@@ -7,8 +7,34 @@ on:
     branches: [develop, main]
 
 jobs:
-  analyze:
-    name: Analyze & Format
+  # ---------------------------------------------------------------------------
+  # TypeScript — extensiones
+  # ---------------------------------------------------------------------------
+  typescript:
+    name: TypeScript (extensiones)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: npm
+
+      - name: Install Node deps
+        run: npm ci
+
+      - name: TypeScript typecheck
+        run: npm run typecheck
+
+      - name: ESLint
+        run: npm run lint
+
+  # ---------------------------------------------------------------------------
+  # Flutter — app
+  # ---------------------------------------------------------------------------
+  flutter-analyze:
+    name: Flutter Analyze & Format
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -19,7 +45,7 @@ jobs:
           channel: stable
           cache: true
 
-      - name: Install dependencies
+      - name: Install Flutter deps
         run: flutter pub get
 
       - name: Generate Isar code
@@ -31,10 +57,10 @@ jobs:
       - name: Flutter analyze
         run: flutter analyze --fatal-infos
 
-  test:
-    name: Unit Tests
+  flutter-test:
+    name: Flutter Unit Tests
     runs-on: ubuntu-latest
-    needs: analyze
+    needs: flutter-analyze
     steps:
       - uses: actions/checkout@v4
 

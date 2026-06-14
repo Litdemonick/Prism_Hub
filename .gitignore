@@ -43,3 +43,7 @@ app.*.map.json
 /android/app/debug
 /android/app/profile
 /android/app/release
+
+# Node / TypeScript (extension tooling)
+node_modules/
+extensions/dist/
