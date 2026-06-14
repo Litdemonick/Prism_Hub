@@ -33,13 +33,15 @@ abstract final class Responsive {
 
   // ── Espaciados (% del viewport) ─────────────────────────────────────────────
 
-  /// Padding horizontal de página: 3 % / 5 % / 10 % según tamaño.
+  /// Padding horizontal de página.
+  /// Mobile/tablet usan % del ancho; desktop usa valor fijo para no recortar
+  /// el contenido y mantenerlo alineado a la izquierda como una app de escritorio.
   static double hPadding(BuildContext context) {
     final w = MediaQuery.sizeOf(context).width;
     return switch (sizeOf(context)) {
-      ScreenSize.mobile => w * 0.03,
-      ScreenSize.tablet => w * 0.05,
-      ScreenSize.desktop => w * 0.10,
+      ScreenSize.mobile => w * 0.03, // 3 % — smartphones
+      ScreenSize.tablet => w * 0.03, // 3 % — tablets
+      ScreenSize.desktop => 16.0, // fijo — desktop: contenido a la izquierda
     };
   }
 
@@ -83,11 +85,13 @@ abstract final class Responsive {
 
   // ── Helpers de layout ───────────────────────────────────────────────────────
 
-  /// Envuelve [child] centrando y limitando el ancho en desktop.
+  /// Limita el ancho máximo del contenido en desktop sin centrarlo:
+  /// el contenido queda alineado a la izquierda y se expande naturalmente.
   static Widget constrain(BuildContext context, Widget child) {
     final max = maxContentWidth(context);
     if (max == null) return child;
-    return Center(
+    return Align(
+      alignment: Alignment.topLeft,
       child: ConstrainedBox(
         constraints: BoxConstraints(maxWidth: max),
         child: child,
