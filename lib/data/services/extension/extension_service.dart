@@ -12,10 +12,10 @@ typedef ExtResult = Map<String, dynamic>;
 /// Las extensiones se escriben en TypeScript y se compilan a bundles IIFE
 /// con esbuild. El bundle expone cuatro funciones globales:
 ///
-///   latest(page)                       → Promise<PrismItem[]>
-///   search(keyword, page, filter?)     → Promise<PrismItem[]>
-///   detail(url)                        → Promise<PrismDetail>
-///   watch(url)                         → Promise<PrismWatch>
+///   `latest(page)`                       → `Promise<PrismItem[]>`
+///   `search(keyword, page, filter?)`    → `Promise<PrismItem[]>`
+///   `detail(url)`                       → `Promise<PrismDetail>`
+///   `watch(url)`                        → `Promise<PrismWatch>`
 ///
 /// Cada extensión instanciada tiene su propio [JavascriptRuntime] aislado
 /// para evitar colisiones de nombres globales entre extensiones.
