@@ -18,7 +18,7 @@ jobs:
 
       - uses: actions/setup-node@v4
         with:
-          node-version: '20'
+          node-version: '24'
           cache: npm
 
       - name: Install Node deps
@@ -52,7 +52,10 @@ jobs:
         run: dart run build_runner build --delete-conflicting-outputs
 
       - name: Dart format check
-        run: dart format --output=none --set-exit-if-changed .
+        # Excluye archivos generados por build_runner (*.g.dart) del check
+        run: |
+          find lib -name "*.dart" ! -name "*.g.dart" ! -name "*.freezed.dart" \
+            | xargs dart format --output=none --set-exit-if-changed
 
       - name: Flutter analyze
         run: flutter analyze --fatal-infos
