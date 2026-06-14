@@ -29,21 +29,26 @@ const ExtensionModelSchema = CollectionSchema(
       name: r'isInstalled',
       type: IsarType.bool,
     ),
-    r'name': PropertySchema(id: 4, name: r'name', type: IsarType.string),
-    r'package': PropertySchema(id: 5, name: r'package', type: IsarType.string),
-    r'repoUrl': PropertySchema(id: 6, name: r'repoUrl', type: IsarType.string),
+    r'localScriptPath': PropertySchema(
+      id: 4,
+      name: r'localScriptPath',
+      type: IsarType.string,
+    ),
+    r'name': PropertySchema(id: 5, name: r'name', type: IsarType.string),
+    r'package': PropertySchema(id: 6, name: r'package', type: IsarType.string),
+    r'repoUrl': PropertySchema(id: 7, name: r'repoUrl', type: IsarType.string),
     r'scriptUrl': PropertySchema(
-      id: 7,
+      id: 8,
       name: r'scriptUrl',
       type: IsarType.string,
     ),
     r'type': PropertySchema(
-      id: 8,
+      id: 9,
       name: r'type',
       type: IsarType.string,
       enumMap: _ExtensionModeltypeEnumValueMap,
     ),
-    r'version': PropertySchema(id: 9, name: r'version', type: IsarType.string),
+    r'version': PropertySchema(id: 10, name: r'version', type: IsarType.string),
   },
   estimateSize: _extensionModelEstimateSize,
   serialize: _extensionModelSerialize,
@@ -86,6 +91,12 @@ int _extensionModelEstimateSize(
       bytesCount += 3 + value.length * 3;
     }
   }
+  {
+    final value = object.localScriptPath;
+    if (value != null) {
+      bytesCount += 3 + value.length * 3;
+    }
+  }
   bytesCount += 3 + object.name.length * 3;
   bytesCount += 3 + object.package.length * 3;
   {
@@ -110,12 +121,13 @@ void _extensionModelSerialize(
   writer.writeString(offsets[1], object.iconUrl);
   writer.writeDateTime(offsets[2], object.installedAt);
   writer.writeBool(offsets[3], object.isInstalled);
-  writer.writeString(offsets[4], object.name);
-  writer.writeString(offsets[5], object.package);
-  writer.writeString(offsets[6], object.repoUrl);
-  writer.writeString(offsets[7], object.scriptUrl);
-  writer.writeString(offsets[8], object.type.name);
-  writer.writeString(offsets[9], object.version);
+  writer.writeString(offsets[4], object.localScriptPath);
+  writer.writeString(offsets[5], object.name);
+  writer.writeString(offsets[6], object.package);
+  writer.writeString(offsets[7], object.repoUrl);
+  writer.writeString(offsets[8], object.scriptUrl);
+  writer.writeString(offsets[9], object.type.name);
+  writer.writeString(offsets[10], object.version);
 }
 
 ExtensionModel _extensionModelDeserialize(
@@ -130,14 +142,15 @@ ExtensionModel _extensionModelDeserialize(
   object.id = id;
   object.installedAt = reader.readDateTimeOrNull(offsets[2]);
   object.isInstalled = reader.readBool(offsets[3]);
-  object.name = reader.readString(offsets[4]);
-  object.package = reader.readString(offsets[5]);
-  object.repoUrl = reader.readStringOrNull(offsets[6]);
-  object.scriptUrl = reader.readString(offsets[7]);
+  object.localScriptPath = reader.readStringOrNull(offsets[4]);
+  object.name = reader.readString(offsets[5]);
+  object.package = reader.readString(offsets[6]);
+  object.repoUrl = reader.readStringOrNull(offsets[7]);
+  object.scriptUrl = reader.readString(offsets[8]);
   object.type =
-      _ExtensionModeltypeValueEnumMap[reader.readStringOrNull(offsets[8])] ??
+      _ExtensionModeltypeValueEnumMap[reader.readStringOrNull(offsets[9])] ??
       ExtensionType.anime;
-  object.version = reader.readString(offsets[9]);
+  object.version = reader.readString(offsets[10]);
   return object;
 }
 
@@ -157,20 +170,22 @@ P _extensionModelDeserializeProp<P>(
     case 3:
       return (reader.readBool(offset)) as P;
     case 4:
-      return (reader.readString(offset)) as P;
+      return (reader.readStringOrNull(offset)) as P;
     case 5:
       return (reader.readString(offset)) as P;
     case 6:
-      return (reader.readStringOrNull(offset)) as P;
-    case 7:
       return (reader.readString(offset)) as P;
+    case 7:
+      return (reader.readStringOrNull(offset)) as P;
     case 8:
+      return (reader.readString(offset)) as P;
+    case 9:
       return (_ExtensionModeltypeValueEnumMap[reader.readStringOrNull(
                 offset,
               )] ??
               ExtensionType.anime)
           as P;
-    case 9:
+    case 10:
       return (reader.readString(offset)) as P;
     default:
       throw IsarError('Unknown property with id $propertyId');
@@ -834,6 +849,165 @@ extension ExtensionModelQueryFilter
     return QueryBuilder.apply(this, (query) {
       return query.addFilterCondition(
         FilterCondition.equalTo(property: r'isInstalled', value: value),
+      );
+    });
+  }
+
+  QueryBuilder<ExtensionModel, ExtensionModel, QAfterFilterCondition>
+  localScriptPathIsNull() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(
+        const FilterCondition.isNull(property: r'localScriptPath'),
+      );
+    });
+  }
+
+  QueryBuilder<ExtensionModel, ExtensionModel, QAfterFilterCondition>
+  localScriptPathIsNotNull() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(
+        const FilterCondition.isNotNull(property: r'localScriptPath'),
+      );
+    });
+  }
+
+  QueryBuilder<ExtensionModel, ExtensionModel, QAfterFilterCondition>
+  localScriptPathEqualTo(String? value, {bool caseSensitive = true}) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(
+        FilterCondition.equalTo(
+          property: r'localScriptPath',
+          value: value,
+          caseSensitive: caseSensitive,
+        ),
+      );
+    });
+  }
+
+  QueryBuilder<ExtensionModel, ExtensionModel, QAfterFilterCondition>
+  localScriptPathGreaterThan(
+    String? value, {
+    bool include = false,
+    bool caseSensitive = true,
+  }) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(
+        FilterCondition.greaterThan(
+          include: include,
+          property: r'localScriptPath',
+          value: value,
+          caseSensitive: caseSensitive,
+        ),
+      );
+    });
+  }
+
+  QueryBuilder<ExtensionModel, ExtensionModel, QAfterFilterCondition>
+  localScriptPathLessThan(
+    String? value, {
+    bool include = false,
+    bool caseSensitive = true,
+  }) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(
+        FilterCondition.lessThan(
+          include: include,
+          property: r'localScriptPath',
+          value: value,
+          caseSensitive: caseSensitive,
+        ),
+      );
+    });
+  }
+
+  QueryBuilder<ExtensionModel, ExtensionModel, QAfterFilterCondition>
+  localScriptPathBetween(
+    String? lower,
+    String? upper, {
+    bool includeLower = true,
+    bool includeUpper = true,
+    bool caseSensitive = true,
+  }) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(
+        FilterCondition.between(
+          property: r'localScriptPath',
+          lower: lower,
+          includeLower: includeLower,
+          upper: upper,
+          includeUpper: includeUpper,
+          caseSensitive: caseSensitive,
+        ),
+      );
+    });
+  }
+
+  QueryBuilder<ExtensionModel, ExtensionModel, QAfterFilterCondition>
+  localScriptPathStartsWith(String value, {bool caseSensitive = true}) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(
+        FilterCondition.startsWith(
+          property: r'localScriptPath',
+          value: value,
+          caseSensitive: caseSensitive,
+        ),
+      );
+    });
+  }
+
+  QueryBuilder<ExtensionModel, ExtensionModel, QAfterFilterCondition>
+  localScriptPathEndsWith(String value, {bool caseSensitive = true}) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(
+        FilterCondition.endsWith(
+          property: r'localScriptPath',
+          value: value,
+          caseSensitive: caseSensitive,
+        ),
+      );
+    });
+  }
+
+  QueryBuilder<ExtensionModel, ExtensionModel, QAfterFilterCondition>
+  localScriptPathContains(String value, {bool caseSensitive = true}) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(
+        FilterCondition.contains(
+          property: r'localScriptPath',
+          value: value,
+          caseSensitive: caseSensitive,
+        ),
+      );
+    });
+  }
+
+  QueryBuilder<ExtensionModel, ExtensionModel, QAfterFilterCondition>
+  localScriptPathMatches(String pattern, {bool caseSensitive = true}) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(
+        FilterCondition.matches(
+          property: r'localScriptPath',
+          wildcard: pattern,
+          caseSensitive: caseSensitive,
+        ),
+      );
+    });
+  }
+
+  QueryBuilder<ExtensionModel, ExtensionModel, QAfterFilterCondition>
+  localScriptPathIsEmpty() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(
+        FilterCondition.equalTo(property: r'localScriptPath', value: ''),
+      );
+    });
+  }
+
+  QueryBuilder<ExtensionModel, ExtensionModel, QAfterFilterCondition>
+  localScriptPathIsNotEmpty() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(
+        FilterCondition.greaterThan(property: r'localScriptPath', value: ''),
       );
     });
   }
@@ -1765,6 +1939,20 @@ extension ExtensionModelQuerySortBy
     });
   }
 
+  QueryBuilder<ExtensionModel, ExtensionModel, QAfterSortBy>
+  sortByLocalScriptPath() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addSortBy(r'localScriptPath', Sort.asc);
+    });
+  }
+
+  QueryBuilder<ExtensionModel, ExtensionModel, QAfterSortBy>
+  sortByLocalScriptPathDesc() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addSortBy(r'localScriptPath', Sort.desc);
+    });
+  }
+
   QueryBuilder<ExtensionModel, ExtensionModel, QAfterSortBy> sortByName() {
     return QueryBuilder.apply(this, (query) {
       return query.addSortBy(r'name', Sort.asc);
@@ -1910,6 +2098,20 @@ extension ExtensionModelQuerySortThenBy
     });
   }
 
+  QueryBuilder<ExtensionModel, ExtensionModel, QAfterSortBy>
+  thenByLocalScriptPath() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addSortBy(r'localScriptPath', Sort.asc);
+    });
+  }
+
+  QueryBuilder<ExtensionModel, ExtensionModel, QAfterSortBy>
+  thenByLocalScriptPathDesc() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addSortBy(r'localScriptPath', Sort.desc);
+    });
+  }
+
   QueryBuilder<ExtensionModel, ExtensionModel, QAfterSortBy> thenByName() {
     return QueryBuilder.apply(this, (query) {
       return query.addSortBy(r'name', Sort.asc);
@@ -2019,6 +2221,16 @@ extension ExtensionModelQueryWhereDistinct
     });
   }
 
+  QueryBuilder<ExtensionModel, ExtensionModel, QDistinct>
+  distinctByLocalScriptPath({bool caseSensitive = true}) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addDistinctBy(
+        r'localScriptPath',
+        caseSensitive: caseSensitive,
+      );
+    });
+  }
+
   QueryBuilder<ExtensionModel, ExtensionModel, QDistinct> distinctByName({
     bool caseSensitive = true,
   }) {
@@ -2098,6 +2310,13 @@ extension ExtensionModelQueryProperty
   QueryBuilder<ExtensionModel, bool, QQueryOperations> isInstalledProperty() {
     return QueryBuilder.apply(this, (query) {
       return query.addPropertyName(r'isInstalled');
+    });
+  }
+
+  QueryBuilder<ExtensionModel, String?, QQueryOperations>
+  localScriptPathProperty() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addPropertyName(r'localScriptPath');
     });
   }
 

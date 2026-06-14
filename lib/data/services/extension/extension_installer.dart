@@ -1,0 +1,82 @@
+import 'dart:io';
+
+import 'package:dio/dio.dart';
+import 'package:logging/logging.dart';
+
+import '../../../core/db/database_service.dart';
+import '../../../core/utils/app_directory.dart';
+import '../../models/extension_dto.dart';
+import '../../models/extension_model.dart';
+import 'extension_service.dart';
+
+class ExtensionInstaller {
+  ExtensionInstaller()
+    : _dio = Dio(
+        BaseOptions(
+          connectTimeout: const Duration(seconds: 30),
+          receiveTimeout: const Duration(seconds: 30),
+        ),
+      );
+
+  final Dio _dio;
+  static final _log = Logger('ExtensionInstaller');
+
+  Future<void> install(ExtensionDto dto) async {
+    _log.info('Instalando ${dto.package} v${dto.version}');
+
+    final scriptPath = AppDirectory.extensionScript(dto.package);
+
+    // Descarga el bundle TypeScript compilado (.js)
+    await _dio.download(dto.scriptUrl, scriptPath);
+
+    final script = await File(scriptPath).readAsString();
+
+    final model = ExtensionModel()
+      ..package = dto.package
+      ..name = dto.name
+      ..version = dto.version
+      ..author = dto.author
+      ..type = dto.type
+      ..scriptUrl = dto.scriptUrl
+      ..iconUrl = dto.iconUrl
+      ..repoUrl = dto.repoUrl
+      ..localScriptPath = scriptPath
+      ..isInstalled = true
+      ..installedAt = DateTime.now();
+
+    final db = DatabaseService.db;
+    await db.writeTxn(() async {
+      final existing = await db.extensionModels.getByPackage(dto.package);
+      if (existing != null) await db.extensionModels.delete(existing.id);
+      await db.extensionModels.put(model);
+    });
+
+    // Carga el runtime inmediatamente (sin reiniciar la app)
+    ExtensionService.load(model, script);
+    _log.info('${dto.package} instalada');
+  }
+
+  Future<void> uninstall(ExtensionModel ext) async {
+    _log.info('Desinstalando ${ext.package}');
+
+    ExtensionService.unload(ext.package);
+
+    if (ext.localScriptPath != null) {
+      final file = File(ext.localScriptPath!);
+      if (await file.exists()) await file.delete();
+    }
+
+    await DatabaseService.db.writeTxn(() async {
+      await DatabaseService.db.extensionModels.delete(ext.id);
+    });
+
+    _log.info('${ext.package} desinstalada');
+  }
+
+  Future<void> update(ExtensionDto dto) async {
+    _log.info('Actualizando ${dto.package} a v${dto.version}');
+    // Desinstalar la versión antigua del runtime (el archivo se sobreescribirá)
+    ExtensionService.unload(dto.package);
+    await install(dto);
+  }
+}

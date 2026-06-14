@@ -8,8 +8,10 @@ import 'core/config/app_config.dart';
 import 'core/db/database_service.dart';
 import 'core/router/app_router.dart';
 import 'core/theme/app_theme.dart';
+import 'core/utils/app_directory.dart';
 import 'core/utils/app_storage.dart';
 import 'core/utils/logger.dart';
+import 'data/services/extension/extension_loader.dart';
 import 'data/services/extension/extension_service.dart';
 
 void main(List<String> args) async {
@@ -23,9 +25,12 @@ void main(List<String> args) async {
   FlutterError.onError = (details) =>
       log.severe('Flutter error', details.exception, details.stack);
 
+  // Inicialización en orden
   await AppStorage.init();
+  await AppDirectory.init();
   await DatabaseService.init();
   ExtensionService.init();
+  await ExtensionLoader.loadAll(); // carga extensiones instaladas desde disco
   MediaKit.ensureInitialized();
 
   if (!Platform.isAndroid && !Platform.isIOS) {
@@ -57,8 +62,6 @@ class PrismApp extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    // go_router requiere MaterialApp.router — GetX sigue funcionando para
-    // state management (GetxController, Get.put, Obx) sin GetMaterialApp.
     return MaterialApp.router(
       title: 'PrismHub',
       debugShowCheckedModeBanner: false,

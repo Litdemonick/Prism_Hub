@@ -2,7 +2,6 @@ import 'package:isar/isar.dart';
 
 part 'extension_model.g.dart';
 
-/// Tipos de contenido que puede manejar una extensión.
 enum ExtensionType { anime, manga, comic, novel }
 
 @collection
@@ -10,7 +9,7 @@ class ExtensionModel {
   Id id = Isar.autoIncrement;
 
   @Index(unique: true)
-  late String package; // e.g. "com.prismhub.animeflv"
+  late String package;
 
   late String name;
   late String version;
@@ -18,6 +17,9 @@ class ExtensionModel {
   late String scriptUrl;
   String? iconUrl;
   String? repoUrl;
+
+  // Ruta local al bundle .js descargado
+  String? localScriptPath;
 
   @Enumerated(EnumType.name)
   late ExtensionType type;
