@@ -1,4 +1,3 @@
-import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../modules/home/home_page.dart';
@@ -26,19 +25,19 @@ abstract final class AppRouter {
         routes: [
           GoRoute(
             path: AppRoutes.home,
-            builder: (_, __) => const HomePage(),
+            builder: (ctx, st) => const HomePage(),
           ),
           GoRoute(
             path: AppRoutes.search,
-            builder: (_, __) => const SearchPage(),
+            builder: (ctx, st) => const SearchPage(),
           ),
           GoRoute(
             path: AppRoutes.extensions,
-            builder: (_, __) => const ExtensionsPage(),
+            builder: (ctx, st) => const ExtensionsPage(),
           ),
           GoRoute(
             path: AppRoutes.settings,
-            builder: (_, __) => const SettingsPage(),
+            builder: (ctx, st) => const SettingsPage(),
           ),
         ],
       ),

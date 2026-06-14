@@ -1,7 +1,6 @@
 import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
-import 'package:get/get.dart';
 import 'package:media_kit/media_kit.dart';
 import 'package:window_manager/window_manager.dart';
 
@@ -58,7 +57,9 @@ class PrismApp extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return GetMaterialApp.router(
+    // go_router requiere MaterialApp.router — GetX sigue funcionando para
+    // state management (GetxController, Get.put, Obx) sin GetMaterialApp.
+    return MaterialApp.router(
       title: 'PrismHub',
       debugShowCheckedModeBanner: false,
       theme: AppTheme.light,
