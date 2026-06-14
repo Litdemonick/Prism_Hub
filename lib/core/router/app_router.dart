@@ -23,10 +23,7 @@ abstract final class AppRouter {
       ShellRoute(
         builder: (context, state, child) => AppShell(child: child),
         routes: [
-          GoRoute(
-            path: AppRoutes.home,
-            builder: (ctx, st) => const HomePage(),
-          ),
+          GoRoute(path: AppRoutes.home, builder: (ctx, st) => const HomePage()),
           GoRoute(
             path: AppRoutes.search,
             builder: (ctx, st) => const SearchPage(),
