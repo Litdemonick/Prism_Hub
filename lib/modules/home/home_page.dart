@@ -3,6 +3,7 @@ import 'package:get/get.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../core/router/app_router.dart';
+import '../../core/utils/responsive.dart';
 import '../../data/models/media_item.dart';
 import '../../data/services/extension/extension_service.dart';
 import '../../shared/widgets/content_card.dart';
@@ -96,11 +97,16 @@ class _SectionRow extends StatelessWidget {
           height: 200,
           child: ListView.separated(
             scrollDirection: Axis.horizontal,
-            padding: const EdgeInsets.symmetric(horizontal: 16),
+            padding: EdgeInsets.symmetric(
+              horizontal: Responsive.hPadding(context),
+            ),
             itemCount: section.items.length,
-            separatorBuilder: (ctx, i) => const SizedBox(width: 12),
-            itemBuilder: (_, i) =>
-                ContentCard(item: section.items[i], width: 120),
+            separatorBuilder: (ctx, i) =>
+                SizedBox(width: Responsive.gap(context)),
+            itemBuilder: (ctx, i) => ContentCard(
+              item: section.items[i],
+              width: Responsive.cardWidth(ctx),
+            ),
           ),
         ),
       ],

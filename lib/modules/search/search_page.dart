@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 
+import '../../core/utils/responsive.dart';
 import '../../data/services/extension/extension_service.dart';
 import '../../shared/widgets/content_card.dart';
 import 'search_controller.dart';
@@ -151,16 +152,18 @@ class _Body extends StatelessWidget {
         );
       }
 
-      return LayoutBuilder(
-        builder: (context, constraints) {
-          final cols = constraints.maxWidth >= 720 ? 4 : 3;
+      return Builder(
+        builder: (context) {
+          final cols = Responsive.gridColumns(context);
+          final gap = Responsive.gap(context);
+          final hp = Responsive.hPadding(context);
           return GridView.builder(
-            padding: const EdgeInsets.all(12),
+            padding: EdgeInsets.symmetric(horizontal: hp, vertical: 12),
             gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
               crossAxisCount: cols,
               childAspectRatio: 0.55,
-              crossAxisSpacing: 10,
-              mainAxisSpacing: 10,
+              crossAxisSpacing: gap,
+              mainAxisSpacing: gap,
             ),
             itemCount: c.results.length,
             itemBuilder: (_, i) => ContentCard(item: c.results[i]),

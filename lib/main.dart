@@ -38,8 +38,9 @@ void main(List<String> args) async {
     await windowManager.waitUntilReadyToShow(
       const WindowOptions(
         size: Size(1200, 780),
+        minimumSize: Size(480, 600), // evita redimensionado excesivo
         center: true,
-        titleBarStyle: TitleBarStyle.hidden,
+        titleBarStyle: TitleBarStyle.normal, // botones nativos min/max/close
       ),
       () async {
         await windowManager.show();

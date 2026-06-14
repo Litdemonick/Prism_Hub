@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../core/router/app_router.dart';
+import '../../core/utils/responsive.dart';
 
 class AppShell extends StatelessWidget {
   const AppShell({super.key, required this.child});
@@ -30,7 +31,7 @@ class AppShell extends StatelessWidget {
 
     return LayoutBuilder(
       builder: (context, constraints) {
-        final isWide = constraints.maxWidth >= 720;
+        final isWide = !Responsive.isMobile(context); // tablet ≥ 600 px
 
         if (isWide) {
           return Scaffold(
