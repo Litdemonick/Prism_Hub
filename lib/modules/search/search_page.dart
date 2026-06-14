@@ -16,11 +16,16 @@ class SearchPage extends StatefulWidget {
 class _SearchPageState extends State<SearchPage> {
   late final ContentSearchController _c;
   final _textController = TextEditingController();
+  bool _hasText = false;
 
   @override
   void initState() {
     super.initState();
     _c = Get.put(ContentSearchController());
+    _textController.addListener(() {
+      final hasText = _textController.text.isNotEmpty;
+      if (hasText != _hasText) setState(() => _hasText = hasText);
+    });
   }
 
   @override
@@ -46,17 +51,14 @@ class _SearchPageState extends State<SearchPage> {
           onSubmitted: _c.search,
         ),
         actions: [
-          Obx(
-            () => _textController.text.isNotEmpty
-                ? IconButton(
-                    icon: const Icon(Icons.clear),
-                    onPressed: () {
-                      _textController.clear();
-                      _c.search('');
-                    },
-                  )
-                : const SizedBox.shrink(),
-          ),
+          if (_hasText)
+            IconButton(
+              icon: const Icon(Icons.clear),
+              onPressed: () {
+                _textController.clear();
+                _c.search('');
+              },
+            ),
         ],
       ),
       body: Column(
