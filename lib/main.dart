@@ -38,7 +38,7 @@ void main(List<String> args) async {
     await windowManager.waitUntilReadyToShow(
       const WindowOptions(
         size: Size(1200, 780),
-        minimumSize: Size(720, 520), // mantiene NavigationRail siempre visible
+        minimumSize: Size(1000, 680), // mantiene NavigationRail siempre visible
         center: true,
         titleBarStyle: TitleBarStyle.normal, // botones nativos min/max/close
       ),
