@@ -1,9 +1,12 @@
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
+import 'package:go_router/go_router.dart';
 
-import '../../data/models/media_item.dart';
+import '../../core/router/app_router.dart';
 import '../../data/models/extension_model.dart';
+import '../../data/models/media_item.dart';
+import '../player/watch_args.dart';
 import 'detail_controller.dart';
 
 /// Argumentos de navegación hacia DetailPage, pasados via GoRouter extra.
@@ -98,6 +101,8 @@ class _DetailScaffold extends StatelessWidget {
               itemBuilder: (_, i) => _EpisodeTile(
                 episode: detail.episodes[i],
                 number: detail.episodes.length - i,
+                package: detail.package,
+                type: detail.type,
               ),
             ),
             const SliverPadding(padding: EdgeInsets.only(bottom: 24)),
@@ -219,14 +224,22 @@ class _InfoSection extends StatelessWidget {
 // ---------------------------------------------------------------------------
 
 class _EpisodeTile extends StatelessWidget {
-  const _EpisodeTile({required this.episode, required this.number});
+  const _EpisodeTile({
+    required this.episode,
+    required this.number,
+    required this.package,
+    required this.type,
+  });
 
   final MediaEpisode episode;
   final int number;
+  final String package;
+  final ExtensionType type;
 
   @override
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
+    final isVideo = type == ExtensionType.anime;
     return ListTile(
       leading: CircleAvatar(
         backgroundColor: cs.primaryContainer,
@@ -240,9 +253,20 @@ class _EpisodeTile extends StatelessWidget {
         ),
       ),
       title: Text(episode.title, maxLines: 1, overflow: TextOverflow.ellipsis),
-      trailing: const Icon(Icons.play_arrow_rounded),
+      trailing: Icon(
+        isVideo ? Icons.play_arrow_rounded : Icons.menu_book_rounded,
+      ),
       onTap: () {
-        // Bloque 3: navegar a player/reader
+        final args = WatchArgs(
+          episodeUrl: episode.url,
+          package: package,
+          title: episode.title,
+          type: type,
+        );
+        context.push(
+          isVideo ? AppRoutes.player : AppRoutes.reader,
+          extra: args,
+        );
       },
     );
   }

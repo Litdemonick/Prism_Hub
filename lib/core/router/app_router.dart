@@ -3,6 +3,9 @@ import 'package:go_router/go_router.dart';
 import '../../modules/detail/detail_page.dart';
 import '../../modules/extensions/extensions_page.dart';
 import '../../modules/home/home_page.dart';
+import '../../modules/player/player_page.dart';
+import '../../modules/player/watch_args.dart';
+import '../../modules/reader/reader_page.dart';
 import '../../modules/search/search_page.dart';
 import '../../modules/settings/settings_page.dart';
 import '../../shared/widgets/app_shell.dart';
@@ -39,10 +42,18 @@ abstract final class AppRouter {
           ),
         ],
       ),
-      // Detail está fuera del ShellRoute para ocupar pantalla completa
+      // Las siguientes rutas están fuera del ShellRoute: pantalla completa, sin nav rail.
       GoRoute(
         path: AppRoutes.detail,
         builder: (ctx, st) => DetailPage(args: st.extra! as DetailArgs),
+      ),
+      GoRoute(
+        path: AppRoutes.player,
+        builder: (ctx, st) => PlayerPage(args: st.extra! as WatchArgs),
+      ),
+      GoRoute(
+        path: AppRoutes.reader,
+        builder: (ctx, st) => ReaderPage(args: st.extra! as WatchArgs),
       ),
     ],
   );
