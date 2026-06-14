@@ -119,6 +119,10 @@ class ExtensionService {
 
   static ExtensionRuntime? get(String package) => _runtimes[package];
 
+  static List<ExtensionRuntime> get allLoaded => _runtimes.values.toList();
+
+  static bool get hasAny => _runtimes.isNotEmpty;
+
   static void disposeAll() {
     for (final rt in _runtimes.values) {
       rt.dispose();
