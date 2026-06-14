@@ -1,0 +1,47 @@
+import 'package:flutter/material.dart';
+import 'package:go_router/go_router.dart';
+
+import '../../modules/home/home_page.dart';
+import '../../modules/search/search_page.dart';
+import '../../modules/extensions/extensions_page.dart';
+import '../../modules/settings/settings_page.dart';
+import '../../shared/widgets/app_shell.dart';
+
+abstract final class AppRoutes {
+  static const home = '/';
+  static const search = '/search';
+  static const detail = '/detail/:type/:id';
+  static const player = '/player';
+  static const reader = '/reader';
+  static const extensions = '/extensions';
+  static const settings = '/settings';
+}
+
+abstract final class AppRouter {
+  static final config = GoRouter(
+    initialLocation: AppRoutes.home,
+    routes: [
+      ShellRoute(
+        builder: (context, state, child) => AppShell(child: child),
+        routes: [
+          GoRoute(
+            path: AppRoutes.home,
+            builder: (_, __) => const HomePage(),
+          ),
+          GoRoute(
+            path: AppRoutes.search,
+            builder: (_, __) => const SearchPage(),
+          ),
+          GoRoute(
+            path: AppRoutes.extensions,
+            builder: (_, __) => const ExtensionsPage(),
+          ),
+          GoRoute(
+            path: AppRoutes.settings,
+            builder: (_, __) => const SettingsPage(),
+          ),
+        ],
+      ),
+    ],
+  );
+}

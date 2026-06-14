@@ -1,0 +1,44 @@
+name: Bug Report
+description: Reporta un error o comportamiento inesperado
+labels: [bug]
+body:
+  - type: input
+    id: version
+    attributes:
+      label: Versión de PrismHub
+      placeholder: "v1.0.0"
+    validations:
+      required: true
+
+  - type: dropdown
+    id: platform
+    attributes:
+      label: Plataforma
+      options: [Windows, Android, Linux, iOS]
+    validations:
+      required: true
+
+  - type: textarea
+    id: description
+    attributes:
+      label: Descripción del bug
+      description: ¿Qué ocurrió? ¿Qué esperabas que ocurriera?
+    validations:
+      required: true
+
+  - type: textarea
+    id: steps
+    attributes:
+      label: Pasos para reproducir
+      placeholder: |
+        1. Ir a …
+        2. Hacer click en …
+        3. Ver error
+    validations:
+      required: true
+
+  - type: textarea
+    id: logs
+    attributes:
+      label: Logs / stacktrace (si aplica)
+      render: shell

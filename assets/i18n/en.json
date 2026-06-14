@@ -1,0 +1,21 @@
+{
+  "app": {
+    "name": "PrismHub"
+  },
+  "nav": {
+    "home": "Home",
+    "search": "Search",
+    "extensions": "Extensions",
+    "settings": "Settings"
+  },
+  "home": {
+    "recents": "Recently watched",
+    "favorites": "Favorites"
+  },
+  "extension": {
+    "install": "Install",
+    "uninstall": "Uninstall",
+    "update": "Update",
+    "no_extensions": "No extensions installed"
+  }
+}
