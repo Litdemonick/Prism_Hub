@@ -41,21 +41,17 @@ class ExtensionRuntime {
     return ExtensionRuntime._(ext, rt);
   }
 
-  Future<List<ExtResult>> latest(int page) =>
-      _callList('latest', [page]);
+  Future<List<ExtResult>> latest(int page) => _callList('latest', [page]);
 
   Future<List<ExtResult>> search(
     String keyword,
     int page, [
     Map<String, dynamic>? filter,
-  ]) =>
-      _callList('search', [keyword, page, filter ?? {}]);
+  ]) => _callList('search', [keyword, page, filter ?? {}]);
 
-  Future<ExtResult> detail(String url) =>
-      _callMap('detail', [url]);
+  Future<ExtResult> detail(String url) => _callMap('detail', [url]);
 
-  Future<ExtResult> watch(String url) =>
-      _callMap('watch', [url]);
+  Future<ExtResult> watch(String url) => _callMap('watch', [url]);
 
   void dispose() => _rt.dispose();
 
@@ -72,7 +68,9 @@ class ExtensionRuntime {
     if (raw is List) return raw.whereType<Map>().map(_castMap).toList();
     if (raw is String) {
       final decoded = jsonDecode(raw);
-      if (decoded is List) return decoded.whereType<Map>().map(_castMap).toList();
+      if (decoded is List) {
+        return decoded.whereType<Map>().map(_castMap).toList();
+      }
     }
     return [];
   }

@@ -5,8 +5,6 @@ class ExtensionsPage extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return const Scaffold(
-      body: Center(child: Text('Extensiones')),
-    );
+    return const Scaffold(body: Center(child: Text('Extensiones')));
   }
 }
