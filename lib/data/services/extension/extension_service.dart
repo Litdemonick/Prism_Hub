@@ -12,10 +12,11 @@ typedef ExtResult = Map<String, dynamic>;
 // ---------------------------------------------------------------------------
 // Polyfill inyectado en QuickJS antes de evaluar cada bundle de extensión.
 //
-// QuickJS no incluye fetch, console ni btoa/atob. Aquí los proveemos:
+// QuickJS no incluye fetch, console, btoa/atob ni AbortController:
 //   • console.log/warn/error  →  puente a Logger de Dart (prismLog)
 //   • fetch(url, init)        →  puente HTTP a dio de Dart (prismFetch)
 //   • btoa / atob             →  implementación pura en JS (son síncronas)
+//   • AbortController/Signal  →  stub funcional (timeout lo maneja Dio)
 // ---------------------------------------------------------------------------
 const _kPolyfill = r'''
 // ── console ─────────────────────────────────────────────────────────────────
@@ -60,6 +61,37 @@ const _kPolyfill = r'''
     }
     return o;
   };
+})();
+
+// ── AbortController / AbortSignal ────────────────────────────────────────────
+(function() {
+  function AbortSignal() {
+    this.aborted = false;
+    this._listeners = [];
+  }
+  AbortSignal.prototype.addEventListener = function(type, fn) {
+    if (type === 'abort') this._listeners.push(fn);
+  };
+  AbortSignal.prototype.removeEventListener = function(type, fn) {
+    if (type === 'abort') {
+      var idx = this._listeners.indexOf(fn);
+      if (idx !== -1) this._listeners.splice(idx, 1);
+    }
+  };
+  AbortSignal.prototype._abort = function() {
+    this.aborted = true;
+    for (var i = 0; i < this._listeners.length; i++) {
+      try { this._listeners[i]({ type: 'abort' }); } catch(_) {}
+    }
+  };
+  function AbortController() {
+    this.signal = new AbortSignal();
+  }
+  AbortController.prototype.abort = function() {
+    this.signal._abort();
+  };
+  globalThis.AbortController = AbortController;
+  globalThis.AbortSignal = AbortSignal;
 })();
 
 // ── fetch polyfill ───────────────────────────────────────────────────────────
