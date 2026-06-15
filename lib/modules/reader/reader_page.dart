@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 
 import '../../data/models/extension_model.dart';
+import '../../data/models/watch_data.dart';
 import '../player/watch_args.dart';
 import 'reader_controller.dart';
 
@@ -119,9 +120,9 @@ class _ReaderPageState extends State<ReaderPage> {
         }
 
         return _verticalScroll
-            ? _VerticalReader(pages: _c.pages)
+            ? _VerticalReader(pages: _c.pages.toList())
             : _HorizontalReader(
-                pages: _c.pages,
+                pages: _c.pages.toList(),
                 currentPage: _c.currentPage,
               );
       }),
@@ -135,14 +136,15 @@ class _ReaderPageState extends State<ReaderPage> {
 
 class _VerticalReader extends StatelessWidget {
   const _VerticalReader({required this.pages});
-  final List<String> pages;
+  final List<WatchStream> pages;
 
   @override
   Widget build(BuildContext context) {
     return ListView.builder(
       itemCount: pages.length,
       itemBuilder: (_, i) => CachedNetworkImage(
-        imageUrl: pages[i],
+        imageUrl: pages[i].url,
+        httpHeaders: pages[i].headers,
         fit: BoxFit.fitWidth,
         width: double.infinity,
         placeholder: (ctx, url) => const SizedBox(
@@ -170,7 +172,7 @@ class _VerticalReader extends StatelessWidget {
 
 class _HorizontalReader extends StatefulWidget {
   const _HorizontalReader({required this.pages, required this.currentPage});
-  final List<String> pages;
+  final List<WatchStream> pages;
   final RxInt currentPage;
 
   @override
@@ -202,7 +204,8 @@ class _HorizontalReaderState extends State<_HorizontalReader> {
         minScale: 0.8,
         maxScale: 4,
         child: CachedNetworkImage(
-          imageUrl: widget.pages[i],
+          imageUrl: widget.pages[i].url,
+          httpHeaders: widget.pages[i].headers,
           fit: BoxFit.contain,
           placeholder: (ctx, url) => const Center(
             child: CircularProgressIndicator(color: Colors.white),

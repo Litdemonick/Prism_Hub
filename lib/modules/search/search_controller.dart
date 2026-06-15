@@ -30,25 +30,25 @@ class ContentSearchController extends GetxController {
           ].whereType<ExtensionRuntime>().toList()
         : ExtensionService.allLoaded;
 
-    final all = <MediaItem>[];
-    for (final rt in runtimes) {
-      try {
-        final raw = await rt.search(q, 1);
-        all.addAll(
-          raw.map(
-            (m) => MediaItem.fromMap(
-              m,
-              package: rt.extension.package,
-              type: rt.extension.type,
-            ),
-          ),
-        );
-      } catch (e) {
-        _log.warning('Error buscando en ${rt.extension.package}: $e');
-      }
-    }
+    final batches = await Future.wait(
+      runtimes.map((rt) async {
+        try {
+          final raw = await rt.search(q, 1);
+          return raw
+              .map((m) => MediaItem.fromMap(
+                    m,
+                    package: rt.extension.package,
+                    type: rt.extension.type,
+                  ))
+              .toList();
+        } catch (e) {
+          _log.warning('Error buscando en ${rt.extension.package}: $e');
+          return <MediaItem>[];
+        }
+      }),
+    );
 
-    results.value = all;
+    results.value = batches.expand((b) => b).toList();
     isSearching.value = false;
   }
 

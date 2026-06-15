@@ -7,7 +7,7 @@ import '../../data/services/extension/extension_service.dart';
 class ReaderController extends GetxController {
   static final _log = Logger('ReaderController');
 
-  final pages = <String>[].obs;
+  final pages = <WatchStream>[].obs;
   final currentPage = 0.obs;
   final isLoading = true.obs;
   final error = Rxn<String>();
@@ -26,10 +26,7 @@ class ReaderController extends GetxController {
     try {
       final raw = await rt.watch(episodeUrl);
       final data = WatchData.fromMap(raw);
-      pages.value = data.streams
-          .map((s) => s.url)
-          .where((u) => u.isNotEmpty)
-          .toList();
+      pages.value = data.streams.where((s) => s.url.isNotEmpty).toList();
 
       if (pages.isEmpty) {
         error.value = 'Sin páginas disponibles';

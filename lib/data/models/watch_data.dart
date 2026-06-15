@@ -20,9 +20,15 @@ class WatchStream {
     url: (map['url'] as String?) ?? '',
     quality: map['quality'] as String?,
     label: map['label'] as String?,
-    headers: (map['headers'] as Map?)?.cast<String, String>(),
+    headers: _parseHeaders(map['headers']),
     mimeType: map['mimeType'] as String?,
   );
+
+  static Map<String, String>? _parseHeaders(dynamic raw) {
+    if (raw == null) return null;
+    if (raw is! Map) return null;
+    return { for (final e in raw.entries) e.key.toString(): e.value?.toString() ?? '' };
+  }
 }
 
 /// Equivale a PrismSubtitle del contrato Prism+.
@@ -59,7 +65,7 @@ class WatchData {
   bool get hasMultipleQualities => streams.length > 1;
 
   factory WatchData.fromMap(Map<String, dynamic> map) {
-    final globalHeaders = (map['headers'] as Map?)?.cast<String, String>();
+    final globalHeaders = WatchStream._parseHeaders(map['headers']);
     final rawStreams = map['streams'] as List? ?? [];
     final rawSubs = map['subtitles'] as List? ?? [];
     return WatchData(
