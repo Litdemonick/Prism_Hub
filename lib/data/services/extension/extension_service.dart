@@ -252,11 +252,17 @@ class ExtensionRuntime {
         'url':        url,
       });
 
-      // Inyectar resultado en QuickJS y procesar jobs pendientes
+      // Inyectar resultado y drenar la cola de microtareas de QuickJS.
+      // JSEvalWrapper (nativo) NO llama JS_ExecutePendingJob automáticamente;
+      // sin este loop las Promises nunca avanzan sus .then() callbacks.
       _rt.evaluate('__prismDone($reqId, ${jsonEncode(payload)})');
+      while (_rt.executePendingJob() > 0) {}
     } catch (e) {
       _log.warning('[${extension.package}] fetch[$reqId] error: $e');
-      _rt.evaluate('__prismErr($reqId, ${jsonEncode(e.toString())})');
+      try {
+        _rt.evaluate('__prismErr($reqId, ${jsonEncode(e.toString())})');
+        while (_rt.executePendingJob() > 0) {}
+      } catch (_) {}
     }
   }
 
@@ -296,9 +302,13 @@ class ExtensionRuntime {
 
   // Máximo 30 s de espera (300 × 100 ms). Entre cada tick cede el control
   // al event-loop de Dart para que los HTTP pendientes puedan completarse.
+  // executePendingJob() drena la cola de microtareas de QuickJS en cada tick.
   Future<String?> _poll(String fn) async {
     for (int i = 0; i < 300; i++) {
       await Future<void>.delayed(const Duration(milliseconds: 100));
+
+      // Drenar cola de jobs JS (Promises pendientes)
+      while (_rt.executePendingJob() > 0) {}
 
       if (_rt.evaluate('__prismR').stringResult == 'true') {
         return _rt.evaluate('__prismV').stringResult;

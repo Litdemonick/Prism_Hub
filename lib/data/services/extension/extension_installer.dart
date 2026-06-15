@@ -21,7 +21,18 @@ class ExtensionInstaller {
   final Dio _dio;
   static final _log = Logger('ExtensionInstaller');
 
-  Future<void> install(ExtensionDto dto) async {
+  Future<void> install(ExtensionDto dto, {bool force = false}) async {
+    // Omitir si ya está instalada (mismo paquete en DB) para no re-descargar
+    // en cada arranque. Usa force:true para actualizar a una versión nueva.
+    if (!force) {
+      final existing = await DatabaseService.db.extensionModels
+          .getByPackage(dto.package);
+      if (existing != null && existing.isInstalled) {
+        _log.fine('${dto.package} ya instalada, omitiendo');
+        return;
+      }
+    }
+
     _log.info('Instalando ${dto.package} v${dto.version}');
 
     final scriptPath = AppDirectory.extensionScript(dto.package);

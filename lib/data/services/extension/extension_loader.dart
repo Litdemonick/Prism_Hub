@@ -36,10 +36,9 @@ abstract final class ExtensionLoader {
       }
     }
 
-    // Primera vez o DB vacía: instalar Prism+ automáticamente
-    if (ExtensionService.allLoaded.isEmpty) {
-      await autoInstallBuiltIn();
-    }
+    // Siempre verificar el catálogo remoto e instalar extensiones faltantes.
+    // El installer omite paquetes ya presentes en DB para no re-descargar.
+    await autoInstallBuiltIn();
   }
 
   /// Descarga e instala todas las extensiones de los repos integrados.
