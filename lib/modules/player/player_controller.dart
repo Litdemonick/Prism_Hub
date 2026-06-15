@@ -23,6 +23,9 @@ class PlayerController extends GetxController {
   final selectedSubtitleIdx = (-1).obs;
   final speed = 1.0.obs;
 
+  // Mensaje transitorio de cambio automático de servidor ("X falló, probando Y").
+  final switchMessage = RxnString();
+
   StreamSubscription<String>? _errorSub;
   StreamSubscription<bool>? _bufferingSub;
   StreamSubscription<bool>? _playingSub;
@@ -32,6 +35,12 @@ class PlayerController extends GetxController {
   // desconocido, etc.). Si llega DESPUÉS, es un error no-fatal (red, pista de sub).
   bool _streamAccepted = false;
 
+  // URLs de servidores que ya fallaron en este episodio → no se reintentan en
+  // el auto-fallback. Se limpia en cada load()/retryAll().
+  final Set<String> _failedStreams = {};
+  // Evita reentradas mientras se cambia de servidor automáticamente.
+  bool _advancing = false;
+
   @override
   void onInit() {
     super.onInit();
@@ -40,11 +49,17 @@ class PlayerController extends GetxController {
 
     _bufferingSub = _player.stream.buffering.listen((b) {
       isBuffering.value = b;
-      if (b) _streamAccepted = true;
+      if (b) {
+        _streamAccepted = true;
+        switchMessage.value = null; // el servidor respondió → ocultar aviso
+      }
     });
 
     _playingSub = _player.stream.playing.listen((playing) {
-      if (playing) _streamAccepted = true;
+      if (playing) {
+        _streamAccepted = true;
+        switchMessage.value = null;
+      }
     });
 
     _errorSub = _player.stream.error.listen((err) {
@@ -57,14 +72,56 @@ class PlayerController extends GetxController {
           err.contains('Failed to recognize file format') ||
           err.contains('No suitable demuxer found');
       if (isFatalUrl || (!isLoading.value && !_streamAccepted)) {
-        error.value = 'No se pudo reproducir el video';
+        _onStreamFailed();
       }
     });
+  }
+
+  /// El servidor actual falló: marca como fallido y salta automáticamente al
+  /// siguiente servidor no probado. Solo cuando se agotan todos muestra error.
+  void _onStreamFailed() {
+    if (_advancing) return;
+    final streams = watchData.value?.streams ?? const [];
+    final current = selectedStream.value;
+    if (current != null) _failedStreams.add(current.url);
+
+    WatchStream? next;
+    for (final s in streams) {
+      if (!_failedStreams.contains(s.url)) {
+        next = s;
+        break;
+      }
+    }
+
+    if (next != null) {
+      _advancing = true;
+      final from = current?.displayLabel ?? 'servidor';
+      switchMessage.value =
+          'Servidor "$from" falló — probando "${next.displayLabel}"…';
+      _log.info('Auto-fallback: $from → ${next.displayLabel}');
+      _openStream(next).whenComplete(() => _advancing = false);
+    } else {
+      switchMessage.value = null;
+      error.value = 'Ningún servidor pudo reproducir este episodio';
+    }
+  }
+
+  /// Reintenta desde el primer servidor (botón "Reintentar" de la pantalla de error).
+  Future<void> retryAll() async {
+    final streams = watchData.value?.streams ?? const [];
+    if (streams.isEmpty) return;
+    _failedStreams.clear();
+    error.value = null;
+    isLoading.value = true;
+    await _openStream(streams.first);
+    isLoading.value = false;
   }
 
   Future<void> load(String episodeUrl, String package) async {
     isLoading.value = true;
     error.value = null;
+    switchMessage.value = null;
+    _failedStreams.clear();
 
     final rt = ExtensionService.get(package);
     if (rt == null) {
@@ -95,8 +152,13 @@ class PlayerController extends GetxController {
     }
   }
 
+  /// Cambio manual de servidor desde el selector. El usuario lo eligió a
+  /// propósito, así que se limpia el error y se re-habilita ese servidor.
   Future<void> switchStream(WatchStream stream) async {
     final pos = _player.state.position;
+    _failedStreams.remove(stream.url);
+    error.value = null;
+    switchMessage.value = null;
     await _openStream(stream);
     await _player.seek(pos);
   }

@@ -44,6 +44,7 @@ class _PlayerPageState extends State<PlayerPage> {
         }
         if (_c.error.value != null) {
           return _ErrorView(
+            c: _c,
             message: _c.error.value!,
             reason: _c.watchData.value?.reason,
             onBack: () => Navigator.of(context).pop(),
@@ -88,6 +89,17 @@ class _PlayerView extends StatelessWidget {
             if (!c.isBuffering.value) return const SizedBox.shrink();
             return const Center(
               child: CircularProgressIndicator(color: Colors.white),
+            );
+          }),
+          // Aviso transitorio de cambio automático de servidor.
+          Obx(() {
+            final msg = c.switchMessage.value;
+            if (msg == null) return const SizedBox.shrink();
+            return Positioned(
+              top: 70,
+              left: 0,
+              right: 0,
+              child: Center(child: _SwitchBanner(message: msg)),
             );
           }),
         ],
@@ -412,9 +424,53 @@ class _LoadingView extends StatelessWidget {
   }
 }
 
-class _ErrorView extends StatelessWidget {
-  const _ErrorView({required this.message, required this.onBack, this.reason});
+class _SwitchBanner extends StatelessWidget {
+  const _SwitchBanner({required this.message});
+  final String message;
 
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      margin: const EdgeInsets.symmetric(horizontal: 24),
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+      decoration: BoxDecoration(
+        color: Colors.black.withValues(alpha: 0.78),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: Colors.white24),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          const SizedBox(
+            width: 16,
+            height: 16,
+            child: CircularProgressIndicator(
+              strokeWidth: 2,
+              color: Color(0xFFFBBF24),
+            ),
+          ),
+          const SizedBox(width: 12),
+          Flexible(
+            child: Text(
+              message,
+              style: const TextStyle(color: Colors.white, fontSize: 13),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _ErrorView extends StatelessWidget {
+  const _ErrorView({
+    required this.c,
+    required this.message,
+    required this.onBack,
+    this.reason,
+  });
+
+  final PlayerController c;
   final String message;
   final String? reason;
   final VoidCallback onBack;
@@ -432,6 +488,7 @@ class _ErrorView extends StatelessWidget {
     final displayMsg = message == '__reason__'
         ? 'No se pudo obtener el stream'
         : message;
+    final streams = c.watchData.value?.streams ?? const [];
 
     return Column(
       children: [
@@ -446,59 +503,112 @@ class _ErrorView extends StatelessWidget {
         ),
         Expanded(
           child: Center(
-            child: Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 40),
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  const Icon(
-                    Icons.error_outline_rounded,
-                    color: Colors.white38,
-                    size: 72,
-                  ),
-                  const SizedBox(height: 20),
-                  Text(
-                    displayMsg,
-                    style: const TextStyle(color: Colors.white70, fontSize: 16),
-                    textAlign: TextAlign.center,
-                  ),
-                  if (showReason) ...[
-                    const SizedBox(height: 12),
-                    Container(
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: 16,
-                        vertical: 10,
+            child: SingleChildScrollView(
+              child: Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 40),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    const Icon(
+                      Icons.error_outline_rounded,
+                      color: Colors.white38,
+                      size: 64,
+                    ),
+                    const SizedBox(height: 18),
+                    Text(
+                      displayMsg,
+                      style: const TextStyle(
+                        color: Colors.white70,
+                        fontSize: 16,
                       ),
-                      decoration: BoxDecoration(
-                        color: Colors.white10,
-                        borderRadius: BorderRadius.circular(12),
-                      ),
-                      child: Text(
-                        _reasonLabel(reason!),
-                        style: const TextStyle(
-                          color: Colors.white60,
-                          fontSize: 14,
+                      textAlign: TextAlign.center,
+                    ),
+                    if (showReason) ...[
+                      const SizedBox(height: 12),
+                      Container(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 16,
+                          vertical: 10,
                         ),
-                        textAlign: TextAlign.center,
+                        decoration: BoxDecoration(
+                          color: Colors.white10,
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                        child: Text(
+                          _reasonLabel(reason!),
+                          style: const TextStyle(
+                            color: Colors.white60,
+                            fontSize: 14,
+                          ),
+                          textAlign: TextAlign.center,
+                        ),
                       ),
+                    ],
+                    // Selector de servidores: el usuario puede probar otro
+                    // manualmente sin salir del episodio.
+                    if (streams.length > 1) ...[
+                      const SizedBox(height: 24),
+                      const Text(
+                        'Probar otro servidor',
+                        style: TextStyle(color: Colors.white54, fontSize: 13),
+                      ),
+                      const SizedBox(height: 12),
+                      Wrap(
+                        spacing: 8,
+                        runSpacing: 8,
+                        alignment: WrapAlignment.center,
+                        children: [
+                          for (final s in streams)
+                            ActionChip(
+                              label: Text(s.displayLabel),
+                              labelStyle: const TextStyle(
+                                color: Colors.white,
+                                fontSize: 13,
+                              ),
+                              backgroundColor: const Color(0xFF1F1F1F),
+                              side: const BorderSide(color: Colors.white24),
+                              onPressed: () => c.switchStream(s),
+                            ),
+                        ],
+                      ),
+                    ],
+                    const SizedBox(height: 24),
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        OutlinedButton.icon(
+                          icon: const Icon(
+                            Icons.refresh_rounded,
+                            color: Color(0xFFFBBF24),
+                          ),
+                          label: const Text(
+                            'Reintentar',
+                            style: TextStyle(color: Color(0xFFFBBF24)),
+                          ),
+                          style: OutlinedButton.styleFrom(
+                            side: const BorderSide(color: Color(0xFFFBBF24)),
+                          ),
+                          onPressed: c.retryAll,
+                        ),
+                        const SizedBox(width: 12),
+                        OutlinedButton.icon(
+                          icon: const Icon(
+                            Icons.arrow_back_rounded,
+                            color: Colors.white70,
+                          ),
+                          label: const Text(
+                            'Volver',
+                            style: TextStyle(color: Colors.white70),
+                          ),
+                          style: OutlinedButton.styleFrom(
+                            side: const BorderSide(color: Colors.white24),
+                          ),
+                          onPressed: onBack,
+                        ),
+                      ],
                     ),
                   ],
-                  const SizedBox(height: 28),
-                  OutlinedButton.icon(
-                    icon: const Icon(
-                      Icons.arrow_back_rounded,
-                      color: Colors.white70,
-                    ),
-                    label: const Text(
-                      'Volver',
-                      style: TextStyle(color: Colors.white70),
-                    ),
-                    style: OutlinedButton.styleFrom(
-                      side: const BorderSide(color: Colors.white24),
-                    ),
-                    onPressed: onBack,
-                  ),
-                ],
+                ),
               ),
             ),
           ),
