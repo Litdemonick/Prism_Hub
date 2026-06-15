@@ -151,7 +151,9 @@ class ExtensionRuntime {
   int _reqId = 0;
 
   static ExtensionRuntime load(ExtensionModel ext, String script) {
-    final rt  = getJavascriptRuntime();
+    // xhr:false → desactiva el fetch/XHR nativo de flutter_js para que no
+    // compita con nuestro polyfill. setTimeout sigue activo (es nativo C).
+    final rt  = getJavascriptRuntime(xhr: false);
     final dio = Dio(
       BaseOptions(
         connectTimeout: const Duration(seconds: 30),
