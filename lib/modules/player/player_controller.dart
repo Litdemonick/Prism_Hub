@@ -135,6 +135,16 @@ class PlayerController extends GetxController {
       final data = WatchData.fromMap(raw);
       watchData.value = data;
 
+      // Diagnóstico: qué devolvió watch() (resuelto vs embed crudo).
+      for (final s in data.streams) {
+        final kind = s.url.contains('.m3u8')
+            ? 'HLS'
+            : (s.url.contains('.mp4') || s.url.contains('get_video'))
+            ? 'MP4'
+            : 'CRUDO';
+        _log.info('stream [${s.quality}] $kind: ${s.url}');
+      }
+
       if (data.streams.isEmpty) {
         error.value = data.reason != null
             ? '__reason__'
