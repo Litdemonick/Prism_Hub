@@ -210,6 +210,17 @@ npm run build:all
 3. Para nuevas extensiones: contribuye directamente al catálogo en [Prism+](https://github.com/Litdemonick/prism-plus)
 4. Abre un PR hacia `develop`
 
+### CI — requisitos antes de hacer push
+
+El CI falla si el código Dart no está formateado o tiene warnings de analyzer:
+
+```bash
+dart format lib/                          # formatear antes de cada push
+flutter analyze --fatal-infos             # infos y warnings rompen el CI
+```
+
+Si no corres `dart format lib/` antes del push, el CI saldrá con exit code 123.
+
 ---
 
 ## 📄 Licencia
