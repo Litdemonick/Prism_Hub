@@ -21,6 +21,7 @@ class HomeController extends GetxController {
   Future<void> loadLatest() async {
     isLoading.value    = true;
     noConnection.value = false;
+    sections.value     = [];
 
     // Si Prism+ no está cargado aún, intentar instalarlo ahora
     if (!ExtensionService.hasAny) {
@@ -34,32 +35,38 @@ class HomeController extends GetxController {
       return;
     }
 
-    // Carga en paralelo para mejor rendimiento
-    final futures = runtimes.map((rt) async {
-      try {
-        final raw = await rt.latest(1);
-        if (raw.isEmpty) return null;
-        return HomeSection(
-          extensionName: rt.extension.name,
-          package:       rt.extension.package,
-          items: raw
-              .map(
-                (m) => MediaItem.fromMap(
-                  m,
-                  package: rt.extension.package,
-                  type:    rt.extension.type,
-                ),
-              )
-              .toList(),
-        );
-      } catch (e) {
-        _log.warning('Error en latest() de ${rt.extension.package}: $e');
-        return null;
-      }
-    });
+    // Cada extensión carga independientemente: la UI muestra cada sección
+    // en cuanto llega sin esperar a las que fallen o tarden más.
+    var remaining = runtimes.length;
 
-    final results = await Future.wait(futures);
-    sections.value  = results.whereType<HomeSection>().toList();
-    isLoading.value = false;
+    void onDone() {
+      remaining--;
+      if (remaining <= 0) {
+        if (sections.isEmpty) noConnection.value = true;
+        isLoading.value = false;
+      }
+    }
+
+    for (final rt in runtimes) {
+      rt.latest(1).then((raw) {
+        if (raw.isNotEmpty) {
+          sections.add(HomeSection(
+            extensionName: rt.extension.name,
+            package:       rt.extension.package,
+            items: raw
+                .map((m) => MediaItem.fromMap(
+                      m,
+                      package: rt.extension.package,
+                      type:    rt.extension.type,
+                    ))
+                .toList(),
+          ));
+        }
+        onDone();
+      }).catchError((Object e) {
+        _log.warning('Error en latest() de ${rt.extension.package}: $e');
+        onDone();
+      });
+    }
   }
 }
