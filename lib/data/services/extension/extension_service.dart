@@ -265,45 +265,53 @@ class ExtensionRuntime {
   // ── Helpers internos ────────────────────────────────────────────────────────
 
   Future<List<ExtResult>> _callList(String fn, List<dynamic> args) async {
-    final js = '$fn(${_encodeArgs(args)})';
+    // Forzar JSON.stringify para normalizar el resultado a String independiente
+    // del tipo nativo que devuelva el bridge de flutter_js (List, Map, String...).
+    final js =
+        '(async()=>JSON.stringify(await $fn(${_encodeArgs(args)})))()';
     final res = await _rt.evaluateAsync(js);
     if (res.isError) {
       _log.warning('[${extension.package}] $fn error: ${res.stringResult}');
       return [];
     }
-    return _extractList(res.rawResult);
+    return _parseList(res.stringResult);
   }
 
-  static List<ExtResult> _extractList(dynamic raw) {
-    if (raw is List) return raw.whereType<Map>().map(_castMap).toList();
-    if (raw is Map) {
-      // PrismPage<T> — { items: [...], hasMore: bool, total?: number }
-      final items = raw['items'];
-      if (items is List) return items.whereType<Map>().map(_castMap).toList();
-    }
-    if (raw is String) {
-      try {
-        final decoded = jsonDecode(raw);
-        return _extractList(decoded);
-      } catch (_) {}
+  static List<ExtResult> _parseList(String? raw) {
+    if (raw == null || raw.isEmpty || raw == 'null') return [];
+    try {
+      final decoded = jsonDecode(raw);
+      if (decoded is List) {
+        return decoded.whereType<Map>().map(_castMap).toList();
+      }
+      if (decoded is Map) {
+        final items = decoded['items'];
+        if (items is List) return items.whereType<Map>().map(_castMap).toList();
+      }
+    } catch (e) {
+      _log.warning('_parseList error: $e — raw=$raw');
     }
     return [];
   }
 
   Future<ExtResult> _callMap(String fn, List<dynamic> args) async {
-    final js = '$fn(${_encodeArgs(args)})';
+    final js =
+        '(async()=>JSON.stringify(await $fn(${_encodeArgs(args)})))()';
     final res = await _rt.evaluateAsync(js);
     if (res.isError) {
       _log.warning('[${extension.package}] $fn error: ${res.stringResult}');
       return {};
     }
-    final raw = res.rawResult;
-    if (raw is Map) return _castMap(raw);
-    if (raw is String) {
-      try {
-        final decoded = jsonDecode(raw);
-        if (decoded is Map) return _castMap(decoded);
-      } catch (_) {}
+    return _parseMap(res.stringResult);
+  }
+
+  static ExtResult _parseMap(String? raw) {
+    if (raw == null || raw.isEmpty || raw == 'null') return {};
+    try {
+      final decoded = jsonDecode(raw);
+      if (decoded is Map) return _castMap(decoded);
+    } catch (e) {
+      _log.warning('_parseMap error: $e');
     }
     return {};
   }
