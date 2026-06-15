@@ -52,6 +52,8 @@ abstract final class ExtensionLoader {
       try {
         final index = await provider.fetchIndex(repoUrl);
         _log.info('${index.extensions.length} extensiones en $repoUrl');
+        final currentPackages = index.extensions.map((e) => e.package).toSet();
+
         for (final dto in index.extensions) {
           try {
             // force: true → re-descarga siempre la versión más reciente del repo
@@ -64,8 +66,38 @@ abstract final class ExtensionLoader {
             _log.warning('Error instalando ${dto.package}: $e');
           }
         }
+
+        // Limpiar extensiones "zombis": las que se instalaron desde el repo
+        // oficial pero ya no están en el índice (se eliminaron de prism+).
+        // Sin esto quedan en la DB spammeando errores de red al arrancar.
+        await _removeStaleBuiltIns(repoUrl, currentPackages, installer);
       } catch (e) {
         _log.warning('No se pudo conectar con $repoUrl: $e');
+      }
+    }
+  }
+
+  /// Desinstala las extensiones que vinieron del repo oficial pero ya no figuran
+  /// en su índice. No toca extensiones de repos agregados por el usuario.
+  static Future<void> _removeStaleBuiltIns(
+    String repoUrl,
+    Set<String> currentPackages,
+    ExtensionInstaller installer,
+  ) async {
+    final installed = await DatabaseService.db.extensionModels
+        .filter()
+        .isInstalledEqualTo(true)
+        .findAll();
+
+    for (final ext in installed) {
+      final fromThisRepo = ext.repoUrl == repoUrl;
+      if (fromThisRepo && !currentPackages.contains(ext.package)) {
+        try {
+          await installer.uninstall(ext);
+          _log.info('Extensión zombi eliminada: ${ext.package}');
+        } catch (e) {
+          _log.warning('No se pudo eliminar ${ext.package}: $e');
+        }
       }
     }
   }
