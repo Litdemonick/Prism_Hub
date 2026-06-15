@@ -2,7 +2,7 @@
 
 <div align="center">
   <picture>
-    <img src="assets/logo_prismhub.png" width="360" alt="PrismHub" />
+    <img src="https://raw.githubusercontent.com/Litdemonick/Prism_Hub/develop/assets/logo_prismhub.png" width="360" alt="PrismHub" />
   </picture>
 
   <br /><br />
