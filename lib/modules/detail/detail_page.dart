@@ -439,7 +439,7 @@ class _SeasonSelector extends StatelessWidget {
         scrollDirection: Axis.horizontal,
         padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
         itemCount: seasons.length,
-        separatorBuilder: (_, __) => const SizedBox(width: 8),
+        separatorBuilder: (_, _) => const SizedBox(width: 8),
         itemBuilder: (_, i) => FilterChip(
           label: Text(seasons[i]),
           selected: i == selected,
@@ -487,7 +487,7 @@ class _EpisodeTile extends StatelessWidget {
                 width: 56,
                 height: 40,
                 fit: BoxFit.cover,
-                errorWidget: (_, __, ___) => _numberAvatar(cs),
+                errorWidget: (_, _, _) => _numberAvatar(cs),
               ),
             )
           : _numberAvatar(cs),

@@ -10,15 +10,21 @@ class AppShell extends StatelessWidget {
   final Widget child;
 
   static const _destinations = [
-    (icon: Icons.home_outlined, label: 'Inicio', route: AppRoutes.home),
-    (icon: Icons.search, label: 'Buscar', route: AppRoutes.search),
     (
-      icon: Icons.extension_outlined,
-      label: 'Extensiones',
-      route: AppRoutes.extensions,
+      icon: Icons.home_outlined,
+      activeIcon: Icons.home_rounded,
+      label: 'Inicio',
+      route: AppRoutes.home,
+    ),
+    (
+      icon: Icons.search_outlined,
+      activeIcon: Icons.search_rounded,
+      label: 'Buscar',
+      route: AppRoutes.search,
     ),
     (
       icon: Icons.settings_outlined,
+      activeIcon: Icons.settings_rounded,
       label: 'Ajustes',
       route: AppRoutes.settings,
     ),
@@ -27,18 +33,17 @@ class AppShell extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final location = GoRouterState.of(context).matchedLocation;
-    final selectedIndex = _destinations.indexWhere((d) => d.route == location);
+    final idx = _destinations.indexWhere((d) => d.route == location);
+    final selected = idx < 0 ? 0 : idx;
 
     return LayoutBuilder(
       builder: (context, constraints) {
-        final isWide = !Responsive.isMobile(context); // tablet ≥ 600 px
-
-        if (isWide) {
+        if (!Responsive.isMobile(context)) {
           return Scaffold(
             body: Row(
               children: [
                 NavigationRail(
-                  selectedIndex: selectedIndex < 0 ? 0 : selectedIndex,
+                  selectedIndex: selected,
                   onDestinationSelected: (i) =>
                       context.go(_destinations[i].route),
                   labelType: NavigationRailLabelType.all,
@@ -46,6 +51,7 @@ class AppShell extends StatelessWidget {
                       .map(
                         (d) => NavigationRailDestination(
                           icon: Icon(d.icon),
+                          selectedIcon: Icon(d.activeIcon),
                           label: Text(d.label),
                         ),
                       )
@@ -61,12 +67,15 @@ class AppShell extends StatelessWidget {
         return Scaffold(
           body: child,
           bottomNavigationBar: NavigationBar(
-            selectedIndex: selectedIndex < 0 ? 0 : selectedIndex,
+            selectedIndex: selected,
             onDestinationSelected: (i) => context.go(_destinations[i].route),
             destinations: _destinations
                 .map(
-                  (d) =>
-                      NavigationDestination(icon: Icon(d.icon), label: d.label),
+                  (d) => NavigationDestination(
+                    icon: Icon(d.icon),
+                    selectedIcon: Icon(d.activeIcon),
+                    label: d.label,
+                  ),
                 )
                 .toList(),
           ),

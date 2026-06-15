@@ -1,7 +1,6 @@
 import 'package:go_router/go_router.dart';
 
 import '../../modules/detail/detail_page.dart';
-import '../../modules/extensions/extensions_page.dart';
 import '../../modules/home/home_page.dart';
 import '../../modules/player/player_page.dart';
 import '../../modules/player/watch_args.dart';
@@ -11,13 +10,12 @@ import '../../modules/settings/settings_page.dart';
 import '../../shared/widgets/app_shell.dart';
 
 abstract final class AppRoutes {
-  static const home = '/';
-  static const search = '/search';
-  static const detail = '/detail';
-  static const player = '/player';
-  static const reader = '/reader';
-  static const extensions = '/extensions';
+  static const home     = '/';
+  static const search   = '/search';
   static const settings = '/settings';
+  static const detail   = '/detail';
+  static const player   = '/player';
+  static const reader   = '/reader';
 }
 
 abstract final class AppRouter {
@@ -27,22 +25,12 @@ abstract final class AppRouter {
       ShellRoute(
         builder: (context, state, child) => AppShell(child: child),
         routes: [
-          GoRoute(path: AppRoutes.home, builder: (ctx, st) => const HomePage()),
-          GoRoute(
-            path: AppRoutes.search,
-            builder: (ctx, st) => const SearchPage(),
-          ),
-          GoRoute(
-            path: AppRoutes.extensions,
-            builder: (ctx, st) => const ExtensionsPage(),
-          ),
-          GoRoute(
-            path: AppRoutes.settings,
-            builder: (ctx, st) => const SettingsPage(),
-          ),
+          GoRoute(path: AppRoutes.home,     builder: (ctx, _) => const HomePage()),
+          GoRoute(path: AppRoutes.search,   builder: (ctx, _) => const SearchPage()),
+          GoRoute(path: AppRoutes.settings, builder: (ctx, _) => const SettingsPage()),
         ],
       ),
-      // Las siguientes rutas están fuera del ShellRoute: pantalla completa, sin nav rail.
+      // Pantalla completa — fuera del ShellRoute (sin NavigationRail)
       GoRoute(
         path: AppRoutes.detail,
         builder: (ctx, st) => DetailPage(args: st.extra! as DetailArgs),

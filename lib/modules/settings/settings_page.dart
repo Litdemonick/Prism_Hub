@@ -85,7 +85,7 @@ class SettingsPage extends StatelessWidget {
                 Image.asset(
                   'assets/logo_prismhub.png',
                   height: 72,
-                  errorBuilder: (_, __, ___) => Icon(
+                  errorBuilder: (_, _, _) => Icon(
                     Icons.apps_rounded,
                     size: 72,
                     color: cs.primary,

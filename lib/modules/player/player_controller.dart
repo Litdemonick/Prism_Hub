@@ -12,36 +12,38 @@ class PlayerController extends GetxController {
   late final Player _player;
   late final VideoController videoController;
 
-  final isLoading = true.obs;
-  final error = Rxn<String>();
-  final watchData = Rxn<WatchData>();
-  final selectedStream = Rxn<WatchStream>();
+  final isLoading           = true.obs;
+  final error               = Rxn<String>();
+  final watchData           = Rxn<WatchData>();
+  final selectedStream      = Rxn<WatchStream>();
+  final selectedSubtitleIdx = (-1).obs; // -1 = desactivado
+  final speed               = 1.0.obs;
 
   @override
   void onInit() {
     super.onInit();
-    _player = Player();
+    _player         = Player();
     videoController = VideoController(_player);
   }
 
   Future<void> load(String episodeUrl, String package) async {
     isLoading.value = true;
-    error.value = null;
+    error.value     = null;
 
     final rt = ExtensionService.get(package);
     if (rt == null) {
-      error.value = 'Extensión no disponible';
+      error.value     = 'Extensión no disponible';
       isLoading.value = false;
       return;
     }
 
     try {
-      final raw = await rt.watch(episodeUrl);
+      final raw  = await rt.watch(episodeUrl);
       final data = WatchData.fromMap(raw);
       watchData.value = data;
 
       if (data.streams.isEmpty) {
-        error.value = 'Sin streams disponibles';
+        error.value     = data.reason != null ? '__reason__' : 'Sin streams disponibles';
         isLoading.value = false;
         return;
       }
@@ -64,6 +66,24 @@ class PlayerController extends GetxController {
   Future<void> _openStream(WatchStream stream) async {
     selectedStream.value = stream;
     await _player.open(Media(stream.url, httpHeaders: stream.headers ?? {}));
+  }
+
+  Future<void> setSubtitle(int index) async {
+    selectedSubtitleIdx.value = index;
+    final subs = watchData.value?.subtitles ?? [];
+    if (index < 0 || index >= subs.length) {
+      await _player.setSubtitleTrack(SubtitleTrack.no());
+    } else {
+      final sub = subs[index];
+      await _player.setSubtitleTrack(
+        SubtitleTrack.uri(sub.url, title: sub.label, language: sub.lang ?? ''),
+      );
+    }
+  }
+
+  Future<void> setSpeed(double s) async {
+    speed.value = s;
+    await _player.setRate(s);
   }
 
   @override
