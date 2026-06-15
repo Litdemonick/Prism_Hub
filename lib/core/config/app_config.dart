@@ -5,7 +5,7 @@ abstract final class AppConfig {
 
   /// URL del índice oficial de Prism+ — motor de extensiones de PrismHub.
   static const String prismPlusRepoUrl =
-      'https://raw.githubusercontent.com/Litdemonick/prism-plus/main/dist/index.json';
+      'https://raw.githubusercontent.com/Litdemonick/prism-plus/main/index.json';
 
   /// Repositorios integrados: siempre presentes, no se pueden eliminar.
   static const List<String> builtInRepos = [prismPlusRepoUrl];
