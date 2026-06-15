@@ -18,6 +18,7 @@ import 'modules/settings/settings_controller.dart';
 
 void main(List<String> args) async {
   WidgetsFlutterBinding.ensureInitialized();
+  initLogger();
 
   if (args.contains('--version') || args.contains('-version')) {
     print('PrismHub ${AppConfig.version}');
