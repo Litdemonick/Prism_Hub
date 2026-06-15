@@ -1,12 +1,13 @@
 /**
  * Plantilla de extensión PrismHub / Prism+
  *
- * Copia esta carpeta, renómbrala y rellena las cuatro funciones.
+ * Copia esta carpeta con el nombre de tu extensión:
+ *   node scripts/new-extension.mjs nombre-extension
  *
- * Compilar:
- *   npm run build -- --extension=mi-extension
+ * Compila después de editar:
+ *   npm run build -- --extension=nombre-extension
  *
- * Tipos: ../types/prism.d.ts  (idéntico al SDK de Prism+)
+ * Tipos: ../types/prism.d.ts — idéntico al SDK de Prism+
  */
 
 import type {
@@ -18,18 +19,18 @@ import type {
 } from '../types/prism'
 
 // ---------------------------------------------------------------------------
-// Metadata — también declara estos valores en extensions/index.json
+// Metadata — refleja estos valores en extensions/index.json
 // ---------------------------------------------------------------------------
 
 export const meta = {
-  name: 'Mi Extensión',
-  package: 'io.prismhub.mi-extension',
+  name: 'PrismPlusExtension',
+  package: 'io.prismhub.my-extension',
   version: '1.0.0',
-  author: 'tu-usuario',
+  author: 'Litdemonick',
   type: 'anime' as const,
-  description: 'Descripción corta de la extensión',
-  icon: 'https://example.com/icon.png',
-  baseUrl: 'https://example.com',
+  description: 'Extension description',
+  icon: '',
+  baseUrl: 'https://target-site.com',
 }
 
 // ---------------------------------------------------------------------------
@@ -48,7 +49,7 @@ async function fetchHtml(url: string, headers?: Record<string, string>): Promise
 }
 
 // ---------------------------------------------------------------------------
-// API requerida — las cuatro funciones que DEBE exportar toda extensión
+// API requerida
 // ---------------------------------------------------------------------------
 
 export async function latest(page: number): Promise<PrismItem[] | PrismPage<PrismItem>> {

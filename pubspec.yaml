@@ -1,5 +1,5 @@
 name: prism_hub
-description: "Prism Hub - Anime, manga, comics y novelas via extensiones"
+description: "PrismHub — app multiplataforma de entretenimiento impulsada por Prism+"
 publish_to: 'none'
 version: 1.0.0+1
 
@@ -60,3 +60,4 @@ flutter:
   assets:
     - assets/i18n/
     - assets/icons/
+    - assets/logo_prismhub.png

@@ -1,8 +1,16 @@
 # PrismHub
 
 <div align="center">
+  <picture>
+    <img src="assets/logo_prismhub.png" width="360" alt="PrismHub" />
+  </picture>
+
+  <br /><br />
+
   <h3>Anime · Manga · Películas · Series · y más — impulsado por Prism+</h3>
   <p>App multiplataforma en Flutter. Motor de extensiones universal: <strong>Prism+</strong>.</p>
+
+  <br />
 
   ![Flutter](https://img.shields.io/badge/Flutter-3.44+-02569B?logo=flutter)
   ![Dart](https://img.shields.io/badge/Dart-3.12+-0175C2?logo=dart)

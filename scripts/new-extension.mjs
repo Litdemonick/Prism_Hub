@@ -1,6 +1,6 @@
 /**
  * Crea una nueva extensión a partir del template.
- * Uso: node scripts/new-extension.mjs mi-extension
+ * Uso: node scripts/new-extension.mjs nombre-extension
  */
 
 import { cpSync, readFileSync, writeFileSync } from 'fs'
@@ -14,18 +14,24 @@ if (!name || name.startsWith('_')) {
   process.exit(1)
 }
 
+const displayName = name
+  .split('-')
+  .map((w) => w.charAt(0).toUpperCase() + w.slice(1))
+  .join('')
+
 const src = join(ROOT, 'extensions', '_template')
 const dest = join(ROOT, 'extensions', name)
 
 cpSync(src, dest, { recursive: true })
 
-// Reemplaza el nombre en index.ts
 const indexPath = join(dest, 'index.ts')
 const content = readFileSync(indexPath, 'utf8')
-  .replace('Mi Extensión', name)
-  .replace('com.prismhub.mi-extension', `com.prismhub.${name}`)
-  .replace('https://example.com', `https://${name}.com`)
+  .replace('PrismPlusExtension', displayName)
+  .replace('io.prismhub.my-extension', `io.prismhub.${name}`)
+  .replace('Extension description', `${displayName} extension for PrismHub`)
+  .replace('https://target-site.com', `https://${name}.com`)
 
 writeFileSync(indexPath, content)
-console.log(`Extensión "${name}" creada en extensions/${name}/`)
-console.log(`Edita extensions/${name}/index.ts y luego: npm run build -- --extension=${name}`)
+console.log(`✅ Extensión "${displayName}" creada en extensions/${name}/`)
+console.log(`📝 Edita extensions/${name}/index.ts`)
+console.log(`🔨 Compila con: npm run build -- --extension=${name}`)
