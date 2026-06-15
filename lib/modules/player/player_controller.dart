@@ -47,11 +47,15 @@ class PlayerController extends GetxController {
     });
 
     _errorSub = _player.stream.error.listen((err) {
-      if (err.isEmpty) return;
+      if (err.isEmpty || error.value != null) return;
       _log.warning('media_kit: $err');
-      // Solo mostrar error fatal si la URL nunca fue aceptada por el player
-      // (nunca llegó a buffering ni playing). Errores post-inicio son no-fatales.
-      if (!isLoading.value && error.value == null && !_streamAccepted) {
+      // Errores que indican URL irreproduble son siempre fatales (embed pages,
+      // formato desconocido, etc.), aunque buffering haya disparado brevemente.
+      final isFatalUrl =
+          err.contains('Failed to open') ||
+          err.contains('Failed to recognize file format') ||
+          err.contains('No suitable demuxer found');
+      if (isFatalUrl || (!isLoading.value && !_streamAccepted)) {
         error.value = 'No se pudo reproducir el video';
       }
     });
