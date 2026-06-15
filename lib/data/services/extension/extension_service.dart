@@ -178,6 +178,28 @@ class ExtensionRuntime {
 
     try {
       rt.evaluate(script);
+
+      // Los bundles de Prism+ usan el patrón IIFE:
+      //   var io_prismhub_xxx = (() => { ... return exports; })();
+      // Las funciones quedan en esa variable, NO en global scope.
+      // Exponemos latest/search/detail/watch como globals para que
+      // _callList pueda invocarlos directamente.
+      final varName = ext.package.replaceAll('.', '_');
+      rt.evaluate('''
+(function() {
+  var _m = (typeof $varName !== 'undefined') ? $varName : null;
+  if (_m && typeof _m === 'object') {
+    if (typeof _m.latest === 'function')
+      globalThis.latest = function() { return _m.latest.apply(_m, arguments); };
+    if (typeof _m.search === 'function')
+      globalThis.search = function() { return _m.search.apply(_m, arguments); };
+    if (typeof _m.detail === 'function')
+      globalThis.detail = function() { return _m.detail.apply(_m, arguments); };
+    if (typeof _m.watch === 'function')
+      globalThis.watch  = function() { return _m.watch.apply(_m, arguments); };
+  }
+})();
+''');
     } catch (e, st) {
       rt.dispose();
       dio.close();
