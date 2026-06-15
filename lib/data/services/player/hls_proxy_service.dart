@@ -44,19 +44,21 @@ abstract final class HlsProxyService {
     ),
   )..interceptors.add(CookieManager(CookieJar()));
 
-  /// Devuelve una URL reproducible. Para HLS con cabeceras, enruta por el proxy;
-  /// para todo lo demás (mp4 directo, sin cabeceras) devuelve la URL original —
-  /// media_kit ya gestiona bien una sola petición con `httpHeaders`.
+  /// Devuelve una URL reproducible. **Todos** los HLS (.m3u8) se enrutan por el
+  /// proxy local, traigan cabeceras o no. Motivo: media_kit/libmpv usa mbedtls y
+  /// un User-Agent no-navegador para los segmentos, y muchos CDN responden 403 o
+  /// rechazan el TLS. El proxy los baja con el Dio de Dart (TLS bueno) + un
+  /// User-Agent de navegador + Referer, garantizando que reproduzcan.
+  /// Los mp4 directos no se tocan (media_kit los abre bien en una sola petición).
   static Future<String> resolve(
     String url,
     Map<String, String>? headers,
   ) async {
-    final isHls = url.contains('.m3u8');
-    if (!isHls || headers == null || headers.isEmpty) return url;
+    if (!url.contains('.m3u8')) return url;
 
     try {
       await start();
-      return _proxyUrl(url, headers);
+      return _proxyUrl(url, headers ?? const {});
     } catch (e) {
       _log.warning('No se pudo enrutar por el proxy, usando URL directa: $e');
       return url;
@@ -202,13 +204,25 @@ abstract final class HlsProxyService {
   }
 
   // ── Política de cabeceras por-host ──────────────────────────────────────────
-  // Punto de extensión: aquí se pueden ajustar cabeceras según el host destino
-  // (p. ej. quitar Referer para CDNs que lo rechazan). Por defecto reenvía todo,
-  // que es lo que garantiza la reproducción frente a los 403 de segmentos.
+  // Garantiza un User-Agent de navegador (los CDN devuelven 403 al UA de libmpv)
+  // y un Referer. Reenvía las cabeceras que ya traiga el stream; completa las que
+  // falten. Esto es lo que hace que los segmentos dejen de dar 403.
+  static const _browserUa =
+      'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 '
+      '(KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36';
+
   static Map<String, String> _headersForHost(
-    Uri host,
+    Uri target,
     Map<String, String> headers,
-  ) => Map<String, String>.from(headers);
+  ) {
+    final out = Map<String, String>.from(headers);
+    // Normalizar claves existentes a su forma canónica para no duplicar.
+    final hasUa = out.keys.any((k) => k.toLowerCase() == 'user-agent');
+    final hasRef = out.keys.any((k) => k.toLowerCase() == 'referer');
+    if (!hasUa) out['User-Agent'] = _browserUa;
+    if (!hasRef) out['Referer'] = '${target.scheme}://${target.host}/';
+    return out;
+  }
 
   // ── Helpers ─────────────────────────────────────────────────────────────────
 
