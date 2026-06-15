@@ -1,12 +1,12 @@
 # PrismHub
 
 <div align="center">
-  <h3>Anime · Manga · Películas · Series · y más — vía extensiones Prism+</h3>
-  <p>App multiplataforma en Flutter. Motor de extensiones universal impulsado por <strong>Prism+</strong>.</p>
+  <h3>Anime · Manga · Películas · Series · y más — impulsado por Prism+</h3>
+  <p>App multiplataforma en Flutter. Motor de extensiones universal: <strong>Prism+</strong>.</p>
 
   ![Flutter](https://img.shields.io/badge/Flutter-3.44+-02569B?logo=flutter)
   ![Dart](https://img.shields.io/badge/Dart-3.12+-0175C2?logo=dart)
-  ![Prism+](https://img.shields.io/badge/Prism+-SDK-6D28D9?logo=typescript)
+  ![Prism+](https://img.shields.io/badge/Motor-Prism+-6D28D9?logo=typescript)
   ![Plataformas](https://img.shields.io/badge/Platforms-Windows%20%7C%20Android%20%7C%20Linux%20%7C%20iOS-22C55E)
   ![License](https://img.shields.io/badge/License-AGPL--3.0-3B82F6)
 </div>
@@ -15,44 +15,53 @@
 
 ## 🧩 ¿Qué es PrismHub?
 
-PrismHub es una aplicación de entretenimiento multiplataforma que consume contenido a través de **extensiones TypeScript**. Soporta anime, manga, películas, series, podcasts, TV en vivo y cualquier tipo de media gracias a su integración con **Prism+**, el núcleo universal de extensiones.
+PrismHub es una aplicación de entretenimiento multiplataforma que consume contenido a través de **extensiones TypeScript**. Su motor es **[Prism+](https://github.com/Litdemonick/prism-plus)** — el núcleo universal de extensiones que PrismHub usa como fuente oficial.
 
-El motor de extensiones ejecuta cada bundle JS en un runtime QuickJS aislado dentro de la app, sin colisiones entre extensiones ni acceso al sistema de archivos del usuario.
+Cada extensión se ejecuta en un runtime QuickJS aislado dentro de la app. PrismHub se sincroniza automáticamente con el catálogo de Prism+ sin configuración extra.
 
 ---
 
-## ⚡ Integración con Prism+
+## ⚡ Motor integrado: Prism+
 
-PrismHub usa [Prism+](https://github.com/Litdemonick/prism-plus) como su **núcleo de extensiones**. Esto significa:
+El repositorio de **Prism+** está integrado como motor oficial de PrismHub. Esto significa:
 
-- Las extensiones escritas para Prism+ funcionan directamente en PrismHub sin modificaciones
-- Los tipos en `extensions/types/prism.d.ts` son idénticos al SDK de Prism+
-- El formato del `index.json` de repositorio es compatible con ambos proyectos
-- PrismHub puede apuntar al repositorio de Prism+ para instalar sus 16+ extensiones
+- ✅ Las extensiones de Prism+ están disponibles desde el primer arranque — sin URL manual
+- ✅ Cualquier extensión nueva o actualización en Prism+ se refleja automáticamente en PrismHub
+- ✅ El contrato de tipos (`extensions/types/prism.d.ts`) es idéntico al SDK de Prism+
+- ✅ El repositorio integrado no se puede eliminar (aparece con 🔒 en la pantalla de Extensiones)
 
-### Agregar el repositorio de Prism+
-
-En la pantalla de **Extensiones** → **Repositorios**, agrega:
-
-```
-https://raw.githubusercontent.com/Litdemonick/prism-plus/main/dist/index.json
-```
-
-Esto habilita la instalación de todas las extensiones incluidas en Prism+.
+Los usuarios pueden agregar repositorios externos adicionales desde la pantalla de Extensiones, pero Prism+ siempre estará presente como fuente principal.
 
 ---
 
 ## ✨ Características
 
-- 🎬 Reproductor de video integrado (`media_kit`) con soporte multi-calidad
+- 🎬 Reproductor de video con soporte multi-calidad y subtítulos
 - 📖 Lector de manga / cómics / novelas con scroll continuo
 - 🔌 Sistema de extensiones Prism+ — instala, actualiza y desinstala sin reiniciar
 - 🏃 Runtime JS aislado por extensión (QuickJS vía `flutter_js`)
+- 📱 Diseño completamente responsivo (móvil / tablet / escritorio)
 - 💾 Historial y favoritos persistentes (Isar)
 - 🌐 i18n ES / EN
 - 🎨 Tema claro/oscuro (Material 3)
-- 🖥️ Navegación adaptativa: rail en desktop, bottom bar en móvil
-- 🔄 Compatible con repositorios de extensiones externos
+- 🔄 Sincronización automática con el catálogo de Prism+
+
+---
+
+## 📱 Diseño responsivo
+
+PrismHub adapta toda su interfaz según el tamaño de pantalla del dispositivo:
+
+| Breakpoint | Rango | Navegación | Grid | Comportamiento |
+|---|---|---|---|---|
+| **Mobile** | < 600 px | Bottom bar | 2 columnas | Smartphones portrait/landscape |
+| **Tablet** | 600–1199 px | Bottom bar | 3 columnas | Tablets, laptops compactas |
+| **Desktop** | ≥ 1200 px | Navigation Rail | 4 columnas | Escritorio con controles de ventana nativos |
+
+- **Padding horizontal**: proporcional al viewport en móvil/tablet; fijo a la izquierda en desktop
+- **Cards de contenido**: ancho adaptativo (110 / 130 / 150 px según dispositivo)
+- **Contenido centrado**: ancho máximo de 1280 px en desktop para pantallas muy anchas
+- **Ventana en desktop**: tamaño inicial 1200×780 px, mínimo 1000×680 px para que el rail siempre sea visible
 
 ---
 
@@ -66,7 +75,7 @@ Esto habilita la instalación de todas las extensiones incluidas en Prism+.
 | DB | Isar 3 |
 | Config / KV | shared_preferences · Hive |
 | HTTP | Dio + cookie_jar |
-| Extensiones | Prism+ SDK → esbuild → flutter_js (QuickJS) |
+| Motor de extensiones | **Prism+ SDK** → esbuild → flutter_js (QuickJS) |
 | Video | media_kit |
 | Desktop | window_manager |
 | i18n | flutter_i18n |
@@ -79,7 +88,7 @@ Esto habilita la instalación de todas las extensiones incluidas en Prism+.
 Prism_Hub/
 ├── lib/
 │   ├── core/
-│   │   ├── config/        # AppConfig (constantes globales)
+│   │   ├── config/        # AppConfig — URL de Prism+, constantes globales
 │   │   ├── db/            # DatabaseService (Isar)
 │   │   ├── router/        # AppRouter + rutas (go_router)
 │   │   ├── theme/         # AppTheme (Material 3)
@@ -89,13 +98,13 @@ Prism_Hub/
 │   │   ├── providers/     # ExtensionRepoProvider
 │   │   └── services/
 │   │       └── extension/ # ExtensionService + Loader + Installer
-│   ├── modules/           # Una carpeta por pantalla
+│   ├── modules/
 │   │   ├── home/
 │   │   ├── search/
 │   │   ├── detail/
-│   │   ├── player/        # Reproductor (anime, películas, series)
+│   │   ├── player/        # Reproductor (video)
 │   │   ├── reader/        # Lector (manga, cómic, novela)
-│   │   ├── extensions/    # Gestión de extensiones + repos
+│   │   ├── extensions/    # Gestión de extensiones y repos
 │   │   └── settings/
 │   └── shared/
 │       ├── widgets/       # AppShell, ContentCard
@@ -105,10 +114,10 @@ Prism_Hub/
 │   │   └── prism.d.ts     # Tipos Prism+ SDK (sincronizados)
 │   ├── _template/
 │   │   └── index.ts       # Plantilla para nuevas extensiones
-│   └── index.json         # Registro local de extensiones
+│   └── index.json         # Registro local
 ├── scripts/
-│   ├── build.mjs          # Compila extensiones TS → JS (esbuild)
-│   └── new-extension.mjs  # Scaffolding de nueva extensión
+│   ├── build.mjs          # Compila TS → JS (esbuild)
+│   └── new-extension.mjs  # Scaffolding de extensión
 ├── package.json
 └── tsconfig.json
 ```
@@ -121,8 +130,8 @@ Cada extensión exporta exactamente cuatro funciones asíncronas:
 
 | Función | Firma | Descripción |
 |---------|-------|-------------|
-| `latest` | `(page) => Promise<PrismItem[] \| PrismPage<PrismItem>>` | Últimos contenidos |
-| `search` | `(keyword, page, filter?) => Promise<PrismItem[] \| PrismPage<PrismItem>>` | Búsqueda |
+| `latest` | `(page) => Promise<PrismItem[] \| PrismPage>` | Últimos contenidos |
+| `search` | `(keyword, page, filter?) => Promise<PrismItem[] \| PrismPage>` | Búsqueda |
 | `detail` | `(url) => Promise<PrismDetail>` | Metadata + episodios/capítulos |
 | `watch` | `(url) => Promise<PrismWatch>` | Streams de video o páginas |
 
@@ -130,7 +139,7 @@ Cada extensión exporta exactamente cuatro funciones asíncronas:
 
 `anime` · `manga` · `novel` · `movie` · `series` · `documentary` · `live` · `video` · `music` · `podcast` · `other`
 
-### Crear una extensión nueva
+### Crear una extensión local
 
 ```bash
 # Copiar la plantilla
@@ -143,13 +152,13 @@ cp -r extensions/_template extensions/mi-extension
 npm run build -- --extension=mi-extension
 ```
 
-La plantilla en `extensions/_template/index.ts` incluye los tipos correctos de Prism+ y stubs listos para rellenar.
+> Para publicar extensiones al catálogo oficial, contribuye directamente en [Prism+](https://github.com/Litdemonick/prism-plus).
 
 ---
 
 ## 🚀 Instalación y desarrollo
 
-### Requisitos previos
+### Requisitos
 
 - Flutter 3.44+
 - Node.js 18+ (para compilar extensiones TypeScript)
@@ -157,7 +166,7 @@ La plantilla en `extensions/_template/index.ts` incluye los tipos correctos de P
 ### Pasos
 
 ```bash
-# 1. Clonar y cambiar a la rama de desarrollo
+# 1. Clonar y cambiar a develop
 git clone https://github.com/Litdemonick/Prism_Hub.git
 cd Prism_Hub
 git checkout develop
@@ -170,7 +179,7 @@ dart run build_runner build --delete-conflicting-outputs
 flutter run -d windows    # Desktop
 flutter run -d android    # Android
 
-# 4. Dependencias de extensiones (TypeScript)
+# 4. Dependencias de extensiones
 npm install
 npm run build:all
 ```
@@ -190,12 +199,10 @@ npm run build:all
 
 ## 🤝 Contribuir
 
-1. Haz fork del repo y crea tu rama desde `develop`
-2. Para extensiones: sigue el contrato Prism+ (`extensions/_template/index.ts`)
-3. Para la app: mantén la arquitectura GetX + go_router existente
-4. Abre un PR hacia `develop` — describe qué hace y por qué
-
-Ver también: [Prism+](https://github.com/Litdemonick/prism-plus) si quieres contribuir extensiones al catálogo compartido.
+1. Haz fork y crea tu rama desde `develop`
+2. Para la app: mantén la arquitectura GetX + go_router existente
+3. Para nuevas extensiones: contribuye directamente al catálogo en [Prism+](https://github.com/Litdemonick/prism-plus)
+4. Abre un PR hacia `develop`
 
 ---
 

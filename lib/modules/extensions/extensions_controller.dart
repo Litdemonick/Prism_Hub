@@ -2,6 +2,7 @@ import 'package:get/get.dart';
 import 'package:isar/isar.dart';
 import 'package:logging/logging.dart';
 
+import '../../core/config/app_config.dart';
 import '../../core/db/database_service.dart';
 import '../../core/utils/app_storage.dart';
 import '../../data/models/extension_dto.dart';
@@ -16,18 +17,25 @@ class ExtensionsController extends GetxController {
 
   final installed = <ExtensionModel>[].obs;
   final available = <ExtensionDto>[].obs;
+
+  /// Todos los repos visibles: built-in (Prism+) + agregados por el usuario.
   final repos = <String>[].obs;
+
+  /// Solo los repos que el usuario agregó manualmente (persisten en storage).
+  final _userRepos = <String>[];
 
   final isLoadingInstalled = false.obs;
   final isLoadingAvailable = false.obs;
 
-  // Packages en proceso (install/uninstall/update)
   final busyPackages = <String>{}.obs;
 
   @override
   void onInit() {
     super.onInit();
-    repos.value = AppStorage.getStringList(StorageKey.extensionRepos);
+    _userRepos
+      ..clear()
+      ..addAll(AppStorage.getStringList(StorageKey.extensionRepos));
+    _syncReposList();
     _loadInstalled();
     fetchAvailable();
   }
@@ -60,7 +68,10 @@ class ExtensionsController extends GetxController {
         all.addAll(index.extensions);
       } catch (e) {
         _log.warning('Error al obtener repo $url: $e');
-        Get.snackbar('Error de red', 'No se pudo acceder a:\n$url');
+        // Repo built-in falla silenciosamente; repos de usuario notifican
+        if (!isBuiltIn(url)) {
+          Get.snackbar('Error de red', 'No se pudo acceder a:\n$url');
+        }
       }
     }
     available.value = all;
@@ -68,7 +79,7 @@ class ExtensionsController extends GetxController {
   }
 
   // ---------------------------------------------------------------------------
-  // Acciones
+  // Acciones de extensiones
 
   Future<void> install(ExtensionDto dto) async {
     busyPackages.add(dto.package);
@@ -113,21 +124,27 @@ class ExtensionsController extends GetxController {
   }
 
   // ---------------------------------------------------------------------------
-  // Repos
+  // Gestión de repositorios
 
   Future<void> addRepo(String url) async {
     final clean = url.trim();
     if (clean.isEmpty || repos.contains(clean)) return;
-    repos.add(clean);
-    await AppStorage.setStringList(StorageKey.extensionRepos, repos.toList());
+    _userRepos.add(clean);
+    await AppStorage.setStringList(StorageKey.extensionRepos, _userRepos);
+    _syncReposList();
     await fetchAvailable();
   }
 
   Future<void> removeRepo(String url) async {
-    repos.remove(url);
-    await AppStorage.setStringList(StorageKey.extensionRepos, repos.toList());
+    if (isBuiltIn(url)) return;
+    _userRepos.remove(url);
+    await AppStorage.setStringList(StorageKey.extensionRepos, _userRepos);
+    _syncReposList();
     available.removeWhere((e) => e.repoUrl == url);
   }
+
+  /// true si el repo es parte del motor integrado (no se puede eliminar).
+  bool isBuiltIn(String url) => AppConfig.builtInRepos.contains(url);
 
   // ---------------------------------------------------------------------------
   // Helpers para la UI
@@ -144,4 +161,10 @@ class ExtensionsController extends GetxController {
 
   ExtensionModel? installedModel(String package) =>
       installed.firstWhereOrNull((e) => e.package == package);
+
+  // ---------------------------------------------------------------------------
+
+  void _syncReposList() {
+    repos.value = [...AppConfig.builtInRepos, ..._userRepos];
+  }
 }

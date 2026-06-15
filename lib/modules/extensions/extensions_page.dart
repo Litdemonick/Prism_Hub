@@ -174,8 +174,8 @@ class _ExploreTab extends StatelessWidget {
       if (c.repos.isEmpty) {
         return const _EmptyState(
           icon: Icons.cloud_off,
-          message: 'Sin repositorios configurados',
-          hint: 'Pulsa + en la barra superior para añadir uno.',
+          message: 'Sin repositorios',
+          hint: 'El repositorio de Prism+ debería cargarse automáticamente.',
         );
       }
 
@@ -243,12 +243,16 @@ class _RepoChips extends StatelessWidget {
         separatorBuilder: (ctx, i) => const SizedBox(width: 8),
         itemBuilder: (context, i) {
           final url = c.repos[i];
-          // Muestra solo el host para brevedad
           final host = Uri.tryParse(url)?.host ?? url;
+          final builtIn = c.isBuiltIn(url);
           return Chip(
+            avatar: builtIn
+                ? const Icon(Icons.lock_outline, size: 14)
+                : null,
             label: Text(host, style: const TextStyle(fontSize: 12)),
-            deleteIcon: const Icon(Icons.close, size: 16),
-            onDeleted: () => c.removeRepo(url),
+            tooltip: builtIn ? 'Motor integrado — no se puede eliminar' : url,
+            deleteIcon: builtIn ? null : const Icon(Icons.close, size: 16),
+            onDeleted: builtIn ? null : () => c.removeRepo(url),
           );
         },
       ),
