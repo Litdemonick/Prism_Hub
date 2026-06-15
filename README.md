@@ -33,12 +33,10 @@ Cada extensión se ejecuta en un runtime QuickJS aislado dentro de la app. Prism
 
 El repositorio de **Prism+** está integrado como motor oficial de PrismHub. Esto significa:
 
-- ✅ Las extensiones de Prism+ están disponibles desde el primer arranque — sin URL manual
+- ✅ Las extensiones de Prism+ se instalan automáticamente en el primer arranque — sin configuración manual
 - ✅ Cualquier extensión nueva o actualización en Prism+ se refleja automáticamente en PrismHub
 - ✅ El contrato de tipos (`extensions/types/prism.d.ts`) es idéntico al SDK de Prism+
-- ✅ El repositorio integrado no se puede eliminar (aparece con 🔒 en la pantalla de Extensiones)
-
-Los usuarios pueden agregar repositorios externos adicionales desde la pantalla de Extensiones, pero Prism+ siempre estará presente como fuente principal.
+- ✅ Prism+ es la única fuente de extensiones — no se requiere ninguna configuración adicional
 
 ---
 
@@ -46,7 +44,7 @@ Los usuarios pueden agregar repositorios externos adicionales desde la pantalla 
 
 - 🎬 Reproductor de video con soporte multi-calidad y subtítulos
 - 📖 Lector de manga / cómics / novelas con scroll continuo
-- 🔌 Sistema de extensiones Prism+ — instala, actualiza y desinstala sin reiniciar
+- 🔌 Motor Prism+ integrado — extensiones auto-instaladas desde el primer arranque
 - 🏃 Runtime JS aislado por extensión (QuickJS vía `flutter_js`)
 - 📱 Diseño completamente responsivo (móvil / tablet / escritorio)
 - 💾 Historial y favoritos persistentes (Isar)
