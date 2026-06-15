@@ -7,6 +7,7 @@ import 'package:media_kit_video/media_kit_video.dart';
 
 import '../../data/models/watch_data.dart';
 import '../../data/services/extension/extension_service.dart';
+import '../../data/services/player/hls_proxy_service.dart';
 
 class PlayerController extends GetxController {
   static final _log = Logger('PlayerController');
@@ -103,7 +104,16 @@ class PlayerController extends GetxController {
   Future<void> _openStream(WatchStream stream) async {
     _streamAccepted = false; // resetear para cada URL nueva
     selectedStream.value = stream;
-    await _player.open(Media(stream.url, httpHeaders: stream.headers ?? {}));
+
+    // Para HLS con cabeceras, enrutar por el proxy local: garantiza que el
+    // Referer/Cookie/Origin lleguen a cada segmento (evita los 403 que dejan el
+    // vídeo en buffering infinito). Para mp4 directo devuelve la URL original.
+    final playUrl = await HlsProxyService.resolve(stream.url, stream.headers);
+    final useProxy = playUrl != stream.url;
+
+    await _player.open(
+      Media(playUrl, httpHeaders: useProxy ? const {} : (stream.headers ?? {})),
+    );
   }
 
   Future<void> setSubtitle(int index) async {

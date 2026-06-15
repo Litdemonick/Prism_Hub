@@ -32,7 +32,7 @@ void main(List<String> args) async {
   await AppStorage.init();
   await AppDirectory.init();
   await DatabaseService.init();
-  ExtensionService.init();
+  await ExtensionService.init();
   await ExtensionLoader.loadAll();
   MediaKit.ensureInitialized();
   Get.put(SettingsController());

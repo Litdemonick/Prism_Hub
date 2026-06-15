@@ -1,9 +1,13 @@
 import 'dart:convert';
 
+import 'package:cookie_jar/cookie_jar.dart';
 import 'package:dio/dio.dart';
+import 'package:dio_cookie_manager/dio_cookie_manager.dart';
+import 'package:flutter/services.dart' show rootBundle;
 import 'package:flutter_js/flutter_js.dart';
 import 'package:logging/logging.dart';
 
+import '../../../core/utils/app_directory.dart';
 import '../../../data/models/extension_model.dart';
 
 typedef ExtResult = Map<String, dynamic>;
@@ -147,6 +151,12 @@ class ExtensionRuntime {
 
   static final _log = Logger('ExtensionRuntime');
 
+  /// Bundle de CryptoJS (UMD) cargado una sola vez desde assets.
+  /// Se inyecta en los runtimes que lo referencian (ver [load]).
+  static String? _cryptoJs;
+
+  static set cryptoJsLib(String? src) => _cryptoJs = src;
+
   // Contador de requests HTTP pendientes por runtime
   int _reqId = 0;
 
@@ -161,6 +171,18 @@ class ExtensionRuntime {
         validateStatus: (_) => true,
       ),
     );
+
+    // Cookie jar persistente por extensión → cookies de sesión sobreviven entre
+    // requests y entre reinicios de la app (necesario para sitios como Animepahe
+    // que firman la sesión con cookies antes de servir el episodio).
+    try {
+      final jar = PersistCookieJar(
+        storage: FileStorage('${AppDirectory.cookiesFor(ext.package)}/'),
+      );
+      dio.interceptors.add(CookieManager(jar));
+    } catch (e) {
+      _log.warning('[${ext.package}] cookie jar no disponible: $e');
+    }
 
     final runtime = ExtensionRuntime._(ext, rt, dio);
 
@@ -190,6 +212,17 @@ class ExtensionRuntime {
     // ── Polyfill + bundle + wrapper IIFE ────────────────────────────────────
     // Sustituir __CH__ por el sufijo único de este runtime.
     rt.evaluate(_kPolyfill.replaceAll('__CH__', ch));
+
+    // CryptoJS — solo se inyecta si el bundle lo usa (ahorra ~60 KB de parseo
+    // por runtime que no lo necesita). El UMD asigna a `this.CryptoJS` y aquí
+    // `this === globalThis`, así que queda disponible como global.
+    if (_cryptoJs != null && script.contains('CryptoJS')) {
+      try {
+        rt.evaluate(_cryptoJs!);
+      } catch (e) {
+        _log.warning('[${ext.package}] no se pudo inyectar CryptoJS: $e');
+      }
+    }
 
     try {
       rt.evaluate(script);
@@ -368,7 +401,18 @@ class ExtensionService {
   static final _log = Logger('ExtensionService');
   static final Map<String, ExtensionRuntime> _runtimes = {};
 
-  static void init() => _log.info('ExtensionService inicializado');
+  static Future<void> init() async {
+    // Precargar CryptoJS una sola vez; se reparte a los runtimes que lo usen.
+    try {
+      ExtensionRuntime.cryptoJsLib = await rootBundle.loadString(
+        'assets/js/crypto-js.min.js',
+      );
+      _log.info('CryptoJS precargado para runtimes de extensión');
+    } catch (e) {
+      _log.warning('CryptoJS no disponible: $e');
+    }
+    _log.info('ExtensionService inicializado');
+  }
 
   static void load(ExtensionModel ext, String compiledScript) {
     _runtimes[ext.package]?.dispose();

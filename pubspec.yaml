@@ -60,4 +60,5 @@ flutter:
   assets:
     - assets/i18n/
     - assets/icons/
+    - assets/js/
     - assets/logo_prismhub.png
