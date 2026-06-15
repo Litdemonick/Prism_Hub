@@ -25,11 +25,12 @@ typedef ExtResult = Map<String, dynamic>;
 // ---------------------------------------------------------------------------
 
 // ── Polyfill inyectado en QuickJS ─────────────────────────────────────────────
+// __CH__ se reemplaza por el sufijo único de cada runtime antes de evaluar.
 const _kPolyfill = r'''
 // ── console ──────────────────────────────────────────────────────────────────
 (function() {
   function _s(lvl, a) {
-    try { sendMessage('prismLog', lvl + Array.prototype.join.call(a, ' ')); } catch(_) {}
+    try { sendMessage('prismLog___CH__', lvl + Array.prototype.join.call(a, ' ')); } catch(_) {}
   }
   globalThis.console = {
     log:   function() { _s('[LOG] ',   arguments); },
@@ -84,13 +85,13 @@ const _kPolyfill = r'''
 })();
 
 // ── Fetch — bridge SÍNCRONO ───────────────────────────────────────────────────
-// sendMessage('prismFetch', json) devuelve reqId (int) SÍNCRONAMENTE.
+// sendMessage('prismFetch___CH__', json) devuelve reqId (string) SÍNCRONAMENTE.
 // Dart inyecta el resultado con __prismDone(id, responseJson) o __prismErr(id, msg).
 var __prismCbs = {};
 globalThis.fetch = function(input, init) {
   var url = (typeof input === 'string') ? input : (input && input.url ? input.url : '');
   var opt = init || {};
-  var reqId = sendMessage('prismFetch', JSON.stringify({
+  var reqId = sendMessage('prismFetch___CH__', JSON.stringify({
     url:     url,
     method:  (opt.method  || 'GET').toUpperCase(),
     headers: opt.headers || {},
@@ -161,23 +162,31 @@ class ExtensionRuntime {
 
     final runtime = ExtensionRuntime._(ext, rt, dio);
 
+    // Sufijo único por runtime: evita colisiones en el mapJsBridge global de flutter_js.
+    // flutter_js 0.8.x usa un Map<String, FnBridgeCallback> global compartido entre
+    // todas las instancias de QuickJsRuntime — sin sufijos, cada onMessage('prismFetch')
+    // sobreescribe el handler del runtime anterior.
+    final ch = ext.package.replaceAll('.', '_');
+
     // ── Bridge: console → Logger ─────────────────────────────────────────────
-    rt.onMessage('prismLog', (dynamic args) {
+    rt.onMessage('prismLog_$ch', (dynamic args) {
       _log.info('[${ext.package}] $args');
       return null;
     });
 
     // ── Bridge: fetch SÍNCRONO ───────────────────────────────────────────────
-    // Devuelve reqId inmediatamente; Dart inyecta el resultado después.
-    rt.onMessage('prismFetch', (dynamic args) {
+    // IMPORTANTE: debe devolver String (no int) porque flutter_js castea el
+    // valor de retorno a String? y lanzaría TypeError silencioso con un int.
+    rt.onMessage('prismFetch_$ch', (dynamic args) {
       final reqId = ++runtime._reqId;
       final raw   = args is String ? args : jsonEncode(args);
       runtime._startFetch(reqId, raw); // fire-and-forget
-      return reqId;
+      return reqId.toString(); // String obligatorio para el bridge de flutter_js
     });
 
     // ── Polyfill + bundle + wrapper IIFE ────────────────────────────────────
-    rt.evaluate(_kPolyfill);
+    // Sustituir __CH__ por el sufijo único de este runtime.
+    rt.evaluate(_kPolyfill.replaceAll('__CH__', ch));
 
     try {
       rt.evaluate(script);
