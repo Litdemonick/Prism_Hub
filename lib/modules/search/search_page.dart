@@ -43,7 +43,7 @@ class _SearchPageState extends State<SearchPage> {
           controller: _textController,
           autofocus: false,
           decoration: const InputDecoration(
-            hintText: 'Buscar anime, manga, comic...',
+            hintText: 'Buscar anime, película, serie, manga...',
             border: InputBorder.none,
             prefixIcon: Icon(Icons.search),
           ),

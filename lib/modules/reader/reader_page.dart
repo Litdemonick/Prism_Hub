@@ -2,12 +2,12 @@ import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 
+import '../../data/models/extension_model.dart';
 import '../player/watch_args.dart';
 import 'reader_controller.dart';
 
 class ReaderPage extends StatefulWidget {
   const ReaderPage({super.key, required this.args});
-
   final WatchArgs args;
 
   @override
@@ -16,18 +16,23 @@ class ReaderPage extends StatefulWidget {
 
 class _ReaderPageState extends State<ReaderPage> {
   late final ReaderController _c;
-  final _pageController = PageController();
+  bool _verticalScroll = true; // manga: scroll vertical por defecto
+
+  bool get _isMangaType => switch (widget.args.type) {
+    ExtensionType.manga || ExtensionType.comic => true,
+    _ => false,
+  };
 
   @override
   void initState() {
     super.initState();
+    _verticalScroll = _isMangaType;
     _c = Get.put(ReaderController(), tag: widget.args.episodeUrl);
     _c.load(widget.args.episodeUrl, widget.args.package);
   }
 
   @override
   void dispose() {
-    _pageController.dispose();
     Get.delete<ReaderController>(tag: widget.args.episodeUrl);
     super.dispose();
   }
@@ -51,12 +56,30 @@ class _ReaderPageState extends State<ReaderPage> {
               final total = _c.pages.length;
               if (total == 0) return const SizedBox.shrink();
               return Text(
-                '${_c.currentPage.value + 1} / $total',
+                _verticalScroll
+                    ? '$total páginas'
+                    : '${_c.currentPage.value + 1} / $total',
                 style: const TextStyle(fontSize: 11, color: Colors.white70),
               );
             }),
           ],
         ),
+        actions: [
+          // Toggle modo lectura
+          Obx(() {
+            if (_c.pages.isEmpty) return const SizedBox.shrink();
+            return IconButton(
+              icon: Icon(
+                _verticalScroll
+                    ? Icons.view_day_outlined
+                    : Icons.swipe_outlined,
+                color: Colors.white,
+              ),
+              tooltip: _verticalScroll ? 'Modo horizontal' : 'Modo vertical',
+              onPressed: () => setState(() => _verticalScroll = !_verticalScroll),
+            );
+          }),
+        ],
       ),
       body: Obx(() {
         if (_c.isLoading.value) {
@@ -71,7 +94,7 @@ class _ReaderPageState extends State<ReaderPage> {
               mainAxisSize: MainAxisSize.min,
               children: [
                 const Icon(
-                  Icons.error_outline,
+                  Icons.broken_image_outlined,
                   color: Colors.white54,
                   size: 64,
                 ),
@@ -86,38 +109,110 @@ class _ReaderPageState extends State<ReaderPage> {
           );
         }
 
-        return PageView.builder(
-          controller: _pageController,
-          itemCount: _c.pages.length,
-          onPageChanged: (i) => _c.currentPage.value = i,
-          itemBuilder: (_, i) => _ImagePage(url: _c.pages[i]),
-        );
+        if (_c.pages.isEmpty) {
+          return const Center(
+            child: Text(
+              'Sin páginas disponibles',
+              style: TextStyle(color: Colors.white70),
+            ),
+          );
+        }
+
+        return _verticalScroll
+            ? _VerticalReader(pages: _c.pages)
+            : _HorizontalReader(
+                pages: _c.pages,
+                currentPage: _c.currentPage,
+              );
       }),
     );
   }
 }
 
-class _ImagePage extends StatelessWidget {
-  const _ImagePage({required this.url});
+// ---------------------------------------------------------------------------
+// Modo scroll vertical (manga)
+// ---------------------------------------------------------------------------
 
-  final String url;
+class _VerticalReader extends StatelessWidget {
+  const _VerticalReader({required this.pages});
+  final List<String> pages;
 
   @override
   Widget build(BuildContext context) {
-    return InteractiveViewer(
-      minScale: 0.5,
-      maxScale: 4,
-      child: CachedNetworkImage(
-        imageUrl: url,
-        fit: BoxFit.contain,
-        placeholder: (ctx, url) => const Center(
-          child: CircularProgressIndicator(color: Colors.white),
+    return ListView.builder(
+      itemCount: pages.length,
+      itemBuilder: (_, i) => CachedNetworkImage(
+        imageUrl: pages[i],
+        fit: BoxFit.fitWidth,
+        width: double.infinity,
+        placeholder: (ctx, url) => const SizedBox(
+          height: 300,
+          child: Center(child: CircularProgressIndicator(color: Colors.white54)),
         ),
-        errorWidget: (ctx, url, err) => const Center(
-          child: Icon(
-            Icons.broken_image_outlined,
-            color: Colors.white54,
-            size: 64,
+        errorWidget: (ctx, url, err) => const SizedBox(
+          height: 200,
+          child: Center(
+            child: Icon(
+              Icons.broken_image_outlined,
+              color: Colors.white30,
+              size: 48,
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Modo horizontal (página a página)
+// ---------------------------------------------------------------------------
+
+class _HorizontalReader extends StatefulWidget {
+  const _HorizontalReader({required this.pages, required this.currentPage});
+  final List<String> pages;
+  final RxInt currentPage;
+
+  @override
+  State<_HorizontalReader> createState() => _HorizontalReaderState();
+}
+
+class _HorizontalReaderState extends State<_HorizontalReader> {
+  late final PageController _pageController;
+
+  @override
+  void initState() {
+    super.initState();
+    _pageController = PageController(initialPage: widget.currentPage.value);
+  }
+
+  @override
+  void dispose() {
+    _pageController.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return PageView.builder(
+      controller: _pageController,
+      itemCount: widget.pages.length,
+      onPageChanged: (i) => widget.currentPage.value = i,
+      itemBuilder: (_, i) => InteractiveViewer(
+        minScale: 0.8,
+        maxScale: 4,
+        child: CachedNetworkImage(
+          imageUrl: widget.pages[i],
+          fit: BoxFit.contain,
+          placeholder: (ctx, url) => const Center(
+            child: CircularProgressIndicator(color: Colors.white),
+          ),
+          errorWidget: (ctx, url, err) => const Center(
+            child: Icon(
+              Icons.broken_image_outlined,
+              color: Colors.white54,
+              size: 64,
+            ),
           ),
         ),
       ),

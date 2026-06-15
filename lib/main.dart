@@ -1,6 +1,7 @@
 import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:get/get.dart';
 import 'package:media_kit/media_kit.dart';
 import 'package:window_manager/window_manager.dart';
 
@@ -13,6 +14,7 @@ import 'core/utils/app_storage.dart';
 import 'core/utils/logger.dart';
 import 'data/services/extension/extension_loader.dart';
 import 'data/services/extension/extension_service.dart';
+import 'modules/settings/settings_controller.dart';
 
 void main(List<String> args) async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -30,8 +32,9 @@ void main(List<String> args) async {
   await AppDirectory.init();
   await DatabaseService.init();
   ExtensionService.init();
-  await ExtensionLoader.loadAll(); // carga extensiones instaladas desde disco
+  await ExtensionLoader.loadAll();
   MediaKit.ensureInitialized();
+  Get.put(SettingsController());
 
   if (!Platform.isAndroid && !Platform.isIOS) {
     await windowManager.ensureInitialized();
@@ -63,13 +66,16 @@ class PrismApp extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return MaterialApp.router(
-      title: 'PrismHub',
-      debugShowCheckedModeBanner: false,
-      theme: AppTheme.light,
-      darkTheme: AppTheme.dark,
-      themeMode: ThemeMode.system,
-      routerConfig: AppRouter.config,
-    );
+    return Obx(() {
+      final settings = Get.find<SettingsController>();
+      return MaterialApp.router(
+        title: AppConfig.appName,
+        debugShowCheckedModeBanner: false,
+        theme: AppTheme.light,
+        darkTheme: AppTheme.dark,
+        themeMode: settings.themeMode.value,
+        routerConfig: AppRouter.config,
+      );
+    });
   }
 }
