@@ -114,10 +114,12 @@ class _DetailScaffold extends StatelessWidget {
 
   String _episodeLabel(ExtensionType type, int count) {
     final word = switch (type) {
-      ExtensionType.anime => 'Episodios',
-      ExtensionType.manga => 'Capítulos',
-      ExtensionType.comic => 'Issues',
-      ExtensionType.novel => 'Capítulos',
+      ExtensionType.manga || ExtensionType.comic || ExtensionType.novel =>
+        'Capítulos',
+      ExtensionType.live   => 'Canales',
+      ExtensionType.music  => 'Tracks',
+      ExtensionType.video  => 'Vídeos',
+      _                    => 'Episodios',
     };
     return '$word ($count)';
   }
@@ -236,10 +238,17 @@ class _EpisodeTile extends StatelessWidget {
   final String package;
   final ExtensionType type;
 
+  static bool _isPlayerType(ExtensionType t) => switch (t) {
+    ExtensionType.manga ||
+    ExtensionType.comic ||
+    ExtensionType.novel => false,
+    _ => true,
+  };
+
   @override
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
-    final isVideo = type == ExtensionType.anime;
+    final isVideo = _isPlayerType(type);
     return ListTile(
       leading: CircleAvatar(
         backgroundColor: cs.primaryContainer,

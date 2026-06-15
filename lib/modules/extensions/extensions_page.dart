@@ -245,14 +245,16 @@ class _RepoChips extends StatelessWidget {
           final url = c.repos[i];
           final host = Uri.tryParse(url)?.host ?? url;
           final builtIn = c.isBuiltIn(url);
-          return Chip(
-            avatar: builtIn
-                ? const Icon(Icons.lock_outline, size: 14)
-                : null,
-            label: Text(host, style: const TextStyle(fontSize: 12)),
-            tooltip: builtIn ? 'Motor integrado — no se puede eliminar' : url,
-            deleteIcon: builtIn ? null : const Icon(Icons.close, size: 16),
-            onDeleted: builtIn ? null : () => c.removeRepo(url),
+          return Tooltip(
+            message: builtIn ? 'Motor integrado — no se puede eliminar' : url,
+            child: Chip(
+              avatar: builtIn
+                  ? const Icon(Icons.lock_outline, size: 14)
+                  : null,
+              label: Text(host, style: const TextStyle(fontSize: 12)),
+              deleteIcon: builtIn ? null : const Icon(Icons.close, size: 16),
+              onDeleted: builtIn ? null : () => c.removeRepo(url),
+            ),
           );
         },
       ),
