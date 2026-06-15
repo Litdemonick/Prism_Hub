@@ -77,7 +77,8 @@ class _ReaderPageState extends State<ReaderPage> {
                 color: Colors.white,
               ),
               tooltip: _verticalScroll ? 'Modo horizontal' : 'Modo vertical',
-              onPressed: () => setState(() => _verticalScroll = !_verticalScroll),
+              onPressed: () =>
+                  setState(() => _verticalScroll = !_verticalScroll),
             );
           }),
         ],
@@ -149,7 +150,9 @@ class _VerticalReader extends StatelessWidget {
         width: double.infinity,
         placeholder: (ctx, url) => const SizedBox(
           height: 300,
-          child: Center(child: CircularProgressIndicator(color: Colors.white54)),
+          child: Center(
+            child: CircularProgressIndicator(color: Colors.white54),
+          ),
         ),
         errorWidget: (ctx, url, err) => const SizedBox(
           height: 200,

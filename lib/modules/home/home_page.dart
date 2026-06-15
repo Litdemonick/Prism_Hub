@@ -200,7 +200,9 @@ class _HeroBanner extends StatelessWidget {
                             horizontal: 16,
                             vertical: 12,
                           ),
-                          textStyle: const TextStyle(fontWeight: FontWeight.w700),
+                          textStyle: const TextStyle(
+                            fontWeight: FontWeight.w700,
+                          ),
                         ),
                         onPressed: () => context.push(
                           AppRoutes.detail,
@@ -276,8 +278,8 @@ class _SectionRow extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final hp        = Responsive.hPadding(context);
-    final gap       = Responsive.gap(context);
+    final hp = Responsive.hPadding(context);
+    final gap = Responsive.gap(context);
     final cardWidth = Responsive.cardWidth(context);
 
     return Column(
@@ -328,8 +330,8 @@ class _HomeLoading extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final hp        = Responsive.hPadding(context);
-    final gap       = Responsive.gap(context);
+    final hp = Responsive.hPadding(context);
+    final gap = Responsive.gap(context);
     final cardWidth = Responsive.cardWidth(context);
 
     return CustomScrollView(

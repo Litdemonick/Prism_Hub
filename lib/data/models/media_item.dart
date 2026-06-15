@@ -8,12 +8,14 @@ int? _int(dynamic v) {
   if (v is String) return int.tryParse(v);
   return null;
 }
+
 double? _dbl(dynamic v) {
   if (v == null) return null;
   if (v is num) return v.toDouble();
   if (v is String) return double.tryParse(v);
   return null;
 }
+
 List<String>? _strList(dynamic v) =>
     v == null ? null : (v as List).map((e) => e?.toString() ?? '').toList();
 Map<String, String>? _strMap(dynamic v) {
@@ -55,15 +57,15 @@ class MediaItem {
   }) {
     final overrideType = _parseType(_str(map['type']));
     return MediaItem(
-      title:       _str(map['title'])       ?? '',
-      url:         _str(map['url'])         ?? '',
-      package:     package,
-      type:        overrideType ?? type,
-      cover:       _str(map['cover']),
+      title: _str(map['title']) ?? '',
+      url: _str(map['url']) ?? '',
+      package: package,
+      type: overrideType ?? type,
+      cover: _str(map['cover']),
       description: _str(map['description']),
-      tags:        _strList(map['tags']),
-      year:        _int(map['year']),
-      rating:      _dbl(map['rating']),
+      tags: _strList(map['tags']),
+      year: _int(map['year']),
+      rating: _dbl(map['rating']),
     );
   }
 
@@ -96,12 +98,12 @@ class MediaEpisode {
   final int? number;
 
   factory MediaEpisode.fromMap(Map<String, dynamic> map) => MediaEpisode(
-    title:     _str(map['title'])     ?? '',
-    url:       _str(map['url'])       ?? '',
+    title: _str(map['title']) ?? '',
+    url: _str(map['url']) ?? '',
     thumbnail: _str(map['thumbnail']),
-    duration:  _int(map['duration']),
-    airDate:   _str(map['airDate']),
-    number:    _int(map['number']),
+    duration: _int(map['duration']),
+    airDate: _str(map['airDate']),
+    number: _int(map['number']),
   );
 }
 
@@ -121,7 +123,7 @@ class MediaSeason {
 
   factory MediaSeason.fromMap(Map<String, dynamic> map) => MediaSeason(
     title: _str(map['title']) ?? '',
-    year:  _int(map['year']),
+    year: _int(map['year']),
     cover: _str(map['cover']),
     episodes: ((map['episodes'] as List?) ?? [])
         .whereType<Map>()
@@ -170,14 +172,14 @@ class MediaDetail {
     required String url,
     required ExtensionType type,
   }) {
-    final rawEps     = map['episodes'] as List? ?? [];
-    final rawSeasons = map['seasons']  as List?;
+    final rawEps = map['episodes'] as List? ?? [];
+    final rawSeasons = map['seasons'] as List?;
     return MediaDetail(
-      title:       _str(map['title'])       ?? '',
-      url:         url,
-      package:     package,
-      type:        type,
-      cover:       _str(map['cover']),
+      title: _str(map['title']) ?? '',
+      url: url,
+      package: package,
+      type: type,
+      cover: _str(map['cover']),
       description: _str(map['description']),
       episodes: rawEps
           .whereType<Map>()
@@ -189,9 +191,9 @@ class MediaDetail {
           .toList(),
       genres: _strList(map['genres']),
       status: _str(map['status']),
-      year:   _int(map['year']),
+      year: _int(map['year']),
       rating: _dbl(map['rating']),
-      extra:  _strMap(map['extra']),
+      extra: _strMap(map['extra']),
     );
   }
 }

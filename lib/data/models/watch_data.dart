@@ -27,7 +27,9 @@ class WatchStream {
   static Map<String, String>? _parseHeaders(dynamic raw) {
     if (raw == null) return null;
     if (raw is! Map) return null;
-    return { for (final e in raw.entries) e.key.toString(): e.value?.toString() ?? '' };
+    return {
+      for (final e in raw.entries) e.key.toString(): e.value?.toString() ?? '',
+    };
   }
 }
 
@@ -57,8 +59,10 @@ class WatchData {
 
   final List<WatchStream> streams;
   final List<WatchSubtitle> subtitles;
+
   /// Headers globales aplicados a todos los streams.
   final Map<String, String>? headers;
+
   /// Razón por la que streams está vacío (premium_required, region_blocked, etc.).
   final String? reason;
 

@@ -248,9 +248,7 @@ class _RepoChips extends StatelessWidget {
           return Tooltip(
             message: builtIn ? 'Motor integrado — no se puede eliminar' : url,
             child: Chip(
-              avatar: builtIn
-                  ? const Icon(Icons.lock_outline, size: 14)
-                  : null,
+              avatar: builtIn ? const Icon(Icons.lock_outline, size: 14) : null,
               label: Text(host, style: const TextStyle(fontSize: 12)),
               deleteIcon: builtIn ? null : const Icon(Icons.close, size: 16),
               onDeleted: builtIn ? null : () => c.removeRepo(url),

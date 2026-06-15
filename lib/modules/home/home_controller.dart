@@ -8,8 +8,8 @@ import '../../data/services/extension/extension_service.dart';
 class HomeController extends GetxController {
   static final _log = Logger('HomeController');
 
-  final sections     = <HomeSection>[].obs;
-  final isLoading    = false.obs;
+  final sections = <HomeSection>[].obs;
+  final isLoading = false.obs;
   final noConnection = false.obs;
 
   @override
@@ -19,9 +19,9 @@ class HomeController extends GetxController {
   }
 
   Future<void> loadLatest() async {
-    isLoading.value    = true;
+    isLoading.value = true;
     noConnection.value = false;
-    sections.value     = [];
+    sections.value = [];
 
     // Si Prism+ no está cargado aún, intentar instalarlo ahora
     if (!ExtensionService.hasAny) {
@@ -31,7 +31,7 @@ class HomeController extends GetxController {
     final runtimes = ExtensionService.allLoaded;
     if (runtimes.isEmpty) {
       noConnection.value = true;
-      isLoading.value    = false;
+      isLoading.value = false;
       return;
     }
 
@@ -48,25 +48,32 @@ class HomeController extends GetxController {
     }
 
     for (final rt in runtimes) {
-      rt.latest(1).then((raw) {
-        if (raw.isNotEmpty) {
-          sections.add(HomeSection(
-            extensionName: rt.extension.name,
-            package:       rt.extension.package,
-            items: raw
-                .map((m) => MediaItem.fromMap(
-                      m,
-                      package: rt.extension.package,
-                      type:    rt.extension.type,
-                    ))
-                .toList(),
-          ));
-        }
-        onDone();
-      }).catchError((Object e) {
-        _log.warning('Error en latest() de ${rt.extension.package}: $e');
-        onDone();
-      });
+      rt
+          .latest(1)
+          .then((raw) {
+            if (raw.isNotEmpty) {
+              sections.add(
+                HomeSection(
+                  extensionName: rt.extension.name,
+                  package: rt.extension.package,
+                  items: raw
+                      .map(
+                        (m) => MediaItem.fromMap(
+                          m,
+                          package: rt.extension.package,
+                          type: rt.extension.type,
+                        ),
+                      )
+                      .toList(),
+                ),
+              );
+            }
+            onDone();
+          })
+          .catchError((Object e) {
+            _log.warning('Error en latest() de ${rt.extension.package}: $e');
+            onDone();
+          });
     }
   }
 }

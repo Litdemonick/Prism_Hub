@@ -379,7 +379,10 @@ class _LoadingView extends StatelessWidget {
             child: Row(
               children: [
                 IconButton(
-                  icon: const Icon(Icons.arrow_back_rounded, color: Colors.white),
+                  icon: const Icon(
+                    Icons.arrow_back_rounded,
+                    color: Colors.white,
+                  ),
                   onPressed: () => Navigator.of(context).pop(),
                 ),
                 const SizedBox(width: 4),
@@ -395,9 +398,7 @@ class _LoadingView extends StatelessWidget {
           ),
         ),
         const Expanded(
-          child: Center(
-            child: CircularProgressIndicator(color: Colors.white),
-          ),
+          child: Center(child: CircularProgressIndicator(color: Colors.white)),
         ),
       ],
     );
@@ -405,11 +406,7 @@ class _LoadingView extends StatelessWidget {
 }
 
 class _ErrorView extends StatelessWidget {
-  const _ErrorView({
-    required this.message,
-    required this.onBack,
-    this.reason,
-  });
+  const _ErrorView({required this.message, required this.onBack, this.reason});
 
   final String message;
   final String? reason;
@@ -417,9 +414,9 @@ class _ErrorView extends StatelessWidget {
 
   static String _reasonLabel(String r) => switch (r) {
     'premium_required' => '🔒  Contenido de pago',
-    'region_blocked'   => '🌍  No disponible en tu región',
+    'region_blocked' => '🌍  No disponible en tu región',
     'js_eval_required' => '⚠️  Este sitio requiere JS avanzado',
-    _                  => r,
+    _ => r,
   };
 
   @override

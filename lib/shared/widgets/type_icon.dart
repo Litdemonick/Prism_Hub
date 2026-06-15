@@ -29,18 +29,18 @@ class MediaTypeChip extends StatelessWidget {
   }
 
   static (String, Color) _typeData(ExtensionType t) => switch (t) {
-    ExtensionType.anime       => ('ANIME',  const Color(0xFF7C3AED)),
-    ExtensionType.manga       => ('MANGA',  const Color(0xFF2563EB)),
-    ExtensionType.comic       => ('COMIC',  const Color(0xFFD97706)),
-    ExtensionType.novel       => ('NOVEL',  const Color(0xFF059669)),
-    ExtensionType.movie       => ('MOVIE',  const Color(0xFFDC2626)),
-    ExtensionType.series      => ('SERIE',  const Color(0xFFDB2777)),
-    ExtensionType.documentary => ('DOC',    const Color(0xFF0891B2)),
-    ExtensionType.live        => ('LIVE',   const Color(0xFFEA580C)),
-    ExtensionType.video       => ('VIDEO',  const Color(0xFF4F46E5)),
-    ExtensionType.music       => ('MUSIC',  const Color(0xFF9333EA)),
-    ExtensionType.podcast     => ('CAST',   const Color(0xFF65A30D)),
-    ExtensionType.other       => ('OTHER',  const Color(0xFF6B7280)),
+    ExtensionType.anime => ('ANIME', const Color(0xFF7C3AED)),
+    ExtensionType.manga => ('MANGA', const Color(0xFF2563EB)),
+    ExtensionType.comic => ('COMIC', const Color(0xFFD97706)),
+    ExtensionType.novel => ('NOVEL', const Color(0xFF059669)),
+    ExtensionType.movie => ('MOVIE', const Color(0xFFDC2626)),
+    ExtensionType.series => ('SERIE', const Color(0xFFDB2777)),
+    ExtensionType.documentary => ('DOC', const Color(0xFF0891B2)),
+    ExtensionType.live => ('LIVE', const Color(0xFFEA580C)),
+    ExtensionType.video => ('VIDEO', const Color(0xFF4F46E5)),
+    ExtensionType.music => ('MUSIC', const Color(0xFF9333EA)),
+    ExtensionType.podcast => ('CAST', const Color(0xFF65A30D)),
+    ExtensionType.other => ('OTHER', const Color(0xFF6B7280)),
   };
 }
 
@@ -48,9 +48,9 @@ class MediaTypeChip extends StatelessWidget {
 IconData mediaTypeIcon(ExtensionType t) => switch (t) {
   ExtensionType.manga ||
   ExtensionType.comic ||
-  ExtensionType.novel   => Icons.menu_book_rounded,
-  ExtensionType.music   => Icons.music_note_rounded,
+  ExtensionType.novel => Icons.menu_book_rounded,
+  ExtensionType.music => Icons.music_note_rounded,
   ExtensionType.podcast => Icons.podcasts_rounded,
-  ExtensionType.live    => Icons.live_tv_rounded,
-  _                     => Icons.play_arrow_rounded,
+  ExtensionType.live => Icons.live_tv_rounded,
+  _ => Icons.play_arrow_rounded,
 };

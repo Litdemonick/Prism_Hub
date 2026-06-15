@@ -12,38 +12,40 @@ class PlayerController extends GetxController {
   late final Player _player;
   late final VideoController videoController;
 
-  final isLoading           = true.obs;
-  final error               = Rxn<String>();
-  final watchData           = Rxn<WatchData>();
-  final selectedStream      = Rxn<WatchStream>();
+  final isLoading = true.obs;
+  final error = Rxn<String>();
+  final watchData = Rxn<WatchData>();
+  final selectedStream = Rxn<WatchStream>();
   final selectedSubtitleIdx = (-1).obs; // -1 = desactivado
-  final speed               = 1.0.obs;
+  final speed = 1.0.obs;
 
   @override
   void onInit() {
     super.onInit();
-    _player         = Player();
+    _player = Player();
     videoController = VideoController(_player);
   }
 
   Future<void> load(String episodeUrl, String package) async {
     isLoading.value = true;
-    error.value     = null;
+    error.value = null;
 
     final rt = ExtensionService.get(package);
     if (rt == null) {
-      error.value     = 'Extensión no disponible';
+      error.value = 'Extensión no disponible';
       isLoading.value = false;
       return;
     }
 
     try {
-      final raw  = await rt.watch(episodeUrl);
+      final raw = await rt.watch(episodeUrl);
       final data = WatchData.fromMap(raw);
       watchData.value = data;
 
       if (data.streams.isEmpty) {
-        error.value     = data.reason != null ? '__reason__' : 'Sin streams disponibles';
+        error.value = data.reason != null
+            ? '__reason__'
+            : 'Sin streams disponibles';
         isLoading.value = false;
         return;
       }

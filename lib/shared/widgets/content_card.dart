@@ -43,11 +43,7 @@ class ContentCard extends StatelessWidget {
                         : _placeholder(cs),
                   ),
                   // Badge tipo — esquina superior izquierda
-                  Positioned(
-                    top: 6,
-                    left: 6,
-                    child: MediaTypeChip(item.type),
-                  ),
+                  Positioned(top: 6, left: 6, child: MediaTypeChip(item.type)),
                   // Badge rating — esquina superior derecha
                   if (item.rating != null)
                     Positioned(

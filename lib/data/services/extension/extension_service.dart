@@ -153,7 +153,7 @@ class ExtensionRuntime {
   static ExtensionRuntime load(ExtensionModel ext, String script) {
     // xhr:false → desactiva el fetch/XHR nativo de flutter_js para que no
     // compita con nuestro polyfill. setTimeout sigue activo (es nativo C).
-    final rt  = getJavascriptRuntime(xhr: false);
+    final rt = getJavascriptRuntime(xhr: false);
     final dio = Dio(
       BaseOptions(
         connectTimeout: const Duration(seconds: 30),
@@ -181,9 +181,10 @@ class ExtensionRuntime {
     // valor de retorno a String? y lanzaría TypeError silencioso con un int.
     rt.onMessage('prismFetch_$ch', (dynamic args) {
       final reqId = ++runtime._reqId;
-      final raw   = args is String ? args : jsonEncode(args);
+      final raw = args is String ? args : jsonEncode(args);
       runtime._startFetch(reqId, raw); // fire-and-forget
-      return reqId.toString(); // String obligatorio para el bridge de flutter_js
+      return reqId
+          .toString(); // String obligatorio para el bridge de flutter_js
     });
 
     // ── Polyfill + bundle + wrapper IIFE ────────────────────────────────────
@@ -223,14 +224,14 @@ class ExtensionRuntime {
   // ── HTTP async (fire-and-forget, inyecta resultado con rt.evaluate) ─────────
   void _startFetch(int reqId, String reqJson) async {
     try {
-      final req     = jsonDecode(reqJson) as Map<String, dynamic>;
-      final url     = req['url'] as String;
-      final method  = (req['method'] as String? ?? 'GET').toUpperCase();
+      final req = jsonDecode(reqJson) as Map<String, dynamic>;
+      final url = req['url'] as String;
+      final method = (req['method'] as String? ?? 'GET').toUpperCase();
       final hdrsRaw = req['headers'];
       final headers = hdrsRaw is Map
           ? hdrsRaw.cast<String, dynamic>()
           : <String, dynamic>{};
-      final body    = req['body'];
+      final body = req['body'];
 
       final res = await _dio.request<String>(
         url,
@@ -247,11 +248,11 @@ class ExtensionRuntime {
       res.headers.forEach((k, v) => flat[k] = v.join(', '));
 
       final payload = jsonEncode({
-        'status':     res.statusCode    ?? 0,
+        'status': res.statusCode ?? 0,
         'statusText': res.statusMessage ?? '',
-        'headers':    flat,
-        'body':       res.data?.toString() ?? '',
-        'url':        url,
+        'headers': flat,
+        'body': res.data?.toString() ?? '',
+        'url': url,
       });
 
       // Inyectar resultado y drenar la cola de microtareas de QuickJS.
@@ -280,7 +281,7 @@ class ExtensionRuntime {
 
   Future<ExtResult> detail(String url) => _callMap('detail', [url]);
 
-  Future<ExtResult> watch(String url)   => _callMap('watch',  [url]);
+  Future<ExtResult> watch(String url) => _callMap('watch', [url]);
 
   void dispose() {
     _rt.dispose();
@@ -337,7 +338,9 @@ class ExtensionRuntime {
         if (items is List) return items.whereType<Map>().map(_castMap).toList();
       }
     } catch (e) {
-      _log.warning('_parseList: $e  raw=${raw.length > 80 ? raw.substring(0,80) : raw}');
+      _log.warning(
+        '_parseList: $e  raw=${raw.length > 80 ? raw.substring(0, 80) : raw}',
+      );
     }
     return [];
   }
@@ -353,7 +356,8 @@ class ExtensionRuntime {
     return {};
   }
 
-  static String _encodeArgs(List<dynamic> args) => args.map(jsonEncode).join(',');
+  static String _encodeArgs(List<dynamic> args) =>
+      args.map(jsonEncode).join(',');
   static ExtResult _castMap(Map m) => m.cast<String, dynamic>();
 }
 

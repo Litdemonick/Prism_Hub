@@ -12,16 +12,16 @@ class SettingsController extends GetxController {
     final saved = AppStorage.getString(StorageKey.themeMode);
     themeMode.value = switch (saved) {
       'light' => ThemeMode.light,
-      'dark'  => ThemeMode.dark,
-      _       => ThemeMode.system,
+      'dark' => ThemeMode.dark,
+      _ => ThemeMode.system,
     };
   }
 
   Future<void> setTheme(ThemeMode mode) async {
     themeMode.value = mode;
     final key = switch (mode) {
-      ThemeMode.light  => 'light',
-      ThemeMode.dark   => 'dark',
+      ThemeMode.light => 'light',
+      ThemeMode.dark => 'dark',
       ThemeMode.system => 'system',
     };
     await AppStorage.setString(StorageKey.themeMode, key);

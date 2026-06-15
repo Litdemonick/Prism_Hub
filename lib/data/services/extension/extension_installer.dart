@@ -25,8 +25,9 @@ class ExtensionInstaller {
     // Omitir si ya está instalada con la misma versión. Si la versión del índice
     // remoto es diferente, reinstalar automáticamente (sin force explícito).
     if (!force) {
-      final existing = await DatabaseService.db.extensionModels
-          .getByPackage(dto.package);
+      final existing = await DatabaseService.db.extensionModels.getByPackage(
+        dto.package,
+      );
       if (existing != null && existing.isInstalled) {
         if (existing.version == dto.version) {
           _log.fine('${dto.package} v${dto.version} ya instalada, omitiendo');

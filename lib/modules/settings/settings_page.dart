@@ -85,11 +85,8 @@ class SettingsPage extends StatelessWidget {
                 Image.asset(
                   'assets/logo_prismhub.png',
                   height: 72,
-                  errorBuilder: (_, _, _) => Icon(
-                    Icons.apps_rounded,
-                    size: 72,
-                    color: cs.primary,
-                  ),
+                  errorBuilder: (_, _, _) =>
+                      Icon(Icons.apps_rounded, size: 72, color: cs.primary),
                 ),
                 const SizedBox(height: 12),
                 Text(
@@ -107,10 +104,7 @@ class SettingsPage extends StatelessWidget {
                 const SizedBox(height: 4),
                 Text(
                   'por Litdemonick',
-                  style: TextStyle(
-                    color: cs.onSurfaceVariant,
-                    fontSize: 13,
-                  ),
+                  style: TextStyle(color: cs.onSurfaceVariant, fontSize: 13),
                 ),
               ],
             ),

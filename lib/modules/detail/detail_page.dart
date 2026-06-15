@@ -139,10 +139,10 @@ class _DetailScaffoldState extends State<_DetailScaffold> {
       ExtensionType.manga ||
       ExtensionType.comic ||
       ExtensionType.novel => 'Capítulos',
-      ExtensionType.live  => 'Canales',
+      ExtensionType.live => 'Canales',
       ExtensionType.music => 'Tracks',
       ExtensionType.video => 'Vídeos',
-      _                   => 'Episodios',
+      _ => 'Episodios',
     };
     return '$word ($count)';
   }
@@ -200,11 +200,7 @@ class _CoverAppBar extends StatelessWidget {
   Widget _bg(ColorScheme cs) => Container(
     color: cs.surfaceContainerHighest,
     child: Center(
-      child: Icon(
-        mediaTypeIcon(type),
-        size: 72,
-        color: cs.outline,
-      ),
+      child: Icon(mediaTypeIcon(type), size: 72, color: cs.outline),
     ),
   );
 }
@@ -289,20 +285,24 @@ class _MetaRow extends StatelessWidget {
     final items = <Widget>[];
 
     if (detail.year != null) {
-      items.add(_MetaPill(
-        icon: Icons.calendar_today_outlined,
-        label: '${detail.year}',
-        cs: cs,
-      ));
+      items.add(
+        _MetaPill(
+          icon: Icons.calendar_today_outlined,
+          label: '${detail.year}',
+          cs: cs,
+        ),
+      );
     }
 
     if (detail.rating != null) {
-      items.add(_MetaPill(
-        icon: Icons.star_rounded,
-        label: detail.rating!.toStringAsFixed(1),
-        color: const Color(0xFFFBBF24),
-        cs: cs,
-      ));
+      items.add(
+        _MetaPill(
+          icon: Icons.star_rounded,
+          label: detail.rating!.toStringAsFixed(1),
+          color: const Color(0xFFFBBF24),
+          cs: cs,
+        ),
+      );
     }
 
     if (detail.status != null) {
@@ -329,19 +329,15 @@ class _MetaRow extends StatelessWidget {
 
     if (items.isEmpty) return const SizedBox.shrink();
 
-    return Wrap(
-      spacing: 8,
-      runSpacing: 6,
-      children: items,
-    );
+    return Wrap(spacing: 8, runSpacing: 6, children: items);
   }
 
   static (String, Color) _statusData(String s) => switch (s) {
-    'ongoing'   => ('En emisión', const Color(0xFF16A34A)),
+    'ongoing' => ('En emisión', const Color(0xFF16A34A)),
     'completed' => ('Completado', const Color(0xFF2563EB)),
-    'upcoming'  => ('Próximamente', const Color(0xFF9333EA)),
-    'hiatus'    => ('En pausa', const Color(0xFFD97706)),
-    _           => (s, const Color(0xFF6B7280)),
+    'upcoming' => ('Próximamente', const Color(0xFF9333EA)),
+    'hiatus' => ('En pausa', const Color(0xFFD97706)),
+    _ => (s, const Color(0xFF6B7280)),
   };
 }
 
@@ -367,11 +363,7 @@ class _MetaPill extends StatelessWidget {
         const SizedBox(width: 3),
         Text(
           label,
-          style: TextStyle(
-            fontSize: 13,
-            fontWeight: FontWeight.w500,
-            color: c,
-          ),
+          style: TextStyle(fontSize: 13, fontWeight: FontWeight.w500, color: c),
         ),
       ],
     );
@@ -467,9 +459,7 @@ class _EpisodeTile extends StatelessWidget {
   final ExtensionType type;
 
   static bool _isPlayerType(ExtensionType t) => switch (t) {
-    ExtensionType.manga ||
-    ExtensionType.comic ||
-    ExtensionType.novel => false,
+    ExtensionType.manga || ExtensionType.comic || ExtensionType.novel => false,
     _ => true,
   };
 
@@ -491,18 +481,11 @@ class _EpisodeTile extends StatelessWidget {
               ),
             )
           : _numberAvatar(cs),
-      title: Text(
-        episode.title,
-        maxLines: 1,
-        overflow: TextOverflow.ellipsis,
-      ),
+      title: Text(episode.title, maxLines: 1, overflow: TextOverflow.ellipsis),
       subtitle: Row(
         children: [
           if (episode.airDate != null)
-            Text(
-              episode.airDate!,
-              style: const TextStyle(fontSize: 11),
-            ),
+            Text(episode.airDate!, style: const TextStyle(fontSize: 11)),
           if (episode.duration != null) ...[
             if (episode.airDate != null)
               const Text(' · ', style: TextStyle(fontSize: 11)),
@@ -521,7 +504,10 @@ class _EpisodeTile extends StatelessWidget {
           title: episode.title,
           type: type,
         );
-        context.push(isVideo ? AppRoutes.player : AppRoutes.reader, extra: args);
+        context.push(
+          isVideo ? AppRoutes.player : AppRoutes.reader,
+          extra: args,
+        );
       },
     );
   }

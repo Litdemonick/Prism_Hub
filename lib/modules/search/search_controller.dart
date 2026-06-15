@@ -35,11 +35,13 @@ class ContentSearchController extends GetxController {
         try {
           final raw = await rt.search(q, 1);
           return raw
-              .map((m) => MediaItem.fromMap(
-                    m,
-                    package: rt.extension.package,
-                    type: rt.extension.type,
-                  ))
+              .map(
+                (m) => MediaItem.fromMap(
+                  m,
+                  package: rt.extension.package,
+                  type: rt.extension.type,
+                ),
+              )
               .toList();
         } catch (e) {
           _log.warning('Error buscando en ${rt.extension.package}: $e');

@@ -4,7 +4,7 @@ abstract final class AppTheme {
   static const _seed = Color(0xFF6C63FF); // Prism purple
 
   static ThemeData get light => _build(Brightness.light);
-  static ThemeData get dark  => _build(Brightness.dark);
+  static ThemeData get dark => _build(Brightness.dark);
 
   static ThemeData _build(Brightness brightness) {
     final cs = ColorScheme.fromSeed(seedColor: _seed, brightness: brightness);
@@ -28,16 +28,12 @@ abstract final class AppTheme {
       // Cards
       cardTheme: CardThemeData(
         elevation: 0,
-        shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(12),
-        ),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
         color: cs.surfaceContainerLow,
       ),
       // Chips
       chipTheme: ChipThemeData(
-        shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(8),
-        ),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
         side: BorderSide.none,
       ),
       // ListTile
