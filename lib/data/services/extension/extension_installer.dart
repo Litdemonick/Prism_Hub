@@ -44,8 +44,18 @@ class ExtensionInstaller {
 
     final scriptPath = AppDirectory.extensionScript(dto.package);
 
-    // Descarga el bundle TypeScript compilado (.js)
-    await _dio.download(dto.scriptUrl, scriptPath);
+    // Descarga el bundle compilado (.js). Cache-buster + no-cache para que la
+    // CDN de GitHub no devuelva una versión vieja del script tras una actualización.
+    final sep = dto.scriptUrl.contains('?') ? '&' : '?';
+    final scriptUrl =
+        '${dto.scriptUrl}${sep}_=${DateTime.now().millisecondsSinceEpoch}';
+    await _dio.download(
+      scriptUrl,
+      scriptPath,
+      options: Options(
+        headers: const {'Cache-Control': 'no-cache', 'Pragma': 'no-cache'},
+      ),
+    );
 
     final script = await File(scriptPath).readAsString();
 

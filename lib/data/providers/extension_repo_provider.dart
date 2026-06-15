@@ -17,13 +17,25 @@ class ExtensionRepoProvider {
   final Dio _dio;
   static final _log = Logger('ExtensionRepoProvider');
 
+  /// Agrega un parámetro único para saltar el caché de la CDN.
+  static String _bust(String url) {
+    final sep = url.contains('?') ? '&' : '?';
+    return '$url${sep}_=${DateTime.now().millisecondsSinceEpoch}';
+  }
+
   Future<RepoIndex> fetchIndex(String repoUrl) async {
     try {
       // Pedir como String para no depender del Content-Type del servidor
-      // (raw.githubusercontent.com devuelve text/plain, no application/json)
+      // (raw.githubusercontent.com devuelve text/plain, no application/json).
+      // Cache-buster + headers no-cache: la CDN de GitHub (Fastly) cachea el
+      // mismo URL ~5 min; sin esto el catálogo de versiones llega desactualizado
+      // y las extensiones nuevas nunca se instalan.
       final response = await _dio.get<String>(
-        repoUrl,
-        options: Options(responseType: ResponseType.plain),
+        _bust(repoUrl),
+        options: Options(
+          responseType: ResponseType.plain,
+          headers: const {'Cache-Control': 'no-cache', 'Pragma': 'no-cache'},
+        ),
       );
 
       final body = response.data;
