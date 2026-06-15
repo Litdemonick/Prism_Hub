@@ -317,7 +317,7 @@ class ExtensionRuntime {
         return _rt.evaluate('__prismV').stringResult;
       }
       if (_rt.evaluate('__prismE').stringResult == 'true') {
-        final err = _rt.evaluate('__prismER').stringResult ?? 'unknown';
+        final err = _rt.evaluate('__prismER').stringResult;
         _log.warning('[${extension.package}] $fn error: $err');
         return null;
       }
@@ -384,7 +384,9 @@ class ExtensionService {
   static bool get hasAny => _runtimes.isNotEmpty;
 
   static void disposeAll() {
-    for (final rt in _runtimes.values) rt.dispose();
+    for (final rt in _runtimes.values) {
+      rt.dispose();
+    }
     _runtimes.clear();
   }
 }

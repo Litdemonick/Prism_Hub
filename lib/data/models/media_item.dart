@@ -1,7 +1,7 @@
 import 'extension_model.dart';
 
 // Helpers de coerción seguros: nunca lanzan si el tipo es inesperado.
-String? _str(dynamic v) => v == null ? null : v.toString();
+String? _str(dynamic v) => v?.toString();
 int? _int(dynamic v) {
   if (v == null) return null;
   if (v is num) return v.toInt();
