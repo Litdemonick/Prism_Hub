@@ -1,6 +1,6 @@
 import 'extension_model.dart';
 
-/// Resultado de latest() o search() — equivale a PrismItem del contrato TS.
+/// Equivale a PrismItem del contrato Prism+.
 class MediaItem {
   const MediaItem({
     required this.title,
@@ -10,45 +10,103 @@ class MediaItem {
     this.cover,
     this.description,
     this.tags,
+    this.year,
+    this.rating,
   });
 
   final String title;
   final String url;
-  final String package; // extensión propietaria
+  final String package;
   final ExtensionType type;
   final String? cover;
   final String? description;
   final List<String>? tags;
+  final int? year;
+  final double? rating;
 
   factory MediaItem.fromMap(
     Map<String, dynamic> map, {
     required String package,
     required ExtensionType type,
-  }) => MediaItem(
-    title: (map['title'] as String?) ?? '',
-    url: (map['url'] as String?) ?? '',
-    package: package,
-    type: type,
-    cover: map['cover'] as String?,
-    description: map['description'] as String?,
-    tags: (map['tags'] as List?)?.cast<String>(),
-  );
+  }) {
+    final overrideType = _parseType(map['type'] as String?);
+    return MediaItem(
+      title: (map['title'] as String?) ?? '',
+      url: (map['url'] as String?) ?? '',
+      package: package,
+      type: overrideType ?? type,
+      cover: map['cover'] as String?,
+      description: map['description'] as String?,
+      tags: (map['tags'] as List?)?.cast<String>(),
+      year: (map['year'] as num?)?.toInt(),
+      rating: (map['rating'] as num?)?.toDouble(),
+    );
+  }
+
+  static ExtensionType? _parseType(String? raw) {
+    if (raw == null) return null;
+    try {
+      return ExtensionType.values.firstWhere((e) => e.name == raw);
+    } catch (_) {
+      return null;
+    }
+  }
 }
 
-/// Episodio / capítulo individual — equivale a PrismEpisode del contrato TS.
+/// Equivale a PrismEpisode del contrato Prism+.
 class MediaEpisode {
-  const MediaEpisode({required this.title, required this.url});
+  const MediaEpisode({
+    required this.title,
+    required this.url,
+    this.thumbnail,
+    this.duration,
+    this.airDate,
+    this.number,
+  });
 
   final String title;
   final String url;
+  final String? thumbnail;
+  final int? duration;
+  final String? airDate;
+  final int? number;
 
   factory MediaEpisode.fromMap(Map<String, dynamic> map) => MediaEpisode(
     title: (map['title'] as String?) ?? '',
     url: (map['url'] as String?) ?? '',
+    thumbnail: map['thumbnail'] as String?,
+    duration: (map['duration'] as num?)?.toInt(),
+    airDate: map['airDate'] as String?,
+    number: (map['number'] as num?)?.toInt(),
   );
 }
 
-/// Resultado de detail() — equivale a PrismDetail del contrato TS.
+/// Equivale a PrismSeason del contrato Prism+.
+class MediaSeason {
+  const MediaSeason({
+    required this.title,
+    required this.episodes,
+    this.year,
+    this.cover,
+  });
+
+  final String title;
+  final List<MediaEpisode> episodes;
+  final int? year;
+  final String? cover;
+
+  factory MediaSeason.fromMap(Map<String, dynamic> map) => MediaSeason(
+    title: (map['title'] as String?) ?? '',
+    year: (map['year'] as num?)?.toInt(),
+    cover: map['cover'] as String?,
+    episodes: ((map['episodes'] as List?) ?? [])
+        .whereType<Map>()
+        .map((e) => MediaEpisode.fromMap(e.cast<String, dynamic>()))
+        .toList(),
+  );
+}
+
+/// Equivale a PrismDetail del contrato Prism+.
 class MediaDetail {
   const MediaDetail({
     required this.title,
@@ -56,8 +114,13 @@ class MediaDetail {
     required this.package,
     required this.type,
     required this.episodes,
+    this.seasons,
     this.cover,
     this.description,
+    this.genres,
+    this.status,
+    this.year,
+    this.rating,
     this.extra,
   });
 
@@ -68,7 +131,14 @@ class MediaDetail {
   final String? cover;
   final String? description;
   final List<MediaEpisode> episodes;
+  final List<MediaSeason>? seasons;
+  final List<String>? genres;
+  final String? status;
+  final int? year;
+  final double? rating;
   final Map<String, String>? extra;
+
+  bool get hasSeasonsData => seasons != null && seasons!.isNotEmpty;
 
   factory MediaDetail.fromMap(
     Map<String, dynamic> map, {
@@ -77,6 +147,7 @@ class MediaDetail {
     required ExtensionType type,
   }) {
     final rawEps = map['episodes'] as List? ?? [];
+    final rawSeasons = map['seasons'] as List?;
     return MediaDetail(
       title: (map['title'] as String?) ?? '',
       url: url,
@@ -88,6 +159,14 @@ class MediaDetail {
           .whereType<Map>()
           .map((e) => MediaEpisode.fromMap(e.cast<String, dynamic>()))
           .toList(),
+      seasons: rawSeasons
+          ?.whereType<Map>()
+          .map((s) => MediaSeason.fromMap(s.cast<String, dynamic>()))
+          .toList(),
+      genres: (map['genres'] as List?)?.cast<String>(),
+      status: map['status'] as String?,
+      year: (map['year'] as num?)?.toInt(),
+      rating: (map['rating'] as num?)?.toDouble(),
       extra: (map['extra'] as Map?)?.cast<String, String>(),
     );
   }

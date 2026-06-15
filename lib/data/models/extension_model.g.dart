@@ -197,12 +197,28 @@ const _ExtensionModeltypeEnumValueMap = {
   r'manga': r'manga',
   r'comic': r'comic',
   r'novel': r'novel',
+  r'movie': r'movie',
+  r'series': r'series',
+  r'documentary': r'documentary',
+  r'live': r'live',
+  r'video': r'video',
+  r'music': r'music',
+  r'podcast': r'podcast',
+  r'other': r'other',
 };
 const _ExtensionModeltypeValueEnumMap = {
   r'anime': ExtensionType.anime,
   r'manga': ExtensionType.manga,
   r'comic': ExtensionType.comic,
   r'novel': ExtensionType.novel,
+  r'movie': ExtensionType.movie,
+  r'series': ExtensionType.series,
+  r'documentary': ExtensionType.documentary,
+  r'live': ExtensionType.live,
+  r'video': ExtensionType.video,
+  r'music': ExtensionType.music,
+  r'podcast': ExtensionType.podcast,
+  r'other': ExtensionType.other,
 };
 
 Id _extensionModelGetId(ExtensionModel object) {

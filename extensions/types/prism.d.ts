@@ -1,99 +1,133 @@
 /**
- * PrismHub Extension API — Type Definitions
+ * Prism+ SDK — Tipos para extensiones PrismHub
  *
- * Cada extensión es un módulo TypeScript que exporta las cuatro funciones
- * requeridas. Después de compilar con esbuild, el bundle JS resultante es
- * ejecutado por flutter_js dentro de la app.
+ * Contrato idéntico al SDK de Prism+ (https://github.com/Litdemonick/prism-plus).
+ * Importa desde aquí para que tus extensiones sean compatibles con ambos ecosistemas.
  */
 
 // ---------------------------------------------------------------------------
-// Datos comunes
+// Tipos base
 // ---------------------------------------------------------------------------
 
+export type MediaType =
+  | 'anime'        // Animación japonesa / donghua
+  | 'manga'        // Cómics japoneses, manhwa, manhua, webtoon
+  | 'novel'        // Light novels, web novels
+  | 'movie'        // Películas
+  | 'series'       // Series de TV, dramas, doramas
+  | 'documentary'  // Documentales
+  | 'live'         // Canales en vivo / IPTV
+  | 'video'        // Contenido de vídeo general
+  | 'music'        // Vídeos musicales
+  | 'podcast'      // Podcasts con vídeo o audio
+  | 'other'        // Cualquier otro tipo
+
+export type ContentStatus = 'ongoing' | 'completed' | 'upcoming' | 'hiatus'
+
+// ---------------------------------------------------------------------------
+// Paginación
+// ---------------------------------------------------------------------------
+
+/** Resultado paginado — retornable como alternativa a PrismItem[] */
+export interface PrismPage<T = PrismItem> {
+  items: T[]
+  /** false = no hay más páginas */
+  hasMore: boolean
+  /** Total de resultados si la API lo provee */
+  total?: number
+}
+
+// ---------------------------------------------------------------------------
+// Listas
+// ---------------------------------------------------------------------------
+
+/** Ítem de lista — retornado por latest() y search() */
 export interface PrismItem {
   title: string
   url: string
   cover?: string
   description?: string
   tags?: string[]
+  year?: number
+  rating?: number
+  /** Sobreescribe el tipo de la extensión para contenido mixto */
+  type?: MediaType
 }
 
+// ---------------------------------------------------------------------------
+// Detalle
+// ---------------------------------------------------------------------------
+
 export interface PrismEpisode {
-  /** Título visible del episodio / capítulo */
   title: string
-  /** URL que se pasará a watch() o al lector */
   url: string
+  thumbnail?: string
+  /** Duración en segundos */
+  duration?: number
+  /** ISO 8601 (YYYY-MM-DD) */
+  airDate?: string
+  number?: number
+}
+
+export interface PrismSeason {
+  title: string
+  episodes: PrismEpisode[]
+  year?: number
+  cover?: string
 }
 
 export interface PrismDetail {
   title: string
   cover?: string
   description?: string
-  /** Tipo de contenido para elegir reproductor/lector */
-  type: 'anime' | 'manga' | 'comic' | 'novel'
+  /** Lista plana de episodios (sin temporadas) */
   episodes: PrismEpisode[]
+  seasons?: PrismSeason[]
+  genres?: string[]
+  status?: ContentStatus
+  year?: number
+  rating?: number
+  /** Metadatos extra clave-valor */
   extra?: Record<string, string>
 }
 
+// ---------------------------------------------------------------------------
+// Reproducción
+// ---------------------------------------------------------------------------
+
 export interface PrismStream {
-  /** URL del stream / imagen de página */
   url: string
-  /** Calidad o label (e.g. "1080p", "HD") */
   quality?: string
-  /** Headers HTTP necesarios (Referer, etc.) */
+  label?: string
   headers?: Record<string, string>
+  mimeType?: string
 }
 
 export interface PrismSubtitle {
   label: string
   url: string
+  /** BCP-47 (es, en, ja, etc.) */
   lang?: string
 }
 
 export interface PrismWatch {
   streams: PrismStream[]
   subtitles?: PrismSubtitle[]
+  /** Headers globales para todos los streams */
+  headers?: Record<string, string>
+  /**
+   * Razón por la que streams[] está vacío.
+   * Ejemplos: "region_blocked", "premium_required", "js_eval_required"
+   */
+  reason?: string
 }
 
 // ---------------------------------------------------------------------------
-// Filtros de búsqueda
+// Filtros (compatibilidad)
 // ---------------------------------------------------------------------------
 
 export type FilterValue = string | number | boolean
 
 export interface PrismFilter {
   [key: string]: FilterValue
-}
-
-// ---------------------------------------------------------------------------
-// Contrato de la extensión
-// Las cuatro funciones que DEBE exportar cada extensión
-// ---------------------------------------------------------------------------
-
-export interface PrismExtension {
-  /**
-   * Devuelve los últimos contenidos agregados (paginado).
-   * @param page Número de página, empieza en 1
-   */
-  latest(page: number): Promise<PrismItem[]>
-
-  /**
-   * Búsqueda por palabra clave.
-   * @param keyword Término de búsqueda
-   * @param page Número de página, empieza en 1
-   * @param filter Filtros opcionales (género, año, etc.)
-   */
-  search(keyword: string, page: number, filter?: PrismFilter): Promise<PrismItem[]>
-
-  /**
-   * Detalle completo de un contenido: metadata + lista de episodios/capítulos.
-   * @param url URL del contenido (obtenida de PrismItem.url)
-   */
-  detail(url: string): Promise<PrismDetail>
-
-  /**
-   * Streams de reproducción o páginas del capítulo.
-   * @param url URL del episodio/capítulo (obtenida de PrismEpisode.url)
-   */
-  watch(url: string): Promise<PrismWatch>
 }

@@ -12,6 +12,8 @@ class ExtensionDto {
     required this.scriptUrl,
     required this.repoUrl,
     this.iconUrl,
+    this.description,
+    this.protocolVersion,
   });
 
   final String name;
@@ -22,6 +24,8 @@ class ExtensionDto {
   final String scriptUrl;
   final String repoUrl;
   final String? iconUrl;
+  final String? description;
+  final String? protocolVersion;
 
   factory ExtensionDto.fromJson(Map<String, dynamic> json, String repoUrl) =>
       ExtensionDto(
@@ -36,6 +40,8 @@ class ExtensionDto {
         scriptUrl: json['script'] as String,
         repoUrl: repoUrl,
         iconUrl: json['icon'] as String?,
+        description: json['description'] as String?,
+        protocolVersion: json['protocolVersion'] as String?,
       );
 }
 

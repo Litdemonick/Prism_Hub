@@ -2,7 +2,20 @@ import 'package:isar/isar.dart';
 
 part 'extension_model.g.dart';
 
-enum ExtensionType { anime, manga, comic, novel }
+enum ExtensionType {
+  anime,
+  manga,
+  comic,
+  novel,
+  movie,
+  series,
+  documentary,
+  live,
+  video,
+  music,
+  podcast,
+  other,
+}
 
 @collection
 class ExtensionModel {

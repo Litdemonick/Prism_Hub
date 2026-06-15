@@ -217,14 +217,20 @@ class ExtensionRuntime {
       _log.warning('[${extension.package}] $fn error: ${res.stringResult}');
       return [];
     }
-    final raw = res.rawResult;
+    return _extractList(res.rawResult);
+  }
+
+  static List<ExtResult> _extractList(dynamic raw) {
     if (raw is List) return raw.whereType<Map>().map(_castMap).toList();
+    if (raw is Map) {
+      // PrismPage<T> — { items: [...], hasMore: bool, total?: number }
+      final items = raw['items'];
+      if (items is List) return items.whereType<Map>().map(_castMap).toList();
+    }
     if (raw is String) {
       try {
         final decoded = jsonDecode(raw);
-        if (decoded is List) {
-          return decoded.whereType<Map>().map(_castMap).toList();
-        }
+        return _extractList(decoded);
       } catch (_) {}
     }
     return [];
