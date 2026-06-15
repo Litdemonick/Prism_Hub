@@ -1,5 +1,29 @@
 import 'extension_model.dart';
 
+// Helpers de coerción seguros: nunca lanzan si el tipo es inesperado.
+String? _str(dynamic v) => v == null ? null : v.toString();
+int? _int(dynamic v) {
+  if (v == null) return null;
+  if (v is num) return v.toInt();
+  if (v is String) return int.tryParse(v);
+  return null;
+}
+double? _dbl(dynamic v) {
+  if (v == null) return null;
+  if (v is num) return v.toDouble();
+  if (v is String) return double.tryParse(v);
+  return null;
+}
+List<String>? _strList(dynamic v) =>
+    v == null ? null : (v as List).map((e) => e?.toString() ?? '').toList();
+Map<String, String>? _strMap(dynamic v) {
+  if (v == null) return null;
+  return {
+    for (final e in (v as Map).entries)
+      e.key.toString(): e.value?.toString() ?? '',
+  };
+}
+
 /// Equivale a PrismItem del contrato Prism+.
 class MediaItem {
   const MediaItem({
@@ -29,17 +53,17 @@ class MediaItem {
     required String package,
     required ExtensionType type,
   }) {
-    final overrideType = _parseType(map['type'] as String?);
+    final overrideType = _parseType(_str(map['type']));
     return MediaItem(
-      title: (map['title'] as String?) ?? '',
-      url: (map['url'] as String?) ?? '',
-      package: package,
-      type: overrideType ?? type,
-      cover: map['cover'] as String?,
-      description: map['description'] as String?,
-      tags: (map['tags'] as List?)?.cast<String>(),
-      year: (map['year'] as num?)?.toInt(),
-      rating: (map['rating'] as num?)?.toDouble(),
+      title:       _str(map['title'])       ?? '',
+      url:         _str(map['url'])         ?? '',
+      package:     package,
+      type:        overrideType ?? type,
+      cover:       _str(map['cover']),
+      description: _str(map['description']),
+      tags:        _strList(map['tags']),
+      year:        _int(map['year']),
+      rating:      _dbl(map['rating']),
     );
   }
 
@@ -72,12 +96,12 @@ class MediaEpisode {
   final int? number;
 
   factory MediaEpisode.fromMap(Map<String, dynamic> map) => MediaEpisode(
-    title: (map['title'] as String?) ?? '',
-    url: (map['url'] as String?) ?? '',
-    thumbnail: map['thumbnail'] as String?,
-    duration: (map['duration'] as num?)?.toInt(),
-    airDate: map['airDate'] as String?,
-    number: (map['number'] as num?)?.toInt(),
+    title:     _str(map['title'])     ?? '',
+    url:       _str(map['url'])       ?? '',
+    thumbnail: _str(map['thumbnail']),
+    duration:  _int(map['duration']),
+    airDate:   _str(map['airDate']),
+    number:    _int(map['number']),
   );
 }
 
@@ -96,9 +120,9 @@ class MediaSeason {
   final String? cover;
 
   factory MediaSeason.fromMap(Map<String, dynamic> map) => MediaSeason(
-    title: (map['title'] as String?) ?? '',
-    year: (map['year'] as num?)?.toInt(),
-    cover: map['cover'] as String?,
+    title: _str(map['title']) ?? '',
+    year:  _int(map['year']),
+    cover: _str(map['cover']),
     episodes: ((map['episodes'] as List?) ?? [])
         .whereType<Map>()
         .map((e) => MediaEpisode.fromMap(e.cast<String, dynamic>()))
@@ -146,15 +170,15 @@ class MediaDetail {
     required String url,
     required ExtensionType type,
   }) {
-    final rawEps = map['episodes'] as List? ?? [];
-    final rawSeasons = map['seasons'] as List?;
+    final rawEps     = map['episodes'] as List? ?? [];
+    final rawSeasons = map['seasons']  as List?;
     return MediaDetail(
-      title: (map['title'] as String?) ?? '',
-      url: url,
-      package: package,
-      type: type,
-      cover: map['cover'] as String?,
-      description: map['description'] as String?,
+      title:       _str(map['title'])       ?? '',
+      url:         url,
+      package:     package,
+      type:        type,
+      cover:       _str(map['cover']),
+      description: _str(map['description']),
       episodes: rawEps
           .whereType<Map>()
           .map((e) => MediaEpisode.fromMap(e.cast<String, dynamic>()))
@@ -163,11 +187,11 @@ class MediaDetail {
           ?.whereType<Map>()
           .map((s) => MediaSeason.fromMap(s.cast<String, dynamic>()))
           .toList(),
-      genres: (map['genres'] as List?)?.cast<String>(),
-      status: map['status'] as String?,
-      year: (map['year'] as num?)?.toInt(),
-      rating: (map['rating'] as num?)?.toDouble(),
-      extra: (map['extra'] as Map?)?.cast<String, String>(),
+      genres: _strList(map['genres']),
+      status: _str(map['status']),
+      year:   _int(map['year']),
+      rating: _dbl(map['rating']),
+      extra:  _strMap(map['extra']),
     );
   }
 }
