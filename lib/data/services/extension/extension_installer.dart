@@ -22,14 +22,20 @@ class ExtensionInstaller {
   static final _log = Logger('ExtensionInstaller');
 
   Future<void> install(ExtensionDto dto, {bool force = false}) async {
-    // Omitir si ya está instalada (mismo paquete en DB) para no re-descargar
-    // en cada arranque. Usa force:true para actualizar a una versión nueva.
+    // Omitir si ya está instalada con la misma versión. Si la versión del índice
+    // remoto es diferente, reinstalar automáticamente (sin force explícito).
     if (!force) {
       final existing = await DatabaseService.db.extensionModels
           .getByPackage(dto.package);
       if (existing != null && existing.isInstalled) {
-        _log.fine('${dto.package} ya instalada, omitiendo');
-        return;
+        if (existing.version == dto.version) {
+          _log.fine('${dto.package} v${dto.version} ya instalada, omitiendo');
+          return;
+        }
+        _log.info(
+          '${dto.package}: versión local=${existing.version} '
+          '→ remota=${dto.version}, actualizando',
+        );
       }
     }
 
