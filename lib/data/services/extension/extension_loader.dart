@@ -54,7 +54,11 @@ abstract final class ExtensionLoader {
         _log.info('${index.extensions.length} extensiones en $repoUrl');
         for (final dto in index.extensions) {
           try {
-            await installer.install(dto);
+            // force: true → re-descarga siempre la versión más reciente del repo
+            // oficial (es liviano: bundles de pocas KB). Garantiza que los
+            // arreglos lleguen al dispositivo sin depender de la versión local
+            // ni del caché. Junto al cache-buster, elimina las extensiones viejas.
+            await installer.install(dto, force: true);
             _log.info('Instalada: ${dto.package} v${dto.version}');
           } catch (e) {
             _log.warning('Error instalando ${dto.package}: $e');
