@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:get/get.dart';
 import 'package:logging/logging.dart';
 import 'package:media_kit/media_kit.dart';
@@ -13,17 +15,33 @@ class PlayerController extends GetxController {
   late final VideoController videoController;
 
   final isLoading = true.obs;
+  final isBuffering = false.obs;
   final error = Rxn<String>();
   final watchData = Rxn<WatchData>();
   final selectedStream = Rxn<WatchStream>();
-  final selectedSubtitleIdx = (-1).obs; // -1 = desactivado
+  final selectedSubtitleIdx = (-1).obs;
   final speed = 1.0.obs;
+
+  StreamSubscription<String>? _errorSub;
+  StreamSubscription<bool>? _bufferingSub;
 
   @override
   void onInit() {
     super.onInit();
     _player = Player();
     videoController = VideoController(_player);
+
+    _errorSub = _player.stream.error.listen((err) {
+      if (err.isEmpty) return;
+      _log.warning('media_kit error: $err');
+      if (!isLoading.value && error.value == null) {
+        error.value = 'No se pudo reproducir el video';
+      }
+    });
+
+    _bufferingSub = _player.stream.buffering.listen((b) {
+      isBuffering.value = b;
+    });
   }
 
   Future<void> load(String episodeUrl, String package) async {
@@ -90,6 +108,8 @@ class PlayerController extends GetxController {
 
   @override
   void onClose() {
+    _errorSub?.cancel();
+    _bufferingSub?.cancel();
     _player.dispose();
     super.onClose();
   }

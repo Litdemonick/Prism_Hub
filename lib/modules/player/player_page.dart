@@ -81,9 +81,16 @@ class _PlayerView extends StatelessWidget {
     return MaterialVideoControlsTheme(
       normal: _buildTheme(context, data),
       fullscreen: _buildTheme(context, data),
-      child: Video(
-        controller: c.videoController,
-        controls: MaterialVideoControls,
+      child: Stack(
+        children: [
+          Video(controller: c.videoController, controls: MaterialVideoControls),
+          Obx(() {
+            if (!c.isBuffering.value) return const SizedBox.shrink();
+            return const Center(
+              child: CircularProgressIndicator(color: Colors.white),
+            );
+          }),
+        ],
       ),
     );
   }
