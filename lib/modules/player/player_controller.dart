@@ -24,6 +24,12 @@ class PlayerController extends GetxController {
 
   StreamSubscription<String>? _errorSub;
   StreamSubscription<bool>? _bufferingSub;
+  StreamSubscription<bool>? _playingSub;
+
+  // true en cuanto el player llega a buffering o playing para el stream actual.
+  // Si stream.error llega ANTES de este flag, la URL es irreproduble (embed, formato
+  // desconocido, etc.). Si llega DESPUÉS, es un error no-fatal (red, pista de sub).
+  bool _streamAccepted = false;
 
   @override
   void onInit() {
@@ -31,16 +37,23 @@ class PlayerController extends GetxController {
     _player = Player();
     videoController = VideoController(_player);
 
-    _errorSub = _player.stream.error.listen((err) {
-      if (err.isEmpty) return;
-      _log.warning('media_kit error: $err');
-      if (!isLoading.value && error.value == null) {
-        error.value = 'No se pudo reproducir el video';
-      }
-    });
-
     _bufferingSub = _player.stream.buffering.listen((b) {
       isBuffering.value = b;
+      if (b) _streamAccepted = true;
+    });
+
+    _playingSub = _player.stream.playing.listen((playing) {
+      if (playing) _streamAccepted = true;
+    });
+
+    _errorSub = _player.stream.error.listen((err) {
+      if (err.isEmpty) return;
+      _log.warning('media_kit: $err');
+      // Solo mostrar error fatal si la URL nunca fue aceptada por el player
+      // (nunca llegó a buffering ni playing). Errores post-inicio son no-fatales.
+      if (!isLoading.value && error.value == null && !_streamAccepted) {
+        error.value = 'No se pudo reproducir el video';
+      }
     });
   }
 
@@ -84,6 +97,7 @@ class PlayerController extends GetxController {
   }
 
   Future<void> _openStream(WatchStream stream) async {
+    _streamAccepted = false; // resetear para cada URL nueva
     selectedStream.value = stream;
     await _player.open(Media(stream.url, httpHeaders: stream.headers ?? {}));
   }
@@ -110,6 +124,7 @@ class PlayerController extends GetxController {
   void onClose() {
     _errorSub?.cancel();
     _bufferingSub?.cancel();
+    _playingSub?.cancel();
     _player.dispose();
     super.onClose();
   }
