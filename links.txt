@@ -1,0 +1,67 @@
+﻿# PrismHub Latino v0.1.0 - Links de Terabox
+#
+# Zom 100 - 12 caps individuales
+zom-100|Temporada 1|01|https://1024terabox.com/s/1YN9Dl6o2yrwr6c924FZDNg
+zom-100|Temporada 1|02|https://1024terabox.com/s/14r11B8q-yHMj9BkR3mQqug
+zom-100|Temporada 1|03|https://1024terabox.com/s/1ut5QfsdZkcJfyjBIS1JuCg
+zom-100|Temporada 1|04|https://1024terabox.com/s/1jo2jspDxsjrgIikpuk0eyA
+zom-100|Temporada 1|05|https://1024terabox.com/s/1TVj2iIsk060A5P0fq0PBbg
+zom-100|Temporada 1|06|https://1024terabox.com/s/1v6cGtitgfde_2r9pAgMRTQ
+zom-100|Temporada 1|07|https://1024terabox.com/s/1dpJbpo6Zo0WSNupDYG5Gxg
+zom-100|Temporada 1|08|https://1024terabox.com/s/1bg08Zq7-FAEwo9AotmmIGA
+zom-100|Temporada 1|09|https://1024terabox.com/s/1XzeclUcpPsxgFL2CFmsKMw
+zom-100|Temporada 1|10|https://1024terabox.com/s/10879Jf5A-3FTfJgS1tHkhA
+zom-100|Temporada 1|11|https://1024terabox.com/s/16JT94sKtSJLMbNcqV-reOA
+zom-100|Temporada 1|12|https://1024terabox.com/s/10FEiDOTjiNvWEiKwhXqbtA
+#
+# Cyberpunk Edgerunners - Carpeta compartida (10 caps)
+# Abrir en navegador: https://1024terabox.com/s/18a5o6HdJNpC57x0RmZfBtA
+cyberpunk-edgerunners|Temporada 1|01|https://1024terabox.com/s/11G9VP6nery0O8J5PiP_vUA
+cyberpunk-edgerunners|Temporada 1|02|https://1024terabox.com/s/1haNNGfZDxbkNzKxIe1vbpg
+cyberpunk-edgerunners|Temporada 1|03|https://1024terabox.com/s/1X5bUJCSUH3T8F3bMXh1Sew
+cyberpunk-edgerunners|Temporada 1|04|https://1024terabox.com/s/1ViV95G2WvKHrygWFvYO-qg
+cyberpunk-edgerunners|Temporada 1|05|https://1024terabox.com/s/1yLOqm1Lg49cOfgkR6es2lQ
+cyberpunk-edgerunners|Temporada 1|06|https://1024terabox.com/s/1s5iz_h4hHJbSfEa_DhcZPw
+cyberpunk-edgerunners|Temporada 1|07|https://1024terabox.com/s/1Tg8xYieKtDVmmYTw9V3Iaw
+cyberpunk-edgerunners|Temporada 1|08|https://1024terabox.com/s/1oG6YnZbovcQ_z3hyts4PqQ
+cyberpunk-edgerunners|Temporada 1|09|https://1024terabox.com/s/1BqEygyjkHoJKOEDG_-WPgA
+cyberpunk-edgerunners|Temporada 1|10|https://1024terabox.com/s/1g1lPF2aHRCSoVjaTP6Wqow
+#
+# Tsuki ga Michibiku Isekai Douchuu - PENDIENTE (agregar links individuales)
+tsuki-ga-michibiku-isekai-douchuu|Temporada 1|01|https://1024terabox.com/s/1K7Mzb6X0tkC2oplX7ZnEEg
+tsuki-ga-michibiku-isekai-douchuu|Temporada 1|02|https://1024terabox.com/s/1rtqh69nGt_nz1O70qxbkmQ
+tsuki-ga-michibiku-isekai-douchuu|Temporada 1|03|https://1024terabox.com/s/1yRUHNQOQICu_ua3L1p7XVAE
+tsuki-ga-michibiku-isekai-douchuu|Temporada 1|04|https://1024terabox.com/s/1mB8M98ZtIf2cz54qNCSiiw
+tsuki-ga-michibiku-isekai-douchuu|Temporada 1|05|https://1024terabox.com/s/1cZ-cPhRWF6mCy1MHXhEQRQ
+tsuki-ga-michibiku-isekai-douchuu|Temporada 1|06|https://1024terabox.com/s/1nJFFuM62SP1-m4FL4g4i6A
+tsuki-ga-michibiku-isekai-douchuu|Temporada 1|07|https://1024terabox.com/s/1KKikMzy-N86tOi1LDHc7-A
+tsuki-ga-michibiku-isekai-douchuu|Temporada 1|08|https://1024terabox.com/s/13x5_TaCZveZoxbesRwtkTQ
+tsuki-ga-michibiku-isekai-douchuu|Temporada 1|09|https://1024terabox.com/s/1enpG3B1iNfrf8sDfLgw5kw
+tsuki-ga-michibiku-isekai-douchuu|Temporada 1|10|https://1024terabox.com/s/1JSEpdUXpARSBV1FeKSSP_w
+tsuki-ga-michibiku-isekai-douchuu|Temporada 1|11|https://1024terabox.com/s/197vQjhEO0ClaWbpemEt1Yg
+tsuki-ga-michibiku-isekai-douchuu|Temporada 1|12|https://1024terabox.com/s/1p0dT1PYkaS9UD89Hc-zJRg
+tsuki-ga-michibiku-isekai-douchuu|Temporada 2|01|https://1024terabox.com/s/1Gd2jYnTbNWYM84NmnauC0w
+tsuki-ga-michibiku-isekai-douchuu|Temporada 2|02|https://1024terabox.com/s/1cNNfKvd6ksnYFvVYCr5P0Q
+tsuki-ga-michibiku-isekai-douchuu|Temporada 2|03|https://1024terabox.com/s/1yTu2JL7ZHFK3LPF-FUC48Q
+tsuki-ga-michibiku-isekai-douchuu|Temporada 2|04|https://1024terabox.com/s/148M5DUYE67B7625DN4xPMw
+tsuki-ga-michibiku-isekai-douchuu|Temporada 2|05|https://1024terabox.com/s/1igofH_opBquxcIVvncU-Vg
+tsuki-ga-michibiku-isekai-douchuu|Temporada 2|06|https://1024terabox.com/s/110VxaPauAwgIrJpbNvvEBg
+tsuki-ga-michibiku-isekai-douchuu|Temporada 2|07|https://1024terabox.com/s/1q4ruT8eK9Ukjz40bal9EvQ
+tsuki-ga-michibiku-isekai-douchuu|Temporada 2|08|https://1024terabox.com/s/1R8gOGoO4bruZNXVF-aRiuw
+tsuki-ga-michibiku-isekai-douchuu|Temporada 2|09|https://1024terabox.com/s/1hYEAfhjobyEwclhdEC6vRQ
+tsuki-ga-michibiku-isekai-douchuu|Temporada 2|10|https://1024terabox.com/s/1U7rbJP08WbrJncoE1vNfXw
+tsuki-ga-michibiku-isekai-douchuu|Temporada 2|11|https://1024terabox.com/s/1xBQjbUKkAnoh2hdIEFrlcQ
+tsuki-ga-michibiku-isekai-douchuu|Temporada 2|12|https://1024terabox.com/s/17bOKuT-3oMrtWb8DCXvFZg
+tsuki-ga-michibiku-isekai-douchuu|Temporada 2|13|https://1024terabox.com/s/1V0UczLWLYSiLrTf9PkkXig
+tsuki-ga-michibiku-isekai-douchuu|Temporada 2|14|https://1024terabox.com/s/18g3I28-RnFW3PIaVz0zp9A
+tsuki-ga-michibiku-isekai-douchuu|Temporada 2|15|https://1024terabox.com/s/1Lcv-Qo5E2PKylJxLIJk_Ug
+tsuki-ga-michibiku-isekai-douchuu|Temporada 2|16|https://1024terabox.com/s/1Gwh7P8B8pIUUt7O2aGyUfA
+tsuki-ga-michibiku-isekai-douchuu|Temporada 2|17|https://1024terabox.com/s/1JMDMRSl14cFZBYQQ_L67TA
+tsuki-ga-michibiku-isekai-douchuu|Temporada 2|18|https://1024terabox.com/s/14jpeC7LJMQVGZLNh-4FEzQ
+tsuki-ga-michibiku-isekai-douchuu|Temporada 2|19|https://1024terabox.com/s/1EDuGy_LETA_VAXUa42_5sw
+tsuki-ga-michibiku-isekai-douchuu|Temporada 2|20|https://1024terabox.com/s/1owxNU5EhDArnMuA4_MZzmg
+tsuki-ga-michibiku-isekai-douchuu|Temporada 2|21|https://1024terabox.com/s/1RKGhJIP4ePkWZA6TgM7IUw
+tsuki-ga-michibiku-isekai-douchuu|Temporada 2|22|https://1024terabox.com/s/1mjaqSZzGE-qK4_1XXz1Qpg
+tsuki-ga-michibiku-isekai-douchuu|Temporada 2|23|https://1024terabox.com/s/1K-7iUaUxCfGd_rEIsSUiEw
+tsuki-ga-michibiku-isekai-douchuu|Temporada 2|24|https://1024terabox.com/s/1DNUWeXIeLgCYlrootdO-FQ
+tsuki-ga-michibiku-isekai-douchuu|Temporada 2|25|https://1024terabox.com/s/1rNCaMEHwCjxwSL94XTG0fg

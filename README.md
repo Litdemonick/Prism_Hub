@@ -1,228 +1,165 @@
-# PrismHub
+﻿# PrismHub Extensions Repository
+
+**English** | [Español](./README-ES.md)
 
 <div align="center">
-  <picture>
-    <img src="https://raw.githubusercontent.com/Litdemonick/Prism_Hub/develop/assets/logo_prismhub.png" width="360" alt="PrismHub" />
-  </picture>
 
-  <br /><br />
+<img width="220" src="./icons/logo.png" alt="PrismHub Logo"/>
 
-  <h3>Anime · Manga · Películas · Series · y más — impulsado por Prism+</h3>
-  <p>App multiplataforma en Flutter. Motor de extensiones universal: <strong>Prism+</strong>.</p>
+# PrismHub
 
-  <br />
+### Repositorio oficial de extensiones para PrismHub
 
-  ![Flutter](https://img.shields.io/badge/Flutter-3.44+-02569B?logo=flutter)
-  ![Dart](https://img.shields.io/badge/Dart-3.12+-0175C2?logo=dart)
-  ![Prism+](https://img.shields.io/badge/Motor-Prism+-6D28D9?logo=typescript)
-  ![Plataformas](https://img.shields.io/badge/Platforms-Windows%20%7C%20Android%20%7C%20Linux%20%7C%20iOS-22C55E)
-  ![License](https://img.shields.io/badge/License-AGPL--3.0-3B82F6)
+Aplicación multiplataforma enfocada en anime, manga y películas en español mediante un sistema de extensiones.
+
+<p align="center">
+  Fork personalizado basado en <b>Miru App</b>, optimizado para la comunidad hispanohablante.
+</p>
+
+<br>
+
+[![Repository](https://img.shields.io/badge/Repository-PrismHub-blue?style=for-the-badge&logo=github)](https://github.com/jephersonRD/PrismHub)
+[![License](https://img.shields.io/github/license/jephersonRD/PrismHub?style=for-the-badge)](LICENSE)
+[![Stars](https://img.shields.io/github/stars/jephersonRD/PrismHub?style=for-the-badge)](https://github.com/jephersonRD/prismhub/stargazers)
+[![Issues](https://img.shields.io/github/issues/jephersonRD/PrismHub?style=for-the-badge)](https://github.com/jephersonRD/prismhub/issues)
+
 </div>
 
 ---
 
-## 🧩 ¿Qué es PrismHub?
-
-PrismHub es una aplicación de entretenimiento multiplataforma que consume contenido a través de **extensiones TypeScript**. Su motor es **[Prism+](https://github.com/Litdemonick/prism-plus)** — el núcleo universal de extensiones que PrismHub usa como fuente oficial.
-
-Cada extensión se ejecuta en un runtime QuickJS aislado dentro de la app. PrismHub se sincroniza automáticamente con el catálogo de Prism+ sin configuración extra.
-
+![Screenshot](./assets/screenshot/screenshot.webp)
 ---
 
-## ⚡ Motor integrado: Prism+
+# ✨ ¿Qué es PrismHub?
 
-El repositorio de **Prism+** está integrado como motor oficial de PrismHub. Esto significa:
+PrismHub es una versión personalizada y modificada de **Miru App**, diseñada específicamente para usuarios de habla hispana.
 
-- ✅ Las extensiones de Prism+ se instalan automáticamente en el primer arranque — sin configuración manual
-- ✅ Cualquier extensión nueva o actualización en Prism+ se refleja automáticamente en PrismHub
-- ✅ El contrato de tipos (`extensions/types/prism.d.ts`) es idéntico al SDK de Prism+
-- ✅ Prism+ es la única fuente de extensiones — no se requiere ninguna configuración adicional
+El proyecto busca ofrecer una experiencia más limpia, rápida y enfocada en contenido en español mediante un sistema flexible de extensiones.
 
----
+## ✅ Con PrismHub puedes
 
-## ✨ Características
+- Ver anime online
+- Acceder a películas y series
+- Utilizar múltiples fuentes desde una sola aplicación
+- Instalar extensiones fácilmente
+- Crear tus propias extensiones en JavaScript
 
-- 🎬 Reproductor de video con soporte multi-calidad y subtítulos
-- 📖 Lector de manga / cómics / novelas con scroll continuo
-- 🔌 Motor Prism+ integrado — extensiones auto-instaladas desde el primer arranque
-- 🏃 Runtime JS aislado por extensión (QuickJS vía `flutter_js`)
-- 📱 Diseño completamente responsivo (móvil / tablet / escritorio)
-- 💾 Historial y favoritos persistentes (Isar)
-- 🌐 i18n ES / EN
-- 🎨 Tema claro/oscuro (Material 3)
-- 🔄 Sincronización automática con el catálogo de Prism+
+# PrismHub Installer
 
----
 
-## 📱 Diseño responsivo
-
-PrismHub adapta toda su interfaz según el tamaño de pantalla del dispositivo:
-
-| Breakpoint | Rango | Navegación | Grid | Comportamiento |
-|---|---|---|---|---|
-| **Mobile** | < 600 px | Bottom bar | 2 columnas | Smartphones portrait/landscape |
-| **Tablet** | 600–1199 px | Bottom bar | 3 columnas | Tablets, laptops compactas |
-| **Desktop** | ≥ 1200 px | Navigation Rail | 4 columnas | Escritorio con controles de ventana nativos |
-
-- **Padding horizontal**: proporcional al viewport en móvil/tablet; fijo a la izquierda en desktop
-- **Cards de contenido**: ancho adaptativo (110 / 130 / 150 px según dispositivo)
-- **Contenido centrado**: ancho máximo de 1280 px en desktop para pantallas muy anchas
-- **Ventana en desktop**: tamaño inicial 1200×780 px, mínimo 1000×680 px para que el rail siempre sea visible
-
----
-
-## 🛠️ Stack
-
-| Área | Tecnología |
-|------|-----------|
-| App | Flutter 3.44 + Dart 3.12 |
-| Estado / DI | GetX |
-| Navegación | go_router (ShellRoute) |
-| DB | Isar 3 |
-| Config / KV | shared_preferences · Hive |
-| HTTP | Dio + cookie_jar |
-| Motor de extensiones | **Prism+ SDK** → esbuild → flutter_js (QuickJS) |
-| Video | media_kit |
-| Desktop | window_manager |
-| i18n | flutter_i18n |
-
----
-
-## 📁 Estructura del proyecto
-
+### Linux 
+<p align="left">
+  <img src="https://img.shields.io/badge/Linux-Supported-2ea043?style=for-the-badge&logo=linux&logoColor=white">
+  
+```bash
+curl -fsSL https://raw.githubusercontent.com/jephersonRD/prismhub/main/jiru-install/install.sh | bash
 ```
-Prism_Hub/
-├── lib/
-│   ├── core/
-│   │   ├── config/        # AppConfig — URL de Prism+, constantes globales
-│   │   ├── db/            # DatabaseService (Isar)
-│   │   ├── router/        # AppRouter + rutas (go_router)
-│   │   ├── theme/         # AppTheme (Material 3)
-│   │   └── utils/         # Logger, AppStorage, Responsive
-│   ├── data/
-│   │   ├── models/        # MediaItem, WatchData, ExtensionModel, …
-│   │   ├── providers/     # ExtensionRepoProvider
-│   │   └── services/
-│   │       └── extension/ # ExtensionService + Loader + Installer
-│   ├── modules/
-│   │   ├── home/
-│   │   ├── search/
-│   │   ├── detail/
-│   │   ├── player/        # Reproductor (video)
-│   │   ├── reader/        # Lector (manga, cómic, novela)
-│   │   ├── extensions/    # Gestión de extensiones y repos
-│   │   └── settings/
-│   └── shared/
-│       ├── widgets/       # AppShell, ContentCard
-│       └── dialogs/
+
+### Windows (PowerShell)
+<img src="https://img.shields.io/badge/Windows-Supported-0078D6?style=for-the-badge&logo=windows&logoColor=white">
+
+```powershell
+irm https://raw.githubusercontent.com/jephersonRD/prismhub/main/jiru-install/install.ps1 | iex
+```
+
+## Assets esperados en GitHub Releases
+
+El instalador busca automáticamente estos assets en la última release:
+
+| Plataforma | Asset |
+|-----------|-------|
+| Linux x64 | `PrismHub-<tag>-linux-x64.tar.gz` o `PrismHub-<tag>-linux.tar.gz` |
+| Linux arm64 | `PrismHub-<tag>-linux-arm64.tar.gz` |
+| Windows x64 | `PrismHub-<tag>-windows-x64.zip` o `PrismHub-<tag>-windows.zip` |
+
+
+# 📦 Cómo agregar este repositorio
+
+1. Abre **PrismHub**
+2. Navega a:
+
+```txt
+Ajustes → Extensiones → Repositorios
+```
+
+3. Presiona el botón **+**
+4. Agrega esta URL:
+
+```txt
+https://raw.githubusercontent.com/jephersonRD/prismhub/main/index.json
+```
+
+5. Presiona **Recargar**
+6. ¡Listo! 🎉
+
+Ahora tendrás acceso a todas las extensiones disponibles.
+
+---
+
+# 📁 Estructura del proyecto
+
+```txt
+prismhub/
+├── index.json
+├── README.md
+├── README-ES.md
 ├── extensions/
-│   ├── types/
-│   │   └── prism.d.ts     # Tipos Prism+ SDK (sincronizados)
-│   ├── _template/
-│   │   └── index.ts       # Plantilla para nuevas extensiones
-│   └── index.json         # Registro local
-├── scripts/
-│   ├── build.mjs          # Compila TS → JS (esbuild)
-│   └── new-extension.mjs  # Scaffolding de extensión
-├── package.json
-└── tsconfig.json
+│   ├── animeflv.js
+│   ├── animeonlineninja.js
+│   ├── cuevana3.js
+│   └── tioanime.js
+├── assets/
+│   ├── icon/
+│   │   └── logo.png
+│   └── screenshot/
+│       └── screenshot.webp
+├── icons/
+│   ├── animeflv.png
+│   ├── animeonlineninja.png
+│   ├── cuevana3.png
+│   └── tioanime.png
+└── .github/
+    └── workflows/
+        └── pages.yml
 ```
 
 ---
 
-## 🔌 API de extensiones (contrato Prism+)
+# 🧩 Desarrollo de extensiones
 
-Cada extensión exporta exactamente cuatro funciones asíncronas:
+Cada archivo `.js` dentro de `extensions/` representa una extensión independiente.
 
-| Función | Firma | Descripción |
-|---------|-------|-------------|
-| `latest` | `(page) => Promise<PrismItem[] \| PrismPage>` | Últimos contenidos |
-| `search` | `(keyword, page, filter?) => Promise<PrismItem[] \| PrismPage>` | Búsqueda |
-| `detail` | `(url) => Promise<PrismDetail>` | Metadata + episodios/capítulos |
-| `watch` | `(url) => Promise<PrismWatch>` | Streams de video o páginas |
+Las extensiones utilizan JavaScript para obtener y procesar información de sitios web compatibles con el ecosistema Miru.
 
-### Tipos de media soportados
+## 📌 Funciones requeridas
 
-`anime` · `manga` · `novel` · `movie` · `series` · `documentary` · `live` · `video` · `music` · `podcast` · `other`
+| Función | Descripción |
+|----------|-------------|
+| `latest(page)` | Obtiene los últimos contenidos agregados |
+| `search(kw, page, filter)` | Realiza búsquedas con palabras clave y filtros |
+| `detail(url)` | Obtiene información detallada de un contenido |
+| `watch(url)` | Obtiene enlaces de reproducción válidos |
 
-### Crear una extensión local
 
-```bash
-# Copiar la plantilla
-cp -r extensions/_template extensions/mi-extension
-
-# Editar extensions/mi-extension/index.ts
-# Completar las 4 funciones con la lógica del sitio
-
-# Compilar
-npm run build -- --extension=mi-extension
-```
-
-> Para publicar extensiones al catálogo oficial, contribuye directamente en [Prism+](https://github.com/Litdemonick/prism-plus).
 
 ---
 
-## 🚀 Instalación y desarrollo
+# 📜 Licencia
 
-### Requisitos
-
-- Flutter 3.44+
-- Node.js 18+ (para compilar extensiones TypeScript)
-
-### Pasos
-
-```bash
-# 1. Clonar y cambiar a develop
-git clone https://github.com/Litdemonick/Prism_Hub.git
-cd Prism_Hub
-git checkout develop
-
-# 2. Dependencias Flutter
-flutter pub get
-dart run build_runner build --delete-conflicting-outputs
-
-# 3. Correr la app
-flutter run -d windows    # Desktop
-flutter run -d android    # Android
-
-# 4. Dependencias de extensiones
-npm install
-npm run build:all
-```
+Este proyecto está bajo la licencia **AGPL-3.0**.
 
 ---
 
-## 🌿 Ramas Git
+# 🌐 Comunidad
 
-| Rama | Uso |
-|------|-----|
-| `main` | Producción — solo merges de `develop` vía PR |
-| `develop` | Integración activa — base de trabajo diario |
-| `feature/*` | Features nuevas → PR a `develop` |
-| `fix/*` | Bugfixes → PR a `develop` |
+- 🐛 Issues: https://github.com/jephersonRD/prismhub/issues
 
 ---
 
-## 🤝 Contribuir
+<div align="center">
 
-1. Haz fork y crea tu rama desde `develop`
-2. Para la app: mantén la arquitectura GetX + go_router existente
-3. Para nuevas extensiones: contribuye directamente al catálogo en [Prism+](https://github.com/Litdemonick/prism-plus)
-4. Abre un PR hacia `develop`
+## ❤️ Hecho con amor para la comunidad hispanohablante
 
-### CI — requisitos antes de hacer push
+### PrismHub — Tu puerta de entrada al entretenimiento en español
 
-El CI falla si el código Dart no está formateado o tiene warnings de analyzer:
-
-```bash
-dart format lib/                          # formatear antes de cada push
-flutter analyze --fatal-infos             # infos y warnings rompen el CI
-```
-
-Si no corres `dart format lib/` antes del push, el CI saldrá con exit code 123.
-
----
-
-## 📄 Licencia
-
-AGPL-3.0 — ver [LICENSE](LICENSE).
+</div>
