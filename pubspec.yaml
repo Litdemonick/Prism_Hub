@@ -1,62 +1,82 @@
-name: prism_hub
-description: "Prism Hub - Anime, manga, comics y novelas via extensiones"
-publish_to: 'none'
-version: 1.0.0+1
+﻿name: prismhub
+description: PrismHub - Anime, manga and novels streaming application
+publish_to: "none"
+version: 0.1.0+1
 
 environment:
-  sdk: ^3.12.1
+  sdk: ">=3.0.3 <4.0.0"
 
 dependencies:
+  desktop_multi_window: ^0.2.0
+  dio: ^5.3.2
+  dio_cookie_manager: ^3.1.0+1
+  easy_refresh: ^3.3.2+1
+  fluent_ui: ^4.7.6
   flutter:
     sdk: flutter
-  cupertino_icons: ^1.0.8
-
-  # --- Estado / DI / Navegación ---
-  get: ^4.7.3              # State management + dependency injection
-  go_router: ^17.3.0       # Declarative routing (shell + nested)
-
-  # --- Red / Scraping ---
-  dio: ^5.9.2              # HTTP client
-  cookie_jar: ^4.0.9
-  dio_cookie_manager: ^3.4.0
-  html: ^0.15.6            # HTML parsing
-  xpath_selector_html_parser: ^3.0.1
-
-  # --- Motor de extensiones ---
-  flutter_js: ^0.8.7       # Runtime JavaScript para extensiones (.js)
-
-  # --- Reproductor (anime) ---
-  media_kit: ^1.2.6
-  media_kit_video: ^2.0.1
-  media_kit_libs_video: ^1.0.7
-
-  # --- Persistencia ---
-  isar: 3.1.0+1            # Base de datos estructurada (biblioteca, historial)
-  isar_flutter_libs: 3.1.0+1
-  hive: ^2.2.3             # Almacenamiento KV ligero
+  flutter_animate: ^4.1.1+1
+  flutter_code_editor: ^0.3.0
+  flutter_highlight: ^0.7.0
+  flutter_i18n: ^0.36.0
+  flutter_js: ^0.8.0
+  flutter_markdown: ^0.6.17+1
+  get: ^4.6.5
+  go_router: ^12.1.1
+  highlight: ^0.7.0
+  hive: ^2.2.3
   hive_flutter: ^1.1.0
-  shared_preferences: ^2.5.5
-  path: ^1.9.1
-  path_provider: ^2.1.5
-
-  # --- UI / Plataforma ---
-  cached_network_image: ^3.4.1
-  window_manager: ^0.5.1   # Control de ventana en desktop
-  flutter_i18n: ^0.37.1    # Internacionalización (es/en)
-
-  # --- Utilidades ---
-  package_info_plus: ^10.1.0
-  logging: ^1.3.0
+  isar: ^3.1.0+1
+  isar_flutter_libs: ^3.1.0+1
+  json_annotation: ^4.8.1
+  media_kit: ^1.1.10+1
+  media_kit_video: ^1.2.4
+  media_kit_libs_video: ^1.0.4
+  package_info_plus: ^4.2.0
+  palette_generator: ^0.3.3+2
+  path: ^1.8.3
+  path_provider: ^2.1.0
+  file_picker: ^6.1.1
+  screenshot: ^2.1.0
+  scrollable_positioned_list: ^0.3.8
+  tmdb_api: ^2.1.5
+  url_launcher: ^6.1.5
+  url_launcher_linux: 3.0.6
+  window_manager: ^0.3.7
+  cookie_jar: ^4.0.8
+  flutter_inappwebview: ^6.0.0
+  flutter_windows_webview:
+    git:
+      url: https://github.com/MiaoMint/flutter_windows_webview
+      ref: master
+  webview_cookie_manager: ^2.0.6
+  html: ^0.15.4
+  xpath_selector_html_parser: ^3.0.1
+  device_info_plus: ^9.0.3
+  android_intent_plus: ^4.0.2
+  crypto: ^3.0.3
+  extended_image: ^8.2.0
+  flutter_hls_parser: ^2.0.1
+  image_gallery_saver: ^2.0.3
+  flutter_socks_proxy: ^0.0.3
+  logging: ^1.2.0
+  share_plus: ^7.2.1
+  volume_controller: ^2.0.7
+  screen_brightness: ^0.2.2+1
+  auto_orientation: ^2.3.1
+  dlna_dart: ^0.0.8
 
 dev_dependencies:
   flutter_test:
     sdk: flutter
-  flutter_lints: ^6.0.0
-  build_runner: ^2.4.13
-  isar_generator: 3.1.0+1
+  flutter_lints: ^3.0.1
+  isar_generator: ^3.1.0+1
+  build_runner: ^2.4.5
+  json_serializable: ^6.7.0
 
 flutter:
   uses-material-design: true
   assets:
     - assets/i18n/
-    - assets/icons/
+    - assets/icon/logo.png
+    - assets/icon/anilist.jpg
+    - assets/js/

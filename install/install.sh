@@ -1,0 +1,659 @@
+﻿#!/usr/bin/env bash
+# =============================================================================
+#  PrismHub Installer — Linux/macOS
+#  Uso: curl -fsSL https://raw.githubusercontent.com/Litdemonick/Prism_Hub/main/install/install.sh | bash
+# =============================================================================
+
+set -euo pipefail
+
+# ─── Configuración ─────────────────────────────────────────────────────────
+REPO_OWNER="Litdemonick"
+REPO_NAME="Prism_Hub"
+API_URL="https://api.github.com/repos/${REPO_OWNER}/${REPO_NAME}/releases/latest"
+INSTALL_DIR="${HOME}/.local/share/PrismHub"
+BIN_DIR="${HOME}/.local/bin"
+APP_DIR="${HOME}/.local/share/applications"
+LOG_DIR="${HOME}/.local/share/PrismHub/logs"
+LOG_FILE="${LOG_DIR}/installer-$(date +%Y%m%d-%H%M%S).log"
+VERSION_FILE="${INSTALL_DIR}/version"
+
+# ─── Colores ANSI ──────────────────────────────────────────────────────────
+if [[ -t 1 ]]; then
+    C_RESET='\033[0m'; C_BOLD='\033[1m'; C_DIM='\033[2m'
+    C_RED='\033[0;31m'; C_GREEN='\033[0;32m'; C_YELLOW='\033[0;33m'
+    C_BLUE='\033[0;34m'; C_CYAN='\033[0;36m'; C_WHITE='\033[1;37m'
+else
+    C_RESET=''; C_BOLD=''; C_DIM=''; C_RED=''; C_GREEN=''; C_YELLOW=''
+    C_BLUE=''; C_CYAN=''; C_WHITE=''
+fi
+
+# ─── Utilidades ────────────────────────────────────────────────────────────
+log() { mkdir -p "$LOG_DIR"; echo "[$(date '+%Y-%m-%d %H:%M:%S')] $*" >> "$LOG_FILE"; }
+print() { echo -e "$*"; }
+info() { print "${C_BLUE}ℹ${C_RESET}  $*"; log "INFO: $*"; }
+success() { print "${C_GREEN}✔${C_RESET}  $*"; log "SUCCESS: $*"; }
+warn() { print "${C_YELLOW}⚠${C_RESET}  $*"; log "WARN: $*"; }
+error() { print "${C_RED}✖${C_RESET}  $*"; log "ERROR: $*"; }
+die() { error "$*"; exit 1; }
+
+# ─── Banner ──────────────────────────────────────────────────────────────────
+show_banner() {
+    clear 2>/dev/null || true
+    print ""
+    print "${C_CYAN}${C_BOLD}  ____       _               _   _       _     ${C_RESET}"
+    print "${C_CYAN}${C_BOLD} |  _ \ _ __(_)___ _ __ ___ | | | |_   _| |__  ${C_RESET}"
+    print "${C_CYAN}${C_BOLD} | |_) | '__| / __| '_ ' _ \| |_| | | | | '_ \ ${C_RESET}"
+    print "${C_CYAN}${C_BOLD} |  __/| |  | \__ \ | | | | |  _  | |_| | |_) |${C_RESET}"
+    print "${C_CYAN}${C_BOLD} |_|   |_|  |_|___/_| |_| |_|_| |_|\__,_|_.__/ ${C_RESET}"
+    print "${C_DIM}  ─────────────────────────────────────────────${C_RESET}"
+    print ""
+}
+
+# ─── Spinner ─────────────────────────────────────────────────────────────────
+spinner() {
+    local pid=$1 msg="$2" delay=0.1
+    local spin='⠋⠙⠹⠸⠼⠴⠦⠧⠇⠏'
+    while kill -0 "$pid" 2>/dev/null; do
+        for i in $(seq 0 9); do
+            printf "\r${C_CYAN}%s${C_RESET}  %s" "${spin:$i:1}" "$msg"
+            sleep $delay
+        done
+    done
+    printf "\r%-60s\r" ""
+}
+
+# ─── Barra de Progreso ───────────────────────────────────────────────────────
+progress_bar() {
+    local percent=$1 width=40
+    local filled=$(( percent * width / 100 ))
+    local empty=$(( width - filled ))
+    local bar=""
+    for ((i=0; i<filled; i++)); do bar+="█"; done
+    for ((i=0; i<empty; i++)); do bar+="░"; done
+    printf "\r${C_CYAN}[%s]${C_RESET} ${C_BOLD}%3d%%${C_RESET}" "$bar" "$percent"
+    [[ $percent -eq 100 ]] && echo ""
+}
+
+# ─── Traducciones ────────────────────────────────────────────────────────────
+declare -A I18N_ES=(
+    [welcome]="Bienvenido al Instalador de PrismHub"
+    [menu_lang]="Selecciona tu idioma"
+    [opt_spanish]="Español"
+    [opt_english]="English"
+    [opt_exit]="Salir"
+    [menu_main]="Menú Principal"
+    [opt_install]="Instalar"
+    [opt_update]="Actualizar"
+    [opt_uninstall]="Desinstalar"
+    [detecting_os]="Detectando sistema operativo..."
+    [detecting_arch]="Detectando arquitectura..."
+    [fetching_release]="Buscando última versión en GitHub..."
+    [downloading]="Descargando PrismHub..."
+    [installing]="Instalando PrismHub..."
+    [success_install]="PrismHub se instaló correctamente."
+    [success_update]="PrismHub se actualizó correctamente."
+    [success_uninstall]="PrismHub se desinstaló correctamente."
+    [installed_version]="Versión instalada"
+    [install_path]="Ruta de instalación"
+    [latest_version]="Última versión disponible"
+    [already_latest]="Ya tienes la última versión."
+    [no_internet]="No se detectó conexión a internet."
+    [choose_option]="Elige una opción"
+    [invalid_option]="Opción inválida."
+    [press_enter]="Presiona Enter para salir..."
+    [cancelled]="Operación cancelada."
+    [log_path]="Log guardado en"
+    [running]="ejecuta: PrismHub"
+    [dep_title]="Dependencias del Sistema"
+    [dep_installed]="ya instalado"
+    [dep_required]="Se requiere:"
+    [dep_installing]="Instalando"
+    [dep_ok]="instalado correctamente"
+    [dep_fail]="Error instalando"
+    [dep_distro_unknown]="No se pudo detectar tu distribución automáticamente."
+    [dep_manual_list]="Asegúrate de tener instalado:"
+    [dep_sudo]="Verificando acceso sudo..."
+    [dep_sudo_fail]="Se requiere sudo para instalar dependencias."
+    [dep_skip]="Continuar de todas formas"
+    [dep_continue]="Continuar"
+)
+
+declare -A I18N_EN=(
+    [welcome]="Welcome to PrismHub Installer"
+    [menu_lang]="Select your language"
+    [opt_spanish]="Spanish"
+    [opt_english]="English"
+    [opt_exit]="Exit"
+    [menu_main]="Main Menu"
+    [opt_install]="Install"
+    [opt_update]="Update"
+    [opt_uninstall]="Uninstall"
+    [detecting_os]="Detecting operating system..."
+    [detecting_arch]="Detecting architecture..."
+    [fetching_release]="Fetching latest release from GitHub..."
+    [downloading]="Downloading PrismHub..."
+    [installing]="Installing PrismHub..."
+    [success_install]="PrismHub installed successfully."
+    [success_update]="PrismHub updated successfully."
+    [success_uninstall]="PrismHub uninstalled successfully."
+    [installed_version]="Installed version"
+    [install_path]="Installation path"
+    [latest_version]="Latest version available"
+    [already_latest]="You already have the latest version."
+    [no_internet]="No internet connection detected."
+    [choose_option]="Choose an option"
+    [invalid_option]="Invalid option."
+    [press_enter]="Press Enter to exit..."
+    [cancelled]="Operation cancelled."
+    [log_path]="Log saved at"
+    [running]="run: PrismHub"
+    [dep_title]="System Dependencies"
+    [dep_installed]="already installed"
+    [dep_required]="Required:"
+    [dep_installing]="Installing"
+    [dep_ok]="installed successfully"
+    [dep_fail]="Error installing"
+    [dep_distro_unknown]="Could not detect your distribution automatically."
+    [dep_manual_list]="Make sure you have installed:"
+    [dep_sudo]="Verifying sudo access..."
+    [dep_sudo_fail]="sudo is required to install dependencies."
+    [dep_skip]="Continue anyway"
+    [dep_continue]="Continue"
+)
+
+LANG_CODE="es"
+t() { local key="$1"; [[ "$LANG_CODE" == "en" ]] && printf "%s" "${I18N_EN[$key]:-$key}" || printf "%s" "${I18N_ES[$key]:-$key}"; }
+
+select_language() {
+    print ""
+    print "  ${C_BOLD}${C_WHITE}[1]${C_RESET} Español"
+    print "  ${C_BOLD}${C_WHITE}[2]${C_RESET} English"
+    print "  ${C_BOLD}${C_WHITE}[3]${C_RESET} ${C_RED}$(t opt_exit)${C_RESET}"
+    print ""
+    read -rp "  $(t choose_option): " choice </dev/tty || true
+    case "$choice" in 1) LANG_CODE="es" ;; 2) LANG_CODE="en" ;; 3) exit 0 ;; esac
+}
+
+# ─── Menú Principal ─────────────────────────────────────────────────────────
+main_menu() {
+    while true; do
+        show_banner
+        print "  ${C_BOLD}${C_CYAN}◆ $(t menu_main) ◆${C_RESET}\n"
+        print "  ${C_BOLD}${C_WHITE}[1]${C_RESET} $(t opt_install)"
+        print "  ${C_BOLD}${C_WHITE}[2]${C_RESET} $(t opt_update)"
+        print "  ${C_BOLD}${C_WHITE}[3]${C_RESET} $(t opt_uninstall)"
+        print "  ${C_BOLD}${C_WHITE}[4]${C_RESET} ${C_RED}$(t opt_exit)${C_RESET}"
+        print ""
+        read -rp "  $(t choose_option): " choice </dev/tty || true
+        case "$choice" in
+            1) do_install; break ;;
+            2) do_update; break ;;
+            3) do_uninstall; break ;;
+            4) exit 0 ;;
+            *) warn "$(t invalid_option)" ;;
+        esac
+    done
+}
+
+# ─── Detección ─────────────────────────────────────────────────────────────
+detect_os() {
+    case "$(uname -s)" in
+        Linux*)  echo "linux" ;;
+        Darwin*) echo "macos" ;;
+        *)       die "Sistema operativo no soportado: $(uname -s)" ;;
+    esac
+}
+
+detect_arch() {
+    local arch
+    arch=$(uname -m)
+    case "$arch" in
+        x86_64|amd64)   echo "x64" ;;
+        aarch64|arm64)  echo "arm64" ;;
+        armv7l|armv6l)  echo "arm" ;;
+        i386|i486|i586|i686)
+            error "Arquitectura de 32 bits ($arch) no está soportada por PrismHub."
+            error "PrismHub requiere un sistema de 64 bits (x86_64 o aarch64)."
+            die   "Por favor usa un sistema operativo de 64 bits."
+            ;;
+        *) die "Arquitectura no soportada: $arch" ;;
+    esac
+}
+
+# ─── Detección de Distribución ───────────────────────────────────────────────
+detect_distro() {
+    local distro_id="unknown"
+    if [[ -f /etc/os-release ]]; then
+        local os_id os_id_like
+        os_id=$(grep '^ID=' /etc/os-release | cut -d= -f2 | tr -d '"' | tr '[:upper:]' '[:lower:]')
+        os_id_like=$(grep '^ID_LIKE=' /etc/os-release | cut -d= -f2 | tr -d '"' | tr '[:upper:]' '[:lower:]')
+        distro_id="${os_id:-unknown}"
+
+        # Normalise known IDs to their package-manager family
+        case "$distro_id" in
+            arch|manjaro|endeavouros|artix|garuda|cachyos|arcolinux|crystal|\
+            hyperbola|parabola|blackarch|archcraft|archlabs) ;; # already fine
+            ubuntu|debian|linuxmint|pop|elementary|zorin|neon|kali|\
+            raspbian|mx|antix|pureos|tails|parrot|deepin|backbox|\
+            vanilla-*) ;; # already fine
+            fedora|rhel|centos|rocky|alma|nobara|ultramarine|mageia|\
+            openmandriva|springdale) ;; # already fine
+            opensuse*|suse*) distro_id="opensuse" ;;
+            void) ;;
+            alpine) ;;
+            gentoo|funtoo) distro_id="gentoo" ;;
+            nixos) distro_id="nixos" ;;
+            solus) ;;
+            *)
+                # Fallback: look at ID_LIKE to find the package-manager family
+                for like in $os_id_like; do
+                    case "$like" in
+                        arch)   distro_id="arch"   ; break ;;
+                        debian|ubuntu) distro_id="debian" ; break ;;
+                        fedora|rhel)   distro_id="fedora" ; break ;;
+                        opensuse|suse) distro_id="opensuse" ; break ;;
+                        void)   distro_id="void"   ; break ;;
+                        alpine) distro_id="alpine" ; break ;;
+                        gentoo) distro_id="gentoo" ; break ;;
+                    esac
+                done
+                ;;
+        esac
+    elif [[ -f /etc/arch-release ]];   then distro_id="arch"
+    elif [[ -f /etc/debian_version ]]; then distro_id="debian"
+    elif [[ -f /etc/fedora-release ]]; then distro_id="fedora"
+    elif [[ -f /etc/void-release ]];   then distro_id="void"
+    elif [[ -f /etc/alpine-release ]]; then distro_id="alpine"
+    elif [[ -f /etc/gentoo-release ]]; then distro_id="gentoo"
+    fi
+    echo "$distro_id"
+}
+
+# ─── Gestión de Dependencias ──────────────────────────────────────────────
+check_dependencies() {
+    local distro="$1"
+
+    print "\n${C_DIM}┌─ $(t dep_title) ──────────────────────────────────────────────────┐${C_RESET}"
+
+    local -a pkg_names=()
+    local -a pkg_check=()
+    local -a pkg_install=()
+
+    case "$distro" in
+        # ── Arch Linux y derivadas ────────────────────────────────────────────
+        arch|manjaro|endeavouros|artix|garuda|cachyos|arcolinux|crystal|\
+archlabs|archcraft|parabola|hyperbola|blackarch)
+            pkg_names=("gtk3" "mpv" "libx11")
+            pkg_check=("pacman -Qs '^gtk3$'" "pacman -Qs '^mpv$'" "pacman -Qs '^libx11$'")
+            pkg_install=("sudo pacman -S --noconfirm gtk3" "sudo pacman -S --noconfirm mpv" "sudo pacman -S --noconfirm libx11")
+            ;;
+        # ── Debian / Ubuntu y derivadas ───────────────────────────────────────
+        debian|ubuntu|linuxmint|pop|elementary|zorin|neon|kali|\
+raspbian|mx|antix|pureos|tails|parrot|deepin|backbox)
+            pkg_names=("libgtk-3-0" "mpv" "libx11-6")
+            pkg_check=("dpkg -s libgtk-3-0 2>/dev/null" "dpkg -s mpv 2>/dev/null" "dpkg -s libx11-6 2>/dev/null")
+            pkg_install=("sudo apt-get install -y libgtk-3-0" "sudo apt-get install -y mpv" "sudo apt-get install -y libx11-6")
+            ;;
+        # ── Fedora / RHEL y derivadas ─────────────────────────────────────────
+        fedora|rhel|centos|rocky|alma|nobara|ultramarine|mageia|openmandriva)
+            pkg_names=("gtk3" "mpv")
+            pkg_check=("rpm -q gtk3 2>/dev/null" "rpm -q mpv 2>/dev/null")
+            pkg_install=("sudo dnf install -y gtk3" "sudo dnf install -y mpv")
+            ;;
+        # ── openSUSE ──────────────────────────────────────────────────────────
+        opensuse|suse)
+            pkg_names=("libgtk-3-0" "mpv")
+            pkg_check=("rpm -q libgtk-3-0 2>/dev/null" "rpm -q mpv 2>/dev/null")
+            pkg_install=("sudo zypper install -y libgtk-3-0 mpv")
+            ;;
+        # ── Void Linux ────────────────────────────────────────────────────────
+        void)
+            pkg_names=("gtk+3" "mpv")
+            pkg_check=("xbps-query gtk+3 2>/dev/null" "xbps-query mpv 2>/dev/null")
+            pkg_install=("sudo xbps-install -Sy gtk+3" "sudo xbps-install -Sy mpv")
+            ;;
+        # ── Alpine Linux ──────────────────────────────────────────────────────
+        alpine)
+            pkg_names=("gtk+3.0" "mpv")
+            pkg_check=("apk info gtk+3.0 2>/dev/null" "apk info mpv 2>/dev/null")
+            pkg_install=("sudo apk add --no-cache gtk+3.0" "sudo apk add --no-cache mpv")
+            ;;
+        # ── Gentoo / Funtoo ───────────────────────────────────────────────────
+        gentoo)
+            pkg_names=("x11-libs/gtk+" "media-video/mpv")
+            pkg_check=("equery list gtk+ 2>/dev/null" "equery list mpv 2>/dev/null")
+            pkg_install=("sudo emerge -av x11-libs/gtk+" "sudo emerge -av media-video/mpv")
+            ;;
+        # ── Solus ─────────────────────────────────────────────────────────────
+        solus)
+            pkg_names=("libgtk-3" "mpv")
+            pkg_check=("eopkg info libgtk-3 2>/dev/null" "eopkg info mpv 2>/dev/null")
+            pkg_install=("sudo eopkg install -y libgtk-3" "sudo eopkg install -y mpv")
+            ;;
+        # ── NixOS ─────────────────────────────────────────────────────────────
+        nixos)
+            print ""
+            warn "NixOS detectado."
+            info "En NixOS instala las dependencias con nix-env o en configuration.nix:"
+            info "  nix-env -iA nixpkgs.gtk3 nixpkgs.mpv"
+            info "O agrega a configuration.nix: environment.systemPackages = [ pkgs.gtk3 pkgs.mpv ];"
+            print ""
+            read -rp "  $(t dep_skip) [s/N]: " confirm </dev/tty || true
+            print "\n${C_DIM}└──────────────────────────────────────────────────────────────────────────┘${C_RESET}"
+            [[ "$confirm" =~ ^[Ss]$ ]] && return 0 || return 1
+            ;;
+        # ── Distro desconocida ────────────────────────────────────────────────
+        *)
+            print ""
+            warn "$(t dep_distro_unknown)"
+            info "$(t dep_manual_list)"
+            info "  • gtk3 (libgtk-3-0 en sistemas Debian/Ubuntu)"
+            info "  • mpv"
+            info "  • libx11"
+            print ""
+            read -rp "  $(t dep_skip) [s/N]: " confirm </dev/tty || true
+            print "\n${C_DIM}└──────────────────────────────────────────────────────────────────────────┘${C_RESET}"
+            [[ "$confirm" =~ ^[Ss]$ ]] && return 0 || return 1
+            ;;
+    esac
+
+    info "$(t dep_sudo)"
+    if ! sudo -v 2>/dev/null; then
+        error "$(t dep_sudo_fail)"
+        print "\n${C_DIM}└──────────────────────────────────────────────────────────────────────────┘${C_RESET}"
+        return 1
+    fi
+
+    local errors=0
+    for i in "${!pkg_names[@]}"; do
+        local pkg="${pkg_names[$i]}"
+        print ""
+        if eval "${pkg_check[$i]}" >/dev/null 2>&1; then
+            success "$(printf '%-25s' "$pkg") $(t dep_installed)"
+        else
+            warn "$(t dep_required) $(printf '%-25s' "$pkg")"
+            info "$(t dep_installing) ${pkg}..."
+            log "Installing dependency: $pkg"
+
+            (
+                eval "${pkg_install[$i]}" >/dev/null 2>&1
+            ) &
+            local pid=$!
+            spinner $pid "$(t dep_installing) ${pkg}..."
+
+            if wait $pid 2>/dev/null; then
+                success "$(printf '%-25s' "$pkg") $(t dep_ok)"
+            else
+                error "$(t dep_fail) $(printf '%-25s' "$pkg")"
+                ((errors++))
+            fi
+        fi
+    done
+
+    print "\n${C_DIM}└──────────────────────────────────────────────────────────────────────────┘${C_RESET}"
+
+    if [[ $errors -gt 0 ]]; then
+        error "$(t dep_fail): $errors dependencia(s). Revísalas manualmente."
+        return 1
+    fi
+    return 0
+}
+
+check_internet() {
+    if ! curl -fsSL --max-time 5 https://api.github.com > /dev/null 2>&1; then
+        die "$(t no_internet)"
+    fi
+}
+
+get_latest_release() {
+    local tmpfile
+    tmpfile=$(mktemp)
+    curl -fsSL -H "Accept: application/vnd.github.v3+json" "$API_URL" > "$tmpfile" 2>/dev/null || {
+        rm -f "$tmpfile"
+        die "Error al conectar con GitHub API."
+    }
+    cat "$tmpfile"
+    rm -f "$tmpfile"
+}
+
+detect_asset() {
+    local os="$1" arch="$2" release_json="$3"
+    local patterns=()
+
+    case "$os" in
+        linux)
+            case "$arch" in
+                x64)   patterns=("PrismHub-*-linux-x64.tar.gz" "PrismHub-*-linux.tar.gz") ;;
+                arm64) patterns=("PrismHub-*-linux-arm64.tar.gz") ;;
+                arm)   patterns=("PrismHub-*-linux-arm.tar.gz") ;;
+            esac
+            ;;
+        macos)
+            case "$arch" in
+                x64)   patterns=("PrismHub-*-mac-x64.tar.gz" "PrismHub-*-macos-x64.tar.gz" "PrismHub-*-mac.tar.gz") ;;
+                arm64) patterns=("PrismHub-*-mac-arm64.tar.gz" "PrismHub-*-macos-arm64.tar.gz") ;;
+            esac
+            ;;
+    esac
+
+    for pattern in "${patterns[@]}"; do
+        local url
+        url=$(echo "$release_json" | grep -o '"browser_download_url": "[^"]*PrismHub-[^"]*\.tar\.gz"' | sed 's/"browser_download_url": "//;s/"$//' | grep -m1 "${pattern/\*/.*}")
+        if [[ -n "$url" ]]; then
+            echo "$url"
+            return 0
+        fi
+    done
+    return 1
+}
+
+download_file() {
+    local url="$1" output="$2"
+    info "$(t downloading)"
+    log "Downloading: $url -> $output"
+
+    local total_size
+    total_size=$(curl -fsSL -I "$url" 2>/dev/null | grep -i content-length | awk '{print $2}' | tr -d '\r')
+    [[ -z "$total_size" || "$total_size" == "0" ]] && total_size=1
+
+    mkdir -p "$(dirname "$output")"
+
+    if command -v wget >/dev/null 2>&1; then
+        wget -q --show-progress "$url" -O "$output" 2>&1 | while IFS= read -r line; do
+            if [[ "$line" =~ ([0-9]+)% ]]; then
+                progress_bar "${BASH_REMATCH[1]}"
+            fi
+        done
+    else
+        (
+            curl -fsSL "$url" -o "$output" >/dev/null 2>&1
+        ) &
+        local pid=$!
+        local sim=0
+        while kill -0 $pid 2>/dev/null; do
+            if [[ $sim -lt 95 ]]; then
+                sim=$((sim + RANDOM % 5 + 1))
+                [[ $sim -gt 95 ]] && sim=95
+            fi
+            progress_bar "$sim"
+            sleep 0.3
+        done
+        wait $pid
+        progress_bar 100
+    fi
+
+    [[ -f "$output" ]] || die "Descarga fallida."
+    success "$(basename "$output") descargado."
+}
+
+download_with_retry() {
+    local url="$1" output="$2" retries=3 delay=2
+    for ((i=1; i<=retries; i++)); do
+        if download_file "$url" "$output"; then return 0; fi
+        warn "Intento $i falló. Reintentando en ${delay}s..."
+        sleep $delay
+        delay=$((delay * 2))
+    done
+    die "Descarga falló después de $retries intentos."
+}
+
+create_desktop_entry() {
+    local binary_path="$1" icon_path="$2"
+    mkdir -p "$APP_DIR"
+    cat > "${APP_DIR}/PrismHub.desktop" <<EOF
+[Desktop Entry]
+Name=PrismHub
+Comment=Anime, manga and multimedia player
+Exec=${binary_path}
+Icon=${icon_path}
+Terminal=false
+Type=Application
+Categories=AudioVideo;Player;Network;
+StartupWMClass=PrismHub
+EOF
+    chmod +x "${APP_DIR}/PrismHub.desktop"
+}
+
+# ─── Instalar ────────────────────────────────────────────────────────────────
+do_install() {
+    show_banner
+    check_internet
+
+    local os arch distro release_json asset_url tag_name tmpdir
+
+    print "\n${C_DIM}┌─ $(t detecting_os) ────────────────────────────────────┐${C_RESET}"
+    os=$(detect_os)
+    info "OS: $os"
+    sleep 0.3
+
+    arch=$(detect_arch)
+    info "Arch: $arch"
+    sleep 0.3
+
+    if [[ "$os" == "linux" ]]; then
+        distro=$(detect_distro)
+        check_dependencies "$distro" || exit 1
+    fi
+
+    print "\n${C_DIM}┌─ $(t fetching_release) ──────────────────────────────┐${C_RESET}"
+    local _tmp
+    _tmp=$(mktemp)
+    get_latest_release > "$_tmp" &
+    spinner $! "$(t fetching_release)"
+    wait $!
+    release_json=$(cat "$_tmp")
+    rm -f "$_tmp"
+
+    tag_name=$(echo "$release_json" | grep '"tag_name":' | head -n1 | sed 's/.*"tag_name": "\([^"]*\)".*/\1/')
+    info "$(t latest_version): ${C_BOLD}${C_GREEN}$tag_name${C_RESET}"
+
+    asset_url=$(detect_asset "$os" "$arch" "$release_json") || \
+        die "No se encontró asset para $os ($arch). Revisa GitHub Releases."
+
+    info "Asset: $(basename "$asset_url")"
+
+    tmpdir=$(mktemp -d)
+    local filepath="${tmpdir}/$(basename "$asset_url")"
+
+    download_with_retry "$asset_url" "$filepath"
+
+    print "\n${C_DIM}┌─ $(t installing) ───────────────────────────────────┐${C_RESET}"
+    mkdir -p "$INSTALL_DIR" "$BIN_DIR"
+
+    tar -xzf "$filepath" -C "$tmpdir"
+
+    local bundle_src=""
+    for candidate in "$tmpdir"/*/; do
+        if [[ -f "${candidate}PrismHub" ]] || [[ -f "${candidate}PrismHub" ]] || [[ -f "${candidate}miru" ]]; then
+            bundle_src="$candidate"
+            break
+        fi
+    done
+    if [[ -z "$bundle_src" ]]; then
+        # Fallback: el contenido está extraído directamente
+        bundle_src="$tmpdir/"
+    fi
+
+    cp -r "${bundle_src}"* "$INSTALL_DIR/"
+    rm -rf "$tmpdir"
+
+    local binary=""
+    for name in PrismHub PrismHub miru; do
+        [[ -f "${INSTALL_DIR}/${name}" ]] && binary="${INSTALL_DIR}/${name}" && chmod +x "$binary" && break
+    done
+
+    if [[ -z "$binary" ]]; then
+        die "No se encontró el binario después de extraer."
+    fi
+
+    ln -sf "$binary" "${BIN_DIR}/PrismHub"
+    info "Symlink: ${BIN_DIR}/PrismHub → $binary"
+
+    create_desktop_entry "$binary" "${INSTALL_DIR}/icon.png"
+    info "Acceso directo creado."
+
+    echo "$tag_name" > "$VERSION_FILE"
+
+    print "\n${C_GREEN}${C_BOLD}  ╔══════════════════════════════════════════════════╗${C_RESET}"
+    print "${C_GREEN}${C_BOLD}  ║                                                  ║${C_RESET}"
+    print "${C_GREEN}${C_BOLD}  ║     $(t success_install)              ║${C_RESET}"
+    print "${C_GREEN}${C_BOLD}  ║                                                  ║${C_RESET}"
+    print "${C_GREEN}${C_BOLD}  ╚══════════════════════════════════════════════════╝${C_RESET}"
+    print ""
+    print "  ${C_BOLD}$(t installed_version):${C_RESET}  ${C_CYAN}$tag_name${C_RESET}"
+    print "  ${C_BOLD}$(t install_path):${C_RESET}       ${C_CYAN}$INSTALL_DIR${C_RESET}"
+    print "  ${C_BOLD}$(t running):${C_RESET}             ${C_CYAN}PrismHub${C_RESET}"
+    print "  ${C_BOLD}$(t log_path):${C_RESET}         ${C_CYAN}$LOG_FILE${C_RESET}"
+    print ""
+    read -rp "  $(t press_enter) " </dev/tty || true
+}
+
+# ─── Actualizar ──────────────────────────────────────────────────────────────
+do_update() {
+    if [[ ! -f "$VERSION_FILE" ]]; then
+        warn "PrismHub no está instalado. Ejecuta 'Instalar' primero."
+        sleep 2
+        return
+    fi
+    local current
+    current=$(cat "$VERSION_FILE")
+    show_banner
+    check_internet
+    info "Versión actual: $current"
+    local release_json latest
+    release_json=$(get_latest_release)
+    latest=$(echo "$release_json" | grep '"tag_name":' | head -n1 | sed 's/.*"tag_name": "\([^"]*\)".*/\1/')
+    if [[ "$current" == "$latest" ]]; then
+        success "$(t already_latest) ($current)"
+        read -rp "  $(t press_enter) " </dev/tty || true
+        return
+    fi
+    info "Nueva versión: $latest"
+    do_install
+    success "$(t success_update)"
+}
+
+# ─── Desinstalar ─────────────────────────────────────────────────────────────
+do_uninstall() {
+    show_banner
+    print "\n${C_YELLOW}${C_BOLD}  ⚠  Se eliminarán todos los archivos de PrismHub.${C_RESET}"
+    read -rp "  ¿Continuar? [s/N]: " confirm </dev/tty || true
+    [[ "$confirm" =~ ^[Ss]$ ]] || { info "$(t cancelled)"; return; }
+    rm -rf "$INSTALL_DIR"
+    rm -f "${BIN_DIR}/PrismHub"
+    rm -f "${APP_DIR}/PrismHub.desktop"
+    rm -rf "${LOG_DIR}"
+    success "$(t success_uninstall)"
+    read -rp "  $(t press_enter) " </dev/tty || true
+}
+
+# ─── Entry Point ─────────────────────────────────────────────────────────────
+trap 'error "Instalación interrumpida."; exit 130' INT TERM
+mkdir -p "$LOG_DIR"
+log "=== PrismHub Installer started ==="
+show_banner
+select_language
+main_menu
+log "=== PrismHub Installer finished ==="
+
+

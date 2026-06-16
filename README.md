@@ -1,139 +1,282 @@
+<div align="center">
+
+<img width="280" src="./icons/logo.png" alt="PrismHub Logo"/>
+
 # PrismHub
 
-<div align="center">
-  <h3>Anime · Manga · Comics · Novelas — via extensiones TypeScript</h3>
-  <p>Aplicación multiplataforma construida con Flutter. Motor de extensiones escrito en TypeScript, compilado con esbuild.</p>
+**Aplicación multiplataforma para anime, manga y series**
 
-  ![Flutter](https://img.shields.io/badge/Flutter-3.44+-02569B?logo=flutter)
-  ![Dart](https://img.shields.io/badge/Dart-3.12+-0175C2?logo=dart)
-  ![TypeScript](https://img.shields.io/badge/Extensions-TypeScript-3178C6?logo=typescript)
-  ![Plataformas](https://img.shields.io/badge/Platforms-Windows%20%7C%20Android%20%7C%20Linux%20%7C%20iOS-green)
-  ![License](https://img.shields.io/badge/License-AGPL--3.0-blue)
+[![License](https://img.shields.io/github/license/Litdemonick/Prism_Hub?style=for-the-badge)](LICENSE)
+[![Stars](https://img.shields.io/github/stars/Litdemonick/Prism_Hub?style=for-the-badge)](https://github.com/Litdemonick/Prism_Hub/stargazers)
+[![Issues](https://img.shields.io/github/issues/Litdemonick/Prism_Hub?style=for-the-badge)](https://github.com/Litdemonick/Prism_Hub/issues)
+[![Platform](https://img.shields.io/badge/Platform-Windows%20%7C%20Android%20%7C%20Linux-informational?style=for-the-badge)](https://github.com/Litdemonick/Prism_Hub/releases)
+
 </div>
+
+---
+
+## Tabla de contenidos
+
+- [¿Qué es PrismHub?](#qué-es-prismhub)
+- [Cómo funciona](#cómo-funciona)
+- [Instalación](#instalación)
+- [Extensiones](#extensiones)
+- [Desarrollo de extensiones](#desarrollo-de-extensiones)
+- [Estructura del repositorio](#estructura-del-repositorio)
+- [Compilar desde código fuente](#compilar-desde-código-fuente)
+- [Licencia](#licencia)
 
 ---
 
 ## ¿Qué es PrismHub?
 
-PrismHub es una aplicación de entretenimiento multiplataforma que consume contenido a través de **extensiones TypeScript**. Soporta anime (video), manga, cómics y novelas ligeras.
+PrismHub es una aplicación de streaming multiplataforma (Windows, Android, Linux) para ver anime, leer manga y acceder a series y películas. No está ligada a ningún sitio web específico — funciona a través de **extensiones JavaScript** que puedes instalar, actualizar o crear tú mismo.
 
-Cada extensión es un módulo TypeScript que se compila a un bundle JS con esbuild y se ejecuta en la app a través de `flutter_js`. El tipado estricto garantiza contratos claros entre la app y cada extensión.
+### Características
 
-## Características
+- Sistema de extensiones JS — añade cualquier fuente sin modificar la app
+- Multi-servidor con failover automático — si un servidor falla, prueba el siguiente sin salir del episodio
+- Historial de visto, favoritos y seguimiento de progreso por episodio
+- Integración con AniList (seguimiento automático)
+- DLNA / Cast a TV
+- Subtítulos externos
+- Proxy HLS local y cookie jar persistente para contenido protegido
 
-- Reproductor de video integrado (`media_kit`)
-- Lector de manga / cómics / novelas
-- Sistema de extensiones TypeScript con tipos estrictos
-- Compilación con esbuild (bundle IIFE, un archivo por extensión)
-- Runtime aislado por extensión (sin colisiones de nombres globales)
-- Historial y favoritos persistentes (Isar)
-- i18n ES / EN
-- Tema claro/oscuro (Material 3)
-- Navegación adaptativa: rail en desktop, bottom bar en móvil
+---
 
-## Stack
+## Cómo funciona
 
-| Área | Tecnología |
+PrismHub carga archivos `.js` (extensiones) y los ejecuta dentro de un motor JavaScript embebido. Cada extensión sabe cómo hablar con un sitio web concreto y devuelve datos en un formato estándar que la app entiende.
+
+```
+Usuario abre PrismHub
+        │
+        ▼
+  Flutter UI (Windows / Android / Linux)
+        │
+        │  llama a latest() / search()
+        ▼
+  ExtensionService (Dart)
+  • Carga el archivo .js de la extensión
+  • Inyecta la API: request(), fetch(), CryptoJS, jsencrypt, md5
+  • Ejecuta el JS en el motor embebido
+        │
+        │  motor JS:  QuickJS  (Windows / Android)
+        │             JavaScriptCore  (Linux)
+        ▼
+  Extensión JavaScript
+  • Hace scraping / llama a la API del sitio web
+  • Devuelve lista de títulos / episodios / URL del stream
+        │
+        ▼
+  Player (media_kit)
+  • Recibe { type: 'hls'|'mp4', url, headers }
+  • Si el servidor falla → lee header X-Servers
+    y prueba el siguiente automáticamente
+```
+
+### Flujo completo al reproducir un episodio
+
+| Paso | Qué ocurre |
 |------|-----------|
-| App | Flutter 3.44 + Dart 3.12 |
-| Estado / DI | GetX |
-| Navegación | go_router (ShellRoute) |
-| DB | Isar 3 (code-gen con build_runner) |
-| Config / KV | shared_preferences · Hive |
-| HTTP | Dio + cookie_jar |
-| Extensiones | TypeScript → esbuild → flutter_js |
-| Video | media_kit |
-| Scraping | html · xpath_selector |
-| Desktop | window_manager |
-| i18n | flutter_i18n |
+| 1 | App llama a `latest()` o `search(kw, page)` → lista de títulos `[{title, url, cover}]` |
+| 2 | Usuario elige un título → app llama a `detail(url)` → lista de episodios |
+| 3 | Usuario pulsa un episodio → app llama a `watch(url)` → `{ type, url, headers }` |
+| 4 | `media_kit` reproduce la URL directamente |
+| 5 | Si el servidor falla → lee `X-Servers` en los headers y cambia de servidor sin salir |
 
-## Estructura del proyecto
+### Almacenamiento local
+
+| Qué | Dónde |
+|-----|-------|
+| Extensiones instaladas | Hive (clave/valor local) |
+| Historial y favoritos | Base de datos Isar (local, sin servidor) |
+| Configuración | Hive |
+| Caché de imágenes | Sistema de archivos temporal |
+
+---
+
+## Instalación
+
+### Windows
+
+```powershell
+irm https://raw.githubusercontent.com/Litdemonick/Prism_Hub/main/install/install.ps1 | iex
+```
+
+O descarga el instalador `.exe` directamente desde [Releases](https://github.com/Litdemonick/Prism_Hub/releases/latest).
+
+### Linux
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/Litdemonick/Prism_Hub/main/install/install.sh | bash
+```
+
+**Arch Linux (PKGBUILD):**
+```bash
+cd install
+makepkg -si
+```
+
+### Android
+
+Descarga el `.apk` desde [Releases](https://github.com/Litdemonick/Prism_Hub/releases/latest).
+
+---
+
+## Extensiones
+
+PrismHub usa un sistema de dos repositorios de extensiones. Puedes tener ambos activos al mismo tiempo.
+
+### [prism+] Repositorio oficial — extensiones PrismHub
+
+Extensiones creadas y mantenidas por el equipo de PrismHub. Enfocadas en contenido en español. **Este repositorio viene configurado por defecto en la app.**
+
+```
+https://raw.githubusercontent.com/Litdemonick/prism-plus/main/index.json
+```
+
+| Nombre | Idioma | Tipo | Sitio |
+|--------|--------|------|-------|
+| TioAnime | ES | Anime | tioanime.com |
+| AnimeFLV | ES / SUB | Anime | animeflv.net |
+| MonosChinos | ES | Anime | monoschinos.st |
+| Animepahe | EN | Anime | animepahe.ru |
+| MangaDex | Multi | Manga | mangadex.org |
+| MangaBat | EN | Manga | h.mangabat.com |
+
+### [comunidad] Repositorio de extensiones de la comunidad
+
+Más de 150 extensiones en múltiples idiomas (anime, manga, novelas, películas). Basadas en el formato estándar de extensiones JS compatible con PrismHub.
+
+```
+https://raw.githubusercontent.com/Litdemonick/Prism_Hub/main/index.json
+```
+
+> Las extensiones de prism+ tienen prioridad. Si una misma fuente existe en ambos repos, usa la de prism+ — las duplicadas han sido eliminadas del repo comunitario.
+
+### Cómo añadir un repositorio en la app
+
+1. Abre PrismHub
+2. Ve a **Ajustes → Extensiones → URL del repositorio**
+3. Pega la URL y guarda
+4. En la sección **Repositorio de extensiones**, pulsa **Recargar**
+
+---
+
+## Desarrollo de extensiones
+
+Las extensiones son archivos JavaScript con el siguiente formato:
+
+```javascript
+// ==PrismHubExtension==
+// @name         MiExtension
+// @version      1.0.0
+// @author       TuNombre
+// @lang         es
+// @license      MIT
+// @package      com.tudominio.miextension
+// @type         bangumi
+// @webSite      https://sitio.com
+// ==/PrismHubExtension==
+
+export default class extends Extension {
+  async latest(page) { /* retorna [{title, url, cover}] */ }
+  async search(kw, page) { /* retorna [{title, url, cover}] */ }
+  async detail(url) { /* retorna {title, cover, desc, episodes:[...]} */ }
+  async watch(url) { /* retorna {type:'hls'|'mp4', url, headers} */ }
+}
+```
+
+### API disponible en extensiones
+
+| Método | Descripción |
+|--------|-------------|
+| `this.request('/ruta')` | HTTP al sitio base (`webSite` + ruta) — incluye UA y cookies |
+| `fetch(url, options)` | HTTP a cualquier URL externa |
+| `this.querySelector(html, selector)` | Selector CSS sobre HTML |
+| `this.queryXPath(html, xpath)` | XPath sobre HTML |
+| `CryptoJS` | Librería CryptoJS (pre-cargada) |
+| `md5(str)` | Hash MD5 |
+
+### Tipos de extensión
+
+| Tipo | `@type` | `watch()` retorna |
+|------|---------|-------------------|
+| Anime / Series | `bangumi` | `{ type: 'hls'\|'mp4', url, headers }` |
+| Manga / Cómic | `manga` | `{ urls: ['img1', 'img2', ...], headers }` |
+| Novela | `fikushon` | `{ title, content: ['párrafo...'] }` |
+
+### Failover multi-servidor
+
+Si tu extensión soporta varios servidores de video, pásalos en los headers para que el player cambie automáticamente si uno falla:
+
+```javascript
+return {
+  type: 'hls',
+  url: primaryUrl,
+  headers: {
+    'X-Servers': JSON.stringify({ 'Servidor2': embedUrl2, 'Servidor3': embedUrl3 }),
+    'X-Primary-Server': 'Servidor1'
+  }
+}
+```
+
+---
+
+## Estructura del repositorio
 
 ```
 Prism_Hub/
-├── lib/
-│   ├── core/
-│   │   ├── config/        # AppConfig (constantes globales)
-│   │   ├── db/            # DatabaseService (Isar)
-│   │   ├── router/        # AppRouter + AppRoutes (go_router)
-│   │   ├── theme/         # AppTheme (Material 3 light/dark)
-│   │   └── utils/         # Logger, AppStorage
-│   ├── data/
-│   │   ├── models/        # Colecciones Isar (Extension, History, Favorite)
-│   │   ├── providers/     # APIs externas (AniList, TMDB…)
-│   │   └── services/
-│   │       └── extension/ # ExtensionService + ExtensionRuntime
-│   ├── modules/           # Un módulo por pantalla
-│   │   ├── home/
-│   │   ├── search/
-│   │   ├── detail/
-│   │   ├── player/        # Reproductor anime
-│   │   ├── reader/        # Lector manga / comic / novela
-│   │   ├── extensions/
-│   │   └── settings/
-│   └── shared/
-│       ├── widgets/       # AppShell, componentes reutilizables
-│       └── dialogs/
-├── extensions/
-│   ├── types/
-│   │   └── prism.d.ts     # Tipos TypeScript de la API Prism
-│   ├── _template/
-│   │   └── index.ts       # Plantilla para nuevas extensiones
-│   ├── dist/              # Bundles JS compilados (generado, no commitear)
-│   └── index.json         # Registro de extensiones publicadas
-├── scripts/
-│   ├── build.mjs          # Compila extensiones TS → JS con esbuild
-│   └── new-extension.mjs  # Scaffolding de nueva extensión
-├── package.json           # TypeScript + esbuild tooling
-└── tsconfig.json
+├── lib/                    ← Código fuente Flutter
+│   ├── controllers/        ← Lógica de negocio (GetX)
+│   ├── data/services/      ← Runtime JS, base de datos Isar
+│   ├── models/             ← Modelos de datos
+│   ├── utils/              ← Utilidades, storage, peticiones HTTP
+│   └── views/              ← UI (páginas y widgets)
+├── extensions/             ← Extensiones de la comunidad (150+)
+├── assets/
+│   ├── i18n/               ← Traducciones (es.json, en.json, zh.json…)
+│   ├── js/                 ← CryptoJS, jsencrypt, md5 (runtime)
+│   └── icon/               ← Iconos de la app
+├── icons/                  ← Logo e iconos del proyecto
+├── install/                ← Scripts de instalación (Windows/Linux/Arch)
+├── .github/workflows/      ← CI/CD (release, build, pages)
+├── index.json              ← Catálogo de extensiones de la comunidad
+└── pubspec.yaml            ← Dependencias Flutter
 ```
 
-## API de extensiones
+---
 
-Las extensiones implementan cuatro funciones definidas en `extensions/types/prism.d.ts`:
-
-| Función | Firma | Descripción |
-|---------|-------|-------------|
-| `latest` | `(page: number) => Promise<PrismItem[]>` | Últimos contenidos |
-| `search` | `(keyword, page, filter?) => Promise<PrismItem[]>` | Búsqueda |
-| `detail` | `(url: string) => Promise<PrismDetail>` | Info + episodios/capítulos |
-| `watch` | `(url: string) => Promise<PrismWatch>` | Streams o páginas |
-
-### Crear una extensión nueva
+## Compilar desde código fuente
 
 ```bash
-npm run new mi-extension          # copia el template
-# edita extensions/mi-extension/index.ts
-npm run build -- --extension=mi-extension   # compila
-```
-
-## Ramas Git
-
-| Rama | Uso |
-|------|-----|
-| `main` | Producción — solo merges de `develop` vía PR |
-| `develop` | Integración activa — base de trabajo diario |
-| `feature/*` | Features nuevas → PR a `develop` |
-| `fix/*` | Bugfixes → PR a `develop` |
-
-## Instalación / Desarrollo
-
-```bash
-# Clonar y cambiar a la rama de desarrollo
-git clone https://github.com/Litdemonick/Prism_Hub.git
-cd Prism_Hub
-git checkout develop
-
-# Flutter
+# Requiere Flutter 3.22+
 flutter pub get
-dart run build_runner build --delete-conflicting-outputs
-flutter run -d windows
-
-# Extensiones (TypeScript)
-npm install
-npm run build:all
+flutter build windows --release   # Windows
+flutter build apk --release       # Android
+flutter build linux --release     # Linux
 ```
+
+---
 
 ## Licencia
 
-AGPL-3.0 — ver [LICENSE](LICENSE).
+PrismHub se distribuye bajo la licencia **[AGPL-3.0](LICENSE)**.
+
+**En resumen:**
+- Puedes usar, modificar y distribuir la app libremente
+- Si distribuyes una versión modificada (incluso en un servidor), debes publicar el código fuente con los mismos términos
+- La app es de código abierto y siempre lo será
+
+Copyright © 2026 Soul_Of_The_sun — [github.com/Litdemonick](https://github.com/Litdemonick)
+
+---
+
+<div align="center">
+
+**PrismHub** — Tu portal de entretenimiento en español
+
+[Releases](https://github.com/Litdemonick/Prism_Hub/releases) · [Issues](https://github.com/Litdemonick/Prism_Hub/issues) · [prism+ extensions](https://github.com/Litdemonick/prism-plus)
+
+</div>

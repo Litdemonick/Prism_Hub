@@ -1,0 +1,12 @@
+﻿PrismHub is a multiplatform streaming application for watching anime, reading manga, and accessing movies and series. It works through a flexible JavaScript extension system that lets you add any content source without modifying the app.
+
+Features:
+- JavaScript extension system (Miru-compatible format, 100+ community extensions)
+- Multi-server playback with automatic failover
+- Watch history, favorites, and progress tracking
+- AniList integration for automatic tracking
+- DLNA / Cast to TV support
+- External subtitle support
+- HLS proxy and persistent cookie jar for protected content
+
+Supported platforms: Windows, Android, Linux
