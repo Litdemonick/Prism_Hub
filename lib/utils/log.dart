@@ -8,7 +8,7 @@ import 'package:path/path.dart' as path;
 
 final logger = Logger('Miru');
 
-class MiruLog {
+class PrismLog {
   static final logFilePath = path.join(PrismHubDirectory.getDirectory, 'PrismHub.log');
 
   static void ensureInitialized() {

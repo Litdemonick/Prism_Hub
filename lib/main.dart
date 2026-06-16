@@ -56,9 +56,9 @@ void main(List<String> args) async {
     // 主窗口
     await PrismHubDirectory.ensureInitialized();
     await PrismHubStorage.ensureInitialized();
-    MiruLog.ensureInitialized();
+    PrismLog.ensureInitialized();
     await ApplicationUtils.ensureInitialized();
-    await MiruRequest.ensureInitialized();
+    await PrismRequest.ensureInitialized();
     ExtensionUtils.ensureInitialized();
     MediaKit.ensureInitialized();
 

@@ -67,10 +67,10 @@ class PrismHubStorage {
       }
     });
 
-    // 修改所有 miruDetail 的 tmdbId 字段为本地的 TMDB id
-    final miruList = await database.PrismHubDetails.where().findAll();
+    // 修改所有 PrismDetail 的 tmdbId 字段为本地的 TMDB id
+    final prismList = await database.PrismHubDetails.where().findAll();
     database.writeTxn(() async {
-      for (final detail in miruList) {
+      for (final detail in prismList) {
         final tmdb = await database.tMDBs
             .where()
             .filter()
@@ -104,8 +104,6 @@ class PrismHubStorage {
   }
 
   static _initSettings() async {
-    // Fix wrong repo URL if saved from a previous run
-    // Repo por defecto: JiruHub (Miru-compatible) mientras convertimos prism+
     const correctRepoUrl = "https://raw.githubusercontent.com/jephersonRD/JiruHub/main";
     final savedUrl = settings.get(SettingKey.prismhubRepoUrl);
     if (savedUrl != null && savedUrl.toString().contains("jephersonrd.github.io")) {

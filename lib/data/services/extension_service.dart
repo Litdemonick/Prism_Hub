@@ -644,18 +644,18 @@ async function stringify(callback) {
 
   // 清理 cookie
   cleanCookie() async {
-    await MiruRequest.cleanCookie(extension.webSite);
+    await PrismRequest.cleanCookie(extension.webSite);
   }
 
   /// 添加 cookie
   /// key=value; key=value
   setCookie(String cookies) async {
-    await MiruRequest.setCookie(cookies, extension.webSite);
+    await PrismRequest.setCookie(cookies, extension.webSite);
   }
 
   // 列出所有的 cookie
   Future<String> listCookie() async {
-    return await MiruRequest.getCookie(extension.webSite);
+    return await PrismRequest.getCookie(extension.webSite);
   }
 
   Future<T> runExtension<T>(Future<T> Function() fun) async {

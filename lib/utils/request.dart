@@ -7,7 +7,7 @@ import 'package:prismhub/utils/PrismHub_storage.dart';
 
 late final Dio dio;
 
-class MiruRequest {
+class PrismRequest {
   static final _cookieJar = PersistCookieJar(
     ignoreExpires: true,
     storage: FileStorage("${PrismHubDirectory.getDirectory}/.cookies/"),

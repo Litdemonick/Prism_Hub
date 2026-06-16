@@ -65,7 +65,7 @@ class DetailPageController extends GetxController {
     return bg;
   }
 
-  PrismHubDetail? _miruDetail;
+  PrismHubDetail? _prismDetail;
 
   int _tmdbID = -1;
 
@@ -142,9 +142,9 @@ class DetailPageController extends GetxController {
     runtime.value = ExtensionUtils.runtimes[package];
     await refreshFavorite();
     try {
-      _miruDetail = await DatabaseService.getPrismHubDetail(package, url);
-      _tmdbID = _miruDetail?.tmdbID ?? -1;
-      aniListID.value = _miruDetail?.aniListID ?? "";
+      _prismDetail = await DatabaseService.getPrismHubDetail(package, url);
+      _tmdbID = _prismDetail?.tmdbID ?? -1;
+      aniListID.value = _prismDetail?.aniListID ?? "";
       await getDetail();
       await getTMDBDetail();
       await getHistory();
@@ -187,10 +187,10 @@ class DetailPageController extends GetxController {
   }
 
   getDetail() async {
-    if (_miruDetail != null) {
+    if (_prismDetail != null) {
       detail = ExtensionDetail.fromJson(
         Map<String, dynamic>.from(
-          jsonDecode(_miruDetail!.data),
+          jsonDecode(_prismDetail!.data),
         ),
       );
       getRemoteDeatil();

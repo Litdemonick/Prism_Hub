@@ -450,7 +450,7 @@ class _SettingsPageState extends State<SettingsPage> {
               buildSubtitle: () => 'settings.proxy-type-subtitle'.i18n,
               applyValue: (value) {
                 PrismHubStorage.setSetting(SettingKey.proxyType, value);
-                MiruRequest.refreshProxy();
+                PrismRequest.refreshProxy();
               },
               buildGroupValue: () {
                 return PrismHubStorage.getSetting(SettingKey.proxyType);
@@ -462,7 +462,7 @@ class _SettingsPageState extends State<SettingsPage> {
               buildSubtitle: () => 'settings.proxy-subtitle'.i18n,
               onChanged: (value) {
                 PrismHubStorage.setSetting(SettingKey.proxy, value);
-                MiruRequest.refreshProxy();
+                PrismRequest.refreshProxy();
               },
               buildText: () {
                 return PrismHubStorage.getSetting(SettingKey.proxy);
@@ -502,7 +502,7 @@ class _SettingsPageState extends State<SettingsPage> {
               trailing: PlatformWidget(
                 androidWidget: TextButton(
                   onPressed: () {
-                    Share.shareXFiles([XFile(MiruLog.logFilePath)]);
+                    Share.shareXFiles([XFile(PrismLog.logFilePath)]);
                   },
                   child: Text('common.export'.i18n),
                 ),
@@ -514,7 +514,7 @@ class _SettingsPageState extends State<SettingsPage> {
                       fileName: 'PrismHub.log',
                     );
                     if (path != null) {
-                      File(MiruLog.logFilePath).copy(path);
+                      File(PrismLog.logFilePath).copy(path);
                     }
                   },
                   child: Text('common.export'.i18n),
