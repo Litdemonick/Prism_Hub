@@ -85,10 +85,13 @@ jobs:
           & "C:\Program Files (x86)\Inno Setup 6\iscc.exe"
           /DMyAppVersion="${{ github.ref_name }}"
           inno_setup.iss
+      - name: Package zip
+        run: |
+          Compress-Archive -Path "build\windows\x64\runner\Release\*" -DestinationPath "PrismHub-${{ github.ref_name }}-windows-x64.zip"
       - name: Release Windows
         uses: ncipollo/release-action@v1
         with:
           token: ${{ secrets.GITHUB_TOKEN }}
-          artifacts: "Output/*.exe"
+          artifacts: "Output/*.exe,PrismHub-${{ github.ref_name }}-windows-x64.zip"
           allowUpdates: true
           omitBody: true

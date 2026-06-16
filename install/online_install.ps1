@@ -10,7 +10,7 @@ $ProgressPreference = "SilentlyContinue"
 
 # ─── Configuración ─────────────────────────────────────────────────────────
 $RepoOwner = "Litdemonick"
-$RepoName = "PrismHub"
+$RepoName = "Prism_Hub"
 $ApiUrl = "https://api.github.com/repos/$RepoOwner/$RepoName/releases/latest"
 $InstallDir = "$env:LOCALAPPDATA\PrismHub"
 $LogDir = "$env:LOCALAPPDATA\PrismHub\logs"
@@ -193,9 +193,9 @@ function Get-LatestRelease {
 
 function Find-Asset($os, $arch, $assets) {
     $patterns = switch ($arch) {
-        "x64"   { @("PrismHub-*-windows-x64.zip", "PrismHub-*-windows.zip", "PrismHub-*-windows-setup.exe") }
-        "arm64" { @("PrismHub-*-windows-arm64.zip") }
-        default { @("PrismHub-*-windows.zip", "PrismHub-*-windows-setup.exe") }
+        "x64"   { @("PrismHub-*-windows-x64.zip", "PrismHub-*-windows.zip", "PrismHub-setup-*.exe", "PrismHub-*-windows-setup.exe") }
+        "arm64" { @("PrismHub-*-windows-arm64.zip", "PrismHub-setup-*.exe") }
+        default { @("PrismHub-*-windows.zip", "PrismHub-setup-*.exe", "PrismHub-*-windows-setup.exe") }
     }
     foreach ($p in $patterns) {
         $pat = "^" + [regex]::Escape($p).Replace("\*", ".*") + "$"

@@ -240,9 +240,9 @@ function Find-Asset($arch, $assets) {
     # Patrones de búsqueda por prioridad según arquitectura
     $patterns = switch ($arch) {
         "x64"   { @("PrismHub-*-windows-x64.zip", "PrismHub-*-windows.zip", "*windows*x64*.zip", "*windows*.zip") }
-        "arm64" { @("PrismHub-*-windows-arm64.zip", "PrismHub-*-windows-arm.zip", "*windows*arm*.zip") }
+        "arm64" { @("PrismHub-*-windows-arm64.zip", "PrismHub-*-windows-arm.zip", "*windows*arm*.zip", "*windows*.zip") }
         "x86"   { @("PrismHub-*-windows-x86.zip", "PrismHub-*-windows.zip", "*windows*.zip") }
-        default { @("PrismHub-*-windows.zip", "*windows*.zip") }
+        default { @("PrismHub-*-windows-x64.zip", "PrismHub-*-windows.zip", "*windows*.zip") }
     }
     foreach ($pattern in $patterns) {
         $regex = "^" + [regex]::Escape($pattern).Replace("\*", ".*") + "$"

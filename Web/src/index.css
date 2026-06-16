@@ -135,3 +135,75 @@ body {
   backdrop-filter: blur(20px);
   border: 1px solid rgba(255, 255, 255, 0.08);
 }
+
+/* ── Gradient border card ── */
+.card-glow {
+  position: relative;
+  background: rgba(255, 255, 255, 0.022);
+  backdrop-filter: blur(16px);
+}
+.card-glow::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  padding: 1px;
+  background: linear-gradient(
+    135deg,
+    rgba(124, 58, 237, 0.38) 0%,
+    rgba(79, 70, 229, 0.10) 45%,
+    rgba(6, 182, 212, 0.28) 100%
+  );
+  -webkit-mask:
+    linear-gradient(#fff 0 0) content-box,
+    linear-gradient(#fff 0 0);
+  -webkit-mask-composite: xor;
+  mask-composite: exclude;
+  pointer-events: none;
+}
+
+/* ── Section badge ── */
+.section-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.3rem 1rem;
+  border-radius: 9999px;
+  background: rgba(124, 58, 237, 0.10);
+  border: 1px solid rgba(124, 58, 237, 0.22);
+  color: rgba(167, 139, 250, 0.85);
+  font-size: 0.68rem;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+}
+
+/* ── Code block ── */
+.code-block {
+  background: rgba(0, 0, 0, 0.38);
+  border: 1px solid rgba(255, 255, 255, 0.05);
+  border-radius: 0.75rem;
+}
+
+/* ── Glow divider line ── */
+.glow-line {
+  height: 1px;
+  background: linear-gradient(
+    90deg,
+    transparent 0%,
+    rgba(124, 58, 237, 0.45) 50%,
+    transparent 100%
+  );
+}
+
+/* ── Animated orb glow behind hero ── */
+.orb-1 { animation-name: orb-float; }
+.orb-2 { animation-name: orb-float; }
+.orb-3 { animation-name: orb-float; }
+
+/* ── Feature / platform card hover lift ── */
+.card-glow {
+  transition: transform 0.25s ease, box-shadow 0.25s ease;
+}
+.card-glow:hover {
+  box-shadow: 0 20px 60px rgba(124, 58, 237, 0.14);
+}
