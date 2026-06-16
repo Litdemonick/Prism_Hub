@@ -629,11 +629,19 @@ to attach them to the start of each source file to most effectively
 state the exclusion of warranty; and each file should have at least
 the "copyright" line and a pointer to where the full notice is found.
 
-    Free and open source Multi-functional application that supports
-    video, comics, novels extended source for Android, Windows.
-    PrismHub is a customized and modified version of Miru.
+    PrismHub — Multiplatform streaming application for anime, manga and series.
+    Open source, free to use, modify and distribute under the terms below.
 
-    Copyright (C) 2026  jephersonRD
+    Copyright (C) 2026  Soul_Of_The_sun (https://github.com/Litdemonick)
+
+    ---
+
+    PrismHub — Aplicación de streaming multiplataforma para anime, manga y series.
+    Código abierto, libre para usar, modificar y distribuir bajo los términos abajo.
+
+    Copyright (C) 2026  Soul_Of_The_sun (https://github.com/Litdemonick)
+
+    ---
 
     This program is free software: you can redistribute it and/or modify
     it under the terms of the GNU Affero General Public License as published

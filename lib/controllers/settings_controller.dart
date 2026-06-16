@@ -10,6 +10,15 @@ import 'package:prismhub/utils/request.dart';
 class SettingsController extends GetxController {
   final contributors = [].obs;
   final extensionLogWindowId = (-1).obs;
+  Timer? _stateTimer;
+  Timer? _pollTimer;
+
+  @override
+  void onClose() {
+    _stateTimer?.cancel();
+    _pollTimer?.cancel();
+    super.onClose();
+  }
 
   final links = {
     'Github': 'https://github.com/Litdemonick/Prism_Hub',
@@ -33,8 +42,8 @@ class SettingsController extends GetxController {
         ..setTitle("PrismHub extension debug")
         ..show();
 
-      // 用于检测窗口是否关闭
-      Timer.periodic(const Duration(seconds: 1), (timer) async {
+      _stateTimer?.cancel();
+      _stateTimer = Timer.periodic(const Duration(seconds: 1), (timer) async {
         try {
           await DesktopMultiWindow.invokeMethod(
             extensionLogWindowId.value,
@@ -45,8 +54,8 @@ class SettingsController extends GetxController {
           timer.cancel();
         }
       });
-      // 轮询带执行的方法并执行方法
-      Timer.periodic(const Duration(milliseconds: 500), (timer) async {
+      _pollTimer?.cancel();
+      _pollTimer = Timer.periodic(const Duration(milliseconds: 500), (timer) async {
         if (extensionLogWindowId.value == -1) {
           timer.cancel();
           return;

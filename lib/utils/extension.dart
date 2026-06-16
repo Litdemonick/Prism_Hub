@@ -75,73 +75,54 @@ class ExtensionUtils {
     }
   }
 
+  static Future<void> _saveAndInit(
+    String script,
+    BuildContext context, {
+    bool safeReload = false,
+  }) async {
+    final ext = ExtensionUtils.parseExtension(script);
+    final savePath = path.join(extensionsDir, '${ext.package}.js');
+    _loading.add(ext.package);
+    File(savePath).writeAsStringSync(script);
+    try {
+      runtimes[ext.package] = await ExtensionService().initRuntime(ext);
+    } finally {
+      _loading.remove(ext.package);
+    }
+    safeReload ? _safeReloadPage() : _reloadPage();
+  }
+
+  static void _showInstallError(BuildContext context, Object e) {
+    if (!context.mounted) return;
+    showPlatformDialog(
+      context: context,
+      title: 'extension-install-error'.i18n,
+      content: Text(e.toString()),
+      actions: [
+        PlatformButton(
+          child: Text('common.close'.i18n),
+          onPressed: RouterUtils.pop,
+        )
+      ],
+    );
+  }
+
   static install(String url, BuildContext context) async {
     try {
       final res = await dio.get<String>(url);
-      if (res.data == null) {
-        throw Exception("Does not seem to be an extension");
-      }
-      final ext = ExtensionUtils.parseExtension(res.data!);
-      final savePath = path.join(extensionsDir, '${ext.package}.js');
-      // Guard before writing so the file watcher skips this package
-      _loading.add(ext.package);
-      File(savePath).writeAsStringSync(res.data!);
-      try {
-        runtimes[ext.package] = await ExtensionService().initRuntime(ext);
-      } finally {
-        _loading.remove(ext.package);
-      }
-      _safeReloadPage();
+      if (res.data == null) throw Exception("Does not seem to be an extension");
+      await _saveAndInit(res.data!, context, safeReload: true);
     } catch (e) {
-      if (context.mounted) {
-        showPlatformDialog(
-          context: context,
-          title: 'extension-install-error'.i18n,
-          content: Text(e.toString()),
-          actions: [
-            PlatformButton(
-              child: Text('common.close'.i18n),
-              onPressed: () {
-                RouterUtils.pop();
-              },
-            )
-          ],
-        );
-      }
+      _showInstallError(context, e);
       rethrow;
     }
   }
 
   static installByScript(String script, BuildContext context) async {
     try {
-      final ext = ExtensionUtils.parseExtension(script);
-      final savePath = path.join(extensionsDir, '${ext.package}.js');
-      // Mark as loading BEFORE writing the file so the file watcher skips this package
-      _loading.add(ext.package);
-      // 保存文件
-      File(savePath).writeAsStringSync(script);
-      try {
-        runtimes[ext.package] = await ExtensionService().initRuntime(ext);
-      } finally {
-        _loading.remove(ext.package);
-      }
-      _reloadPage();
+      await _saveAndInit(script, context);
     } catch (e) {
-      if (context.mounted) {
-        showPlatformDialog(
-          context: context,
-          title: 'extension-install-error'.i18n,
-          content: Text(e.toString()),
-          actions: [
-            PlatformButton(
-              child: Text('common.close'.i18n),
-              onPressed: () {
-                RouterUtils.pop();
-              },
-            )
-          ],
-        );
-      }
+      _showInstallError(context, e);
       rethrow;
     }
   }

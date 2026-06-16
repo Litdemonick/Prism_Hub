@@ -262,7 +262,14 @@ flutter build linux --release     # Linux
 
 ## Licencia
 
-[AGPL-3.0](LICENSE)
+PrismHub se distribuye bajo la licencia **[AGPL-3.0](LICENSE)**.
+
+**En resumen:**
+- Puedes usar, modificar y distribuir la app libremente
+- Si distribuyes una versión modificada (incluso en un servidor), debes publicar el código fuente con los mismos términos
+- La app es de código abierto y siempre lo será
+
+Copyright © 2026 Soul_Of_The_sun — [github.com/Litdemonick](https://github.com/Litdemonick)
 
 ---
 
