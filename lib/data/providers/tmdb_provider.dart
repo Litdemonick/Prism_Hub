@@ -1,5 +1,5 @@
 ﻿import 'package:prismhub/models/tmdb.dart' as tmdb_model;
-import 'package:prismhub/utils/PrismHub_storage.dart';
+import 'package:prismhub/utils/prismhub_storage.dart';
 import 'package:tmdb_api/tmdb_api.dart';
 
 class TmdbApi {

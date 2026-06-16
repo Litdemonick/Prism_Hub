@@ -8,7 +8,7 @@ import 'package:prismhub/controllers/bt_dialog_controller.dart';
 import 'package:prismhub/controllers/main_controller.dart';
 import 'package:prismhub/utils/application.dart';
 import 'package:prismhub/utils/log.dart';
-import 'package:prismhub/utils/PrismHub_directory.dart';
+import 'package:prismhub/utils/prismhub_directory.dart';
 import 'package:prismhub/utils/request.dart';
 import 'package:path/path.dart' as path;
 

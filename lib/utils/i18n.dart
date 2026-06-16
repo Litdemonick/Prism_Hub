@@ -5,7 +5,7 @@ import 'package:flutter_i18n/flutter_i18n.dart';
 import 'package:flutter_i18n/loaders/decoders/json_decode_strategy.dart';
 import 'package:get/get.dart';
 import 'package:prismhub/router/router.dart';
-import 'package:prismhub/utils/PrismHub_storage.dart';
+import 'package:prismhub/utils/prismhub_storage.dart';
 
 final _context =
     Platform.isAndroid ? Get.context! : rootNavigatorKey.currentContext!;

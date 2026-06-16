@@ -3,7 +3,7 @@
 import 'package:flutter_windows_webview/flutter_windows_webview.dart';
 import 'package:get/get.dart';
 import 'package:prismhub/data/providers/anilist_provider.dart';
-import 'package:prismhub/utils/PrismHub_storage.dart';
+import 'package:prismhub/utils/prismhub_storage.dart';
 import 'package:prismhub/views/pages/tracking/anilist_webview.dart';
 
 class TrackingPageController extends GetxController {

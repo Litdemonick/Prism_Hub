@@ -2,8 +2,8 @@
 
 import 'package:flutter/foundation.dart';
 import 'package:logging/logging.dart';
-import 'package:prismhub/utils/PrismHub_directory.dart';
-import 'package:prismhub/utils/PrismHub_storage.dart';
+import 'package:prismhub/utils/prismhub_directory.dart';
+import 'package:prismhub/utils/prismhub_storage.dart';
 import 'package:path/path.dart' as path;
 
 final logger = Logger('Miru');

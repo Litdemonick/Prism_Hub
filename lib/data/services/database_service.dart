@@ -4,7 +4,7 @@ import 'package:fluent_ui/fluent_ui.dart';
 import 'package:isar/isar.dart';
 import 'package:prismhub/models/index.dart';
 import 'package:prismhub/utils/extension.dart';
-import 'package:prismhub/utils/PrismHub_storage.dart';
+import 'package:prismhub/utils/prismhub_storage.dart';
 
 class DatabaseService {
   static final db = PrismHubStorage.database;

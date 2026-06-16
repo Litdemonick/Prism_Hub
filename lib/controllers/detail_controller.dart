@@ -20,7 +20,7 @@ import 'package:prismhub/utils/extension.dart';
 import 'package:prismhub/data/services/extension_service.dart';
 import 'package:prismhub/utils/external_player.dart';
 import 'package:prismhub/utils/i18n.dart';
-import 'package:prismhub/utils/PrismHub_storage.dart';
+import 'package:prismhub/utils/prismhub_storage.dart';
 import 'package:prismhub/views/widgets/messenger.dart';
 
 class DetailPageController extends GetxController {

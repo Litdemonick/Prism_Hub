@@ -2,7 +2,7 @@
 import 'package:prismhub/models/index.dart';
 import 'package:prismhub/controllers/watch/reader_controller.dart';
 import 'package:prismhub/data/services/database_service.dart';
-import 'package:prismhub/utils/PrismHub_storage.dart';
+import 'package:prismhub/utils/prismhub_storage.dart';
 import 'package:scrollable_positioned_list/scrollable_positioned_list.dart';
 
 class NovelController extends ReaderController<ExtensionFikushonWatch> {

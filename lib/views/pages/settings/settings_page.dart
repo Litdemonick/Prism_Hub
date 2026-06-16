@@ -21,7 +21,7 @@ import 'package:prismhub/views/widgets/settings/settings_switch_tile.dart';
 import 'package:prismhub/views/widgets/settings/settings_numberbox_button.dart';
 import 'package:prismhub/views/widgets/settings/settings_tile.dart';
 import 'package:prismhub/utils/i18n.dart';
-import 'package:prismhub/utils/PrismHub_storage.dart';
+import 'package:prismhub/utils/prismhub_storage.dart';
 import 'package:prismhub/utils/application.dart';
 import 'package:prismhub/views/widgets/list_title.dart';
 import 'package:prismhub/views/widgets/platform_widget.dart';

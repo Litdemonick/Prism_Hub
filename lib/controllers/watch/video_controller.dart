@@ -29,13 +29,13 @@ import 'package:prismhub/data/services/database_service.dart';
 import 'package:prismhub/data/services/extension_service.dart';
 import 'package:prismhub/utils/i18n.dart';
 import 'package:prismhub/utils/layout.dart';
-import 'package:prismhub/utils/PrismHub_directory.dart';
+import 'package:prismhub/utils/prismhub_directory.dart';
 import 'package:prismhub/views/pages/watch/video/video_player_sidebar.dart';
 import 'package:window_manager/window_manager.dart';
 import 'package:path/path.dart' as path;
 import 'package:fluent_ui/fluent_ui.dart' as fluent;
 import 'package:crypto/crypto.dart';
-import 'package:prismhub/utils/PrismHub_storage.dart';
+import 'package:prismhub/utils/prismhub_storage.dart';
 import 'package:flutter_hls_parser/flutter_hls_parser.dart';
 
 class VideoPlayerController extends GetxController {

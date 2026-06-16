@@ -5,7 +5,7 @@ import 'package:get/get.dart';
 import 'package:prismhub/models/extension.dart';
 import 'package:prismhub/controllers/detail_controller.dart';
 import 'package:prismhub/views/widgets/detail/detail_continue_play.dart';
-import 'package:prismhub/utils/PrismHub_storage.dart';
+import 'package:prismhub/utils/prismhub_storage.dart';
 import 'package:prismhub/views/widgets/card_tile.dart';
 import 'package:prismhub/utils/i18n.dart';
 import 'package:prismhub/views/widgets/platform_widget.dart';
