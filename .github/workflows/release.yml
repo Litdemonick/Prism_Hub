@@ -22,11 +22,8 @@ jobs:
       - uses: subosito/flutter-action@v2
         with:
           channel: stable
-      - name: Setup Android SDK 34
-        run: |
-          sdkmanager="$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager"
-          echo "y" | $sdkmanager --uninstall "platforms;android-36" || true
-          echo "y" | $sdkmanager "platforms;android-34"
+      - name: Setup Android SDK 36
+        run: echo "y" | $ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager "platforms;android-36"
       - name: Decode keystore
         run: echo $ENCODED_KEYSTORE | base64 -di > android/app/keystore.jks
         env:

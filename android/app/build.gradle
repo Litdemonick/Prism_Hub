@@ -37,7 +37,7 @@ def _keyPassword = System.getenv("KEY_PASSWORD") ?: keystoreProperties.getProper
 
 android {
     namespace "com.prismhub.app"
-    compileSdk 34
+    compileSdk 36
     ndkVersion flutter.ndkVersion
 
     compileOptions {
