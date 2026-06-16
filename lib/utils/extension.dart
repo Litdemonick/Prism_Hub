@@ -238,19 +238,6 @@ class ExtensionUtils {
     }
   }
 
-  // ==MiruExtension==
-  // @name         Enime
-  // @version      v0.0.1
-  // @author       MiaoMint
-  // @lang         all
-  // @license      MIT
-  // @icon         https://avatars.githubusercontent.com/u/74993083?s=200&v=4
-  // @package      moe.enime
-  // @type         bangumi
-  // @webSite      https://api.enime.moe/
-  // @description  Enime API is an open source API service for developers to access anime info (as well as their video sources) https://github.com/Enime-Project/api.enime.moe
-  // ==/MiruExtension==
-
   // 解析扩展为元数据
   static Extension parseExtension(String extension) {
     Map<String, dynamic> result = {};

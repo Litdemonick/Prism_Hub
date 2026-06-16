@@ -1,15 +1,15 @@
-﻿// ==MiruExtension==
+﻿// ==PrismHubExtension==
 // @name         AnimeOnlineNinja
 // @version      v1.0.0
-// @author       jephersonRD
+// @author       PrismHub
 // @lang         es
 // @license      MIT
-// @icon         https://raw.githubusercontent.com/jephersonRD/prismhub/main/icons/animeonlineninja.png
+// @icon         https://raw.githubusercontent.com/Litdemonick/Prism_Hub/main/icons/animeonlineninja.png
 // @package      com.PrismHub.animeonlineninja
 // @type         bangumi
 // @webSite      https://www.animeonline.ninja
 // @description  Ver anime en español desde AnimeOnlineNinja
-// ==/MiruExtension==
+// ==/PrismHubExtension==
 
 var extension = {
   latest: function(page) {

@@ -74,7 +74,7 @@ class _ExtensionCardState extends State<ExtensionCard> {
       // Inject metadata header if missing (e.g. CDN cache serving old file)
       if (!script.contains('==PrismHubExtension==') && !script.contains('==MiruExtension==') && !script.contains('@package')) {
         final typeName = widget.type.toString().split('.').last;
-        final header = '// ==MiruExtension==\n'
+        final header = '// ==PrismHubExtension==\n'
             '// @name         ${widget.name}\n'
             '// @version      ${widget.version}\n'
             '// @author       PrismHub\n'
@@ -85,7 +85,7 @@ class _ExtensionCardState extends State<ExtensionCard> {
             '// @type         $typeName\n'
             '// @webSite      ${widget.webSite ?? ""}\n'
             '// @description  ${widget.description ?? widget.name}\n'
-            '// ==/MiruExtension==\n\n';
+            '// ==/PrismHubExtension==\n\n';
         script = header + script;
       }
       await ExtensionUtils.installByScript(script, context);

@@ -1,15 +1,15 @@
-﻿// ==MiruExtension==
+﻿// ==PrismHubExtension==
 // @name         Cuevana3
 // @version      v1.0.0
-// @author       jephersonRD
+// @author       PrismHub
 // @lang         es
 // @license      MIT
-// @icon         https://raw.githubusercontent.com/jephersonRD/prismhub/main/icons/cuevana3.png
+// @icon         https://raw.githubusercontent.com/Litdemonick/Prism_Hub/main/icons/cuevana3.png
 // @package      com.PrismHub.cuevana3
 // @type         bangumi
 // @webSite      https://cuevana3.me
 // @description  Ver películas y series en español desde Cuevana3
-// ==/MiruExtension==
+// ==/PrismHubExtension==
 
 var extension = {
   latest: function(page) {

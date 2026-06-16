@@ -1,17 +1,17 @@
-﻿// ==MiruExtension==
+﻿// ==PrismHubExtension==
 // @name         PrismHub Latino
 // @version      v0.3.4
-// @author       jephMD
+// @author       PrismHub
 // @lang         es
 // @license      MIT
-// @icon         https://raw.githubusercontent.com/jephersonRD/prismhub/main/icons/app.png
+// @icon         https://raw.githubusercontent.com/Litdemonick/Prism_Hub/main/icons/app.png
 // @package      PrismHublatino
 // @type         bangumi
 // @webSite      https://www.1024terabox.com
 // @nsfw         false
-// ==/MiruExtension==
+// ==/PrismHubExtension==
 
-const API_URL = "https://raw.githubusercontent.com/jephersonRD/prismhub/main/extensions/anime_db.json";
+const API_URL = "https://raw.githubusercontent.com/Litdemonick/Prism_Hub/main/extensions/anime_db.json";
 const PAGE_SIZE = 20;
 
 // ── Credenciales Terabox embebidas ─────────────────────────────────────────────
