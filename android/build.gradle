@@ -1,4 +1,4 @@
-ext.kotlin_version = '2.1.21'
+ext.kotlin_version = '2.2.20'
 
 allprojects {
     repositories {
@@ -19,11 +19,25 @@ tasks.register("clean", Delete) {
     delete rootProject.buildDir
 }
 
-// Force compileSdk 34 for all Android modules — android-36 jar is broken on CI runners
+// Fix all Android subprojects/plugins after their build.gradle runs
 gradle.afterProject { proj ->
-    if (proj != rootProject && proj.hasProperty('android')) {
-        proj.android {
-            compileSdk 34
-        }
+    if (proj == rootProject || !proj.hasProperty('android')) return
+
+    // Force compileSdk 34 — android-36 jar is broken on CI runners
+    proj.android {
+        compileSdk 34
     }
+
+    // AGP 8.7+ requires 'namespace' in every library build.gradle.
+    // Old Flutter plugins only declare it in AndroidManifest.xml — read it from there.
+    try {
+        if (!proj.android.namespace) {
+            def manifest = proj.file("src/main/AndroidManifest.xml")
+            if (manifest.exists()) {
+                def xml = new groovy.xml.XmlSlurper().parse(manifest)
+                def pkg = xml.'@package'?.text()
+                if (pkg) proj.android.namespace = pkg
+            }
+        }
+    } catch (Exception ignored) {}
 }
