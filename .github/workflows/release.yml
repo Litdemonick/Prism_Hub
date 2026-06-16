@@ -21,7 +21,6 @@ jobs:
           java-version: '17'
       - uses: subosito/flutter-action@v2
         with:
-          flutter-version: 3.16.8
           channel: stable
       - name: Setup Android SDK 34
         run: |
@@ -55,7 +54,6 @@ jobs:
           ref: main
       - uses: subosito/flutter-action@v2
         with:
-          flutter-version: 3.16.8
           channel: stable
       - name: Install dependencies
         run: |
@@ -84,7 +82,6 @@ jobs:
           ref: main
       - uses: subosito/flutter-action@v2
         with:
-          flutter-version: 3.16.8
           channel: stable
       - run: flutter pub get
       - name: Build Windows

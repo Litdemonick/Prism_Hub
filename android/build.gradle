@@ -1,4 +1,4 @@
-ext.kotlin_version = '1.8.22'
+ext.kotlin_version = '1.9.25'
 
 allprojects {
     repositories {
