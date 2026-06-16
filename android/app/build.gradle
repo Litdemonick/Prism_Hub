@@ -41,7 +41,8 @@ apply from: "$flutterRoot/packages/flutter_tools/gradle/flutter.gradle"
 
 android {
     namespace "com.prismhub.app"
-    compileSdkVersion 35
+    compileSdkVersion 34
+    buildToolsVersion "34.0.0"
     ndkVersion flutter.ndkVersion
 
     compileOptions {
