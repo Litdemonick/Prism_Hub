@@ -234,7 +234,7 @@ Prism_Hub/
 │   ├── models/             ← Modelos de datos
 │   ├── utils/              ← Utilidades, storage, peticiones HTTP
 │   └── views/              ← UI (páginas y widgets)
-├── extensions/             ← Extensiones de la comunidad (150+) [Miru-compatible]
+├── extensions/             ← Extensiones de la comunidad (150+)
 ├── assets/
 │   ├── i18n/               ← Traducciones (es.json, en.json, zh.json…)
 │   ├── js/                 ← CryptoJS, jsencrypt, md5 (runtime)
