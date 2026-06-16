@@ -26,6 +26,16 @@ subprojects {
     project.evaluationDependsOn(':app')
 }
 
+// Force all Flutter plugin subprojects to use SDK 34 (android-36 jar is broken on CI runners)
+subprojects {
+    afterEvaluate { project ->
+        if (project.hasProperty('android')) {
+            project.android.compileSdkVersion 34
+            project.android.buildToolsVersion "34.0.0"
+        }
+    }
+}
+
 tasks.register("clean", Delete) {
     delete rootProject.buildDir
 }
