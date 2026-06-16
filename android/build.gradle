@@ -19,10 +19,9 @@ tasks.register("clean", Delete) {
     delete rootProject.buildDir
 }
 
-// AGP 8.7+ requires 'namespace' in every library build.gradle.
-// Old Flutter plugins only declare it in AndroidManifest.xml — read it from there.
 gradle.afterProject { proj ->
     if (proj == rootProject || !proj.hasProperty('android')) return
+    // AGP 8.7+ requires 'namespace'; old plugins only have it in AndroidManifest.xml
     try {
         if (!proj.android.namespace) {
             def manifest = proj.file("src/main/AndroidManifest.xml")
@@ -31,6 +30,12 @@ gradle.afterProject { proj ->
                 def pkg = xml.'@package'?.text()
                 if (pkg) proj.android.namespace = pkg
             }
+        }
+    } catch (Exception ignored) {}
+    // Force Kotlin jvmTarget to 1.8 to match Java compileOptions on all plugins (fixes JVM 21 mismatch)
+    try {
+        proj.tasks.withType(org.jetbrains.kotlin.gradle.tasks.KotlinCompile).configureEach {
+            kotlinOptions { jvmTarget = '1.8' }
         }
     } catch (Exception ignored) {}
 }
