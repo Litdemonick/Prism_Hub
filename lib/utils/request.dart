@@ -2,8 +2,8 @@
 import 'package:dio/dio.dart';
 import 'package:dio_cookie_manager/dio_cookie_manager.dart';
 import 'package:flutter_socks_proxy/socks_proxy.dart';
-import 'package:prismhub/utils/PrismHub_directory.dart';
-import 'package:prismhub/utils/PrismHub_storage.dart';
+import 'package:prismhub/utils/prismhub_directory.dart';
+import 'package:prismhub/utils/prismhub_storage.dart';
 
 late final Dio dio;
 

@@ -5,7 +5,7 @@ import 'package:flutter/material.dart';
 import 'package:hive_flutter/adapters.dart';
 import 'package:isar/isar.dart';
 import 'package:prismhub/models/index.dart';
-import 'package:prismhub/utils/PrismHub_directory.dart';
+import 'package:prismhub/utils/prismhub_directory.dart';
 import 'package:path/path.dart' as p;
 
 class PrismHubStorage {

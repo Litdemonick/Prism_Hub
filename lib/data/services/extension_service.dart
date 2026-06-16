@@ -8,7 +8,7 @@ import 'package:html/dom.dart';
 import 'package:html/parser.dart';
 import 'package:prismhub/data/services/extension_jscore_plugin.dart';
 import 'package:prismhub/utils/log.dart';
-import 'package:prismhub/utils/PrismHub_storage.dart';
+import 'package:prismhub/utils/prismhub_storage.dart';
 import 'package:prismhub/utils/request.dart';
 import 'package:xpath_selector_html_parser/xpath_selector_html_parser.dart';
 import 'dart:io';

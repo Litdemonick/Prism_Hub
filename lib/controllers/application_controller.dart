@@ -1,6 +1,6 @@
 ﻿import 'package:flutter/material.dart';
 import 'package:get/get.dart';
-import 'package:prismhub/utils/PrismHub_storage.dart';
+import 'package:prismhub/utils/prismhub_storage.dart';
 
 class ApplicationController extends GetxController {
   static get find => Get.find();

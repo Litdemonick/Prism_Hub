@@ -2,7 +2,7 @@
 import 'package:prismhub/models/extension.dart';
 import 'package:prismhub/utils/extension.dart';
 import 'package:prismhub/data/services/extension_service.dart';
-import 'package:prismhub/utils/PrismHub_storage.dart';
+import 'package:prismhub/utils/prismhub_storage.dart';
 
 class SearchPageController extends GetxController {
   Rx<ExtensionType?> cuurentExtensionType = Rx(null);

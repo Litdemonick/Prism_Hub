@@ -11,7 +11,7 @@ import 'package:prismhub/controllers/search_controller.dart';
 import 'package:prismhub/controllers/settings_controller.dart';
 import 'package:prismhub/data/services/extension_service.dart';
 import 'package:prismhub/utils/i18n.dart';
-import 'package:prismhub/utils/PrismHub_directory.dart';
+import 'package:prismhub/utils/prismhub_directory.dart';
 import 'package:prismhub/utils/request.dart';
 import 'package:prismhub/utils/router.dart';
 import 'package:prismhub/views/widgets/button.dart';
