@@ -1,4 +1,5 @@
-﻿import 'package:flutter/material.dart';
+﻿// ignore_for_file: deprecated_member_use
+import 'package:flutter/material.dart';
 import 'package:prismhub/utils/i18n.dart';
 
 class SwitchTileDialog<T> extends StatefulWidget {

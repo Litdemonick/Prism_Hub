@@ -138,9 +138,9 @@ class PrismHubStorage {
     await _initSetting(SettingKey.proxyType, 'DIRECT');
     await _initSetting(SettingKey.saveLog, true);
     await _initSetting(SettingKey.subtitleFontSize, 46.0);
-    await _initSetting(SettingKey.subtitleFontColor, Colors.white.value);
+    await _initSetting(SettingKey.subtitleFontColor, Colors.white.toARGB32());
     await _initSetting(SettingKey.subtitleFontWeight, 'bold');
-    await _initSetting(SettingKey.subtitleBackgroundColor, Colors.black.value);
+    await _initSetting(SettingKey.subtitleBackgroundColor, Colors.black.toARGB32());
     await _initSetting(SettingKey.subtitleBackgroundOpacity, 0.5);
     await _initSetting(SettingKey.subtitleTextAlign, TextAlign.center.index);
   }

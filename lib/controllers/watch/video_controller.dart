@@ -243,7 +243,7 @@ class VideoPlayerController extends GetxController {
     ever(subtitleFontColor, (callback) {
       PrismHubStorage.setSetting(
         SettingKey.subtitleFontColor,
-        callback.value,
+        callback.toARGB32(),
       );
     });
     ever(subtitleFontWeight, (callback) {
@@ -255,7 +255,7 @@ class VideoPlayerController extends GetxController {
     ever(subtitleBackgroundColor, (callback) {
       PrismHubStorage.setSetting(
         SettingKey.subtitleBackgroundColor,
-        callback.value,
+        callback.toARGB32(),
       );
     });
     ever(subtitleBackgroundOpacity, (callback) {

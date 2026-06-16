@@ -91,29 +91,30 @@ class ComicController extends ReaderController<ExtensionMangaWatch> {
     super.onInit();
   }
 
-  onKey(RawKeyEvent event) {
+  onKey(KeyEvent event) {
     // 按下 ctrl
-    isZoom.value = event.isControlPressed;
+    isZoom.value = HardwareKeyboard.instance.isControlPressed;
+    if (event is! KeyDownEvent && event is! KeyRepeatEvent) return;
     // 上下
-    if (event.isKeyPressed(LogicalKeyboardKey.arrowUp)) {
+    if (event.logicalKey == LogicalKeyboardKey.arrowUp) {
       if (readType.value == MangaReadMode.webTonn) {
         return previousPage();
       }
     }
-    if (event.isKeyPressed(LogicalKeyboardKey.arrowDown)) {
+    if (event.logicalKey == LogicalKeyboardKey.arrowDown) {
       if (readType.value == MangaReadMode.webTonn) {
         return nextPage();
       }
     }
 
-    if (event.isKeyPressed(LogicalKeyboardKey.arrowLeft)) {
+    if (event.logicalKey == LogicalKeyboardKey.arrowLeft) {
       if (readType.value == MangaReadMode.rightToLeft) {
         return nextPage();
       }
       previousPage();
     }
 
-    if (event.isKeyPressed(LogicalKeyboardKey.arrowRight)) {
+    if (event.logicalKey == LogicalKeyboardKey.arrowRight) {
       if (readType.value == MangaReadMode.rightToLeft) {
         return previousPage();
       }

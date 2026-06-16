@@ -161,7 +161,7 @@ class _ThumnailPageState extends State<_ThumnailPage> {
           final color = Platform.isAndroid
               ? Theme.of(context).scaffoldBackgroundColor
               : fluent.FluentTheme.of(context).scaffoldBackgroundColor;
-          return color.withOpacity(0);
+          return color.withValues(alpha: 0);
         },
         child: ExtendedImage.network(
           widget.url,

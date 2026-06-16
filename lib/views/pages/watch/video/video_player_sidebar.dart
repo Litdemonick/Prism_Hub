@@ -49,7 +49,7 @@ class _VideoPlayerSidebarState extends State<VideoPlayerSidebar> {
 
   Widget _buildAndroid(BuildContext context) {
     return Container(
-      color: ThemeData.dark().colorScheme.background,
+      color: ThemeData.dark().colorScheme.surface,
       child: DefaultTabController(
         length: _tabs.length,
         initialIndex: !_tabs.keys.toList().contains(_c.initSidebarTab.value)
@@ -212,7 +212,7 @@ class _SideBarSettingsState extends State<_SideBarSettings> {
                               return fluent.Button(
                                 autofocus: _c.subtitleFontColor.value == color,
                                 style: fluent.ButtonStyle(
-                                  padding: fluent.ButtonState.all(
+                                  padding: WidgetStateProperty.all(
                                     const EdgeInsets.all(4.0),
                                   ),
                                 ),
@@ -265,7 +265,7 @@ class _SideBarSettingsState extends State<_SideBarSettings> {
                                 autofocus:
                                     _c.subtitleBackgroundColor.value == color,
                                 style: fluent.ButtonStyle(
-                                  padding: fluent.ButtonState.all(
+                                  padding: WidgetStateProperty.all(
                                     const EdgeInsets.all(4.0),
                                   ),
                                 ),
@@ -343,7 +343,7 @@ class _SideBarSettingsState extends State<_SideBarSettings> {
                               autofocus: _c.subtitleTextAlign.value ==
                                   TextAlign.justify,
                               style: fluent.ButtonStyle(
-                                padding: fluent.ButtonState.all(
+                                padding: WidgetStateProperty.all(
                                   const EdgeInsets.all(4.0),
                                 ),
                               ),
@@ -365,7 +365,7 @@ class _SideBarSettingsState extends State<_SideBarSettings> {
                               autofocus:
                                   _c.subtitleTextAlign.value == TextAlign.left,
                               style: fluent.ButtonStyle(
-                                padding: fluent.ButtonState.all(
+                                padding: WidgetStateProperty.all(
                                   const EdgeInsets.all(4.0),
                                 ),
                               ),
@@ -387,7 +387,7 @@ class _SideBarSettingsState extends State<_SideBarSettings> {
                               autofocus:
                                   _c.subtitleTextAlign.value == TextAlign.right,
                               style: fluent.ButtonStyle(
-                                padding: fluent.ButtonState.all(
+                                padding: WidgetStateProperty.all(
                                   const EdgeInsets.all(4.0),
                                 ),
                               ),
@@ -409,7 +409,7 @@ class _SideBarSettingsState extends State<_SideBarSettings> {
                               autofocus: _c.subtitleTextAlign.value ==
                                   TextAlign.center,
                               style: fluent.ButtonStyle(
-                                padding: fluent.ButtonState.all(
+                                padding: WidgetStateProperty.all(
                                   const EdgeInsets.all(4.0),
                                 ),
                               ),

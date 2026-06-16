@@ -96,11 +96,7 @@ class _ExtensionSearcherPageState extends fluent.State<ExtensionSearcherPage> {
       _page++;
     } catch (e) {
       // ignore: use_build_context_synchronously
-      showPlatformSnackbar(
-        context: context,
-        content: e.toString(),
-        severity: fluent.InfoBarSeverity.error,
-      );
+      showPlatformSnackbar(context: context, content: e.toString(), severity: fluent.InfoBarSeverity.error);
       rethrow;
     } finally {
       _isLoading = false;

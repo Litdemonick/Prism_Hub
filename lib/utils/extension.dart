@@ -100,8 +100,8 @@ class ExtensionUtils {
       content: Text(e.toString()),
       actions: [
         PlatformButton(
-          child: Text('common.close'.i18n),
           onPressed: RouterUtils.pop,
+          child: Text('common.close'.i18n),
         )
       ],
     );
@@ -111,8 +111,10 @@ class ExtensionUtils {
     try {
       final res = await dio.get<String>(url);
       if (res.data == null) throw Exception("Does not seem to be an extension");
+      // ignore: use_build_context_synchronously
       await _saveAndInit(res.data!, context, safeReload: true);
     } catch (e) {
+      // ignore: use_build_context_synchronously
       _showInstallError(context, e);
       rethrow;
     }
@@ -122,6 +124,7 @@ class ExtensionUtils {
     try {
       await _saveAndInit(script, context);
     } catch (e) {
+      // ignore: use_build_context_synchronously
       _showInstallError(context, e);
       rethrow;
     }

@@ -26,7 +26,7 @@ void main(List<String> args) async {
   if (args.contains('-version') || args.contains('--version')) {
     WidgetsFlutterBinding.ensureInitialized();
     final info = await PackageInfo.fromPlatform();
-    print('PrismHub v${info.version}');
+    debugPrint('PrismHub v${info.version}');
     exit(0);
   }
 
@@ -120,7 +120,7 @@ class _MainAppState extends State<MainApp> {
   }
 
   Widget _buildMobileMain(BuildContext context) {
-    final cjkFontFallback = const [
+    const cjkFontFallback = [
       "Noto Sans CJK JP",
       "Noto Sans CJK KR",
       "Noto Sans CJK TC",

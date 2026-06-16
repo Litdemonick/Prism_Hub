@@ -221,13 +221,13 @@ class _ExtensionRepoPageState extends State<ExtensionRepoPage> {
                 () => fluent.ComboBox<String>(
                   items: [
                     fluent.ComboBoxItem(value: 'all', child: Text('common.show-all'.i18n)),
-                    fluent.ComboBoxItem(value: 'en', child: const Text('English')),
-                    fluent.ComboBoxItem(value: 'es', child: const Text('Español')),
-                    fluent.ComboBoxItem(value: 'zh', child: const Text('中文')),
-                    fluent.ComboBoxItem(value: 'ja', child: const Text('日本語')),
-                    fluent.ComboBoxItem(value: 'ko', child: const Text('한국어')),
-                    fluent.ComboBoxItem(value: 'hi', child: const Text('हिन्दी')),
-                    fluent.ComboBoxItem(value: 'ru', child: const Text('Русский')),
+                    const fluent.ComboBoxItem(value: 'en', child: Text('English')),
+                    const fluent.ComboBoxItem(value: 'es', child: Text('Español')),
+                    const fluent.ComboBoxItem(value: 'zh', child: Text('中文')),
+                    const fluent.ComboBoxItem(value: 'ja', child: Text('日本語')),
+                    const fluent.ComboBoxItem(value: 'ko', child: Text('한국어')),
+                    const fluent.ComboBoxItem(value: 'hi', child: Text('हिन्दी')),
+                    const fluent.ComboBoxItem(value: 'ru', child: Text('Русский')),
                   ],
                   value: c.searchLang.value,
                   onChanged: (value) {

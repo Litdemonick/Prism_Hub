@@ -1,4 +1,5 @@
-﻿import 'package:fluent_ui/fluent_ui.dart' as fluent;
+﻿// ignore_for_file: deprecated_member_use
+import 'package:fluent_ui/fluent_ui.dart' as fluent;
 import 'package:flutter/material.dart';
 import 'package:prismhub/views/widgets/settings/settings_tile.dart';
 import 'package:prismhub/views/widgets/platform_widget.dart';

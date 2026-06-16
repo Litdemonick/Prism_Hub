@@ -95,7 +95,7 @@ class _VideoPlayerDesktopControlsState
                       color: _c.subtitleFontColor.value,
                       fontWeight: _c.subtitleFontWeight.value,
                       backgroundColor:
-                          _c.subtitleBackgroundColor.value.withOpacity(
+                          _c.subtitleBackgroundColor.value.withValues(alpha:
                         _c.subtitleBackgroundOpacity.value,
                       ),
                     );
@@ -251,10 +251,10 @@ class _VideoPlayerDesktopControlsState
                             padding: const EdgeInsets.symmetric(
                                 horizontal: 24, vertical: 18),
                             decoration: BoxDecoration(
-                              color: Colors.black.withOpacity(0.78),
+                              color: Colors.black.withValues(alpha:0.78),
                               borderRadius: BorderRadius.circular(12),
                               border: Border.all(
-                                color: Colors.orange.withOpacity(0.8),
+                                color: Colors.orange.withValues(alpha:0.8),
                                 width: 1.5,
                               ),
                             ),
@@ -344,7 +344,7 @@ class _HeaderState extends State<_Header> {
   @override
   Widget build(BuildContext context) {
     return Container(
-      color: Colors.black.withOpacity(0.5),
+      color: Colors.black.withValues(alpha:0.5),
       child: Padding(
         padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
         child: Row(
@@ -420,7 +420,7 @@ class _Footer extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Container(
-      color: Colors.black.withOpacity(0.5),
+      color: Colors.black.withValues(alpha:0.5),
       child: Padding(
         padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
         child: Column(

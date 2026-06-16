@@ -20,7 +20,7 @@ class CardTile extends StatelessWidget {
       decoration: BoxDecoration(
         color: FluentTheme.of(context).cardColor,
         borderRadius: BorderRadius.circular(10),
-        border: Border.all(color: Colors.grey.withOpacity(0.1), width: 1),
+        border: Border.all(color: Colors.grey.withValues(alpha:0.1), width: 1),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -49,8 +49,8 @@ class CardTile extends StatelessWidget {
               border: Border(
                 bottom: BorderSide(
                   color: FluentTheme.of(context).brightness == Brightness.dark
-                      ? Colors.white.withOpacity(0.1)
-                      : Colors.grey.withOpacity(0.1),
+                      ? Colors.white.withValues(alpha:0.1)
+                      : Colors.grey.withValues(alpha:0.1),
                   width: 1,
                 ),
               ),

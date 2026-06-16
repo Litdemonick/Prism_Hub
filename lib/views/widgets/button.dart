@@ -122,7 +122,7 @@ class PlatformToggleButton extends fluent.StatelessWidget {
     return TextButton(
       onPressed: () => onChanged?.call(!checked),
       style: ButtonStyle(
-        side: MaterialStateProperty.all(
+        side: WidgetStateProperty.all(
           BorderSide(
             color: checked
                 ? Theme.of(context).colorScheme.primary

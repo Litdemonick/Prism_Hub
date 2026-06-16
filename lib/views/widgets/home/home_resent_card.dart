@@ -120,7 +120,7 @@ class _HomeRecentCardState extends State<HomeRecentCard> {
                   end: Alignment.bottomCenter,
                   colors: [
                     Colors.transparent,
-                    Colors.black.withOpacity(0.8),
+                    Colors.black.withValues(alpha:0.8),
                   ],
                 ),
               ),
@@ -186,7 +186,7 @@ class _HomeRecentCardState extends State<HomeRecentCard> {
                 fit: BoxFit.cover,
                 colorFilter: primaryColor != null
                     ? ColorFilter.mode(
-                        primaryColor!.withOpacity(0.9),
+                        primaryColor!.withValues(alpha:0.9),
                         BlendMode.srcOver,
                       )
                     : null,
@@ -201,7 +201,7 @@ class _HomeRecentCardState extends State<HomeRecentCard> {
             end: Alignment.bottomCenter,
             colors: [
               Colors.transparent,
-              Colors.black.withOpacity(0.8),
+              Colors.black.withValues(alpha:0.8),
             ],
           ),
         ),
@@ -342,7 +342,7 @@ class _HomeRecentCardState extends State<HomeRecentCard> {
           ancestor: Navigator.of(context).context.findRenderObject(),
         );
         contextController.showFlyout(
-          barrierColor: Colors.black.withOpacity(0.1),
+          barrierColor: Colors.black.withValues(alpha:0.1),
           position: position,
           builder: (context) {
             return fluent.FlyoutContent(
