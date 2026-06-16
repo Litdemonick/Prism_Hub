@@ -10,7 +10,7 @@ import License from './pages/License';
 function App() {
   return (
     <HashRouter>
-      <main className="min-h-screen bg-[#f0f0f0]">
+      <main className="min-h-screen bg-[#08080f]">
         <Routes>
           <Route path="/" element={<Home />} />
           <Route path="/linux" element={<Linux />} />
