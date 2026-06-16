@@ -1,4 +1,4 @@
-# This is a basic workflow to help you get started with Actions
+﻿# This is a basic workflow to help you get started with Actions
 
 name: Dev Build CI
 
@@ -45,17 +45,17 @@ jobs:
         uses: actions/upload-artifact@v3
         with:
           path: "build/app/outputs/flutter-apk/app-armeabi-v7a-release.apk"
-          name: Miru-pr-${{ github.event.pull_request.number }}-armeabi-v7a.apk
+          name: PrismHub-pr-${{ github.event.pull_request.number }}-armeabi-v7a.apk
       - name: Upload Artifact - arm64-v8a
         uses: actions/upload-artifact@v3
         with:
           path: "build/app/outputs/flutter-apk/app-arm64-v8a-release.apk"
-          name: Miru-pr-${{ github.event.pull_request.number }}-arm64-v8a.apk
+          name: PrismHub-pr-${{ github.event.pull_request.number }}-arm64-v8a.apk
       - name: Upload Artifact - x86
         uses: actions/upload-artifact@v3
         with:
           path: "build/app/outputs/flutter-apk/app-x86_64-release.apk"
-          name: Miru-pr-${{ github.event.pull_request.number }}-x86_64.apk
+          name: PrismHub-pr-${{ github.event.pull_request.number }}-x86_64.apk
 
   build-and-release-windows:
     runs-on: windows-latest
@@ -70,15 +70,15 @@ jobs:
         run: flutter pub get
       - name: Build artifacts
         run: flutter build windows --release
-      - name: Rename Release Directory Name to Miru-App # 为了解压缩后更好看一点
+      - name: Rename Release Directory Name to PrismHub 
         run: |
-          mv build/windows/x64/runner/Release build/windows/x64/runner/Miru-App
+          mv build/windows/x64/runner/Release build/windows/x64/runner/PrismHub
       # 发布安装包
       - name: Upload Artifact
         uses: actions/upload-artifact@v3
         with:
-          path: "build/windows/x64/runner/Miru-App"
-          name: Miru-pr-${{ github.event.pull_request.number }}-windows.zip
+          path: "build/windows/x64/runner/PrismHub"
+          name: PrismHub-pr-${{ github.event.pull_request.number }}-windows.zip
 
   build-and-release-linux:
     runs-on: ubuntu-latest
@@ -94,12 +94,12 @@ jobs:
         run: flutter pub get
       - name: Build artifacts
         run: flutter build linux --release
-      - name: Rename Release Directory Name to Miru-App # 为了解压缩后更好看一点
+      - name: Rename Release Directory Name to PrismHub 
         run: |
-          mv build/linux/x64/release/bundle build/linux/x64/release/Miru-App
+          mv build/linux/x64/release/bundle build/linux/x64/release/PrismHub
       # 发布安装包
       - name: Upload Artifact
         uses: actions/upload-artifact@v3
         with:
-          path: "build/linux/x64/release/Miru-App"
-          name: Miru-pr-${{ github.event.pull_request.number }}-linux.zip
+          path: "build/linux/x64/release/PrismHub"
+          name: PrismHub-pr-${{ github.event.pull_request.number }}-linux.zip

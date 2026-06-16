@@ -1,1 +1,1 @@
-An App that unifies websites for watching movies, comics and novels online
+﻿PrismHub — Anime, manga and series streaming application

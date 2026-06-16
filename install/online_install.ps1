@@ -1,7 +1,7 @@
-<#
+﻿<#
  ==============================================================================
-  JiruHub Installer — Windows (PowerShell)
-  Uso: irm https://raw.githubusercontent.com/jephersonRD/JiruHub/main/jiru-install/install.ps1 | iex
+  PrismHub Installer — Windows (PowerShell)
+  Uso: irm https://raw.githubusercontent.com/Litdemonick/PrismHub/main/jiru-install/install.ps1 | iex
  ==============================================================================
 #>
 
@@ -9,11 +9,11 @@ $ErrorActionPreference = "Stop"
 $ProgressPreference = "SilentlyContinue"
 
 # ─── Configuración ─────────────────────────────────────────────────────────
-$RepoOwner = "jephersonRD"
-$RepoName = "JiruHub"
+$RepoOwner = "Litdemonick"
+$RepoName = "PrismHub"
 $ApiUrl = "https://api.github.com/repos/$RepoOwner/$RepoName/releases/latest"
-$InstallDir = "$env:LOCALAPPDATA\JiruHub"
-$LogDir = "$env:LOCALAPPDATA\JiruHub\logs"
+$InstallDir = "$env:LOCALAPPDATA\PrismHub"
+$LogDir = "$env:LOCALAPPDATA\PrismHub\logs"
 $LogFile = "$LogDir\installer-$(Get-Date -Format 'yyyyMMdd-HHmmss').log"
 $VersionFile = "$InstallDir\version"
 $StartMenuDir = "$env:APPDATA\Microsoft\Windows\Start Menu\Programs"
@@ -32,7 +32,7 @@ $Reset = "`e[0m"
 
 # ─── Traducciones ───────────────────────────────────────────────────────────
 $I18N_ES = @{
-    welcome="Bienvenido al Instalador de JiruHub"
+    welcome="Bienvenido al Instalador de PrismHub"
     menu_lang="Selecciona tu idioma"
     opt_spanish="Español"; opt_english="English"; opt_exit="Salir"
     menu_main="Menú Principal"
@@ -40,11 +40,11 @@ $I18N_ES = @{
     detecting_os="Detectando sistema operativo..."
     detecting_arch="Detectando arquitectura..."
     fetching_release="Buscando última versión en GitHub..."
-    downloading="Descargando JiruHub..."
-    installing="Instalando JiruHub..."
-    success_install="JiruHub se instaló correctamente."
-    success_update="JiruHub se actualizó correctamente."
-    success_uninstall="JiruHub se desinstaló correctamente."
+    downloading="Descargando PrismHub..."
+    installing="Instalando PrismHub..."
+    success_install="PrismHub se instaló correctamente."
+    success_update="PrismHub se actualizó correctamente."
+    success_uninstall="PrismHub se desinstaló correctamente."
     installed_version="Versión instalada"
     install_path="Ruta de instalación"
     latest_version="Última versión disponible"
@@ -55,11 +55,11 @@ $I18N_ES = @{
     press_enter="Presiona Enter para salir..."
     cancelled="Operación cancelada."
     log_path="Log guardado en"
-    running="ejecuta: jiruhub"
+    running="ejecuta: PrismHub"
 }
 
 $I18N_EN = @{
-    welcome="Welcome to JiruHub Installer"
+    welcome="Welcome to PrismHub Installer"
     menu_lang="Select your language"
     opt_spanish="Spanish"; opt_english="English"; opt_exit="Exit"
     menu_main="Main Menu"
@@ -67,11 +67,11 @@ $I18N_EN = @{
     detecting_os="Detecting operating system..."
     detecting_arch="Detecting architecture..."
     fetching_release="Fetching latest release from GitHub..."
-    downloading="Downloading JiruHub..."
-    installing="Installing JiruHub..."
-    success_install="JiruHub installed successfully."
-    success_update="JiruHub updated successfully."
-    success_uninstall="JiruHub uninstalled successfully."
+    downloading="Downloading PrismHub..."
+    installing="Installing PrismHub..."
+    success_install="PrismHub installed successfully."
+    success_update="PrismHub updated successfully."
+    success_uninstall="PrismHub uninstalled successfully."
     installed_version="Installed version"
     install_path="Installation path"
     latest_version="Latest version available"
@@ -82,7 +82,7 @@ $I18N_EN = @{
     press_enter="Press Enter to exit..."
     cancelled="Operation cancelled."
     log_path="Log saved at"
-    running="run: jiruhub"
+    running="run: PrismHub"
 }
 
 function T($key) {
@@ -193,9 +193,9 @@ function Get-LatestRelease {
 
 function Find-Asset($os, $arch, $assets) {
     $patterns = switch ($arch) {
-        "x64"   { @("JiruHub-*-windows-x64.zip", "JiruHub-*-windows.zip", "JiruHub-*-windows-setup.exe") }
-        "arm64" { @("JiruHub-*-windows-arm64.zip") }
-        default { @("JiruHub-*-windows.zip", "JiruHub-*-windows-setup.exe") }
+        "x64"   { @("PrismHub-*-windows-x64.zip", "PrismHub-*-windows.zip", "PrismHub-*-windows-setup.exe") }
+        "arm64" { @("PrismHub-*-windows-arm64.zip") }
+        default { @("PrismHub-*-windows.zip", "PrismHub-*-windows-setup.exe") }
     }
     foreach ($p in $patterns) {
         $pat = "^" + [regex]::Escape($p).Replace("\*", ".*") + "$"
@@ -273,7 +273,7 @@ function Invoke-Install {
     if (-not $asset) { Die "No se encontró asset para $os ($arch). Revisa GitHub Releases." }
     Info "Asset: $($asset.name)"
 
-    $tmp = "$env:TEMP\jiruhub_install"
+    $tmp = "$env:TEMP\PrismHub_install"
     New-Item -ItemType Directory -Path $tmp -Force | Out-Null
     $zipPath = "$tmp\$($asset.name)"
 
@@ -286,8 +286,8 @@ function Invoke-Install {
 
     $bundleDir = $tmp
     Get-ChildItem $tmp -Directory | ForEach-Object {
-        if ((Test-Path "$($_.FullName)\jiruhub.exe" -PathType Leaf) -or
-            (Test-Path "$($_.FullName)\JiruHub.exe" -PathType Leaf) -or
+        if ((Test-Path "$($_.FullName)\PrismHub.exe" -PathType Leaf) -or
+            (Test-Path "$($_.FullName)\PrismHub.exe" -PathType Leaf) -or
             (Test-Path "$($_.FullName)\miru.exe" -PathType Leaf)) {
             $bundleDir = $_.FullName
         }
@@ -301,7 +301,7 @@ function Invoke-Install {
     $exe = Get-ChildItem $InstallDir -Filter "*.exe" | Select-Object -First 1
     if (-not $exe) { Die "No se encontró el ejecutable después de extraer." }
 
-    $shortcut = "$StartMenuDir\JiruHub.lnk"
+    $shortcut = "$StartMenuDir\PrismHub.lnk"
     New-Shortcut $exe.FullName $shortcut
     Info "Acceso directo creado."
 
@@ -324,7 +324,7 @@ function Invoke-Install {
 # ─── Actualizar ──────────────────────────────────────────────────────────────
 function Invoke-Update {
     if (-not (Test-Path $VersionFile)) {
-        Warn "JiruHub no está instalado. Ejecuta 'Instalar' primero."
+        Warn "PrismHub no está instalado. Ejecuta 'Instalar' primero."
         Start-Sleep -Seconds 2; return
     }
     $current = Get-Content $VersionFile
@@ -345,14 +345,14 @@ function Invoke-Update {
 # ─── Desinstalar ─────────────────────────────────────────────────────────────
 function Invoke-Uninstall {
     Show-Banner
-    Write-Host "`n  ${Yellow}${Bold}  ⚠  Se eliminarán todos los archivos de JiruHub.${Reset}"
+    Write-Host "`n  ${Yellow}${Bold}  ⚠  Se eliminarán todos los archivos de PrismHub.${Reset}"
     $c = Read-Host "  ¿Continuar? [s/N]"
     if ($c -notmatch "^[Ss]$") { Info $(T('cancelled')); return }
     Remove-Item $InstallDir -Recurse -Force -ErrorAction SilentlyContinue
-    Remove-Item "$StartMenuDir\JiruHub.lnk" -Force -ErrorAction SilentlyContinue
+    Remove-Item "$StartMenuDir\PrismHub.lnk" -Force -ErrorAction SilentlyContinue
     Remove-Item $LogDir -Recurse -Force -ErrorAction SilentlyContinue
-    Remove-Item "$env:ProgramFiles\JiruHub" -Recurse -Force -ErrorAction SilentlyContinue
-    Remove-Item "${env:ProgramFiles(x86)}\JiruHub" -Recurse -Force -ErrorAction SilentlyContinue
+    Remove-Item "$env:ProgramFiles\PrismHub" -Recurse -Force -ErrorAction SilentlyContinue
+    Remove-Item "${env:ProgramFiles(x86)}\PrismHub" -Recurse -Force -ErrorAction SilentlyContinue
     Ok $(T('success_uninstall'))
     Read-Host "  $(T('press_enter'))"
 }
@@ -360,13 +360,14 @@ function Invoke-Uninstall {
 # ─── Entry Point ───────────────────────────────────────────────────────────
 try {
     New-Item -ItemType Directory -Path $LogDir -Force | Out-Null
-    Write-Log "=== JiruHub Installer started ==="
+    Write-Log "=== PrismHub Installer started ==="
     Show-Banner
     Select-Language
     Show-MainMenu
-    Write-Log "=== JiruHub Installer finished ==="
+    Write-Log "=== PrismHub Installer finished ==="
 } catch {
     Err "Error: $_"
     Write-Log "FATAL: $_"
     Read-Host "  $(T('press_enter'))"
 }
+

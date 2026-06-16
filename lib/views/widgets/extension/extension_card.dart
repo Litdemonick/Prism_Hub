@@ -77,7 +77,7 @@ class _ExtensionCardState extends State<ExtensionCard> {
         final header = '// ==MiruExtension==\n'
             '// @name         ${widget.name}\n'
             '// @version      ${widget.version}\n'
-            '// @author       jephersonRD\n'
+            '// @author       PrismHub\n'
             '// @lang         ${widget.lang}\n'
             '// @license      ${widget.license ?? "MIT"}\n'
             '// @icon         ${widget.icon ?? ""}\n'

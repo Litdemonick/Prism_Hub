@@ -12,9 +12,8 @@ class SettingsController extends GetxController {
   final extensionLogWindowId = (-1).obs;
 
   final links = {
-    'Github': 'https://github.com/jephersonRD/PrismHub',
-    'Youtube': 'https://www.youtube.com/@jephmd',
-    'Website': 'https://PrismHub.js.org',
+    'Github': 'https://github.com/Litdemonick/Prism_Hub',
+    'Extensions': 'https://github.com/Litdemonick/prism-plus',
   };
 
   @override
@@ -125,7 +124,7 @@ class SettingsController extends GetxController {
 
   _getContributors() async {
     final res = await dio
-        .get("https://api.github.com/repos/jephersonRD/prismhub/contributors");
+        .get("https://api.github.com/repos/Litdemonick/Prism_Hub/contributors");
     contributors.value = List.from(res.data)
         .where((element) => element["type"] == "User")
         .toList();

@@ -1,0 +1,75 @@
+﻿# Maintainer: PrismHub <Litdemonick>
+# PKGBUILD for PrismHub binary release
+
+pkgname=prismhub-bin
+pkgver=0.1.0
+pkgrel=1
+pkgdesc="PrismHub - Anime, manga and multimedia player (binary release)"
+arch=('x86_64')
+url="https://github.com/Litdemonick/Prism_Hub"
+license=('MIT')
+depends=(
+    'gtk3'
+    'mpv'
+    'libx11'
+    'libxrandr'
+    'libxinerama'
+    'libxcursor'
+    'libxcomposite'
+    'libxdamage'
+    'libxfixes'
+    'libxext'
+    'libxrender'
+    'libxi'
+    'pango'
+    'cairo'
+    'glib2'
+    'libpulse'
+    'alsa-lib'
+)
+provides=('PrismHub')
+conflicts=('PrismHub')
+source=("https://github.com/Litdemonick/Prism_Hub/releases/download/v${pkgver}/PrismHub-v${pkgver}-linux-x64.tar.gz")
+sha256sums=('SKIP')
+noextract=("${pkgname}-${pkgver}-linux-x64.tar.gz")
+
+package() {
+    tar -xzf "${srcdir}/PrismHub-v${pkgver}-linux-x64.tar.gz" -C "${pkgdir}"
+
+    install -Dm755 "${pkgdir}/bundle/PrismHub" "${pkgdir}/usr/bin/PrismHub"
+
+    install -d "${pkgdir}/opt/PrismHub"
+    cp -r "${pkgdir}/bundle/data" "${pkgdir}/opt/PrismHub/data"
+    cp -r "${pkgdir}/bundle/lib" "${pkgdir}/opt/PrismHub/lib"
+    install -Dm644 "${pkgdir}/bundle/icon.png" "${pkgdir}/usr/share/pixmaps/PrismHub.png"
+
+    rm -rf "${pkgdir}/bundle"
+
+    install -Dm644 /dev/stdin "${pkgdir}/usr/share/applications/PrismHub.desktop" <<EOF
+[Desktop Entry]
+Name=PrismHub
+Comment=Anime, manga and multimedia player
+Exec=/usr/bin/PrismHub
+Icon=PrismHub
+Terminal=false
+Type=Application
+Categories=AudioVideo;Player;Network;
+StartupWMClass=PrismHub
+EOF
+
+    install -Dm644 /dev/stdin "${pkgdir}/usr/share/metainfo/PrismHub.appdata.xml" <<EOF
+<?xml version="1.0" encoding="UTF-8"?>
+<component type="desktop">
+  <id>com.PrismHub.app</id>
+  <name>PrismHub</name>
+  <summary>Anime, manga and multimedia player</summary>
+  <url>https://github.com/Litdemonick/Prism_Hub</url>
+  <project_license>MIT</project_license>
+  <description>
+    <p>PrismHub is a custom modified version of Miru App, optimized for the Spanish-speaking community.</p>
+  </description>
+</component>
+EOF
+}
+
+

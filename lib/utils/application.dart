@@ -43,7 +43,7 @@ class ApplicationUtils {
   static checkUpdate(BuildContext context, {bool showSnackbar = false}) async {
     try {
       const url =
-          "https://api.github.com/repos/jephersonRD/prismhub/releases/latest";
+          "https://api.github.com/repos/Litdemonick/Prism_Hub/releases/latest";
       final res = await dio.get(url);
       final tagName = res.data["tag_name"] as String;
       final remoteVersion = tagName.replaceFirst('v', '');

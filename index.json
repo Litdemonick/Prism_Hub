@@ -8,7 +8,7 @@
         "name":  "345movie",
         "package":  "345movie.net",
         "type":  "bangumi",
-        "url":  "https://raw.githubusercontent.com/jephersonRD/prismhub/main/extensions/345movie.net.js",
+        "url":  "https://raw.githubusercontent.com/Litdemonick/Prism_Hub/main/extensions/345movie.net.js",
         "version":  "v0.0.3",
         "webSite":  "https://345movie.net/movies"
     },
@@ -21,7 +21,7 @@
         "nsfw":  "false",
         "package":  "360zy.com",
         "type":  "bangumi",
-        "url":  "https://raw.githubusercontent.com/jephersonRD/prismhub/main/extensions/360zy.com.js",
+        "url":  "https://raw.githubusercontent.com/Litdemonick/Prism_Hub/main/extensions/360zy.com.js",
         "version":  "v0.0.2",
         "webSite":  "https://360zy.com"
     },
@@ -34,7 +34,7 @@
         "nsfw":  "false",
         "package":  "9animetv.to",
         "type":  "bangumi",
-        "url":  "https://raw.githubusercontent.com/jephersonRD/prismhub/main/extensions/9animetv.to.js",
+        "url":  "https://raw.githubusercontent.com/Litdemonick/Prism_Hub/main/extensions/9animetv.to.js",
         "version":  "v0.0.3",
         "webSite":  "https://9animetv.to"
     },
@@ -47,7 +47,7 @@
         "nsfw":  "false",
         "package":  "agedm.org",
         "type":  "bangumi",
-        "url":  "https://raw.githubusercontent.com/jephersonRD/prismhub/main/extensions/agedm.org.js",
+        "url":  "https://raw.githubusercontent.com/Litdemonick/Prism_Hub/main/extensions/agedm.org.js",
         "version":  "v0.0.1",
         "webSite":  "https://api.agedm.org"
     },
@@ -59,7 +59,7 @@
         "name":  "AniGoGo",
         "package":  "ani.gogo",
         "type":  "bangumi",
-        "url":  "https://raw.githubusercontent.com/jephersonRD/prismhub/main/extensions/ani.gogo.js",
+        "url":  "https://raw.githubusercontent.com/Litdemonick/Prism_Hub/main/extensions/ani.gogo.js",
         "version":  "v0.0.3",
         "webSite":  "https://api.amvstr.me/api/v2"
     },
@@ -72,7 +72,7 @@
         "nsfw":  "false",
         "package":  "aniliberty",
         "type":  "bangumi",
-        "url":  "https://raw.githubusercontent.com/jephersonRD/prismhub/main/extensions/aniliberty.js",
+        "url":  "https://raw.githubusercontent.com/Litdemonick/Prism_Hub/main/extensions/aniliberty.js",
         "version":  "v0.0.9",
         "webSite":  "https://anilibria.top/api/v1"
     },
@@ -85,7 +85,7 @@
         "name":  "TioAnime",
         "package":  "tioanime",
         "type":  "bangumi",
-        "url":  "https://raw.githubusercontent.com/jephersonRD/prismhub/main/extensions/tioanime.js",
+        "url":  "https://raw.githubusercontent.com/Litdemonick/Prism_Hub/main/extensions/tioanime.js",
         "version":  "v0.1.7",
         "webSite":  "https://jimov-api.vercel.app"
     },
@@ -98,7 +98,7 @@
         "nsfw":  "false",
         "package":  "anime.girigirilove.com",
         "type":  "bangumi",
-        "url":  "https://raw.githubusercontent.com/jephersonRD/prismhub/main/extensions/anime.girigirilove.com.js",
+        "url":  "https://raw.githubusercontent.com/Litdemonick/Prism_Hub/main/extensions/anime.girigirilove.com.js",
         "version":  "v0.0.3",
         "webSite":  "https://anime.girigirilove.com"
     },
@@ -110,7 +110,7 @@
         "name":  "Animeazu",
         "package":  "animeazu.com",
         "type":  "bangumi",
-        "url":  "https://raw.githubusercontent.com/jephersonRD/prismhub/main/extensions/animeazu.com.js",
+        "url":  "https://raw.githubusercontent.com/Litdemonick/Prism_Hub/main/extensions/animeazu.com.js",
         "version":  "v0.0.1",
         "webSite":  "https://animeazu.com"
     },
@@ -123,7 +123,7 @@
         "nsfw":  "false",
         "package":  "animepahe.ru",
         "type":  "bangumi",
-        "url":  "https://raw.githubusercontent.com/jephersonRD/prismhub/main/extensions/animepahe.ru.js",
+        "url":  "https://raw.githubusercontent.com/Litdemonick/Prism_Hub/main/extensions/animepahe.ru.js",
         "version":  "v0.0.3",
         "webSite":  "https://animepahe.ru"
     },
@@ -137,7 +137,7 @@
         "package":  "animeworld",
         "tags":  "italian",
         "type":  "bangumi",
-        "url":  "https://raw.githubusercontent.com/jephersonRD/prismhub/main/extensions/animeworld.js",
+        "url":  "https://raw.githubusercontent.com/Litdemonick/Prism_Hub/main/extensions/animeworld.js",
         "version":  "v0.0.1",
         "webSite":  "https://www.animeworld.so"
     },
@@ -150,7 +150,7 @@
         "nsfw":  "true",
         "package":  "aosikazy.com",
         "type":  "bangumi",
-        "url":  "https://raw.githubusercontent.com/jephersonRD/prismhub/main/extensions/aosikazy.com.js",
+        "url":  "https://raw.githubusercontent.com/Litdemonick/Prism_Hub/main/extensions/aosikazy.com.js",
         "version":  "v0.0.2",
         "webSite":  "https://aosikazy.vip"
     },
@@ -163,7 +163,7 @@
         "nsfw":  "false",
         "package":  "api.yinyuetai",
         "type":  "bangumi",
-        "url":  "https://raw.githubusercontent.com/jephersonRD/prismhub/main/extensions/api.yinyuetai.js",
+        "url":  "https://raw.githubusercontent.com/Litdemonick/Prism_Hub/main/extensions/api.yinyuetai.js",
         "version":  "v0.0.2",
         "webSite":  "https://video-api.yinyuetai.com"
     },
@@ -175,7 +175,7 @@
         "name":  "Arabsama",
         "package":  "arabsama.net",
         "type":  "bangumi",
-        "url":  "https://raw.githubusercontent.com/jephersonRD/prismhub/main/extensions/arabsama.net.js",
+        "url":  "https://raw.githubusercontent.com/Litdemonick/Prism_Hub/main/extensions/arabsama.net.js",
         "version":  "v0.0.1",
         "webSite":  "https://arabsama.net"
     },
@@ -187,7 +187,7 @@
         "name":  "AsuraScan",
         "package":  "asuratoon.com",
         "type":  "manga",
-        "url":  "https://raw.githubusercontent.com/jephersonRD/prismhub/main/extensions/asuratoon.com.js",
+        "url":  "https://raw.githubusercontent.com/Litdemonick/Prism_Hub/main/extensions/asuratoon.com.js",
         "version":  "v0.0.5",
         "webSite":  "https://asuracomic.net"
     },
@@ -200,7 +200,7 @@
         "nsfw":  "false",
         "package":  "baozimh.com",
         "type":  "manga",
-        "url":  "https://raw.githubusercontent.com/jephersonRD/prismhub/main/extensions/baozimh.com.js",
+        "url":  "https://raw.githubusercontent.com/Litdemonick/Prism_Hub/main/extensions/baozimh.com.js",
         "version":  "v0.0.2",
         "webSite":  "https://www.baozimh.com"
     },
@@ -212,7 +212,7 @@
         "name":  "Bato",
         "package":  "bato.to",
         "type":  "manga",
-        "url":  "https://raw.githubusercontent.com/jephersonRD/prismhub/main/extensions/bato.to.js",
+        "url":  "https://raw.githubusercontent.com/Litdemonick/Prism_Hub/main/extensions/bato.to.js",
         "version":  "v0.0.2",
         "webSite":  "https://bato.to"
     },
@@ -225,7 +225,7 @@
         "nsfw":  "false",
         "package":  "best.light.novel",
         "type":  "fikushon",
-        "url":  "https://raw.githubusercontent.com/jephersonRD/prismhub/main/extensions/best.light.novel.js",
+        "url":  "https://raw.githubusercontent.com/Litdemonick/Prism_Hub/main/extensions/best.light.novel.js",
         "version":  "v0.0.1",
         "webSite":  "https://bestlightnovel.com"
     },
@@ -238,7 +238,7 @@
         "nsfw":  "false",
         "package":  "bfzy.tv",
         "type":  "bangumi",
-        "url":  "https://raw.githubusercontent.com/jephersonRD/prismhub/main/extensions/bfzy.tv.js",
+        "url":  "https://raw.githubusercontent.com/Litdemonick/Prism_Hub/main/extensions/bfzy.tv.js",
         "version":  "v0.0.2",
         "webSite":  "https://bfzy.tv"
     },
@@ -250,7 +250,7 @@
         "name":  "å“”å“©è½»å°è¯´",
         "package":  "bilinovel.com",
         "type":  "fikushon",
-        "url":  "https://raw.githubusercontent.com/jephersonRD/prismhub/main/extensions/bilinovel.com.js",
+        "url":  "https://raw.githubusercontent.com/Litdemonick/Prism_Hub/main/extensions/bilinovel.com.js",
         "version":  "v0.1.0",
         "webSite":  "https://www.bilinovel.com"
     },
@@ -262,7 +262,7 @@
         "name":  "ç¬”è¶£é˜",
         "package":  "bqg.cc",
         "type":  "fikushon",
-        "url":  "https://raw.githubusercontent.com/jephersonRD/prismhub/main/extensions/bqg.cc.js",
+        "url":  "https://raw.githubusercontent.com/Litdemonick/Prism_Hub/main/extensions/bqg.cc.js",
         "version":  "v0.0.2",
         "webSite":  "https://m.bi17.cc"
     },
@@ -276,7 +276,7 @@
         "nsfw":  "false",
         "package":  "client.iptv",
         "type":  "bangumi",
-        "url":  "https://raw.githubusercontent.com/jephersonRD/prismhub/main/extensions/client.iptv.js",
+        "url":  "https://raw.githubusercontent.com/Litdemonick/Prism_Hub/main/extensions/client.iptv.js",
         "version":  "v0.0.6",
         "webSite":  "https://live.fanmingming.com"
     },
@@ -289,7 +289,7 @@
         "nsfw":  "true",
         "package":  "club.everia",
         "type":  "manga",
-        "url":  "https://raw.githubusercontent.com/jephersonRD/prismhub/main/extensions/club.everia.js",
+        "url":  "https://raw.githubusercontent.com/Litdemonick/Prism_Hub/main/extensions/club.everia.js",
         "version":  "v0.0.4",
         "webSite":  "https://everia.club"
     },
@@ -302,7 +302,7 @@
         "nsfw":  "true",
         "package":  "club.manga18",
         "type":  "manga",
-        "url":  "https://raw.githubusercontent.com/jephersonRD/prismhub/main/extensions/club.manga18.js",
+        "url":  "https://raw.githubusercontent.com/Litdemonick/Prism_Hub/main/extensions/club.manga18.js",
         "version":  "v0.0.3",
         "webSite":  "https://manga18.club"
     },
@@ -314,7 +314,7 @@
         "name":  "åŠ¨æ¼«ä¹‹å®¶",
         "package":  "com.dmzj.www",
         "type":  "manga",
-        "url":  "https://raw.githubusercontent.com/jephersonRD/prismhub/main/extensions/com.dmzj.www.js",
+        "url":  "https://raw.githubusercontent.com/Litdemonick/Prism_Hub/main/extensions/com.dmzj.www.js",
         "version":  "v0.0.2",
         "webSite":  "https://www.dmzj.com"
     },
@@ -327,7 +327,7 @@
         "nsfw":  "true",
         "package":  "com.freexcomic",
         "type":  "manga",
-        "url":  "https://raw.githubusercontent.com/jephersonRD/prismhub/main/extensions/com.freexcomic.js",
+        "url":  "https://raw.githubusercontent.com/Litdemonick/Prism_Hub/main/extensions/com.freexcomic.js",
         "version":  "v0.0.3",
         "webSite":  "http://"
     },
@@ -340,7 +340,7 @@
         "nsfw":  "true",
         "package":  "com.manga18fx",
         "type":  "manga",
-        "url":  "https://raw.githubusercontent.com/jephersonRD/prismhub/main/extensions/com.manga18fx.js",
+        "url":  "https://raw.githubusercontent.com/Litdemonick/Prism_Hub/main/extensions/com.manga18fx.js",
         "version":  "v0.0.1",
         "webSite":  "https://manga18fx.com"
     },
@@ -353,7 +353,7 @@
         "name":  "æ¬§ä¹å½±é™¢",
         "package":  "com.olevod.www",
         "type":  "bangumi",
-        "url":  "https://raw.githubusercontent.com/jephersonRD/prismhub/main/extensions/com.olevod.www.js",
+        "url":  "https://raw.githubusercontent.com/Litdemonick/Prism_Hub/main/extensions/com.olevod.www.js",
         "version":  "v0.0.1",
         "webSite":  "https://www.olevod.com"
     },
@@ -365,7 +365,7 @@
         "name":  "ComicExtra",
         "package":  "comicextra",
         "type":  "manga",
-        "url":  "https://raw.githubusercontent.com/jephersonRD/prismhub/main/extensions/comicextra.js",
+        "url":  "https://raw.githubusercontent.com/Litdemonick/Prism_Hub/main/extensions/comicextra.js",
         "version":  "v0.0.2",
         "webSite":  "https://comixextra.com"
     },
@@ -377,7 +377,7 @@
         "name":  "Comick",
         "package":  "comick.app",
         "type":  "manga",
-        "url":  "https://raw.githubusercontent.com/jephersonRD/prismhub/main/extensions/comick.app.js",
+        "url":  "https://raw.githubusercontent.com/Litdemonick/Prism_Hub/main/extensions/comick.app.js",
         "version":  "v0.0.6",
         "webSite":  "https://api.comick.fun"
     },
@@ -389,7 +389,7 @@
         "nsfw":  "false",
         "package":  "cooing.cc",
         "type":  "bangumi",
-        "url":  "https://raw.githubusercontent.com/jephersonRD/prismhub/main/extensions/cooing.cc.js",
+        "url":  "https://raw.githubusercontent.com/Litdemonick/Prism_Hub/main/extensions/cooing.cc.js",
         "version":  "v0.0.4",
         "webSite":  "https://cooing.cc"
     },
@@ -402,7 +402,7 @@
         "nsfw":  "false",
         "package":  "cycanime.com",
         "type":  "bangumi",
-        "url":  "https://raw.githubusercontent.com/jephersonRD/prismhub/main/extensions/cycanime.com.js",
+        "url":  "https://raw.githubusercontent.com/Litdemonick/Prism_Hub/main/extensions/cycanime.com.js",
         "version":  "v0.1.2",
         "webSite":  "https://www.cyc-anime.net"
     },
@@ -416,7 +416,7 @@
         "nsfw":  "false",
         "package":  "de.ccc.media",
         "type":  "bangumi",
-        "url":  "https://raw.githubusercontent.com/jephersonRD/prismhub/main/extensions/de.ccc.media.js",
+        "url":  "https://raw.githubusercontent.com/Litdemonick/Prism_Hub/main/extensions/de.ccc.media.js",
         "version":  "v0.0.1",
         "webSite":  "https://api.media.ccc.de"
     },
@@ -428,7 +428,7 @@
         "name":  "7å–œå½±é™¢",
         "package":  "dev.0n0.miru.7xi",
         "type":  "bangumi",
-        "url":  "https://raw.githubusercontent.com/jephersonRD/prismhub/main/extensions/dev.0n0.miru.7xi.js",
+        "url":  "https://raw.githubusercontent.com/Litdemonick/Prism_Hub/main/extensions/dev.0n0.miru.7xi.js",
         "version":  "v0.0.7",
         "webSite":  "https://www.7xi.tv"
     },
@@ -441,7 +441,7 @@
         "nsfw":  "true",
         "package":  "draftsex.porn",
         "type":  "bangumi",
-        "url":  "https://raw.githubusercontent.com/jephersonRD/prismhub/main/extensions/draftsex.porn.js",
+        "url":  "https://raw.githubusercontent.com/Litdemonick/Prism_Hub/main/extensions/draftsex.porn.js",
         "version":  "v0.0.2",
         "webSite":  "https://draftsex.porn"
     },
@@ -453,7 +453,7 @@
         "name":  "DramaCool",
         "package":  "dramacool.pa",
         "type":  "bangumi",
-        "url":  "https://raw.githubusercontent.com/jephersonRD/prismhub/main/extensions/dramacool.pa.js",
+        "url":  "https://raw.githubusercontent.com/Litdemonick/Prism_Hub/main/extensions/dramacool.pa.js",
         "version":  "v0.0.4",
         "webSite":  "https://proxy.techzbots1.workers.dev/?u=https://nontan-source-kgw9jch3s-imkryp70n.vercel.app/movies/dramacool"
     },
@@ -466,7 +466,7 @@
         "nsfw":  "true",
         "package":  "eroticmv.com",
         "type":  "bangumi",
-        "url":  "https://raw.githubusercontent.com/jephersonRD/prismhub/main/extensions/eroticmv.com.js",
+        "url":  "https://raw.githubusercontent.com/Litdemonick/Prism_Hub/main/extensions/eroticmv.com.js",
         "version":  "v0.0.1",
         "webSite":  "https://eroticmv.com"
     },
@@ -479,7 +479,7 @@
         "nsfw":  "false",
         "package":  "ffzy.tv",
         "type":  "bangumi",
-        "url":  "https://raw.githubusercontent.com/jephersonRD/prismhub/main/extensions/ffzy.tv.js",
+        "url":  "https://raw.githubusercontent.com/Litdemonick/Prism_Hub/main/extensions/ffzy.tv.js",
         "version":  "v0.0.2",
         "webSite":  "https://cj.ffzyapi.com"
     },
@@ -492,7 +492,7 @@
         "nsfw":  "false",
         "package":  "filmycab",
         "type":  "bangumi",
-        "url":  "https://raw.githubusercontent.com/jephersonRD/prismhub/main/extensions/filmycab.js",
+        "url":  "https://raw.githubusercontent.com/Litdemonick/Prism_Hub/main/extensions/filmycab.js",
         "version":  "v0.0.2",
         "webSite":  "https://afilmyhub.mom"
     },
@@ -505,7 +505,7 @@
         "nsfw":  "false",
         "package":  "filmypunjab.com",
         "type":  "bangumi",
-        "url":  "https://raw.githubusercontent.com/jephersonRD/prismhub/main/extensions/filmypunjab.com.js",
+        "url":  "https://raw.githubusercontent.com/Litdemonick/Prism_Hub/main/extensions/filmypunjab.com.js",
         "version":  "v0.0.3",
         "webSite":  "https://111.90.140.97"
     },
@@ -517,7 +517,7 @@
         "name":  "FlameComics",
         "package":  "flamecomics.com",
         "type":  "manga",
-        "url":  "https://raw.githubusercontent.com/jephersonRD/prismhub/main/extensions/flamecomics.com.js",
+        "url":  "https://raw.githubusercontent.com/Litdemonick/Prism_Hub/main/extensions/flamecomics.com.js",
         "version":  "v0.0.1",
         "webSite":  "https://flamecomics.com/"
     },
@@ -529,7 +529,7 @@
         "name":  "FlixHQ",
         "package":  "flixhq",
         "type":  "bangumi",
-        "url":  "https://raw.githubusercontent.com/jephersonRD/prismhub/main/extensions/flixhq.js",
+        "url":  "https://raw.githubusercontent.com/Litdemonick/Prism_Hub/main/extensions/flixhq.js",
         "version":  "v0.0.1",
         "webSite":  "https://consumet8.vercel.app/movies/flixhq"
     },
@@ -541,7 +541,7 @@
         "name":  "Funtoons",
         "package":  "funtoons.online",
         "type":  "manga",
-        "url":  "https://raw.githubusercontent.com/jephersonRD/prismhub/main/extensions/funtoons.online.js",
+        "url":  "https://raw.githubusercontent.com/Litdemonick/Prism_Hub/main/extensions/funtoons.online.js",
         "version":  "v0.0.1",
         "webSite":  "https://funtoons.online"
     },
@@ -554,7 +554,7 @@
         "nsfw":  "false",
         "package":  "gakiarchives.com",
         "type":  "bangumi",
-        "url":  "https://raw.githubusercontent.com/jephersonRD/prismhub/main/extensions/gakiarchives.com.js",
+        "url":  "https://raw.githubusercontent.com/Litdemonick/Prism_Hub/main/extensions/gakiarchives.com.js",
         "version":  "v0.0.1",
         "webSite":  "https://gakiarchives.com"
     },
@@ -567,7 +567,7 @@
         "nsfw":  "false",
         "package":  "gimy.su",
         "type":  "bangumi",
-        "url":  "https://raw.githubusercontent.com/jephersonRD/prismhub/main/extensions/gimy.su.js",
+        "url":  "https://raw.githubusercontent.com/Litdemonick/Prism_Hub/main/extensions/gimy.su.js",
         "version":  "v0.0.2",
         "webSite":  "https://gimy.su"
     },
@@ -579,7 +579,7 @@
         "name":  "GoGoAnime",
         "package":  "gogo.anime",
         "type":  "bangumi",
-        "url":  "https://raw.githubusercontent.com/jephersonRD/prismhub/main/extensions/gogo.anime.js",
+        "url":  "https://raw.githubusercontent.com/Litdemonick/Prism_Hub/main/extensions/gogo.anime.js",
         "version":  "v0.0.8",
         "webSite":  "https://consumet-leox-api.vercel.app/anime/gogoanime"
     },
@@ -592,7 +592,7 @@
         "nsfw":  "false",
         "package":  "gufengmh",
         "type":  "manga",
-        "url":  "https://raw.githubusercontent.com/jephersonRD/prismhub/main/extensions/gufengmh.js",
+        "url":  "https://raw.githubusercontent.com/Litdemonick/Prism_Hub/main/extensions/gufengmh.js",
         "version":  "v0.0.1",
         "webSite":  "https://www.gufengmh.com"
     },
@@ -605,7 +605,7 @@
         "nsfw":  "false",
         "package":  "gzhanmh",
         "type":  "manga",
-        "url":  "https://raw.githubusercontent.com/jephersonRD/prismhub/main/extensions/gzhanmh.js",
+        "url":  "https://raw.githubusercontent.com/Litdemonick/Prism_Hub/main/extensions/gzhanmh.js",
         "version":  "v0.0.1",
         "webSite":  "https://m.g-mh.org"
     },
@@ -618,7 +618,7 @@
         "nsfw":  "true",
         "package":  "hanime1.me",
         "type":  "bangumi",
-        "url":  "https://raw.githubusercontent.com/jephersonRD/prismhub/main/extensions/hanime1.me.js",
+        "url":  "https://raw.githubusercontent.com/Litdemonick/Prism_Hub/main/extensions/hanime1.me.js",
         "version":  "v0.0.1",
         "webSite":  "https://hanime1.me"
     },
@@ -631,7 +631,7 @@
         "nsfw":  "false",
         "package":  "heimuer.tv",
         "type":  "bangumi",
-        "url":  "https://raw.githubusercontent.com/jephersonRD/prismhub/main/extensions/heimuer.tv.js",
+        "url":  "https://raw.githubusercontent.com/Litdemonick/Prism_Hub/main/extensions/heimuer.tv.js",
         "version":  "v0.0.2",
         "webSite":  "https://heimuer.tv"
     },
@@ -644,7 +644,7 @@
         "nsfw":  "true",
         "package":  "hentaidexy.net",
         "type":  "manga",
-        "url":  "https://raw.githubusercontent.com/jephersonRD/prismhub/main/extensions/hentaidexy.net.js",
+        "url":  "https://raw.githubusercontent.com/Litdemonick/Prism_Hub/main/extensions/hentaidexy.net.js",
         "version":  "v0.0.1",
         "webSite":  "https://backend.hentaidexy.net"
     },
@@ -656,7 +656,7 @@
         "name":  "HiAnime",
         "package":  "hianime.to",
         "type":  "bangumi",
-        "url":  "https://raw.githubusercontent.com/jephersonRD/prismhub/main/extensions/hianime.to.js",
+        "url":  "https://raw.githubusercontent.com/Litdemonick/Prism_Hub/main/extensions/hianime.to.js",
         "version":  "v0.0.8",
         "webSite":  "https://hianime.to"
     },
@@ -669,7 +669,7 @@
         "nsfw":  "false",
         "package":  "huaweiba.live",
         "type":  "bangumi",
-        "url":  "https://raw.githubusercontent.com/jephersonRD/prismhub/main/extensions/huaweiba.live.js",
+        "url":  "https://raw.githubusercontent.com/Litdemonick/Prism_Hub/main/extensions/huaweiba.live.js",
         "version":  "v0.0.2",
         "webSite":  "https://huaweiba.live"
     },
@@ -683,7 +683,7 @@
         "package":  "idlix",
         "tags":  "movie,tvseries,anime,english",
         "type":  "bangumi",
-        "url":  "https://raw.githubusercontent.com/jephersonRD/prismhub/main/extensions/idlix.js",
+        "url":  "https://raw.githubusercontent.com/Litdemonick/Prism_Hub/main/extensions/idlix.js",
         "version":  "v0.0.2",
         "webSite":  "https://vip.idlixofficial.net"
     },
@@ -696,7 +696,7 @@
         "nsfw":  "true",
         "package":  "ikunzy.com",
         "type":  "bangumi",
-        "url":  "https://raw.githubusercontent.com/jephersonRD/prismhub/main/extensions/ikunzy.com.js",
+        "url":  "https://raw.githubusercontent.com/Litdemonick/Prism_Hub/main/extensions/ikunzy.com.js",
         "version":  "v0.0.2",
         "webSite":  "https://ikunzy.org"
     },
@@ -708,7 +708,7 @@
         "name":  "Invidious",
         "package":  "invidious.io",
         "type":  "bangumi",
-        "url":  "https://raw.githubusercontent.com/jephersonRD/prismhub/main/extensions/invidious.io.js",
+        "url":  "https://raw.githubusercontent.com/Litdemonick/Prism_Hub/main/extensions/invidious.io.js",
         "version":  "v0.0.4",
         "webSite":  "https://cal1.iv.ggtyler.dev/api/v1"
     },
@@ -722,7 +722,7 @@
         "nsfw":  "false",
         "package":  "iptv-org",
         "type":  "bangumi",
-        "url":  "https://raw.githubusercontent.com/jephersonRD/prismhub/main/extensions/iptv-org.js",
+        "url":  "https://raw.githubusercontent.com/Litdemonick/Prism_Hub/main/extensions/iptv-org.js",
         "version":  "v0.0.1",
         "webSite":  "https://iptv-org.github.io/iptv"
     },
@@ -734,7 +734,7 @@
         "name":  "IsekaiScan",
         "package":  "isekaiscan.to",
         "type":  "manga",
-        "url":  "https://raw.githubusercontent.com/jephersonRD/prismhub/main/extensions/isekaiscan.to.js",
+        "url":  "https://raw.githubusercontent.com/Litdemonick/Prism_Hub/main/extensions/isekaiscan.to.js",
         "version":  "v0.0.3",
         "webSite":  "https://m.isekaiscan.to"
     },
@@ -747,7 +747,7 @@
         "nsfw":  "true",
         "package":  "iwara.tv",
         "type":  "bangumi",
-        "url":  "https://raw.githubusercontent.com/jephersonRD/prismhub/main/extensions/iwara.tv.js",
+        "url":  "https://raw.githubusercontent.com/Litdemonick/Prism_Hub/main/extensions/iwara.tv.js",
         "version":  "v0.0.1",
         "webSite":  "https://www.iwara.tv"
     },
@@ -760,7 +760,7 @@
         "nsfw":  "true",
         "package":  "javhd.icu",
         "type":  "bangumi",
-        "url":  "https://raw.githubusercontent.com/jephersonRD/prismhub/main/extensions/javhd.icu.js",
+        "url":  "https://raw.githubusercontent.com/Litdemonick/Prism_Hub/main/extensions/javhd.icu.js",
         "version":  "v0.0.1",
         "webSite":  "https://javhd.icu"
     },
@@ -773,7 +773,7 @@
         "nsfw":  "false",
         "package":  "jisuzy.com",
         "type":  "bangumi",
-        "url":  "https://raw.githubusercontent.com/jephersonRD/prismhub/main/extensions/jisuzy.com.js",
+        "url":  "https://raw.githubusercontent.com/Litdemonick/Prism_Hub/main/extensions/jisuzy.com.js",
         "version":  "v0.0.2",
         "webSite":  "https://jisuzy.com"
     },
@@ -785,7 +785,7 @@
         "name":  "èšå°è¯´",
         "package":  "juxiaoshuo",
         "type":  "fikushon",
-        "url":  "https://raw.githubusercontent.com/jephersonRD/prismhub/main/extensions/juxiaoshuo.js",
+        "url":  "https://raw.githubusercontent.com/Litdemonick/Prism_Hub/main/extensions/juxiaoshuo.js",
         "version":  "v0.0.1",
         "webSite":  "https://www.juxiaoshuo.net"
     },
@@ -797,7 +797,7 @@
         "name":  "KimCartoon",
         "package":  "kimcartoon.li",
         "type":  "bangumi",
-        "url":  "https://raw.githubusercontent.com/jephersonRD/prismhub/main/extensions/kimcartoon.li.js",
+        "url":  "https://raw.githubusercontent.com/Litdemonick/Prism_Hub/main/extensions/kimcartoon.li.js",
         "version":  "v0.0.2",
         "webSite":  "https://kimcartoon.li"
     },
@@ -809,7 +809,7 @@
         "name":  "Kisskh",
         "package":  "kisskh.co",
         "type":  "bangumi",
-        "url":  "https://raw.githubusercontent.com/jephersonRD/prismhub/main/extensions/kisskh.co.js",
+        "url":  "https://raw.githubusercontent.com/Litdemonick/Prism_Hub/main/extensions/kisskh.co.js",
         "version":  "v0.0.3",
         "webSite":  "https://kisskh.co"
     },
@@ -822,7 +822,7 @@
         "nsfw":  "false",
         "package":  "komiic.com",
         "type":  "manga",
-        "url":  "https://raw.githubusercontent.com/jephersonRD/prismhub/main/extensions/komiic.com.js",
+        "url":  "https://raw.githubusercontent.com/Litdemonick/Prism_Hub/main/extensions/komiic.com.js",
         "version":  "v0.0.2",
         "webSite":  "https://komiic.com"
     },
@@ -834,7 +834,7 @@
         "name":  "Komikcast",
         "package":  "komikcast.lol",
         "type":  "manga",
-        "url":  "https://raw.githubusercontent.com/jephersonRD/prismhub/main/extensions/komikcast.lol.js",
+        "url":  "https://raw.githubusercontent.com/Litdemonick/Prism_Hub/main/extensions/komikcast.lol.js",
         "version":  "v0.0.1",
         "webSite":  "https://komikcast.lol"
     },
@@ -848,7 +848,7 @@
         "package":  "komiku.com",
         "tags":  "indonesia",
         "type":  "manga",
-        "url":  "https://raw.githubusercontent.com/jephersonRD/prismhub/main/extensions/komiku.com.js",
+        "url":  "https://raw.githubusercontent.com/Litdemonick/Prism_Hub/main/extensions/komiku.com.js",
         "version":  "v0.0.1",
         "webSite":  "https://komiku.com"
     },
@@ -862,7 +862,7 @@
         "package":  "komiku.com",
         "tags":  "indonesia",
         "type":  "manga",
-        "url":  "https://raw.githubusercontent.com/jephersonRD/prismhub/main/extensions/kuromanhua.xyz.js",
+        "url":  "https://raw.githubusercontent.com/Litdemonick/Prism_Hub/main/extensions/kuromanhua.xyz.js",
         "version":  "v0.0.1",
         "webSite":  "https://kuromanhua.xyz"
     },
@@ -875,7 +875,7 @@
         "nsfw":  "true",
         "package":  "laoyazy.com",
         "type":  "bangumi",
-        "url":  "https://raw.githubusercontent.com/jephersonRD/prismhub/main/extensions/laoyazy.com.js",
+        "url":  "https://raw.githubusercontent.com/Litdemonick/Prism_Hub/main/extensions/laoyazy.com.js",
         "version":  "v0.0.2",
         "webSite":  "https://laoyazy.com"
     },
@@ -887,7 +887,7 @@
         "name":  "Letvå½±é™¢",
         "package":  "letv.im",
         "type":  "bangumi",
-        "url":  "https://raw.githubusercontent.com/jephersonRD/prismhub/main/extensions/letv.im.js",
+        "url":  "https://raw.githubusercontent.com/Litdemonick/Prism_Hub/main/extensions/letv.im.js",
         "version":  "v0.0.1",
         "webSite":  "https://letv.im"
     },
@@ -899,7 +899,7 @@
         "name":  "libvio",
         "package":  "libvio.app",
         "type":  "bangumi",
-        "url":  "https://raw.githubusercontent.com/jephersonRD/prismhub/main/extensions/libvio.app.js",
+        "url":  "https://raw.githubusercontent.com/Litdemonick/Prism_Hub/main/extensions/libvio.app.js",
         "version":  "v0.0.3",
         "webSite":  "https://www.libvio.app"
     },
@@ -911,7 +911,7 @@
         "name":  "LilyManga",
         "package":  "lilymanga.net",
         "type":  "manga",
-        "url":  "https://raw.githubusercontent.com/jephersonRD/prismhub/main/extensions/lilymanga.net.js",
+        "url":  "https://raw.githubusercontent.com/Litdemonick/Prism_Hub/main/extensions/lilymanga.net.js",
         "version":  "v0.0.1",
         "webSite":  "https://lilymanga.net"
     },
@@ -924,7 +924,7 @@
         "nsfw":  "false",
         "package":  "lk21official",
         "type":  "bangumi",
-        "url":  "https://raw.githubusercontent.com/jephersonRD/prismhub/main/extensions/lk21official.js",
+        "url":  "https://raw.githubusercontent.com/Litdemonick/Prism_Hub/main/extensions/lk21official.js",
         "version":  "v0.0.2",
         "webSite":  "https://tv3.lk21official.wiki"
     },
@@ -937,7 +937,7 @@
         "nsfw":  "false",
         "package":  "lzzy.tv",
         "type":  "bangumi",
-        "url":  "https://raw.githubusercontent.com/jephersonRD/prismhub/main/extensions/lzzy.tv.js",
+        "url":  "https://raw.githubusercontent.com/Litdemonick/Prism_Hub/main/extensions/lzzy.tv.js",
         "version":  "v0.0.2",
         "webSite":  "https://lzizy.com"
     },
@@ -950,7 +950,7 @@
         "nsfw":  "false",
         "package":  "manHuaWu",
         "type":  "manga",
-        "url":  "https://raw.githubusercontent.com/jephersonRD/prismhub/main/extensions/manHuaWu.js",
+        "url":  "https://raw.githubusercontent.com/Litdemonick/Prism_Hub/main/extensions/manHuaWu.js",
         "version":  "v0.0.1",
         "webSite":  "https://www.mhua5.com"
     },
@@ -963,7 +963,7 @@
         "nsfw":  "false",
         "package":  "manga4life.com",
         "type":  "manga",
-        "url":  "https://raw.githubusercontent.com/jephersonRD/prismhub/main/extensions/manga4life.com.js",
+        "url":  "https://raw.githubusercontent.com/Litdemonick/Prism_Hub/main/extensions/manga4life.com.js",
         "version":  "v0.0.1",
         "webSite":  "https://www.manga4life.com"
     },
@@ -975,7 +975,7 @@
         "name":  "MangaBat",
         "package":  "mangabat.com",
         "type":  "manga",
-        "url":  "https://raw.githubusercontent.com/jephersonRD/prismhub/main/extensions/mangabat.com.js",
+        "url":  "https://raw.githubusercontent.com/Litdemonick/Prism_Hub/main/extensions/mangabat.com.js",
         "version":  "v0.0.1",
         "webSite":  "https://h.mangabat.com"
     },
@@ -987,7 +987,7 @@
         "name":  "MangaClash",
         "package":  "mangaclash.com",
         "type":  "manga",
-        "url":  "https://raw.githubusercontent.com/jephersonRD/prismhub/main/extensions/mangaclash.com.js",
+        "url":  "https://raw.githubusercontent.com/Litdemonick/Prism_Hub/main/extensions/mangaclash.com.js",
         "version":  "v0.0.1",
         "webSite":  "https://mangaclash.com"
     },
@@ -999,7 +999,7 @@
         "name":  "æ‹·è´æ¼«ç”»",
         "package":  "mangacopy.com",
         "type":  "manga",
-        "url":  "https://raw.githubusercontent.com/jephersonRD/prismhub/main/extensions/mangacopy.com.js",
+        "url":  "https://raw.githubusercontent.com/Litdemonick/Prism_Hub/main/extensions/mangacopy.com.js",
         "version":  "v0.0.4",
         "webSite":  "https://www.mangacopy.com"
     },
@@ -1011,7 +1011,7 @@
         "name":  "ãƒžãƒ³ã‚¬ã‚¯ãƒ­ã‚¹",
         "package":  "mangacross.jp",
         "type":  "manga",
-        "url":  "https://raw.githubusercontent.com/jephersonRD/prismhub/main/extensions/mangacross.jp.js",
+        "url":  "https://raw.githubusercontent.com/Litdemonick/Prism_Hub/main/extensions/mangacross.jp.js",
         "version":  "v0.0.1",
         "webSite":  "https://mangacross.jp"
     },
@@ -1023,7 +1023,7 @@
         "name":  "MangaDex",
         "package":  "mangadex.org",
         "type":  "manga",
-        "url":  "https://raw.githubusercontent.com/jephersonRD/prismhub/main/extensions/mangadex.org.js",
+        "url":  "https://raw.githubusercontent.com/Litdemonick/Prism_Hub/main/extensions/mangadex.org.js",
         "version":  "v0.0.3",
         "webSite":  "https://api.mangadex.org"
     },
@@ -1035,7 +1035,7 @@
         "name":  "Mangakatana",
         "package":  "mangakatana.com",
         "type":  "manga",
-        "url":  "https://raw.githubusercontent.com/jephersonRD/prismhub/main/extensions/mangakatana.com.js",
+        "url":  "https://raw.githubusercontent.com/Litdemonick/Prism_Hub/main/extensions/mangakatana.com.js",
         "version":  "v0.0.1",
         "webSite":  "https://mangakatana.com/"
     },
@@ -1047,7 +1047,7 @@
         "name":  "MangaKomi",
         "package":  "mangakomi",
         "type":  "manga",
-        "url":  "https://raw.githubusercontent.com/jephersonRD/prismhub/main/extensions/mangakomi.js",
+        "url":  "https://raw.githubusercontent.com/Litdemonick/Prism_Hub/main/extensions/mangakomi.js",
         "version":  "v0.0.1",
         "webSite":  "https://mangakomi.io"
     },
@@ -1059,7 +1059,7 @@
         "name":  "Manganato",
         "package":  "manganato",
         "type":  "manga",
-        "url":  "https://raw.githubusercontent.com/jephersonRD/prismhub/main/extensions/manganato.js",
+        "url":  "https://raw.githubusercontent.com/Litdemonick/Prism_Hub/main/extensions/manganato.js",
         "version":  "v0.0.1",
         "webSite":  "https://manganato.com"
     },
@@ -1072,7 +1072,7 @@
         "nsfw":  "false",
         "package":  "manhuadb.com",
         "type":  "manga",
-        "url":  "https://raw.githubusercontent.com/jephersonRD/prismhub/main/extensions/manhuadb.com.js",
+        "url":  "https://raw.githubusercontent.com/Litdemonick/Prism_Hub/main/extensions/manhuadb.com.js",
         "version":  "v0.0.1",
         "webSite":  "https://www.manhuadb.com"
     },
@@ -1085,7 +1085,7 @@
         "nsfw":  "false",
         "package":  "manhuagui.com",
         "type":  "manga",
-        "url":  "https://raw.githubusercontent.com/jephersonRD/prismhub/main/extensions/manhuagui.com.js",
+        "url":  "https://raw.githubusercontent.com/Litdemonick/Prism_Hub/main/extensions/manhuagui.com.js",
         "version":  "v0.0.3",
         "webSite":  "https://api-manhuagui.aoihosizora.top/v1"
     },
@@ -1098,7 +1098,7 @@
         "name":  "Mikanani",
         "package":  "me.mikanani",
         "type":  "bangumi",
-        "url":  "https://raw.githubusercontent.com/jephersonRD/prismhub/main/extensions/me.mikanani.js",
+        "url":  "https://raw.githubusercontent.com/Litdemonick/Prism_Hub/main/extensions/me.mikanani.js",
         "version":  "v0.0.4",
         "webSite":  "https://mikanani.me"
     },
@@ -1111,7 +1111,7 @@
         "nsfw":  "true",
         "package":  "moduzy.com",
         "type":  "bangumi",
-        "url":  "https://raw.githubusercontent.com/jephersonRD/prismhub/main/extensions/moduzy.com.js",
+        "url":  "https://raw.githubusercontent.com/Litdemonick/Prism_Hub/main/extensions/moduzy.com.js",
         "version":  "v0.0.2",
         "webSite":  "https://moduzy.vip"
     },
@@ -1124,7 +1124,7 @@
         "name":  "Enime",
         "package":  "moe.enime",
         "type":  "bangumi",
-        "url":  "https://raw.githubusercontent.com/jephersonRD/prismhub/main/extensions/moe.enime.js",
+        "url":  "https://raw.githubusercontent.com/Litdemonick/Prism_Hub/main/extensions/moe.enime.js",
         "version":  "v0.0.5",
         "webSite":  "https://api.enime.moe"
     },
@@ -1136,7 +1136,7 @@
         "name":  "è½»å°è¯´æ–‡åº“",
         "package":  "moe.wol.wenku8",
         "type":  "fikushon",
-        "url":  "https://raw.githubusercontent.com/jephersonRD/prismhub/main/extensions/moe.wol.wenku8.js",
+        "url":  "https://raw.githubusercontent.com/Litdemonick/Prism_Hub/main/extensions/moe.wol.wenku8.js",
         "version":  "v0.0.1",
         "webSite":  "https://www.wenku8.net"
     },
@@ -1149,7 +1149,7 @@
         "nsfw":  "false",
         "package":  "monoschinos",
         "type":  "bangumi",
-        "url":  "https://raw.githubusercontent.com/jephersonRD/prismhub/main/extensions/monoschinos.js",
+        "url":  "https://raw.githubusercontent.com/Litdemonick/Prism_Hub/main/extensions/monoschinos.js",
         "version":  "v0.1.0",
         "webSite":  "https://monoschinos.st"
     },
@@ -1162,7 +1162,7 @@
         "nsfw":  "false",
         "package":  "movieku.lol",
         "type":  "bangumi",
-        "url":  "https://raw.githubusercontent.com/jephersonRD/prismhub/main/extensions/movieku.lol.js",
+        "url":  "https://raw.githubusercontent.com/Litdemonick/Prism_Hub/main/extensions/movieku.lol.js",
         "version":  "v0.0.3",
         "webSite":  "https://movieku.lol"
     },
@@ -1175,7 +1175,7 @@
         "name":  "YTS.mx",
         "package":  "mx.yts",
         "type":  "bangumi",
-        "url":  "https://raw.githubusercontent.com/jephersonRD/prismhub/main/extensions/mx.yts.js",
+        "url":  "https://raw.githubusercontent.com/Litdemonick/Prism_Hub/main/extensions/mx.yts.js",
         "version":  "v0.0.6",
         "webSite":  "https://yts.mx"
     },
@@ -1188,7 +1188,7 @@
         "nsfw":  "true",
         "package":  "netfapx.com",
         "type":  "bangumi",
-        "url":  "https://raw.githubusercontent.com/jephersonRD/prismhub/main/extensions/netfapx.com.js",
+        "url":  "https://raw.githubusercontent.com/Litdemonick/Prism_Hub/main/extensions/netfapx.com.js",
         "version":  "v0.0.1",
         "webSite":  "https://netfapx.com"
     },
@@ -1201,7 +1201,7 @@
         "nsfw":  "true",
         "package":  "nhentai.to",
         "type":  "manga",
-        "url":  "https://raw.githubusercontent.com/jephersonRD/prismhub/main/extensions/nhentai.to.js",
+        "url":  "https://raw.githubusercontent.com/Litdemonick/Prism_Hub/main/extensions/nhentai.to.js",
         "version":  "v0.0.3",
         "webSite":  "https://nhentai.to"
     },
@@ -1213,7 +1213,7 @@
         "name":  "Nimegami",
         "package":  "nimegami.id",
         "type":  "bangumi",
-        "url":  "https://raw.githubusercontent.com/jephersonRD/prismhub/main/extensions/nimegami.id.js",
+        "url":  "https://raw.githubusercontent.com/Litdemonick/Prism_Hub/main/extensions/nimegami.id.js",
         "version":  "v0.0.2",
         "webSite":  "https://nimegami.id"
     },
@@ -1226,7 +1226,7 @@
         "name":  "Nyaa",
         "package":  "nyaa.si",
         "type":  "bangumi",
-        "url":  "https://raw.githubusercontent.com/jephersonRD/prismhub/main/extensions/nyaa.si.js",
+        "url":  "https://raw.githubusercontent.com/Litdemonick/Prism_Hub/main/extensions/nyaa.si.js",
         "version":  "v0.0.1",
         "webSite":  "https://nyaa.si"
     },
@@ -1239,7 +1239,7 @@
         "nsfw":  "false",
         "package":  "nyadm.link",
         "type":  "bangumi",
-        "url":  "https://raw.githubusercontent.com/jephersonRD/prismhub/main/extensions/nyadm.link.js",
+        "url":  "https://raw.githubusercontent.com/Litdemonick/Prism_Hub/main/extensions/nyadm.link.js",
         "version":  "v0.0.6",
         "webSite":  "https://www.nyadm.net"
     },
@@ -1252,7 +1252,7 @@
         "nsfw":  "true",
         "package":  "omegascans.org",
         "type":  "manga",
-        "url":  "https://raw.githubusercontent.com/jephersonRD/prismhub/main/extensions/omegascans.org.js",
+        "url":  "https://raw.githubusercontent.com/Litdemonick/Prism_Hub/main/extensions/omegascans.org.js",
         "version":  "v0.0.2",
         "webSite":  "https://api.omegascans.org"
     },
@@ -1265,7 +1265,7 @@
         "nsfw":  "true",
         "package":  "onejav.com",
         "type":  "bangumi",
-        "url":  "https://raw.githubusercontent.com/jephersonRD/prismhub/main/extensions/onejav.com.js",
+        "url":  "https://raw.githubusercontent.com/Litdemonick/Prism_Hub/main/extensions/onejav.com.js",
         "version":  "v0.0.1",
         "webSite":  "https://onejav.com"
     },
@@ -1279,7 +1279,7 @@
         "package":  "otakudesu",
         "tags":  "anime,indonesia",
         "type":  "bangumi",
-        "url":  "https://raw.githubusercontent.com/jephersonRD/prismhub/main/extensions/otakudesu.js",
+        "url":  "https://raw.githubusercontent.com/Litdemonick/Prism_Hub/main/extensions/otakudesu.js",
         "version":  "v0.0.1",
         "webSite":  "https://otakudesu.cloud"
     },
@@ -1292,7 +1292,7 @@
         "nsfw":  "true",
         "package":  "p7av.com",
         "type":  "bangumi",
-        "url":  "https://raw.githubusercontent.com/jephersonRD/prismhub/main/extensions/p7av.com.js",
+        "url":  "https://raw.githubusercontent.com/Litdemonick/Prism_Hub/main/extensions/p7av.com.js",
         "version":  "v0.0.2",
         "webSite":  "https://www.haha888.xyz"
     },
@@ -1304,7 +1304,7 @@
         "name":  "Piped",
         "package":  "piped.video",
         "type":  "bangumi",
-        "url":  "https://raw.githubusercontent.com/jephersonRD/prismhub/main/extensions/piped.video.js",
+        "url":  "https://raw.githubusercontent.com/Litdemonick/Prism_Hub/main/extensions/piped.video.js",
         "version":  "v0.0.1",
         "webSite":  "https://piped.video"
     },
@@ -1317,7 +1317,7 @@
         "nsfw":  "true",
         "package":  "pornxp.com",
         "type":  "bangumi",
-        "url":  "https://raw.githubusercontent.com/jephersonRD/prismhub/main/extensions/pornxp.com.js",
+        "url":  "https://raw.githubusercontent.com/Litdemonick/Prism_Hub/main/extensions/pornxp.com.js",
         "version":  "v0.0.1",
         "webSite":  "https://www.pornxp.com"
     },
@@ -1329,7 +1329,7 @@
         "name":  "Ravenscans",
         "package":  "ravenscans.com",
         "type":  "manga",
-        "url":  "https://raw.githubusercontent.com/jephersonRD/prismhub/main/extensions/ravenscans.com.js",
+        "url":  "https://raw.githubusercontent.com/Litdemonick/Prism_Hub/main/extensions/ravenscans.com.js",
         "version":  "v0.0.1",
         "webSite":  "https://ravenscans.com"
     },
@@ -1342,7 +1342,7 @@
         "nsfw":  "false",
         "package":  "rawkuma.com",
         "type":  "manga",
-        "url":  "https://raw.githubusercontent.com/jephersonRD/prismhub/main/extensions/rawkuma.com.js",
+        "url":  "https://raw.githubusercontent.com/Litdemonick/Prism_Hub/main/extensions/rawkuma.com.js",
         "version":  "v0.0.2",
         "webSite":  "https://rawkuma.com"
     },
@@ -1354,7 +1354,7 @@
         "name":  "ReadComicsOnline",
         "package":  "readcomicsonline.ru",
         "type":  "manga",
-        "url":  "https://raw.githubusercontent.com/jephersonRD/prismhub/main/extensions/readcomicsonline.ru.js",
+        "url":  "https://raw.githubusercontent.com/Litdemonick/Prism_Hub/main/extensions/readcomicsonline.ru.js",
         "version":  "v0.0.1",
         "webSite":  "https://readcomicsonline.ru"
     },
@@ -1366,7 +1366,7 @@
         "nsfw":  "true",
         "package":  "ren.0u0.miru.mfxs",
         "type":  "fikushon",
-        "url":  "https://raw.githubusercontent.com/jephersonRD/prismhub/main/extensions/ren.0u0.miru.mfxs.js",
+        "url":  "https://raw.githubusercontent.com/Litdemonick/Prism_Hub/main/extensions/ren.0u0.miru.mfxs.js",
         "version":  "v0.0.1",
         "webSite":  "https://www.493d.com/"
     },
@@ -1378,7 +1378,7 @@
         "name":  "ACG.RIP",
         "package":  "rip.acg",
         "type":  "bangumi",
-        "url":  "https://raw.githubusercontent.com/jephersonRD/prismhub/main/extensions/rip.acg.js",
+        "url":  "https://raw.githubusercontent.com/Litdemonick/Prism_Hub/main/extensions/rip.acg.js",
         "version":  "v0.0.1",
         "webSite":  "https://acg.rip"
     },
@@ -1391,7 +1391,7 @@
         "nsfw":  "false",
         "package":  "royalroad.com",
         "type":  "fikushon",
-        "url":  "https://raw.githubusercontent.com/jephersonRD/prismhub/main/extensions/royalroad.com.js",
+        "url":  "https://raw.githubusercontent.com/Litdemonick/Prism_Hub/main/extensions/royalroad.com.js",
         "version":  "v0.0.3",
         "webSite":  "https://www.royalroad.com"
     },
@@ -1404,7 +1404,7 @@
         "nsfw":  "true",
         "package":  "rule34video.com",
         "type":  "bangumi",
-        "url":  "https://raw.githubusercontent.com/jephersonRD/prismhub/main/extensions/rule34video.com.js",
+        "url":  "https://raw.githubusercontent.com/Litdemonick/Prism_Hub/main/extensions/rule34video.com.js",
         "version":  "v0.0.1",
         "webSite":  "https://rule34video.com"
     },
@@ -1416,7 +1416,7 @@
         "name":  "æ¨±èŠ±åŠ¨æ¼«",
         "package":  "sakura",
         "type":  "bangumi",
-        "url":  "https://raw.githubusercontent.com/jephersonRD/prismhub/main/extensions/sakura.js",
+        "url":  "https://raw.githubusercontent.com/Litdemonick/Prism_Hub/main/extensions/sakura.js",
         "version":  "v0.0.2",
         "webSite":  "https://www.vdm8.com"
     },
@@ -1430,7 +1430,7 @@
         "package":  "samehadaku",
         "tags":  "anime,indonesia",
         "type":  "bangumi",
-        "url":  "https://raw.githubusercontent.com/jephersonRD/prismhub/main/extensions/samehadaku.js",
+        "url":  "https://raw.githubusercontent.com/Litdemonick/Prism_Hub/main/extensions/samehadaku.js",
         "version":  "v0.0.1",
         "webSite":  "https://samehadaku.email"
     },
@@ -1443,7 +1443,7 @@
         "nsfw":  "true",
         "package":  "semaozy.com",
         "type":  "bangumi",
-        "url":  "https://raw.githubusercontent.com/jephersonRD/prismhub/main/extensions/semaozy.com.js",
+        "url":  "https://raw.githubusercontent.com/Litdemonick/Prism_Hub/main/extensions/semaozy.com.js",
         "version":  "v0.0.2",
         "webSite":  "https://semaozy.com"
     },
@@ -1456,7 +1456,7 @@
         "nsfw":  "true",
         "package":  "senlinzy.com",
         "type":  "bangumi",
-        "url":  "https://raw.githubusercontent.com/jephersonRD/prismhub/main/extensions/senlinzy.com.js",
+        "url":  "https://raw.githubusercontent.com/Litdemonick/Prism_Hub/main/extensions/senlinzy.com.js",
         "version":  "v0.0.2",
         "webSite":  "https://senlinzy.com"
     },
@@ -1469,7 +1469,7 @@
         "nsfw":  "false",
         "package":  "sflix.to",
         "type":  "bangumi",
-        "url":  "https://raw.githubusercontent.com/jephersonRD/prismhub/main/extensions/sflix.to.js",
+        "url":  "https://raw.githubusercontent.com/Litdemonick/Prism_Hub/main/extensions/sflix.to.js",
         "version":  "v0.0.3",
         "webSite":  "https://sflix.to"
     },
@@ -1482,7 +1482,7 @@
         "nsfw":  "true",
         "package":  "simplyhentai.com",
         "type":  "manga",
-        "url":  "https://raw.githubusercontent.com/jephersonRD/prismhub/main/extensions/simplyhentai.com.js",
+        "url":  "https://raw.githubusercontent.com/Litdemonick/Prism_Hub/main/extensions/simplyhentai.com.js",
         "version":  "v0.0.2",
         "webSite":  "https://cors.notesnook.com/https://api.simply-hentai.com/v3"
     },
@@ -1495,7 +1495,7 @@
         "nsfw":  "false",
         "package":  "stream.mkvdrama.org",
         "type":  "bangumi",
-        "url":  "https://raw.githubusercontent.com/jephersonRD/prismhub/main/extensions/stream.mkvdrama.org.js",
+        "url":  "https://raw.githubusercontent.com/Litdemonick/Prism_Hub/main/extensions/stream.mkvdrama.org.js",
         "version":  "v0.0.2",
         "webSite":  "https://stream.mkvdrama.org"
     },
@@ -1508,7 +1508,7 @@
         "nsfw":  "false",
         "package":  "subozy.com",
         "type":  "bangumi",
-        "url":  "https://raw.githubusercontent.com/jephersonRD/prismhub/main/extensions/subozy.com.js",
+        "url":  "https://raw.githubusercontent.com/Litdemonick/Prism_Hub/main/extensions/subozy.com.js",
         "version":  "v0.0.2",
         "webSite":  "https://www.subozy.com"
     },
@@ -1521,7 +1521,7 @@
         "nsfw":  "false",
         "package":  "supercartoons.net",
         "type":  "bangumi",
-        "url":  "https://raw.githubusercontent.com/jephersonRD/prismhub/main/extensions/supercartoons.net.js",
+        "url":  "https://raw.githubusercontent.com/Litdemonick/Prism_Hub/main/extensions/supercartoons.net.js",
         "version":  "v0.0.1",
         "webSite":  "https://www.supercartoons.net"
     },
@@ -1533,7 +1533,7 @@
         "name":  "swatmanhua",
         "package":  "swatmanhua.com",
         "type":  "manga",
-        "url":  "https://raw.githubusercontent.com/jephersonRD/prismhub/main/extensions/swatmanhua.com.js",
+        "url":  "https://raw.githubusercontent.com/Litdemonick/Prism_Hub/main/extensions/swatmanhua.com.js",
         "version":  "v0.0.1",
         "webSite":  "https://swatmanhua.com"
     },
@@ -1546,7 +1546,7 @@
         "nsfw":  "false",
         "package":  "tamilyogi",
         "type":  "bangumi",
-        "url":  "https://raw.githubusercontent.com/jephersonRD/prismhub/main/extensions/tamilyogi.js",
+        "url":  "https://raw.githubusercontent.com/Litdemonick/Prism_Hub/main/extensions/tamilyogi.js",
         "version":  "v0.0.4",
         "webSite":  "https://tamilyogi.plus"
     },
@@ -1559,7 +1559,7 @@
         "nsfw":  "true",
         "package":  "taotu",
         "type":  "manga",
-        "url":  "https://raw.githubusercontent.com/jephersonRD/prismhub/main/extensions/taotu.js",
+        "url":  "https://raw.githubusercontent.com/Litdemonick/Prism_Hub/main/extensions/taotu.js",
         "version":  "v0.0.1",
         "webSite":  "https://en.taotu.org"
     },
@@ -1571,7 +1571,7 @@
         "name":  "TeamxNovel",
         "package":  "teamxnovel.com",
         "type":  "manga",
-        "url":  "https://raw.githubusercontent.com/jephersonRD/prismhub/main/extensions/teamxnovel.com.js",
+        "url":  "https://raw.githubusercontent.com/Litdemonick/Prism_Hub/main/extensions/teamxnovel.com.js",
         "version":  "v0.0.1",
         "webSite":  "https://teamxnovel.com"
     },
@@ -1583,7 +1583,7 @@
         "name":  "MoviesArc",
         "package":  "themoviearchive",
         "type":  "bangumi",
-        "url":  "https://raw.githubusercontent.com/jephersonRD/prismhub/main/extensions/themoviearchive.js",
+        "url":  "https://raw.githubusercontent.com/Litdemonick/Prism_Hub/main/extensions/themoviearchive.js",
         "version":  "v0.0.3",
         "webSite":  "https://api.themoviedb.org/3"
     },
@@ -1595,7 +1595,7 @@
         "name":  "thunderscans",
         "package":  "thunderscans.com",
         "type":  "manga",
-        "url":  "https://raw.githubusercontent.com/jephersonRD/prismhub/main/extensions/thunderscans.com.js",
+        "url":  "https://raw.githubusercontent.com/Litdemonick/Prism_Hub/main/extensions/thunderscans.com.js",
         "version":  "v0.0.1",
         "webSite":  "https://thunderscans.com"
     },
@@ -1608,7 +1608,7 @@
         "nsfw":  "false",
         "package":  "tiankongzy.com",
         "type":  "bangumi",
-        "url":  "https://raw.githubusercontent.com/jephersonRD/prismhub/main/extensions/tiankongzy.com.js",
+        "url":  "https://raw.githubusercontent.com/Litdemonick/Prism_Hub/main/extensions/tiankongzy.com.js",
         "version":  "v0.0.2",
         "webSite":  "https://tiankongzy.com"
     },
@@ -1621,7 +1621,7 @@
         "nsfw":  "true",
         "package":  "top.lkp2.www",
         "type":  "bangumi",
-        "url":  "https://raw.githubusercontent.com/jephersonRD/prismhub/main/extensions/top.lkp2.www.js",
+        "url":  "https://raw.githubusercontent.com/Litdemonick/Prism_Hub/main/extensions/top.lkp2.www.js",
         "version":  "v0.0.1",
         "webSite":  "https://www.lkp2.top/"
     },
@@ -1634,7 +1634,7 @@
         "nsfw":  "false",
         "package":  "topcartoons.tv",
         "type":  "bangumi",
-        "url":  "https://raw.githubusercontent.com/jephersonRD/prismhub/main/extensions/topcartoons.tv.js",
+        "url":  "https://raw.githubusercontent.com/Litdemonick/Prism_Hub/main/extensions/topcartoons.tv.js",
         "version":  "v0.0.1",
         "webSite":  "https://www.topcartoons.tv"
     },
@@ -1646,7 +1646,7 @@
         "name":  "NetTruyen",
         "package":  "truyen.net",
         "type":  "manga",
-        "url":  "https://raw.githubusercontent.com/jephersonRD/prismhub/main/extensions/truyen.net.js",
+        "url":  "https://raw.githubusercontent.com/Litdemonick/Prism_Hub/main/extensions/truyen.net.js",
         "version":  "v0.0.5",
         "webSite":  "https://comics-api.vercel.app"
     },
@@ -1659,7 +1659,7 @@
         "nsfw":  "false",
         "package":  "turkish123",
         "type":  "bangumi",
-        "url":  "https://raw.githubusercontent.com/jephersonRD/prismhub/main/extensions/turkish123.js",
+        "url":  "https://raw.githubusercontent.com/Litdemonick/Prism_Hub/main/extensions/turkish123.js",
         "version":  "v0.0.2",
         "webSite":  "https://www2.turkish123.org"
     },
@@ -1672,7 +1672,7 @@
         "nsfw":  "true",
         "package":  "uaa.com",
         "type":  "bangumi",
-        "url":  "https://raw.githubusercontent.com/jephersonRD/prismhub/main/extensions/uaa.com.js",
+        "url":  "https://raw.githubusercontent.com/Litdemonick/Prism_Hub/main/extensions/uaa.com.js",
         "version":  "v0.0.1",
         "webSite":  "https://www.uaa.com/api/video/app/video"
     },
@@ -1685,7 +1685,7 @@
         "nsfw":  "false",
         "package":  "ukuzy.com",
         "type":  "bangumi",
-        "url":  "https://raw.githubusercontent.com/jephersonRD/prismhub/main/extensions/ukuzy.com.js",
+        "url":  "https://raw.githubusercontent.com/Litdemonick/Prism_Hub/main/extensions/ukuzy.com.js",
         "version":  "v0.0.2",
         "webSite":  "https://ukuzy.com"
     },
@@ -1697,7 +1697,7 @@
         "name":  "Unimay",
         "package":  "unimay.media",
         "type":  "bangumi",
-        "url":  "https://raw.githubusercontent.com/jephersonRD/prismhub/main/extensions/unimay.media.js",
+        "url":  "https://raw.githubusercontent.com/Litdemonick/Prism_Hub/main/extensions/unimay.media.js",
         "version":  "v0.0.1",
         "webSite":  "https://api.unimay.media"
     },
@@ -1710,7 +1710,7 @@
         "nsfw":  "false",
         "package":  "vn.tangthuvien",
         "type":  "fikushon",
-        "url":  "https://raw.githubusercontent.com/jephersonRD/prismhub/main/extensions/vn.tangthuvien.js",
+        "url":  "https://raw.githubusercontent.com/Litdemonick/Prism_Hub/main/extensions/vn.tangthuvien.js",
         "version":  "v0.0.1",
         "webSite":  "https://truyen.tangthuvien.vn"
     },
@@ -1721,7 +1721,7 @@
         "name":  "å½±è§†é›†åˆ",
         "package":  "vod.api.json.collection",
         "type":  "bangumi",
-        "url":  "https://raw.githubusercontent.com/jephersonRD/prismhub/main/extensions/vod.api.json.collection.js",
+        "url":  "https://raw.githubusercontent.com/Litdemonick/Prism_Hub/main/extensions/vod.api.json.collection.js",
         "version":  "v0.0.3",
         "webSite":  "https://"
     },
@@ -1733,7 +1733,7 @@
         "nsfw":  "true",
         "package":  "vod.api.json.collection18",
         "type":  "bangumi",
-        "url":  "https://raw.githubusercontent.com/jephersonRD/prismhub/main/extensions/vod.api.json.collection18.js",
+        "url":  "https://raw.githubusercontent.com/Litdemonick/Prism_Hub/main/extensions/vod.api.json.collection18.js",
         "version":  "v0.0.1",
         "webSite":  "https://"
     },
@@ -1744,7 +1744,7 @@
         "name":  "å…«æˆ’å½±è§†",
         "package":  "vod.api.xml.bajie",
         "type":  "bangumi",
-        "url":  "https://raw.githubusercontent.com/jephersonRD/prismhub/main/extensions/vod.api.xml.bajie.js",
+        "url":  "https://raw.githubusercontent.com/Litdemonick/Prism_Hub/main/extensions/vod.api.xml.bajie.js",
         "version":  "v0.0.1",
         "webSite":  "https://cj.bajiecaiji.com"
     },
@@ -1756,7 +1756,7 @@
         "name":  "weebcentral",
         "package":  "weebcentral.com",
         "type":  "manga",
-        "url":  "https://raw.githubusercontent.com/jephersonRD/prismhub/main/extensions/weebcentral.com.js",
+        "url":  "https://raw.githubusercontent.com/Litdemonick/Prism_Hub/main/extensions/weebcentral.com.js",
         "version":  "v0.0.2",
         "webSite":  "https://weebcentral.com"
     },
@@ -1768,7 +1768,7 @@
         "name":  "é£Žè½¦åŠ¨æ¼«",
         "package":  "windmill",
         "type":  "bangumi",
-        "url":  "https://raw.githubusercontent.com/jephersonRD/prismhub/main/extensions/windmill.js",
+        "url":  "https://raw.githubusercontent.com/Litdemonick/Prism_Hub/main/extensions/windmill.js",
         "version":  "v0.0.1",
         "webSite":  "https://www.dm530w.org"
     },
@@ -1781,7 +1781,7 @@
         "nsfw":  "true",
         "package":  "wnacg.com",
         "type":  "manga",
-        "url":  "https://raw.githubusercontent.com/jephersonRD/prismhub/main/extensions/wnacg.com.js",
+        "url":  "https://raw.githubusercontent.com/Litdemonick/Prism_Hub/main/extensions/wnacg.com.js",
         "version":  "v0.0.2",
         "webSite":  "https://www.wnacg.com"
     },
@@ -1794,7 +1794,7 @@
         "nsfw":  "false",
         "package":  "wnmtl.org",
         "type":  "fikushon",
-        "url":  "https://raw.githubusercontent.com/jephersonRD/prismhub/main/extensions/wnmtl.org.js",
+        "url":  "https://raw.githubusercontent.com/Litdemonick/Prism_Hub/main/extensions/wnmtl.org.js",
         "version":  "v0.0.1",
         "webSite":  "https://api.mystorywave.com/story-wave-backend/api/v1/content"
     },
@@ -1807,7 +1807,7 @@
         "nsfw":  "false",
         "package":  "wolongzyw.com",
         "type":  "bangumi",
-        "url":  "https://raw.githubusercontent.com/jephersonRD/prismhub/main/extensions/wolongzyw.com.js",
+        "url":  "https://raw.githubusercontent.com/Litdemonick/Prism_Hub/main/extensions/wolongzyw.com.js",
         "version":  "v0.0.2",
         "webSite":  "https://wolongzyw.com"
     },
@@ -1819,7 +1819,7 @@
         "name":  "WTR-LAB",
         "package":  "wtr-lab.com",
         "type":  "fikushon",
-        "url":  "https://raw.githubusercontent.com/jephersonRD/prismhub/main/extensions/wtr-lab.com.js",
+        "url":  "https://raw.githubusercontent.com/Litdemonick/Prism_Hub/main/extensions/wtr-lab.com.js",
         "version":  "v0.0.1",
         "webSite":  "https://wtr-lab.com"
     },
@@ -1832,7 +1832,7 @@
         "nsfw":  "false",
         "package":  "wujinzy.com",
         "type":  "bangumi",
-        "url":  "https://raw.githubusercontent.com/jephersonRD/prismhub/main/extensions/wujinzy.com.js",
+        "url":  "https://raw.githubusercontent.com/Litdemonick/Prism_Hub/main/extensions/wujinzy.com.js",
         "version":  "v0.0.2",
         "webSite":  "https://wujinzy.com"
     },
@@ -1845,7 +1845,7 @@
         "nsfw":  "false",
         "package":  "xfani.com",
         "type":  "bangumi",
-        "url":  "https://raw.githubusercontent.com/jephersonRD/prismhub/main/extensions/xfani.com.js",
+        "url":  "https://raw.githubusercontent.com/Litdemonick/Prism_Hub/main/extensions/xfani.com.js",
         "version":  "v0.1.1",
         "webSite":  "https://dick.xfani.com"
     },
@@ -1858,7 +1858,7 @@
         "nsfw":  "true",
         "package":  "xhamster.com",
         "type":  "bangumi",
-        "url":  "https://raw.githubusercontent.com/jephersonRD/prismhub/main/extensions/xhamster.com.js",
+        "url":  "https://raw.githubusercontent.com/Litdemonick/Prism_Hub/main/extensions/xhamster.com.js",
         "version":  "v0.0.1",
         "webSite":  "https://xhamster.com"
     },
@@ -1871,7 +1871,7 @@
         "nsfw":  "true",
         "package":  "xnxx.com",
         "type":  "bangumi",
-        "url":  "https://raw.githubusercontent.com/jephersonRD/prismhub/main/extensions/xnxx.com.js",
+        "url":  "https://raw.githubusercontent.com/Litdemonick/Prism_Hub/main/extensions/xnxx.com.js",
         "version":  "v0.0.1",
         "webSite":  "https://www.xnxx.com"
     },
@@ -1884,7 +1884,7 @@
         "nsfw":  "true",
         "package":  "xvideos.com",
         "type":  "bangumi",
-        "url":  "https://raw.githubusercontent.com/jephersonRD/prismhub/main/extensions/xvideos.com.js",
+        "url":  "https://raw.githubusercontent.com/Litdemonick/Prism_Hub/main/extensions/xvideos.com.js",
         "version":  "v0.0.1",
         "webSite":  "https://www.xvideos.com"
     },
@@ -1897,7 +1897,7 @@
         "nsfw":  "true",
         "package":  "xyz.xdtv2",
         "type":  "bangumi",
-        "url":  "https://raw.githubusercontent.com/jephersonRD/prismhub/main/extensions/xyz.xdtv2.js",
+        "url":  "https://raw.githubusercontent.com/Litdemonick/Prism_Hub/main/extensions/xyz.xdtv2.js",
         "version":  "v0.0.2",
         "webSite":  "https://caocao15.xyz"
     },
@@ -1910,7 +1910,7 @@
         "nsfw":  "false",
         "package":  "yayazy.net",
         "type":  "bangumi",
-        "url":  "https://raw.githubusercontent.com/jephersonRD/prismhub/main/extensions/yayazy.net.js",
+        "url":  "https://raw.githubusercontent.com/Litdemonick/Prism_Hub/main/extensions/yayazy.net.js",
         "version":  "v0.0.1",
         "webSite":  "https://yayazy.net"
     },
@@ -1923,7 +1923,7 @@
         "nsfw":  "false",
         "package":  "yhzy.cc",
         "type":  "bangumi",
-        "url":  "https://raw.githubusercontent.com/jephersonRD/prismhub/main/extensions/yhzy.cc.js",
+        "url":  "https://raw.githubusercontent.com/Litdemonick/Prism_Hub/main/extensions/yhzy.cc.js",
         "version":  "v0.0.2",
         "webSite":  "https://yhzy.cc"
     },
@@ -1935,7 +1935,7 @@
         "name":  "CC",
         "package":  "yinhuadm",
         "type":  "bangumi",
-        "url":  "https://raw.githubusercontent.com/jephersonRD/prismhub/main/extensions/yinhuadm.js",
+        "url":  "https://raw.githubusercontent.com/Litdemonick/Prism_Hub/main/extensions/yinhuadm.js",
         "version":  "v0.0.1",
         "webSite":  "https://www.yinhuadm.cc/"
     },
@@ -1948,7 +1948,7 @@
         "nsfw":  "false",
         "package":  "yomovies",
         "type":  "bangumi",
-        "url":  "https://raw.githubusercontent.com/jephersonRD/prismhub/main/extensions/yomovies.js",
+        "url":  "https://raw.githubusercontent.com/Litdemonick/Prism_Hub/main/extensions/yomovies.js",
         "version":  "v0.0.7",
         "webSite":  "https://yomovies.boats"
     },
@@ -1961,7 +1961,7 @@
         "nsfw":  "true",
         "package":  "yugenanime.tv",
         "type":  "bangumi",
-        "url":  "https://raw.githubusercontent.com/jephersonRD/prismhub/main/extensions/yugenanime.tv.js",
+        "url":  "https://raw.githubusercontent.com/Litdemonick/Prism_Hub/main/extensions/yugenanime.tv.js",
         "version":  "v0.0.1",
         "webSite":  "https://yugenanime.tv"
     },
@@ -1974,7 +1974,7 @@
         "nsfw":  "false",
         "package":  "yurineko.net",
         "type":  "manga",
-        "url":  "https://raw.githubusercontent.com/jephersonRD/prismhub/main/extensions/yurineko.net.js",
+        "url":  "https://raw.githubusercontent.com/Litdemonick/Prism_Hub/main/extensions/yurineko.net.js",
         "version":  "v0.0.1",
         "webSite":  "https://api.yurineko.net"
     },
@@ -1987,7 +1987,7 @@
         "nsfw":  "true",
         "package":  "yutuzy.com",
         "type":  "bangumi",
-        "url":  "https://raw.githubusercontent.com/jephersonRD/prismhub/main/extensions/yutuzy.com.js",
+        "url":  "https://raw.githubusercontent.com/Litdemonick/Prism_Hub/main/extensions/yutuzy.com.js",
         "version":  "v0.0.2",
         "webSite":  "https://yutuzy.com"
     },
@@ -1999,7 +1999,7 @@
         "name":  "YYæ¼«ç”»",
         "package":  "yymanhua.com",
         "type":  "manga",
-        "url":  "https://raw.githubusercontent.com/jephersonRD/prismhub/main/extensions/yymanhua.com.js",
+        "url":  "https://raw.githubusercontent.com/Litdemonick/Prism_Hub/main/extensions/yymanhua.com.js",
         "version":  "v0.0.4",
         "webSite":  "https://www.yymanhua.com"
     },
@@ -2012,7 +2012,7 @@
         "nsfw":  "false",
         "package":  "yzzy.tv",
         "type":  "bangumi",
-        "url":  "https://raw.githubusercontent.com/jephersonRD/prismhub/main/extensions/yzzy.tv.js",
+        "url":  "https://raw.githubusercontent.com/Litdemonick/Prism_Hub/main/extensions/yzzy.tv.js",
         "version":  "v0.0.2",
         "webSite":  "https://yzzy.tv"
     },
@@ -2024,22 +2024,24 @@
         "name":  "ZeroScans",
         "package":  "zeroscans.com",
         "type":  "manga",
-        "url":  "https://raw.githubusercontent.com/jephersonRD/prismhub/main/extensions/zeroscans.com.js",
+        "url":  "https://raw.githubusercontent.com/Litdemonick/Prism_Hub/main/extensions/zeroscans.com.js",
         "version":  "v0.0.2",
         "webSite":  "https://zscans.com"
     },
     {
         "author":  "jephMD",
         "description":  "Anime en Español Latino vía PrismHub DB + Terabox",
-        "icon":  "https://raw.githubusercontent.com/jephersonRD/prismhub/main/icons/app.png",
+        "icon":  "https://raw.githubusercontent.com/Litdemonick/Prism_Hub/main/icons/app.png",
         "lang":  "es",
         "license":  "MIT",
         "name":  "PrismHub Latino",
         "nsfw":  "false",
         "package":  "PrismHublatino",
         "type":  "bangumi",
-        "url":  "https://raw.githubusercontent.com/jephersonRD/prismhub/main/extensions/PrismHublatino.js",
+        "url":  "https://raw.githubusercontent.com/Litdemonick/Prism_Hub/main/extensions/PrismHublatino.js",
         "version":  "v0.3.4",
         "webSite":  "https://www.1024terabox.com"
     }
 ]
+
+

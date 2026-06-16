@@ -1,19 +1,19 @@
-#!/usr/bin/env bash
+﻿#!/usr/bin/env bash
 # =============================================================================
-#  JiruHub Installer — Linux/macOS
-#  Uso: curl -fsSL https://raw.githubusercontent.com/jephersonRD/JiruHub/main/jiru-install/install.sh | bash
+#  PrismHub Installer — Linux/macOS
+#  Uso: curl -fsSL https://raw.githubusercontent.com/Litdemonick/Prism_Hub/main/install/install.sh | bash
 # =============================================================================
 
 set -euo pipefail
 
 # ─── Configuración ─────────────────────────────────────────────────────────
-REPO_OWNER="jephersonRD"
-REPO_NAME="JiruHub"
+REPO_OWNER="Litdemonick"
+REPO_NAME="Prism_Hub"
 API_URL="https://api.github.com/repos/${REPO_OWNER}/${REPO_NAME}/releases/latest"
-INSTALL_DIR="${HOME}/.local/share/JiruHub"
+INSTALL_DIR="${HOME}/.local/share/PrismHub"
 BIN_DIR="${HOME}/.local/bin"
 APP_DIR="${HOME}/.local/share/applications"
-LOG_DIR="${HOME}/.local/share/JiruHub/logs"
+LOG_DIR="${HOME}/.local/share/PrismHub/logs"
 LOG_FILE="${LOG_DIR}/installer-$(date +%Y%m%d-%H%M%S).log"
 VERSION_FILE="${INSTALL_DIR}/version"
 
@@ -40,13 +40,12 @@ die() { error "$*"; exit 1; }
 show_banner() {
     clear 2>/dev/null || true
     print ""
-    print "${C_CYAN}${C_BOLD}     ██╗██╗██████╗ ██╗   ██╗██╗  ██╗██╗   ██╗██████╗ ${C_RESET}"
-    print "${C_CYAN}${C_BOLD}     ██║██║██╔══██╗██║   ██║██║  ██║██║   ██║██╔══██╗${C_RESET}"
-    print "${C_CYAN}${C_BOLD}     ██║██║██████╔╝██║   ██║███████║██║   ██║██████╔╝${C_RESET}"
-    print "${C_CYAN}${C_BOLD}██   ██║██║██╔══██╗██║   ██║██╔══██║██║   ██║██╔══██╗${C_RESET}"
-    print "${C_CYAN}${C_BOLD}╚█████╔╝██║██║  ██║╚██████╔╝██║  ██║╚██████╔╝██████╔╝${C_RESET}"
-    print "${C_CYAN}${C_BOLD} ╚════╝ ╚═╝╚═╝  ╚═╝ ╚═════╝ ╚═╝  ╚═╝ ╚═════╝ ╚═════╝ ${C_RESET}"
-    print "${C_DIM}        ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${C_RESET}"
+    print "${C_CYAN}${C_BOLD}  ____       _               _   _       _     ${C_RESET}"
+    print "${C_CYAN}${C_BOLD} |  _ \ _ __(_)___ _ __ ___ | | | |_   _| |__  ${C_RESET}"
+    print "${C_CYAN}${C_BOLD} | |_) | '__| / __| '_ ' _ \| |_| | | | | '_ \ ${C_RESET}"
+    print "${C_CYAN}${C_BOLD} |  __/| |  | \__ \ | | | | |  _  | |_| | |_) |${C_RESET}"
+    print "${C_CYAN}${C_BOLD} |_|   |_|  |_|___/_| |_| |_|_| |_|\__,_|_.__/ ${C_RESET}"
+    print "${C_DIM}  ─────────────────────────────────────────────${C_RESET}"
     print ""
 }
 
@@ -77,7 +76,7 @@ progress_bar() {
 
 # ─── Traducciones ────────────────────────────────────────────────────────────
 declare -A I18N_ES=(
-    [welcome]="Bienvenido al Instalador de JiruHub"
+    [welcome]="Bienvenido al Instalador de PrismHub"
     [menu_lang]="Selecciona tu idioma"
     [opt_spanish]="Español"
     [opt_english]="English"
@@ -89,11 +88,11 @@ declare -A I18N_ES=(
     [detecting_os]="Detectando sistema operativo..."
     [detecting_arch]="Detectando arquitectura..."
     [fetching_release]="Buscando última versión en GitHub..."
-    [downloading]="Descargando JiruHub..."
-    [installing]="Instalando JiruHub..."
-    [success_install]="JiruHub se instaló correctamente."
-    [success_update]="JiruHub se actualizó correctamente."
-    [success_uninstall]="JiruHub se desinstaló correctamente."
+    [downloading]="Descargando PrismHub..."
+    [installing]="Instalando PrismHub..."
+    [success_install]="PrismHub se instaló correctamente."
+    [success_update]="PrismHub se actualizó correctamente."
+    [success_uninstall]="PrismHub se desinstaló correctamente."
     [installed_version]="Versión instalada"
     [install_path]="Ruta de instalación"
     [latest_version]="Última versión disponible"
@@ -104,7 +103,7 @@ declare -A I18N_ES=(
     [press_enter]="Presiona Enter para salir..."
     [cancelled]="Operación cancelada."
     [log_path]="Log guardado en"
-    [running]="ejecuta: jiruhub"
+    [running]="ejecuta: PrismHub"
     [dep_title]="Dependencias del Sistema"
     [dep_installed]="ya instalado"
     [dep_required]="Se requiere:"
@@ -120,7 +119,7 @@ declare -A I18N_ES=(
 )
 
 declare -A I18N_EN=(
-    [welcome]="Welcome to JiruHub Installer"
+    [welcome]="Welcome to PrismHub Installer"
     [menu_lang]="Select your language"
     [opt_spanish]="Spanish"
     [opt_english]="English"
@@ -132,11 +131,11 @@ declare -A I18N_EN=(
     [detecting_os]="Detecting operating system..."
     [detecting_arch]="Detecting architecture..."
     [fetching_release]="Fetching latest release from GitHub..."
-    [downloading]="Downloading JiruHub..."
-    [installing]="Installing JiruHub..."
-    [success_install]="JiruHub installed successfully."
-    [success_update]="JiruHub updated successfully."
-    [success_uninstall]="JiruHub uninstalled successfully."
+    [downloading]="Downloading PrismHub..."
+    [installing]="Installing PrismHub..."
+    [success_install]="PrismHub installed successfully."
+    [success_update]="PrismHub updated successfully."
+    [success_uninstall]="PrismHub uninstalled successfully."
     [installed_version]="Installed version"
     [install_path]="Installation path"
     [latest_version]="Latest version available"
@@ -147,7 +146,7 @@ declare -A I18N_EN=(
     [press_enter]="Press Enter to exit..."
     [cancelled]="Operation cancelled."
     [log_path]="Log saved at"
-    [running]="run: jiruhub"
+    [running]="run: PrismHub"
     [dep_title]="System Dependencies"
     [dep_installed]="already installed"
     [dep_required]="Required:"
@@ -213,8 +212,8 @@ detect_arch() {
         aarch64|arm64)  echo "arm64" ;;
         armv7l|armv6l)  echo "arm" ;;
         i386|i486|i586|i686)
-            error "Arquitectura de 32 bits ($arch) no está soportada por JiruHub."
-            error "JiruHub requiere un sistema de 64 bits (x86_64 o aarch64)."
+            error "Arquitectura de 32 bits ($arch) no está soportada por PrismHub."
+            error "PrismHub requiere un sistema de 64 bits (x86_64 o aarch64)."
             die   "Por favor usa un sistema operativo de 64 bits."
             ;;
         *) die "Arquitectura no soportada: $arch" ;;
@@ -424,22 +423,22 @@ detect_asset() {
     case "$os" in
         linux)
             case "$arch" in
-                x64)   patterns=("JiruHub-*-linux-x64.tar.gz" "JiruHub-*-linux.tar.gz") ;;
-                arm64) patterns=("JiruHub-*-linux-arm64.tar.gz") ;;
-                arm)   patterns=("JiruHub-*-linux-arm.tar.gz") ;;
+                x64)   patterns=("PrismHub-*-linux-x64.tar.gz" "PrismHub-*-linux.tar.gz") ;;
+                arm64) patterns=("PrismHub-*-linux-arm64.tar.gz") ;;
+                arm)   patterns=("PrismHub-*-linux-arm.tar.gz") ;;
             esac
             ;;
         macos)
             case "$arch" in
-                x64)   patterns=("JiruHub-*-mac-x64.tar.gz" "JiruHub-*-macos-x64.tar.gz" "JiruHub-*-mac.tar.gz") ;;
-                arm64) patterns=("JiruHub-*-mac-arm64.tar.gz" "JiruHub-*-macos-arm64.tar.gz") ;;
+                x64)   patterns=("PrismHub-*-mac-x64.tar.gz" "PrismHub-*-macos-x64.tar.gz" "PrismHub-*-mac.tar.gz") ;;
+                arm64) patterns=("PrismHub-*-mac-arm64.tar.gz" "PrismHub-*-macos-arm64.tar.gz") ;;
             esac
             ;;
     esac
 
     for pattern in "${patterns[@]}"; do
         local url
-        url=$(echo "$release_json" | grep -o '"browser_download_url": "[^"]*JiruHub-[^"]*\.tar\.gz"' | sed 's/"browser_download_url": "//;s/"$//' | grep -m1 "${pattern/\*/.*}")
+        url=$(echo "$release_json" | grep -o '"browser_download_url": "[^"]*PrismHub-[^"]*\.tar\.gz"' | sed 's/"browser_download_url": "//;s/"$//' | grep -m1 "${pattern/\*/.*}")
         if [[ -n "$url" ]]; then
             echo "$url"
             return 0
@@ -501,18 +500,18 @@ download_with_retry() {
 create_desktop_entry() {
     local binary_path="$1" icon_path="$2"
     mkdir -p "$APP_DIR"
-    cat > "${APP_DIR}/jiruhub.desktop" <<EOF
+    cat > "${APP_DIR}/PrismHub.desktop" <<EOF
 [Desktop Entry]
-Name=JiruHub
+Name=PrismHub
 Comment=Anime, manga and multimedia player
 Exec=${binary_path}
 Icon=${icon_path}
 Terminal=false
 Type=Application
 Categories=AudioVideo;Player;Network;
-StartupWMClass=jiruhub
+StartupWMClass=PrismHub
 EOF
-    chmod +x "${APP_DIR}/jiruhub.desktop"
+    chmod +x "${APP_DIR}/PrismHub.desktop"
 }
 
 # ─── Instalar ────────────────────────────────────────────────────────────────
@@ -565,7 +564,7 @@ do_install() {
 
     local bundle_src=""
     for candidate in "$tmpdir"/*/; do
-        if [[ -f "${candidate}jiruhub" ]] || [[ -f "${candidate}JiruHub" ]] || [[ -f "${candidate}miru" ]]; then
+        if [[ -f "${candidate}PrismHub" ]] || [[ -f "${candidate}PrismHub" ]] || [[ -f "${candidate}miru" ]]; then
             bundle_src="$candidate"
             break
         fi
@@ -579,7 +578,7 @@ do_install() {
     rm -rf "$tmpdir"
 
     local binary=""
-    for name in jiruhub JiruHub miru; do
+    for name in PrismHub PrismHub miru; do
         [[ -f "${INSTALL_DIR}/${name}" ]] && binary="${INSTALL_DIR}/${name}" && chmod +x "$binary" && break
     done
 
@@ -587,8 +586,8 @@ do_install() {
         die "No se encontró el binario después de extraer."
     fi
 
-    ln -sf "$binary" "${BIN_DIR}/jiruhub"
-    info "Symlink: ${BIN_DIR}/jiruhub → $binary"
+    ln -sf "$binary" "${BIN_DIR}/PrismHub"
+    info "Symlink: ${BIN_DIR}/PrismHub → $binary"
 
     create_desktop_entry "$binary" "${INSTALL_DIR}/icon.png"
     info "Acceso directo creado."
@@ -603,7 +602,7 @@ do_install() {
     print ""
     print "  ${C_BOLD}$(t installed_version):${C_RESET}  ${C_CYAN}$tag_name${C_RESET}"
     print "  ${C_BOLD}$(t install_path):${C_RESET}       ${C_CYAN}$INSTALL_DIR${C_RESET}"
-    print "  ${C_BOLD}$(t running):${C_RESET}             ${C_CYAN}jiruhub${C_RESET}"
+    print "  ${C_BOLD}$(t running):${C_RESET}             ${C_CYAN}PrismHub${C_RESET}"
     print "  ${C_BOLD}$(t log_path):${C_RESET}         ${C_CYAN}$LOG_FILE${C_RESET}"
     print ""
     read -rp "  $(t press_enter) " </dev/tty || true
@@ -612,7 +611,7 @@ do_install() {
 # ─── Actualizar ──────────────────────────────────────────────────────────────
 do_update() {
     if [[ ! -f "$VERSION_FILE" ]]; then
-        warn "JiruHub no está instalado. Ejecuta 'Instalar' primero."
+        warn "PrismHub no está instalado. Ejecuta 'Instalar' primero."
         sleep 2
         return
     fi
@@ -637,12 +636,12 @@ do_update() {
 # ─── Desinstalar ─────────────────────────────────────────────────────────────
 do_uninstall() {
     show_banner
-    print "\n${C_YELLOW}${C_BOLD}  ⚠  Se eliminarán todos los archivos de JiruHub.${C_RESET}"
+    print "\n${C_YELLOW}${C_BOLD}  ⚠  Se eliminarán todos los archivos de PrismHub.${C_RESET}"
     read -rp "  ¿Continuar? [s/N]: " confirm </dev/tty || true
     [[ "$confirm" =~ ^[Ss]$ ]] || { info "$(t cancelled)"; return; }
     rm -rf "$INSTALL_DIR"
-    rm -f "${BIN_DIR}/jiruhub"
-    rm -f "${APP_DIR}/jiruhub.desktop"
+    rm -f "${BIN_DIR}/PrismHub"
+    rm -f "${APP_DIR}/PrismHub.desktop"
     rm -rf "${LOG_DIR}"
     success "$(t success_uninstall)"
     read -rp "  $(t press_enter) " </dev/tty || true
@@ -651,8 +650,10 @@ do_uninstall() {
 # ─── Entry Point ─────────────────────────────────────────────────────────────
 trap 'error "Instalación interrumpida."; exit 130' INT TERM
 mkdir -p "$LOG_DIR"
-log "=== JiruHub Installer started ==="
+log "=== PrismHub Installer started ==="
 show_banner
 select_language
 main_menu
-log "=== JiruHub Installer finished ==="
+log "=== PrismHub Installer finished ==="
+
+

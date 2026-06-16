@@ -3,7 +3,7 @@
 
 #define MyAppName "PrismHub"
 #define MyAppPublisher "PrismHub"
-#define MyAppURL "https://github.com/jephersonRD/PrismHub"
+#define MyAppURL "https://github.com/Litdemonick/Prism_Hub"
 #define MyAppExeName "PrismHub.exe"
 
 [Setup]
