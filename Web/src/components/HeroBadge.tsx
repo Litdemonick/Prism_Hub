@@ -7,10 +7,10 @@ export default function HeroBadge() {
       initial={{ opacity: 0, y: 20 }}
       animate={{ opacity: 1, y: 0 }}
       transition={{ duration: 0.6, ease: 'easeOut' }}
-      className="flex items-center gap-2 px-4 py-2 rounded-full bg-white/60 backdrop-blur-md border border-white/20 mx-auto mb-3 w-fit"
+      className="flex items-center gap-2 px-4 py-2 rounded-full bg-violet-500/10 border border-violet-500/20 mx-auto mb-4 w-fit backdrop-blur-md"
     >
-      <Sparkles className="w-4 h-4 text-black" />
-      <span className="text-[14px] font-normal text-black">Dev Fluido</span>
+      <Sparkles className="w-3.5 h-3.5 text-violet-400" />
+      <span className="text-[13px] font-normal text-violet-300">Open Source · AGPL-3.0</span>
     </motion.div>
   );
 }

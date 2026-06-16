@@ -2,50 +2,49 @@ import { useState } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { ChevronDown } from 'lucide-react';
 import Navbar from '../components/Navbar';
+import PrismBg from '../components/PrismBg';
 
 const faqs = [
   {
-    q: '¿Qué es JiruHub?',
-    a: 'JiruHub es una aplicación multiplataforma basada en un fork personalizado de Miru App, enfocada en anime, manga y películas en español mediante un sistema de extensiones.',
+    q: '¿Qué es PrismHub?',
+    a: 'PrismHub es una aplicación multiplataforma (Windows, Android, Linux) para ver anime, leer manga y acceder a series y películas. Funciona mediante extensiones JavaScript que puedes instalar y crear tú mismo.',
   },
   {
-    q: '¿JiruHub es compatible con Windows y Linux?',
-    a: 'Sí. Actualmente JiruHub tiene soporte para Linux y Windows mediante instaladores automáticos desde terminal y PowerShell.',
+    q: '¿PrismHub es compatible con Windows, Linux y Android?',
+    a: 'Sí. PrismHub tiene soporte para Windows, Linux y Android. Windows y Linux cuentan con instaladores automáticos desde terminal. Android tiene APK descargable desde Releases.',
   },
   {
-    q: '¿Cómo agrego el repositorio de extensiones?',
-    a: 'Debes ir a: Ajustes → Extensiones → Repositorios. Luego presiona + y agrega esta URL:\n\nhttps://raw.githubusercontent.com/jephersonRD/JiruHub/main/index.json\n\nDespués pulsa Recargar y aparecerán las extensiones disponibles.',
+    q: '¿Cómo instalo extensiones?',
+    a: 'Ve a Ajustes → Extensiones → URL del repositorio y pega una de estas URLs:\n\nRepositorio oficial (prism+):\nhttps://raw.githubusercontent.com/Litdemonick/prism-plus/main/index.json\n\nRepositorio comunidad (150+ extensiones):\nhttps://raw.githubusercontent.com/Litdemonick/Prism_Hub/main/index.json\n\nLuego pulsa Recargar para ver las extensiones disponibles.',
   },
   {
-    q: '¿Qué contenido puedo ver en JiruHub?',
-    a: 'Puedes ver anime online, películas, series y acceder a múltiples fuentes desde una sola aplicación usando extensiones compatibles.',
+    q: '¿Qué contenido puedo ver?',
+    a: 'Puedes ver anime, películas, series y leer manga desde múltiples fuentes, todo desde una sola aplicación usando extensiones. Las extensiones de prism+ están enfocadas en contenido en español.',
   },
   {
     q: '¿Puedo crear mis propias extensiones?',
-    a: 'Sí. JiruHub permite desarrollar extensiones en JavaScript utilizando funciones como latest(), search(), detail() y watch().',
+    a: 'Sí. Las extensiones son archivos JavaScript con un header ==PrismHubExtension== y una clase que implementa latest(), search(), detail() y watch(). Consulta la sección de Extensiones para más detalles.',
   },
   {
-    q: '¿JiruHub es código abierto?',
-    a: 'Sí. El proyecto es open source y está distribuido bajo la licencia AGPL-3.0, permitiendo modificar y contribuir al proyecto.',
+    q: '¿PrismHub es código abierto?',
+    a: 'Sí. PrismHub es open source bajo licencia AGPL-3.0. Puedes usar, modificar y distribuir la aplicación siempre que mantengas el código fuente accesible.',
+  },
+  {
+    q: '¿Por qué el reproductor cambia de servidor automáticamente?',
+    a: 'Las extensiones de prism+ retornan un header X-Servers con servidores alternativos. Si el servidor principal falla, el reproductor lee ese header y prueba el siguiente sin que tengas que hacer nada.',
   },
 ];
 
 function FaqItem({ question, answer }: { question: string; answer: string }) {
   const [open, setOpen] = useState(false);
-
   return (
-    <motion.div
-      layout
-      className="rounded-[1.5rem] bg-white/10 backdrop-blur-md border border-white/20 overflow-hidden"
-    >
+    <motion.div layout className="rounded-2xl glass-card overflow-hidden">
       <button
         onClick={() => setOpen(!open)}
         className="w-full flex items-center justify-between px-6 py-4 text-left text-white text-sm md:text-base font-normal"
       >
         <span>{question}</span>
-        <ChevronDown
-          className={`w-4 h-4 text-white/70 transition-transform duration-300 ${open ? 'rotate-180' : ''}`}
-        />
+        <ChevronDown className={`w-4 h-4 text-violet-400 transition-transform duration-300 flex-shrink-0 ml-4 ${open ? 'rotate-180' : ''}`} />
       </button>
       <AnimatePresence initial={false}>
         {open && (
@@ -57,7 +56,7 @@ function FaqItem({ question, answer }: { question: string; answer: string }) {
             transition={{ duration: 0.3, ease: 'easeInOut' }}
             className="overflow-hidden"
           >
-            <div className="px-6 pb-4 text-[rgb(45,45,45)] text-xs md:text-sm font-normal leading-relaxed whitespace-pre-line">
+            <div className="px-6 pb-5 text-white/50 text-xs md:text-sm font-normal leading-relaxed whitespace-pre-line border-t border-white/5 pt-3">
               {answer}
             </div>
           </motion.div>
@@ -69,19 +68,11 @@ function FaqItem({ question, answer }: { question: string; answer: string }) {
 
 export default function Faq() {
   return (
-    <div className="w-full min-h-screen flex items-center justify-center p-3 md:p-5 bg-[#f0f0f0]">
-      <section className="relative w-full max-w-[1536px] min-h-[calc(100vh-1.5rem)] rounded-[1.5rem] md:rounded-[3rem] overflow-hidden shadow-none flex flex-col items-center bg-white/10">
-        <video
-          autoPlay
-          muted
-          loop
-          playsInline
-          className="absolute inset-0 w-full h-full object-cover object-[65%] lg:object-center z-0 blur-xl opacity-40"
-        >
-          <source src="/JiruHub/assets/media/jiruhub.mp4" type="video/mp4" />
-        </video>
+    <div className="w-full min-h-screen flex items-center justify-center p-3 md:p-5 bg-[#08080f]">
+      <section className="relative w-full max-w-[1536px] min-h-[calc(100vh-1.5rem)] rounded-[1.5rem] md:rounded-[3rem] overflow-hidden flex flex-col items-center">
+        <PrismBg />
         <div className="relative z-10 w-full h-full flex flex-col items-center">
-          <Navbar light />
+          <Navbar />
           <div className="flex-1 w-full max-w-2xl px-6 pb-12">
             <motion.h1
               initial={{ opacity: 0, y: 10 }}
@@ -89,15 +80,15 @@ export default function Faq() {
               transition={{ duration: 0.5 }}
               className="text-3xl md:text-4xl font-normal text-white text-center mb-8 tracking-tight"
             >
-              FAQ — JiruHub
+              FAQ — <span className="prism-text">PrismHub</span>
             </motion.h1>
-            <div className="flex flex-col gap-4">
+            <div className="flex flex-col gap-3">
               {faqs.map((faq, i) => (
                 <motion.div
                   key={i}
                   initial={{ opacity: 0, y: 16 }}
                   animate={{ opacity: 1, y: 0 }}
-                  transition={{ duration: 0.4, delay: i * 0.08 }}
+                  transition={{ duration: 0.4, delay: i * 0.07 }}
                 >
                   <FaqItem question={faq.q} answer={faq.a} />
                 </motion.div>
