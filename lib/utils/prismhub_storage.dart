@@ -104,9 +104,12 @@ class PrismHubStorage {
   }
 
   static _initSettings() async {
-    const correctRepoUrl = "https://raw.githubusercontent.com/jephersonRD/JiruHub/main";
+    const correctRepoUrl = "https://raw.githubusercontent.com/Litdemonick/prism-plus/main";
     final savedUrl = settings.get(SettingKey.prismhubRepoUrl);
-    if (savedUrl != null && savedUrl.toString().contains("jephersonrd.github.io")) {
+    if (savedUrl != null && (
+      savedUrl.toString().contains("jephersonrd.github.io") ||
+      savedUrl.toString().contains("jephersonRD/JiruHub")
+    )) {
       await settings.put(SettingKey.prismhubRepoUrl, correctRepoUrl);
     }
     await _initSetting(SettingKey.prismhubRepoUrl, correctRepoUrl);
