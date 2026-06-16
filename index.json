@@ -77,19 +77,6 @@
         "webSite":  "https://anilibria.top/api/v1"
     },
     {
-        "author":  "PrismHub",
-        "description":  "Anime en espaÃ±ol Latino vÃ­a TioAnime",
-        "icon":  "https://tioanime.com/favicon.ico",
-        "lang":  "es",
-        "license":  "MIT",
-        "name":  "TioAnime",
-        "package":  "tioanime",
-        "type":  "bangumi",
-        "url":  "https://raw.githubusercontent.com/Litdemonick/Prism_Hub/main/extensions/tioanime.js",
-        "version":  "v0.1.7",
-        "webSite":  "https://jimov-api.vercel.app"
-    },
-    {
         "author":  "appdevelpo",
         "icon":  "https://anime.girigirilove.com/upload/site/20230603-1/9e57505c4e140f30c70aac0cc93fa9ad.png",
         "lang":  "zh",
@@ -113,19 +100,6 @@
         "url":  "https://raw.githubusercontent.com/Litdemonick/Prism_Hub/main/extensions/animeazu.com.js",
         "version":  "v0.0.1",
         "webSite":  "https://animeazu.com"
-    },
-    {
-        "author":  "appdevelpo",
-        "icon":  "https://animepahe.ru/web-app-manifest-512x512.png",
-        "lang":  "en",
-        "license":  "MIT",
-        "name":  "Animepahe",
-        "nsfw":  "false",
-        "package":  "animepahe.ru",
-        "type":  "bangumi",
-        "url":  "https://raw.githubusercontent.com/Litdemonick/Prism_Hub/main/extensions/animepahe.ru.js",
-        "version":  "v0.0.3",
-        "webSite":  "https://animepahe.ru"
     },
     {
         "author":  "Nazz",
@@ -969,18 +943,6 @@
     },
     {
         "author":  "bethro",
-        "icon":  "https://h.mangabat.com/favicon-96x96.png",
-        "lang":  "en",
-        "license":  "MIT",
-        "name":  "MangaBat",
-        "package":  "mangabat.com",
-        "type":  "manga",
-        "url":  "https://raw.githubusercontent.com/Litdemonick/Prism_Hub/main/extensions/mangabat.com.js",
-        "version":  "v0.0.1",
-        "webSite":  "https://h.mangabat.com"
-    },
-    {
-        "author":  "bethro",
         "icon":  "https://mangaclash.com/wp-content/uploads/2020/03/cropped-22.jpg",
         "lang":  "en",
         "license":  "MIT",
@@ -1014,18 +976,6 @@
         "url":  "https://raw.githubusercontent.com/Litdemonick/Prism_Hub/main/extensions/mangacross.jp.js",
         "version":  "v0.0.1",
         "webSite":  "https://mangacross.jp"
-    },
-    {
-        "author":  "bethro",
-        "icon":  "https://mangadex.org/img/avatar.png",
-        "lang":  "all",
-        "license":  "MIT",
-        "name":  "MangaDex",
-        "package":  "mangadex.org",
-        "type":  "manga",
-        "url":  "https://raw.githubusercontent.com/Litdemonick/Prism_Hub/main/extensions/mangadex.org.js",
-        "version":  "v0.0.3",
-        "webSite":  "https://api.mangadex.org"
     },
     {
         "author":  "shashankx86",
@@ -1139,19 +1089,6 @@
         "url":  "https://raw.githubusercontent.com/Litdemonick/Prism_Hub/main/extensions/moe.wol.wenku8.js",
         "version":  "v0.0.1",
         "webSite":  "https://www.wenku8.net"
-    },
-    {
-        "author":  "OshekharO",
-        "icon":  "https://monoschinos.st/img/2web.jpg",
-        "lang":  "es",
-        "license":  "MIT",
-        "name":  "MonosChinos",
-        "nsfw":  "false",
-        "package":  "monoschinos",
-        "type":  "bangumi",
-        "url":  "https://raw.githubusercontent.com/Litdemonick/Prism_Hub/main/extensions/monoschinos.js",
-        "version":  "v0.1.0",
-        "webSite":  "https://monoschinos.st"
     },
     {
         "author":  "appdevelpo",
@@ -2043,5 +1980,3 @@
         "webSite":  "https://www.1024terabox.com"
     }
 ]
-
-

@@ -1,7 +1,7 @@
 ﻿<#
  ==============================================================================
   PrismHub Installer — Windows (PowerShell)
-  Uso: irm https://raw.githubusercontent.com/Litdemonick/PrismHub/main/jiru-install/install.ps1 | iex
+  Uso: irm https://raw.githubusercontent.com/Litdemonick/Prism_Hub/main/install/online_install.ps1 | iex
  ==============================================================================
 #>
 
