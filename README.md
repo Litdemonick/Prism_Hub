@@ -1,6 +1,6 @@
 <div align="center">
 
-<img width="160" src="./icons/logo.png" alt="PrismHub Logo"/>
+<img width="280" src="./icons/logo.png" alt="PrismHub Logo"/>
 
 # PrismHub
 
