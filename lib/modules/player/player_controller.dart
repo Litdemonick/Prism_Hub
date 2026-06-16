@@ -173,18 +173,34 @@ class PlayerController extends GetxController {
     await _player.seek(pos);
   }
 
+  // Mismo UA que el proxy HLS — garantiza que libmpv no use Lavf/... en mp4 directos.
+  static const _browserUa =
+      'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 '
+      '(KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36';
+
   Future<void> _openStream(WatchStream stream) async {
     _streamAccepted = false; // resetear para cada URL nueva
     selectedStream.value = stream;
 
-    // Para HLS con cabeceras, enrutar por el proxy local: garantiza que el
-    // Referer/Cookie/Origin lleguen a cada segmento (evita los 403 que dejan el
-    // vídeo en buffering infinito). Para mp4 directo devuelve la URL original.
+    // Para HLS, enrutar por el proxy local (inyecta UA + Referer en segmentos).
+    // Para mp4 directo, pasar headers a Media() directamente — libmpv los aplica
+    // a todas las peticiones, igual que hace JiruHub para evitar 403 en CDN.
     final playUrl = await HlsProxyService.resolve(stream.url, stream.headers);
     final useProxy = playUrl != stream.url;
 
+    final Map<String, String> mediaHeaders;
+    if (useProxy) {
+      mediaHeaders = const {}; // el proxy maneja todo
+    } else {
+      final h = Map<String, String>.from(stream.headers ?? {});
+      if (!h.keys.any((k) => k.toLowerCase() == 'user-agent')) {
+        h['User-Agent'] = _browserUa;
+      }
+      mediaHeaders = h;
+    }
+
     await _player.open(
-      Media(playUrl, httpHeaders: useProxy ? const {} : (stream.headers ?? {})),
+      Media(playUrl, httpHeaders: mediaHeaders),
     );
   }
 
