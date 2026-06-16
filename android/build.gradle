@@ -19,17 +19,10 @@ tasks.register("clean", Delete) {
     delete rootProject.buildDir
 }
 
-// Fix all Android subprojects/plugins after their build.gradle runs
+// AGP 8.7+ requires 'namespace' in every library build.gradle.
+// Old Flutter plugins only declare it in AndroidManifest.xml — read it from there.
 gradle.afterProject { proj ->
     if (proj == rootProject || !proj.hasProperty('android')) return
-
-    // Force compileSdk 34 — android-36 jar is broken on CI runners
-    proj.android {
-        compileSdk 34
-    }
-
-    // AGP 8.7+ requires 'namespace' in every library build.gradle.
-    // Old Flutter plugins only declare it in AndroidManifest.xml — read it from there.
     try {
         if (!proj.android.namespace) {
             def manifest = proj.file("src/main/AndroidManifest.xml")
