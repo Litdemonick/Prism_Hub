@@ -712,6 +712,16 @@ class _Footer extends StatelessWidget {
                   icon: const Icon(Icons.video_file),
                 );
               }),
+              // 选择服务器 (server selector)
+              Obx(() {
+                if (controller.availableServers.isEmpty) {
+                  return const SizedBox.shrink();
+                }
+                return IconButton(
+                  onPressed: () => showServerSheet(context, controller),
+                  icon: const Icon(Icons.dns),
+                );
+              }),
               IconButton(
                 onPressed: () {
                   controller.toggleSideBar(SidebarTab.tracks);
@@ -831,4 +841,61 @@ class _SeekBarState extends State<_SeekBar> {
       ),
     );
   }
+}
+
+// Server selector bottom sheet for the mobile player (parity with desktop).
+void showServerSheet(BuildContext context, VideoPlayerController controller) {
+  showModalBottomSheet(
+    context: context,
+    showDragHandle: true,
+    builder: (_) => SafeArea(
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+            child: Row(
+              children: [
+                const Icon(Icons.dns, size: 18),
+                const SizedBox(width: 8),
+                Text(
+                  'video.servers'.i18n,
+                  style: const TextStyle(fontWeight: FontWeight.bold),
+                ),
+              ],
+            ),
+          ),
+          const Divider(height: 1),
+          Flexible(
+            child: Obx(
+              () => ListView(
+                shrinkWrap: true,
+                children: [
+                  for (final entry in controller.availableServers.entries)
+                    ListTile(
+                      leading: Icon(
+                        controller.currentServerName.value == entry.key
+                            ? Icons.check_circle
+                            : Icons.dns_outlined,
+                        color: controller.currentServerName.value == entry.key
+                            ? Colors.purpleAccent
+                            : null,
+                      ),
+                      title: Text(entry.key),
+                      selected: controller.currentServerName.value == entry.key,
+                      onTap: controller.currentServerName.value == entry.key
+                          ? null
+                          : () {
+                              Navigator.of(context).pop();
+                              controller.switchServer(entry.key);
+                            },
+                    ),
+                ],
+              ),
+            ),
+          ),
+        ],
+      ),
+    ),
+  );
 }

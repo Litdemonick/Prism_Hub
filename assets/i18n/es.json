@@ -32,7 +32,8 @@
     "login": "Iniciar sesión",
     "no-data": "Sin datos",
     "clear": "Limpiar",
-    "export": "Exportar"
+    "export": "Exportar",
+    "no-internet": "Conéctate a internet para cargar el contenido"
   },
   "home": {
     "continue-watching": "Continuar",
@@ -173,7 +174,8 @@
       "full-screen": "Pantalla completa",
       "volume": "Volumen",
       "torrent-file-list": "Lista de archivos torrent"
-    }
+    },
+    "servers": "Servidores"
   },
   "comic-settings": {
     "read-mode": "Modo de lectura",

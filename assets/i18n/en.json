@@ -51,7 +51,8 @@
     "export": "Export",
     "off": "Off",
     "error-message": "Error message",
-    "disconnect": "Disconnect"
+    "disconnect": "Disconnect",
+    "no-internet": "Connect to the internet to load content"
   },
   "home": {
     "continue-watching": "Continue",
@@ -225,7 +226,8 @@
         "single": "Single",
         "auto-next": "Auto next"
       }
-    }
+    },
+    "servers": "Servers"
   },
   "comic-settings": {
     "read-mode": "Read mode",

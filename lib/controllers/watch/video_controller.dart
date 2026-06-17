@@ -210,6 +210,10 @@ class VideoPlayerController extends GetxController {
       await np.setProperty('network-timeout', '5');
       await np.setProperty(
           'demuxer-lavf-o', 'reconnect=0,reconnect_delay_max=0');
+      // Muchos m3u8 de hosts (voe, netu, etc.) referencian segmentos en otro
+      // dominio; mpv los marca "unsafe" y se niega a cargarlos. Permitirlo
+      // hace que esos streams reproduzcan en vez de fallar.
+      await np.setProperty('load-unsafe-playlists', 'yes');
     }
     play();
 
