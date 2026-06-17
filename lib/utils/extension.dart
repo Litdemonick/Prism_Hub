@@ -103,14 +103,21 @@ class ExtensionUtils {
   static bool isNativePackage(String package) =>
       nativePackages.contains(package);
 
-  // Install prism+ default extensions from the repo on first launch only, so
-  // they appear ready to use. Downloads (not bundled) keep prism+ the single
-  // source of truth and always fresh. Stays pending if offline so it retries.
+  static final RegExp _versionHeader = RegExp(r'@version\s+([^\s\r\n]+)');
+
+  static String? _scriptVersion(String script) =>
+      _versionHeader.firstMatch(script)?.group(1)?.replaceFirst('v', '').trim();
+
+  // Sync prism+ native default extensions from the repo on every launch:
+  //  - first run: install the curated natives so they appear ready to use
+  //  - later: re-download a native if the repo has a newer version (so fixes
+  //    to resolvers/scrapers reach the app without reinstalling by hand)
+  //  - respects user removals: a native the user deleted is not re-added
+  // prism+ stays the single source of truth (no bundled copies). Offline-safe.
   static Future<void> _installDefaultsFromRepo() async {
-    if (PrismHubStorage.getSetting(SettingKey.defaultExtensionsInstalled) ==
-        true) {
-      return;
-    }
+    final firstRun = PrismHubStorage.getSetting(
+            SettingKey.defaultExtensionsInstalled) !=
+        true;
     try {
       final repoUrl = PrismHubStorage.getSetting(SettingKey.prismhubRepoUrl);
       final res = await dio.get<String>('$repoUrl/index.json');
@@ -121,11 +128,20 @@ class ExtensionUtils {
         final pkg = e['package']?.toString();
         final scriptUrl = (e['script'] ?? e['url'])?.toString();
         if (pkg == null || scriptUrl == null) continue;
-        // Pre-install only the curated native defaults; the rest of the prism+
-        // catalog is added by the user from the repo page over time.
+        // Only the curated natives are managed here; the rest of the catalog is
+        // installed by the user from the repo page.
         if (!isNativePackage(pkg)) continue;
+
         final dest = File(path.join(extensionsDir, '$pkg.js'));
-        if (dest.existsSync()) continue;
+        final exists = dest.existsSync();
+        // The user removed this native — don't bring it back on later launches.
+        if (!exists && !firstRun) continue;
+        // Already installed: only re-download when the repo version is different.
+        if (exists) {
+          final repoVersion = e['version']?.toString().replaceFirst('v', '');
+          final localVersion = _scriptVersion(dest.readAsStringSync());
+          if (repoVersion == null || repoVersion == localVersion) continue;
+        }
         final js = await dio.get<String>(scriptUrl);
         if (js.data != null && js.data!.isNotEmpty) {
           dest.writeAsStringSync(js.data!);
@@ -134,9 +150,9 @@ class ExtensionUtils {
       await PrismHubStorage.setSetting(
           SettingKey.defaultExtensionsInstalled, true);
     } catch (e) {
-      // Likely offline on first run — leave the flag unset so we retry next
-      // launch. The app still works; extensions can be installed from the repo.
-      debugPrint('No se pudieron instalar las extensiones por defecto: $e');
+      // Offline / repo unreachable — keep working with what's installed and
+      // retry next launch (the first-run flag stays unset until it succeeds).
+      debugPrint('No se pudieron sincronizar las extensiones por defecto: $e');
     }
   }
 
