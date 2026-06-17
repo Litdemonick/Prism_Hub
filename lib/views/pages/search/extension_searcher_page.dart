@@ -10,6 +10,7 @@ import 'package:prismhub/models/index.dart';
 import 'package:prismhub/router/router.dart';
 import 'package:prismhub/utils/extension.dart';
 import 'package:prismhub/data/services/extension_service.dart';
+import 'package:prismhub/utils/error.dart';
 import 'package:prismhub/utils/i18n.dart';
 import 'package:prismhub/views/widgets/button.dart';
 import 'package:prismhub/views/widgets/extension_item_card.dart';
@@ -96,7 +97,7 @@ class _ExtensionSearcherPageState extends fluent.State<ExtensionSearcherPage> {
       _page++;
     } catch (e) {
       // ignore: use_build_context_synchronously
-      showPlatformSnackbar(context: context, content: e.toString(), severity: fluent.InfoBarSeverity.error);
+      showPlatformSnackbar(context: context, content: friendlyError(e), severity: fluent.InfoBarSeverity.error);
       rethrow;
     } finally {
       _isLoading = false;

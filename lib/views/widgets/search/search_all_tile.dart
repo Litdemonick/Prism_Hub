@@ -2,6 +2,7 @@
 
 import 'package:flutter/material.dart';
 import 'package:prismhub/controllers/search_controller.dart';
+import 'package:prismhub/utils/error.dart';
 import 'package:prismhub/utils/i18n.dart';
 import 'package:prismhub/views/widgets/extension_item_card.dart';
 import 'package:prismhub/views/widgets/horizontal_list.dart';
@@ -32,7 +33,18 @@ class _SearchAllTileState extends State<SearchAllTile> {
         title: widget.searchResult.runitme.extension.name,
         contentBuilder: (controller) {
           if (widget.searchResult.error != null) {
-            return Text(widget.searchResult.error!.split('\n').first);
+            final err = widget.searchResult.error!;
+            if (isConnectionError(err)) {
+              return Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  const Icon(Icons.wifi_off, size: 16),
+                  const SizedBox(width: 6),
+                  Flexible(child: Text('common.no-internet'.i18n)),
+                ],
+              );
+            }
+            return Text(friendlyError(err));
           }
           if (widget.searchResult.result == null) {
             return const ProgressRing();
