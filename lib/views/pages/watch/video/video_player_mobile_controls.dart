@@ -11,6 +11,7 @@ import 'package:prismhub/utils/layout.dart';
 import 'package:prismhub/utils/router.dart';
 import 'package:prismhub/views/pages/watch/video/video_player_cast.dart';
 import 'package:prismhub/views/pages/watch/video/video_player_sidebar.dart';
+import 'package:prismhub/views/pages/watch/video/webview_player_page.dart';
 import 'package:prismhub/views/widgets/cache_network_image.dart';
 import 'package:prismhub/views/widgets/progress.dart';
 import 'package:screen_brightness/screen_brightness.dart';
@@ -872,24 +873,35 @@ void showServerSheet(BuildContext context, VideoPlayerController controller) {
                 shrinkWrap: true,
                 children: [
                   for (final entry in controller.availableServers.entries)
-                    ListTile(
-                      leading: Icon(
-                        controller.currentServerName.value == entry.key
-                            ? Icons.check_circle
-                            : Icons.dns_outlined,
-                        color: controller.currentServerName.value == entry.key
-                            ? Colors.purpleAccent
-                            : null,
-                      ),
-                      title: Text(entry.key),
-                      selected: controller.currentServerName.value == entry.key,
-                      onTap: controller.currentServerName.value == entry.key
-                          ? null
-                          : () {
-                              Navigator.of(context).pop();
-                              controller.switchServer(entry.key);
-                            },
-                    ),
+                    Builder(builder: (_) {
+                      final isCurrent =
+                          controller.currentServerName.value == entry.key;
+                      final direct = isDirectStream(entry.value);
+                      return ListTile(
+                        leading: Icon(
+                          isCurrent
+                              ? Icons.check_circle
+                              : (direct ? Icons.dns_outlined : Icons.public),
+                          color: isCurrent ? Colors.purpleAccent : null,
+                        ),
+                        title: Text(entry.key),
+                        // Servidores no-directos abren en el navegador embebido.
+                        subtitle: direct
+                            ? null
+                            : Text('video.webview-server'.i18n,
+                                style: const TextStyle(fontSize: 11)),
+                        selected: isCurrent,
+                        onTap: () {
+                          Navigator.of(context).pop();
+                          if (direct) {
+                            if (!isCurrent) controller.switchServer(entry.key);
+                          } else {
+                            openWebViewPlayer(context, entry.value,
+                                referer: controller.serverReferers[entry.key]);
+                          }
+                        },
+                      );
+                    }),
                 ],
               ),
             ),

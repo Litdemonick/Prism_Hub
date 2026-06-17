@@ -225,7 +225,14 @@ class ExtensionUtils {
     BuildContext context, {
     bool safeReload = false,
   }) async {
-    final ext = ExtensionUtils.parseExtension(script);
+    // Parse defensively: a .js without a valid @package header otherwise throws
+    // an ugly "Null is not a subtype of String" instead of a clean notice.
+    Extension ext;
+    try {
+      ext = ExtensionUtils.parseExtension(script);
+    } catch (_) {
+      throw Exception('extension.invalid'.i18n);
+    }
     // Validate: reject garbage so a malformed paste can't write junk files,
     // and reject unsafe package ids (path traversal) so a malicious extension
     // can't escape the extensions directory.

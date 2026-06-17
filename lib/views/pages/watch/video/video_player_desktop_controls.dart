@@ -8,6 +8,7 @@ import 'package:media_kit_video/media_kit_video.dart';
 import 'package:prismhub/controllers/watch/video_controller.dart';
 import 'package:prismhub/router/router.dart';
 import 'package:prismhub/utils/i18n.dart';
+import 'package:prismhub/views/pages/watch/video/webview_player_page.dart';
 import 'package:prismhub/views/widgets/cache_network_image.dart';
 import 'package:prismhub/views/widgets/watch/playlist.dart';
 import 'package:window_manager/window_manager.dart';
@@ -1316,22 +1317,42 @@ class _ServerSelectorState extends State<_ServerSelector> {
                                           widget.controller.currentServerName
                                                   .value ==
                                               entry.key;
+                                      final direct =
+                                          isDirectStream(entry.value);
                                       return ListTile.selectable(
                                         selected: isCurrent,
                                         leading: Icon(
                                           isCurrent
                                               ? FluentIcons.check_mark
-                                              : FluentIcons.server,
+                                              : (direct
+                                                  ? FluentIcons.server
+                                                  : FluentIcons.globe),
                                           size: 16,
                                         ),
                                         title: Text(entry.key),
-                                        onPressed: isCurrent
+                                        subtitle: direct
                                             ? null
-                                            : () async {
-                                                router.pop();
-                                                await widget.controller
-                                                    .switchServer(entry.key);
-                                              },
+                                            : Text(
+                                                'video.webview-server'.i18n,
+                                                style: const TextStyle(
+                                                    fontSize: 11),
+                                              ),
+                                        onPressed: () {
+                                          router.pop();
+                                          if (direct) {
+                                            if (!isCurrent) {
+                                              widget.controller
+                                                  .switchServer(entry.key);
+                                            }
+                                          } else {
+                                            openWebViewPlayer(
+                                              context,
+                                              entry.value,
+                                              referer: widget.controller
+                                                  .serverReferers[entry.key],
+                                            );
+                                          }
+                                        },
                                       );
                                     }),
                                 ],

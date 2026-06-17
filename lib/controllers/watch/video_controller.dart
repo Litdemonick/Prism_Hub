@@ -31,6 +31,8 @@ import 'package:prismhub/utils/i18n.dart';
 import 'package:prismhub/utils/layout.dart';
 import 'package:prismhub/utils/prismhub_directory.dart';
 import 'package:prismhub/views/pages/watch/video/video_player_sidebar.dart';
+import 'package:prismhub/views/pages/watch/video/webview_player_page.dart'
+    show isDirectStream;
 import 'package:window_manager/window_manager.dart';
 import 'package:path/path.dart' as path;
 import 'package:fluent_ui/fluent_ui.dart' as fluent;
@@ -493,6 +495,14 @@ class VideoPlayerController extends GetxController {
             logger.info('Servidores disponibles para failover: ${serverEntries.map((e) => e.key).toList()}');
             for (final entry in serverEntries) {
               if (entry.key == currentServerName.value) continue;
+              // Los embeds no-directos (mega, doodstream, voe bloqueado, etc.) no
+              // los puede reproducir el player nativo: media_kit abriría un HTML y
+              // gastaría hasta 12s antes de fallar. Se omiten en el failover nativo
+              // — el usuario los reproduce vía WebView desde el selector de servers.
+              if (!isDirectStream(entry.value)) {
+                logger.info('Failover → omitiendo embed (va por WebView): ${entry.key}');
+                continue;
+              }
               try {
                 logger.info('Failover → probando servidor: ${entry.key}');
                 serverFailedMessage.value =
