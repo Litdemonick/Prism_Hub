@@ -175,7 +175,8 @@
       "volume": "Volumen",
       "torrent-file-list": "Lista de archivos torrent"
     },
-    "servers": "Servidores"
+    "servers": "Servidores",
+    "webview-server": "Abre en el navegador"
   },
   "comic-settings": {
     "read-mode": "Modo de lectura",

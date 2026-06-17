@@ -126,7 +126,9 @@ class _ExtensionRepoPageState extends State<ExtensionRepoPage> {
               version: e['version'] ?? '',
               package: e['package'] ?? '',
               lang: e['lang'] ?? 'all',
-              url: e['url'],
+              // El catálogo de prism+ trae la URL del bundle en `script`;
+              // repos antiguos usaban `url`. Soportar ambos.
+              url: e['script'] ?? e['url'],
               webSite: e['webSite'],
               license: e['license'],
               description: e['description'],

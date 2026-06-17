@@ -227,7 +227,8 @@
         "auto-next": "Auto next"
       }
     },
-    "servers": "Servers"
+    "servers": "Servers",
+    "webview-server": "Opens in browser"
   },
   "comic-settings": {
     "read-mode": "Read mode",

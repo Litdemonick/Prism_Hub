@@ -34,7 +34,10 @@ class ExtensionRepoPageController extends GetxController {
       final url = '${PrismHubStorage.getSetting(SettingKey.prismhubRepoUrl)}/index.json';
       debugPrint('🔍 Extension repo URL: $url');
       final res = await dio.get<String>(url);
-      extensions = jsonDecode(res.data!);
+      final decoded = jsonDecode(res.data!);
+      // El catálogo de prism+ es {name, extensions:[...]}; repos antiguos eran
+      // una lista pelada. Soportar ambos.
+      extensions = decoded is Map ? (decoded['extensions'] ?? []) : decoded;
       if (!PrismHubStorage.getSetting(SettingKey.enableNSFW)) {
         extensions.removeWhere((element) => element['nsfw'] == "true");
       }
