@@ -29,7 +29,7 @@
     "save": "Guardar",
     "save-success": "Guardado con éxito",
     "logout": "Cerrar sesión",
-    "login": "Iniciar sesión", 
+    "login": "Iniciar sesión",
     "no-data": "Sin datos",
     "clear": "Limpiar",
     "export": "Exportar"
@@ -56,7 +56,10 @@
     },
     "error-dialog": "Mensaje de error",
     "installed": "Instalado",
-    "edit-code": "Código de edición"
+    "edit-code": "Código de edición",
+    "already-native": "Esta extensión ya está integrada de forma nativa en Prism+ con mejor rendimiento. No es necesario instalarla externamente.",
+    "invalid": "La extensión no es válida o está dañada. No se instaló.",
+    "not-working": "Esta extensión no funciona por el momento"
   },
   "extension-repo": {
     "error": "¡Ha ocurrido un error!",

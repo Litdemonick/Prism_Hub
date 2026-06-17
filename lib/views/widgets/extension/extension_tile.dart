@@ -24,28 +24,62 @@ class _ExtensionTileState extends State<ExtensionTile> {
   final fluent.FlyoutController moreFlyoutController =
       fluent.FlyoutController();
 
+  late bool _enabled = ExtensionUtils.isEnabled(widget.extension.package);
+
+  Future<void> _toggleEnabled(bool value) async {
+    setState(() => _enabled = value);
+    await ExtensionUtils.setExtensionEnabled(widget.extension.package, value);
+  }
+
   Widget _buildAndroid(BuildContext context) {
     return ListTile(
-      leading: SizedBox(
-        width: 35,
-        height: 35,
-        child: CacheNetWorkImagePic(
-          widget.extension.icon ?? '',
-          key: ValueKey(widget.extension.icon),
-          fit: BoxFit.contain,
-          fallback: const Icon(Icons.extension),
+      leading: Opacity(
+        opacity: _enabled ? 1 : 0.4,
+        child: SizedBox(
+          width: 35,
+          height: 35,
+          child: CacheNetWorkImagePic(
+            widget.extension.icon ?? '',
+            key: ValueKey(widget.extension.icon),
+            fit: BoxFit.contain,
+            fallback: const Icon(Icons.extension),
+          ),
         ),
       ),
       title: Text(widget.extension.name),
-      subtitle: Text(
-        '${widget.extension.version}  ${ExtensionUtils.typeToString(widget.extension.type)} ',
-        style: const TextStyle(fontSize: 12),
+      subtitle: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Text(
+            '${widget.extension.version}  ${ExtensionUtils.typeToString(widget.extension.type)} ',
+            style: const TextStyle(fontSize: 12),
+          ),
+          if (ExtensionUtils.isFailing(widget.extension.package))
+            Row(
+              children: [
+                const Icon(Icons.warning_amber_rounded,
+                    size: 13, color: Colors.orange),
+                const SizedBox(width: 4),
+                Expanded(
+                  child: Text(
+                    'extension.not-working'.i18n,
+                    style: const TextStyle(fontSize: 11, color: Colors.orange),
+                  ),
+                ),
+              ],
+            ),
+        ],
       ),
       onTap: () {
         Get.to(ExtensionSettingsPage(package: widget.extension.package));
       },
-      trailing: IconButton(
-        onPressed: () {
+      trailing: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Switch(value: _enabled, onChanged: _toggleEnabled),
+          IconButton(
+            onPressed: () {
           // 弹出菜单
           showModalBottomSheet(
             context: context,
@@ -73,8 +107,10 @@ class _ExtensionTileState extends State<ExtensionTile> {
               );
             },
           );
-        },
-        icon: const Icon(Icons.more_vert),
+            },
+            icon: const Icon(Icons.more_vert),
+          ),
+        ],
       ),
     );
   }
@@ -120,6 +156,22 @@ class _ExtensionTileState extends State<ExtensionTile> {
                         widget.extension.author,
                         style: const TextStyle(fontSize: 12),
                       ),
+                      if (ExtensionUtils.isFailing(widget.extension.package))
+                        Row(
+                          children: [
+                            const Icon(fluent.FluentIcons.warning,
+                                size: 12, color: Colors.orange),
+                            const SizedBox(width: 4),
+                            Flexible(
+                              child: Text(
+                                'extension.not-working'.i18n,
+                                style: const TextStyle(
+                                    fontSize: 11, color: Colors.orange),
+                                overflow: TextOverflow.ellipsis,
+                              ),
+                            ),
+                          ],
+                        ),
                     ],
                   ),
                 ),
@@ -131,6 +183,11 @@ class _ExtensionTileState extends State<ExtensionTile> {
             child: Text(ExtensionUtils.typeToString(widget.extension.type)),
           ),
           const Spacer(),
+          fluent.ToggleSwitch(
+            checked: _enabled,
+            onChanged: _toggleEnabled,
+          ),
+          const SizedBox(width: 8),
           fluent.IconButton(
               // child: Padding(
               //   padding: const EdgeInsets.symmetric(

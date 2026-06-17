@@ -12,6 +12,7 @@ import 'package:prismhub/controllers/settings_controller.dart';
 import 'package:prismhub/data/services/extension_service.dart';
 import 'package:prismhub/utils/i18n.dart';
 import 'package:prismhub/utils/prismhub_directory.dart';
+import 'package:prismhub/utils/prismhub_storage.dart';
 import 'package:prismhub/utils/request.dart';
 import 'package:prismhub/utils/router.dart';
 import 'package:prismhub/views/widgets/button.dart';
@@ -22,15 +23,128 @@ class ExtensionUtils {
   static Map<String, ExtensionService> runtimes = {};
   static Map<String, String> extensionErrorMap = {};
 
+  // Runtime failures: the extension loaded fine but failed when used (site down,
+  // extraction failed, etc.). Surfaced in the UI so the user sees a source is
+  // currently not working.
+  static Map<String, String> runtimeErrors = {};
+
+  static void reportRuntimeError(String package, String reason) {
+    if (package.isEmpty) return;
+    runtimeErrors[package] = reason;
+    _safeReloadPage();
+  }
+
+  static void clearRuntimeError(String package) {
+    if (runtimeErrors.remove(package) != null) _safeReloadPage();
+  }
+
+  // True if this extension is currently failing (loaded but unusable).
+  static bool isFailing(String package) => runtimeErrors.containsKey(package);
+
   static String get extensionsDir => path.join(
         PrismHubDirectory.getDirectory,
         'extensions',
       );
 
+  // 已禁用的扩展 (enable/disable). Disabled extensions stay installed but are
+  // excluded from search/discovery.
+  static List<String> get disabledExtensions =>
+      ((PrismHubStorage.getSetting(SettingKey.disabledExtensions) as List?)
+              ?.cast<String>()) ??
+      <String>[];
+
+  static bool isEnabled(String package) =>
+      !disabledExtensions.contains(package);
+
+  // Join an extension's webSite with a possibly-relative url, guaranteeing
+  // exactly one slash. Extensions are inconsistent: some return '/path', some
+  // a bare slug ('foo-bar'), some an absolute URL. Naive `webSite + url`
+  // produces broken hosts like 'https://site.comfoo-bar'.
+  static String joinWebUrl(String webSite, String url) {
+    if (url.startsWith('http://') || url.startsWith('https://')) return url;
+    final base = webSite.endsWith('/')
+        ? webSite.substring(0, webSite.length - 1)
+        : webSite;
+    final path = url.startsWith('/') ? url : '/$url';
+    return '$base$path';
+  }
+
+  static Future<void> setExtensionEnabled(String package, bool enabled) async {
+    final list = disabledExtensions;
+    if (enabled) {
+      list.remove(package);
+    } else if (!list.contains(package)) {
+      list.add(package);
+    }
+    await PrismHubStorage.setSetting(SettingKey.disabledExtensions, list);
+    _reloadPage();
+  }
+
+  // Only enabled runtimes — used for search/discovery so disabled sources hide.
+  static Map<String, ExtensionService> get enabledRuntimes =>
+      Map.fromEntries(runtimes.entries.where((e) => isEnabled(e.key)));
+
+  // Packages shipped natively by prism+. prism+ (the repo) is the single source
+  // of truth — the app installs these from the repo on first launch (not
+  // bundled) and blocks external installs that collide with them.
+  static const Set<String> nativePackages = {
+    'io.prismhub.animeflv',
+    'io.prismhub.animepahe',
+    'io.prismhub.comick',
+    'io.prismhub.jikan',
+    'io.prismhub.mangabat',
+    'io.prismhub.mangadex',
+    'io.prismhub.monoschinos',
+    'io.prismhub.omegascans',
+    'io.prismhub.tioanime',
+    'io.prismhub.yts',
+  };
+
+  static bool isNativePackage(String package) =>
+      nativePackages.contains(package);
+
+  // Install prism+ default extensions from the repo on first launch only, so
+  // they appear ready to use. Downloads (not bundled) keep prism+ the single
+  // source of truth and always fresh. Stays pending if offline so it retries.
+  static Future<void> _installDefaultsFromRepo() async {
+    if (PrismHubStorage.getSetting(SettingKey.defaultExtensionsInstalled) ==
+        true) {
+      return;
+    }
+    try {
+      final repoUrl = PrismHubStorage.getSetting(SettingKey.prismhubRepoUrl);
+      final res = await dio.get<String>('$repoUrl/index.json');
+      final decoded = jsonDecode(res.data!);
+      final List list =
+          decoded is Map ? (decoded['extensions'] ?? []) : decoded;
+      for (final e in list) {
+        final pkg = e['package']?.toString();
+        final scriptUrl = (e['script'] ?? e['url'])?.toString();
+        if (pkg == null || scriptUrl == null) continue;
+        // Pre-install only the curated native defaults; the rest of the prism+
+        // catalog is added by the user from the repo page over time.
+        if (!isNativePackage(pkg)) continue;
+        final dest = File(path.join(extensionsDir, '$pkg.js'));
+        if (dest.existsSync()) continue;
+        final js = await dio.get<String>(scriptUrl);
+        if (js.data != null && js.data!.isNotEmpty) {
+          dest.writeAsStringSync(js.data!);
+        }
+      }
+      await PrismHubStorage.setSetting(
+          SettingKey.defaultExtensionsInstalled, true);
+    } catch (e) {
+      // Likely offline on first run — leave the flag unset so we retry next
+      // launch. The app still works; extensions can be installed from the repo.
+      debugPrint('No se pudieron instalar las extensiones por defecto: $e');
+    }
+  }
+
   // 初始化扩展
   static ensureInitialized() async {
     // 创建目录
     Directory(extensionsDir).createSync(recursive: true);
+    await _installDefaultsFromRepo();
     await _loadExtensions();
     // 监听目录变化
     Directory(extensionsDir).watch().listen((event) async {
@@ -75,19 +189,50 @@ class ExtensionUtils {
     }
   }
 
+  // True if an external extension collides with a native prism+ one (by
+  // package id or by name) — those are blocked from external install.
+  static bool isDuplicateOfNative(Extension ext) {
+    if (isNativePackage(ext.package)) return true;
+    final name = ext.name.toLowerCase().trim();
+    if (name.isEmpty) return false;
+    return runtimes.values.any((r) =>
+        isNativePackage(r.extension.package) &&
+        r.extension.name.toLowerCase().trim() == name);
+  }
+
   static Future<void> _saveAndInit(
     String script,
     BuildContext context, {
     bool safeReload = false,
   }) async {
     final ext = ExtensionUtils.parseExtension(script);
-    final savePath = path.join(extensionsDir, '${ext.package}.js');
-    _loading.add(ext.package);
+    // Validate: reject garbage so a malformed paste can't write junk files,
+    // and reject unsafe package ids (path traversal) so a malicious extension
+    // can't escape the extensions directory.
+    final pkg = ext.package.trim();
+    if (pkg.isEmpty || !RegExp(r'^[a-zA-Z0-9._-]+$').hasMatch(pkg)) {
+      throw Exception('extension.invalid'.i18n);
+    }
+    // Black-box filter: an extension already shipped natively by prism+ must
+    // not be installed externally — the native build is preferred.
+    if (isDuplicateOfNative(ext)) {
+      throw Exception('extension.already-native'.i18n);
+    }
+    final savePath = path.join(extensionsDir, '$pkg.js');
+    _loading.add(pkg);
     File(savePath).writeAsStringSync(script);
     try {
-      runtimes[ext.package] = await ExtensionService().initRuntime(ext);
+      runtimes[pkg] = await ExtensionService().initRuntime(ext);
+    } catch (e) {
+      // Init failed — remove the bad runtime and file so it doesn't persist
+      // and break loading on the next launch.
+      runtimes.remove(pkg);
+      try {
+        File(savePath).deleteSync();
+      } catch (_) {}
+      rethrow;
     } finally {
-      _loading.remove(ext.package);
+      _loading.remove(pkg);
     }
     safeReload ? _safeReloadPage() : _reloadPage();
   }

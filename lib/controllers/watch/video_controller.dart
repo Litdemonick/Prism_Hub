@@ -36,6 +36,7 @@ import 'package:path/path.dart' as path;
 import 'package:fluent_ui/fluent_ui.dart' as fluent;
 import 'package:crypto/crypto.dart';
 import 'package:prismhub/utils/prismhub_storage.dart';
+import 'package:prismhub/utils/extension.dart';
 import 'package:flutter_hls_parser/flutter_hls_parser.dart';
 
 class VideoPlayerController extends GetxController {
@@ -548,6 +549,9 @@ class VideoPlayerController extends GetxController {
             if (!foundWorking) {
               final errorDetails = serverErrors.entries.map((e) => '${e.key}: ${e.value}').join(', ');
               logger.severe('Todos los servidores fallaron. Errores: $errorDetails');
+              // Flag the extension as currently not working so the user sees it.
+              ExtensionUtils.reportRuntimeError(
+                  runtime.extension.package, errorDetails);
               serverFailedMessage.value =
                   'Ningún servidor disponible desde tu red.\n'
                   'Errores: $errorDetails\n'
@@ -566,6 +570,8 @@ class VideoPlayerController extends GetxController {
         }
 
       }
+      // Playback resolved successfully — clear any previous "not working" flag.
+      ExtensionUtils.clearRuntimeError(runtime.extension.package);
       isGettingWatchData.value = false;
       // 添加来自扩展的字幕
       subtitles.addAll(
@@ -1062,7 +1068,39 @@ class VideoPlayerController extends GetxController {
       return false;
     }
     await player.open(Media(url, httpHeaders: headers));
-    return true;
+
+    // media_kit accepts any URL in open() but only reports an unplayable
+    // source (e.g. "Failed to recognize file format" for an HTML embed like
+    // mega.nz) later, asynchronously, via the error stream. Race a real
+    // success signal (duration / video params) against the error stream so a
+    // dead source fails over to the next server instead of showing a stuck
+    // player.
+    final completer = Completer<bool>();
+    final subs = <StreamSubscription>[];
+    void finish(bool ok) {
+      if (!completer.isCompleted) completer.complete(ok);
+    }
+
+    subs.add(player.stream.error.listen((e) {
+      logger.warning('media_kit no pudo reproducir ($url): $e');
+      finish(false);
+    }));
+    subs.add(player.stream.duration.listen((d) {
+      if (d > Duration.zero) finish(true);
+    }));
+    subs.add(player.stream.videoParams.listen((p) {
+      if ((p.w ?? 0) > 0 && (p.h ?? 0) > 0) finish(true);
+    }));
+
+    final ok = await completer.future
+        .timeout(const Duration(seconds: 12), onTimeout: () => false);
+    for (final s in subs) {
+      unawaited(s.cancel());
+    }
+    if (!ok) {
+      logger.info('Fuente no reproducible, se intentará failover: $url');
+    }
+    return ok;
   }
 
   // Inicializa mpv con una fuente local de video negro (sin red).

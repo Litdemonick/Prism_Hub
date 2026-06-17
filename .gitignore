@@ -58,3 +58,5 @@ Web/node_modules/
 
 # IDE
 .idea/
+# Android build artifacts
+/android/build/
