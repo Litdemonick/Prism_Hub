@@ -178,6 +178,8 @@ class PrismHubStorage {
 class SettingKey {
   static const theme = "Theme";
   static const prismhubRepoUrl = "prismhubRepoUrl";
+  static const defaultExtensionsInstalled = "DefaultExtensionsInstalled";
+  static const disabledExtensions = "DisabledExtensions";
   static const tmdbKey = 'TMDBKey';
   static const autoCheckUpdate = 'AutoCheckUpdate';
   static const language = 'Language';

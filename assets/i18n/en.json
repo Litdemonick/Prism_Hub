@@ -76,7 +76,10 @@
     },
     "error-dialog": "Error Message",
     "installed": "Installed",
-    "edit-code": "Edit Code"
+    "edit-code": "Edit Code",
+    "already-native": "This extension is already built into Prism+ natively with better performance. There is no need to install it externally.",
+    "invalid": "The extension is invalid or corrupted. It was not installed.",
+    "not-working": "This extension is not working at the moment"
   },
   "extension-repo": {
     "error": "An error occurred!",

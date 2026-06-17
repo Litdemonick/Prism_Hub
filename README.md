@@ -126,41 +126,27 @@ Descarga el `.apk` desde [Releases](https://github.com/Litdemonick/Prism_Hub/rel
 
 ## Extensiones
 
-PrismHub usa un sistema de dos repositorios de extensiones. Puedes tener ambos activos al mismo tiempo.
-
-### [prism+] Repositorio oficial — extensiones PrismHub
-
-Extensiones creadas y mantenidas por el equipo de PrismHub. Enfocadas en contenido en español. **Este repositorio viene configurado por defecto en la app.**
+PrismHub se alimenta de una **única fuente**: [**prism+**](https://github.com/Litdemonick/prism-plus), su motor de extensiones oficial. El repo comunitario ya fue fusionado dentro de prism+, así que todo el catálogo (161 extensiones) vive en un solo sitio.
 
 ```
 https://raw.githubusercontent.com/Litdemonick/prism-plus/main/index.json
 ```
 
-| Nombre | Idioma | Tipo | Sitio |
-|--------|--------|------|-------|
-| TioAnime | ES | Anime | tioanime.com |
-| AnimeFLV | ES / SUB | Anime | animeflv.net |
-| MonosChinos | ES | Anime | monoschinos.st |
-| Animepahe | EN | Anime | animepahe.ru |
-| MangaDex | Multi | Manga | mangadex.org |
-| MangaBat | EN | Manga | h.mangabat.com |
+### Cómo funciona
 
-### [comunidad] Repositorio de extensiones de la comunidad
+- **10 extensiones nativas vienen pre-instaladas y activas** al primer arranque (TioAnime, AnimeFLV, MonosChinos, Animepahe, MangaDex, MangaBat, Comick, OmegaScans, Jikan, YTS). Se descargan de prism+ — no van empaquetadas en la app, así que siempre están al día.
+- Las **otras ~151 extensiones** de la comunidad están en el catálogo, listas para **instalar cuando quieras** desde **Repositorio de extensiones**.
+- Cada extensión tiene un **switch para activar/desactivar** sin desinstalarla. Las desactivadas no aparecen en la búsqueda.
+- **Bloqueo de duplicados:** si intentas importar desde fuera una extensión que prism+ ya trae de forma nativa, la app la bloquea con un aviso — la versión nativa tiene prioridad.
+- Si añades una extensión externa propia (URL o archivo `.js`), se guarda en tu sistema y carga normalmente.
 
-Más de 150 extensiones en múltiples idiomas (anime, manga, novelas, películas). Basadas en el formato estándar de extensiones JS compatible con PrismHub.
+### Añadir / actualizar extensiones
 
-```
-https://raw.githubusercontent.com/Litdemonick/Prism_Hub/main/index.json
-```
+1. Abre PrismHub → **Extensiones**
+2. Pulsa el icono de **descarga** para ver el **Repositorio de extensiones** (catálogo prism+)
+3. Instala las que quieras; usa el **switch** para activarlas o desactivarlas
 
-> Las extensiones de prism+ tienen prioridad. Si una misma fuente existe en ambos repos, usa la de prism+ — las duplicadas han sido eliminadas del repo comunitario.
-
-### Cómo añadir un repositorio en la app
-
-1. Abre PrismHub
-2. Ve a **Ajustes → Extensiones → URL del repositorio**
-3. Pega la URL y guarda
-4. En la sección **Repositorio de extensiones**, pulsa **Recargar**
+> prism+ es la única fuente y solo su mantenedor publica extensiones. El repo es público (para que la app pueda descargarlas) pero cerrado a contribuciones externas.
 
 ---
 

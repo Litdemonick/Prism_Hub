@@ -81,7 +81,7 @@ class DetailPageController extends GetxController {
           final webview = FlutterWindowsWebview();
           await webview.setUA(PrismHubStorage.getUASetting());
           webview.launchWebview(
-            extension!.webSite + url,
+            ExtensionUtils.joinWebUrl(extension!.webSite, url),
             WebviewOptions(
               onNavigation: (url) {
                 if (Uri.parse(url).host != Uri.parse(extension!.webSite).host) {

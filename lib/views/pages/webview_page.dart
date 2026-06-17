@@ -1,6 +1,7 @@
 ﻿import 'package:flutter/material.dart';
 import 'package:flutter_inappwebview/flutter_inappwebview.dart';
 import 'package:prismhub/data/services/extension_service.dart';
+import 'package:prismhub/utils/extension.dart';
 import 'package:prismhub/utils/prismhub_storage.dart';
 import 'package:webview_cookie_manager_plus/webview_cookie_manager_plus.dart';
 
@@ -18,7 +19,8 @@ class WebViewPage extends StatefulWidget {
 }
 
 class _WebViewPageState extends State<WebViewPage> {
-  late String url = widget.extensionRuntime.extension.webSite + widget.url;
+  late String url = ExtensionUtils.joinWebUrl(
+      widget.extensionRuntime.extension.webSite, widget.url);
   final cookieManager = WebviewCookieManager();
   late Uri loadUrl = Uri.parse(url);
 
