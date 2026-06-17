@@ -1,4 +1,4 @@
-﻿// GENERATED CODE - DO NOT MODIFY BY HAND
+// GENERATED CODE - DO NOT MODIFY BY HAND
 
 part of 'prismhub_detail.dart';
 
@@ -10,12 +10,12 @@ part of 'prismhub_detail.dart';
 // ignore_for_file: duplicate_ignore, non_constant_identifier_names, constant_identifier_names, invalid_use_of_protected_member, unnecessary_cast, prefer_const_constructors, lines_longer_than_80_chars, require_trailing_commas, inference_failure_on_function_invocation, unnecessary_parenthesis, unnecessary_raw_strings, unnecessary_null_checks, join_return_with_assignment, prefer_final_locals, avoid_js_rounded_ints, avoid_positional_boolean_parameters, always_specify_types
 
 extension GetPrismHubDetailCollection on Isar {
-  IsarCollection<PrismHubDetail> get PrismHubDetails => this.collection();
+  IsarCollection<PrismHubDetail> get prismHubDetails => this.collection();
 }
 
 const PrismHubDetailSchema = CollectionSchema(
   name: r'PrismHubDetail',
-  id: 1216732533843362544,
+  id: -5638653428456797213,
   properties: {
     r'aniListID': PropertySchema(
       id: 0,
@@ -48,10 +48,10 @@ const PrismHubDetailSchema = CollectionSchema(
       type: IsarType.string,
     )
   },
-  estimateSize: _PrismHubDetailEstimateSize,
-  serialize: _PrismHubDetailSerialize,
-  deserialize: _PrismHubDetailDeserialize,
-  deserializeProp: _PrismHubDetailDeserializeProp,
+  estimateSize: _prismHubDetailEstimateSize,
+  serialize: _prismHubDetailSerialize,
+  deserialize: _prismHubDetailDeserialize,
+  deserializeProp: _prismHubDetailDeserializeProp,
   idName: r'id',
   indexes: {
     r'package&url': IndexSchema(
@@ -75,13 +75,13 @@ const PrismHubDetailSchema = CollectionSchema(
   },
   links: {},
   embeddedSchemas: {},
-  getId: _PrismHubDetailGetId,
-  getLinks: _PrismHubDetailGetLinks,
-  attach: _PrismHubDetailAttach,
+  getId: _prismHubDetailGetId,
+  getLinks: _prismHubDetailGetLinks,
+  attach: _prismHubDetailAttach,
   version: '3.1.0+1',
 );
 
-int _PrismHubDetailEstimateSize(
+int _prismHubDetailEstimateSize(
   PrismHubDetail object,
   List<int> offsets,
   Map<Type, List<int>> allOffsets,
@@ -99,7 +99,7 @@ int _PrismHubDetailEstimateSize(
   return bytesCount;
 }
 
-void _PrismHubDetailSerialize(
+void _prismHubDetailSerialize(
   PrismHubDetail object,
   IsarWriter writer,
   List<int> offsets,
@@ -113,7 +113,7 @@ void _PrismHubDetailSerialize(
   writer.writeString(offsets[5], object.url);
 }
 
-PrismHubDetail _PrismHubDetailDeserialize(
+PrismHubDetail _prismHubDetailDeserialize(
   Id id,
   IsarReader reader,
   List<int> offsets,
@@ -130,7 +130,7 @@ PrismHubDetail _PrismHubDetailDeserialize(
   return object;
 }
 
-P _PrismHubDetailDeserializeProp<P>(
+P _prismHubDetailDeserializeProp<P>(
   IsarReader reader,
   int propertyId,
   int offset,
@@ -154,15 +154,15 @@ P _PrismHubDetailDeserializeProp<P>(
   }
 }
 
-Id _PrismHubDetailGetId(PrismHubDetail object) {
+Id _prismHubDetailGetId(PrismHubDetail object) {
   return object.id;
 }
 
-List<IsarLinkBase<dynamic>> _PrismHubDetailGetLinks(PrismHubDetail object) {
+List<IsarLinkBase<dynamic>> _prismHubDetailGetLinks(PrismHubDetail object) {
   return [];
 }
 
-void _PrismHubDetailAttach(
+void _prismHubDetailAttach(
     IsarCollection<dynamic> col, Id id, PrismHubDetail object) {
   object.id = id;
 }
@@ -494,7 +494,8 @@ extension PrismHubDetailQueryFilter
     });
   }
 
-  QueryBuilder<PrismHubDetail, PrismHubDetail, QAfterFilterCondition> dataEqualTo(
+  QueryBuilder<PrismHubDetail, PrismHubDetail, QAfterFilterCondition>
+      dataEqualTo(
     String value, {
     bool caseSensitive = true,
   }) {
@@ -539,7 +540,8 @@ extension PrismHubDetailQueryFilter
     });
   }
 
-  QueryBuilder<PrismHubDetail, PrismHubDetail, QAfterFilterCondition> dataBetween(
+  QueryBuilder<PrismHubDetail, PrismHubDetail, QAfterFilterCondition>
+      dataBetween(
     String lower,
     String upper, {
     bool includeLower = true,
@@ -597,9 +599,8 @@ extension PrismHubDetailQueryFilter
     });
   }
 
-  QueryBuilder<PrismHubDetail, PrismHubDetail, QAfterFilterCondition> dataMatches(
-      String pattern,
-      {bool caseSensitive = true}) {
+  QueryBuilder<PrismHubDetail, PrismHubDetail, QAfterFilterCondition>
+      dataMatches(String pattern, {bool caseSensitive = true}) {
     return QueryBuilder.apply(this, (query) {
       return query.addFilterCondition(FilterCondition.matches(
         property: r'data',
@@ -653,7 +654,8 @@ extension PrismHubDetailQueryFilter
     });
   }
 
-  QueryBuilder<PrismHubDetail, PrismHubDetail, QAfterFilterCondition> idLessThan(
+  QueryBuilder<PrismHubDetail, PrismHubDetail, QAfterFilterCondition>
+      idLessThan(
     Id value, {
     bool include = false,
   }) {
@@ -949,7 +951,8 @@ extension PrismHubDetailQueryFilter
     });
   }
 
-  QueryBuilder<PrismHubDetail, PrismHubDetail, QAfterFilterCondition> urlEqualTo(
+  QueryBuilder<PrismHubDetail, PrismHubDetail, QAfterFilterCondition>
+      urlEqualTo(
     String value, {
     bool caseSensitive = true,
   }) {
@@ -978,7 +981,8 @@ extension PrismHubDetailQueryFilter
     });
   }
 
-  QueryBuilder<PrismHubDetail, PrismHubDetail, QAfterFilterCondition> urlLessThan(
+  QueryBuilder<PrismHubDetail, PrismHubDetail, QAfterFilterCondition>
+      urlLessThan(
     String value, {
     bool include = false,
     bool caseSensitive = true,
@@ -993,7 +997,8 @@ extension PrismHubDetailQueryFilter
     });
   }
 
-  QueryBuilder<PrismHubDetail, PrismHubDetail, QAfterFilterCondition> urlBetween(
+  QueryBuilder<PrismHubDetail, PrismHubDetail, QAfterFilterCondition>
+      urlBetween(
     String lower,
     String upper, {
     bool includeLower = true,
@@ -1026,7 +1031,8 @@ extension PrismHubDetailQueryFilter
     });
   }
 
-  QueryBuilder<PrismHubDetail, PrismHubDetail, QAfterFilterCondition> urlEndsWith(
+  QueryBuilder<PrismHubDetail, PrismHubDetail, QAfterFilterCondition>
+      urlEndsWith(
     String value, {
     bool caseSensitive = true,
   }) {
@@ -1039,9 +1045,8 @@ extension PrismHubDetailQueryFilter
     });
   }
 
-  QueryBuilder<PrismHubDetail, PrismHubDetail, QAfterFilterCondition> urlContains(
-      String value,
-      {bool caseSensitive = true}) {
+  QueryBuilder<PrismHubDetail, PrismHubDetail, QAfterFilterCondition>
+      urlContains(String value, {bool caseSensitive = true}) {
     return QueryBuilder.apply(this, (query) {
       return query.addFilterCondition(FilterCondition.contains(
         property: r'url',
@@ -1051,9 +1056,8 @@ extension PrismHubDetailQueryFilter
     });
   }
 
-  QueryBuilder<PrismHubDetail, PrismHubDetail, QAfterFilterCondition> urlMatches(
-      String pattern,
-      {bool caseSensitive = true}) {
+  QueryBuilder<PrismHubDetail, PrismHubDetail, QAfterFilterCondition>
+      urlMatches(String pattern, {bool caseSensitive = true}) {
     return QueryBuilder.apply(this, (query) {
       return query.addFilterCondition(FilterCondition.matches(
         property: r'url',
@@ -1123,7 +1127,8 @@ extension PrismHubDetailQuerySortBy
     });
   }
 
-  QueryBuilder<PrismHubDetail, PrismHubDetail, QAfterSortBy> sortByPackageDesc() {
+  QueryBuilder<PrismHubDetail, PrismHubDetail, QAfterSortBy>
+      sortByPackageDesc() {
     return QueryBuilder.apply(this, (query) {
       return query.addSortBy(r'package', Sort.desc);
     });
@@ -1135,13 +1140,15 @@ extension PrismHubDetailQuerySortBy
     });
   }
 
-  QueryBuilder<PrismHubDetail, PrismHubDetail, QAfterSortBy> sortByTmdbIDDesc() {
+  QueryBuilder<PrismHubDetail, PrismHubDetail, QAfterSortBy>
+      sortByTmdbIDDesc() {
     return QueryBuilder.apply(this, (query) {
       return query.addSortBy(r'tmdbID', Sort.desc);
     });
   }
 
-  QueryBuilder<PrismHubDetail, PrismHubDetail, QAfterSortBy> sortByUpdateTime() {
+  QueryBuilder<PrismHubDetail, PrismHubDetail, QAfterSortBy>
+      sortByUpdateTime() {
     return QueryBuilder.apply(this, (query) {
       return query.addSortBy(r'updateTime', Sort.asc);
     });
@@ -1212,7 +1219,8 @@ extension PrismHubDetailQuerySortThenBy
     });
   }
 
-  QueryBuilder<PrismHubDetail, PrismHubDetail, QAfterSortBy> thenByPackageDesc() {
+  QueryBuilder<PrismHubDetail, PrismHubDetail, QAfterSortBy>
+      thenByPackageDesc() {
     return QueryBuilder.apply(this, (query) {
       return query.addSortBy(r'package', Sort.desc);
     });
@@ -1224,13 +1232,15 @@ extension PrismHubDetailQuerySortThenBy
     });
   }
 
-  QueryBuilder<PrismHubDetail, PrismHubDetail, QAfterSortBy> thenByTmdbIDDesc() {
+  QueryBuilder<PrismHubDetail, PrismHubDetail, QAfterSortBy>
+      thenByTmdbIDDesc() {
     return QueryBuilder.apply(this, (query) {
       return query.addSortBy(r'tmdbID', Sort.desc);
     });
   }
 
-  QueryBuilder<PrismHubDetail, PrismHubDetail, QAfterSortBy> thenByUpdateTime() {
+  QueryBuilder<PrismHubDetail, PrismHubDetail, QAfterSortBy>
+      thenByUpdateTime() {
     return QueryBuilder.apply(this, (query) {
       return query.addSortBy(r'updateTime', Sort.asc);
     });
@@ -1285,7 +1295,8 @@ extension PrismHubDetailQueryWhereDistinct
     });
   }
 
-  QueryBuilder<PrismHubDetail, PrismHubDetail, QDistinct> distinctByUpdateTime() {
+  QueryBuilder<PrismHubDetail, PrismHubDetail, QDistinct>
+      distinctByUpdateTime() {
     return QueryBuilder.apply(this, (query) {
       return query.addDistinctBy(r'updateTime');
     });
@@ -1331,7 +1342,8 @@ extension PrismHubDetailQueryProperty
     });
   }
 
-  QueryBuilder<PrismHubDetail, DateTime, QQueryOperations> updateTimeProperty() {
+  QueryBuilder<PrismHubDetail, DateTime, QQueryOperations>
+      updateTimeProperty() {
     return QueryBuilder.apply(this, (query) {
       return query.addPropertyName(r'updateTime');
     });

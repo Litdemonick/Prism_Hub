@@ -68,7 +68,7 @@ class PrismHubStorage {
     });
 
     // 修改所有 PrismDetail 的 tmdbId 字段为本地的 TMDB id
-    final prismList = await database.PrismHubDetails.where().findAll();
+    final prismList = await database.prismHubDetails.where().findAll();
     database.writeTxn(() async {
       for (final detail in prismList) {
         final tmdb = await database.tMDBs
@@ -78,7 +78,7 @@ class PrismHubStorage {
             .findFirst();
         if (tmdb != null) {
           detail.tmdbID = tmdb.id;
-          await database.PrismHubDetails.put(detail);
+          await database.prismHubDetails.put(detail);
         }
       }
     });

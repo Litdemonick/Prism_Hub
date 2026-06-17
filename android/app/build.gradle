@@ -34,6 +34,9 @@ def _storeFile = file(System.getenv("KEYSTORE") ?: keystoreProperties.getPropert
 def _storePassword = System.getenv("KEYSTORE_PASSWORD") ?: keystoreProperties.getProperty("storePassword")
 def _keyAlias = System.getenv("KEY_ALIAS") ?: keystoreProperties.getProperty("keyAlias")
 def _keyPassword = System.getenv("KEY_PASSWORD") ?: keystoreProperties.getProperty("keyPassword")
+// Only sign with the release keystore when it actually exists (CI / signed builds).
+// Locally it isn't present, so debug/release fall back to the default debug keystore.
+def hasReleaseKeystore = _storePassword != null && _storeFile.exists()
 
 android {
     namespace "com.prismhub.app"
@@ -63,34 +66,26 @@ android {
     }
 
     signingConfigs {
-        release {
-            storeFile _storeFile
-            storePassword _storePassword
-            keyAlias _keyAlias
-            keyPassword _keyPassword
-            v1SigningEnabled true
-            v2SigningEnabled true
-        }
-        debug {
-            storeFile _storeFile
-            storePassword _storePassword
-            keyAlias _keyAlias
-            keyPassword _keyPassword
-            v1SigningEnabled true
-            v2SigningEnabled true
+        if (hasReleaseKeystore) {
+            release {
+                storeFile _storeFile
+                storePassword _storePassword
+                keyAlias _keyAlias
+                keyPassword _keyPassword
+                v1SigningEnabled true
+                v2SigningEnabled true
+            }
         }
     }
 
     buildTypes {
         release {
-            if (signingConfigs.release.storePassword != null) {
-                signingConfig signingConfigs.release
-            }
+            // Use the release keystore when present, otherwise the default debug
+            // keystore so local `flutter build apk --release` still works.
+            signingConfig hasReleaseKeystore ? signingConfigs.release : signingConfigs.debug
         }
         debug {
-            if (signingConfigs.debug.storePassword != null) {
-                signingConfig signingConfigs.release
-            }
+            // Default debug signing (~/.android/debug.keystore).
         }
     }
 }

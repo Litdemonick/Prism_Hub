@@ -237,7 +237,7 @@ class DatabaseService {
     String? anilistID,
   }) {
     return db.writeTxn(
-      () => db.PrismHubDetails.putByIndex(
+      () => db.prismHubDetails.putByIndex(
         r'package&url',
         PrismHubDetail()
           ..data = jsonEncode(extensionDetail.toJson())
@@ -254,7 +254,7 @@ class DatabaseService {
     String package,
     String url,
   ) async {
-    return await db.PrismHubDetails
+    return await db.prismHubDetails
         .filter()
         .packageEqualTo(package)
         .and()

@@ -6,7 +6,7 @@ import 'package:file_picker/file_picker.dart';
 import 'package:fluent_ui/fluent_ui.dart' as fluent;
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
-import 'package:image_gallery_saver/image_gallery_saver.dart';
+import 'package:image_gallery_saver_plus/image_gallery_saver_plus.dart';
 import 'package:prismhub/utils/i18n.dart';
 import 'package:prismhub/utils/request.dart';
 import 'package:prismhub/views/widgets/messenger.dart';
@@ -124,7 +124,7 @@ class _ThumnailPageState extends State<_ThumnailPage> {
       ),
     );
     if (Platform.isAndroid) {
-      final result = await ImageGallerySaver.saveImage(
+      final result = await ImageGallerySaverPlus.saveImage(
         res.data,
         name: fileName,
       );
