@@ -1,4 +1,5 @@
-﻿import 'dart:convert';
+﻿// ignore_for_file: experimental_member_use
+import 'dart:convert';
 
 import 'package:fluent_ui/fluent_ui.dart';
 import 'package:isar/isar.dart';

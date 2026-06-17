@@ -88,6 +88,7 @@ class _ExtensionCardState extends State<ExtensionCard> {
             '// ==/PrismHubExtension==\n\n';
         script = header + script;
       }
+      if (!mounted) return;
       await ExtensionUtils.installByScript(script, context);
       isLoading = false;
       isInstall = true;

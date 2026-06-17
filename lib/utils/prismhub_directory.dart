@@ -12,11 +12,11 @@ class PrismHubDirectory {
     _cacheDir = await getTemporaryDirectory();
   }
 
-  static String get getDirectory => _PrismHubDir(_appDocDir);
+  static String get getDirectory => _prismHubDir(_appDocDir);
 
-  static String get getCacheDirectory => _PrismHubDir(_cacheDir);
+  static String get getCacheDirectory => _prismHubDir(_cacheDir);
 
-  static String _PrismHubDir(Directory directory) {
+  static String _prismHubDir(Directory directory) {
     final dir = path.join(directory.path, 'PrismHub');
     Directory(dir).createSync(recursive: true);
     return dir;

@@ -43,7 +43,7 @@ class _DetailAppbarTitleState extends State<DetailAppbarTitle> {
             .textTheme
             .bodyMedium
             ?.color!
-            .withOpacity(_scrollListener()),
+            .withValues(alpha: _scrollListener()),
       ),
     );
   }

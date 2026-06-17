@@ -38,9 +38,9 @@ class _DetailContinuePlayState extends State<DetailContinuePlay> {
         icon: const Icon(Icons.play_arrow),
         label: Text(noEpisodesString),
         style: ButtonStyle(
-          backgroundColor: MaterialStateProperty.all(Colors.grey),
-          foregroundColor: MaterialStateProperty.all(Colors.white),
-          minimumSize: MaterialStateProperty.all(
+          backgroundColor: WidgetStateProperty.all(Colors.grey),
+          foregroundColor: WidgetStateProperty.all(Colors.white),
+          minimumSize: WidgetStateProperty.all(
             const Size(double.infinity, 50),
           ),
         ),
@@ -75,7 +75,7 @@ class _DetailContinuePlayState extends State<DetailContinuePlay> {
             overflow: TextOverflow.ellipsis,
           ),
           style: ButtonStyle(
-            minimumSize: MaterialStateProperty.all(
+            minimumSize: WidgetStateProperty.all(
               const Size(double.infinity, 50),
             ),
           ),
@@ -94,7 +94,7 @@ class _DetailContinuePlayState extends State<DetailContinuePlay> {
           icon: const Icon(Icons.play_arrow),
           label: Text(watchNowString),
           style: ButtonStyle(
-            minimumSize: MaterialStateProperty.all(
+            minimumSize: WidgetStateProperty.all(
               const Size(double.infinity, 50),
             ),
           ),

@@ -52,7 +52,7 @@ class _SearchAppBarState extends State<SearchAppBar> {
       title: _showSearch
           ? PopScope(
               canPop: false,
-              onPopInvoked: (_) async {
+              onPopInvokedWithResult: (_, __) async {
                 if (_showSearch) {
                   setState(() {
                     widget.textEditingController.clear();

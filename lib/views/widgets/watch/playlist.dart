@@ -19,7 +19,7 @@ class PlayList extends fluent.StatelessWidget {
   Widget _buildAndroid(BuildContext context) {
     return Container(
       padding: const EdgeInsets.all(8),
-      color: Theme.of(context).colorScheme.background,
+      color: Theme.of(context).colorScheme.surface,
       child: ScrollablePositionedList.builder(
         itemCount: list.length,
         initialScrollIndex: selectIndex,
@@ -82,7 +82,7 @@ class PlaylistAndroidTile extends StatelessWidget {
       child: Card(
         color: selected
             ? Theme.of(context).colorScheme.primary
-            : Theme.of(context).colorScheme.background,
+            : Theme.of(context).colorScheme.surface,
         child: Container(
           padding: const EdgeInsets.all(16),
           child: Text(
@@ -90,7 +90,7 @@ class PlaylistAndroidTile extends StatelessWidget {
             style: TextStyle(
               color: selected
                   ? Theme.of(context).colorScheme.onPrimary
-                  : Theme.of(context).colorScheme.onBackground,
+                  : Theme.of(context).colorScheme.onSurface,
             ),
           ),
         ),

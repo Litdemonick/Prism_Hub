@@ -86,9 +86,9 @@ class _DetailAppbarflexibleSpaceState extends State<DetailAppbarflexibleSpace> {
                     end: Alignment.bottomCenter,
                     colors: [
                       // 主题背景色
-                      Theme.of(context).colorScheme.background.withOpacity(0.3),
-                      Theme.of(context).colorScheme.background.withOpacity(0.9),
-                      Theme.of(context).colorScheme.background,
+                      Theme.of(context).colorScheme.surface.withValues(alpha: 0.3),
+                      Theme.of(context).colorScheme.surface.withValues(alpha: 0.9),
+                      Theme.of(context).colorScheme.surface,
                     ],
                   ),
                 ),

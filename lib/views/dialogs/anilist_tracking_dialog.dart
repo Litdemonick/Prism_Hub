@@ -404,15 +404,13 @@ class _AnilistTrackingDialogState extends State<AnilistTrackingDialog> {
             );
           } catch (e) {
             if (mounted) {
-              showPlatformSnackbar(
-                context: context,
-                content: e.toString(),
-                severity: fluent.InfoBarSeverity.error,
-              );
+              // ignore: use_build_context_synchronously
+              showPlatformSnackbar(context: context, content: e.toString(), severity: fluent.InfoBarSeverity.error);
               return;
             }
           }
           if (mounted) {
+            // ignore: use_build_context_synchronously
             Navigator.of(context).pop();
           }
         },

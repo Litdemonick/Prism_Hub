@@ -70,14 +70,14 @@ class _ComicReaderContentState extends State<ComicReaderContent> {
   _buildContent() {
     late Color backgroundColor;
     if (Platform.isAndroid) {
-      backgroundColor = Theme.of(context).colorScheme.background;
+      backgroundColor = Theme.of(context).colorScheme.surface;
     } else {
       backgroundColor = fluent.FluentTheme.of(context).micaBackgroundColor;
     }
-    return RawKeyboardListener(
+    return KeyboardListener(
       focusNode: FocusNode(),
       autofocus: true,
-      onKey: _c.onKey,
+      onKeyEvent: _c.onKey,
       child: Container(
         color: backgroundColor,
         width: double.infinity,
