@@ -120,7 +120,10 @@ class ExtensionUtils {
         true;
     try {
       final repoUrl = PrismHubStorage.getSetting(SettingKey.prismhubRepoUrl);
-      final res = await dio.get<String>('$repoUrl/index.json');
+      // Cache-bust: GitHub raw caches index.json/dist for minutes, which would
+      // hide a freshly pushed extension/resolver fix.
+      final bust = DateTime.now().millisecondsSinceEpoch;
+      final res = await dio.get<String>('$repoUrl/index.json?t=$bust');
       final decoded = jsonDecode(res.data!);
       final List list =
           decoded is Map ? (decoded['extensions'] ?? []) : decoded;
@@ -142,7 +145,8 @@ class ExtensionUtils {
           final localVersion = _scriptVersion(dest.readAsStringSync());
           if (repoVersion == null || repoVersion == localVersion) continue;
         }
-        final js = await dio.get<String>(scriptUrl);
+        final sep = scriptUrl.contains('?') ? '&' : '?';
+        final js = await dio.get<String>('$scriptUrl${sep}t=$bust');
         if (js.data != null && js.data!.isNotEmpty) {
           dest.writeAsStringSync(js.data!);
         }
