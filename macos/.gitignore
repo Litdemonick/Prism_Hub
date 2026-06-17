@@ -1,0 +1,11 @@
+Flutter/Flutter-Debug.xcconfig
+Flutter/Flutter-Release.xcconfig
+Flutter/ephemeral/
+
+# Xcode user-specific files
+**/dgph
+**/xcuserdata/
+*.moved-aside
+
+# CocoaPods
+**/Pods/

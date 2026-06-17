@@ -20,7 +20,7 @@ tasks.register("clean", Delete) {
 }
 
 gradle.afterProject { proj ->
-    if (proj == rootProject || !proj.hasProperty('android')) return
+    if (proj == rootProject || proj.name == 'app' || !proj.hasProperty('android')) return
     // AGP 8.7+ requires 'namespace'; old plugins only have it in AndroidManifest.xml
     try {
         if (!proj.android.namespace) {
@@ -32,10 +32,24 @@ gradle.afterProject { proj ->
             }
         }
     } catch (Exception ignored) {}
-    // Force Kotlin jvmTarget to 1.8 to match Java compileOptions on all plugins (fixes JVM 21 mismatch)
+    // Bump every plugin's compileSdk to 34. Old plugins pin a compileSdk too low
+    // to compile Java 9+ source once we unify the JVM target, but android-36's
+    // stricter nullability annotations break their legacy Kotlin — 34 is the
+    // sweet spot that satisfies both.
+    try {
+        proj.android.compileSdkVersion 34
+    } catch (Exception ignored) {}
+    // Unify Java + Kotlin JVM target to 17 on every plugin. Plugins declare
+    // mismatched targets (some Java 11, some Kotlin 1.8) which fails on JDK 21.
+    try {
+        proj.android.compileOptions {
+            sourceCompatibility JavaVersion.VERSION_17
+            targetCompatibility JavaVersion.VERSION_17
+        }
+    } catch (Exception ignored) {}
     try {
         proj.tasks.withType(org.jetbrains.kotlin.gradle.tasks.KotlinCompile).configureEach {
-            kotlinOptions { jvmTarget = '1.8' }
+            kotlinOptions { jvmTarget = '17' }
         }
     } catch (Exception ignored) {}
 }

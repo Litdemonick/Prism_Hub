@@ -2,7 +2,7 @@
 import 'package:flutter_inappwebview/flutter_inappwebview.dart';
 import 'package:prismhub/data/services/extension_service.dart';
 import 'package:prismhub/utils/prismhub_storage.dart';
-import 'package:webview_cookie_manager/webview_cookie_manager.dart';
+import 'package:webview_cookie_manager_plus/webview_cookie_manager_plus.dart';
 
 class WebViewPage extends StatefulWidget {
   const WebViewPage({
