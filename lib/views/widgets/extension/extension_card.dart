@@ -6,6 +6,7 @@ import 'package:prismhub/utils/i18n.dart';
 import 'package:prismhub/utils/prismhub_storage.dart';
 import 'package:prismhub/utils/request.dart';
 import 'package:prismhub/views/widgets/cache_network_image.dart';
+import 'package:prismhub/views/widgets/messenger.dart';
 import 'package:prismhub/views/widgets/platform_widget.dart';
 import 'package:prismhub/views/widgets/progress.dart';
 
@@ -90,15 +91,30 @@ class _ExtensionCardState extends State<ExtensionCard> {
       }
       if (!mounted) return;
       await ExtensionUtils.installByScript(script, context);
-      isLoading = false;
-      isInstall = true;
-      hasUpgrade = false;
+      // Confirmación visible: antes el éxito no avisaba nada y parecía que
+      // "no pasó nada" al instalar.
+      if (mounted) {
+        showPlatformSnackbar(
+          context: context,
+          content: 'extension.install-success'.i18n,
+          severity: fluent.InfoBarSeverity.success,
+        );
+      }
     } catch (e) {
+      // installByScript ya muestra un diálogo de error con el detalle; aquí solo
+      // registramos. El estado real se sincroniza abajo desde runtimes.
       debugPrint(e.toString());
-      isLoading = false;
     } finally {
       if (mounted) {
-        setState(() {});
+        setState(() {
+          isLoading = false;
+          // Reflejar el estado REAL: si el init falló, la extensión no quedó en
+          // runtimes → el botón vuelve a "Instalar" en vez de mentir "instalada".
+          isInstall = ExtensionUtils.runtimes.containsKey(widget.package);
+          hasUpgrade = isInstall &&
+              ExtensionUtils.runtimes[widget.package]!.extension.version !=
+                  widget.version;
+        });
       }
     }
   }

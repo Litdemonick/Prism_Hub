@@ -29,37 +29,10 @@ class _VideoPlayerDesktopControlsState
     extends State<VideoPlayerDesktopControls> {
   late final _c = widget.controller;
   final FocusNode _focusNode = FocusNode();
-  Timer? _timer;
-  bool _showControls = true;
   final _subtitleViewKey = GlobalKey<SubtitleViewState>();
-
-  _updateTimer() {
-    _timer?.cancel();
-    _timer = null;
-    setState(() {
-      _showControls = true;
-    });
-    _timer = Timer.periodic(
-      const Duration(seconds: 3),
-      (_) {
-        if (mounted) {
-          setState(() {
-            _showControls = false;
-          });
-        }
-      },
-    );
-  }
-
-  @override
-  void initState() {
-    super.initState();
-    _updateTimer();
-  }
 
   @override
   void dispose() {
-    _timer?.cancel();
     _focusNode.dispose();
     super.dispose();
   }
@@ -67,9 +40,7 @@ class _VideoPlayerDesktopControlsState
   @override
   Widget build(BuildContext context) {
     return MouseRegion(
-      onHover: (_) {
-        _updateTimer();
-      },
+      onHover: (_) {},
       child: FluentTheme(
         data: FluentThemeData(
           brightness: Brightness.dark,
@@ -169,6 +140,11 @@ class _VideoPlayerDesktopControlsState
                         );
                       }
                       if (!_c.isGettingWatchData.value) {
+                        // Si hay un mensaje de fallo de servidor, no mostrar el
+                        // spinner encima: evita el parpadeo del aro sobre el aviso.
+                        if (_c.serverFailedMessage.value.isNotEmpty) {
+                          return const SizedBox.shrink();
+                        }
                         return StreamBuilder(
                           stream: _c.player.stream.buffering,
                           builder: (context, snapshot) {
@@ -227,9 +203,9 @@ class _VideoPlayerDesktopControlsState
               Positioned.fill(
                 child: Column(
                   children: [
-                    // header
+                    // header — siempre visible (a pedido del usuario).
                     Opacity(
-                      opacity: _showControls ? 1 : 0,
+                      opacity: 1,
                       child: _Header(
                         title: _c.title,
                         episode: _c.playList[_c.index.value].name,
@@ -246,8 +222,12 @@ class _VideoPlayerDesktopControlsState
                       child: Center(
                         child: Obx(() {
                           final msg = _c.serverFailedMessage.value;
-                          if (msg.isEmpty) return const SizedBox.shrink();
-                          return Container(
+                          return AnimatedSwitcher(
+                            duration: const Duration(milliseconds: 250),
+                            child: msg.isEmpty
+                                ? const SizedBox.shrink()
+                                : Container(
+                            key: const ValueKey('server-failed'),
                             margin: const EdgeInsets.symmetric(horizontal: 40),
                             padding: const EdgeInsets.symmetric(
                                 horizontal: 24, vertical: 18),
@@ -288,13 +268,14 @@ class _VideoPlayerDesktopControlsState
                                 ),
                               ],
                             ),
+                          ),
                           );
                         }),
                       ),
                     ),
-                    // footer
+                    // footer — siempre visible (a pedido del usuario).
                     Opacity(
-                      opacity: _showControls ? 1 : 0,
+                      opacity: 1,
                       child: _Footer(controller: _c),
                     ),
                   ],

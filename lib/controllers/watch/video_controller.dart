@@ -152,6 +152,8 @@ class VideoPlayerController extends GetxController {
   ExtensionBangumiWatch? watchData;
   final error = "".obs;
   final isGettingWatchData = true.obs;
+  // Último texto de error de media_kit — para deduplicar el toast y no parpadear.
+  String _lastErrorEvent = '';
 
   // Selector de servidores (llenado desde X-Servers header de la extensión)
   final availableServers = <String, String>{}.obs; // nombre → embed URL
@@ -405,7 +407,16 @@ class VideoPlayerController extends GetxController {
     // 错误监听 — detectar fallo de reproducción
     player.stream.error.listen((event) {
       logger.severe('media_kit error: $event');
-      sendMessage(Message(Text(event)));
+      // Durante la resolución/failover, media_kit re-emite el mismo error varias
+      // veces (uno por cada intento de servidor). NO mostrar un toast por cada uno:
+      // eso encolaba mensajes que parpadeaban. El estado de fallo se comunica con
+      // el overlay estable `serverFailedMessage`. Solo se muestra un toast para un
+      // error nuevo ocurrido DURANTE la reproducción ya iniciada.
+      final isDup = event == _lastErrorEvent;
+      _lastErrorEvent = event;
+      if (!isGettingWatchData.value && !isDup) {
+        sendMessage(Message(Text(event)));
+      }
       // Si el error indica que el stream no es accesible, notificar
       if (event.toLowerCase().contains('not found') ||
           event.toLowerCase().contains('403') ||
@@ -433,6 +444,7 @@ class VideoPlayerController extends GetxController {
     }
     player.stop();
     isGettingWatchData.value = true;
+    _lastErrorEvent = '';
     try {
       await getWatchData();
     } catch (e) {
