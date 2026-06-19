@@ -30,6 +30,12 @@ class DetailPageController extends GetxController {
     this.heroTag,
   });
 
+  // Caché en memoria por sesión: evita re-fetch al volver al mismo detalle.
+  // Se invalida al hacer pull-to-refresh manual (onRefresh() con clearCache=true).
+  static final Map<String, ExtensionDetail> _sessionCache = {};
+
+  static void clearSessionCache() => _sessionCache.clear();
+
   final String package;
   final String url;
   final String? heroTag;
@@ -200,8 +206,17 @@ class DetailPageController extends GetxController {
   }
 
   getRemoteDeatil() async {
+    final cacheKey = '$package:$url';
+    // Si ya tenemos el dato en memoria (misma sesión) lo usamos directo y
+    // actualizamos en background sin bloquear la UI.
+    if (_sessionCache.containsKey(cacheKey)) {
+      detail = _sessionCache[cacheKey];
+      _refreshDetailInBackground(cacheKey);
+      return;
+    }
     try {
       detail = await runtime.value!.detail(url);
+      _sessionCache[cacheKey] = detail!;
       await DatabaseService.putPrismHubDetail(
         package,
         url,
@@ -234,6 +249,24 @@ class DetailPageController extends GetxController {
         );
       }
       rethrow;
+    }
+  }
+
+  // Actualiza el detalle en background (sin spinner) cuando viene de caché.
+  Future<void> _refreshDetailInBackground(String cacheKey) async {
+    try {
+      final fresh = await runtime.value!.detail(url);
+      _sessionCache[cacheKey] = fresh;
+      detail = fresh;
+      await DatabaseService.putPrismHubDetail(
+        package,
+        url,
+        fresh,
+        tmdbID: _tmdbID,
+        anilistID: aniListID.value,
+      );
+    } catch (_) {
+      // Fallo silencioso: seguimos con lo que tenemos en caché.
     }
   }
 

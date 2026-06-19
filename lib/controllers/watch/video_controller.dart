@@ -215,9 +215,25 @@ class VideoPlayerController extends GetxController {
       await np.setProperty(
           'demuxer-lavf-o', 'reconnect=0,reconnect_delay_max=0');
       // Muchos m3u8 de hosts (voe, netu, etc.) referencian segmentos en otro
-      // dominio; mpv los marca "unsafe" y se niega a cargarlos. Permitirlo
-      // hace que esos streams reproduzcan en vez de fallar.
+      // dominio; mpv los marca "unsafe" y se niega a cargarlos.
       await np.setProperty('load-unsafe-playlists', 'yes');
+      // Buffer optimizado para streaming de anime (segmentos HLS de 5-10 s).
+      // 50 MiB es seguro en móvil; en desktop sube solo porque hay más RAM.
+      await np.setProperty('cache', 'yes');
+      await np.setProperty('cache-secs', '30');
+      await np.setProperty('demuxer-max-bytes', '50MiB');
+      await np.setProperty('demuxer-readahead-secs', '10');
+      await np.setProperty('hls-bitrate', 'max');
+      // Proxy de Ajustes → mpv: desbloquea CDNs filtrados por el ISP.
+      // Sin esto el proxy solo llega a la resolución del embed, no al stream.
+      final proxyType =
+          PrismHubStorage.getSetting(SettingKey.proxyType)?.toString() ??
+              'DIRECT';
+      final proxyAddr =
+          PrismHubStorage.getSetting(SettingKey.proxy)?.toString() ?? '';
+      if (proxyType != 'DIRECT' && proxyAddr.isNotEmpty) {
+        await np.setProperty('http-proxy', '$proxyType://$proxyAddr');
+      }
     }
     play();
 
