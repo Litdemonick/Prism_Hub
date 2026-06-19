@@ -324,6 +324,54 @@ class _VideoPlayerMobileControlsState extends State<VideoPlayerMobileControls> {
                     );
                   }
                   if (!_c.isGettingWatchData.value) {
+                    // Aviso estable de fallo de servidor (sin parpadeo): se
+                    // muestra con fade y sin spinner encima.
+                    final failMsg = _c.serverFailedMessage.value;
+                    if (failMsg.isNotEmpty) {
+                      return AnimatedSwitcher(
+                        duration: const Duration(milliseconds: 250),
+                        child: Container(
+                          key: const ValueKey('server-failed-mobile'),
+                          margin: const EdgeInsets.symmetric(horizontal: 32),
+                          padding: const EdgeInsets.symmetric(
+                              horizontal: 20, vertical: 16),
+                          decoration: BoxDecoration(
+                            color: Colors.black.withValues(alpha: 0.78),
+                            borderRadius: BorderRadius.circular(12),
+                            border: Border.all(
+                              color: Colors.orange.withValues(alpha: 0.8),
+                              width: 1.5,
+                            ),
+                          ),
+                          child: Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              const Icon(Icons.warning_amber_rounded,
+                                  color: Colors.orange, size: 26),
+                              const SizedBox(width: 14),
+                              Flexible(
+                                child: Text(
+                                  failMsg,
+                                  style: const TextStyle(
+                                    fontSize: 14,
+                                    color: Colors.white,
+                                    height: 1.4,
+                                  ),
+                                ),
+                              ),
+                              const SizedBox(width: 10),
+                              IconButton(
+                                icon: const Icon(Icons.close,
+                                    color: Colors.white70, size: 18),
+                                onPressed: () {
+                                  _c.serverFailedMessage.value = '';
+                                },
+                              ),
+                            ],
+                          ),
+                        ),
+                      );
+                    }
                     return StreamBuilder(
                       stream: _c.player.stream.buffering,
                       builder: (context, snapshot) {
@@ -414,24 +462,23 @@ class _VideoPlayerMobileControlsState extends State<VideoPlayerMobileControls> {
                 }),
               ),
             ),
-            // 头部控制栏
-            if (_showControls)
-              Positioned(
-                top: 0,
-                left: 0,
-                right: 0,
-                child: _Header(
-                  controller: _c,
-                ),
+            // 头部控制栏 — siempre visible (a pedido del usuario): el botón de
+            // servidores y demás controles no se ocultan en ningún dispositivo.
+            Positioned(
+              top: 0,
+              left: 0,
+              right: 0,
+              child: _Header(
+                controller: _c,
               ),
-            // 底部控制栏
-            if (_showControls)
-              Positioned(
-                bottom: 0,
-                left: 0,
-                right: 0,
-                child: _Footer(controller: _c),
-              ),
+            ),
+            // 底部控制栏 — siempre visible.
+            Positioned(
+              bottom: 0,
+              left: 0,
+              right: 0,
+              child: _Footer(controller: _c),
+            ),
             Positioned.fill(
               child: Obx(
                 () {

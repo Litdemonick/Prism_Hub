@@ -60,7 +60,8 @@
     "edit-code": "Código de edición",
     "already-native": "Esta extensión ya está integrada de forma nativa en Prism+ con mejor rendimiento. No es necesario instalarla externamente.",
     "invalid": "La extensión no es válida o está dañada. No se instaló.",
-    "not-working": "Esta extensión no funciona por el momento"
+    "not-working": "Esta extensión no funciona por el momento",
+    "install-success": "Extensión instalada"
   },
   "extension-repo": {
     "error": "¡Ha ocurrido un error!",
