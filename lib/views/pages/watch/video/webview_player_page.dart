@@ -1,7 +1,10 @@
+import 'dart:io';
+
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_inappwebview/flutter_inappwebview.dart';
 import 'package:prismhub/utils/prismhub_storage.dart';
+import 'package:url_launcher/url_launcher_string.dart';
 
 /// True when a URL is a direct media stream that media_kit can play natively.
 /// Anything else (an embed/player page like mega.nz/embed, voe.sx/e, ...) needs
@@ -17,13 +20,25 @@ bool isDirectStream(String url) {
       u.contains('/api/file/'); // pixeldrain direct
 }
 
-/// Opens an embed/player page in the fullscreen WebView fallback player.
+/// True where the in-app InAppWebView is supported. flutter_inappwebview ships
+/// only android/ios/macos — on Windows/Linux there is NO WebView, so embeds must
+/// open in the system browser instead.
+bool get _webViewSupported =>
+    Platform.isAndroid || Platform.isIOS || Platform.isMacOS;
+
+/// Plays an embed/player page that can't be resolved to a direct stream.
+/// Mobile/macOS → fullscreen in-app WebView. Windows/Linux (no WebView) → the
+/// system browser, which runs the host's own player.
 void openWebViewPlayer(
   BuildContext context,
   String url, {
   String? referer,
   String title = '',
 }) {
+  if (!_webViewSupported) {
+    launchUrlString(url, mode: LaunchMode.externalApplication);
+    return;
+  }
   Navigator.of(context).push(
     MaterialPageRoute(
       builder: (_) =>
