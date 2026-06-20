@@ -124,9 +124,6 @@ class ExtensionUtils {
   //  - respects user removals: a native the user deleted is not re-added
   // prism+ stays the single source of truth (no bundled copies). Offline-safe.
   static Future<void> _installDefaultsFromRepo() async {
-    final firstRun = PrismHubStorage.getSetting(
-            SettingKey.defaultExtensionsInstalled) !=
-        true;
     try {
       final repoUrl = PrismHubStorage.getSetting(SettingKey.prismhubRepoUrl);
       // Cache-bust: GitHub raw caches index.json/dist for minutes, which would
@@ -153,8 +150,9 @@ class ExtensionUtils {
 
         final dest = File(path.join(extensionsDir, '$pkg.js'));
         final exists = dest.existsSync();
-        // The user removed this native — don't bring it back on later launches.
-        if (!exists && !firstRun) continue;
+        // Los 3 defaults se garantizan siempre presentes: si falta uno (p.ej.
+        // cambió el set de defaults tras el primer arranque), se instala. Así el
+        // equipo siempre tiene exactamente las 3 oficiales por defecto.
         // Already installed: only re-download when the repo version is different.
         if (exists) {
           final repoVersion = e['version']?.toString().replaceFirst('v', '');
@@ -177,6 +175,27 @@ class ExtensionUtils {
       }
       await PrismHubStorage.setSetting(
           SettingKey.defaultExtensionsInstalled, true);
+
+      // Purga de oficiales huérfanas: una extensión del namespace oficial
+      // `io.prismhub.*` que ya NO está en el catálogo de prism+ (la quitamos del
+      // repo, p.ej. animeflv) se elimina del equipo. NO toca extensiones externas
+      // de terceros (otro namespace) — prism_hub permite sideload. Solo corre si
+      // el catálogo se descargó bien (officialPackages no vacío), para no borrar
+      // nada estando offline.
+      if (officialPackages.isNotEmpty) {
+        for (final f in Directory(extensionsDir).listSync()) {
+          if (path.extension(f.path) != '.js') continue;
+          final pkg = path.basenameWithoutExtension(f.path);
+          if (pkg.startsWith('io.prismhub.') &&
+              !officialPackages.contains(pkg)) {
+            try {
+              File(f.path).deleteSync();
+              runtimes.remove(pkg);
+              debugPrint('Extensión oficial huérfana eliminada: $pkg');
+            } catch (_) {}
+          }
+        }
+      }
     } catch (e) {
       // Offline / repo unreachable — keep working with what's installed and
       // retry next launch (the first-run flag stays unset until it succeeds).
