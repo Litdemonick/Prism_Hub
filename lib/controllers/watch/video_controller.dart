@@ -217,6 +217,12 @@ class VideoPlayerController extends GetxController {
       // Muchos m3u8 de hosts (voe, netu, etc.) referencian segmentos en otro
       // dominio; mpv los marca "unsafe" y se niega a cargarlos.
       await np.setProperty('load-unsafe-playlists', 'yes');
+      // UA de navegador: CDNs de anime (luluvdo, streamwish, etc.) bloquean
+      // el UA por defecto de mpv ("Lavf/xx.xx"). Usar el mismo UA que el app.
+      final ua = PrismHubStorage.getUASetting();
+      if (ua != null && ua.isNotEmpty) {
+        await np.setProperty('user-agent', ua);
+      }
       // Buffer optimizado para streaming de anime (segmentos HLS de 5-10 s).
       // 50 MiB es seguro en móvil; en desktop sube solo porque hay más RAM.
       await np.setProperty('cache', 'yes');
