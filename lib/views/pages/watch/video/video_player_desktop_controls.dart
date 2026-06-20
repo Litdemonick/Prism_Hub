@@ -1309,25 +1309,31 @@ class _ServerSelectorState extends State<_ServerSelector> {
                                                   ? FluentIcons.server
                                                   : FluentIcons.status_error_full),
                                           size: 16,
-                                          color: (!isCurrent && !direct)
-                                              ? Colors.grey
-                                              : null,
+                                          color: isCurrent
+                                              ? Colors.green
+                                              : (direct
+                                                  ? Colors.white
+                                                  : Colors.white.withValues(
+                                                      alpha: 0.38)),
                                         ),
                                         title: Text(
                                           entry.key,
                                           style: TextStyle(
-                                            color: (!isCurrent && !direct)
-                                                ? Colors.grey
-                                                : null,
+                                            color: direct
+                                                ? Colors.white
+                                                : Colors.white
+                                                    .withValues(alpha: 0.38),
                                           ),
                                         ),
                                         subtitle: direct
                                             ? null
-                                            : const Text(
+                                            : Text(
                                                 'No disponible desde tu red',
                                                 style: TextStyle(
                                                     fontSize: 11,
-                                                    color: Colors.grey),
+                                                    color: Colors.white
+                                                        .withValues(
+                                                            alpha: 0.38)),
                                               ),
                                         onPressed: () {
                                           router.pop();

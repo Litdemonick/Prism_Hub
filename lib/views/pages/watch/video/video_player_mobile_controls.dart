@@ -930,20 +930,21 @@ void showServerSheet(BuildContext context, VideoPlayerController controller) {
                               ? Icons.check_circle
                               : (direct ? Icons.dns_outlined : Icons.block),
                           color: isCurrent
-                              ? Colors.purpleAccent
-                              : (!direct ? Colors.grey : null),
+                              ? Colors.greenAccent
+                              : (direct ? Colors.white : Colors.white38),
                         ),
                         title: Text(
                           entry.key,
                           style: TextStyle(
-                            color: (!isCurrent && !direct) ? Colors.grey : null,
+                            color: direct ? Colors.white : Colors.white38,
                           ),
                         ),
                         subtitle: direct
                             ? null
                             : const Text(
                                 'No disponible desde tu red',
-                                style: TextStyle(fontSize: 11, color: Colors.grey),
+                                style:
+                                    TextStyle(fontSize: 11, color: Colors.white38),
                               ),
                         selected: isCurrent,
                         onTap: () {
