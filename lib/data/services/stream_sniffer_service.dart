@@ -219,12 +219,8 @@ class StreamSnifferService {
       if (completer.isCompleted) return;
       timer?.cancel();
       completer.complete(result);
-      // Liberar el WebView en microtask para no cortar el callback en curso.
-      Future.microtask(() async {
-        try {
-          await webView?.dispose();
-        } catch (_) {}
-      });
+      // No dispose aquí: se hace después de await completer.future para
+      // garantizar que el callback nativo ya terminó antes de destruir el WebView.
     }
 
     void onCandidate(String u, [String? frameHref]) {
@@ -316,7 +312,13 @@ class StreamSnifferService {
       finish(null);
     }
 
-    return completer.future;
+    final result = await completer.future;
+    // Esperar un tick para que el callback nativo que llamó finish() termine
+    // de ejecutarse antes de destruir el WebView — evita crash en WebView2
+    // cuando dispose() se llama mientras el call stack nativo aún está activo.
+    await Future.delayed(const Duration(milliseconds: 150));
+    try { await webView?.dispose(); } catch (_) {}
+    return result;
   }
 
   /// Carga [pageUrl] en un WebView oculto y espera a que [_loaderSource]
@@ -337,9 +339,6 @@ class StreamSnifferService {
       if (completer.isCompleted) return;
       timer?.cancel();
       completer.complete(result);
-      Future.microtask(() async {
-        try { await webView?.dispose(); } catch (_) {}
-      });
     }
 
     try {
@@ -396,6 +395,9 @@ class StreamSnifferService {
       finish([]);
     }
 
-    return completer.future;
+    final result = await completer.future;
+    await Future.delayed(const Duration(milliseconds: 150));
+    try { await webView?.dispose(); } catch (_) {}
+    return result;
   }
 }
