@@ -116,12 +116,20 @@ class _VideoPlayerState extends State<VideoPlayer> {
 
   @override
   Widget build(BuildContext context) {
-    return PlatformBuildWidget(
-      androidBuilder: (context) => Theme(
-        data: ThemeData.dark(useMaterial3: true),
-        child: Scaffold(body: _buildContent()),
+    // ExcludeSemantics: el reproductor reconstruye sus controles cada frame
+    // (posición, barra de progreso, buffering). En Windows eso satura el árbol
+    // de accesibilidad del engine y genera el spam continuo en consola:
+    //   "Failed to update ui::AXTree, error: NNN will not be in the tree..."
+    // El video no necesita semántica de lector de pantalla, así que se excluye
+    // toda la página: elimina el spam sin afectar la funcionalidad.
+    return ExcludeSemantics(
+      child: PlatformBuildWidget(
+        androidBuilder: (context) => Theme(
+          data: ThemeData.dark(useMaterial3: true),
+          child: Scaffold(body: _buildContent()),
+        ),
+        desktopBuilder: ((context) => _buildContent()),
       ),
-      desktopBuilder: ((context) => _buildContent()),
     );
   }
 }

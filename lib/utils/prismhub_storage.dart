@@ -173,6 +173,18 @@ class PrismHubStorage {
       setSetting(SettingKey.windowsWebviewUA, value);
     }
   }
+
+  // Recuerda el último servidor que reprodujo bien un episodio concreto, para
+  // probarlo primero la próxima vez y no re-buscar entre todos (carga más rápido).
+  static String? getLastWorkingServer(String package, String episodeUrl) {
+    final v = settings.get('lastServer:$package:$episodeUrl');
+    return v is String && v.isNotEmpty ? v : null;
+  }
+
+  static setLastWorkingServer(
+      String package, String episodeUrl, String server) async {
+    await settings.put('lastServer:$package:$episodeUrl', server);
+  }
 }
 
 class SettingKey {

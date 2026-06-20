@@ -496,6 +496,9 @@ class VideoPlayerController extends GetxController {
           await dlnaDevice.value!.setUrl(watchData!.url);
           await dlnaDevice.value!.play();
         } else {
+          // Si recordamos un servidor que ya funcionó en este episodio, usarlo
+          // como primario para no re-buscar entre todos (carga más rápido).
+          _applyPreferredServer();
           final primaryUrl = watchData!.url;
           unawaited(getQuality());
 
@@ -550,6 +553,14 @@ class VideoPlayerController extends GetxController {
                 var alt = await runtime.watch(entry.value)
                     as ExtensionBangumiWatch;
                 logger.info('Failover ${entry.key} URL: ${alt.url}');
+                // El adapter pierde el Referer al recibir una URL ya resuelta
+                // (.mp4/.m3u8) — la corta y devuelve headers vacíos. Sin Referer
+                // muchos CDNs responden 403 (p.ej. mp4upload). Se recupera del
+                // mapa local de referers por servidor.
+                final fref = serverReferers[entry.key];
+                if (fref != null && fref.isNotEmpty) {
+                  alt.headers = {...?alt.headers, 'Referer': fref};
+                }
                 if (alt.url.startsWith('error://')) {
                   final errorMsg = alt.url.replaceFirst('error://', '');
                   logger.severe('Failover ${entry.key}: error de extracción ($errorMsg)');
@@ -619,6 +630,15 @@ class VideoPlayerController extends GetxController {
       }
       // Playback resolved successfully — clear any previous "not working" flag.
       ExtensionUtils.clearRuntimeError(runtime.extension.package);
+      // Recordar el servidor que funcionó para este episodio: la próxima vez se
+      // prueba primero y no se re-busca entre todos.
+      if (currentServerName.value.isNotEmpty) {
+        PrismHubStorage.setLastWorkingServer(
+          runtime.extension.package,
+          playList[index.value].url,
+          currentServerName.value,
+        );
+      }
       isGettingWatchData.value = false;
       // 添加来自扩展的字幕
       subtitles.addAll(
@@ -1148,6 +1168,30 @@ class VideoPlayerController extends GetxController {
       logger.info('Fuente no reproducible, se intentará failover: $url');
     }
     return ok;
+  }
+
+  // Si hay un servidor recordado para este episodio que sí es reproducible
+  // nativamente, se usa como primario para no re-buscar entre todos.
+  void _applyPreferredServer() {
+    final saved = PrismHubStorage.getLastWorkingServer(
+      runtime.extension.package,
+      playList[index.value].url,
+    );
+    if (saved == null || saved == currentServerName.value) return;
+    final savedUrl = availableServers[saved];
+    if (savedUrl == null || !isDirectStream(savedUrl)) return;
+    logger.info('Usando servidor recordado: $saved');
+    currentServerName.value = saved;
+    final headers = <String, String>{};
+    final ref = serverReferers[saved];
+    if (ref != null && ref.isNotEmpty) headers['Referer'] = ref;
+    watchData = ExtensionBangumiWatch(
+      type: watchData!.type,
+      url: savedUrl,
+      subtitles: watchData!.subtitles,
+      headers: headers.isEmpty ? null : headers,
+      audioTrack: watchData!.audioTrack,
+    );
   }
 
   // Inicializa mpv con una fuente local de video negro (sin red).
