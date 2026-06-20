@@ -10,6 +10,7 @@ import 'package:prismhub/controllers/extension/extension_controller.dart';
 import 'package:prismhub/controllers/search_controller.dart';
 import 'package:prismhub/controllers/settings_controller.dart';
 import 'package:prismhub/data/services/extension_service.dart';
+import 'package:prismhub/utils/extension_signature.dart';
 import 'package:prismhub/utils/i18n.dart';
 import 'package:prismhub/utils/prismhub_directory.dart';
 import 'package:prismhub/utils/prismhub_storage.dart';
@@ -88,8 +89,8 @@ class ExtensionUtils {
   // el core del app). El usuario puede borrarlas; el resto de nativePackages
   // están disponibles en el catálogo para instalar cuando quiera.
   static const Set<String> defaultPackages = {
-    'io.prismhub.animeflv',    // anime ES — mayor catálogo y más servidores
-    'io.prismhub.monoschinos', // anime ES — segunda fuente principal
+    'io.prismhub.tioanime',    // anime ES — probada y funcional
+    'io.prismhub.monoschinos', // anime ES — probada y funcional
     'io.prismhub.mangadex',    // manga multi-idioma — base universal
   };
 
@@ -97,17 +98,19 @@ class ExtensionUtils {
   // si colisionan con el nombre — se prefiere siempre la build oficial.
   static const Set<String> nativePackages = {
     ...defaultPackages,
-    'io.prismhub.animepahe',
-    'io.prismhub.comick',
-    'io.prismhub.jikan',
-    'io.prismhub.mangabat',
-    'io.prismhub.omegascans',
-    'io.prismhub.tioanime',
-    'io.prismhub.yts',
+    // Por ahora solo las 3 verificadas. Las nuevas se agregan desde el
+    // programa visual de prism+ y entran al catálogo vía index.json.
   };
 
+  // Catálogo oficial vivo: se llena desde el index.json de prism+ en cada
+  // arranque. Permite bloquear el sideload de CUALQUIER extensión oficial
+  // (por package o por nombre), no solo las 3 hardcodeadas, a medida que prism+
+  // crece. Una oficial solo se instala por el canal firmado del catálogo.
+  static final Set<String> officialPackages = {};
+  static final Set<String> officialNames = {};
+
   static bool isNativePackage(String package) =>
-      nativePackages.contains(package);
+      nativePackages.contains(package) || officialPackages.contains(package);
 
   static final RegExp _versionHeader = RegExp(r'@version\s+([^\s\r\n]+)');
 
@@ -137,6 +140,13 @@ class ExtensionUtils {
         final pkg = e['package']?.toString();
         final scriptUrl = (e['script'] ?? e['url'])?.toString();
         if (pkg == null || scriptUrl == null) continue;
+        // Registrar TODA extensión del catálogo oficial (no solo las default)
+        // para bloquear sideloads que las dupliquen.
+        officialPackages.add(pkg);
+        final officialName = e['name']?.toString().toLowerCase().trim();
+        if (officialName != null && officialName.isNotEmpty) {
+          officialNames.add(officialName);
+        }
         // Solo los 3 paquetes por defecto se auto-instalan en primer launch.
         // Los demás nativos están disponibles en el catálogo del repo.
         if (!defaultPackages.contains(pkg)) continue;
@@ -154,6 +164,14 @@ class ExtensionUtils {
         final sep = scriptUrl.contains('?') ? '&' : '?';
         final js = await dio.get<String>('$scriptUrl${sep}t=$bust');
         if (js.data != null && js.data!.isNotEmpty) {
+          // Seguridad: los defaults son oficiales y DEBEN traer firma válida de
+          // prism+. Si falta o no valida, es manipulación → no se instala.
+          final signature = e['signature']?.toString();
+          if (!ExtensionSignature.isOfficial(js.data!, signature)) {
+            debugPrint(
+                'Firma inválida o ausente para $pkg — no se instala (posible manipulación).');
+            continue;
+          }
           dest.writeAsStringSync(js.data!);
         }
       }
@@ -212,12 +230,15 @@ class ExtensionUtils {
     }
   }
 
-  // True if an external extension collides with a native prism+ one (by
-  // package id or by name) — those are blocked from external install.
+  // True if an external extension collides with a native/official prism+ one
+  // (by package id or by name) — those are blocked from external/sideload
+  // install. Una oficial solo entra por el canal firmado del catálogo.
   static bool isDuplicateOfNative(Extension ext) {
     if (isNativePackage(ext.package)) return true;
     final name = ext.name.toLowerCase().trim();
     if (name.isEmpty) return false;
+    // Mismo nombre que una oficial del catálogo de prism+.
+    if (officialNames.contains(name)) return true;
     return runtimes.values.any((r) =>
         isNativePackage(r.extension.package) &&
         r.extension.name.toLowerCase().trim() == name);
@@ -227,6 +248,7 @@ class ExtensionUtils {
     String script,
     BuildContext context, {
     bool safeReload = false,
+    bool officialVerified = false,
   }) async {
     // Parse defensively: a .js without a valid @package header otherwise throws
     // an ugly "Null is not a subtype of String" instead of a clean notice.
@@ -244,8 +266,9 @@ class ExtensionUtils {
       throw Exception('extension.invalid'.i18n);
     }
     // Black-box filter: an extension already shipped natively by prism+ must
-    // not be installed externally — the native build is preferred.
-    if (isDuplicateOfNative(ext)) {
+    // not be installed externally — the native build is preferred. La instalación
+    // oficial firmada (officialVerified) sí pasa: es la legítima del catálogo.
+    if (!officialVerified && isDuplicateOfNative(ext)) {
       throw Exception('extension.already-native'.i18n);
     }
     final savePath = path.join(extensionsDir, '$pkg.js');
@@ -295,9 +318,13 @@ class ExtensionUtils {
     }
   }
 
-  static installByScript(String script, BuildContext context) async {
+  // officialVerified=true cuando la firma oficial del catálogo ya fue validada
+  // (extension_card): en ese caso se permite instalar la oficial aunque coincida
+  // con una nativa — ES la oficial. El sideload externo nunca pasa este flag.
+  static installByScript(String script, BuildContext context,
+      {bool officialVerified = false}) async {
     try {
-      await _saveAndInit(script, context);
+      await _saveAndInit(script, context, officialVerified: officialVerified);
     } catch (e) {
       // ignore: use_build_context_synchronously
       _showInstallError(context, e);

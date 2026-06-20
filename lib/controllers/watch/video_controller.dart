@@ -27,6 +27,7 @@ import 'package:prismhub/router/router.dart';
 import 'package:prismhub/utils/bt_server.dart';
 import 'package:prismhub/data/services/database_service.dart';
 import 'package:prismhub/data/services/extension_service.dart';
+import 'package:prismhub/data/services/stream_sniffer_service.dart';
 import 'package:prismhub/utils/i18n.dart';
 import 'package:prismhub/utils/layout.dart';
 import 'package:prismhub/utils/prismhub_directory.dart';
@@ -160,6 +161,9 @@ class VideoPlayerController extends GetxController {
   final serverReferers = <String, String>{}; // nombre → referer (no observable)
   final currentServerName = ''.obs;
   final serverFailedMessage = ''.obs;
+  // URL de la página del episodio en el sitio (X-Page-Url). Se carga en un
+  // WebView oculto y se sniffe su player como fallback universal.
+  String _episodePageUrl = '';
 
 
   // 字幕配置
@@ -472,6 +476,7 @@ class VideoPlayerController extends GetxController {
     player.stop();
     isGettingWatchData.value = true;
     _lastErrorEvent = '';
+    _pageSniffAttempted = false;
     try {
       await getWatchData();
     } catch (e) {
@@ -500,10 +505,22 @@ class VideoPlayerController extends GetxController {
           // como primario para no re-buscar entre todos (carga más rápido).
           _applyPreferredServer();
           final primaryUrl = watchData!.url;
-          unawaited(getQuality());
+          if (isDirectStream(primaryUrl)) unawaited(getQuality());
 
           logger.info('Intentando servidor primario: ${currentServerName.value} → $primaryUrl');
-          bool worked = await _tryOpenPlayer(primaryUrl, watchData!.headers);
+          bool worked;
+          if (primaryUrl.startsWith('page://')) {
+            // La extensión no resolvió ningún servidor pero dio la URL de la
+            // página: ir directo al page-sniff (cargar el sitio en WebView).
+            worked = await _trySniffPage();
+          } else if (isDirectStream(primaryUrl)) {
+            worked = await _tryOpenPlayer(primaryUrl, watchData!.headers);
+          } else {
+            // El primario es un embed sin resolver (voe, netu, streamwish...).
+            // No gastar 12s en media_kit intentando reproducir un HTML: ir
+            // directo al sniffer WebView, que sí sabe sacar el stream real.
+            worked = await _trySniff(currentServerName.value, primaryUrl);
+          }
 
           if (!worked && watchData!.headers != null && watchData!.headers!.containsKey('X-Netu-Alts')) {
             try {
@@ -537,19 +554,19 @@ class VideoPlayerController extends GetxController {
             logger.info('Servidores disponibles para failover: ${serverEntries.map((e) => e.key).toList()}');
             for (final entry in serverEntries) {
               if (entry.key == currentServerName.value) continue;
-              // Los embeds no-directos (mega, doodstream, voe bloqueado, etc.) no
-              // los puede reproducir el player nativo: media_kit abriría un HTML y
-              // gastaría hasta 12s antes de fallar. Se omiten en el failover nativo
-              // — el usuario los reproduce vía WebView desde el selector de servers.
+              // Los embeds no-directos (voe, netu, streamwish, doodstream...) no
+              // los reproduce media_kit (es un HTML, no un stream). En vez de
+              // saltarlos, se intentan con el sniffer de WebView oculto, que sí
+              // extrae el stream real usando el JS del propio host.
               if (!isDirectStream(entry.value)) {
-                logger.info('Failover → omitiendo embed (va por WebView): ${entry.key}');
+                if (await _trySniff(entry.key, entry.value)) {
+                  foundWorking = true;
+                  break;
+                }
                 continue;
               }
               try {
                 logger.info('Failover → probando servidor: ${entry.key}');
-                serverFailedMessage.value =
-                    'Servidor "${currentServerName.value}" no disponible, '
-                    'probando "${entry.key}"...';
                 var alt = await runtime.watch(entry.value)
                     as ExtensionBangumiWatch;
                 logger.info('Failover ${entry.key} URL: ${alt.url}');
@@ -610,11 +627,15 @@ class VideoPlayerController extends GetxController {
                 logger.severe('Stack trace: $stackTrace');
               }
             }
+            // Último recurso universal: cargar la página del episodio en WebView
+            // y sniffear el player del sitio (lo que andaría en el navegador).
+            if (!foundWorking && await _trySniffPage()) {
+              foundWorking = true;
+            }
             if (!foundWorking) {
               logger.severe('Todos los servidores fallaron: ${serverErrors.entries.map((e) => '${e.key}: ${e.value}').join(', ')}');
               serverFailedMessage.value =
-                  'Ningún servidor disponible desde tu red.\n'
-                  'Prueba con una VPN o elige otro episodio.';
+                  'No se pudo cargar el video de este episodio.';
               isGettingWatchData.value = false;
               await _safePlayerInit();
               return;
@@ -712,11 +733,14 @@ class VideoPlayerController extends GetxController {
       // Servidor actual
       currentServerName.value = headers['X-Primary-Server'] ??
           (availableServers.isNotEmpty ? availableServers.keys.first : '');
+      // URL de la página del episodio para el page-sniff (fallback universal).
+      _episodePageUrl = headers['X-Page-Url'] ?? '';
       // Limpiar cabeceras especiales — no enviar al player
       watchData!.headers = Map.from(headers)
         ..remove('X-Servers')
         ..remove('X-Server-Referers')
-        ..remove('X-Primary-Server');
+        ..remove('X-Primary-Server')
+        ..remove('X-Page-Url');
     }
   }
 
@@ -1192,6 +1216,88 @@ class VideoPlayerController extends GetxController {
       headers: headers.isEmpty ? null : headers,
       audioTrack: watchData!.audioTrack,
     );
+  }
+
+  // Intenta reproducir un embed que el resolver nativo no pudo resolver, usando
+  // el sniffer de WebView oculto: carga la página del host, deja correr su JS y
+  // captura el .m3u8/.mp4 que pide su propio player. Es el fallback universal.
+  // Retorna true si encontró un stream y media_kit lo abrió.
+  Future<bool> _trySniff(String name, String embedUrl) async {
+    if (embedUrl.startsWith('error://')) return false;
+    // Mega transmite cifrado dentro de su propia página (no hay .m3u8/.mp4 que
+    // interceptar) — el sniffer no aplica; se reproduce vía WebView visible.
+    final low = embedUrl.toLowerCase();
+    if (low.contains('mega.nz') || low.contains('mega.co.nz')) return false;
+    try {
+      logger.info('Sniffer WebView → $name: $embedUrl');
+      final referer = serverReferers[name];
+      final sniffed = await StreamSnifferService.sniff(embedUrl, referer: referer);
+      if (sniffed == null) {
+        logger.info('Sniffer no encontró stream para $name');
+        return false;
+      }
+      logger.info('Sniffer encontró stream para $name: ${sniffed.url}');
+      final headers = {'Referer': sniffed.referer};
+      if (!await _tryOpenPlayer(sniffed.url, headers)) {
+        logger.info('Sniffer: media_kit no pudo abrir el stream de $name');
+        return false;
+      }
+      currentServerName.value = name;
+      watchData = ExtensionBangumiWatch(
+        type: watchData!.type,
+        url: sniffed.url,
+        subtitles: watchData!.subtitles,
+        headers: headers,
+        audioTrack: watchData!.audioTrack,
+      );
+      serverFailedMessage.value = '';
+      return true;
+    } catch (e) {
+      logger.warning('Sniffer excepción en $name: $e');
+      return false;
+    }
+  }
+
+  // Fallback universal: carga la página del episodio en un WebView oculto y deja
+  // que el propio sitio cargue su player; el sniffer captura el m3u8/mp4 que el
+  // sitio pide. Funciona aunque el resolver nativo no extraiga nada (es lo que
+  // hace que ande "como en el navegador"). Retorna true si reprodujo.
+  bool _pageSniffAttempted = false;
+  Future<bool> _trySniffPage() async {
+    if (_episodePageUrl.isEmpty || _pageSniffAttempted) return false;
+    _pageSniffAttempted = true;
+    try {
+      logger.info('Page-sniff WebView → $_episodePageUrl');
+      final sniffed = await StreamSnifferService.sniff(
+        _episodePageUrl,
+        timeout: const Duration(seconds: 25),
+        loadEmbeds: true,
+      );
+      if (sniffed == null) {
+        logger.info('Page-sniff no encontró stream');
+        return false;
+      }
+      logger.info('Page-sniff encontró stream: ${sniffed.url}');
+      final headers = {'Referer': sniffed.referer};
+      if (!await _tryOpenPlayer(sniffed.url, headers)) {
+        logger.info('Page-sniff: media_kit no pudo abrir el stream');
+        return false;
+      }
+      currentServerName.value =
+          currentServerName.value.isEmpty ? 'Auto' : currentServerName.value;
+      watchData = ExtensionBangumiWatch(
+        type: watchData!.type,
+        url: sniffed.url,
+        subtitles: watchData!.subtitles,
+        headers: headers,
+        audioTrack: watchData!.audioTrack,
+      );
+      serverFailedMessage.value = '';
+      return true;
+    } catch (e) {
+      logger.warning('Page-sniff excepción: $e');
+      return false;
+    }
   }
 
   // Inicializa mpv con una fuente local de video negro (sin red).

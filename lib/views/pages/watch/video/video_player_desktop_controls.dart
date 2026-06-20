@@ -139,12 +139,13 @@ class _VideoPlayerDesktopControlsState
                           ],
                         );
                       }
+                      // Si hay un mensaje (de fallo o estado), no mostrar ni el
+                      // card de carga ni el spinner: evita que se superpongan al
+                      // aviso del centro de la pantalla.
+                      if (_c.serverFailedMessage.value.isNotEmpty) {
+                        return const SizedBox.shrink();
+                      }
                       if (!_c.isGettingWatchData.value) {
-                        // Si hay un mensaje de fallo de servidor, no mostrar el
-                        // spinner encima: evita el parpadeo del aro sobre el aviso.
-                        if (_c.serverFailedMessage.value.isNotEmpty) {
-                          return const SizedBox.shrink();
-                        }
                         return StreamBuilder(
                           stream: _c.player.stream.buffering,
                           builder: (context, snapshot) {

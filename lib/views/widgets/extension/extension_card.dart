@@ -2,6 +2,7 @@
 import 'package:flutter/material.dart';
 import 'package:prismhub/models/extension.dart';
 import 'package:prismhub/utils/extension.dart';
+import 'package:prismhub/utils/extension_signature.dart';
 import 'package:prismhub/utils/i18n.dart';
 import 'package:prismhub/utils/prismhub_storage.dart';
 import 'package:prismhub/utils/request.dart';
@@ -24,6 +25,7 @@ class ExtensionCard extends StatefulWidget {
     this.webSite,
     this.license,
     this.description,
+    this.signature,
   });
   final String? icon;
   final String? url;
@@ -36,6 +38,9 @@ class ExtensionCard extends StatefulWidget {
   final String? webSite;
   final String? license;
   final String? description;
+  // Firma Ed25519 de prism+ (del index.json). Si está y valida → oficial; si
+  // está pero no valida → manipulada (se rechaza); si falta → externa.
+  final String? signature;
 
   @override
   State<ExtensionCard> createState() => _ExtensionCardState();
@@ -72,6 +77,18 @@ class _ExtensionCardState extends State<ExtensionCard> {
       if (res.data == null) throw Exception("Does not seem to be an extension");
 
       String script = res.data!;
+      // Seguridad: si la entrada del catálogo trae firma, debe validar contra la
+      // llave pública de prism+. Si no valida, la extensión fue alterada → no se
+      // instala. Si no trae firma, es externa (no oficial) y se permite igual:
+      // PrismHub es open source y admite sideload de terceros.
+      bool officialVerified = false;
+      if (widget.signature != null && widget.signature!.isNotEmpty) {
+        if (!ExtensionSignature.isOfficial(script, widget.signature)) {
+          throw Exception('extension.invalid-signature'.i18n);
+        }
+        // Firma oficial válida → puede instalarse aunque sea una nativa.
+        officialVerified = true;
+      }
       // Inject metadata header if missing (e.g. CDN cache serving old file)
       if (!script.contains('==PrismHubExtension==') && !script.contains('==MiruExtension==') && !script.contains('@package')) {
         final typeName = widget.type.toString().split('.').last;
@@ -90,7 +107,8 @@ class _ExtensionCardState extends State<ExtensionCard> {
         script = header + script;
       }
       if (!mounted) return;
-      await ExtensionUtils.installByScript(script, context);
+      await ExtensionUtils.installByScript(script, context,
+          officialVerified: officialVerified);
       // Confirmación visible: antes el éxito no avisaba nada y parecía que
       // "no pasó nada" al instalar.
       if (mounted) {
