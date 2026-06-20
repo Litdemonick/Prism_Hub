@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'dart:collection';
+import 'dart:convert';
 
 import 'package:flutter_inappwebview/flutter_inappwebview.dart';
 import 'package:prismhub/utils/log.dart';
@@ -29,21 +30,53 @@ class StreamSnifferService {
   /// JS inyectado al inicio del documento. Hookea `fetch`, `XMLHttpRequest`,
   /// el setter de `<video>.src` y escanea tags `<video>/<source>` para reportar
   /// cualquier URL que parezca un stream de video al lado Dart.
+  ///
+  /// En WebView2 (Windows), `flutter_inappwebview.callHandler` no está disponible
+  /// en iframes cross-origin. Se usa un doble mecanismo:
+  ///   1. Llamada directa si estamos en el frame principal.
+  ///   2. postMessage hacia el frame principal si estamos en un sub-frame.
+  ///      El frame principal escucha esos mensajes y los reenvía a Dart.
   static const String _hookSource = r'''
 (function(){
+  var _isTop = (window === window.top);
+
+  function sendStream(u, frameHref){
+    try{
+      // Llamada directa (funciona en frame principal y, en Android, en sub-frames)
+      window.flutter_inappwebview.callHandler('prismStream', u, frameHref || location.href);
+    }catch(e){
+      // Sub-frame cross-origin en WebView2: relay via postMessage al frame raíz
+      try{
+        window.top.postMessage(JSON.stringify({_prism:1,h:'prismStream',a:[u, frameHref||location.href]}),'*');
+      }catch(e2){}
+    }
+  }
+
   function rep(u){
     try{
       if(!u) return;
       u = '' + u;
       if(/\.m3u8(\?|#|$)|\.mp4(\?|#|$)|\.mkv(\?|#|$)|\.webm(\?|#|$)|mime=video|\/manifest|\.ts(\?|#|$)/i.test(u)){
         if(u.indexOf('http')!==0){ try{ u = new URL(u, location.href).href; }catch(e){} }
-        // Segundo arg: la URL del frame que pidió el stream. Cuando sniffeamos la
-        // página completa, el m3u8 lo pide un iframe (voe, streamwish...) y su
-        // Referer correcto es el de ESE host, no el de la página contenedora.
-        try{ window.flutter_inappwebview.callHandler('prismStream', u, location.href); }catch(e){}
+        sendStream(u, location.href);
       }
     }catch(e){}
   }
+
+  // Relay de sub-frames: solo en el frame principal
+  if(_isTop){
+    try{
+      window.addEventListener('message', function(ev){
+        try{
+          var d = JSON.parse(ev.data);
+          if(d && d._prism===1 && d.h==='prismStream' && d.a && d.a[0]){
+            try{ window.flutter_inappwebview.callHandler('prismStream', d.a[0], d.a[1]||''); }catch(e){}
+          }
+        }catch(e){}
+      }, false);
+    }catch(e){}
+  }
+
   try{
     var of = window.fetch;
     if(of){ window.fetch = function(){ try{ var a=arguments[0]; rep(a && a.url ? a.url : a); }catch(e){} return of.apply(this, arguments); }; }
@@ -64,10 +97,30 @@ class StreamSnifferService {
     }
   }catch(e){}
   try{
+    // Escaneo periódico de <video>/<source> + auto-play de videos pausados
     setInterval(function(){
       var els = document.querySelectorAll('video, source');
       for(var i=0;i<els.length;i++){ rep(els[i].src || els[i].getAttribute('src')); }
+      // Intentar reproducir videos pausados (players que esperan clic)
+      var vids = document.querySelectorAll('video');
+      for(var j=0;j<vids.length;j++){
+        try{ if(vids[j].paused && vids[j].readyState>0) vids[j].play(); }catch(e){}
+      }
     }, 400);
+  }catch(e){}
+  // Auto-clic en botones de play comunes, una vez que el DOM esté listo
+  try{
+    function _tryClickPlay(){
+      var sels=['.vjs-big-play-button','.jw-icon-display','.fp-play',
+                '[class*="play-btn"i]','[class*="play-button"i]',
+                '[data-plyr="play"]','.btn-play','.play-overlay',
+                '[aria-label*="Play"i]','button[title*="Play"i]'];
+      for(var i=0;i<sels.length;i++){
+        try{ var el=document.querySelector(sels[i]); if(el){ el.click(); break; } }catch(e){}
+      }
+    }
+    setTimeout(_tryClickPlay, 1200);
+    setTimeout(_tryClickPlay, 3000);
   }catch(e){}
 })();
 ''';
@@ -78,6 +131,12 @@ class StreamSnifferService {
   /// `var videos` / `[data-player]` (base64) / iframes. Este script lee esa
   /// lista y monta cada embed en un iframe oculto — replicando el click — para
   /// que sus players arranquen, pidan su m3u8 y el hook lo capture.
+  // Reemplaza la creación de iframes por un callHandler con las URLs.
+  // Los iframes dinámicos en WebView2 (Windows) NO reciben _hookSource
+  // (userScripts no se inyectan en frames creados en runtime), por lo que
+  // callHandler no estaba disponible en ellos y los streams nunca se capturaban.
+  // Solución: enviar las embed URLs a Dart; Dart abre un WebView independiente
+  // por cada URL (frame principal → callHandler funciona perfectamente).
   static const String _loaderSource = r'''
 (function(){
   function pick(){
@@ -113,18 +172,9 @@ class StreamSnifferService {
     var e=pick();
     if (e.length && !done){
       done=true; clearInterval(t);
-      try{ window.flutter_inappwebview.callHandler('prismDebug', 'embeds:'+e.length+' '+e.slice(0,6).join(' | ')); }catch(x){}
-      for (var i=0;i<e.length && i<6;i++){
-        try{
-          var f=document.createElement('iframe');
-          f.style.cssText='position:absolute;left:-9999px;top:0;width:640px;height:360px;border:0;';
-          f.setAttribute('allow','autoplay; encrypted-media; fullscreen');
-          f.src=e[i];
-          document.body.appendChild(f);
-        }catch(e2){}
-      }
+      try{ window.flutter_inappwebview.callHandler('prismEmbeds', JSON.stringify(e)); }catch(x){}
     }
-    if (tries>40){ clearInterval(t); try{ window.flutter_inappwebview.callHandler('prismDebug', 'sin embeds tras '+tries+' intentos'); }catch(x){} }
+    if (tries>40){ clearInterval(t); try{ window.flutter_inappwebview.callHandler('prismEmbeds', JSON.stringify([])); }catch(x){} }
   }, 300);
 })();
 ''';
@@ -264,6 +314,86 @@ class StreamSnifferService {
     } catch (e) {
       logger.warning('[sniffer] error iniciando WebView oculto: $e');
       finish(null);
+    }
+
+    return completer.future;
+  }
+
+  /// Carga [pageUrl] en un WebView oculto y espera a que [_loaderSource]
+  /// detecte los embed URLs (window.videos, [data-player], iframe[src]).
+  /// Devuelve la lista de URLs (puede estar vacía si la página no las tiene
+  /// o si vence el [timeout]).
+  /// Úsalo como primera etapa del page-sniff antes de sniffear cada embed
+  /// individualmente con [sniff()].
+  static Future<List<String>> getEmbedUrls(
+    String pageUrl, {
+    Duration timeout = const Duration(seconds: 15),
+  }) async {
+    final completer = Completer<List<String>>();
+    HeadlessInAppWebView? webView;
+    Timer? timer;
+
+    void finish(List<String> result) {
+      if (completer.isCompleted) return;
+      timer?.cancel();
+      completer.complete(result);
+      Future.microtask(() async {
+        try { await webView?.dispose(); } catch (_) {}
+      });
+    }
+
+    try {
+      webView = HeadlessInAppWebView(
+        initialUrlRequest: URLRequest(url: WebUri(pageUrl)),
+        initialSettings: InAppWebViewSettings(
+          userAgent: PrismHubStorage.getUASetting(),
+          javaScriptEnabled: true,
+          javaScriptCanOpenWindowsAutomatically: false,
+          supportMultipleWindows: false,
+          mediaPlaybackRequiresUserGesture: false,
+          transparentBackground: true,
+          isInspectable: false,
+        ),
+        initialUserScripts: UnmodifiableListView<UserScript>([
+          UserScript(
+            source: _loaderSource,
+            injectionTime: UserScriptInjectionTime.AT_DOCUMENT_END,
+            forMainFrameOnly: true,
+          ),
+        ]),
+        onWebViewCreated: (controller) {
+          controller.addJavaScriptHandler(
+            handlerName: 'prismEmbeds',
+            callback: (args) {
+              try {
+                if (args.isNotEmpty && args.first != null) {
+                  final List<dynamic> parsed =
+                      jsonDecode(args.first.toString());
+                  final urls =
+                      parsed.map((e) => e.toString()).toList();
+                  logger.info('[sniffer/embeds] ${urls.length} embed(s) en $pageUrl');
+                  finish(urls);
+                } else {
+                  finish([]);
+                }
+              } catch (e) {
+                logger.warning('[sniffer/embeds] error parseando: $e');
+                finish([]);
+              }
+              return null;
+            },
+          );
+        },
+      );
+
+      await webView.run();
+      timer = Timer(timeout, () {
+        logger.info('[sniffer/embeds] timeout para $pageUrl');
+        finish([]);
+      });
+    } catch (e) {
+      logger.warning('[sniffer/embeds] error WebView: $e');
+      finish([]);
     }
 
     return completer.future;

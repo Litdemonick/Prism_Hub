@@ -744,16 +744,38 @@ class VideoPlayerController extends GetxController {
     }
   }
 
-  // Cambia al servidor — extrae su stream URL on-demand llamando watch(embedUrl)
+  // Cambia al servidor — extrae su stream URL on-demand.
+  // Para streams directos (ya resueltos por la extensión) llama runtime.watch().
+  // Para embeds sin resolver (voe, netu, streamwish...) usa el sniffer WebView.
   switchServer(String name) async {
     if (!availableServers.containsKey(name)) return;
     serverFailedMessage.value = '';
     isGettingWatchData.value = true;
 
     final embedUrl = availableServers[name]!;
+
+    // Embed sin resolver: sniffear con WebView oculto (no llamar runtime.watch
+    // porque la extensión lo trataría como página de episodio y fallaría).
+    if (!isDirectStream(embedUrl)) {
+      logger.info('switchServer: embed detectado, usando sniffer para $name');
+      final ok = await _trySniff(name, embedUrl);
+      isGettingWatchData.value = false;
+      if (!ok) {
+        serverFailedMessage.value =
+            'Servidor "$name" no disponible. Intenta otro.';
+      } else {
+        _isAutoSeekPosition = true;
+        PrismHubStorage.setLastWorkingServer(
+          runtime.extension.package,
+          playList[index.value].url,
+          name,
+        );
+      }
+      return;
+    }
+
     ExtensionBangumiWatch newWatch;
     try {
-      // Mode 2: la extensión detecta que es un embed URL y extrae directamente
       newWatch = await runtime.watch(embedUrl) as ExtensionBangumiWatch;
     } catch (e) {
       logger.severe(e);
@@ -785,6 +807,11 @@ class VideoPlayerController extends GetxController {
     isGettingWatchData.value = false;
     await player.open(
       Media(newWatch.url, httpHeaders: watchData!.headers),
+    );
+    PrismHubStorage.setLastWorkingServer(
+      runtime.extension.package,
+      playList[index.value].url,
+      name,
     );
   }
 
@@ -1231,7 +1258,11 @@ class VideoPlayerController extends GetxController {
     try {
       logger.info('Sniffer WebView → $name: $embedUrl');
       final referer = serverReferers[name];
-      final sniffed = await StreamSnifferService.sniff(embedUrl, referer: referer);
+      final sniffed = await StreamSnifferService.sniff(
+        embedUrl,
+        referer: referer,
+        timeout: const Duration(seconds: 8),
+      );
       if (sniffed == null) {
         logger.info('Sniffer no encontró stream para $name');
         return false;
@@ -1258,20 +1289,40 @@ class VideoPlayerController extends GetxController {
     }
   }
 
-  // Fallback universal: carga la página del episodio en un WebView oculto y deja
-  // que el propio sitio cargue su player; el sniffer captura el m3u8/mp4 que el
-  // sitio pide. Funciona aunque el resolver nativo no extraiga nada (es lo que
-  // hace que ande "como en el navegador"). Retorna true si reprodujo.
+  // Fallback universal de dos etapas:
+  // Etapa 1 — extrae embed URLs de la página (window.videos, [data-player], iframe[src])
+  //           via callHandler (no crea iframes, que en WebView2 no reciben _hookSource).
+  // Etapa 2 — sniffea cada embed en su propio WebView (frame principal → callHandler ok).
+  // Si ningún embed funcionó o la página no tenía embeds detectables, intenta un
+  // sniff directo de la página (iframes estáticos capturados via postMessage relay).
   bool _pageSniffAttempted = false;
   Future<bool> _trySniffPage() async {
     if (_episodePageUrl.isEmpty || _pageSniffAttempted) return false;
     _pageSniffAttempted = true;
     try {
-      logger.info('Page-sniff WebView → $_episodePageUrl');
+      // Etapa 1: extraer embed URLs de la página del episodio.
+      logger.info('Page-sniff etapa 1: extrayendo embeds de $_episodePageUrl');
+      final embedUrls = await StreamSnifferService.getEmbedUrls(
+        _episodePageUrl,
+        timeout: const Duration(seconds: 15),
+      );
+
+      if (embedUrls.isNotEmpty) {
+        // Etapa 2: sniffear cada embed en WebView propio.
+        for (int i = 0; i < embedUrls.length && i < 6; i++) {
+          final embedUrl = embedUrls[i];
+          logger.info('Page-sniff etapa 2 [${i+1}/${embedUrls.length}]: $embedUrl');
+          if (await _trySniff('Embed ${i + 1}', embedUrl)) return true;
+        }
+        logger.info('Page-sniff etapa 2: ningún embed produjo stream');
+      } else {
+        logger.info('Page-sniff etapa 1: sin embeds, intentando sniff directo');
+      }
+
+      // Fallback: sniff directo de la página (iframes estáticos + auto-play).
       final sniffed = await StreamSnifferService.sniff(
         _episodePageUrl,
-        timeout: const Duration(seconds: 25),
-        loadEmbeds: true,
+        timeout: const Duration(seconds: 15),
       );
       if (sniffed == null) {
         logger.info('Page-sniff no encontró stream');
