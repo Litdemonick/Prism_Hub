@@ -928,23 +928,34 @@ void showServerSheet(BuildContext context, VideoPlayerController controller) {
                         leading: Icon(
                           isCurrent
                               ? Icons.check_circle
-                              : (direct ? Icons.dns_outlined : Icons.public),
-                          color: isCurrent ? Colors.purpleAccent : null,
+                              : (direct ? Icons.dns_outlined : Icons.block),
+                          color: isCurrent
+                              ? Colors.purpleAccent
+                              : (!direct ? Colors.grey : null),
                         ),
-                        title: Text(entry.key),
-                        // Servidores no-directos abren en el navegador embebido.
+                        title: Text(
+                          entry.key,
+                          style: TextStyle(
+                            color: (!isCurrent && !direct) ? Colors.grey : null,
+                          ),
+                        ),
                         subtitle: direct
                             ? null
-                            : Text('video.webview-server'.i18n,
-                                style: const TextStyle(fontSize: 11)),
+                            : const Text(
+                                'No disponible desde tu red',
+                                style: TextStyle(fontSize: 11, color: Colors.grey),
+                              ),
                         selected: isCurrent,
                         onTap: () {
                           Navigator.of(context).pop();
-                          if (direct) {
-                            if (!isCurrent) controller.switchServer(entry.key);
-                          } else {
-                            openWebViewPlayer(context, entry.value,
-                                referer: controller.serverReferers[entry.key]);
+                          if (!isCurrent) {
+                            if (direct) {
+                              controller.switchServer(entry.key);
+                            } else {
+                              controller.serverFailedMessage.value =
+                                  'Servidor "${entry.key}" no disponible desde tu red.\n'
+                                  'Requiere proxy o VPN para acceder.';
+                            }
                           }
                         },
                       );

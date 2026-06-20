@@ -429,14 +429,19 @@ class VideoPlayerController extends GetxController {
     // 错误监听 — detectar fallo de reproducción
     player.stream.error.listen((event) {
       logger.severe('media_kit error: $event');
-      // Durante la resolución/failover, media_kit re-emite el mismo error varias
-      // veces (uno por cada intento de servidor). NO mostrar un toast por cada uno:
-      // eso encolaba mensajes que parpadeaban. El estado de fallo se comunica con
-      // el overlay estable `serverFailedMessage`. Solo se muestra un toast para un
-      // error nuevo ocurrido DURANTE la reproducción ya iniciada.
       final isDup = event == _lastErrorEvent;
       _lastErrorEvent = event;
-      if (!isGettingWatchData.value && !isDup) {
+      // Errores técnicos de libmpv/ffmpeg no se muestran al usuario:
+      // son ruido interno (timeout TCP, file format, etc.) que solo confunde.
+      // El estado de fallo se comunica con el overlay estable serverFailedMessage.
+      final isTechnical = event.contains('Failed to open') ||
+          event.contains('tcp:') ||
+          event.contains('ffurl_read') ||
+          event.contains('Failed to recognize') ||
+          event.contains('No such') ||
+          event.contains('Connection refused') ||
+          event.contains('Operation timed out');
+      if (!isGettingWatchData.value && !isDup && !isTechnical) {
         sendMessage(Message(Text(event)));
       }
       // Si el error indica que el stream no es accesible, notificar
@@ -595,18 +600,12 @@ class VideoPlayerController extends GetxController {
               }
             }
             if (!foundWorking) {
-              final errorDetails = serverErrors.entries.map((e) => '${e.key}: ${e.value}').join(', ');
-              logger.severe('Todos los servidores fallaron. Errores: $errorDetails');
-              // Flag the extension as currently not working so the user sees it.
-              ExtensionUtils.reportRuntimeError(
-                  runtime.extension.package, errorDetails);
+              logger.severe('Todos los servidores fallaron: ${serverErrors.entries.map((e) => '${e.key}: ${e.value}').join(', ')}');
               serverFailedMessage.value =
                   'Ningún servidor disponible desde tu red.\n'
-                  'Errores: $errorDetails\n'
                   'Prueba con una VPN o elige otro episodio.';
-              logger.severe('Todos los servidores fallaron, iniciando _safePlayerInit');
-              await _safePlayerInit();
               isGettingWatchData.value = false;
+              await _safePlayerInit();
               return;
             }
           }

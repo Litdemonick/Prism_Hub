@@ -1307,31 +1307,40 @@ class _ServerSelectorState extends State<_ServerSelector> {
                                               ? FluentIcons.check_mark
                                               : (direct
                                                   ? FluentIcons.server
-                                                  : FluentIcons.globe),
+                                                  : FluentIcons.status_error_full),
                                           size: 16,
+                                          color: (!isCurrent && !direct)
+                                              ? Colors.grey
+                                              : null,
                                         ),
-                                        title: Text(entry.key),
+                                        title: Text(
+                                          entry.key,
+                                          style: TextStyle(
+                                            color: (!isCurrent && !direct)
+                                                ? Colors.grey
+                                                : null,
+                                          ),
+                                        ),
                                         subtitle: direct
                                             ? null
-                                            : Text(
-                                                'video.webview-server'.i18n,
-                                                style: const TextStyle(
-                                                    fontSize: 11),
+                                            : const Text(
+                                                'No disponible desde tu red',
+                                                style: TextStyle(
+                                                    fontSize: 11,
+                                                    color: Colors.grey),
                                               ),
                                         onPressed: () {
                                           router.pop();
-                                          if (direct) {
-                                            if (!isCurrent) {
+                                          if (!isCurrent) {
+                                            if (direct) {
                                               widget.controller
                                                   .switchServer(entry.key);
+                                            } else {
+                                              widget.controller
+                                                  .serverFailedMessage.value =
+                                                  'Servidor "${entry.key}" no disponible desde tu red.\n'
+                                                  'Requiere proxy o VPN para acceder.';
                                             }
-                                          } else {
-                                            openWebViewPlayer(
-                                              context,
-                                              entry.value,
-                                              referer: widget.controller
-                                                  .serverReferers[entry.key],
-                                            );
                                           }
                                         },
                                       );
