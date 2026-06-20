@@ -98,7 +98,7 @@ class _VideoPlayerState extends State<VideoPlayer> {
                         ),
                         child: _c.cuurentMessageWidget.value!,
                       ),
-                    ).animate().fade(),
+                    ),
                   ),
               ],
             ),

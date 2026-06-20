@@ -1251,10 +1251,16 @@ class VideoPlayerController extends GetxController {
   // Retorna true si encontró un stream y media_kit lo abrió.
   Future<bool> _trySniff(String name, String embedUrl) async {
     if (embedUrl.startsWith('error://')) return false;
-    // Mega transmite cifrado dentro de su propia página (no hay .m3u8/.mp4 que
-    // interceptar) — el sniffer no aplica; se reproduce vía WebView visible.
     final low = embedUrl.toLowerCase();
-    if (low.contains('mega.nz') || low.contains('mega.co.nz')) return false;
+    // Estos hosts no exponen streams HLS/MP4: abren ventanas de descarga, requieren
+    // interacción de usuario o cifran el contenido sin URL interceptable.
+    if (low.contains('mega.nz') || low.contains('mega.co.nz') ||
+        low.contains('savefiles.') || low.contains('mediafire.') ||
+        low.contains('1fichier.') || low.contains('zippyshare.') ||
+        low.contains('racaty.') || low.contains('katfile.') ||
+        low.contains('rapidgator.') || low.contains('nitroflare.')) {
+      return false;
+    }
     try {
       logger.info('Sniffer WebView → $name: $embedUrl');
       final referer = serverReferers[name];
@@ -1299,7 +1305,20 @@ class VideoPlayerController extends GetxController {
   Future<bool> _trySniffPage() async {
     if (_episodePageUrl.isEmpty || _pageSniffAttempted) return false;
     _pageSniffAttempted = true;
+    final episodeUrl = playList[index.value].url;
     try {
+      // Fast-path: si ya sabemos qué embed funcionó para este episodio, probarlo
+      // directo sin escanear toda la página (ahorra ~15s en cargas siguientes).
+      final cachedEmbed = PrismHubStorage.getPageSniffEmbed(
+        runtime.extension.package,
+        episodeUrl,
+      );
+      if (cachedEmbed != null) {
+        logger.info('Page-sniff fast-path: embed cacheado → $cachedEmbed');
+        if (await _trySniff('Cached', cachedEmbed)) return true;
+        logger.info('Page-sniff fast-path falló, re-escaneando página');
+      }
+
       // Etapa 1: extraer embed URLs de la página del episodio.
       logger.info('Page-sniff etapa 1: extrayendo embeds de $_episodePageUrl');
       final embedUrls = await StreamSnifferService.getEmbedUrls(
@@ -1312,7 +1331,15 @@ class VideoPlayerController extends GetxController {
         for (int i = 0; i < embedUrls.length && i < 6; i++) {
           final embedUrl = embedUrls[i];
           logger.info('Page-sniff etapa 2 [${i+1}/${embedUrls.length}]: $embedUrl');
-          if (await _trySniff('Embed ${i + 1}', embedUrl)) return true;
+          if (await _trySniff('Embed ${i + 1}', embedUrl)) {
+            // Guardar el embed que funcionó para carga rápida en el próximo intento.
+            unawaited(PrismHubStorage.setPageSniffEmbed(
+              runtime.extension.package,
+              episodeUrl,
+              embedUrl,
+            ));
+            return true;
+          }
         }
         logger.info('Page-sniff etapa 2: ningún embed produjo stream');
       } else {

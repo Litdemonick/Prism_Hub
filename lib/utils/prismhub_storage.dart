@@ -185,6 +185,18 @@ class PrismHubStorage {
       String package, String episodeUrl, String server) async {
     await settings.put('lastServer:$package:$episodeUrl', server);
   }
+
+  // Recuerda el embed URL del page-sniff que reprodujo bien el episodio.
+  // Permite saltarse el escaneo de toda la página y probar ese embed directo.
+  static String? getPageSniffEmbed(String package, String episodeUrl) {
+    final v = settings.get('pageSniffEmbed:$package:$episodeUrl');
+    return v is String && v.isNotEmpty ? v : null;
+  }
+
+  static Future<void> setPageSniffEmbed(
+      String package, String episodeUrl, String embedUrl) async {
+    await settings.put('pageSniffEmbed:$package:$episodeUrl', embedUrl);
+  }
 }
 
 class SettingKey {
