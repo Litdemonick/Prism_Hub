@@ -89,9 +89,8 @@ class ExtensionUtils {
   // el core del app). El usuario puede borrarlas; el resto de nativePackages
   // están disponibles en el catálogo para instalar cuando quiera.
   static const Set<String> defaultPackages = {
-    'io.prismhub.tioanime',    // anime ES — probada y funcional
-    'io.prismhub.monoschinos', // anime ES — probada y funcional
-    'io.prismhub.mangadex',    // manga multi-idioma — base universal
+    'io.prismhub.jkanime',  // anime ES — múltiples servidores confiables
+    'io.prismhub.mangadex', // manga multi-idioma — base universal
   };
 
   // Todos los paquetes oficiales de prism+. Bloqueados de instalar externamente
@@ -187,7 +186,8 @@ class ExtensionUtils {
           if (path.extension(f.path) != '.js') continue;
           final pkg = path.basenameWithoutExtension(f.path);
           if (pkg.startsWith('io.prismhub.') &&
-              !officialPackages.contains(pkg)) {
+              !officialPackages.contains(pkg) &&
+              !nativePackages.contains(pkg)) {
             try {
               File(f.path).deleteSync();
               runtimes.remove(pkg);

@@ -161,6 +161,10 @@ class VideoPlayerController extends GetxController {
   final serverReferers = <String, String>{}; // nombre → referer (no observable)
   final currentServerName = ''.obs;
   final serverFailedMessage = ''.obs;
+  // Cuando el sniffer headless no puede capturar el stream (CF-protected),
+  // se emite la petición de abrir el WebView visible. El widget listener
+  // (desktop/mobile controls) lo intercepta y llama openWebViewPlayer().
+  final webViewFallback = Rxn<Map<String, String>>(null);
   // URL de la página del episodio en el sitio (X-Page-Url). Se carga en un
   // WebView oculto y se sniffe su player como fallback universal.
   String _episodePageUrl = '';
@@ -547,99 +551,25 @@ class VideoPlayerController extends GetxController {
 
           if (!worked) {
             logger.severe('Servidor primario fallido: ${currentServerName.value}');
-            // Auto-failover: iterar servidores alternativos
-            bool foundWorking = false;
-            final serverEntries = availableServers.entries.toList();
-            final serverErrors = <String, String>{}; // Para registrar errores por servidor
-            logger.info('Servidores disponibles para failover: ${serverEntries.map((e) => e.key).toList()}');
-            for (final entry in serverEntries) {
-              if (entry.key == currentServerName.value) continue;
-              // Los embeds no-directos (voe, netu, streamwish, doodstream...) no
-              // los reproduce media_kit (es un HTML, no un stream). En vez de
-              // saltarlos, se intentan con el sniffer de WebView oculto, que sí
-              // extrae el stream real usando el JS del propio host.
-              if (!isDirectStream(entry.value)) {
-                if (await _trySniff(entry.key, entry.value)) {
-                  foundWorking = true;
-                  break;
-                }
-                continue;
-              }
-              try {
-                logger.info('Failover → probando servidor: ${entry.key}');
-                var alt = await runtime.watch(entry.value)
-                    as ExtensionBangumiWatch;
-                logger.info('Failover ${entry.key} URL: ${alt.url}');
-                // El adapter pierde el Referer al recibir una URL ya resuelta
-                // (.mp4/.m3u8) — la corta y devuelve headers vacíos. Sin Referer
-                // muchos CDNs responden 403 (p.ej. mp4upload). Se recupera del
-                // mapa local de referers por servidor.
-                final fref = serverReferers[entry.key];
-                if (fref != null && fref.isNotEmpty) {
-                  alt.headers = {...?alt.headers, 'Referer': fref};
-                }
-                if (alt.url.startsWith('error://')) {
-                  final errorMsg = alt.url.replaceFirst('error://', '');
-                  logger.severe('Failover ${entry.key}: error de extracción ($errorMsg)');
-                  serverErrors[entry.key] = errorMsg;
-                  continue;
-                }
-                
-                bool altWorked = await _tryOpenPlayer(alt.url, alt.headers);
-                
-                if (!altWorked && alt.headers != null && alt.headers!.containsKey('X-Netu-Alts')) {
-                  try {
-                    final List<dynamic> alts = jsonDecode(alt.headers!['X-Netu-Alts']!);
-                    for (final altUrlDyn in alts) {
-                      final altUrlStr = altUrlDyn.toString();
-                      logger.info('Failover probando alternativa: $altUrlStr');
-                      altWorked = await _tryOpenPlayer(altUrlStr, alt.headers);
-                      if (altWorked) {
-                        alt = ExtensionBangumiWatch(
-                          type: alt.type,
-                          url: altUrlStr,
-                          subtitles: alt.subtitles,
-                          headers: alt.headers,
-                          audioTrack: alt.audioTrack,
-                        );
-                        break;
-                      }
-                    }
-                  } catch (e) {
-                    logger.warning('Error parseando X-Netu-Alts en failover: $e');
-                  }
-                }
-
-                if (!altWorked) {
-                  logger.severe('Failover ${entry.key}: no se pudo conectar a ningún host');
-                  continue;
-                }
-                
-                // Servidor alternativo alcanzable — usarlo
-                currentServerName.value = entry.key;
-                watchData = alt;
-                serverFailedMessage.value = '';
-                logger.info('Failover exitoso: ${entry.key}');
-                foundWorking = true;
-                break;
-              } catch (e, stackTrace) {
-                logger.severe('Failover ${entry.key} excepción: $e');
-                logger.severe('Stack trace: $stackTrace');
-              }
-            }
-            // Último recurso universal: cargar la página del episodio en WebView
-            // y sniffear el player del sitio (lo que andaría en el navegador).
-            if (!foundWorking && await _trySniffPage()) {
-              foundWorking = true;
-            }
-            if (!foundWorking) {
-              logger.severe('Todos los servidores fallaron: ${serverErrors.entries.map((e) => '${e.key}: ${e.value}').join(', ')}');
+            // El usuario elige el servidor: no hacer auto-failover.
+            // Si hay otros servidores disponibles, mostrar mensaje para que elija.
+            // Si no hay más opciones, intentar page-sniff como último recurso.
+            if (availableServers.length > 1) {
               serverFailedMessage.value =
-                  'No se pudo cargar el video de este episodio.';
-              isGettingWatchData.value = false;
-              await _safePlayerInit();
-              return;
+                  'Servidor "${currentServerName.value}" no disponible.\n'
+                  'Elegí otro servidor con el botón Servidor.';
+            } else if (_episodePageUrl.isNotEmpty && !_pageSniffAttempted) {
+              if (!await _trySniffPage()) {
+                serverFailedMessage.value =
+                    'No se encontró un servidor de video disponible.';
+              }
+            } else {
+              serverFailedMessage.value =
+                  'No se encontró un servidor de video disponible.';
             }
+            isGettingWatchData.value = false;
+            await _safePlayerInit();
+            return;
           }
           if (watchData!.audioTrack != null) {
             await player.setAudioTrack(
@@ -708,6 +638,7 @@ class VideoPlayerController extends GetxController {
     availableServers.clear();
     serverReferers.clear();
     serverFailedMessage.value = '';
+    webViewFallback.value = null;
     final playUrl = playList[index.value].url;
     watchData = await runtime.watch(playUrl) as ExtensionBangumiWatch;
 
@@ -744,75 +675,93 @@ class VideoPlayerController extends GetxController {
     }
   }
 
-  // Cambia al servidor — extrae su stream URL on-demand.
-  // Para streams directos (ya resueltos por la extensión) llama runtime.watch().
-  // Para embeds sin resolver (voe, netu, streamwish...) usa el sniffer WebView.
+  // Cambia al servidor on-demand (igual que JiruHub):
+  //   1. Llama runtime.watch(url) — el wrapper del build maneja 3 casos:
+  //        a) URL directa .m3u8/.mp4 → fast-path, devuelve inmediatamente.
+  //        b) URL de embed conocido → resolveEmbed on-demand vía SDK.
+  //        c) URL de episodio → extensión la procesa normalmente.
+  //   2. Si la extensión no puede resolver (error/vacío) → fallback WebView sniffer.
   switchServer(String name) async {
     if (!availableServers.containsKey(name)) return;
     serverFailedMessage.value = '';
-    isGettingWatchData.value = true;
+    webViewFallback.value = null;
 
     final embedUrl = availableServers[name]!;
+    logger.info('switchServer: $name → $embedUrl');
 
-    // Embed sin resolver: sniffear con WebView oculto (no llamar runtime.watch
-    // porque la extensión lo trataría como página de episodio y fallaría).
-    if (!isDirectStream(embedUrl)) {
-      logger.info('switchServer: embed detectado, usando sniffer para $name');
-      final ok = await _trySniff(name, embedUrl);
-      isGettingWatchData.value = false;
-      if (!ok) {
-        serverFailedMessage.value =
-            'Servidor "$name" no disponible. Intenta otro.';
-      } else {
-        _isAutoSeekPosition = true;
-        PrismHubStorage.setLastWorkingServer(
-          runtime.extension.package,
-          playList[index.value].url,
-          name,
-        );
-      }
-      return;
-    }
+    isGettingWatchData.value = true;
 
     ExtensionBangumiWatch newWatch;
     try {
       newWatch = await runtime.watch(embedUrl) as ExtensionBangumiWatch;
     } catch (e) {
-      logger.severe(e);
-      serverFailedMessage.value =
-          'No se pudo extraer el servidor "$name". Intenta otro.';
+      logger.severe('switchServer: runtime.watch falló para $name: $e');
+      if (!isDirectStream(embedUrl)) {
+        final ok = await _trySniff(name, embedUrl, timeout: const Duration(seconds: 5));
+        isGettingWatchData.value = false;
+        if (!ok) {
+          _requestWebViewFallback(name, embedUrl);
+        } else {
+          _isAutoSeekPosition = true;
+          unawaited(PrismHubStorage.setLastWorkingServer(
+              runtime.extension.package, playList[index.value].url, name));
+        }
+        return;
+      }
+      serverFailedMessage.value = 'No se pudo extraer "$name". Elegí otro.';
       isGettingWatchData.value = false;
       return;
     }
 
-    if (newWatch.url.startsWith('error://')) {
-      serverFailedMessage.value =
-          'Servidor "$name" no disponible. Intenta otro.';
+    if (newWatch.url.isEmpty || newWatch.url.startsWith('error://') || newWatch.url.startsWith('page://')) {
+      logger.warning('switchServer: extensión retornó error/page para $name (${newWatch.url})');
+      if (!isDirectStream(embedUrl)) {
+        final ok = await _trySniff(name, embedUrl, timeout: const Duration(seconds: 5));
+        isGettingWatchData.value = false;
+        if (!ok) {
+          _requestWebViewFallback(name, embedUrl);
+        } else {
+          _isAutoSeekPosition = true;
+          unawaited(PrismHubStorage.setLastWorkingServer(
+              runtime.extension.package, playList[index.value].url, name));
+        }
+        return;
+      }
+      serverFailedMessage.value = 'Servidor "$name" no disponible. Elegí otro.';
       isGettingWatchData.value = false;
       return;
     }
 
+    // Extensión resolvió exitosamente — construir headers y abrir el player
     currentServerName.value = name;
-    // Si la extensión no devolvió Referer, intentar del mapa local
     final headers = <String, String>{};
+    // Preservar Referer: del resultado de la extensión o del mapa local
     final referer = newWatch.headers?['Referer'] ?? serverReferers[name];
     if (referer != null) headers['Referer'] = referer;
+    // Copiar headers útiles (excluir X-* que solo aplican al listado de episodio)
+    if (newWatch.headers != null) {
+      for (final e in newWatch.headers!.entries) {
+        if (!e.key.startsWith('X-')) headers[e.key] = e.value;
+      }
+    }
 
     watchData = ExtensionBangumiWatch(
-      type: watchData!.type,
+      type: newWatch.type,
       url: newWatch.url,
+      subtitles: watchData!.subtitles,
       headers: headers.isEmpty ? null : headers,
+      audioTrack: watchData!.audioTrack,
     );
     _isAutoSeekPosition = true;
+
+    if (!await _tryOpenPlayer(newWatch.url, headers.isEmpty ? null : headers)) {
+      serverFailedMessage.value = 'Servidor "$name" no responde. Elegí otro.';
+    } else {
+      serverFailedMessage.value = '';
+      unawaited(PrismHubStorage.setLastWorkingServer(
+          runtime.extension.package, playList[index.value].url, name));
+    }
     isGettingWatchData.value = false;
-    await player.open(
-      Media(newWatch.url, httpHeaders: watchData!.headers),
-    );
-    PrismHubStorage.setLastWorkingServer(
-      runtime.extension.package,
-      playList[index.value].url,
-      name,
-    );
   }
 
   // 获取 torrent 媒体文件
@@ -1245,11 +1194,28 @@ class VideoPlayerController extends GetxController {
     );
   }
 
+  // Emite una petición de abrir el WebView visible para un embed que ni el
+  // resolver HTTP ni el sniffer headless pudieron manejar (ej: CF-protected).
+  // El WebView muestra solo el player del host (voe.sx, etc.), sin UI del sitio.
+  void _requestWebViewFallback(String name, String embedUrl) {
+    isGettingWatchData.value = false;
+    logger.info('switchServer: WebView visible → $name ($embedUrl)');
+    webViewFallback.value = {
+      'url': embedUrl,
+      'name': name,
+      'referer': serverReferers[name] ?? '',
+    };
+  }
+
   // Intenta reproducir un embed que el resolver nativo no pudo resolver, usando
   // el sniffer de WebView oculto: carga la página del host, deja correr su JS y
   // captura el .m3u8/.mp4 que pide su propio player. Es el fallback universal.
   // Retorna true si encontró un stream y media_kit lo abrió.
-  Future<bool> _trySniff(String name, String embedUrl) async {
+  Future<bool> _trySniff(
+    String name,
+    String embedUrl, {
+    Duration timeout = const Duration(seconds: 8),
+  }) async {
     if (embedUrl.startsWith('error://')) return false;
     final low = embedUrl.toLowerCase();
     // Estos hosts no exponen streams HLS/MP4: abren ventanas de descarga, requieren
@@ -1262,12 +1228,12 @@ class VideoPlayerController extends GetxController {
       return false;
     }
     try {
-      logger.info('Sniffer WebView → $name: $embedUrl');
+      logger.info('Sniffer WebView → $name: $embedUrl (timeout: ${timeout.inSeconds}s)');
       final referer = serverReferers[name];
       final sniffed = await StreamSnifferService.sniff(
         embedUrl,
         referer: referer,
-        timeout: const Duration(seconds: 8),
+        timeout: timeout,
       );
       if (sniffed == null) {
         logger.info('Sniffer no encontró stream para $name');

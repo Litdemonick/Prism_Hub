@@ -7,11 +7,12 @@ import 'package:get/get.dart';
 import 'package:media_kit_video/media_kit_video.dart';
 import 'package:prismhub/controllers/watch/video_controller.dart';
 import 'package:prismhub/utils/i18n.dart';
+import 'package:prismhub/views/pages/watch/video/webview_player_page.dart'
+    show openWebViewPlayer;
 import 'package:prismhub/utils/layout.dart';
 import 'package:prismhub/utils/router.dart';
 import 'package:prismhub/views/pages/watch/video/video_player_cast.dart';
 import 'package:prismhub/views/pages/watch/video/video_player_sidebar.dart';
-import 'package:prismhub/views/pages/watch/video/webview_player_page.dart';
 import 'package:prismhub/views/widgets/cache_network_image.dart';
 import 'package:prismhub/views/widgets/progress.dart';
 import 'package:screen_brightness/screen_brightness.dart';
@@ -44,6 +45,7 @@ class _VideoPlayerMobileControlsState extends State<VideoPlayerMobileControls> {
   bool _isLongPress = false;
   // 定时器
   Timer? _timer;
+  Worker? _webViewWorker;
 
   _updateTimer() {
     _timer?.cancel();
@@ -74,10 +76,22 @@ class _VideoPlayerMobileControlsState extends State<VideoPlayerMobileControls> {
   void initState() {
     _init();
     super.initState();
+    _webViewWorker = ever(_c.webViewFallback, (Map<String, String>? req) {
+      if (req != null && mounted) {
+        _c.webViewFallback.value = null;
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          if (mounted) {
+            final referer = req['referer']?.isNotEmpty == true ? req['referer'] : null;
+            openWebViewPlayer(context, req['url']!, referer: referer, title: req['name'] ?? '');
+          }
+        });
+      }
+    });
   }
 
   @override
   void dispose() {
+    _webViewWorker?.dispose();
     _timer?.cancel();
     super.dispose();
   }
@@ -923,39 +937,34 @@ void showServerSheet(BuildContext context, VideoPlayerController controller) {
                     Builder(builder: (_) {
                       final isCurrent =
                           controller.currentServerName.value == entry.key;
-                      final direct = isDirectStream(entry.value);
                       return ListTile(
                         leading: Icon(
                           isCurrent
                               ? Icons.check_circle
-                              : (direct ? Icons.dns_outlined : Icons.block),
+                              : Icons.dns_outlined,
                           color: isCurrent
                               ? Colors.greenAccent
-                              : (direct ? Colors.white : Colors.white38),
+                              : Colors.white,
                         ),
                         title: Text(
                           entry.key,
-                          style: TextStyle(
-                            color: direct ? Colors.white : Colors.white38,
-                          ),
+                          style: const TextStyle(color: Colors.white),
                         ),
-                        subtitle: direct
-                            ? null
-                            : const Text(
-                                'No disponible desde tu red',
-                                style:
-                                    TextStyle(fontSize: 11, color: Colors.white38),
-                              ),
                         selected: isCurrent,
                         onTap: () {
                           Navigator.of(context).pop();
                           if (!isCurrent) {
-                            if (direct) {
-                              controller.switchServer(entry.key);
+                            final eu = controller.availableServers[entry.key]!;
+                            if (eu.contains('mega.nz') ||
+                                eu.contains('mega.co.nz')) {
+                              controller.player.pause();
+                              openWebViewPlayer(
+                                context, eu,
+                                referer: controller.serverReferers[entry.key],
+                                title: entry.key,
+                              );
                             } else {
-                              controller.serverFailedMessage.value =
-                                  'Servidor "${entry.key}" no disponible desde tu red.\n'
-                                  'Requiere proxy o VPN para acceder.';
+                              controller.switchServer(entry.key);
                             }
                           }
                         },

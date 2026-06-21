@@ -7,8 +7,9 @@ import 'package:media_kit/media_kit.dart';
 import 'package:media_kit_video/media_kit_video.dart';
 import 'package:prismhub/controllers/watch/video_controller.dart';
 import 'package:prismhub/router/router.dart';
+import 'package:prismhub/views/pages/watch/video/webview_player_page.dart'
+    show openWebViewPlayer;
 import 'package:prismhub/utils/i18n.dart';
-import 'package:prismhub/views/pages/watch/video/webview_player_page.dart';
 import 'package:prismhub/views/widgets/cache_network_image.dart';
 import 'package:prismhub/views/widgets/watch/playlist.dart';
 import 'package:window_manager/window_manager.dart';
@@ -30,9 +31,28 @@ class _VideoPlayerDesktopControlsState
   late final _c = widget.controller;
   final FocusNode _focusNode = FocusNode();
   final _subtitleViewKey = GlobalKey<SubtitleViewState>();
+  Worker? _webViewWorker;
+
+  @override
+  void initState() {
+    super.initState();
+    _webViewWorker = ever(_c.webViewFallback, (Map<String, String>? req) {
+      if (req != null && mounted) {
+        _c.webViewFallback.value = null;
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          if (mounted) {
+            _c.player.pause();
+            final referer = req['referer']?.isNotEmpty == true ? req['referer'] : null;
+            openWebViewPlayer(context, req['url']!, referer: referer, title: req['name'] ?? '');
+          }
+        });
+      }
+    });
+  }
 
   @override
   void dispose() {
+    _webViewWorker?.dispose();
     _focusNode.dispose();
     super.dispose();
   }
@@ -1299,54 +1319,40 @@ class _ServerSelectorState extends State<_ServerSelector> {
                                           widget.controller.currentServerName
                                                   .value ==
                                               entry.key;
-                                      final direct =
-                                          isDirectStream(entry.value);
                                       return ListTile.selectable(
                                         selected: isCurrent,
                                         leading: Icon(
                                           isCurrent
                                               ? FluentIcons.check_mark
-                                              : (direct
-                                                  ? FluentIcons.server
-                                                  : FluentIcons.status_error_full),
+                                              : FluentIcons.server,
                                           size: 16,
                                           color: isCurrent
                                               ? Colors.green
-                                              : (direct
-                                                  ? Colors.white
-                                                  : Colors.white.withValues(
-                                                      alpha: 0.38)),
+                                              : Colors.white,
                                         ),
                                         title: Text(
                                           entry.key,
-                                          style: TextStyle(
-                                            color: direct
-                                                ? Colors.white
-                                                : Colors.white
-                                                    .withValues(alpha: 0.38),
+                                          style: const TextStyle(
+                                            color: Colors.white,
                                           ),
                                         ),
-                                        subtitle: direct
-                                            ? null
-                                            : Text(
-                                                'No disponible desde tu red',
-                                                style: TextStyle(
-                                                    fontSize: 11,
-                                                    color: Colors.white
-                                                        .withValues(
-                                                            alpha: 0.38)),
-                                              ),
                                         onPressed: () {
                                           router.pop();
                                           if (!isCurrent) {
-                                            if (direct) {
-                                              widget.controller
-                                                  .switchServer(entry.key);
+                                            final eu = widget.controller
+                                                .availableServers[entry.key]!;
+                                            if (eu.contains('mega.nz') ||
+                                                eu.contains('mega.co.nz')) {
+                                              widget.controller.player.pause();
+                                              openWebViewPlayer(
+                                                context, eu,
+                                                referer: widget.controller
+                                                    .serverReferers[entry.key],
+                                                title: entry.key,
+                                              );
                                             } else {
                                               widget.controller
-                                                  .serverFailedMessage.value =
-                                                  'Servidor "${entry.key}" no disponible desde tu red.\n'
-                                                  'Requiere proxy o VPN para acceder.';
+                                                  .switchServer(entry.key);
                                             }
                                           }
                                         },
