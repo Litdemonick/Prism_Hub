@@ -88,12 +88,14 @@ class _ComicReaderContentState extends State<ComicReaderContent> {
             ),
           ),
         ),
-        // Quick mode-toggle buttons (cascade / page-by-page)
+        // Quick mode-toggle buttons — hidden while control panel is visible
+        // to avoid overlapping the Siguiente/Anterior chapter buttons.
         Positioned(
           bottom: 2,
           right: 8,
-          child: Obx(
-            () => Row(
+          child: Obx(() {
+            if (_c.isShowControlPanel.value) return const SizedBox.shrink();
+            return Row(
               mainAxisSize: MainAxisSize.min,
               children: [
                 _buildModeBtn(
@@ -102,8 +104,8 @@ class _ComicReaderContentState extends State<ComicReaderContent> {
                 _buildModeBtn(
                     Icons.menu_book, 'Páginas', MangaReadMode.standard),
               ],
-            ),
-          ),
+            );
+          }),
         ),
       ],
     );
