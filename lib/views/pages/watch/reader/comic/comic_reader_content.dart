@@ -26,6 +26,9 @@ class _ComicReaderContentState extends State<ComicReaderContent> {
   @override
   void initState() {
     super.initState();
+    // On Android the UI starts visible; the user hides it by scrolling or
+    // tapping the center zone (handled in ReaderView).
+    if (Platform.isAndroid) _c.isShowControlPanel.value = true;
   }
 
   late final _c = Get.find<ComicController>(tag: widget.tag);
@@ -50,22 +53,26 @@ class _ComicReaderContentState extends State<ComicReaderContent> {
     required VoidCallback onTap,
     bool active = false,
   }) {
+    final isAndroid = Platform.isAndroid;
+    // Android: 48×48 dp minimum tap target per Material guidelines.
+    final iconSize = isAndroid ? 22.0 : 18.0;
+    final padding = isAndroid ? 13.0 : 6.0;
     return Tooltip(
       message: tooltip,
       child: GestureDetector(
         onTap: onTap,
         child: Container(
-          padding: const EdgeInsets.all(6),
+          padding: EdgeInsets.all(padding),
           decoration: BoxDecoration(
             color: active
                 ? Colors.white.withAlpha(60)
                 : Colors.black.withAlpha(120),
-            borderRadius: BorderRadius.circular(4),
+            borderRadius: BorderRadius.circular(isAndroid ? 8 : 4),
           ),
           child: Icon(
             icon,
             color: active ? Colors.white : Colors.white54,
-            size: 18,
+            size: iconSize,
           ),
         ),
       ),
@@ -185,20 +192,35 @@ class _ComicReaderContentState extends State<ComicReaderContent> {
   // ── Full display overlay (wraps content) ─────────────────────────────────
 
   Widget _buildDisplay(Widget child) {
+    final isAndroid = Platform.isAndroid;
+    // On Android, overlays fade in/out with isShowControlPanel so reading is
+    // immersive (scrolling hides them; single tap brings them back).
+    Widget overlay(Widget w) {
+      if (!isAndroid) return w;
+      return Obx(() {
+        final visible = _c.isShowControlPanel.value;
+        return AnimatedOpacity(
+          opacity: visible ? 1.0 : 0.0,
+          duration: const Duration(milliseconds: 200),
+          child: IgnorePointer(ignoring: !visible, child: w),
+        );
+      });
+    }
+
     return Stack(
       children: [
         child,
-        // Top-right: chapter nav + mode toggles (always visible)
+        // Top-right: chapter nav + mode toggles
         Positioned(
-          top: 48,
+          top: isAndroid ? 12 : 48,
           right: 8,
-          child: _buildTopOverlay(),
+          child: overlay(_buildTopOverlay()),
         ),
         // Bottom-left: page counter + page navigation (page mode)
         Positioned(
           bottom: 0,
           left: 0,
-          child: _buildBottomBar(),
+          child: overlay(_buildBottomBar()),
         ),
       ],
     );
@@ -271,29 +293,39 @@ class _ComicReaderContentState extends State<ComicReaderContent> {
                     },
                     child: InteractiveViewer(
                       scaleEnabled: _c.isZoom.value,
-                      child: ScrollablePositionedList.builder(
-                        physics: _c.isZoom.value
-                            ? const NeverScrollableScrollPhysics()
-                            : null,
-                        padding: EdgeInsets.symmetric(
-                            horizontal: cascadePadding),
-                        initialScrollIndex: currentPage,
-                        itemScrollController: _c.itemScrollController,
-                        itemPositionsListener: _c.itemPositionsListener,
-                        scrollOffsetController: _c.scrollOffsetController,
-                        itemBuilder: (context, index) {
-                          final url = images[index];
-                          // width:infinity expands to the list's constrained
-                          // width so images fill the content area.
-                          return CacheNetWorkImagePic(
-                            url,
-                            width: double.infinity,
-                            fit: BoxFit.fitWidth,
-                            placeholder: _buildPlaceholder(context),
-                            headers: _c.watchData.value?.headers,
-                          );
+                      child: NotificationListener<ScrollNotification>(
+                        onNotification: (n) {
+                          // Auto-hide UI during scroll on Android for
+                          // immersive reading; it comes back on single tap.
+                          if (Platform.isAndroid) {
+                            if (n is ScrollStartNotification) {
+                              _c.isShowControlPanel.value = false;
+                            }
+                          }
+                          return false;
                         },
-                        itemCount: images.length,
+                        child: ScrollablePositionedList.builder(
+                          physics: _c.isZoom.value
+                              ? const NeverScrollableScrollPhysics()
+                              : null,
+                          padding: EdgeInsets.symmetric(
+                              horizontal: cascadePadding),
+                          initialScrollIndex: currentPage,
+                          itemScrollController: _c.itemScrollController,
+                          itemPositionsListener: _c.itemPositionsListener,
+                          scrollOffsetController: _c.scrollOffsetController,
+                          itemBuilder: (context, index) {
+                            final url = images[index];
+                            return CacheNetWorkImagePic(
+                              url,
+                              width: double.infinity,
+                              fit: BoxFit.fitWidth,
+                              placeholder: _buildPlaceholder(context),
+                              headers: _c.watchData.value?.headers,
+                            );
+                          },
+                          itemCount: images.length,
+                        ),
                       ),
                     ),
                   ),

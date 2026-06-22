@@ -33,20 +33,22 @@ class _VideoPlayerMobileControlsState extends State<VideoPlayerMobileControls> {
   bool _showControls = true;
   double _currentBrightness = 0;
   double _currentVolume = 0;
-  // 是否是调整亮度
   bool _isBrightness = false;
-  // 是否正在调节
   bool _isAdjusting = false;
-  // 滑动时的进度
   Duration _position = Duration.zero;
-  // 是否左右滑动调整进度
   bool _isSeeking = false;
-  // 是否长按加速
   bool _isLongPress = false;
-  // 定时器
   Timer? _timer;
   Worker? _webViewWorker;
   Worker? _resumeWorker;
+  // Debounce: ignores taps within 600 ms to prevent double-trigger on fast touch.
+  DateTime? _lastTap;
+  bool _debounce([Duration d = const Duration(milliseconds: 600)]) {
+    final now = DateTime.now();
+    if (_lastTap != null && now.difference(_lastTap!) < d) return false;
+    _lastTap = now;
+    return true;
+  }
 
   _updateTimer() {
     _timer?.cancel();
@@ -242,17 +244,15 @@ class _VideoPlayerMobileControlsState extends State<VideoPlayerMobileControls> {
                   _updateTimer();
                 },
                 onDoubleTapDown: (details) {
-                  // 如果左边点击快退，中间暂停，右边快进
+                  if (!_debounce(const Duration(milliseconds: 400))) return;
                   final dx = details.localPosition.dx;
                   final width = LayoutUtils.width / 3;
                   if (dx < width) {
                     _c.seek(
-                      _c.position.value - const Duration(seconds: 10),
-                    );
+                        _c.position.value - const Duration(seconds: 10));
                   } else if (dx > width * 2) {
                     _c.seek(
-                      _c.position.value + const Duration(seconds: 10),
-                    );
+                        _c.position.value + const Duration(seconds: 10));
                   } else {
                     _c.playOrPause();
                   }
@@ -649,7 +649,9 @@ class _Footer extends StatelessWidget {
                   icon: const Icon(Icons.skip_previous),
                   onPressed: controller.index.value > 0
                       ? () {
-                          controller.index.value--;
+                          if (controller.index.value > 0) {
+                            controller.index.value--;
+                          }
                         }
                       : null,
                 ),
@@ -658,18 +660,12 @@ class _Footer extends StatelessWidget {
                 if (controller.isPlaying.value) {
                   return IconButton(
                     onPressed: controller.playOrPause,
-                    icon: const Icon(
-                      Icons.pause,
-                      size: 30,
-                    ),
+                    icon: const Icon(Icons.pause, size: 30),
                   );
                 }
                 return IconButton(
                   onPressed: controller.playOrPause,
-                  icon: const Icon(
-                    Icons.play_arrow,
-                    size: 30,
-                  ),
+                  icon: const Icon(Icons.play_arrow, size: 30),
                 );
               }),
               Obx(
@@ -678,7 +674,10 @@ class _Footer extends StatelessWidget {
                   onPressed:
                       controller.playList.length - 1 > controller.index.value
                           ? () {
-                              controller.index.value++;
+                              if (controller.index.value <
+                                  controller.playList.length - 1) {
+                                controller.index.value++;
+                              }
                             }
                           : null,
                 ),
@@ -743,27 +742,31 @@ class _Footer extends StatelessWidget {
                 );
               }),
               const SizedBox(width: 10),
-              // 倍速
+              // Speed selector — chip with visible background for tap affordance
               Obx(
                 () => PopupMenuButton<double>(
                   initialValue: controller.currentSpeed.value,
                   onSelected: (value) {
                     controller.currentSpeed.value = value;
                   },
-                  itemBuilder: (context) {
-                    return [
-                      for (final speed in controller.speedList)
-                        PopupMenuItem(
-                          value: speed,
-                          child: Text('${speed}x'),
-                        ),
-                    ];
-                  },
-                  child: Text(
-                    '${controller.currentSpeed.value}x',
-                    style: const TextStyle(
-                      fontSize: 14,
-                      fontWeight: FontWeight.w300,
+                  itemBuilder: (context) => [
+                    for (final speed in controller.speedList)
+                      PopupMenuItem(
+                        value: speed,
+                        child: Text('${speed}x'),
+                      ),
+                  ],
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(
+                        horizontal: 10, vertical: 6),
+                    decoration: BoxDecoration(
+                      color: Colors.white12,
+                      borderRadius: BorderRadius.circular(6),
+                    ),
+                    child: Text(
+                      '${controller.currentSpeed.value}x',
+                      style: const TextStyle(
+                          fontSize: 13, fontWeight: FontWeight.w500),
                     ),
                   ),
                 ),
@@ -852,17 +855,15 @@ class _SeekBarState extends State<_SeekBar> {
 
   @override
   Widget build(BuildContext context) {
+    // 40 dp tall so the thumb sits in a comfortable 40×full-width touch zone;
+    // visually the track is still slim (3 dp) to match the player aesthetic.
     return SizedBox(
-      height: 13,
+      height: 40,
       child: SliderTheme(
         data: const SliderThemeData(
-          trackHeight: 2,
-          thumbShape: RoundSliderThumbShape(
-            enabledThumbRadius: 6,
-          ),
-          overlayShape: RoundSliderOverlayShape(
-            overlayRadius: 12,
-          ),
+          trackHeight: 3,
+          thumbShape: RoundSliderThumbShape(enabledThumbRadius: 7),
+          overlayShape: RoundSliderOverlayShape(overlayRadius: 16),
         ),
         child: Obx(
           () {
