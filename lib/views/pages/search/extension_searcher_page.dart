@@ -46,15 +46,11 @@ class _ExtensionSearcherPageState extends fluent.State<ExtensionSearcherPage> {
 
   late final _textEditingController = TextEditingController(text: _keyWord);
 
-  List<ExtensionListItem> _recentItems = [];
-  bool _recentLoading = false;
-
   @override
   void initState() {
     super.initState();
     SchedulerBinding.instance.addPostFrameCallback((timeStamp) {
       _initFilters();
-      if (_keyWord.isEmpty) _initRecientes();
     });
   }
 
@@ -72,27 +68,11 @@ class _ExtensionSearcherPageState extends fluent.State<ExtensionSearcherPage> {
     setState(() {});
   }
 
-  Future<void> _initRecientes() async {
-    if (!mounted) return;
-    setState(() => _recentLoading = true);
-    try {
-      final items = await _runtime.latest(1);
-      if (mounted) setState(() => _recentItems = items);
-    } catch (_) {
-      // Silently fail — main grid still works
-    } finally {
-      if (mounted) setState(() => _recentLoading = false);
-    }
-  }
-
   Future<void> _onRefresh() async {
-    final bool browseMode = _keyWord.isEmpty;
     setState(() {
       _page = 1;
       _data.clear();
-      if (browseMode) _recentItems = [];
     });
-    if (browseMode) _initRecientes();
     await _onLoad();
   }
 
@@ -224,56 +204,6 @@ class _ExtensionSearcherPageState extends fluent.State<ExtensionSearcherPage> {
     );
   }
 
-  Widget _buildRecientesDesktop(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.only(left: 16, right: 16, bottom: 4),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(
-            'Recientes',
-            style: fluent.FluentTheme.of(context).typography.subtitle,
-          ),
-          const SizedBox(height: 10),
-          SizedBox(
-            height: 210,
-            child: _recentLoading
-                ? const Center(child: fluent.ProgressRing())
-                : ListView.builder(
-                    scrollDirection: Axis.horizontal,
-                    itemCount: _recentItems.length,
-                    itemBuilder: (context, index) {
-                      final item = _recentItems[index];
-                      return SizedBox(
-                        width: 128,
-                        child: Padding(
-                          padding: const EdgeInsets.only(right: 10),
-                          child: ExtensionItemCard(
-                            title: item.title,
-                            url: item.url,
-                            package: widget.package,
-                            cover: item.cover,
-                            update: item.update,
-                            headers: item.headers,
-                          ),
-                        ),
-                      );
-                    },
-                  ),
-          ),
-          const SizedBox(height: 12),
-          const fluent.Divider(),
-          const SizedBox(height: 6),
-          Text(
-            'Explorar',
-            style: fluent.FluentTheme.of(context).typography.bodyStrong,
-          ),
-          const SizedBox(height: 4),
-        ],
-      ),
-    );
-  }
-
   Widget _buildAndroid(BuildContext context) {
     return Scaffold(
       appBar: SearchAppBar(
@@ -389,8 +319,6 @@ class _ExtensionSearcherPageState extends fluent.State<ExtensionSearcherPage> {
           ),
         ),
         const SizedBox(height: 16),
-        if (_keyWord.isEmpty && (_recentItems.isNotEmpty || _recentLoading))
-          _buildRecientesDesktop(context),
         Expanded(
           child: InfiniteScroller(
             onRefresh: _onRefresh,
