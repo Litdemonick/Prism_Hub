@@ -355,39 +355,36 @@ class _HeaderState extends State<_Header> {
         child: Row(
           children: [
             Expanded(
-              child: DragToMoveArea(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      widget.title,
-                      style: const TextStyle(
-                        fontSize: 16,
-                        fontWeight: FontWeight.bold,
-                        overflow: TextOverflow.ellipsis,
-                      ),
+              // Plain Column — no DragToMoveArea so clicks don't move the window.
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    widget.title,
+                    style: const TextStyle(
+                      fontSize: 16,
+                      fontWeight: FontWeight.bold,
+                      overflow: TextOverflow.ellipsis,
                     ),
-                    Text(
-                      widget.episode,
-                      style: const TextStyle(
-                        fontSize: 14,
-                        fontWeight: FontWeight.w300,
-                        overflow: TextOverflow.ellipsis,
-                      ),
+                  ),
+                  Text(
+                    widget.episode,
+                    style: const TextStyle(
+                      fontSize: 14,
+                      fontWeight: FontWeight.w300,
+                      overflow: TextOverflow.ellipsis,
                     ),
-                  ],
-                ),
+                  ),
+                ],
               ),
             ),
-            // 置顶
+            // Always-on-top toggle
             IconButton(
               icon: Icon(
                 _isAlwaysOnTop ? FluentIcons.pinned : FluentIcons.pin,
               ),
               onPressed: () async {
-                WindowManager.instance.setAlwaysOnTop(
-                  !_isAlwaysOnTop,
-                );
+                WindowManager.instance.setAlwaysOnTop(!_isAlwaysOnTop);
                 setState(() {
                   _isAlwaysOnTop = !_isAlwaysOnTop;
                 });
@@ -395,19 +392,8 @@ class _HeaderState extends State<_Header> {
             ),
             const SizedBox(width: 10),
             IconButton(
-              icon: const Icon(
-                FluentIcons.chrome_minimize,
-              ),
-              onPressed: () {
-                WindowManager.instance.minimize();
-              },
-            ),
-            const SizedBox(width: 10),
-            IconButton(
               onPressed: widget.onClose,
-              icon: const Icon(
-                FluentIcons.chevron_down,
-              ),
+              icon: const Icon(FluentIcons.chevron_down),
             ),
           ],
         ),
