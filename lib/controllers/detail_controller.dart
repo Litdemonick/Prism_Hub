@@ -6,7 +6,6 @@ import 'dart:io';
 import 'package:fluent_ui/fluent_ui.dart' as fluent;
 import 'package:flutter/material.dart';
 import 'package:flutter_i18n/flutter_i18n.dart';
-import 'package:flutter_windows_webview/flutter_windows_webview.dart';
 import 'package:get/get.dart';
 import 'package:prismhub/data/providers/tmdb_provider.dart';
 import 'package:prismhub/models/index.dart';
@@ -81,36 +80,6 @@ class DetailPageController extends GetxController {
   void onInit() {
     onRefresh();
     Get.find<MainController>().setAcitons([
-      fluent.IconButton(
-        icon: const Icon(fluent.FluentIcons.pop_expand),
-        onPressed: () async {
-          final webview = FlutterWindowsWebview();
-          await webview.setUA(PrismHubStorage.getUASetting());
-          webview.launchWebview(
-            ExtensionUtils.joinWebUrl(extension!.webSite, url),
-            WebviewOptions(
-              onNavigation: (url) {
-                if (Uri.parse(url).host != Uri.parse(extension!.webSite).host) {
-                  return false;
-                }
-                webview.getCookies(url).then((value) async {
-                  if (value.containsKey("cf_clearance")) {
-                    debugPrint("验证通过");
-                  }
-                  runtime.value!.setCookie(
-                    value.entries
-                        .map((e) => '${e.key}=${e.value}')
-                        .toList()
-                        .join(';'),
-                  );
-                });
-
-                return false;
-              },
-            ),
-          );
-        },
-      ),
       fluent.FlyoutTarget(
         controller: _flyoutController,
         child: fluent.IconButton(

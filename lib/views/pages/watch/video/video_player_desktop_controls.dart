@@ -32,29 +32,61 @@ class _VideoPlayerDesktopControlsState
   final FocusNode _focusNode = FocusNode();
   final _subtitleViewKey = GlobalKey<SubtitleViewState>();
   Worker? _webViewWorker;
+  Worker? _resumeWorker;
 
   @override
   void initState() {
     super.initState();
-    _webViewWorker = ever(_c.webViewFallback, (Map<String, String>? req) {
-      if (req != null && mounted) {
-        _c.webViewFallback.value = null;
-        WidgetsBinding.instance.addPostFrameCallback((_) {
-          if (mounted) {
-            _c.player.pause();
-            final referer = req['referer']?.isNotEmpty == true ? req['referer'] : null;
-            openWebViewPlayer(context, req['url']!, referer: referer, title: req['name'] ?? '');
-          }
-        });
-      }
+    // No abrir WebView automáticamente — el usuario lo abre con el botón en la UI.
+    _webViewWorker = ever(_c.webViewFallback, (_) {});
+    // Mostrar diálogo de continuación cuando el controlador emite la señal.
+    _resumeWorker = ever(_c.resumePrompt, (secs) {
+      if (secs == null || !mounted) return;
+      _showResumeDialog(secs);
     });
   }
 
   @override
   void dispose() {
     _webViewWorker?.dispose();
+    _resumeWorker?.dispose();
     _focusNode.dispose();
     super.dispose();
+  }
+
+  void _showResumeDialog(int secs) {
+    final h = secs ~/ 3600;
+    final m = (secs % 3600) ~/ 60;
+    final s = secs % 60;
+    final timeStr = h > 0
+        ? '${h.toString().padLeft(2, '0')}:${m.toString().padLeft(2, '0')}:${s.toString().padLeft(2, '0')}'
+        : '${m.toString().padLeft(2, '0')}:${s.toString().padLeft(2, '0')}';
+    showDialog<void>(
+      context: context,
+      builder: (ctx) => ContentDialog(
+        title: const Text('¡Un momento!'),
+        content: Text(
+          'Parece que anteriormente estabas mirando este vídeo '
+          '¿Deseas continuar donde te quedaste? $timeStr',
+        ),
+        actions: [
+          Button(
+            child: const Text('Cancelar'),
+            onPressed: () {
+              Navigator.of(ctx).pop();
+              _c.cancelResume();
+            },
+          ),
+          FilledButton(
+            child: const Text('Aceptar'),
+            onPressed: () {
+              Navigator.of(ctx).pop();
+              _c.confirmResume(secs);
+            },
+          ),
+        ],
+      ),
+    );
   }
 
   @override
@@ -110,52 +142,21 @@ class _VideoPlayerDesktopControlsState
                         return Column(
                           mainAxisSize: MainAxisSize.min,
                           children: [
-                            Text(
-                              'video.streamlink-error'.i18n,
-                              style: const TextStyle(
+                            const Text(
+                              'Servidor no accesible.',
+                              style: TextStyle(
                                 fontSize: 16,
                                 fontWeight: FontWeight.bold,
                               ),
                             ),
                             const SizedBox(height: 10),
-                            Row(
-                              mainAxisSize: MainAxisSize.min,
-                              children: [
-                                Button(
-                                  child: Text('common.error-message'.i18n),
-                                  onPressed: () {
-                                    showDialog(
-                                      context: context,
-                                      builder: (context) => ContentDialog(
-                                        constraints: const BoxConstraints(
-                                          maxWidth: 500,
-                                        ),
-                                        title:
-                                            Text('common.error-message'.i18n),
-
-                                        content: SelectableText(_c.error.value),
-                                        actions: [
-                                          Button(
-                                            child: Text('common.close'.i18n),
-                                            onPressed: () {
-                                              router.pop();
-                                            },
-                                          ),
-                                        ],
-                                      ),
-                                    );
-                                  },
-                                ),
-                                const SizedBox(width: 10),
-                                Button(
-                                  child: Text('common.retry'.i18n),
-                                  onPressed: () {
-                                    _c.error.value = '';
-                                    _c.play();
-                                  },
-                                ),
-                              ],
-                            )
+                            Button(
+                              child: Text('common.retry'.i18n),
+                              onPressed: () {
+                                _c.error.value = '';
+                                _c.play();
+                              },
+                            ),
                           ],
                         );
                       }
@@ -285,6 +286,7 @@ class _VideoPlayerDesktopControlsState
                                   ),
                                   onPressed: () {
                                     _c.serverFailedMessage.value = '';
+                                    _c.webViewFallback.value = null;
                                   },
                                 ),
                               ],

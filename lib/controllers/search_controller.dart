@@ -85,9 +85,12 @@ class SearchPageController extends GetxController {
               searchResultList.insert(lastResultIndex + 1, element);
               lastResultIndex++;
             }
+          } else {
+            searchResultList.refresh();
           }
         }).catchError((e) {
           element.error = e.toString();
+          searchResultList.refresh();
         }).whenComplete(() {
           element.completed = true;
         }),

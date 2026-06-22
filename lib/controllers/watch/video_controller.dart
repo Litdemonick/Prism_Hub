@@ -136,6 +136,12 @@ class VideoPlayerController extends GetxController {
   // 是否已经自动跳转到上次播放进度
   bool _isAutoSeekPosition = false;
 
+  // Posición de continuación pendiente (segundos). Null = no hay nada guardado.
+  // Se fija antes de cargar el video para evitar que el auto-seek la consuma.
+  int? _pendingResumeSeconds;
+  // Señal para la UI: cuando tiene valor, mostrar el diálogo "¿Continuar?".
+  final Rxn<int> resumePrompt = Rxn<int>(null);
+
   // 信息列队
   final messageQueue = <Message>[];
   final Rx<Widget?> cuurentMessageWidget = Rx(null);
@@ -357,9 +363,12 @@ class VideoPlayerController extends GetxController {
       }
     });
 
-    // 自动恢复上次播放进度
+    // 自动恢复上次播放进度 (solo cuando el diálogo no lo maneja)
     player.stream.duration.listen((event) async {
-      if (_isAutoSeekPosition || event.inSeconds == 0) {
+      if (_isAutoSeekPosition || event.inSeconds == 0) return;
+      // Si hay un diálogo de resume pendiente, él maneja el seek — no interferir.
+      if (_pendingResumeSeconds != null || resumePrompt.value != null) {
+        _isAutoSeekPosition = true;
         return;
       }
 
@@ -481,12 +490,33 @@ class VideoPlayerController extends GetxController {
     isGettingWatchData.value = true;
     _lastErrorEvent = '';
     _pageSniffAttempted = false;
+    _pendingResumeSeconds = null;
+    resumePrompt.value = null;
     try {
       await getWatchData();
     } catch (e) {
       logger.severe(e);
-      error.value = e.toString();
+      serverFailedMessage.value = 'No se pudo cargar el episodio. Intentá más tarde.';
+      isGettingWatchData.value = false;
+      await _safePlayerInit();
       return;
+    }
+
+    // Verificar progreso guardado antes de cargar — si hay posición significativa
+    // se le pregunta al usuario si desea continuar (el stream.duration listener
+    // queda inhibido mientras _pendingResumeSeconds != null).
+    {
+      final hist = await DatabaseService.getHistoryByPackageAndUrl(
+        runtime.extension.package,
+        detailUrl,
+      );
+      if (hist != null &&
+          hist.progress.isNotEmpty &&
+          hist.episodeId == index.value &&
+          hist.episodeGroupId == episodeGroupId) {
+        final secs = int.tryParse(hist.progress) ?? 0;
+        if (secs > 5) _pendingResumeSeconds = secs;
+      }
     }
 
     try {
@@ -551,30 +581,35 @@ class VideoPlayerController extends GetxController {
 
           if (!worked) {
             logger.severe('Servidor primario fallido: ${currentServerName.value}');
-            // El usuario elige el servidor: no hacer auto-failover.
-            // Si hay otros servidores disponibles, mostrar mensaje para que elija.
-            // Si no hay más opciones, intentar page-sniff como último recurso.
             if (availableServers.length > 1) {
               serverFailedMessage.value =
-                  'Servidor "${currentServerName.value}" no disponible.\n'
+                  'Servidor "${currentServerName.value}" no accesible.\n'
                   'Elegí otro servidor con el botón Servidor.';
             } else if (_episodePageUrl.isNotEmpty && !_pageSniffAttempted) {
               if (!await _trySniffPage()) {
                 serverFailedMessage.value =
-                    'No se encontró un servidor de video disponible.';
+                    'Servidor no accesible. Intentá más tarde.';
               }
             } else {
               serverFailedMessage.value =
-                  'No se encontró un servidor de video disponible.';
+                  'Servidor no accesible. Intentá más tarde.';
             }
             isGettingWatchData.value = false;
             await _safePlayerInit();
             return;
           }
+          // Servidor cargó OK — iniciar en pausa para que el usuario
+          // decida cuándo reproducir.
+          await player.pause();
           if (watchData!.audioTrack != null) {
             await player.setAudioTrack(
               AudioTrack.uri(watchData!.audioTrack!),
             );
+          }
+          // Si hay progreso guardado, emitir señal al UI para mostrar el diálogo.
+          if (_pendingResumeSeconds != null) {
+            resumePrompt.value = _pendingResumeSeconds;
+            _pendingResumeSeconds = null;
           }
         }
 
@@ -696,38 +731,38 @@ class VideoPlayerController extends GetxController {
       newWatch = await runtime.watch(embedUrl) as ExtensionBangumiWatch;
     } catch (e) {
       logger.severe('switchServer: runtime.watch falló para $name: $e');
-      if (!isDirectStream(embedUrl)) {
+      if (isDirectStream(embedUrl)) {
+        // La extensión no sabe manejar URLs directas — intentar reproducir directo
+        await _playDirectFallback(name, embedUrl);
+      } else {
         final ok = await _trySniff(name, embedUrl, timeout: const Duration(seconds: 5));
-        isGettingWatchData.value = false;
         if (!ok) {
-          _requestWebViewFallback(name, embedUrl);
+          _setServerFailed(name, embedUrl);
         } else {
           _isAutoSeekPosition = true;
           unawaited(PrismHubStorage.setLastWorkingServer(
               runtime.extension.package, playList[index.value].url, name));
         }
-        return;
       }
-      serverFailedMessage.value = 'No se pudo extraer "$name". Elegí otro.';
       isGettingWatchData.value = false;
       return;
     }
 
     if (newWatch.url.isEmpty || newWatch.url.startsWith('error://') || newWatch.url.startsWith('page://')) {
       logger.warning('switchServer: extensión retornó error/page para $name (${newWatch.url})');
-      if (!isDirectStream(embedUrl)) {
+      if (isDirectStream(embedUrl)) {
+        // La extensión no sabe manejar URLs directas — intentar reproducir directo
+        await _playDirectFallback(name, embedUrl);
+      } else {
         final ok = await _trySniff(name, embedUrl, timeout: const Duration(seconds: 5));
-        isGettingWatchData.value = false;
         if (!ok) {
-          _requestWebViewFallback(name, embedUrl);
+          _setServerFailed(name, embedUrl);
         } else {
           _isAutoSeekPosition = true;
           unawaited(PrismHubStorage.setLastWorkingServer(
               runtime.extension.package, playList[index.value].url, name));
         }
-        return;
       }
-      serverFailedMessage.value = 'Servidor "$name" no disponible. Elegí otro.';
       isGettingWatchData.value = false;
       return;
     }
@@ -1109,7 +1144,7 @@ class VideoPlayerController extends GetxController {
       final socket = await Socket.connect(
         uri.host,
         port,
-        timeout: const Duration(seconds: 4),
+        timeout: const Duration(seconds: 1),
       );
       socket.destroy();
       logger.info('Host alcanzable: ${uri.host}:$port');
@@ -1125,6 +1160,10 @@ class VideoPlayerController extends GetxController {
   // Intenta abrir el player con la URL dada.
   // Retorna true si el player fue abierto correctamente.
   // Retorna false si la URL es error:// o el host no es alcanzable.
+  static const _browserUA =
+      'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 '
+      '(KHTML, like Gecko) Chrome/125.0.0.0 Safari/537.36';
+
   Future<bool> _tryOpenPlayer(
       String url, Map<String, String>? headers) async {
     if (url.startsWith('error://')) {
@@ -1134,7 +1173,11 @@ class VideoPlayerController extends GetxController {
     if (!await _isHostReachable(url)) {
       return false;
     }
-    await player.open(Media(url, httpHeaders: headers));
+    // Inyectar User-Agent de browser si no viene en los headers.
+    // libmpv por defecto envía "Lavf/X.X.X" que los CDNs de streaming bloquean.
+    final hdrs = <String, String>{'User-Agent': _browserUA};
+    if (headers != null) hdrs.addAll(headers);
+    await player.open(Media(url, httpHeaders: hdrs));
 
     // media_kit accepts any URL in open() but only reports an unplayable
     // source (e.g. "Failed to recognize file format" for an HTML embed like
@@ -1160,7 +1203,7 @@ class VideoPlayerController extends GetxController {
     }));
 
     final ok = await completer.future
-        .timeout(const Duration(seconds: 12), onTimeout: () => false);
+        .timeout(const Duration(seconds: 8), onTimeout: () => false);
     for (final s in subs) {
       unawaited(s.cancel());
     }
@@ -1169,6 +1212,8 @@ class VideoPlayerController extends GetxController {
     }
     return ok;
   }
+
+
 
   // Si hay un servidor recordado para este episodio que sí es reproducible
   // nativamente, se usa como primario para no re-buscar entre todos.
@@ -1194,18 +1239,53 @@ class VideoPlayerController extends GetxController {
     );
   }
 
-  // Emite una petición de abrir el WebView visible para un embed que ni el
-  // resolver HTTP ni el sniffer headless pudieron manejar (ej: CF-protected).
-  // El WebView muestra solo el player del host (voe.sx, etc.), sin UI del sitio.
-  void _requestWebViewFallback(String name, String embedUrl) {
-    isGettingWatchData.value = false;
-    logger.info('switchServer: WebView visible → $name ($embedUrl)');
-    webViewFallback.value = {
-      'url': embedUrl,
-      'name': name,
-      'referer': serverReferers[name] ?? '',
-    };
+  // Responde al diálogo "¿Continuar donde te quedaste?" — usuario aceptó.
+  void confirmResume(int seconds) {
+    _isAutoSeekPosition = true;
+    resumePrompt.value = null;
+    player.seek(Duration(seconds: seconds));
+    player.play();
   }
+
+  // Responde al diálogo "¿Continuar donde te quedaste?" — usuario canceló.
+  void cancelResume() {
+    _isAutoSeekPosition = true;
+    resumePrompt.value = null;
+    player.play();
+  }
+
+  // Muestra error + guarda embed URL para que el usuario pueda abrirlo
+  // manualmente en WebView con el botón "Ver en WebView" de la UI.
+  // NO abre WebView automáticamente (evita anuncios inesperados).
+  void _setServerFailed(String name, String embedUrl) {
+    serverFailedMessage.value = 'Servidor "$name" no accesible. Elegí otro.';
+    if (!isDirectStream(embedUrl)) {
+      webViewFallback.value = {
+        'url': embedUrl,
+        'name': name,
+        'referer': serverReferers[name] ?? '',
+      };
+    }
+    logger.info('switchServer: fallo → $name. WebView disponible: $embedUrl');
+  }
+
+  // Intenta reproducir directamente una URL que ya es un stream (m3u8/mp4).
+  // Usado cuando la extensión no sabe manejar la URL (ej: Desu ya resuelto).
+  Future<void> _playDirectFallback(String name, String directUrl) async {
+    currentServerName.value = name;
+    final headers = <String, String>{};
+    final referer = serverReferers[name];
+    if (referer != null && referer.isNotEmpty) headers['Referer'] = referer;
+    if (!await _tryOpenPlayer(directUrl, headers.isEmpty ? null : headers)) {
+      _setServerFailed(name, directUrl);
+    } else {
+      serverFailedMessage.value = '';
+      webViewFallback.value = null;
+      unawaited(PrismHubStorage.setLastWorkingServer(
+          runtime.extension.package, playList[index.value].url, name));
+    }
+  }
+
 
   // Intenta reproducir un embed que el resolver nativo no pudo resolver, usando
   // el sniffer de WebView oculto: carga la página del host, deja correr su JS y
@@ -1242,7 +1322,13 @@ class VideoPlayerController extends GetxController {
       logger.info('Sniffer encontró stream para $name: ${sniffed.url}');
       final headers = {'Referer': sniffed.referer};
       if (!await _tryOpenPlayer(sniffed.url, headers)) {
-        logger.info('Sniffer: media_kit no pudo abrir el stream de $name');
+        logger.info('Sniffer: media_kit rechazado por CDN → $name. Guardando para botón WebView.');
+        // Guardar embed URL para botón "Ver en WebView" manual — NO abrir automáticamente
+        webViewFallback.value = {
+          'url': embedUrl,
+          'name': name,
+          'referer': serverReferers[name] ?? '',
+        };
         return false;
       }
       currentServerName.value = name;
@@ -1324,7 +1410,12 @@ class VideoPlayerController extends GetxController {
       logger.info('Page-sniff encontró stream: ${sniffed.url}');
       final headers = {'Referer': sniffed.referer};
       if (!await _tryOpenPlayer(sniffed.url, headers)) {
-        logger.info('Page-sniff: media_kit no pudo abrir el stream');
+        logger.info('Page-sniff: media_kit rechazado. Guardando para botón WebView.');
+        webViewFallback.value = {
+          'url': _episodePageUrl,
+          'name': 'WebView',
+          'referer': '',
+        };
         return false;
       }
       currentServerName.value =

@@ -46,11 +46,15 @@ class _ExtensionSearcherPageState extends fluent.State<ExtensionSearcherPage> {
 
   late final _textEditingController = TextEditingController(text: _keyWord);
 
+  List<ExtensionListItem> _recentItems = [];
+  bool _recentLoading = false;
+
   @override
   void initState() {
     super.initState();
     SchedulerBinding.instance.addPostFrameCallback((timeStamp) {
       _initFilters();
+      if (_keyWord.isEmpty) _initRecientes();
     });
   }
 
@@ -68,11 +72,27 @@ class _ExtensionSearcherPageState extends fluent.State<ExtensionSearcherPage> {
     setState(() {});
   }
 
+  Future<void> _initRecientes() async {
+    if (!mounted) return;
+    setState(() => _recentLoading = true);
+    try {
+      final items = await _runtime.latest(1);
+      if (mounted) setState(() => _recentItems = items);
+    } catch (_) {
+      // Silently fail — main grid still works
+    } finally {
+      if (mounted) setState(() => _recentLoading = false);
+    }
+  }
+
   Future<void> _onRefresh() async {
+    final bool browseMode = _keyWord.isEmpty && _filters == null;
     setState(() {
       _page = 1;
       _data.clear();
+      if (browseMode) _recentItems = [];
     });
+    if (browseMode) _initRecientes();
     await _onLoad();
   }
 
@@ -86,14 +106,18 @@ class _ExtensionSearcherPageState extends fluent.State<ExtensionSearcherPage> {
       } else {
         data = await _runtime.search(_keyWord, _page, filter: _selectedFilters);
       }
-      if (data.isEmpty && mounted) {
+      // Dedup cross-página: filtra items que ya están en el grid (evita repetidos
+      // cuando home page y directorio comparten los mismos slugs de anime).
+      final existingUrls = _data.map((e) => e.url).toSet();
+      final fresh = data.where((e) => !existingUrls.contains(e.url)).toList();
+      if (fresh.isEmpty && mounted) {
         showPlatformSnackbar(
           context: context,
           content: "common.no-more-data".i18n,
           severity: fluent.InfoBarSeverity.warning,
         );
       }
-      _data.addAll(data);
+      _data.addAll(fresh);
       _page++;
     } catch (e) {
       // ignore: use_build_context_synchronously
@@ -200,6 +224,56 @@ class _ExtensionSearcherPageState extends fluent.State<ExtensionSearcherPage> {
     );
   }
 
+  Widget _buildRecientesDesktop(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.only(left: 16, right: 16, bottom: 4),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            'Recientes',
+            style: fluent.FluentTheme.of(context).typography.subtitle,
+          ),
+          const SizedBox(height: 10),
+          SizedBox(
+            height: 210,
+            child: _recentLoading
+                ? const Center(child: fluent.ProgressRing())
+                : ListView.builder(
+                    scrollDirection: Axis.horizontal,
+                    itemCount: _recentItems.length,
+                    itemBuilder: (context, index) {
+                      final item = _recentItems[index];
+                      return SizedBox(
+                        width: 128,
+                        child: Padding(
+                          padding: const EdgeInsets.only(right: 10),
+                          child: ExtensionItemCard(
+                            title: item.title,
+                            url: item.url,
+                            package: widget.package,
+                            cover: item.cover,
+                            update: item.update,
+                            headers: item.headers,
+                          ),
+                        ),
+                      );
+                    },
+                  ),
+          ),
+          const SizedBox(height: 12),
+          const fluent.Divider(),
+          const SizedBox(height: 6),
+          Text(
+            'Explorar',
+            style: fluent.FluentTheme.of(context).typography.bodyStrong,
+          ),
+          const SizedBox(height: 4),
+        ],
+      ),
+    );
+  }
+
   Widget _buildAndroid(BuildContext context) {
     return Scaffold(
       appBar: SearchAppBar(
@@ -224,26 +298,28 @@ class _ExtensionSearcherPageState extends fluent.State<ExtensionSearcherPage> {
         onLoad: _onLoad,
         easyRefreshController: _easyRefreshController,
         child: LayoutBuilder(
-          builder: (context, constraints) => GridView.builder(
-            padding: const EdgeInsets.symmetric(horizontal: 16),
-            gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
-              crossAxisCount: constraints.maxWidth ~/ 120,
-              childAspectRatio: 0.7,
-              crossAxisSpacing: 16,
-              mainAxisSpacing: 16,
+          builder: (context, constraints) => ExcludeSemantics(
+            child: GridView.builder(
+              padding: const EdgeInsets.symmetric(horizontal: 16),
+              gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
+                crossAxisCount: constraints.maxWidth ~/ 120,
+                childAspectRatio: 0.7,
+                crossAxisSpacing: 16,
+                mainAxisSpacing: 16,
+              ),
+              itemCount: _data.length,
+              itemBuilder: (context, index) {
+                final item = _data[index];
+                return ExtensionItemCard(
+                  title: item.title,
+                  url: item.url,
+                  package: widget.package,
+                  cover: item.cover,
+                  update: item.update,
+                  headers: item.headers,
+                );
+              },
             ),
-            itemCount: _data.length,
-            itemBuilder: (context, index) {
-              final item = _data[index];
-              return ExtensionItemCard(
-                title: item.title,
-                url: item.url,
-                package: widget.package,
-                cover: item.cover,
-                update: item.update,
-                headers: item.headers,
-              );
-            },
           ),
         ),
       ),
@@ -313,31 +389,36 @@ class _ExtensionSearcherPageState extends fluent.State<ExtensionSearcherPage> {
           ),
         ),
         const SizedBox(height: 16),
+        if (_keyWord.isEmpty && _filters == null &&
+            (_recentItems.isNotEmpty || _recentLoading))
+          _buildRecientesDesktop(context),
         Expanded(
           child: InfiniteScroller(
             onRefresh: _onRefresh,
             onLoad: _onLoad,
             child: LayoutBuilder(
-              builder: ((context, constraints) => GridView.builder(
-                    padding: const EdgeInsets.all(16),
-                    gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
-                      crossAxisCount: constraints.maxWidth ~/ 160,
-                      childAspectRatio: 0.6,
-                      crossAxisSpacing: 16,
-                      mainAxisSpacing: 16,
+              builder: ((context, constraints) => ExcludeSemantics(
+                    child: GridView.builder(
+                      padding: const EdgeInsets.all(16),
+                      gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
+                        crossAxisCount: constraints.maxWidth ~/ 160,
+                        childAspectRatio: 0.6,
+                        crossAxisSpacing: 16,
+                        mainAxisSpacing: 16,
+                      ),
+                      itemCount: _data.length,
+                      itemBuilder: (context, index) {
+                        final item = _data[index];
+                        return ExtensionItemCard(
+                          title: item.title,
+                          url: item.url,
+                          package: widget.package,
+                          cover: item.cover,
+                          update: item.update,
+                          headers: item.headers,
+                        );
+                      },
                     ),
-                    itemCount: _data.length,
-                    itemBuilder: (context, index) {
-                      final item = _data[index];
-                      return ExtensionItemCard(
-                        title: item.title,
-                        url: item.url,
-                        package: widget.package,
-                        cover: item.cover,
-                        update: item.update,
-                        headers: item.headers,
-                      );
-                    },
                   )),
             ),
           ),
