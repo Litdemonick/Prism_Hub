@@ -26,9 +26,14 @@ class _ComicReaderContentState extends State<ComicReaderContent> {
   @override
   void initState() {
     super.initState();
-    // On Android the UI starts visible; the user hides it by scrolling or
-    // tapping the center zone (handled in ReaderView).
-    if (Platform.isAndroid) _c.isShowControlPanel.value = true;
+    // Defer to post-frame: setting an Rx value during initState (which runs
+    // inside the parent Obx's build phase) triggers markNeedsBuild on an
+    // already-building widget, causing a Flutter assertion error.
+    if (Platform.isAndroid) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted) _c.isShowControlPanel.value = true;
+      });
+    }
   }
 
   late final _c = Get.find<ComicController>(tag: widget.tag);
