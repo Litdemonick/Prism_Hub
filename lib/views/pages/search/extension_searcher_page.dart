@@ -86,7 +86,7 @@ class _ExtensionSearcherPageState extends fluent.State<ExtensionSearcherPage> {
   }
 
   Future<void> _onRefresh() async {
-    final bool browseMode = _keyWord.isEmpty && _filters == null;
+    final bool browseMode = _keyWord.isEmpty;
     setState(() {
       _page = 1;
       _data.clear();
@@ -101,7 +101,7 @@ class _ExtensionSearcherPageState extends fluent.State<ExtensionSearcherPage> {
       _isLoading = true;
       setState(() {});
       late List<ExtensionListItem> data;
-      if (_keyWord.isEmpty && _filters == null) {
+      if (_keyWord.isEmpty) {
         data = await _runtime.latest(_page);
       } else {
         data = await _runtime.search(_keyWord, _page, filter: _selectedFilters);
@@ -389,8 +389,7 @@ class _ExtensionSearcherPageState extends fluent.State<ExtensionSearcherPage> {
           ),
         ),
         const SizedBox(height: 16),
-        if (_keyWord.isEmpty && _filters == null &&
-            (_recentItems.isNotEmpty || _recentLoading))
+        if (_keyWord.isEmpty && (_recentItems.isNotEmpty || _recentLoading))
           _buildRecientesDesktop(context),
         Expanded(
           child: InfiniteScroller(
