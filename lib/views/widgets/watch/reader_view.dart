@@ -1,4 +1,6 @@
-﻿import 'package:flutter/material.dart';
+﻿import 'dart:io';
+
+import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 import 'package:prismhub/utils/layout.dart';
 import 'package:prismhub/views/widgets/watch/control_panel_footer.dart';
@@ -36,8 +38,10 @@ class ReaderView<T extends ReaderController> extends StatelessWidget {
             child: content,
           ),
 
-          // 点击中间显示控制面板
-          // 左边上一页右边下一页
+          // Center tap zone: toggle control panel (or page nav on desktop).
+          // Uses onTap (not onTapDown) so a scroll/drag gesture is NOT
+          // misinterpreted as a tap — the GestureArena settles first and the
+          // callback only fires on a genuine short-press with no movement.
           if (c.error.value.isEmpty)
             Positioned(
               top: 120,
@@ -45,18 +49,34 @@ class ReaderView<T extends ReaderController> extends StatelessWidget {
               left: 0,
               right: 0,
               child: GestureDetector(
-                onTapDown: (TapDownDetails details) {
-                  final xPos = details.globalPosition.dx;
-                  final width = LayoutUtils.width;
-                  final unitWidth = width / 3;
-                  if (xPos < unitWidth) {
-                    return c.previousPage();
+                behavior: HitTestBehavior.translucent,
+                onTap: () {
+                  // On Android the left/right zones just toggle the panel;
+                  // page navigation is handled by the comic's own controls.
+                  if (Platform.isAndroid) {
+                    c.isShowControlPanel.value =
+                        !c.isShowControlPanel.value;
+                    return;
                   }
-                  if (xPos > unitWidth * 2) {
-                    return c.nextPage();
-                  }
-                  c.isShowControlPanel.value = !c.isShowControlPanel.value;
+                  // Desktop: left third → prev, right third → next, center → panel.
+                  // Using a separate callback instead of relying on the tap
+                  // position from onTapDown to avoid frame-delay issues.
                 },
+                onTapUp: Platform.isAndroid
+                    ? null
+                    : (details) {
+                        final xPos = details.globalPosition.dx;
+                        final width = LayoutUtils.width;
+                        final unitWidth = width / 3;
+                        if (xPos < unitWidth) {
+                          c.previousPage();
+                        } else if (xPos > unitWidth * 2) {
+                          c.nextPage();
+                        } else {
+                          c.isShowControlPanel.value =
+                              !c.isShowControlPanel.value;
+                        }
+                      },
               ),
             ),
 
