@@ -223,7 +223,6 @@ class _ComicReaderContentState extends State<ComicReaderContent> {
         width: double.infinity,
         child: LayoutBuilder(
           builder: (context, constraints) {
-            final maxWidth = constraints.maxWidth;
             return Obx(() {
               if (_c.error.value.isNotEmpty) {
                 return Column(

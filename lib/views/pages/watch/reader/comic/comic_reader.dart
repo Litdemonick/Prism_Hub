@@ -8,7 +8,6 @@ import 'package:prismhub/views/widgets/platform_widget.dart';
 // import 'package:prismhub/views/pages/watch/reader/comic/comic_zoom.dart';
 import 'package:prismhub/data/services/extension_service.dart';
 import 'package:prismhub/views/widgets/watch/reader_view.dart';
-import 'package:window_manager/window_manager.dart';
 
 class ComicReader extends StatefulWidget {
   const ComicReader({
