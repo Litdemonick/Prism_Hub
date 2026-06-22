@@ -80,6 +80,7 @@
     "edit-code": "Edit Code",
     "already-native": "This extension is already built into Prism+ natively with better performance. There is no need to install it externally.",
     "invalid": "The extension is invalid or corrupted. It was not installed.",
+    "invalid-signature": "Invalid signature: this extension was tampered with and does not match the official Prism+ one. Not installed for safety.",
     "not-working": "This extension is not working at the moment",
     "install-success": "Extension installed"
   },

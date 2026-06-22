@@ -6,7 +6,6 @@ import 'dart:io';
 import 'package:fluent_ui/fluent_ui.dart' as fluent;
 import 'package:flutter/material.dart';
 import 'package:flutter_i18n/flutter_i18n.dart';
-import 'package:flutter_windows_webview/flutter_windows_webview.dart';
 import 'package:get/get.dart';
 import 'package:prismhub/data/providers/tmdb_provider.dart';
 import 'package:prismhub/models/index.dart';
@@ -29,6 +28,12 @@ class DetailPageController extends GetxController {
     required this.url,
     this.heroTag,
   });
+
+  // Caché en memoria por sesión: evita re-fetch al volver al mismo detalle.
+  // Se invalida al hacer pull-to-refresh manual (onRefresh() con clearCache=true).
+  static final Map<String, ExtensionDetail> _sessionCache = {};
+
+  static void clearSessionCache() => _sessionCache.clear();
 
   final String package;
   final String url;
@@ -75,36 +80,6 @@ class DetailPageController extends GetxController {
   void onInit() {
     onRefresh();
     Get.find<MainController>().setAcitons([
-      fluent.IconButton(
-        icon: const Icon(fluent.FluentIcons.pop_expand),
-        onPressed: () async {
-          final webview = FlutterWindowsWebview();
-          await webview.setUA(PrismHubStorage.getUASetting());
-          webview.launchWebview(
-            ExtensionUtils.joinWebUrl(extension!.webSite, url),
-            WebviewOptions(
-              onNavigation: (url) {
-                if (Uri.parse(url).host != Uri.parse(extension!.webSite).host) {
-                  return false;
-                }
-                webview.getCookies(url).then((value) async {
-                  if (value.containsKey("cf_clearance")) {
-                    debugPrint("验证通过");
-                  }
-                  runtime.value!.setCookie(
-                    value.entries
-                        .map((e) => '${e.key}=${e.value}')
-                        .toList()
-                        .join(';'),
-                  );
-                });
-
-                return false;
-              },
-            ),
-          );
-        },
-      ),
       fluent.FlyoutTarget(
         controller: _flyoutController,
         child: fluent.IconButton(
@@ -200,8 +175,17 @@ class DetailPageController extends GetxController {
   }
 
   getRemoteDeatil() async {
+    final cacheKey = '$package:$url';
+    // Si ya tenemos el dato en memoria (misma sesión) lo usamos directo y
+    // actualizamos en background sin bloquear la UI.
+    if (_sessionCache.containsKey(cacheKey)) {
+      detail = _sessionCache[cacheKey];
+      _refreshDetailInBackground(cacheKey);
+      return;
+    }
     try {
       detail = await runtime.value!.detail(url);
+      _sessionCache[cacheKey] = detail!;
       await DatabaseService.putPrismHubDetail(
         package,
         url,
@@ -234,6 +218,24 @@ class DetailPageController extends GetxController {
         );
       }
       rethrow;
+    }
+  }
+
+  // Actualiza el detalle en background (sin spinner) cuando viene de caché.
+  Future<void> _refreshDetailInBackground(String cacheKey) async {
+    try {
+      final fresh = await runtime.value!.detail(url);
+      _sessionCache[cacheKey] = fresh;
+      detail = fresh;
+      await DatabaseService.putPrismHubDetail(
+        package,
+        url,
+        fresh,
+        tmdbID: _tmdbID,
+        anilistID: aniListID.value,
+      );
+    } catch (_) {
+      // Fallo silencioso: seguimos con lo que tenemos en caché.
     }
   }
 

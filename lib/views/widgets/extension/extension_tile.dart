@@ -72,7 +72,10 @@ class _ExtensionTileState extends State<ExtensionTile> {
         ],
       ),
       onTap: () {
-        Get.to(ExtensionSettingsPage(package: widget.extension.package));
+        router.push(Uri(
+          path: '/search_extension',
+          queryParameters: {'package': widget.extension.package},
+        ).toString());
       },
       trailing: Row(
         mainAxisSize: MainAxisSize.min,
@@ -87,6 +90,14 @@ class _ExtensionTileState extends State<ExtensionTile> {
               return Column(
                 mainAxisSize: MainAxisSize.min,
                 children: [
+                  ListTile(
+                    leading: const Icon(Icons.settings),
+                    title: Text('common.settings'.i18n),
+                    onTap: () {
+                      Get.back();
+                      Get.to(ExtensionSettingsPage(package: widget.extension.package));
+                    },
+                  ),
                   ListTile(
                     leading: const Icon(Icons.code),
                     title: Text('extension.edit-code'.i18n),
@@ -188,14 +199,20 @@ class _ExtensionTileState extends State<ExtensionTile> {
             onChanged: _toggleEnabled,
           ),
           const SizedBox(width: 8),
+          fluent.Tooltip(
+            message: 'Abrir',
+            child: fluent.IconButton(
+              icon: const Icon(fluent.FluentIcons.search),
+              onPressed: () {
+                router.push(Uri(
+                  path: '/search_extension',
+                  queryParameters: {'package': widget.extension.package},
+                ).toString());
+              },
+            ),
+          ),
+          const SizedBox(width: 8),
           fluent.IconButton(
-              // child: Padding(
-              //   padding: const EdgeInsets.symmetric(
-              //     horizontal: 20,
-              //     vertical: 2,
-              //   ),
-              //   child: Text('common.settings'.i18n),
-              // ),
               icon: const Icon(fluent.FluentIcons.settings),
               onPressed: () {
                 router.push(Uri(

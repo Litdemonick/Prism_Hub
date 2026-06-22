@@ -132,6 +132,8 @@ class _ExtensionRepoPageState extends State<ExtensionRepoPage> {
               webSite: e['webSite'],
               license: e['license'],
               description: e['description'],
+              // Firma Ed25519 de prism+ — la card verifica antes de instalar.
+              signature: e['signature'],
               nsfw: e['nsfw'] == 'true' || e['nsfw'] == true,
               type: type);
         })

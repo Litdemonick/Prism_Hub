@@ -12,19 +12,24 @@ class TmdbApi {
     String keyword, {
     int page = 1,
   }) async {
-    final result = await search(
-      keyword,
-      page: page,
-    );
-    // print(result);
-    final results = result["results"] as List;
-    if (results.isEmpty) {
+    // TMDB es enriquecimiento opcional. Sin API key configurada la API responde
+    // 401; no tiene sentido pedirla ni ensuciar el log con el error.
+    final key = PrismHubStorage.getSetting(SettingKey.tmdbKey)?.toString() ?? '';
+    if (key.isEmpty) return null;
+    try {
+      final result = await search(keyword, page: page);
+      final results = result["results"] as List;
+      if (results.isEmpty) {
+        return null;
+      }
+      return getDetail(
+        results.first["id"],
+        results.first["media_type"],
+      );
+    } catch (_) {
+      // Fallo de red/clave inválida: TMDB es opcional, se ignora en silencio.
       return null;
     }
-    return getDetail(
-      results.first["id"],
-      results.first["media_type"],
-    );
   }
 
   static Future<tmdb_model.TMDBDetail> getDetail(

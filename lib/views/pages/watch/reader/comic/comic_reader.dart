@@ -8,7 +8,6 @@ import 'package:prismhub/views/widgets/platform_widget.dart';
 // import 'package:prismhub/views/pages/watch/reader/comic/comic_zoom.dart';
 import 'package:prismhub/data/services/extension_service.dart';
 import 'package:prismhub/views/widgets/watch/reader_view.dart';
-import 'package:window_manager/window_manager.dart';
 
 class ComicReader extends StatefulWidget {
   const ComicReader({
@@ -67,10 +66,13 @@ class _ComicReaderState extends State<ComicReader> {
       widget.title,
       content: PlatformWidget(
           androidWidget: ComicReaderContent(widget.title),
-          desktopWidget: DragToMoveArea(
-            child: ComicReaderContent(widget.title),
-          )),
+          // DragToMoveArea removed: double-clicking buttons was triggering
+          // window maximize/restore via the drag-to-move hook.
+          desktopWidget: ComicReaderContent(widget.title)),
       buildSettings: (context) => ComicReaderSettings(widget.title),
+      // Comic reader handles its own page/chapter navigation in the content
+      // overlay, so we suppress the generic chapter-navigation footer.
+      buildFooter: (_) => const SizedBox.shrink(),
     );
   }
 }

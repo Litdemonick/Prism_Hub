@@ -7,8 +7,9 @@ import 'package:media_kit/media_kit.dart';
 import 'package:media_kit_video/media_kit_video.dart';
 import 'package:prismhub/controllers/watch/video_controller.dart';
 import 'package:prismhub/router/router.dart';
+import 'package:prismhub/views/pages/watch/video/webview_player_page.dart'
+    show openWebViewPlayer;
 import 'package:prismhub/utils/i18n.dart';
-import 'package:prismhub/views/pages/watch/video/webview_player_page.dart';
 import 'package:prismhub/views/widgets/cache_network_image.dart';
 import 'package:prismhub/views/widgets/watch/playlist.dart';
 import 'package:window_manager/window_manager.dart';
@@ -30,11 +31,62 @@ class _VideoPlayerDesktopControlsState
   late final _c = widget.controller;
   final FocusNode _focusNode = FocusNode();
   final _subtitleViewKey = GlobalKey<SubtitleViewState>();
+  Worker? _webViewWorker;
+  Worker? _resumeWorker;
+
+  @override
+  void initState() {
+    super.initState();
+    // No abrir WebView automáticamente — el usuario lo abre con el botón en la UI.
+    _webViewWorker = ever(_c.webViewFallback, (_) {});
+    // Mostrar diálogo de continuación cuando el controlador emite la señal.
+    _resumeWorker = ever(_c.resumePrompt, (secs) {
+      if (secs == null || !mounted) return;
+      _showResumeDialog(secs);
+    });
+  }
 
   @override
   void dispose() {
+    _webViewWorker?.dispose();
+    _resumeWorker?.dispose();
     _focusNode.dispose();
     super.dispose();
+  }
+
+  void _showResumeDialog(int secs) {
+    final h = secs ~/ 3600;
+    final m = (secs % 3600) ~/ 60;
+    final s = secs % 60;
+    final timeStr = h > 0
+        ? '${h.toString().padLeft(2, '0')}:${m.toString().padLeft(2, '0')}:${s.toString().padLeft(2, '0')}'
+        : '${m.toString().padLeft(2, '0')}:${s.toString().padLeft(2, '0')}';
+    showDialog<void>(
+      context: context,
+      builder: (ctx) => ContentDialog(
+        title: const Text('¡Un momento!'),
+        content: Text(
+          'Parece que anteriormente estabas mirando este vídeo '
+          '¿Deseas continuar donde te quedaste? $timeStr',
+        ),
+        actions: [
+          Button(
+            child: const Text('Cancelar'),
+            onPressed: () {
+              Navigator.of(ctx).pop();
+              _c.cancelResume();
+            },
+          ),
+          FilledButton(
+            child: const Text('Aceptar'),
+            onPressed: () {
+              Navigator.of(ctx).pop();
+              _c.confirmResume(secs);
+            },
+          ),
+        ],
+      ),
+    );
   }
 
   @override
@@ -90,61 +142,31 @@ class _VideoPlayerDesktopControlsState
                         return Column(
                           mainAxisSize: MainAxisSize.min,
                           children: [
-                            Text(
-                              'video.streamlink-error'.i18n,
-                              style: const TextStyle(
+                            const Text(
+                              'Servidor no accesible.',
+                              style: TextStyle(
                                 fontSize: 16,
                                 fontWeight: FontWeight.bold,
                               ),
                             ),
                             const SizedBox(height: 10),
-                            Row(
-                              mainAxisSize: MainAxisSize.min,
-                              children: [
-                                Button(
-                                  child: Text('common.error-message'.i18n),
-                                  onPressed: () {
-                                    showDialog(
-                                      context: context,
-                                      builder: (context) => ContentDialog(
-                                        constraints: const BoxConstraints(
-                                          maxWidth: 500,
-                                        ),
-                                        title:
-                                            Text('common.error-message'.i18n),
-
-                                        content: SelectableText(_c.error.value),
-                                        actions: [
-                                          Button(
-                                            child: Text('common.close'.i18n),
-                                            onPressed: () {
-                                              router.pop();
-                                            },
-                                          ),
-                                        ],
-                                      ),
-                                    );
-                                  },
-                                ),
-                                const SizedBox(width: 10),
-                                Button(
-                                  child: Text('common.retry'.i18n),
-                                  onPressed: () {
-                                    _c.error.value = '';
-                                    _c.play();
-                                  },
-                                ),
-                              ],
-                            )
+                            Button(
+                              child: Text('common.retry'.i18n),
+                              onPressed: () {
+                                _c.error.value = '';
+                                _c.play();
+                              },
+                            ),
                           ],
                         );
                       }
+                      // Si hay un mensaje (de fallo o estado), no mostrar ni el
+                      // card de carga ni el spinner: evita que se superpongan al
+                      // aviso del centro de la pantalla.
+                      if (_c.serverFailedMessage.value.isNotEmpty) {
+                        return const SizedBox.shrink();
+                      }
                       if (!_c.isGettingWatchData.value) {
-                        // Si hay un mensaje de fallo de servidor, no mostrar el
-                        // spinner encima: evita el parpadeo del aro sobre el aviso.
-                        if (_c.serverFailedMessage.value.isNotEmpty) {
-                          return const SizedBox.shrink();
-                        }
                         return StreamBuilder(
                           stream: _c.player.stream.buffering,
                           builder: (context, snapshot) {
@@ -264,6 +286,7 @@ class _VideoPlayerDesktopControlsState
                                   ),
                                   onPressed: () {
                                     _c.serverFailedMessage.value = '';
+                                    _c.webViewFallback.value = null;
                                   },
                                 ),
                               ],
@@ -1298,40 +1321,41 @@ class _ServerSelectorState extends State<_ServerSelector> {
                                           widget.controller.currentServerName
                                                   .value ==
                                               entry.key;
-                                      final direct =
-                                          isDirectStream(entry.value);
                                       return ListTile.selectable(
                                         selected: isCurrent,
                                         leading: Icon(
                                           isCurrent
                                               ? FluentIcons.check_mark
-                                              : (direct
-                                                  ? FluentIcons.server
-                                                  : FluentIcons.globe),
+                                              : FluentIcons.server,
                                           size: 16,
+                                          color: isCurrent
+                                              ? Colors.green
+                                              : Colors.white,
                                         ),
-                                        title: Text(entry.key),
-                                        subtitle: direct
-                                            ? null
-                                            : Text(
-                                                'video.webview-server'.i18n,
-                                                style: const TextStyle(
-                                                    fontSize: 11),
-                                              ),
+                                        title: Text(
+                                          entry.key,
+                                          style: const TextStyle(
+                                            color: Colors.white,
+                                          ),
+                                        ),
                                         onPressed: () {
                                           router.pop();
-                                          if (direct) {
-                                            if (!isCurrent) {
+                                          if (!isCurrent) {
+                                            final eu = widget.controller
+                                                .availableServers[entry.key]!;
+                                            if (eu.contains('mega.nz') ||
+                                                eu.contains('mega.co.nz')) {
+                                              widget.controller.player.pause();
+                                              openWebViewPlayer(
+                                                context, eu,
+                                                referer: widget.controller
+                                                    .serverReferers[entry.key],
+                                                title: entry.key,
+                                              );
+                                            } else {
                                               widget.controller
                                                   .switchServer(entry.key);
                                             }
-                                          } else {
-                                            openWebViewPlayer(
-                                              context,
-                                              entry.value,
-                                              referer: widget.controller
-                                                  .serverReferers[entry.key],
-                                            );
                                           }
                                         },
                                       );

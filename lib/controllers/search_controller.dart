@@ -1,4 +1,6 @@
-﻿import 'package:get/get.dart';
+﻿import 'dart:async';
+
+import 'package:get/get.dart';
 import 'package:prismhub/models/extension.dart';
 import 'package:prismhub/utils/extension.dart';
 import 'package:prismhub/data/services/extension_service.dart';
@@ -59,8 +61,15 @@ class SearchPageController extends GetxController {
         resultFuture = element.runitme.search(search.value, 1);
       }
 
+      // Timeout por extensión: si tarda más de 15 s se marca como error
+      // en vez de colgar la tab indefinidamente.
+      final timedFuture = resultFuture.timeout(
+        const Duration(seconds: 15),
+        onTimeout: () => throw TimeoutException('Tiempo de espera agotado'),
+      );
+
       futures.add(
-        resultFuture.then((result) {
+        timedFuture.then((result) {
           if (_randomKey != key) {
             return;
           }
@@ -76,9 +85,12 @@ class SearchPageController extends GetxController {
               searchResultList.insert(lastResultIndex + 1, element);
               lastResultIndex++;
             }
+          } else {
+            searchResultList.refresh();
           }
         }).catchError((e) {
           element.error = e.toString();
+          searchResultList.refresh();
         }).whenComplete(() {
           element.completed = true;
         }),

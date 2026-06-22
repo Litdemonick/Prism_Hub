@@ -10,6 +10,7 @@ import 'package:prismhub/controllers/extension/extension_controller.dart';
 import 'package:prismhub/controllers/search_controller.dart';
 import 'package:prismhub/controllers/settings_controller.dart';
 import 'package:prismhub/data/services/extension_service.dart';
+import 'package:prismhub/utils/extension_signature.dart';
 import 'package:prismhub/utils/i18n.dart';
 import 'package:prismhub/utils/prismhub_directory.dart';
 import 'package:prismhub/utils/prismhub_storage.dart';
@@ -84,24 +85,36 @@ class ExtensionUtils {
   static Map<String, ExtensionService> get enabledRuntimes =>
       Map.fromEntries(runtimes.entries.where((e) => isEnabled(e.key)));
 
-  // Packages shipped natively by prism+. prism+ (the repo) is the single source
-  // of truth — the app installs these from the repo on first launch (not
-  // bundled) and blocks external installs that collide with them.
-  static const Set<String> nativePackages = {
-    'io.prismhub.animeflv',
-    'io.prismhub.animepahe',
-    'io.prismhub.comick',
-    'io.prismhub.jikan',
-    'io.prismhub.mangabat',
-    'io.prismhub.mangadex',
-    'io.prismhub.monoschinos',
-    'io.prismhub.omegascans',
-    'io.prismhub.tioanime',
-    'io.prismhub.yts',
+  // Extensiones que se auto-instalan en el primer launch.
+  // Solo las publicadas en prism+ index.json; añadir aquí solo cuando ya
+  // exista la entrada firmada en el catálogo.
+  static const Set<String> defaultPackages = {
+    'io.prismhub.jkanime',    // anime ES — múltiples servidores confiables
+    'io.prismhub.manhwaweb',  // manhwa/manga ES — ManhwaWeb
   };
 
+  // Todos los paquetes oficiales de prism+. Bloqueados de instalar externamente
+  // si colisionan con el nombre — se prefiere siempre la build oficial.
+  static const Set<String> nativePackages = {
+    ...defaultPackages,
+    // Nuevas extensiones se agregan aquí una vez publicadas y firmadas en prism+.
+  };
+
+  // Extensiones que se eliminaron del catálogo y deben borrarse del dispositivo
+  // incluso sin conexión. Añadir aquí cualquier package que se retire de prism+.
+  static const Set<String> _removedPackages = {
+    'io.prismhub.mangadex', // retirado antes del release v1.0.0 — no firmado
+  };
+
+  // Catálogo oficial vivo: se llena desde el index.json de prism+ en cada
+  // arranque. Permite bloquear el sideload de CUALQUIER extensión oficial
+  // (por package o por nombre), no solo las 3 hardcodeadas, a medida que prism+
+  // crece. Una oficial solo se instala por el canal firmado del catálogo.
+  static final Set<String> officialPackages = {};
+  static final Set<String> officialNames = {};
+
   static bool isNativePackage(String package) =>
-      nativePackages.contains(package);
+      nativePackages.contains(package) || officialPackages.contains(package);
 
   static final RegExp _versionHeader = RegExp(r'@version\s+([^\s\r\n]+)');
 
@@ -115,9 +128,6 @@ class ExtensionUtils {
   //  - respects user removals: a native the user deleted is not re-added
   // prism+ stays the single source of truth (no bundled copies). Offline-safe.
   static Future<void> _installDefaultsFromRepo() async {
-    final firstRun = PrismHubStorage.getSetting(
-            SettingKey.defaultExtensionsInstalled) !=
-        true;
     try {
       final repoUrl = PrismHubStorage.getSetting(SettingKey.prismhubRepoUrl);
       // Cache-bust: GitHub raw caches index.json/dist for minutes, which would
@@ -131,14 +141,22 @@ class ExtensionUtils {
         final pkg = e['package']?.toString();
         final scriptUrl = (e['script'] ?? e['url'])?.toString();
         if (pkg == null || scriptUrl == null) continue;
-        // Only the curated natives are managed here; the rest of the catalog is
-        // installed by the user from the repo page.
-        if (!isNativePackage(pkg)) continue;
+        // Registrar TODA extensión del catálogo oficial (no solo las default)
+        // para bloquear sideloads que las dupliquen.
+        officialPackages.add(pkg);
+        final officialName = e['name']?.toString().toLowerCase().trim();
+        if (officialName != null && officialName.isNotEmpty) {
+          officialNames.add(officialName);
+        }
+        // Solo los 3 paquetes por defecto se auto-instalan en primer launch.
+        // Los demás nativos están disponibles en el catálogo del repo.
+        if (!defaultPackages.contains(pkg)) continue;
 
         final dest = File(path.join(extensionsDir, '$pkg.js'));
         final exists = dest.existsSync();
-        // The user removed this native — don't bring it back on later launches.
-        if (!exists && !firstRun) continue;
+        // Los 3 defaults se garantizan siempre presentes: si falta uno (p.ej.
+        // cambió el set de defaults tras el primer arranque), se instala. Así el
+        // equipo siempre tiene exactamente las 3 oficiales por defecto.
         // Already installed: only re-download when the repo version is different.
         if (exists) {
           final repoVersion = e['version']?.toString().replaceFirst('v', '');
@@ -148,11 +166,41 @@ class ExtensionUtils {
         final sep = scriptUrl.contains('?') ? '&' : '?';
         final js = await dio.get<String>('$scriptUrl${sep}t=$bust');
         if (js.data != null && js.data!.isNotEmpty) {
+          // Seguridad: los defaults son oficiales y DEBEN traer firma válida de
+          // prism+. Si falta o no valida, es manipulación → no se instala.
+          final signature = e['signature']?.toString();
+          if (!ExtensionSignature.isOfficial(js.data!, signature)) {
+            debugPrint(
+                'Firma inválida o ausente para $pkg — no se instala (posible manipulación).');
+            continue;
+          }
           dest.writeAsStringSync(js.data!);
         }
       }
       await PrismHubStorage.setSetting(
           SettingKey.defaultExtensionsInstalled, true);
+
+      // Purga de oficiales huérfanas: una extensión del namespace oficial
+      // `io.prismhub.*` que ya NO está en el catálogo de prism+ (la quitamos del
+      // repo, p.ej. animeflv) se elimina del equipo. NO toca extensiones externas
+      // de terceros (otro namespace) — prism_hub permite sideload. Solo corre si
+      // el catálogo se descargó bien (officialPackages no vacío), para no borrar
+      // nada estando offline.
+      if (officialPackages.isNotEmpty) {
+        for (final f in Directory(extensionsDir).listSync()) {
+          if (path.extension(f.path) != '.js') continue;
+          final pkg = path.basenameWithoutExtension(f.path);
+          if (pkg.startsWith('io.prismhub.') &&
+              !officialPackages.contains(pkg) &&
+              !nativePackages.contains(pkg)) {
+            try {
+              File(f.path).deleteSync();
+              runtimes.remove(pkg);
+              debugPrint('Extensión oficial huérfana eliminada: $pkg');
+            } catch (_) {}
+          }
+        }
+      }
     } catch (e) {
       // Offline / repo unreachable — keep working with what's installed and
       // retry next launch (the first-run flag stays unset until it succeeds).
@@ -164,8 +212,13 @@ class ExtensionUtils {
   static ensureInitialized() async {
     // 创建目录
     Directory(extensionsDir).createSync(recursive: true);
+    // Purga offline de paquetes retirados: se elimina el JS aunque no haya red,
+    // así el usuario no ve extensiones obsoletas al abrir la app.
+    _purgeRemovedPackages();
     await _installDefaultsFromRepo();
     await _loadExtensions();
+    // Limpia el Hive disabled-list de entradas muertas (paquetes sin JS).
+    _cleanStaleDisabledList();
     // 监听目录变化
     Directory(extensionsDir).watch().listen((event) async {
       if (path.extension(event.path) == '.js') {
@@ -192,13 +245,10 @@ class ExtensionUtils {
   }
 
   static _loadExtensions() async {
-    // 获取扩展列表
     final extensionsList = Directory(extensionsDir).listSync();
-    // 遍历扩展列表
-    for (final extension in extensionsList) {
-      await installByPath(extension.path);
-    }
-
+    // Carga en paralelo: con 3-10 extensiones instaladas ahorra ~0.5-2 s
+    // en el arranque del app versus la carga secuencial original.
+    await Future.wait(extensionsList.map((e) => installByPath(e.path)));
     _reloadPage();
   }
 
@@ -209,12 +259,46 @@ class ExtensionUtils {
     }
   }
 
-  // True if an external extension collides with a native prism+ one (by
-  // package id or by name) — those are blocked from external install.
+  // Borra sin necesidad de red los .js de paquetes retirados del catálogo.
+  static void _purgeRemovedPackages() {
+    for (final pkg in _removedPackages) {
+      try {
+        final f = File(path.join(extensionsDir, '$pkg.js'));
+        if (f.existsSync()) {
+          f.deleteSync();
+          debugPrint('Paquete retirado eliminado del dispositivo: $pkg');
+        }
+      } catch (_) {}
+    }
+  }
+
+  // Elimina del Hive disabled-list los package IDs que ya no tienen JS en disco,
+  // evitando datos muertos que confundan el estado de la UI.
+  static void _cleanStaleDisabledList() {
+    final raw = PrismHubStorage.getSetting(SettingKey.disabledExtensions);
+    if (raw == null) return;
+    final List<String> list =
+        raw is List ? List<String>.from(raw) : <String>[];
+    final existingPkgs = Directory(extensionsDir)
+        .listSync()
+        .where((e) => path.extension(e.path) == '.js')
+        .map((e) => path.basenameWithoutExtension(e.path))
+        .toSet();
+    final cleaned = list.where(existingPkgs.contains).toList();
+    if (cleaned.length != list.length) {
+      PrismHubStorage.setSetting(SettingKey.disabledExtensions, cleaned);
+    }
+  }
+
+  // True if an external extension collides with a native/official prism+ one
+  // (by package id or by name) — those are blocked from external/sideload
+  // install. Una oficial solo entra por el canal firmado del catálogo.
   static bool isDuplicateOfNative(Extension ext) {
     if (isNativePackage(ext.package)) return true;
     final name = ext.name.toLowerCase().trim();
     if (name.isEmpty) return false;
+    // Mismo nombre que una oficial del catálogo de prism+.
+    if (officialNames.contains(name)) return true;
     return runtimes.values.any((r) =>
         isNativePackage(r.extension.package) &&
         r.extension.name.toLowerCase().trim() == name);
@@ -224,6 +308,7 @@ class ExtensionUtils {
     String script,
     BuildContext context, {
     bool safeReload = false,
+    bool officialVerified = false,
   }) async {
     // Parse defensively: a .js without a valid @package header otherwise throws
     // an ugly "Null is not a subtype of String" instead of a clean notice.
@@ -241,8 +326,9 @@ class ExtensionUtils {
       throw Exception('extension.invalid'.i18n);
     }
     // Black-box filter: an extension already shipped natively by prism+ must
-    // not be installed externally — the native build is preferred.
-    if (isDuplicateOfNative(ext)) {
+    // not be installed externally — the native build is preferred. La instalación
+    // oficial firmada (officialVerified) sí pasa: es la legítima del catálogo.
+    if (!officialVerified && isDuplicateOfNative(ext)) {
       throw Exception('extension.already-native'.i18n);
     }
     final savePath = path.join(extensionsDir, '$pkg.js');
@@ -292,9 +378,13 @@ class ExtensionUtils {
     }
   }
 
-  static installByScript(String script, BuildContext context) async {
+  // officialVerified=true cuando la firma oficial del catálogo ya fue validada
+  // (extension_card): en ese caso se permite instalar la oficial aunque coincida
+  // con una nativa — ES la oficial. El sideload externo nunca pasa este flag.
+  static installByScript(String script, BuildContext context,
+      {bool officialVerified = false}) async {
     try {
-      await _saveAndInit(script, context);
+      await _saveAndInit(script, context, officialVerified: officialVerified);
     } catch (e) {
       // ignore: use_build_context_synchronously
       _showInstallError(context, e);

@@ -11,10 +11,12 @@ class ReaderView<T extends ReaderController> extends StatelessWidget {
     super.key,
     required this.content,
     required this.buildSettings,
+    this.buildFooter,
   });
   final String tag;
   final Widget content;
   final Widget Function(BuildContext context) buildSettings;
+  final Widget Function(BuildContext context)? buildFooter;
 
   @override
   Widget build(BuildContext context) {
@@ -71,7 +73,9 @@ class ReaderView<T extends ReaderController> extends StatelessWidget {
               right: 0,
               left: 0,
               bottom: 0,
-              child: ControlPanelFooter<T>(tag),
+              child: buildFooter != null
+                  ? buildFooter!(context)
+                  : ControlPanelFooter<T>(tag),
             ),
           ]
         ],

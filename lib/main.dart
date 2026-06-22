@@ -59,7 +59,7 @@ void main(List<String> args) async {
     PrismLog.ensureInitialized();
     await ApplicationUtils.ensureInitialized();
     await PrismRequest.ensureInitialized();
-    ExtensionUtils.ensureInitialized();
+    await ExtensionUtils.ensureInitialized();
     MediaKit.ensureInitialized();
 
     if (!Platform.isAndroid) {
@@ -73,6 +73,8 @@ void main(List<String> args) async {
         titleBarStyle: TitleBarStyle.hidden,
       );
       windowManager.waitUntilReadyToShow(windowOptions, () async {
+        // 900×600 is the minimum viable reading size; prevents layout breaks.
+        await windowManager.setMinimumSize(const Size(900, 600));
         final position = PrismHubStorage.getSetting(SettingKey.windowPosition);
         if (position != null) {
           final offsetArr = position.split(",");
@@ -80,9 +82,7 @@ void main(List<String> args) async {
             double.parse(offsetArr[0]),
             double.parse(offsetArr[1]),
           );
-          await windowManager.setPosition(
-            offset,
-          );
+          await windowManager.setPosition(offset);
         }
         await windowManager.show();
         await windowManager.focus();

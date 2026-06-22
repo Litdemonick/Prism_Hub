@@ -4,8 +4,8 @@ import 'package:flutter_inappwebview/flutter_inappwebview.dart';
 import 'package:prismhub/utils/prismhub_storage.dart';
 
 /// True when a URL is a direct media stream that media_kit can play natively.
-/// Anything else (an embed/player page like mega.nz/embed, voe.sx/e, ...) needs
-/// the WebView fallback.
+/// Anything else (an embed/player page like mega.nz/embed, voe.sx/e, ...) is not
+/// directly playable.
 bool isDirectStream(String url) {
   final u = url.toLowerCase();
   return u.contains('.m3u8') ||
@@ -17,7 +17,7 @@ bool isDirectStream(String url) {
       u.contains('/api/file/'); // pixeldrain direct
 }
 
-/// Opens an embed/player page in the fullscreen WebView fallback player.
+/// Opens an embed/player page in the fullscreen in-app WebView.
 void openWebViewPlayer(
   BuildContext context,
   String url, {

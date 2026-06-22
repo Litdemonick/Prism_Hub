@@ -7,11 +7,12 @@ import 'package:get/get.dart';
 import 'package:media_kit_video/media_kit_video.dart';
 import 'package:prismhub/controllers/watch/video_controller.dart';
 import 'package:prismhub/utils/i18n.dart';
+import 'package:prismhub/views/pages/watch/video/webview_player_page.dart'
+    show openWebViewPlayer;
 import 'package:prismhub/utils/layout.dart';
 import 'package:prismhub/utils/router.dart';
 import 'package:prismhub/views/pages/watch/video/video_player_cast.dart';
 import 'package:prismhub/views/pages/watch/video/video_player_sidebar.dart';
-import 'package:prismhub/views/pages/watch/video/webview_player_page.dart';
 import 'package:prismhub/views/widgets/cache_network_image.dart';
 import 'package:prismhub/views/widgets/progress.dart';
 import 'package:screen_brightness/screen_brightness.dart';
@@ -44,6 +45,8 @@ class _VideoPlayerMobileControlsState extends State<VideoPlayerMobileControls> {
   bool _isLongPress = false;
   // 定时器
   Timer? _timer;
+  Worker? _webViewWorker;
+  Worker? _resumeWorker;
 
   _updateTimer() {
     _timer?.cancel();
@@ -74,12 +77,56 @@ class _VideoPlayerMobileControlsState extends State<VideoPlayerMobileControls> {
   void initState() {
     _init();
     super.initState();
+    // No abrir WebView automáticamente — el usuario lo abre con el botón en la UI.
+    _webViewWorker = ever(_c.webViewFallback, (_) {});
+    // Mostrar diálogo de continuación cuando el controlador emite la señal.
+    _resumeWorker = ever(_c.resumePrompt, (secs) {
+      if (secs == null || !mounted) return;
+      _showResumeDialog(secs);
+    });
   }
 
   @override
   void dispose() {
+    _webViewWorker?.dispose();
+    _resumeWorker?.dispose();
     _timer?.cancel();
     super.dispose();
+  }
+
+  void _showResumeDialog(int secs) {
+    final h = secs ~/ 3600;
+    final m = (secs % 3600) ~/ 60;
+    final s = secs % 60;
+    final timeStr = h > 0
+        ? '${h.toString().padLeft(2, '0')}:${m.toString().padLeft(2, '0')}:${s.toString().padLeft(2, '0')}'
+        : '${m.toString().padLeft(2, '0')}:${s.toString().padLeft(2, '0')}';
+    showDialog<void>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('¡Un momento!'),
+        content: Text(
+          'Parece que anteriormente estabas mirando este vídeo '
+          '¿Deseas continuar donde te quedaste? $timeStr',
+        ),
+        actions: [
+          TextButton(
+            child: const Text('Cancelar'),
+            onPressed: () {
+              Navigator.of(ctx).pop();
+              _c.cancelResume();
+            },
+          ),
+          TextButton(
+            child: const Text('Aceptar'),
+            onPressed: () {
+              Navigator.of(ctx).pop();
+              _c.confirmResume(secs);
+            },
+          ),
+        ],
+      ),
+    );
   }
 
   @override
@@ -279,47 +326,21 @@ class _VideoPlayerMobileControlsState extends State<VideoPlayerMobileControls> {
                     return Column(
                       mainAxisSize: MainAxisSize.min,
                       children: [
-                        Text(
-                          "video.streamlink-error".i18n,
-                          style: const TextStyle(
+                        const Text(
+                          'Servidor no accesible.',
+                          style: TextStyle(
                             fontSize: 16,
                             fontWeight: FontWeight.bold,
                           ),
                         ),
                         const SizedBox(height: 10),
-                        Row(
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            FilledButton(
-                              child: Text('common.error-message'.i18n),
-                              onPressed: () {
-                                showDialog(
-                                  context: context,
-                                  builder: (context) => AlertDialog(
-                                    title: Text('common.error-message'.i18n),
-                                    content: SelectableText(_c.error.value),
-                                    actions: [
-                                      FilledButton(
-                                        child: Text('common.close'.i18n),
-                                        onPressed: () {
-                                          Get.back();
-                                        },
-                                      ),
-                                    ],
-                                  ),
-                                );
-                              },
-                            ),
-                            const SizedBox(width: 10),
-                            FilledButton(
-                              child: Text('common.retry'.i18n),
-                              onPressed: () {
-                                _c.error.value = '';
-                                _c.play();
-                              },
-                            ),
-                          ],
-                        )
+                        FilledButton(
+                          child: Text('common.retry'.i18n),
+                          onPressed: () {
+                            _c.error.value = '';
+                            _c.play();
+                          },
+                        ),
                       ],
                     );
                   }
@@ -923,28 +944,35 @@ void showServerSheet(BuildContext context, VideoPlayerController controller) {
                     Builder(builder: (_) {
                       final isCurrent =
                           controller.currentServerName.value == entry.key;
-                      final direct = isDirectStream(entry.value);
                       return ListTile(
                         leading: Icon(
                           isCurrent
                               ? Icons.check_circle
-                              : (direct ? Icons.dns_outlined : Icons.public),
-                          color: isCurrent ? Colors.purpleAccent : null,
+                              : Icons.dns_outlined,
+                          color: isCurrent
+                              ? Colors.greenAccent
+                              : Colors.white,
                         ),
-                        title: Text(entry.key),
-                        // Servidores no-directos abren en el navegador embebido.
-                        subtitle: direct
-                            ? null
-                            : Text('video.webview-server'.i18n,
-                                style: const TextStyle(fontSize: 11)),
+                        title: Text(
+                          entry.key,
+                          style: const TextStyle(color: Colors.white),
+                        ),
                         selected: isCurrent,
                         onTap: () {
                           Navigator.of(context).pop();
-                          if (direct) {
-                            if (!isCurrent) controller.switchServer(entry.key);
-                          } else {
-                            openWebViewPlayer(context, entry.value,
-                                referer: controller.serverReferers[entry.key]);
+                          if (!isCurrent) {
+                            final eu = controller.availableServers[entry.key]!;
+                            if (eu.contains('mega.nz') ||
+                                eu.contains('mega.co.nz')) {
+                              controller.player.pause();
+                              openWebViewPlayer(
+                                context, eu,
+                                referer: controller.serverReferers[entry.key],
+                                title: entry.key,
+                              );
+                            } else {
+                              controller.switchServer(entry.key);
+                            }
                           }
                         },
                       );

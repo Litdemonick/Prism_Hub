@@ -1,4 +1,4 @@
-﻿import 'dart:io';
+import 'dart:io';
 
 import 'package:easy_refresh/easy_refresh.dart';
 import 'package:fluent_ui/fluent_ui.dart' as fluent;
@@ -36,12 +36,18 @@ class ExtensionSearcherPage extends fluent.StatefulWidget {
 class _ExtensionSearcherPageState extends fluent.State<ExtensionSearcherPage> {
   late ExtensionService _runtime;
   late String _keyWord = widget.keyWord ?? '';
+
+  // Android: infinite scroll accumulates pages
   final List<ExtensionListItem> _data = [];
   int _page = 1;
+
+  // Desktop: arrow navigation, shows one page at a time
+  int _browsePage = 1;
+  List<ExtensionListItem> _browseData = [];
+
   bool _isLoading = true;
   final EasyRefreshController _easyRefreshController = EasyRefreshController();
   Map<String, ExtensionFilter>? _filters;
-  // 初始化一开始选择的选项
   Map<String, List<String>> _selectedFilters = {};
 
   late final _textEditingController = TextEditingController(text: _keyWord);
@@ -61,12 +67,62 @@ class _ExtensionSearcherPageState extends fluent.State<ExtensionSearcherPage> {
   }
 
   _initFilters() async {
-    _filters = await _runtime.createFilter();
-    _filters!.forEach((key, value) {
-      _selectedFilters[key] = [value.defaultOption];
-    });
-    setState(() {});
+    try {
+      _filters = await _runtime.createFilter();
+      _filters!.forEach((key, value) {
+        _selectedFilters[key] = [value.defaultOption];
+      });
+    } catch (_) {
+      _filters = {};
+    }
+    if (!mounted) return;
+    if (Platform.isAndroid) {
+      setState(() {});
+    } else {
+      _goToPage(1);
+    }
   }
+
+  // ── Desktop: page-based navigation ──────────────────────────────────────
+
+  Future<void> _goToPage(int page) async {
+    if (!mounted || page < 1) return;
+    final oldPage = _browsePage;
+    setState(() {
+      _browsePage = page;
+      _browseData = [];
+      _isLoading = true;
+    });
+    try {
+      final data = _keyWord.isEmpty
+          ? await _runtime.latest(_browsePage)
+          : await _runtime.search(_keyWord, _browsePage,
+              filter: _selectedFilters);
+      if (!mounted) return;
+      if (data.isEmpty) {
+        setState(() => _browsePage = oldPage);
+        showPlatformSnackbar(
+          context: context,
+          content: 'common.no-more-data'.i18n,
+          severity: fluent.InfoBarSeverity.warning,
+        );
+      } else {
+        setState(() => _browseData = data);
+      }
+    } catch (e) {
+      if (!mounted) return;
+      setState(() => _browsePage = oldPage);
+      showPlatformSnackbar(
+        context: context,
+        content: friendlyError(e),
+        severity: fluent.InfoBarSeverity.error,
+      );
+    } finally {
+      if (mounted) setState(() => _isLoading = false);
+    }
+  }
+
+  // ── Android: infinite scroll ─────────────────────────────────────────────
 
   Future<void> _onRefresh() async {
     setState(() {
@@ -81,38 +137,43 @@ class _ExtensionSearcherPageState extends fluent.State<ExtensionSearcherPage> {
       _isLoading = true;
       setState(() {});
       late List<ExtensionListItem> data;
-      if (_keyWord.isEmpty && _filters == null) {
+      if (_keyWord.isEmpty) {
         data = await _runtime.latest(_page);
       } else {
         data = await _runtime.search(_keyWord, _page, filter: _selectedFilters);
       }
-      if (data.isEmpty && mounted) {
+      final existingUrls = _data.map((e) => e.url).toSet();
+      final fresh = data.where((e) => !existingUrls.contains(e.url)).toList();
+      if (fresh.isEmpty && mounted) {
         showPlatformSnackbar(
           context: context,
           content: "common.no-more-data".i18n,
           severity: fluent.InfoBarSeverity.warning,
         );
       }
-      _data.addAll(data);
+      _data.addAll(fresh);
       _page++;
     } catch (e) {
       // ignore: use_build_context_synchronously
-      showPlatformSnackbar(context: context, content: friendlyError(e), severity: fluent.InfoBarSeverity.error);
+      showPlatformSnackbar(
+          context: context,
+          content: friendlyError(e),
+          severity: fluent.InfoBarSeverity.error);
       rethrow;
     } finally {
       _isLoading = false;
-      if (mounted) {
-        setState(() {});
-      }
+      if (mounted) setState(() {});
     }
   }
+
+  // ── Shared ───────────────────────────────────────────────────────────────
 
   _onSearch(String keyWord) {
     _keyWord = keyWord;
     if (Platform.isAndroid) {
       _easyRefreshController.callRefresh();
     } else {
-      _onRefresh();
+      _goToPage(1);
     }
   }
 
@@ -134,17 +195,11 @@ class _ExtensionSearcherPageState extends fluent.State<ExtensionSearcherPage> {
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Padding(
-              padding: const EdgeInsets.only(
-                left: 16,
-                right: 16,
-                top: 16,
-              ),
+              padding: const EdgeInsets.only(left: 16, right: 16, top: 16),
               child: Row(
                 children: [
                   TextButton(
-                    onPressed: () {
-                      Get.back();
-                    },
+                    onPressed: () => Get.back(),
                     child: Text("common.cancel".i18n),
                   ),
                   const Spacer(),
@@ -160,14 +215,12 @@ class _ExtensionSearcherPageState extends fluent.State<ExtensionSearcherPage> {
             ),
             const Divider(),
             Expanded(
-                child: Padding(
-              padding: const EdgeInsets.only(
-                left: 16,
-                right: 16,
-                top: 16,
+              child: Padding(
+                padding:
+                    const EdgeInsets.only(left: 16, right: 16, top: 16),
+                child: fiterWidget,
               ),
-              child: fiterWidget,
-            ))
+            ),
           ],
         ),
       );
@@ -183,15 +236,13 @@ class _ExtensionSearcherPageState extends fluent.State<ExtensionSearcherPage> {
           actions: [
             fluent.Button(
               child: Text('common.cancel'.i18n),
-              onPressed: () {
-                router.pop();
-              },
+              onPressed: () => router.pop(),
             ),
             fluent.FilledButton(
               child: Text('common.confirm'.i18n),
               onPressed: () {
                 router.pop();
-                _onRefresh();
+                _goToPage(1);
               },
             ),
           ],
@@ -200,15 +251,15 @@ class _ExtensionSearcherPageState extends fluent.State<ExtensionSearcherPage> {
     );
   }
 
+  // ── Builders ─────────────────────────────────────────────────────────────
+
   Widget _buildAndroid(BuildContext context) {
     return Scaffold(
       appBar: SearchAppBar(
         title: _runtime.extension.name,
         textEditingController: _textEditingController,
         onChanged: (value) {
-          if (value.isEmpty) {
-            _onSearch(value);
-          }
+          if (value.isEmpty) _onSearch(value);
         },
         onSubmitted: _onSearch,
         actions: [
@@ -224,26 +275,28 @@ class _ExtensionSearcherPageState extends fluent.State<ExtensionSearcherPage> {
         onLoad: _onLoad,
         easyRefreshController: _easyRefreshController,
         child: LayoutBuilder(
-          builder: (context, constraints) => GridView.builder(
-            padding: const EdgeInsets.symmetric(horizontal: 16),
-            gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
-              crossAxisCount: constraints.maxWidth ~/ 120,
-              childAspectRatio: 0.7,
-              crossAxisSpacing: 16,
-              mainAxisSpacing: 16,
+          builder: (context, constraints) => ExcludeSemantics(
+            child: GridView.builder(
+              padding: const EdgeInsets.symmetric(horizontal: 16),
+              gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
+                crossAxisCount: constraints.maxWidth ~/ 120,
+                childAspectRatio: 0.7,
+                crossAxisSpacing: 16,
+                mainAxisSpacing: 16,
+              ),
+              itemCount: _data.length,
+              itemBuilder: (context, index) {
+                final item = _data[index];
+                return ExtensionItemCard(
+                  title: item.title,
+                  url: item.url,
+                  package: widget.package,
+                  cover: item.cover,
+                  update: item.update,
+                  headers: item.headers,
+                );
+              },
             ),
-            itemCount: _data.length,
-            itemBuilder: (context, index) {
-              final item = _data[index];
-              return ExtensionItemCard(
-                title: item.title,
-                url: item.url,
-                package: widget.package,
-                cover: item.cover,
-                update: item.update,
-                headers: item.headers,
-              );
-            },
           ),
         ),
       ),
@@ -263,6 +316,7 @@ class _ExtensionSearcherPageState extends fluent.State<ExtensionSearcherPage> {
         ),
       ),
     ]);
+
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -295,53 +349,90 @@ class _ExtensionSearcherPageState extends fluent.State<ExtensionSearcherPage> {
               SizedBox(
                 width: 300,
                 child: fluent.TextBox(
-                  controller: TextEditingController(
-                    text: _keyWord,
-                  ),
+                  controller: TextEditingController(text: _keyWord),
                   onChanged: (value) {
-                    if (value.isEmpty) {
-                      _onSearch(value);
-                    }
+                    if (value.isEmpty) _onSearch(value);
                   },
                   suffix: suffix,
                   suffixMode: fluent.OverlayVisibilityMode.editing,
                   onSubmitted: _onSearch,
                   placeholder: 'search.hint-text'.i18n,
                 ),
-              )
+              ),
             ],
           ),
         ),
-        const SizedBox(height: 16),
+        const SizedBox(height: 8),
+        // Grid + left/right arrows
         Expanded(
-          child: InfiniteScroller(
-            onRefresh: _onRefresh,
-            onLoad: _onLoad,
-            child: LayoutBuilder(
-              builder: ((context, constraints) => GridView.builder(
-                    padding: const EdgeInsets.all(16),
-                    gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
-                      crossAxisCount: constraints.maxWidth ~/ 160,
-                      childAspectRatio: 0.6,
-                      crossAxisSpacing: 16,
-                      mainAxisSpacing: 16,
-                    ),
-                    itemCount: _data.length,
-                    itemBuilder: (context, index) {
-                      final item = _data[index];
-                      return ExtensionItemCard(
-                        title: item.title,
-                        url: item.url,
-                        package: widget.package,
-                        cover: item.cover,
-                        update: item.update,
-                        headers: item.headers,
-                      );
-                    },
-                  )),
-            ),
+          child: Row(
+            children: [
+              // ← prev page
+              SizedBox(
+                width: 48,
+                child: Center(
+                  child: _browsePage > 1
+                      ? fluent.FilledButton(
+                          onPressed: _isLoading
+                              ? null
+                              : () => _goToPage(_browsePage - 1),
+                          child: const Icon(
+                              fluent.FluentIcons.chevron_left,
+                              size: 14),
+                        )
+                      : const SizedBox.shrink(),
+                ),
+              ),
+              // Anime grid
+              Expanded(
+                child: _isLoading && _browseData.isEmpty
+                    ? const Center(child: fluent.ProgressRing())
+                    : LayoutBuilder(
+                        builder: (ctx, constraints) => ExcludeSemantics(
+                          child: GridView.builder(
+                            padding: const EdgeInsets.symmetric(
+                                horizontal: 8, vertical: 8),
+                            gridDelegate:
+                                SliverGridDelegateWithFixedCrossAxisCount(
+                              crossAxisCount:
+                                  (constraints.maxWidth ~/ 160).clamp(1, 20),
+                              childAspectRatio: 0.6,
+                              crossAxisSpacing: 12,
+                              mainAxisSpacing: 12,
+                            ),
+                            itemCount: _browseData.length,
+                            itemBuilder: (ctx, i) {
+                              final item = _browseData[i];
+                              return ExtensionItemCard(
+                                title: item.title,
+                                url: item.url,
+                                package: widget.package,
+                                cover: item.cover,
+                                update: item.update,
+                                headers: item.headers,
+                              );
+                            },
+                          ),
+                        ),
+                      ),
+              ),
+              // → next page
+              SizedBox(
+                width: 48,
+                child: Center(
+                  child: fluent.FilledButton(
+                    onPressed: _isLoading
+                        ? null
+                        : () => _goToPage(_browsePage + 1),
+                    child: const Icon(
+                        fluent.FluentIcons.chevron_right,
+                        size: 14),
+                  ),
+                ),
+              ),
+            ],
           ),
-        )
+        ),
       ],
     );
   }
@@ -358,12 +449,8 @@ class _ExtensionSearcherPageState extends fluent.State<ExtensionSearcherPage> {
     );
     if (runtime == null) {
       return PlatformWidget(
-        androidWidget: Scaffold(
-          body: extensionMissing,
-        ),
-        desktopWidget: Center(
-          child: extensionMissing,
-        ),
+        androidWidget: Scaffold(body: extensionMissing),
+        desktopWidget: Center(child: extensionMissing),
       );
     }
     _runtime = runtime;
@@ -396,12 +483,10 @@ class _ExtensionFilterWidget extends StatefulWidget {
 class _ExtensionFilterWidgetState extends State<_ExtensionFilterWidget> {
   late final ExtensionService _runtime = widget.runtime;
   late Map<String, ExtensionFilter> _filters = widget.filters;
-  // 初始化一开始选择的选项
   late Map<String, List<String>> _selectedFilters = widget.selectedFilters;
 
   _onSelectFilter(key, value) async {
     final selectedFilters = Map<String, List<String>>.from(_selectedFilters);
-    // 如果存在就删除，不存在就添加
     if (selectedFilters[key]!.contains(value)) {
       if (selectedFilters[key]!.length > _filters[key]!.min) {
         selectedFilters[key]!.remove(value);
@@ -412,18 +497,14 @@ class _ExtensionFilterWidgetState extends State<_ExtensionFilterWidget> {
       }
       selectedFilters[key]!.add(value);
     }
-    // 再请求一次 _filters
     final filters = Map<String, ExtensionFilter>.from(
       await _runtime.createFilter(filter: selectedFilters),
     );
-
-    // 剔除 _filters 中不能存在的选项
     selectedFilters.forEach((key, value) {
       if (!filters.containsKey(key)) {
         selectedFilters.remove(key);
       }
     });
-
     setState(() {
       _selectedFilters = selectedFilters;
       _filters = filters;
@@ -438,9 +519,7 @@ class _ExtensionFilterWidgetState extends State<_ExtensionFilterWidget> {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           for (final filter in _filters.entries) ...[
-            Text(
-              filter.value.title,
-            ),
+            Text(filter.value.title),
             const SizedBox(height: 16),
             Wrap(
               spacing: 8,
@@ -449,21 +528,17 @@ class _ExtensionFilterWidgetState extends State<_ExtensionFilterWidget> {
                 for (final entry in filter.value.options.entries) ...[
                   PlatformToggleButton(
                     onChanged: (value) async {
-                      await _onSelectFilter(
-                        filter.key,
-                        entry.key,
-                      );
+                      await _onSelectFilter(filter.key, entry.key);
                       setState(() {});
                     },
-                    checked: widget.selectedFilters[filter.key]!.contains(
-                      entry.key,
-                    ),
+                    checked: widget.selectedFilters[filter.key]!
+                        .contains(entry.key),
                     text: entry.value,
                   ),
                 ]
               ],
             ),
-            const SizedBox(height: 16)
+            const SizedBox(height: 16),
           ],
         ],
       ),

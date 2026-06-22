@@ -27,6 +27,7 @@ import 'package:prismhub/router/router.dart';
 import 'package:prismhub/utils/bt_server.dart';
 import 'package:prismhub/data/services/database_service.dart';
 import 'package:prismhub/data/services/extension_service.dart';
+import 'package:prismhub/data/services/stream_sniffer_service.dart';
 import 'package:prismhub/utils/i18n.dart';
 import 'package:prismhub/utils/layout.dart';
 import 'package:prismhub/utils/prismhub_directory.dart';
@@ -135,6 +136,12 @@ class VideoPlayerController extends GetxController {
   // 是否已经自动跳转到上次播放进度
   bool _isAutoSeekPosition = false;
 
+  // Posición de continuación pendiente (segundos). Null = no hay nada guardado.
+  // Se fija antes de cargar el video para evitar que el auto-seek la consuma.
+  int? _pendingResumeSeconds;
+  // Señal para la UI: cuando tiene valor, mostrar el diálogo "¿Continuar?".
+  final Rxn<int> resumePrompt = Rxn<int>(null);
+
   // 信息列队
   final messageQueue = <Message>[];
   final Rx<Widget?> cuurentMessageWidget = Rx(null);
@@ -160,6 +167,13 @@ class VideoPlayerController extends GetxController {
   final serverReferers = <String, String>{}; // nombre → referer (no observable)
   final currentServerName = ''.obs;
   final serverFailedMessage = ''.obs;
+  // Cuando el sniffer headless no puede capturar el stream (CF-protected),
+  // se emite la petición de abrir el WebView visible. El widget listener
+  // (desktop/mobile controls) lo intercepta y llama openWebViewPlayer().
+  final webViewFallback = Rxn<Map<String, String>>(null);
+  // URL de la página del episodio en el sitio (X-Page-Url). Se carga en un
+  // WebView oculto y se sniffe su player como fallback universal.
+  String _episodePageUrl = '';
 
 
   // 字幕配置
@@ -215,9 +229,31 @@ class VideoPlayerController extends GetxController {
       await np.setProperty(
           'demuxer-lavf-o', 'reconnect=0,reconnect_delay_max=0');
       // Muchos m3u8 de hosts (voe, netu, etc.) referencian segmentos en otro
-      // dominio; mpv los marca "unsafe" y se niega a cargarlos. Permitirlo
-      // hace que esos streams reproduzcan en vez de fallar.
+      // dominio; mpv los marca "unsafe" y se niega a cargarlos.
       await np.setProperty('load-unsafe-playlists', 'yes');
+      // UA de navegador: CDNs de anime (luluvdo, streamwish, etc.) bloquean
+      // el UA por defecto de mpv ("Lavf/xx.xx"). Usar el mismo UA que el app.
+      final ua = PrismHubStorage.getUASetting();
+      if (ua != null && ua.isNotEmpty) {
+        await np.setProperty('user-agent', ua);
+      }
+      // Buffer optimizado para streaming de anime (segmentos HLS de 5-10 s).
+      // 50 MiB es seguro en móvil; en desktop sube solo porque hay más RAM.
+      await np.setProperty('cache', 'yes');
+      await np.setProperty('cache-secs', '30');
+      await np.setProperty('demuxer-max-bytes', '50MiB');
+      await np.setProperty('demuxer-readahead-secs', '10');
+      await np.setProperty('hls-bitrate', 'max');
+      // Proxy de Ajustes → mpv: desbloquea CDNs filtrados por el ISP.
+      // Sin esto el proxy solo llega a la resolución del embed, no al stream.
+      final proxyType =
+          PrismHubStorage.getSetting(SettingKey.proxyType)?.toString() ??
+              'DIRECT';
+      final proxyAddr =
+          PrismHubStorage.getSetting(SettingKey.proxy)?.toString() ?? '';
+      if (proxyType != 'DIRECT' && proxyAddr.isNotEmpty) {
+        await np.setProperty('http-proxy', '$proxyType://$proxyAddr');
+      }
     }
     play();
 
@@ -327,9 +363,12 @@ class VideoPlayerController extends GetxController {
       }
     });
 
-    // 自动恢复上次播放进度
+    // 自动恢复上次播放进度 (solo cuando el diálogo no lo maneja)
     player.stream.duration.listen((event) async {
-      if (_isAutoSeekPosition || event.inSeconds == 0) {
+      if (_isAutoSeekPosition || event.inSeconds == 0) return;
+      // Si hay un diálogo de resume pendiente, él maneja el seek — no interferir.
+      if (_pendingResumeSeconds != null || resumePrompt.value != null) {
+        _isAutoSeekPosition = true;
         return;
       }
 
@@ -407,14 +446,19 @@ class VideoPlayerController extends GetxController {
     // 错误监听 — detectar fallo de reproducción
     player.stream.error.listen((event) {
       logger.severe('media_kit error: $event');
-      // Durante la resolución/failover, media_kit re-emite el mismo error varias
-      // veces (uno por cada intento de servidor). NO mostrar un toast por cada uno:
-      // eso encolaba mensajes que parpadeaban. El estado de fallo se comunica con
-      // el overlay estable `serverFailedMessage`. Solo se muestra un toast para un
-      // error nuevo ocurrido DURANTE la reproducción ya iniciada.
       final isDup = event == _lastErrorEvent;
       _lastErrorEvent = event;
-      if (!isGettingWatchData.value && !isDup) {
+      // Errores técnicos de libmpv/ffmpeg no se muestran al usuario:
+      // son ruido interno (timeout TCP, file format, etc.) que solo confunde.
+      // El estado de fallo se comunica con el overlay estable serverFailedMessage.
+      final isTechnical = event.contains('Failed to open') ||
+          event.contains('tcp:') ||
+          event.contains('ffurl_read') ||
+          event.contains('Failed to recognize') ||
+          event.contains('No such') ||
+          event.contains('Connection refused') ||
+          event.contains('Operation timed out');
+      if (!isGettingWatchData.value && !isDup && !isTechnical) {
         sendMessage(Message(Text(event)));
       }
       // Si el error indica que el stream no es accesible, notificar
@@ -445,12 +489,34 @@ class VideoPlayerController extends GetxController {
     player.stop();
     isGettingWatchData.value = true;
     _lastErrorEvent = '';
+    _pageSniffAttempted = false;
+    _pendingResumeSeconds = null;
+    resumePrompt.value = null;
     try {
       await getWatchData();
     } catch (e) {
       logger.severe(e);
-      error.value = e.toString();
+      serverFailedMessage.value = 'No se pudo cargar el episodio. Intentá más tarde.';
+      isGettingWatchData.value = false;
+      await _safePlayerInit();
       return;
+    }
+
+    // Verificar progreso guardado antes de cargar — si hay posición significativa
+    // se le pregunta al usuario si desea continuar (el stream.duration listener
+    // queda inhibido mientras _pendingResumeSeconds != null).
+    {
+      final hist = await DatabaseService.getHistoryByPackageAndUrl(
+        runtime.extension.package,
+        detailUrl,
+      );
+      if (hist != null &&
+          hist.progress.isNotEmpty &&
+          hist.episodeId == index.value &&
+          hist.episodeGroupId == episodeGroupId) {
+        final secs = int.tryParse(hist.progress) ?? 0;
+        if (secs > 5) _pendingResumeSeconds = secs;
+      }
     }
 
     try {
@@ -469,11 +535,26 @@ class VideoPlayerController extends GetxController {
           await dlnaDevice.value!.setUrl(watchData!.url);
           await dlnaDevice.value!.play();
         } else {
+          // Si recordamos un servidor que ya funcionó en este episodio, usarlo
+          // como primario para no re-buscar entre todos (carga más rápido).
+          _applyPreferredServer();
           final primaryUrl = watchData!.url;
-          unawaited(getQuality());
+          if (isDirectStream(primaryUrl)) unawaited(getQuality());
 
           logger.info('Intentando servidor primario: ${currentServerName.value} → $primaryUrl');
-          bool worked = await _tryOpenPlayer(primaryUrl, watchData!.headers);
+          bool worked;
+          if (primaryUrl.startsWith('page://')) {
+            // La extensión no resolvió ningún servidor pero dio la URL de la
+            // página: ir directo al page-sniff (cargar el sitio en WebView).
+            worked = await _trySniffPage();
+          } else if (isDirectStream(primaryUrl)) {
+            worked = await _tryOpenPlayer(primaryUrl, watchData!.headers);
+          } else {
+            // El primario es un embed sin resolver (voe, netu, streamwish...).
+            // No gastar 12s en media_kit intentando reproducir un HTML: ir
+            // directo al sniffer WebView, que sí sabe sacar el stream real.
+            worked = await _trySniff(currentServerName.value, primaryUrl);
+          }
 
           if (!worked && watchData!.headers != null && watchData!.headers!.containsKey('X-Netu-Alts')) {
             try {
@@ -500,104 +581,50 @@ class VideoPlayerController extends GetxController {
 
           if (!worked) {
             logger.severe('Servidor primario fallido: ${currentServerName.value}');
-            // Auto-failover: iterar servidores alternativos
-            bool foundWorking = false;
-            final serverEntries = availableServers.entries.toList();
-            final serverErrors = <String, String>{}; // Para registrar errores por servidor
-            logger.info('Servidores disponibles para failover: ${serverEntries.map((e) => e.key).toList()}');
-            for (final entry in serverEntries) {
-              if (entry.key == currentServerName.value) continue;
-              // Los embeds no-directos (mega, doodstream, voe bloqueado, etc.) no
-              // los puede reproducir el player nativo: media_kit abriría un HTML y
-              // gastaría hasta 12s antes de fallar. Se omiten en el failover nativo
-              // — el usuario los reproduce vía WebView desde el selector de servers.
-              if (!isDirectStream(entry.value)) {
-                logger.info('Failover → omitiendo embed (va por WebView): ${entry.key}');
-                continue;
-              }
-              try {
-                logger.info('Failover → probando servidor: ${entry.key}');
-                serverFailedMessage.value =
-                    'Servidor "${currentServerName.value}" no disponible, '
-                    'probando "${entry.key}"...';
-                var alt = await runtime.watch(entry.value)
-                    as ExtensionBangumiWatch;
-                logger.info('Failover ${entry.key} URL: ${alt.url}');
-                if (alt.url.startsWith('error://')) {
-                  final errorMsg = alt.url.replaceFirst('error://', '');
-                  logger.severe('Failover ${entry.key}: error de extracción ($errorMsg)');
-                  serverErrors[entry.key] = errorMsg;
-                  continue;
-                }
-                
-                bool altWorked = await _tryOpenPlayer(alt.url, alt.headers);
-                
-                if (!altWorked && alt.headers != null && alt.headers!.containsKey('X-Netu-Alts')) {
-                  try {
-                    final List<dynamic> alts = jsonDecode(alt.headers!['X-Netu-Alts']!);
-                    for (final altUrlDyn in alts) {
-                      final altUrlStr = altUrlDyn.toString();
-                      logger.info('Failover probando alternativa: $altUrlStr');
-                      altWorked = await _tryOpenPlayer(altUrlStr, alt.headers);
-                      if (altWorked) {
-                        alt = ExtensionBangumiWatch(
-                          type: alt.type,
-                          url: altUrlStr,
-                          subtitles: alt.subtitles,
-                          headers: alt.headers,
-                          audioTrack: alt.audioTrack,
-                        );
-                        break;
-                      }
-                    }
-                  } catch (e) {
-                    logger.warning('Error parseando X-Netu-Alts en failover: $e');
-                  }
-                }
-
-                if (!altWorked) {
-                  logger.severe('Failover ${entry.key}: no se pudo conectar a ningún host');
-                  continue;
-                }
-                
-                // Servidor alternativo alcanzable — usarlo
-                currentServerName.value = entry.key;
-                watchData = alt;
-                serverFailedMessage.value = '';
-                logger.info('Failover exitoso: ${entry.key}');
-                foundWorking = true;
-                break;
-              } catch (e, stackTrace) {
-                logger.severe('Failover ${entry.key} excepción: $e');
-                logger.severe('Stack trace: $stackTrace');
-              }
-            }
-            if (!foundWorking) {
-              final errorDetails = serverErrors.entries.map((e) => '${e.key}: ${e.value}').join(', ');
-              logger.severe('Todos los servidores fallaron. Errores: $errorDetails');
-              // Flag the extension as currently not working so the user sees it.
-              ExtensionUtils.reportRuntimeError(
-                  runtime.extension.package, errorDetails);
+            if (availableServers.length > 1) {
               serverFailedMessage.value =
-                  'Ningún servidor disponible desde tu red.\n'
-                  'Errores: $errorDetails\n'
-                  'Prueba con una VPN o elige otro episodio.';
-              logger.severe('Todos los servidores fallaron, iniciando _safePlayerInit');
-              await _safePlayerInit();
-              isGettingWatchData.value = false;
-              return;
+                  'Servidor "${currentServerName.value}" no accesible.\n'
+                  'Elegí otro servidor con el botón Servidor.';
+            } else if (_episodePageUrl.isNotEmpty && !_pageSniffAttempted) {
+              if (!await _trySniffPage()) {
+                serverFailedMessage.value =
+                    'Servidor no accesible. Intentá más tarde.';
+              }
+            } else {
+              serverFailedMessage.value =
+                  'Servidor no accesible. Intentá más tarde.';
             }
+            isGettingWatchData.value = false;
+            await _safePlayerInit();
+            return;
           }
+          // Servidor cargó OK — iniciar en pausa para que el usuario
+          // decida cuándo reproducir.
+          await player.pause();
           if (watchData!.audioTrack != null) {
             await player.setAudioTrack(
               AudioTrack.uri(watchData!.audioTrack!),
             );
+          }
+          // Si hay progreso guardado, emitir señal al UI para mostrar el diálogo.
+          if (_pendingResumeSeconds != null) {
+            resumePrompt.value = _pendingResumeSeconds;
+            _pendingResumeSeconds = null;
           }
         }
 
       }
       // Playback resolved successfully — clear any previous "not working" flag.
       ExtensionUtils.clearRuntimeError(runtime.extension.package);
+      // Recordar el servidor que funcionó para este episodio: la próxima vez se
+      // prueba primero y no se re-busca entre todos.
+      if (currentServerName.value.isNotEmpty) {
+        PrismHubStorage.setLastWorkingServer(
+          runtime.extension.package,
+          playList[index.value].url,
+          currentServerName.value,
+        );
+      }
       isGettingWatchData.value = false;
       // 添加来自扩展的字幕
       subtitles.addAll(
@@ -646,6 +673,7 @@ class VideoPlayerController extends GetxController {
     availableServers.clear();
     serverReferers.clear();
     serverFailedMessage.value = '';
+    webViewFallback.value = null;
     final playUrl = playList[index.value].url;
     watchData = await runtime.watch(playUrl) as ExtensionBangumiWatch;
 
@@ -671,56 +699,104 @@ class VideoPlayerController extends GetxController {
       // Servidor actual
       currentServerName.value = headers['X-Primary-Server'] ??
           (availableServers.isNotEmpty ? availableServers.keys.first : '');
+      // URL de la página del episodio para el page-sniff (fallback universal).
+      _episodePageUrl = headers['X-Page-Url'] ?? '';
       // Limpiar cabeceras especiales — no enviar al player
       watchData!.headers = Map.from(headers)
         ..remove('X-Servers')
         ..remove('X-Server-Referers')
-        ..remove('X-Primary-Server');
+        ..remove('X-Primary-Server')
+        ..remove('X-Page-Url');
     }
   }
 
-  // Cambia al servidor — extrae su stream URL on-demand llamando watch(embedUrl)
+  // Cambia al servidor on-demand (igual que JiruHub):
+  //   1. Llama runtime.watch(url) — el wrapper del build maneja 3 casos:
+  //        a) URL directa .m3u8/.mp4 → fast-path, devuelve inmediatamente.
+  //        b) URL de embed conocido → resolveEmbed on-demand vía SDK.
+  //        c) URL de episodio → extensión la procesa normalmente.
+  //   2. Si la extensión no puede resolver (error/vacío) → fallback WebView sniffer.
   switchServer(String name) async {
     if (!availableServers.containsKey(name)) return;
     serverFailedMessage.value = '';
-    isGettingWatchData.value = true;
+    webViewFallback.value = null;
 
     final embedUrl = availableServers[name]!;
+    logger.info('switchServer: $name → $embedUrl');
+
+    isGettingWatchData.value = true;
+
     ExtensionBangumiWatch newWatch;
     try {
-      // Mode 2: la extensión detecta que es un embed URL y extrae directamente
       newWatch = await runtime.watch(embedUrl) as ExtensionBangumiWatch;
     } catch (e) {
-      logger.severe(e);
-      serverFailedMessage.value =
-          'No se pudo extraer el servidor "$name". Intenta otro.';
+      logger.severe('switchServer: runtime.watch falló para $name: $e');
+      if (isDirectStream(embedUrl)) {
+        // La extensión no sabe manejar URLs directas — intentar reproducir directo
+        await _playDirectFallback(name, embedUrl);
+      } else {
+        final ok = await _trySniff(name, embedUrl, timeout: const Duration(seconds: 5));
+        if (!ok) {
+          _setServerFailed(name, embedUrl);
+        } else {
+          _isAutoSeekPosition = true;
+          unawaited(PrismHubStorage.setLastWorkingServer(
+              runtime.extension.package, playList[index.value].url, name));
+        }
+      }
       isGettingWatchData.value = false;
       return;
     }
 
-    if (newWatch.url.startsWith('error://')) {
-      serverFailedMessage.value =
-          'Servidor "$name" no disponible. Intenta otro.';
+    if (newWatch.url.isEmpty || newWatch.url.startsWith('error://') || newWatch.url.startsWith('page://')) {
+      logger.warning('switchServer: extensión retornó error/page para $name (${newWatch.url})');
+      if (isDirectStream(embedUrl)) {
+        // La extensión no sabe manejar URLs directas — intentar reproducir directo
+        await _playDirectFallback(name, embedUrl);
+      } else {
+        final ok = await _trySniff(name, embedUrl, timeout: const Duration(seconds: 5));
+        if (!ok) {
+          _setServerFailed(name, embedUrl);
+        } else {
+          _isAutoSeekPosition = true;
+          unawaited(PrismHubStorage.setLastWorkingServer(
+              runtime.extension.package, playList[index.value].url, name));
+        }
+      }
       isGettingWatchData.value = false;
       return;
     }
 
+    // Extensión resolvió exitosamente — construir headers y abrir el player
     currentServerName.value = name;
-    // Si la extensión no devolvió Referer, intentar del mapa local
     final headers = <String, String>{};
+    // Preservar Referer: del resultado de la extensión o del mapa local
     final referer = newWatch.headers?['Referer'] ?? serverReferers[name];
     if (referer != null) headers['Referer'] = referer;
+    // Copiar headers útiles (excluir X-* que solo aplican al listado de episodio)
+    if (newWatch.headers != null) {
+      for (final e in newWatch.headers!.entries) {
+        if (!e.key.startsWith('X-')) headers[e.key] = e.value;
+      }
+    }
 
     watchData = ExtensionBangumiWatch(
-      type: watchData!.type,
+      type: newWatch.type,
       url: newWatch.url,
+      subtitles: watchData!.subtitles,
       headers: headers.isEmpty ? null : headers,
+      audioTrack: watchData!.audioTrack,
     );
     _isAutoSeekPosition = true;
+
+    if (!await _tryOpenPlayer(newWatch.url, headers.isEmpty ? null : headers)) {
+      serverFailedMessage.value = 'Servidor "$name" no responde. Elegí otro.';
+    } else {
+      serverFailedMessage.value = '';
+      unawaited(PrismHubStorage.setLastWorkingServer(
+          runtime.extension.package, playList[index.value].url, name));
+    }
     isGettingWatchData.value = false;
-    await player.open(
-      Media(newWatch.url, httpHeaders: watchData!.headers),
-    );
   }
 
   // 获取 torrent 媒体文件
@@ -1068,7 +1144,7 @@ class VideoPlayerController extends GetxController {
       final socket = await Socket.connect(
         uri.host,
         port,
-        timeout: const Duration(seconds: 4),
+        timeout: const Duration(seconds: 1),
       );
       socket.destroy();
       logger.info('Host alcanzable: ${uri.host}:$port');
@@ -1084,6 +1160,10 @@ class VideoPlayerController extends GetxController {
   // Intenta abrir el player con la URL dada.
   // Retorna true si el player fue abierto correctamente.
   // Retorna false si la URL es error:// o el host no es alcanzable.
+  static const _browserUA =
+      'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 '
+      '(KHTML, like Gecko) Chrome/125.0.0.0 Safari/537.36';
+
   Future<bool> _tryOpenPlayer(
       String url, Map<String, String>? headers) async {
     if (url.startsWith('error://')) {
@@ -1093,7 +1173,11 @@ class VideoPlayerController extends GetxController {
     if (!await _isHostReachable(url)) {
       return false;
     }
-    await player.open(Media(url, httpHeaders: headers));
+    // Inyectar User-Agent de browser si no viene en los headers.
+    // libmpv por defecto envía "Lavf/X.X.X" que los CDNs de streaming bloquean.
+    final hdrs = <String, String>{'User-Agent': _browserUA};
+    if (headers != null) hdrs.addAll(headers);
+    await player.open(Media(url, httpHeaders: hdrs));
 
     // media_kit accepts any URL in open() but only reports an unplayable
     // source (e.g. "Failed to recognize file format" for an HTML embed like
@@ -1119,7 +1203,7 @@ class VideoPlayerController extends GetxController {
     }));
 
     final ok = await completer.future
-        .timeout(const Duration(seconds: 12), onTimeout: () => false);
+        .timeout(const Duration(seconds: 8), onTimeout: () => false);
     for (final s in subs) {
       unawaited(s.cancel());
     }
@@ -1127,6 +1211,228 @@ class VideoPlayerController extends GetxController {
       logger.info('Fuente no reproducible, se intentará failover: $url');
     }
     return ok;
+  }
+
+
+
+  // Si hay un servidor recordado para este episodio que sí es reproducible
+  // nativamente, se usa como primario para no re-buscar entre todos.
+  void _applyPreferredServer() {
+    final saved = PrismHubStorage.getLastWorkingServer(
+      runtime.extension.package,
+      playList[index.value].url,
+    );
+    if (saved == null || saved == currentServerName.value) return;
+    final savedUrl = availableServers[saved];
+    if (savedUrl == null || !isDirectStream(savedUrl)) return;
+    logger.info('Usando servidor recordado: $saved');
+    currentServerName.value = saved;
+    final headers = <String, String>{};
+    final ref = serverReferers[saved];
+    if (ref != null && ref.isNotEmpty) headers['Referer'] = ref;
+    watchData = ExtensionBangumiWatch(
+      type: watchData!.type,
+      url: savedUrl,
+      subtitles: watchData!.subtitles,
+      headers: headers.isEmpty ? null : headers,
+      audioTrack: watchData!.audioTrack,
+    );
+  }
+
+  // Responde al diálogo "¿Continuar donde te quedaste?" — usuario aceptó.
+  void confirmResume(int seconds) {
+    _isAutoSeekPosition = true;
+    resumePrompt.value = null;
+    player.seek(Duration(seconds: seconds));
+    player.play();
+  }
+
+  // Responde al diálogo "¿Continuar donde te quedaste?" — usuario canceló.
+  void cancelResume() {
+    _isAutoSeekPosition = true;
+    resumePrompt.value = null;
+    player.play();
+  }
+
+  // Muestra error + guarda embed URL para que el usuario pueda abrirlo
+  // manualmente en WebView con el botón "Ver en WebView" de la UI.
+  // NO abre WebView automáticamente (evita anuncios inesperados).
+  void _setServerFailed(String name, String embedUrl) {
+    serverFailedMessage.value = 'Servidor "$name" no accesible. Elegí otro.';
+    if (!isDirectStream(embedUrl)) {
+      webViewFallback.value = {
+        'url': embedUrl,
+        'name': name,
+        'referer': serverReferers[name] ?? '',
+      };
+    }
+    logger.info('switchServer: fallo → $name. WebView disponible: $embedUrl');
+  }
+
+  // Intenta reproducir directamente una URL que ya es un stream (m3u8/mp4).
+  // Usado cuando la extensión no sabe manejar la URL (ej: Desu ya resuelto).
+  Future<void> _playDirectFallback(String name, String directUrl) async {
+    currentServerName.value = name;
+    final headers = <String, String>{};
+    final referer = serverReferers[name];
+    if (referer != null && referer.isNotEmpty) headers['Referer'] = referer;
+    if (!await _tryOpenPlayer(directUrl, headers.isEmpty ? null : headers)) {
+      _setServerFailed(name, directUrl);
+    } else {
+      serverFailedMessage.value = '';
+      webViewFallback.value = null;
+      unawaited(PrismHubStorage.setLastWorkingServer(
+          runtime.extension.package, playList[index.value].url, name));
+    }
+  }
+
+
+  // Intenta reproducir un embed que el resolver nativo no pudo resolver, usando
+  // el sniffer de WebView oculto: carga la página del host, deja correr su JS y
+  // captura el .m3u8/.mp4 que pide su propio player. Es el fallback universal.
+  // Retorna true si encontró un stream y media_kit lo abrió.
+  Future<bool> _trySniff(
+    String name,
+    String embedUrl, {
+    Duration timeout = const Duration(seconds: 8),
+  }) async {
+    if (embedUrl.startsWith('error://')) return false;
+    final low = embedUrl.toLowerCase();
+    // Estos hosts no exponen streams HLS/MP4: abren ventanas de descarga, requieren
+    // interacción de usuario o cifran el contenido sin URL interceptable.
+    if (low.contains('mega.nz') || low.contains('mega.co.nz') ||
+        low.contains('savefiles.') || low.contains('mediafire.') ||
+        low.contains('1fichier.') || low.contains('zippyshare.') ||
+        low.contains('racaty.') || low.contains('katfile.') ||
+        low.contains('rapidgator.') || low.contains('nitroflare.')) {
+      return false;
+    }
+    try {
+      logger.info('Sniffer WebView → $name: $embedUrl (timeout: ${timeout.inSeconds}s)');
+      final referer = serverReferers[name];
+      final sniffed = await StreamSnifferService.sniff(
+        embedUrl,
+        referer: referer,
+        timeout: timeout,
+      );
+      if (sniffed == null) {
+        logger.info('Sniffer no encontró stream para $name');
+        return false;
+      }
+      logger.info('Sniffer encontró stream para $name: ${sniffed.url}');
+      final headers = {'Referer': sniffed.referer};
+      if (!await _tryOpenPlayer(sniffed.url, headers)) {
+        logger.info('Sniffer: media_kit rechazado por CDN → $name. Guardando para botón WebView.');
+        // Guardar embed URL para botón "Ver en WebView" manual — NO abrir automáticamente
+        webViewFallback.value = {
+          'url': embedUrl,
+          'name': name,
+          'referer': serverReferers[name] ?? '',
+        };
+        return false;
+      }
+      currentServerName.value = name;
+      watchData = ExtensionBangumiWatch(
+        type: watchData!.type,
+        url: sniffed.url,
+        subtitles: watchData!.subtitles,
+        headers: headers,
+        audioTrack: watchData!.audioTrack,
+      );
+      serverFailedMessage.value = '';
+      return true;
+    } catch (e) {
+      logger.warning('Sniffer excepción en $name: $e');
+      return false;
+    }
+  }
+
+  // Fallback universal de dos etapas:
+  // Etapa 1 — extrae embed URLs de la página (window.videos, [data-player], iframe[src])
+  //           via callHandler (no crea iframes, que en WebView2 no reciben _hookSource).
+  // Etapa 2 — sniffea cada embed en su propio WebView (frame principal → callHandler ok).
+  // Si ningún embed funcionó o la página no tenía embeds detectables, intenta un
+  // sniff directo de la página (iframes estáticos capturados via postMessage relay).
+  bool _pageSniffAttempted = false;
+  Future<bool> _trySniffPage() async {
+    if (_episodePageUrl.isEmpty || _pageSniffAttempted) return false;
+    _pageSniffAttempted = true;
+    final episodeUrl = playList[index.value].url;
+    try {
+      // Fast-path: si ya sabemos qué embed funcionó para este episodio, probarlo
+      // directo sin escanear toda la página (ahorra ~15s en cargas siguientes).
+      final cachedEmbed = PrismHubStorage.getPageSniffEmbed(
+        runtime.extension.package,
+        episodeUrl,
+      );
+      if (cachedEmbed != null) {
+        logger.info('Page-sniff fast-path: embed cacheado → $cachedEmbed');
+        if (await _trySniff('Cached', cachedEmbed)) return true;
+        logger.info('Page-sniff fast-path falló, re-escaneando página');
+      }
+
+      // Etapa 1: extraer embed URLs de la página del episodio.
+      logger.info('Page-sniff etapa 1: extrayendo embeds de $_episodePageUrl');
+      final embedUrls = await StreamSnifferService.getEmbedUrls(
+        _episodePageUrl,
+        timeout: const Duration(seconds: 15),
+      );
+
+      if (embedUrls.isNotEmpty) {
+        // Etapa 2: sniffear cada embed en WebView propio.
+        for (int i = 0; i < embedUrls.length && i < 6; i++) {
+          final embedUrl = embedUrls[i];
+          logger.info('Page-sniff etapa 2 [${i+1}/${embedUrls.length}]: $embedUrl');
+          if (await _trySniff('Embed ${i + 1}', embedUrl)) {
+            // Guardar el embed que funcionó para carga rápida en el próximo intento.
+            unawaited(PrismHubStorage.setPageSniffEmbed(
+              runtime.extension.package,
+              episodeUrl,
+              embedUrl,
+            ));
+            return true;
+          }
+        }
+        logger.info('Page-sniff etapa 2: ningún embed produjo stream');
+      } else {
+        logger.info('Page-sniff etapa 1: sin embeds, intentando sniff directo');
+      }
+
+      // Fallback: sniff directo de la página (iframes estáticos + auto-play).
+      final sniffed = await StreamSnifferService.sniff(
+        _episodePageUrl,
+        timeout: const Duration(seconds: 15),
+      );
+      if (sniffed == null) {
+        logger.info('Page-sniff no encontró stream');
+        return false;
+      }
+      logger.info('Page-sniff encontró stream: ${sniffed.url}');
+      final headers = {'Referer': sniffed.referer};
+      if (!await _tryOpenPlayer(sniffed.url, headers)) {
+        logger.info('Page-sniff: media_kit rechazado. Guardando para botón WebView.');
+        webViewFallback.value = {
+          'url': _episodePageUrl,
+          'name': 'WebView',
+          'referer': '',
+        };
+        return false;
+      }
+      currentServerName.value =
+          currentServerName.value.isEmpty ? 'Auto' : currentServerName.value;
+      watchData = ExtensionBangumiWatch(
+        type: watchData!.type,
+        url: sniffed.url,
+        subtitles: watchData!.subtitles,
+        headers: headers,
+        audioTrack: watchData!.audioTrack,
+      );
+      serverFailedMessage.value = '';
+      return true;
+    } catch (e) {
+      logger.warning('Page-sniff excepción: $e');
+      return false;
+    }
   }
 
   // Inicializa mpv con una fuente local de video negro (sin red).
