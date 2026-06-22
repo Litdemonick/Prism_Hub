@@ -67,9 +67,9 @@ class _ComicReaderState extends State<ComicReader> {
       widget.title,
       content: PlatformWidget(
           androidWidget: ComicReaderContent(widget.title),
-          desktopWidget: DragToMoveArea(
-            child: ComicReaderContent(widget.title),
-          )),
+          // DragToMoveArea removed: double-clicking buttons was triggering
+          // window maximize/restore via the drag-to-move hook.
+          desktopWidget: ComicReaderContent(widget.title)),
       buildSettings: (context) => ComicReaderSettings(widget.title),
       // Comic reader handles its own page/chapter navigation in the content
       // overlay, so we suppress the generic chapter-navigation footer.

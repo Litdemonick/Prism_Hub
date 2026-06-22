@@ -247,52 +247,54 @@ class _ComicReaderContentState extends State<ComicReaderContent> {
               final currentPage = _c.currentPage.value;
 
               // ── Cascade (webtoon) mode ───────────────────────────────────
-              // Images fill the full screen width; no horizontal padding so
-              // pages look correct on any screen size.
+              // SizedBox with screen dimensions is required so that
+              // ScrollablePositionedList gets a bounded width — without it
+              // images render at their intrinsic (tiny) size.
               if (readerType == MangaReadMode.webTonn) {
-                return Listener(
-                  onPointerDown: (event) {
-                    _pointer.add(event.pointer);
-                    if (_pointer.length == 2) _c.isZoom.value = true;
-                  },
-                  onPointerUp: (event) {
-                    _pointer.remove(event.pointer);
-                    if (_pointer.length == 1) _c.isZoom.value = false;
-                  },
-                  child: InteractiveViewer(
-                    scaleEnabled: _c.isZoom.value,
-                    child: ScrollablePositionedList.builder(
-                      physics: _c.isZoom.value
-                          ? const NeverScrollableScrollPhysics()
-                          : null,
-                      initialScrollIndex: currentPage,
-                      itemScrollController: _c.itemScrollController,
-                      itemPositionsListener: _c.itemPositionsListener,
-                      scrollOffsetController: _c.scrollOffsetController,
-                      itemBuilder: (context, index) {
-                        final url = images[index];
-                        return SizedBox(
-                          width: double.infinity,
-                          child: CacheNetWorkImagePic(
+                final sw = MediaQuery.of(context).size.width;
+                final sh = MediaQuery.of(context).size.height;
+                return SizedBox(
+                  width: sw,
+                  height: sh,
+                  child: Listener(
+                    onPointerDown: (event) {
+                      _pointer.add(event.pointer);
+                      if (_pointer.length == 2) _c.isZoom.value = true;
+                    },
+                    onPointerUp: (event) {
+                      _pointer.remove(event.pointer);
+                      if (_pointer.length == 1) _c.isZoom.value = false;
+                    },
+                    child: InteractiveViewer(
+                      scaleEnabled: _c.isZoom.value,
+                      child: ScrollablePositionedList.builder(
+                        physics: _c.isZoom.value
+                            ? const NeverScrollableScrollPhysics()
+                            : null,
+                        initialScrollIndex: currentPage,
+                        itemScrollController: _c.itemScrollController,
+                        itemPositionsListener: _c.itemPositionsListener,
+                        scrollOffsetController: _c.scrollOffsetController,
+                        itemBuilder: (context, index) {
+                          final url = images[index];
+                          return CacheNetWorkImagePic(
                             url,
                             fit: BoxFit.fitWidth,
                             placeholder: _buildPlaceholder(context),
                             headers: _c.watchData.value?.headers,
-                          ),
-                        );
-                      },
-                      itemCount: images.length,
+                          );
+                        },
+                        itemCount: images.length,
+                      ),
                     ),
                   ),
                 );
               }
 
               // ── Page-by-page mode (standard / rightToLeft) ───────────────
-              // On desktop: ExtendedImageMode.none prevents scroll-wheel zoom;
-              // the outer Listener converts scroll to page navigation.
-              // Center content up to 800 px on wide screens.
-              final viewPadding =
-                  maxWidth > 800 ? ((maxWidth - 800) / 2) : 0.0;
+              // No horizontal padding — images fill full width and BoxFit.contain
+              // handles aspect ratio with natural black bars.
+              const viewPadding = 0.0;
               final isDesktop = !Platform.isAndroid;
 
               return Listener(
