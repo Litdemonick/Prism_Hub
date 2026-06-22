@@ -38,20 +38,22 @@ class _ComicReaderContentState extends State<ComicReaderContent> {
     return SizedBox(
       width: width,
       height: height,
-      child: const Center(
-        child: Center(
-          child: ProgressRing(),
-        ),
-      ),
+      child: const Center(child: ProgressRing()),
     );
   }
 
-  Widget _buildModeBtn(IconData icon, String label, MangaReadMode mode) {
-    final active = _c.readType.value == mode;
+  // ── Small icon button used for mode and chapter toggles ──────────────────
+
+  Widget _buildIconBtn({
+    required IconData icon,
+    required String tooltip,
+    required VoidCallback onTap,
+    bool active = false,
+  }) {
     return Tooltip(
-      message: label,
+      message: tooltip,
       child: GestureDetector(
-        onTap: () => _c.readType.value = mode,
+        onTap: onTap,
         child: Container(
           padding: const EdgeInsets.all(6),
           decoration: BoxDecoration(
@@ -70,54 +72,148 @@ class _ComicReaderContentState extends State<ComicReaderContent> {
     );
   }
 
-  _buildDisplay(Widget child) {
+  // ── Top overlay: chapter nav (left) + mode toggle (right) ────────────────
+  // Positioned just below the 40 px header so it never conflicts with it.
+
+  Widget _buildTopOverlay() {
+    return Obx(() {
+      final readerType = _c.readType.value;
+      final hasPrev = _c.index.value > 0;
+      final hasNext = _c.index.value < _c.playList.length - 1;
+
+      return Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          // ← previous chapter
+          if (hasPrev)
+            _buildIconBtn(
+              icon: Icons.skip_previous,
+              tooltip: 'Capítulo anterior',
+              onTap: () => _c.index.value--,
+            ),
+          if (hasPrev) const SizedBox(width: 4),
+          // → next chapter
+          if (hasNext)
+            _buildIconBtn(
+              icon: Icons.skip_next,
+              tooltip: 'Capítulo siguiente',
+              onTap: () => _c.index.value++,
+            ),
+          if (hasNext) const SizedBox(width: 8),
+          // Cascade / Pages mode toggles
+          _buildIconBtn(
+            icon: Icons.view_day,
+            tooltip: 'Cascada',
+            onTap: () => _c.readType.value = MangaReadMode.webTonn,
+            active: readerType == MangaReadMode.webTonn,
+          ),
+          const SizedBox(width: 4),
+          _buildIconBtn(
+            icon: Icons.menu_book,
+            tooltip: 'Páginas',
+            onTap: () => _c.readType.value = MangaReadMode.standard,
+            active: readerType == MangaReadMode.standard,
+          ),
+        ],
+      );
+    });
+  }
+
+  // ── Bottom bar: counter + page nav (page mode) or just counter (cascade) ─
+
+  Widget _buildBottomBar() {
+    return Obx(() {
+      final readerType = _c.readType.value;
+      final total = _c.watchData.value?.urls.length ?? 0;
+      final page = _c.currentPage.value;
+
+      final counter = Text(
+        '${page + 1}/$total',
+        style: const TextStyle(color: Colors.white, fontSize: 15),
+      );
+
+      if (readerType == MangaReadMode.webTonn) {
+        // Cascade: just the position counter
+        return Container(
+          color: Colors.black.withAlpha(200),
+          padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 4),
+          child: counter,
+        );
+      }
+
+      // Page mode: prev-page | counter | next-page
+      return Container(
+        color: Colors.black.withAlpha(200),
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 2),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            if (page > 0)
+              _buildNavBtn(
+                label: 'common.previous'.i18n,
+                onTap: _c.previousPage,
+              ),
+            if (page > 0) const SizedBox(width: 8),
+            counter,
+            if (total > 0 && page < total - 1) const SizedBox(width: 8),
+            if (total > 0 && page < total - 1)
+              _buildNavBtn(
+                label: 'common.next'.i18n,
+                onTap: _c.nextPage,
+              ),
+          ],
+        ),
+      );
+    });
+  }
+
+  Widget _buildNavBtn({required String label, required VoidCallback onTap}) {
+    return GestureDetector(
+      onTap: onTap,
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
+        decoration: BoxDecoration(
+          color: Colors.white.withAlpha(30),
+          borderRadius: BorderRadius.circular(4),
+        ),
+        child: Text(label,
+            style: const TextStyle(color: Colors.white, fontSize: 13)),
+      ),
+    );
+  }
+
+  // ── Full display overlay (wraps content) ─────────────────────────────────
+
+  Widget _buildDisplay(Widget child) {
     return Stack(
       children: [
         child,
-        // Page / position counter
-        Positioned(
-          bottom: 0,
-          child: Container(
-            color: Colors.black.withAlpha(200),
-            padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 2),
-            child: Obx(
-              () => Text(
-                "${_c.currentPage.value + 1}/${_c.watchData.value?.urls.length ?? 0}",
-                style: const TextStyle(color: Colors.white, fontSize: 15),
-              ),
-            ),
-          ),
-        ),
-        // Quick mode-toggle buttons — positioned at top-right, below the
-        // 40px header, so they never conflict with the bottom footer
-        // (Siguiente/Anterior) and are always hittable.
+        // Top-right: chapter nav + mode toggles (always visible)
         Positioned(
           top: 48,
           right: 8,
-          child: Obx(
-            () => Row(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                _buildModeBtn(
-                    Icons.view_day, 'Cascada', MangaReadMode.webTonn),
-                const SizedBox(width: 4),
-                _buildModeBtn(
-                    Icons.menu_book, 'Páginas', MangaReadMode.standard),
-              ],
-            ),
-          ),
+          child: _buildTopOverlay(),
+        ),
+        // Bottom-left: page counter + page navigation (page mode)
+        Positioned(
+          bottom: 0,
+          left: 0,
+          child: _buildBottomBar(),
         ),
       ],
     );
   }
 
-  _buildContent() {
+  // ── Main content ──────────────────────────────────────────────────────────
+
+  Widget _buildContent() {
     late Color backgroundColor;
     if (Platform.isAndroid) {
       backgroundColor = Theme.of(context).colorScheme.surface;
     } else {
       backgroundColor = fluent.FluentTheme.of(context).micaBackgroundColor;
     }
+
     return KeyboardListener(
       focusNode: FocusNode(),
       autofocus: true,
@@ -126,7 +222,7 @@ class _ComicReaderContentState extends State<ComicReaderContent> {
         color: backgroundColor,
         width: double.infinity,
         child: LayoutBuilder(
-          builder: ((context, constraints) {
+          builder: (context, constraints) {
             final maxWidth = constraints.maxWidth;
             return Obx(() {
               if (_c.error.value.isNotEmpty) {
@@ -135,11 +231,9 @@ class _ComicReaderContentState extends State<ComicReaderContent> {
                   children: [
                     Text(_c.error.value),
                     PlatformButton(
+                      onPressed: _c.getContent,
                       child: Text('common.retry'.i18n),
-                      onPressed: () {
-                        _c.getContent();
-                      },
-                    )
+                    ),
                   ],
                 );
               }
@@ -148,68 +242,59 @@ class _ComicReaderContentState extends State<ComicReaderContent> {
                 return const Center(child: ProgressRing());
               }
 
-              final viewPadding =
-                  maxWidth > 800 ? ((maxWidth - 800) / 2) : 0.0;
               final images = _c.watchData.value!.urls;
               final readerType = _c.readType.value;
-              final cuurentPage = _c.currentPage.value;
+              final currentPage = _c.currentPage.value;
 
-              // ── Cascade (webtoon) mode ─────────────────────────────────────
+              // ── Cascade (webtoon) mode ───────────────────────────────────
+              // Images fill the full screen width; no horizontal padding so
+              // pages look correct on any screen size.
               if (readerType == MangaReadMode.webTonn) {
-                final width = MediaQuery.of(context).size.width;
-                final height = MediaQuery.of(context).size.height;
-                return SizedBox(
-                  width: width,
-                  height: height,
-                  child: Listener(
-                    onPointerDown: (event) {
-                      _pointer.add(event.pointer);
-                      if (_pointer.length == 2) {
-                        _c.isZoom.value = true;
-                      }
-                    },
-                    onPointerUp: (event) {
-                      _pointer.remove(event.pointer);
-                      if (_pointer.length == 1) {
-                        _c.isZoom.value = false;
-                      }
-                    },
-                    child: InteractiveViewer(
-                      scaleEnabled: _c.isZoom.value,
-                      child: ScrollablePositionedList.builder(
-                        physics: _c.isZoom.value
-                            ? const NeverScrollableScrollPhysics()
-                            : null,
-                        padding: EdgeInsets.symmetric(
-                          horizontal: viewPadding,
-                        ),
-                        initialScrollIndex: cuurentPage,
-                        itemScrollController: _c.itemScrollController,
-                        itemPositionsListener: _c.itemPositionsListener,
-                        scrollOffsetController: _c.scrollOffsetController,
-                        itemBuilder: (context, index) {
-                          final url = images[index];
-                          return CacheNetWorkImagePic(
+                return Listener(
+                  onPointerDown: (event) {
+                    _pointer.add(event.pointer);
+                    if (_pointer.length == 2) _c.isZoom.value = true;
+                  },
+                  onPointerUp: (event) {
+                    _pointer.remove(event.pointer);
+                    if (_pointer.length == 1) _c.isZoom.value = false;
+                  },
+                  child: InteractiveViewer(
+                    scaleEnabled: _c.isZoom.value,
+                    child: ScrollablePositionedList.builder(
+                      physics: _c.isZoom.value
+                          ? const NeverScrollableScrollPhysics()
+                          : null,
+                      initialScrollIndex: currentPage,
+                      itemScrollController: _c.itemScrollController,
+                      itemPositionsListener: _c.itemPositionsListener,
+                      scrollOffsetController: _c.scrollOffsetController,
+                      itemBuilder: (context, index) {
+                        final url = images[index];
+                        return SizedBox(
+                          width: double.infinity,
+                          child: CacheNetWorkImagePic(
                             url,
                             fit: BoxFit.fitWidth,
                             placeholder: _buildPlaceholder(context),
                             headers: _c.watchData.value?.headers,
-                          );
-                        },
-                        itemCount: images.length,
-                      ),
+                          ),
+                        );
+                      },
+                      itemCount: images.length,
                     ),
                   ),
                 );
               }
 
-              // ── Page-by-page mode (standard / rightToLeft) ─────────────────
-              // On desktop: images use ExtendedImageMode.none so the scroll
-              // wheel is NOT consumed by ExtendedImage for zoom. A Listener
-              // wrapping the page view claims scroll events and converts them
-              // to page navigation. Pinch-to-zoom is kept on Android via
-              // ExtendedImageMode.gesture.
+              // ── Page-by-page mode (standard / rightToLeft) ───────────────
+              // On desktop: ExtendedImageMode.none prevents scroll-wheel zoom;
+              // the outer Listener converts scroll to page navigation.
+              // Center content up to 800 px on wide screens.
+              final viewPadding =
+                  maxWidth > 800 ? ((maxWidth - 800) / 2) : 0.0;
               final isDesktop = !Platform.isAndroid;
+
               return Listener(
                 onPointerSignal: isDesktop
                     ? (event) {
@@ -235,12 +320,11 @@ class _ComicReaderContentState extends State<ComicReaderContent> {
                   },
                   scrollDirection: Axis.horizontal,
                   controller: _c.pageController.value,
-                  itemBuilder: (BuildContext context, int index) {
+                  itemBuilder: (context, index) {
                     final url = images[index];
                     return Container(
-                      padding: EdgeInsets.symmetric(
-                        horizontal: viewPadding,
-                      ),
+                      padding:
+                          EdgeInsets.symmetric(horizontal: viewPadding),
                       child: CacheNetWorkImagePic(
                         url,
                         mode: isDesktop
@@ -256,7 +340,7 @@ class _ComicReaderContentState extends State<ComicReaderContent> {
                 ),
               );
             });
-          }),
+          },
         ),
       ),
     );
@@ -265,17 +349,10 @@ class _ComicReaderContentState extends State<ComicReaderContent> {
   @override
   Widget build(BuildContext context) {
     return PlatformBuildWidget(
-      androidBuilder: (context) {
-        return Scaffold(
-            body: SafeArea(
-          child: _buildDisplay(
-            _buildContent(),
-          ),
-        ));
-      },
-      desktopBuilder: (context) => _buildDisplay(
-        _buildContent(),
+      androidBuilder: (context) => Scaffold(
+        body: SafeArea(child: _buildDisplay(_buildContent())),
       ),
+      desktopBuilder: (context) => _buildDisplay(_buildContent()),
     );
   }
 }

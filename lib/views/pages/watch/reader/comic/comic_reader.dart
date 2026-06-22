@@ -71,6 +71,9 @@ class _ComicReaderState extends State<ComicReader> {
             child: ComicReaderContent(widget.title),
           )),
       buildSettings: (context) => ComicReaderSettings(widget.title),
+      // Comic reader handles its own page/chapter navigation in the content
+      // overlay, so we suppress the generic chapter-navigation footer.
+      buildFooter: (_) => const SizedBox.shrink(),
     );
   }
 }
