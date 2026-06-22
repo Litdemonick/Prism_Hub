@@ -223,6 +223,7 @@ class _ComicReaderContentState extends State<ComicReaderContent> {
         width: double.infinity,
         child: LayoutBuilder(
           builder: (context, constraints) {
+            final maxWidth = constraints.maxWidth;
             return Obx(() {
               if (_c.error.value.isNotEmpty) {
                 return Column(
@@ -245,10 +246,14 @@ class _ComicReaderContentState extends State<ComicReaderContent> {
               final readerType = _c.readType.value;
               final currentPage = _c.currentPage.value;
 
+              // Cascade: cap content at 900 px so Mica background shows on sides.
+              final cascadePadding =
+                  maxWidth > 900 ? (maxWidth - 900) / 2 : 0.0;
+
               // ── Cascade (webtoon) mode ───────────────────────────────────
-              // SizedBox with screen dimensions is required so that
-              // ScrollablePositionedList gets a bounded width — without it
-              // images render at their intrinsic (tiny) size.
+              // SizedBox with screen dimensions gives ScrollablePositionedList
+              // a bounded width. Images receive width:infinity so they fill
+              // the available area (constrained by the list to maxWidth).
               if (readerType == MangaReadMode.webTonn) {
                 final sw = MediaQuery.of(context).size.width;
                 final sh = MediaQuery.of(context).size.height;
@@ -270,14 +275,19 @@ class _ComicReaderContentState extends State<ComicReaderContent> {
                         physics: _c.isZoom.value
                             ? const NeverScrollableScrollPhysics()
                             : null,
+                        padding: EdgeInsets.symmetric(
+                            horizontal: cascadePadding),
                         initialScrollIndex: currentPage,
                         itemScrollController: _c.itemScrollController,
                         itemPositionsListener: _c.itemPositionsListener,
                         scrollOffsetController: _c.scrollOffsetController,
                         itemBuilder: (context, index) {
                           final url = images[index];
+                          // width:infinity expands to the list's constrained
+                          // width so images fill the content area.
                           return CacheNetWorkImagePic(
                             url,
+                            width: double.infinity,
                             fit: BoxFit.fitWidth,
                             placeholder: _buildPlaceholder(context),
                             headers: _c.watchData.value?.headers,
@@ -291,9 +301,6 @@ class _ComicReaderContentState extends State<ComicReaderContent> {
               }
 
               // ── Page-by-page mode (standard / rightToLeft) ───────────────
-              // No horizontal padding — images fill full width and BoxFit.contain
-              // handles aspect ratio with natural black bars.
-              const viewPadding = 0.0;
               final isDesktop = !Platform.isAndroid;
 
               return Listener(
@@ -323,19 +330,21 @@ class _ComicReaderContentState extends State<ComicReaderContent> {
                   controller: _c.pageController.value,
                   itemBuilder: (context, index) {
                     final url = images[index];
-                    return Container(
-                      padding:
-                          EdgeInsets.symmetric(horizontal: viewPadding),
-                      child: CacheNetWorkImagePic(
-                        url,
-                        mode: isDesktop
-                            ? ExtendedImageMode.none
-                            : ExtendedImageMode.gesture,
-                        key: ValueKey(url),
-                        fit: BoxFit.contain,
-                        placeholder: _buildPlaceholder(context),
-                        headers: _c.watchData.value?.headers,
-                      ),
+                    // width/height infinity fill the PageView cell (sw×sh).
+                    // BoxFit.contain scales the portrait image to the screen
+                    // height; the Mica background is naturally visible on the
+                    // sides as letterbox — no explicit padding needed.
+                    return CacheNetWorkImagePic(
+                      url,
+                      width: double.infinity,
+                      height: double.infinity,
+                      mode: isDesktop
+                          ? ExtendedImageMode.none
+                          : ExtendedImageMode.gesture,
+                      key: ValueKey(url),
+                      fit: BoxFit.contain,
+                      placeholder: _buildPlaceholder(context),
+                      headers: _c.watchData.value?.headers,
                     );
                   },
                 ),

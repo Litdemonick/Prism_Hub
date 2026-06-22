@@ -85,21 +85,25 @@ class ExtensionUtils {
   static Map<String, ExtensionService> get enabledRuntimes =>
       Map.fromEntries(runtimes.entries.where((e) => isEnabled(e.key)));
 
-  // Extensiones que se auto-instalan en el primer launch (las más útiles para
-  // el core del app). El usuario puede borrarlas; el resto de nativePackages
-  // están disponibles en el catálogo para instalar cuando quiera.
+  // Extensiones que se auto-instalan en el primer launch.
+  // Solo las publicadas en prism+ index.json; añadir aquí solo cuando ya
+  // exista la entrada firmada en el catálogo.
   static const Set<String> defaultPackages = {
     'io.prismhub.jkanime',    // anime ES — múltiples servidores confiables
     'io.prismhub.manhwaweb',  // manhwa/manga ES — ManhwaWeb
-    'io.prismhub.mangadex',   // manga multi-idioma — base universal
   };
 
   // Todos los paquetes oficiales de prism+. Bloqueados de instalar externamente
   // si colisionan con el nombre — se prefiere siempre la build oficial.
   static const Set<String> nativePackages = {
     ...defaultPackages,
-    // Por ahora solo las 3 verificadas. Las nuevas se agregan desde el
-    // programa visual de prism+ y entran al catálogo vía index.json.
+    // Nuevas extensiones se agregan aquí una vez publicadas y firmadas en prism+.
+  };
+
+  // Extensiones que se eliminaron del catálogo y deben borrarse del dispositivo
+  // incluso sin conexión. Añadir aquí cualquier package que se retire de prism+.
+  static const Set<String> _removedPackages = {
+    'io.prismhub.mangadex', // retirado antes del release v1.0.0 — no firmado
   };
 
   // Catálogo oficial vivo: se llena desde el index.json de prism+ en cada
@@ -208,8 +212,13 @@ class ExtensionUtils {
   static ensureInitialized() async {
     // 创建目录
     Directory(extensionsDir).createSync(recursive: true);
+    // Purga offline de paquetes retirados: se elimina el JS aunque no haya red,
+    // así el usuario no ve extensiones obsoletas al abrir la app.
+    _purgeRemovedPackages();
     await _installDefaultsFromRepo();
     await _loadExtensions();
+    // Limpia el Hive disabled-list de entradas muertas (paquetes sin JS).
+    _cleanStaleDisabledList();
     // 监听目录变化
     Directory(extensionsDir).watch().listen((event) async {
       if (path.extension(event.path) == '.js') {
@@ -247,6 +256,37 @@ class ExtensionUtils {
     final file = File(path.join(extensionsDir, '$package.js'));
     if (file.existsSync()) {
       file.deleteSync();
+    }
+  }
+
+  // Borra sin necesidad de red los .js de paquetes retirados del catálogo.
+  static void _purgeRemovedPackages() {
+    for (final pkg in _removedPackages) {
+      try {
+        final f = File(path.join(extensionsDir, '$pkg.js'));
+        if (f.existsSync()) {
+          f.deleteSync();
+          debugPrint('Paquete retirado eliminado del dispositivo: $pkg');
+        }
+      } catch (_) {}
+    }
+  }
+
+  // Elimina del Hive disabled-list los package IDs que ya no tienen JS en disco,
+  // evitando datos muertos que confundan el estado de la UI.
+  static void _cleanStaleDisabledList() {
+    final raw = PrismHubStorage.getSetting(SettingKey.disabledExtensions);
+    if (raw == null) return;
+    final List<String> list =
+        raw is List ? List<String>.from(raw) : <String>[];
+    final existingPkgs = Directory(extensionsDir)
+        .listSync()
+        .where((e) => path.extension(e.path) == '.js')
+        .map((e) => path.basenameWithoutExtension(e.path))
+        .toSet();
+    final cleaned = list.where(existingPkgs.contains).toList();
+    if (cleaned.length != list.length) {
+      PrismHubStorage.setSetting(SettingKey.disabledExtensions, cleaned);
     }
   }
 

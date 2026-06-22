@@ -41,7 +41,7 @@ class ExtensionService {
     // 读取文件
     final file =
         File('${ExtensionUtils.extensionsDir}/${extension.package}.js');
-    final content = file.readAsStringSync();
+    final content = await file.readAsString();
 
     // 初始化runtime
     if (Platform.isAndroid) {
@@ -432,7 +432,6 @@ class Extension {
     return await handlePromise("getSetting$className",JSON.stringify([key]));
   }
   async registerSetting(settings) {
-    console.log(JSON.stringify([settings]));
     this.settingKeys.push(settings.key);
     return await handlePromise("registerSetting$className",JSON.stringify([settings]));
   }
@@ -610,7 +609,6 @@ async function stringify(callback) {
               return sendMessage("getSetting", JSON.stringify([key]));
             }
             async registerSetting(settings) {
-              console.log(JSON.stringify([settings]));
               this.settingKeys.push(settings.key);
               return sendMessage("registerSetting", JSON.stringify([settings]));
             }

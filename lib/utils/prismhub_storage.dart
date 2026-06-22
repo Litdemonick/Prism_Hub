@@ -163,14 +163,14 @@ class PrismHubStorage {
     if (Platform.isAndroid) {
       return settings.get(SettingKey.androidWebviewUA);
     }
-    return settings.get(SettingKey.windowsWebviewUA);
+    return settings.get(SettingKey.windowsWebviewUA); // Windows & Linux
   }
 
   static setUASetting(String value) async {
     if (Platform.isAndroid) {
-      setSetting(SettingKey.androidWebviewUA, value);
+      await setSetting(SettingKey.androidWebviewUA, value);
     } else {
-      setSetting(SettingKey.windowsWebviewUA, value);
+      await setSetting(SettingKey.windowsWebviewUA, value);
     }
   }
 
