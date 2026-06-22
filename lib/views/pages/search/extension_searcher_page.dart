@@ -67,10 +67,15 @@ class _ExtensionSearcherPageState extends fluent.State<ExtensionSearcherPage> {
   }
 
   _initFilters() async {
-    _filters = await _runtime.createFilter();
-    _filters!.forEach((key, value) {
-      _selectedFilters[key] = [value.defaultOption];
-    });
+    try {
+      _filters = await _runtime.createFilter();
+      _filters!.forEach((key, value) {
+        _selectedFilters[key] = [value.defaultOption];
+      });
+    } catch (_) {
+      _filters = {};
+    }
+    if (!mounted) return;
     if (Platform.isAndroid) {
       setState(() {});
     } else {
@@ -380,34 +385,36 @@ class _ExtensionSearcherPageState extends fluent.State<ExtensionSearcherPage> {
               ),
               // Anime grid
               Expanded(
-                child: LayoutBuilder(
-                  builder: (ctx, constraints) => ExcludeSemantics(
-                    child: GridView.builder(
-                      padding: const EdgeInsets.symmetric(
-                          horizontal: 8, vertical: 8),
-                      gridDelegate:
-                          SliverGridDelegateWithFixedCrossAxisCount(
-                        crossAxisCount:
-                            (constraints.maxWidth ~/ 160).clamp(1, 20),
-                        childAspectRatio: 0.6,
-                        crossAxisSpacing: 12,
-                        mainAxisSpacing: 12,
+                child: _isLoading && _browseData.isEmpty
+                    ? const Center(child: fluent.ProgressRing())
+                    : LayoutBuilder(
+                        builder: (ctx, constraints) => ExcludeSemantics(
+                          child: GridView.builder(
+                            padding: const EdgeInsets.symmetric(
+                                horizontal: 8, vertical: 8),
+                            gridDelegate:
+                                SliverGridDelegateWithFixedCrossAxisCount(
+                              crossAxisCount:
+                                  (constraints.maxWidth ~/ 160).clamp(1, 20),
+                              childAspectRatio: 0.6,
+                              crossAxisSpacing: 12,
+                              mainAxisSpacing: 12,
+                            ),
+                            itemCount: _browseData.length,
+                            itemBuilder: (ctx, i) {
+                              final item = _browseData[i];
+                              return ExtensionItemCard(
+                                title: item.title,
+                                url: item.url,
+                                package: widget.package,
+                                cover: item.cover,
+                                update: item.update,
+                                headers: item.headers,
+                              );
+                            },
+                          ),
+                        ),
                       ),
-                      itemCount: _browseData.length,
-                      itemBuilder: (ctx, i) {
-                        final item = _browseData[i];
-                        return ExtensionItemCard(
-                          title: item.title,
-                          url: item.url,
-                          package: widget.package,
-                          cover: item.cover,
-                          update: item.update,
-                          headers: item.headers,
-                        );
-                      },
-                    ),
-                  ),
-                ),
               ),
               // → next page
               SizedBox(
