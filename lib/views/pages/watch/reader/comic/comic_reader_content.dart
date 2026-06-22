@@ -88,14 +88,14 @@ class _ComicReaderContentState extends State<ComicReaderContent> {
             ),
           ),
         ),
-        // Quick mode-toggle buttons — hidden while control panel is visible
-        // to avoid overlapping the Siguiente/Anterior chapter buttons.
+        // Quick mode-toggle buttons — positioned at top-right, below the
+        // 40px header, so they never conflict with the bottom footer
+        // (Siguiente/Anterior) and are always hittable.
         Positioned(
-          bottom: 2,
+          top: 48,
           right: 8,
-          child: Obx(() {
-            if (_c.isShowControlPanel.value) return const SizedBox.shrink();
-            return Row(
+          child: Obx(
+            () => Row(
               mainAxisSize: MainAxisSize.min,
               children: [
                 _buildModeBtn(
@@ -104,8 +104,8 @@ class _ComicReaderContentState extends State<ComicReaderContent> {
                 _buildModeBtn(
                     Icons.menu_book, 'Páginas', MangaReadMode.standard),
               ],
-            );
-          }),
+            ),
+          ),
         ),
       ],
     );
