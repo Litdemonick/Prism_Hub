@@ -1,4 +1,4 @@
-﻿import 'dart:io';
+import 'dart:io';
 
 import 'package:file_picker/file_picker.dart';
 import 'package:fluent_ui/fluent_ui.dart' as fluent;
@@ -81,7 +81,8 @@ class _SettingsPageState extends State<SettingsPage> {
                 PrismHubStorage.setSetting(SettingKey.tmdbKey, value);
                 TmdbApi.tmdb = TMDB(
                   ApiKeys(value, ''),
-                  defaultLanguage: PrismHubStorage.getSetting(SettingKey.language),
+                  defaultLanguage:
+                      PrismHubStorage.getSetting(SettingKey.language),
                 );
               },
               buildText: () {
@@ -293,7 +294,8 @@ class _SettingsPageState extends State<SettingsPage> {
                       button1text: "1s",
                       button2text: "0.1s",
                       onChanged: (value) {
-                        PrismHubStorage.setSetting(SettingKey.keyJ, value ??= 10.0);
+                        PrismHubStorage.setSetting(
+                            SettingKey.keyJ, value ??= 10.0);
                       },
                       numberBoxvalue:
                           PrismHubStorage.getSetting(SettingKey.keyJ) ?? 10.0,
@@ -336,37 +338,6 @@ class _SettingsPageState extends State<SettingsPage> {
                 ],
               ),
             ]
-          ],
-        ),
-      ),
-      const SizedBox(height: 10),
-      // 漫画阅读器设置
-      SettingsExpanderTile(
-        icon: fluent.FluentIcons.reading_mode,
-        androidIcon: Icons.image,
-        title: 'settings.comic-reader'.i18n,
-        subTitle: 'settings.comic-reader-subtitle'.i18n,
-        content: Column(
-          children: [
-            SettingsRadiosTile(
-              title: 'settings.default-reader-mode'.i18n,
-              itemNameValue: () {
-                final map = {
-                  'comic-settings.standard'.i18n: 'standard',
-                  'comic-settings.right-to-left'.i18n: 'rightToLeft',
-                  'comic-settings.web-tonn'.i18n: 'webTonn',
-                };
-                return map;
-              }(),
-              buildSubtitle: () =>
-                  '${PrismHubStorage.getSetting(SettingKey.readingMode)}'.i18n,
-              applyValue: (value) {
-                PrismHubStorage.setSetting(SettingKey.readingMode, value);
-              },
-              buildGroupValue: () {
-                return PrismHubStorage.getSetting(SettingKey.readingMode);
-              },
-            ),
           ],
         ),
       ),

@@ -24,6 +24,7 @@ class CacheNetWorkImagePic extends StatelessWidget {
     this.placeholder,
     this.canFullScreen = false,
     this.mode = ExtendedImageMode.none,
+    this.initGestureConfigHandler,
   });
   final String url;
   final BoxFit fit;
@@ -34,6 +35,7 @@ class CacheNetWorkImagePic extends StatelessWidget {
   final bool canFullScreen;
   final Widget? placeholder;
   final ExtendedImageMode mode;
+  final InitGestureConfigHandler? initGestureConfigHandler;
 
   _errorBuild() {
     if (fallback != null) {
@@ -52,6 +54,7 @@ class CacheNetWorkImagePic extends StatelessWidget {
       height: height,
       cache: true,
       mode: mode,
+      initGestureConfigHandler: initGestureConfigHandler,
       loadStateChanged: (state) {
         switch (state.extendedImageLoadState) {
           case LoadState.loading:

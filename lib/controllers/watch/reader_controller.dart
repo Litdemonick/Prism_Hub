@@ -56,6 +56,13 @@ class ReaderController<T> extends GetxController {
 
   void nextPage() {}
 
+  // Whether clicking the left/right thirds of the screen should page
+  // forward/back (see ReaderView's tap-zone overlay). Readers with a
+  // continuous-scroll mode (e.g. comic's webtoon/cascade) should disable
+  // this — there's no discrete "page" to jump to on click there, and the
+  // overlay firing on top of the content's own gestures causes erratic jumps.
+  bool get clickPagingEnabled => true;
+
   showControlPanel() {
     isShowControlPanel.value = true;
     _timer?.cancel();

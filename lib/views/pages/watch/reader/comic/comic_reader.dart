@@ -2,7 +2,6 @@
 import 'package:get/get.dart';
 import 'package:prismhub/models/extension.dart';
 import 'package:prismhub/views/pages/watch/reader/comic/comic_reader_content.dart';
-import 'package:prismhub/views/pages/watch/reader/comic/comic_reader_settings.dart';
 import 'package:prismhub/controllers/watch/comic_controller.dart';
 import 'package:prismhub/views/widgets/platform_widget.dart';
 // import 'package:prismhub/views/pages/watch/reader/comic/comic_zoom.dart';
@@ -69,7 +68,8 @@ class _ComicReaderState extends State<ComicReader> {
           // DragToMoveArea removed: double-clicking buttons was triggering
           // window maximize/restore via the drag-to-move hook.
           desktopWidget: ComicReaderContent(widget.title)),
-      buildSettings: (context) => ComicReaderSettings(widget.title),
+      // Webtoon is the only reader mode now, so there's nothing to
+      // configure — omit buildSettings and the gear button hides itself.
       // Comic reader handles its own page/chapter navigation in the content
       // overlay, so we suppress the generic chapter-navigation footer.
       buildFooter: (_) => const SizedBox.shrink(),

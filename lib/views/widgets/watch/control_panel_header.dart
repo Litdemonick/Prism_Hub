@@ -16,7 +16,7 @@ class ControlPanelHeader<T extends ReaderController> extends StatefulWidget {
     required this.buildSettings,
   });
   final String tag;
-  final Widget Function(BuildContext context) buildSettings;
+  final Widget Function(BuildContext context)? buildSettings;
 
   @override
   State<ControlPanelHeader> createState() => _ControlPanelHeaderState<T>();
@@ -38,15 +38,16 @@ class _ControlPanelHeaderState<T extends ReaderController>
         child: AppBar(
           title: Text(_c.title),
           actions: [
-            IconButton(
-              onPressed: () {
-                showModalBottomSheet(
-                  context: context,
-                  builder: (context) => widget.buildSettings(context),
-                );
-              },
-              icon: const Icon(Icons.settings),
-            ),
+            if (widget.buildSettings != null)
+              IconButton(
+                onPressed: () {
+                  showModalBottomSheet(
+                    context: context,
+                    builder: (context) => widget.buildSettings!(context),
+                  );
+                },
+                icon: const Icon(Icons.settings),
+              ),
             IconButton(
               onPressed: () {
                 showModalBottomSheet(
@@ -101,18 +102,20 @@ class _ControlPanelHeaderState<T extends ReaderController>
                 ),
               ),
             ),
-            fluent.FlyoutTarget(
-              controller: _settingFlayoutcontroller,
-              child: fluent.IconButton(
-                icon: const Icon(fluent.FluentIcons.settings),
-                onPressed: () {
-                  _settingFlayoutcontroller.showFlyout(builder: (context) {
-                    return widget.buildSettings(context);
-                  });
-                },
+            if (widget.buildSettings != null) ...[
+              fluent.FlyoutTarget(
+                controller: _settingFlayoutcontroller,
+                child: fluent.IconButton(
+                  icon: const Icon(fluent.FluentIcons.settings),
+                  onPressed: () {
+                    _settingFlayoutcontroller.showFlyout(builder: (context) {
+                      return widget.buildSettings!(context);
+                    });
+                  },
+                ),
               ),
-            ),
-            const SizedBox(width: 8),
+              const SizedBox(width: 8),
+            ],
             fluent.FlyoutTarget(
               controller: _playListFlayoutcontroller,
               child: fluent.IconButton(

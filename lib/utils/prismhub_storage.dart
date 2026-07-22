@@ -115,7 +115,9 @@ class PrismHubStorage {
     await _initSetting(SettingKey.prismhubRepoUrl, correctRepoUrl);
     await _initSetting(SettingKey.tmdbKey, "");
     await _initSetting(SettingKey.autoCheckUpdate, true);
-    await _initSetting(SettingKey.language, 'en');
+    final systemLang = Platform.localeName.split('_').first;
+    await _initSetting(
+        SettingKey.language, systemLang.isNotEmpty ? systemLang : 'en');
     await _initSetting(SettingKey.novelFontSize, 18.0);
     await _initSetting(SettingKey.theme, 'system');
     await _initSetting(SettingKey.enableNSFW, false);

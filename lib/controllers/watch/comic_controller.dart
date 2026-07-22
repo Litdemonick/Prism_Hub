@@ -1,4 +1,4 @@
-﻿import 'package:fluent_ui/fluent_ui.dart';
+import 'package:fluent_ui/fluent_ui.dart';
 import 'package:flutter/services.dart';
 import 'package:get/get.dart';
 import 'package:prismhub/data/providers/anilist_provider.dart';
@@ -6,7 +6,6 @@ import 'package:prismhub/models/index.dart';
 import 'package:prismhub/controllers/watch/reader_controller.dart';
 import 'package:prismhub/data/services/database_service.dart';
 import 'package:scrollable_positioned_list/scrollable_positioned_list.dart';
-import 'package:extended_image/extended_image.dart';
 import 'package:prismhub/utils/prismhub_storage.dart';
 
 class ComicController extends ReaderController<ExtensionMangaWatch> {
@@ -20,21 +19,15 @@ class ComicController extends ReaderController<ExtensionMangaWatch> {
     required super.cover,
     required super.anilistID,
   });
-  Map<String, MangaReadMode> readmode = {
-    'standard': MangaReadMode.standard,
-    'rightToLeft': MangaReadMode.rightToLeft,
-    'webTonn': MangaReadMode.webTonn,
-  };
-  final String setting = PrismHubStorage.getSetting(SettingKey.readingMode);
 
-  final readType = MangaReadMode.standard.obs;
+  // Only the webtoon/cascade reader mode is supported — page-by-page
+  // (standard / rightToLeft) was removed.
+  final readType = MangaReadMode.webTonn.obs;
 
   final currentScale = 1.0.obs;
-  // MangaReadMode
   // 当前页码
   final currentPage = 0.obs;
 
-  final pageController = ExtendedPageController().obs;
   final itemPositionsListener = ItemPositionsListener.create();
   final itemScrollController = ItemScrollController();
   final scrollOffsetController = ScrollOffsetController();
@@ -47,8 +40,10 @@ class ComicController extends ReaderController<ExtensionMangaWatch> {
   final isZoom = false.obs;
 
   @override
+  bool get clickPagingEnabled => false;
+
+  @override
   void onInit() {
-    _initSetting();
     itemPositionsListener.itemPositions.addListener(() {
       if (itemPositionsListener.itemPositions.value.isEmpty) {
         return;
@@ -57,14 +52,6 @@ class ComicController extends ReaderController<ExtensionMangaWatch> {
       currentPage.value = pos.index;
     });
 
-    ever(readType, (callback) {
-      _jumpPage(currentPage.value);
-      // 保存设置
-      DatabaseService.setMangaReaderType(
-        super.detailUrl,
-        callback,
-      );
-    });
     // 如果切换章节，重置当前页码
     ever(super.index, (callback) => currentPage.value = 0);
     ever(super.watchData, (callback) async {
@@ -95,70 +82,33 @@ class ComicController extends ReaderController<ExtensionMangaWatch> {
     // 按下 ctrl
     isZoom.value = HardwareKeyboard.instance.isControlPressed;
     if (event is! KeyDownEvent && event is! KeyRepeatEvent) return;
-    // 上下
-    if (event.logicalKey == LogicalKeyboardKey.arrowUp) {
-      if (readType.value == MangaReadMode.webTonn) {
-        return previousPage();
-      }
+    // 上下左右都在同一条竖向滚动上翻页
+    if (event.logicalKey == LogicalKeyboardKey.arrowUp ||
+        event.logicalKey == LogicalKeyboardKey.arrowLeft) {
+      return previousPage();
     }
-    if (event.logicalKey == LogicalKeyboardKey.arrowDown) {
-      if (readType.value == MangaReadMode.webTonn) {
-        return nextPage();
-      }
-    }
-
-    if (event.logicalKey == LogicalKeyboardKey.arrowLeft) {
-      if (readType.value == MangaReadMode.rightToLeft) {
-        return nextPage();
-      }
-      previousPage();
-    }
-
-    if (event.logicalKey == LogicalKeyboardKey.arrowRight) {
-      if (readType.value == MangaReadMode.rightToLeft) {
-        return previousPage();
-      }
-      nextPage();
+    if (event.logicalKey == LogicalKeyboardKey.arrowDown ||
+        event.logicalKey == LogicalKeyboardKey.arrowRight) {
+      return nextPage();
     }
   }
 
-  _initSetting() async {
-    readType.value = readmode[setting] ?? MangaReadMode.standard;
-    readType.value = await DatabaseService.getMnagaReaderType(
-      super.detailUrl,
-      readType.value,
-    );
-  }
-
-  _jumpPage(int page) async {
-    if (readType.value == MangaReadMode.webTonn) {
-      if (itemScrollController.isAttached) {
-        itemScrollController.jumpTo(
-          index: page,
-        );
-      }
-      return;
+  _jumpPage(int page) {
+    if (itemScrollController.isAttached) {
+      itemScrollController.jumpTo(index: page);
     }
-    if (pageController.value.hasClients) {
-      pageController.value.jumpToPage(page);
-      return;
-    }
-    pageController.value = ExtendedPageController(initialPage: page);
   }
 
   // 下一页
   @override
   void nextPage() {
-    if (readType.value != MangaReadMode.webTonn) {
-      pageController.value.nextPage(
+    final next = currentPage.value + 1;
+    final count = watchData.value?.urls.length ?? 0;
+    if (next < count && itemScrollController.isAttached) {
+      itemScrollController.scrollTo(
+        index: next,
         duration: const Duration(milliseconds: 300),
         curve: Curves.ease,
-      );
-    } else {
-      scrollOffsetController.animateScroll(
-        duration: const Duration(milliseconds: 100),
-        curve: Curves.ease,
-        offset: 200.0,
       );
     }
   }
@@ -166,16 +116,12 @@ class ComicController extends ReaderController<ExtensionMangaWatch> {
   // 上一页
   @override
   void previousPage() {
-    if (readType.value != MangaReadMode.webTonn) {
-      pageController.value.previousPage(
+    final prev = (currentPage.value - 1).clamp(0, 9999);
+    if (itemScrollController.isAttached) {
+      itemScrollController.scrollTo(
+        index: prev,
         duration: const Duration(milliseconds: 300),
         curve: Curves.ease,
-      );
-    } else {
-      scrollOffsetController.animateScroll(
-        duration: const Duration(milliseconds: 100),
-        curve: Curves.ease,
-        offset: -200.0,
       );
     }
   }
@@ -190,7 +136,8 @@ class ComicController extends ReaderController<ExtensionMangaWatch> {
         pages.toString(),
       );
     }
-    if (PrismHubStorage.getSetting(SettingKey.autoTracking) && anilistID != "") {
+    if (PrismHubStorage.getSetting(SettingKey.autoTracking) &&
+        anilistID != "") {
       AniListProvider.editList(
         status: AnilistMediaListStatus.current,
         progress: playIndex + 1,
