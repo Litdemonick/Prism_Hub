@@ -35,11 +35,19 @@ jobs:
           KEYSTORE_PASSWORD: ${{ secrets.KEYSTORE_PASSWORD }}
           KEY_ALIAS: ${{ secrets.KEY_ALIAS }}
           KEY_PASSWORD: ${{ secrets.KEY_PASSWORD }}
+      - name: Rename APKs
+        run: |
+          cd build/app/outputs/flutter-apk
+          for f in app-*-release.apk; do
+            arch="${f#app-}"
+            arch="${arch%-release.apk}"
+            mv "$f" "PrismHub-${{ github.ref_name }}-$arch.apk"
+          done
       - name: Release Android
         uses: ncipollo/release-action@v1
         with:
           token: ${{ secrets.GITHUB_TOKEN }}
-          artifacts: "build/app/outputs/flutter-apk/app-*.apk"
+          artifacts: "build/app/outputs/flutter-apk/PrismHub-*.apk"
           allowUpdates: true
           omitBody: true
 
