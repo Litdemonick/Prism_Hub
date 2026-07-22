@@ -1,99 +1,46 @@
-﻿import 'package:fluent_ui/fluent_ui.dart' as fluent;
-import 'package:flutter/material.dart';
-import 'package:prismhub/models/history.dart';
-import 'package:prismhub/views/widgets/home/home_resent_card.dart';
-import 'package:prismhub/utils/i18n.dart';
-import 'package:prismhub/views/widgets/platform_widget.dart';
+import 'dart:io';
 
-class HomeRecent extends StatefulWidget {
+import 'package:flutter/material.dart';
+import 'package:get/get.dart';
+import 'package:prismhub/models/history.dart';
+import 'package:prismhub/router/router.dart';
+import 'package:prismhub/views/pages/history_page.dart';
+import 'package:prismhub/views/widgets/home/home_resent_card.dart';
+import 'package:prismhub/views/widgets/horizontal_list.dart';
+import 'package:prismhub/utils/i18n.dart';
+
+class HomeRecent extends StatelessWidget {
   const HomeRecent({
     super.key,
     required this.data,
   });
   final List<History> data;
 
-  @override
-  State<HomeRecent> createState() => _HomeRecentState();
-}
-
-class _HomeRecentState extends State<HomeRecent> {
-  ScrollController horizontalController = ScrollController();
-
-  _horzontalMove(bool left) {
-    horizontalController.animateTo(
-        horizontalController.offset + (left ? -350 : 350),
-        duration: const Duration(milliseconds: 500),
-        curve: Curves.ease);
-  }
-
-  Widget _buildAndroidHomeRecent(BuildContext context) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        SizedBox(
-          height: 200,
-          child: ListView.builder(
-            scrollDirection: Axis.horizontal,
-            controller: horizontalController,
-            itemCount: widget.data.length,
-            itemBuilder: (context, index) {
-              return HomeRecentCard(history: widget.data[index]);
-            },
-          ),
-        ),
-      ],
-    );
-  }
-
-  Widget _buildDesktopHomeRecent(BuildContext context) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Row(
-          mainAxisAlignment: MainAxisAlignment.spaceBetween,
-          children: [
-            Text(
-              "home.continue-watching".i18n,
-              style: const TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
-            ),
-            Row(
-              children: [
-                fluent.IconButton(
-                    icon: const Icon(fluent.FluentIcons.chevron_left),
-                    onPressed: () {
-                      _horzontalMove(true);
-                    }),
-                const SizedBox(width: 8),
-                fluent.IconButton(
-                    icon: const Icon(fluent.FluentIcons.chevron_right),
-                    onPressed: () {
-                      _horzontalMove(false);
-                    })
-              ],
-            )
-          ],
-        ),
-        const SizedBox(height: 16),
-        SizedBox(
-          height: 200,
-          child: ListView.builder(
-            scrollDirection: Axis.horizontal,
-            controller: horizontalController,
-            itemCount: widget.data.length,
-            itemBuilder: (context, index) {
-              return HomeRecentCard(history: widget.data[index]);
-            },
-          ),
-        ),
-      ],
-    );
+  void _openHistoryPage() {
+    if (Platform.isAndroid) {
+      Get.to(const HistoryPage());
+      return;
+    }
+    router.push('/history');
   }
 
   @override
   Widget build(BuildContext context) {
-    return PlatformBuildWidget(
-      androidBuilder: _buildAndroidHomeRecent,
-      desktopBuilder: _buildDesktopHomeRecent,
+    return HorizontalList(
+      title: "home.continue-watching".i18n,
+      onClickMore: _openHistoryPage,
+      // contentBuilder (not itemBuilder) — itemBuilder wraps each item in a
+      // fixed 110/170px-wide box, but HomeRecentCard renders itself at a
+      // hardcoded 350px; this keeps the original unconstrained ListView.
+      contentBuilder: (controller) => SizedBox(
+        height: 200,
+        child: ListView.builder(
+          scrollDirection: Axis.horizontal,
+          controller: controller,
+          itemCount: data.length,
+          itemBuilder: (context, index) => HomeRecentCard(history: data[index]),
+        ),
+      ),
     );
   }
 }

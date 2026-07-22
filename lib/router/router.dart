@@ -11,6 +11,7 @@ import 'package:prismhub/views/pages/extension/extension_page.dart';
 import 'package:prismhub/views/pages/extension/extension_repo_page.dart';
 import 'package:prismhub/views/pages/extension/extension_settings_page.dart';
 import 'package:prismhub/views/pages/favorites_page.dart';
+import 'package:prismhub/views/pages/history_page.dart';
 import 'package:prismhub/views/pages/home_page.dart';
 import 'package:prismhub/views/pages/main_page.dart';
 import 'package:prismhub/views/pages/search/extension_searcher_page.dart';
@@ -45,6 +46,17 @@ final router = GoRouter(
         GoRoute(
           path: '/',
           builder: (context, state) => _animation(const HomePage()),
+        ),
+        GoRoute(
+          path: '/history',
+          builder: (context, state) => _animation(
+            HistoryPage(
+              initialTab: int.tryParse(
+                    state.uri.queryParameters['tab'] ?? '',
+                  ) ??
+                  0,
+            ),
+          ),
         ),
         GoRoute(
           path: '/favorites',
