@@ -123,11 +123,17 @@ class _AppRootState extends State<_AppRoot> {
   }
 
   Future<void> _init() async {
+    // Duración mínima: en una red rápida esta inicialización termina en
+    // milisegundos y la animación del splash ni se alcanza a ver — se fuerza
+    // a que el splash quede visible al menos este tiempo, sin importar qué
+    // tan rápido termine todo lo demás.
+    final minDuration = Future.delayed(const Duration(milliseconds: 1400));
     PrismLog.ensureInitialized();
     await ApplicationUtils.ensureInitialized();
     await PrismRequest.ensureInitialized();
     await ExtensionUtils.ensureInitialized();
     MediaKit.ensureInitialized();
+    await minDuration;
     if (mounted) setState(() => _ready = true);
   }
 
