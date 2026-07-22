@@ -38,6 +38,9 @@ class _DetailAppbarTitleState extends State<DetailAppbarTitle> {
   Widget build(BuildContext context) {
     return Text(
       widget.text,
+      maxLines: 1,
+      overflow: TextOverflow.ellipsis,
+      softWrap: false,
       style: TextStyle(
         color: Theme.of(context)
             .textTheme

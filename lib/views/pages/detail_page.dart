@@ -309,6 +309,7 @@ class _DetailPageState extends State<DetailPage> {
                             children: [
                               SelectableText(
                                 c.detail?.title ?? '',
+                                maxLines: 2,
                                 style: const TextStyle(
                                   fontSize: 30,
                                   fontWeight: FontWeight.bold,
