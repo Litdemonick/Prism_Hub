@@ -137,3 +137,8 @@ if(NOT CMAKE_BUILD_TYPE MATCHES "Debug")
   install(FILES "${AOT_LIBRARY}" DESTINATION "${INSTALL_BUNDLE_LIB_DIR}"
     COMPONENT Runtime)
 endif()
+
+# App icon — install.sh/PKGBUILD expect icon.png at the bundle root to wire
+# up the .desktop entry and /usr/share/pixmaps.
+install(FILES "${CMAKE_CURRENT_SOURCE_DIR}/icon.png" DESTINATION "${CMAKE_INSTALL_PREFIX}"
+  COMPONENT Runtime)
