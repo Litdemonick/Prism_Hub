@@ -117,6 +117,38 @@ class DatabaseService {
     return db.writeTxn(() => db.historys.where().deleteAll());
   }
 
+  // 按类型删除历史 (null = 全部)
+  static Future<void> deleteHistoryByType(ExtensionType? type) async {
+    if (type == null) {
+      return deleteAllHistory();
+    }
+    return db.writeTxn(
+      () => db.historys.filter().typeEqualTo(type).deleteAll(),
+    );
+  }
+
+  // 删除单个收藏
+  static Future<void> deleteFavorite(String package, String url) async {
+    return db.writeTxn(
+      () => db.favorites
+          .filter()
+          .packageEqualTo(package)
+          .and()
+          .urlEqualTo(url)
+          .deleteAll(),
+    );
+  }
+
+  // 按类型删除收藏 (null = 全部)
+  static Future<void> deleteFavoritesByType(ExtensionType? type) async {
+    if (type == null) {
+      return db.writeTxn(() => db.favorites.where().deleteAll());
+    }
+    return db.writeTxn(
+      () => db.favorites.filter().typeEqualTo(type).deleteAll(),
+    );
+  }
+
   // 扩展设置
   // 获取扩展设置
   static Future<List<ExtensionSetting>> getExtensionSettings(String package) {

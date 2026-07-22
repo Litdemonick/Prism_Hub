@@ -1,5 +1,6 @@
 ﻿import 'package:flutter/material.dart';
 import 'package:get/get.dart';
+import 'package:prismhub/models/extension.dart';
 import 'package:prismhub/views/pages/detail_page.dart';
 import 'package:prismhub/router/router.dart';
 import 'package:prismhub/views/widgets/grid_item_tile.dart';
@@ -14,6 +15,7 @@ class ExtensionItemCard extends StatefulWidget {
     this.cover,
     this.update,
     this.headers,
+    this.type,
   });
   final String title;
   final String? cover;
@@ -21,6 +23,8 @@ class ExtensionItemCard extends StatefulWidget {
   final String url;
   final String package;
   final Map<String, String>? headers;
+  // Solo se pasa desde Home — en el resto de la app queda null.
+  final ExtensionType? type;
 
   @override
   State<ExtensionItemCard> createState() => _ExtensionItemCardState();
@@ -35,6 +39,7 @@ class _ExtensionItemCardState extends State<ExtensionItemCard> {
         cover: widget.cover,
         subtitle: widget.update,
         headers: widget.headers,
+        type: widget.type,
         onTap: () {
           Get.to(DetailPage(
             url: widget.url,
@@ -52,6 +57,7 @@ class _ExtensionItemCardState extends State<ExtensionItemCard> {
       cover: widget.cover,
       subtitle: widget.update,
       headers: widget.headers,
+      type: widget.type,
       onTap: () {
         router.push(
           Uri(

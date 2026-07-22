@@ -1,4 +1,4 @@
-﻿import 'dart:io';
+import 'dart:io';
 
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
@@ -12,12 +12,12 @@ class ReaderView<T extends ReaderController> extends StatelessWidget {
     this.tag, {
     super.key,
     required this.content,
-    required this.buildSettings,
+    this.buildSettings,
     this.buildFooter,
   });
   final String tag;
   final Widget content;
-  final Widget Function(BuildContext context) buildSettings;
+  final Widget Function(BuildContext context)? buildSettings;
   final Widget Function(BuildContext context)? buildFooter;
 
   @override
@@ -47,15 +47,19 @@ class ReaderView<T extends ReaderController> extends StatelessWidget {
               top: 120,
               bottom: 120,
               left: 0,
-              right: 0,
+              // Leave the system scrollbar's hit strip free on desktop —
+              // this overlay is translucent, so its tap recognizer competes
+              // in the same gesture arena as the scrollbar's own drag
+              // recognizer for any click/drag over it, causing the
+              // scrollbar to jump erratically instead of dragging smoothly.
+              right: Platform.isAndroid ? 0 : 20,
               child: GestureDetector(
                 behavior: HitTestBehavior.translucent,
                 onTap: () {
                   // On Android the left/right zones just toggle the panel;
                   // page navigation is handled by the comic's own controls.
                   if (Platform.isAndroid) {
-                    c.isShowControlPanel.value =
-                        !c.isShowControlPanel.value;
+                    c.isShowControlPanel.value = !c.isShowControlPanel.value;
                     return;
                   }
                   // Desktop: left third → prev, right third → next, center → panel.
@@ -65,6 +69,11 @@ class ReaderView<T extends ReaderController> extends StatelessWidget {
                 onTapUp: Platform.isAndroid
                     ? null
                     : (details) {
+                        if (!c.clickPagingEnabled) {
+                          c.isShowControlPanel.value =
+                              !c.isShowControlPanel.value;
+                          return;
+                        }
                         final xPos = details.globalPosition.dx;
                         final width = LayoutUtils.width;
                         final unitWidth = width / 3;

@@ -25,7 +25,7 @@
     "previous": "Предыдущее",
     "show-all": "Показать всё",
     "delete": "Удалить",
-    "delete-all": "Удалить всё"
+    "delete-all": "Удалить всё",
     "save": "Сохранить",
     "save-success": "Сохранение прошло успешно",
     "logout": "Выйти",
@@ -41,7 +41,7 @@
     "continue-watching": "Продолжить",
     "favorite": "Избранное",
     "no-record": "Нет избранного или просмотра записей",
-    "watched": "Просмотрен {ep}"
+    "watched": "Просмотрен {ep}",
     "favorite-all": "Все {type} избранные"
   },
   "search": {
@@ -233,7 +233,7 @@
   "extension-type": {
     "video": "Видео",
     "novel": "Новелла",
-    "comic": "Комикс"
+    "comic": "Манга"
   },
   "extension-info": {
     "author": "Автор",

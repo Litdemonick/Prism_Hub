@@ -16,7 +16,7 @@ class ControlPanelHeader<T extends ReaderController> extends StatefulWidget {
     required this.buildSettings,
   });
   final String tag;
-  final Widget Function(BuildContext context) buildSettings;
+  final Widget Function(BuildContext context)? buildSettings;
 
   @override
   State<ControlPanelHeader> createState() => _ControlPanelHeaderState<T>();
@@ -38,15 +38,16 @@ class _ControlPanelHeaderState<T extends ReaderController>
         child: AppBar(
           title: Text(_c.title),
           actions: [
-            IconButton(
-              onPressed: () {
-                showModalBottomSheet(
-                  context: context,
-                  builder: (context) => widget.buildSettings(context),
-                );
-              },
-              icon: const Icon(Icons.settings),
-            ),
+            if (widget.buildSettings != null)
+              IconButton(
+                onPressed: () {
+                  showModalBottomSheet(
+                    context: context,
+                    builder: (context) => widget.buildSettings!(context),
+                  );
+                },
+                icon: const Icon(Icons.settings),
+              ),
             IconButton(
               onPressed: () {
                 showModalBottomSheet(
@@ -81,64 +82,72 @@ class _ControlPanelHeaderState<T extends ReaderController>
         height: 40,
         color: fluent.FluentTheme.of(context).micaBackgroundColor,
         padding: const EdgeInsets.only(left: 16),
-        child: DragToMoveArea(
-          child: Row(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              fluent.IconButton(
-                icon: const Icon(fluent.FluentIcons.back),
-                onPressed: () {
-                  RouterUtils.pop();
-                },
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            fluent.IconButton(
+              icon: const Icon(fluent.FluentIcons.back),
+              onPressed: () {
+                RouterUtils.pop();
+              },
+            ),
+            const SizedBox(width: 16),
+            // DragToMoveArea only on the title text — buttons stay outside
+            // so clicking them never accidentally drags the window.
+            Expanded(
+              child: DragToMoveArea(
+                child: Text(
+                  _c.title + _c.playList[_c.index.value].name,
+                  overflow: TextOverflow.ellipsis,
+                ),
               ),
-              const SizedBox(width: 16),
-              Text(_c.title + _c.playList[_c.index.value].name),
-              const Spacer(),
+            ),
+            if (widget.buildSettings != null) ...[
               fluent.FlyoutTarget(
                 controller: _settingFlayoutcontroller,
                 child: fluent.IconButton(
                   icon: const Icon(fluent.FluentIcons.settings),
                   onPressed: () {
                     _settingFlayoutcontroller.showFlyout(builder: (context) {
-                      return widget.buildSettings(context);
+                      return widget.buildSettings!(context);
                     });
                   },
                 ),
               ),
               const SizedBox(width: 8),
-              fluent.FlyoutTarget(
-                controller: _playListFlayoutcontroller,
-                child: fluent.IconButton(
-                  icon: const Icon(fluent.FluentIcons.collapse_menu),
-                  onPressed: () {
-                    _playListFlayoutcontroller.showFlyout(builder: (context) {
-                      return SizedBox(
-                        width: 300,
-                        child: Obx(
-                          () => PlayList(
-                            title: _c.title,
-                            list: _c.playList.map((e) => e.name).toList(),
-                            selectIndex: _c.index.value,
-                            onChange: (value) {
-                              _c.index.value = value;
-                              router.pop();
-                            },
-                          ),
-                        ),
-                      );
-                    });
-                  },
-                ),
-              ),
-              SizedBox(
-                width: 138,
-                child: WindowCaption(
-                  backgroundColor: Colors.transparent,
-                  brightness: fluent.FluentTheme.of(context).brightness,
-                ),
-              )
             ],
-          ),
+            fluent.FlyoutTarget(
+              controller: _playListFlayoutcontroller,
+              child: fluent.IconButton(
+                icon: const Icon(fluent.FluentIcons.collapse_menu),
+                onPressed: () {
+                  _playListFlayoutcontroller.showFlyout(builder: (context) {
+                    return SizedBox(
+                      width: 300,
+                      child: Obx(
+                        () => PlayList(
+                          title: _c.title,
+                          list: _c.playList.map((e) => e.name).toList(),
+                          selectIndex: _c.index.value,
+                          onChange: (value) {
+                            _c.index.value = value;
+                            router.pop();
+                          },
+                        ),
+                      ),
+                    );
+                  });
+                },
+              ),
+            ),
+            SizedBox(
+              width: 138,
+              child: WindowCaption(
+                backgroundColor: Colors.transparent,
+                brightness: fluent.FluentTheme.of(context).brightness,
+              ),
+            ),
+          ],
         ),
       ).animate().fade(),
     );

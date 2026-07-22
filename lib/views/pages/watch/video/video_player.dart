@@ -1,5 +1,4 @@
 ﻿import 'package:flutter/material.dart';
-import 'package:flutter_animate/flutter_animate.dart';
 import 'package:get/get.dart';
 import 'package:prismhub/models/extension.dart';
 import 'package:prismhub/controllers/watch/video_controller.dart';
@@ -61,16 +60,16 @@ class _VideoPlayerState extends State<VideoPlayer> {
   _buildContent() {
     return Obx(() {
       final maxWidth = MediaQuery.of(context).size.width;
+      // El área del video SIEMPRE usa Expanded (nunca un ancho fijo en
+      // píxeles): un ancho calculado a partir de MediaQuery queda un
+      // instante desincronizado del tamaño real de la ventana durante un
+      // resize (ej. entrar/salir de pantalla completa), y como esta Row
+      // tiene un segundo hijo (el sidebar), eso desborda la Row. Solo el
+      // sidebar anima con un ancho fijo (0↔300), un rango acotado que no
+      // depende del tamaño de la ventana.
       return Row(
         children: [
-          AnimatedContainer(
-            onEnd: () {
-              _c.isOpenSidebar.value = _c.showSidebar.value;
-            },
-            width: _c.showSidebar.value
-                ? MediaQuery.of(context).size.width - 300
-                : maxWidth,
-            duration: const Duration(milliseconds: 120),
+          Expanded(
             child: Stack(
               children: [
                 VideoPlayerConten(tag: widget.title),
@@ -103,12 +102,25 @@ class _VideoPlayerState extends State<VideoPlayer> {
               ],
             ),
           ),
-          if (_c.isOpenSidebar.value)
-            Expanded(
-              child: VideoPlayerSidebar(
-                controller: _c,
-              ),
-            )
+          AnimatedContainer(
+            onEnd: () {
+              _c.isOpenSidebar.value = _c.showSidebar.value;
+            },
+            width: _c.showSidebar.value ? 300 : 0,
+            duration: const Duration(milliseconds: 120),
+            clipBehavior: Clip.hardEdge,
+            decoration: const BoxDecoration(),
+            child: _c.isOpenSidebar.value || _c.showSidebar.value
+                ? OverflowBox(
+                    minWidth: 300,
+                    maxWidth: 300,
+                    alignment: Alignment.centerRight,
+                    child: VideoPlayerSidebar(
+                      controller: _c,
+                    ),
+                  )
+                : null,
+          ),
         ],
       );
     });

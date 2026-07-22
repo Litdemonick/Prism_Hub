@@ -440,65 +440,91 @@ class _VideoPlayerMobileControlsState extends State<VideoPlayerMobileControls> {
                     elevation: 0,
                     child: Padding(
                       padding: const EdgeInsets.all(10),
-                      child: Row(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          if (_c.runtime.extension.icon != null)
-                            Container(
-                              decoration: const BoxDecoration(
-                                shape: BoxShape.circle,
-                              ),
-                              clipBehavior: Clip.antiAlias,
-                              margin: const EdgeInsets.only(right: 10),
-                              child: CacheNetWorkImagePic(
-                                _c.runtime.extension.icon!,
-                                width: 30,
-                                height: 30,
-                              ),
-                            ),
-                          Column(
-                            mainAxisSize: MainAxisSize.min,
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Text(
-                                _c.runtime.extension.name,
-                                style: const TextStyle(
-                                  fontSize: 16,
-                                  fontWeight: FontWeight.bold,
+                      child: ConstrainedBox(
+                        constraints: BoxConstraints(
+                          maxWidth: LayoutUtils.width * 0.8,
+                        ),
+                        child: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            if (_c.runtime.extension.icon != null)
+                              Container(
+                                decoration: const BoxDecoration(
+                                  shape: BoxShape.circle,
+                                ),
+                                clipBehavior: Clip.antiAlias,
+                                margin: const EdgeInsets.only(right: 10),
+                                child: CacheNetWorkImagePic(
+                                  _c.runtime.extension.icon!,
+                                  width: 30,
+                                  height: 30,
                                 ),
                               ),
-                              Text(
-                                'video.getting-streamlink'.i18n,
-                                style: const TextStyle(
-                                  fontSize: 14,
-                                  fontWeight: FontWeight.w300,
-                                ),
+                            Flexible(
+                              child: Column(
+                                mainAxisSize: MainAxisSize.min,
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Text(
+                                    _c.runtime.extension.name,
+                                    maxLines: 1,
+                                    overflow: TextOverflow.ellipsis,
+                                    style: const TextStyle(
+                                      fontSize: 16,
+                                      fontWeight: FontWeight.bold,
+                                    ),
+                                  ),
+                                  Text(
+                                    'video.getting-streamlink'.i18n,
+                                    maxLines: 1,
+                                    overflow: TextOverflow.ellipsis,
+                                    style: const TextStyle(
+                                      fontSize: 14,
+                                      fontWeight: FontWeight.w300,
+                                    ),
+                                  ),
+                                ],
                               ),
-                            ],
-                          )
-                        ],
+                            )
+                          ],
+                        ),
                       ),
                     ),
                   );
                 }),
               ),
             ),
-            // 头部控制栏 — siempre visible (a pedido del usuario): el botón de
-            // servidores y demás controles no se ocultan en ningún dispositivo.
+            // Header y footer — se ocultan al tocar la pantalla y vuelven a
+            // aparecer con otro toque (o solos a los 3s si estaban visibles).
+            // IgnorePointer cuando están ocultos: evita que un botón invisible
+            // siga siendo tocable.
             Positioned(
               top: 0,
               left: 0,
               right: 0,
-              child: _Header(
-                controller: _c,
+              child: IgnorePointer(
+                ignoring: !_showControls,
+                child: AnimatedOpacity(
+                  opacity: _showControls ? 1 : 0,
+                  duration: const Duration(milliseconds: 200),
+                  child: _Header(
+                    controller: _c,
+                  ),
+                ),
               ),
             ),
-            // 底部控制栏 — siempre visible.
             Positioned(
               bottom: 0,
               left: 0,
               right: 0,
-              child: _Footer(controller: _c),
+              child: IgnorePointer(
+                ignoring: !_showControls,
+                child: AnimatedOpacity(
+                  opacity: _showControls ? 1 : 0,
+                  duration: const Duration(milliseconds: 200),
+                  child: _Footer(controller: _c),
+                ),
+              ),
             ),
             Positioned.fill(
               child: Obx(

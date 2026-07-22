@@ -1,6 +1,5 @@
-﻿import 'package:flutter/material.dart';
+import 'package:flutter/material.dart';
 import 'package:get/get.dart';
-import 'package:prismhub/models/extension.dart';
 import 'package:prismhub/controllers/home_controller.dart';
 import 'package:prismhub/views/widgets/home/home_favorites.dart';
 import 'package:prismhub/views/widgets/home/home_recent.dart';
@@ -26,8 +25,7 @@ class _HomePageState extends State<HomePage> {
   Widget _buildContent() {
     return Obx(
       () {
-        if (c.resents.isEmpty &&
-            c.favorites.values.every((element) => element.isEmpty)) {
+        if (c.resents.isEmpty && c.favorites.isEmpty) {
           return Center(
             child: Column(
               mainAxisAlignment: MainAxisAlignment.center,
@@ -60,20 +58,7 @@ class _HomePageState extends State<HomePage> {
                   ),
                   const SizedBox(height: 16),
                 ],
-                if (c.favorites.isNotEmpty) ...[
-                  HomeFavorites(
-                    type: ExtensionType.bangumi,
-                    data: c.favorites[ExtensionType.bangumi]!,
-                  ),
-                  HomeFavorites(
-                    type: ExtensionType.manga,
-                    data: c.favorites[ExtensionType.manga]!,
-                  ),
-                  HomeFavorites(
-                    type: ExtensionType.fikushon,
-                    data: c.favorites[ExtensionType.fikushon]!,
-                  ),
-                ]
+                if (c.favorites.isNotEmpty) HomeFavorites(data: c.favorites)
               ],
             ),
           ),

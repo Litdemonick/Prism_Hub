@@ -56,10 +56,14 @@
   },
   "home": {
     "continue-watching": "Continue",
-    "favorite": "Favorite",
+    "favorite": "Favorites",
     "no-record": "No favorites or viewing records",
     "watched": "Watched {ep}",
-    "favorite-all": "All {type} favorites"
+    "watched-episode": "Watched Episode {ep}",
+    "watched-chapter": "Watched Chapter {ep}",
+    "favorite-all": "All {type} favorites",
+    "history": "History",
+    "clear-history-confirm": "Delete everything? This can't be undone."
   },
   "search": {
     "hint-text": "Please use search wisely!~",
@@ -263,7 +267,7 @@
   "extension-type": {
     "video": "Video",
     "novel": "Novel",
-    "comic": "Comic"
+    "comic": "Manga"
   },
   "extension-info": {
     "author": "Author",

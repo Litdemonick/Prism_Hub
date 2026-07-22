@@ -1,4 +1,4 @@
-﻿import 'dart:convert';
+import 'dart:convert';
 import 'dart:io';
 
 import 'package:flutter/material.dart';
@@ -104,18 +104,20 @@ class PrismHubStorage {
   }
 
   static _initSettings() async {
-    const correctRepoUrl = "https://raw.githubusercontent.com/Litdemonick/prism-plus/main";
+    const correctRepoUrl =
+        "https://raw.githubusercontent.com/Litdemonick/prism-plus/main";
     final savedUrl = settings.get(SettingKey.prismhubRepoUrl);
-    if (savedUrl != null && (
-      savedUrl.toString().contains("jephersonrd.github.io") ||
-      savedUrl.toString().contains("jephersonRD/JiruHub")
-    )) {
+    if (savedUrl != null &&
+        (savedUrl.toString().contains("jephersonrd.github.io") ||
+            savedUrl.toString().contains("jephersonRD/JiruHub"))) {
       await settings.put(SettingKey.prismhubRepoUrl, correctRepoUrl);
     }
     await _initSetting(SettingKey.prismhubRepoUrl, correctRepoUrl);
     await _initSetting(SettingKey.tmdbKey, "");
     await _initSetting(SettingKey.autoCheckUpdate, true);
-    await _initSetting(SettingKey.language, 'en');
+    final systemLang = Platform.localeName.split('_').first;
+    await _initSetting(
+        SettingKey.language, systemLang.isNotEmpty ? systemLang : 'en');
     await _initSetting(SettingKey.novelFontSize, 18.0);
     await _initSetting(SettingKey.theme, 'system');
     await _initSetting(SettingKey.enableNSFW, false);
@@ -140,7 +142,8 @@ class PrismHubStorage {
     await _initSetting(SettingKey.subtitleFontSize, 46.0);
     await _initSetting(SettingKey.subtitleFontColor, Colors.white.toARGB32());
     await _initSetting(SettingKey.subtitleFontWeight, 'bold');
-    await _initSetting(SettingKey.subtitleBackgroundColor, Colors.black.toARGB32());
+    await _initSetting(
+        SettingKey.subtitleBackgroundColor, Colors.black.toARGB32());
     await _initSetting(SettingKey.subtitleBackgroundOpacity, 0.5);
     await _initSetting(SettingKey.subtitleTextAlign, TextAlign.center.index);
   }

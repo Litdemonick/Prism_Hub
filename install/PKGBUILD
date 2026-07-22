@@ -2,7 +2,7 @@
 # PKGBUILD for PrismHub binary release
 
 pkgname=prismhub-bin
-pkgver=0.1.0
+pkgver=1.0.0
 pkgrel=1
 pkgdesc="PrismHub - Anime, manga and multimedia player (binary release)"
 arch=('x86_64')

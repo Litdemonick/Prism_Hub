@@ -1,5 +1,7 @@
 ﻿import 'package:flutter/material.dart';
+import 'package:prismhub/models/extension.dart';
 import 'package:prismhub/views/widgets/cover.dart';
+import 'package:prismhub/views/widgets/extension_type_badge.dart';
 import 'package:prismhub/views/widgets/platform_widget.dart';
 
 class GridItemTile extends StatefulWidget {
@@ -10,12 +12,16 @@ class GridItemTile extends StatefulWidget {
     this.subtitle,
     this.onTap,
     this.headers,
+    this.type,
   });
   final String title;
   final String? cover;
   final String? subtitle;
   final Function()? onTap;
   final Map<String, String>? headers;
+  // Solo se pasa desde Home (Continuar/Favoritos) — en el resto de la app
+  // queda null y no se dibuja nada.
+  final ExtensionType? type;
 
   @override
   State<GridItemTile> createState() => _GridItemTileState();
@@ -38,6 +44,12 @@ class _GridItemTileState extends State<GridItemTile> {
             headers: widget.headers,
           ),
         ),
+        if (widget.type != null)
+          Positioned(
+            top: 6,
+            left: 6,
+            child: ExtensionTypeBadge(type: widget.type!),
+          ),
         Positioned(
             left: 0,
             right: 0,
@@ -131,14 +143,24 @@ class _GridItemTileState extends State<GridItemTile> {
                     borderRadius: BorderRadius.all(Radius.circular(8)),
                   ),
                   clipBehavior: Clip.antiAlias,
-                  child: AnimatedScale(
-                    scale: _isHover ? 1.05 : 1,
-                    duration: const Duration(milliseconds: 80),
-                    child: Cover(
-                      alt: widget.title,
-                      url: widget.cover,
-                      headers: widget.headers,
-                    ),
+                  child: Stack(
+                    children: [
+                      AnimatedScale(
+                        scale: _isHover ? 1.05 : 1,
+                        duration: const Duration(milliseconds: 80),
+                        child: Cover(
+                          alt: widget.title,
+                          url: widget.cover,
+                          headers: widget.headers,
+                        ),
+                      ),
+                      if (widget.type != null)
+                        Positioned(
+                          top: 6,
+                          left: 6,
+                          child: ExtensionTypeBadge(type: widget.type!),
+                        ),
+                    ],
                   )),
             ),
           ),

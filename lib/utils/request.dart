@@ -16,7 +16,18 @@ class PrismRequest {
   static bool _isInitialized = false;
 
   static Future<void> ensureInitialized() async {
-    dio = Dio();
+    // Sin connectTimeout, Dio espera indefinidamente a que abra la conexión.
+    // En redes restrictivas (ej. universidad con proxy/inspección SSL o DNS
+    // lento) eso nunca falla ni se reintenta — para el usuario, "la extensión
+    // no carga" y se queda así para siempre. NO se fija receiveTimeout acá:
+    // este mismo cliente se usa para descargas grandes (actualización de la
+    // app, binario de bt-server) y un límite global de recepción las cortaría
+    // a mitad de camino en una red lenta. Los fetches chicos (catálogo de
+    // extensiones, scripts) le ponen su propio receiveTimeout por request.
+    dio = Dio(BaseOptions(
+      connectTimeout: const Duration(seconds: 15),
+      sendTimeout: const Duration(seconds: 15),
+    ));
     final cookieManager = CookieManager(_cookieJar);
     dio.interceptors.add(cookieManager);
     refreshProxy();

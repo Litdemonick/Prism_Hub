@@ -8,6 +8,7 @@ import 'package:prismhub/views/widgets/anilist_horizontal_list.dart';
 import 'package:prismhub/views/widgets/button.dart';
 import 'package:prismhub/views/widgets/card.dart';
 import 'package:prismhub/views/widgets/progress.dart';
+import 'package:prismhub/utils/error.dart';
 import 'package:prismhub/utils/i18n.dart';
 import 'package:prismhub/data/providers/anilist_provider.dart';
 import 'package:prismhub/views/widgets/cache_network_image.dart';
@@ -133,7 +134,7 @@ class _AniListTrackingPageState extends State<AniListTrackingPage> {
           if (snapshot.hasError) {
             return Column(
               children: [
-                Text(snapshot.error.toString()),
+                Text(friendlyError(snapshot.error)),
                 PlatformButton(
                   child: Text("common.retry".i18n),
                   onPressed: () {

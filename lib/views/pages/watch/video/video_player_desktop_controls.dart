@@ -355,39 +355,36 @@ class _HeaderState extends State<_Header> {
         child: Row(
           children: [
             Expanded(
-              child: DragToMoveArea(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      widget.title,
-                      style: const TextStyle(
-                        fontSize: 16,
-                        fontWeight: FontWeight.bold,
-                        overflow: TextOverflow.ellipsis,
-                      ),
+              // Plain Column — no DragToMoveArea so clicks don't move the window.
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    widget.title,
+                    style: const TextStyle(
+                      fontSize: 16,
+                      fontWeight: FontWeight.bold,
+                      overflow: TextOverflow.ellipsis,
                     ),
-                    Text(
-                      widget.episode,
-                      style: const TextStyle(
-                        fontSize: 14,
-                        fontWeight: FontWeight.w300,
-                        overflow: TextOverflow.ellipsis,
-                      ),
+                  ),
+                  Text(
+                    widget.episode,
+                    style: const TextStyle(
+                      fontSize: 14,
+                      fontWeight: FontWeight.w300,
+                      overflow: TextOverflow.ellipsis,
                     ),
-                  ],
-                ),
+                  ),
+                ],
               ),
             ),
-            // 置顶
+            // Always-on-top toggle
             IconButton(
               icon: Icon(
                 _isAlwaysOnTop ? FluentIcons.pinned : FluentIcons.pin,
               ),
               onPressed: () async {
-                WindowManager.instance.setAlwaysOnTop(
-                  !_isAlwaysOnTop,
-                );
+                WindowManager.instance.setAlwaysOnTop(!_isAlwaysOnTop);
                 setState(() {
                   _isAlwaysOnTop = !_isAlwaysOnTop;
                 });
@@ -395,19 +392,8 @@ class _HeaderState extends State<_Header> {
             ),
             const SizedBox(width: 10),
             IconButton(
-              icon: const Icon(
-                FluentIcons.chrome_minimize,
-              ),
-              onPressed: () {
-                WindowManager.instance.minimize();
-              },
-            ),
-            const SizedBox(width: 10),
-            IconButton(
               onPressed: widget.onClose,
-              icon: const Icon(
-                FluentIcons.chevron_down,
-              ),
+              icon: const Icon(FluentIcons.chevron_down),
             ),
           ],
         ),
@@ -564,7 +550,10 @@ class _Footer extends StatelessWidget {
                   ),
                   if (constraints.maxWidth > 500)
                     Expanded(
-                      child: Row(
+                      child: SingleChildScrollView(
+                        scrollDirection: Axis.horizontal,
+                        reverse: true,
+                        child: Row(
                         mainAxisAlignment: MainAxisAlignment.end,
                         mainAxisSize: MainAxisSize.min,
                         children: [
@@ -631,6 +620,7 @@ class _Footer extends StatelessWidget {
                             ),
                           ),
                         ],
+                        ),
                       ),
                     ),
                 ],
@@ -799,7 +789,7 @@ class _EpisodeState extends State<_Episode> {
                         selectIndex: widget.controller.index.value,
                         onChange: (value) {
                           widget.controller.index.value = value;
-                          router.pop();
+                          Flyout.of(context).close();
                         },
                       ),
                     ),
@@ -870,7 +860,7 @@ class _QualityState extends State<_Quality> {
                               widget.controller.switchQuality(
                                 quality.value,
                               );
-                              router.pop();
+                              Flyout.of(context).close();
                             },
                           ),
                       ],
@@ -949,7 +939,7 @@ class _TrackState extends State<_Track> {
                             widget.controller.setSubtitleTrack(
                               SubtitleTrack.no(),
                             );
-                            router.pop();
+                            Flyout.of(context).close();
                           },
                         ),
                         ListTile.selectable(
@@ -969,7 +959,7 @@ class _TrackState extends State<_Track> {
                               widget.controller.setSubtitleTrack(
                                 subtitle,
                               );
-                              router.pop();
+                              Flyout.of(context).close();
                             },
                           ),
                         // 来自视频的字幕
@@ -987,7 +977,7 @@ class _TrackState extends State<_Track> {
                                 widget.controller.setSubtitleTrack(
                                   subtitle,
                                 );
-                                router.pop();
+                                Flyout.of(context).close();
                               },
                             ),
                         const SizedBox(height: 10),
@@ -1015,7 +1005,7 @@ class _TrackState extends State<_Track> {
                                 widget.controller.player.setAudioTrack(
                                   audio,
                                 );
-                                router.pop();
+                                Flyout.of(context).close();
                               },
                             ),
                       ],
@@ -1087,7 +1077,7 @@ class _TorrentFilesState extends State<_TorrentFiles> {
                                     file,
                             onPressed: () {
                               widget.controller.playTorrentFile(file);
-                              router.pop();
+                              Flyout.of(context).close();
                             },
                           ),
                       ],
@@ -1158,7 +1148,7 @@ class _SpeedState extends State<_Speed> {
                             onPressed: () {
                               widget.controller.player.setRate(speed);
                               widget.controller.currentSpeed.value = speed;
-                              router.pop();
+                              Flyout.of(context).close();
                             },
                           ),
                       ],
@@ -1273,9 +1263,14 @@ class _ServerSelectorState extends State<_ServerSelector> {
               children: [
                 const Icon(FluentIcons.server, size: 14),
                 const SizedBox(width: 6),
-                Text(
-                  current.isEmpty ? 'Servidor' : current,
-                  style: const TextStyle(fontSize: 13),
+                ConstrainedBox(
+                  constraints: const BoxConstraints(maxWidth: 90),
+                  child: Text(
+                    current.isEmpty ? 'Servidor' : current,
+                    style: const TextStyle(fontSize: 13),
+                    overflow: TextOverflow.ellipsis,
+                    maxLines: 1,
+                  ),
                 ),
               ],
             ),
@@ -1339,7 +1334,7 @@ class _ServerSelectorState extends State<_ServerSelector> {
                                           ),
                                         ),
                                         onPressed: () {
-                                          router.pop();
+                                          Flyout.of(context).close();
                                           if (!isCurrent) {
                                             final eu = widget.controller
                                                 .availableServers[entry.key]!;

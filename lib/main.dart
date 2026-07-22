@@ -142,11 +142,25 @@ class _MainAppState extends State<MainApp> {
     );
   }
 
+  // Azul + dorado — antes usaba el morado por default de Material 3 (sin
+  // seed explícito). El dorado queda como color secundario/terciario; el
+  // sistema de temas actual solo da para esto, personalización de verdad
+  // queda para más adelante.
+  static const _brandGold = Color(0xFFC9A227);
+
   ThemeData _buildTheme(Brightness brightness, List<String> fallback) {
-    final base = brightness == Brightness.dark 
-        ? ThemeData.dark(useMaterial3: true) 
+    final base = brightness == Brightness.dark
+        ? ThemeData.dark(useMaterial3: true)
         : ThemeData.light(useMaterial3: true);
+    final scheme = ColorScheme.fromSeed(
+      seedColor: Colors.blue,
+      brightness: brightness,
+    ).copyWith(
+      secondary: _brandGold,
+      tertiary: _brandGold,
+    );
     return base.copyWith(
+      colorScheme: scheme,
       textTheme: _buildTextTheme(brightness, fallback),
     );
   }
@@ -181,9 +195,11 @@ class _MainAppState extends State<MainApp> {
       darkTheme: fluent.FluentThemeData(
         brightness: Brightness.dark,
         visualDensity: VisualDensity.standard,
+        accentColor: fluent.Colors.blue,
       ),
       theme: fluent.FluentThemeData(
         visualDensity: VisualDensity.standard,
+        accentColor: fluent.Colors.blue,
       ),
       localizationsDelegates: [
         I18nUtils.flutterI18nDelegate,
@@ -208,7 +224,14 @@ class _MainAppState extends State<MainApp> {
                   "Arial Unicode MS",
                 ],
               ),
-              child: child ?? const SizedBox(),
+              // El embedder de Windows spamea "Failed to update ui::AXTree"
+              // en cualquier página con rebuilds frecuentes (Obx, streams de
+              // posición/progreso, listas reactivas) — es ruido del engine,
+              // no un bug de la app. Se excluye semántica en toda la app de
+              // escritorio (ya se hacía puntualmente en el reproductor).
+              child: ExcludeSemantics(
+                child: child ?? const SizedBox(),
+              ),
             ),
           ),
         );

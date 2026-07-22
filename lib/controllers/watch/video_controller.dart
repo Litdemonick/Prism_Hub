@@ -515,7 +515,12 @@ class VideoPlayerController extends GetxController {
           hist.episodeId == index.value &&
           hist.episodeGroupId == episodeGroupId) {
         final secs = int.tryParse(hist.progress) ?? 0;
-        if (secs > 5) _pendingResumeSeconds = secs;
+        final total = int.tryParse(hist.totalProgress) ?? 0;
+        // No preguntar "¿continuar?" si ya estaba prácticamente terminado
+        // (últimos 30s o 95% visto) — a esa altura no tiene sentido
+        // "retomar" un capítulo que de hecho ya se vio entero.
+        final nearEnd = total > 0 && (total - secs <= 30 || secs >= total * 0.95);
+        if (secs > 5 && !nearEnd) _pendingResumeSeconds = secs;
       }
     }
 
@@ -1511,13 +1516,20 @@ class VideoPlayerController extends GetxController {
     }
     _dlnaTimer?.cancel();
     try { player.pause(); } catch (_) {}
+    // _saveHistory() needs a live rendered frame for its screenshot — it
+    // MUST run before player.stop() clears the video output, or
+    // player.screenshot() silently returns null and _saveHistory() bails
+    // out before ever reaching DatabaseService.putHistory(). That's why
+    // watched videos were never showing up in "Continuar": every close
+    // stopped the player first, so the screenshot always failed and no
+    // history record was ever written.
+    try {
+      await _saveHistory();
+    } catch (_) {}
     try {
       await player.stop();
       // Dar tiempo a libmpv para liquidar su estado antes de dispose
       await Future.delayed(const Duration(milliseconds: 400));
-    } catch (_) {}
-    try {
-      await _saveHistory();
     } catch (_) {}
     try {
       player.dispose();

@@ -1,4 +1,5 @@
 ﻿import 'package:fluent_ui/fluent_ui.dart' as fluent;
+import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
 import 'package:prismhub/models/extension.dart';
 import 'package:prismhub/utils/extension.dart';
@@ -69,11 +70,19 @@ class _ExtensionCardState extends State<ExtensionCard> {
     });
     try {
       // Use direct url from index.json if available, otherwise fallback to repo convention
-      final url = widget.url ??
+      final baseUrl = widget.url ??
           PrismHubStorage.getSetting(SettingKey.prismhubRepoUrl) +
               "/repo/${widget.package}.js";
+      // Cache-bust: GitHub raw cachea el .js unos minutos — sin esto, instalar
+      // justo después de publicar una versión nueva podía traer la vieja.
+      final bust = DateTime.now().millisecondsSinceEpoch;
+      final sep = baseUrl.contains('?') ? '&' : '?';
+      final url = '$baseUrl${sep}t=$bust';
       debugPrint(url);
-      final res = await dio.get<String>(url);
+      final res = await dio.get<String>(
+        url,
+        options: Options(receiveTimeout: const Duration(seconds: 20)),
+      );
       if (res.data == null) throw Exception("Does not seem to be an extension");
 
       String script = res.data!;
@@ -180,43 +189,62 @@ class _ExtensionCardState extends State<ExtensionCard> {
                 ),
             ],
           )),
-      trailing: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          if (isLoading)
-            const SizedBox(
-              width: 25,
-              height: 25,
-              child: ProgressRing(),
-            )
-          else if (isInstall) ...[
-            if (hasUpgrade)
-              FilledButton(
-                child: Text('extension-repo.upgrade'.i18n),
-                onPressed: () async {
-                  await _install();
-                  setState(() {});
-                },
-              ),
-            const SizedBox(width: 8),
-            if (isInstall)
-              TextButton(
-                child: Text('common.uninstall'.i18n),
-                onPressed: () async {
-                  await ExtensionUtils.uninstall(widget.package);
-                  setState(() {
-                    isInstall = false;
-                  });
-                },
+      trailing: SizedBox(
+        width: hasUpgrade ? 96 : 90,
+        child: isLoading
+            ? const SizedBox(
+                width: 25,
+                height: 25,
+                child: ProgressRing(),
               )
-          ] else
-            TextButton(
-              onPressed: () async {
-                await _install();
-              },
-              child: Text('common.install'.i18n),
-            )
-        ],
+            : isInstall
+                ? Wrap(
+                    alignment: WrapAlignment.end,
+                    crossAxisAlignment: WrapCrossAlignment.center,
+                    spacing: 4,
+                    runSpacing: 0,
+                    children: [
+                      if (hasUpgrade)
+                        SizedBox(
+                          height: 32,
+                          child: FilledButton(
+                            style: TextButton.styleFrom(
+                              padding: const EdgeInsets.symmetric(horizontal: 8),
+                              minimumSize: Size.zero,
+                              textStyle: const TextStyle(fontSize: 12),
+                            ),
+                            onPressed: () async {
+                              await _install();
+                              setState(() {});
+                            },
+                            child: Text('extension-repo.upgrade'.i18n),
+                          ),
+                        ),
+                      SizedBox(
+                        height: 32,
+                        child: TextButton(
+                          style: TextButton.styleFrom(
+                            padding: const EdgeInsets.symmetric(horizontal: 8),
+                            minimumSize: Size.zero,
+                            textStyle: const TextStyle(fontSize: 12),
+                          ),
+                          onPressed: () async {
+                            await ExtensionUtils.uninstall(widget.package);
+                            setState(() {
+                              isInstall = false;
+                            });
+                          },
+                          child: Text('common.uninstall'.i18n),
+                        ),
+                      ),
+                    ],
+                  )
+                : TextButton(
+                    onPressed: () async {
+                      await _install();
+                    },
+                    child: Text('common.install'.i18n),
+                  ),
       ),
     );
   }
@@ -271,7 +299,10 @@ class _ExtensionCardState extends State<ExtensionCard> {
               ],
             ),
           ),
-          Row(
+          Wrap(
+            crossAxisAlignment: WrapCrossAlignment.center,
+            alignment: WrapAlignment.spaceBetween,
+            runSpacing: 8,
             children: [
               Padding(
                 padding: const EdgeInsets.only(right: 8),
@@ -280,34 +311,37 @@ class _ExtensionCardState extends State<ExtensionCard> {
                   style: const TextStyle(fontSize: 12),
                 ),
               ),
-              const Spacer(),
               if (isLoading)
                 const SizedBox(
                   width: 25,
                   height: 25,
                   child: ProgressRing(),
                 )
-              else if (isInstall) ...[
-                if (hasUpgrade)
-                  fluent.FilledButton(
-                    child: Text('extension-repo.upgrade'.i18n),
-                    onPressed: () async {
-                      await _install();
-                      setState(() {});
-                    },
-                  ),
-                const SizedBox(width: 8),
-                if (isInstall)
-                  fluent.FilledButton(
-                    child: Text('common.uninstall'.i18n),
-                    onPressed: () async {
-                      await ExtensionUtils.uninstall(widget.package);
-                      setState(() {
-                        isInstall = false;
-                      });
-                    },
-                  )
-              ] else
+              else if (isInstall)
+                Wrap(
+                  spacing: 8,
+                  runSpacing: 8,
+                  children: [
+                    if (hasUpgrade)
+                      fluent.FilledButton(
+                        child: Text('extension-repo.upgrade'.i18n),
+                        onPressed: () async {
+                          await _install();
+                          setState(() {});
+                        },
+                      ),
+                    fluent.FilledButton(
+                      child: Text('common.uninstall'.i18n),
+                      onPressed: () async {
+                        await ExtensionUtils.uninstall(widget.package);
+                        setState(() {
+                          isInstall = false;
+                        });
+                      },
+                    ),
+                  ],
+                )
+              else
                 fluent.FilledButton(
                   onPressed: () async {
                     await _install();

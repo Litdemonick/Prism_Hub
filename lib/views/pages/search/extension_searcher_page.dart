@@ -41,9 +41,17 @@ class _ExtensionSearcherPageState extends fluent.State<ExtensionSearcherPage> {
   final List<ExtensionListItem> _data = [];
   int _page = 1;
 
-  // Desktop: arrow navigation, shows one page at a time
+  // Desktop: arrow navigation, shows one "view page" at a time. Some
+  // sources return very few items per raw page (e.g. 26) while others
+  // return plenty (40+) — a single raw page then leaves a lot of dead
+  // space below the grid. _rawPage is the actual next source page to
+  // fetch; _virtualPages caches each already-built view page (keyed by
+  // _browsePage - 1) so going back is instant and forward navigation
+  // keeps pulling from wherever the raw cursor left off.
   int _browsePage = 1;
   List<ExtensionListItem> _browseData = [];
+  int _rawPage = 1;
+  final List<List<ExtensionListItem>> _virtualPages = [];
 
   bool _isLoading = true;
   final EasyRefreshController _easyRefreshController = EasyRefreshController();
@@ -85,21 +93,52 @@ class _ExtensionSearcherPageState extends fluent.State<ExtensionSearcherPage> {
 
   // ── Desktop: page-based navigation ──────────────────────────────────────
 
+  // Minimum items to gather before treating a view page as "full enough"
+  // to stop pulling more raw pages — a few rows' worth on a typical window.
+  static const _minItemsPerViewPage = 40;
+
   Future<void> _goToPage(int page) async {
     if (!mounted || page < 1) return;
+    // Page 1 always means "start over" (fresh search/filter) — reset the
+    // raw cursor and cache so nothing stale from a previous query lingers.
+    if (page == 1) {
+      _rawPage = 1;
+      _virtualPages.clear();
+    }
     final oldPage = _browsePage;
+
+    // Already built this view page before (e.g. navigating back) — show
+    // the cached result instantly instead of refetching.
+    if (page - 1 < _virtualPages.length) {
+      setState(() {
+        _browsePage = page;
+        _browseData = _virtualPages[page - 1];
+      });
+      return;
+    }
+
     setState(() {
       _browsePage = page;
       _browseData = [];
       _isLoading = true;
     });
     try {
-      final data = _keyWord.isEmpty
-          ? await _runtime.latest(_browsePage)
-          : await _runtime.search(_keyWord, _browsePage,
-              filter: _selectedFilters);
+      final collected = <ExtensionListItem>[];
+      var gotAny = false;
+      for (var attempts = 0;
+          attempts < 4 && collected.length < _minItemsPerViewPage;
+          attempts++) {
+        final batch = _keyWord.isEmpty
+            ? await _runtime.latest(_rawPage)
+            : await _runtime.search(_keyWord, _rawPage,
+                filter: _selectedFilters);
+        if (batch.isEmpty) break;
+        gotAny = true;
+        collected.addAll(batch);
+        _rawPage++;
+      }
       if (!mounted) return;
-      if (data.isEmpty) {
+      if (!gotAny) {
         setState(() => _browsePage = oldPage);
         showPlatformSnackbar(
           context: context,
@@ -107,7 +146,8 @@ class _ExtensionSearcherPageState extends fluent.State<ExtensionSearcherPage> {
           severity: fluent.InfoBarSeverity.warning,
         );
       } else {
-        setState(() => _browseData = data);
+        _virtualPages.add(collected);
+        setState(() => _browseData = collected);
       }
     } catch (e) {
       if (!mounted) return;
@@ -136,14 +176,22 @@ class _ExtensionSearcherPageState extends fluent.State<ExtensionSearcherPage> {
     try {
       _isLoading = true;
       setState(() {});
-      late List<ExtensionListItem> data;
-      if (_keyWord.isEmpty) {
-        data = await _runtime.latest(_page);
-      } else {
-        data = await _runtime.search(_keyWord, _page, filter: _selectedFilters);
-      }
+      // Algunas fuentes (ej. jk) tienen páginas que se solapan con la
+      // anterior — una sola página toda duplicada NO significa que no haya
+      // más contenido, solo que esa página puntual no trajo nada nuevo.
+      // Se insiste unas páginas más antes de recién ahí avisar "sin más datos".
       final existingUrls = _data.map((e) => e.url).toSet();
-      final fresh = data.where((e) => !existingUrls.contains(e.url)).toList();
+      final fresh = <ExtensionListItem>[];
+      for (var attempts = 0; attempts < 4 && fresh.isEmpty; attempts++) {
+        final data = _keyWord.isEmpty
+            ? await _runtime.latest(_page)
+            : await _runtime.search(_keyWord, _page, filter: _selectedFilters);
+        if (data.isEmpty) break; // la fuente sí se quedó sin páginas
+        _page++;
+        for (final e in data) {
+          if (existingUrls.add(e.url)) fresh.add(e);
+        }
+      }
       if (fresh.isEmpty && mounted) {
         showPlatformSnackbar(
           context: context,
@@ -152,7 +200,6 @@ class _ExtensionSearcherPageState extends fluent.State<ExtensionSearcherPage> {
         );
       }
       _data.addAll(fresh);
-      _page++;
     } catch (e) {
       // ignore: use_build_context_synchronously
       showPlatformSnackbar(
@@ -216,8 +263,7 @@ class _ExtensionSearcherPageState extends fluent.State<ExtensionSearcherPage> {
             const Divider(),
             Expanded(
               child: Padding(
-                padding:
-                    const EdgeInsets.only(left: 16, right: 16, top: 16),
+                padding: const EdgeInsets.only(left: 16, right: 16, top: 16),
                 child: fiterWidget,
               ),
             ),
@@ -376,8 +422,7 @@ class _ExtensionSearcherPageState extends fluent.State<ExtensionSearcherPage> {
                           onPressed: _isLoading
                               ? null
                               : () => _goToPage(_browsePage - 1),
-                          child: const Icon(
-                              fluent.FluentIcons.chevron_left,
+                          child: const Icon(fluent.FluentIcons.chevron_left,
                               size: 14),
                         )
                       : const SizedBox.shrink(),
@@ -421,12 +466,10 @@ class _ExtensionSearcherPageState extends fluent.State<ExtensionSearcherPage> {
                 width: 48,
                 child: Center(
                   child: fluent.FilledButton(
-                    onPressed: _isLoading
-                        ? null
-                        : () => _goToPage(_browsePage + 1),
-                    child: const Icon(
-                        fluent.FluentIcons.chevron_right,
-                        size: 14),
+                    onPressed:
+                        _isLoading ? null : () => _goToPage(_browsePage + 1),
+                    child:
+                        const Icon(fluent.FluentIcons.chevron_right, size: 14),
                   ),
                 ),
               ),
@@ -531,8 +574,8 @@ class _ExtensionFilterWidgetState extends State<_ExtensionFilterWidget> {
                       await _onSelectFilter(filter.key, entry.key);
                       setState(() {});
                     },
-                    checked: widget.selectedFilters[filter.key]!
-                        .contains(entry.key),
+                    checked:
+                        widget.selectedFilters[filter.key]!.contains(entry.key),
                     text: entry.value,
                   ),
                 ]
