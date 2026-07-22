@@ -59,6 +59,8 @@
     "favorite": "Favorites",
     "no-record": "No favorites or viewing records",
     "watched": "Watched {ep}",
+    "watched-episode": "Watched Episode {ep}",
+    "watched-chapter": "Watched Chapter {ep}",
     "favorite-all": "All {type} favorites",
     "history": "History",
     "clear-history-confirm": "Delete everything? This can't be undone."

@@ -1,6 +1,7 @@
 ﻿import 'package:fluent_ui/fluent_ui.dart' as fluent;
 import 'package:flutter/material.dart';
 import 'package:prismhub/utils/i18n.dart';
+import 'package:prismhub/views/widgets/horizontal_scroll_fade.dart';
 import 'package:prismhub/views/widgets/platform_widget.dart';
 
 class HorizontalList extends StatefulWidget {
@@ -55,17 +56,20 @@ class _HorizontalListState extends State<HorizontalList> {
         else
           SizedBox(
             height: 170,
-            child: ListView.builder(
-              scrollDirection: Axis.horizontal,
+            child: HorizontalScrollFade(
               controller: _controller,
-              itemCount: widget.itemCount,
-              itemBuilder: ((context, index) {
-                return Container(
-                  width: 110,
-                  margin: const EdgeInsets.only(right: 16),
-                  child: widget.itemBuilder!(context, index),
-                );
-              }),
+              child: ListView.builder(
+                scrollDirection: Axis.horizontal,
+                controller: _controller,
+                itemCount: widget.itemCount,
+                itemBuilder: ((context, index) {
+                  return Container(
+                    width: 110,
+                    margin: const EdgeInsets.only(right: 16),
+                    child: widget.itemBuilder!(context, index),
+                  );
+                }),
+              ),
             ),
           ),
         const SizedBox(height: 16),

@@ -13,6 +13,7 @@ import 'package:prismhub/data/services/database_service.dart';
 import 'package:prismhub/utils/i18n.dart';
 import 'package:prismhub/utils/resume_history.dart';
 import 'package:prismhub/views/widgets/cache_network_image.dart';
+import 'package:prismhub/views/widgets/extension_type_badge.dart';
 import 'package:prismhub/views/widgets/platform_widget.dart';
 
 // Deliberately simple/synchronous: this card used to also check each item
@@ -85,15 +86,23 @@ class _HomeRecentCardState extends State<HomeRecentCard> {
               Text(
                 FlutterI18n.translate(
                   context,
-                  "home.watched",
+                  widget.history.type == ExtensionType.bangumi
+                      ? "home.watched-episode"
+                      : "home.watched-chapter",
                   translationParams: {
-                    "ep": widget.history.episodeTitle,
+                    // episodeId es el índice (0-based) en la lista — un
+                    // número siempre corto y confiable, a diferencia de
+                    // episodeTitle que en algunas fuentes es un nombre
+                    // descriptivo larguísimo que no deja ver en qué
+                    // capítulo/episodio real quedaste.
+                    "ep": (widget.history.episodeId + 1).toString(),
                   },
                 ),
                 style: const TextStyle(
                   color: Colors.white,
                   fontSize: 12,
                 ),
+                overflow: TextOverflow.ellipsis,
                 maxLines: 1,
               ),
             ],
@@ -117,6 +126,17 @@ class _HomeRecentCardState extends State<HomeRecentCard> {
             fit: BoxFit.cover,
             width: double.infinity,
             height: double.infinity,
+            errorBuilder: (context, error, stackTrace) => Image.asset(
+              'assets/cardoffline.png',
+              fit: BoxFit.cover,
+              width: double.infinity,
+              height: double.infinity,
+            ),
+          ),
+          Positioned(
+            top: 6,
+            left: 6,
+            child: ExtensionTypeBadge(type: widget.history.type),
           ),
           _titleBar(),
         ],
@@ -141,6 +161,11 @@ class _HomeRecentCardState extends State<HomeRecentCard> {
               height: double.infinity,
               fit: BoxFit.cover,
             ),
+          Positioned(
+            top: 6,
+            left: 6,
+            child: ExtensionTypeBadge(type: widget.history.type),
+          ),
           _titleBar(),
         ],
       ),

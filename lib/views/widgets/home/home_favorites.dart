@@ -52,6 +52,7 @@ class HomeFavorites extends StatelessWidget {
           url: data[index].url,
           package: data[index].package,
           cover: data[index].cover,
+          type: data[index].type,
         );
       },
     );
