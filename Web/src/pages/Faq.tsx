@@ -33,6 +33,10 @@ const faqs = [
     q: '¿Por qué el reproductor cambia de servidor automáticamente?',
     a: 'Las extensiones de prism+ retornan un header X-Servers con servidores alternativos. Si el servidor principal falla, el reproductor lee ese header y prueba el siguiente sin que tengas que hacer nada.',
   },
+  {
+    q: 'Windows bloqueó o borró el instalador, ¿está infectado?',
+    a: 'No. El .exe todavía no tiene firma digital (certificado de code-signing), así que Windows Defender u otro antivirus puede marcarlo como "desconocido" y bloquearlo al primer intento — es un falso positivo común en software nuevo sin firmar, no un virus. Revisá Seguridad de Windows → Protección contra virus y amenazas → Historial de protección, y permitilo/restauralo desde ahí.',
+  },
 ];
 
 function FaqItem({ question, answer }: { question: string; answer: string }) {
