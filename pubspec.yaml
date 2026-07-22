@@ -79,6 +79,7 @@ flutter:
   assets:
     - assets/i18n/
     - assets/icon/logo.png
+    - assets/icon/logo_mark.png
     - assets/icon/anilist.jpg
     - assets/cardoffline.png
     - assets/js/
