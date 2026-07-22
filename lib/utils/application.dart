@@ -38,7 +38,7 @@ class ApplicationUtils {
   }
 
   static String get _platformSuffix =>
-      Platform.isWindows ? 'windows.zip' : 'linux.tar.gz';
+      Platform.isWindows ? 'windows-x64.zip' : 'linux-x64.tar.gz';
 
   static checkUpdate(BuildContext context, {bool showSnackbar = false}) async {
     try {
