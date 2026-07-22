@@ -4,6 +4,7 @@ import 'package:fluent_ui/fluent_ui.dart' as fluent;
 import 'package:flutter/material.dart';
 import 'package:prismhub/data/providers/anilist_provider.dart';
 import 'package:prismhub/router/router.dart';
+import 'package:prismhub/utils/error.dart';
 import 'package:prismhub/utils/i18n.dart';
 import 'package:prismhub/utils/layout.dart';
 import 'package:prismhub/views/pages/search/search_page.dart';
@@ -62,7 +63,7 @@ class _AnilistMorePageState extends State<AnilistMorePage> {
               final data = snapshot.data;
               if (snapshot.hasError) {
                 return Center(
-                  child: Text(snapshot.error.toString()),
+                  child: Text(friendlyError(snapshot.error)),
                 );
               }
               if (!snapshot.hasData) {
@@ -129,7 +130,7 @@ class _AnilistMorePageState extends State<AnilistMorePage> {
         final data = snapshot.data;
         if (snapshot.hasError) {
           return Center(
-            child: Text(snapshot.error.toString()),
+            child: Text(friendlyError(snapshot.error)),
           );
         }
         if (!snapshot.hasData) {

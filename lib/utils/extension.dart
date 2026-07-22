@@ -1,6 +1,7 @@
 ﻿import 'dart:convert';
 import 'dart:io';
 
+import 'package:dio/dio.dart';
 import 'package:desktop_multi_window/desktop_multi_window.dart';
 import 'package:fluent_ui/fluent_ui.dart';
 import 'package:flutter/material.dart';
@@ -133,7 +134,11 @@ class ExtensionUtils {
       // Cache-bust: GitHub raw caches index.json/dist for minutes, which would
       // hide a freshly pushed extension/resolver fix.
       final bust = DateTime.now().millisecondsSinceEpoch;
-      final res = await dio.get<String>('$repoUrl/index.json?t=$bust');
+      // receiveTimeout acá (no global en dio): esto es JSON/JS chico, así que
+      // en una red restrictiva (universidad, etc.) preferimos fallar rápido
+      // y reintentar en el próximo arranque, en vez de quedar colgados.
+      final smallFetch = Options(receiveTimeout: const Duration(seconds: 20));
+      final res = await dio.get<String>('$repoUrl/index.json?t=$bust', options: smallFetch);
       final decoded = jsonDecode(res.data!);
       final List list =
           decoded is Map ? (decoded['extensions'] ?? []) : decoded;
@@ -164,7 +169,7 @@ class ExtensionUtils {
           if (repoVersion == null || repoVersion == localVersion) continue;
         }
         final sep = scriptUrl.contains('?') ? '&' : '?';
-        final js = await dio.get<String>('$scriptUrl${sep}t=$bust');
+        final js = await dio.get<String>('$scriptUrl${sep}t=$bust', options: smallFetch);
         if (js.data != null && js.data!.isNotEmpty) {
           // Seguridad: los defaults son oficiales y DEBEN traer firma válida de
           // prism+. Si falta o no valida, es manipulación → no se instala.
