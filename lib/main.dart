@@ -13,6 +13,7 @@ import 'package:prismhub/utils/prismhub_directory.dart';
 import 'package:prismhub/utils/request.dart';
 import 'package:prismhub/views/pages/debug_page.dart';
 import 'package:prismhub/views/pages/main_page.dart';
+import 'package:prismhub/views/pages/splash_screen.dart';
 import 'package:prismhub/router/router.dart';
 import 'package:prismhub/utils/extension.dart';
 import 'package:prismhub/utils/i18n.dart';
@@ -53,14 +54,12 @@ void main(List<String> args) async {
       return;
     }
 
-    // 主窗口
+    // 主窗口 — solo lo indispensable para calcular tamaño/posición de la
+    // ventana va acá; el resto (log, red, extensiones, media_kit) se hace
+    // durante el splash, ya con algo visible en pantalla en vez de una
+    // ventana oculta/en blanco mientras carga.
     await PrismHubDirectory.ensureInitialized();
     await PrismHubStorage.ensureInitialized();
-    PrismLog.ensureInitialized();
-    await ApplicationUtils.ensureInitialized();
-    await PrismRequest.ensureInitialized();
-    await ExtensionUtils.ensureInitialized();
-    MediaKit.ensureInitialized();
 
     if (!Platform.isAndroid) {
       await windowManager.ensureInitialized();
@@ -97,10 +96,51 @@ void main(List<String> args) async {
       SystemChrome.setSystemUIOverlayStyle(style);
     }
 
-    runApp(const MainApp());
+    runApp(const _AppRoot());
   }, (error, stack) {
     logger.severe("", error, stack);
   });
+}
+
+// Muestra el splash animado mientras corre el resto de la inicialización
+// (log, red, extensiones, media_kit) — antes esto pasaba antes de runApp(),
+// así que la ventana quedaba oculta/en blanco sin ningún indicio de que la
+// app estaba cargando.
+class _AppRoot extends StatefulWidget {
+  const _AppRoot();
+
+  @override
+  State<_AppRoot> createState() => _AppRootState();
+}
+
+class _AppRootState extends State<_AppRoot> {
+  bool _ready = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _init();
+  }
+
+  Future<void> _init() async {
+    PrismLog.ensureInitialized();
+    await ApplicationUtils.ensureInitialized();
+    await PrismRequest.ensureInitialized();
+    await ExtensionUtils.ensureInitialized();
+    MediaKit.ensureInitialized();
+    if (mounted) setState(() => _ready = true);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    if (!_ready) {
+      return const MaterialApp(
+        debugShowCheckedModeBanner: false,
+        home: SplashScreen(),
+      );
+    }
+    return const MainApp();
+  }
 }
 
 class MainApp extends StatefulWidget {
