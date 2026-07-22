@@ -15,7 +15,7 @@ const faqs = [
   },
   {
     q: '¿Cómo instalo extensiones?',
-    a: 'Ve a Ajustes → Extensiones → URL del repositorio y pega una de estas URLs:\n\nRepositorio oficial (prism+):\nhttps://raw.githubusercontent.com/Litdemonick/prism-plus/main/index.json\n\nRepositorio comunidad (150+ extensiones):\nhttps://raw.githubusercontent.com/Litdemonick/Prism_Hub/main/index.json\n\nLuego pulsa Recargar para ver las extensiones disponibles.',
+    a: 'El repositorio oficial (prism+) ya viene configurado por defecto. Si querés agregar otro, andá a Ajustes → Extensiones → URL del repositorio, pegá la URL de un index.json compatible y pulsá Recargar:\n\nhttps://raw.githubusercontent.com/Litdemonick/prism-plus/main/index.json',
   },
   {
     q: '¿Qué contenido puedo ver?',

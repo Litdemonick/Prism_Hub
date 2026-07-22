@@ -1,11 +1,12 @@
 import { motion } from 'motion/react';
 import {
   Puzzle, Zap, BookOpen, Star, Tv2, Layers,
-  Shield, Globe, Code2, ArrowUpRight, Download, Terminal,
+  Shield, Code2, ArrowUpRight, Download, Terminal,
 } from 'lucide-react';
 import type { ReactElement } from 'react';
 import { useNavigate } from 'react-router-dom';
 import Hero from '../components/Hero';
+import { REPO, formatSize, useExtensionCount, useLatestRelease } from '../lib/githubRelease';
 
 /* ── Platform icons ───────────────────────────────────────── */
 const WinIcon = () => (
@@ -30,8 +31,7 @@ const DroidIcon = () => (
 );
 
 /* ── Data ─────────────────────────────────────────────────── */
-const stats = [
-  { value: '150+', label: 'Extensiones' },
+const baseStats = [
   { value: '3',    label: 'Plataformas' },
   { value: 'Beta', label: 'En desarrollo' },
   { value: '100%', label: 'Open Source' },
@@ -78,7 +78,7 @@ type Platform = {
   command: string;
   desc: string;
   route?: string;
-  href?: string;
+  assetKey: 'windows' | 'linux' | 'android';
 };
 
 const platforms: Platform[] = [
@@ -88,6 +88,7 @@ const platforms: Platform[] = [
     command: 'irm https://raw.githubusercontent.com/Litdemonick/Prism_Hub/main/install/install.ps1 | iex',
     desc: 'Instalador .exe de un clic. Windows 10 / 11 (64 bits).',
     route: '/windows',
+    assetKey: 'windows',
   },
   {
     name: 'Linux', Icon: LinuxIcon, color: '#f97316',
@@ -95,13 +96,14 @@ const platforms: Platform[] = [
     command: 'curl -fsSL https://raw.githubusercontent.com/Litdemonick/Prism_Hub/main/install/install.sh | bash',
     desc: 'Script universal. También disponible PKGBUILD para Arch.',
     route: '/linux',
+    assetKey: 'linux',
   },
   {
     name: 'Android', Icon: DroidIcon, color: '#22c55e',
     shell: 'APK directo',
-    command: 'Descarga el APK firmado desde GitHub Releases e instálalo.',
+    command: 'Descarga el APK firmado e instálalo (activa "Fuentes desconocidas").',
     desc: 'APK firmado. Android 5.0+. Activa "Fuentes desconocidas".',
-    href: 'https://github.com/Litdemonick/Prism_Hub/releases/latest',
+    assetKey: 'android',
   },
 ];
 
@@ -141,6 +143,12 @@ const fadeUp = (delay = 0) => ({
 /* ── Home ────────────────────────────────────────────────── */
 export default function Home() {
   const navigate = useNavigate();
+  const release = useLatestRelease();
+  const extensionCount = useExtensionCount();
+  const stats = [
+    { value: extensionCount != null ? String(extensionCount) : '4', label: 'Extensiones' },
+    ...baseStats,
+  ];
 
   return (
     <div className="bg-[#08080f] overflow-x-hidden">
@@ -253,17 +261,36 @@ export default function Home() {
                   </p>
                 </div>
 
-                {/* Button */}
-                <motion.button
-                  whileHover={{ scale: 1.02 }}
-                  whileTap={{ scale: 0.97 }}
-                  onClick={() => p.route ? navigate(p.route) : window.open(p.href!, '_blank')}
-                  className="flex items-center justify-center gap-2 w-full py-3 rounded-xl text-sm font-light transition-all duration-300 btn-glow"
-                  style={{ background: `${p.color}12`, border: `1px solid ${p.color}32`, color: p.color }}
-                >
-                  <Download className="w-4 h-4" />
-                  Instalar en {p.name}
-                </motion.button>
+                {/* Button — descarga directa del asset una vez resuelta la
+                    última release; mientras carga (o si falla) cae a la
+                    página de releases, que siempre lista todo. */}
+                {(() => {
+                  const asset = release?.[p.assetKey];
+                  const downloadHref = asset?.browser_download_url
+                    ?? `https://github.com/${REPO}/releases/latest`;
+                  return (
+                    <motion.a
+                      href={downloadHref}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      whileHover={{ scale: 1.02 }}
+                      whileTap={{ scale: 0.97 }}
+                      className="flex items-center justify-center gap-2 w-full py-3 rounded-xl text-sm font-light transition-all duration-300 btn-glow"
+                      style={{ background: `${p.color}12`, border: `1px solid ${p.color}32`, color: p.color }}
+                    >
+                      <Download className="w-4 h-4" />
+                      {asset ? `Descargar${asset.size ? ` (${formatSize(asset.size)})` : ''}` : `Descargar para ${p.name}`}
+                    </motion.a>
+                  );
+                })()}
+                {p.route && (
+                  <button
+                    onClick={() => navigate(p.route!)}
+                    className="text-white/30 hover:text-white/60 text-xs text-center transition-colors -mt-2"
+                  >
+                    o instalar con un comando →
+                  </button>
+                )}
               </motion.div>
             ))}
           </div>
@@ -284,7 +311,7 @@ export default function Home() {
               <span className="prism-text">de extensiones JS</span>
             </h2>
             <p className="text-white/40 max-w-md mx-auto text-base leading-relaxed">
-              Dos repositorios listos para usar o crea las tuyas en minutos con la API estándar.
+              Repositorio oficial listo para usar, o crea las tuyas en minutos con la API estándar.
             </p>
           </motion.div>
 
@@ -326,36 +353,20 @@ export default function Home() {
                   </div>
                   <div className="flex-1 min-w-0">
                     <div className="text-white text-sm">prism+ · Oficial</div>
-                    <div className="text-white/30 text-xs">TioAnime, AnimeFLV, MonosChinos, MangaDex…</div>
+                    <div className="text-white/30 text-xs">
+                      {extensionCount != null ? `${extensionCount} extensiones` : 'AnimeYT, JKAnime, ManhwaWeb, Olympus'}
+                    </div>
                   </div>
                   <span className="shrink-0 text-[10px] px-2.5 py-1 rounded-full bg-violet-500/10 border border-violet-500/20 text-violet-300">
                     Preinstalado
                   </span>
                 </div>
                 <p className="text-white/35 text-xs leading-relaxed mb-3">
-                  Extensiones creadas por el equipo PrismHub. Enfocadas en español. Vienen activas por defecto en la app.
+                  Extensiones creadas por el equipo PrismHub. Enfocadas en español. Vienen activas por defecto en la app —
+                  en crecimiento constante.
                 </p>
                 <div className="code-block px-3 py-2 text-[10px] font-mono text-violet-300/55 break-all">
                   raw.githubusercontent.com/Litdemonick/prism-plus/main/index.json
-                </div>
-              </div>
-
-              {/* Comunidad */}
-              <div className="card-glow rounded-2xl p-6">
-                <div className="flex items-center gap-3 mb-3">
-                  <div className="w-10 h-10 rounded-xl bg-cyan-500/10 border border-cyan-500/20 flex items-center justify-center">
-                    <Globe className="w-4 h-4 text-cyan-400" />
-                  </div>
-                  <div>
-                    <div className="text-white text-sm">Comunidad</div>
-                    <div className="text-white/30 text-xs">150+ extensiones · multi-idioma</div>
-                  </div>
-                </div>
-                <p className="text-white/35 text-xs leading-relaxed mb-3">
-                  Anime, manga, novelas y películas de la comunidad. Múltiples idiomas. En constante crecimiento.
-                </p>
-                <div className="code-block px-3 py-2 text-[10px] font-mono text-cyan-300/55 break-all">
-                  raw.githubusercontent.com/Litdemonick/Prism_Hub/main/index.json
                 </div>
               </div>
 

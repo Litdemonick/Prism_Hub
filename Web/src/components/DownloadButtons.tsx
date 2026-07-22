@@ -1,5 +1,5 @@
 import { motion } from 'motion/react';
-import { useNavigate } from 'react-router-dom';
+import { REPO, useLatestRelease } from '../lib/githubRelease';
 
 const LinuxIcon = () => (
   <svg fill="currentColor" stroke="currentColor" strokeWidth="0" viewBox="0 0 448 512" className="w-4 h-4">
@@ -20,13 +20,13 @@ const AndroidIcon = () => (
 );
 
 const platforms = [
-  { name: 'Linux',   icon: LinuxIcon,   route: '/linux'   as const },
-  { name: 'Windows', icon: WindowsIcon, route: '/windows' as const },
-  { name: 'Android', icon: AndroidIcon, route: null, href: 'https://github.com/Litdemonick/Prism_Hub/releases/latest' },
+  { name: 'Linux', icon: LinuxIcon, assetKey: 'linux' as const },
+  { name: 'Windows', icon: WindowsIcon, assetKey: 'windows' as const },
+  { name: 'Android', icon: AndroidIcon, assetKey: 'android' as const },
 ];
 
 export default function DownloadButtons() {
-  const navigate = useNavigate();
+  const release = useLatestRelease();
 
   return (
     <motion.div
@@ -35,18 +35,25 @@ export default function DownloadButtons() {
       transition={{ duration: 0.6, delay: 0.6, ease: 'easeOut' }}
       className="flex items-center gap-3 mt-8 flex-wrap justify-center"
     >
-      {platforms.map((p) => (
-        <motion.button
-          key={p.name}
-          whileHover={{ scale: 1.04 }}
-          whileTap={{ scale: 0.97 }}
-          onClick={() => p.route ? navigate(p.route) : window.open(p.href, '_blank')}
-          className="flex items-center gap-2 px-5 py-2.5 rounded-full border border-white/10 bg-white/5 hover:bg-white/10 hover:border-violet-500/30 text-white/80 hover:text-white transition-all backdrop-blur-md btn-glow"
-        >
-          <p.icon />
-          <span className="text-[14px] font-normal">{p.name}</span>
-        </motion.button>
-      ))}
+      {platforms.map((p) => {
+        const asset = release?.[p.assetKey];
+        const downloadHref = asset?.browser_download_url
+          ?? `https://github.com/${REPO}/releases/latest`;
+        return (
+          <motion.a
+            key={p.name}
+            href={downloadHref}
+            target="_blank"
+            rel="noopener noreferrer"
+            whileHover={{ scale: 1.04 }}
+            whileTap={{ scale: 0.97 }}
+            className="flex items-center gap-2 px-5 py-2.5 rounded-full border border-white/10 bg-white/5 hover:bg-white/10 hover:border-violet-500/30 text-white/80 hover:text-white transition-all backdrop-blur-md btn-glow"
+          >
+            <p.icon />
+            <span className="text-[14px] font-normal">{p.name}</span>
+          </motion.a>
+        );
+      })}
     </motion.div>
   );
 }

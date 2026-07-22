@@ -90,28 +90,28 @@ export default class extends Extension {
           <p className="text-violet-400 text-xs mb-1 font-mono">prism+ — oficial (configurado por defecto)</p>
           <pre className="glass-card rounded-xl px-4 py-2 text-xs font-mono text-white/50 overflow-x-auto scrollbar-thin">https://raw.githubusercontent.com/Litdemonick/prism-plus/main/index.json</pre>
         </div>
-        <div>
-          <p className="text-white/40 text-xs mb-1 font-mono">comunidad — 150+ extensiones</p>
-          <pre className="glass-card rounded-xl px-4 py-2 text-xs font-mono text-white/50 overflow-x-auto scrollbar-thin">https://raw.githubusercontent.com/Litdemonick/Prism_Hub/main/index.json</pre>
-        </div>
-        <p className="text-white/30 text-xs">Ajustes → Extensiones → URL del repositorio → pegar URL → Recargar</p>
+        <p className="text-white/30 text-xs">¿Tenés tu propio repo de extensiones? Ajustes → Extensiones → URL del repositorio → pegar la URL de tu index.json → Recargar</p>
       </div>
     ),
   },
   {
     title: '6. Estructura del repositorio',
     content: (
-      <pre className="glass-card rounded-xl px-4 py-3 text-xs font-mono text-violet-300 leading-relaxed">{`Prism_Hub/
+      <pre className="glass-card rounded-xl px-4 py-3 text-xs font-mono text-violet-300 leading-relaxed">{`Prism_Hub/               ← app Flutter
 ├── lib/
 │   ├── controllers/    ← Lógica de negocio (GetX)
 │   ├── data/services/  ← Runtime JS + Isar DB
 │   ├── models/         ← Modelos de datos
 │   └── views/          ← UI (páginas y widgets)
-├── extensions/         ← 150+ extensiones comunidad
 ├── assets/i18n/        ← Traducciones (ES, EN, ZH…)
 ├── install/            ← Scripts Windows / Linux / Arch
-├── index.json          ← Catálogo extensiones comunidad
-└── pubspec.yaml        ← Dependencias Flutter`}</pre>
+├── Web/                ← Este sitio (React + Vite)
+└── pubspec.yaml        ← Dependencias Flutter
+
+prism-plus/              ← repo aparte, extensiones oficiales
+├── extensions/         ← código fuente de cada extensión
+├── sdk/                ← helpers (HTML parsing, resolvers de embeds)
+└── index.json          ← catálogo que consume la app`}</pre>
     ),
   },
   {
