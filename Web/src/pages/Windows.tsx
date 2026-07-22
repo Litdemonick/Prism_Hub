@@ -61,6 +61,14 @@ export default function Windows() {
                   O descarga el instalador .exe desde Releases →
                 </a>
               </p>
+
+              <div className="mt-8 glass-card rounded-2xl px-5 py-4 text-xs text-white/40 leading-relaxed">
+                <span className="text-white/60 font-normal">¿Windows bloquea o borra el instalador?</span>{' '}
+                El .exe todavía no tiene firma digital (certificado de code-signing), así que Windows
+                Defender u otro antivirus puede marcarlo como desconocido y bloquearlo al primer intento —
+                no significa que esté infectado. Revisá Seguridad de Windows → Protección contra virus y
+                amenazas → Historial de protección, y permitilo/restauralo ahí si aparece bloqueado.
+              </div>
             </motion.div>
           </div>
         </div>
