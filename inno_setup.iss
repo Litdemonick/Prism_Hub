@@ -26,6 +26,14 @@ SetupIconFile=.\windows\runner\resources\app_icon.ico
 Compression=lzma
 SolidCompression=yes
 WizardStyle=modern
+; Sin esto, ni instalar (sobre una versión ya corriendo) ni desinstalar
+; cierran el proceso — Windows no mata un .exe corriendo solo porque se
+; borró el archivo del disco, así que quedaba corriendo "fantasma" después
+; de desinstalar. CloseApplications usa Restart Manager para detectarlo y
+; cerrarlo (force = sin preguntar); RestartApplications=no porque no tiene
+; sentido reabrir el reproductor solo.
+CloseApplications=force
+RestartApplications=no
 
 [Languages]
 Name: "english"; MessagesFile: "compiler:Default.isl"
