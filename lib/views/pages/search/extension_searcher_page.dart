@@ -176,14 +176,22 @@ class _ExtensionSearcherPageState extends fluent.State<ExtensionSearcherPage> {
     try {
       _isLoading = true;
       setState(() {});
-      late List<ExtensionListItem> data;
-      if (_keyWord.isEmpty) {
-        data = await _runtime.latest(_page);
-      } else {
-        data = await _runtime.search(_keyWord, _page, filter: _selectedFilters);
-      }
+      // Algunas fuentes (ej. jk) tienen páginas que se solapan con la
+      // anterior — una sola página toda duplicada NO significa que no haya
+      // más contenido, solo que esa página puntual no trajo nada nuevo.
+      // Se insiste unas páginas más antes de recién ahí avisar "sin más datos".
       final existingUrls = _data.map((e) => e.url).toSet();
-      final fresh = data.where((e) => !existingUrls.contains(e.url)).toList();
+      final fresh = <ExtensionListItem>[];
+      for (var attempts = 0; attempts < 4 && fresh.isEmpty; attempts++) {
+        final data = _keyWord.isEmpty
+            ? await _runtime.latest(_page)
+            : await _runtime.search(_keyWord, _page, filter: _selectedFilters);
+        if (data.isEmpty) break; // la fuente sí se quedó sin páginas
+        _page++;
+        for (final e in data) {
+          if (existingUrls.add(e.url)) fresh.add(e);
+        }
+      }
       if (fresh.isEmpty && mounted) {
         showPlatformSnackbar(
           context: context,
@@ -192,7 +200,6 @@ class _ExtensionSearcherPageState extends fluent.State<ExtensionSearcherPage> {
         );
       }
       _data.addAll(fresh);
-      _page++;
     } catch (e) {
       // ignore: use_build_context_synchronously
       showPlatformSnackbar(
