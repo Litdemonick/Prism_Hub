@@ -727,26 +727,29 @@ class _SideBarSettingsState extends State<_SideBarSettings> {
         ),
         const SizedBox(height: 10),
         Obx(
-          () => SegmentedButton(
-            showSelectedIcon: false,
-            segments: [
-              ButtonSegment(
-                value: FontWeight.normal,
-                label: Text(
-                  'video.sidebar.subtitle.font-weight-normal'.i18n,
+          () => SingleChildScrollView(
+            scrollDirection: Axis.horizontal,
+            child: SegmentedButton(
+              showSelectedIcon: false,
+              segments: [
+                ButtonSegment(
+                  value: FontWeight.normal,
+                  label: Text(
+                    'video.sidebar.subtitle.font-weight-normal'.i18n,
+                  ),
                 ),
-              ),
-              ButtonSegment(
-                value: FontWeight.bold,
-                label: Text(
-                  'video.sidebar.subtitle.font-weight-bold'.i18n,
+                ButtonSegment(
+                  value: FontWeight.bold,
+                  label: Text(
+                    'video.sidebar.subtitle.font-weight-bold'.i18n,
+                  ),
                 ),
-              ),
-            ],
-            selected: <FontWeight>{_c.subtitleFontWeight.value},
-            onSelectionChanged: (value) {
-              _c.subtitleFontWeight.value = value.first;
-            },
+              ],
+              selected: <FontWeight>{_c.subtitleFontWeight.value},
+              onSelectionChanged: (value) {
+                _c.subtitleFontWeight.value = value.first;
+              },
+            ),
           ),
         ),
         const SizedBox(height: 20),
@@ -756,32 +759,35 @@ class _SideBarSettingsState extends State<_SideBarSettings> {
         ),
         const SizedBox(height: 10),
         Obx(
-          () => SegmentedButton(
-            showSelectedIcon: false,
-            segments: [
-              ButtonSegment(
-                value: PlaylistMode.loop,
-                label: Text(
-                  'video.sidebar.play-mode.loop'.i18n,
+          () => SingleChildScrollView(
+            scrollDirection: Axis.horizontal,
+            child: SegmentedButton(
+              showSelectedIcon: false,
+              segments: [
+                ButtonSegment(
+                  value: PlaylistMode.loop,
+                  label: Text(
+                    'video.sidebar.play-mode.loop'.i18n,
+                  ),
                 ),
-              ),
-              ButtonSegment(
-                value: PlaylistMode.single,
-                label: Text(
-                  'video.sidebar.play-mode.single'.i18n,
+                ButtonSegment(
+                  value: PlaylistMode.single,
+                  label: Text(
+                    'video.sidebar.play-mode.single'.i18n,
+                  ),
                 ),
-              ),
-              ButtonSegment(
-                value: PlaylistMode.none,
-                label: Text(
-                  'video.sidebar.play-mode.auto-next'.i18n,
+                ButtonSegment(
+                  value: PlaylistMode.none,
+                  label: Text(
+                    'video.sidebar.play-mode.auto-next'.i18n,
+                  ),
                 ),
-              ),
-            ],
-            selected: <PlaylistMode>{_c.playMode.value},
-            onSelectionChanged: (value) {
-              _c.playMode.value = value.first;
-            },
+              ],
+              selected: <PlaylistMode>{_c.playMode.value},
+              onSelectionChanged: (value) {
+                _c.playMode.value = value.first;
+              },
+            ),
           ),
         ),
       ],

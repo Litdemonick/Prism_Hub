@@ -550,7 +550,10 @@ class _Footer extends StatelessWidget {
                   ),
                   if (constraints.maxWidth > 500)
                     Expanded(
-                      child: Row(
+                      child: SingleChildScrollView(
+                        scrollDirection: Axis.horizontal,
+                        reverse: true,
+                        child: Row(
                         mainAxisAlignment: MainAxisAlignment.end,
                         mainAxisSize: MainAxisSize.min,
                         children: [
@@ -617,6 +620,7 @@ class _Footer extends StatelessWidget {
                             ),
                           ),
                         ],
+                        ),
                       ),
                     ),
                 ],
@@ -1259,9 +1263,14 @@ class _ServerSelectorState extends State<_ServerSelector> {
               children: [
                 const Icon(FluentIcons.server, size: 14),
                 const SizedBox(width: 6),
-                Text(
-                  current.isEmpty ? 'Servidor' : current,
-                  style: const TextStyle(fontSize: 13),
+                ConstrainedBox(
+                  constraints: const BoxConstraints(maxWidth: 90),
+                  child: Text(
+                    current.isEmpty ? 'Servidor' : current,
+                    style: const TextStyle(fontSize: 13),
+                    overflow: TextOverflow.ellipsis,
+                    maxLines: 1,
+                  ),
                 ),
               ],
             ),
