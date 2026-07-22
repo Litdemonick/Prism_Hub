@@ -105,4 +105,22 @@ jobs:
           token: ${{ secrets.GITHUB_TOKEN }}
           artifacts: "Output/*.exe,PrismHub-${{ github.ref_name }}-windows-x64.zip"
           allowUpdates: true
-          omitBody: true
+          body: |
+            ## PrismHub — anime, manga y series, sin límites
+
+            App multiplataforma (Windows · Linux · Android) para ver anime, leer manga y acceder a series/películas mediante un sistema de **extensiones JavaScript**: cada fuente de contenido es un script que se instala sin tocar la app ni esperar una actualización.
+
+            ### Qué incluye
+            - **Reproductor con failover automático**: si un servidor falla, cambia solo al siguiente sin cortar la reproducción.
+            - **Historial y favoritos** unificados, con progreso por episodio guardado localmente.
+            - **Tracking con AniList**: vinculá tu cuenta y se actualiza tu lista mientras reproducís.
+            - **DLNA / Cast a TV** para pantalla grande sin cables.
+            - **Auto-actualización en Windows y Linux**: la app se avisa sola de nuevas versiones y se actualiza desde Ajustes, sin volver a descargar el instalador a mano.
+            - Repositorio oficial de extensiones **prism+** preinstalado (en crecimiento).
+
+            ### Instalación
+            - **Windows**: instalador `.exe` o el `.zip` portable.
+            - **Linux**: `.tar.gz` (x64) — también hay script de instalación y PKGBUILD para Arch en el repo.
+            - **Android**: elegí el `.apk` según tu arquitectura (`arm64-v8a` cubre la gran mayoría de equipos modernos).
+
+            Proyecto **open source bajo AGPL-3.0**. Sigue en beta — reportá bugs en [Issues](https://github.com/Litdemonick/Prism_Hub/issues).
