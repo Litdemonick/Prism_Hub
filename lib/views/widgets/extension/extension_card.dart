@@ -189,43 +189,62 @@ class _ExtensionCardState extends State<ExtensionCard> {
                 ),
             ],
           )),
-      trailing: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          if (isLoading)
-            const SizedBox(
-              width: 25,
-              height: 25,
-              child: ProgressRing(),
-            )
-          else if (isInstall) ...[
-            if (hasUpgrade)
-              FilledButton(
-                child: Text('extension-repo.upgrade'.i18n),
-                onPressed: () async {
-                  await _install();
-                  setState(() {});
-                },
-              ),
-            const SizedBox(width: 8),
-            if (isInstall)
-              TextButton(
-                child: Text('common.uninstall'.i18n),
-                onPressed: () async {
-                  await ExtensionUtils.uninstall(widget.package);
-                  setState(() {
-                    isInstall = false;
-                  });
-                },
+      trailing: SizedBox(
+        width: hasUpgrade ? 96 : 90,
+        child: isLoading
+            ? const SizedBox(
+                width: 25,
+                height: 25,
+                child: ProgressRing(),
               )
-          ] else
-            TextButton(
-              onPressed: () async {
-                await _install();
-              },
-              child: Text('common.install'.i18n),
-            )
-        ],
+            : isInstall
+                ? Wrap(
+                    alignment: WrapAlignment.end,
+                    crossAxisAlignment: WrapCrossAlignment.center,
+                    spacing: 4,
+                    runSpacing: 0,
+                    children: [
+                      if (hasUpgrade)
+                        SizedBox(
+                          height: 32,
+                          child: FilledButton(
+                            style: TextButton.styleFrom(
+                              padding: const EdgeInsets.symmetric(horizontal: 8),
+                              minimumSize: Size.zero,
+                              textStyle: const TextStyle(fontSize: 12),
+                            ),
+                            onPressed: () async {
+                              await _install();
+                              setState(() {});
+                            },
+                            child: Text('extension-repo.upgrade'.i18n),
+                          ),
+                        ),
+                      SizedBox(
+                        height: 32,
+                        child: TextButton(
+                          style: TextButton.styleFrom(
+                            padding: const EdgeInsets.symmetric(horizontal: 8),
+                            minimumSize: Size.zero,
+                            textStyle: const TextStyle(fontSize: 12),
+                          ),
+                          onPressed: () async {
+                            await ExtensionUtils.uninstall(widget.package);
+                            setState(() {
+                              isInstall = false;
+                            });
+                          },
+                          child: Text('common.uninstall'.i18n),
+                        ),
+                      ),
+                    ],
+                  )
+                : TextButton(
+                    onPressed: () async {
+                      await _install();
+                    },
+                    child: Text('common.install'.i18n),
+                  ),
       ),
     );
   }
