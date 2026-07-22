@@ -37,11 +37,15 @@ class CacheNetWorkImagePic extends StatelessWidget {
   final ExtendedImageMode mode;
   final InitGestureConfigHandler? initGestureConfigHandler;
 
-  _errorBuild() {
+  // Branded placeholder for a cover that failed to load — the source site
+  // may be down or blocking, not necessarily an app bug. assets/cardoffline.png
+  // is the app's dedicated "offline/no image" art, so it reads as an
+  // intentional state instead of a bare error icon.
+  Widget _errorBuild() {
     if (fallback != null) {
       return fallback!;
     }
-    return const Center(child: Icon(fluent.FluentIcons.error));
+    return Image.asset('assets/cardoffline.png', fit: BoxFit.cover);
   }
 
   @override

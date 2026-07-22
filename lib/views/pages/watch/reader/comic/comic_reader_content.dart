@@ -218,13 +218,25 @@ class _ComicReaderContentState extends State<ComicReaderContent> {
     }
   }
 
-  _buildPlaceholder(BuildContext context) {
+  // Shown per-page while its image is still loading — scrolling fast
+  // through not-yet-loaded pages used to hit a blank box; the dimmed
+  // branded art fills that space instead of leaving it empty.
+  Widget _buildPlaceholder(BuildContext context) {
     final width = MediaQuery.of(context).size.width;
     final height = MediaQuery.of(context).size.height;
     return SizedBox(
       width: width,
       height: height,
-      child: const Center(child: ProgressRing()),
+      child: Stack(
+        fit: StackFit.expand,
+        children: [
+          Opacity(
+            opacity: 0.5,
+            child: Image.asset('assets/cardoffline.png', fit: BoxFit.cover),
+          ),
+          const Center(child: ProgressRing()),
+        ],
+      ),
     );
   }
 
