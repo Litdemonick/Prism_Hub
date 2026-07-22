@@ -37,10 +37,12 @@
   },
   "home": {
     "continue-watching": "Continuar",
-    "favorite": "Favorito",
+    "favorite": "Favoritos",
     "no-record": "Sin favoritos ni registros de visualización",
     "watched": "Visto {ep}",
-    "favorite-all": "Todos los {type}s favoritos"
+    "favorite-all": "Todos los {type}s favoritos",
+    "history": "Historial",
+    "clear-history-confirm": "¿Eliminar todo? Esta acción no se puede deshacer."
   },
   "search": {
     "hint-text": "¡Por favor, busca ampliamente!~",
@@ -211,7 +213,7 @@
   "extension-type": {
     "video": "Vídeo",
     "novel": "Novela",
-    "comic": "Cómic"
+    "comic": "Manga"
   },
   "extension-info": {
     "author": "Autor",
