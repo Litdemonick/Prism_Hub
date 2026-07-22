@@ -158,7 +158,10 @@ class _HistoryPageState extends State<HistoryPage>
           }).toList();
 
     if (items.isEmpty) {
-      return Center(child: Text('common.no-result'.i18n));
+      final nothingAtAll = _c.resents.isEmpty && _c.favorites.isEmpty;
+      return Center(
+        child: Text(nothingAtAll ? 'home.no-record'.i18n : 'common.no-result'.i18n),
+      );
     }
 
     return LayoutBuilder(
@@ -278,9 +281,11 @@ class _HistoryPageState extends State<HistoryPage>
 
   @override
   Widget build(BuildContext context) {
-    if (_c.resents.isEmpty && _c.favorites.isEmpty) {
-      return Center(child: Text('home.no-record'.i18n));
-    }
+    // No hacer early-return acá con un Center+Text suelto: eso saltea el
+    // Scaffold/AppBar (sin Material ancestor, Flutter dibuja el texto con su
+    // estilo de fallback feo — rojo con subrayado amarillo) y deja la página
+    // sin botón para volver. El estado vacío se maneja dentro de _buildGrid,
+    // que ya corre dentro del Scaffold normal.
     return PlatformBuildWidget(
       androidBuilder: _buildAndroid,
       desktopBuilder: _buildDesktop,

@@ -37,6 +37,12 @@ class HistoryItemCard extends StatelessWidget {
         fit: BoxFit.cover,
         width: double.infinity,
         height: double.infinity,
+        errorBuilder: (context, error, stackTrace) => Image.asset(
+          'assets/cardoffline.png',
+          fit: BoxFit.cover,
+          width: double.infinity,
+          height: double.infinity,
+        ),
       );
     }
     return CacheNetWorkImagePic(
