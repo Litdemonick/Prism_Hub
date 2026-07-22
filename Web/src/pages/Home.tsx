@@ -33,7 +33,7 @@ const DroidIcon = () => (
 const stats = [
   { value: '150+', label: 'Extensiones' },
   { value: '3',    label: 'Plataformas' },
-  { value: 'v1.0', label: 'Versión estable' },
+  { value: 'Beta', label: 'En desarrollo' },
   { value: '100%', label: 'Open Source' },
 ];
 
