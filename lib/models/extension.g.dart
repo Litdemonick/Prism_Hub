@@ -92,6 +92,8 @@ ExtensionDetail _$ExtensionDetailFromJson(Map<String, dynamic> json) =>
       headers: (json['headers'] as Map<String, dynamic>?)?.map(
         (k, e) => MapEntry(k, e as String),
       ),
+      genres:
+          (json['genres'] as List<dynamic>?)?.map((e) => e as String).toList(),
     );
 
 Map<String, dynamic> _$ExtensionDetailToJson(ExtensionDetail instance) =>
@@ -101,6 +103,7 @@ Map<String, dynamic> _$ExtensionDetailToJson(ExtensionDetail instance) =>
       'desc': instance.desc,
       'episodes': instance.episodes,
       'headers': instance.headers,
+      'genres': instance.genres,
     };
 
 ExtensionEpisodeGroup _$ExtensionEpisodeGroupFromJson(

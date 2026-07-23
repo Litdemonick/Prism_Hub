@@ -99,6 +99,7 @@ class ExtensionDetail {
     this.desc,
     this.episodes,
     this.headers,
+    this.genres,
   });
 
   final String title;
@@ -106,6 +107,9 @@ class ExtensionDetail {
   final String? desc;
   final List<ExtensionEpisodeGroup>? episodes;
   late Map<String, String>? headers;
+  // No todas las extensiones lo devuelven (jkanime/animeytx/manhwaweb/olympus
+  // sí, vía su propio scraping del sitio) — por eso es opcional.
+  final List<String>? genres;
 
   factory ExtensionDetail.fromJson(Map<String, dynamic> json) =>
       _$ExtensionDetailFromJson(json);

@@ -63,7 +63,18 @@
     "watched-chapter": "Watched Chapter {ep}",
     "favorite-all": "All {type} favorites",
     "history": "History",
-    "clear-history-confirm": "Delete everything? This can't be undone."
+    "clear-history-confirm": "Delete everything? This can't be undone.",
+    "hero-title": "Discover your next obsession",
+    "hero-subtitle": "Explore anime, manga and novels from all your extensions. Save favorites and track your progress chapter by chapter.",
+    "hero-cta": "Explore catalog",
+    "video": "Video",
+    "reading": "Reading",
+    "following": "Following",
+    "in-progress": "In progress",
+    "completed": "Completed",
+    "recommended": "Recommended for you",
+    "genres": "Genres",
+    "genre-empty": "No results for this genre in your library"
   },
   "search": {
     "hint-text": "Please use search wisely!~",
