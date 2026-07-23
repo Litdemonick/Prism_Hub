@@ -89,7 +89,7 @@ class SearchPageController extends GetxController {
             searchResultList.refresh();
           }
         }).catchError((e) {
-          element.error = e.toString();
+          element.error = e;
           searchResultList.refresh();
         }).whenComplete(() {
           element.completed = true;
@@ -116,7 +116,10 @@ class SearchPageController extends GetxController {
 class SearchResult {
   final ExtensionService runitme;
   List<ExtensionListItem>? result;
-  String? error;
+  // Objeto de excepción crudo, no un String — friendlyError()/
+  // isConnectionError() necesitan el tipo real (DioException, etc.) para
+  // detectar errores de red de forma confiable, no solo matchear texto.
+  Object? error;
   bool completed;
   SearchResult({
     required this.runitme,

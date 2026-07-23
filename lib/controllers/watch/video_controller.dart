@@ -1506,12 +1506,14 @@ class VideoPlayerController extends GetxController {
         SystemUiMode.edgeToEdge,
       );
       // 如果是平板则不改变
-      // 切换回竖屏
+      // Libera el bloqueo nativo que dejó landscapeAutoMode(forceSensor:
+      // true) en onInit — pedir portraitUp/portraitDown acá bloqueaba la
+      // rotación libre para siempre (hasta reiniciar la app), porque nada
+      // más en la app vuelve a pedir "todas las orientaciones". fullAutoMode
+      // restaura la auto-rotación real según el sensor/config del sistema.
       if (!LayoutUtils.isTablet) {
-        SystemChrome.setPreferredOrientations([
-          DeviceOrientation.portraitUp,
-          DeviceOrientation.portraitDown,
-        ]);
+        await AutoOrientation.fullAutoMode();
+        SystemChrome.setPreferredOrientations(DeviceOrientation.values);
       }
     }
     _dlnaTimer?.cancel();

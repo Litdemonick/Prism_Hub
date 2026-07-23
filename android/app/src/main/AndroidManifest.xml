@@ -31,6 +31,14 @@
         <meta-data
             android:name="flutterEmbedding"
             android:value="2" />
+        <!-- Impeller (renderer nuevo, default en Android desde Flutter 3.29+)
+             mostraba texto con artefactos (líneas/contornos raros que se
+             corrigen solos al frame siguiente) durante transiciones rápidas
+             de las cards — es un patrón de bug conocido de Impeller
+             (shader warm-up). Se vuelve a Skia, el renderer estable anterior. -->
+        <meta-data
+            android:name="io.flutter.embedding.android.EnableImpeller"
+            android:value="false" />
     </application>
     <uses-permission android:name="android.permission.INTERNET" />
     <uses-permission android:name="android.permission.WAKE_LOCK" />

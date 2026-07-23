@@ -44,7 +44,18 @@
     "watched-chapter": "Visto Capítulo {ep}",
     "favorite-all": "Todos los {type}s favoritos",
     "history": "Historial",
-    "clear-history-confirm": "¿Eliminar todo? Esta acción no se puede deshacer."
+    "clear-history-confirm": "¿Eliminar todo? Esta acción no se puede deshacer.",
+    "hero-title": "Descubre tu próxima obsesión",
+    "hero-subtitle": "Explora animes, mangas y novelas de todas tus extensiones. Guarda favoritos y seguí tu progreso capítulo a capítulo.",
+    "hero-cta": "Explorar catálogo",
+    "video": "Video",
+    "reading": "Lectura",
+    "following": "Siguiendo",
+    "in-progress": "En progreso",
+    "completed": "Completados",
+    "recommended": "Recomendado para ti",
+    "genres": "Géneros",
+    "genre-empty": "Sin resultados de este género en tu biblioteca"
   },
   "search": {
     "hint-text": "¡Por favor, busca ampliamente!~",
