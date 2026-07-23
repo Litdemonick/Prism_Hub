@@ -1,11 +1,27 @@
 import 'package:dio/dio.dart';
 import 'package:prismhub/utils/i18n.dart';
 
-/// True when an error string looks like a network/connectivity failure
-/// (no internet, host unreachable, connection reset, etc.).
-bool isConnectionError(String? error) {
+/// True when an error looks like a network/connectivity failure (no
+/// internet, host unreachable, connection reset, timeout, etc.). Checks the
+/// DioException type first (reliable, and covers cases like
+/// "DioException [unknown]: null" whose text matches no marker below) before
+/// falling back to matching the stringified message.
+bool isConnectionError(Object? error) {
   if (error == null) return false;
-  final e = error.toLowerCase();
+  if (error is DioException &&
+      (error.type == DioExceptionType.connectionTimeout ||
+          error.type == DioExceptionType.receiveTimeout ||
+          error.type == DioExceptionType.sendTimeout ||
+          error.type == DioExceptionType.connectionError ||
+          // DioExceptionType.unknown: en la práctica, casi siempre envuelve
+          // una falla de socket/red que Dio no supo categorizar mejor (el
+          // caso "DioException [unknown]: null" sin mensaje interno). Para
+          // una petición HTTP simple como las de las extensiones, tratarlo
+          // como "sin conexión" es más útil que mostrar el texto crudo.
+          error.type == DioExceptionType.unknown)) {
+    return true;
+  }
+  final e = error.toString().toLowerCase();
   const markers = [
     'connection error',
     'connectionerror',
@@ -33,18 +49,8 @@ bool isConnectionError(String? error) {
 /// its first line so we never dump a full stack trace at the user.
 String friendlyError(Object? error) {
   if (error == null) return '';
-  // Chequeo directo del tipo primero: más confiable que matchear texto, y
-  // cubre timeouts de Dio cuyo mensaje no calza con ningún marker de arriba.
-  if (error is DioException &&
-      (error.type == DioExceptionType.connectionTimeout ||
-          error.type == DioExceptionType.receiveTimeout ||
-          error.type == DioExceptionType.sendTimeout ||
-          error.type == DioExceptionType.connectionError)) {
+  if (isConnectionError(error)) {
     return 'common.no-internet'.i18n;
   }
-  final text = error.toString();
-  if (isConnectionError(text)) {
-    return 'common.no-internet'.i18n;
-  }
-  return text.split('\n').first;
+  return error.toString().split('\n').first;
 }
