@@ -11,6 +11,7 @@ import 'package:prismhub/utils/i18n.dart';
 import 'package:prismhub/utils/resume_history.dart';
 import 'package:prismhub/views/pages/detail_page.dart';
 import 'package:prismhub/views/pages/history_page.dart';
+import 'package:prismhub/views/widgets/home/home_category_chips.dart';
 import 'package:prismhub/views/widgets/home/home_hero_banner.dart';
 import 'package:prismhub/views/widgets/home/home_library_genre_chips.dart';
 import 'package:prismhub/views/widgets/home/home_media_card.dart';
@@ -168,6 +169,8 @@ class _HomePageState extends State<HomePage> {
                     ),
                     const SizedBox(height: 32),
                   ],
+                  HomeCategoryChips(controller: c),
+                  const SizedBox(height: 24),
                   HomeLibraryGenreChips(controller: c),
                 ],
               ),

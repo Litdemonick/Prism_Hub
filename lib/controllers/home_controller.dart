@@ -35,6 +35,27 @@ class HomePageController extends GetxController {
   List<LibraryGenreEntry> entriesForGenre(String genre) =>
       libraryEntries.where((e) => e.genres.contains(genre)).toList();
 
+  // "Categorías" — mismas etiquetas fijas del diseño (no dependen de qué
+  // haya en tu biblioteca, siempre se muestran), pero filtran contenido
+  // real: coincidencia parcial insensible a mayúsculas contra los géneros
+  // reales cacheados (ver libraryEntries), no un catálogo fabricado.
+  static const fixedCategories = [
+    'Acción',
+    'Romance',
+    'Fantasía',
+    'Terror',
+    'Comedia',
+    'Deportes',
+    'Drama',
+  ];
+
+  List<LibraryGenreEntry> entriesForCategory(String category) {
+    final needle = category.toLowerCase();
+    return libraryEntries
+        .where((e) => e.genres.any((g) => g.toLowerCase().contains(needle)))
+        .toList();
+  }
+
   // Portada real random para el fondo del hero — cambia cada vez que se
   // refresca el home (favoritos/continuar viendo/recomendado, en ese orden
   // de prioridad de pool combinado). Nunca se fabrica una imagen.
