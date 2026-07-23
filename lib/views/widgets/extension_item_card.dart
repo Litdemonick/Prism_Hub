@@ -32,22 +32,25 @@ class ExtensionItemCard extends StatefulWidget {
 
 class _ExtensionItemCardState extends State<ExtensionItemCard> {
   Widget _buildAndroid(BuildContext context) {
-    return Hero(
-      tag: widget.url,
-      child: GridItemTile(
-        title: widget.title,
-        cover: widget.cover,
-        subtitle: widget.update,
-        headers: widget.headers,
-        type: widget.type,
-        onTap: () {
-          Get.to(DetailPage(
-            url: widget.url,
-            package: widget.package,
-            tag: widget.url,
-          ));
-        },
-      ),
+    // Sin Hero: envolvía toda la tarjeta (imagen + título + badge +
+    // degradado) pero del otro lado (detail_appbar_flexible_space.dart) el
+    // Hero es solo una imagen chica sin texto — Flutter tenía que
+    // transformar una forma en la otra durante el vuelo, y esa mezcla de
+    // formas tan distintas se veía como que las tarjetas "se movían" mal
+    // al entrar/salir del detalle.
+    return GridItemTile(
+      title: widget.title,
+      cover: widget.cover,
+      subtitle: widget.update,
+      headers: widget.headers,
+      type: widget.type,
+      onTap: () {
+        Get.to(DetailPage(
+          url: widget.url,
+          package: widget.package,
+          tag: widget.url,
+        ));
+      },
     );
   }
 
