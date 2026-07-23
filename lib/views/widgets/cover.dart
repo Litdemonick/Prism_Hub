@@ -28,7 +28,15 @@ class Cover extends StatelessWidget {
 
     return Container(
       padding: const EdgeInsets.all(8),
-      color: ColorUtils.getColorByText(alt),
+      // decoration (no color:) — Container exige decoration != null cuando
+      // clipBehavior no es Clip.none, si no tira "Failed assertion" en
+      // tiempo de ejecución (el error rojo que tapaba toda la tarjeta).
+      decoration: BoxDecoration(color: ColorUtils.getColorByText(alt)),
+      // hardEdge: sin esto, un título largo en una portada angosta (ej. el
+      // thumbnail chico del detalle) rendereaba más líneas de las que
+      // entraban en alto y se veía "sangrando" fuera de la tarjeta en vez
+      // de recortarse limpio.
+      clipBehavior: Clip.hardEdge,
       child: noText
           ? const SizedBox.expand()
           : Center(
@@ -37,8 +45,9 @@ class Cover extends StatelessWidget {
                 style: const TextStyle(
                   color: Colors.white,
                 ),
+                textAlign: TextAlign.center,
                 overflow: TextOverflow.ellipsis,
-                maxLines: 6,
+                maxLines: 3,
               ),
             ),
     );
