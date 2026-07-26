@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 import 'package:prismhub/controllers/detail_controller.dart';
 import 'package:prismhub/utils/i18n.dart';
+import 'package:prismhub/views/widgets/home/home_theme.dart';
 import 'package:prismhub/views/widgets/platform_widget.dart';
 
 class DetailFavoriteButton extends StatefulWidget {
@@ -53,7 +54,23 @@ class _DetailFavoriteButtonState extends State<DetailFavoriteButton> {
   Widget _buildDesktop(BuildContext context) {
     return Obx(() {
       final isFavorite = c.isFavorite.value;
-      return fluent.FilledButton(
+      return fluent.Button(
+        style: fluent.ButtonStyle(
+          backgroundColor: fluent.WidgetStateProperty.all(
+            isFavorite ? HomeTheme.accentPink.withValues(alpha: 0.18) : HomeTheme.cardSurface,
+          ),
+          foregroundColor: fluent.WidgetStateProperty.all(
+            isFavorite ? HomeTheme.accentPink : HomeTheme.textPrimary,
+          ),
+          shape: fluent.WidgetStateProperty.all(
+            RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(999),
+              side: BorderSide(
+                color: isFavorite ? HomeTheme.accentPink : HomeTheme.border,
+              ),
+            ),
+          ),
+        ),
         onPressed: () async {
           await c.toggleFavorite();
         },
@@ -66,12 +83,12 @@ class _DetailFavoriteButtonState extends State<DetailFavoriteButton> {
                 ? [
                     Text('detail.favorited'.i18n),
                     const SizedBox(width: 8),
-                    const Icon(fluent.FluentIcons.favorite_star_fill)
+                    const Icon(fluent.FluentIcons.favorite_star_fill, size: 14)
                   ]
                 : [
                     Text('detail.favorite'.i18n),
                     const SizedBox(width: 8),
-                    const Icon(fluent.FluentIcons.favorite_star)
+                    const Icon(fluent.FluentIcons.favorite_star, size: 14)
                   ],
           ),
         ),

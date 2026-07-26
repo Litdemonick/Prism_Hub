@@ -21,20 +21,24 @@
     "home": "Home",
     "search": "Search",
     "extension": "Extensions",
+    "extension-installed": "Installed Extensions",
     "extension-repo": "Extension Repository",
     "settings": "Settings",
     "no-extension": "No installed extensions",
     "no-result": "No relevant results",
     "no-more-data": "No more data",
+    "no-more-data-filtered": "No more data with this filter",
     "cancel": "Cancel",
     "confirm": "Confirm",
     "close": "Close",
+    "refresh": "Refresh",
     "copied": "Copied to clipboard",
     "uninstall": "Uninstall",
     "install": "Install",
     "repo": "Repository",
     "unset": "Not set",
     "extension-missing": "Extension {package} missing",
+    "extension-disabled": "Extension {package} is disabled",
     "error": "Error",
     "retry": "Retry",
     "next": "Next",
@@ -52,35 +56,27 @@
     "off": "Off",
     "error-message": "Error message",
     "disconnect": "Disconnect",
-    "no-internet": "Connect to the internet to load content"
+    "no-internet": "Connect to the internet to load content",
+    "no-internet-multiple": "No internet connection: couldn't load content from {count} extensions"
   },
   "home": {
     "continue-watching": "Continue",
     "favorite": "Favorites",
     "no-record": "No favorites or viewing records",
-    "watched": "Watched {ep}",
     "watched-episode": "Watched Episode {ep}",
     "watched-chapter": "Watched Chapter {ep}",
     "favorite-all": "All {type} favorites",
     "history": "History",
     "clear-history-confirm": "Delete everything? This can't be undone.",
     "hero-title": "Discover your next obsession",
-    "hero-subtitle": "Explore anime, manga and novels from all your extensions. Save favorites and track your progress chapter by chapter.",
-    "hero-cta": "Explore catalog",
-    "video": "Video",
-    "reading": "Reading",
-    "following": "Following",
-    "in-progress": "In progress",
-    "completed": "Completed",
-    "recommended": "Recommended for you",
-    "categories": "Categories",
-    "genres": "Genres",
-    "genre-empty": "No results for this genre in your library"
+    "hero-subtitle": "Explore anime, movies, series, manga and novels from all your extensions. Save favorites and track your progress chapter by chapter.",
+    "hero-cta": "Explore catalog"
   },
   "search": {
     "hint-text": "Please use search wisely!~",
     "all": "All",
-    "filter": "Filter"
+    "filter": "Filter",
+    "reset-filters": "Reset filters"
   },
   "extension": {
     "import": {
@@ -98,13 +94,22 @@
     "invalid": "The extension is invalid or corrupted. It was not installed.",
     "invalid-signature": "Invalid signature: this extension was tampered with and does not match the official Prism+ one. Not installed for safety.",
     "not-working": "This extension is not working at the moment",
-    "install-success": "Extension installed"
+    "install-success": "Extension installed",
+    "official-badge": "PrismPlus",
+    "update-required": "Update required",
+    "update-required-dialog": "This extension has a pending update. You must update it before you can use it.",
+    "go-to-update": "Go to update"
   },
   "extension-repo": {
     "error": "An error occurred!",
     "error-tips": "Please check your network connection or the repository address",
     "empty": "Repository is empty",
-    "upgrade": "Update"
+    "upgrade": "Update",
+    "installed": "Installed",
+    "available": "Available"
+  },
+  "extension-searcher": {
+    "nsfw-blocked": "This content is 18+. Enable adult content in Settings > General to view it."
   },
   "settings": {
     "general": "General",
@@ -120,10 +125,12 @@
     "auto-tracking": "Auto Tracking",
     "auto-tracking-subtitle": "Automatically sync progress when finished watching / reading",
     "about": "About",
+    "about-description": "🎉 PrismHub - A versatile application that is free, open-source, and supports extension sources for videos, comics, and novels, available on Android, Windows, Linux and Web platforms.",
     "links": "Links",
     "contributors": "Contributors",
     "repo-url": "Extension Repository URL",
     "repo-url-subtitle": "Get the repository URL for extensions",
+    "repo-official-note": "The default repository is the official PrismPlus one. Extensions signed from there are marked \"PrismPlus\" in the list.",
     "tmdb-key": "TMDB API Key",
     "tmdb-key-subtitle": "Get API Key for TMDB metadata",
     "bt-server": "BT Server",
@@ -145,6 +152,7 @@
     "nsfw-subtitle": "Show NSFW content",
     "external-player": "Preferred video player",
     "external-player-subtitle": "Currently, the preferred player is {player}",
+    "external-player-locked-subtitle": "For now the whole app uses the built-in player.",
     "external-player-builtin": "Built-in",
     "language-subtitle": "Change the language of the software",
     "extension-log": "Extension Log Window",
@@ -158,6 +166,7 @@
     "network-ua-subtitle": "Modify the User-Agent in the request header for Webviews and extensions.",
     "proxy-type": "Proxy Type",
     "proxy-type-subtitle": "Proxy type for requests",
+    "proxy-type-locked-subtitle": "Locked to \"Direct\" for stability — other types could make the app feel slow.",
     "proxy-type-direct": "Direct",
     "proxy-type-socks4": "Socks4",
     "proxy-type-socks5": "Socks5",
@@ -174,12 +183,19 @@
   },
   "external-player-launching": "Launching {player}",
   "detail": {
+    "status-ongoing": "Ongoing",
+    "status-completed": "Completed",
+    "status-upcoming": "Upcoming",
+    "status-hiatus": "On hiatus",
     "tracking": "Tracking",
     "favorite": "Favorite",
     "favorited": "Favorited",
     "continue-watching": "Continue {episode}",
+    "episode-label": "Episode {ep}",
+    "chapter-label": "Chapter {ep}",
     "total-episodes": "Total {total}",
     "overview": "Overview",
+    "no-description": "No description available for this content.",
     "cast": "Cast",
     "additional-info": "Additional Info",
     "get-lastest-data-error": "Failed to get latest data",
@@ -192,6 +208,7 @@
     "episodes": "Episodes",
     "watch-now": "Watch Now",
     "no-episodes": "No episodes",
+    "no-episodes-yet": "No episodes yet for now.",
     "play-complete": "Playback complete",
     "resume-last-playback": "Resume last playback",
     "subtitle-none": "No Subtitle",
@@ -219,6 +236,7 @@
     },
     "cast": "Cast to device",
     "cast-device": "playing on {device}",
+    "cast-disconnect": "Disconnect",
     "sidebar": {
       "tab": {
         "episodes": "Episodes",
@@ -246,7 +264,8 @@
       }
     },
     "servers": "Servers",
-    "webview-server": "Opens in browser"
+    "webview-server": "Opens in browser",
+    "webview-server-return": "Back to browser"
   },
   "comic-settings": {
     "read-mode": "Read mode",
@@ -263,9 +282,18 @@
     "show-report-dialog-subtitle": "Show error report dialog when app starts"
   },
   "reader": {
+    "reading-mode": "Reading mode",
+    "mode-webtoon": "Cascade (webtoon)",
+    "mode-webtoon-subtitle": "Continuous vertical scrolling",
+    "mode-ltr": "Pages — left to right",
+    "mode-ltr-subtitle": "One page at a time, western order",
+    "mode-rtl": "Pages — right to left",
+    "mode-rtl-subtitle": "One page at a time, Japanese manga order",
     "chapters": "Chapters",
     "read-now": "Read Now",
-    "no-chapters": "No chapters"
+    "no-chapters": "No chapters",
+    "no-chapters-yet": "No chapters yet for now.",
+    "page-load-failed": "Could not load this page"
   },
   "upgrade": {
     "check-update": "Check for Updates",
@@ -273,13 +301,22 @@
     "download": "Go to Update",
     "no-update": "Already up to date",
     "not-now": "Not now",
-    "error": "Failed to check for updates, network error occurred"
+    "error": "Failed to check for updates, network error occurred",
+    "forced-title": "Update required",
+    "forced-required": "A new version of PrismHub is available. You must update to keep using the app.",
+    "update-now": "Update now",
+    "already-updated": "I already updated",
+    "downloading": "Downloading update...",
+    "install-failed": "Update failed",
+    "still-outdated": "The update wasn't detected yet. Finish installing it and try again."
   },
   "extension-install-error": "Failed to install extension",
   "extension-type": {
     "video": "Video",
     "novel": "Novel",
-    "comic": "Manga"
+    "comic": "Manga",
+    "reading": "Reading",
+    "mixed": "Video + Reading"
   },
   "extension-info": {
     "author": "Author",

@@ -40,6 +40,18 @@ class _HorizontalScrollFadeState extends State<HorizontalScrollFade>
   }
 
   @override
+  void didUpdateWidget(covariant HorizontalScrollFade oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    // El listener del ScrollController solo dispara con eventos de scroll,
+    // no cuando cambia la CANTIDAD de contenido (ej: la lista pasa de vacía
+    // a poblada tras cargar datos async) — sin esto, _canScrollRight se
+    // quedaba pegado con el valor calculado en el primer frame (a veces
+    // antes de que el contenido real existiera), mostrando la flecha
+    // flotando aunque ya no hubiera nada para desplazar.
+    WidgetsBinding.instance.addPostFrameCallback((_) => _update());
+  }
+
+  @override
   void dispose() {
     widget.controller.removeListener(_update);
     _bounce.dispose();

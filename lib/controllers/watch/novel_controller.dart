@@ -15,6 +15,7 @@ class NovelController extends ReaderController<ExtensionFikushonWatch> {
     required super.runtime,
     required super.cover,
     required super.anilistID,
+    super.cameFromDetail,
   });
 
   // 字体大小
@@ -59,7 +60,7 @@ class NovelController extends ReaderController<ExtensionFikushonWatch> {
           history.episodeId != index.value) {
         return;
       }
-      positions.value = int.parse(history.progress);
+      positions.value = int.tryParse(history.progress) ?? 0;
     });
   }
 

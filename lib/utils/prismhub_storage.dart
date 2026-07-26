@@ -22,6 +22,12 @@ class PrismHubStorage {
     await _initSettings();
 
     // 初始化数据库
+    // inspector: false — Isar lo activa solo por defecto en builds que no
+    // son release (corre un servidor web + sincroniza estado de la DB en
+    // vivo para el Isar Inspector). Es útil para debuggear la DB
+    // directamente, pero tiene un costo de fondo real en modo debug — para
+    // reactivarlo temporalmente (ej. inspeccionar datos a mano), comentar
+    // esta línea nomás.
     database = await Isar.open(
       [
         FavoriteSchema,
@@ -32,6 +38,7 @@ class PrismHubStorage {
         TMDBSchema,
       ],
       directory: _path,
+      inspector: false,
     );
 
     // 数据库升级
@@ -138,6 +145,24 @@ class PrismHubStorage {
         "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36 Edg/120.0.0.0");
     await _initSetting(SettingKey.proxy, '');
     await _initSetting(SettingKey.proxyType, 'DIRECT');
+    // El tipo de proxy quedó bloqueado en Ajustes (SOCKS5/SOCKS4/PROXY
+    // activan flutter_socks_proxy, una reimplementación pura en Dart de
+    // HttpClient que enruta TODA la app por su parser vía
+    // HttpOverrides.global — causa confirmada en vivo de lentitud general).
+    // Quien ya tenía guardado un valor distinto de "DIRECT" de antes de este
+    // bloqueo queda forzado de vuelta, para no dejarlo atascado en un modo
+    // que ya no puede cambiar desde la UI.
+    if (settings.get(SettingKey.proxyType) != 'DIRECT') {
+      await settings.put(SettingKey.proxyType, 'DIRECT');
+    }
+    // Ídem con el reproductor: por ahora toda la app usa el incorporado
+    // (la opción quedó bloqueada en Ajustes), así que quien tuviera VLC/
+    // PotPlayer/mpv guardado de antes vuelve a "built-in" — si no, quedaba
+    // atascado en un reproductor externo que ya no puede cambiar desde la
+    // UI.
+    if (settings.get(SettingKey.videoPlayer) != 'built-in') {
+      await settings.put(SettingKey.videoPlayer, 'built-in');
+    }
     await _initSetting(SettingKey.saveLog, true);
     await _initSetting(SettingKey.subtitleFontSize, 46.0);
     await _initSetting(SettingKey.subtitleFontColor, Colors.white.toARGB32());
@@ -207,6 +232,7 @@ class SettingKey {
   static const prismhubRepoUrl = "prismhubRepoUrl";
   static const defaultExtensionsInstalled = "DefaultExtensionsInstalled";
   static const disabledExtensions = "DisabledExtensions";
+  static const hiddenCards = "HiddenCards";
   static const tmdbKey = 'TMDBKey';
   static const autoCheckUpdate = 'AutoCheckUpdate';
   static const language = 'Language';

@@ -1,4 +1,4 @@
-﻿import 'dart:convert';
+import 'dart:convert';
 import 'dart:io';
 
 import 'package:dio/dio.dart';
@@ -8,6 +8,7 @@ import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 import 'package:prismhub/models/extension.dart';
 import 'package:prismhub/controllers/extension/extension_controller.dart';
+import 'package:prismhub/controllers/home_controller.dart';
 import 'package:prismhub/controllers/search_controller.dart';
 import 'package:prismhub/controllers/settings_controller.dart';
 import 'package:prismhub/data/services/extension_service.dart';
@@ -43,6 +44,88 @@ class ExtensionUtils {
   // True if this extension is currently failing (loaded but unusable).
   static bool isFailing(String package) => runtimeErrors.containsKey(package);
 
+  // Caché de versiones publicadas en el índice del repo (package -> version),
+  // usada para bloquear el uso de una extensión desactualizada (ver
+  // ExtensionTile). TTL corto: evita golpear el repo en cada tile, pero no
+  // deja quedar una versión vieja cacheada por toda la sesión.
+  static Map<String, String>? _remoteVersionsCache;
+  static DateTime? _remoteVersionsFetchedAt;
+  static const _remoteVersionsTtl = Duration(minutes: 10);
+  // Dedup de llamadas EN VUELO — el cache de arriba solo evita refetches
+  // una vez que YA hay un resultado completo, pero con N extensiones
+  // instaladas, sus ExtensionTile montan en el mismo frame y todas llaman
+  // hasExtensionUpdate() antes de que la primera termine: sin esto, cada
+  // una disparaba su PROPIO dio.get(index.json) en paralelo (confirmado en
+  // vivo: 8 pedidos idénticos en menos de 1s con 8 extensiones instaladas).
+  static Future<Map<String, String>>? _remoteVersionsInFlight;
+
+  // Invalida el cache de versiones remotas para forzar una consulta fresca.
+  // Lo usa el "deslizar para actualizar" de Extensiones instaladas: sin
+  // esto, una extensión recién actualizada seguía apareciendo como
+  // "actualización requerida" hasta que venciera el TTL de 10 minutos o se
+  // reiniciara la app (reportado en vivo con Olympus).
+  static void clearRemoteVersionsCache() {
+    _remoteVersionsCache = null;
+    _remoteVersionsFetchedAt = null;
+  }
+
+  static Future<Map<String, String>> _fetchRemoteVersions() async {
+    final cached = _remoteVersionsCache;
+    final fetchedAt = _remoteVersionsFetchedAt;
+    if (cached != null &&
+        fetchedAt != null &&
+        DateTime.now().difference(fetchedAt) < _remoteVersionsTtl) {
+      return cached;
+    }
+    final inFlight = _remoteVersionsInFlight;
+    if (inFlight != null) return inFlight;
+    final future = _doFetchRemoteVersions();
+    _remoteVersionsInFlight = future;
+    try {
+      return await future;
+    } finally {
+      _remoteVersionsInFlight = null;
+    }
+  }
+
+  static Future<Map<String, String>> _doFetchRemoteVersions() async {
+    final cached = _remoteVersionsCache;
+    try {
+      final url =
+          '${PrismHubStorage.getSetting(SettingKey.prismhubRepoUrl)}/index.json';
+      final res = await dio.get<String>(
+        url,
+        options: Options(receiveTimeout: const Duration(seconds: 20)),
+      );
+      final decoded = jsonDecode(res.data!);
+      final list = decoded is Map ? (decoded['extensions'] ?? []) : decoded;
+      final map = <String, String>{};
+      for (final e in list) {
+        final pkg = e['package'] as String?;
+        final ver = e['version'] as String?;
+        if (pkg != null && ver != null) map[pkg] = ver;
+      }
+      _remoteVersionsCache = map;
+      _remoteVersionsFetchedAt = DateTime.now();
+      return map;
+    } catch (e) {
+      // Sin conexión / repo caído: no bloquear extensiones por no poder
+      // chequear — devolver la última caché conocida (o vacío).
+      return cached ?? {};
+    }
+  }
+
+  // True si el package instalado tiene una versión más nueva en el índice
+  // remoto del repo. Comparación por desigualdad de string (igual que
+  // ExtensionCard en el repositorio) — no hay parsing semver hoy.
+  static Future<bool> hasExtensionUpdate(String package) async {
+    final installed = runtimes[package]?.extension.version;
+    if (installed == null) return false;
+    final remote = await _fetchRemoteVersions();
+    final remoteVersion = remote[package];
+    return remoteVersion != null && remoteVersion != installed;
+  }
+
   static String get extensionsDir => path.join(
         PrismHubDirectory.getDirectory,
         'extensions',
@@ -52,7 +135,7 @@ class ExtensionUtils {
   // excluded from search/discovery.
   static List<String> get disabledExtensions =>
       ((PrismHubStorage.getSetting(SettingKey.disabledExtensions) as List?)
-              ?.cast<String>()) ??
+          ?.cast<String>()) ??
       <String>[];
 
   static bool isEnabled(String package) =>
@@ -90,8 +173,8 @@ class ExtensionUtils {
   // Solo las publicadas en prism+ index.json; añadir aquí solo cuando ya
   // exista la entrada firmada en el catálogo.
   static const Set<String> defaultPackages = {
-    'io.prismhub.jkanime',    // anime ES — múltiples servidores confiables
-    'io.prismhub.manhwaweb',  // manhwa/manga ES — ManhwaWeb
+    'io.prismhub.jkanime', // anime ES — múltiples servidores confiables
+    'io.prismhub.manhwaweb', // manhwa/manga ES — ManhwaWeb
   };
 
   // Todos los paquetes oficiales de prism+. Bloqueados de instalar externamente
@@ -117,6 +200,18 @@ class ExtensionUtils {
   static bool isNativePackage(String package) =>
       nativePackages.contains(package) || officialPackages.contains(package);
 
+  // Único lugar con esta validación — antes solo corría dentro de
+  // _saveAndInit (instalación vía UI/URL). installByPath() (usado al
+  // arrancar y por el file watcher cuando aparece/cambia un .js en la
+  // carpeta) tomaba ext.package sin este chequeo y lo usaba tal cual para
+  // construir rutas de archivo (extension_service.dart, request.dart) — un
+  // .js puesto ahí por cualquier vía que no sea el instalador (arrastrar y
+  // soltar, carpeta sincronizada, ZIP extraído) con un @package
+  // "../../../algo" evadía el traversal check.
+  static final RegExp _validPackagePattern = RegExp(r'^[a-zA-Z0-9._-]+$');
+  static bool isValidPackage(String pkg) =>
+      pkg.isNotEmpty && _validPackagePattern.hasMatch(pkg);
+
   static final RegExp _versionHeader = RegExp(r'@version\s+([^\s\r\n]+)');
 
   static String? _scriptVersion(String script) =>
@@ -138,7 +233,8 @@ class ExtensionUtils {
       // en una red restrictiva (universidad, etc.) preferimos fallar rápido
       // y reintentar en el próximo arranque, en vez de quedar colgados.
       final smallFetch = Options(receiveTimeout: const Duration(seconds: 20));
-      final res = await dio.get<String>('$repoUrl/index.json?t=$bust', options: smallFetch);
+      final res = await dio.get<String>('$repoUrl/index.json?t=$bust',
+          options: smallFetch);
       final decoded = jsonDecode(res.data!);
       final List list =
           decoded is Map ? (decoded['extensions'] ?? []) : decoded;
@@ -169,7 +265,8 @@ class ExtensionUtils {
           if (repoVersion == null || repoVersion == localVersion) continue;
         }
         final sep = scriptUrl.contains('?') ? '&' : '?';
-        final js = await dio.get<String>('$scriptUrl${sep}t=$bust', options: smallFetch);
+        final js = await dio.get<String>('$scriptUrl${sep}t=$bust',
+            options: smallFetch);
         if (js.data != null && js.data!.isNotEmpty) {
           // Seguridad: los defaults son oficiales y DEBEN traer firma válida de
           // prism+. Si falta o no valida, es manipulación → no se instala.
@@ -282,8 +379,7 @@ class ExtensionUtils {
   static void _cleanStaleDisabledList() {
     final raw = PrismHubStorage.getSetting(SettingKey.disabledExtensions);
     if (raw == null) return;
-    final List<String> list =
-        raw is List ? List<String>.from(raw) : <String>[];
+    final List<String> list = raw is List ? List<String>.from(raw) : <String>[];
     final existingPkgs = Directory(extensionsDir)
         .listSync()
         .where((e) => path.extension(e.path) == '.js')
@@ -327,7 +423,7 @@ class ExtensionUtils {
     // and reject unsafe package ids (path traversal) so a malicious extension
     // can't escape the extensions directory.
     final pkg = ext.package.trim();
-    if (pkg.isEmpty || !RegExp(r'^[a-zA-Z0-9._-]+$').hasMatch(pkg)) {
+    if (!isValidPackage(pkg)) {
       throw Exception('extension.invalid'.i18n);
     }
     // Black-box filter: an extension already shipped natively by prism+ must
@@ -405,6 +501,10 @@ class ExtensionUtils {
         final file = File(p);
         final content = await file.readAsString();
         final ext = ExtensionUtils.parseExtension(content);
+        // Mismo chequeo que _saveAndInit — acá el .js pudo llegar por
+        // cualquier vía (arrastrar y soltar, carpeta sincronizada, ZIP
+        // extraído), no solo por el instalador de la app.
+        if (!isValidPackage(ext.package.trim())) return;
         // Skip if already loaded with same version (prevents Isar unique index violation
         // when file watcher fires multiple events during install)
         if (runtimes.containsKey(ext.package) &&
@@ -440,18 +540,71 @@ class ExtensionUtils {
     if (Get.isRegistered<SearchPageController>()) {
       Get.find<SearchPageController>().callRefresh();
     }
+    // Home (Continuar/Favoritos/fondo del hero) — sin esto, desactivar o
+    // desinstalar una extensión dejaba su contenido visible en Home hasta
+    // el próximo refresco manual o hasta reabrir la página.
+    if (Get.isRegistered<HomePageController>()) {
+      Get.find<HomePageController>().callRefresh();
+    }
   }
 
+  static final RegExp _episodeNumberPattern = RegExp(r'\d+(?:\.\d+)?');
+
+  // El número real de episodio/capítulo, extraído del título guardado —
+  // NO la posición en la lista (episodeId+1). La posición asume que el
+  // índice local coincide 1:1 con la numeración real de la fuente, y eso
+  // se rompe apenas hay un special/capítulo no secuencial o un offset
+  // distinto por extensión (confirmado: mostraba "Episodio 4" para lo que
+  // en verdad era el episodio 3). Si el título guardado no tiene ningún
+  // número (algunas fuentes ahí guardan el título de la serie repetido en
+  // vez del episodio puntual), se cae a la posición como última opción.
+  static String episodeNumberLabel(String? episodeTitle, int episodeId) {
+    if (episodeTitle != null && episodeTitle.isNotEmpty) {
+      final matches = _episodeNumberPattern.allMatches(episodeTitle).toList();
+      if (matches.isNotEmpty) return matches.last.group(0)!;
+    }
+    return (episodeId + 1).toString();
+  }
+
+  // Manga y novela (fikushon) se muestran igual — "Lectura" — de cara al
+  // usuario: ambos son texto para leer, y manga en particular es muy
+  // versátil (manhwa/manhua/cómic caen ahí también). El ExtensionType
+  // interno sigue distinguiendo los dos (el lector usa una UI distinta
+  // para cada uno); esto solo unifica la ETIQUETA visible.
   static String typeToString(ExtensionType type) {
     switch (type) {
       case ExtensionType.bangumi:
         return 'extension-type.video'.i18n;
       case ExtensionType.fikushon:
-        return 'extension-type.novel'.i18n;
       case ExtensionType.manga:
-        return 'extension-type.comic'.i18n;
+        return 'extension-type.reading'.i18n;
+      case ExtensionType.mixed:
+        return 'extension-type.mixed'.i18n;
     }
   }
+
+  // Extensiones normales declaran un ExtensionType fijo (manga/bangumi/
+  // fikushon) que alcanza para decidir lector-vs-reproductor. Una extensión
+  // "mixed" (ej. ShadeManga: manga Y anime reales en el mismo sitio) no
+  // puede hacerlo — necesita el tipo de CADA título puntual, que la
+  // extensión manda en ExtensionDetail.type (ver detail() en el SDK). Este
+  // helper es el único lugar que resuelve esa ambigüedad, para no repetir
+  // la misma lógica en DetailPageController, resumeHistoryItem, etc.
+  static ExtensionType resolveType(
+      Extension extension, ExtensionDetail? detail) {
+    if (extension.type != ExtensionType.mixed) return extension.type;
+    return detail?.type ?? ExtensionType.bangumi;
+  }
+
+  // Único lugar con esta regla — antes estaba duplicada palabra por palabra
+  // en search_page.dart y extension_repo_page.dart ("mixed entra en las
+  // dos"), con el riesgo de que se actualizara en un lado y no en el otro.
+  static const videoTypes = {ExtensionType.bangumi, ExtensionType.mixed};
+  static const readingTypes = {
+    ExtensionType.manga,
+    ExtensionType.fikushon,
+    ExtensionType.mixed,
+  };
 
   static addLog(
     Extension ext,

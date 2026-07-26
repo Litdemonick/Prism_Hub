@@ -72,14 +72,14 @@ class DetailOverView extends StatelessWidget {
                 ],
               );
             }),
-            Obx(
-              () => SelectableText(
-                c.tmdbDetail?.overview ?? c.detail?.desc ?? '',
-                style: const TextStyle(
-                  height: 2,
-                ),
-              ),
-            ),
+            Obx(() {
+              final desc = c.tmdbDetail?.overview ?? c.detail?.desc;
+              final hasDesc = desc != null && desc.isNotEmpty;
+              return SelectableText(
+                hasDesc ? desc : "detail.no-description".i18n,
+                style: const TextStyle(height: 2),
+              );
+            }),
             const SizedBox(height: 20),
             Obx(
               () {

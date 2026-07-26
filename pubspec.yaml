@@ -7,6 +7,7 @@ environment:
   sdk: ">=3.0.3 <4.0.0"
 
 dependencies:
+  connectivity_plus: ^6.1.3
   desktop_multi_window: ^0.2.0
   dio: ^5.3.2
   dio_cookie_manager: ^3.1.0+1
@@ -43,7 +44,7 @@ dependencies:
   url_launcher_linux: 3.0.6
   window_manager: ^0.5.1
   cookie_jar: ^4.0.8
-  flutter_inappwebview: ^6.0.0
+  flutter_inappwebview: ^6.1.5
   flutter_windows_webview:
     git:
       url: https://github.com/MiaoMint/flutter_windows_webview
@@ -65,6 +66,16 @@ dependencies:
   auto_orientation: ^2.3.1
   dlna_dart: ^0.0.8
   ed25519_edwards: ^0.3.1
+  # Proxy HTTP local — un DLNA/Chromecast pide la URL del stream por su
+  # cuenta y no puede mandar el Referer/User-Agent que muchas fuentes de
+  # anime exigen; ver lib/utils/cast_relay_server.dart.
+  shelf: ^1.4.2
+  # Recorte/zoom de la captura del reproductor WebView (le sacamos la barra
+  # de controles del sitio antes de guardarla como portada de "Continuar
+  # viendo") — ver video_controller.dart. Antes solo estaba como
+  # dev_dependency (la usaba flutter_launcher_icons en tiempo de build), pero
+  # el código de la app en sí también la necesita en runtime.
+  image: ^4.8.0
 
 dev_dependencies:
   flutter_test:
@@ -73,6 +84,27 @@ dev_dependencies:
   isar_generator: ^3.1.0+1
   build_runner: ^2.4.5
   json_serializable: ^6.7.0
+  flutter_launcher_icons: ^0.14.4
+
+flutter_launcher_icons:
+  android: true
+  # assets/icon/icon_square.png — recorte de iconoapp2.png al contorno real
+  # de la estrella (el original tenía mucho margen transparente alrededor,
+  # así que a 16-32px en la barra de tareas se veía chica/perdida en vez de
+  # llenar el ícono como el resto de las apps). Este recorte + padding
+  # cuadrado hace que se note grande y clara a cualquier tamaño.
+  image_path: "assets/icon/icon_square.png"
+  # OJO: el .ico de Windows NO se genera desde acá. flutter_launcher_icons
+  # solo mete UNA imagen (la de icon_size) en el .ico, y entonces la barra de
+  # tareas — que dibuja a 24/32px — tiene que achicar esos 256px al vuelo con
+  # un escalador malo, y el icono se ve pixelado. El .ico bueno, con las 10
+  # resoluciones que Windows pide, lo arma tool/generate_windows_icon.ps1:
+  #   powershell -ExecutionPolicy Bypass -STA -File tool\generate_windows_icon.ps1
+  # Dejar esto en false para que no lo pise.
+  windows:
+    generate: false
+    image_path: "assets/icon/icon_square.png"
+    icon_size: 256
 
 flutter:
   uses-material-design: true
@@ -81,5 +113,5 @@ flutter:
     - assets/icon/logo.png
     - assets/icon/logo_mark.png
     - assets/icon/anilist.jpg
-    - assets/cardoffline.png
+    - assets/carddefaultoffline.png
     - assets/js/

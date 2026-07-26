@@ -46,9 +46,10 @@ class _ExtensionItemCardState extends State<ExtensionItemCard> {
       type: widget.type,
       onTap: () {
         Get.to(DetailPage(
+          key: ValueKey('${widget.package}|${widget.url}'),
           url: widget.url,
           package: widget.package,
-          tag: widget.url,
+          tag: '${widget.package}|${widget.url}',
         ));
       },
     );

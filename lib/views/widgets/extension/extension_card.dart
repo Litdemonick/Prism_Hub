@@ -1,4 +1,4 @@
-﻿import 'package:fluent_ui/fluent_ui.dart' as fluent;
+import 'package:fluent_ui/fluent_ui.dart' as fluent;
 import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
 import 'package:prismhub/models/extension.dart';
@@ -8,6 +8,7 @@ import 'package:prismhub/utils/i18n.dart';
 import 'package:prismhub/utils/prismhub_storage.dart';
 import 'package:prismhub/utils/request.dart';
 import 'package:prismhub/views/widgets/cache_network_image.dart';
+import 'package:prismhub/views/widgets/home/home_theme.dart';
 import 'package:prismhub/views/widgets/messenger.dart';
 import 'package:prismhub/views/widgets/platform_widget.dart';
 import 'package:prismhub/views/widgets/progress.dart';
@@ -99,7 +100,9 @@ class _ExtensionCardState extends State<ExtensionCard> {
         officialVerified = true;
       }
       // Inject metadata header if missing (e.g. CDN cache serving old file)
-      if (!script.contains('==PrismHubExtension==') && !script.contains('==MiruExtension==') && !script.contains('@package')) {
+      if (!script.contains('==PrismHubExtension==') &&
+          !script.contains('==MiruExtension==') &&
+          !script.contains('@package')) {
         final typeName = widget.type.toString().split('.').last;
         final header = '// ==PrismHubExtension==\n'
             '// @name         ${widget.name}\n'
@@ -146,45 +149,70 @@ class _ExtensionCardState extends State<ExtensionCard> {
     }
   }
 
-  Widget _buildAndroid(BuildContext context) {
-    return ListTile(
-      leading: SizedBox(
-        width: 35,
-        height: 35,
-        child: CacheNetWorkImagePic(
-          icon,
-          fit: BoxFit.contain,
-          fallback: const Icon(Icons.extension),
+  // Caja con fondo propio para el ícono — antes el ícono (o su fallback,
+  // cuando la extensión no trae uno) quedaba flotando suelto sobre el fondo
+  // de la tarjeta; con marca (borde + superficie) se ve intencional en vez
+  // de una imagen rota.
+  Widget _iconBox({required double size, required double iconSize}) {
+    return Container(
+      width: size,
+      height: size,
+      decoration: BoxDecoration(
+        color: HomeTheme.cardSurface,
+        borderRadius: BorderRadius.circular(size / 4),
+        border: Border.all(color: HomeTheme.border),
+      ),
+      clipBehavior: Clip.antiAlias,
+      child: CacheNetWorkImagePic(
+        icon,
+        fit: BoxFit.contain,
+        fallback: Icon(
+          fluent.FluentIcons.puzzle,
+          size: iconSize,
+          color: HomeTheme.accentPink,
         ),
       ),
+    );
+  }
+
+  Widget _buildAndroid(BuildContext context) {
+    return ListTile(
+      leading: _iconBox(size: 40, iconSize: 20),
       title: Text(widget.name),
       subtitle: DefaultTextStyle(
           style: TextStyle(
             fontSize: 12,
             color: Theme.of(context).textTheme.bodySmall!.color,
           ),
-          child: Row(
+          // Wrap en vez de Row: con varios badges juntos (versión + tipo +
+          // idioma + 18+ + oficial) en pantallas angostas de celular, un Row
+          // fijo tiraba RenderFlex overflow — confirmado en vivo ("overflow
+          // by 28 pixels"). Wrap baja el resto a una segunda línea en vez de
+          // desbordar, igual que ya hace la versión de escritorio.
+          child: Wrap(
+            crossAxisAlignment: WrapCrossAlignment.center,
+            spacing: 8,
+            runSpacing: 2,
             children: [
-              Padding(
-                padding: const EdgeInsets.only(right: 8),
-                child: Text(widget.version),
-              ),
-              Padding(
-                padding: const EdgeInsets.only(right: 8),
-                child: Text(ExtensionUtils.typeToString(widget.type)),
-              ),
-              Padding(
-                padding: const EdgeInsets.only(right: 8),
-                child: Text(widget.lang),
-              ),
+              Text(widget.version),
+              Text(ExtensionUtils.typeToString(widget.type)),
+              Text(widget.lang),
               if (widget.nsfw)
-                const Padding(
-                  padding: EdgeInsets.only(right: 8),
-                  child: Text(
-                    '18+',
-                    style: TextStyle(
-                      color: Colors.redAccent,
-                    ),
+                const Text(
+                  '18+',
+                  style: TextStyle(
+                    color: Colors.redAccent,
+                  ),
+                ),
+              // Solo indica que el catálogo trae firma de prism+ (no
+              // valida acá — eso pasa recién al instalar, ver _install()).
+              // Es solo informativo, no editable.
+              if (widget.signature != null && widget.signature!.isNotEmpty)
+                Text(
+                  'extension.official-badge'.i18n,
+                  style: const TextStyle(
+                    color: HomeTheme.accentPink,
+                    fontWeight: FontWeight.w600,
                   ),
                 ),
             ],
@@ -209,7 +237,8 @@ class _ExtensionCardState extends State<ExtensionCard> {
                           height: 32,
                           child: FilledButton(
                             style: TextButton.styleFrom(
-                              padding: const EdgeInsets.symmetric(horizontal: 8),
+                              padding:
+                                  const EdgeInsets.symmetric(horizontal: 8),
                               minimumSize: Size.zero,
                               textStyle: const TextStyle(fontSize: 12),
                             ),
@@ -250,25 +279,18 @@ class _ExtensionCardState extends State<ExtensionCard> {
   }
 
   Widget _buildDesktop(BuildContext context) {
-    return fluent.Card(
-      padding: const EdgeInsets.all(12),
+    return Container(
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: HomeTheme.cardSurface,
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: HomeTheme.border),
+      ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         mainAxisAlignment: MainAxisAlignment.spaceBetween,
         children: [
-          Container(
-            decoration: BoxDecoration(
-              borderRadius: BorderRadius.circular(8),
-            ),
-            clipBehavior: Clip.antiAlias,
-            child: CacheNetWorkImagePic(
-              icon,
-              width: 64,
-              height: 64,
-              fit: BoxFit.contain,
-              fallback: const Icon(fluent.FluentIcons.add_in, size: 32),
-            ),
-          ),
+          _iconBox(size: 64, iconSize: 30),
           const SizedBox(height: 8),
           Text(widget.name, style: const TextStyle(fontSize: 17)),
           DefaultTextStyle(
@@ -293,6 +315,17 @@ class _ExtensionCardState extends State<ExtensionCard> {
                       '18+',
                       style: TextStyle(
                         color: Colors.redAccent,
+                      ),
+                    ),
+                  ),
+                if (widget.signature != null && widget.signature!.isNotEmpty)
+                  Padding(
+                    padding: const EdgeInsets.only(right: 8),
+                    child: Text(
+                      'extension.official-badge'.i18n,
+                      style: const TextStyle(
+                        color: HomeTheme.accentPink,
+                        fontWeight: FontWeight.w600,
                       ),
                     ),
                   ),
@@ -323,6 +356,10 @@ class _ExtensionCardState extends State<ExtensionCard> {
                   runSpacing: 8,
                   children: [
                     if (hasUpgrade)
+                      // Actualizar es la acción destacada (relleno, acento
+                      // morado); Desinstalar queda como botón simple — antes
+                      // los dos eran FilledButton y competían por atención,
+                      // sin distinguir cuál es la acción recomendada.
                       fluent.FilledButton(
                         child: Text('extension-repo.upgrade'.i18n),
                         onPressed: () async {
@@ -330,7 +367,7 @@ class _ExtensionCardState extends State<ExtensionCard> {
                           setState(() {});
                         },
                       ),
-                    fluent.FilledButton(
+                    fluent.Button(
                       child: Text('common.uninstall'.i18n),
                       onPressed: () async {
                         await ExtensionUtils.uninstall(widget.package);

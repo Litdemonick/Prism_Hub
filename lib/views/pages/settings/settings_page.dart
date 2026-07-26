@@ -6,14 +6,10 @@ import 'package:flutter/material.dart';
 import 'package:flutter_i18n/flutter_i18n.dart';
 import 'package:get/get.dart';
 import 'package:prismhub/data/providers/tmdb_provider.dart';
-import 'package:prismhub/controllers/application_controller.dart';
-import 'package:prismhub/router/router.dart';
 import 'package:prismhub/utils/log.dart';
 import 'package:prismhub/utils/request.dart';
-import 'package:prismhub/views/dialogs/bt_dialog.dart';
 import 'package:prismhub/controllers/extension/extension_repo_controller.dart';
 import 'package:prismhub/controllers/settings_controller.dart';
-import 'package:prismhub/views/pages/tracking/anilist_tracking_page.dart';
 import 'package:prismhub/views/widgets/settings/settings_expander_tile.dart';
 import 'package:prismhub/views/widgets/settings/settings_input_tile.dart';
 import 'package:prismhub/views/widgets/settings/settings_radios_tile.dart';
@@ -23,11 +19,29 @@ import 'package:prismhub/views/widgets/settings/settings_tile.dart';
 import 'package:prismhub/utils/i18n.dart';
 import 'package:prismhub/utils/prismhub_storage.dart';
 import 'package:prismhub/utils/application.dart';
+import 'package:prismhub/views/widgets/home/animated_background_glow.dart';
+import 'package:prismhub/views/widgets/home/home_theme.dart';
 import 'package:prismhub/views/widgets/list_title.dart';
 import 'package:prismhub/views/widgets/platform_widget.dart';
 import 'package:share_plus/share_plus.dart';
 import 'package:tmdb_api/tmdb_api.dart';
 import 'package:url_launcher/url_launcher.dart';
+
+// El repo por defecto se guarda con "https://" adelante — mostrarlo/editarlo
+// así en el campo de texto era frágil (había que dejar el prefijo intacto
+// para no perder el esquema, y confirmar cada tecla — ver onChanged más
+// abajo — disparaba un fetch de red con el valor a medio escribir, lo que se
+// veía como el programa "bugueando"). Se muestra/edita solo la parte directa
+// (dominio + ruta) y se reconstruye el esquema completo al guardar.
+String _stripUrlScheme(String url) =>
+    url.replaceFirst(RegExp(r'^https?://'), '');
+String _withUrlScheme(String value) {
+  final v = value.trim();
+  if (v.isEmpty || v.startsWith('http://') || v.startsWith('https://')) {
+    return v;
+  }
+  return 'https://$v';
+}
 
 class SettingsPage extends StatefulWidget {
   const SettingsPage({super.key});
@@ -50,7 +64,11 @@ class _SettingsPageState extends State<SettingsPage> {
       if (!Platform.isAndroid) ...[
         Text(
           'common.settings'.i18n,
-          style: const TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
+          style: const TextStyle(
+            fontSize: 20,
+            fontWeight: FontWeight.bold,
+            color: HomeTheme.textPrimary,
+          ),
         ),
         const SizedBox(height: 16),
       ],
@@ -117,28 +135,6 @@ class _SettingsPageState extends State<SettingsPage> {
                 return PrismHubStorage.getSetting(SettingKey.language);
               },
             ),
-            // 主题设置
-            SettingsRadiosTile(
-              title: 'settings.theme'.i18n,
-              itemNameValue: () {
-                final map = {
-                  'settings.theme-system'.i18n: 'system',
-                  'settings.theme-light'.i18n: 'light',
-                  'settings.theme-dark'.i18n: 'dark',
-                };
-                if (Platform.isAndroid) {
-                  map['settings.theme-black'.i18n] = 'black';
-                }
-                return map;
-              }(),
-              buildSubtitle: () => 'settings.theme-subtitle'.i18n,
-              applyValue: (value) {
-                Get.find<ApplicationController>().changeTheme(value);
-              },
-              buildGroupValue: () {
-                return Get.find<ApplicationController>().themeText.value;
-              },
-            ),
             // 启动检查更新
             SettingsSwitchTile(
               title: 'settings.auto-check-update'.i18n,
@@ -178,15 +174,31 @@ class _SettingsPageState extends State<SettingsPage> {
                 if (!Platform.isAndroid) {
                   return 'settings.repo-url-subtitle'.i18n;
                 }
-                return PrismHubStorage.getSetting(SettingKey.prismhubRepoUrl);
+                return _stripUrlScheme(
+                    PrismHubStorage.getSetting(SettingKey.prismhubRepoUrl));
               },
               onChanged: (value) {
-                PrismHubStorage.setSetting(SettingKey.prismhubRepoUrl, value);
+                PrismHubStorage.setSetting(
+                    SettingKey.prismhubRepoUrl, _withUrlScheme(value));
                 Get.find<ExtensionRepoPageController>().onRefresh();
               },
               buildText: () {
-                return PrismHubStorage.getSetting(SettingKey.prismhubRepoUrl);
+                return _stripUrlScheme(
+                    PrismHubStorage.getSetting(SettingKey.prismhubRepoUrl));
               },
+            ),
+            const SizedBox(height: 8),
+            // Solo informativo (no editable) — el repo por defecto es el
+            // oficial de prism-plus; las extensiones que vienen firmadas
+            // desde ahí se marcan como "PrismPlus" en el listado (ver
+            // extension_card.dart).
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 4),
+              child: Text(
+                'settings.repo-official-note'.i18n,
+                style:
+                    const TextStyle(fontSize: 12, color: HomeTheme.textMuted),
+              ),
             ),
             const SizedBox(height: 8),
           ],
@@ -202,60 +214,23 @@ class _SettingsPageState extends State<SettingsPage> {
         content: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            SettingsTile(
-              title: 'settings.bt-server'.i18n,
-              buildSubtitle: () => "settings.bt-server-subtitle".i18n,
-              trailing: PlatformWidget(
-                androidWidget: TextButton(
-                  onPressed: () {
-                    showDialog(
-                      context: context,
-                      builder: (context) => const BTDialog(),
-                    );
-                  },
-                  child: Text('settings.bt-server-manager'.i18n),
-                ),
-                desktopWidget: fluent.FilledButton(
-                  onPressed: () {
-                    fluent.showDialog(
-                      context: context,
-                      builder: (context) => const BTDialog(),
-                    );
-                  },
-                  child: Text('settings.bt-server-manager'.i18n),
-                ),
-              ),
-            ),
+            // Servidor BT desactivado a pedido explícito — la entrada de
+            // Ajustes se saca de la UI (el código de BTServerUtils sigue
+            // existiendo, solo que ya no hay forma de instalarlo/arrancarlo
+            // desde acá, y MainController tampoco lo arranca al abrir).
+            // Reproductor externo bloqueado a pedido explícito: por ahora
+            // toda la app (PC y celular) usa solo el reproductor
+            // incorporado. Se deja la opción a la vista pero no editable —
+            // el valor ya se fuerza a "built-in" al iniciar (ver
+            // prismhub_storage.dart).
             SettingsRadiosTile(
               title: 'settings.external-player'.i18n,
-              itemNameValue: () {
-                if (Platform.isAndroid) {
-                  return {
-                    "settings.external-player-builtin".i18n: "built-in",
-                    "VLC": "vlc",
-                    "Other": "other",
-                  };
-                }
-                if (Platform.isLinux) {
-                  return {
-                    "settings.external-player-builtin".i18n: "built-in",
-                    "VLC": "vlc",
-                    "mpv": "mpv",
-                  };
-                }
-                return {
-                  "settings.external-player-builtin".i18n: "built-in",
-                  "VLC": "vlc",
-                  "PotPlayer": "potplayer",
-                };
-              }(),
-              buildSubtitle: () => FlutterI18n.translate(
-                context,
-                'settings.external-player-subtitle',
-                translationParams: {
-                  'player': PrismHubStorage.getSetting(SettingKey.videoPlayer),
-                },
-              ),
+              enabled: false,
+              itemNameValue: {
+                "settings.external-player-builtin".i18n: "built-in",
+              },
+              buildSubtitle: () =>
+                  'settings.external-player-locked-subtitle'.i18n,
               applyValue: (value) {
                 PrismHubStorage.setSetting(SettingKey.videoPlayer, value);
               },
@@ -341,51 +316,12 @@ class _SettingsPageState extends State<SettingsPage> {
           ],
         ),
       ),
-      const SizedBox(height: 10),
-      // 同步数据
-      SettingsExpanderTile(
-        icon: fluent.FluentIcons.sync,
-        androidIcon: Icons.sync,
-        content: Column(
-          children: [
-            SettingsSwitchTile(
-              title: 'settings.auto-tracking'.i18n,
-              buildSubtitle: () => 'settings.auto-tracking-subtitle'.i18n,
-              buildValue: () {
-                return PrismHubStorage.getSetting(SettingKey.autoTracking);
-              },
-              onChanged: (value) {
-                PrismHubStorage.setSetting(SettingKey.autoTracking, value);
-              },
-            ),
-            const SizedBox(height: 10),
-            SettingsTile(
-              isCard: true,
-              icon: Container(
-                width: 30,
-                height: 30,
-                decoration: BoxDecoration(
-                  image: const DecorationImage(
-                    image: AssetImage('assets/icon/anilist.jpg'),
-                  ),
-                  borderRadius: BorderRadius.circular(4),
-                ),
-              ),
-              title: 'Anilist',
-              trailing: const Icon(Icons.chevron_right),
-              onTap: () {
-                if (!Platform.isAndroid) {
-                  router.push('/settings/anilist');
-                } else {
-                  Get.to(() => const AniListTrackingPage());
-                }
-              },
-            ),
-          ],
-        ),
-        title: 'settings.tracking'.i18n,
-        subTitle: 'settings.tracking-subtitle'.i18n,
-      ),
+      // Sección de sincronización (AniList) desactivada a pedido explícito
+      // para esta release — se saca entera de la UI en vez de dejarla
+      // visible pero rota. El código de tracking sigue intacto
+      // (AniListTrackingPage, la ruta /settings/anilist, el
+      // TrackingPageController), así que volver a mostrarla es solo
+      // devolver este bloque.
       const SizedBox(height: 20),
       // 高级
       ListTitle(title: 'settings.advanced'.i18n),
@@ -418,7 +354,15 @@ class _SettingsPageState extends State<SettingsPage> {
                 'settings.proxy-type-socks4'.i18n: 'SOCKS4',
                 'settings.proxy-type-http'.i18n: 'PROXY',
               },
-              buildSubtitle: () => 'settings.proxy-type-subtitle'.i18n,
+              // Bloqueado: cambiar de "Directo" activa flutter_socks_proxy,
+              // una reimplementación pura en Dart de HttpClient que enruta
+              // TODAS las peticiones de la app por su parser (más lento) vía
+              // HttpOverrides.global — confirmado como causa real de
+              // lentitud general reportada en vivo. Se deja el valor
+              // guardado a la vista (por si alguien lo configuró antes) pero
+              // ya no editable.
+              enabled: false,
+              buildSubtitle: () => 'settings.proxy-type-locked-subtitle'.i18n,
               applyValue: (value) {
                 PrismHubStorage.setSetting(SettingKey.proxyType, value);
                 PrismRequest.refreshProxy();
@@ -430,6 +374,7 @@ class _SettingsPageState extends State<SettingsPage> {
             const SizedBox(height: 10),
             SettingsIntpuTile(
               title: 'settings.proxy'.i18n,
+              enabled: false,
               buildSubtitle: () => 'settings.proxy-subtitle'.i18n,
               onChanged: (value) {
                 PrismHubStorage.setSetting(SettingKey.proxy, value);
@@ -569,12 +514,31 @@ class _SettingsPageState extends State<SettingsPage> {
         content: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            const SelectableText(
-              "🎉 PrismHub - A versatile application that is free, open-source, and supports extension sources for videos, comics, and novels, available on Android, Windows, Linux and Web platforms.",
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+              decoration: BoxDecoration(
+                color: HomeTheme.accentPink.withValues(alpha: 0.18),
+                borderRadius: BorderRadius.circular(20),
+                border: Border.all(color: HomeTheme.accentPink),
+              ),
+              child: const Text(
+                "BETA",
+                style: TextStyle(
+                  color: HomeTheme.accentPink,
+                  fontSize: 10,
+                  fontWeight: FontWeight.bold,
+                ),
+              ),
+            ),
+            const SizedBox(height: 10),
+            SelectableText(
+              'settings.about-description'.i18n,
+              style: const TextStyle(color: HomeTheme.textPrimary),
             ),
             const SizedBox(height: 20),
             Text(
               'settings.links'.i18n,
+              style: const TextStyle(color: HomeTheme.textPrimary),
             ),
             const SizedBox(height: 8),
             Wrap(
@@ -594,7 +558,7 @@ class _SettingsPageState extends State<SettingsPage> {
                         child: Text(
                           link.key,
                           style: const TextStyle(
-                            color: Colors.blue,
+                            color: HomeTheme.accentPink,
                           ),
                         ),
                       ),
@@ -605,6 +569,7 @@ class _SettingsPageState extends State<SettingsPage> {
             const SizedBox(height: 10),
             Text(
               'settings.contributors'.i18n,
+              style: const TextStyle(color: HomeTheme.textPrimary),
             ),
             const SizedBox(height: 8),
             Obx(
@@ -626,7 +591,7 @@ class _SettingsPageState extends State<SettingsPage> {
                             child: Text(
                               contributor['login'],
                               style: const TextStyle(
-                                color: Colors.blue,
+                                color: HomeTheme.accentPink,
                               ),
                             ),
                           ),
@@ -643,12 +608,25 @@ class _SettingsPageState extends State<SettingsPage> {
 
   Widget _buildAndroid(BuildContext context) {
     return Scaffold(
+      backgroundColor: HomeTheme.bg,
       appBar: AppBar(
-        title: Text('common.settings'.i18n),
+        backgroundColor: HomeTheme.bg,
+        title: Text(
+          'common.settings'.i18n,
+          style: const TextStyle(color: HomeTheme.textPrimary),
+        ),
       ),
-      body: ListView(
-        padding: const EdgeInsets.symmetric(vertical: 10),
-        children: _buildContent(),
+      body: Container(
+        color: HomeTheme.bg,
+        child: Stack(
+          children: [
+            const Positioned.fill(child: AnimatedBackgroundGlow()),
+            ListView(
+              padding: const EdgeInsets.symmetric(vertical: 10),
+              children: _buildContent(),
+            ),
+          ],
+        ),
       ),
     );
   }
@@ -657,9 +635,17 @@ class _SettingsPageState extends State<SettingsPage> {
   Widget build(BuildContext context) {
     return PlatformBuildWidget(
       androidBuilder: _buildAndroid,
-      desktopBuilder: (context) => ListView(
-        padding: const EdgeInsets.symmetric(horizontal: 30, vertical: 20),
-        children: _buildContent(),
+      desktopBuilder: (context) => Container(
+        color: HomeTheme.bg,
+        child: Stack(
+          children: [
+            const Positioned.fill(child: AnimatedBackgroundGlow()),
+            ListView(
+              padding: const EdgeInsets.symmetric(horizontal: 30, vertical: 20),
+              children: _buildContent(),
+            ),
+          ],
+        ),
       ),
     );
   }

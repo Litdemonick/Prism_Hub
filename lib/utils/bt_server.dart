@@ -121,8 +121,15 @@ class BTServerUtils {
     final mainController = Get.find<MainController>();
     final isRunner = mainController.btServerisRunning;
     final version = mainController.btServerVersion;
+    // Antes cada 1s — un chequeo de "¿sigue vivo el proceso en background?"
+    // no necesita esa granularidad, y corre así por toda la sesión (se
+    // instala una vez en MainController.onReady, nunca se cancela) incluso
+    // si el usuario jamás reproduce un torrent. Cada intento fallido (ej.
+    // con un proxy mal configurado que afecta también a localhost) tiene un
+    // costo real — 10s sigue siendo instantáneo para el usuario (el
+    // indicador de estado en Ajustes) a una fracción del costo.
     timer?.cancel();
-    timer = Timer.periodic(const Duration(seconds: 1), (timer) async {
+    timer = Timer.periodic(const Duration(seconds: 10), (timer) async {
       try {
         version.value = await BTServerApi.getVersion();
         isRunner.value = true;

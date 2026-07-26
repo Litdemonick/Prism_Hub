@@ -1,6 +1,7 @@
 ﻿// ignore_for_file: use_build_context_synchronously
 import 'dart:io';
 
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:flutter_i18n/flutter_i18n.dart';
 import 'package:flutter_markdown/flutter_markdown.dart';
@@ -9,6 +10,7 @@ import 'package:prismhub/utils/i18n.dart';
 import 'package:prismhub/utils/request.dart';
 import 'package:prismhub/utils/router.dart';
 import 'package:prismhub/views/widgets/button.dart';
+import 'package:prismhub/views/widgets/home/home_theme.dart';
 import 'package:prismhub/views/widgets/messenger.dart';
 import 'package:url_launcher/url_launcher.dart';
 import 'package:package_info_plus/package_info_plus.dart';
@@ -39,6 +41,60 @@ class ApplicationUtils {
 
   static String get _platformSuffix =>
       Platform.isWindows ? 'windows-x64.zip' : 'linux-x64.tar.gz';
+
+  static Map<String, dynamic>? _findAsset(dynamic assets, String tagName) {
+    final expectedName = 'PrismHub-$tagName-$_platformSuffix';
+    try {
+      return (assets as List).firstWhere(
+        (a) => (a['name'] as String) == expectedName,
+      ) as Map<String, dynamic>;
+    } catch (_) {
+      return null;
+    }
+  }
+
+  // Chequeo obligatorio de versión: a diferencia de checkUpdate() (dialog
+  // descartable, disparado manualmente o al inicio si autoCheckUpdate está
+  // activado), esta variante bloquea el uso de la app con una página de
+  // pantalla completa sin forma de cerrarla salvo actualizando. Solo tiene
+  // sentido en Android/Windows/Linux — la Web siempre sirve la última
+  // versión desplegada, no hay un "instalable" que forzar.
+  static Future<void> checkForcedUpdate(BuildContext context) async {
+    if (kIsWeb) return;
+    try {
+      const url =
+          "https://api.github.com/repos/Litdemonick/Prism_Hub/releases/latest";
+      final res = await dio.get(url);
+      final tagName = res.data["tag_name"] as String;
+      final remoteVersion = tagName.replaceFirst('v', '');
+      if (packageInfo.version == remoteVersion) return;
+      if (!context.mounted) return;
+
+      final asset = Platform.isAndroid
+          ? null
+          : _findAsset(res.data['assets'], tagName);
+
+      await Navigator.of(context, rootNavigator: true).push(
+        PageRouteBuilder(
+          opaque: true,
+          pageBuilder: (context, animation, secondaryAnimation) =>
+              _ForcedUpdatePage(
+            remoteVersion: remoteVersion,
+            changelog: (res.data['body'] as String?) ?? '',
+            htmlUrl: res.data['html_url'] as String,
+            asset: asset,
+          ),
+          transitionsBuilder: (context, animation, secondaryAnimation, child) =>
+              FadeTransition(opacity: animation, child: child),
+        ),
+      );
+    } catch (e) {
+      // Silencioso: si no se puede chequear (sin internet, GitHub caído), no
+      // hay que bloquear el uso de la app por un error de red — el gate solo
+      // se muestra cuando SÍ se confirma una versión nueva.
+      debugPrint('checkForcedUpdate error: $e');
+    }
+  }
 
   static checkUpdate(BuildContext context, {bool showSnackbar = false}) async {
     try {
@@ -91,16 +147,7 @@ class ApplicationUtils {
           return;
         }
 
-        final expectedName = 'PrismHub-$tagName-$_platformSuffix';
-        final assets = res.data['assets'] as List;
-        Map<String, dynamic>? asset;
-        try {
-          asset = assets.firstWhere(
-            (a) => (a['name'] as String) == expectedName,
-          ) as Map<String, dynamic>;
-        } catch (_) {
-          asset = null;
-        }
+        final asset = _findAsset(res.data['assets'], tagName);
 
         showPlatformDialog(
           context: context,
@@ -219,7 +266,7 @@ class ApplicationUtils {
       if (context.mounted) {
         showPlatformSnackbar(
           context: context,
-          title: 'Update failed',
+          title: 'upgrade.install-failed'.i18n,
           content: e.toString(),
         );
       }
@@ -257,5 +304,142 @@ class ApplicationUtils {
       );
       exit(0);
     }
+  }
+}
+
+// Página de pantalla completa sin forma de descartarla (PopScope con
+// canPop:false, sin AppBar/botón atrás) — se muestra solo cuando
+// checkForcedUpdate() confirmó una versión más nueva. En Windows/Linux con
+// asset disponible, "Actualizar ahora" descarga+instala+reinicia el proceso
+// solo (nunca vuelve a esta página). En Android (y Desktop sin asset
+// coincidente) abre la página de GitHub en el navegador y agrega un botón
+// "Ya actualicé": vuelve a consultar PackageInfo.fromPlatform() (lee el
+// paquete instalado en el SO, no el proceso en memoria) para detectar si la
+// actualización ya se instaló y, en ese caso, recién ahí cierra el gate.
+class _ForcedUpdatePage extends StatefulWidget {
+  const _ForcedUpdatePage({
+    required this.remoteVersion,
+    required this.changelog,
+    required this.htmlUrl,
+    required this.asset,
+  });
+
+  final String remoteVersion;
+  final String changelog;
+  final String htmlUrl;
+  final Map<String, dynamic>? asset;
+
+  @override
+  State<_ForcedUpdatePage> createState() => _ForcedUpdatePageState();
+}
+
+class _ForcedUpdatePageState extends State<_ForcedUpdatePage> {
+  bool _checking = false;
+
+  bool get _needsManualRetry => Platform.isAndroid || widget.asset == null;
+
+  Future<void> _retryCheck() async {
+    setState(() => _checking = true);
+    try {
+      packageInfo = await PackageInfo.fromPlatform();
+      if (packageInfo.version == widget.remoteVersion) {
+        if (mounted) Navigator.of(context, rootNavigator: true).pop();
+        return;
+      }
+      if (mounted) {
+        showPlatformSnackbar(
+          context: context,
+          content: 'upgrade.still-outdated'.i18n,
+        );
+      }
+    } catch (_) {
+      if (mounted) {
+        showPlatformSnackbar(context: context, content: 'upgrade.error'.i18n);
+      }
+    } finally {
+      if (mounted) setState(() => _checking = false);
+    }
+  }
+
+  void _updateNow() {
+    if (widget.asset != null) {
+      ApplicationUtils._downloadAndInstall(
+        context,
+        widget.asset!,
+        widget.remoteVersion,
+      );
+    } else {
+      launchUrl(Uri.parse(widget.htmlUrl), mode: LaunchMode.externalApplication);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return PopScope(
+      canPop: false,
+      child: Material(
+        color: HomeTheme.bg,
+        child: SafeArea(
+          child: Padding(
+            padding: const EdgeInsets.all(24),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const Icon(Icons.system_update,
+                    size: 48, color: HomeTheme.accentPink),
+                const SizedBox(height: 16),
+                Text(
+                  FlutterI18n.translate(
+                    context,
+                    'upgrade.new-version',
+                    translationParams: {'version': widget.remoteVersion},
+                  ),
+                  style: const TextStyle(
+                    fontSize: 20,
+                    fontWeight: FontWeight.bold,
+                    color: HomeTheme.textPrimary,
+                  ),
+                ),
+                const SizedBox(height: 8),
+                Text(
+                  'upgrade.forced-required'.i18n,
+                  style: const TextStyle(color: HomeTheme.textPrimary),
+                ),
+                const SizedBox(height: 16),
+                Expanded(
+                  child: SingleChildScrollView(
+                    child: Markdown(
+                      data: widget.changelog,
+                      shrinkWrap: true,
+                      physics: const NeverScrollableScrollPhysics(),
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 16),
+                Row(
+                  children: [
+                    if (_needsManualRetry) ...[
+                      Expanded(
+                        child: PlatformTextButton(
+                          onPressed: _checking ? null : _retryCheck,
+                          child: Text('upgrade.already-updated'.i18n),
+                        ),
+                      ),
+                      const SizedBox(width: 12),
+                    ],
+                    Expanded(
+                      child: PlatformFilledButton(
+                        onPressed: _checking ? null : _updateNow,
+                        child: Text('upgrade.update-now'.i18n),
+                      ),
+                    ),
+                  ],
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
   }
 }

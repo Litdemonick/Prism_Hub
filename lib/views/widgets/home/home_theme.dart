@@ -22,16 +22,6 @@ class HomeTheme {
     stops: [0.0, 0.65, 1.0],
   );
 
-  // Cuando el hero tiene una portada real de fondo, se necesita un
-  // degradado más oscuro/opaco encima para que el texto siga siendo
-  // legible sobre cualquier imagen.
-  static const heroOverlayGradient = LinearGradient(
-    begin: Alignment.topCenter,
-    end: Alignment.bottomCenter,
-    colors: [Color(0xB3120A18), Color(0xE60B0714)],
-    stops: [0.0, 1.0],
-  );
-
   // Un gradiente por posición — mismo patrón round-robin que usa el diseño
   // para las tarjetas cuando no hay portada real.
   static const cardGradients = [

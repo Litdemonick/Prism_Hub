@@ -1,10 +1,10 @@
 import 'dart:async';
-import 'dart:convert';
 import 'dart:math';
 
 import 'package:get/get.dart';
 import 'package:prismhub/models/index.dart';
 import 'package:prismhub/data/services/database_service.dart';
+import 'package:prismhub/utils/connectivity.dart';
 import 'package:prismhub/utils/extension.dart';
 import 'package:prismhub/utils/prismhub_storage.dart';
 
@@ -15,76 +15,56 @@ class HomePageController extends GetxController {
   // where each one came from).
   final RxList<Favorite> favorites = <Favorite>[].obs;
 
-  // "Recomendado para ti" — UNA sola fila combinando lo último de cada
-  // extensión habilitada (latest(1)), intercalado, en vez de una fila por
-  // extensión. Reemplaza "Tendencias"/"Nuevos capítulos" del mockup, que no
-  // tienen ninguna señal real de popularidad/actualización en ninguna
-  // extensión.
-  final RxList<RecommendedItem> recommended = <RecommendedItem>[].obs;
-
-  // Géneros reales vistos en tu propia biblioteca de lectura (favoritos +
-  // historial), sacados de la caché local de detalle (PrismHubDetail) — sin
-  // llamadas de red nuevas. No hay catálogo de géneros unificado entre
-  // extensiones (cada una tiene el suyo), así que esto filtra TU biblioteca,
-  // no busca en las extensiones.
-  final RxList<String> libraryGenres = <String>[].obs;
-  // Uno por título (favorito o con historial), con sus géneros — para poder
-  // filtrar al tocar un chip sin re-consultar la base de datos.
-  final RxList<LibraryGenreEntry> libraryEntries = <LibraryGenreEntry>[].obs;
-
-  List<LibraryGenreEntry> entriesForGenre(String genre) =>
-      libraryEntries.where((e) => e.genres.contains(genre)).toList();
-
-  // "Categorías" — mismas etiquetas fijas del diseño (no dependen de qué
-  // haya en tu biblioteca, siempre se muestran), pero filtran contenido
-  // real: coincidencia parcial insensible a mayúsculas contra los géneros
-  // reales cacheados (ver libraryEntries), no un catálogo fabricado.
-  static const fixedCategories = [
-    'Acción',
-    'Romance',
-    'Fantasía',
-    'Terror',
-    'Comedia',
-    'Deportes',
-    'Drama',
-  ];
-
-  List<LibraryGenreEntry> entriesForCategory(String category) {
-    final needle = category.toLowerCase();
-    return libraryEntries
-        .where((e) => e.genres.any((g) => g.toLowerCase().contains(needle)))
-        .toList();
-  }
-
-  // Portada real random para el fondo del hero — cambia cada vez que se
-  // refresca el home (favoritos/continuar viendo/recomendado, en ese orden
-  // de prioridad de pool combinado). Nunca se fabrica una imagen.
+  // Portada real random para el fondo del hero — nunca se fabrica una imagen.
   final Rx<HeroBackground?> heroBackground = Rx(null);
 
-  void _pickHeroBackground() {
-    final pool = <(String, Map<String, String>?)>[
-      ...recommended
-          .where((r) => r.cover?.isNotEmpty == true)
-          .map((r) => (r.cover!, r.headers)),
-      ...resents
-          .where((h) => h.cover?.isNotEmpty == true)
-          .map((h) => (h.cover!, null)),
-      ...favorites
-          .where((f) => f.cover?.isNotEmpty == true)
-          .map((f) => (f.cover!, null)),
-    ];
-    if (pool.isEmpty) {
-      heroBackground.value = null;
-      return;
-    }
-    final pick = pool[Random().nextInt(pool.length)];
-    heroBackground.value = HeroBackground(cover: pick.$1, headers: pick.$2);
-  }
+  // Pool de portadas para el hero — lo último (latest(1)) de cada extensión
+  // instalada y activa, así el fondo va rotando con contenido real de TUS
+  // extensiones (no un catálogo externo).
+  List<(String, Map<String, String>?)> _extensionPool = [];
+  // Antes de que termine el PRIMER intento de _refreshHeroPool(), el pool
+  // está vacío nada más porque todavía no respondió (arranque en frío) — ahí
+  // sí conviene mostrar algo temporal (portada de Continuar/Favoritos) en
+  // vez de dejar el hero pelado esos primeros segundos. Una vez que el
+  // primer intento YA terminó (haya salido bien o mal), un pool vacío
+  // significa que de verdad no hay nada disponible (sin internet, todas las
+  // extensiones fallaron) — ahí NO hay que caer a ese fallback: esas mismas
+  // portadas necesitan la misma red que ya falló, así que se veían pegadas/
+  // rotas en vez de "vivas".
+  bool _hasLoadedPoolOnce = false;
+
+  // Dos timers con roles distintos:
+  // - _poolRefreshTimer: re-descarga lo último de cada extensión (red) — no
+  //   hace falta muy seguido, el contenido nuevo no aparece cada segundo.
+  // - _rotationTimer: cada 20s elige OTRA imagen del pool YA descargado (sin
+  //   red) — esto es lo que hace que el fondo se sienta "vivo" sin esperar
+  //   a que termine una descarga.
+  Timer? _poolRefreshTimer;
+  Timer? _rotationTimer;
 
   @override
   void onInit() {
+    // onRefresh() ya dispara _refreshHeroPool() sola apenas heroBackground
+    // esté en null (ver su propio self-heal) — no hace falta duplicar la
+    // llamada acá, evita dos fetches de red corriendo en paralelo al abrir.
     onRefresh();
+    _poolRefreshTimer = Timer.periodic(
+      const Duration(minutes: 20),
+      (_) => _refreshHeroPool(),
+    );
+    _rotationTimer = Timer.periodic(
+      const Duration(seconds: 20),
+      (_) => _pickHeroBackground(),
+    );
     super.onInit();
+  }
+
+  @override
+  void onClose() {
+    _poolRefreshTimer?.cancel();
+    _rotationTimer?.cancel();
+    _coldStartRetry?.cancel();
+    super.onClose();
   }
 
   refreshHistory() async {
@@ -96,6 +76,10 @@ class HomePageController extends GetxController {
     resents.value = _onlyEnabled(data, (h) => h.package);
   }
 
+  // Refresco manual (deslizar en Android / botón "Actualizar" en PC) — trae
+  // Continuar/Favoritos al día. A propósito NO toca heroBackground: la
+  // imagen del banner no debe cambiar solo porque el usuario refrescó, eso
+  // es trabajo exclusivo de la rotación cada 20s.
   onRefresh() async {
     // Kick off all independent reads before awaiting any — corre todo en
     // paralelo en vez de uno atrás del otro.
@@ -108,9 +92,24 @@ class HomePageController extends GetxController {
     final favoritesData = _onlyEnabled(await favoritesFuture, (f) => f.package);
     resents.value = resentsData;
     favorites.value = favoritesData;
-    _pickHeroBackground();
-    unawaited(_loadLibraryGenres(favoritesData, resentsData));
-    unawaited(refreshRecommended().then((_) => _pickHeroBackground()));
+    // Si por lo que sea el hero todavía no tiene nada (primera vez real,
+    // el fetch inicial falló, tardó más de la cuenta) lo reintenta acá —
+    // pero solo cuando está vacío: si ya hay una imagen puesta, refrescar
+    // no la toca (ver comentario de arriba).
+    if (heroBackground.value == null) {
+      unawaited(_refreshHeroPool());
+    }
+  }
+
+  // Se llama cuando cambia el set de extensiones habilitadas (activar,
+  // desactivar, instalar, desinstalar — ver ExtensionUtils._reloadPage). A
+  // diferencia de onRefresh(), acá SÍ hace falta limpiar el hero: si la
+  // imagen que se está mostrando justo venía de la extensión que se
+  // desactivó, tiene que desaparecer YA, no esperar a la próxima rotación
+  // o a que el usuario reabra Home.
+  Future<void> callRefresh() async {
+    await onRefresh();
+    await _refreshHeroPool();
   }
 
   // Oculta (no borra) historial/favoritos de extensiones desinstaladas o
@@ -122,87 +121,111 @@ class HomePageController extends GetxController {
         .toList();
   }
 
-  Future<void> _loadLibraryGenres(
-    List<Favorite> favs,
-    List<History> hist,
-  ) async {
-    final seen = <String>{};
-    final allGenres = <String>{};
-    final entries = <LibraryGenreEntry>[];
-    for (final (title, url, package, cover, type) in [
-      ...favs.map((f) => (f.title, f.url, f.package, f.cover, f.type)),
-      ...hist.map((h) => (h.title, h.url, h.package, h.cover, h.type)),
-    ]) {
-      final key = '$package|$url';
-      if (!seen.add(key)) continue;
-      final cached = await DatabaseService.getPrismHubDetail(package, url);
-      if (cached == null) continue;
-      try {
-        final detail = ExtensionDetail.fromJson(jsonDecode(cached.data));
-        final genres = detail.genres;
-        if (genres == null || genres.isEmpty) continue;
-        allGenres.addAll(genres);
-        entries.add(LibraryGenreEntry(
-          title: title,
-          url: url,
-          package: package,
-          cover: cover,
-          type: type,
-          genres: genres,
-        ));
-      } catch (_) {}
-    }
-    libraryGenres.value = allGenres.toList()..sort();
-    libraryEntries.value = entries;
+  // History/Favorite solo guardan la URL de la portada, no los headers con
+  // los que se cargó la primera vez (esos solo existen en la respuesta viva
+  // de latest()/search()/detail(), no se persisten en la base). Algunos
+  // sitios (ej. ManhwaWeb) exigen SIEMPRE un Referer = su propio dominio
+  // para servir imágenes — sin eso, la portada falla al mostrarla de nuevo
+  // en Continuar/Favoritos aunque en el Detalle (que sí pide headers
+  // frescos) se vea bien. El sitio de la extensión (webSite del manifest)
+  // es un Referer razonable y está disponible al toque, sin red.
+  Map<String, String>? headersForPackage(String package) {
+    final site = ExtensionUtils.enabledRuntimes[package]?.extension.webSite;
+    if (site == null || site.isEmpty) return null;
+    return {'Referer': site};
   }
 
-  // Adaptado del patrón de SearchPageController.getRuntime()/getResult() —
-  // no se toca search_controller.dart, esta es una copia chica propia del
-  // Home. Trae hasta 4 por extensión y los intercala (uno de cada una por
-  // turno) en una sola lista — nada de filas separadas por extensión.
-  Future<void> refreshRecommended() async {
+  Future<void> _refreshHeroPool() async {
     final exts = ExtensionUtils.enabledRuntimes.values.toList();
     if (!PrismHubStorage.getSetting(SettingKey.enableNSFW)) {
       exts.removeWhere((element) => element.extension.nsfw);
     }
     if (exts.isEmpty) {
-      recommended.value = [];
+      _extensionPool = [];
+      _hasLoadedPoolOnce = true;
+      _pickHeroBackground();
+      return;
+    }
+    // Sin conexión detectada de entrada — evita esperar el timeout de 15s
+    // de cada extensión (todas fallarían igual) solo para terminar con el
+    // pool vacío de todas formas.
+    if (!ConnectivityUtils.isOnline.value) {
+      _hasLoadedPoolOnce = true;
+      _pickHeroBackground();
       return;
     }
 
-    final perExtension = <List<RecommendedItem>>[];
-    final futures = exts.map((runtime) async {
+    final results = await Future.wait(exts.map((runtime) async {
       try {
         final items = await runtime.latest(1).timeout(
               const Duration(seconds: 15),
-              onTimeout: () => throw TimeoutException('Tiempo de espera agotado'),
+              onTimeout: () =>
+                  throw TimeoutException('Tiempo de espera agotado'),
             );
         return items
-            .take(4)
-            .map((item) => RecommendedItem(
-                  title: item.title,
-                  url: item.url,
-                  package: runtime.extension.package,
-                  cover: item.cover,
-                  headers: item.headers,
-                  type: runtime.extension.type,
-                ))
+            .take(3)
+            .where((i) => i.cover?.isNotEmpty == true)
+            .map((i) => (i.cover!, i.headers))
             .toList();
       } catch (_) {
-        return <RecommendedItem>[];
+        return <(String, Map<String, String>?)>[];
       }
-    });
-    perExtension.addAll(await Future.wait(futures));
-
-    final merged = <RecommendedItem>[];
-    var i = 0;
-    while (merged.length < 20 && perExtension.any((l) => i < l.length)) {
-      for (final list in perExtension) {
-        if (i < list.length) merged.add(list[i]);
-      }
-      i++;
+    }));
+    _extensionPool = results.expand((e) => e).toList();
+    _hasLoadedPoolOnce = true;
+    _pickHeroBackground();
+    // Si after todo esto el hero sigue vacío (arranque en frío — DNS/TLS
+    // recién calentando, primera request de la sesión más lenta de lo
+    // normal — hizo que TODAS las extensiones fallaran/tardaran de más) y
+    // no hay retry ya en camino, reintenta una vez solo a los 8s en vez de
+    // esperar el próximo ciclo de 20 min o depender de que el usuario
+    // refresque a mano.
+    if (heroBackground.value == null && _coldStartRetry == null) {
+      _coldStartRetry = Timer(const Duration(seconds: 8), () {
+        _coldStartRetry = null;
+        _refreshHeroPool();
+      });
     }
-    recommended.value = merged;
+  }
+
+  Timer? _coldStartRetry;
+
+  void _pickHeroBackground() {
+    // Prioriza el pool de tus extensiones (contenido real, elegido al azar
+    // entre lo último de cada una). Solo ANTES del primer intento real (ver
+    // _hasLoadedPoolOnce) se cae a tus propias portadas (continuar viendo/
+    // favoritos) para no dejar el hero pelado esos primeros segundos.
+    final pool = _extensionPool.isNotEmpty
+        ? _extensionPool
+        : (_hasLoadedPoolOnce
+            ? const <(String, Map<String, String>?)>[]
+            : <(String, Map<String, String>?)>[
+                ...resents
+                    .where((h) => h.cover?.isNotEmpty == true)
+                    .map((h) => (h.cover!, headersForPackage(h.package))),
+                ...favorites
+                    .where((f) => f.cover?.isNotEmpty == true)
+                    .map((f) => (f.cover!, headersForPackage(f.package))),
+              ]);
+    if (pool.isEmpty) {
+      // Ya se intentó de verdad (o no hay extensiones habilitadas) y no hay
+      // nada disponible — limpiar en vez de dejar pegada la última imagen:
+      // esa portada vieja necesita la misma red que ya falló para volver a
+      // cargar, así que quedaba mostrada rota/sin cambiar en vez de "viva".
+      heroBackground.value = null;
+      return;
+    }
+    // Excluye la portada actual del sorteo (si hay más de una opción) —
+    // sin esto, con pools chicos (2-4 extensiones) el azar repetía la misma
+    // imagen seguido y la rotación de 20s parecía no hacer nada.
+    var candidates = pool;
+    final current = heroBackground.value?.cover;
+    if (current != null && pool.length > 1) {
+      final filtered = pool.where((p) => p.$1 != current).toList();
+      if (filtered.isNotEmpty) candidates = filtered;
+    }
+    final pick = candidates[Random().nextInt(candidates.length)];
+    heroBackground.value = HeroBackground(cover: pick.$1, headers: pick.$2);
   }
 }
 
@@ -211,45 +234,4 @@ class HeroBackground {
   final String cover;
   final Map<String, String>? headers;
   HeroBackground({required this.cover, required this.headers});
-}
-
-// Un ítem de "Recomendado para ti" — de latest(1) de una extensión
-// habilitada, no persistido.
-class RecommendedItem {
-  final String title;
-  final String url;
-  final String package;
-  final String? cover;
-  final Map<String, String>? headers;
-  final ExtensionType type;
-
-  RecommendedItem({
-    required this.title,
-    required this.url,
-    required this.package,
-    required this.cover,
-    required this.headers,
-    required this.type,
-  });
-}
-
-// Título de tu biblioteca (favorito o con historial) con sus géneros reales
-// cacheados — solo para armar los chips de género y su filtro en Home, no es
-// un modelo persistido.
-class LibraryGenreEntry {
-  final String title;
-  final String url;
-  final String package;
-  final String? cover;
-  final ExtensionType type;
-  final List<String> genres;
-
-  LibraryGenreEntry({
-    required this.title,
-    required this.url,
-    required this.package,
-    required this.cover,
-    required this.type,
-    required this.genres,
-  });
 }

@@ -2,6 +2,7 @@
 import 'package:get/get.dart';
 import 'package:prismhub/models/index.dart';
 import 'package:prismhub/controllers/watch/novel_controller.dart';
+import 'package:prismhub/controllers/watch/reader_controller.dart';
 import 'package:prismhub/views/pages/watch/reader/novel/novel_reader_content.dart';
 import 'package:prismhub/views/pages/watch/reader/novel/novel_reader_settings.dart';
 import 'package:prismhub/views/widgets/watch/reader_view.dart';
@@ -18,6 +19,7 @@ class NovelReader extends StatefulWidget {
     required this.detailUrl,
     required this.anilistID,
     this.cover,
+    this.cameFromDetail = false,
   });
 
   final String title;
@@ -28,12 +30,16 @@ class NovelReader extends StatefulWidget {
   final ExtensionService runtime;
   final String? cover;
   final String anilistID;
+  final bool cameFromDetail;
 
   @override
   State<NovelReader> createState() => _NovelReaderState();
 }
 
 class _NovelReaderState extends State<NovelReader> {
+  late final String _tag = ReaderController.buildTag(
+      widget.title, widget.detailUrl, widget.episodeGroupId);
+
   @override
   void initState() {
     Get.put(
@@ -46,24 +52,25 @@ class _NovelReaderState extends State<NovelReader> {
         runtime: widget.runtime,
         cover: widget.cover,
         anilistID: widget.anilistID,
+        cameFromDetail: widget.cameFromDetail,
       ),
-      tag: widget.title,
+      tag: _tag,
     );
     super.initState();
   }
 
   @override
   void dispose() {
-    Get.delete<NovelController>(tag: widget.title);
+    Get.delete<NovelController>(tag: _tag);
     super.dispose();
   }
 
   @override
   Widget build(BuildContext context) {
     return ReaderView<NovelController>(
-      widget.title,
-      content: NovelReaderContent(widget.title),
-      buildSettings: (context) => NovelReaderSettings(widget.title),
+      _tag,
+      content: NovelReaderContent(_tag),
+      buildSettings: (context) => NovelReaderSettings(_tag),
     );
   }
 }

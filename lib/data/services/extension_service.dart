@@ -23,7 +23,6 @@ import 'package:flutter_js/javascriptcore/jscore_runtime.dart';
 class ExtensionService {
   late JavascriptRuntime runtime;
   late Extension extension;
-  String _cuurentRequestUrl = '';
   String evalString = '';
   late JsBridge jsBridge;
   static Map<dynamic, dynamic> evalMap = {};
@@ -66,7 +65,6 @@ class ExtensionService {
     }
 
     jsRequest(dynamic args) async {
-      _cuurentRequestUrl = args[0];
       final headers = args[1]['headers'] ?? {};
       if (headers['User-Agent'] == null) {
         headers['User-Agent'] = PrismHubStorage.getUASetting();
@@ -89,13 +87,32 @@ class ExtensionService {
       );
 
       try {
-        final res = await dio.request<String>(
+        final res = await PrismRequest.dioForPackage(extension.package).request<String>(
           url,
           data: requestBody,
           queryParameters: args[1]['queryParameters'] ?? {},
           options: Options(
             headers: headers,
             method: method,
+            // No tirar excepción por un status code "raro" (4xx/5xx) — varios
+            // sitios devuelven el HTML real y útil bajo un status no-2xx por
+            // algún detalle de su propio ruteo (confirmado en vivo dos veces:
+            // animeytx pasándose de la última página real, animejara
+            // paginando/filtrando su catálogo por género — ambos con 404
+            // pero cuerpo perfectamente válido). Antes esto se perdía ANTES
+            // de que la extensión llegara a verlo. Los fallos de red de
+            // verdad (timeout, DNS, conexión rechazada) siguen tirando
+            // DioException igual — eso no depende de validateStatus.
+            validateStatus: (_) => true,
+            // El cliente Dio global no fija receiveTimeout (se usa también
+            // para descargas grandes, ver request.dart) — pero jsRequest es
+            // el puente de red de TODAS las extensiones (latest/search/
+            // detail/watch), siempre páginas/JSON chicos. Sin este límite,
+            // un sitio que acepta la conexión pero se cuelga a mitad de
+            // respuesta deja esperando para siempre, sin ningún timeout que
+            // lo rescate — el reproductor queda pegado en "Obteniendo
+            // enlace..." sin forma de recuperarse salvo cerrar la app.
+            receiveTimeout: const Duration(seconds: 20),
           ),
         );
         log.requestHeaders = res.requestOptions.headers;
@@ -428,6 +445,12 @@ class Extension {
   checkUpdate(url) {
     throw new Error("not implement checkUpdate");
   }
+  top(filter, page) {
+    throw new Error("not implement top");
+  }
+  createTopFilter(){
+    throw new Error("not implement createTopFilter");
+  }
   async getSetting(key) {
     return await handlePromise("getSetting$className",JSON.stringify([key]));
   }
@@ -605,6 +628,12 @@ async function stringify(callback) {
             checkUpdate(url) {
               throw new Error("not implement checkUpdate");
             }
+            top(filter, page) {
+              throw new Error("not implement top");
+            }
+            createTopFilter(){
+              throw new Error("not implement createTopFilter");
+            }
             async getSetting(key) {
               return sendMessage("getSetting", JSON.stringify([key]));
             }
@@ -642,18 +671,18 @@ async function stringify(callback) {
 
   // 清理 cookie
   cleanCookie() async {
-    await PrismRequest.cleanCookie(extension.webSite);
+    await PrismRequest.cleanCookieForPackage(extension.package, extension.webSite);
   }
 
   /// 添加 cookie
   /// key=value; key=value
   setCookie(String cookies) async {
-    await PrismRequest.setCookie(cookies, extension.webSite);
+    await PrismRequest.setCookieForPackage(extension.package, cookies, extension.webSite);
   }
 
   // 列出所有的 cookie
   Future<String> listCookie() async {
-    return await PrismRequest.getCookie(extension.webSite);
+    return await PrismRequest.getCookieForPackage(extension.package, extension.webSite);
   }
 
   Future<T> runExtension<T>(Future<T> Function() fun) async {
@@ -669,9 +698,16 @@ async function stringify(callback) {
     }
   }
 
+  // Antes usaba _cuurentRequestUrl, un campo de instancia que jsRequest
+  // pisaba en CADA request — con dos llamadas concurrentes a esta misma
+  // extensión (ej. Home pidiendo latest() mientras Detail pide detail()
+  // para la misma extensión, comparten la única instancia de
+  // ExtensionService por package), el Referer de una podía terminar
+  // reflejando la URL de la otra. extension.webSite es estable y no
+  // depende de qué request haya corrido último.
   Future<Map<String, String>> get _defaultHeaders async {
     return {
-      "Referer": _cuurentRequestUrl,
+      "Referer": extension.webSite,
       "User-Agent": PrismHubStorage.getUASetting(),
       "Cookie": await listCookie(),
     };
@@ -702,10 +738,15 @@ async function stringify(callback) {
     Map<String, List<String>>? filter,
   }) async {
     return runExtension(() async {
+      // jsonEncode(kw) en vez de interpolar "$kw" a mano: un término de
+      // búsqueda con comillas (copiar/pegar un título con comillas
+      // tipográficas, etc.) rompía la sintaxis del JS generado y la
+      // búsqueda fallaba con un error genérico en vez de escaparlo bien.
+      final kwJs = jsonEncode(kw);
       final jsResult = await runtime.handlePromise(
         await runtime.evaluateAsync(Platform.isLinux
-            ? '${className}Instance.search("$kw",$page,${filter == null ? null : jsonEncode(filter)})'
-            : 'stringify(()=>${className}Instance.search("$kw",$page,${filter == null ? null : jsonEncode(filter)}))'),
+            ? '${className}Instance.search($kwJs,$page,${filter == null ? null : jsonEncode(filter)})'
+            : 'stringify(()=>${className}Instance.search($kwJs,$page,${filter == null ? null : jsonEncode(filter)}))'),
       );
       List<ExtensionListItem> result =
           jsonDecode(jsResult.stringResult).map<ExtensionListItem>((e) {
@@ -721,6 +762,13 @@ async function stringify(callback) {
   Future<Map<String, ExtensionFilter>> createFilter({
     Map<String, List<String>>? filter,
   }) async {
+    // jsonEncode(filter) se interpola DIRECTO como literal de objeto JS (JSON
+    // válido es JS válido) — igual que search()/top(). Antes se envolvía a
+    // mano entre comillas simples + JSON.parse: jsonEncode escapa `"` y `\`
+    // pero no comillas simples literales, así que un valor de filtro con un
+    // apóstrofe (ej. un género "Women's") cortaba el string JS antes de
+    // tiempo y el resto quedaba como código JS crudo — mínimo rompía el
+    // filtro con un SyntaxError, en el peor caso inyectaba JS arbitrario.
     late String eval;
     if (filter == null) {
       eval = Platform.isLinux
@@ -728,8 +776,8 @@ async function stringify(callback) {
           : 'stringify(()=>${className}Instance.createFilter())';
     } else {
       eval = Platform.isLinux
-          ? '${className}Instance.createFilter(JSON.parse(\'${jsonEncode(filter)}\'))'
-          : 'stringify(()=>${className}Instance.createFilter(JSON.parse(\'${jsonEncode(filter)}\')))';
+          ? '${className}Instance.createFilter(${jsonEncode(filter)})'
+          : 'stringify(()=>${className}Instance.createFilter(${jsonEncode(filter)}))';
     }
     return runExtension(() async {
       final jsResult = await runtime.handlePromise(
@@ -745,12 +793,56 @@ async function stringify(callback) {
     });
   }
 
-  Future<ExtensionDetail> detail(String url) async {
+  // Ranking/top nativo de la extensión (no de AniList) — cada extensión trae
+  // su propia noción de "top" con sus propios filtros reales (ver
+  // createTopFilter): JKAnime por temporada/año, Olympus por total/mensual,
+  // etc. Extensiones que no lo implementan devuelven [] (ver wrapper
+  // generado por prism-plus), nunca lanzan.
+  Future<List<ExtensionListItem>> top({
+    Map<String, List<String>>? filter,
+    int page = 1,
+  }) async {
     return runExtension(() async {
       final jsResult = await runtime.handlePromise(
         await runtime.evaluateAsync(Platform.isLinux
-            ? '${className}Instance.detail("$url")'
-            : 'stringify(()=>${className}Instance.detail("$url"))'),
+            ? '${className}Instance.top(${filter == null ? null : jsonEncode(filter)},$page)'
+            : 'stringify(()=>${className}Instance.top(${filter == null ? null : jsonEncode(filter)},$page))'),
+      );
+      List<ExtensionListItem> result =
+          jsonDecode(jsResult.stringResult).map<ExtensionListItem>((e) {
+        return ExtensionListItem.fromJson(e);
+      }).toList();
+      for (var element in result) {
+        element.headers ??= await _defaultHeaders;
+      }
+      return result;
+    });
+  }
+
+  Future<Map<String, ExtensionFilter>> createTopFilter() async {
+    return runExtension(() async {
+      final jsResult = await runtime.handlePromise(
+        await runtime.evaluateAsync(Platform.isLinux
+            ? '${className}Instance.createTopFilter()'
+            : 'stringify(()=>${className}Instance.createTopFilter())'),
+      );
+      Map<String, dynamic> result = jsonDecode(jsResult.stringResult);
+      return result.map(
+        (key, value) => MapEntry(
+          key,
+          ExtensionFilter.fromJson(value),
+        ),
+      );
+    });
+  }
+
+  Future<ExtensionDetail> detail(String url) async {
+    return runExtension(() async {
+      final urlJs = jsonEncode(url);
+      final jsResult = await runtime.handlePromise(
+        await runtime.evaluateAsync(Platform.isLinux
+            ? '${className}Instance.detail($urlJs)'
+            : 'stringify(()=>${className}Instance.detail($urlJs))'),
       );
       final result =
           ExtensionDetail.fromJson(jsonDecode(jsResult.stringResult));
@@ -759,16 +851,23 @@ async function stringify(callback) {
     });
   }
 
-  Future<Object?> watch(String url) async {
+  // typeHint: solo hace falta para extensiones "mixed" (ExtensionType.type
+  // fijo no alcanza para decidir manga vs bangumi ahí) — el llamador ya sabe
+  // qué tipo de título está reproduciendo (viene de ExtensionUtils.resolveType
+  // o del contexto: video_controller/reader_controller solo se usan para un
+  // tipo cada uno). Para el resto de extensiones no cambia nada: sigue
+  // cayendo a extension.type de siempre.
+  Future<Object?> watch(String url, {ExtensionType? typeHint}) async {
     return runExtension(() async {
+      final urlJs = jsonEncode(url);
       final jsResult = await runtime.handlePromise(
         await runtime.evaluateAsync(Platform.isLinux
-            ? '${className}Instance.watch("$url")'
-            : 'stringify(()=>${className}Instance.watch("$url"))'),
+            ? '${className}Instance.watch($urlJs)'
+            : 'stringify(()=>${className}Instance.watch($urlJs))'),
       );
       final data = jsonDecode(jsResult.stringResult);
 
-      switch (extension.type) {
+      switch (typeHint ?? extension.type) {
         case ExtensionType.bangumi:
           final result = ExtensionBangumiWatch.fromJson(data);
           result.headers ??= await _defaultHeaders;
@@ -785,9 +884,10 @@ async function stringify(callback) {
 
   Future<String> checkUpdate(url) async {
     return runExtension(() async {
+      final urlJs = jsonEncode(url);
       final jsResult = await runtime.handlePromise(
         await runtime.evaluateAsync(
-            'stringify(()=>${className}Instance.checkUpdate("$url"))'),
+            'stringify(()=>${className}Instance.checkUpdate($urlJs))'),
       );
       return jsResult.stringResult;
     });

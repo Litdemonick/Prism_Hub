@@ -36,11 +36,13 @@ class StreamSnifferService {
   ///   1. Llamada directa si estamos en el frame principal.
   ///   2. postMessage hacia el frame principal si estamos en un sub-frame.
   ///      El frame principal escucha esos mensajes y los reenvía a Dart.
-  static const String _hookSource = r'''
+  static const String hookSource = r'''
 (function(){
   var _isTop = (window === window.top);
 
+  var _streamFound = false;
   function sendStream(u, frameHref){
+    _streamFound = true;
     try{
       // Llamada directa (funciona en frame principal y, en Android, en sub-frames)
       window.flutter_inappwebview.callHandler('prismStream', u, frameHref || location.href);
@@ -116,11 +118,27 @@ class StreamSnifferService {
                 '[data-plyr="play"]','.btn-play','.play-overlay',
                 '[aria-label*="Play"i]','button[title*="Play"i]'];
       for(var i=0;i<sels.length;i++){
-        try{ var el=document.querySelector(sels[i]); if(el){ el.click(); break; } }catch(e){}
+        try{ var el=document.querySelector(sels[i]); if(el){ el.click(); return true; } }catch(e){}
       }
+      return false;
     }
-    setTimeout(_tryClickPlay, 1200);
-    setTimeout(_tryClickPlay, 3000);
+    // Fallback genérico: algunos frontends propios (ej. "haz clic para
+    // verificar que eres humano") no usan ninguna clase/lib conocida — el
+    // botón de play ocupa el centro de la pantalla. Si nada de lo de arriba
+    // encontró nada y todavía no llegó ningún stream, clickear ahí. Solo se
+    // intenta si sigue sin aparecer stream, para no interferir con players
+    // que ya arrancaron solos (un clic de más puede pausarlos).
+    function _tryClickCenter(){
+      if (_streamFound) return;
+      if (_tryClickPlay()) return;
+      try{
+        var el = document.elementFromPoint(window.innerWidth/2, window.innerHeight/2);
+        if (el) el.click();
+      }catch(e){}
+    }
+    setTimeout(_tryClickCenter, 1200);
+    setTimeout(_tryClickCenter, 3000);
+    setTimeout(_tryClickCenter, 5500);
   }catch(e){}
 })();
 ''';
@@ -132,13 +150,25 @@ class StreamSnifferService {
   /// lista y monta cada embed en un iframe oculto — replicando el click — para
   /// que sus players arranquen, pidan su m3u8 y el hook lo capture.
   // Reemplaza la creación de iframes por un callHandler con las URLs.
-  // Los iframes dinámicos en WebView2 (Windows) NO reciben _hookSource
+  // Los iframes dinámicos en WebView2 (Windows) NO reciben hookSource
   // (userScripts no se inyectan en frames creados en runtime), por lo que
   // callHandler no estaba disponible en ellos y los streams nunca se capturaban.
   // Solución: enviar las embed URLs a Dart; Dart abre un WebView independiente
   // por cada URL (frame principal → callHandler funciona perfectamente).
   static const String _loaderSource = r'''
 (function(){
+  // Hosts que jamás son un embed de video (widgets de comentarios, anuncios,
+  // analytics) — confirmado en vivo que quedaban en la lista de candidatos
+  // igual que un embed real, gastando 8s de sniff cada uno para nada (ej.
+  // disqus.com + 2 iframes de googleads en la misma página).
+  var _adHosts = ['disqus.com','doubleclick.net','googlesyndication.com',
+    'googleadservices.com','google-analytics.com','googletagmanager.com',
+    'facebook.com/plugins','platform.twitter.com','ads.yahoo.com',
+    'adservice.google'];
+  function _isAdOrComment(u){
+    for (var i=0;i<_adHosts.length;i++){ if (u.indexOf(_adHosts[i])!==-1) return true; }
+    return false;
+  }
   function pick(){
     var out = [];
     try {
@@ -160,7 +190,7 @@ class StreamSnifferService {
     } catch(e){}
     try {
       var ifr = document.querySelectorAll('iframe[src]');
-      for (var i=0;i<ifr.length;i++){ var s=ifr[i].src||''; if(s.indexOf('http')===0) out.push(s); }
+      for (var i=0;i<ifr.length;i++){ var s=ifr[i].src||''; if(s.indexOf('http')===0 && !_isAdOrComment(s)) out.push(s); }
     } catch(e){}
     var seen={}, uniq=[];
     for (var i=0;i<out.length;i++){ if(!seen[out[i]]){ seen[out[i]]=1; uniq.push(out[i]); } }
@@ -258,7 +288,7 @@ class StreamSnifferService {
         ),
         initialUserScripts: UnmodifiableListView<UserScript>([
           UserScript(
-            source: _hookSource,
+            source: hookSource,
             injectionTime: UserScriptInjectionTime.AT_DOCUMENT_START,
             // forMainFrameOnly:false → también inyecta en iframes. Imprescindible
             // para el "page-sniff": el sitio (animeflv, etc.) carga su player

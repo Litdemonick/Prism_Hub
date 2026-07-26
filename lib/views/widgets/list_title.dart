@@ -1,4 +1,5 @@
 ﻿import 'package:flutter/material.dart';
+import 'package:prismhub/views/widgets/home/home_theme.dart';
 import 'package:prismhub/views/widgets/platform_widget.dart';
 
 class ListTitle extends StatelessWidget {
@@ -11,7 +12,10 @@ class ListTitle extends StatelessWidget {
       padding: const EdgeInsets.only(left: 16, right: 16),
       child: Text(
         title,
-        style: TextStyle(color: Theme.of(context).colorScheme.primary),
+        style: const TextStyle(
+          color: HomeTheme.accentPink,
+          fontWeight: FontWeight.w700,
+        ),
       ),
     );
   }
@@ -19,7 +23,10 @@ class ListTitle extends StatelessWidget {
   Widget _buildDesktop(BuildContext context) {
     return Text(
       title,
-      style: const TextStyle(fontWeight: FontWeight.bold),
+      style: const TextStyle(
+        fontWeight: FontWeight.bold,
+        color: HomeTheme.textPrimary,
+      ),
     );
   }
 

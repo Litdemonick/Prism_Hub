@@ -1,5 +1,5 @@
-﻿import 'package:fluent_ui/fluent_ui.dart' as fluent;
-import 'package:flutter/material.dart';
+﻿import 'package:flutter/material.dart';
+import 'package:prismhub/views/widgets/home/home_theme.dart';
 import 'package:prismhub/views/widgets/platform_widget.dart';
 
 class SettingsTile extends StatefulWidget {
@@ -27,9 +27,15 @@ class _SettingsTileState extends State<SettingsTile> {
   Widget _buildAndroid(BuildContext context) {
     return ListTile(
       leading: widget.icon,
-      title: Text(widget.title),
+      title: Text(
+        widget.title,
+        style: const TextStyle(color: HomeTheme.textPrimary),
+      ),
       subtitle: widget.buildSubtitle != null
-          ? Text(widget.buildSubtitle!.call())
+          ? Text(
+              widget.buildSubtitle!.call(),
+              style: const TextStyle(color: HomeTheme.textMuted),
+            )
           : null,
       trailing: widget.trailing,
       onTap: widget.onTap,
@@ -43,19 +49,32 @@ class _SettingsTileState extends State<SettingsTile> {
           widget.icon!,
           const SizedBox(width: 16),
         ],
-        Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            Text(widget.title),
-            if (widget.buildSubtitle != null)
+        // Expanded, no un ancho libre: sin esto, un subtítulo largo (ej. el
+        // aviso de "Bloqueado en Directa por estabilidad...") hacía que la
+        // Column creciera a su ancho natural en una sola línea, empujando el
+        // trailing (botón/campo) fuera de la ventana — "RIGHT OVERFLOWED",
+        // reportado en vivo con captura. Expanded la acota al espacio
+        // disponible para que el texto ajuste ahí (Text ya hace wrap por
+        // defecto dentro de ese ancho).
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
               Text(
-                widget.buildSubtitle!.call(),
-                style: const TextStyle(fontSize: 12),
-              )
-          ],
+                widget.title,
+                style: const TextStyle(color: HomeTheme.textPrimary),
+              ),
+              if (widget.buildSubtitle != null)
+                Text(
+                  widget.buildSubtitle!.call(),
+                  style:
+                      const TextStyle(fontSize: 12, color: HomeTheme.textMuted),
+                )
+            ],
+          ),
         ),
-        const Spacer(),
+        const SizedBox(width: 12),
         widget.trailing ?? const SizedBox(),
       ],
     );
@@ -72,7 +91,13 @@ class _SettingsTileState extends State<SettingsTile> {
     }
 
     if (widget.isCard) {
-      return fluent.Card(
+      return Container(
+        padding: const EdgeInsets.all(12),
+        decoration: BoxDecoration(
+          color: HomeTheme.cardSurface,
+          borderRadius: BorderRadius.circular(10),
+          border: Border.all(color: HomeTheme.border),
+        ),
         child: content,
       );
     }

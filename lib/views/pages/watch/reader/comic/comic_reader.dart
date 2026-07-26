@@ -2,7 +2,9 @@
 import 'package:get/get.dart';
 import 'package:prismhub/models/extension.dart';
 import 'package:prismhub/views/pages/watch/reader/comic/comic_reader_content.dart';
+import 'package:prismhub/views/pages/watch/reader/comic/comic_reader_settings.dart';
 import 'package:prismhub/controllers/watch/comic_controller.dart';
+import 'package:prismhub/controllers/watch/reader_controller.dart';
 import 'package:prismhub/views/widgets/platform_widget.dart';
 // import 'package:prismhub/views/pages/watch/reader/comic/comic_zoom.dart';
 import 'package:prismhub/data/services/extension_service.dart';
@@ -19,6 +21,7 @@ class ComicReader extends StatefulWidget {
     required this.runtime,
     required this.anilistID,
     this.cover,
+    this.cameFromDetail = false,
   });
 
   final String title;
@@ -29,12 +32,16 @@ class ComicReader extends StatefulWidget {
   final ExtensionService runtime;
   final String? cover;
   final String anilistID;
+  final bool cameFromDetail;
 
   @override
   State<ComicReader> createState() => _ComicReaderState();
 }
 
 class _ComicReaderState extends State<ComicReader> {
+  late final String _tag = ReaderController.buildTag(
+      widget.title, widget.detailUrl, widget.episodeGroupId);
+
   @override
   void initState() {
     Get.put(
@@ -47,29 +54,32 @@ class _ComicReaderState extends State<ComicReader> {
         runtime: widget.runtime,
         cover: widget.cover,
         anilistID: widget.anilistID,
+        cameFromDetail: widget.cameFromDetail,
       ),
-      tag: widget.title,
+      tag: _tag,
     );
     super.initState();
   }
 
   @override
   void dispose() {
-    Get.delete<ComicController>(tag: widget.title);
+    Get.delete<ComicController>(tag: _tag);
     super.dispose();
   }
 
   @override
   Widget build(BuildContext context) {
     return ReaderView<ComicController>(
-      widget.title,
+      _tag,
       content: PlatformWidget(
-          androidWidget: ComicReaderContent(widget.title),
+          androidWidget: ComicReaderContent(_tag),
           // DragToMoveArea removed: double-clicking buttons was triggering
           // window maximize/restore via the drag-to-move hook.
-          desktopWidget: ComicReaderContent(widget.title)),
-      // Webtoon is the only reader mode now, so there's nothing to
-      // configure — omit buildSettings and the gear button hides itself.
+          desktopWidget: ComicReaderContent(_tag)),
+      // Selector de modo de lectura (cascada / página a página, izq→der o
+      // der→izq). Vuelve a haber algo que configurar, así que el botón del
+      // engranaje se muestra de nuevo.
+      buildSettings: (context) => ComicReaderSettings(_tag),
       // Comic reader handles its own page/chapter navigation in the content
       // overlay, so we suppress the generic chapter-navigation footer.
       buildFooter: (_) => const SizedBox.shrink(),

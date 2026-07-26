@@ -1,4 +1,4 @@
-﻿// ignore_for_file: use_build_context_synchronously
+// ignore_for_file: use_build_context_synchronously
 
 import 'dart:async';
 import 'dart:convert';
@@ -12,11 +12,13 @@ import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:get/get.dart';
+import 'package:image/image.dart' as img;
 import 'package:media_kit/media_kit.dart';
 import 'package:media_kit_video/media_kit_video.dart';
 import 'package:prismhub/data/providers/anilist_provider.dart';
 import 'package:prismhub/data/providers/bt_server_provider.dart';
 import 'package:prismhub/models/index.dart';
+import 'package:prismhub/utils/error.dart';
 import 'package:prismhub/utils/log.dart';
 import 'package:prismhub/utils/request.dart';
 import 'package:prismhub/utils/router.dart';
@@ -25,6 +27,7 @@ import 'package:prismhub/controllers/home_controller.dart';
 import 'package:prismhub/controllers/main_controller.dart';
 import 'package:prismhub/router/router.dart';
 import 'package:prismhub/utils/bt_server.dart';
+import 'package:prismhub/utils/cast_relay_server.dart';
 import 'package:prismhub/data/services/database_service.dart';
 import 'package:prismhub/data/services/extension_service.dart';
 import 'package:prismhub/data/services/stream_sniffer_service.dart';
@@ -60,6 +63,16 @@ class VideoPlayerController extends GetxController {
     required this.runtime,
     required this.anilistID,
   });
+
+  // Antes el tag de Get.put/Get.find era solo el título — dos títulos
+  // iguales de extensiones distintas (o volver a entrar rápido al mismo
+  // capítulo antes de que el onClose() async del controller viejo termine
+  // de desmontarse) podían compartir tag y pisarse. Se compone con
+  // detailUrl+episodeGroupId, que juntos identifican unívocamente ESTA
+  // sesión de reproducción puntual.
+  static String buildTag(String title, String detailUrl, int episodeGroupId) {
+    return '$title|$detailUrl|$episodeGroupId';
+  }
 
   // 播放器
   final player = Player();
@@ -139,6 +152,12 @@ class VideoPlayerController extends GetxController {
   // Posición de continuación pendiente (segundos). Null = no hay nada guardado.
   // Se fija antes de cargar el video para evitar que el auto-seek la consuma.
   int? _pendingResumeSeconds;
+
+  // Nombre del servidor que está EFECTIVAMENTE abierto/cargado en el player
+  // ahora mismo (distinto de currentServerName, que cambia apenas se toca una
+  // pestaña aunque todavía no se resolvió nada). Se usa para detectar cuando
+  // el usuario vuelve al servidor que ya tenía andando, para no recargarlo.
+  String? _lastOpenedServerName;
   // Señal para la UI: cuando tiene valor, mostrar el diálogo "¿Continuar?".
   final Rxn<int> resumePrompt = Rxn<int>(null);
 
@@ -161,20 +180,45 @@ class VideoPlayerController extends GetxController {
   final isGettingWatchData = true.obs;
   // Último texto de error de media_kit — para deduplicar el toast y no parpadear.
   String _lastErrorEvent = '';
+  // Cuenta errores de decodificación en ráfaga (audio/video corrupto) — sin
+  // esto un stream roto podía inundar el log para siempre, uno por cada
+  // frame fallido, sin límite y sin avisarle nada útil al usuario.
+  int _decodeErrorBurstCount = 0;
+  DateTime? _decodeErrorBurstStart;
+  // Si el buffering se queda trabado (ej. mp4upload: el archivo es real y se
+  // reconoce bien, pero el servidor deja de responder a mitad de descarga sin
+  // tirar ningún error) media_kit no avisa nada — el usuario se queda mirando
+  // el spinner para siempre sin ninguna salida. Este timer trata "más de 20s
+  // en buffering seguido" como un fallo real del servidor.
+  Timer? _bufferingStallTimer;
+  Timer? _qualitySwitchTimer;
 
   // Selector de servidores (llenado desde X-Servers header de la extensión)
   final availableServers = <String, String>{}.obs; // nombre → embed URL
   final serverReferers = <String, String>{}; // nombre → referer (no observable)
   final currentServerName = ''.obs;
   final serverFailedMessage = ''.obs;
+  // false entre "el servidor abrió" y "ya se ve el primer frame real" — media
+  //_kit puede tardar un rato en pintar el primer cuadro aunque duration/
+  // videoParams ya hayan llegado (streaming HLS: el buffering inicial pasa
+  // SIN el flag de buffering en true, así que sin esto la pantalla quedaba
+  // en negro sin ningún spinner, como si estuviera trabada de verdad).
+  final hasRenderedFrame = false.obs;
+  // true cuando hay más de un servidor y todavía no se intentó reproducir
+  // ninguno — la UI muestra la lista para elegir en vez de un spinner. Se
+  // apaga en cuanto el usuario elige uno (switchServer).
+  final awaitingServerChoice = false.obs;
   // Cuando el sniffer headless no puede capturar el stream (CF-protected),
   // se emite la petición de abrir el WebView visible. El widget listener
   // (desktop/mobile controls) lo intercepta y llama openWebViewPlayer().
   final webViewFallback = Rxn<Map<String, String>>(null);
+  // true después de la primera vez que se abrió el WebView para este fallback
+  // — cambia el texto del botón de "Abre en el navegador" a "Volver al
+  // navegador" cuando el usuario ya estuvo ahí y solo está retomando.
+  final webViewOpenedOnce = false.obs;
   // URL de la página del episodio en el sitio (X-Page-Url). Se carga en un
   // WebView oculto y se sniffe su player como fallback universal.
   String _episodePageUrl = '';
-
 
   // 字幕配置
   final subtitleFontSize = 46.0.obs;
@@ -196,6 +240,12 @@ class VideoPlayerController extends GetxController {
   // 总时长
   final duration = Duration.zero.obs;
 
+  // Cuánto lleva descargado/cacheado el demuxer más allá de la posición
+  // actual — mpv sigue llenando este buffer en segundo plano aunque el
+  // video esté en pausa (pausar solo detiene decodificación, no la
+  // descarga). Usado para la "sombra" de buffer en la barra de progreso.
+  final buffer = Duration.zero.obs;
+
   // 播放状态
   final isPlaying = false.obs;
 
@@ -204,6 +254,10 @@ class VideoPlayerController extends GetxController {
 
   // 定时器
   Timer? _dlnaTimer;
+
+  // URL de relay activa (si el stream necesitó headers) — se limpia del
+  // servidor local al desconectar, ver disconnectDLNADevice().
+  String? _dlnaRelayUrl;
 
   @override
   void onInit() async {
@@ -219,15 +273,35 @@ class VideoPlayerController extends GetxController {
     _initPlayer();
     // Configurar libmpv para evitar crashes en Linux:
     // - hwdec=no: evita error vaapi not supported by libswscale
-    // - reconnect=0: evita SIGSEGV ~16s post-EHOSTUNREACH cuando
-    //   libmpv intenta reconectar HLS y falla en la limpieza interna
-    // - network-timeout=5: fallo rápido
+    // - reconnect=0 (solo Linux): evita SIGSEGV ~16s post-EHOSTUNREACH cuando
+    //   libmpv intenta reconectar HLS y falla en la limpieza interna. En
+    //   Windows este SIGSEGV nunca se vio, y desactivar reconnect ahí tiene
+    //   un costo real: confirmado en vivo (mp4upload) que un solo hipo de red
+    //   de más de network-timeout (5s) deja el buffering trabado PARA
+    //   SIEMPRE sin ningún error — reconnect es justo lo que permitiría
+    //   recuperarse solo en vez de necesitar el watchdog de buffering.
+    // - network-timeout: en Linux 5s ("fallo rápido", ver más arriba). En el
+    //   resto, 5s resultó demasiado agresivo: confirmado en vivo (mp4upload)
+    //   que el servidor arranca lento (~5.5 Mbps) y recién unos segundos
+    //   después acelera de verdad (~30 Mbps sostenido) — con un timeout tan
+    //   corto, mpv corta la conexión ANTES de que llegue a acelerar, y cada
+    //   corte reinicia el ciclo lento desde cero. Un navegador real no tiene
+    //   ese límite artificial y por eso le anda bien. 20s le da margen real
+    //   para pasar la fase lenta sin ser tan largo como para tapar un host
+    //   genuinamente caído (el watchdog de buffering de arriba igual corta a
+    //   los 20s si after todo esto sigue sin progresar).
     if (player.platform is NativePlayer) {
       final np = player.platform as NativePlayer;
       await np.setProperty('hwdec', 'no');
-      await np.setProperty('network-timeout', '5');
-      await np.setProperty(
-          'demuxer-lavf-o', 'reconnect=0,reconnect_delay_max=0');
+      if (Platform.isLinux) {
+        await np.setProperty('network-timeout', '5');
+        await np.setProperty(
+            'demuxer-lavf-o', 'reconnect=0,reconnect_delay_max=0');
+      } else {
+        await np.setProperty('network-timeout', '20');
+        await np.setProperty('demuxer-lavf-o',
+            'reconnect=1,reconnect_streamed=1,reconnect_delay_max=5');
+      }
       // Muchos m3u8 de hosts (voe, netu, etc.) referencian segmentos en otro
       // dominio; mpv los marca "unsafe" y se niega a cargarlos.
       await np.setProperty('load-unsafe-playlists', 'yes');
@@ -251,8 +325,19 @@ class VideoPlayerController extends GetxController {
               'DIRECT';
       final proxyAddr =
           PrismHubStorage.getSetting(SettingKey.proxy)?.toString() ?? '';
-      if (proxyType != 'DIRECT' && proxyAddr.isNotEmpty) {
-        await np.setProperty('http-proxy', '$proxyType://$proxyAddr');
+      // El tipo se guarda como 'PROXY'/'SOCKS5'/'SOCKS4' (formato que espera
+      // flutter_socks_proxy del lado Dio) — mpv/ffmpeg necesita un esquema de
+      // URL real (http/socks5/socks4), no ese literal. Confirmado que con el
+      // literal tal cual mpv no reconoce "PROXY://" y el proxy no llega al
+      // stream aunque sí llegue a la resolución del embed vía Dio.
+      const proxyScheme = {
+        'PROXY': 'http',
+        'SOCKS5': 'socks5',
+        'SOCKS4': 'socks4',
+      };
+      final scheme = proxyScheme[proxyType];
+      if (scheme != null && proxyAddr.isNotEmpty) {
+        await np.setProperty('http-proxy', '$scheme://$proxyAddr');
       }
     }
     play();
@@ -346,6 +431,28 @@ class VideoPlayerController extends GetxController {
         return;
       }
 
+      // Algunos hosts cortan la conexión a mitad de capítulo y ffmpeg lo
+      // reporta como "completed" (EOF) en vez de un error de red — sin este
+      // chequeo, un corte de stream se sentía como si el reproductor
+      // saltara solo al siguiente episodio. Si falta bastante para el
+      // final real, no es un final real: tratarlo como el mismo corte a
+      // mitad de stream que se recupera arriba (mismo mecanismo, misma
+      // posición conservada).
+      final dur = duration.value;
+      final pos = position.value;
+      if (hasRenderedFrame.value && dur > Duration.zero) {
+        final remaining = dur - pos;
+        final farFromEnd = remaining > const Duration(seconds: 15) &&
+            remaining.inMilliseconds > dur.inMilliseconds * 0.08;
+        if (farFromEnd) {
+          logger.severe(
+              '"completed" sospechoso a mitad de capítulo (faltan ${remaining.inSeconds}s de ${dur.inSeconds}s) — se trata como corte, no como fin real.');
+          _midStreamResumeAt = pos;
+          _failOrRetryServer(currentServerName.value);
+          return;
+        }
+      }
+
       if (index.value == playList.length - 1) {
         sendMessage(Message(Text('video.play-complete'.i18n)));
         return;
@@ -361,6 +468,12 @@ class VideoPlayerController extends GetxController {
         final width = player.state.width;
         currentQuality.value = "${width}x$event";
       }
+    });
+
+    // Primer cuadro real pintado — recién acá se apaga el spinner de carga
+    // del centro (ver comentario en hasRenderedFrame).
+    player.stream.videoParams.listen((p) {
+      if ((p.w ?? 0) > 0 && (p.h ?? 0) > 0) hasRenderedFrame.value = true;
     });
 
     // 自动恢复上次播放进度 (solo cuando el diálogo no lo maneja)
@@ -383,7 +496,7 @@ class VideoPlayerController extends GetxController {
           history.episodeId == index.value &&
           history.episodeGroupId == episodeGroupId) {
         _isAutoSeekPosition = true;
-        player.seek(Duration(seconds: int.parse(history.progress)));
+        player.seek(Duration(seconds: int.tryParse(history.progress) ?? 0));
         sendMessage(Message(Text('video.resume-last-playback'.i18n)));
       }
     });
@@ -443,37 +556,126 @@ class VideoPlayerController extends GetxController {
       position.value = event;
     });
 
+    // Vigía de buffering atascado — ver comentario en _bufferingStallTimer.
+    player.stream.buffering.listen((buffering) {
+      if (dlnaDevice.value != null) return;
+      _bufferingStallTimer?.cancel();
+      _bufferingStallTimer = null;
+      if (buffering) {
+        // Confirmado en vivo (Voe/voe.sx, cloudwindow-route): el buffering
+        // inicial puede tardar más de 20s y aun así terminar arrancando
+        // sano — subido a 35s para darle el mismo margen que
+        // _tryOpenPlayer. Ahora que un fallo pasa automáticamente al
+        // siguiente servidor (ver _setServerFailed), esperar un poco más
+        // acá antes de rendirse sale más barato que antes.
+        _bufferingStallTimer = Timer(const Duration(seconds: 35), () {
+          // Si el usuario pausó (a propósito o justo cuando empezó a
+          // bufferizar) esto NO es un servidor trabado — pausado no
+          // necesita seguir cargando nada, así que no hay "atasco" real
+          // que declarar. Sin este chequeo, dejar el video en pausa un
+          // rato largo terminaba mostrando "servidor no disponible" solo.
+          if (!player.state.playing) return;
+          if (serverFailedMessage.value.isEmpty) {
+            logger.severe(
+                'Buffering atascado 35s+ en "${currentServerName.value}" — tratando como servidor caído.');
+            final stuckName = currentServerName.value;
+            if (stuckName.isNotEmpty) {
+              // Si ya se había pintado un cuadro antes de trabarse, es un
+              // corte a mitad de capítulo — recuperar en la misma posición
+              // en vez de reiniciar desde 0 (ver _midStreamResumeAt).
+              if (hasRenderedFrame.value) {
+                _midStreamResumeAt = position.value;
+              }
+              _failOrRetryServer(stuckName);
+            } else {
+              serverFailedMessage.value =
+                  'Se quedó cargando. Elegí otro servidor.';
+            }
+          }
+        });
+      }
+    });
+
     // 错误监听 — detectar fallo de reproducción
     player.stream.error.listen((event) {
+      // Errores de decodificación (audio/video corrupto) pueden llegar en
+      // ráfaga, uno por cada frame roto — confirmado en vivo: cientos de
+      // "Error decoding audio" por segundo, inundando el log para siempre
+      // sin avisarle nada útil al usuario ni cortar la reproducción rota.
+      // Se loggea solo el primero de cada ráfaga, y si sigue mucho tiempo se
+      // trata como un fallo real de servidor.
+      if (event.toLowerCase().contains('error decoding')) {
+        final now = DateTime.now();
+        if (_decodeErrorBurstStart == null ||
+            now.difference(_decodeErrorBurstStart!) >
+                const Duration(seconds: 3)) {
+          _decodeErrorBurstStart = now;
+          _decodeErrorBurstCount = 0;
+        }
+        _decodeErrorBurstCount++;
+        if (_decodeErrorBurstCount == 1) {
+          logger.severe('media_kit error: $event');
+        }
+        if (_decodeErrorBurstCount == 20 && serverFailedMessage.value.isEmpty) {
+          logger.severe(
+              'media_kit error: ráfaga de errores de decodificación, tratando como servidor roto ($event)');
+          serverFailedMessage.value = availableServers.length > 1
+              ? 'Servidor "${currentServerName.value}" con audio/video dañado.\n'
+                  'Cambiá de servidor con el botón Servidor.'
+              : 'Error de reproducción (audio/video dañado). Intentá más tarde.';
+        }
+        return;
+      }
       logger.severe('media_kit error: $event');
       final isDup = event == _lastErrorEvent;
       _lastErrorEvent = event;
       // Errores técnicos de libmpv/ffmpeg no se muestran al usuario:
       // son ruido interno (timeout TCP, file format, etc.) que solo confunde.
       // El estado de fallo se comunica con el overlay estable serverFailedMessage.
+      final eventLower = event.toLowerCase();
       final isTechnical = event.contains('Failed to open') ||
           event.contains('tcp:') ||
           event.contains('ffurl_read') ||
           event.contains('Failed to recognize') ||
           event.contains('No such') ||
           event.contains('Connection refused') ||
-          event.contains('Operation timed out');
+          event.contains('Operation timed out') ||
+          // "Media source is not playable" (reportado en vivo con FuegoCine,
+          // intermitente): no estaba en esta lista, así que se le mostraba al
+          // usuario el texto técnico crudo Y TAMPOCO disparaba el
+          // auto-recuperación de abajo (esa condición tampoco lo cubría) —
+          // se quedaba colgado esperando que el usuario recargue a mano.
+          eventLower.contains('not playable');
       if (!isGettingWatchData.value && !isDup && !isTechnical) {
         sendMessage(Message(Text(event)));
       }
       // Si el error indica que el stream no es accesible, notificar
-      if (event.toLowerCase().contains('not found') ||
-          event.toLowerCase().contains('403') ||
-          event.toLowerCase().contains('500') ||
-          event.toLowerCase().contains('no such') ||
-          event.toLowerCase().contains('failed')) {
-        if (serverFailedMessage.value.isEmpty) {
+      if (eventLower.contains('not found') ||
+          eventLower.contains('403') ||
+          eventLower.contains('500') ||
+          eventLower.contains('no such') ||
+          eventLower.contains('not playable') ||
+          eventLower.contains('failed')) {
+        // hasRenderedFrame=true acá significa que YA se venía reproduciendo
+        // bien y esto es un corte real a mitad de capítulo (no un fallo de
+        // conexión inicial — ese caso ya lo maneja play()/switchServer() por
+        // su cuenta). En vez de dejar el video parado esperando que el
+        // usuario note el cartel y cambie de servidor a mano, se recupera
+        // solo (mismo mecanismo de auto-failover ya validado en vivo),
+        // conservando la posición para no reiniciar el capítulo desde 0.
+        if (hasRenderedFrame.value) {
+          logger.severe(
+              'Corte a mitad de reproducción en "${currentServerName.value}" ($event) — recuperando automáticamente.');
+          _midStreamResumeAt = position.value;
+          _failOrRetryServer(currentServerName.value);
+        } else if (serverFailedMessage.value.isEmpty) {
           if (availableServers.length > 1) {
             serverFailedMessage.value =
                 'Servidor "${currentServerName.value}" no disponible.\n'
                 'Cambia de servidor con el botón Servidor.';
           } else {
-            serverFailedMessage.value = 'Error de reproducción. Intenta más tarde.';
+            serverFailedMessage.value =
+                'Error de reproducción. Intenta más tarde.';
           }
         }
       }
@@ -483,20 +685,30 @@ class VideoPlayerController extends GetxController {
   // 播放
   play() async {
     // 如果已经 delete 当前 controller
-    if (!Get.isRegistered<VideoPlayerController>(tag: title)) {
+    if (!Get.isRegistered<VideoPlayerController>(
+        tag: buildTag(title, detailUrl, episodeGroupId))) {
       return;
     }
     player.stop();
     isGettingWatchData.value = true;
+    awaitingServerChoice.value = false;
+    hasRenderedFrame.value = false;
     _lastErrorEvent = '';
     _pageSniffAttempted = false;
+    _webViewElapsedSeconds = 0;
+    _webViewOwnsScreenshotFile = false;
     _pendingResumeSeconds = null;
     resumePrompt.value = null;
+    _lastOpenedServerName = null;
+    _serverRetryCount = 0;
+    _triedAndFailedServers.clear();
+    _midStreamResumeAt = null;
     try {
       await getWatchData();
     } catch (e) {
       logger.severe(e);
-      serverFailedMessage.value = 'No se pudo cargar el episodio. Intentá más tarde.';
+      serverFailedMessage.value =
+          'No se pudo cargar el episodio. Intentá más tarde.';
       isGettingWatchData.value = false;
       await _safePlayerInit();
       return;
@@ -519,9 +731,40 @@ class VideoPlayerController extends GetxController {
         // No preguntar "¿continuar?" si ya estaba prácticamente terminado
         // (últimos 30s o 95% visto) — a esa altura no tiene sentido
         // "retomar" un capítulo que de hecho ya se vio entero.
-        final nearEnd = total > 0 && (total - secs <= 30 || secs >= total * 0.95);
+        final nearEnd =
+            total > 0 && (total - secs <= 30 || secs >= total * 0.95);
         if (secs > 5 && !nearEnd) _pendingResumeSeconds = secs;
       }
+    }
+
+    // Con más de un servidor para elegir, la app no prueba nada sola — el
+    // usuario elige de la lista (con el recordado/nativo ya marcado ahí) y
+    // recién ahí se resuelve+intenta ESE (switchServer). Antes se probaban
+    // los 5-6 servidores de una al abrir el capítulo, cargando/gastando red
+    // de más aunque el usuario ni fuera a usar la mayoría de esos intentos.
+    //
+    // Excepción: si YA hay un servidor recordado que funcionó antes en este
+    // mismo episodio (típicamente al volver desde "Continuar viendo"), no
+    // tiene sentido hacer elegir de nuevo. Se resuelve directo llamando a
+    // switchServer (el MISMO flujo que usa el usuario al elegir a mano) — no
+    // alcanza con reusar la ruta de "servidor único" de más abajo porque esa
+    // solo sabe abrir directo o mandar al sniffer de WebView, y la mayoría de
+    // los servidores son embeds que la propia extensión sabe resolver mejor
+    // (runtime.watch). switchServer ya dispara el diálogo de "¿continuar?"
+    // si corresponde una vez que abre.
+    if (watchData!.type != ExtensionWatchBangumiType.torrent &&
+        dlnaDevice.value == null &&
+        availableServers.length > 1) {
+      if (_applyPreferredServer()) {
+        // No tocar isGettingWatchData acá: switchServer ya lo pone en true
+        // apenas arranca — pisarlo a false y volver a true un instante
+        // después solo generaba un parpadeo del spinner de carga.
+        unawaited(switchServer(currentServerName.value));
+        return;
+      }
+      awaitingServerChoice.value = true;
+      isGettingWatchData.value = false;
+      return;
     }
 
     try {
@@ -530,7 +773,18 @@ class VideoPlayerController extends GetxController {
           await getTorrentMediaFile();
         } catch (e) {
           logger.severe(e);
-          error.value = e.toString();
+          error.value = friendlyError(e);
+          return;
+        }
+
+        // El torrent puede no traer ningún archivo de video reproducible
+        // (solo subtítulos, o un torrent de audio/otro contenido) —
+        // torrentMediaFileList.first sobre una lista vacía tiraba
+        // StateError sin ningún mensaje útil.
+        if (torrentMediaFileList.isEmpty) {
+          isGettingWatchData.value = false;
+          error.value =
+              'Este torrent no tiene archivos de video reproducibles.';
           return;
         }
 
@@ -546,7 +800,8 @@ class VideoPlayerController extends GetxController {
           final primaryUrl = watchData!.url;
           if (isDirectStream(primaryUrl)) unawaited(getQuality());
 
-          logger.info('Intentando servidor primario: ${currentServerName.value} → $primaryUrl');
+          logger.info(
+              'Intentando servidor primario: ${currentServerName.value} → $primaryUrl');
           bool worked;
           if (primaryUrl.startsWith('page://')) {
             // La extensión no resolvió ningún servidor pero dio la URL de la
@@ -561,9 +816,12 @@ class VideoPlayerController extends GetxController {
             worked = await _trySniff(currentServerName.value, primaryUrl);
           }
 
-          if (!worked && watchData!.headers != null && watchData!.headers!.containsKey('X-Netu-Alts')) {
+          if (!worked &&
+              watchData!.headers != null &&
+              watchData!.headers!.containsKey('X-Netu-Alts')) {
             try {
-              final List<dynamic> alts = jsonDecode(watchData!.headers!['X-Netu-Alts']!);
+              final List<dynamic> alts =
+                  jsonDecode(watchData!.headers!['X-Netu-Alts']!);
               for (final altUrlDyn in alts) {
                 final altUrl = altUrlDyn.toString();
                 logger.info('Intentando URL alternativa: $altUrl');
@@ -585,7 +843,8 @@ class VideoPlayerController extends GetxController {
           }
 
           if (!worked) {
-            logger.severe('Servidor primario fallido: ${currentServerName.value}');
+            logger.severe(
+                'Servidor primario fallido: ${currentServerName.value}');
             if (availableServers.length > 1) {
               serverFailedMessage.value =
                   'Servidor "${currentServerName.value}" no accesible.\n'
@@ -598,6 +857,63 @@ class VideoPlayerController extends GetxController {
             } else {
               serverFailedMessage.value =
                   'Servidor no accesible. Intentá más tarde.';
+            }
+            // Este era el bug real: el fallo del servidor PRIMARIO (la
+            // primera carga) nunca pasaba por _setServerFailed/_trySniff, así
+            // que webViewFallback quedaba en null y el botón "Abrir en
+            // WebView" no aparecía nunca en el primer intento (solo se
+            // llegaba a ver si el usuario cambiaba de servidor a mano).
+            // _trySniffPage/_trySniff ya lo completan solos cuando encuentran
+            // un stream que media_kit rechaza — esto cubre el resto (ej.
+            // Moon, que nunca llega a dar un stream sniffeable sin un clic
+            // humano real).
+            if (webViewFallback.value == null &&
+                !isDirectStream(primaryUrl) &&
+                !primaryUrl.startsWith('page://') &&
+                !primaryUrl.startsWith('error://')) {
+              // OJO con el orden: asignar webViewFallback.value dispara el
+              // worker ever() (video_player_desktop/mobile_controls.dart) de
+              // forma SINCRÓNICA, en el mismo momento de esta línea — si
+              // webViewOpenedOnce se resetea DESPUÉS, ese worker todavía ve
+              // el valor viejo (true, de una sesión de WebView anterior en
+              // este mismo episodio) y no vuelve a abrir el navegador
+              // interno solo, dejando al usuario colgado en el frame
+              // congelado (reportado en vivo). Por eso el reset va primero.
+              webViewOpenedOnce.value = false;
+              webViewFallback.value = {
+                'url': primaryUrl,
+                'name': currentServerName.value,
+                'referer': serverReferers[currentServerName.value] ?? '',
+              };
+              // Ídem _setServerFailed: recordarlo igual que un servidor
+              // nativo exitoso, para que la próxima vez no haga elegir de
+              // cero (ver comentario completo allá).
+              if (currentServerName.value.isNotEmpty) {
+                _lastOpenedServerName = currentServerName.value;
+                unawaited(PrismHubStorage.setLastWorkingServer(
+                  runtime.extension.package,
+                  playList[index.value].url,
+                  currentServerName.value,
+                ));
+              }
+            }
+            // El mensaje genérico de arriba ("no accesible, elegí otro") no
+            // explica lo que en realidad hace falta cuando SÍ hay un
+            // fallback disponible: un clic humano real en el navegador (ej.
+            // Moon). Si terminamos con uno, pisar el mensaje con algo que
+            // apunte directo al botón.
+            if (webViewFallback.value != null) {
+              // Este mensaje queda visible en el reproductor NATIVO tanto
+              // antes de navegar (instante, casi no se ve) como DESPUÉS si
+              // el usuario vuelve del navegador interno — por eso el texto
+              // tiene que ser válido en ambos momentos, no sonar a "ya te
+              // estoy abriendo algo" (eso quedaría mintiendo una vez que ya
+              // volvió). El aviso de "por qué estás acá" en el momento
+              // justo va DENTRO del navegador interno (SnackBar en
+              // webview_player_page.dart), no acá.
+              serverFailedMessage.value =
+                  'No se puede reproducir en el reproductor nativo.\n'
+                  'Podés verlo desde el navegador interno.';
             }
             isGettingWatchData.value = false;
             await _safePlayerInit();
@@ -617,13 +933,13 @@ class VideoPlayerController extends GetxController {
             _pendingResumeSeconds = null;
           }
         }
-
       }
       // Playback resolved successfully — clear any previous "not working" flag.
       ExtensionUtils.clearRuntimeError(runtime.extension.package);
       // Recordar el servidor que funcionó para este episodio: la próxima vez se
       // prueba primero y no se re-busca entre todos.
       if (currentServerName.value.isNotEmpty) {
+        _lastOpenedServerName = currentServerName.value;
         PrismHubStorage.setLastWorkingServer(
           runtime.extension.package,
           playList[index.value].url,
@@ -661,13 +977,21 @@ class VideoPlayerController extends GetxController {
       play();
       return;
     } catch (e) {
+      // Antes mostraba e.toString() crudo Y dejaba isGettingWatchData en
+      // true para siempre — cualquier excepción no prevista acá (ej.
+      // torrentMediaFileList vacío en playTorrentFile) dejaba el spinner de
+      // carga girando sin parar, sin mensaje útil, sin forma de recuperarse
+      // salvo salir del reproductor. El rethrow tampoco servía de nada: esta
+      // función se llama sin await en varios lados (onInit, ever(index,...)),
+      // así que solo terminaba como una excepción de Future no manejada.
+      logger.severe(e);
+      isGettingWatchData.value = false;
       sendMessage(
         Message(
-          Text(e.toString()),
+          Text(friendlyError(e)),
           time: const Duration(seconds: 5),
         ),
       );
-      rethrow;
     }
   }
 
@@ -680,7 +1004,8 @@ class VideoPlayerController extends GetxController {
     serverFailedMessage.value = '';
     webViewFallback.value = null;
     final playUrl = playList[index.value].url;
-    watchData = await runtime.watch(playUrl) as ExtensionBangumiWatch;
+    watchData = await runtime.watch(playUrl, typeHint: ExtensionType.bangumi)
+        as ExtensionBangumiWatch;
 
     final headers = watchData!.headers;
     if (headers != null) {
@@ -697,8 +1022,8 @@ class VideoPlayerController extends GetxController {
         try {
           final Map<String, dynamic> parsed =
               jsonDecode(headers['X-Server-Referers']!);
-          serverReferers.addAll(
-              parsed.map((k, v) => MapEntry(k, v.toString())));
+          serverReferers
+              .addAll(parsed.map((k, v) => MapEntry(k, v.toString())));
         } catch (_) {}
       }
       // Servidor actual
@@ -715,6 +1040,92 @@ class VideoPlayerController extends GetxController {
     }
   }
 
+  // Se incrementa en cada switchServer(): si el usuario cambia de servidor de
+  // nuevo antes de que el anterior termine de resolver, la llamada vieja se
+  // descarta en vez de "ganar la carrera" y pisar la elección más nueva —
+  // confirmado en vivo: sin esto, cambiar de servidor rápido dejaba sonando
+  // el anterior porque su resolución tardía llegaba después y sobreescribía
+  // el player ya abierto por el servidor elegido en realidad.
+  int _switchServerGen = 0;
+
+  // Corta la cadena sniffer/page-sniff (varios pasos de 8-15s cada uno,
+  // puede sumar más de un minuto) apenas el usuario navega para atrás —
+  // confirmado en vivo que sin esto la cadena sigue corriendo entera en
+  // segundo plano aunque la pantalla ya no esté, compitiendo por el mismo
+  // WebView nativo y dejando la app sintiéndose trabada. No cancela el paso
+  // YA en curso (eso depende del plugin nativo), pero evita encolar el
+  // siguiente paso una vez que el actual termina.
+  bool _disposed = false;
+
+  // Reintento automático antes de rendirse: confirmado en vivo (Streamwish)
+  // que algunos hosts asignan un servidor de backend al azar en CADA
+  // resolución (el link cambia de subdominio cada vez) — si te toca uno
+  // lento/caído, un simple reintento (que pide una URL firmada nueva) puede
+  // caer en uno sano. Se resetea al elegir un servidor distinto o al abrir
+  // uno con éxito, para no gastar el único reintento en fallos viejos.
+  int _serverRetryCount = 0;
+  static const _maxServerRetries = 1;
+
+  // Servidores que ya se probaron y fallaron en esta cadena de auto-failover
+  // (ver _setServerFailed) — se resetea al elegir un servidor a mano
+  // (selectServer), para que un reintento manual del usuario siempre tenga
+  // chance real en vez de saltarse todo por "ya lo probamos".
+  final Set<String> _triedAndFailedServers = {};
+
+  // Posición a restaurar después de una recuperación automática a mitad de
+  // episodio (corte real de stream, no un fallo de conexión inicial — ver
+  // player.stream.error.listen y el watchdog de buffering). switchServer()
+  // siempre abre la fuente nueva desde 0; sin esto, un simple hipo de red a
+  // mitad de capítulo reiniciaba el episodio entero en vez de seguir donde
+  // se cortó.
+  Duration? _midStreamResumeAt;
+
+  // Tocar una pestaña de servidor solo ELIGE (marca cuál se va a intentar);
+  // no resuelve ni reproduce nada todavía — eso pasa recién cuando el
+  // usuario toca el botón de play (centro o abajo), que llama switchServer
+  // con el nombre que haya quedado acá. Pausa lo que estuviera sonando para
+  // no dejar audio de fondo mientras la elección queda pendiente.
+  //
+  // Suma a la misma "generación" que switchServer: si había un switchServer
+  // anterior todavía resolviendo en segundo plano (el usuario tocó play para
+  // un servidor y después, antes de que terminara, tocó otra pestaña), sin
+  // esto ese intento viejo podía terminar de cargar más tarde y pisar la
+  // elección nueva — arrancaba a reproducir el que el usuario ya no quería.
+  void selectServer(String name) {
+    if (!availableServers.containsKey(name)) return;
+    ++_switchServerGen;
+    _serverRetryCount = 0;
+    _triedAndFailedServers.clear();
+    _midStreamResumeAt = null;
+
+    // Si es el mismo servidor que ya está efectivamente cargado en el player
+    // (el usuario solo estaba mirando otras pestañas y volvió a esta), no hay
+    // nada que recargar — antes esto forzaba un switchServer nuevo al tocar
+    // "reproducir" y perdía el punto donde estaba, aunque en los hechos no se
+    // había cambiado de servidor.
+    if (name == _lastOpenedServerName &&
+        player.state.duration > Duration.zero) {
+      currentServerName.value = name;
+      awaitingServerChoice.value = false;
+      serverFailedMessage.value = '';
+      player.play();
+      return;
+    }
+
+    currentServerName.value = name;
+    awaitingServerChoice.value = true;
+    isGettingWatchData.value = false;
+    // Limpiar el fallo del servidor ANTERIOR — sin esto, el cartel de "no se
+    // puede reproducir" (atado solo a serverFailedMessage, no a
+    // awaitingServerChoice) quedaba pegado en pantalla aunque el usuario ya
+    // hubiera elegido otro servidor distinto para intentar.
+    serverFailedMessage.value = '';
+    webViewFallback.value = null;
+    webViewOpenedOnce.value = false;
+    _bufferingStallTimer?.cancel();
+    player.pause();
+  }
+
   // Cambia al servidor on-demand (igual que JiruHub):
   //   1. Llama runtime.watch(url) — el wrapper del build maneja 3 casos:
   //        a) URL directa .m3u8/.mp4 → fast-path, devuelve inmediatamente.
@@ -723,8 +1134,12 @@ class VideoPlayerController extends GetxController {
   //   2. Si la extensión no puede resolver (error/vacío) → fallback WebView sniffer.
   switchServer(String name) async {
     if (!availableServers.containsKey(name)) return;
+    final myGen = ++_switchServerGen;
     serverFailedMessage.value = '';
     webViewFallback.value = null;
+    awaitingServerChoice.value = false;
+    hasRenderedFrame.value = false;
+    _bufferingStallTimer?.cancel();
 
     final embedUrl = availableServers[name]!;
     logger.info('switchServer: $name → $embedUrl');
@@ -733,42 +1148,64 @@ class VideoPlayerController extends GetxController {
 
     ExtensionBangumiWatch newWatch;
     try {
-      newWatch = await runtime.watch(embedUrl) as ExtensionBangumiWatch;
+      newWatch = await runtime.watch(embedUrl, typeHint: ExtensionType.bangumi)
+          as ExtensionBangumiWatch;
     } catch (e) {
+      if (myGen != _switchServerGen) return;
       logger.severe('switchServer: runtime.watch falló para $name: $e');
       if (isDirectStream(embedUrl)) {
         // La extensión no sabe manejar URLs directas — intentar reproducir directo
         await _playDirectFallback(name, embedUrl);
       } else {
-        final ok = await _trySniff(name, embedUrl, timeout: const Duration(seconds: 5));
+        final ok = await _trySniff(name, embedUrl,
+            timeout: const Duration(seconds: 5));
+        if (myGen != _switchServerGen) return;
         if (!ok) {
-          _setServerFailed(name, embedUrl);
+          _failOrRetryServer(name);
         } else {
           _isAutoSeekPosition = true;
+          _lastOpenedServerName = name;
           unawaited(PrismHubStorage.setLastWorkingServer(
               runtime.extension.package, playList[index.value].url, name));
+          if (_pendingResumeSeconds != null) {
+            await player.pause();
+            resumePrompt.value = _pendingResumeSeconds;
+            _pendingResumeSeconds = null;
+          }
         }
       }
-      isGettingWatchData.value = false;
+      if (myGen == _switchServerGen) isGettingWatchData.value = false;
       return;
     }
+    if (myGen != _switchServerGen) return;
 
-    if (newWatch.url.isEmpty || newWatch.url.startsWith('error://') || newWatch.url.startsWith('page://')) {
-      logger.warning('switchServer: extensión retornó error/page para $name (${newWatch.url})');
+    if (newWatch.url.isEmpty ||
+        newWatch.url.startsWith('error://') ||
+        newWatch.url.startsWith('page://')) {
+      logger.warning(
+          'switchServer: extensión retornó error/page para $name (${newWatch.url})');
       if (isDirectStream(embedUrl)) {
         // La extensión no sabe manejar URLs directas — intentar reproducir directo
         await _playDirectFallback(name, embedUrl);
       } else {
-        final ok = await _trySniff(name, embedUrl, timeout: const Duration(seconds: 5));
+        final ok = await _trySniff(name, embedUrl,
+            timeout: const Duration(seconds: 5));
+        if (myGen != _switchServerGen) return;
         if (!ok) {
-          _setServerFailed(name, embedUrl);
+          _failOrRetryServer(name);
         } else {
           _isAutoSeekPosition = true;
+          _lastOpenedServerName = name;
           unawaited(PrismHubStorage.setLastWorkingServer(
               runtime.extension.package, playList[index.value].url, name));
+          if (_pendingResumeSeconds != null) {
+            await player.pause();
+            resumePrompt.value = _pendingResumeSeconds;
+            _pendingResumeSeconds = null;
+          }
         }
       }
-      isGettingWatchData.value = false;
+      if (myGen == _switchServerGen) isGettingWatchData.value = false;
       return;
     }
 
@@ -794,12 +1231,33 @@ class VideoPlayerController extends GetxController {
     );
     _isAutoSeekPosition = true;
 
-    if (!await _tryOpenPlayer(newWatch.url, headers.isEmpty ? null : headers)) {
-      serverFailedMessage.value = 'Servidor "$name" no responde. Elegí otro.';
+    final opened =
+        await _tryOpenPlayer(newWatch.url, headers.isEmpty ? null : headers);
+    if (myGen != _switchServerGen) return;
+    if (!opened) {
+      // La extensión "resolvió" algo (newWatch.url no está vacío/error/page)
+      // pero media_kit no llegó a abrirlo a tiempo — antes de rendirse,
+      // reintentar (ver _failOrRetryServer): algunos hosts firman contra un
+      // backend elegido al azar en cada resolución, así que una URL nueva
+      // puede caer en uno sano.
+      _failOrRetryServer(name);
     } else {
+      _serverRetryCount = 0;
       serverFailedMessage.value = '';
+      _lastOpenedServerName = name;
+      if (isDirectStream(newWatch.url)) unawaited(getQuality());
       unawaited(PrismHubStorage.setLastWorkingServer(
           runtime.extension.package, playList[index.value].url, name));
+      // Si había un progreso guardado pendiente de confirmar (recién se
+      // arrancó el episodio, no un cambio de servidor a mitad de reproducir),
+      // preguntar acá — antes esto solo pasaba por la ruta de servidor único,
+      // así que abrir vía switchServer (elegido a mano o recordado) nunca
+      // mostraba el diálogo y arrancaba de cero en silencio.
+      if (_pendingResumeSeconds != null) {
+        await player.pause();
+        resumePrompt.value = _pendingResumeSeconds;
+        _pendingResumeSeconds = null;
+      }
     }
     isGettingWatchData.value = false;
   }
@@ -872,7 +1330,8 @@ class VideoPlayerController extends GetxController {
         }
       } else {
         // HTTP 4xx/5xx: puede que libmpv lo reproduzca igual (Range headers)
-        logger.info('getQuality HTTP error ${e.response?.statusCode}, continuing');
+        logger.info(
+            'getQuality HTTP error ${e.response?.statusCode}, continuing');
       }
       return;
     } catch (e) {
@@ -907,7 +1366,17 @@ class VideoPlayerController extends GetxController {
       },
     );
 
-    final m3u8Content = await completer.future;
+    String m3u8Content;
+    try {
+      m3u8Content = await completer.future;
+    } catch (e) {
+      // El stream de descarga del m3u8 puede cortarse a mitad de camino (red
+      // inestable) — sin este try/catch, completer.completeError() de la
+      // línea de arriba se propagaba como una excepción de Future sin
+      // manejar (getQuality() se llama vía unawaited()).
+      logger.severe(e);
+      return;
+    }
     if (m3u8Content.isEmpty) {
       return;
     }
@@ -918,26 +1387,32 @@ class VideoPlayerController extends GetxController {
         response.realUri,
         m3u8Content,
       );
-    } on ParserException catch (e) {
+    } catch (e) {
+      // No solo ParserException — parseString no garantiza que sea el único
+      // tipo de excepción que puede tirar ante contenido corrupto.
       logger.severe(e);
       return;
     }
 
     if (playlist is HlsMasterPlaylist) {
-      final urlList = playlist.mediaPlaylistUrls
-          .map(
-            (e) => e.toString(),
-          )
-          .toList();
-      final resolution = playlist.variants.map(
-        (it) => "${it.format.width}x${it.format.height}",
-      );
-      qualityMap.addAll(
-        Map.fromIterables(
-          resolution,
-          urlList,
-        ),
-      );
+      try {
+        final urlList = playlist.mediaPlaylistUrls
+            .map(
+              (e) => e.toString(),
+            )
+            .toList();
+        final resolution = playlist.variants.map(
+          (it) => "${it.format.width}x${it.format.height}",
+        );
+        qualityMap.addAll(
+          Map.fromIterables(
+            resolution,
+            urlList,
+          ),
+        );
+      } catch (e) {
+        logger.severe(e);
+      }
     }
   }
 
@@ -962,9 +1437,19 @@ class VideoPlayerController extends GetxController {
       Media(qualityUrl, httpHeaders: headers),
     );
     //跳轉到切換之前的時間
-    Timer.periodic(const Duration(seconds: 1), (timer) {
+    // Antes este timer no se guardaba en ningún campo ni tenía límite de
+    // intentos — si el seek real cae en el keyframe más cercano y nunca
+    // coincide exactamente con currentSecond (pasa seguido), quedaba
+    // llamando player.seek()/player.state cada segundo para siempre, y si
+    // el usuario cerraba el reproductor antes de que coincidiera, sobre un
+    // Player ya dispuesto. Guardado en un campo (cancelado en onClose) +
+    // límite de 10 intentos como red de seguridad.
+    _qualitySwitchTimer?.cancel();
+    var attempts = 0;
+    _qualitySwitchTimer = Timer.periodic(const Duration(seconds: 1), (timer) {
+      attempts++;
       player.seek(Duration(seconds: currentSecond));
-      if (player.state.position.inSeconds == currentSecond) {
+      if (player.state.position.inSeconds == currentSecond || attempts >= 10) {
         timer.cancel();
       }
     });
@@ -1014,12 +1499,119 @@ class VideoPlayerController extends GetxController {
         ..cover = file.path
         ..episodeGroupId = episodeGroupId
         ..package = runtime.extension.package
-        ..type = runtime.extension.type
+        // ExtensionType.bangumi fijo (no runtime.extension.type): este
+        // controller SOLO se usa para video — para una extensión "mixed"
+        // (ej. ShadeManga) usar el tipo fijo de la extensión guardaría
+        // "mixed" en el historial, que ExtensionTypeBadge/typeToString no
+        // saben mostrar como "video" ni "lectura".
+        ..type = ExtensionType.bangumi
         ..episodeId = index.value
         ..episodeTitle = epName
         ..title = title
         ..progress = player.state.position.inSeconds.toString()
         ..totalProgress = player.state.duration.inSeconds.toString(),
+    );
+    await Get.find<HomePageController>().onRefresh();
+  }
+
+  // Progreso acumulado mientras se mira por el fallback de WebView. Vive acá
+  // (no en WebViewPlayerPage) para que sobreviva a un cambio de servidor: si
+  // el usuario prueba otro servidor, se cierra la página WebView vieja y se
+  // abre una nueva — sin este contador a nivel controller, cada cambio de
+  // servidor reiniciaba el progreso guardado a 0. Se resetea en play() (nuevo
+  // episodio), no al cambiar de servidor dentro del mismo episodio.
+  int _webViewElapsedSeconds = 0;
+  // True una vez que ESTE controller ya escribió el archivo de portada del
+  // WebView al menos una vez — a partir de ahí, capturas sucesivas SÍ
+  // refrescan el frame (para que el card de "Continuar viendo" muestre algo
+  // reciente, no la primera captura congelada para siempre). Si el archivo
+  // ya existía por OTRA fuente (una sesión nativa anterior que guardó un
+  // frame real) y este flag sigue en false, no se toca — se sigue
+  // priorizando ese frame nativo sobre uno de WebView.
+  bool _webViewOwnsScreenshotFile = false;
+
+  // Guarda progreso mientras se mira por el fallback de WebView (botón
+  // "Abrir en el navegador"). Ese modo no usa el player nativo (media_kit),
+  // así que _saveHistory() de arriba no sirve: no hay player.state.position
+  // ni player.screenshot() real. Se usa en cambio un contador de segundos
+  // transcurridos (aproximado, no la posición real del video del sitio) y
+  // una captura de la propia WebView como portada — mismo mecanismo, otra
+  // fuente. Sin esto, mirar por WebView nunca aparecía en "Continuar viendo".
+  // La captura cruda de la WebView trae la barra de progreso/controles del
+  // reproductor propio del sitio pegada abajo (parte de la página, no algo
+  // que podamos ocultar antes de capturar) — se veía como una línea fina en
+  // la portada de "Continuar viendo", reportado en vivo con captura. Se
+  // recorta esa franja inferior y se escala el resto de vuelta al tamaño
+  // original (zoom), así la portada queda como un frame limpio.
+  Uint8List _cropWebViewPlayerBar(Uint8List bytes) {
+    try {
+      final image = img.decodeImage(bytes);
+      if (image == null) return bytes;
+      const cropFraction = 0.08;
+      final cropPx = (image.height * cropFraction).round();
+      if (cropPx <= 0 || cropPx >= image.height) return bytes;
+      final cropped = img.copyCrop(
+        image,
+        x: 0,
+        y: 0,
+        width: image.width,
+        height: image.height - cropPx,
+      );
+      final zoomed = img.copyResize(
+        cropped,
+        width: image.width,
+        height: image.height,
+      );
+      return Uint8List.fromList(img.encodePng(zoomed));
+    } catch (e) {
+      logger.warning('No se pudo recortar la captura del WebView: $e');
+      return bytes;
+    }
+  }
+
+  Future<void> saveWebViewProgress(Uint8List? screenshot,
+      {bool isFinal = false}) async {
+    _webViewElapsedSeconds += 15;
+    final tempDir = PrismHubDirectory.getCacheDirectory;
+    final coverDir = path.join(tempDir, 'history_cover');
+    Directory(coverDir).createSync(recursive: true);
+    final epName = playList[index.value].name;
+    final filename = '${title}_$epName';
+    final file = File(
+        path.join(coverDir, md5.convert(utf8.encode(filename)).toString()));
+    // Solo la captura FINAL (al salir/pasar a segundo plano) actualiza la
+    // portada guardada — ver WebViewPlayerPage._captureFinalProgress. Las
+    // llamadas periódicas (isFinal:false) ya vienen con screenshot:null
+    // desde ahí, pero se chequea isFinal explícitamente para no depender
+    // solo de esa convención.
+    if (isFinal &&
+        screenshot != null &&
+        (_webViewOwnsScreenshotFile || !file.existsSync())) {
+      await file.writeAsBytes(_cropWebViewPlayerBar(screenshot));
+      _webViewOwnsScreenshotFile = true;
+    }
+    if (!file.existsSync()) return;
+
+    await DatabaseService.putHistory(
+      History()
+        ..url = detailUrl
+        ..cover = file.path
+        ..episodeGroupId = episodeGroupId
+        ..package = runtime.extension.package
+        // ExtensionType.bangumi fijo (no runtime.extension.type): este
+        // controller SOLO se usa para video — para una extensión "mixed"
+        // (ej. ShadeManga) usar el tipo fijo de la extensión guardaría
+        // "mixed" en el historial, que ExtensionTypeBadge/typeToString no
+        // saben mostrar como "video" ni "lectura".
+        ..type = ExtensionType.bangumi
+        ..episodeId = index.value
+        ..episodeTitle = epName
+        ..title = title
+        ..progress = _webViewElapsedSeconds.toString()
+        // Total desconocido a propósito (no hay forma de saber la duración
+        // real del video del sitio desde acá) — el resto de la app ya trata
+        // un totalProgress vacío como "sin dato", no como "recién empezado".
+        ..totalProgress = '',
     );
     await Get.find<HomePageController>().onRefresh();
   }
@@ -1090,11 +1682,34 @@ class VideoPlayerController extends GetxController {
       sendMessage(Message(Text('等待视频加载'.i18n)));
       return;
     }
-    final url = watchData!.url;
+    var url = watchData!.url;
+    final headers = watchData!.headers;
+    // El renderer DLNA pide la URL con SU propio cliente HTTP — no hay
+    // forma de decirle que mande el Referer/User-Agent que la fuente
+    // exige. Sin esto, cualquier fuente con headers obligatorios se veía
+    // sana localmente pero fallaba en silencio en el TV. Con headers, se
+    // pasa por el relay local en vez de la URL directa (ver
+    // cast_relay_server.dart).
+    if (headers != null && headers.isNotEmpty) {
+      try {
+        url = await CastRelayServer.registerAndGetUrl(
+          targetUrl: url,
+          headers: headers,
+        );
+        _dlnaRelayUrl = url;
+      } catch (e) {
+        logger.warning('CastRelayServer falló, casteando URL directa: $e');
+      }
+    }
     dlnaDevice.value = device;
     await device.setUrl(url);
     await device.play();
     await player.stop();
+    // Cancelar cualquier timer previo antes de crear uno nuevo — si el
+    // usuario elige otro dispositivo DLNA sin desconectar el anterior
+    // primero, sin esto quedaban DOS timers corriendo _getDLNAStatus() cada
+    // segundo para siempre (uno por cada dispositivo elegido en la sesión).
+    _dlnaTimer?.cancel();
     _dlnaTimer = Timer.periodic(const Duration(seconds: 1), (timer) {
       _getDLNAStatus();
     });
@@ -1109,6 +1724,10 @@ class VideoPlayerController extends GetxController {
     dlnaDevice.value = null;
     device.stop();
     _dlnaTimer?.cancel();
+    if (_dlnaRelayUrl != null) {
+      CastRelayServer.unregister(_dlnaRelayUrl!);
+      _dlnaRelayUrl = null;
+    }
   }
 
   // 获取 DLNA 播放状态
@@ -1117,23 +1736,28 @@ class VideoPlayerController extends GetxController {
     if (device == null) {
       return;
     }
-    final transportInfo = await device.getTransportInfo();
-    if (transportInfo.contains("PLAYING")) {
-      isPlaying.value = true;
-    } else {
-      isPlaying.value = false;
+    // Este método corre desde un Timer.periodic de 1s mientras dure el cast
+    // (ver connectDLNADevice) — sin try/catch, un TV desconectado/
+    // inalcanzable o un formato de posición inesperado (firmware distinto)
+    // tira la MISMA excepción sin manejar una vez por segundo para siempre,
+    // sin que el usuario vea ningún aviso.
+    try {
+      final transportInfo = await device.getTransportInfo();
+      isPlaying.value = transportInfo.contains("PLAYING");
+      final dlnaPosition = await device.position();
+      final positionParser = PositionParser(dlnaPosition);
+      final absTimeArr = positionParser.AbsTime.split(":");
+      if (absTimeArr.length < 3) return;
+      final absTime = Duration(
+        hours: int.tryParse(absTimeArr[0]) ?? 0,
+        minutes: int.tryParse(absTimeArr[1]) ?? 0,
+        seconds: int.tryParse(absTimeArr[2]) ?? 0,
+      );
+      position.value = absTime;
+      duration.value = Duration(seconds: positionParser.TrackDurationInt);
+    } catch (e) {
+      logger.warning('_getDLNAStatus falló: $e');
     }
-    final dlnaPosition = await device.position();
-    final positionParser = PositionParser(dlnaPosition);
-    final absTimeArr = positionParser.AbsTime.split(":");
-    final absTime = Duration(
-      hours: int.parse(absTimeArr[0]),
-      minutes: int.parse(absTimeArr[1]),
-      seconds: int.parse(absTimeArr[2]),
-    );
-    position.value = absTime;
-    positionParser.TrackDurationInt;
-    duration.value = Duration(seconds: positionParser.TrackDurationInt);
   }
 
   // Verifica si el host de una URL es alcanzable vía TCP.
@@ -1169,8 +1793,7 @@ class VideoPlayerController extends GetxController {
       'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 '
       '(KHTML, like Gecko) Chrome/125.0.0.0 Safari/537.36';
 
-  Future<bool> _tryOpenPlayer(
-      String url, Map<String, String>? headers) async {
+  Future<bool> _tryOpenPlayer(String url, Map<String, String>? headers) async {
     if (url.startsWith('error://')) {
       logger.severe('URL de error recibida: $url');
       return false;
@@ -1207,29 +1830,57 @@ class VideoPlayerController extends GetxController {
       if ((p.w ?? 0) > 0 && (p.h ?? 0) > 0) finish(true);
     }));
 
+    // Confirmado en vivo varias veces (Streamwish, y de nuevo con Voe/voe.sx):
+    // la URL resuelta es real y válida, pero media_kit puede tardar bastante
+    // más de 8s (incluso más de 25s con Voe, cuyo CDN espejo cloudwindow-route
+    // es lento para arrancar) en reconocer el formato/duración la primera
+    // vez — el chequeo reportaba "falló" y el video arrancaba solo, sano,
+    // unos segundos después. 35s da margen real; el watchdog de buffering
+    // (más abajo, mismo margen) ya cubre el caso de un servidor genuinamente
+    // colgado DESPUÉS de abrir, así que no hace falta que este timeout sea
+    // corto "por las dudas" — total nada queda esperando para siempre (y
+    // ahora que un fallo pasa automáticamente al siguiente servidor, esperar
+    // un poco más acá sale más barato que antes).
     final ok = await completer.future
-        .timeout(const Duration(seconds: 8), onTimeout: () => false);
+        .timeout(const Duration(seconds: 35), onTimeout: () => false);
     for (final s in subs) {
       unawaited(s.cancel());
     }
     if (!ok) {
       logger.info('Fuente no reproducible, se intentará failover: $url');
+    } else if (_midStreamResumeAt != null) {
+      // Recuperación de un corte a mitad de capítulo (ver
+      // _midStreamResumeAt) — seguir donde se quedó en vez de arrancar
+      // la fuente nueva desde 0.
+      player.seek(_midStreamResumeAt!);
+      _midStreamResumeAt = null;
     }
     return ok;
   }
 
+  // Nombre del servidor recordado para el diálogo "¿Continuar donde te
+  // quedaste?" — mismo storage que usa _applyPreferredServer, solo lectura.
+  String? get rememberedServerName => PrismHubStorage.getLastWorkingServer(
+        runtime.extension.package,
+        playList[index.value].url,
+      );
 
-
-  // Si hay un servidor recordado para este episodio que sí es reproducible
-  // nativamente, se usa como primario para no re-buscar entre todos.
-  void _applyPreferredServer() {
+  // Si hay un servidor recordado para este episodio, se usa como primario
+  // para no re-buscar entre todos. Devuelve true si currentServerName quedó
+  // apuntando a un recordado válido (ya sea porque lo acaba de aplicar o
+  // porque ya estaba puesto) — con esto play() sabe si puede saltearse la
+  // elección manual de servidor y arrancar solo. No exige que sea URL directa
+  // — la mayoría de los servidores son embeds que switchServer/runtime.watch
+  // sabe resolver perfectamente, no hace falta que ya vengan resueltos acá.
+  bool _applyPreferredServer() {
     final saved = PrismHubStorage.getLastWorkingServer(
       runtime.extension.package,
       playList[index.value].url,
     );
-    if (saved == null || saved == currentServerName.value) return;
+    if (saved == null) return false;
     final savedUrl = availableServers[saved];
-    if (savedUrl == null || !isDirectStream(savedUrl)) return;
+    if (savedUrl == null) return false;
+    if (saved == currentServerName.value) return true;
     logger.info('Usando servidor recordado: $saved');
     currentServerName.value = saved;
     final headers = <String, String>{};
@@ -1242,6 +1893,7 @@ class VideoPlayerController extends GetxController {
       headers: headers.isEmpty ? null : headers,
       audioTrack: watchData!.audioTrack,
     );
+    return true;
   }
 
   // Responde al diálogo "¿Continuar donde te quedaste?" — usuario aceptó.
@@ -1259,19 +1911,83 @@ class VideoPlayerController extends GetxController {
     player.play();
   }
 
-  // Muestra error + guarda embed URL para que el usuario pueda abrirlo
-  // manualmente en WebView con el botón "Ver en WebView" de la UI.
-  // NO abre WebView automáticamente (evita anuncios inesperados).
-  void _setServerFailed(String name, String embedUrl) {
-    serverFailedMessage.value = 'Servidor "$name" no accesible. Elegí otro.';
-    if (!isDirectStream(embedUrl)) {
+  // Antes de rendirse con este servidor, reintentar UNA vez pidiendo una
+  // resolución nueva (ver comentario en _serverRetryCount) — algunos hosts
+  // (confirmado: Streamwish) firman una URL nueva contra un servidor de
+  // backend elegido al azar en cada resolución, así que un simple reintento
+  // puede caer en uno sano sin que el usuario tenga que hacer nada.
+  void _failOrRetryServer(String name) {
+    if (_serverRetryCount < _maxServerRetries) {
+      _serverRetryCount++;
+      logger.info(
+          'switchServer: $name falló, reintentando ($_serverRetryCount/$_maxServerRetries) con una resolución nueva.');
+      unawaited(switchServer(name));
+      return;
+    }
+    _setServerFailed(name);
+  }
+
+  // Antes probaba el SIGUIENTE servidor disponible automáticamente cuando
+  // uno fallaba — a pedido explícito, esto ya NO pasa: el reproductor debe
+  // esperar 100% a que el usuario elija otro servidor a mano (botón
+  // Servidor), nunca auto-avanzar sin ninguna interacción. El único
+  // reintento automático que queda es _failOrRetryServer probando de nuevo
+  // EL MISMO servidor con una resolución nueva (algunos hosts firman contra
+  // un backend al azar en cada resolución) — eso no es "cambiar de
+  // servidor", es reintentar el mismo.
+  void _setServerFailed(String name) {
+    _triedAndFailedServers.add(name);
+    // Mismo criterio que el fallo del servidor PRIMARIO (play()): si la URL
+    // del servidor no es un stream directo, ofrecer el WebView en vez de
+    // solo un mensaje de texto sin salida — antes esto SOLO se hacía en el
+    // primer intento; cualquier fallo que llegara acá (corte a mitad de
+    // reproducción, reintento agotado vía switchServer) dejaba
+    // webViewFallback en null para siempre, así que el WebView nunca se
+    // abría (confirmado en vivo: "Servidor no disponible" sin ninguna
+    // salida real en FuegoCine y otras extensiones de video).
+    final url = availableServers[name];
+    if (webViewFallback.value == null &&
+        url != null &&
+        !isDirectStream(url) &&
+        !url.startsWith('page://') &&
+        !url.startsWith('error://')) {
+      // Orden importa: ver comentario en play() sobre por qué el reset va
+      // ANTES de asignar webViewFallback.value (ese ever() dispara
+      // sincrónico).
+      webViewOpenedOnce.value = false;
       webViewFallback.value = {
-        'url': embedUrl,
+        'url': url,
         'name': name,
         'referer': serverReferers[name] ?? '',
       };
+      // Recordarlo igual que un servidor que sí funcionó nativo — antes
+      // esto SOLO pasaba tras un _tryOpenPlayer exitoso, así que un título
+      // que solo anda por WebView nunca quedaba guardado como preferido:
+      // cada vez que volvías, tocaba elegir servidor de la lista de cero
+      // en vez de reintentar directo el mismo que ya sabías que funciona
+      // (aunque sea por WebView).
+      _lastOpenedServerName = name;
+      unawaited(PrismHubStorage.setLastWorkingServer(
+        runtime.extension.package,
+        playList[index.value].url,
+        name,
+      ));
     }
-    logger.info('switchServer: fallo → $name. WebView disponible: $embedUrl');
+    if (webViewFallback.value != null) {
+      // Sin "Abriendo..." — ese texto quedaba engañoso una vez que el
+      // usuario ya cerró el navegador interno y volvió acá (el botón de
+      // abajo es la forma real de volver a abrirlo, no algo automático que
+      // ya está pasando).
+      serverFailedMessage.value =
+          'No se puede reproducir en el reproductor nativo.\n'
+          'Podés verlo desde el navegador interno.';
+    } else {
+      serverFailedMessage.value = availableServers.length > 1
+          ? 'Servidor "$name" no disponible.\nElegí otro servidor con el botón Servidor.'
+          : 'Servidor "$name" no disponible. Intentá más tarde.';
+    }
+    logger.info(
+        'switchServer: $name falló. ${webViewFallback.value != null ? "Abriendo WebView." : "Esperando a que el usuario elija otro servidor."}');
   }
 
   // Intenta reproducir directamente una URL que ya es un stream (m3u8/mp4).
@@ -1282,15 +1998,21 @@ class VideoPlayerController extends GetxController {
     final referer = serverReferers[name];
     if (referer != null && referer.isNotEmpty) headers['Referer'] = referer;
     if (!await _tryOpenPlayer(directUrl, headers.isEmpty ? null : headers)) {
-      _setServerFailed(name, directUrl);
+      _failOrRetryServer(name);
     } else {
+      _serverRetryCount = 0;
       serverFailedMessage.value = '';
       webViewFallback.value = null;
+      _lastOpenedServerName = name;
       unawaited(PrismHubStorage.setLastWorkingServer(
           runtime.extension.package, playList[index.value].url, name));
+      if (_pendingResumeSeconds != null) {
+        await player.pause();
+        resumePrompt.value = _pendingResumeSeconds;
+        _pendingResumeSeconds = null;
+      }
     }
   }
-
 
   // Intenta reproducir un embed que el resolver nativo no pudo resolver, usando
   // el sniffer de WebView oculto: carga la página del host, deja correr su JS y
@@ -1301,19 +2023,26 @@ class VideoPlayerController extends GetxController {
     String embedUrl, {
     Duration timeout = const Duration(seconds: 8),
   }) async {
+    if (_disposed) return false;
     if (embedUrl.startsWith('error://')) return false;
     final low = embedUrl.toLowerCase();
     // Estos hosts no exponen streams HLS/MP4: abren ventanas de descarga, requieren
     // interacción de usuario o cifran el contenido sin URL interceptable.
-    if (low.contains('mega.nz') || low.contains('mega.co.nz') ||
-        low.contains('savefiles.') || low.contains('mediafire.') ||
-        low.contains('1fichier.') || low.contains('zippyshare.') ||
-        low.contains('racaty.') || low.contains('katfile.') ||
-        low.contains('rapidgator.') || low.contains('nitroflare.')) {
+    if (low.contains('mega.nz') ||
+        low.contains('mega.co.nz') ||
+        low.contains('savefiles.') ||
+        low.contains('mediafire.') ||
+        low.contains('1fichier.') ||
+        low.contains('zippyshare.') ||
+        low.contains('racaty.') ||
+        low.contains('katfile.') ||
+        low.contains('rapidgator.') ||
+        low.contains('nitroflare.')) {
       return false;
     }
     try {
-      logger.info('Sniffer WebView → $name: $embedUrl (timeout: ${timeout.inSeconds}s)');
+      logger.info(
+          'Sniffer WebView → $name: $embedUrl (timeout: ${timeout.inSeconds}s)');
       final referer = serverReferers[name];
       final sniffed = await StreamSnifferService.sniff(
         embedUrl,
@@ -1327,8 +2056,12 @@ class VideoPlayerController extends GetxController {
       logger.info('Sniffer encontró stream para $name: ${sniffed.url}');
       final headers = {'Referer': sniffed.referer};
       if (!await _tryOpenPlayer(sniffed.url, headers)) {
-        logger.info('Sniffer: media_kit rechazado por CDN → $name. Guardando para botón WebView.');
-        // Guardar embed URL para botón "Ver en WebView" manual — NO abrir automáticamente
+        logger.info(
+            'Sniffer: media_kit rechazado por CDN → $name. Guardando para botón WebView.');
+        // Guardar embed URL para botón "Ver en WebView" manual — NO abrir automáticamente.
+        // Orden importa: ver comentario en play() sobre por qué el reset va
+        // ANTES de asignar webViewFallback.value.
+        webViewOpenedOnce.value = false;
         webViewFallback.value = {
           'url': embedUrl,
           'name': name,
@@ -1360,7 +2093,9 @@ class VideoPlayerController extends GetxController {
   // sniff directo de la página (iframes estáticos capturados via postMessage relay).
   bool _pageSniffAttempted = false;
   Future<bool> _trySniffPage() async {
-    if (_episodePageUrl.isEmpty || _pageSniffAttempted) return false;
+    if (_disposed || _episodePageUrl.isEmpty || _pageSniffAttempted) {
+      return false;
+    }
     _pageSniffAttempted = true;
     final episodeUrl = playList[index.value].url;
     try {
@@ -1387,7 +2122,8 @@ class VideoPlayerController extends GetxController {
         // Etapa 2: sniffear cada embed en WebView propio.
         for (int i = 0; i < embedUrls.length && i < 6; i++) {
           final embedUrl = embedUrls[i];
-          logger.info('Page-sniff etapa 2 [${i+1}/${embedUrls.length}]: $embedUrl');
+          logger.info(
+              'Page-sniff etapa 2 [${i + 1}/${embedUrls.length}]: $embedUrl');
           if (await _trySniff('Embed ${i + 1}', embedUrl)) {
             // Guardar el embed que funcionó para carga rápida en el próximo intento.
             unawaited(PrismHubStorage.setPageSniffEmbed(
@@ -1403,6 +2139,7 @@ class VideoPlayerController extends GetxController {
         logger.info('Page-sniff etapa 1: sin embeds, intentando sniff directo');
       }
 
+      if (_disposed) return false;
       // Fallback: sniff directo de la página (iframes estáticos + auto-play).
       final sniffed = await StreamSnifferService.sniff(
         _episodePageUrl,
@@ -1415,7 +2152,11 @@ class VideoPlayerController extends GetxController {
       logger.info('Page-sniff encontró stream: ${sniffed.url}');
       final headers = {'Referer': sniffed.referer};
       if (!await _tryOpenPlayer(sniffed.url, headers)) {
-        logger.info('Page-sniff: media_kit rechazado. Guardando para botón WebView.');
+        logger.info(
+            'Page-sniff: media_kit rechazado. Guardando para botón WebView.');
+        // Orden importa: ver comentario en play() sobre por qué el reset va
+        // ANTES de asignar webViewFallback.value.
+        webViewOpenedOnce.value = false;
         webViewFallback.value = {
           'url': _episodePageUrl,
           'name': 'WebView',
@@ -1494,7 +2235,9 @@ class VideoPlayerController extends GetxController {
 
   @override
   void onClose() async {
-    if (PrismHubStorage.getSetting(SettingKey.autoTracking) && anilistID != "") {
+    _disposed = true;
+    if (PrismHubStorage.getSetting(SettingKey.autoTracking) &&
+        anilistID != "") {
       AniListProvider.editList(
         status: AnilistMediaListStatus.current,
         progress: playIndex + 1,
@@ -1517,7 +2260,11 @@ class VideoPlayerController extends GetxController {
       }
     }
     _dlnaTimer?.cancel();
-    try { player.pause(); } catch (_) {}
+    _bufferingStallTimer?.cancel();
+    _qualitySwitchTimer?.cancel();
+    try {
+      player.pause();
+    } catch (_) {}
     // _saveHistory() needs a live rendered frame for its screenshot — it
     // MUST run before player.stop() clears the video output, or
     // player.screenshot() silently returns null and _saveHistory() bails

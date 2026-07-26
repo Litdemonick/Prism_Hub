@@ -1,5 +1,6 @@
 ﻿import 'package:fluent_ui/fluent_ui.dart' as fluent;
 import 'package:flutter/material.dart';
+import 'package:prismhub/views/widgets/home/home_theme.dart';
 // import 'package:prismhub/views/widgets/platform_widget.dart';
 
 class SettingNumboxButton extends fluent.StatefulWidget {
@@ -27,13 +28,23 @@ class _SettingsIntpuTileState extends fluent.State<SettingNumboxButton> {
   Widget _buildDesktop(BuildContext context) {
     return fluent.Tooltip(
         message: widget.title,
-        child: fluent.Card(
+        child: Container(
+            padding: const EdgeInsets.all(8),
+            decoration: BoxDecoration(
+              color: HomeTheme.cardSurface,
+              borderRadius: BorderRadius.circular(8),
+              border: Border.all(color: HomeTheme.border),
+            ),
             child: Row(
           children: [
             SizedBox(
               width: 60,
               height: 24,
-              child: widget.icon ?? Text(widget.title),
+              child: widget.icon ??
+                  Text(
+                    widget.title,
+                    style: const TextStyle(color: HomeTheme.textPrimary),
+                  ),
             ),
             Expanded(
                 child: SizedBox(

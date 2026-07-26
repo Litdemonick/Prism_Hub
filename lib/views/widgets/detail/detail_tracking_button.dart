@@ -10,6 +10,7 @@ import 'package:prismhub/router/router.dart';
 import 'package:prismhub/utils/i18n.dart';
 import 'package:prismhub/views/dialogs/anilist_binding_dialog.dart';
 import 'package:prismhub/views/dialogs/anilist_tracking_dialog.dart';
+import 'package:prismhub/views/widgets/home/home_theme.dart';
 import 'package:prismhub/views/widgets/platform_widget.dart';
 import 'package:fluent_ui/fluent_ui.dart' as fluent;
 
@@ -32,7 +33,10 @@ class _DetailTrackingButtonState extends State<DetailTrackingButton> {
   };
 
   _showTrackingDialog() async {
-    final anilistType = anlistExtensionMap[c.extension?.type]!;
+    // c.type (resuelto), no c.extension?.type (fijo) — una extensión
+    // "mixed" no tiene entrada en el mapa bajo su tipo crudo y el "!" de
+    // abajo tiraría un null-check crash al abrir el diálogo de AniList.
+    final anilistType = anlistExtensionMap[c.type]!;
     if (c.aniListID.value.isEmpty) {
       dynamic data;
       if (Platform.isAndroid) {
@@ -101,6 +105,16 @@ class _DetailTrackingButtonState extends State<DetailTrackingButton> {
   Widget _buildDeskltop(BuildContext context) {
     return _buildShow(
       fluent.Button(
+        style: fluent.ButtonStyle(
+          backgroundColor: fluent.WidgetStateProperty.all(HomeTheme.cardSurface),
+          foregroundColor: fluent.WidgetStateProperty.all(HomeTheme.textPrimary),
+          shape: fluent.WidgetStateProperty.all(
+            RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(999),
+              side: const BorderSide(color: HomeTheme.border),
+            ),
+          ),
+        ),
         child: Padding(
           padding:
               const EdgeInsets.only(left: 10, right: 10, top: 5, bottom: 5),
@@ -109,7 +123,7 @@ class _DetailTrackingButtonState extends State<DetailTrackingButton> {
             children: [
               Text('detail.tracking'.i18n),
               const SizedBox(width: 8),
-              const Icon(fluent.FluentIcons.sync)
+              const Icon(fluent.FluentIcons.sync, size: 14)
             ],
           ),
         ),
@@ -122,7 +136,7 @@ class _DetailTrackingButtonState extends State<DetailTrackingButton> {
 
   Widget _buildShow(Widget widget) {
     final trackingPageController = Get.put(TrackingPageController());
-    if (anlistExtensionMap.containsKey(c.extension?.type) &&
+    if (anlistExtensionMap.containsKey(c.type) &&
         trackingPageController.anilistIsLogin.value) {
       return widget;
     }

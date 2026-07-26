@@ -22,12 +22,16 @@ import 'package:prismhub/views/widgets/messenger.dart';
 // no cache yet.
 Future<void> resumeHistoryItem(BuildContext context, History history) async {
   final runtime = ExtensionUtils.runtimes[history.package];
-  if (runtime == null) {
+  // Deshabilitada (con el toggle apagado) se bloquea igual que no instalada
+  // — antes esto solo miraba si el runtime existía, así que "Continuar
+  // viendo" abría igual el reproductor de una extensión desactivada.
+  final disabled = runtime != null && !ExtensionUtils.isEnabled(history.package);
+  if (runtime == null || disabled) {
     showPlatformSnackbar(
       context: context,
       content: FlutterI18n.translate(
         context,
-        'common.extension-missing',
+        disabled ? 'common.extension-disabled' : 'common.extension-missing',
         translationParams: {'package': history.package},
       ),
       severity: fluent.InfoBarSeverity.error,
@@ -69,6 +73,7 @@ Future<void> resumeHistoryItem(BuildContext context, History history) async {
   }
 
   if (!context.mounted) return;
+  final resolvedType = ExtensionUtils.resolveType(runtime.extension, detail);
   Navigator.of(context, rootNavigator: true).push(
     PageRouteBuilder(
       transitionDuration: const Duration(milliseconds: 600),
@@ -87,6 +92,7 @@ Future<void> resumeHistoryItem(BuildContext context, History history) async {
             episodeGroupId: history.episodeGroupId,
             detailUrl: history.url,
             anilistID: anilistId,
+            typeOverride: resolvedType,
           ),
         );
       },
@@ -96,7 +102,12 @@ Future<void> resumeHistoryItem(BuildContext context, History history) async {
 
 void _openDetailPageFallback(History history) {
   if (Platform.isAndroid) {
-    Get.to(DetailPage(url: history.url, package: history.package));
+    Get.to(DetailPage(
+      key: ValueKey('${history.package}|${history.url}'),
+      url: history.url,
+      package: history.package,
+      tag: '${history.package}|${history.url}',
+    ));
     return;
   }
   router.push(

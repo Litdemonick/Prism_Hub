@@ -1,16 +1,19 @@
-﻿import 'dart:async';
+import 'dart:async';
 
 import 'package:fluent_ui/fluent_ui.dart';
+import 'package:flutter/material.dart' as material;
 import 'package:flutter/services.dart';
 import 'package:get/get.dart';
 import 'package:media_kit/media_kit.dart';
 import 'package:media_kit_video/media_kit_video.dart';
 import 'package:prismhub/controllers/watch/video_controller.dart';
 import 'package:prismhub/router/router.dart';
+import 'package:prismhub/views/pages/watch/video/video_player_cast.dart';
 import 'package:prismhub/views/pages/watch/video/webview_player_page.dart'
-    show openWebViewPlayer;
+    show isKnownNativeServer, openWebViewPlayer;
 import 'package:prismhub/utils/i18n.dart';
 import 'package:prismhub/views/widgets/cache_network_image.dart';
+import 'package:prismhub/views/widgets/home/home_theme.dart';
 import 'package:prismhub/views/widgets/watch/playlist.dart';
 import 'package:window_manager/window_manager.dart';
 
@@ -33,12 +36,40 @@ class _VideoPlayerDesktopControlsState
   final _subtitleViewKey = GlobalKey<SubtitleViewState>();
   Worker? _webViewWorker;
   Worker? _resumeWorker;
+  // Se ocultan rápido si el mouse no se mueve (mismo patrón que ya usa la
+  // versión mobile, con su propio timer de 3s de inactividad).
+  bool _showControls = true;
+  Timer? _hideTimer;
+
+  void _resetHideTimer() {
+    _hideTimer?.cancel();
+    if (!_showControls && mounted) setState(() => _showControls = true);
+    _hideTimer = Timer(const Duration(seconds: 2), () {
+      if (mounted) setState(() => _showControls = false);
+    });
+  }
 
   @override
   void initState() {
     super.initState();
-    // No abrir WebView automáticamente — el usuario lo abre con el botón en la UI.
-    _webViewWorker = ever(_c.webViewFallback, (_) {});
+    _resetHideTimer();
+    // El reproductor nativo no pudo con este servidor (ver play() en
+    // video_controller.dart) — abrir el WebView automáticamente en vez de
+    // depender de un botón: antes esta señal (webViewFallback) se emitía
+    // pero NADA la escuchaba de verdad (este worker tenía el callback
+    // vacío), así que el fallback a WebView nunca se disparaba y el
+    // usuario se quedaba solo con el cartel de texto sin forma real de ver
+    // el video. webViewOpenedOnce evita reabrir una segunda vez si el mapa
+    // se vuelve a emitir mientras ya se está mostrando.
+    _webViewWorker = ever(_c.webViewFallback, (fallback) {
+      if (fallback == null || !mounted || _c.webViewOpenedOnce.value) return;
+      // Directo, sin pausa: mostrar el mensaje acá y recién después navegar
+      // se veía como un flash raro (reportado en vivo) — el navegador interno
+      // tiene que abrir/cargar primero, y el aviso de por qué se cambió se
+      // muestra DENTRO de esa pantalla (ver _WebViewPlayerPageState en
+      // webview_player_page.dart), no antes de llegar a ella.
+      _openWebView();
+    });
     // Mostrar diálogo de continuación cuando el controlador emite la señal.
     _resumeWorker = ever(_c.resumePrompt, (secs) {
       if (secs == null || !mounted) return;
@@ -50,8 +81,28 @@ class _VideoPlayerDesktopControlsState
   void dispose() {
     _webViewWorker?.dispose();
     _resumeWorker?.dispose();
+    _hideTimer?.cancel();
     _focusNode.dispose();
     super.dispose();
+  }
+
+  // Reabre el WebView con la misma URL guardada — usado tanto por el
+  // auto-open (arriba) como por el botón "Volver al navegador" del cartel
+  // de error: antes, al cerrar el WebView (botón atrás) y volver acá, no
+  // había forma de reabrirlo salvo tocar el servidor de nuevo en la lista
+  // (que ni siquiera reintenta el mismo, según el servidor elegido).
+  void _openWebView() {
+    final fallback = _c.webViewFallback.value;
+    if (fallback == null) return;
+    _c.webViewOpenedOnce.value = true;
+    final referer = fallback['referer'];
+    openWebViewPlayer(
+      context,
+      fallback['url']!,
+      referer: (referer == null || referer.isEmpty) ? null : referer,
+      title: _c.title,
+      onProgress: _c.saveWebViewProgress,
+    );
   }
 
   void _showResumeDialog(int secs) {
@@ -61,30 +112,44 @@ class _VideoPlayerDesktopControlsState
     final timeStr = h > 0
         ? '${h.toString().padLeft(2, '0')}:${m.toString().padLeft(2, '0')}:${s.toString().padLeft(2, '0')}'
         : '${m.toString().padLeft(2, '0')}:${s.toString().padLeft(2, '0')}';
+    final server = _c.rememberedServerName;
+    final serverStr = (server != null && server.isNotEmpty)
+        ? ' en el servidor "$server"'
+        : '';
     showDialog<void>(
       context: context,
-      builder: (ctx) => ContentDialog(
-        title: const Text('¡Un momento!'),
-        content: Text(
-          'Parece que anteriormente estabas mirando este vídeo '
-          '¿Deseas continuar donde te quedaste? $timeStr',
+      builder: (ctx) => FluentTheme(
+        // showDialog inserta esto en el Overlay del Navigator raíz, fuera
+        // del FluentTheme(dark) local de este widget — sin este wrap
+        // quedaba con el tema claro/celeste por defecto de toda la app en
+        // vez del oscuro+morado del reproductor.
+        data: FluentTheme.of(context).copyWith(
+          accentColor:
+              AccentColor.swatch(const {'normal': HomeTheme.accentPink}),
         ),
-        actions: [
-          Button(
-            child: const Text('Cancelar'),
-            onPressed: () {
-              Navigator.of(ctx).pop();
-              _c.cancelResume();
-            },
+        child: ContentDialog(
+          title: const Text('¡Un momento!'),
+          content: Text(
+            'Parece que anteriormente estabas mirando este vídeo$serverStr. '
+            '¿Deseas continuar donde te quedaste? $timeStr',
           ),
-          FilledButton(
-            child: const Text('Aceptar'),
-            onPressed: () {
-              Navigator.of(ctx).pop();
-              _c.confirmResume(secs);
-            },
-          ),
-        ],
+          actions: [
+            Button(
+              child: const Text('Cancelar'),
+              onPressed: () {
+                Navigator.of(ctx).pop();
+                _c.cancelResume();
+              },
+            ),
+            FilledButton(
+              child: const Text('Aceptar'),
+              onPressed: () {
+                Navigator.of(ctx).pop();
+                _c.confirmResume(secs);
+              },
+            ),
+          ],
+        ),
       ),
     );
   }
@@ -92,7 +157,7 @@ class _VideoPlayerDesktopControlsState
   @override
   Widget build(BuildContext context) {
     return MouseRegion(
-      onHover: (_) {},
+      onHover: (_) => _resetHideTimer(),
       child: FluentTheme(
         data: FluentThemeData(
           brightness: Brightness.dark,
@@ -119,8 +184,8 @@ class _VideoPlayerDesktopControlsState
                       color: _c.subtitleFontColor.value,
                       fontWeight: _c.subtitleFontWeight.value,
                       backgroundColor:
-                          _c.subtitleBackgroundColor.value.withValues(alpha:
-                        _c.subtitleBackgroundOpacity.value,
+                          _c.subtitleBackgroundColor.value.withValues(
+                        alpha: _c.subtitleBackgroundOpacity.value,
                       ),
                     );
                     return SubtitleView(
@@ -166,13 +231,82 @@ class _VideoPlayerDesktopControlsState
                       if (_c.serverFailedMessage.value.isNotEmpty) {
                         return const SizedBox.shrink();
                       }
+                      // Esperando que el usuario elija un servidor — no se
+                      // prueba nada solo hasta que lo haga (evita cargar/
+                      // resolver todos los servidores de una al entrar).
+                      if (_c.awaitingServerChoice.value) {
+                        return GestureDetector(
+                          onTap: _c.currentServerName.value.isEmpty
+                              ? null
+                              : () =>
+                                  _c.switchServer(_c.currentServerName.value),
+                          child: MouseRegion(
+                            cursor: SystemMouseCursors.click,
+                            child: Container(
+                              // Fondo sólido detrás de todo el bloque: con
+                              // escenas claras del anime, el texto quedaba
+                              // encima directo del video y era ilegible.
+                              padding: const EdgeInsets.symmetric(
+                                  horizontal: 28, vertical: 22),
+                              decoration: BoxDecoration(
+                                color: HomeTheme.cardSurface
+                                    .withValues(alpha: 0.92),
+                                borderRadius: BorderRadius.circular(16),
+                                border: Border.all(color: HomeTheme.border),
+                              ),
+                              child: Column(
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  Container(
+                                    padding: const EdgeInsets.all(18),
+                                    decoration: const BoxDecoration(
+                                      shape: BoxShape.circle,
+                                      color: HomeTheme.accentPink,
+                                    ),
+                                    child: const Icon(FluentIcons.play_solid,
+                                        color: Colors.white, size: 32),
+                                  ),
+                                  const SizedBox(height: 12),
+                                  const Text(
+                                    'Tocá para reproducir el servidor elegido arriba',
+                                    style: TextStyle(
+                                        fontSize: 15, color: Colors.white),
+                                  ),
+                                ],
+                              ),
+                            ),
+                          ),
+                        );
+                      }
                       if (!_c.isGettingWatchData.value) {
+                        // Entre "el servidor abrió" y "ya se pintó el primer
+                        // cuadro" media_kit puede tardar sin que el flag de
+                        // buffering llegue a avisar nada (sobre todo HLS) —
+                        // sin esto quedaba una pantalla negra sin ningún
+                        // spinner, como si estuviera trabada de verdad.
+                        if (!_c.hasRenderedFrame.value) {
+                          return const ProgressRing(
+                            activeColor: HomeTheme.accentPink,
+                          );
+                        }
+                        // Pausado: nunca mostrar el spinner. mpv sigue
+                        // llenando el buffer en segundo plano estando en
+                        // pausa (que es lo que queremos, y la sombra de la
+                        // barra ya lo muestra), pero dejar el spinner
+                        // girando ahí hacía parecer que el reproductor se
+                        // quedó trabado justo cuando el usuario pausó a
+                        // propósito.
+                        if (!_c.isPlaying.value) {
+                          return const SizedBox.shrink();
+                        }
                         return StreamBuilder(
                           stream: _c.player.stream.buffering,
                           builder: (context, snapshot) {
                             if (snapshot.hasData && snapshot.data! ||
                                 _c.player.state.buffering) {
-                              return const ProgressRing();
+                              return const ProgressRing(
+                                activeColor: HomeTheme.accentPink,
+                              );
                             }
                             return const SizedBox.shrink();
                           },
@@ -225,86 +359,143 @@ class _VideoPlayerDesktopControlsState
               Positioned.fill(
                 child: Column(
                   children: [
-                    // header — siempre visible (a pedido del usuario).
-                    Opacity(
-                      opacity: 1,
-                      child: _Header(
-                        title: _c.title,
-                        episode: _c.playList[_c.index.value].name,
-                        onClose: () {
-                          if (_c.isFullScreen.value) {
-                            WindowManager.instance.setFullScreen(false);
-                          }
-                          router.pop();
-                        },
-                      ),
-                    ),
-                    // center — notificación de servidor fallido
-                    Expanded(
-                      child: Center(
-                        child: Obx(() {
-                          final msg = _c.serverFailedMessage.value;
-                          return AnimatedSwitcher(
-                            duration: const Duration(milliseconds: 250),
-                            child: msg.isEmpty
-                                ? const SizedBox.shrink()
-                                : Container(
-                            key: const ValueKey('server-failed'),
-                            margin: const EdgeInsets.symmetric(horizontal: 40),
-                            padding: const EdgeInsets.symmetric(
-                                horizontal: 24, vertical: 18),
-                            decoration: BoxDecoration(
-                              color: Colors.black.withValues(alpha:0.78),
-                              borderRadius: BorderRadius.circular(12),
-                              border: Border.all(
-                                color: Colors.orange.withValues(alpha:0.8),
-                                width: 1.5,
-                              ),
-                            ),
-                            child: Row(
-                              mainAxisSize: MainAxisSize.min,
-                              children: [
-                                Icon(
-                                  FluentIcons.warning,
-                                  color: Colors.orange,
-                                  size: 28,
-                                ),
-                                const SizedBox(width: 16),
-                                Text(
-                                    msg,
-                                    style: const TextStyle(
-                                      fontSize: 15,
-                                      color: Colors.white,
-                                      height: 1.5,
-                                    ),
-                                  ),
-                                const SizedBox(width: 16),
-                                IconButton(
-                                  icon: const Icon(
-                                    FluentIcons.chrome_close,
-                                    size: 14,
-                                  ),
-                                  onPressed: () {
-                                    _c.serverFailedMessage.value = '';
-                                    _c.webViewFallback.value = null;
+                    // header + selector — se ocultan rápido si el mouse no
+                    // se mueve (igual que el footer, más abajo).
+                    IgnorePointer(
+                      ignoring: !_showControls,
+                      child: AnimatedOpacity(
+                        opacity: _showControls ? 1 : 0,
+                        duration: const Duration(milliseconds: 200),
+                        child: Column(
+                          children: [
+                            // Obx acá: _c.index.value se leía suelto en el
+                            // build de este State (no reactivo), así que el
+                            // título arriba solo se actualizaba cuando algo
+                            // más disparaba un rebuild — se sentía "atrasado"
+                            // al cambiar de capítulo. Envuelto en Obx, sigue
+                            // a index.value al toque.
+                            Obx(() => _Header(
+                                  title: _c.title,
+                                  episode: _c.playList[_c.index.value].name,
+                                  onClose: () {
+                                    if (_c.isFullScreen.value) {
+                                      WindowManager.instance
+                                          .setFullScreen(false);
+                                    }
+                                    router.pop();
                                   },
-                                ),
-                              ],
-                            ),
-                          ),
-                          );
-                        }),
+                                )),
+                            // selector de servidores — pestañas arriba, no un
+                            // botón escondido abajo (a pedido del usuario, y
+                            // para que se vea de una cuál es el
+                            // recomendado/nativo).
+                            _ServerTabBar(controller: _c),
+                          ],
+                        ),
                       ),
                     ),
-                    // footer — siempre visible (a pedido del usuario).
-                    Opacity(
-                      opacity: 1,
-                      child: _Footer(controller: _c),
+                    // center — click para pausar/reproducir (sin tocar el
+                    // footer) + notificación de servidor fallido. Solo se
+                    // activa cuando el video ya está listo: mientras hay un
+                    // overlay bloqueante abajo (elegir servidor, error,
+                    // cargando) ese overlay necesita recibir el toque él
+                    // mismo (por ej. "tocá para reproducir"), así que acá no
+                    // se agrega el GestureDetector encima y el toque le
+                    // llega directo.
+                    Expanded(
+                      child: Obx(() {
+                        final blocked = _c.awaitingServerChoice.value ||
+                            _c.error.value.isNotEmpty ||
+                            _c.isGettingWatchData.value ||
+                            !_c.hasRenderedFrame.value;
+                        final content = Center(
+                          child: Obx(() {
+                            final msg = _c.serverFailedMessage.value;
+                            return AnimatedSwitcher(
+                              duration: const Duration(milliseconds: 250),
+                              child: msg.isEmpty
+                                  ? const SizedBox.shrink()
+                                  : Container(
+                                      key: const ValueKey('server-failed'),
+                                      margin: const EdgeInsets.symmetric(
+                                          horizontal: 40),
+                                      padding: const EdgeInsets.symmetric(
+                                          horizontal: 24, vertical: 18),
+                                      decoration: BoxDecoration(
+                                        color: Colors.black
+                                            .withValues(alpha: 0.78),
+                                        borderRadius: BorderRadius.circular(12),
+                                        border: Border.all(
+                                          color: Colors.orange
+                                              .withValues(alpha: 0.8),
+                                          width: 1.5,
+                                        ),
+                                      ),
+                                      child: Column(
+                                        mainAxisSize: MainAxisSize.min,
+                                        children: [
+                                          Row(
+                                            mainAxisSize: MainAxisSize.min,
+                                            children: [
+                                              Icon(
+                                                FluentIcons.warning,
+                                                color: Colors.orange,
+                                                size: 28,
+                                              ),
+                                              const SizedBox(width: 16),
+                                              Flexible(
+                                                child: Text(
+                                                  msg,
+                                                  style: const TextStyle(
+                                                    fontSize: 15,
+                                                    color: Colors.white,
+                                                    height: 1.5,
+                                                  ),
+                                                ),
+                                              ),
+                                            ],
+                                          ),
+                                          // Reabrir el WebView sin tener que
+                                          // volver a elegir el servidor de
+                                          // la lista — antes, al cerrar el
+                                          // WebView (botón atrás) y volver
+                                          // acá, no había ninguna forma de
+                                          // retomarlo.
+                                          if (_c.webViewFallback.value !=
+                                              null) ...[
+                                            const SizedBox(height: 14),
+                                            FilledButton(
+                                              onPressed: _openWebView,
+                                              child: const Text(
+                                                  'Volver al navegador interno'),
+                                            ),
+                                          ],
+                                        ],
+                                      ),
+                                    ),
+                            );
+                          }),
+                        );
+                        if (blocked) return content;
+                        return GestureDetector(
+                          behavior: HitTestBehavior.opaque,
+                          onTap: () => _c.playOrPause(),
+                          child: content,
+                        );
+                      }),
+                    ),
+                    // footer — se oculta rápido si el mouse no se mueve.
+                    IgnorePointer(
+                      ignoring: !_showControls,
+                      child: AnimatedOpacity(
+                        opacity: _showControls ? 1 : 0,
+                        duration: const Duration(milliseconds: 200),
+                        child: _Footer(controller: _c),
+                      ),
                     ),
                   ],
                 ),
               ),
-
             ],
           ),
         ),
@@ -328,76 +519,142 @@ class _Header extends StatefulWidget {
 }
 
 class _HeaderState extends State<_Header> {
-  bool _isAlwaysOnTop = false;
-
-  @override
-  initState() {
-    super.initState();
-    WindowManager.instance.isAlwaysOnTop().then((value) {
-      _isAlwaysOnTop = value;
-    });
-  }
-
-  @override
-  void dispose() {
-    if (_isAlwaysOnTop) {
-      WindowManager.instance.setAlwaysOnTop(false);
-    }
-    super.dispose();
-  }
-
   @override
   Widget build(BuildContext context) {
     return Container(
-      color: Colors.black.withValues(alpha:0.5),
+      color: Colors.black.withValues(alpha: 0.5),
       child: Padding(
         padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
         child: Row(
           children: [
             Expanded(
-              // Plain Column — no DragToMoveArea so clicks don't move the window.
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    widget.title,
-                    style: const TextStyle(
-                      fontSize: 16,
-                      fontWeight: FontWeight.bold,
-                      overflow: TextOverflow.ellipsis,
+              // Mismo patrón que control_panel_header.dart: DragToMoveArea
+              // solo en el bloque de título (texto, sin botones), para poder
+              // mover la ventana desde ahí sin arriesgar clicks accidentales
+              // sobre los controles de al lado.
+              child: DragToMoveArea(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      widget.title,
+                      style: const TextStyle(
+                        fontSize: 16,
+                        fontWeight: FontWeight.bold,
+                        overflow: TextOverflow.ellipsis,
+                      ),
                     ),
-                  ),
-                  Text(
-                    widget.episode,
-                    style: const TextStyle(
-                      fontSize: 14,
-                      fontWeight: FontWeight.w300,
-                      overflow: TextOverflow.ellipsis,
+                    Text(
+                      widget.episode,
+                      style: const TextStyle(
+                        fontSize: 14,
+                        fontWeight: FontWeight.w300,
+                        overflow: TextOverflow.ellipsis,
+                      ),
                     ),
-                  ),
-                ],
+                  ],
+                ),
               ),
             ),
-            // Always-on-top toggle
-            IconButton(
-              icon: Icon(
-                _isAlwaysOnTop ? FluentIcons.pinned : FluentIcons.pin,
-              ),
-              onPressed: () async {
-                WindowManager.instance.setAlwaysOnTop(!_isAlwaysOnTop);
-                setState(() {
-                  _isAlwaysOnTop = !_isAlwaysOnTop;
-                });
-              },
-            ),
-            const SizedBox(width: 10),
             IconButton(
               onPressed: widget.onClose,
               icon: const Icon(FluentIcons.chevron_down),
             ),
+            const SizedBox(width: 10),
+            // Minimizar/maximizar/cerrar — sin esto la ventana del
+            // reproductor no tenía forma de minimizarse ni maximizarse (el
+            // botón "cerrar" de arriba solo vuelve a la pantalla anterior,
+            // no es el control de ventana de Windows).
+            // WindowCaption pide altura infinita internamente (SizedBox con
+            // height: double.infinity) — sin un alto explícito acá, el Row
+            // del header recibía una restricción de alto NO acotada y
+            // reventaba el layout en pleno frame (justo el error en cascada
+            // de "RenderBox was not laid out" que tumbaba TODO el reproductor,
+            // no solo esta esquina). control_panel_header.dart no tiene este
+            // problema porque ahí todo el header ya tiene height: 40 fijo.
+            const SizedBox(
+              width: 138,
+              height: 32,
+              child: _VideoWindowCaptionButtons(),
+            ),
           ],
         ),
       ),
+    );
+  }
+}
+
+// Reemplaza el WindowCaption de window_manager (que usa FutureBuilder +
+// windowManager.isMaximized() consultado de NUEVO en cada rebuild) por
+// estado propio actualizado solo vía WindowListener. En este header, el
+// MouseRegion(onHover: _resetHideTimer) del reproductor entero dispara
+// setState seguido — cada rebuild relanzaba isMaximized() y el FutureBuilder
+// podía mostrar un snapshot viejo justo al hacer click, así que el botón de
+// maximizar (el del medio) parecía no responder aunque la ventana sí
+// cambiaba de estado. Confirmado en vivo: minimizar/cerrar (llamadas
+// directas, sin estado intermedio) siempre funcionaron bien.
+class _VideoWindowCaptionButtons extends StatefulWidget {
+  const _VideoWindowCaptionButtons();
+
+  @override
+  State<_VideoWindowCaptionButtons> createState() =>
+      _VideoWindowCaptionButtonsState();
+}
+
+class _VideoWindowCaptionButtonsState extends State<_VideoWindowCaptionButtons>
+    with WindowListener {
+  bool _isMaximized = false;
+
+  @override
+  void initState() {
+    super.initState();
+    windowManager.addListener(this);
+    windowManager.isMaximized().then((value) {
+      if (mounted) setState(() => _isMaximized = value);
+    });
+  }
+
+  @override
+  void dispose() {
+    windowManager.removeListener(this);
+    super.dispose();
+  }
+
+  @override
+  void onWindowMaximize() => setState(() => _isMaximized = true);
+
+  @override
+  void onWindowUnmaximize() => setState(() => _isMaximized = false);
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        WindowCaptionButton.minimize(
+          brightness: Brightness.dark,
+          onPressed: () async {
+            if (await windowManager.isMinimized()) {
+              windowManager.restore();
+            } else {
+              windowManager.minimize();
+            }
+          },
+        ),
+        _isMaximized
+            ? WindowCaptionButton.unmaximize(
+                brightness: Brightness.dark,
+                onPressed: () => windowManager.unmaximize(),
+              )
+            : WindowCaptionButton.maximize(
+                brightness: Brightness.dark,
+                onPressed: () => windowManager.maximize(),
+              ),
+        WindowCaptionButton.close(
+          brightness: Brightness.dark,
+          onPressed: () => windowManager.close(),
+        ),
+      ],
     );
   }
 }
@@ -411,7 +668,7 @@ class _Footer extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Container(
-      color: Colors.black.withValues(alpha:0.5),
+      color: Colors.black.withValues(alpha: 0.5),
       child: Padding(
         padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
         child: Column(
@@ -471,12 +728,7 @@ class _Footer extends StatelessWidget {
                           Row(
                         mainAxisSize: MainAxisSize.min,
                         children: [
-                          _Volume(
-                            value: controller.player.state.volume,
-                            onVolumeChanged: (value) {
-                              controller.player.setVolume(value);
-                            },
-                          ),
+                          _Volume(player: controller.player),
                           // 画质
                           Obx(() {
                             if (controller.currentQuality.value.isEmpty) {
@@ -494,10 +746,12 @@ class _Footer extends StatelessWidget {
                     child: Row(
                       mainAxisAlignment: MainAxisAlignment.center,
                       children: [
-                        // 上一集
+                        // 上一集 — bloqueado mientras carga, para no disparar
+                        // otro cambio de episodio encima de uno ya en curso.
                         Obx(
                           () => IconButton(
-                            onPressed: controller.index.value > 0
+                            onPressed: controller.index.value > 0 &&
+                                    !controller.isGettingWatchData.value
                                 ? () {
                                     controller.index.value--;
                                   }
@@ -508,34 +762,74 @@ class _Footer extends StatelessWidget {
                           ),
                         ),
                         const SizedBox(width: 20),
-                        StreamBuilder(
-                          stream: controller.player.stream.playing,
-                          builder: (context, snapshot) {
-                            if (snapshot.hasData && snapshot.data! ||
-                                controller.player.state.playing) {
+                        Obx(() {
+                          // Resolviendo el servidor elegido — bloquear el
+                          // botón para no permitir otro toque mientras carga.
+                          if (controller.isGettingWatchData.value) {
+                            return const SizedBox(
+                              width: 30,
+                              height: 30,
+                              child: Padding(
+                                padding: EdgeInsets.all(4),
+                                child: ProgressRing(
+                                  strokeWidth: 2.5,
+                                  activeColor: HomeTheme.accentPink,
+                                ),
+                              ),
+                            );
+                          }
+                          // Todavía no se eligió/cargó ningún servidor — este
+                          // botón elige el marcado arriba y arranca a
+                          // resolverlo, en vez de jugar con un player vacío.
+                          if (controller.awaitingServerChoice.value) {
+                            return IconButton(
+                              onPressed:
+                                  controller.currentServerName.value.isEmpty
+                                      ? null
+                                      : () => controller.switchServer(
+                                          controller.currentServerName.value),
+                              icon: const Icon(FluentIcons.play, size: 30),
+                            );
+                          }
+                          // El servidor falló (no se pudo reproducir nativo) —
+                          // no hay nada cargado para pausar/reproducir, así
+                          // que se bloquea en vez de dejarlo tocable sin efecto.
+                          if (controller.serverFailedMessage.value.isNotEmpty) {
+                            return const IconButton(
+                              onPressed: null,
+                              icon: Icon(FluentIcons.play, size: 30),
+                            );
+                          }
+                          return StreamBuilder(
+                            stream: controller.player.stream.playing,
+                            builder: (context, snapshot) {
+                              if (snapshot.hasData && snapshot.data! ||
+                                  controller.player.state.playing) {
+                                return IconButton(
+                                  onPressed: controller.player.pause,
+                                  icon: const Icon(
+                                    FluentIcons.pause,
+                                    size: 30,
+                                  ),
+                                );
+                              }
                               return IconButton(
-                                onPressed: controller.player.pause,
+                                onPressed: controller.player.play,
                                 icon: const Icon(
-                                  FluentIcons.pause,
+                                  FluentIcons.play,
                                   size: 30,
                                 ),
                               );
-                            }
-                            return IconButton(
-                              onPressed: controller.player.play,
-                              icon: const Icon(
-                                FluentIcons.play,
-                                size: 30,
-                              ),
-                            );
-                          },
-                        ),
+                            },
+                          );
+                        }),
                         const SizedBox(width: 20),
-                        // 下一集
+                        // 下一集 — bloqueado mientras carga.
                         Obx(
                           () => IconButton(
                             onPressed: controller.playList.length - 1 >
-                                    controller.index.value
+                                        controller.index.value &&
+                                    !controller.isGettingWatchData.value
                                 ? () {
                                     controller.index.value++;
                                   }
@@ -554,72 +848,65 @@ class _Footer extends StatelessWidget {
                         scrollDirection: Axis.horizontal,
                         reverse: true,
                         child: Row(
-                        mainAxisAlignment: MainAxisAlignment.end,
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          // playback speed
-                          if (constraints.maxWidth > 700)
-                            Padding(
-                              padding: const EdgeInsets.only(right: 10),
-                              child: _Speed(controller: controller),
-                            ),
-                          // torrent files
-                          if (constraints.maxWidth > 700)
-                            Obx(() {
-                              if (controller.torrentMediaFileList.isEmpty) {
-                                return const SizedBox.shrink();
-                              }
-                              return Padding(
+                          mainAxisAlignment: MainAxisAlignment.end,
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            // playback speed
+                            if (constraints.maxWidth > 700)
+                              Padding(
                                 padding: const EdgeInsets.only(right: 10),
-                                child: _TorrentFiles(
-                                  controller: controller,
+                                child: _Speed(controller: controller),
+                              ),
+                            // torrent files
+                            if (constraints.maxWidth > 700)
+                              Obx(() {
+                                if (controller.torrentMediaFileList.isEmpty) {
+                                  return const SizedBox.shrink();
+                                }
+                                return Padding(
+                                  padding: const EdgeInsets.only(right: 10),
+                                  child: _TorrentFiles(
+                                    controller: controller,
+                                  ),
+                                );
+                              }),
+                            // track
+                            _Track(controller: controller),
+                            const SizedBox(width: 10),
+                            // cast (DLNA) — antes solo en celular
+                            _Cast(controller: controller),
+                            const SizedBox(width: 10),
+
+                            // 剧集
+                            _Episode(controller: controller),
+
+                            const SizedBox(width: 10),
+                            // 全屏
+                            Obx(
+                              () => IconButton(
+                                onPressed: () {
+                                  controller.toggleFullscreen();
+                                },
+                                icon: Icon(
+                                  controller.isFullScreen.value
+                                      ? FluentIcons.back_to_window
+                                      : FluentIcons.full_screen,
                                 ),
-                              );
-                            }),
-                          // track
-                          _Track(controller: controller),
-                          const SizedBox(width: 10),
-
-                          // selector de servidor
-                          Obx(() {
-                            if (controller.availableServers.isEmpty) {
-                              return const SizedBox.shrink();
-                            }
-                            return Padding(
-                              padding: const EdgeInsets.only(right: 10),
-                              child: _ServerSelector(controller: controller),
-                            );
-                          }),
-
-                          // 剧集
-                          _Episode(controller: controller),
-
-                          const SizedBox(width: 10),
-                          // 全屏
-                          Obx(
-                            () => IconButton(
-                              onPressed: () {
-                                controller.toggleFullscreen();
-                              },
-                              icon: Icon(
-                                controller.isFullScreen.value
-                                    ? FluentIcons.back_to_window
-                                    : FluentIcons.full_screen,
                               ),
                             ),
-                          ),
-                          const SizedBox(width: 10),
-                          // 设置
-                          IconButton(
-                            onPressed: () {
-                              final showPlayList = controller.showSidebar.value;
-                              controller.showSidebar.value = !showPlayList;
-                            },
-                            icon: const Icon(
-                              FluentIcons.settings,
+                            const SizedBox(width: 10),
+                            // 设置
+                            IconButton(
+                              onPressed: () {
+                                final showPlayList =
+                                    controller.showSidebar.value;
+                                controller.showSidebar.value = !showPlayList;
+                              },
+                              icon: const Icon(
+                                FluentIcons.settings,
+                              ),
                             ),
-                          ),
-                        ],
+                          ],
                         ),
                       ),
                     ),
@@ -634,12 +921,8 @@ class _Footer extends StatelessWidget {
 }
 
 class _Volume extends StatefulWidget {
-  const _Volume({
-    required this.value,
-    required this.onVolumeChanged,
-  });
-  final double value;
-  final Function(double value) onVolumeChanged;
+  const _Volume({required this.player});
+  final Player player;
 
   @override
   State<_Volume> createState() => _VolumeState();
@@ -648,16 +931,31 @@ class _Volume extends StatefulWidget {
 class _VolumeState extends State<_Volume> {
   final _controller = FlyoutController();
   final _volume = 0.0.obs;
+  StreamSubscription<double>? _volumeSub;
+
   @override
   void initState() {
     super.initState();
-    _volume.value = widget.value;
+    _volume.value = widget.player.state.volume;
+    // Antes el valor se leía una sola vez al crear el widget y quedaba
+    // pegado — si el volumen cambiaba por otro lado (atajo de teclado, DLNA,
+    // etc.) el ícono y el slider del flyout seguían mostrando el valor
+    // viejo. Escuchar el stream real lo mantiene siempre sincronizado.
+    _volumeSub = widget.player.stream.volume.listen((v) {
+      _volume.value = v;
+    });
+  }
+
+  void _onVolumeChanged(double value) {
+    _volume.value = value;
+    widget.player.setVolume(value);
   }
 
   @override
   void dispose() {
-    super.dispose();
+    _volumeSub?.cancel();
     _controller.dispose();
+    super.dispose();
   }
 
   @override
@@ -678,11 +976,14 @@ class _VolumeState extends State<_Volume> {
         ),
         onPressed: () {
           _controller.showFlyout(
-            barrierDismissible: false,
-            dismissOnPointerMoveAway: true,
+            barrierDismissible: true,
+            dismissOnPointerMoveAway: false,
             builder: (context) {
               return FluentTheme(
-                data: FluentThemeData.dark(),
+                data: FluentThemeData.dark().copyWith(
+                  accentColor: AccentColor.swatch(
+                      const {'normal': HomeTheme.accentPink}),
+                ),
                 child: FlyoutContent(
                   useAcrylic: true,
                   child: Padding(
@@ -708,10 +1009,7 @@ class _VolumeState extends State<_Volume> {
                             child: Slider(
                               value: _volume.value,
                               max: 100,
-                              onChanged: (value) {
-                                _volume.value = value;
-                                widget.onVolumeChanged(value);
-                              },
+                              onChanged: _onVolumeChanged,
                             ),
                           ),
                         ),
@@ -768,11 +1066,17 @@ class _EpisodeState extends State<_Episode> {
           icon: const Icon(FluentIcons.playlist_music),
           onPressed: () {
             controller.showFlyout(
-              barrierDismissible: false,
-              dismissOnPointerMoveAway: true,
+              // true: clickear afuera de la lista sí la cierra.
+              barrierDismissible: true,
+              // false: en cambio, mover el mouse hacia abajo dentro de la
+              // propia lista de episodios NO la cierra (cortaba el scroll).
+              dismissOnPointerMoveAway: false,
               builder: (context) {
                 return FluentTheme(
-                  data: FluentThemeData.dark(),
+                  data: FluentThemeData.dark().copyWith(
+                    accentColor: AccentColor.swatch(
+                        const {'normal': HomeTheme.accentPink}),
+                  ),
                   child: FlyoutContent(
                     padding: const EdgeInsets.all(0),
                     useAcrylic: true,
@@ -788,6 +1092,12 @@ class _EpisodeState extends State<_Episode> {
                             .toList(),
                         selectIndex: widget.controller.index.value,
                         onChange: (value) {
+                          // Bloqueado mientras carga — sin esto se podía
+                          // elegir otro capítulo encima de uno que todavía
+                          // estaba resolviendo.
+                          if (widget.controller.isGettingWatchData.value) {
+                            return;
+                          }
                           widget.controller.index.value = value;
                           Flyout.of(context).close();
                         },
@@ -838,8 +1148,8 @@ class _QualityState extends State<_Quality> {
             return;
           }
           controller.showFlyout(
-            barrierDismissible: false,
-            dismissOnPointerMoveAway: true,
+            barrierDismissible: true,
+            dismissOnPointerMoveAway: false,
             builder: (context) {
               return FluentTheme(
                 data: FluentThemeData.dark(),
@@ -904,11 +1214,14 @@ class _TrackState extends State<_Track> {
         icon: const Icon(FluentIcons.locale_language),
         onPressed: () {
           controller.showFlyout(
-            barrierDismissible: false,
-            dismissOnPointerMoveAway: true,
+            barrierDismissible: true,
+            dismissOnPointerMoveAway: false,
             builder: (context) {
               return FluentTheme(
-                data: FluentThemeData.dark(),
+                data: FluentThemeData.dark().copyWith(
+                  accentColor: AccentColor.swatch(
+                      const {'normal': HomeTheme.accentPink}),
+                ),
                 child: FlyoutContent(
                   useAcrylic: true,
                   padding: const EdgeInsets.all(0),
@@ -1021,6 +1334,122 @@ class _TrackState extends State<_Track> {
   }
 }
 
+// Cast (DLNA) — antes solo estaba en el reproductor de celular; en PC no
+// había ninguna forma de abrirlo. Reutiliza VideoPlayerCast (la misma
+// búsqueda de dispositivos que ya funciona en Android) envuelto en
+// Material — ese widget usa ListTile de Material, que sin un ancestro
+// Material tira "No Material widget found" en este árbol, que corre sobre
+// fluent_ui (mismo problema ya conocido en este codebase para TextField).
+class _Cast extends StatefulWidget {
+  const _Cast({required this.controller});
+  final VideoPlayerController controller;
+
+  @override
+  State<_Cast> createState() => _CastState();
+}
+
+class _CastState extends State<_Cast> {
+  final _flyoutController = FlyoutController();
+
+  @override
+  void dispose() {
+    _flyoutController.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return FlyoutTarget(
+      controller: _flyoutController,
+      child: Obx(() {
+        final connected = widget.controller.dlnaDevice.value != null;
+        return IconButton(
+          icon: Icon(
+            connected
+                ? FluentIcons.t_v_monitor_selected
+                : FluentIcons.screen_cast,
+            color: connected ? HomeTheme.accentPink : null,
+          ),
+          onPressed: () {
+            _flyoutController.showFlyout(
+              barrierDismissible: true,
+              dismissOnPointerMoveAway: false,
+              builder: (context) {
+                return FluentTheme(
+                  data: FluentThemeData.dark().copyWith(
+                    accentColor: AccentColor.swatch(
+                        const {'normal': HomeTheme.accentPink}),
+                  ),
+                  child: FlyoutContent(
+                    useAcrylic: true,
+                    padding: const EdgeInsets.all(0),
+                    child: Container(
+                      width: 280,
+                      constraints: const BoxConstraints(maxHeight: 320),
+                      child: Obx(() {
+                        final device = widget.controller.dlnaDevice.value;
+                        if (device != null) {
+                          return Padding(
+                            padding: const EdgeInsets.all(16),
+                            child: Column(
+                              mainAxisSize: MainAxisSize.min,
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(
+                                  'video.cast'.i18n,
+                                  style: TextStyle(
+                                    fontSize: 13,
+                                    color: Colors.white.withAlpha(200),
+                                  ),
+                                ),
+                                const SizedBox(height: 6),
+                                Text(
+                                  device.info.friendlyName,
+                                  style: const TextStyle(
+                                    fontSize: 16,
+                                    fontWeight: FontWeight.w600,
+                                  ),
+                                ),
+                                const SizedBox(height: 14),
+                                FilledButton(
+                                  child: Text('video.cast-disconnect'.i18n),
+                                  onPressed: () {
+                                    widget.controller.disconnectDLNADevice();
+                                    Flyout.of(context).close();
+                                  },
+                                ),
+                              ],
+                            ),
+                          );
+                        }
+                        return material.Material(
+                          type: material.MaterialType.transparency,
+                          child: material.Theme(
+                            data: material.ThemeData.dark(useMaterial3: true),
+                            child: Padding(
+                              padding: const EdgeInsets.symmetric(vertical: 8),
+                              child: VideoPlayerCast(
+                                onDeviceSelected: (selected) {
+                                  widget.controller.connectDLNADevice(selected);
+                                  Flyout.of(context).close();
+                                },
+                              ),
+                            ),
+                          ),
+                        );
+                      }),
+                    ),
+                  ),
+                );
+              },
+            );
+          },
+        );
+      }),
+    );
+  }
+}
+
 class _TorrentFiles extends StatefulWidget {
   const _TorrentFiles({
     required this.controller,
@@ -1049,11 +1478,14 @@ class _TorrentFilesState extends State<_TorrentFiles> {
         icon: const Icon(FluentIcons.folder_open),
         onPressed: () {
           controller.showFlyout(
-            barrierDismissible: false,
-            dismissOnPointerMoveAway: true,
+            barrierDismissible: true,
+            dismissOnPointerMoveAway: false,
             builder: (context) {
               return FluentTheme(
-                data: FluentThemeData.dark(),
+                data: FluentThemeData.dark().copyWith(
+                  accentColor: AccentColor.swatch(
+                      const {'normal': HomeTheme.accentPink}),
+                ),
                 child: FlyoutContent(
                   useAcrylic: true,
                   padding: const EdgeInsets.all(0),
@@ -1121,11 +1553,14 @@ class _SpeedState extends State<_Speed> {
         child: Obx(() => Text('x${widget.controller.currentSpeed.value}')),
         onPressed: () {
           controller.showFlyout(
-            barrierDismissible: false,
-            dismissOnPointerMoveAway: true,
+            barrierDismissible: true,
+            dismissOnPointerMoveAway: false,
             builder: (context) {
               return FluentTheme(
-                data: FluentThemeData.dark(),
+                data: FluentThemeData.dark().copyWith(
+                  accentColor: AccentColor.swatch(
+                      const {'normal': HomeTheme.accentPink}),
+                ),
                 child: FlyoutContent(
                   useAcrylic: true,
                   padding: const EdgeInsets.all(0),
@@ -1177,22 +1612,36 @@ class _SeekBar extends StatefulWidget {
 class _SeekBarState extends State<_SeekBar> {
   Duration position = const Duration();
   Duration duration = const Duration();
+  // Cuánto lleva descargado/cacheado el demuxer más allá de la posición
+  // actual — mpv sigue llenando este buffer en segundo plano aunque el
+  // video esté en pausa (pausar solo detiene decodificación, no la
+  // descarga). Se muestra como una "sombra" en la barra, igual que en
+  // Android (que ya lo tenía vía Slider.secondaryTrackValue nativo).
+  Duration buffer = const Duration();
   bool _isDrag = false;
   StreamSubscription<Duration>? positionSubscription;
   StreamSubscription<Duration>? durationSubscription;
+  StreamSubscription<Duration>? bufferSubscription;
 
   @override
   void initState() {
     super.initState();
     positionSubscription =
         widget.controller.player.stream.position.listen((event) {
-      if (!_isDrag) {
-        position = event;
+      if (!_isDrag && mounted) {
+        setState(() => position = event);
       }
     });
     durationSubscription =
         widget.controller.player.stream.duration.listen((event) {
-      duration = event;
+      if (mounted) {
+        setState(() => duration = event);
+      }
+    });
+    bufferSubscription = widget.controller.player.stream.buffer.listen((event) {
+      if (mounted) {
+        setState(() => buffer = event);
+      }
     });
   }
 
@@ -1200,175 +1649,198 @@ class _SeekBarState extends State<_SeekBar> {
   void dispose() {
     positionSubscription?.cancel();
     durationSubscription?.cancel();
+    bufferSubscription?.cancel();
     super.dispose();
   }
 
   @override
   Widget build(BuildContext context) {
-    return Slider(
-      value: (position.inSeconds).toDouble(),
-      max: duration.inSeconds < position.inSeconds
-          ? position.inSeconds.toDouble()
-          : duration.inSeconds.toDouble(),
-      label:
-          '${position.inMinutes}:${(position.inSeconds % 60).toString().padLeft(2, '0')}',
-      onChanged: (value) {
-        _isDrag = true;
-        setState(() {
-          position = Duration(seconds: value.toInt());
-        });
-      },
-      onChangeEnd: (value) {
-        _isDrag = false;
-        widget.controller.player.seek(
-          Duration(
-            seconds: value.toInt(),
+    final maxSeconds = duration.inSeconds < position.inSeconds
+        ? position.inSeconds.toDouble()
+        : duration.inSeconds.toDouble();
+    final currentSeconds = position.inSeconds.toDouble();
+    final playedFraction =
+        maxSeconds <= 0 ? 0.0 : (currentSeconds / maxSeconds).clamp(0.0, 1.0);
+    final bufferFraction =
+        maxSeconds <= 0 ? 0.0 : (buffer.inSeconds / maxSeconds).clamp(0.0, 1.0);
+    // Solo el tramo entre "ya reproducido" y "ya bufferizado" — si se
+    // dibujara desde 0 taparía la parte ya reproducida (rosa) y el thumb.
+    final shadowFraction = (bufferFraction - playedFraction).clamp(0.0, 1.0);
+
+    return FluentTheme(
+      data: FluentTheme.of(context).copyWith(
+        accentColor: AccentColor.swatch(const {'normal': HomeTheme.accentPink}),
+      ),
+      // Sin altura fija: el Stack se ajusta solo a la altura natural del
+      // Slider (el hijo más alto, sin posicionar).
+      child: Stack(
+        alignment: Alignment.centerLeft,
+        children: [
+          // El Slider con su track normal (visible, sin tocar) — antes
+          // esto quedaba transparente y, si todavía no había buffer
+          // reportado, no quedaba NADA visible después del thumb.
+          Slider(
+            value: currentSeconds.clamp(0, maxSeconds <= 0 ? 0 : maxSeconds),
+            max: maxSeconds,
+            label:
+                '${position.inMinutes}:${(position.inSeconds % 60).toString().padLeft(2, '0')}',
+            onChanged: (value) {
+              _isDrag = true;
+              setState(() {
+                position = Duration(seconds: value.toInt());
+              });
+            },
+            onChangeEnd: (value) {
+              _isDrag = false;
+              widget.controller.player.seek(
+                Duration(
+                  seconds: value.toInt(),
+                ),
+              );
+            },
           ),
-        );
-      },
+          // Sombra del buffer — dibujada ENCIMA del track normal, alineada
+          // al track REAL del Slider de fluent_ui (padding horizontal fijo
+          // de 10px a cada lado, _trackSidePadding en el paquete).
+          IgnorePointer(
+            child: Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 10),
+              child: LayoutBuilder(
+                builder: (context, constraints) {
+                  final trackWidth = constraints.maxWidth;
+                  return SizedBox(
+                    height: 4,
+                    child: Row(
+                      children: [
+                        SizedBox(width: trackWidth * playedFraction),
+                        Container(
+                          width: trackWidth * shadowFraction,
+                          decoration: BoxDecoration(
+                            // Rosa (no gris) — el track base del Slider es
+                            // blanco/claro, y un gris quedaba invisible
+                            // contra eso. Con esto queda una gradación
+                            // clara: rosa sólido (reproducido) → rosa
+                            // (bufferizado) → blanco (nada aún).
+                            color: HomeTheme.accentPink.withValues(alpha: 0.7),
+                            borderRadius: BorderRadius.circular(999),
+                          ),
+                        ),
+                      ],
+                    ),
+                  );
+                },
+              ),
+            ),
+          ),
+        ],
+      ),
     );
   }
 }
 
-// ─── Selector de Servidores ──────────────────────────────────────────────────
+// ─── Selector de Servidores — fila de pestañas arriba del video ─────────────
 
-class _ServerSelector extends StatefulWidget {
-  const _ServerSelector({required this.controller});
+class _ServerTabBar extends StatelessWidget {
+  const _ServerTabBar({required this.controller});
   final VideoPlayerController controller;
 
   @override
-  State<_ServerSelector> createState() => _ServerSelectorState();
+  Widget build(BuildContext context) {
+    return Obx(() {
+      if (controller.availableServers.isEmpty) return const SizedBox.shrink();
+      final current = controller.currentServerName.value;
+      return Container(
+        width: double.infinity,
+        color: Colors.black.withValues(alpha: 0.35),
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+        child: SingleChildScrollView(
+          scrollDirection: Axis.horizontal,
+          child: Row(
+            children: [
+              for (final entry in controller.availableServers.entries) ...[
+                _ServerTab(
+                  label: entry.key,
+                  selected: entry.key == current,
+                  isNative: isKnownNativeServer(entry.key, entry.value),
+                  onTap: () => controller.selectServer(entry.key),
+                ),
+                const SizedBox(width: 8),
+              ],
+            ],
+          ),
+        ),
+      );
+    });
+  }
 }
 
-class _ServerSelectorState extends State<_ServerSelector> {
-  final _flyout = FlyoutController();
-
-  @override
-  void dispose() {
-    _flyout.dispose();
-    super.dispose();
-  }
+class _ServerTab extends StatelessWidget {
+  const _ServerTab({
+    required this.label,
+    required this.selected,
+    required this.isNative,
+    required this.onTap,
+  });
+  final String label;
+  final bool selected;
+  final bool isNative;
+  final VoidCallback onTap;
 
   @override
   Widget build(BuildContext context) {
-    return FluentTheme(
-      data: FluentThemeData.dark(),
-      child: FlyoutTarget(
-        controller: _flyout,
-        child: Obx(() {
-          final current = widget.controller.currentServerName.value;
-          return Button(
-            child: Row(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                const Icon(FluentIcons.server, size: 14),
+    return GestureDetector(
+      onTap: onTap,
+      child: MouseRegion(
+        cursor: SystemMouseCursors.click,
+        child: AnimatedContainer(
+          duration: const Duration(milliseconds: 200),
+          curve: Curves.easeOut,
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 9),
+          decoration: BoxDecoration(
+            // Fondo sólido (no translúcido): con escenas claras del anime
+            // detrás, el texto se volvía ilegible. selected pasa a violeta
+            // sólido de verdad, así que el texto ahí va blanco (violeta
+            // sobre violeta era invisible).
+            color: selected ? HomeTheme.accentPink : HomeTheme.cardSurface,
+            borderRadius: BorderRadius.circular(999),
+            border: Border.all(
+              color: selected ? HomeTheme.accentPink : HomeTheme.border,
+              width: selected ? 1.4 : 1,
+            ),
+            boxShadow: selected
+                ? [
+                    BoxShadow(
+                      color: HomeTheme.accentPink.withValues(alpha: 0.45),
+                      blurRadius: 10,
+                      spreadRadius: 0.5,
+                    ),
+                  ]
+                : null,
+          ),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Text(
+                label,
+                style: TextStyle(
+                  fontSize: 13,
+                  fontWeight: selected ? FontWeight.w700 : FontWeight.w500,
+                  color: Colors.white,
+                ),
+              ),
+              if (isNative) ...[
                 const SizedBox(width: 6),
-                ConstrainedBox(
-                  constraints: const BoxConstraints(maxWidth: 90),
-                  child: Text(
-                    current.isEmpty ? 'Servidor' : current,
-                    style: const TextStyle(fontSize: 13),
-                    overflow: TextOverflow.ellipsis,
-                    maxLines: 1,
-                  ),
+                Icon(
+                  FluentIcons.lightning_bolt,
+                  size: 12,
+                  color: selected
+                      ? Colors.white
+                      : const Color(0xFF69F0AE).withValues(alpha: 0.85),
                 ),
               ],
-            ),
-            onPressed: () {
-              _flyout.showFlyout(
-                barrierDismissible: false,
-                dismissOnPointerMoveAway: true,
-                builder: (context) {
-                  return FluentTheme(
-                    data: FluentThemeData.dark(),
-                    child: FlyoutContent(
-                      useAcrylic: true,
-                      padding: const EdgeInsets.all(0),
-                      child: Container(
-                        width: 220,
-                        constraints: const BoxConstraints(maxHeight: 300),
-                        child: Column(
-                          mainAxisSize: MainAxisSize.min,
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            const Padding(
-                              padding: EdgeInsets.fromLTRB(16, 12, 16, 4),
-                              child: Text(
-                                'Cambiar servidor',
-                                style: TextStyle(
-                                  fontSize: 13,
-                                  fontWeight: FontWeight.bold,
-                                  color: Colors.white,
-                                ),
-                              ),
-                            ),
-                            const Divider(),
-                            Flexible(
-                              child: ListView(
-                                shrinkWrap: true,
-                                padding:
-                                    const EdgeInsets.symmetric(vertical: 4),
-                                children: [
-                                  for (final entry in widget
-                                      .controller.availableServers.entries)
-                                    Obx(() {
-                                      final isCurrent =
-                                          widget.controller.currentServerName
-                                                  .value ==
-                                              entry.key;
-                                      return ListTile.selectable(
-                                        selected: isCurrent,
-                                        leading: Icon(
-                                          isCurrent
-                                              ? FluentIcons.check_mark
-                                              : FluentIcons.server,
-                                          size: 16,
-                                          color: isCurrent
-                                              ? Colors.green
-                                              : Colors.white,
-                                        ),
-                                        title: Text(
-                                          entry.key,
-                                          style: const TextStyle(
-                                            color: Colors.white,
-                                          ),
-                                        ),
-                                        onPressed: () {
-                                          Flyout.of(context).close();
-                                          if (!isCurrent) {
-                                            final eu = widget.controller
-                                                .availableServers[entry.key]!;
-                                            if (eu.contains('mega.nz') ||
-                                                eu.contains('mega.co.nz')) {
-                                              widget.controller.player.pause();
-                                              openWebViewPlayer(
-                                                context, eu,
-                                                referer: widget.controller
-                                                    .serverReferers[entry.key],
-                                                title: entry.key,
-                                              );
-                                            } else {
-                                              widget.controller
-                                                  .switchServer(entry.key);
-                                            }
-                                          }
-                                        },
-                                      );
-                                    }),
-                                ],
-                              ),
-                            ),
-                            const SizedBox(height: 4),
-                          ],
-                        ),
-                      ),
-                    ),
-                  );
-                },
-              );
-            },
-          );
-        }),
+            ],
+          ),
+        ),
       ),
     );
   }

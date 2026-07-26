@@ -41,6 +41,9 @@ class _VideoPlayerSidebarState extends State<VideoPlayerSidebar> {
       list: _c.playList.map((e) => e.name).toList(),
       selectIndex: _c.index.value,
       onChange: (value) {
+        // Bloqueado mientras carga — sin esto se podía elegir otro capítulo
+        // encima de uno que todavía estaba resolviendo.
+        if (_c.isGettingWatchData.value) return;
         _c.index.value = value;
         _c.showSidebar.value = false;
       },

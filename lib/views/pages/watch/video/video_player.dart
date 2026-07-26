@@ -33,6 +33,8 @@ class VideoPlayer extends StatefulWidget {
 
 class _VideoPlayerState extends State<VideoPlayer> {
   late VideoPlayerController _c;
+  late final String _tag = VideoPlayerController.buildTag(
+      widget.title, widget.detailUrl, widget.episodeGroupId);
 
   @override
   void initState() {
@@ -46,14 +48,14 @@ class _VideoPlayerState extends State<VideoPlayer> {
         runtime: widget.runtime,
         anilistID: widget.anilistID,
       ),
-      tag: widget.title,
+      tag: _tag,
     );
     super.initState();
   }
 
   @override
   void dispose() {
-    Get.delete<VideoPlayerController>(tag: widget.title);
+    Get.delete<VideoPlayerController>(tag: _tag);
     super.dispose();
   }
 
@@ -72,7 +74,7 @@ class _VideoPlayerState extends State<VideoPlayer> {
           Expanded(
             child: Stack(
               children: [
-                VideoPlayerConten(tag: widget.title),
+                VideoPlayerConten(tag: _tag),
                 // 消息弹出
                 if (_c.cuurentMessageWidget.value != null)
                   Positioned(

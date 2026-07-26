@@ -1,4 +1,7 @@
+import 'dart:io';
+
 import 'package:flutter/material.dart';
+import 'package:prismhub/views/widgets/home/home_media_card.dart';
 import 'package:prismhub/views/widgets/home/home_theme.dart';
 import 'package:prismhub/views/widgets/horizontal_scroll_fade.dart';
 
@@ -12,12 +15,14 @@ class HomeSection extends StatefulWidget {
     required this.onClickMore,
     required this.itemCount,
     required this.itemBuilder,
+    this.showNavButtons = true,
   });
 
   final String title;
   final VoidCallback onClickMore;
   final int itemCount;
   final Widget Function(BuildContext, int) itemBuilder;
+  final bool showNavButtons;
 
   @override
   State<HomeSection> createState() => _HomeSectionState();
@@ -25,6 +30,7 @@ class HomeSection extends StatefulWidget {
 
 class _HomeSectionState extends State<HomeSection> {
   final ScrollController _controller = ScrollController();
+  bool _headerHover = false;
 
   void _move(bool left) {
     _controller.animateTo(
@@ -60,38 +66,62 @@ class _HomeSectionState extends State<HomeSection> {
           children: [
             GestureDetector(
               onTap: widget.onClickMore,
-              child: Row(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Text(
-                    widget.title,
-                    style: const TextStyle(
-                      color: HomeTheme.textPrimary,
-                      fontSize: 17,
-                      fontWeight: FontWeight.w700,
+              child: MouseRegion(
+                cursor: SystemMouseCursors.click,
+                onEnter: (_) => setState(() => _headerHover = true),
+                onExit: (_) => setState(() => _headerHover = false),
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    AnimatedDefaultTextStyle(
+                      duration: const Duration(milliseconds: 150),
+                      style: TextStyle(
+                        color: _headerHover ? HomeTheme.accentPink : HomeTheme.textPrimary,
+                        fontSize: 17,
+                        fontWeight: FontWeight.w700,
+                      ),
+                      child: Text(widget.title),
                     ),
-                  ),
-                  const SizedBox(width: 6),
-                  const Text(
-                    '›',
-                    style: TextStyle(color: HomeTheme.textMuted, fontSize: 15),
-                  ),
-                ],
+                    const SizedBox(width: 6),
+                    AnimatedDefaultTextStyle(
+                      duration: const Duration(milliseconds: 150),
+                      style: TextStyle(
+                        color: _headerHover ? HomeTheme.accentPink : HomeTheme.textMuted,
+                        fontSize: 15,
+                      ),
+                      child: AnimatedSlide(
+                        duration: const Duration(milliseconds: 150),
+                        offset: _headerHover ? const Offset(0.25, 0) : Offset.zero,
+                        child: const Text('›'),
+                      ),
+                    ),
+                  ],
+                ),
               ),
             ),
             const Spacer(),
-            _NavButton(icon: Icons.chevron_left, onTap: () => _move(true)),
-            const SizedBox(width: 6),
-            _NavButton(icon: Icons.chevron_right, onTap: () => _move(false)),
+            if (widget.showNavButtons) ...[
+              _NavButton(icon: Icons.chevron_left, onTap: () => _move(true)),
+              const SizedBox(width: 6),
+              _NavButton(icon: Icons.chevron_right, onTap: () => _move(false)),
+            ],
           ],
         ),
         const SizedBox(height: 14),
         SizedBox(
-          // 250 es solo el alto de la portada (HomeMediaCard) — el título y
-          // subtítulo van DEBAJO de eso, así que la fila necesita más alto
-          // que la portada sola o desborda (visto en vivo: "overflowed by
-          // 44/26 pixels").
-          height: 300,
+          // Alto de la portada (HomeMediaCard) + margen para el título y
+          // subtítulo que van DEBAJO de eso — sin el margen, la fila
+          // desborda (visto en vivo: "overflowed by 44/26 pixels"). En
+          // Android horizontal, HomeMediaCard usa su variante más chica
+          // (ver androidLandscapeHeight) — hay que matchear acá también.
+          height: (Platform.isAndroid &&
+                      MediaQuery.of(context).orientation ==
+                          Orientation.landscape
+                  ? HomeMediaCard.androidLandscapeHeight
+                  : Platform.isAndroid
+                      ? HomeMediaCard.androidHeight
+                      : HomeMediaCard.desktopHeight) +
+              50,
           child: HorizontalScrollFade(controller: _controller, child: list),
         ),
       ],

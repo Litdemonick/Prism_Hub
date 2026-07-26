@@ -1,4 +1,4 @@
-﻿// ignore_for_file: use_build_context_synchronously
+// ignore_for_file: use_build_context_synchronously
 
 import 'dart:convert';
 import 'dart:io';
@@ -15,6 +15,7 @@ import 'package:prismhub/controllers/main_controller.dart';
 import 'package:prismhub/views/pages/watch/watch_page.dart';
 import 'package:prismhub/router/router.dart';
 import 'package:prismhub/data/services/database_service.dart';
+import 'package:prismhub/utils/error.dart';
 import 'package:prismhub/utils/extension.dart';
 import 'package:prismhub/data/services/extension_service.dart';
 import 'package:prismhub/utils/external_player.dart';
@@ -32,8 +33,19 @@ class DetailPageController extends GetxController {
   // Caché en memoria por sesión: evita re-fetch al volver al mismo detalle.
   // Se invalida al hacer pull-to-refresh manual (onRefresh() con clearCache=true).
   static final Map<String, ExtensionDetail> _sessionCache = {};
+  static const _sessionCacheLimit = 60;
 
   static void clearSessionCache() => _sessionCache.clear();
+
+  // Mapa insertion-ordered: al reinsertar una key se la manda al final (LRU),
+  // y si se pasa el límite se descarta la más vieja (la primera).
+  static void _putSessionCache(String key, ExtensionDetail value) {
+    _sessionCache.remove(key);
+    _sessionCache[key] = value;
+    if (_sessionCache.length > _sessionCacheLimit) {
+      _sessionCache.remove(_sessionCache.keys.first);
+    }
+  }
 
   final String package;
   final String url;
@@ -50,8 +62,12 @@ class DetailPageController extends GetxController {
   final RxString aniListID = ''.obs;
   final Rx<TMDBDetail?> tmdb = Rx(null);
   final Rx<ExtensionService?> runtime = Rx(null);
-  ExtensionType get type =>
-      runtime.value?.extension.type ?? ExtensionType.bangumi;
+  ExtensionType get type {
+    final ext = runtime.value?.extension;
+    if (ext == null) return ExtensionType.bangumi;
+    return ExtensionUtils.resolveType(ext, data.value);
+  }
+
   Extension? get extension => runtime.value?.extension;
 
   ExtensionDetail? get detail => data.value;
@@ -114,7 +130,14 @@ class DetailPageController extends GetxController {
   }
 
   onRefresh() async {
-    runtime.value = ExtensionUtils.runtimes[package];
+    // Deshabilitada (con el toggle apagado en Extensiones) se trata igual
+    // que no instalada acá: runtime queda null, así que getDetail() de abajo
+    // toma el mismo camino de error que ya existía para "no instalada" — sin
+    // esto, una extensión desactivada seguía sirviendo el detalle entero
+    // pese al toggle.
+    runtime.value = ExtensionUtils.isEnabled(package)
+        ? ExtensionUtils.runtimes[package]
+        : null;
     await refreshFavorite();
     try {
       _prismDetail = await DatabaseService.getPrismHubDetail(package, url);
@@ -125,7 +148,7 @@ class DetailPageController extends GetxController {
       await getHistory();
       isLoading.value = false;
     } catch (e) {
-      error.value = e.toString();
+      error.value = friendlyError(e);
       rethrow;
     }
   }
@@ -162,7 +185,13 @@ class DetailPageController extends GetxController {
   }
 
   getDetail() async {
-    if (_prismDetail != null) {
+    // Con la extensión deshabilitada/desinstalada (runtime null) no hay que
+    // usar el detalle cacheado localmente tampoco — sin este chequeo, el
+    // capítulo/detalle entero se seguía viendo desde la caché de Isar pese
+    // al toggle apagado, aunque nunca se pudiera reproducir nada real.
+    // getRemoteDeatil() ya sabe mostrar el error correcto (missing/disabled)
+    // cuando runtime.value es null.
+    if (runtime.value != null && _prismDetail != null) {
       detail = ExtensionDetail.fromJson(
         Map<String, dynamic>.from(
           jsonDecode(_prismDetail!.data),
@@ -177,15 +206,18 @@ class DetailPageController extends GetxController {
   getRemoteDeatil() async {
     final cacheKey = '$package:$url';
     // Si ya tenemos el dato en memoria (misma sesión) lo usamos directo y
-    // actualizamos en background sin bloquear la UI.
-    if (_sessionCache.containsKey(cacheKey)) {
+    // actualizamos en background sin bloquear la UI — pero NO si la
+    // extensión está deshabilitada/desinstalada ahora: sin este chequeo,
+    // desactivarla a mitad de sesión no bloqueaba nada si el detalle ya
+    // se había pedido antes en esa misma sesión.
+    if (runtime.value != null && _sessionCache.containsKey(cacheKey)) {
       detail = _sessionCache[cacheKey];
       _refreshDetailInBackground(cacheKey);
       return;
     }
     try {
       detail = await runtime.value!.detail(url);
-      _sessionCache[cacheKey] = detail!;
+      _putSessionCache(cacheKey, detail!);
       await DatabaseService.putPrismHubDetail(
         package,
         url,
@@ -198,7 +230,9 @@ class DetailPageController extends GetxController {
       if (runtime.value == null) {
         final content = FlutterI18n.translate(
           currentContext,
-          'common.extension-missing',
+          ExtensionUtils.runtimes.containsKey(package)
+              ? 'common.extension-disabled'
+              : 'common.extension-missing',
           translationParams: {
             'package': package,
           },
@@ -210,10 +244,13 @@ class DetailPageController extends GetxController {
         );
         throw content;
       } else {
+        // friendlyError(e) en vez del texto crudo de la excepción — sin
+        // conexión, esto mostraba literalmente "DioException [connection
+        // error]: ..." en vez de un aviso legible (reportado en vivo).
         showPlatformSnackbar(
           context: currentContext,
           title: 'detail.get-lastest-data-error'.i18n,
-          content: e.toString().split('\n')[0],
+          content: friendlyError(e),
           severity: fluent.InfoBarSeverity.error,
         );
       }
@@ -225,7 +262,7 @@ class DetailPageController extends GetxController {
   Future<void> _refreshDetailInBackground(String cacheKey) async {
     try {
       final fresh = await runtime.value!.detail(url);
-      _sessionCache[cacheKey] = fresh;
+      _putSessionCache(cacheKey, fresh);
       detail = fresh;
       await DatabaseService.putPrismHubDetail(
         package,
@@ -369,8 +406,8 @@ class DetailPageController extends GetxController {
         );
         late ExtensionBangumiWatch watchData;
         try {
-          watchData = await runtime.value!.watch(urls[index].url)
-              as ExtensionBangumiWatch;
+          watchData = await runtime.value!.watch(urls[index].url,
+              typeHint: ExtensionType.bangumi) as ExtensionBangumiWatch;
         } catch (e) {
           showPlatformSnackbar(
             context: currentContext,
@@ -420,6 +457,8 @@ class DetailPageController extends GetxController {
               episodeGroupId: selectEpGroup,
               detailUrl: url,
               anilistID: aniListID.value,
+              typeOverride: type,
+              cameFromDetail: true,
             ),
           );
         }),

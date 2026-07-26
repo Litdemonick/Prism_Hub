@@ -1,7 +1,64 @@
+import 'dart:async';
+import 'dart:io';
+
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_inappwebview/flutter_inappwebview.dart';
+import 'package:path/path.dart' as p;
+import 'package:prismhub/utils/log.dart';
+import 'package:prismhub/utils/prismhub_directory.dart';
 import 'package:prismhub/utils/prismhub_storage.dart';
+import 'package:url_launcher/url_launcher.dart';
+import 'package:window_manager/window_manager.dart';
+
+// ---------------------------------------------------------------------------
+// Entorno de WebView2 (solo Windows) — creado UNA vez para todo el proceso.
+//
+// Sin pasarle un entorno explícito, el plugin llama
+// CreateCoreWebView2EnvironmentWithOptions(nullptr, nullptr, nullptr, ...) en
+// CADA InAppWebView que se crea (visto en su código nativo,
+// in_app_webview.cpp:167). Eso trae dos problemas reales:
+//
+//  1. Usa la carpeta de datos por defecto: una al lado del .exe. En la app
+//     instalada eso cae en Program Files (solo lectura), así que la creación
+//     del entorno falla siempre.
+//  2. Es justo la llamada que falla con CO_E_NOTINITIALIZED ("No se ha
+//     llamado a CoInitialize" — confirmado en vivo, in_app_webview.cpp:67)
+//     cuando COM del proceso quedó en mal estado a mitad de la sesión, que es
+//     el "deja de funcionar de la nada".
+//
+// Con un entorno propio ya creado, el plugin toma el atajo de reusarlo y no
+// vuelve a llamar a esa función nativa nunca más — así un solo éxito temprano
+// (al arrancar, cuando COM está sano) sirve para toda la vida del proceso.
+WebViewEnvironment? _sharedEnvironment;
+Future<WebViewEnvironment?>? _sharedEnvironmentFuture;
+
+/// Devuelve el entorno compartido de WebView2, creándolo la primera vez.
+/// En plataformas que no son Windows no aplica (devuelve null y el plugin usa
+/// el WebView del sistema como siempre).
+Future<WebViewEnvironment?> ensureWebViewEnvironment() {
+  if (!Platform.isWindows) return Future.value(null);
+  if (_sharedEnvironment != null) return Future.value(_sharedEnvironment);
+  return _sharedEnvironmentFuture ??= _createWebViewEnvironment();
+}
+
+Future<WebViewEnvironment?> _createWebViewEnvironment() async {
+  try {
+    final dir = Directory(p.join(PrismHubDirectory.getDirectory, 'webview2'));
+    if (!dir.existsSync()) dir.createSync(recursive: true);
+    final env = await WebViewEnvironment.create(
+      settings: WebViewEnvironmentSettings(userDataFolder: dir.path),
+    );
+    _sharedEnvironment = env;
+    return env;
+  } catch (e) {
+    // Si falla, se sigue con el camino de antes (entorno por defecto) — no
+    // conviene romper el WebView por no poder crear el entorno propio.
+    logger.warning('No se pudo crear el entorno de WebView2: $e');
+    _sharedEnvironmentFuture = null;
+    return null;
+  }
+}
 
 /// True when a URL is a direct media stream that media_kit can play natively.
 /// Anything else (an embed/player page like mega.nz/embed, voe.sx/e, ...) is not
@@ -17,17 +74,48 @@ bool isDirectStream(String url) {
       u.contains('/api/file/'); // pixeldrain direct
 }
 
-/// Opens an embed/player page in the fullscreen in-app WebView.
+// Servidores que se resuelven perezosamente (recién al elegirlos, no al
+// entrar al capítulo) — su URL en la lista sigue siendo la del embed crudo
+// (ej. voe.sx/e/xxx), así que isDirectStream() nunca les da el rayito aunque
+// verificamos en vivo que sí terminan en un stream nativo confiable. A
+// diferencia de Desu/Magi (se resuelven de entrada, su URL en la lista YA es
+// la real), estos no tienen otra forma de mostrarlo sin resolver los 5-6
+// servidores de una — el problema que esta sesión resolvió justamente para
+// no repetir.
+const _knownReliableServerNames = {'voe', 'doodstream'};
+
+/// True si el rayito de "nativo confiable" debería mostrarse para esta
+/// pestaña — por URL (isDirectStream) o por nombre de servidor verificado.
+bool isKnownNativeServer(String serverName, String url) {
+  if (isDirectStream(url)) return true;
+  final n = serverName.toLowerCase();
+  return _knownReliableServerNames.any((known) => n.contains(known));
+}
+
+/// Opens an embed/player page in the fullscreen in-app WebView — the last
+/// resort for a server that couldn't be resolved/played natively (switchServer
+/// already tried that before falling back here).
+///
+/// [onProgress], if given, is called periodically with a screenshot of the
+/// WebView — used to keep "Continuar viendo" updated for this fallback (which
+/// bypasses the native player entirely, so it has no other way to report
+/// progress). The elapsed-time counter itself lives on the caller's side
+/// (survives across a server switch, unlike this page).
 void openWebViewPlayer(
   BuildContext context,
   String url, {
   String? referer,
   String title = '',
+  void Function(Uint8List? screenshot, {bool isFinal})? onProgress,
 }) {
   Navigator.of(context).push(
     MaterialPageRoute(
-      builder: (_) =>
-          WebViewPlayerPage(url: url, referer: referer, title: title),
+      builder: (_) => WebViewPlayerPage(
+        url: url,
+        referer: referer,
+        title: title,
+        onProgress: onProgress,
+      ),
     ),
   );
 }
@@ -41,31 +129,308 @@ class WebViewPlayerPage extends StatefulWidget {
     required this.url,
     this.title = '',
     this.referer,
+    this.onProgress,
+    this.autoReloadAttempt = 0,
   });
 
   final String url;
   final String title;
   final String? referer;
+  // isFinal=true solo en la captura final (al salir/pasar a segundo plano)
+  // — el caller (saveWebViewProgress en video_controller.dart) usa esto
+  // para decidir si actualiza la portada guardada: las llamadas periódicas
+  // (isFinal=false) solo actualizan el progreso en segundos, no la imagen.
+  final void Function(Uint8List? screenshot, {bool isFinal})? onProgress;
+  // Cuántos reintentos automáticos ya se hicieron ante un crash (ver
+  // _checkAlive/_reloadAfterCrash) — acotado para no quedar reconstruyendo
+  // solo en bucle infinito si el sitio está roto de fondo (no un hipo
+  // puntual del proceso de render). Al llegar al tope, se deja de
+  // reconstruir solo y se muestra el botón manual de "Recargar".
+  final int autoReloadAttempt;
 
   @override
   State<WebViewPlayerPage> createState() => _WebViewPlayerPageState();
 }
 
-class _WebViewPlayerPageState extends State<WebViewPlayerPage> {
+class _WebViewPlayerPageState extends State<WebViewPlayerPage>
+    with WidgetsBindingObserver {
   bool _loading = true;
+  // Evita mostrar el aviso "no se pudo reproducir en el nativo" más de una
+  // vez (ej. si onLoadStop vuelve a disparar tras un auto-reload).
+  bool _shownNativeFailNotice = false;
+  bool _noticeVisible = false;
+  Timer? _noticeTimer;
+  // Evita capturar/guardar dos veces (ej. pasa a background Y se cierra
+  // justo después) — la captura final solo tiene sentido una vez.
+  bool _finalCaptureDone = false;
+  bool _loadTimedOut = false;
+  // En un reintento (autoReloadAttempt > 0), la instancia anterior de
+  // InAppWebView recién se acaba de destruir (pushReplacement) — crear la
+  // nueva de inmediato es la causa más común confirmada en vivo de
+  // "Cannot create the InAppWebView instance!" en Windows (el proceso de
+  // WebView2 todavía no terminó de liberar recursos). Un margen chico antes
+  // de montar el widget le da tiempo a esa limpieza. Sin retraso en el
+  // primer intento (autoReloadAttempt == 0) — ahí no hay nada que liberar.
+  bool _readyToMount = false;
+  // Entorno compartido de WebView2 (null en Android/otros, y también en
+  // Windows si no se pudo crear — ahí el plugin cae al comportamiento de
+  // antes).
+  WebViewEnvironment? _environment;
+  InAppWebViewController? _webViewController;
+  Timer? _progressTimer;
+  Timer? _loadTimeoutTimer;
+  Timer? _heartbeatTimer;
+  int _heartbeatFailures = 0;
+  bool _webViewCrashed = false;
+  // Evita procesar el mismo fallo de creación dos veces (ej. si
+  // FlutterError.onError se dispara más de una vez para la misma causa).
+  bool _creationFailed = false;
+  void Function(FlutterErrorDetails)? _previousOnError;
+  // Referencia al wrapper propio — al encadenar reintentos (pushReplacement),
+  // la página nueva ya instaló el suyo antes de que esta se destruya, así
+  // que dispose() solo debe restaurar si el handler activo sigue siendo el
+  // que instaló ESTA instancia (si no, restaurar pisaría el de la más nueva).
+  void Function(FlutterErrorDetails)? _myOnError;
+  // El bridge onEnterFullscreen/onExitFullscreen (más abajo) no siempre
+  // dispara según el sitio — se mantiene el botón propio como forma
+  // confiable de entrar/salir de pantalla completa, además del bridge.
+  bool _isFullScreen = false;
+
+  // Auto-ocultar volver/pantalla-completa igual que el reproductor nativo —
+  // sin esto quedaban tapando la esquina de arriba todo el tiempo encima del
+  // contenido del sitio. El WebView nativo (vista de plataforma) se come los
+  // eventos de mouse dentro suyo, así que el hover para "revelar" solo
+  // reacciona confiablemente si el mouse se mueve fuera de esa área — al
+  // menos vuelve a mostrarlos apenas se acerca a los bordes.
+  bool _showControls = true;
+  Timer? _hideTimer;
+
+  void _resetHideTimer() {
+    _hideTimer?.cancel();
+    if (!_showControls) setState(() => _showControls = true);
+    _hideTimer = Timer(const Duration(seconds: 2), () {
+      if (mounted) setState(() => _showControls = false);
+    });
+  }
+
+  // "Cannot create the InAppWebView instance!" (falla nativa de WebView2 en
+  // Windows, confirmada en vivo) no llega a ningún callback del widget —
+  // sale directo por FlutterError.onError. Sin este enganche, la única señal
+  // de que algo salió mal era el timeout ciego de 15s (hasta 45s sumando los
+  // reintentos), aunque el fallo real ya pasó apenas se intentó crear el
+  // WebView. Se envuelve el handler global (delegando siempre al anterior)
+  // solo mientras esta página está montada, y se restaura en dispose().
+  void _installCreationFailureDetector() {
+    _previousOnError = FlutterError.onError;
+    _myOnError = (FlutterErrorDetails details) {
+      if (!_creationFailed &&
+          mounted &&
+          _loading &&
+          details
+              .exceptionAsString()
+              .contains('Cannot create the InAppWebView instance')) {
+        _creationFailed = true;
+        _loadTimeoutTimer?.cancel();
+        // FlutterError.onError puede dispararse en medio de un build — se
+        // difiere la navegación/setState al próximo microtask para no tocar
+        // el árbol de widgets mientras el framework todavía lo está armando.
+        scheduleMicrotask(() {
+          if (!mounted) return;
+          if (widget.autoReloadAttempt < _maxAutoReloads) {
+            _reloadAfterCrash();
+          } else {
+            setState(() => _loadTimedOut = true);
+          }
+        });
+      }
+      _previousOnError?.call(details);
+    };
+    FlutterError.onError = _myOnError;
+  }
 
   @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addObserver(this);
+    _installCreationFailureDetector();
+    _prepareMount();
+    _resetHideTimer();
     SystemChrome.setEnabledSystemUIMode(SystemUiMode.immersiveSticky);
     SystemChrome.setPreferredOrientations([
       DeviceOrientation.landscapeLeft,
       DeviceOrientation.landscapeRight,
     ]);
+    // Si se llega acá desde el reproductor nativo ya en pantalla completa,
+    // sincronizar el estado real para que el botón no crea que hace falta
+    // "entrar" cuando ya está.
+    if (Platform.isWindows) {
+      WindowManager.instance.isFullScreen().then((value) {
+        if (mounted) setState(() => _isFullScreen = value);
+      });
+    }
+    if (widget.onProgress != null) {
+      // Estas llamadas periódicas NO tocan la portada guardada (isFinal
+      // implícito en false) — solo van sumando el contador de segundos
+      // transcurridos para que el progreso mostrado en "Continuar viendo"
+      // sea razonable. La imagen de portada se captura UNA sola vez, recién
+      // al salir (ver _captureFinalAndPop/didChangeAppLifecycleState), para
+      // que muestre el momento en el que el usuario realmente se quedó, no
+      // un frame al azar de mitad de sesión.
+      _progressTimer = Timer.periodic(
+          const Duration(seconds: 15), (_) => widget.onProgress!(null));
+    }
+    // Sin esto, si el WebView nativo nunca llega a crearse (ej. falla de
+    // COM/WebView2 en Windows — confirmado en vivo: "Cannot create the
+    // InAppWebView instance!"), la página quedaba con el spinner infinito y
+    // ningún indicio de que algo salió mal. Ahora, si todavía quedan
+    // reintentos automáticos disponibles, reconstruye solo (igual que un
+    // crash post-carga) en vez de esperar a que el usuario toque el botón
+    // manual — este fallo puntual (el WebView2 nativo no llegó ni a crearse)
+    // suele ser un hipo transitorio del proceso de WebView2, no algo
+    // permanente.
+    _loadTimeoutTimer = Timer(const Duration(seconds: 15), () {
+      if (!mounted || !_loading) return;
+      if (widget.autoReloadAttempt < _maxAutoReloads) {
+        _reloadAfterCrash();
+      } else {
+        setState(() => _loadTimedOut = true);
+      }
+    });
+    // Heartbeat contra el proceso de render de WebView2 muriendo a mitad de
+    // reproducción — confirmado en el código nativo del plugin (0.6.0) que
+    // Windows NO implementa el evento ProcessFailed (a diferencia de Android,
+    // que sí lo hookea), así que no existe forma de que el plugin nos avise
+    // solo. Cuando el proceso muere, el WebView queda con el último frame
+    // congelado y deja de responder a cualquier JS — evaluateJavascript nunca
+    // vuelve a resolver ni tirar error, se queda colgado, por eso el timeout
+    // acá es imprescindible para poder contarlo como fallo.
+    _heartbeatTimer =
+        Timer.periodic(const Duration(seconds: 20), (_) => _checkAlive());
+  }
+
+  // Espera a tener el entorno de WebView2 antes de montar el widget — sin
+  // esto el InAppWebView se crearía sin entorno y caería en la llamada nativa
+  // que falla (ver comentario del entorno compartido arriba).
+  Future<void> _prepareMount() async {
+    final env = await ensureWebViewEnvironment();
+    if (widget.autoReloadAttempt > 0 && Platform.isWindows) {
+      await Future.delayed(const Duration(milliseconds: 700));
+    }
+    if (!mounted) return;
+    setState(() {
+      _environment = env;
+      _readyToMount = true;
+    });
+  }
+
+  // Tope de reconstrucciones automáticas — si el sitio está roto de fondo
+  // (no un hipo puntual del proceso de render de WebView2), reconstruir
+  // solo para siempre sería un loop infinito silencioso. Agotado el tope,
+  // se deja de reconstruir solo y se muestra el botón manual.
+  static const _maxAutoReloads = 2;
+
+  Future<void> _checkAlive() async {
+    if (!mounted || _loading || _webViewCrashed) return;
+    try {
+      await _webViewController
+          ?.evaluateJavascript(source: '1')
+          .timeout(const Duration(seconds: 8));
+      _heartbeatFailures = 0;
+    } catch (_) {
+      _heartbeatFailures++;
+      // 2 fallos seguidos (~40s sin responder) — no un solo hipo puntual.
+      if (_heartbeatFailures >= 2 && mounted) {
+        setState(() => _webViewCrashed = true);
+        if (widget.autoReloadAttempt < _maxAutoReloads) {
+          _reloadAfterCrash();
+        }
+      }
+    }
+  }
+
+  void _reloadAfterCrash() {
+    Navigator.of(context).pushReplacement(
+      MaterialPageRoute(
+        builder: (_) => WebViewPlayerPage(
+          url: widget.url,
+          referer: widget.referer,
+          title: widget.title,
+          onProgress: widget.onProgress,
+          autoReloadAttempt: widget.autoReloadAttempt + 1,
+        ),
+      ),
+    );
+  }
+
+  // Captura y guarda la portada UNA sola vez — al salir del video (botón
+  // atrás / gesto atrás) o al pasar la app a segundo plano/cerrarse. Es la
+  // única llamada que pasa isFinal:true, así que es la única que realmente
+  // actualiza la imagen guardada (ver saveWebViewProgress en
+  // video_controller.dart).
+  Future<void> _captureFinalProgress() async {
+    if (_finalCaptureDone || widget.onProgress == null) return;
+    _finalCaptureDone = true;
+    Uint8List? shot;
+    try {
+      shot = await _webViewController
+          ?.takeScreenshot()
+          .timeout(const Duration(seconds: 3));
+    } catch (_) {}
+    widget.onProgress!(shot, isFinal: true);
+  }
+
+  // No async/await acá a propósito: esperar la captura (hasta 3s de
+  // takeScreenshot) antes de volver hacía que el botón atrás se sintiera
+  // colgado/lento (reportado en vivo). Se dispara la captura en paralelo y
+  // se vuelve al instante — best-effort, igual que el caso de
+  // background/cierre en didChangeAppLifecycleState.
+  void _exitAndCaptureProgress() {
+    unawaited(_captureFinalProgress());
+    if (mounted) Navigator.of(context).pop();
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    // paused/hidden: la app se va a segundo plano o se está cerrando — mejor
+    // esfuerzo, no hay garantía de que el proceso siga vivo el tiempo
+    // suficiente para terminar la captura si es un cierre abrupto, pero
+    // cubre el caso común (minimizar, cambiar de app, Alt+Tab).
+    if (state == AppLifecycleState.paused ||
+        state == AppLifecycleState.hidden) {
+      unawaited(_captureFinalProgress());
+    }
+  }
+
+  // Solo Windows: en Android se probó pedirle al <video> del sitio que
+  // entre a su propio fullscreen HTML5 vía JS (requestFullscreen) para
+  // tener un botón también ahí — revertido, dispara la vista nativa de
+  // fullscreen de Android (onShowCustomView), que tapa TODA la pantalla
+  // incluyendo nuestros propios controles de Flutter (confirmado en vivo:
+  // pantalla negra, botones sin responder). Hacerlo bien en Android
+  // necesita un overlay nativo propio, no JS — queda pendiente; por ahora
+  // el fullscreen HTML5 del sitio se maneja solo con su propio botón
+  // adentro del embed.
+  Future<void> _toggleFullScreen() async {
+    if (!Platform.isWindows) return;
+    _isFullScreen = !_isFullScreen;
+    await WindowManager.instance.setFullScreen(_isFullScreen);
+    if (mounted) setState(() {});
   }
 
   @override
   void dispose() {
+    if (identical(FlutterError.onError, _myOnError)) {
+      FlutterError.onError = _previousOnError;
+    }
+    WidgetsBinding.instance.removeObserver(this);
+    _progressTimer?.cancel();
+    _loadTimeoutTimer?.cancel();
+    _heartbeatTimer?.cancel();
+    _hideTimer?.cancel();
+    _noticeTimer?.cancel();
+    if (Platform.isWindows && _isFullScreen) {
+      unawaited(WindowManager.instance.setFullScreen(false));
+    }
     SystemChrome.setEnabledSystemUIMode(SystemUiMode.edgeToEdge);
     SystemChrome.setPreferredOrientations(DeviceOrientation.values);
     super.dispose();
@@ -73,65 +438,292 @@ class _WebViewPlayerPageState extends State<WebViewPlayerPage> {
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      backgroundColor: Colors.black,
-      body: Stack(
-        children: [
-          InAppWebView(
-            initialUrlRequest: URLRequest(
-              url: WebUri(widget.url),
-              headers: widget.referer != null ? {'Referer': widget.referer!} : null,
-            ),
-            initialSettings: InAppWebViewSettings(
-              userAgent: PrismHubStorage.getUASetting(),
-              mediaPlaybackRequiresUserGesture: false,
-              allowsInlineMediaPlayback: true,
-              javaScriptEnabled: true,
-              transparentBackground: true,
-              // Bloquea ventanas/popups de anuncios de los hosts.
-              javaScriptCanOpenWindowsAutomatically: false,
-              supportMultipleWindows: false,
-            ),
-            onLoadStop: (controller, url) {
-              if (mounted) setState(() => _loading = false);
-            },
-            // Mantener la navegación dentro del mismo host: bloquea redirecciones
-            // a páginas de anuncios de otros dominios.
-            shouldOverrideUrlLoading: (controller, action) async {
-              final u = action.request.url;
-              if (u == null) return NavigationActionPolicy.ALLOW;
-              final host = Uri.tryParse(widget.url)?.host;
-              if (action.isForMainFrame &&
-                  host != null &&
-                  u.host.isNotEmpty &&
-                  u.host != host) {
-                return NavigationActionPolicy.CANCEL;
-              }
-              return NavigationActionPolicy.ALLOW;
-            },
-          ),
-          if (_loading)
-            const Center(
-              child: CircularProgressIndicator(color: Colors.white),
-            ),
-          // Botón de volver.
-          SafeArea(
-            child: Align(
-              alignment: Alignment.topLeft,
-              child: Container(
-                margin: const EdgeInsets.all(8),
-                decoration: const BoxDecoration(
-                  color: Colors.black54,
-                  shape: BoxShape.circle,
+    return PopScope(
+      canPop: false,
+      onPopInvokedWithResult: (didPop, result) {
+        if (didPop) return;
+        // Cubre el gesto/botón atrás del sistema (Android), no solo los
+        // botones propios de esta pantalla — misma captura final antes de
+        // salir.
+        _exitAndCaptureProgress();
+      },
+      child: Scaffold(
+        backgroundColor: Colors.black,
+        body: MouseRegion(
+          onHover: (_) => _resetHideTimer(),
+          onEnter: (_) => _resetHideTimer(),
+          // MouseRegion (arriba) solo reacciona a mouse real — en celular no
+          // dispara nunca, así que una vez que la barra se auto-ocultaba a
+          // los 2s no había NINGUNA forma de volver a mostrarla tocando la
+          // pantalla (confirmado en vivo: el botón de volver quedaba
+          // invisible e inactivo para siempre). Listener (no GestureDetector)
+          // a propósito: solo escucha el evento de puntero crudo, sin entrar
+          // en el gesture arena — así no compite por el toque con la vista
+          // de plataforma del WebView (que necesita sus propios taps/scroll
+          // para el embed del sitio) ni le agrega latencia.
+          child: Listener(
+            behavior: HitTestBehavior.translucent,
+            onPointerDown: (_) => _resetHideTimer(),
+            child: Stack(
+              children: [
+                if (_readyToMount)
+                  InAppWebView(
+                    webViewEnvironment: _environment,
+                    initialUrlRequest: URLRequest(
+                      url: WebUri(widget.url),
+                      headers: widget.referer != null
+                          ? {'Referer': widget.referer!}
+                          : null,
+                    ),
+                    initialSettings: InAppWebViewSettings(
+                      userAgent: PrismHubStorage.getUASetting(),
+                      mediaPlaybackRequiresUserGesture: false,
+                      allowsInlineMediaPlayback: true,
+                      javaScriptEnabled: true,
+                      transparentBackground: true,
+                      // Bloquea ventanas/popups de anuncios de los hosts.
+                      javaScriptCanOpenWindowsAutomatically: false,
+                      supportMultipleWindows: false,
+                    ),
+                    onWebViewCreated: (controller) {
+                      _webViewController = controller;
+                    },
+                    // Puentea el fullscreen HTML5 del propio sitio (el botón que se ve
+                    // dentro de su reproductor) con el fullscreen real de la ventana
+                    // de Windows — sin esto, el sitio entraba en "fullscreen" a nivel
+                    // DOM pero la ventana de la app se quedaba igual, así que no se
+                    // veía ningún cambio.
+                    onEnterFullscreen: (controller) {
+                      if (mounted) setState(() => _isFullScreen = true);
+                      if (Platform.isWindows) {
+                        WindowManager.instance.setFullScreen(true);
+                      }
+                    },
+                    onExitFullscreen: (controller) {
+                      if (mounted) setState(() => _isFullScreen = false);
+                      if (Platform.isWindows) {
+                        WindowManager.instance.setFullScreen(false);
+                      }
+                    },
+                    onLoadStop: (controller, url) {
+                      _loadTimeoutTimer?.cancel();
+                      if (mounted) setState(() => _loading = false);
+                      // El aviso de por qué se llegó acá va DESPUÉS de que
+                      // el navegador interno ya cargó y se ve — mostrarlo
+                      // antes (en la pantalla del reproductor nativo, previo
+                      // a navegar) se veía como un flash raro seguido de un
+                      // cambio de pantalla abrupto (reportado en vivo).
+                      // Aviso propio dentro del Stack, NO un SnackBar: esta
+                      // pantalla vive bajo FluentApp (no MaterialApp), así
+                      // que no hay ScaffoldMessenger en el árbol y
+                      // ScaffoldMessenger.of(context) tiraba excepción en
+                      // cada carga (confirmado en el log en vivo).
+                      if (!_shownNativeFailNotice && mounted) {
+                        _shownNativeFailNotice = true;
+                        setState(() => _noticeVisible = true);
+                        _noticeTimer?.cancel();
+                        _noticeTimer = Timer(const Duration(seconds: 4), () {
+                          if (mounted) setState(() => _noticeVisible = false);
+                        });
+                      }
+                    },
+                    // Mantener la navegación dentro del mismo host: bloquea redirecciones
+                    // a páginas de otros dominios — en la práctica, casi siempre
+                    // anuncios/popunders de los hosts de video, no contenido real.
+                    // Antes esto abría el navegador externo del sistema como
+                    // "mejor que nada" — a pedido explícito, ya no: el reproductor
+                    // nunca debe abrir el navegador externo, solo el WebView interno.
+                    // Se cancela la navegación sin más — el usuario sigue viendo el
+                    // video/embed original sin interrupciones.
+                    shouldOverrideUrlLoading: (controller, action) async {
+                      final u = action.request.url;
+                      if (u == null) return NavigationActionPolicy.ALLOW;
+                      final host = Uri.tryParse(widget.url)?.host;
+                      if (action.isForMainFrame &&
+                          host != null &&
+                          u.host.isNotEmpty &&
+                          u.host != host) {
+                        return NavigationActionPolicy.CANCEL;
+                      }
+                      return NavigationActionPolicy.ALLOW;
+                    },
+                  ),
+                if (_loading && _loadTimedOut)
+                  Center(
+                    child: Padding(
+                      padding: const EdgeInsets.symmetric(horizontal: 32),
+                      child: Column(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          const Icon(Icons.error_outline,
+                              color: Colors.orangeAccent, size: 40),
+                          const SizedBox(height: 12),
+                          Text(
+                            'No se pudo abrir el navegador interno.\n'
+                            'Probá abrirlo en tu navegador, o cerrá la app '
+                            '${Platform.isAndroid ? '' : '(no solo minimizar) '}'
+                            'y volvé a intentar.',
+                            textAlign: TextAlign.center,
+                            style: const TextStyle(
+                                color: Colors.white, fontSize: 15, height: 1.4),
+                          ),
+                          const SizedBox(height: 16),
+                          // Falla conocida y no siempre evitable de flutter_inappwebview
+                          // en Windows/Linux desktop (confirmado: mismo error exacto
+                          // reportado en otros proyectos ajenos a PrismHub) — sin esto,
+                          // si el WebView interno no llega ni a crearse, no había
+                          // ninguna forma de ver el contenido igual.
+                          FilledButton(
+                            onPressed: () {
+                              final uri = Uri.tryParse(widget.url);
+                              if (uri != null) {
+                                launchUrl(uri,
+                                    mode: LaunchMode.externalApplication);
+                              }
+                            },
+                            child: const Text('Abrir en tu navegador'),
+                          ),
+                          const SizedBox(height: 10),
+                          OutlinedButton(
+                            style: OutlinedButton.styleFrom(
+                              foregroundColor: Colors.white,
+                              side: const BorderSide(color: Colors.white54),
+                            ),
+                            onPressed: _exitAndCaptureProgress,
+                            child: const Text('Volver'),
+                          ),
+                        ],
+                      ),
+                    ),
+                  )
+                else if (_webViewCrashed)
+                  Center(
+                    child: Padding(
+                      padding: const EdgeInsets.symmetric(horizontal: 32),
+                      child: Column(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          const Icon(Icons.error_outline,
+                              color: Colors.orangeAccent, size: 40),
+                          const SizedBox(height: 12),
+                          const Text(
+                            'El navegador interno dejó de responder.\n'
+                            'Esto puede pasar en sitios con muchos anuncios.',
+                            textAlign: TextAlign.center,
+                            style: TextStyle(
+                                color: Colors.white, fontSize: 15, height: 1.4),
+                          ),
+                          const SizedBox(height: 16),
+                          FilledButton(
+                            onPressed: _reloadAfterCrash,
+                            child: const Text('Recargar'),
+                          ),
+                          const SizedBox(height: 10),
+                          OutlinedButton(
+                            style: OutlinedButton.styleFrom(
+                              foregroundColor: Colors.white,
+                              side: const BorderSide(color: Colors.white54),
+                            ),
+                            onPressed: _exitAndCaptureProgress,
+                            child: const Text('Volver'),
+                          ),
+                        ],
+                      ),
+                    ),
+                  )
+                else if (_loading)
+                  const Center(
+                    child: CircularProgressIndicator(color: Colors.white),
+                  ),
+                // Barra superior: volver y pantalla completa. Se oculta sola a los
+                // 2s sin actividad, igual que los controles del reproductor nativo.
+                // Mismo degradado negro→transparente que usa el reproductor nativo
+                // (video_player_mobile_controls.dart) en vez de círculos negros
+                // planos sueltos — esos se veían fuera de lugar/inconsistentes
+                // con el resto de la app (reportado en vivo: "el contorno se ve
+                // mal").
+                IgnorePointer(
+                  ignoring: !_showControls,
+                  child: AnimatedOpacity(
+                    opacity: _showControls ? 1 : 0,
+                    duration: const Duration(milliseconds: 200),
+                    child: Container(
+                      decoration: BoxDecoration(
+                        gradient: LinearGradient(
+                          begin: Alignment.topCenter,
+                          end: Alignment.bottomCenter,
+                          colors: [
+                            Colors.black.withValues(alpha: 0.85),
+                            Colors.transparent,
+                          ],
+                        ),
+                      ),
+                      child: SafeArea(
+                        child: Padding(
+                          padding: const EdgeInsets.symmetric(
+                              horizontal: 12, vertical: 4),
+                          child: Row(
+                            children: [
+                              IconButton(
+                                icon: const Icon(Icons.arrow_back,
+                                    color: Colors.white),
+                                onPressed: _exitAndCaptureProgress,
+                              ),
+                              const Spacer(),
+                              if (Platform.isWindows)
+                                IconButton(
+                                  icon: Icon(
+                                    _isFullScreen
+                                        ? Icons.fullscreen_exit
+                                        : Icons.fullscreen,
+                                    color: Colors.white,
+                                  ),
+                                  onPressed: _toggleFullScreen,
+                                ),
+                            ],
+                          ),
+                        ),
+                      ),
+                    ),
+                  ),
                 ),
-                child: IconButton(
-                  icon: const Icon(Icons.arrow_back, color: Colors.white),
-                  onPressed: () => Navigator.of(context).maybePop(),
+                // Aviso de "por qué estás en el navegador interno" — abajo,
+                // sin tapar el video, y se va solo a los 4s. Reemplaza al
+                // SnackBar (esta pantalla no tiene ScaffoldMessenger arriba,
+                // ver onLoadStop).
+                Positioned(
+                  left: 0,
+                  right: 0,
+                  bottom: 0,
+                  child: IgnorePointer(
+                    child: AnimatedOpacity(
+                      opacity: _noticeVisible ? 1 : 0,
+                      duration: const Duration(milliseconds: 250),
+                      child: SafeArea(
+                        top: false,
+                        child: Container(
+                          margin: const EdgeInsets.all(16),
+                          padding: const EdgeInsets.symmetric(
+                              horizontal: 16, vertical: 12),
+                          decoration: BoxDecoration(
+                            color: Colors.black.withValues(alpha: 0.85),
+                            borderRadius: BorderRadius.circular(10),
+                          ),
+                          child: const Text(
+                            'No se pudo reproducir en el reproductor nativo. '
+                            'Viendo desde el navegador interno.',
+                            textAlign: TextAlign.center,
+                            style: TextStyle(color: Colors.white, fontSize: 13),
+                          ),
+                        ),
+                      ),
+                    ),
+                  ),
                 ),
-              ),
+              ],
             ),
           ),
-        ],
+        ),
       ),
     );
   }

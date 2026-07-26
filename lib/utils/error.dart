@@ -40,6 +40,12 @@ bool isConnectionError(Object? error) {
     'connecting timeout',
     'receiving timeout',
     'sending timeout',
+    // Las peticiones de las extensiones cruzan el puente JS (QuickJS) antes
+    // de volver a Dart — confirmado en vivo que ahí se pierde el tipo real
+    // DioException (queda solo el texto), así que el chequeo por tipo de
+    // arriba no alcanza para ese caso. "[unknown]" es el propio formato de
+    // Dio para DioExceptionType.unknown en su toString().
+    'dioexception [unknown]',
   ];
   return markers.any(e.contains);
 }

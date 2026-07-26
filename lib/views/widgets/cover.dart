@@ -9,11 +9,17 @@ class Cover extends StatelessWidget {
     this.url,
     this.noText = false,
     required this.headers,
+    this.alignment = Alignment.center,
   });
   final String? url;
   final String alt;
   final bool noText;
   final Map<String, String>? headers;
+  // Qué parte de la imagen queda centrada al recortar con cover — por
+  // defecto el centro, pero el fondo del detalle (una portada angosta
+  // estirada como banner ancho) se ve mejor mostrando más de la parte de
+  // abajo en vez del centro exacto.
+  final Alignment alignment;
 
   @override
   Widget build(BuildContext context) {
@@ -23,6 +29,7 @@ class Cover extends StatelessWidget {
         width: double.infinity,
         height: double.infinity,
         headers: headers,
+        alignment: alignment,
       );
     }
 

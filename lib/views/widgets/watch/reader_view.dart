@@ -74,12 +74,20 @@ class ReaderView<T extends ReaderController> extends StatelessWidget {
                               !c.isShowControlPanel.value;
                           return;
                         }
+                        // Franja angosta en cada borde, NO un tercio de la
+                        // pantalla: la zona de paginado tiene que coincidir
+                        // con las flechas que se ven (64px, ver _PageArrow en
+                        // comic_reader_content.dart). Con tercios, un clic
+                        // sobre el manga mismo cambiaba de página sin querer
+                        // — a pedido explícito, solo pagina la zona de las
+                        // flechas. Un poco más ancha que el ícono para que
+                        // sea cómoda de acertar.
+                        const edge = 80.0;
                         final xPos = details.globalPosition.dx;
                         final width = LayoutUtils.width;
-                        final unitWidth = width / 3;
-                        if (xPos < unitWidth) {
+                        if (xPos < edge) {
                           c.previousPage();
-                        } else if (xPos > unitWidth * 2) {
+                        } else if (xPos > width - edge) {
                           c.nextPage();
                         } else {
                           c.isShowControlPanel.value =

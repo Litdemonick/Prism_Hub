@@ -117,12 +117,27 @@ final router = GoRouter(
         ),
         GoRoute(
           path: '/detail',
-          builder: (context, state) => _animation(
-            DetailPage(
-              url: state.uri.queryParameters['url']!,
-              package: state.uri.queryParameters['package']!,
-            ),
-          ),
+          builder: (context, state) {
+            final url = state.uri.queryParameters['url']!;
+            final package = state.uri.queryParameters['package']!;
+            // GoRoute reutiliza el mismo Widget/State al navegar de un
+            // /detail a otro (mismo path, solo cambia el query) si no hay
+            // una Key que los distinga — initState no vuelve a correr, y
+            // quedaba viendo el detalle anterior hasta salir y volver a
+            // entrar (recién ahí se forzaba un Element nuevo). La Key
+            // fuerza un State nuevo por cada url/package distinto. El tag
+            // (antes ausente acá, null para TODO detalle de escritorio)
+            // también evita que el controller de GetX de un detalle
+            // pisara al de otro bajo el mismo tag compartido.
+            return _animation(
+              DetailPage(
+                key: ValueKey('$package|$url'),
+                url: url,
+                package: package,
+                tag: '$package|$url',
+              ),
+            );
+          },
         ),
       ],
     )

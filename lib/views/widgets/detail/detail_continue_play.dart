@@ -2,9 +2,11 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_i18n/flutter_i18n.dart';
 import 'package:get/get.dart';
-import 'package:prismhub/models/extension.dart';
+import 'package:prismhub/models/index.dart';
 import 'package:prismhub/controllers/detail_controller.dart';
+import 'package:prismhub/utils/extension.dart';
 import 'package:prismhub/utils/i18n.dart';
+import 'package:prismhub/views/widgets/home/home_theme.dart';
 import 'package:prismhub/views/widgets/platform_widget.dart';
 
 class DetailContinuePlay extends StatefulWidget {
@@ -20,6 +22,17 @@ class DetailContinuePlay extends StatefulWidget {
 
 class _DetailContinuePlayState extends State<DetailContinuePlay> {
   late DetailPageController c = Get.find<DetailPageController>(tag: widget.tag);
+
+  // episodeTitle a veces queda igual al título de la obra (sin número
+  // propio) — el número real (extraído del título si lo trae, o la
+  // posición como última opción) es lo que de verdad identifica en qué
+  // episodio/capítulo vas.
+  String _episodeLabel(History history) {
+    final number = ExtensionUtils.episodeNumberLabel(history.episodeTitle, history.episodeId);
+    return c.type == ExtensionType.bangumi
+        ? FlutterI18n.translate(context, 'detail.episode-label', translationParams: {'ep': number})
+        : FlutterI18n.translate(context, 'detail.chapter-label', translationParams: {'ep': number});
+  }
 
   Widget _buildAndroid(BuildContext context) {
     return Obx(() {
@@ -42,6 +55,9 @@ class _DetailContinuePlayState extends State<DetailContinuePlay> {
           foregroundColor: WidgetStateProperty.all(Colors.white),
           minimumSize: WidgetStateProperty.all(
             const Size(double.infinity, 50),
+          ),
+          side: WidgetStateProperty.all(
+            const BorderSide(color: Colors.white24, width: 1.5),
           ),
         ),
       );
@@ -68,7 +84,7 @@ class _DetailContinuePlayState extends State<DetailContinuePlay> {
               context,
               'detail.continue-watching',
               translationParams: {
-                'episode': history!.episodeTitle,
+                'episode': _episodeLabel(history!),
               },
             ),
             maxLines: 1,
@@ -77,6 +93,9 @@ class _DetailContinuePlayState extends State<DetailContinuePlay> {
           style: ButtonStyle(
             minimumSize: WidgetStateProperty.all(
               const Size(double.infinity, 50),
+            ),
+            side: WidgetStateProperty.all(
+              BorderSide(color: HomeTheme.accentPink.withValues(alpha: 0.6), width: 1.5),
             ),
           ),
         );
@@ -97,6 +116,9 @@ class _DetailContinuePlayState extends State<DetailContinuePlay> {
             minimumSize: WidgetStateProperty.all(
               const Size(double.infinity, 50),
             ),
+            side: WidgetStateProperty.all(
+              BorderSide(color: HomeTheme.accentPink.withValues(alpha: 0.6), width: 1.5),
+            ),
           ),
         );
       }
@@ -109,7 +131,14 @@ class _DetailContinuePlayState extends State<DetailContinuePlay> {
       final history = c.history.value;
       final data = c.detail!;
       if (history != null && c.history.value!.episodeTitle.isNotEmpty) {
-        return fluent.FilledButton(
+        return fluent.Button(
+          style: fluent.ButtonStyle(
+            backgroundColor: fluent.WidgetStateProperty.all(HomeTheme.accentPink),
+            foregroundColor: fluent.WidgetStateProperty.all(HomeTheme.bg),
+            shape: fluent.WidgetStateProperty.all(
+              RoundedRectangleBorder(borderRadius: BorderRadius.circular(999)),
+            ),
+          ),
           onPressed: () {
             c.goWatch(
               context,
@@ -118,27 +147,31 @@ class _DetailContinuePlayState extends State<DetailContinuePlay> {
               history.episodeGroupId,
             );
           },
-          child: Row(
-            children: [
-              const Icon(fluent.FluentIcons.play),
-              const SizedBox(width: 5),
-              Container(
-                constraints: const BoxConstraints(
-                  maxWidth: 150,
-                ),
-                child: Text(
-                  FlutterI18n.translate(
-                    context,
-                    'detail.continue-watching',
-                    translationParams: {
-                      'episode': history.episodeTitle,
-                    },
+          child: Padding(
+            padding: const EdgeInsets.symmetric(vertical: 4),
+            child: Row(
+              children: [
+                const Icon(fluent.FluentIcons.play, size: 14),
+                const SizedBox(width: 6),
+                Container(
+                  constraints: const BoxConstraints(
+                    maxWidth: 150,
                   ),
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                ),
-              )
-            ],
+                  child: Text(
+                    FlutterI18n.translate(
+                      context,
+                      'detail.continue-watching',
+                      translationParams: {
+                        'episode': _episodeLabel(history),
+                      },
+                    ),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: const TextStyle(fontWeight: FontWeight.w700),
+                  ),
+                )
+              ],
+            ),
           ),
         );
       }

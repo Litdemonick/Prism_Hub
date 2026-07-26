@@ -5,7 +5,6 @@ import 'package:get/get.dart';
 import 'package:prismhub/data/providers/tmdb_provider.dart';
 import 'package:prismhub/models/extension.dart';
 import 'package:prismhub/controllers/detail_controller.dart';
-import 'package:prismhub/views/pages/webview_page.dart';
 import 'package:prismhub/views/widgets/detail/detail_appbar_flexible_space.dart';
 import 'package:prismhub/views/widgets/detail/detail_appbar_title.dart';
 import 'package:prismhub/views/widgets/detail/detail_background_color.dart';
@@ -16,11 +15,11 @@ import 'package:prismhub/views/widgets/detail/detail_overview.dart';
 import 'package:prismhub/utils/i18n.dart';
 import 'package:prismhub/utils/layout.dart';
 import 'package:prismhub/views/widgets/cache_network_image.dart';
-import 'package:prismhub/views/widgets/card_tile.dart';
 import 'package:prismhub/views/widgets/cover.dart';
+import 'package:prismhub/views/widgets/detail/detail_card_tile.dart';
 import 'package:prismhub/views/widgets/detail/detail_tracking_button.dart';
+import 'package:prismhub/views/widgets/home/home_theme.dart';
 import 'package:prismhub/views/widgets/platform_widget.dart';
-import 'package:prismhub/views/widgets/progress.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 class DetailPage extends StatefulWidget {
@@ -83,6 +82,18 @@ class _DetailPageState extends State<DetailPage> {
           if (c.type == ExtensionType.bangumi) Tab(text: 'detail.cast'.i18n),
         ];
 
+        // Fijo en 400 tapaba casi toda la pantalla en horizontal sin dejar
+        // lugar para capítulos/sinopsis debajo. En vez de solo achicar el
+        // mismo diseño vertical (portada arriba, texto+botones apilados
+        // abajo — con poca altura eso dejaba la portada recortada y pegada
+        // al botón de atrás), en horizontal el hero pasa a un layout
+        // HORIZONTAL propio (ver DetailAppbarflexibleSpace.landscape):
+        // portada a la izquierda, título+botones a la derecha, usando el
+        // ancho de sobra en vez de pelear por la poca altura.
+        final isLandscape =
+            MediaQuery.of(context).orientation == Orientation.landscape;
+        final heroHeight = isLandscape ? 200.0 : 400.0;
+
         final content = DefaultTabController(
           length: tabs.length,
           child: NestedScrollView(
@@ -101,49 +112,27 @@ class _DetailPageState extends State<DetailPage> {
                   ),
                   flexibleSpace: DetailAppbarflexibleSpace(
                     tag: widget.tag,
+                    height: heroHeight,
+                    landscape: isLandscape,
                   ),
-                  bottom: TabBar(
-                    tabs: tabs,
+                  // Fondo sólido: el TabBar es transparente por defecto —
+                  // sin esto, una franja de la portada/imagen del hero se
+                  // veía asomando (recortada, fea) justo arriba de las
+                  // pestañas en vez de quedar tapada prolijamente.
+                  bottom: PreferredSize(
+                    preferredSize: const Size.fromHeight(48),
+                    child: Container(
+                      color: HomeTheme.bg,
+                      child: TabBar(tabs: tabs),
+                    ),
                   ),
                   actions: [
                     // DetailTrackingButton
                     DetailTrackingButton(
                       tag: widget.tag,
                     ),
-
-                    // webview
-                    IconButton(
-                      onPressed: () {
-                        Get.to(
-                          WebViewPage(
-                            extensionRuntime: c.runtime.value!,
-                            url: c.url,
-                          ),
-                        );
-                      },
-                      icon: const Icon(Icons.public),
-                    ),
-                    PopupMenuButton(
-                      icon: const Icon(Icons.more_vert),
-                      itemBuilder: (context) {
-                        return [
-                          if (c.detail != null)
-                            PopupMenuItem(
-                              child: ListTile(
-                                title: Text(
-                                  'detail.modify-tmdb-binding'.i18n,
-                                ),
-                                onTap: () {
-                                  Get.back();
-                                  c.modifyTMDBBinding();
-                                },
-                              ),
-                            )
-                        ];
-                      },
-                    )
                   ],
-                  expandedHeight: 400,
+                  expandedHeight: heroHeight,
                 ),
               ];
             },
@@ -244,14 +233,23 @@ class _DetailPageState extends State<DetailPage> {
   Widget _buildDesktopDetail(BuildContext context) {
     return Obx(() {
       if (c.error.value.isNotEmpty) {
-        return Center(
-          child: Text(c.error.value),
+        return ColoredBox(
+          color: HomeTheme.bg,
+          child: Center(
+            child: Text(
+              c.error.value,
+              style: const TextStyle(color: HomeTheme.textPrimary),
+            ),
+          ),
         );
       }
 
       if (c.isLoading.value) {
-        return const Center(
-          child: ProgressRing(),
+        return const ColoredBox(
+          color: HomeTheme.bg,
+          child: Center(
+            child: fluent.ProgressRing(activeColor: HomeTheme.accentPink),
+          ),
         );
       }
       return Stack(
@@ -262,6 +260,7 @@ class _DetailPageState extends State<DetailPage> {
               url: c.backgorund,
               noText: true,
               headers: c.detail?.headers,
+              alignment: const Alignment(0, 0.35),
             ),
           ).blur(
             begin: const Offset(10, 10),
@@ -292,7 +291,9 @@ class _DetailPageState extends State<DetailPage> {
                                 height: double.infinity,
                                 clipBehavior: Clip.antiAlias,
                                 decoration: BoxDecoration(
-                                  borderRadius: BorderRadius.circular(8),
+                                  color: HomeTheme.cardSurface,
+                                  borderRadius: BorderRadius.circular(10),
+                                  border: Border.all(color: HomeTheme.border),
                                 ),
                                 child: CacheNetWorkImagePic(
                                   c.detail?.cover ?? '',
@@ -312,16 +313,17 @@ class _DetailPageState extends State<DetailPage> {
                                 maxLines: 2,
                                 style: const TextStyle(
                                   fontSize: 30,
-                                  fontWeight: FontWeight.bold,
+                                  fontWeight: FontWeight.w800,
+                                  color: HomeTheme.textPrimary,
                                 ),
                               ),
                               const SizedBox(height: 20),
-                              const DetailExtensionTile(),
+                              DetailExtensionTile(tag: widget.tag),
                               const SizedBox(height: 20),
                               Row(
                                 children: [
                                   // 收藏按钮
-                                  const DetailFavoriteButton(),
+                                  DetailFavoriteButton(tag: widget.tag),
                                   const SizedBox(width: 8),
                                   DetailTrackingButton(
                                     tag: widget.tag,
@@ -330,6 +332,20 @@ class _DetailPageState extends State<DetailPage> {
 
                                   if (c.tmdbDetail != null)
                                     fluent.Button(
+                                      style: fluent.ButtonStyle(
+                                        backgroundColor: fluent.WidgetStateProperty.all(
+                                          HomeTheme.cardSurface,
+                                        ),
+                                        foregroundColor: fluent.WidgetStateProperty.all(
+                                          HomeTheme.textPrimary,
+                                        ),
+                                        shape: fluent.WidgetStateProperty.all(
+                                          RoundedRectangleBorder(
+                                            borderRadius: BorderRadius.circular(999),
+                                            side: const BorderSide(color: HomeTheme.border),
+                                          ),
+                                        ),
+                                      ),
                                       child: const Padding(
                                         padding: EdgeInsets.only(
                                             left: 10,
@@ -341,7 +357,7 @@ class _DetailPageState extends State<DetailPage> {
                                           children: [
                                             Text("TMDB"),
                                             SizedBox(width: 8),
-                                            Icon(fluent.FluentIcons.pop_expand)
+                                            Icon(fluent.FluentIcons.pop_expand, size: 14)
                                           ],
                                         ),
                                       ),
@@ -361,7 +377,7 @@ class _DetailPageState extends State<DetailPage> {
                       ),
                     ),
                     const SizedBox(height: 30),
-                    if (c.detail?.episodes != null) const DetailEpisodes(),
+                    if (c.detail?.episodes != null) DetailEpisodes(tag: widget.tag),
                     const SizedBox(height: 16),
                     Obx(
                       () {
@@ -375,7 +391,7 @@ class _DetailPageState extends State<DetailPage> {
                         ];
                         return fluent.Padding(
                           padding: const EdgeInsets.only(bottom: 16),
-                          child: CardTile(
+                          child: DetailCardTile(
                             title: 'tmdb.backdrops'.i18n,
                             child: SizedBox(
                               height: 300,
@@ -415,7 +431,7 @@ class _DetailPageState extends State<DetailPage> {
                         }
                         return fluent.Padding(
                           padding: const EdgeInsets.only(bottom: 16),
-                          child: CardTile(
+                          child: DetailCardTile(
                             title: 'detail.cast'.i18n,
                             child: SizedBox(
                               height: 150,
@@ -460,11 +476,13 @@ class _DetailPageState extends State<DetailPage> {
                                               cast.name,
                                               style: const TextStyle(
                                                 fontWeight: FontWeight.bold,
+                                                color: HomeTheme.textPrimary,
                                               ),
                                             ),
                                             Text(
                                               cast.character,
                                               overflow: TextOverflow.ellipsis,
+                                              style: const TextStyle(color: HomeTheme.textMuted),
                                             ),
                                           ],
                                         ),
@@ -481,19 +499,19 @@ class _DetailPageState extends State<DetailPage> {
                     ),
                     Obx(
                       () {
-                        if (c.detail?.desc == null) {
-                          return const SizedBox();
-                        }
+                        final desc = c.tmdbDetail?.overview ?? c.detail?.desc;
+                        final hasDesc = desc != null && desc.isNotEmpty;
                         return Padding(
                           padding: const EdgeInsets.only(bottom: 16),
-                          child: CardTile(
+                          child: DetailCardTile(
                             title: "detail.overview".i18n,
                             child: Padding(
                               padding: const EdgeInsets.symmetric(vertical: 8),
                               child: SelectableText(
-                                c.tmdbDetail?.overview ?? c.detail?.desc ?? '',
-                                style: const TextStyle(
+                                hasDesc ? desc : "detail.no-description".i18n,
+                                style: TextStyle(
                                   height: 2,
+                                  color: hasDesc ? HomeTheme.textPrimary : HomeTheme.textMuted,
                                 ),
                               ),
                             ),
@@ -506,7 +524,7 @@ class _DetailPageState extends State<DetailPage> {
                         if (c.tmdbDetail == null) {
                           return const SizedBox();
                         }
-                        return CardTile(
+                        return DetailCardTile(
                           title: 'detail.additional-info'.i18n,
                           child: Wrap(children: [
                             ...[
@@ -576,11 +594,13 @@ _buildInfoTile(BuildContext context, String title, String value) {
         title,
         style: const TextStyle(
           fontWeight: FontWeight.bold,
+          color: HomeTheme.textPrimary,
         ),
       ),
       const SizedBox(height: 8),
       SelectableText(
         value,
+        style: const TextStyle(color: HomeTheme.textMuted),
       ),
       const SizedBox(height: 16)
     ],

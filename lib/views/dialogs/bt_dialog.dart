@@ -132,6 +132,10 @@ class _BTDialogState extends State<BTDialog> {
 
   Widget _buildAndroid(BuildContext context) {
     return AlertDialog(
+      // scrollable + margen chico: en horizontal el alto útil es poco y este
+      // contenido (estado + acciones del servidor BT) no entraba.
+      scrollable: true,
+      insetPadding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
       title: const Text("BT-Server"),
       content: _buildContent(context),
       actions: [

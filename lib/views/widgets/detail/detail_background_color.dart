@@ -1,4 +1,5 @@
 import 'package:fluent_ui/fluent_ui.dart';
+import 'package:prismhub/views/widgets/home/home_theme.dart';
 
 class DetailBackgroundColor extends StatefulWidget {
   const DetailBackgroundColor({
@@ -34,10 +35,8 @@ class _DetailBackgroundColorState extends State<DetailBackgroundColor> {
           begin: Alignment.topCenter,
           end: Alignment.bottomCenter,
           colors: [
-            FluentTheme.of(context).micaBackgroundColor.withValues(alpha:
-                  scrollOffset / 255,
-                ),
-            FluentTheme.of(context).micaBackgroundColor,
+            HomeTheme.bg.withValues(alpha: scrollOffset / 255),
+            HomeTheme.bg,
           ],
         ),
       ),

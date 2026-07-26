@@ -68,4 +68,61 @@ class PrismRequest {
     final cookies = await _cookieJar.loadForRequest(Uri.parse(url));
     return cookies.map((e) => e.toString()).join(';');
   }
+
+  // Dio+CookieJar aislados por extensión — antes TODAS las extensiones
+  // compartían el mismo `dio`/`_cookieJar` de arriba. Una extensión puede
+  // pedir cualquier URL (su propio request() deja pisar el destino con el
+  // header "Miru-Url", y el puente sendMessage('request',...) del SDK ni
+  // eso — el string que llega es lo que se pide, sin restricción de
+  // dominio), así que con un jar compartido, la extensión A podía apuntar
+  // al dominio de la extensión B y la respuesta volvía con las cookies de
+  // sesión de B adjuntas — robo de sesión entre extensiones. Un Dio nuevo
+  // hereda el proxy vigente solo (SocksProxy parchea HttpOverrides.global,
+  // a nivel de proceso — confirmado leyendo su fuente), así que no hace
+  // falta replicar refreshProxy() acá.
+  static final Map<String, Dio> _extensionDios = {};
+  static final Map<String, PersistCookieJar> _extensionCookieJars = {};
+
+  static PersistCookieJar cookieJarForPackage(String package) {
+    return _extensionCookieJars.putIfAbsent(
+      package,
+      () => PersistCookieJar(
+        ignoreExpires: true,
+        storage: FileStorage(
+          "${PrismHubDirectory.getDirectory}/.cookies_ext/$package/",
+        ),
+      ),
+    );
+  }
+
+  static Dio dioForPackage(String package) {
+    return _extensionDios.putIfAbsent(package, () {
+      final d = Dio(BaseOptions(
+        connectTimeout: const Duration(seconds: 15),
+        sendTimeout: const Duration(seconds: 15),
+      ));
+      d.interceptors.add(CookieManager(cookieJarForPackage(package)));
+      return d;
+    });
+  }
+
+  static Future<void> cleanCookieForPackage(String package, String url) async {
+    await cookieJarForPackage(package).delete(Uri.parse(url));
+  }
+
+  static Future<void> setCookieForPackage(
+      String package, String cookies, String url) async {
+    final cookieList = cookies.split(';');
+    for (final cookie in cookieList) {
+      await cookieJarForPackage(package).saveFromResponse(
+        Uri.parse(url),
+        [Cookie.fromSetCookieValue(cookie)],
+      );
+    }
+  }
+
+  static Future<String> getCookieForPackage(String package, String url) async {
+    final cookies = await cookieJarForPackage(package).loadForRequest(Uri.parse(url));
+    return cookies.map((e) => e.toString()).join(';');
+  }
 }

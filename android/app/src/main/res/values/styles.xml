@@ -13,6 +13,10 @@
 
          This Theme is only used starting with V2 of Flutter's Android embedding. -->
     <style name="NormalTheme" parent="@android:style/Theme.Light.NoTitleBar">
-        <item name="android:windowBackground">?android:colorBackground</item>
+        <!-- Antes ?android:colorBackground, que en un tema Light resuelve a
+             blanco — daba un flash blanco entre el splash nativo (oscuro,
+             ver launch_background) y el primer frame de Flutter. Mismo color
+             oscuro que el splash para que la transición sea invisible. -->
+        <item name="android:windowBackground">@color/launch_background</item>
     </style>
 </resources>

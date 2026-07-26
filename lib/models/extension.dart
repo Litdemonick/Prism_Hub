@@ -2,7 +2,10 @@ import 'package:json_annotation/json_annotation.dart';
 
 part 'extension.g.dart';
 
-enum ExtensionType { manga, bangumi, fikushon }
+// mixed va al FINAL — FavoritesPage llega por índice de ExtensionType.values
+// vía query param (router.dart), insertarlo en el medio correría los índices
+// de manga/bangumi/fikushon y rompería rutas ya guardadas/compartidas.
+enum ExtensionType { manga, bangumi, fikushon, mixed }
 
 enum ExtensionWatchBangumiType { hls, mp4, torrent }
 
@@ -55,6 +58,7 @@ class ExtensionFilter {
     required this.max,
     required this.defaultOption,
     required this.options,
+    this.adultOption,
   });
   final String title;
   final int min;
@@ -62,6 +66,14 @@ class ExtensionFilter {
   @JsonKey(name: "default")
   final String defaultOption;
   final Map<String, String> options;
+  // Marca cuál valor de `options` representa "mostrar contenido +18" para
+  // este filtro (ej. una extensión mixta manga+anime con su propia sección
+  // de adultos, como ShadeManga) — cuando el usuario elige ESE valor
+  // puntual, extension_searcher_page.dart chequea el switch de NSFW de
+  // Ajustes ANTES de llamar a search(), en vez de mostrar el contenido
+  // directo o dejarlo bloqueado sin explicación. null = este filtro no
+  // tiene una opción de adultos (el caso normal, la mayoría de extensiones).
+  final String? adultOption;
 
   factory ExtensionFilter.fromJson(Map<String, dynamic> json) =>
       _$ExtensionFilterFromJson(json);
@@ -100,6 +112,8 @@ class ExtensionDetail {
     this.episodes,
     this.headers,
     this.genres,
+    this.type,
+    this.status,
   });
 
   final String title;
@@ -107,9 +121,20 @@ class ExtensionDetail {
   final String? desc;
   final List<ExtensionEpisodeGroup>? episodes;
   late Map<String, String>? headers;
+  // Estado de publicación que manda la extensión (el SDK lo define como
+  // 'ongoing' | 'completed' | 'upcoming' | 'hiatus'). Opcional: no todas
+  // las extensiones lo scrapean, y las que no, simplemente no muestran el
+  // badge en el detalle en vez de inventar un estado.
+  final String? status;
   // No todas las extensiones lo devuelven (jkanime/animeytx/manhwaweb/olympus
   // sí, vía su propio scraping del sitio) — por eso es opcional.
   final List<String>? genres;
+  // Solo lo llenan extensiones "mixed" (manga+anime en una, ej. ShadeManga):
+  // como la extensión declara un único ExtensionType fijo en su manifest,
+  // este campo por-título es la única forma de saber si ESTE detalle puntual
+  // se debe abrir con el lector de manga o el reproductor de video — ver
+  // ExtensionUtils.resolveType(). El resto de extensiones no lo manda nunca.
+  final ExtensionType? type;
 
   factory ExtensionDetail.fromJson(Map<String, dynamic> json) =>
       _$ExtensionDetailFromJson(json);

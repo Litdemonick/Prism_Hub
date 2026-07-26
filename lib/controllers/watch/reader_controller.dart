@@ -6,6 +6,7 @@ import 'package:prismhub/models/history.dart';
 import 'package:prismhub/controllers/home_controller.dart';
 import 'package:prismhub/data/services/database_service.dart';
 import 'package:prismhub/data/services/extension_service.dart';
+import 'package:prismhub/utils/error.dart';
 
 class ReaderController<T> extends GetxController {
   final String title;
@@ -16,6 +17,15 @@ class ReaderController<T> extends GetxController {
   final ExtensionService runtime;
   final String? cover;
   final String anilistID;
+  // True cuando el lector se abrió desde la página de detalle (goWatch) —
+  // en ese caso ya hay un DetailPage de este mismo título debajo en la
+  // pila de navegación, y el botón "Ver detalle" (control_panel_header.dart)
+  // solo necesita cerrar el lector para revelarlo, no abrir uno nuevo.
+  // False cuando se entra por otro lado que NO deja un detalle debajo (ej.
+  // "Continuar viendo" desde Home/Historial, ver resume_history.dart) —
+  // ahí sí hace falta abrir un detalle nuevo, o "Ver detalle" no llevaría
+  // a ningún lado.
+  final bool cameFromDetail;
 
   ReaderController({
     required this.title,
@@ -26,7 +36,21 @@ class ReaderController<T> extends GetxController {
     required this.runtime,
     required this.anilistID,
     this.cover,
+    this.cameFromDetail = false,
   });
+
+  // Tag único para Get.put/Get.find/Get.delete — antes se usaba solo
+  // `title` (ver VideoPlayerController, mismo bug ya corregido ahí): si dos
+  // capítulos del mismo título se abren en sucesión rápida, el segundo
+  // Get.put(tag: title) pisa el registro del primero en el contenedor de
+  // GetX, y cuando el widget VIEJO recién dispone (dispose puede llegar
+  // tarde por la transición/animación) borra el controller del NUEVO lector
+  // en vez del propio. El lector que quedó en pantalla se queda sin
+  // controller registrado — de ahí lecturas/tirones raros al entrar y
+  // volver a entrar seguido.
+  static String buildTag(String title, String detailUrl, int episodeGroupId) {
+    return '$title|$detailUrl|$episodeGroupId';
+  }
 
   late Rx<T?> watchData = Rx(null);
   final error = ''.obs;
@@ -42,13 +66,24 @@ class ReaderController<T> extends GetxController {
     super.onInit();
   }
 
+  // Solo hace falta para una extensión "mixed" (ExtensionService.watch()
+  // no puede adivinar manga-vs-fikushon desde su tipo fijo ahí) — este
+  // reader SOLO se instancia para lectura, nunca para video, así que T ya
+  // deja saber cuál de los dos es sin que el llamador tenga que pasarlo.
+  ExtensionType? get _typeHint {
+    if (T == ExtensionMangaWatch) return ExtensionType.manga;
+    if (T == ExtensionFikushonWatch) return ExtensionType.fikushon;
+    return null;
+  }
+
   getContent() async {
     try {
       error.value = '';
       watchData.value = null;
-      watchData.value = await runtime.watch(cuurentPlayUrl) as T;
+      watchData.value =
+          await runtime.watch(cuurentPlayUrl, typeHint: _typeHint) as T;
     } catch (e) {
-      error.value = e.toString();
+      error.value = friendlyError(e);
     }
   }
 
@@ -71,12 +106,26 @@ class ReaderController<T> extends GetxController {
     });
   }
 
+  @override
+  void onClose() {
+    // showControlPanel() se dispara con solo mover el mouse cerca de los
+    // bordes (ver reader_view.dart, onHover) — pasa en casi cualquier
+    // sesión de lectura. Sin cancelar acá, si el usuario sale del lector
+    // dentro de los 3s siguientes el Timer sigue vivo y dispara después del
+    // dispose, escribiendo sobre un Rx de un controller ya cerrado.
+    _timer?.cancel();
+    super.onClose();
+  }
+
   addHistory(String progress, String totalProgress) async {
     await DatabaseService.putHistory(
       History()
         ..url = detailUrl
         ..episodeId = index.value
-        ..type = runtime.extension.type
+        // _typeHint ya resuelve manga-vs-fikushon por T (ver getContent()) —
+        // sin esto, una extensión "mixed" guardaría el literal "mixed" en el
+        // historial, que ExtensionTypeBadge/typeToString no saben mostrar.
+        ..type = _typeHint ?? runtime.extension.type
         ..episodeGroupId = episodeGroupId
         ..package = runtime.extension.package
         ..episodeTitle = playList[index.value].name

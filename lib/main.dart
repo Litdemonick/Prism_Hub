@@ -1,6 +1,7 @@
 ﻿import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
+import 'dart:ui' as ui;
 import 'package:desktop_multi_window/desktop_multi_window.dart';
 import 'package:fluent_ui/fluent_ui.dart' as fluent;
 import 'package:flutter/material.dart';
@@ -8,12 +9,15 @@ import 'package:flutter/services.dart';
 import 'package:get/get.dart';
 import 'package:media_kit/media_kit.dart';
 import 'package:prismhub/controllers/application_controller.dart';
+import 'package:prismhub/utils/connectivity.dart';
 import 'package:prismhub/utils/log.dart';
 import 'package:prismhub/utils/prismhub_directory.dart';
 import 'package:prismhub/utils/request.dart';
 import 'package:prismhub/views/pages/debug_page.dart';
 import 'package:prismhub/views/pages/main_page.dart';
+import 'package:prismhub/views/pages/watch/video/webview_player_page.dart';
 import 'package:prismhub/views/pages/splash_screen.dart';
+import 'package:prismhub/views/widgets/home/home_theme.dart';
 import 'package:prismhub/router/router.dart';
 import 'package:prismhub/utils/extension.dart';
 import 'package:prismhub/utils/i18n.dart';
@@ -38,6 +42,27 @@ void main(List<String> args) async {
 
     WidgetsFlutterBinding.ensureInitialized();
 
+    // Instrumentación temporal de frames — para diagnosticar tirones
+    // reportados en toda la app (botones, scroll, cambio de pestaña) sin
+    // seguir adivinando. Loggea CUALQUIER frame cuya duración total pase
+    // los 100ms (muy por encima del presupuesto de 16ms a 60fps, así que
+    // esto no debería dispararse en un frame normal ni typing/scrolling
+    // fluido) junto con cuánto de eso fue build (Dart/UI thread) vs. raster
+    // (GPU thread) — decisivo para saber si el cuello de botella está en
+    // lógica Dart o en composición/GPU.
+    WidgetsBinding.instance.addTimingsCallback((List<ui.FrameTiming> timings) {
+      for (final timing in timings) {
+        final buildMs = timing.buildDuration.inMilliseconds;
+        final rasterMs = timing.rasterDuration.inMilliseconds;
+        final totalMs = timing.totalSpan.inMilliseconds;
+        if (totalMs > 100) {
+          logger.warning(
+            'FRAME LENTO: build=${buildMs}ms raster=${rasterMs}ms total=${totalMs}ms',
+          );
+        }
+      }
+    });
+
     // 多窗口
     if (args.firstOrNull == 'multi_window') {
       final windowId = int.parse(args[1]);
@@ -60,6 +85,16 @@ void main(List<String> args) async {
     // ventana oculta/en blanco mientras carga.
     await PrismHubDirectory.ensureInitialized();
     await PrismHubStorage.ensureInitialized();
+
+    // Crea el entorno de WebView2 ya al arrancar, mientras COM del proceso
+    // está recién inicializado y sano (ver el comentario largo en
+    // webview_player_page.dart). Creado una sola vez acá, el reproductor
+    // WebView lo reusa toda la sesión y nunca vuelve a pasar por la llamada
+    // nativa que fallaba con CO_E_NOTINITIALIZED a mitad de uso. Sin await:
+    // no debe atrasar el arranque, y si falla se resuelve solo más tarde.
+    if (Platform.isWindows) {
+      unawaited(ensureWebViewEnvironment());
+    }
 
     if (!Platform.isAndroid) {
       await windowManager.ensureInitialized();
@@ -130,6 +165,7 @@ class _AppRootState extends State<_AppRoot> {
     final minDuration = Future.delayed(const Duration(milliseconds: 1400));
     PrismLog.ensureInitialized();
     await ApplicationUtils.ensureInitialized();
+    await ConnectivityUtils.ensureInitialized();
     await PrismRequest.ensureInitialized();
     await ExtensionUtils.ensureInitialized();
     MediaKit.ensureInitialized();
@@ -188,18 +224,20 @@ class _MainAppState extends State<MainApp> {
     );
   }
 
-  // Azul + dorado — antes usaba el morado por default de Material 3 (sin
-  // seed explícito). El dorado queda como color secundario/terciario; el
-  // sistema de temas actual solo da para esto, personalización de verdad
-  // queda para más adelante.
+  // Morado (HomeTheme.accentPink) + dorado — antes usaba azul. El dorado
+  // queda como color secundario/terciario; el sistema de temas actual solo
+  // da para esto, personalización de verdad queda para más adelante.
   static const _brandGold = Color(0xFFC9A227);
+  static final _fluentAccent = fluent.AccentColor.swatch(const {
+    'normal': HomeTheme.accentPink,
+  });
 
   ThemeData _buildTheme(Brightness brightness, List<String> fallback) {
     final base = brightness == Brightness.dark
         ? ThemeData.dark(useMaterial3: true)
         : ThemeData.light(useMaterial3: true);
     final scheme = ColorScheme.fromSeed(
-      seedColor: Colors.blue,
+      seedColor: HomeTheme.accentPink,
       brightness: brightness,
     ).copyWith(
       secondary: _brandGold,
@@ -241,11 +279,11 @@ class _MainAppState extends State<MainApp> {
       darkTheme: fluent.FluentThemeData(
         brightness: Brightness.dark,
         visualDensity: VisualDensity.standard,
-        accentColor: fluent.Colors.blue,
+        accentColor: _fluentAccent,
       ),
       theme: fluent.FluentThemeData(
         visualDensity: VisualDensity.standard,
-        accentColor: fluent.Colors.blue,
+        accentColor: _fluentAccent,
       ),
       localizationsDelegates: [
         I18nUtils.flutterI18nDelegate,

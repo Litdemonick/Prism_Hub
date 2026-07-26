@@ -1,4 +1,4 @@
-﻿import 'dart:async';
+import 'dart:async';
 
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
@@ -8,12 +8,13 @@ import 'package:media_kit_video/media_kit_video.dart';
 import 'package:prismhub/controllers/watch/video_controller.dart';
 import 'package:prismhub/utils/i18n.dart';
 import 'package:prismhub/views/pages/watch/video/webview_player_page.dart'
-    show openWebViewPlayer;
+    show isKnownNativeServer, openWebViewPlayer;
 import 'package:prismhub/utils/layout.dart';
 import 'package:prismhub/utils/router.dart';
 import 'package:prismhub/views/pages/watch/video/video_player_cast.dart';
 import 'package:prismhub/views/pages/watch/video/video_player_sidebar.dart';
 import 'package:prismhub/views/widgets/cache_network_image.dart';
+import 'package:prismhub/views/widgets/home/home_theme.dart';
 import 'package:prismhub/views/widgets/progress.dart';
 import 'package:screen_brightness/screen_brightness.dart';
 import 'package:volume_controller/volume_controller.dart';
@@ -27,7 +28,8 @@ class VideoPlayerMobileControls extends StatefulWidget {
       _VideoPlayerMobileControlsState();
 }
 
-class _VideoPlayerMobileControlsState extends State<VideoPlayerMobileControls> {
+class _VideoPlayerMobileControlsState extends State<VideoPlayerMobileControls>
+    with WidgetsBindingObserver {
   late final VideoPlayerController _c = widget.controller;
   final _subtitleViewKey = GlobalKey<SubtitleViewState>();
   bool _showControls = true;
@@ -79,8 +81,20 @@ class _VideoPlayerMobileControlsState extends State<VideoPlayerMobileControls> {
   void initState() {
     _init();
     super.initState();
-    // No abrir WebView automáticamente — el usuario lo abre con el botón en la UI.
-    _webViewWorker = ever(_c.webViewFallback, (_) {});
+    WidgetsBinding.instance.addObserver(this);
+    // El reproductor nativo no pudo con este servidor — abrir el WebView
+    // automáticamente (ver mismo comentario en video_player_desktop_controls.dart:
+    // este worker tenía el callback vacío, así que el fallback nunca se
+    // disparaba de verdad).
+    _webViewWorker = ever(_c.webViewFallback, (fallback) {
+      if (fallback == null || !mounted || _c.webViewOpenedOnce.value) return;
+      // Directo, sin pausa: mostrar el mensaje acá y recién después navegar
+      // se veía como un flash raro (reportado en vivo) — el navegador interno
+      // tiene que abrir/cargar primero, y el aviso de por qué se cambió se
+      // muestra DENTRO de esa pantalla (ver _WebViewPlayerPageState en
+      // webview_player_page.dart), no antes de llegar a ella.
+      _openWebView();
+    });
     // Mostrar diálogo de continuación cuando el controlador emite la señal.
     _resumeWorker = ever(_c.resumePrompt, (secs) {
       if (secs == null || !mounted) return;
@@ -90,10 +104,48 @@ class _VideoPlayerMobileControlsState extends State<VideoPlayerMobileControls> {
 
   @override
   void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
     _webViewWorker?.dispose();
     _resumeWorker?.dispose();
     _timer?.cancel();
+    // El gesto de deslizar para ajustar brillo (onVerticalDragUpdate más
+    // abajo) usa setScreenBrightness, que pisa el brillo de la ventana de la
+    // app hasta que algo lo revierta explícitamente — sin este reset, al
+    // salir del reproductor quedaba "pegado" en el último valor ajustado en
+    // vez de volver al que controla el sistema (reportado en vivo).
+    ScreenBrightness().resetScreenBrightness();
     super.dispose();
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    // dispose() no alcanza si la app pasa a segundo plano (botón Inicio,
+    // cambiar de app) sin volver atrás desde el reproductor — el widget
+    // sigue montado, solo oculto, así que el override de brillo seguía
+    // activo (esto es justo lo que el usuario reportó: Android seguía
+    // mostrando "PrismHub controla el brillo" aun sin estar mirando el
+    // video). Se suelta también acá, no solo al salir de la pantalla.
+    if (state == AppLifecycleState.paused ||
+        state == AppLifecycleState.hidden) {
+      ScreenBrightness().resetScreenBrightness();
+    }
+  }
+
+  // Reabre el WebView con la misma URL guardada (mismo botón que en
+  // desktop) — sin esto, cerrar el WebView (atrás) y volver acá no dejaba
+  // ninguna forma de retomarlo salvo tocar el servidor de nuevo.
+  void _openWebView() {
+    final fallback = _c.webViewFallback.value;
+    if (fallback == null) return;
+    _c.webViewOpenedOnce.value = true;
+    final referer = fallback['referer'];
+    openWebViewPlayer(
+      context,
+      fallback['url']!,
+      referer: (referer == null || referer.isEmpty) ? null : referer,
+      title: _c.title,
+      onProgress: _c.saveWebViewProgress,
+    );
   }
 
   void _showResumeDialog(int secs) {
@@ -103,12 +155,21 @@ class _VideoPlayerMobileControlsState extends State<VideoPlayerMobileControls> {
     final timeStr = h > 0
         ? '${h.toString().padLeft(2, '0')}:${m.toString().padLeft(2, '0')}:${s.toString().padLeft(2, '0')}'
         : '${m.toString().padLeft(2, '0')}:${s.toString().padLeft(2, '0')}';
+    final server = _c.rememberedServerName;
+    final serverStr = (server != null && server.isNotEmpty)
+        ? ' en el servidor "$server"'
+        : '';
     showDialog<void>(
       context: context,
       builder: (ctx) => AlertDialog(
+        // El reproductor fuerza orientación horizontal, así que este diálogo
+        // SIEMPRE se muestra con poco alto útil — scrollable + margen chico
+        // para que no desborde con títulos/tiempos largos.
+        scrollable: true,
+        insetPadding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
         title: const Text('¡Un momento!'),
         content: Text(
-          'Parece que anteriormente estabas mirando este vídeo '
+          'Parece que anteriormente estabas mirando este vídeo$serverStr. '
           '¿Deseas continuar donde te quedaste? $timeStr',
         ),
         actions: [
@@ -153,8 +214,8 @@ class _VideoPlayerMobileControlsState extends State<VideoPlayerMobileControls> {
                     color: _c.subtitleFontColor.value,
                     fontWeight: _c.subtitleFontWeight.value,
                     backgroundColor:
-                        _c.subtitleBackgroundColor.value.withValues(alpha:
-                      _c.subtitleBackgroundOpacity.value,
+                        _c.subtitleBackgroundColor.value.withValues(
+                      alpha: _c.subtitleBackgroundOpacity.value,
                     ),
                   );
                   return SubtitleView(
@@ -248,11 +309,9 @@ class _VideoPlayerMobileControlsState extends State<VideoPlayerMobileControls> {
                   final dx = details.localPosition.dx;
                   final width = LayoutUtils.width / 3;
                   if (dx < width) {
-                    _c.seek(
-                        _c.position.value - const Duration(seconds: 10));
+                    _c.seek(_c.position.value - const Duration(seconds: 10));
                   } else if (dx > width * 2) {
-                    _c.seek(
-                        _c.position.value + const Duration(seconds: 10));
+                    _c.seek(_c.position.value + const Duration(seconds: 10));
                   } else {
                     _c.playOrPause();
                   }
@@ -344,6 +403,38 @@ class _VideoPlayerMobileControlsState extends State<VideoPlayerMobileControls> {
                       ],
                     );
                   }
+                  // Esperando que el usuario elija un servidor — no se
+                  // prueba nada solo hasta que lo haga.
+                  if (_c.awaitingServerChoice.value) {
+                    return GestureDetector(
+                      onTap: _c.currentServerName.value.isEmpty
+                          ? null
+                          : () => _c.switchServer(_c.currentServerName.value),
+                      child: Column(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Container(
+                            padding: const EdgeInsets.all(20),
+                            decoration: BoxDecoration(
+                              shape: BoxShape.circle,
+                              color:
+                                  HomeTheme.accentPink.withValues(alpha: 0.18),
+                              border: Border.all(color: HomeTheme.accentPink),
+                            ),
+                            child: const Icon(Icons.play_arrow,
+                                color: HomeTheme.accentPink, size: 36),
+                          ),
+                          const SizedBox(height: 10),
+                          const Text(
+                            'Tocá para reproducir el servidor elegido arriba',
+                            style:
+                                TextStyle(fontSize: 14, color: Colors.white70),
+                            textAlign: TextAlign.center,
+                          ),
+                        ],
+                      ),
+                    );
+                  }
                   if (!_c.isGettingWatchData.value) {
                     // Aviso estable de fallo de servidor (sin parpadeo): se
                     // muestra con fade y sin spinner encima.
@@ -364,40 +455,59 @@ class _VideoPlayerMobileControlsState extends State<VideoPlayerMobileControls> {
                               width: 1.5,
                             ),
                           ),
-                          child: Row(
+                          child: Column(
                             mainAxisSize: MainAxisSize.min,
                             children: [
-                              const Icon(Icons.warning_amber_rounded,
-                                  color: Colors.orange, size: 26),
-                              const SizedBox(width: 14),
-                              Flexible(
-                                child: Text(
-                                  failMsg,
-                                  style: const TextStyle(
-                                    fontSize: 14,
-                                    color: Colors.white,
-                                    height: 1.4,
+                              Row(
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  const Icon(Icons.warning_amber_rounded,
+                                      color: Colors.orange, size: 26),
+                                  const SizedBox(width: 14),
+                                  Flexible(
+                                    child: Text(
+                                      failMsg,
+                                      style: const TextStyle(
+                                        fontSize: 14,
+                                        color: Colors.white,
+                                        height: 1.4,
+                                      ),
+                                    ),
                                   ),
+                                ],
+                              ),
+                              if (_c.webViewFallback.value != null) ...[
+                                const SizedBox(height: 12),
+                                FilledButton(
+                                  onPressed: _openWebView,
+                                  child:
+                                      const Text('Volver al navegador interno'),
                                 ),
-                              ),
-                              const SizedBox(width: 10),
-                              IconButton(
-                                icon: const Icon(Icons.close,
-                                    color: Colors.white70, size: 18),
-                                onPressed: () {
-                                  _c.serverFailedMessage.value = '';
-                                },
-                              ),
+                              ],
                             ],
                           ),
                         ),
                       );
                     }
+                    // Mismo caso que en desktop: entre que el servidor abre y
+                    // se pinta el primer cuadro, buffering puede no avisar
+                    // nada (sobre todo HLS) y quedaba una pantalla negra sin
+                    // spinner, como si estuviera trabada de verdad.
+                    if (!_c.hasRenderedFrame.value) {
+                      return const ProgressRing();
+                    }
                     return StreamBuilder(
                       stream: _c.player.stream.buffering,
                       builder: (context, snapshot) {
-                        if (snapshot.hasData && snapshot.data! ||
-                            _c.player.state.buffering) {
+                        // Pausado: nunca mostrar el spinner (mismo criterio
+                        // que en desktop). mpv sigue llenando el buffer en
+                        // pausa — eso está bien y la barra ya lo muestra —
+                        // pero el spinner girando hacía parecer que el
+                        // reproductor se trabó justo al pausar.
+                        final isBuffering =
+                            (snapshot.hasData && snapshot.data!) ||
+                                _c.player.state.buffering;
+                        if (isBuffering && _c.isPlaying.value) {
                           return const ProgressRing();
                         }
                         if (_c.dlnaDevice.value != null) {
@@ -436,7 +546,8 @@ class _VideoPlayerMobileControlsState extends State<VideoPlayerMobileControls> {
                   }
 
                   return Card(
-                    color: Theme.of(context).colorScheme.surfaceContainerHighest,
+                    color:
+                        Theme.of(context).colorScheme.surfaceContainerHighest,
                     elevation: 0,
                     child: Padding(
                       padding: const EdgeInsets.all(10),
@@ -507,8 +618,36 @@ class _VideoPlayerMobileControlsState extends State<VideoPlayerMobileControls> {
                 child: AnimatedOpacity(
                   opacity: _showControls ? 1 : 0,
                   duration: const Duration(milliseconds: 200),
-                  child: _Header(
-                    controller: _c,
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      _Header(
+                        controller: _c,
+                      ),
+                      // selector de servidores — pestañas arriba, no un botón
+                      // escondido en un bottom sheet.
+                      _ServerTabBar(controller: _c),
+                    ],
+                  ),
+                ),
+              ),
+            ),
+            // Volver, siempre visible — a pedido explícito: no debe ocultarse
+            // junto con el resto del header ni siquiera en pantalla completa
+            // (antes compartía el auto-hide con título/tabs/footer). Va
+            // ENCIMA del header (que sí se oculta) para no quedar tapado.
+            Positioned(
+              top: 0,
+              left: 0,
+              child: SafeArea(
+                child: Padding(
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                  child: IconButton(
+                    icon: const Icon(Icons.arrow_back, color: Colors.white),
+                    onPressed: () {
+                      RouterUtils.pop();
+                    },
                   ),
                 ),
               ),
@@ -557,12 +696,15 @@ class _Header extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Container(
-      decoration: const BoxDecoration(
+      // 0.85 (antes black54, ~33%) — contra un video claro se leían mal el
+      // título/episodio y los íconos; con esto se ven bien sea cual sea el
+      // contenido de fondo.
+      decoration: BoxDecoration(
         gradient: LinearGradient(
           begin: Alignment.topCenter,
           end: Alignment.bottomCenter,
           colors: [
-            Colors.black54,
+            Colors.black.withValues(alpha: 0.85),
             Colors.transparent,
           ],
         ),
@@ -570,12 +712,11 @@ class _Header extends StatelessWidget {
       padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
       child: Row(
         children: [
-          IconButton(
-            icon: const Icon(Icons.arrow_back),
-            onPressed: () {
-              RouterUtils.pop();
-            },
-          ),
+          // El botón real vive en un overlay aparte, siempre visible (ver
+          // _AlwaysVisibleBackButton más abajo) — este espacio solo reserva
+          // el ancho para que el título no se corra al ocultarse el resto
+          // del header.
+          const SizedBox(width: 48),
           const SizedBox(width: 10),
           Expanded(
             child: Obx(() {
@@ -652,12 +793,14 @@ class _Footer extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Container(
-      decoration: const BoxDecoration(
+      // 0.85 (antes black54, ~33%) — los minutos/botones se leían mal
+      // contra un video claro; con esto quedan legibles siempre.
+      decoration: BoxDecoration(
         gradient: LinearGradient(
           begin: Alignment.bottomCenter,
           end: Alignment.topCenter,
           colors: [
-            Colors.black54,
+            Colors.black.withValues(alpha: 0.85),
             Colors.transparent,
           ],
         ),
@@ -668,174 +811,216 @@ class _Footer extends StatelessWidget {
         children: [
           _SeekBar(controller: controller),
           const SizedBox(height: 10),
-          Row(
-            children: [
-              Obx(
-                () => IconButton(
-                  icon: const Icon(Icons.skip_previous),
-                  onPressed: controller.index.value > 0
-                      ? () {
-                          if (controller.index.value > 0) {
-                            controller.index.value--;
+          // Scrolleable horizontal: cuando el sidebar (ajustes/calidad/etc.)
+          // está abierto, le saca 300px de ancho al video — sin esto, esta
+          // fila (que no tiene ningún hijo flexible salvo el Spacer) podía
+          // desbordar por unos pixeles en vez de simplemente dejar scrollear
+          // hasta los botones de la derecha.
+          SingleChildScrollView(
+            scrollDirection: Axis.horizontal,
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                // Bloqueado mientras carga, para no disparar otro cambio de
+                // episodio encima de uno ya en curso.
+                Obx(
+                  () => IconButton(
+                    icon: const Icon(Icons.skip_previous),
+                    onPressed: controller.index.value > 0 &&
+                            !controller.isGettingWatchData.value
+                        ? () {
+                            if (controller.index.value > 0) {
+                              controller.index.value--;
+                            }
                           }
-                        }
-                      : null,
+                        : null,
+                  ),
                 ),
-              ),
-              Obx(() {
-                if (controller.isPlaying.value) {
+                Obx(() {
+                  // Resolviendo el servidor elegido — bloquear el botón para
+                  // no permitir otro toque/doble intento mientras carga.
+                  if (controller.isGettingWatchData.value) {
+                    return const IconButton(
+                      onPressed: null,
+                      icon: SizedBox(
+                        width: 24,
+                        height: 24,
+                        child: CircularProgressIndicator(
+                          strokeWidth: 2,
+                          color: HomeTheme.accentPink,
+                        ),
+                      ),
+                    );
+                  }
+                  if (controller.awaitingServerChoice.value) {
+                    return IconButton(
+                      onPressed: controller.currentServerName.value.isEmpty
+                          ? null
+                          : () => controller
+                              .switchServer(controller.currentServerName.value),
+                      icon: const Icon(Icons.play_arrow, size: 30),
+                    );
+                  }
+                  // El servidor falló (no se pudo reproducir nativo) — no hay
+                  // nada cargado para pausar/reproducir, se bloquea en vez de
+                  // dejarlo tocable sin efecto.
+                  if (controller.serverFailedMessage.value.isNotEmpty) {
+                    return const IconButton(
+                      onPressed: null,
+                      icon: Icon(Icons.play_arrow, size: 30),
+                    );
+                  }
+                  if (controller.isPlaying.value) {
+                    return IconButton(
+                      onPressed: controller.playOrPause,
+                      icon: const Icon(Icons.pause, size: 30),
+                    );
+                  }
                   return IconButton(
                     onPressed: controller.playOrPause,
-                    icon: const Icon(Icons.pause, size: 30),
+                    icon: const Icon(Icons.play_arrow, size: 30),
                   );
-                }
-                return IconButton(
-                  onPressed: controller.playOrPause,
-                  icon: const Icon(Icons.play_arrow, size: 30),
-                );
-              }),
-              Obx(
-                () => IconButton(
-                  icon: const Icon(Icons.skip_next),
-                  onPressed:
-                      controller.playList.length - 1 > controller.index.value
-                          ? () {
-                              if (controller.index.value <
-                                  controller.playList.length - 1) {
-                                controller.index.value++;
-                              }
+                }),
+                // Bloqueado mientras carga.
+                Obx(
+                  () => IconButton(
+                    icon: const Icon(Icons.skip_next),
+                    onPressed: controller.playList.length - 1 >
+                                controller.index.value &&
+                            !controller.isGettingWatchData.value
+                        ? () {
+                            if (controller.index.value <
+                                controller.playList.length - 1) {
+                              controller.index.value++;
                             }
-                          : null,
+                          }
+                        : null,
+                  ),
                 ),
-              ),
-              const SizedBox(width: 10),
-              // 播放进度
-              Obx(() {
-                final position = controller.position.value;
-                return Text(
-                  '${position.inMinutes}:${(position.inSeconds % 60).toString().padLeft(2, '0')}',
-                  style: const TextStyle(
-                    fontSize: 14,
-                    fontWeight: FontWeight.w300,
-                  ),
-                );
-              }),
-              const Text('/'),
-              Obx(() {
-                final duration = controller.duration.value;
-                return Text(
-                  '${duration.inMinutes}:${(duration.inSeconds % 60).toString().padLeft(2, '0')}',
-                  style: const TextStyle(
-                    fontSize: 14,
-                    fontWeight: FontWeight.w300,
-                  ),
-                );
-              }),
-              const Spacer(),
-              Obx(() {
-                if (controller.currentQuality.value.isEmpty) {
-                  return const SizedBox.shrink();
-                }
-                return FilledButton.tonal(
-                  onPressed: () {
-                    if (controller.qualityMap.isEmpty) {
-                      controller.sendMessage(
-                        Message(
-                          Text(
-                            'video.no-qualities'.i18n,
-                          ),
-                        ),
-                      );
-                      return;
-                    }
-                    controller.toggleSideBar(SidebarTab.qualitys);
-                  },
-                  style: ButtonStyle(
-                    padding: WidgetStateProperty.all(
-                      const EdgeInsets.symmetric(
-                        horizontal: 10,
-                        vertical: 5,
-                      ),
-                    ),
-                  ),
-                  child: Text(
-                    controller.currentQuality.value,
+                const SizedBox(width: 10),
+                // 播放进度
+                Obx(() {
+                  final position = controller.position.value;
+                  return Text(
+                    '${position.inMinutes}:${(position.inSeconds % 60).toString().padLeft(2, '0')}',
                     style: const TextStyle(
                       fontSize: 14,
                       fontWeight: FontWeight.w300,
                     ),
-                  ),
-                );
-              }),
-              const SizedBox(width: 10),
-              // Speed selector — chip with visible background for tap affordance
-              Obx(
-                () => PopupMenuButton<double>(
-                  initialValue: controller.currentSpeed.value,
-                  onSelected: (value) {
-                    controller.currentSpeed.value = value;
-                  },
-                  itemBuilder: (context) => [
-                    for (final speed in controller.speedList)
-                      PopupMenuItem(
-                        value: speed,
-                        child: Text('${speed}x'),
+                  );
+                }),
+                const Text('/'),
+                Obx(() {
+                  final duration = controller.duration.value;
+                  return Text(
+                    '${duration.inMinutes}:${(duration.inSeconds % 60).toString().padLeft(2, '0')}',
+                    style: const TextStyle(
+                      fontSize: 14,
+                      fontWeight: FontWeight.w300,
+                    ),
+                  );
+                }),
+                // Spacer (antes) necesita ancho acotado — no funciona dentro
+                // de un SingleChildScrollView horizontal (ancho no acotado a
+                // propósito, para que esta fila nunca desborde). Un hueco fijo
+                // en su lugar; se pierde que el grupo de la derecha quede
+                // siempre pegado al borde, pero elimina el overflow de raíz.
+                const SizedBox(width: 24),
+                Obx(() {
+                  if (controller.currentQuality.value.isEmpty) {
+                    return const SizedBox.shrink();
+                  }
+                  return FilledButton.tonal(
+                    onPressed: () {
+                      if (controller.qualityMap.isEmpty) {
+                        controller.sendMessage(
+                          Message(
+                            Text(
+                              'video.no-qualities'.i18n,
+                            ),
+                          ),
+                        );
+                        return;
+                      }
+                      controller.toggleSideBar(SidebarTab.qualitys);
+                    },
+                    style: ButtonStyle(
+                      padding: WidgetStateProperty.all(
+                        const EdgeInsets.symmetric(
+                          horizontal: 10,
+                          vertical: 5,
+                        ),
                       ),
-                  ],
-                  child: Container(
-                    padding: const EdgeInsets.symmetric(
-                        horizontal: 10, vertical: 6),
-                    decoration: BoxDecoration(
-                      color: Colors.white12,
-                      borderRadius: BorderRadius.circular(6),
                     ),
                     child: Text(
-                      '${controller.currentSpeed.value}x',
+                      controller.currentQuality.value,
                       style: const TextStyle(
-                          fontSize: 13, fontWeight: FontWeight.w500),
+                        fontSize: 14,
+                        fontWeight: FontWeight.w300,
+                      ),
+                    ),
+                  );
+                }),
+                const SizedBox(width: 10),
+                // Speed selector — chip with visible background for tap affordance
+                Obx(
+                  () => PopupMenuButton<double>(
+                    initialValue: controller.currentSpeed.value,
+                    onSelected: (value) {
+                      controller.currentSpeed.value = value;
+                    },
+                    itemBuilder: (context) => [
+                      for (final speed in controller.speedList)
+                        PopupMenuItem(
+                          value: speed,
+                          child: Text('${speed}x'),
+                        ),
+                    ],
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 10, vertical: 6),
+                      decoration: BoxDecoration(
+                        color: Colors.white12,
+                        borderRadius: BorderRadius.circular(6),
+                      ),
+                      child: Text(
+                        '${controller.currentSpeed.value}x',
+                        style: const TextStyle(
+                            fontSize: 13, fontWeight: FontWeight.w500),
+                      ),
                     ),
                   ),
                 ),
-              ),
-              // torrent files
-              const SizedBox(width: 10),
-              Obx(() {
-                if (controller.torrentMediaFileList.isEmpty) {
-                  return const SizedBox.shrink();
-                }
-                return IconButton(
+                // torrent files
+                const SizedBox(width: 10),
+                Obx(() {
+                  if (controller.torrentMediaFileList.isEmpty) {
+                    return const SizedBox.shrink();
+                  }
+                  return IconButton(
+                    onPressed: () {
+                      controller.toggleSideBar(SidebarTab.torrentFiles);
+                    },
+                    icon: const Icon(Icons.video_file),
+                  );
+                }),
+                IconButton(
                   onPressed: () {
-                    controller.toggleSideBar(SidebarTab.torrentFiles);
+                    controller.toggleSideBar(SidebarTab.tracks);
                   },
-                  icon: const Icon(Icons.video_file),
-                );
-              }),
-              // 选择服务器 (server selector)
-              Obx(() {
-                if (controller.availableServers.isEmpty) {
-                  return const SizedBox.shrink();
-                }
-                return IconButton(
-                  onPressed: () => showServerSheet(context, controller),
-                  icon: const Icon(Icons.dns),
-                );
-              }),
-              IconButton(
-                onPressed: () {
-                  controller.toggleSideBar(SidebarTab.tracks);
-                },
-                icon: const Icon(
-                  Icons.subtitles,
+                  icon: const Icon(
+                    Icons.subtitles,
+                  ),
                 ),
-              ),
-              // 播放列表
-              IconButton(
-                icon: const Icon(Icons.playlist_play),
-                onPressed: () {
-                  controller.toggleSideBar(SidebarTab.episodes);
-                },
-              ),
-            ],
+                // 播放列表
+                IconButton(
+                  icon: const Icon(Icons.playlist_play),
+                  onPressed: () {
+                    controller.toggleSideBar(SidebarTab.episodes);
+                  },
+                ),
+              ],
+            ),
           ),
         ],
       ),
@@ -939,77 +1124,102 @@ class _SeekBarState extends State<_SeekBar> {
   }
 }
 
-// Server selector bottom sheet for the mobile player (parity with desktop).
-void showServerSheet(BuildContext context, VideoPlayerController controller) {
-  showModalBottomSheet(
-    context: context,
-    showDragHandle: true,
-    builder: (_) => SafeArea(
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-            child: Row(
-              children: [
-                const Icon(Icons.dns, size: 18),
-                const SizedBox(width: 8),
-                Text(
-                  'video.servers'.i18n,
-                  style: const TextStyle(fontWeight: FontWeight.bold),
+// ─── Selector de Servidores — fila de pestañas arriba del video ─────────────
+
+class _ServerTabBar extends StatelessWidget {
+  const _ServerTabBar({required this.controller});
+  final VideoPlayerController controller;
+
+  @override
+  Widget build(BuildContext context) {
+    return Obx(() {
+      if (controller.availableServers.isEmpty) return const SizedBox.shrink();
+      final current = controller.currentServerName.value;
+      return Container(
+        width: double.infinity,
+        // 0.85 (antes 0.35) — contra un fotograma claro del video, los
+        // nombres de servidor casi no se leían.
+        color: Colors.black.withValues(alpha: 0.85),
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+        child: SingleChildScrollView(
+          scrollDirection: Axis.horizontal,
+          child: Row(
+            children: [
+              for (final entry in controller.availableServers.entries) ...[
+                _ServerTab(
+                  label: entry.key,
+                  selected: entry.key == current,
+                  isNative: isKnownNativeServer(entry.key, entry.value),
+                  onTap: () => controller.selectServer(entry.key),
                 ),
+                const SizedBox(width: 6),
               ],
-            ),
+            ],
           ),
-          const Divider(height: 1),
-          Flexible(
-            child: Obx(
-              () => ListView(
-                shrinkWrap: true,
-                children: [
-                  for (final entry in controller.availableServers.entries)
-                    Builder(builder: (_) {
-                      final isCurrent =
-                          controller.currentServerName.value == entry.key;
-                      return ListTile(
-                        leading: Icon(
-                          isCurrent
-                              ? Icons.check_circle
-                              : Icons.dns_outlined,
-                          color: isCurrent
-                              ? Colors.greenAccent
-                              : Colors.white,
-                        ),
-                        title: Text(
-                          entry.key,
-                          style: const TextStyle(color: Colors.white),
-                        ),
-                        selected: isCurrent,
-                        onTap: () {
-                          Navigator.of(context).pop();
-                          if (!isCurrent) {
-                            final eu = controller.availableServers[entry.key]!;
-                            if (eu.contains('mega.nz') ||
-                                eu.contains('mega.co.nz')) {
-                              controller.player.pause();
-                              openWebViewPlayer(
-                                context, eu,
-                                referer: controller.serverReferers[entry.key],
-                                title: entry.key,
-                              );
-                            } else {
-                              controller.switchServer(entry.key);
-                            }
-                          }
-                        },
-                      );
-                    }),
-                ],
+        ),
+      );
+    });
+  }
+}
+
+class _ServerTab extends StatelessWidget {
+  const _ServerTab({
+    required this.label,
+    required this.selected,
+    required this.isNative,
+    required this.onTap,
+  });
+  final String label;
+  final bool selected;
+  final bool isNative;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      onTap: onTap,
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 200),
+        curve: Curves.easeOut,
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+        // Fondo bien opaco en los dos estados (antes 0.22/0.7, contra un
+        // video claro se veía transparentado) — la selección ya se nota
+        // por el borde y el color del texto, no hace falta un relleno
+        // traslúcido que dependa de lo oscuro que esté el video atrás.
+        decoration: BoxDecoration(
+          color: selected
+              ? HomeTheme.accentPink.withValues(alpha: 0.35)
+              : Colors.black.withValues(alpha: 0.75),
+          borderRadius: BorderRadius.circular(999),
+          border: Border.all(
+            color: selected ? HomeTheme.accentPink : HomeTheme.border,
+            width: selected ? 1.4 : 1,
+          ),
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Text(
+              label,
+              style: TextStyle(
+                fontSize: 12,
+                fontWeight: selected ? FontWeight.w700 : FontWeight.w500,
+                color: selected ? HomeTheme.accentPink : Colors.white,
               ),
             ),
-          ),
-        ],
+            if (isNative) ...[
+              const SizedBox(width: 5),
+              Icon(
+                Icons.bolt,
+                size: 12,
+                color: selected
+                    ? HomeTheme.accentPink
+                    : Colors.greenAccent.withValues(alpha: 0.85),
+              ),
+            ],
+          ],
+        ),
       ),
-    ),
-  );
+    );
+  }
 }

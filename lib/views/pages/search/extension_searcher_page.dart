@@ -9,11 +9,14 @@ import 'package:get/get.dart';
 import 'package:prismhub/models/index.dart';
 import 'package:prismhub/router/router.dart';
 import 'package:prismhub/utils/extension.dart';
+import 'package:prismhub/utils/prismhub_storage.dart';
 import 'package:prismhub/data/services/extension_service.dart';
 import 'package:prismhub/utils/error.dart';
 import 'package:prismhub/utils/i18n.dart';
-import 'package:prismhub/views/widgets/button.dart';
 import 'package:prismhub/views/widgets/extension_item_card.dart';
+import 'package:prismhub/views/widgets/home/animated_background_glow.dart';
+import 'package:prismhub/views/widgets/home/home_theme.dart';
+import 'package:prismhub/views/widgets/home/refresh_button.dart';
 import 'package:prismhub/views/widgets/infinite_scroller.dart';
 import 'package:prismhub/views/widgets/messenger.dart';
 import 'package:prismhub/views/widgets/platform_widget.dart';
@@ -57,6 +60,47 @@ class _ExtensionSearcherPageState extends fluent.State<ExtensionSearcherPage> {
   final EasyRefreshController _easyRefreshController = EasyRefreshController();
   Map<String, ExtensionFilter>? _filters;
   Map<String, List<String>> _selectedFilters = {};
+  // true cuando el filtro elegido activa una opción marcada como "adultos"
+  // (ExtensionFilter.adultOption — ver ShadeManga) Y el switch de NSFW en
+  // Ajustes está apagado. En ese caso no se llama a la extensión: se
+  // muestra un aviso pidiendo activar el NSFW en vez de dejar la pantalla
+  // vacía sin explicación (o, peor, mostrar contenido +18 sin querer).
+  bool _nsfwBlocked = false;
+
+  bool get _adultOptionSelected {
+    if (_filters == null) return false;
+    for (final entry in _filters!.entries) {
+      final adultOpt = entry.value.adultOption;
+      if (adultOpt == null) continue;
+      if (_selectedFilters[entry.key]?.contains(adultOpt) ?? false) return true;
+    }
+    return false;
+  }
+
+  // Cada llamada a _goToPage/_onLoad se marca con un número que sube. Si el
+  // usuario cambia de filtro o de página mientras una búsqueda anterior
+  // todavía está en vuelo, la respuesta vieja (de otro filtro/página) ya no
+  // coincide con el número vigente y se descarta en vez de pisar el estado
+  // más nuevo — esto es lo que rompía "volver atrás" cuando se cambiaba de
+  // filtro justo antes de que terminara de cargar la página anterior.
+  int _requestGen = 0;
+
+  // Sin esto, filtrar SIN escribir nada en el buscador no hacía nada: con
+  // palabra clave vacía siempre se llamaba a latest() (que no recibe
+  // filtro), ignorando por completo lo que el usuario eligió en el diálogo.
+  // Se considera "activo" cualquier filtro cuya selección actual sea
+  // distinta de su propio valor por defecto.
+  bool get _hasActiveFilters {
+    if (_filters == null) return false;
+    for (final entry in _filters!.entries) {
+      final selected = _selectedFilters[entry.key];
+      if (selected == null) continue;
+      if (selected.length != 1 || selected.first != entry.value.defaultOption) {
+        return true;
+      }
+    }
+    return false;
+  }
 
   late final _textEditingController = TextEditingController(text: _keyWord);
 
@@ -80,7 +124,12 @@ class _ExtensionSearcherPageState extends fluent.State<ExtensionSearcherPage> {
       _filters!.forEach((key, value) {
         _selectedFilters[key] = [value.defaultOption];
       });
-    } catch (_) {
+    } catch (e, st) {
+      // Antes esto se tragaba el error en silencio — el diálogo de filtro
+      // quedaba vacío (título+botones, sin ninguna opción) sin ninguna
+      // pista de por qué. Con esto al menos se ve la excepción real en la
+      // consola de `flutter run`.
+      debugPrint('createFilter() falló para ${widget.package}: $e\n$st');
       _filters = {};
     }
     if (!mounted) return;
@@ -99,6 +148,17 @@ class _ExtensionSearcherPageState extends fluent.State<ExtensionSearcherPage> {
 
   Future<void> _goToPage(int page) async {
     if (!mounted || page < 1) return;
+    if (_adultOptionSelected &&
+        !PrismHubStorage.getSetting(SettingKey.enableNSFW)) {
+      setState(() {
+        _nsfwBlocked = true;
+        _browseData = [];
+        _isLoading = false;
+      });
+      return;
+    }
+    if (_nsfwBlocked) setState(() => _nsfwBlocked = false);
+    final myGen = ++_requestGen;
     // Page 1 always means "start over" (fresh search/filter) — reset the
     // raw cursor and cache so nothing stale from a previous query lingers.
     if (page == 1) {
@@ -128,21 +188,47 @@ class _ExtensionSearcherPageState extends fluent.State<ExtensionSearcherPage> {
       for (var attempts = 0;
           attempts < 4 && collected.length < _minItemsPerViewPage;
           attempts++) {
-        final batch = _keyWord.isEmpty
-            ? await _runtime.latest(_rawPage)
-            : await _runtime.search(_keyWord, _rawPage,
-                filter: _selectedFilters);
+        List<ExtensionListItem> batch;
+        try {
+          batch = _keyWord.isEmpty && !_hasActiveFilters
+              ? await _runtime.latest(_rawPage)
+              : await _runtime.search(_keyWord, _rawPage,
+                  filter: _selectedFilters);
+        } catch (e) {
+          // Pedir de más para "rellenar" la página de vista es best-effort:
+          // muchas fuentes (confirmado en vivo con animeytx, sitio WordPress)
+          // tiran 404 real al pasarse de su última página válida en vez de
+          // devolver una lista vacía. Si ya se consiguió algo en un intento
+          // anterior (gotAny) O ya habíamos cargado alguna página con éxito
+          // antes en esta navegación (_virtualPages no vacío), tratar esto
+          // igual que "sin más datos" — no tirar todo lo ya conseguido.
+          // Antes esto solo miraba "gotAny" (que se reinicia en CADA página
+          // nueva), así que si el primer pedido de una página posterior caía
+          // justo en el límite real del sitio, se mostraba como error en vez
+          // de "no hay más datos" — aunque la página anterior sí había
+          // cargado bien. Si esta es realmente la primera página de toda la
+          // navegación y el primer intento falla, ahí sí es un error real
+          // (no hay nada que mostrar).
+          if (gotAny || _virtualPages.isNotEmpty) break;
+          rethrow;
+        }
+        // Una navegación o cambio de filtro más nuevo ya arrancó mientras
+        // esperábamos esta respuesta — descartarla, no pisar el estado actual.
+        if (myGen != _requestGen) return;
         if (batch.isEmpty) break;
         gotAny = true;
         collected.addAll(batch);
         _rawPage++;
       }
-      if (!mounted) return;
+      if (!mounted || myGen != _requestGen) return;
       if (!gotAny) {
         setState(() => _browsePage = oldPage);
         showPlatformSnackbar(
           context: context,
-          content: 'common.no-more-data'.i18n,
+          content: (_hasActiveFilters
+                  ? 'common.no-more-data-filtered'
+                  : 'common.no-more-data')
+              .i18n,
           severity: fluent.InfoBarSeverity.warning,
         );
       } else {
@@ -150,7 +236,7 @@ class _ExtensionSearcherPageState extends fluent.State<ExtensionSearcherPage> {
         setState(() => _browseData = collected);
       }
     } catch (e) {
-      if (!mounted) return;
+      if (!mounted || myGen != _requestGen) return;
       setState(() => _browsePage = oldPage);
       showPlatformSnackbar(
         context: context,
@@ -158,7 +244,7 @@ class _ExtensionSearcherPageState extends fluent.State<ExtensionSearcherPage> {
         severity: fluent.InfoBarSeverity.error,
       );
     } finally {
-      if (mounted) setState(() => _isLoading = false);
+      if (mounted && myGen == _requestGen) setState(() => _isLoading = false);
     }
   }
 
@@ -173,8 +259,19 @@ class _ExtensionSearcherPageState extends fluent.State<ExtensionSearcherPage> {
   }
 
   Future<void> _onLoad() async {
+    if (_adultOptionSelected &&
+        !PrismHubStorage.getSetting(SettingKey.enableNSFW)) {
+      setState(() {
+        _nsfwBlocked = true;
+        _data.clear();
+        _isLoading = false;
+      });
+      return;
+    }
+    final myGen = ++_requestGen;
     try {
       _isLoading = true;
+      if (_nsfwBlocked) _nsfwBlocked = false;
       setState(() {});
       // Algunas fuentes (ej. jk) tienen páginas que se solapan con la
       // anterior — una sola página toda duplicada NO significa que no haya
@@ -182,25 +279,53 @@ class _ExtensionSearcherPageState extends fluent.State<ExtensionSearcherPage> {
       // Se insiste unas páginas más antes de recién ahí avisar "sin más datos".
       final existingUrls = _data.map((e) => e.url).toSet();
       final fresh = <ExtensionListItem>[];
+      var gotAnyThisCall = false;
       for (var attempts = 0; attempts < 4 && fresh.isEmpty; attempts++) {
-        final data = _keyWord.isEmpty
-            ? await _runtime.latest(_page)
-            : await _runtime.search(_keyWord, _page, filter: _selectedFilters);
+        List<ExtensionListItem> data;
+        try {
+          data = _keyWord.isEmpty && !_hasActiveFilters
+              ? await _runtime.latest(_page)
+              : await _runtime.search(_keyWord, _page,
+                  filter: _selectedFilters);
+        } catch (e) {
+          // Mismo caso que en desktop: pasarse de la última página real
+          // suele tirar 404 en vez de una lista vacía. Si esta llamada ya
+          // había conseguido algo (gotAnyThisCall) O ya había contenido
+          // cargado de antes (_data no vacío — scroll infinito, esta es la
+          // Nva. tanda), tratarlo como "sin más datos" en vez de reventar
+          // con un error. Antes solo miraba gotAnyThisCall (se reinicia en
+          // cada tanda nueva), así que la primera petición de una tanda
+          // posterior que cae justo en el límite real del sitio se mostraba
+          // como error aunque ya hubiera contenido bueno en pantalla. Si
+          // esto es realmente la primera carga y falla, sí es un error real.
+          if (gotAnyThisCall || _data.isNotEmpty) break;
+          rethrow;
+        }
+        // Un refresh/cambio de filtro más nuevo ya reinició _data mientras
+        // esperábamos esta respuesta — descartarla, no mezclar resultados
+        // de un filtro viejo con la lista ya reiniciada.
+        if (myGen != _requestGen) return;
         if (data.isEmpty) break; // la fuente sí se quedó sin páginas
+        gotAnyThisCall = true;
         _page++;
         for (final e in data) {
           if (existingUrls.add(e.url)) fresh.add(e);
         }
       }
+      if (myGen != _requestGen) return;
       if (fresh.isEmpty && mounted) {
         showPlatformSnackbar(
           context: context,
-          content: "common.no-more-data".i18n,
+          content: (_hasActiveFilters
+                  ? "common.no-more-data-filtered"
+                  : "common.no-more-data")
+              .i18n,
           severity: fluent.InfoBarSeverity.warning,
         );
       }
       _data.addAll(fresh);
     } catch (e) {
+      if (myGen != _requestGen) return;
       // ignore: use_build_context_synchronously
       showPlatformSnackbar(
           context: context,
@@ -238,36 +363,58 @@ class _ExtensionSearcherPageState extends fluent.State<ExtensionSearcherPage> {
     if (Platform.isAndroid) {
       showModalBottomSheet(
         context: context,
-        builder: (context) => Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Padding(
-              padding: const EdgeInsets.only(left: 16, right: 16, top: 16),
-              child: Row(
-                children: [
-                  TextButton(
-                    onPressed: () => Get.back(),
-                    child: Text("common.cancel".i18n),
-                  ),
-                  const Spacer(),
-                  FilledButton(
-                    onPressed: () {
-                      Get.back();
-                      _easyRefreshController.callRefresh();
-                    },
-                    child: Text("common.confirm".i18n),
-                  )
-                ],
+        backgroundColor: HomeTheme.bg,
+        // Sin isScrollControlled/DraggableScrollableSheet, el sheet quedaba
+        // con una altura fija chica (no la real disponible) — en horizontal
+        // (poca altura vertical) apenas entraban 1-2 filas de chips.
+        // Mismo patrón ya usado en video_player_mobile_controls.dart para
+        // el selector de dispositivo DLNA.
+        useSafeArea: true,
+        isScrollControlled: true,
+        showDragHandle: true,
+        builder: (context) => DraggableScrollableSheet(
+          expand: false,
+          initialChildSize: 0.75,
+          minChildSize: 0.4,
+          maxChildSize: 0.95,
+          builder: (context, scrollController) => Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Padding(
+                padding: const EdgeInsets.only(left: 16, right: 16),
+                child: Row(
+                  children: [
+                    TextButton(
+                      onPressed: () => Get.back(),
+                      child: Text(
+                        "common.cancel".i18n,
+                        style: const TextStyle(color: HomeTheme.textMuted),
+                      ),
+                    ),
+                    const Spacer(),
+                    FilledButton(
+                      style: ButtonStyle(
+                        backgroundColor:
+                            WidgetStateProperty.all(HomeTheme.accentPink),
+                      ),
+                      onPressed: () {
+                        Get.back();
+                        _easyRefreshController.callRefresh();
+                      },
+                      child: Text("common.confirm".i18n),
+                    )
+                  ],
+                ),
               ),
-            ),
-            const Divider(),
-            Expanded(
-              child: Padding(
-                padding: const EdgeInsets.only(left: 16, right: 16, top: 16),
-                child: fiterWidget,
+              const Divider(color: HomeTheme.border),
+              Expanded(
+                child: Padding(
+                  padding: const EdgeInsets.only(left: 16, right: 16, top: 16),
+                  child: fiterWidget,
+                ),
               ),
-            ),
-          ],
+            ],
+          ),
         ),
       );
       return;
@@ -277,14 +424,45 @@ class _ExtensionSearcherPageState extends fluent.State<ExtensionSearcherPage> {
       context: context,
       builder: (context) {
         return fluent.ContentDialog(
-          title: Text('search.filter'.i18n),
+          constraints: const BoxConstraints(maxWidth: 580, maxHeight: 680),
+          style: const fluent.ContentDialogThemeData(
+            decoration: BoxDecoration(
+              color: HomeTheme.cardSurface,
+              borderRadius: BorderRadius.all(Radius.circular(14)),
+            ),
+          ),
+          title: Text(
+            'search.filter'.i18n,
+            style: const TextStyle(
+                color: HomeTheme.textPrimary, fontWeight: FontWeight.w800),
+          ),
           content: fiterWidget,
           actions: [
             fluent.Button(
+              style: fluent.ButtonStyle(
+                backgroundColor: fluent.WidgetStateProperty.all(HomeTheme.bg),
+                foregroundColor:
+                    fluent.WidgetStateProperty.all(HomeTheme.textMuted),
+                shape: fluent.WidgetStateProperty.all(
+                  RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(999),
+                    side: const BorderSide(color: HomeTheme.border),
+                  ),
+                ),
+              ),
               child: Text('common.cancel'.i18n),
               onPressed: () => router.pop(),
             ),
             fluent.FilledButton(
+              style: fluent.ButtonStyle(
+                backgroundColor:
+                    fluent.WidgetStateProperty.all(HomeTheme.accentPink),
+                foregroundColor: fluent.WidgetStateProperty.all(HomeTheme.bg),
+                shape: fluent.WidgetStateProperty.all(
+                  RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(999)),
+                ),
+              ),
               child: Text('common.confirm'.i18n),
               onPressed: () {
                 router.pop();
@@ -299,8 +477,38 @@ class _ExtensionSearcherPageState extends fluent.State<ExtensionSearcherPage> {
 
   // ── Builders ─────────────────────────────────────────────────────────────
 
+  // Se muestra en vez de la grilla cuando el filtro elegido activa contenido
+  // +18 (ExtensionFilter.adultOption) y el switch de NSFW en Ajustes está
+  // apagado — sin esto, elegir esa opción dejaba la pantalla vacía sin
+  // ninguna pista de por qué no aparece nada.
+  Widget _buildNsfwBlockedMessage() {
+    return Center(
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 32),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const Icon(Icons.no_adult_content,
+                color: HomeTheme.accentPink, size: 40),
+            const SizedBox(height: 12),
+            Text(
+              'extension-searcher.nsfw-blocked'.i18n,
+              textAlign: TextAlign.center,
+              style: const TextStyle(color: HomeTheme.textMuted, fontSize: 14),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
   Widget _buildAndroid(BuildContext context) {
     return Scaffold(
+      backgroundColor: HomeTheme.bg,
+      // Buscador en la AppBar (arriba): el teclado se superpone en vez de
+      // encoger el body, si no en horizontal la grilla se queda sin alto y
+      // desborda.
+      resizeToAvoidBottomInset: false,
       appBar: SearchAppBar(
         title: _runtime.extension.name,
         textEditingController: _textEditingController,
@@ -316,33 +524,70 @@ class _ExtensionSearcherPageState extends fluent.State<ExtensionSearcherPage> {
             ),
         ],
       ),
-      body: InfiniteScroller(
-        onRefresh: _onRefresh,
-        onLoad: _onLoad,
-        easyRefreshController: _easyRefreshController,
-        child: LayoutBuilder(
-          builder: (context, constraints) => ExcludeSemantics(
-            child: GridView.builder(
-              padding: const EdgeInsets.symmetric(horizontal: 16),
-              gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
-                crossAxisCount: constraints.maxWidth ~/ 120,
-                childAspectRatio: 0.7,
-                crossAxisSpacing: 16,
-                mainAxisSpacing: 16,
-              ),
-              itemCount: _data.length,
-              itemBuilder: (context, index) {
-                final item = _data[index];
-                return ExtensionItemCard(
-                  title: item.title,
-                  url: item.url,
-                  package: widget.package,
-                  cover: item.cover,
-                  update: item.update,
-                  headers: item.headers,
-                );
-              },
+      body: Container(
+        color: HomeTheme.bg,
+        child: Stack(
+          children: [
+            const Positioned.fill(child: AnimatedBackgroundGlow()),
+            InfiniteScroller(
+              onRefresh: _onRefresh,
+              onLoad: _onLoad,
+              easyRefreshController: _easyRefreshController,
+              child: _nsfwBlocked
+                  ? _buildNsfwBlockedMessage()
+                  : LayoutBuilder(
+                      builder: (context, constraints) => ExcludeSemantics(
+                        child: GridView.builder(
+                          padding: const EdgeInsets.symmetric(horizontal: 16),
+                          gridDelegate:
+                              SliverGridDelegateWithFixedCrossAxisCount(
+                            crossAxisCount: constraints.maxWidth ~/ 120,
+                            childAspectRatio: 0.7,
+                            crossAxisSpacing: 16,
+                            mainAxisSpacing: 16,
+                          ),
+                          itemCount: _data.length,
+                          itemBuilder: (context, index) {
+                            final item = _data[index];
+                            return ExtensionItemCard(
+                              title: item.title,
+                              url: item.url,
+                              package: widget.package,
+                              cover: item.cover,
+                              update: item.update,
+                              headers: item.headers,
+                            );
+                          },
+                        ),
+                      ),
+                    ),
             ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _navButton({required IconData icon, required VoidCallback? onTap}) {
+    return GestureDetector(
+      onTap: onTap,
+      child: MouseRegion(
+        cursor:
+            onTap == null ? SystemMouseCursors.basic : SystemMouseCursors.click,
+        child: Container(
+          width: 36,
+          height: 36,
+          decoration: BoxDecoration(
+            shape: BoxShape.circle,
+            color: HomeTheme.cardSurface.withValues(alpha: 0.9),
+            border: Border.all(
+              color: onTap == null ? HomeTheme.border : HomeTheme.accentPink,
+            ),
+          ),
+          child: Icon(
+            icon,
+            size: 18,
+            color: onTap == null ? HomeTheme.textMuted : HomeTheme.accentPink,
           ),
         ),
       ),
@@ -363,137 +608,214 @@ class _ExtensionSearcherPageState extends fluent.State<ExtensionSearcherPage> {
       ),
     ]);
 
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        if (_isLoading)
-          const SizedBox(
-            height: 4,
-            width: double.infinity,
-            child: fluent.ProgressBar(),
-          )
-        else
-          const SizedBox(height: 4),
-        fluent.Padding(
-          padding: const EdgeInsets.only(left: 16, right: 16, top: 16),
-          child: Row(
+    return Container(
+      color: HomeTheme.bg,
+      child: Stack(
+        children: [
+          const Positioned.fill(child: AnimatedBackgroundGlow()),
+          Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Expanded(
-                flex: 2,
-                child: Text(
-                  _runtime.extension.name,
-                  style: fluent.FluentTheme.of(context).typography.subtitle,
+              if (_isLoading)
+                ClipRRect(
+                  borderRadius: BorderRadius.circular(999),
+                  child: const SizedBox(
+                    height: 3,
+                    width: double.infinity,
+                    child: LinearProgressIndicator(
+                      backgroundColor: HomeTheme.border,
+                      valueColor: AlwaysStoppedAnimation(HomeTheme.accentPink),
+                    ),
+                  ),
+                )
+              else
+                const SizedBox(height: 3),
+              Container(
+                width: double.infinity,
+                margin: const EdgeInsets.fromLTRB(16, 16, 16, 0),
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                decoration: BoxDecoration(
+                  color: HomeTheme.cardSurface,
+                  border: Border.all(color: HomeTheme.border),
+                  // Sin borderRadius — a propósito, una barra "cuadrada" (bordes
+                  // rectos) en vez de la esquina redondeada que se usa en el
+                  // resto de las tarjetas.
                 ),
-              ),
-              const Spacer(),
-              if (_filters != null)
-                fluent.IconButton(
-                  icon: const Icon(fluent.FluentIcons.filter),
-                  onPressed: () => _onFilter(context),
-                ),
-              const SizedBox(width: 8),
-              SizedBox(
-                width: 300,
-                child: fluent.TextBox(
-                  controller: TextEditingController(text: _keyWord),
-                  onChanged: (value) {
-                    if (value.isEmpty) _onSearch(value);
-                  },
-                  suffix: suffix,
-                  suffixMode: fluent.OverlayVisibilityMode.editing,
-                  onSubmitted: _onSearch,
-                  placeholder: 'search.hint-text'.i18n,
-                ),
-              ),
-            ],
-          ),
-        ),
-        const SizedBox(height: 8),
-        // Grid + left/right arrows
-        Expanded(
-          child: Row(
-            children: [
-              // ← prev page
-              SizedBox(
-                width: 48,
-                child: Center(
-                  child: _browsePage > 1
-                      ? fluent.FilledButton(
-                          onPressed: _isLoading
-                              ? null
-                              : () => _goToPage(_browsePage - 1),
-                          child: const Icon(fluent.FluentIcons.chevron_left,
-                              size: 14),
-                        )
-                      : const SizedBox.shrink(),
-                ),
-              ),
-              // Anime grid
-              Expanded(
-                child: _isLoading && _browseData.isEmpty
-                    ? const Center(child: fluent.ProgressRing())
-                    : LayoutBuilder(
-                        builder: (ctx, constraints) => ExcludeSemantics(
-                          child: GridView.builder(
-                            padding: const EdgeInsets.symmetric(
-                                horizontal: 8, vertical: 8),
-                            gridDelegate:
-                                SliverGridDelegateWithFixedCrossAxisCount(
-                              crossAxisCount:
-                                  (constraints.maxWidth ~/ 160).clamp(1, 20),
-                              childAspectRatio: 0.6,
-                              crossAxisSpacing: 12,
-                              mainAxisSpacing: 12,
+                child: Row(
+                  children: [
+                    Expanded(
+                      flex: 2,
+                      child: Text(
+                        _runtime.extension.name,
+                        style: const TextStyle(
+                          fontSize: 20,
+                          fontWeight: FontWeight.w800,
+                          color: HomeTheme.textPrimary,
+                        ),
+                      ),
+                    ),
+                    const Spacer(),
+                    RefreshButton(onTap: () => _goToPage(1)),
+                    const SizedBox(width: 8),
+                    if (_filters != null) ...[
+                      GestureDetector(
+                        onTap: () => _onFilter(context),
+                        child: MouseRegion(
+                          cursor: SystemMouseCursors.click,
+                          child: Container(
+                            width: 40,
+                            height: 40,
+                            decoration: BoxDecoration(
+                              color: HomeTheme.cardSurface,
+                              borderRadius: BorderRadius.circular(10),
+                              border: Border.all(color: HomeTheme.border),
                             ),
-                            itemCount: _browseData.length,
-                            itemBuilder: (ctx, i) {
-                              final item = _browseData[i];
-                              return ExtensionItemCard(
-                                title: item.title,
-                                url: item.url,
-                                package: widget.package,
-                                cover: item.cover,
-                                update: item.update,
-                                headers: item.headers,
-                              );
-                            },
+                            child: const Icon(Icons.filter_alt_rounded,
+                                size: 18, color: HomeTheme.textPrimary),
                           ),
                         ),
                       ),
+                      const SizedBox(width: 8),
+                    ],
+                    Container(
+                      width: 300,
+                      height: 40,
+                      padding: const EdgeInsets.symmetric(horizontal: 12),
+                      decoration: BoxDecoration(
+                        color: HomeTheme.cardSurface,
+                        borderRadius: BorderRadius.circular(10),
+                        border: Border.all(color: HomeTheme.border),
+                      ),
+                      child: Row(
+                        children: [
+                          const Icon(Icons.search,
+                              size: 18, color: HomeTheme.textMuted),
+                          const SizedBox(width: 8),
+                          Expanded(
+                            child: fluent.TextBox(
+                              controller: TextEditingController(text: _keyWord),
+                              decoration:
+                                  const WidgetStatePropertyAll(BoxDecoration()),
+                              style: const TextStyle(
+                                  color: HomeTheme.textPrimary, fontSize: 14),
+                              placeholderStyle:
+                                  const TextStyle(color: HomeTheme.textMuted),
+                              onChanged: (value) {
+                                if (value.isEmpty) _onSearch(value);
+                              },
+                              suffix: suffix,
+                              suffixMode: fluent.OverlayVisibilityMode.editing,
+                              onSubmitted: _onSearch,
+                              placeholder: 'search.hint-text'.i18n,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
+                ),
               ),
-              // → next page
-              SizedBox(
-                width: 48,
-                child: Center(
-                  child: fluent.FilledButton(
-                    onPressed:
-                        _isLoading ? null : () => _goToPage(_browsePage + 1),
-                    child:
-                        const Icon(fluent.FluentIcons.chevron_right, size: 14),
-                  ),
+              const SizedBox(height: 8),
+              // Grid + flechas prev/next EN SU PROPIA COLUMNA (Row), no
+              // flotando encima de la grilla — así nunca se superponen a una
+              // tarjeta, sea cual sea el ancho de la ventana.
+              Expanded(
+                child: Row(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    SizedBox(
+                      width: 44,
+                      child: Center(
+                        child: _browsePage > 1
+                            ? _navButton(
+                                icon: Icons.chevron_left,
+                                onTap: _isLoading
+                                    ? null
+                                    : () => _goToPage(_browsePage - 1),
+                              )
+                            : const SizedBox.shrink(),
+                      ),
+                    ),
+                    Expanded(
+                      child: _nsfwBlocked
+                          ? _buildNsfwBlockedMessage()
+                          : _isLoading && _browseData.isEmpty
+                              ? const Center(
+                                  child: CircularProgressIndicator(
+                                      color: HomeTheme.accentPink),
+                                )
+                              : LayoutBuilder(
+                                  builder: (ctx, constraints) =>
+                                      ExcludeSemantics(
+                                    child: GridView.builder(
+                                      padding: const EdgeInsets.symmetric(
+                                          horizontal: 8, vertical: 8),
+                                      gridDelegate:
+                                          SliverGridDelegateWithFixedCrossAxisCount(
+                                        crossAxisCount:
+                                            (constraints.maxWidth ~/ 160)
+                                                .clamp(1, 20),
+                                        childAspectRatio: 0.6,
+                                        crossAxisSpacing: 12,
+                                        mainAxisSpacing: 12,
+                                      ),
+                                      itemCount: _browseData.length,
+                                      itemBuilder: (ctx, i) {
+                                        final item = _browseData[i];
+                                        return ExtensionItemCard(
+                                          title: item.title,
+                                          url: item.url,
+                                          package: widget.package,
+                                          cover: item.cover,
+                                          update: item.update,
+                                          headers: item.headers,
+                                        );
+                                      },
+                                    ),
+                                  ),
+                                ),
+                    ),
+                    SizedBox(
+                      width: 44,
+                      child: Center(
+                        child: _navButton(
+                          icon: Icons.chevron_right,
+                          onTap: _isLoading
+                              ? null
+                              : () => _goToPage(_browsePage + 1),
+                        ),
+                      ),
+                    ),
+                  ],
                 ),
               ),
             ],
           ),
-        ),
-      ],
+        ],
+      ),
     );
   }
 
   @override
   Widget build(BuildContext context) {
     final runtime = ExtensionUtils.runtimes[widget.package];
-    final extensionMissing = Text(
-      FlutterI18n.translate(
-        context,
-        'common-extension-missing',
-        translationParams: {'package': widget.package},
-      ),
-    );
-    if (runtime == null) {
+    // Deshabilitada (pero instalada) se trata como inaccesible acá también —
+    // antes solo se chequeaba "no instalada", así que buscar dentro de una
+    // extensión desactivada desde el toggle igual funcionaba.
+    final disabled =
+        runtime != null && !ExtensionUtils.isEnabled(widget.package);
+    if (runtime == null || disabled) {
+      final message = Text(
+        FlutterI18n.translate(
+          context,
+          disabled ? 'common.extension-disabled' : 'common.extension-missing',
+          translationParams: {'package': widget.package},
+        ),
+      );
       return PlatformWidget(
-        androidWidget: Scaffold(body: extensionMissing),
-        desktopWidget: Center(child: extensionMissing),
+        androidWidget: Scaffold(body: Center(child: message)),
+        desktopWidget: Center(child: message),
       );
     }
     _runtime = runtime;
@@ -527,6 +849,13 @@ class _ExtensionFilterWidgetState extends State<_ExtensionFilterWidget> {
   late final ExtensionService _runtime = widget.runtime;
   late Map<String, ExtensionFilter> _filters = widget.filters;
   late Map<String, List<String>> _selectedFilters = widget.selectedFilters;
+  final _scrollController = ScrollController();
+
+  @override
+  void dispose() {
+    _scrollController.dispose();
+    super.dispose();
+  }
 
   _onSelectFilter(key, value) async {
     final selectedFilters = Map<String, List<String>>.from(_selectedFilters);
@@ -555,36 +884,155 @@ class _ExtensionFilterWidgetState extends State<_ExtensionFilterWidget> {
     widget.onSelectFilter(_selectedFilters, _filters);
   }
 
+  // Vuelve cada filtro a su propio valor por defecto — antes había que
+  // destildar cada chip a mano (con géneros de sobra, tedioso).
+  Future<void> _onReset() async {
+    final selectedFilters = <String, List<String>>{
+      for (final entry in _filters.entries)
+        entry.key: [entry.value.defaultOption],
+    };
+    final filters = Map<String, ExtensionFilter>.from(
+      await _runtime.createFilter(filter: selectedFilters),
+    );
+    setState(() {
+      _selectedFilters = selectedFilters;
+      _filters = filters;
+    });
+    widget.onSelectFilter(_selectedFilters, _filters);
+  }
+
+  // Orden alfabético por etiqueta visible — con géneros de sobra (Olympus
+  // tiene ~50) quedaban en el orden que devuelve la extensión, medio al
+  // azar. "Todos"/"Ver todo" (la opción vacía) siempre va primero.
+  List<MapEntry<String, String>> _sortedOptions(Map<String, String> options) {
+    final entries = options.entries.toList();
+    entries.sort((a, b) {
+      if (a.key.isEmpty) return -1;
+      if (b.key.isEmpty) return 1;
+      return a.value.toLowerCase().compareTo(b.value.toLowerCase());
+    });
+    return entries;
+  }
+
+  // Píldora propia (no PlatformToggleButton) — mismo lenguaje visual que el
+  // resto de la app (chips de tipo en Búsqueda, tabs de Historial): fondo
+  // oscuro, borde rosa cuando está seleccionado. PlatformToggleButton usaba
+  // el azul por defecto de fluent_ui, que no combinaba con nada más.
+  Widget _chip(
+      {required String label,
+      required bool selected,
+      required VoidCallback onTap}) {
+    return GestureDetector(
+      onTap: onTap,
+      child: MouseRegion(
+        cursor: SystemMouseCursors.click,
+        child: AnimatedContainer(
+          duration: const Duration(milliseconds: 150),
+          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+          decoration: BoxDecoration(
+            color: selected
+                ? HomeTheme.accentPink.withValues(alpha: 0.18)
+                : HomeTheme.cardSurface,
+            borderRadius: BorderRadius.circular(999),
+            border: Border.all(
+              color: selected ? HomeTheme.accentPink : HomeTheme.border,
+            ),
+          ),
+          child: Text(
+            label,
+            style: TextStyle(
+              color: selected ? HomeTheme.accentPink : HomeTheme.textPrimary,
+              fontSize: 13,
+              fontWeight: FontWeight.w600,
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
-    return SingleChildScrollView(
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          for (final filter in _filters.entries) ...[
-            Text(filter.value.title),
-            const SizedBox(height: 16),
-            Wrap(
-              spacing: 8,
-              runSpacing: 8,
-              children: [
-                for (final entry in filter.value.options.entries) ...[
-                  PlatformToggleButton(
-                    onChanged: (value) async {
-                      await _onSelectFilter(filter.key, entry.key);
-                      setState(() {});
-                    },
-                    checked:
-                        widget.selectedFilters[filter.key]!.contains(entry.key),
-                    text: entry.value,
-                  ),
-                ]
-              ],
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Align(
+          alignment: Alignment.centerRight,
+          child: GestureDetector(
+            onTap: _onReset,
+            child: MouseRegion(
+              cursor: SystemMouseCursors.click,
+              child: Text(
+                'search.reset-filters'.i18n,
+                style: const TextStyle(
+                  color: HomeTheme.textMuted,
+                  fontSize: 12.5,
+                  fontWeight: FontWeight.w600,
+                  decoration: TextDecoration.underline,
+                ),
+              ),
             ),
-            const SizedBox(height: 16),
-          ],
-        ],
-      ),
+          ),
+        ),
+        const SizedBox(height: 8),
+        Flexible(
+          // Scrollbar propio con padding a la derecha — sin esto, el thumb
+          // por defecto quedaba flotando encima del texto de los chips en
+          // vez de al costado (se notaba mucho con géneros de sobra).
+          child: Scrollbar(
+            controller: _scrollController,
+            thumbVisibility: true,
+            child: SingleChildScrollView(
+              controller: _scrollController,
+              padding: const EdgeInsets.only(right: 14),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  for (final filter in _filters.entries) ...[
+                    Text(
+                      filter.value.title,
+                      style: const TextStyle(
+                        color: HomeTheme.textPrimary,
+                        fontSize: 15,
+                        fontWeight: FontWeight.w800,
+                      ),
+                    ),
+                    const SizedBox(height: 12),
+                    Wrap(
+                      spacing: 10,
+                      runSpacing: 10,
+                      children: [
+                        for (final entry
+                            in _sortedOptions(filter.value.options)) ...[
+                          _chip(
+                            label: entry.value,
+                            // _selectedFilters (el estado local, que sí se
+                            // actualiza) — no widget.selectedFilters (la
+                            // copia congelada de cuando se abrió el
+                            // diálogo). Con esa venía el bug real: tocar
+                            // un chip o "Restablecer" cambiaba los datos
+                            // pero nunca se veía reflejado en pantalla.
+                            selected: _selectedFilters[filter.key]!
+                                .contains(entry.key),
+                            onTap: () async {
+                              await _onSelectFilter(filter.key, entry.key);
+                            },
+                          ),
+                        ]
+                      ],
+                    ),
+                    const SizedBox(height: 16),
+                    if (filter.key != _filters.keys.last)
+                      const Divider(color: HomeTheme.border, height: 1),
+                    const SizedBox(height: 16),
+                  ],
+                ],
+              ),
+            ),
+          ),
+        ),
+      ],
     );
   }
 }

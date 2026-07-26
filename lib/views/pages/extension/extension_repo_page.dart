@@ -1,10 +1,13 @@
-﻿import 'package:easy_refresh/easy_refresh.dart';
+import 'package:easy_refresh/easy_refresh.dart';
 import 'package:fluent_ui/fluent_ui.dart' as fluent;
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 import 'package:prismhub/models/extension.dart';
 import 'package:prismhub/controllers/extension/extension_repo_controller.dart';
 import 'package:prismhub/views/widgets/extension/extension_card.dart';
+import 'package:prismhub/views/widgets/home/animated_background_glow.dart';
+import 'package:prismhub/views/widgets/home/home_theme.dart';
+import 'package:prismhub/utils/extension.dart';
 import 'package:prismhub/utils/i18n.dart';
 import 'package:prismhub/views/widgets/button.dart';
 import 'package:prismhub/views/widgets/platform_widget.dart';
@@ -20,6 +23,15 @@ class ExtensionRepoPage extends StatefulWidget {
 
 class _ExtensionRepoPageState extends State<ExtensionRepoPage> {
   late ExtensionRepoPageController c;
+
+  // Alias a ExtensionUtils.videoTypes/readingTypes (único lugar con esta
+  // regla ahora — antes estaba duplicada acá Y en search_page.dart). Se
+  // mantienen estos nombres locales porque el resto del archivo los usa
+  // para pattern-matching por identidad de Set más abajo; al ser el MISMO
+  // const canonicalizado que expone ExtensionUtils, la identidad se
+  // conserva igual.
+  static const _videoTypes = ExtensionUtils.videoTypes;
+  static const _readingTypes = ExtensionUtils.readingTypes;
 
   @override
   void initState() {
@@ -43,26 +55,22 @@ class _ExtensionRepoPageState extends State<ExtensionRepoPage> {
               SizedBox(
                 width: double.infinity,
                 child: Obx(
-                  () => SegmentedButton<ExtensionType?>(
+                  () => SegmentedButton<Set<ExtensionType>?>(
                     segments: [
                       ButtonSegment(
                         value: null,
                         label: Text('common.show-all'.i18n),
                       ),
                       ButtonSegment(
-                        value: ExtensionType.bangumi,
+                        value: _videoTypes,
                         label: Text('extension-type.video'.i18n),
                       ),
                       ButtonSegment(
-                        value: ExtensionType.manga,
-                        label: Text('extension-type.comic'.i18n),
-                      ),
-                      ButtonSegment(
-                        value: ExtensionType.fikushon,
-                        label: Text('extension-type.novel'.i18n),
+                        value: _readingTypes,
+                        label: Text('extension-type.reading'.i18n),
                       ),
                     ],
-                    selected: <ExtensionType?>{c.searchType.value},
+                    selected: <Set<ExtensionType>?>{c.searchType.value},
                     onSelectionChanged: (value) {
                       debugPrint(value.first.toString());
                       c.searchType.value = value.first;
@@ -115,29 +123,28 @@ class _ExtensionRepoPageState extends State<ExtensionRepoPage> {
             e['version'] != null &&
             e['lang'] != null)
         .map((e) {
-          final type = ExtensionType.values.firstWhere(
-            (element) => element.toString() == 'ExtensionType.${e['type']}',
-            orElse: () => ExtensionType.bangumi,
-          );
-          return ExtensionCard(
-              key: ValueKey(e['package']),
-              name: e['name'] ?? '',
-              icon: e['icon'],
-              version: e['version'] ?? '',
-              package: e['package'] ?? '',
-              lang: e['lang'] ?? 'all',
-              // El catálogo de prism+ trae la URL del bundle en `script`;
-              // repos antiguos usaban `url`. Soportar ambos.
-              url: e['script'] ?? e['url'],
-              webSite: e['webSite'],
-              license: e['license'],
-              description: e['description'],
-              // Firma Ed25519 de prism+ — la card verifica antes de instalar.
-              signature: e['signature'],
-              nsfw: e['nsfw'] == 'true' || e['nsfw'] == true,
-              type: type);
-        })
-        .toList();
+      final type = ExtensionType.values.firstWhere(
+        (element) => element.toString() == 'ExtensionType.${e['type']}',
+        orElse: () => ExtensionType.bangumi,
+      );
+      return ExtensionCard(
+          key: ValueKey(e['package']),
+          name: e['name'] ?? '',
+          icon: e['icon'],
+          version: e['version'] ?? '',
+          package: e['package'] ?? '',
+          lang: e['lang'] ?? 'all',
+          // El catálogo de prism+ trae la URL del bundle en `script`;
+          // repos antiguos usaban `url`. Soportar ambos.
+          url: e['script'] ?? e['url'],
+          webSite: e['webSite'],
+          license: e['license'],
+          description: e['description'],
+          // Firma Ed25519 de prism+ — la card verifica antes de instalar.
+          signature: e['signature'],
+          nsfw: e['nsfw'] == 'true' || e['nsfw'] == true,
+          type: type);
+    }).toList();
     // 过滤
     if (c.search.value.isNotEmpty) {
       extensionCards.removeWhere((element) =>
@@ -145,7 +152,7 @@ class _ExtensionRepoPageState extends State<ExtensionRepoPage> {
     }
     if (c.searchType.value != null) {
       extensionCards.removeWhere(
-        (element) => element.type != c.searchType.value,
+        (element) => !c.searchType.value!.contains(element.type),
       );
     }
     if (c.searchLang.value != 'all') {
@@ -158,18 +165,66 @@ class _ExtensionRepoPageState extends State<ExtensionRepoPage> {
       return Center(child: Text('extension-repo.empty'.i18n));
     }
 
+    // Instaladas primero, agrupadas aparte — antes quedaban mezcladas en
+    // cualquier orden con las que ni siquiera están instaladas, obligando a
+    // buscar entre todas para ver qué ya tenés.
+    final installedCards = extensionCards
+        .where((e) => ExtensionUtils.runtimes.containsKey(e.package))
+        .toList();
+    final availableCards = extensionCards
+        .where((e) => !ExtensionUtils.runtimes.containsKey(e.package))
+        .toList();
+    final showSections = installedCards.isNotEmpty && availableCards.isNotEmpty;
+
+    Widget sectionTitle(String text) => Padding(
+          padding: const EdgeInsets.only(bottom: 12, top: 4),
+          child: Text(
+            text,
+            style: const TextStyle(fontSize: 15, fontWeight: FontWeight.bold),
+          ),
+        );
+
     return PlatformBuildWidget(
       androidBuilder: (context) => ListView(
-        children: extensionCards,
+        children: [
+          if (showSections) sectionTitle('extension-repo.installed'.i18n),
+          ...installedCards,
+          if (showSections) sectionTitle('extension-repo.available'.i18n),
+          ...availableCards,
+        ],
       ),
       desktopBuilder: (context) => LayoutBuilder(
         builder: (context, constraints) {
           final count = (constraints.maxWidth ~/ 220).clamp(1, 10);
-          return GridView.count(
-            crossAxisCount: count,
-            crossAxisSpacing: 16,
-            mainAxisSpacing: 16,
-            children: extensionCards,
+          Widget grid(List<Widget> cards) => GridView.count(
+                shrinkWrap: true,
+                physics: const NeverScrollableScrollPhysics(),
+                crossAxisCount: count,
+                crossAxisSpacing: 16,
+                mainAxisSpacing: 16,
+                children: cards,
+              );
+          if (!showSections) {
+            // El grid interno usa NeverScrollableScrollPhysics a propósito
+            // (así no compite con el scroll de afuera cuando SÍ hay
+            // secciones) — sin un scrollable que lo envuelva acá, con todas
+            // las extensiones ya instaladas (sin sección "disponibles") no
+            // había ninguna forma de bajar a ver el resto de la lista.
+            return SingleChildScrollView(
+              child: grid(installedCards + availableCards),
+            );
+          }
+          return SingleChildScrollView(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                sectionTitle('extension-repo.installed'.i18n),
+                grid(installedCards),
+                const SizedBox(height: 24),
+                sectionTitle('extension-repo.available'.i18n),
+                grid(availableCards),
+              ],
+            ),
           );
         },
       ),
@@ -179,6 +234,11 @@ class _ExtensionRepoPageState extends State<ExtensionRepoPage> {
   Widget _buildAndroid(BuildContext context) {
     return Obx(
       () => Scaffold(
+        backgroundColor: HomeTheme.bg,
+        // Buscador en la AppBar (arriba): el teclado se superpone en vez de
+        // encoger el body, si no en horizontal la lista se queda sin alto y
+        // desborda.
+        resizeToAvoidBottomInset: false,
         appBar: SearchAppBar(
           title: 'common.extension-repo'.i18n,
           textEditingController: TextEditingController(text: c.search.value),
@@ -194,115 +254,162 @@ class _ExtensionRepoPageState extends State<ExtensionRepoPage> {
             ),
           ],
         ),
-        body: EasyRefresh(
-          onRefresh: c.onRefresh,
-          header: const ClassicHeader(
-            showText: false,
-            showMessage: false,
-          ),
-          child: Obx(_content),
+        body: Stack(
+          children: [
+            const Positioned.fill(child: AnimatedBackgroundGlow()),
+            EasyRefresh(
+              onRefresh: c.onRefresh,
+              header: const ClassicHeader(
+                showText: false,
+                showMessage: false,
+              ),
+              child: Obx(_content),
+            ),
+          ],
         ),
       ),
     );
   }
 
   Widget _buildDesktop(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.only(left: 16, right: 16, top: 16),
-      child: Column(
+    return Container(
+      color: HomeTheme.bg,
+      child: Stack(
         children: [
-          Row(
-            children: [
-              Text(
-                'common.extension-repo'.i18n,
-                style: const TextStyle(
-                  fontSize: 20,
-                  fontWeight: FontWeight.bold,
-                ),
-              ),
-              const Spacer(),
-              Obx(
-                () => fluent.ComboBox<String>(
-                  items: [
-                    fluent.ComboBoxItem(value: 'all', child: Text('common.show-all'.i18n)),
-                    const fluent.ComboBoxItem(value: 'en', child: Text('English')),
-                    const fluent.ComboBoxItem(value: 'es', child: Text('Español')),
-                    const fluent.ComboBoxItem(value: 'zh', child: Text('中文')),
-                    const fluent.ComboBoxItem(value: 'ja', child: Text('日本語')),
-                    const fluent.ComboBoxItem(value: 'ko', child: Text('한국어')),
-                    const fluent.ComboBoxItem(value: 'hi', child: Text('हिन्दी')),
-                    const fluent.ComboBoxItem(value: 'ru', child: Text('Русский')),
+          const Positioned.fill(child: AnimatedBackgroundGlow()),
+          Padding(
+            padding: const EdgeInsets.only(left: 16, right: 16, top: 16),
+            child: Column(
+              children: [
+                // Wrap en vez de Row+Spacer: en ventana angosta (PC modo
+                // chiquito) el título + los 2 combos + el buscador de 200px no
+                // entraban en una sola línea y tiraban un RenderFlex overflow
+                // arriba de todo — confirmado en vivo. Wrap baja la barra de
+                // controles a una segunda línea en vez de desbordar.
+                Wrap(
+                  alignment: WrapAlignment.spaceBetween,
+                  crossAxisAlignment: WrapCrossAlignment.center,
+                  runSpacing: 12,
+                  children: [
+                    Text(
+                      'common.extension-repo'.i18n,
+                      style: const TextStyle(
+                        fontSize: 20,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                    // Antes cada control (combo/buscador/refresh) quedaba como una
+                    // caja plana suelta, sin relación visual con el resto de la
+                    // app — agrupados en una sola superficie con el mismo estilo
+                    // de las tarjetas de abajo, se lee como una sola barra en vez
+                    // de piezas sueltas.
+                    Container(
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 12, vertical: 8),
+                      decoration: BoxDecoration(
+                        color: HomeTheme.cardSurface,
+                        borderRadius: BorderRadius.circular(12),
+                        border: Border.all(color: HomeTheme.border),
+                      ),
+                      child: Row(
+                        children: [
+                          Obx(
+                            () => fluent.ComboBox<String>(
+                              items: [
+                                fluent.ComboBoxItem(
+                                    value: 'all',
+                                    child: Text('common.show-all'.i18n)),
+                                const fluent.ComboBoxItem(
+                                    value: 'en', child: Text('English')),
+                                const fluent.ComboBoxItem(
+                                    value: 'es', child: Text('Español')),
+                                const fluent.ComboBoxItem(
+                                    value: 'zh', child: Text('中文')),
+                                const fluent.ComboBoxItem(
+                                    value: 'ja', child: Text('日本語')),
+                                const fluent.ComboBoxItem(
+                                    value: 'ko', child: Text('한국어')),
+                                const fluent.ComboBoxItem(
+                                    value: 'hi', child: Text('हिन्दी')),
+                                const fluent.ComboBoxItem(
+                                    value: 'ru', child: Text('Русский')),
+                              ],
+                              value: c.searchLang.value,
+                              onChanged: (value) {
+                                c.searchLang.value = value ?? 'all';
+                              },
+                            ),
+                          ),
+                          const SizedBox(width: 12),
+                          Obx(
+                            () => fluent.ComboBox<String>(
+                              items: [
+                                fluent.ComboBoxItem(
+                                  value: "all",
+                                  child: Text('common.show-all'.i18n),
+                                ),
+                                fluent.ComboBoxItem(
+                                  value: "video",
+                                  child: Text('extension-type.video'.i18n),
+                                ),
+                                fluent.ComboBoxItem(
+                                  value: "reading",
+                                  child: Text('extension-type.reading'.i18n),
+                                ),
+                              ],
+                              value: switch (c.searchType.value) {
+                                null => "all",
+                                _videoTypes => "video",
+                                _readingTypes => "reading",
+                                _ => "all",
+                              },
+                              onChanged: (value) {
+                                c.searchType.value = switch (value) {
+                                  "video" => _videoTypes,
+                                  "reading" => _readingTypes,
+                                  _ => null,
+                                };
+                              },
+                            ),
+                          ),
+                          const SizedBox(width: 12),
+                          SizedBox(
+                            width: 200,
+                            child: Obx(
+                              () => fluent.TextBox(
+                                controller:
+                                    TextEditingController(text: c.search.value),
+                                placeholder: 'common.search'.i18n,
+                                onChanged: (value) {
+                                  if (value.isEmpty) {
+                                    c.onRefresh();
+                                    c.search.value = '';
+                                  }
+                                },
+                                onSubmitted: (value) {
+                                  c.search.value = value;
+                                },
+                              ),
+                            ),
+                          ),
+                          const SizedBox(width: 12),
+                          fluent.IconButton(
+                            icon: const Icon(fluent.FluentIcons.refresh),
+                            onPressed: () {
+                              c.onRefresh();
+                            },
+                          ),
+                        ],
+                      ),
+                    ),
                   ],
-                  value: c.searchLang.value,
-                  onChanged: (value) {
-                    c.searchLang.value = value ?? 'all';
-                  },
                 ),
-              ),
-              const SizedBox(width: 16),
-              Obx(
-                () => fluent.ComboBox<String>(
-                  items: [
-                    fluent.ComboBoxItem(
-                      value: "all",
-                      child: Text('common.show-all'.i18n),
-                    ),
-                    fluent.ComboBoxItem(
-                      value: ExtensionType.bangumi.toString(),
-                      child: Text('extension-type.video'.i18n),
-                    ),
-                    fluent.ComboBoxItem(
-                      value: ExtensionType.manga.toString(),
-                      child: Text('extension-type.comic'.i18n),
-                    ),
-                    fluent.ComboBoxItem(
-                      value: ExtensionType.fikushon.toString(),
-                      child: Text('extension-type.novel'.i18n),
-                    ),
-                  ],
-                  value: c.searchType.value?.toString() ?? "all",
-                  onChanged: (value) {
-                    if (value == "all") {
-                      c.searchType.value = null;
-                      return;
-                    }
-                    c.searchType.value = ExtensionType.values.firstWhere(
-                      (element) => element.toString() == value,
-                    );
-                  },
+                const SizedBox(height: 16),
+                Expanded(
+                  child: Obx(_content),
                 ),
-              ),
-              const SizedBox(width: 16),
-              SizedBox(
-                width: 200,
-                child: Obx(
-                  () => fluent.TextBox(
-                    controller: TextEditingController(text: c.search.value),
-                    placeholder: 'common.search'.i18n,
-                    onChanged: (value) {
-                      if (value.isEmpty) {
-                        c.onRefresh();
-                        c.search.value = '';
-                      }
-                    },
-                    onSubmitted: (value) {
-                      c.search.value = value;
-                    },
-                  ),
-                ),
-              ),
-              const SizedBox(width: 16),
-              fluent.IconButton(
-                icon: const Icon(fluent.FluentIcons.refresh),
-                onPressed: () {
-                  c.onRefresh();
-                },
-              )
-            ],
-          ),
-          const SizedBox(height: 16),
-          Expanded(
-            child: Obx(_content),
+              ],
+            ),
           ),
         ],
       ),

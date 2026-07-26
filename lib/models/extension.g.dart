@@ -40,6 +40,7 @@ const _$ExtensionTypeEnumMap = {
   ExtensionType.manga: 'manga',
   ExtensionType.bangumi: 'bangumi',
   ExtensionType.fikushon: 'fikushon',
+  ExtensionType.mixed: 'mixed',
 };
 
 ExtensionFilter _$ExtensionFilterFromJson(Map<String, dynamic> json) =>
@@ -49,6 +50,7 @@ ExtensionFilter _$ExtensionFilterFromJson(Map<String, dynamic> json) =>
       max: (json['max'] as num).toInt(),
       defaultOption: json['default'] as String,
       options: Map<String, String>.from(json['options'] as Map),
+      adultOption: json['adultOption'] as String?,
     );
 
 Map<String, dynamic> _$ExtensionFilterToJson(ExtensionFilter instance) =>
@@ -58,6 +60,7 @@ Map<String, dynamic> _$ExtensionFilterToJson(ExtensionFilter instance) =>
       'max': instance.max,
       'default': instance.defaultOption,
       'options': instance.options,
+      'adultOption': instance.adultOption,
     };
 
 ExtensionListItem _$ExtensionListItemFromJson(Map<String, dynamic> json) =>
@@ -94,6 +97,8 @@ ExtensionDetail _$ExtensionDetailFromJson(Map<String, dynamic> json) =>
       ),
       genres:
           (json['genres'] as List<dynamic>?)?.map((e) => e as String).toList(),
+      type: $enumDecodeNullable(_$ExtensionTypeEnumMap, json['type']),
+      status: json['status'] as String?,
     );
 
 Map<String, dynamic> _$ExtensionDetailToJson(ExtensionDetail instance) =>
@@ -103,7 +108,9 @@ Map<String, dynamic> _$ExtensionDetailToJson(ExtensionDetail instance) =>
       'desc': instance.desc,
       'episodes': instance.episodes,
       'headers': instance.headers,
+      'status': instance.status,
       'genres': instance.genres,
+      'type': _$ExtensionTypeEnumMap[instance.type],
     };
 
 ExtensionEpisodeGroup _$ExtensionEpisodeGroupFromJson(
