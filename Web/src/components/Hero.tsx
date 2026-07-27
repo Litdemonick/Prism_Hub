@@ -35,18 +35,23 @@ export default function Hero() {
             </motion.p>
             <DownloadButtons />
             <motion.a
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              transition={{ duration: 0.6, delay: 1 }}
+              initial={{ opacity: 0, y: 8 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ duration: 0.5, delay: 1 }}
               href="https://github.com/Litdemonick/prism-plus"
               target="_blank"
               rel="noopener noreferrer"
-              className="inline-flex items-center gap-1.5 text-[11px] text-emerald-400/50 hover:text-emerald-400/80 transition-colors mt-4 landscape:mt-2"
+              whileHover={{ scale: 1.03 }}
+              whileTap={{ scale: 0.97 }}
+              className="inline-flex items-center gap-2 px-5 py-2.5 landscape:px-4 landscape:py-2 rounded-xl border border-emerald-500/30 bg-emerald-500/8 text-emerald-400/80 hover:text-emerald-300 hover:border-emerald-400/50 hover:bg-emerald-500/15 transition-all mt-5 landscape:mt-2 text-[13px] landscape:text-[12px] font-normal"
             >
-              <svg viewBox="0 0 512 512" className="w-3 h-3" fill="currentColor">
+              <svg viewBox="0 0 512 512" className="w-4 h-4 landscape:w-3.5 landscape:h-3.5" fill="currentColor">
                 <path d="M256 48C141.1 48 48 141.1 48 256s93.1 208 208 208 208-93.1 208-208S370.9 48 256 48zm128 256h-80v80h-96v-80h-80v-96h80v-80h96v80h80v96z"/>
               </svg>
-              <span>Repositorio de extensiones prism+</span>
+              <span>Repositorio prism+</span>
+              <svg viewBox="0 0 24 24" className="w-3.5 h-3.5 landscape:w-3 landscape:h-3" fill="none" stroke="currentColor" strokeWidth="2">
+                <path d="M7 17L17 7M17 7H7M17 7V17"/>
+              </svg>
             </motion.a>
           </div>
           <BottomLeftCard />
