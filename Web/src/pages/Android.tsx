@@ -8,7 +8,7 @@ import {
   detectAndroidVariant,
   getAndroidDownloadHref,
   getAndroidAsset,
-  AndroidVariant,
+  type AndroidVariant,
 } from '../lib/githubRelease';
 
 const DroidIcon = () => (
