@@ -1,6 +1,8 @@
 ﻿// ignore_for_file: use_build_context_synchronously
 import 'dart:io';
 
+import 'package:collection/collection.dart';
+
 import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:flutter_i18n/flutter_i18n.dart';
