@@ -33,7 +33,7 @@ export default function BottomLeftCard() {
           <span className="text-2xl md:text-3xl font-normal prism-text tracking-tight">
             {stars !== null ? formatCount(stars) : '—'}
           </span>
-          <span className="text-[10px] md:text-[12px] font-normal text-violet-300/70 tracking-wider">Prism_Hub · Stars</span>
+          <span className="text-[10px] md:text-[12px] font-normal text-violet-300/70 tracking-wider">GitHub Stars</span>
         </div>
         <svg width="40" height="40" viewBox="0 0 256 256" fill="none" xmlns="http://www.w3.org/2000/svg">
           <rect width="256" height="256" rx="60" fill="#1a1a2e"/>
@@ -51,32 +51,7 @@ export default function BottomLeftCard() {
         <div className="bg-violet-500/20 p-1 rounded-full">
           <ArrowUpRight className="w-3.5 h-3.5 text-violet-300" />
         </div>
-        <span className="text-[13px] font-normal text-violet-200">Prism_Hub repo</span>
-      </motion.a>
-
-      <div className="border-t border-white/5 my-1" />
-
-      <div className="flex items-center justify-between">
-        <div className="flex flex-col">
-          <span className="text-lg md:text-xl font-normal text-emerald-300 tracking-tight">prism+</span>
-          <span className="text-[10px] md:text-[12px] font-normal text-emerald-300/60 tracking-wider">Extensiones oficiales</span>
-        </div>
-        <svg viewBox="0 0 512 512" className="w-8 h-8" fill="#6ee7b7">
-          <path d="M256 48C141.1 48 48 141.1 48 256s93.1 208 208 208 208-93.1 208-208S370.9 48 256 48zm128 256h-80v80h-96v-80h-80v-96h80v-80h96v80h80v96z"/>
-        </svg>
-      </div>
-      <motion.a
-        href="https://github.com/Litdemonick/prism-plus"
-        target="_blank"
-        rel="noopener noreferrer"
-        whileHover={{ scale: 1.02 }}
-        whileTap={{ scale: 0.98 }}
-        className="flex items-center bg-emerald-600/20 hover:bg-emerald-600/30 border border-emerald-500/20 rounded-full pl-1.5 pr-4 py-1.5 gap-2 transition-colors self-start"
-      >
-        <div className="bg-emerald-500/20 p-1 rounded-full">
-          <ArrowUpRight className="w-3.5 h-3.5 text-emerald-300" />
-        </div>
-        <span className="text-[13px] font-normal text-emerald-200">prism+ repo</span>
+        <span className="text-[13px] font-normal text-violet-200">Ver repositorio</span>
       </motion.a>
     </motion.div>
   );
