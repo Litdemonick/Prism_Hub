@@ -33,7 +33,7 @@ export default function DownloadButtons() {
       initial={{ opacity: 0, y: 20 }}
       animate={{ opacity: 1, y: 0 }}
       transition={{ duration: 0.6, delay: 0.6, ease: 'easeOut' }}
-      className="flex items-stretch gap-3 mt-8 landscape:mt-2 flex-wrap justify-center"
+      className="flex items-stretch gap-4 landscape:gap-3 mt-8 landscape:mt-3 flex-wrap justify-center"
     >
       {platforms.map((p) => {
         const asset = release?.[p.assetKey];
@@ -49,14 +49,14 @@ export default function DownloadButtons() {
             rel="noopener noreferrer"
             whileHover={{ scale: 1.03, y: -2 }}
             whileTap={{ scale: 0.97 }}
-            className="flex items-center gap-2.5 px-6 py-3.5 landscape:px-4 landscape:py-2.5 rounded-2xl backdrop-blur-md btn-glow transition-all [&>svg]:w-5 [&>svg]:h-5 landscape:[&>svg]:w-4 landscape:[&>svg]:h-4"
+            className="flex items-center gap-3 px-8 py-4 landscape:px-5 landscape:py-3 rounded-2xl backdrop-blur-md btn-glow transition-all [&>svg]:w-5 [&>svg]:h-5"
             style={{ background: `${p.color}14`, border: `1px solid ${p.color}38`, color: p.color }}
           >
             <p.icon />
             <span className="flex items-center gap-2">
-              <span className="text-[15px] landscape:text-[13px] font-normal text-white leading-tight whitespace-nowrap">Instalar {p.name}</span>
+              <span className="text-[16px] landscape:text-[14px] font-normal text-white leading-tight whitespace-nowrap">Instalar {p.name}</span>
               <span className="flex items-center gap-1.5">
-                <span className="text-[11px] landscape:text-[10px] text-white/35 font-mono leading-tight">{release?.tag}</span>
+                <span className="text-[12px] landscape:text-[11px] text-white/35 font-mono leading-tight">{release?.tag}</span>
                 {isNew && (
                   <span className="text-[10px] font-medium text-amber-300 bg-amber-400/10 border border-amber-400/25 px-1.5 py-0.5 rounded-full leading-none">NUEVO</span>
                 )}
