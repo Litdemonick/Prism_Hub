@@ -43,7 +43,7 @@ export default function Hero() {
               rel="noopener noreferrer"
               whileHover={{ scale: 1.03 }}
               whileTap={{ scale: 0.97 }}
-              className="inline-flex items-center gap-2.5 px-6 py-3 landscape:px-5 landscape:py-2.5 rounded-xl border border-emerald-500/30 bg-emerald-500/8 text-emerald-400/80 hover:text-emerald-300 hover:border-emerald-400/50 hover:bg-emerald-500/15 transition-all mt-6 landscape:mt-4 mb-2 text-[14px] landscape:text-[13px] font-normal"
+              className="inline-flex items-center gap-2.5 px-6 py-3 landscape:px-5 landscape:py-2.5 rounded-xl border border-amber-500/30 bg-amber-500/8 text-amber-400/80 hover:text-amber-300 hover:border-amber-400/50 hover:bg-amber-500/15 transition-all mt-6 landscape:mt-4 mb-2 text-[14px] landscape:text-[13px] font-normal"
             >
               <svg viewBox="0 0 512 512" className="w-4 h-4 landscape:w-3.5 landscape:h-3.5" fill="currentColor">
                 <path d="M256 48C141.1 48 48 141.1 48 256s93.1 208 208 208 208-93.1 208-208S370.9 48 256 48zm128 256h-80v80h-96v-80h-80v-96h80v-80h96v80h80v96z"/>
