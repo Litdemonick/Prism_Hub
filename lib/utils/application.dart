@@ -42,12 +42,53 @@ class ApplicationUtils {
   static String get _platformSuffix =>
       Platform.isWindows ? 'windows-x64.zip' : 'linux-x64.tar.gz';
 
+  static bool get _windowsInstallLooksManaged {
+    if (!Platform.isWindows) return false;
+    final installDir = Directory(Platform.resolvedExecutable).parent;
+    final lower = installDir.path.toLowerCase();
+    final hasInnoUninstaller = installDir
+        .listSync()
+        .whereType<File>()
+        .any((f) => f.uri.pathSegments.last.toLowerCase().startsWith('unins'));
+    return hasInnoUninstaller || lower.contains(r'\program files');
+  }
+
   static Map<String, dynamic>? _findAsset(dynamic assets, String tagName) {
     final expectedName = 'PrismHub-$tagName-$_platformSuffix';
+    final expectedSetupName = 'PrismHub-setup-$tagName.exe';
     try {
-      return (assets as List).firstWhere(
+      final list = assets as List;
+      if (Platform.isWindows && _windowsInstallLooksManaged) {
+        final setup = list.firstWhereOrNull(
+          (a) => (a['name'] as String?) == expectedSetupName,
+        );
+        if (setup != null) return setup as Map<String, dynamic>;
+      }
+      final archive = list.firstWhere(
         (a) => (a['name'] as String) == expectedName,
-      ) as Map<String, dynamic>;
+      );
+      return archive as Map<String, dynamic>;
+    } catch (_) {
+      return null;
+    }
+  }
+
+  static Map<String, dynamic>? _findAndroidAsset(dynamic assets) {
+    if (!Platform.isAndroid) return null;
+    try {
+      final list = (assets as List).cast<Map<String, dynamic>>();
+      final supportedAbis = androidDeviceInfo.supportedAbis;
+      for (final abi in supportedAbis) {
+        final match = list.firstWhereOrNull((a) {
+          final name = (a['name'] as String?)?.toLowerCase() ?? '';
+          return name.endsWith('-$abi.apk');
+        });
+        if (match != null) return match;
+      }
+      return list.firstWhereOrNull((a) {
+        final name = (a['name'] as String?)?.toLowerCase() ?? '';
+        return name.endsWith('.apk');
+      });
     } catch (_) {
       return null;
     }
@@ -71,7 +112,7 @@ class ApplicationUtils {
       if (!context.mounted) return;
 
       final asset = Platform.isAndroid
-          ? null
+          ? _findAndroidAsset(res.data['assets'])
           : _findAsset(res.data['assets'], tagName);
 
       await Navigator.of(context, rootNavigator: true).push(
@@ -106,6 +147,7 @@ class ApplicationUtils {
       debugPrint('remoteVersion: $remoteVersion');
       if (packageInfo.version != remoteVersion) {
         if (Platform.isAndroid) {
+          final asset = _findAndroidAsset(res.data['assets']);
           Get.to(
             Scaffold(
               appBar: AppBar(
@@ -131,7 +173,10 @@ class ApplicationUtils {
                         onPressed: () {
                           RouterUtils.pop();
                           launchUrl(
-                            Uri.parse(res.data['html_url']),
+                            Uri.parse(
+                              (asset?['browser_download_url'] as String?) ??
+                                  res.data['html_url'] as String,
+                            ),
                             mode: LaunchMode.externalApplication,
                           );
                         },
@@ -240,12 +285,23 @@ class ApplicationUtils {
 
       await dio.download(url, downloadPath);
 
+      final assetName = (asset['name'] as String).toLowerCase();
+      if (Platform.isWindows && assetName.endsWith('.exe')) {
+        Get.back();
+        await _runWindowsInstaller(downloadPath);
+        return;
+      }
+
+      final extractDir =
+          Directory('${tempDir.path}${Platform.pathSeparator}app');
+      extractDir.createSync();
+
       if (Platform.isLinux) {
         await Process.run('tar', [
           '-xzf',
           downloadPath,
           '-C',
-          tempDir.path,
+          extractDir.path,
         ]);
       } else if (Platform.isWindows) {
         await Process.run('powershell', [
@@ -253,14 +309,15 @@ class ApplicationUtils {
           '-Path',
           downloadPath,
           '-DestinationPath',
-          tempDir.path,
+          extractDir.path,
           '-Force',
         ]);
       }
 
       Get.back();
 
-      await _replaceAndRestart(tempDir);
+      final sourceDir = _findExtractedAppDir(extractDir);
+      await _replaceAndRestart(sourceDir, tempDir);
     } catch (e) {
       Get.back();
       if (context.mounted) {
@@ -273,13 +330,80 @@ class ApplicationUtils {
     }
   }
 
-  static Future<void> _replaceAndRestart(Directory tempDir) async {
+  static Directory _findExtractedAppDir(Directory extractDir) {
+    final currentExeName =
+        Platform.resolvedExecutable.split(Platform.pathSeparator).last;
+    final targetExeName = currentExeName.toLowerCase();
+    final exeFiles = extractDir
+        .listSync(recursive: true)
+        .whereType<File>()
+        .where((f) => f.path.toLowerCase().endsWith('.exe'))
+        .toList();
+
+    final matchingExe = exeFiles.firstWhereOrNull(
+      (f) => f.uri.pathSegments.last.toLowerCase() == targetExeName,
+    );
+    if (matchingExe != null) return matchingExe.parent;
+
+    final prismExe = exeFiles.firstWhereOrNull(
+      (f) => f.uri.pathSegments.last.toLowerCase().contains('prismhub'),
+    );
+    if (prismExe != null) return prismExe.parent;
+
+    if (Platform.isLinux) {
+      final currentName =
+          Platform.resolvedExecutable.split(Platform.pathSeparator).last;
+      final matchingFile = extractDir
+          .listSync(recursive: true)
+          .whereType<File>()
+          .firstWhereOrNull(
+            (f) => f.uri.pathSegments.last.toLowerCase() ==
+                currentName.toLowerCase(),
+          );
+      if (matchingFile != null) return matchingFile.parent;
+    }
+
+    return extractDir;
+  }
+
+  static String _psQuote(String value) => "'${value.replaceAll("'", "''")}'";
+
+  static bool _canWriteTo(Directory dir) {
+    try {
+      final probe = File(
+        '${dir.path}${Platform.pathSeparator}.prismhub-update-write-test',
+      );
+      probe.writeAsStringSync('ok');
+      probe.deleteSync();
+      return true;
+    } catch (_) {
+      return false;
+    }
+  }
+
+  static Future<void> _runWindowsInstaller(String installerPath) async {
+    final command =
+        'Start-Process -FilePath ${_psQuote(installerPath)} -Verb RunAs';
+    await Process.run('powershell', [
+      '-NoProfile',
+      '-ExecutionPolicy',
+      'Bypass',
+      '-Command',
+      command,
+    ]);
+    exit(0);
+  }
+
+  static Future<void> _replaceAndRestart(
+    Directory sourceDir,
+    Directory tempDir,
+  ) async {
     final currentExe = Platform.resolvedExecutable;
     final installDir = Directory(currentExe).parent;
     final exeName = currentExe.split(Platform.pathSeparator).last;
 
     if (Platform.isLinux) {
-      await Process.run('cp', ['-r', '${tempDir.path}/.', installDir.path]);
+      await Process.run('cp', ['-r', '${sourceDir.path}/.', installDir.path]);
       Process.start(
         '${installDir.path}/$exeName',
         [],
@@ -287,21 +411,72 @@ class ApplicationUtils {
       );
       exit(0);
     } else if (Platform.isWindows) {
-      final batchPath = '${tempDir.path}\\update.bat';
-      File(batchPath).writeAsStringSync(
-        '@echo off\r\n'
-        'chcp 65001 >nul\r\n'
-        'timeout /t 3 /nobreak >nul\r\n'
-        'xcopy /y /e /q "${tempDir.path}\\*.*" "${installDir.path}\\"\r\n'
-        'start "" "${installDir.path}\\$exeName"\r\n'
-        'rmdir /s /q "${tempDir.path}"\r\n',
+      final scriptPath = '${tempDir.path}\\update.ps1';
+      final logPath =
+          '${Directory.systemTemp.path}\\PrismHub-update-${DateTime.now().millisecondsSinceEpoch}.log';
+      File(scriptPath).writeAsStringSync(
+        r'''
+param(
+  [string]$SourceDir,
+  [string]$InstallDir,
+  [string]$ExeName,
+  [string]$TempDir,
+  [string]$LogPath,
+  [int]$AppPid
+)
+$ErrorActionPreference = 'Stop'
+function Log([string]$Message) {
+  Add-Content -LiteralPath $LogPath -Value "[$(Get-Date -Format o)] $Message"
+}
+try {
+  Log "Waiting for PrismHub process $AppPid to exit"
+  Wait-Process -Id $AppPid -Timeout 30 -ErrorAction SilentlyContinue
+  Log "Copying from $SourceDir to $InstallDir"
+  New-Item -ItemType Directory -Path $InstallDir -Force | Out-Null
+  Copy-Item -Path (Join-Path $SourceDir '*') -Destination $InstallDir -Recurse -Force
+  Log "Starting $ExeName"
+  Start-Process -FilePath (Join-Path $InstallDir $ExeName)
+  Log "Cleaning temp dir $TempDir"
+  Remove-Item -LiteralPath $TempDir -Recurse -Force -ErrorAction SilentlyContinue
+} catch {
+  Log "ERROR: $($_.Exception.Message)"
+  try { Start-Process -FilePath (Join-Path $InstallDir $ExeName) } catch {}
+}
+''',
       );
-      Process.start(
-        batchPath,
-        [],
-        mode: ProcessStartMode.normal,
-        runInShell: true,
-      );
+      final args = [
+        '-NoProfile',
+        '-ExecutionPolicy',
+        'Bypass',
+        '-File',
+        scriptPath,
+        '-SourceDir',
+        sourceDir.path,
+        '-InstallDir',
+        installDir.path,
+        '-ExeName',
+        exeName,
+        '-TempDir',
+        tempDir.path,
+        '-LogPath',
+        logPath,
+        '-AppPid',
+        pid.toString(),
+      ];
+      if (_canWriteTo(installDir)) {
+        Process.start('powershell', args, mode: ProcessStartMode.normal);
+      } else {
+        final command = 'Start-Process -FilePath powershell '
+            '-ArgumentList ${_psQuote(args.map(_psQuote).join(' '))} '
+            '-Verb RunAs';
+        await Process.run('powershell', [
+          '-NoProfile',
+          '-ExecutionPolicy',
+          'Bypass',
+          '-Command',
+          command,
+        ]);
+      }
       exit(0);
     }
   }
@@ -362,7 +537,11 @@ class _ForcedUpdatePageState extends State<_ForcedUpdatePage> {
   }
 
   void _updateNow() {
-    if (widget.asset != null) {
+    if (Platform.isAndroid) {
+      final url =
+          (widget.asset?['browser_download_url'] as String?) ?? widget.htmlUrl;
+      launchUrl(Uri.parse(url), mode: LaunchMode.externalApplication);
+    } else if (widget.asset != null) {
       ApplicationUtils._downloadAndInstall(
         context,
         widget.asset!,

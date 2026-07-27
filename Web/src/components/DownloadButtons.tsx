@@ -1,5 +1,9 @@
 import { motion } from 'motion/react';
-import { REPO, useLatestRelease } from '../lib/githubRelease';
+import {
+  APP_VERSION,
+  getDirectDownloadHref,
+  useLatestRelease,
+} from '../lib/githubRelease';
 
 const LinuxIcon = () => (
   <svg fill="currentColor" stroke="currentColor" strokeWidth="0" viewBox="0 0 448 512" className="w-4 h-4">
@@ -19,7 +23,6 @@ const AndroidIcon = () => (
   </svg>
 );
 
-const APP_VERSION = 'v1.0.1';
 const platforms = [
   { name: 'Windows', icon: WindowsIcon, assetKey: 'windows' as const, color: '#0ea5e9' },
   { name: 'Linux', icon: LinuxIcon, assetKey: 'linux' as const, color: '#f97316' },
@@ -37,9 +40,7 @@ export default function DownloadButtons() {
       className="flex items-stretch gap-4 landscape:gap-3 mt-8 landscape:mt-3 flex-wrap justify-center"
     >
       {platforms.map((p) => {
-        const asset = release?.[p.assetKey];
-        const downloadHref = asset?.browser_download_url
-          ?? `https://github.com/${REPO}/releases/latest`;
+        const downloadHref = getDirectDownloadHref(release, p.assetKey);
         const isNew = release?.publishedAt
           && Date.now() - new Date(release.publishedAt).getTime() < 7 * 24 * 60 * 60 * 1000;
         return (

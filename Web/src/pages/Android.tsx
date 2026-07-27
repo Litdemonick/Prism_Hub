@@ -2,7 +2,14 @@ import { motion } from 'motion/react';
 import { Download, Settings2, ShieldCheck, FolderDown } from 'lucide-react';
 import Navbar from '../components/Navbar';
 import PrismBg from '../components/PrismBg';
-import { REPO, useLatestRelease, formatSize } from '../lib/githubRelease';
+import {
+  useLatestRelease,
+  formatSize,
+  detectAndroidVariant,
+  getAndroidDownloadHref,
+  getAndroidAsset,
+  AndroidVariant,
+} from '../lib/githubRelease';
 
 const DroidIcon = () => (
   <svg fill="currentColor" strokeWidth="0" viewBox="0 0 24 24" className="w-5 h-5 text-violet-400">
@@ -28,11 +35,19 @@ const steps = [
   },
 ];
 
+const allVariants: { label: string; key: AndroidVariant }[] = [
+  { label: 'ARM64 (arm64-v8a)', key: 'arm64-v8a' },
+  { label: 'ARM32 (armeabi-v7a)', key: 'armeabi-v7a' },
+  { label: 'x86_64', key: 'x86_64' },
+];
+
 export default function Android() {
   const release = useLatestRelease();
-  const asset = release?.android;
-  const downloadHref = asset?.browser_download_url
-    ?? `https://github.com/${REPO}/releases/latest`;
+  const detectedVariant = detectAndroidVariant();
+  const mainHref = getAndroidDownloadHref(release);
+  const mainAsset = getAndroidAsset(release);
+  const mainLabel = allVariants.find((v) => v.key === detectedVariant)?.label || detectedVariant;
+  const otherVariants = allVariants.filter((v) => v.key !== detectedVariant);
 
   return (
     <div className="w-full h-screen flex items-center justify-center p-3 md:p-5 bg-[#08080f]">
@@ -53,7 +68,7 @@ export default function Android() {
               </div>
 
               <motion.a
-                href={downloadHref}
+                href={mainHref}
                 target="_blank"
                 rel="noopener noreferrer"
                 whileHover={{ scale: 1.02 }}
@@ -61,13 +76,41 @@ export default function Android() {
                 className="flex items-center justify-center gap-2 w-full py-4 rounded-2xl text-white text-sm bg-[#22c55e]/12 border border-[#22c55e]/35 hover:bg-[#22c55e]/18 transition-all btn-glow"
               >
                 <Download className="w-4 h-4 text-[#22c55e]" />
-                {asset
-                  ? `Descargar APK (arm64-v8a)${asset.size ? ` · ${formatSize(asset.size)}` : ''}`
-                  : 'Descargar APK'}
+                {mainAsset?.size
+                  ? `Descargar APK (${mainLabel}) · ${formatSize(mainAsset.size)}`
+                  : `Descargar APK (${mainLabel})`}
               </motion.a>
               <p className="mt-3 text-[12px] text-white/30 font-normal text-center">
                 Android 5.0 o superior · sin Google Play
               </p>
+
+              {otherVariants.length > 0 && (
+                <div className="mt-5 flex flex-col gap-2">
+                  <p className="text-[11px] text-white/25 font-normal text-center">
+                    Otras arquitecturas:
+                  </p>
+                  <div className="flex gap-2 justify-center">
+                    {otherVariants.map((v) => {
+                      const href = getAndroidDownloadHref(release, v.key);
+                      const asset = getAndroidAsset(release, v.key);
+                      return (
+                        <motion.a
+                          key={v.key}
+                          href={href}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          whileHover={{ scale: 1.03 }}
+                          whileTap={{ scale: 0.97 }}
+                          className="flex items-center gap-1.5 px-4 py-2.5 rounded-xl text-white/70 text-[12px] bg-white/[0.04] border border-white/[0.08] hover:bg-white/[0.08] hover:text-white transition-all"
+                        >
+                          <Download className="w-3 h-3" />
+                          {asset?.size ? `${v.label} · ${formatSize(asset.size)}` : v.label}
+                        </motion.a>
+                      );
+                    })}
+                  </div>
+                </div>
+              )}
 
               <div className="mt-8 flex flex-col gap-4">
                 {steps.map((s, i) => (
@@ -88,17 +131,6 @@ export default function Android() {
                   </motion.div>
                 ))}
               </div>
-
-              <p className="mt-6 text-center">
-                <a
-                  href={`https://github.com/${REPO}/releases/latest`}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="text-violet-400 hover:text-violet-300 text-sm transition-colors underline underline-offset-4"
-                >
-                  Ver todas las arquitecturas en Releases →
-                </a>
-              </p>
             </motion.div>
           </div>
         </div>

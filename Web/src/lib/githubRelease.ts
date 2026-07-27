@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 
 export const REPO = 'Litdemonick/Prism_Hub';
+export const APP_VERSION = 'v1.0.1';
 
 export type ReleaseAsset = { name: string; browser_download_url: string; size: number };
 export type ReleaseInfo = {
@@ -11,6 +12,32 @@ export type ReleaseInfo = {
   windows?: ReleaseAsset;
   linux?: ReleaseAsset;
   android?: ReleaseAsset;
+  androidArm64?: ReleaseAsset;
+  androidArmv7?: ReleaseAsset;
+  androidX64?: ReleaseAsset;
+};
+
+export type DownloadPlatform = 'windows' | 'linux' | 'android';
+export type AndroidVariant = 'auto' | 'arm64-v8a' | 'armeabi-v7a' | 'x86_64';
+
+const fallbackAssetNames = {
+  windows: `PrismHub-setup-${APP_VERSION}.exe`,
+  linux: `PrismHub-${APP_VERSION}-linux-x64.tar.gz`,
+  androidArm64: `PrismHub-${APP_VERSION}-arm64-v8a.apk`,
+  androidArmv7: `PrismHub-${APP_VERSION}-armeabi-v7a.apk`,
+  androidX64: `PrismHub-${APP_VERSION}-x86_64.apk`,
+};
+
+function latestDownloadUrl(assetName: string) {
+  return `https://github.com/${REPO}/releases/latest/download/${assetName}`;
+}
+
+export const fallbackDownloads = {
+  windows: latestDownloadUrl(fallbackAssetNames.windows),
+  linux: latestDownloadUrl(fallbackAssetNames.linux),
+  androidArm64: latestDownloadUrl(fallbackAssetNames.androidArm64),
+  androidArmv7: latestDownloadUrl(fallbackAssetNames.androidArmv7),
+  androidX64: latestDownloadUrl(fallbackAssetNames.androidX64),
 };
 
 export function formatDate(iso?: string) {
@@ -37,15 +64,60 @@ function assetsToRelease(data: {
 }): ReleaseInfo {
   const assets: ReleaseAsset[] = data.assets || [];
   const find = (re: RegExp) => assets.find((a) => re.test(a.name));
+  const androidArm64 = find(/arm64-v8a.*\.apk$/i);
+  const androidArmv7 = find(/armeabi-v7a.*\.apk$/i);
+  const androidX64 = find(/x86_64.*\.apk$/i);
   return {
     tag: data.tag_name,
     htmlUrl: data.html_url,
     body: data.body,
     publishedAt: data.published_at,
-    windows: find(/\.exe$/i) || find(/windows.*\.zip$/i),
+    windows: find(/setup.*\.exe$/i) || find(/\.exe$/i) || find(/windows.*\.zip$/i),
     linux: find(/linux.*\.tar\.gz$/i),
-    android: find(/arm64-v8a.*\.apk$/i) || find(/\.apk$/i),
+    android: androidArm64 || androidArmv7 || androidX64 || find(/\.apk$/i),
+    androidArm64,
+    androidArmv7,
+    androidX64,
   };
+}
+
+export function detectAndroidVariant(): AndroidVariant {
+  if (typeof navigator === 'undefined') return 'arm64-v8a';
+  const ua = navigator.userAgent.toLowerCase();
+  if (ua.includes('x86_64') || ua.includes('x64')) return 'x86_64';
+  if (ua.includes('x86')) return 'x86_64';
+  if (ua.includes('armeabi-v7a') || ua.includes('armv7')) return 'armeabi-v7a';
+  return 'arm64-v8a';
+}
+
+export function getAndroidAsset(
+  release?: ReleaseInfo | null,
+  variant: AndroidVariant = 'auto',
+) {
+  const resolved = variant === 'auto' ? detectAndroidVariant() : variant;
+  if (resolved === 'x86_64') return release?.androidX64 || release?.androidArm64 || release?.android;
+  if (resolved === 'armeabi-v7a') return release?.androidArmv7 || release?.androidArm64 || release?.android;
+  return release?.androidArm64 || release?.android;
+}
+
+export function getAndroidDownloadHref(
+  release?: ReleaseInfo | null,
+  variant: AndroidVariant = 'auto',
+) {
+  const resolved = variant === 'auto' ? detectAndroidVariant() : variant;
+  const asset = getAndroidAsset(release, resolved);
+  if (asset?.browser_download_url) return asset.browser_download_url;
+  if (resolved === 'x86_64') return fallbackDownloads.androidX64;
+  if (resolved === 'armeabi-v7a') return fallbackDownloads.androidArmv7;
+  return fallbackDownloads.androidArm64;
+}
+
+export function getDirectDownloadHref(
+  release: ReleaseInfo | null | undefined,
+  platform: DownloadPlatform,
+) {
+  if (platform === 'android') return getAndroidDownloadHref(release);
+  return release?.[platform]?.browser_download_url || fallbackDownloads[platform];
 }
 
 /** Últimas N releases publicadas (para mostrar historial/changelog real en
