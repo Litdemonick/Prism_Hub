@@ -53,8 +53,8 @@ export default function DownloadButtons() {
             style={{ background: `${p.color}14`, border: `1px solid ${p.color}38`, color: p.color }}
           >
             <p.icon />
-            <span className="flex flex-col items-start gap-px">
-              <span className="text-[15px] font-normal text-white leading-tight">Instalar {p.name}</span>
+            <span className="flex items-center gap-2">
+              <span className="text-[15px] font-normal text-white leading-tight whitespace-nowrap">Instalar {p.name}</span>
               <span className="flex items-center gap-1.5">
                 <span className="text-[11px] text-white/35 font-mono leading-tight">{release?.tag}</span>
                 {isNew && (
