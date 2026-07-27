@@ -4,9 +4,9 @@ name: Dev Build CI
 
 on:
   pull_request:
-    branches: ["main", "dev"]
+    branches: ["main", "develop"]
   push:
-    branches: ["dev"]
+    branches: ["develop"]
 
 # A workflow run is made up of one or more jobs that can run sequentially or in parallel
 jobs:
@@ -19,11 +19,10 @@ jobs:
     # Steps represent a sequence of tasks that will be executed as part of the job
     steps:
       # Checks-out your repository under $GITHUB_WORKSPACE, so your job can access it
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v4
       - name: Flutter action
         uses: subosito/flutter-action@v2
         with:
-          flutter-version:  3.16.8 
           channel: stable
       - name: Decode keystore
         run: |
@@ -42,17 +41,17 @@ jobs:
 
       # 发布安装包
       - name: Upload Artifact - armeabi-v7a
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
         with:
           path: "build/app/outputs/flutter-apk/app-armeabi-v7a-release.apk"
           name: PrismHub-pr-${{ github.event.pull_request.number }}-armeabi-v7a.apk
       - name: Upload Artifact - arm64-v8a
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
         with:
           path: "build/app/outputs/flutter-apk/app-arm64-v8a-release.apk"
           name: PrismHub-pr-${{ github.event.pull_request.number }}-arm64-v8a.apk
       - name: Upload Artifact - x86
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
         with:
           path: "build/app/outputs/flutter-apk/app-x86_64-release.apk"
           name: PrismHub-pr-${{ github.event.pull_request.number }}-x86_64.apk
@@ -61,10 +60,9 @@ jobs:
     runs-on: windows-latest
 
     steps:
-      - uses: actions/checkout@v3
-      - uses: subosito/flutter-action@v2.12.0
+      - uses: actions/checkout@v4
+      - uses: subosito/flutter-action@v2
         with:
-          flutter-version:  3.16.8 
           channel: stable
       - name: Install project dependencies
         run: flutter pub get
@@ -75,7 +73,7 @@ jobs:
           mv build/windows/x64/runner/Release build/windows/x64/runner/PrismHub
       # 发布安装包
       - name: Upload Artifact
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
         with:
           path: "build/windows/x64/runner/PrismHub"
           name: PrismHub-pr-${{ github.event.pull_request.number }}-windows.zip
@@ -85,10 +83,9 @@ jobs:
     steps:
       - name: Install Dependencies
         run: sudo apt-get install ninja-build build-essential libgtk-3-dev libmpv-dev mpv
-      - uses: actions/checkout@v3
-      - uses: subosito/flutter-action@v2.12.0
+      - uses: actions/checkout@v4
+      - uses: subosito/flutter-action@v2
         with:
-          flutter-version:  3.16.8 
           channel: stable
       - name: Install project dependencies
         run: flutter pub get
@@ -99,7 +96,7 @@ jobs:
           mv build/linux/x64/release/bundle build/linux/x64/release/PrismHub
       # 发布安装包
       - name: Upload Artifact
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
         with:
           path: "build/linux/x64/release/PrismHub"
           name: PrismHub-pr-${{ github.event.pull_request.number }}-linux.zip

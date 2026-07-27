@@ -2,12 +2,14 @@ import { motion, AnimatePresence } from 'motion/react';
 import {
   Puzzle, Zap, BookOpen, Star, Tv2, Layers,
   Shield, Code2, ArrowUpRight, Download, Terminal,
-  Sparkles, ShieldAlert, Gauge, LayoutGrid, Monitor, Smartphone,
+  Sparkles, Monitor, Smartphone,
 } from 'lucide-react';
 import { useState, type ReactElement } from 'react';
 import { useNavigate } from 'react-router-dom';
 import Hero from '../components/Hero';
-import { REPO, formatSize, useExtensionCount, useLatestRelease } from '../lib/githubRelease';
+import {
+  REPO, formatDate, formatSize, useExtensionCount, useLatestRelease, useReleases,
+} from '../lib/githubRelease';
 
 /* ── Platform icons ───────────────────────────────────────── */
 const WinIcon = () => (
@@ -71,20 +73,96 @@ const features = [
   },
 ];
 
-const whatsNew = [
-  {
-    Icon: ShieldAlert, title: 'Extensiones +18 y control por el usuario',
-    desc: 'Las extensiones con contenido para adultos ahora se marcan explícitamente y piden confirmación al activarlas — y se desactivan solas si apagás el modo +18 en Ajustes.',
-  },
-  {
-    Icon: Gauge, title: 'Reproductor más fluido',
-    desc: 'Decodificación por hardware habilitada en Windows y Android (antes forzaba software en todos lados) — menos tirones, más fluido, más batería.',
-  },
-  {
-    Icon: LayoutGrid, title: 'Repositorio de extensiones rediseñado',
-    desc: 'Extensiones inestables se marcan en espera de actualización sin bloquear el resto, y la cuadrícula se reordena sola sin desbordes al crecer el catálogo.',
-  },
-] as const;
+const platformMeta = {
+  windows: { Icon: WinIcon, color: '#0ea5e9', label: 'Windows' },
+  linux: { Icon: LinuxIcon, color: '#f97316', label: 'Linux' },
+  android: { Icon: DroidIcon, color: '#22c55e', label: 'Android' },
+} as const;
+
+/* ── Changelog: parser minimalista de markdown (## / ### / listas / **bold**
+ * / [link](url)) — sin librería nueva y sin dangerouslySetInnerHTML, el
+ * body de la release ya viene de nuestro propio workflow. ─────────────── */
+function renderInline(text: string, keyPrefix: string): ReactElement {
+  const parts = text.split(/(\*\*[^*]+\*\*|\[[^\]]+\]\([^)]+\))/g).filter(Boolean);
+  return (
+    <>
+      {parts.map((part, i) => {
+        const bold = /^\*\*([^*]+)\*\*$/.exec(part);
+        if (bold) {
+          return <strong key={`${keyPrefix}-${i}`} className="text-white/80 font-medium">{bold[1]}</strong>;
+        }
+        const link = /^\[([^\]]+)\]\(([^)]+)\)$/.exec(part);
+        if (link) {
+          return (
+            <a
+              key={`${keyPrefix}-${i}`}
+              href={link[2]}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="text-violet-300 underline underline-offset-2 hover:text-violet-200"
+            >
+              {link[1]}
+            </a>
+          );
+        }
+        return <span key={`${keyPrefix}-${i}`}>{part}</span>;
+      })}
+    </>
+  );
+}
+
+function Changelog({ body }: { body?: string }) {
+  if (!body) return null;
+  const blocks: ReactElement[] = [];
+  let listItems: string[] = [];
+  const flushList = () => {
+    if (listItems.length) {
+      blocks.push(
+        <ul key={`ul-${blocks.length}`} className="list-disc list-inside space-y-1 mb-3 ml-1">
+          {listItems.map((item, i) => (
+            <li key={i} className="text-white/50 text-[13px] leading-relaxed">
+              {renderInline(item, `li-${blocks.length}-${i}`)}
+            </li>
+          ))}
+        </ul>,
+      );
+      listItems = [];
+    }
+  };
+  body.split('\n').forEach((raw, i) => {
+    const line = raw.trim();
+    if (!line) {
+      flushList();
+      return;
+    }
+    if (line.startsWith('### ')) {
+      flushList();
+      blocks.push(
+        <h5 key={i} className="text-white text-sm font-medium mt-3 mb-1.5">
+          {renderInline(line.slice(4), `h5-${i}`)}
+        </h5>,
+      );
+    } else if (line.startsWith('## ')) {
+      flushList();
+      blocks.push(
+        <h4 key={i} className="text-white text-[15px] font-normal mt-4 mb-2 first:mt-0">
+          {renderInline(line.slice(3), `h4-${i}`)}
+        </h4>,
+      );
+    } else if (line.startsWith('- ') || line.startsWith('* ')) {
+      listItems.push(line.slice(2));
+    } else {
+      flushList();
+      blocks.push(
+        <p key={i} className="text-white/50 text-[13px] leading-relaxed mb-2">
+          {renderInline(line, `p-${i}`)}
+        </p>,
+      );
+    }
+  });
+  flushList();
+  return <div>{blocks}</div>;
+}
 
 const screenshots = {
   desktop: [
@@ -172,6 +250,7 @@ const fadeUp = (delay = 0) => ({
 export default function Home() {
   const navigate = useNavigate();
   const release = useLatestRelease();
+  const releases = useReleases(2);
   const extensionCount = useExtensionCount();
   const [shotView, setShotView] = useState<'desktop' | 'mobile'>('desktop');
   const stats = [
@@ -197,35 +276,90 @@ export default function Home() {
         </div>
       </motion.section>
 
-      {/* ───── NOVEDADES ───── */}
+      {/* ───── VERSIONES ───── */}
       <section className="relative py-24 px-6">
-        <div className="max-w-6xl mx-auto">
+        <div className="absolute inset-0 bg-gradient-to-b from-transparent via-violet-950/8 to-transparent pointer-events-none" />
+        <div className="max-w-5xl mx-auto">
           <motion.div {...fadeUp()} className="text-center mb-14">
             <span className="section-badge inline-flex items-center gap-1.5">
-              <Sparkles className="w-3 h-3" /> Novedades · Beta 1.0.1
+              <Sparkles className="w-3 h-3" /> Historial
             </span>
             <h2 className="text-3xl md:text-4xl font-light text-white leading-tight mt-5">
-              Qué trae esta <span className="prism-text">actualización</span>
+              Qué trae cada <span className="prism-text">versión</span>
             </h2>
+            <p className="text-white/40 max-w-md mx-auto text-base leading-relaxed mt-4">
+              Directo del historial de releases del repo — siempre al día.
+            </p>
           </motion.div>
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-            {whatsNew.map((n, i) => (
-              <motion.div
-                key={n.title}
-                initial={{ opacity: 0, y: 30 }}
-                whileInView={{ opacity: 1, y: 0 }}
-                viewport={{ once: true, margin: '-60px' }}
-                transition={{ duration: 0.5, delay: i * 0.08 }}
-                className="card-glow rounded-2xl p-6"
-              >
-                <div className="w-10 h-10 rounded-xl bg-violet-500/12 border border-violet-500/22 flex items-center justify-center mb-4">
-                  <n.Icon className="w-4 h-4 text-violet-300" />
-                </div>
-                <h3 className="text-white text-[14px] font-normal mb-2">{n.title}</h3>
-                <p className="text-white/40 text-[12.5px] leading-relaxed">{n.desc}</p>
-              </motion.div>
-            ))}
-          </div>
+
+          {releases === null ? (
+            <div className="text-center text-white/25 text-sm">Cargando versiones…</div>
+          ) : releases.length === 0 ? (
+            <div className="text-center text-white/25 text-sm">
+              No se pudo cargar el historial ahora — <a
+                href={`https://github.com/${REPO}/releases`}
+                target="_blank" rel="noopener noreferrer"
+                className="text-violet-300 underline underline-offset-2"
+              >verlo en GitHub</a>.
+            </div>
+          ) : (
+            <div className="flex flex-col gap-5">
+              {releases.map((r, i) => (
+                <motion.div
+                  key={r.tag}
+                  initial={{ opacity: 0, y: 30 }}
+                  whileInView={{ opacity: 1, y: 0 }}
+                  viewport={{ once: true, margin: '-60px' }}
+                  transition={{ duration: 0.5, delay: i * 0.1 }}
+                  className="card-glow rounded-2xl p-7"
+                >
+                  <div className="flex flex-wrap items-center gap-3 mb-1">
+                    <span className="text-white text-lg font-normal">{r.tag}</span>
+                    {i === 0 && (
+                      <span className="text-[10px] px-2.5 py-1 rounded-full bg-violet-500/12 border border-violet-500/25 text-violet-300">
+                        Más reciente
+                      </span>
+                    )}
+                    <span className="text-white/25 text-xs ml-auto">{formatDate(r.publishedAt)}</span>
+                  </div>
+
+                  <div className="mt-4 mb-5">
+                    <Changelog body={r.body} />
+                  </div>
+
+                  <div className="flex flex-wrap gap-2.5">
+                    {(['windows', 'linux', 'android'] as const).map((key) => {
+                      const asset = r[key];
+                      if (!asset) return null;
+                      const meta = platformMeta[key];
+                      return (
+                        <a
+                          key={key}
+                          href={asset.browser_download_url}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="flex items-center gap-2 px-3.5 py-2 rounded-xl text-xs transition-all btn-glow [&>svg]:w-4 [&>svg]:h-4"
+                          style={{ background: `${meta.color}12`, border: `1px solid ${meta.color}30`, color: meta.color }}
+                        >
+                          <meta.Icon />
+                          {meta.label}
+                          {asset.size ? ` · ${formatSize(asset.size)}` : ''}
+                        </a>
+                      );
+                    })}
+                    <a
+                      href={r.htmlUrl}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="flex items-center gap-1.5 px-3.5 py-2 rounded-xl text-xs text-white/35 hover:text-white/60 border border-white/10 transition-colors"
+                    >
+                      Ver en GitHub <ArrowUpRight className="w-3 h-3" />
+                    </a>
+                  </div>
+                </motion.div>
+              ))}
+            </div>
+          )}
         </div>
       </section>
 
