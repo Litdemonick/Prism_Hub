@@ -12,7 +12,7 @@ export default function BottomRightCorner() {
       transition={{ duration: 0.8, delay: 0.4 }}
       // Oculto hasta sm: en celular chico se superponía con los botones de
       // "Instalar" del hero — es un atajo decorativo a Docs, ya está en el navbar.
-      className="hidden sm:flex absolute bottom-0 right-0 p-3 pt-5 pl-8 sm:p-4 sm:pt-6 sm:pl-10 md:p-6 md:pt-8 md:pl-14 bg-[#08080f] rounded-tl-[1.5rem] sm:rounded-tl-[2rem] md:rounded-tl-[3.5rem] items-center gap-3 sm:gap-4 md:gap-6 border-t border-l border-white/5"
+      className="hidden sm:flex landscape:hidden absolute bottom-0 right-0 p-3 pt-5 pl-8 sm:p-4 sm:pt-6 sm:pl-10 md:p-6 md:pt-8 md:pl-14 bg-[#08080f] rounded-tl-[1.5rem] sm:rounded-tl-[2rem] md:rounded-tl-[3.5rem] items-center gap-3 sm:gap-4 md:gap-6 border-t border-l border-white/5"
     >
       <div className="absolute -top-[1.5rem] sm:-top-[2rem] md:-top-[3.5rem] right-0 w-[1.5rem] sm:w-[2rem] md:w-[3.5rem] h-[1.5rem] sm:h-[2rem] md:h-[3.5rem] pointer-events-none">
         <svg width="100%" height="100%" viewBox="0 0 56 56" fill="none" xmlns="http://www.w3.org/2000/svg">
