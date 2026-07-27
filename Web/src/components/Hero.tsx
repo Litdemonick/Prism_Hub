@@ -9,10 +9,10 @@ import PrismBg from './PrismBg';
 
 export default function Hero() {
   return (
-    <div className="w-full h-screen flex items-center justify-center p-3 md:p-5 bg-[#08080f]">
-      <section className="relative w-full max-w-[1536px] h-full rounded-[1.5rem] md:rounded-[3rem] overflow-hidden flex flex-col items-center">
+    <div className="w-full h-screen landscape:h-auto flex items-center justify-center p-3 md:p-5 bg-[#08080f]">
+      <section className="relative w-full max-w-[1536px] h-full landscape:h-auto rounded-[1.5rem] md:rounded-[3rem] overflow-hidden landscape:overflow-visible flex flex-col items-center">
         <PrismBg />
-        <div className="relative z-10 w-full h-full flex flex-col items-center">
+        <div className="relative z-10 w-full h-full landscape:h-auto flex flex-col items-center">
           <Navbar />
           <div className="relative z-10 w-full flex flex-col items-center pt-8 landscape:pt-2 px-6 text-center max-w-4xl">
             <HeroBadge />
@@ -43,7 +43,7 @@ export default function Hero() {
               rel="noopener noreferrer"
               whileHover={{ scale: 1.03 }}
               whileTap={{ scale: 0.97 }}
-              className="inline-flex items-center gap-2 px-5 py-2.5 landscape:px-4 landscape:py-2 rounded-xl border border-emerald-500/30 bg-emerald-500/8 text-emerald-400/80 hover:text-emerald-300 hover:border-emerald-400/50 hover:bg-emerald-500/15 transition-all mt-5 landscape:mt-2 text-[13px] landscape:text-[12px] font-normal"
+              className="inline-flex items-center gap-2.5 px-6 py-3 landscape:px-5 landscape:py-2.5 rounded-xl border border-emerald-500/30 bg-emerald-500/8 text-emerald-400/80 hover:text-emerald-300 hover:border-emerald-400/50 hover:bg-emerald-500/15 transition-all mt-6 landscape:mt-4 mb-2 text-[14px] landscape:text-[13px] font-normal"
             >
               <svg viewBox="0 0 512 512" className="w-4 h-4 landscape:w-3.5 landscape:h-3.5" fill="currentColor">
                 <path d="M256 48C141.1 48 48 141.1 48 256s93.1 208 208 208 208-93.1 208-208S370.9 48 256 48zm128 256h-80v80h-96v-80h-80v-96h80v-80h96v80h80v96z"/>
@@ -67,7 +67,7 @@ export default function Hero() {
             // Oculto en pantallas muy bajas (celular en horizontal, etc.) —
             // ahí el contenido del hero ya ocupa casi todo el alto y esto
             // se superponía con los botones de descarga.
-            className="hidden sm:flex absolute bottom-8 left-1/2 -translate-x-1/2 z-20 flex-col items-center gap-1.5 pointer-events-none"
+            className="hidden sm:flex landscape:hidden absolute bottom-8 left-1/2 -translate-x-1/2 z-20 flex-col items-center gap-1.5 pointer-events-none"
           >
             <span className="text-white/45 text-xs font-normal tracking-[0.2em] uppercase">Desliza</span>
             <motion.div
