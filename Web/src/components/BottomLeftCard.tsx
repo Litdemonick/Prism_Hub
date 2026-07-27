@@ -12,8 +12,8 @@ export default function BottomLeftCard() {
 
   useEffect(() => {
     fetch('https://api.github.com/repos/Litdemonick/Prism_Hub')
-      .then(r => r.json())
-      .then(d => setStars(d.stargazers_count))
+      .then(r => (r.ok ? r.json() : Promise.reject(r.status)))
+      .then(d => setStars(d.stargazers_count ?? null))
       .catch(() => setStars(null));
   }, []);
 
@@ -31,7 +31,7 @@ export default function BottomLeftCard() {
       <div className="flex items-center justify-between">
         <div className="flex flex-col">
           <span className="text-2xl md:text-3xl font-normal prism-text tracking-tight">
-            {stars !== null ? formatCount(stars) : '—'}
+            {stars ? formatCount(stars) : '—'}
           </span>
           <span className="text-[10px] md:text-[12px] font-normal text-violet-300/70 tracking-wider">GitHub Stars</span>
         </div>
