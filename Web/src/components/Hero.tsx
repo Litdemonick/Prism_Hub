@@ -10,7 +10,7 @@ import PrismBg from './PrismBg';
 export default function Hero() {
   return (
     <div className="w-full h-screen flex items-center justify-center p-3 md:p-5 bg-[#08080f]">
-      <section className="relative w-full max-w-[1536px] h-full rounded-[1.5rem] md:rounded-[3rem] overflow-hidden landscape:overflow-y-auto flex flex-col items-center">
+      <section className="relative w-full max-w-[1536px] h-full rounded-[1.5rem] md:rounded-[3rem] overflow-hidden flex flex-col items-center">
         <PrismBg />
         <div className="relative z-10 w-full h-full flex flex-col items-center">
           <Navbar />
@@ -41,7 +41,7 @@ export default function Hero() {
               href="https://github.com/Litdemonick/prism-plus"
               target="_blank"
               rel="noopener noreferrer"
-              className="inline-flex items-center gap-1.5 text-[11px] text-emerald-400/50 hover:text-emerald-400/80 transition-colors mt-4"
+              className="inline-flex items-center gap-1.5 text-[11px] text-emerald-400/50 hover:text-emerald-400/80 transition-colors mt-4 landscape:mt-2"
             >
               <svg viewBox="0 0 512 512" className="w-3 h-3" fill="currentColor">
                 <path d="M256 48C141.1 48 48 141.1 48 256s93.1 208 208 208 208-93.1 208-208S370.9 48 256 48zm128 256h-80v80h-96v-80h-80v-96h80v-80h96v80h80v96z"/>
