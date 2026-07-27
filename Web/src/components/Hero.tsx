@@ -10,17 +10,17 @@ import PrismBg from './PrismBg';
 export default function Hero() {
   return (
     <div className="w-full h-screen flex items-center justify-center p-3 md:p-5 bg-[#08080f]">
-      <section className="relative w-full max-w-[1536px] h-full rounded-[1.5rem] md:rounded-[3rem] overflow-hidden flex flex-col items-center">
+      <section className="relative w-full max-w-[1536px] h-full rounded-[1.5rem] md:rounded-[3rem] overflow-hidden landscape:overflow-y-auto flex flex-col items-center">
         <PrismBg />
         <div className="relative z-10 w-full h-full flex flex-col items-center">
           <Navbar />
-          <div className="relative z-10 w-full flex flex-col items-center pt-8 px-6 text-center max-w-4xl">
+          <div className="relative z-10 w-full flex flex-col items-center pt-8 landscape:pt-2 px-6 text-center max-w-4xl">
             <HeroBadge />
             <motion.h1
               initial={{ opacity: 0, scale: 0.97 }}
               animate={{ opacity: 1, scale: 1 }}
               transition={{ duration: 0.8, delay: 0.2 }}
-              className="text-5xl sm:text-6xl md:text-7xl lg:text-[88px] font-normal text-white mb-3 tracking-tight leading-[1.05]"
+              className="text-5xl sm:text-6xl md:text-7xl lg:text-[88px] landscape:text-3xl font-normal text-white mb-3 landscape:mb-1 tracking-tight leading-[1.05]"
             >
               Prism<span className="prism-text">Hub</span>
             </motion.h1>
