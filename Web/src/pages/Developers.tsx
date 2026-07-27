@@ -11,9 +11,9 @@ const extensionTypes = [
 
 const contribute = [
   { icon: Bug,           title: 'Reportar bugs',         desc: 'Abre un issue en GitHub con pasos para reproducir el problema.', href: 'https://github.com/Litdemonick/Prism_Hub/issues' },
-  { icon: Puzzle,        title: 'Crear extensiones',     desc: 'Implementa latest(), search(), detail() y watch() para un nuevo sitio.', href: 'https://github.com/Litdemonick/prism-plus' },
-  { icon: GitPullRequest,title: 'Pull Requests',         desc: 'Mejoras de rendimiento, nuevas features o traducciones son bienvenidas.', href: 'https://github.com/Litdemonick/Prism_Hub/pulls' },
-  { icon: Code2,         title: 'Escribir extensiones',  desc: 'Publica tus extensiones en el repo prism+ oficial o en tu propio repo.', href: 'https://github.com/Litdemonick/prism-plus' },
+  { icon: Puzzle,        title: 'Crear extensiones',     desc: 'Implementa latest(), search(), detail() y watch() para un nuevo sitio — se instala/actualiza desde su propia URL, sin depender del repo oficial.', href: 'https://github.com/Litdemonick/prism-plus' },
+  { icon: GitPullRequest,title: 'Pull Requests',         desc: 'Mejoras de rendimiento, nuevas features o traducciones al código de la app son bienvenidas.', href: 'https://github.com/Litdemonick/Prism_Hub/pulls' },
+  { icon: Code2,         title: 'Ver el código real',    desc: 'El repo prism+ es el catálogo oficial que usa la app — mirá el código fuente de sus extensiones ahí.', href: 'https://github.com/Litdemonick/prism-plus' },
 ];
 
 export default function Developers() {
@@ -52,9 +52,15 @@ export default class extends Extension {
     return [{ title: '...', url: '...', cover: '...' }];
   }
 
-  async search(kw, page) {
+  async search(kw, page, filter) {
+    // filter: valores elegidos en createFilter() de abajo (género, orden, etc.)
     const html = await this.request(\`/buscar/\${encodeURIComponent(kw)}?p=\${page}\`);
     return [{ title: '...', url: '...', cover: '...' }];
+  }
+
+  async createFilter() {
+    // Opcional — arma los selectores que ve el usuario antes de buscar
+    return { genero: { title: 'Género', options: { '': 'Todos', accion: 'Acción' }, default: '', min: 1, max: 1 } };
   }
 
   async detail(url) {

@@ -113,13 +113,12 @@ jobs:
           body: |
             ## PrismHub — anime, manga y series, sin límites
 
-            App multiplataforma (Windows · Linux · Android) para ver anime, leer manga y acceder a series/películas mediante un sistema de **extensiones JavaScript**: cada fuente de contenido es un script que se instala sin tocar la app ni esperar una actualización.
+            App multiplataforma (Windows · Linux · Android) para ver anime, leer manga y acceder a series/películas mediante un sistema de **extensiones JavaScript**: cada fuente de contenido es un script que se instala o actualiza por separado, sin depender de una actualización de la app.
 
             ### Qué incluye
             - **Reproductor con failover automático**: si un servidor falla, cambia solo al siguiente sin cortar la reproducción.
-            - **Historial y favoritos** unificados, con progreso por episodio guardado localmente.
-            - **Tracking con AniList**: vinculá tu cuenta y se actualiza tu lista mientras reproducís.
-            - **DLNA / Cast a TV** para pantalla grande sin cables.
+            - **Lector de manga** con modo paginado y modo cascada (scroll vertical tipo webtoon).
+            - **Historial y favoritos** unificados, con progreso por episodio/capítulo guardado localmente.
             - **Auto-actualización en Windows y Linux**: la app se avisa sola de nuevas versiones y se actualiza desde Ajustes, sin volver a descargar el instalador a mano.
             - Repositorio oficial de extensiones **prism+** preinstalado (en crecimiento).
 

@@ -1,6 +1,6 @@
 import { motion, AnimatePresence } from 'motion/react';
 import {
-  Puzzle, Zap, BookOpen, Star, Tv2, Layers,
+  Puzzle, Zap, BookOpen, Layers, ScrollText,
   Shield, Code2, ArrowUpRight, Terminal,
   Sparkles, Monitor, Smartphone,
 } from 'lucide-react';
@@ -44,7 +44,7 @@ const baseStats = [
 const features = [
   {
     Icon: Puzzle, title: 'Extensiones JavaScript',
-    desc: 'Cualquier fuente de contenido como archivo .js. Sin modificar la app, sin esperar actualizaciones.',
+    desc: 'Cualquier fuente de contenido como archivo .js — instalar una nueva no requiere actualizar la app. Cada extensión se actualiza por separado cuando su fuente cambia.',
     bg: 'rgba(124,58,237,0.12)', border: 'rgba(124,58,237,0.28)',
   },
   {
@@ -58,14 +58,9 @@ const features = [
     bg: 'rgba(6,182,212,0.10)', border: 'rgba(6,182,212,0.24)',
   },
   {
-    Icon: Star, title: 'AniList integrado',
-    desc: 'Vincula tu cuenta y PrismHub actualiza tu lista automáticamente mientras reproduces.',
+    Icon: ScrollText, title: 'Lector de manga',
+    desc: 'Modo paginado o modo cascada (scroll continuo tipo webtoon) — elegís cómo leer cada serie.',
     bg: 'rgba(124,58,237,0.12)', border: 'rgba(124,58,237,0.28)',
-  },
-  {
-    Icon: Tv2, title: 'DLNA / Cast a TV',
-    desc: 'Transmite directamente a tu televisor DLNA. Pantalla grande sin cables ni configuración extra.',
-    bg: 'rgba(79,70,229,0.12)', border: 'rgba(79,70,229,0.28)',
   },
   {
     Icon: Layers, title: 'Multiplataforma nativo',
@@ -296,6 +291,111 @@ export default function Home() {
         </div>
       </motion.section>
 
+      {/* ───── SCREENSHOTS (arriba de todo, junto con instalación — la
+          prueba visual antes de pedir que instalen) ───── */}
+      <section className="relative py-24 px-6">
+        <div className="absolute inset-0 bg-gradient-to-b from-transparent via-cyan-950/6 to-transparent pointer-events-none" />
+        <div className="max-w-7xl mx-auto">
+          <motion.div {...fadeUp()} className="text-center mb-10">
+            <span className="section-badge">▣  Capturas</span>
+            <h2 className="text-3xl md:text-4xl font-light text-white leading-tight mt-5 mb-5">
+              Así se ve <span className="prism-text">PrismHub</span>
+            </h2>
+            <p className="text-white/40 max-w-md mx-auto text-base leading-relaxed">
+              La misma app, nativa en escritorio y en tu celular — tocá una captura para verla en grande.
+            </p>
+          </motion.div>
+
+          <motion.div {...fadeUp(0.1)} className="flex items-center justify-center gap-2 mb-10">
+            {(['desktop', 'mobile'] as const).map((v) => (
+              <button
+                key={v}
+                onClick={() => setShotView(v)}
+                className={`flex items-center gap-2 px-5 py-2.5 rounded-full text-sm transition-all ${
+                  shotView === v
+                    ? 'bg-violet-500/15 border border-violet-500/40 text-white'
+                    : 'border border-white/10 text-white/40 hover:text-white/70'
+                }`}
+              >
+                {v === 'desktop' ? <Monitor className="w-4 h-4" /> : <Smartphone className="w-4 h-4" />}
+                {v === 'desktop' ? 'Escritorio' : 'Celular'}
+              </button>
+            ))}
+          </motion.div>
+
+          <AnimatePresence mode="wait">
+            {shotView === 'desktop' ? (
+              <motion.div
+                key="desktop"
+                initial={{ opacity: 0, y: 12 }}
+                animate={{ opacity: 1, y: 0 }}
+                exit={{ opacity: 0, y: -12 }}
+                transition={{ duration: 0.35 }}
+                className="grid grid-cols-1 lg:grid-cols-3 gap-6"
+              >
+                {screenshots.desktop.map((s) => (
+                  <button
+                    key={s.src}
+                    onClick={() => setLightbox(s)}
+                    className="card-glow rounded-2xl overflow-hidden group cursor-zoom-in text-left"
+                  >
+                    <img src={s.src} alt={s.alt} loading="lazy" className="w-full h-auto block transition-transform duration-300 group-hover:scale-[1.03]" />
+                  </button>
+                ))}
+              </motion.div>
+            ) : (
+              <motion.div
+                key="mobile"
+                initial={{ opacity: 0, y: 12 }}
+                animate={{ opacity: 1, y: 0 }}
+                exit={{ opacity: 0, y: -12 }}
+                transition={{ duration: 0.35 }}
+                className="flex flex-wrap items-start justify-center gap-8"
+              >
+                {screenshots.mobile.map((s) => (
+                  <button
+                    key={s.src}
+                    onClick={() => setLightbox(s)}
+                    className="card-glow rounded-[2rem] overflow-hidden group cursor-zoom-in w-full max-w-[340px] border-4 border-white/10"
+                  >
+                    <img src={s.src} alt={s.alt} loading="lazy" className="w-full h-auto block transition-transform duration-300 group-hover:scale-[1.03]" />
+                  </button>
+                ))}
+              </motion.div>
+            )}
+          </AnimatePresence>
+        </div>
+
+        {/* Lightbox — click afuera o en la X para cerrar */}
+        <AnimatePresence>
+          {lightbox && (
+            <motion.div
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              onClick={() => setLightbox(null)}
+              className="fixed inset-0 z-50 bg-black/85 backdrop-blur-sm flex items-center justify-center p-6 cursor-zoom-out"
+            >
+              <motion.img
+                initial={{ scale: 0.95, opacity: 0 }}
+                animate={{ scale: 1, opacity: 1 }}
+                exit={{ scale: 0.95, opacity: 0 }}
+                src={lightbox.src}
+                alt={lightbox.alt}
+                onClick={(e) => e.stopPropagation()}
+                className="max-w-full max-h-full rounded-xl border border-white/10 object-contain"
+              />
+              <button
+                onClick={() => setLightbox(null)}
+                className="absolute top-5 right-5 w-10 h-10 rounded-full bg-white/10 hover:bg-white/20 flex items-center justify-center text-white transition-colors"
+              >
+                ✕
+              </button>
+            </motion.div>
+          )}
+        </AnimatePresence>
+      </section>
+
       {/* ───── PLATFORMS (instalación arriba de todo — antes quedaba
           enterrada más abajo de la página y nadie llegaba a verla) ───── */}
       <section className="relative py-32 px-6">
@@ -509,110 +609,6 @@ export default function Home() {
         </div>
       </section>
 
-      {/* ───── SCREENSHOTS ───── */}
-      <section className="relative py-24 px-6">
-        <div className="absolute inset-0 bg-gradient-to-b from-transparent via-cyan-950/6 to-transparent pointer-events-none" />
-        <div className="max-w-7xl mx-auto">
-          <motion.div {...fadeUp()} className="text-center mb-10">
-            <span className="section-badge">▣  Capturas</span>
-            <h2 className="text-3xl md:text-4xl font-light text-white leading-tight mt-5 mb-5">
-              Así se ve <span className="prism-text">PrismHub</span>
-            </h2>
-            <p className="text-white/40 max-w-md mx-auto text-base leading-relaxed">
-              La misma app, nativa en escritorio y en tu celular — tocá una captura para verla en grande.
-            </p>
-          </motion.div>
-
-          <motion.div {...fadeUp(0.1)} className="flex items-center justify-center gap-2 mb-10">
-            {(['desktop', 'mobile'] as const).map((v) => (
-              <button
-                key={v}
-                onClick={() => setShotView(v)}
-                className={`flex items-center gap-2 px-5 py-2.5 rounded-full text-sm transition-all ${
-                  shotView === v
-                    ? 'bg-violet-500/15 border border-violet-500/40 text-white'
-                    : 'border border-white/10 text-white/40 hover:text-white/70'
-                }`}
-              >
-                {v === 'desktop' ? <Monitor className="w-4 h-4" /> : <Smartphone className="w-4 h-4" />}
-                {v === 'desktop' ? 'Escritorio' : 'Celular'}
-              </button>
-            ))}
-          </motion.div>
-
-          <AnimatePresence mode="wait">
-            {shotView === 'desktop' ? (
-              <motion.div
-                key="desktop"
-                initial={{ opacity: 0, y: 12 }}
-                animate={{ opacity: 1, y: 0 }}
-                exit={{ opacity: 0, y: -12 }}
-                transition={{ duration: 0.35 }}
-                className="grid grid-cols-1 lg:grid-cols-3 gap-6"
-              >
-                {screenshots.desktop.map((s) => (
-                  <button
-                    key={s.src}
-                    onClick={() => setLightbox(s)}
-                    className="card-glow rounded-2xl overflow-hidden group cursor-zoom-in text-left"
-                  >
-                    <img src={s.src} alt={s.alt} loading="lazy" className="w-full h-auto block transition-transform duration-300 group-hover:scale-[1.03]" />
-                  </button>
-                ))}
-              </motion.div>
-            ) : (
-              <motion.div
-                key="mobile"
-                initial={{ opacity: 0, y: 12 }}
-                animate={{ opacity: 1, y: 0 }}
-                exit={{ opacity: 0, y: -12 }}
-                transition={{ duration: 0.35 }}
-                className="flex flex-wrap items-start justify-center gap-8"
-              >
-                {screenshots.mobile.map((s) => (
-                  <button
-                    key={s.src}
-                    onClick={() => setLightbox(s)}
-                    className="card-glow rounded-[2rem] overflow-hidden group cursor-zoom-in w-full max-w-[340px] border-4 border-white/10"
-                  >
-                    <img src={s.src} alt={s.alt} loading="lazy" className="w-full h-auto block transition-transform duration-300 group-hover:scale-[1.03]" />
-                  </button>
-                ))}
-              </motion.div>
-            )}
-          </AnimatePresence>
-        </div>
-
-        {/* Lightbox — click afuera o en la X para cerrar */}
-        <AnimatePresence>
-          {lightbox && (
-            <motion.div
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              exit={{ opacity: 0 }}
-              onClick={() => setLightbox(null)}
-              className="fixed inset-0 z-50 bg-black/85 backdrop-blur-sm flex items-center justify-center p-6 cursor-zoom-out"
-            >
-              <motion.img
-                initial={{ scale: 0.95, opacity: 0 }}
-                animate={{ scale: 1, opacity: 1 }}
-                exit={{ scale: 0.95, opacity: 0 }}
-                src={lightbox.src}
-                alt={lightbox.alt}
-                onClick={(e) => e.stopPropagation()}
-                className="max-w-full max-h-full rounded-xl border border-white/10 object-contain"
-              />
-              <button
-                onClick={() => setLightbox(null)}
-                className="absolute top-5 right-5 w-10 h-10 rounded-full bg-white/10 hover:bg-white/20 flex items-center justify-center text-white transition-colors"
-              >
-                ✕
-              </button>
-            </motion.div>
-          )}
-        </AnimatePresence>
-      </section>
-
       {/* ───── FEATURES ───── */}
       <section className="relative py-32 px-6">
         <div className="absolute inset-0 bg-gradient-to-b from-transparent via-violet-950/8 to-transparent pointer-events-none" />
@@ -663,11 +659,11 @@ export default function Home() {
           <motion.div {...fadeUp()} className="text-center mb-20">
             <span className="section-badge">⬡  Extensiones</span>
             <h2 className="text-4xl md:text-5xl lg:text-[58px] font-light text-white leading-tight mt-5 mb-5">
-              Ecosistema abierto<br/>
-              <span className="prism-text">de extensiones JS</span>
+              Motor de<br/>
+              <span className="prism-text">extensiones JS</span>
             </h2>
             <p className="text-white/40 max-w-md mx-auto text-base leading-relaxed">
-              Repositorio oficial listo para usar, o crea las tuyas en minutos con la API estándar.
+              Repositorio oficial prism+ listo para usar — cada fuente corre aislada en su propio sandbox.
             </p>
           </motion.div>
 
@@ -721,9 +717,17 @@ export default function Home() {
                   Extensiones creadas por el equipo PrismHub. Enfocadas en español. Vienen activas por defecto en la app —
                   en crecimiento constante.
                 </p>
-                <div className="code-block px-3 py-2 text-[10px] font-mono text-violet-300/55 break-all">
+                <div className="code-block px-3 py-2 text-[10px] font-mono text-violet-300/55 break-all mb-3">
                   raw.githubusercontent.com/Litdemonick/prism-plus/main/index.json
                 </div>
+                <a
+                  href="https://github.com/Litdemonick/prism-plus"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="flex items-center gap-1 text-violet-400 hover:text-violet-300 text-xs transition-colors w-fit"
+                >
+                  Ver repositorio prism+ <ArrowUpRight className="w-3 h-3" />
+                </a>
               </div>
 
               {/* Dev CTA */}

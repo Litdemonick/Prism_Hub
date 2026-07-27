@@ -30,15 +30,16 @@
 
 ## ¿Qué es PrismHub?
 
-PrismHub es una aplicación de streaming multiplataforma (Windows, Android, Linux) para ver anime, leer manga y acceder a series y películas. No está ligada a ningún sitio web específico — funciona a través de **extensiones JavaScript** que puedes instalar, actualizar o crear tú mismo.
+PrismHub es una aplicación de streaming multiplataforma (Windows, Android, Linux) para ver anime, leer manga y acceder a series y películas. No está ligada a ningún sitio web específico — funciona a través de **extensiones JavaScript** que se instalan o actualizan por separado, sin depender de una actualización de la app.
+
+> Este proyecto arrancó tomando como base y punto de partida la idea de **JiruHub**. Desde ahí se reconstruyó y se convirtió en un desarrollo propio e independiente — repositorio de extensiones propio ([prism+](https://github.com/Litdemonick/prism-plus)), soporte, mejoras y rumbo propios, mantenido activamente por [Litdemonick](https://github.com/Litdemonick).
 
 ### Características
 
-- Sistema de extensiones JS — añade cualquier fuente sin modificar la app
+- Sistema de extensiones JS — instalar una nueva no requiere actualizar la app
 - Multi-servidor con failover automático — si un servidor falla, prueba el siguiente sin salir del episodio
-- Historial de visto, favoritos y seguimiento de progreso por episodio
-- Integración con AniList (seguimiento automático)
-- DLNA / Cast a TV
+- Lector de manga con modo paginado y modo cascada (scroll continuo tipo webtoon)
+- Historial de visto, favoritos y seguimiento de progreso por episodio/capítulo
 - Subtítulos externos
 - Proxy HLS local y cookie jar persistente para contenido protegido
 
@@ -126,7 +127,7 @@ Descarga el `.apk` desde [Releases](https://github.com/Litdemonick/Prism_Hub/rel
 
 ## Extensiones
 
-PrismHub se alimenta de una **única fuente**: [**prism+**](https://github.com/Litdemonick/prism-plus), su motor de extensiones oficial. El repo comunitario ya fue fusionado dentro de prism+, así que todo el catálogo (161 extensiones) vive en un solo sitio.
+PrismHub se alimenta de una **única fuente**: [**prism+**](https://github.com/Litdemonick/prism-plus), su motor de extensiones oficial y exclusivo — catálogo propio, curado y firmado por el mismo mantenedor de PrismHub.
 
 ```
 https://raw.githubusercontent.com/Litdemonick/prism-plus/main/index.json
@@ -134,11 +135,11 @@ https://raw.githubusercontent.com/Litdemonick/prism-plus/main/index.json
 
 ### Cómo funciona
 
-- **10 extensiones nativas vienen pre-instaladas y activas** al primer arranque (TioAnime, AnimeFLV, MonosChinos, Animepahe, MangaDex, MangaBat, Comick, OmegaScans, Jikan, YTS). Se descargan de prism+ — no van empaquetadas en la app, así que siempre están al día.
-- Las **otras ~151 extensiones** de la comunidad están en el catálogo, listas para **instalar cuando quieras** desde **Repositorio de extensiones**.
+- **Solo JKAnime viene pre-instalada y activa** al primer arranque. Se descarga de prism+ — no va empaquetada en la app, así que siempre está al día.
+- El **resto del catálogo oficial** está disponible para **instalar y activar cuando quieras** desde **Repositorio de extensiones**. Algunas incluyen contenido +18 y piden confirmación explícita al activarlas.
+- Una extensión con un bug conocido sin resolver se marca **inestable**: no se puede instalar de nuevo hasta que se arregle, y si ya la tenías instalada, la app pide actualizarla.
 - Cada extensión tiene un **switch para activar/desactivar** sin desinstalarla. Las desactivadas no aparecen en la búsqueda.
-- **Bloqueo de duplicados:** si intentas importar desde fuera una extensión que prism+ ya trae de forma nativa, la app la bloquea con un aviso — la versión nativa tiene prioridad.
-- Si añades una extensión externa propia (URL o archivo `.js`), se guarda en tu sistema y carga normalmente.
+- **Bloqueo de duplicados:** si intentas importar desde fuera una extensión que prism+ ya trae de forma nativa, la app la bloquea con un aviso — la versión oficial tiene prioridad.
 
 ### Añadir / actualizar extensiones
 
@@ -256,6 +257,12 @@ PrismHub se distribuye bajo la licencia **[AGPL-3.0](LICENSE)**.
 - La app es de código abierto y siempre lo será
 
 Copyright © 2026 Soul_Of_The_sun — [github.com/Litdemonick](https://github.com/Litdemonick)
+
+---
+
+## Sobre el desarrollo
+
+Este proyecto se apoya en herramientas de IA como parte del proceso de desarrollo — para ir más rápido, aprender a usarlas en serio y llegar a construir cosas con las que de otra forma hubiera costado mucho más arrancar. Las decisiones de producto, diseño y dirección del proyecto son propias.
 
 ---
 
