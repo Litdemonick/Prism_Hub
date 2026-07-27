@@ -26,7 +26,7 @@ export default function BottomLeftCard() {
       // botones de "Instalar" del hero (ahora más grandes) — en pantallas
       // chicas el espacio vertical no alcanza para todo junto, y esto es
       // decorativo (el link a GitHub ya está en el navbar).
-      className="hidden md:flex absolute md:left-6 md:right-auto md:bottom-6 lg:bottom-10 lg:left-10 p-3 md:p-4 lg:p-5 rounded-[1.2rem] md:rounded-[1.5rem] lg:rounded-[2.2rem] glass-card flex-col gap-2 lg:gap-3 min-w-[180px] md:min-w-[200px] lg:min-w-[220px] w-fit"
+      className="hidden md:flex landscape:hidden absolute md:left-6 md:right-auto md:bottom-6 lg:bottom-10 lg:left-10 p-3 md:p-4 lg:p-5 rounded-[1.2rem] md:rounded-[1.5rem] lg:rounded-[2.2rem] glass-card flex-col gap-2 lg:gap-3 min-w-[180px] md:min-w-[200px] lg:min-w-[220px] w-fit"
     >
       <div className="flex items-center justify-between">
         <div className="flex flex-col">
