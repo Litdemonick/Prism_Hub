@@ -19,6 +19,7 @@ const AndroidIcon = () => (
   </svg>
 );
 
+const APP_VERSION = 'v1.0.1';
 const platforms = [
   { name: 'Windows', icon: WindowsIcon, assetKey: 'windows' as const, color: '#0ea5e9' },
   { name: 'Linux', icon: LinuxIcon, assetKey: 'linux' as const, color: '#f97316' },
@@ -56,7 +57,7 @@ export default function DownloadButtons() {
             <span className="flex items-center gap-2">
               <span className="text-[16px] landscape:text-[14px] font-normal text-white leading-tight whitespace-nowrap">Instalar {p.name}</span>
               <span className="flex items-center gap-1.5">
-                <span className="text-[12px] landscape:text-[11px] text-white/35 font-mono leading-tight">{release?.tag}</span>
+                <span className="text-[12px] landscape:text-[11px] text-white/35 font-mono leading-tight">{release?.tag || APP_VERSION}</span>
                 {isNew && (
                   <span className="text-[10px] font-medium text-amber-300 bg-amber-400/10 border border-amber-400/25 px-1.5 py-0.5 rounded-full leading-none">NUEVO</span>
                 )}
