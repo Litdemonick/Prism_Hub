@@ -34,6 +34,20 @@ export default function Hero() {
               JavaScript para cualquier fuente de contenido.
             </motion.p>
             <DownloadButtons />
+            <motion.a
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              transition={{ duration: 0.6, delay: 1 }}
+              href="https://github.com/Litdemonick/prism-plus"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="inline-flex items-center gap-1.5 text-[11px] text-emerald-400/50 hover:text-emerald-400/80 transition-colors mt-4"
+            >
+              <svg viewBox="0 0 512 512" className="w-3 h-3" fill="currentColor">
+                <path d="M256 48C141.1 48 48 141.1 48 256s93.1 208 208 208 208-93.1 208-208S370.9 48 256 48zm128 256h-80v80h-96v-80h-80v-96h80v-80h96v80h80v96z"/>
+              </svg>
+              <span>Repositorio de extensiones prism+</span>
+            </motion.a>
           </div>
           <BottomLeftCard />
           <BottomRightCorner />
