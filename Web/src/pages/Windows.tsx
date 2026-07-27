@@ -62,12 +62,26 @@ export default function Windows() {
                 </a>
               </p>
 
-              <div className="mt-8 glass-card rounded-2xl px-5 py-4 text-xs text-white/40 leading-relaxed">
-                <span className="text-white/60 font-normal">¿Windows bloquea o borra el instalador?</span>{' '}
-                El .exe todavía no tiene firma digital (certificado de code-signing), así que Windows
-                Defender u otro antivirus puede marcarlo como desconocido y bloquearlo al primer intento —
-                no significa que esté infectado. Revisá Seguridad de Windows → Protección contra virus y
-                amenazas → Historial de protección, y permitilo/restauralo ahí si aparece bloqueado.
+              <div className="mt-8 glass-card rounded-2xl px-5 py-4 text-xs text-white/40 leading-relaxed space-y-3">
+                <div>
+                  <span className="text-white/60 font-normal">¿Windows bloquea el instalador?</span>{' '}
+                  El .exe todavía no tiene firma digital (certificado de code-signing), así que Windows
+                  puede marcarlo como desconocido. Depende de qué te aparece:
+                </div>
+                <div>
+                  <span className="text-white/55 font-normal">"Windows protegió su PC" (SmartScreen)</span>
+                  {' '}— tocá <span className="text-white/60">Más información → Ejecutar de todas formas</span>.
+                  No hace falta cambiar nada más.
+                </div>
+                <div>
+                  <span className="text-white/55 font-normal">
+                    "Una directiva de Control de aplicaciones bloqueó este archivo" (error 4551 / Smart App Control)
+                  </span>
+                  {' '}— este bloqueo NO tiene botón de "ejecutar igual", hay que apagar la función entera:
+                  Configuración → Privacidad y seguridad → Seguridad de Windows → Control de aplicaciones y
+                  del navegador → Control inteligente de aplicaciones → <span className="text-white/60">Desactivado</span>.
+                  Si ahí ya dice "Activado" (no "Evaluación"), Windows no deja volver atrás sin reinstalar el sistema.
+                </div>
               </div>
             </motion.div>
           </div>

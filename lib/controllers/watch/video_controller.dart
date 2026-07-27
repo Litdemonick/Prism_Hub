@@ -1177,7 +1177,7 @@ class VideoPlayerController extends GetxController {
     player.pause();
   }
 
-  // Cambia al servidor on-demand (igual que JiruHub):
+  // Cambia al servidor on-demand:
   //   1. Llama runtime.watch(url) — el wrapper del build maneja 3 casos:
   //        a) URL directa .m3u8/.mp4 → fast-path, devuelve inmediatamente.
   //        b) URL de embed conocido → resolveEmbed on-demand vía SDK.

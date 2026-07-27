@@ -73,6 +73,14 @@ const features = [
   },
 ];
 
+const techStack = [
+  { label: 'Flutter / Dart', desc: 'Un solo código para Windows, Linux y Android nativo' },
+  { label: 'media_kit + libmpv', desc: 'El mismo motor de video que mpv/VLC, con failover automático de servidor' },
+  { label: 'Extensiones JS (QuickJS)', desc: 'Cada fuente corre en un sandbox aislado — instalás/actualizás sin tocar la app' },
+  { label: 'GetX', desc: 'Estado reactivo liviano en toda la app' },
+  { label: 'AGPL-3.0', desc: '100% open source, código abierto para siempre' },
+] as const;
+
 const platformMeta = {
   windows: { Icon: WinIcon, color: '#0ea5e9', label: 'Windows' },
   linux: { Icon: LinuxIcon, color: '#f97316', label: 'Linux' },
@@ -275,6 +283,46 @@ export default function Home() {
           ))}
         </div>
       </motion.section>
+
+      {/* ───── QUÉ ES ───── */}
+      <section className="relative py-24 px-6">
+        <div className="max-w-4xl mx-auto text-center">
+          <motion.div {...fadeUp()}>
+            <span className="section-badge">◆  Qué es</span>
+            <h2 className="text-3xl md:text-4xl font-light text-white leading-tight mt-5 mb-6">
+              Un reproductor y lector,<br/>
+              <span className="prism-text">no un catálogo cerrado</span>
+            </h2>
+            <p className="text-white/45 max-w-2xl mx-auto text-base leading-relaxed">
+              PrismHub no aloja ni distribuye contenido — es la app que lo organiza. Cada fuente
+              (anime, manga, novelas, películas o series) es una <span className="text-white/70">extensión</span> que
+              vos instalás; PrismHub le pone encima un reproductor con failover de servidores,
+              historial, favoritos y tracking, todo guardado localmente en tu equipo.
+            </p>
+          </motion.div>
+
+          <motion.div
+            {...fadeUp(0.15)}
+            className="flex flex-wrap justify-center gap-3 mt-10"
+          >
+            {techStack.map((t) => (
+              <div
+                key={t.label}
+                className="group relative"
+              >
+                <span className="flex items-center px-4 py-2 rounded-full border border-white/10 bg-white/[0.03] text-white/60 text-[13px] cursor-default hover:border-violet-500/30 hover:text-white/85 transition-colors">
+                  {t.label}
+                </span>
+                <div className="pointer-events-none absolute left-1/2 -translate-x-1/2 bottom-full mb-2 w-56 opacity-0 group-hover:opacity-100 transition-opacity z-10">
+                  <div className="card-glow rounded-lg px-3 py-2 text-[11px] text-white/50 leading-relaxed text-center">
+                    {t.desc}
+                  </div>
+                </div>
+              </div>
+            ))}
+          </motion.div>
+        </div>
+      </section>
 
       {/* ───── VERSIONES ───── */}
       <section className="relative py-24 px-6">
