@@ -14,7 +14,7 @@ export default function Hero() {
         <PrismBg />
         <div className="relative z-10 w-full h-full flex flex-col items-center">
           <Navbar />
-          <div className="w-full flex flex-col items-center pt-8 px-6 text-center max-w-4xl">
+          <div className="relative z-10 w-full flex flex-col items-center pt-8 px-6 text-center max-w-4xl">
             <HeroBadge />
             <motion.h1
               initial={{ opacity: 0, scale: 0.97 }}
