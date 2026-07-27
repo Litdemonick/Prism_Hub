@@ -39,6 +39,8 @@ export default function DownloadButtons() {
         const asset = release?.[p.assetKey];
         const downloadHref = asset?.browser_download_url
           ?? `https://github.com/${REPO}/releases/latest`;
+        const isNew = release?.publishedAt
+          && Date.now() - new Date(release.publishedAt).getTime() < 7 * 24 * 60 * 60 * 1000;
         return (
           <motion.a
             key={p.name}
@@ -51,7 +53,15 @@ export default function DownloadButtons() {
             style={{ background: `${p.color}14`, border: `1px solid ${p.color}38`, color: p.color }}
           >
             <p.icon />
-            <span className="text-[15px] font-normal text-white">Instalar {p.name}</span>
+            <span className="flex flex-col items-start gap-px">
+              <span className="text-[15px] font-normal text-white leading-tight">Instalar {p.name}</span>
+              <span className="flex items-center gap-1.5">
+                <span className="text-[11px] text-white/35 font-mono leading-tight">{release?.tag}</span>
+                {isNew && (
+                  <span className="text-[10px] font-medium text-amber-300 bg-amber-400/10 border border-amber-400/25 px-1.5 py-0.5 rounded-full leading-none">NUEVO</span>
+                )}
+              </span>
+            </span>
           </motion.a>
         );
       })}

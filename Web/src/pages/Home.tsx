@@ -445,7 +445,24 @@ export default function Home() {
                     <p.Icon />
                   </div>
                   <div>
-                    <div className="text-white text-lg font-light">{p.name}</div>
+                    <div className="flex items-center gap-2.5">
+                      <span className="text-white text-lg font-light">{p.name}</span>
+                      {(() => {
+                        const rel = releases?.[0];
+                        const isNew = rel?.publishedAt
+                          && Date.now() - new Date(rel.publishedAt).getTime() < 7 * 24 * 60 * 60 * 1000;
+                        return (
+                          <>
+                            {rel?.tag && (
+                              <span className="text-[11px] text-white/25 font-mono leading-none mt-0.5">{rel.tag}</span>
+                            )}
+                            {isNew && (
+                              <span className="text-[9px] font-medium text-amber-300 bg-amber-400/10 border border-amber-400/25 px-1.5 py-0.5 rounded-full leading-none">NUEVO</span>
+                            )}
+                          </>
+                        );
+                      })()}
+                    </div>
                     <div className="text-white/30 text-xs mt-0.5 leading-snug">{p.desc}</div>
                   </div>
                 </div>
