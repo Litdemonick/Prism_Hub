@@ -46,7 +46,7 @@ export default function Footer() {
         <div className="grid grid-cols-2 md:grid-cols-4 gap-10 mb-14">
           <div className="col-span-2 md:col-span-1">
             <div className="flex items-center gap-2.5 mb-3">
-              <img src="/brand/logo.png" alt="PrismHub" className="w-8 h-8 rounded-lg" />
+              <img src={`${import.meta.env.BASE_URL}brand/logo.png`} alt="PrismHub" className="w-8 h-8 rounded-lg" />
               <span className="prism-text text-base font-normal tracking-tight">PrismHub</span>
             </div>
             <p className="text-white/30 text-xs leading-relaxed max-w-[220px]">

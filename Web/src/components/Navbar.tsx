@@ -19,7 +19,7 @@ export default function Navbar() {
   return (
     <nav className="flex items-center justify-between py-6 px-6 md:px-10 w-full relative z-10">
       <Link to="/" className="flex items-center gap-2.5 group">
-        <img src="/brand/logo.png" alt="PrismHub" className="w-8 h-8 rounded-lg" />
+        <img src={`${import.meta.env.BASE_URL}brand/logo.png`} alt="PrismHub" className="w-8 h-8 rounded-lg" />
         <span className="prism-text text-lg font-normal tracking-tight">PrismHub</span>
       </Link>
 

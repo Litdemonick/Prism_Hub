@@ -45,14 +45,19 @@ export default function Hero() {
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             transition={{ duration: 1, delay: 1.4 }}
-            className="absolute bottom-6 left-1/2 -translate-x-1/2 z-20 flex flex-col items-center gap-1 pointer-events-none"
+            // Oculto en pantallas muy bajas (celular en horizontal, etc.) —
+            // ahí el contenido del hero ya ocupa casi todo el alto y esto
+            // se superponía con los botones de descarga.
+            className="hidden sm:flex absolute bottom-8 left-1/2 -translate-x-1/2 z-20 flex-col items-center gap-1.5 pointer-events-none"
           >
-            <span className="text-white/25 text-[10px] tracking-widest uppercase">Desliza</span>
+            <span className="text-white/45 text-xs font-normal tracking-[0.2em] uppercase">Desliza</span>
             <motion.div
-              animate={{ y: [0, 6, 0] }}
+              animate={{ y: [0, 10, 0] }}
               transition={{ duration: 1.6, repeat: Infinity, ease: 'easeInOut' }}
+              className="flex flex-col -space-y-3"
             >
-              <ChevronDown className="w-4 h-4 text-white/25" />
+              <ChevronDown className="w-7 h-7 text-violet-300/70" />
+              <ChevronDown className="w-7 h-7 text-violet-300/35" />
             </motion.div>
           </motion.div>
         </div>

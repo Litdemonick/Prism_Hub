@@ -57,7 +57,12 @@ jobs:
           name: PrismHub-pr-${{ github.event.pull_request.number }}-x86_64.apk
 
   build-and-release-windows:
-    runs-on: windows-latest
+    # Fijado a windows-2022 (no windows-latest): confirmado en vivo que la
+    # imagen nueva de windows-latest trae un MSVC que rompe la compilación
+    # de flutter_inappwebview_windows (usa <experimental/coroutine>, ahora
+    # error duro en vez de warning). release.yml ya estaba fijado así y por
+    # eso no le pasa lo mismo.
+    runs-on: windows-2022
 
     steps:
       - uses: actions/checkout@v4

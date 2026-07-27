@@ -20,9 +20,9 @@ const AndroidIcon = () => (
 );
 
 const platforms = [
-  { name: 'Linux', icon: LinuxIcon, assetKey: 'linux' as const },
-  { name: 'Windows', icon: WindowsIcon, assetKey: 'windows' as const },
-  { name: 'Android', icon: AndroidIcon, assetKey: 'android' as const },
+  { name: 'Windows', icon: WindowsIcon, assetKey: 'windows' as const, color: '#0ea5e9' },
+  { name: 'Linux', icon: LinuxIcon, assetKey: 'linux' as const, color: '#f97316' },
+  { name: 'Android', icon: AndroidIcon, assetKey: 'android' as const, color: '#22c55e' },
 ];
 
 export default function DownloadButtons() {
@@ -33,7 +33,7 @@ export default function DownloadButtons() {
       initial={{ opacity: 0, y: 20 }}
       animate={{ opacity: 1, y: 0 }}
       transition={{ duration: 0.6, delay: 0.6, ease: 'easeOut' }}
-      className="flex items-center gap-3 mt-8 flex-wrap justify-center"
+      className="flex items-stretch gap-3 mt-8 flex-wrap justify-center"
     >
       {platforms.map((p) => {
         const asset = release?.[p.assetKey];
@@ -45,12 +45,13 @@ export default function DownloadButtons() {
             href={downloadHref}
             target="_blank"
             rel="noopener noreferrer"
-            whileHover={{ scale: 1.04 }}
+            whileHover={{ scale: 1.03, y: -2 }}
             whileTap={{ scale: 0.97 }}
-            className="flex items-center gap-2 px-5 py-2.5 rounded-full border border-white/10 bg-white/5 hover:bg-white/10 hover:border-violet-500/30 text-white/80 hover:text-white transition-all backdrop-blur-md btn-glow"
+            className="flex items-center gap-2.5 px-6 py-3.5 rounded-2xl backdrop-blur-md btn-glow transition-all [&>svg]:w-5 [&>svg]:h-5"
+            style={{ background: `${p.color}14`, border: `1px solid ${p.color}38`, color: p.color }}
           >
             <p.icon />
-            <span className="text-[14px] font-normal">{p.name}</span>
+            <span className="text-[15px] font-normal text-white">Instalar {p.name}</span>
           </motion.a>
         );
       })}

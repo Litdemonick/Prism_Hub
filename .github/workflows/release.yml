@@ -105,6 +105,11 @@ jobs:
           token: ${{ secrets.GITHUB_TOKEN }}
           artifacts: "Output/*.exe,PrismHub-${{ github.ref_name }}-windows-x64.zip"
           allowUpdates: true
+          # generateReleaseNotes: agrega el "What's Changed" real (commits
+          # desde el tag anterior) debajo del body fijo — confirmado en vivo
+          # que sin esto, cada release repetía la MISMA descripción genérica
+          # que la anterior, sin decir qué cambió de verdad.
+          generateReleaseNotes: true
           body: |
             ## PrismHub — anime, manga y series, sin límites
 

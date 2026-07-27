@@ -1,7 +1,7 @@
 import { motion, AnimatePresence } from 'motion/react';
 import {
   Puzzle, Zap, BookOpen, Star, Tv2, Layers,
-  Shield, Code2, ArrowUpRight, Download, Terminal,
+  Shield, Code2, ArrowUpRight, Terminal,
   Sparkles, Monitor, Smartphone,
 } from 'lucide-react';
 import { useState, type ReactElement } from 'react';
@@ -9,7 +9,7 @@ import { useNavigate } from 'react-router-dom';
 import Hero from '../components/Hero';
 import Footer from '../components/Footer';
 import {
-  REPO, formatDate, formatSize, useExtensionCount, useLatestRelease, useReleases,
+  REPO, formatDate, formatSize, useExtensionCount, useReleases,
 } from '../lib/githubRelease';
 
 /* ── Platform icons ───────────────────────────────────────── */
@@ -173,17 +173,23 @@ function Changelog({ body }: { body?: string }) {
   return <div>{blocks}</div>;
 }
 
+// Vite solo reescribe rutas que él procesa (imports, index.html) — un string
+// crudo como '/screenshots/x.png' escrito en JSX NO se ajusta al `base` del
+// build, así que en GitHub Pages (servido en /Prism_Hub/, no en la raíz)
+// apuntaba al dominio raíz y las imágenes daban 404 — confirmado en vivo.
+const SHOT_BASE = `${import.meta.env.BASE_URL}screenshots/`;
+
 const screenshots = {
   desktop: [
-    { src: '/screenshots/desktop-home.png', alt: 'Inicio de PrismHub en Windows: continuar viendo, favoritos y catálogo destacado' },
-    { src: '/screenshots/desktop-search.png', alt: 'Búsqueda unificada en PrismHub: resultados de todas tus extensiones agrupados por fuente' },
-    { src: '/screenshots/desktop-extension.png', alt: 'Filtro de género dentro de una extensión (Olympus) en PrismHub' },
+    { src: `${SHOT_BASE}desktop-home.png`, alt: 'Inicio de PrismHub en Windows: continuar viendo, favoritos y catálogo destacado' },
+    { src: `${SHOT_BASE}desktop-search.png`, alt: 'Búsqueda unificada en PrismHub: resultados de todas tus extensiones agrupados por fuente' },
+    { src: `${SHOT_BASE}desktop-extension.png`, alt: 'Filtro de género dentro de una extensión (Olympus) en PrismHub' },
   ],
   mobile: [
-    { src: '/screenshots/mobile-home.jpeg', alt: 'Inicio de PrismHub en Android' },
-    { src: '/screenshots/mobile-search.jpeg', alt: 'Búsqueda de PrismHub en Android, agrupada por extensión' },
+    { src: `${SHOT_BASE}mobile-home.jpeg`, alt: 'Inicio de PrismHub en Android' },
+    { src: `${SHOT_BASE}mobile-search.jpeg`, alt: 'Búsqueda de PrismHub en Android, agrupada por extensión' },
   ],
-} as const;
+};
 
 type Platform = {
   name: string;
@@ -259,17 +265,21 @@ const fadeUp = (delay = 0) => ({
 /* ── Home ────────────────────────────────────────────────── */
 export default function Home() {
   const navigate = useNavigate();
-  const release = useLatestRelease();
   const releases = useReleases(2);
   const extensionCount = useExtensionCount();
   const [shotView, setShotView] = useState<'desktop' | 'mobile'>('desktop');
+  const [lightbox, setLightbox] = useState<{ src: string; alt: string } | null>(null);
   const stats = [
     { value: extensionCount != null ? String(extensionCount) : '4', label: 'Extensiones' },
     ...baseStats,
   ];
 
   return (
-    <div className="bg-[#08080f] overflow-x-hidden">
+    <div className="overflow-x-hidden">
+      {/* Fondo persistente detrás de TODA la página (no solo el hero) —
+          antes cada sección abajo del hero era un negro plano sin ningún
+          brillo, se sentía "cortado" apenas terminaba el hero. */}
+      <div className="page-glow" />
 
       {/* ───── HERO ───── */}
       <Hero />
@@ -300,7 +310,7 @@ export default function Home() {
             >
               <div className="absolute inset-0 rounded-3xl bg-violet-600/30 blur-2xl" />
               <img
-                src="/brand/logo.png"
+                src={`${import.meta.env.BASE_URL}brand/logo.png`}
                 alt="PrismHub"
                 className="relative w-20 h-20 rounded-3xl border border-violet-500/30"
               />
@@ -351,28 +361,10 @@ export default function Home() {
                   </p>
                 </div>
 
-                {/* Button — descarga directa del asset una vez resuelta la
-                    última release; mientras carga (o si falla) cae a la
-                    página de releases, que siempre lista todo. */}
-                {(() => {
-                  const asset = release?.[p.assetKey];
-                  const downloadHref = asset?.browser_download_url
-                    ?? `https://github.com/${REPO}/releases/latest`;
-                  return (
-                    <motion.a
-                      href={downloadHref}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      whileHover={{ scale: 1.02 }}
-                      whileTap={{ scale: 0.97 }}
-                      className="flex items-center justify-center gap-2 w-full py-3 rounded-xl text-sm font-light transition-all duration-300 btn-glow"
-                      style={{ background: `${p.color}12`, border: `1px solid ${p.color}32`, color: p.color }}
-                    >
-                      <Download className="w-4 h-4" />
-                      {asset ? `Descargar${asset.size ? ` (${formatSize(asset.size)})` : ''}` : `Descargar para ${p.name}`}
-                    </motion.a>
-                  );
-                })()}
+                {/* Sin botón de descarga acá a propósito — ya está arriba
+                    en el hero (colorido, lo primero que se ve) y abajo en
+                    Versiones (con el changelog de esa versión puntual).
+                    Repetirlo una tercera vez acá era redundante. */}
                 {p.route && (
                   <button
                     onClick={() => navigate(p.route!)}
@@ -520,14 +512,14 @@ export default function Home() {
       {/* ───── SCREENSHOTS ───── */}
       <section className="relative py-24 px-6">
         <div className="absolute inset-0 bg-gradient-to-b from-transparent via-cyan-950/6 to-transparent pointer-events-none" />
-        <div className="max-w-6xl mx-auto">
+        <div className="max-w-7xl mx-auto">
           <motion.div {...fadeUp()} className="text-center mb-10">
             <span className="section-badge">▣  Capturas</span>
             <h2 className="text-3xl md:text-4xl font-light text-white leading-tight mt-5 mb-5">
               Así se ve <span className="prism-text">PrismHub</span>
             </h2>
             <p className="text-white/40 max-w-md mx-auto text-base leading-relaxed">
-              La misma app, nativa en escritorio y en tu celular.
+              La misma app, nativa en escritorio y en tu celular — tocá una captura para verla en grande.
             </p>
           </motion.div>
 
@@ -556,12 +548,16 @@ export default function Home() {
                 animate={{ opacity: 1, y: 0 }}
                 exit={{ opacity: 0, y: -12 }}
                 transition={{ duration: 0.35 }}
-                className="grid grid-cols-1 md:grid-cols-3 gap-5"
+                className="grid grid-cols-1 lg:grid-cols-3 gap-6"
               >
                 {screenshots.desktop.map((s) => (
-                  <div key={s.src} className="card-glow rounded-2xl overflow-hidden">
-                    <img src={s.src} alt={s.alt} loading="lazy" className="w-full h-auto block" />
-                  </div>
+                  <button
+                    key={s.src}
+                    onClick={() => setLightbox(s)}
+                    className="card-glow rounded-2xl overflow-hidden group cursor-zoom-in text-left"
+                  >
+                    <img src={s.src} alt={s.alt} loading="lazy" className="w-full h-auto block transition-transform duration-300 group-hover:scale-[1.03]" />
+                  </button>
                 ))}
               </motion.div>
             ) : (
@@ -571,20 +567,50 @@ export default function Home() {
                 animate={{ opacity: 1, y: 0 }}
                 exit={{ opacity: 0, y: -12 }}
                 transition={{ duration: 0.35 }}
-                className="flex flex-wrap items-start justify-center gap-6"
+                className="flex flex-wrap items-start justify-center gap-8"
               >
                 {screenshots.mobile.map((s) => (
-                  <div
+                  <button
                     key={s.src}
-                    className="card-glow rounded-[2rem] overflow-hidden w-full max-w-[280px] border-4 border-white/10"
+                    onClick={() => setLightbox(s)}
+                    className="card-glow rounded-[2rem] overflow-hidden group cursor-zoom-in w-full max-w-[340px] border-4 border-white/10"
                   >
-                    <img src={s.src} alt={s.alt} loading="lazy" className="w-full h-auto block" />
-                  </div>
+                    <img src={s.src} alt={s.alt} loading="lazy" className="w-full h-auto block transition-transform duration-300 group-hover:scale-[1.03]" />
+                  </button>
                 ))}
               </motion.div>
             )}
           </AnimatePresence>
         </div>
+
+        {/* Lightbox — click afuera o en la X para cerrar */}
+        <AnimatePresence>
+          {lightbox && (
+            <motion.div
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              onClick={() => setLightbox(null)}
+              className="fixed inset-0 z-50 bg-black/85 backdrop-blur-sm flex items-center justify-center p-6 cursor-zoom-out"
+            >
+              <motion.img
+                initial={{ scale: 0.95, opacity: 0 }}
+                animate={{ scale: 1, opacity: 1 }}
+                exit={{ scale: 0.95, opacity: 0 }}
+                src={lightbox.src}
+                alt={lightbox.alt}
+                onClick={(e) => e.stopPropagation()}
+                className="max-w-full max-h-full rounded-xl border border-white/10 object-contain"
+              />
+              <button
+                onClick={() => setLightbox(null)}
+                className="absolute top-5 right-5 w-10 h-10 rounded-full bg-white/10 hover:bg-white/20 flex items-center justify-center text-white transition-colors"
+              >
+                ✕
+              </button>
+            </motion.div>
+          )}
+        </AnimatePresence>
       </section>
 
       {/* ───── FEATURES ───── */}
