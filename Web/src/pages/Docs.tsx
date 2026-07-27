@@ -7,7 +7,7 @@ const sections = [
     title: '1. ¿Qué es PrismHub?',
     content: (
       <div className="space-y-3">
-        <p>PrismHub es una aplicación multiplataforma de streaming para anime, manga y series. Su arquitectura se basa en <span className="text-violet-400">extensiones JavaScript</span> que permiten añadir cualquier fuente de contenido sin modificar la app.</p>
+        <p>PrismHub es una aplicación multiplataforma de streaming y lectura para anime, manga, novelas, series y películas. Su arquitectura se basa en <span className="text-violet-400">extensiones JavaScript</span> que permiten añadir cualquier fuente de contenido sin modificar la app.</p>
         <p>Es open source bajo <span className="text-violet-400">AGPL-3.0</span>, mantenido activamente con mejoras continuas.</p>
         <a href="https://github.com/Litdemonick/Prism_Hub" target="_blank" rel="noopener noreferrer" className="text-violet-400 underline hover:text-violet-300 transition-colors inline-block">Repositorio en GitHub →</a>
       </div>

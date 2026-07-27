@@ -1,6 +1,7 @@
 import { HashRouter, Routes, Route } from 'react-router-dom';
 import Home from './pages/Home';
 import Linux from './pages/Linux';
+import Android from './pages/Android';
 import Faq from './pages/Faq';
 import Windows from './pages/Windows';
 import Docs from './pages/Docs';
@@ -14,6 +15,7 @@ function App() {
         <Routes>
           <Route path="/" element={<Home />} />
           <Route path="/linux" element={<Linux />} />
+          <Route path="/android" element={<Android />} />
           <Route path="/faq" element={<Faq />} />
           <Route path="/windows" element={<Windows />} />
           <Route path="/docs" element={<Docs />} />

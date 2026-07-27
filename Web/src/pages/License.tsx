@@ -28,7 +28,7 @@ export default function License() {
               <div className="mt-4 glass-card rounded-2xl px-5 py-4 text-left">
                 <p className="text-violet-400 text-sm font-normal mb-1">PrismHub</p>
                 <p className="text-white/50 text-xs leading-relaxed">
-                  Aplicación multiplataforma open source para anime, manga y series.<br />
+                  Aplicación multiplataforma open source para anime, manga, novelas, series y películas.<br />
                   Copyright © 2026 Soul_Of_The_sun (<a href="https://github.com/Litdemonick" target="_blank" rel="noopener noreferrer" className="text-violet-400 hover:text-violet-300 underline">github.com/Litdemonick</a>)
                 </p>
                 <p className="text-white/30 text-xs mt-3 leading-relaxed">

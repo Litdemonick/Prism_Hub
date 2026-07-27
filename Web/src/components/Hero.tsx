@@ -1,4 +1,5 @@
 import { motion } from 'motion/react';
+import { ChevronDown } from 'lucide-react';
 import Navbar from './Navbar';
 import HeroBadge from './HeroBadge';
 import BottomLeftCard from './BottomLeftCard';
@@ -29,13 +30,31 @@ export default function Hero() {
               transition={{ duration: 0.8, delay: 0.4 }}
               className="text-sm sm:text-base md:text-lg text-white/50 leading-relaxed max-w-xl font-normal"
             >
-              Anime, manga y series — sin límites. Sistema de extensiones
+              Anime, manga, novelas, series y películas — sin límites. Sistema de extensiones
               JavaScript para cualquier fuente de contenido.
             </motion.p>
             <DownloadButtons />
           </div>
           <BottomLeftCard />
           <BottomRightCorner />
+
+          {/* Indicador de scroll — el hero ocupa el 100vh completo, sin esto
+              parecía que la página terminaba ahí y no había nada más abajo
+              (confirmado en vivo). */}
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            transition={{ duration: 1, delay: 1.4 }}
+            className="absolute bottom-6 left-1/2 -translate-x-1/2 z-20 flex flex-col items-center gap-1 pointer-events-none"
+          >
+            <span className="text-white/25 text-[10px] tracking-widest uppercase">Desliza</span>
+            <motion.div
+              animate={{ y: [0, 6, 0] }}
+              transition={{ duration: 1.6, repeat: Infinity, ease: 'easeInOut' }}
+            >
+              <ChevronDown className="w-4 h-4 text-white/25" />
+            </motion.div>
+          </motion.div>
         </div>
       </section>
     </div>

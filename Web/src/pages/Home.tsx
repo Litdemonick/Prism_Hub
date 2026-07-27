@@ -7,6 +7,7 @@ import {
 import { useState, type ReactElement } from 'react';
 import { useNavigate } from 'react-router-dom';
 import Hero from '../components/Hero';
+import Footer from '../components/Footer';
 import {
   REPO, formatDate, formatSize, useExtensionCount, useLatestRelease, useReleases,
 } from '../lib/githubRelease';
@@ -217,6 +218,7 @@ const platforms: Platform[] = [
     shell: 'APK directo',
     command: 'Descarga el APK firmado e instálalo (activa "Fuentes desconocidas").',
     desc: 'APK firmado. Android 5.0+. Activa "Fuentes desconocidas".',
+    route: '/android',
     assetKey: 'android',
   },
 ];
@@ -283,6 +285,110 @@ export default function Home() {
           ))}
         </div>
       </motion.section>
+
+      {/* ───── PLATFORMS (instalación arriba de todo — antes quedaba
+          enterrada más abajo de la página y nadie llegaba a verla) ───── */}
+      <section className="relative py-32 px-6">
+        <div className="max-w-6xl mx-auto">
+          <motion.div {...fadeUp()} className="text-center mb-20">
+            <motion.div
+              initial={{ opacity: 0, scale: 0.85 }}
+              whileInView={{ opacity: 1, scale: 1 }}
+              viewport={{ once: true }}
+              transition={{ duration: 0.6 }}
+              className="relative w-20 h-20 mx-auto mb-6"
+            >
+              <div className="absolute inset-0 rounded-3xl bg-violet-600/30 blur-2xl" />
+              <img
+                src="/brand/logo.png"
+                alt="PrismHub"
+                className="relative w-20 h-20 rounded-3xl border border-violet-500/30"
+              />
+            </motion.div>
+            <span className="section-badge">↓  Instalación</span>
+            <h2 className="text-4xl md:text-5xl lg:text-[58px] font-light text-white leading-tight mt-5 mb-5">
+              Un solo comando<br/>
+              <span className="prism-text">en todas las plataformas</span>
+            </h2>
+            <p className="text-white/40 max-w-md mx-auto text-base leading-relaxed">
+              Scripts de instalación automáticos para Windows y Linux. APK directo para Android.
+            </p>
+          </motion.div>
+
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-5">
+            {platforms.map((p, i) => (
+              <motion.div
+                key={p.name}
+                initial={{ opacity: 0, y: 40 }}
+                whileInView={{ opacity: 1, y: 0 }}
+                viewport={{ once: true, margin: '-60px' }}
+                transition={{ duration: 0.6, delay: i * 0.12 }}
+                whileHover={{ y: -8, transition: { duration: 0.25 } }}
+                className="card-glow rounded-3xl p-7 flex flex-col gap-5"
+              >
+                {/* Header */}
+                <div className="flex items-center gap-4">
+                  <div
+                    className="w-14 h-14 rounded-2xl flex items-center justify-center shrink-0"
+                    style={{ background: `${p.color}18`, border: `1px solid ${p.color}35` }}
+                  >
+                    <p.Icon />
+                  </div>
+                  <div>
+                    <div className="text-white text-lg font-light">{p.name}</div>
+                    <div className="text-white/30 text-xs mt-0.5 leading-snug">{p.desc}</div>
+                  </div>
+                </div>
+
+                {/* Command */}
+                <div className="code-block p-4 flex-1">
+                  <div className="text-white/20 text-[10px] font-mono mb-2 tracking-wider uppercase">{p.shell}</div>
+                  <p
+                    className="text-[11.5px] font-mono leading-relaxed break-all"
+                    style={{ color: `${p.color}cc` }}
+                  >
+                    {p.command}
+                  </p>
+                </div>
+
+                {/* Button — descarga directa del asset una vez resuelta la
+                    última release; mientras carga (o si falla) cae a la
+                    página de releases, que siempre lista todo. */}
+                {(() => {
+                  const asset = release?.[p.assetKey];
+                  const downloadHref = asset?.browser_download_url
+                    ?? `https://github.com/${REPO}/releases/latest`;
+                  return (
+                    <motion.a
+                      href={downloadHref}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      whileHover={{ scale: 1.02 }}
+                      whileTap={{ scale: 0.97 }}
+                      className="flex items-center justify-center gap-2 w-full py-3 rounded-xl text-sm font-light transition-all duration-300 btn-glow"
+                      style={{ background: `${p.color}12`, border: `1px solid ${p.color}32`, color: p.color }}
+                    >
+                      <Download className="w-4 h-4" />
+                      {asset ? `Descargar${asset.size ? ` (${formatSize(asset.size)})` : ''}` : `Descargar para ${p.name}`}
+                    </motion.a>
+                  );
+                })()}
+                {p.route && (
+                  <button
+                    onClick={() => navigate(p.route!)}
+                    className="text-white/30 hover:text-white/60 text-xs text-center transition-colors -mt-2"
+                  >
+                    {p.assetKey === 'android' ? 'ver guía de instalación →' : 'o instalar con un comando →'}
+                  </button>
+                )}
+              </motion.div>
+            ))}
+          </div>
+        </div>
+      </section>
+
+      {/* ───── DIVIDER ───── */}
+      <div className="glow-line max-w-4xl mx-6 md:mx-auto" />
 
       {/* ───── QUÉ ES ───── */}
       <section className="relative py-24 px-6">
@@ -524,109 +630,6 @@ export default function Home() {
       {/* ───── DIVIDER ───── */}
       <div className="glow-line max-w-4xl mx-6 md:mx-auto" />
 
-      {/* ───── PLATFORMS ───── */}
-      <section className="relative py-32 px-6">
-        <div className="max-w-6xl mx-auto">
-          <motion.div {...fadeUp()} className="text-center mb-20">
-            <motion.div
-              initial={{ opacity: 0, scale: 0.85 }}
-              whileInView={{ opacity: 1, scale: 1 }}
-              viewport={{ once: true }}
-              transition={{ duration: 0.6 }}
-              className="relative w-20 h-20 mx-auto mb-6"
-            >
-              <div className="absolute inset-0 rounded-3xl bg-violet-600/30 blur-2xl" />
-              <img
-                src="/brand/logo.png"
-                alt="PrismHub"
-                className="relative w-20 h-20 rounded-3xl border border-violet-500/30"
-              />
-            </motion.div>
-            <span className="section-badge">↓  Instalación</span>
-            <h2 className="text-4xl md:text-5xl lg:text-[58px] font-light text-white leading-tight mt-5 mb-5">
-              Un solo comando<br/>
-              <span className="prism-text">en todas las plataformas</span>
-            </h2>
-            <p className="text-white/40 max-w-md mx-auto text-base leading-relaxed">
-              Scripts de instalación automáticos para Windows y Linux. APK directo para Android.
-            </p>
-          </motion.div>
-
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-5">
-            {platforms.map((p, i) => (
-              <motion.div
-                key={p.name}
-                initial={{ opacity: 0, y: 40 }}
-                whileInView={{ opacity: 1, y: 0 }}
-                viewport={{ once: true, margin: '-60px' }}
-                transition={{ duration: 0.6, delay: i * 0.12 }}
-                whileHover={{ y: -8, transition: { duration: 0.25 } }}
-                className="card-glow rounded-3xl p-7 flex flex-col gap-5"
-              >
-                {/* Header */}
-                <div className="flex items-center gap-4">
-                  <div
-                    className="w-14 h-14 rounded-2xl flex items-center justify-center shrink-0"
-                    style={{ background: `${p.color}18`, border: `1px solid ${p.color}35` }}
-                  >
-                    <p.Icon />
-                  </div>
-                  <div>
-                    <div className="text-white text-lg font-light">{p.name}</div>
-                    <div className="text-white/30 text-xs mt-0.5 leading-snug">{p.desc}</div>
-                  </div>
-                </div>
-
-                {/* Command */}
-                <div className="code-block p-4 flex-1">
-                  <div className="text-white/20 text-[10px] font-mono mb-2 tracking-wider uppercase">{p.shell}</div>
-                  <p
-                    className="text-[11.5px] font-mono leading-relaxed break-all"
-                    style={{ color: `${p.color}cc` }}
-                  >
-                    {p.command}
-                  </p>
-                </div>
-
-                {/* Button — descarga directa del asset una vez resuelta la
-                    última release; mientras carga (o si falla) cae a la
-                    página de releases, que siempre lista todo. */}
-                {(() => {
-                  const asset = release?.[p.assetKey];
-                  const downloadHref = asset?.browser_download_url
-                    ?? `https://github.com/${REPO}/releases/latest`;
-                  return (
-                    <motion.a
-                      href={downloadHref}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      whileHover={{ scale: 1.02 }}
-                      whileTap={{ scale: 0.97 }}
-                      className="flex items-center justify-center gap-2 w-full py-3 rounded-xl text-sm font-light transition-all duration-300 btn-glow"
-                      style={{ background: `${p.color}12`, border: `1px solid ${p.color}32`, color: p.color }}
-                    >
-                      <Download className="w-4 h-4" />
-                      {asset ? `Descargar${asset.size ? ` (${formatSize(asset.size)})` : ''}` : `Descargar para ${p.name}`}
-                    </motion.a>
-                  );
-                })()}
-                {p.route && (
-                  <button
-                    onClick={() => navigate(p.route!)}
-                    className="text-white/30 hover:text-white/60 text-xs text-center transition-colors -mt-2"
-                  >
-                    o instalar con un comando →
-                  </button>
-                )}
-              </motion.div>
-            ))}
-          </div>
-        </div>
-      </section>
-
-      {/* ───── DIVIDER ───── */}
-      <div className="glow-line max-w-4xl mx-6 md:mx-auto" />
-
       {/* ───── EXTENSIONS ───── */}
       <section className="relative py-32 px-6">
         <div className="absolute inset-0 bg-gradient-to-b from-transparent via-indigo-950/8 to-transparent pointer-events-none" />
@@ -760,24 +763,10 @@ export default function Home() {
               </div>
             </div>
           </motion.div>
-
-          <motion.p
-            initial={{ opacity: 0 }}
-            whileInView={{ opacity: 1 }}
-            viewport={{ once: true }}
-            transition={{ duration: 0.6, delay: 0.4 }}
-            className="text-center text-white/18 text-xs mt-10"
-          >
-            © 2026 Soul_Of_The_sun · AGPL-3.0 ·{' '}
-            <a
-              href="https://github.com/Litdemonick"
-              className="hover:text-white/45 transition-colors underline underline-offset-2"
-            >
-              github.com/Litdemonick
-            </a>
-          </motion.p>
         </div>
       </section>
+
+      <Footer />
 
     </div>
   );
