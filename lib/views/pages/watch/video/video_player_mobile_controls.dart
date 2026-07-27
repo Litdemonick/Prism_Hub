@@ -8,7 +8,7 @@ import 'package:media_kit_video/media_kit_video.dart';
 import 'package:prismhub/controllers/watch/video_controller.dart';
 import 'package:prismhub/utils/i18n.dart';
 import 'package:prismhub/views/pages/watch/video/webview_player_page.dart'
-    show isKnownNativeServer, openWebViewPlayer;
+    show openWebViewPlayer;
 import 'package:prismhub/utils/layout.dart';
 import 'package:prismhub/utils/router.dart';
 import 'package:prismhub/views/pages/watch/video/video_player_cast.dart';
@@ -16,7 +16,6 @@ import 'package:prismhub/views/pages/watch/video/video_player_sidebar.dart';
 import 'package:prismhub/views/widgets/cache_network_image.dart';
 import 'package:prismhub/views/widgets/home/home_theme.dart';
 import 'package:prismhub/views/widgets/progress.dart';
-import 'package:screen_brightness/screen_brightness.dart';
 import 'package:volume_controller/volume_controller.dart';
 
 class VideoPlayerMobileControls extends StatefulWidget {
@@ -28,18 +27,19 @@ class VideoPlayerMobileControls extends StatefulWidget {
       _VideoPlayerMobileControlsState();
 }
 
-class _VideoPlayerMobileControlsState extends State<VideoPlayerMobileControls>
-    with WidgetsBindingObserver {
+class _VideoPlayerMobileControlsState
+    extends State<VideoPlayerMobileControls> {
   late final VideoPlayerController _c = widget.controller;
   final _subtitleViewKey = GlobalKey<SubtitleViewState>();
   bool _showControls = true;
-  double _currentBrightness = 0;
   double _currentVolume = 0;
-  bool _isBrightness = false;
   bool _isAdjusting = false;
-  Duration _position = Duration.zero;
-  bool _isSeeking = false;
   bool _isLongPress = false;
+  // Cuenta de dedos apoyados en la pantalla — sin esto, pellizcar con 2 dedos
+  // (que el usuario espera que no haga nada, no hay zoom por pellizco, solo
+  // doble tap) igual disparaba onVerticalDragUpdate con el movimiento de uno
+  // de los 2 dedos, subiendo/bajando el volumen sin querer.
+  int _activePointers = 0;
   Timer? _timer;
   Worker? _webViewWorker;
   Worker? _resumeWorker;
@@ -73,7 +73,6 @@ class _VideoPlayerMobileControlsState extends State<VideoPlayerMobileControls>
   _init() async {
     _updateTimer();
     VolumeController().showSystemUI = false;
-    _currentBrightness = await ScreenBrightness().current;
     _currentVolume = await VolumeController().getVolume();
   }
 
@@ -81,7 +80,6 @@ class _VideoPlayerMobileControlsState extends State<VideoPlayerMobileControls>
   void initState() {
     _init();
     super.initState();
-    WidgetsBinding.instance.addObserver(this);
     // El reproductor nativo no pudo con este servidor — abrir el WebView
     // automáticamente (ver mismo comentario en video_player_desktop_controls.dart:
     // este worker tenía el callback vacío, así que el fallback nunca se
@@ -104,42 +102,34 @@ class _VideoPlayerMobileControlsState extends State<VideoPlayerMobileControls>
 
   @override
   void dispose() {
-    WidgetsBinding.instance.removeObserver(this);
     _webViewWorker?.dispose();
     _resumeWorker?.dispose();
     _timer?.cancel();
-    // El gesto de deslizar para ajustar brillo (onVerticalDragUpdate más
-    // abajo) usa setScreenBrightness, que pisa el brillo de la ventana de la
-    // app hasta que algo lo revierta explícitamente — sin este reset, al
-    // salir del reproductor quedaba "pegado" en el último valor ajustado en
-    // vez de volver al que controla el sistema (reportado en vivo).
-    ScreenBrightness().resetScreenBrightness();
     super.dispose();
-  }
-
-  @override
-  void didChangeAppLifecycleState(AppLifecycleState state) {
-    // dispose() no alcanza si la app pasa a segundo plano (botón Inicio,
-    // cambiar de app) sin volver atrás desde el reproductor — el widget
-    // sigue montado, solo oculto, así que el override de brillo seguía
-    // activo (esto es justo lo que el usuario reportó: Android seguía
-    // mostrando "PrismHub controla el brillo" aun sin estar mirando el
-    // video). Se suelta también acá, no solo al salir de la pantalla.
-    if (state == AppLifecycleState.paused ||
-        state == AppLifecycleState.hidden) {
-      ScreenBrightness().resetScreenBrightness();
-    }
   }
 
   // Reabre el WebView con la misma URL guardada (mismo botón que en
   // desktop) — sin esto, cerrar el WebView (atrás) y volver acá no dejaba
   // ninguna forma de retomarlo salvo tocar el servidor de nuevo.
-  void _openWebView() {
+  Future<void> _openWebView() async {
     final fallback = _c.webViewFallback.value;
     if (fallback == null) return;
     _c.webViewOpenedOnce.value = true;
+    // El reproductor nativo (media_kit/mpv) seguía con su textura de video
+    // activa de fondo mientras el WebView se abre ENCIMA (esta pantalla no
+    // reemplaza la ruta anterior, la apila) — dos motores de render nativos
+    // pesados (mpv/ANGLE y WebView2/Chromium) compitiendo por GPU en la
+    // misma ventana en Windows es la causa confirmada (mismo problema
+    // reportado en los repos de flutter_inappwebview y media_kit) del
+    // freeze/"No responde" — tan severo que ni un hot restart lo recupera,
+    // hay que matar el proceso. player.stop() solo no alcanza (para de
+    // decodificar, pero no libera la textura nativa) — isWebViewActive saca
+    // el widget Video del árbol entero mientras el WebView esté arriba (ver
+    // VideoPlayerConten).
+    unawaited(_c.player.stop());
+    _c.isWebViewActive.value = true;
     final referer = fallback['referer'];
-    openWebViewPlayer(
+    await openWebViewPlayer(
       context,
       fallback['url']!,
       referer: (referer == null || referer.isEmpty) ? null : referer,
@@ -243,22 +233,6 @@ class _VideoPlayerMobileControlsState extends State<VideoPlayerMobileControls>
                   child: Column(
                     mainAxisSize: MainAxisSize.min,
                     children: [
-                      if (_isSeeking)
-                        Padding(
-                          padding: const EdgeInsets.all(8.0),
-                          child: Row(
-                            mainAxisSize: MainAxisSize.min,
-                            children: [
-                              Text(
-                                '${_position.inMinutes}:${(_position.inSeconds % 60).toString().padLeft(2, '0')}',
-                              ),
-                              const Text('/'),
-                              Text(
-                                '${_c.duration.value.inMinutes}:${(_c.duration.value.inSeconds % 60).toString().padLeft(2, '0')}',
-                              ),
-                            ],
-                          ),
-                        ),
                       if (_isLongPress)
                         const Padding(
                           padding: EdgeInsets.all(8.0),
@@ -270,20 +244,11 @@ class _VideoPlayerMobileControlsState extends State<VideoPlayerMobileControls>
                           child: Row(
                             mainAxisSize: MainAxisSize.min,
                             children: [
-                              if (_isBrightness) ...[
-                                const Icon(Icons.brightness_5),
-                                const SizedBox(width: 5),
-                                Text(
-                                  (_currentBrightness * 100).toStringAsFixed(0),
-                                )
-                              ],
-                              if (!_isBrightness) ...[
-                                const Icon(Icons.volume_up),
-                                const SizedBox(width: 5),
-                                Text(
-                                  (_currentVolume * 100).toStringAsFixed(0),
-                                )
-                              ],
+                              const Icon(Icons.volume_up),
+                              const SizedBox(width: 5),
+                              Text(
+                                (_currentVolume * 100).toStringAsFixed(0),
+                              ),
                             ],
                           ),
                         ),
@@ -294,7 +259,15 @@ class _VideoPlayerMobileControlsState extends State<VideoPlayerMobileControls>
             ),
             // 手势层
             Positioned.fill(
-              child: GestureDetector(
+              child: Listener(
+                onPointerDown: (_) => _activePointers++,
+                onPointerUp: (_) {
+                  if (_activePointers > 0) _activePointers--;
+                },
+                onPointerCancel: (_) {
+                  if (_activePointers > 0) _activePointers--;
+                },
+                child: GestureDetector(
                 behavior: HitTestBehavior.opaque,
                 onTap: () {
                   if (_showControls) {
@@ -316,52 +289,23 @@ class _VideoPlayerMobileControlsState extends State<VideoPlayerMobileControls>
                     _c.playOrPause();
                   }
                 },
-                onVerticalDragStart: (details) {
-                  _isBrightness =
-                      details.localPosition.dx < LayoutUtils.width / 2;
-                },
-                // 左右两边上下滑动
+                // Deslizar vertical = volumen, en cualquier parte de la
+                // pantalla — a pedido explícito, el reproductor ya no toca
+                // el brillo del sistema (antes la mitad izquierda lo hacía).
+                // Se ignora con más de un dedo apoyado (pellizcar) — sin
+                // esto, un pellizco (que no debe hacer nada, no hay zoom por
+                // pellizco) igual subía/bajaba el volumen con el movimiento
+                // de uno de los 2 dedos.
                 onVerticalDragUpdate: (details) {
+                  if (_activePointers > 1) return;
                   final add = details.delta.dy / 500;
-                  // 如果是左边调节亮度
-                  if (_isBrightness) {
-                    _currentBrightness = (_currentBrightness - add).clamp(0, 1);
-                    ScreenBrightness().setScreenBrightness(_currentBrightness);
-                  }
-                  // 如果是右边调节音量
-                  else {
-                    _currentVolume = (_currentVolume - add).clamp(0, 1);
-                    VolumeController().setVolume(_currentVolume);
-                  }
+                  _currentVolume = (_currentVolume - add).clamp(0, 1);
+                  VolumeController().setVolume(_currentVolume);
                   _isAdjusting = true;
                   setState(() {});
                 },
-                onHorizontalDragStart: (details) {
-                  _position = _c.position.value;
-                },
                 onVerticalDragEnd: (details) {
                   _isAdjusting = false;
-                  setState(() {});
-                },
-                // 左右滑动
-                onHorizontalDragUpdate: (details) {
-                  double scale = 200000 / LayoutUtils.width;
-                  Duration pos = _position +
-                      Duration(
-                        milliseconds: (details.delta.dx * scale).round(),
-                      );
-                  _position = Duration(
-                    milliseconds: pos.inMilliseconds.clamp(
-                      0,
-                      _c.duration.value.inMilliseconds,
-                    ),
-                  );
-                  _isSeeking = true;
-                  setState(() {});
-                },
-                onHorizontalDragEnd: (details) {
-                  _c.seek(_position);
-                  _isSeeking = false;
                   setState(() {});
                 },
                 onLongPressStart: (details) {
@@ -375,6 +319,7 @@ class _VideoPlayerMobileControlsState extends State<VideoPlayerMobileControls>
                   setState(() {});
                 },
                 child: const SizedBox.expand(),
+                ),
               ),
             ),
             // 中间显示
@@ -496,18 +441,18 @@ class _VideoPlayerMobileControlsState extends State<VideoPlayerMobileControls>
                     if (!_c.hasRenderedFrame.value) {
                       return const ProgressRing();
                     }
-                    return StreamBuilder(
-                      stream: _c.player.stream.buffering,
-                      builder: (context, snapshot) {
+                    return Builder(
+                      builder: (context) {
                         // Pausado: nunca mostrar el spinner (mismo criterio
                         // que en desktop). mpv sigue llenando el buffer en
                         // pausa — eso está bien y la barra ya lo muestra —
                         // pero el spinner girando hacía parecer que el
                         // reproductor se trabó justo al pausar.
-                        final isBuffering =
-                            (snapshot.hasData && snapshot.data!) ||
-                                _c.player.state.buffering;
-                        if (isBuffering && _c.isPlaying.value) {
+                        // isActuallyBuffering (no el flag crudo de mpv) ya
+                        // descuenta los casos en que el video sigue avanzando
+                        // de verdad pero el flag quedó pegado en true — ver
+                        // VideoPlayerController.
+                        if (_c.isActuallyBuffering.value && _c.isPlaying.value) {
                           return const ProgressRing();
                         }
                         if (_c.dlnaDevice.value != null) {
@@ -621,33 +566,36 @@ class _VideoPlayerMobileControlsState extends State<VideoPlayerMobileControls>
                   child: Column(
                     mainAxisSize: MainAxisSize.min,
                     children: [
+                      SafeArea(
+                        bottom: false,
+                        child: Padding(
+                          padding: const EdgeInsets.symmetric(
+                              horizontal: 12, vertical: 6),
+                          child: Row(
+                            children: [
+                              // Volver, a pedido explícito ahora se oculta
+                              // junto con el resto del header (antes estaba
+                              // marcada como "siempre visible" a pedido
+                              // anterior — se revirtió ese criterio).
+                              IconButton(
+                                icon: const Icon(Icons.arrow_back,
+                                    color: Colors.white),
+                                onPressed: () {
+                                  RouterUtils.pop();
+                                },
+                              ),
+                            ],
+                          ),
+                        ),
+                      ),
                       _Header(
                         controller: _c,
                       ),
-                      // selector de servidores — pestañas arriba, no un botón
-                      // escondido en un bottom sheet.
-                      _ServerTabBar(controller: _c),
+                      // La tira de servidores ya no queda siempre visible
+                      // tapando el video — a pedido explícito, ahora se abre
+                      // bajo demanda desde el botón de servidor en el footer
+                      // (ver SidebarTab.servers).
                     ],
-                  ),
-                ),
-              ),
-            ),
-            // Volver, siempre visible — a pedido explícito: no debe ocultarse
-            // junto con el resto del header ni siquiera en pantalla completa
-            // (antes compartía el auto-hide con título/tabs/footer). Va
-            // ENCIMA del header (que sí se oculta) para no quedar tapado.
-            Positioned(
-              top: 0,
-              left: 0,
-              child: SafeArea(
-                child: Padding(
-                  padding:
-                      const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-                  child: IconButton(
-                    icon: const Icon(Icons.arrow_back, color: Colors.white),
-                    onPressed: () {
-                      RouterUtils.pop();
-                    },
                   ),
                 ),
               ),
@@ -712,12 +660,6 @@ class _Header extends StatelessWidget {
       padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
       child: Row(
         children: [
-          // El botón real vive en un overlay aparte, siempre visible (ver
-          // _AlwaysVisibleBackButton más abajo) — este espacio solo reserva
-          // el ancho para que el título no se corra al ocultarse el resto
-          // del header.
-          const SizedBox(width: 48),
-          const SizedBox(width: 10),
           Expanded(
             child: Obx(() {
               final data = controller.playList[controller.index.value];
@@ -1004,6 +946,20 @@ class _Footer extends StatelessWidget {
                     icon: const Icon(Icons.video_file),
                   );
                 }),
+                // Servidores — antes era una tira de pestañas siempre
+                // visible tapando el video; a pedido explícito ahora se
+                // esconde detrás de este botón, igual que calidad/pistas.
+                Obx(() {
+                  if (controller.availableServers.isEmpty) {
+                    return const SizedBox.shrink();
+                  }
+                  return IconButton(
+                    onPressed: () {
+                      controller.toggleSideBar(SidebarTab.servers);
+                    },
+                    icon: const Icon(Icons.dns),
+                  );
+                }),
                 IconButton(
                   onPressed: () {
                     controller.toggleSideBar(SidebarTab.tracks);
@@ -1118,106 +1074,6 @@ class _SeekBarState extends State<_SeekBar> {
               },
             );
           },
-        ),
-      ),
-    );
-  }
-}
-
-// ─── Selector de Servidores — fila de pestañas arriba del video ─────────────
-
-class _ServerTabBar extends StatelessWidget {
-  const _ServerTabBar({required this.controller});
-  final VideoPlayerController controller;
-
-  @override
-  Widget build(BuildContext context) {
-    return Obx(() {
-      if (controller.availableServers.isEmpty) return const SizedBox.shrink();
-      final current = controller.currentServerName.value;
-      return Container(
-        width: double.infinity,
-        // 0.85 (antes 0.35) — contra un fotograma claro del video, los
-        // nombres de servidor casi no se leían.
-        color: Colors.black.withValues(alpha: 0.85),
-        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-        child: SingleChildScrollView(
-          scrollDirection: Axis.horizontal,
-          child: Row(
-            children: [
-              for (final entry in controller.availableServers.entries) ...[
-                _ServerTab(
-                  label: entry.key,
-                  selected: entry.key == current,
-                  isNative: isKnownNativeServer(entry.key, entry.value),
-                  onTap: () => controller.selectServer(entry.key),
-                ),
-                const SizedBox(width: 6),
-              ],
-            ],
-          ),
-        ),
-      );
-    });
-  }
-}
-
-class _ServerTab extends StatelessWidget {
-  const _ServerTab({
-    required this.label,
-    required this.selected,
-    required this.isNative,
-    required this.onTap,
-  });
-  final String label;
-  final bool selected;
-  final bool isNative;
-  final VoidCallback onTap;
-
-  @override
-  Widget build(BuildContext context) {
-    return GestureDetector(
-      onTap: onTap,
-      child: AnimatedContainer(
-        duration: const Duration(milliseconds: 200),
-        curve: Curves.easeOut,
-        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
-        // Fondo bien opaco en los dos estados (antes 0.22/0.7, contra un
-        // video claro se veía transparentado) — la selección ya se nota
-        // por el borde y el color del texto, no hace falta un relleno
-        // traslúcido que dependa de lo oscuro que esté el video atrás.
-        decoration: BoxDecoration(
-          color: selected
-              ? HomeTheme.accentPink.withValues(alpha: 0.35)
-              : Colors.black.withValues(alpha: 0.75),
-          borderRadius: BorderRadius.circular(999),
-          border: Border.all(
-            color: selected ? HomeTheme.accentPink : HomeTheme.border,
-            width: selected ? 1.4 : 1,
-          ),
-        ),
-        child: Row(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Text(
-              label,
-              style: TextStyle(
-                fontSize: 12,
-                fontWeight: selected ? FontWeight.w700 : FontWeight.w500,
-                color: selected ? HomeTheme.accentPink : Colors.white,
-              ),
-            ),
-            if (isNative) ...[
-              const SizedBox(width: 5),
-              Icon(
-                Icons.bolt,
-                size: 12,
-                color: selected
-                    ? HomeTheme.accentPink
-                    : Colors.greenAccent.withValues(alpha: 0.85),
-              ),
-            ],
-          ],
         ),
       ),
     );

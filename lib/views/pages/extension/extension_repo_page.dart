@@ -143,6 +143,7 @@ class _ExtensionRepoPageState extends State<ExtensionRepoPage> {
           // Firma Ed25519 de prism+ — la card verifica antes de instalar.
           signature: e['signature'],
           nsfw: e['nsfw'] == 'true' || e['nsfw'] == true,
+          unstable: e['unstable'] == 'true' || e['unstable'] == true,
           type: type);
     }).toList();
     // 过滤
@@ -186,6 +187,7 @@ class _ExtensionRepoPageState extends State<ExtensionRepoPage> {
 
     return PlatformBuildWidget(
       androidBuilder: (context) => ListView(
+        padding: const EdgeInsets.only(bottom: 24),
         children: [
           if (showSections) sectionTitle('extension-repo.installed'.i18n),
           ...installedCards,
@@ -193,41 +195,47 @@ class _ExtensionRepoPageState extends State<ExtensionRepoPage> {
           ...availableCards,
         ],
       ),
-      desktopBuilder: (context) => LayoutBuilder(
-        builder: (context, constraints) {
-          final count = (constraints.maxWidth ~/ 220).clamp(1, 10);
-          Widget grid(List<Widget> cards) => GridView.count(
-                shrinkWrap: true,
-                physics: const NeverScrollableScrollPhysics(),
-                crossAxisCount: count,
-                crossAxisSpacing: 16,
-                mainAxisSpacing: 16,
-                children: cards,
-              );
-          if (!showSections) {
-            // El grid interno usa NeverScrollableScrollPhysics a propósito
-            // (así no compite con el scroll de afuera cuando SÍ hay
-            // secciones) — sin un scrollable que lo envuelva acá, con todas
-            // las extensiones ya instaladas (sin sección "disponibles") no
-            // había ninguna forma de bajar a ver el resto de la lista.
-            return SingleChildScrollView(
-              child: grid(installedCards + availableCards),
-            );
-          }
-          return SingleChildScrollView(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
+      // Wrap centrado en vez de GridView.count con columnas fijas: con pocas
+      // extensiones (ej. una sola en "Disponibles") el grid viejo las dejaba
+      // pegadas arriba a la izquierda con todo el resto de la ventana vacío
+      // — Wrap las centra como grupo, y sigue reflowando en varias filas sin
+      // desbordar cuando se van agregando muchas más (no hace falta calcular
+      // columnas a mano).
+      desktopBuilder: (context) {
+        Widget grid(List<Widget> cards) => Wrap(
+              alignment: WrapAlignment.center,
+              spacing: 16,
+              runSpacing: 16,
               children: [
-                sectionTitle('extension-repo.installed'.i18n),
-                grid(installedCards),
-                const SizedBox(height: 24),
-                sectionTitle('extension-repo.available'.i18n),
-                grid(availableCards),
+                for (final card in cards) SizedBox(width: 220, child: card),
               ],
-            ),
+            );
+        // padding a la derecha: en desktop Flutter dibuja el scrollbar
+        // pegado al borde del propio Scrollable — sin este margen quedaba
+        // encima de la última columna de cards (confirmado en vivo). Abajo,
+        // espacio para poder scrollear un poco más allá de la última fila
+        // en vez de que quede justo pegada al borde inferior.
+        const scrollPadding = EdgeInsets.only(right: 16, bottom: 24);
+        if (!showSections) {
+          return SingleChildScrollView(
+            padding: scrollPadding,
+            child: grid(installedCards + availableCards),
           );
-        },
-      ),
+        }
+        return SingleChildScrollView(
+          padding: scrollPadding,
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              sectionTitle('extension-repo.installed'.i18n),
+              grid(installedCards),
+              const SizedBox(height: 24),
+              sectionTitle('extension-repo.available'.i18n),
+              grid(availableCards),
+            ],
+          ),
+        );
+      },
     );
   }
 

@@ -98,7 +98,12 @@
     "official-badge": "PrismPlus",
     "update-required": "Update required",
     "update-required-dialog": "This extension has a pending update. You must update it before you can use it.",
-    "go-to-update": "Go to update"
+    "go-to-update": "Go to update",
+    "unstable": "Unstable",
+    "unstable-blocked": "Unstable extension, waiting for an update",
+    "nsfw-warning-title": "18+ content",
+    "nsfw-warning-content": "This extension may contain adult (18+) content. Do you want to continue?",
+    "nsfw-setting-required": "Enable 18+ content in Settings > General before installing or activating this extension."
   },
   "extension-repo": {
     "error": "An error occurred!",

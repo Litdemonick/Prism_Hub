@@ -204,6 +204,17 @@ class VideoPlayerController extends GetxController {
   // SIN el flag de buffering en true, así que sin esto la pantalla quedaba
   // en negro sin ningún spinner, como si estuviera trabada de verdad).
   final hasRenderedFrame = false.obs;
+  // Flag de buffering YA corregido con la posición real — ver
+  // player.stream.buffering.listen más abajo. El flag crudo de mpv
+  // (paused-for-cache) confirmado en vivo que a veces queda pegado en true
+  // para siempre (el evento de "ya terminó de bufferizar" no siempre llega
+  // por la plataforma), aunque el video ya esté reproduciendo frames nuevos
+  // — eso hacía que el spinner de carga siguiera girando después de que el
+  // contenido ya cargó. Si la posición avanzó hace poco, no puede estar
+  // bufferizando de verdad, sin importar lo que diga el flag crudo.
+  final isActuallyBuffering = false.obs;
+  DateTime? _lastPositionAdvanceAt;
+  Duration? _lastPositionSeen;
   // true cuando hay más de un servidor y todavía no se intentó reproducir
   // ninguno — la UI muestra la lista para elegir en vez de un spinner. Se
   // apaga en cuanto el usuario elige uno (switchServer).
@@ -216,6 +227,17 @@ class VideoPlayerController extends GetxController {
   // — cambia el texto del botón de "Abre en el navegador" a "Volver al
   // navegador" cuando el usuario ya estuvo ahí y solo está retomando.
   final webViewOpenedOnce = false.obs;
+  // true mientras la pantalla de WebView está efectivamente empujada arriba
+  // de esta (no solo "ya se abrió alguna vez", como webViewOpenedOnce).
+  // VideoPlayerConten lo usa para sacar el widget Video (y su textura nativa
+  // de mpv/ANGLE) del árbol mientras tanto — confirmado en vivo (y con
+  // reportes idénticos en los repos de flutter_inappwebview y media_kit)
+  // que WebView2 y la textura de video de mpv compiten por GPU en Windows,
+  // al punto de congelar la app entera ("No responde", ni con hot restart)
+  // cuando ambos están activos en la misma ventana a la vez. player.stop()
+  // solo no alcanza: para de decodificar, pero no libera la textura/
+  // superficie nativa que sigue registrada mientras el widget siga montado.
+  final isWebViewActive = false.obs;
   // URL de la página del episodio en el sitio (X-Page-Url). Se carga en un
   // WebView oculto y se sniffe su player como fallback universal.
   String _episodePageUrl = '';
@@ -292,12 +314,21 @@ class VideoPlayerController extends GetxController {
     //   los 20s si after todo esto sigue sin progresar).
     if (player.platform is NativePlayer) {
       final np = player.platform as NativePlayer;
-      await np.setProperty('hwdec', 'no');
       if (Platform.isLinux) {
+        // hwdec=no era el único caso que de verdad lo necesitaba (vaapi no
+        // soportado por libswscale ahí) — estaba aplicándose SIN QUERER
+        // también en Android/Windows, forzando decodificación por software
+        // en todos lados. Eso es justo lo que hacía sentir el reproductor
+        // menos fluido que YouTube (más CPU, más chance de tirar frames en
+        // 1080p+) — con hwdec en 'auto-safe' fuera de Linux, mpv usa
+        // MediaCodec en Android / D3D11VA en Windows cuando el dispositivo
+        // lo soporta, cayendo solo a software si no.
+        await np.setProperty('hwdec', 'no');
         await np.setProperty('network-timeout', '5');
         await np.setProperty(
             'demuxer-lavf-o', 'reconnect=0,reconnect_delay_max=0');
       } else {
+        await np.setProperty('hwdec', 'auto-safe');
         await np.setProperty('network-timeout', '20');
         await np.setProperty('demuxer-lavf-o',
             'reconnect=1,reconnect_streamed=1,reconnect_delay_max=5');
@@ -554,11 +585,25 @@ class VideoPlayerController extends GetxController {
         return;
       }
       position.value = event;
+      // Avance real de posición → hay frames nuevos reproduciéndose, así que
+      // NO puede estar bufferizando de verdad ahora mismo, sin importar lo
+      // que diga el flag crudo (ver isActuallyBuffering).
+      if (_lastPositionSeen == null || event != _lastPositionSeen) {
+        _lastPositionSeen = event;
+        _lastPositionAdvanceAt = DateTime.now();
+        if (isActuallyBuffering.value) isActuallyBuffering.value = false;
+      }
     });
 
     // Vigía de buffering atascado — ver comentario en _bufferingStallTimer.
     player.stream.buffering.listen((buffering) {
       if (dlnaDevice.value != null) return;
+      // Si la posición avanzó hace menos de 800ms, el flag crudo está
+      // desfasado (evento de "terminó de bufferizar" perdido) — se ignora.
+      final advancedRecently = _lastPositionAdvanceAt != null &&
+          DateTime.now().difference(_lastPositionAdvanceAt!) <
+              const Duration(milliseconds: 800);
+      isActuallyBuffering.value = buffering && !advancedRecently;
       _bufferingStallTimer?.cancel();
       _bufferingStallTimer = null;
       if (buffering) {
@@ -693,6 +738,12 @@ class VideoPlayerController extends GetxController {
     isGettingWatchData.value = true;
     awaitingServerChoice.value = false;
     hasRenderedFrame.value = false;
+    // No arrastrar el "avanzó hace poco" del video/servidor ANTERIOR — sin
+    // esto, un corte real justo al cambiar de contenido podía quedar sin
+    // spinner un instante porque todavía valía el timestamp viejo.
+    _lastPositionAdvanceAt = null;
+    _lastPositionSeen = null;
+    isActuallyBuffering.value = false;
     _lastErrorEvent = '';
     _pageSniffAttempted = false;
     _webViewElapsedSeconds = 0;
@@ -1139,6 +1190,9 @@ class VideoPlayerController extends GetxController {
     webViewFallback.value = null;
     awaitingServerChoice.value = false;
     hasRenderedFrame.value = false;
+    _lastPositionAdvanceAt = null;
+    _lastPositionSeen = null;
+    isActuallyBuffering.value = false;
     _bufferingStallTimer?.cancel();
 
     final embedUrl = availableServers[name]!;
@@ -1648,8 +1702,13 @@ class VideoPlayerController extends GetxController {
   }
 
   // 切换侧边栏
+  // Tocar el MISMO botón del footer con el panel ya abierto en ese tab lo
+  // cierra (comportamiento de toggle de siempre); tocar OTRO botón mientras
+  // el panel ya está abierto cambia el contenido en vez de solo cerrarlo —
+  // antes cualquier botón cerraba el panel sin importar cuál se tocó, así
+  // que ir de "Episodios" a "Servidor" necesitaba dos toques.
   toggleSideBar(SidebarTab tab) {
-    if (showSidebar.value) {
+    if (showSidebar.value && initSidebarTab.value == tab) {
       showSidebar.value = false;
       return;
     }
@@ -2245,8 +2304,16 @@ class VideoPlayerController extends GetxController {
       );
     }
     if (Platform.isAndroid) {
+      // manual + overlays completos (no edgeToEdge): confirmado en vivo que
+      // volver a edgeToEdge al salir dejaba la hora/batería "comidas" por el
+      // SafeArea de la página de destino — MediaQuery no llegaba a
+      // refrescar el padding superior a tiempo tras el cambio de modo, así
+      // que el contenido se dibujaba encima de donde iría el status bar.
+      // Pedir manual con TODOS los overlays fuerza que ambas barras vuelvan
+      // a mostrarse reservando su espacio, sin depender de ese timing.
       SystemChrome.setEnabledSystemUIMode(
-        SystemUiMode.edgeToEdge,
+        SystemUiMode.manual,
+        overlays: SystemUiOverlay.values,
       );
       // 如果是平板则不改变
       // Libera el bloqueo nativo que dejó landscapeAutoMode(forceSensor:

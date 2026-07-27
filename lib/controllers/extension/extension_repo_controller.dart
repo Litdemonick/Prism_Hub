@@ -5,6 +5,7 @@ import 'package:fluent_ui/fluent_ui.dart';
 import 'package:get/get.dart';
 import 'package:prismhub/models/index.dart';
 import 'package:prismhub/utils/connectivity.dart';
+import 'package:prismhub/utils/extension.dart';
 import 'package:prismhub/utils/prismhub_storage.dart';
 import 'package:prismhub/utils/request.dart';
 
@@ -71,8 +72,15 @@ class ExtensionRepoPageController extends GetxController {
       // El catálogo de prism+ es {name, extensions:[...]}; repos antiguos eran
       // una lista pelada. Soportar ambos.
       extensions = decoded is Map ? (decoded['extensions'] ?? []) : decoded;
+      // Con el ajuste apagado se oculta el nsfw solo de lo que TODAVÍA no
+      // está instalado (no se puede instalar de nuevo sin prenderlo) — una
+      // que el usuario ya tenía instalada (ej. ShadeManga/ManhwaWeb) sigue
+      // viéndose en "Instaladas" para poder gestionarla/desinstalarla; antes
+      // desaparecía de la lista por completo, como si se hubiera borrado.
       if (!PrismHubStorage.getSetting(SettingKey.enableNSFW)) {
-        extensions.removeWhere((element) => element['nsfw'] == "true");
+        extensions.removeWhere((element) =>
+            element['nsfw'] == "true" &&
+            !ExtensionUtils.runtimes.containsKey(element['package']));
       }
       extensionsTemp.clear();
       extensionsTemp.addAll(extensions);

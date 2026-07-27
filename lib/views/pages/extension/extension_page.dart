@@ -156,56 +156,99 @@ class _ExtensionPageState extends State<ExtensionPage> {
             child: Obx(
               () => Column(
                 children: [
-                  Row(
-                    children: [
-                      Text(
-                        'common.extension-installed'.i18n,
-                        style: const TextStyle(
-                          fontSize: 20,
-                          fontWeight: FontWeight.bold,
-                        ),
-                      ),
-                      const Spacer(),
-                      // 错误按钮
-                      if (c.errors.isNotEmpty)
-                        fluent.IconButton(
-                          icon: const Icon(fluent.FluentIcons.error),
-                          onPressed: () {
-                            _loadErrorDialog();
-                          },
-                        ),
-                    ],
-                  ),
-                  const SizedBox(height: 16),
-                  if (c.runtimes.isEmpty)
-                    Expanded(
-                      child: Column(
-                        mainAxisAlignment: MainAxisAlignment.center,
-                        children: [
-                          Text('common.no-extension'.i18n),
-                          const SizedBox(height: 8),
-                          fluent.FilledButton(
-                            child: Text(
-                              'common.extension-repo'.i18n,
-                            ),
-                            onPressed: () {
-                              router.push('/extension_repo');
-                            },
-                          )
-                        ],
-                      ),
-                    ),
+                  // Ancho máximo + centrado: en un monitor ancho la lista de
+                  // filas horizontales quedaba estirada de punta a punta,
+                  // dificil de leer — con el header y la lista adentro del
+                  // mismo bloque centrado, todo queda alineado entre sí en
+                  // vez de que el header quede suelto a lo ancho de toda la
+                  // ventana.
                   Expanded(
-                    child: ListView(
-                      children: [
-                        for (final ext in c.runtimes.values)
-                          Container(
-                            margin: const EdgeInsets.only(bottom: 8),
-                            child: ExtensionTile(ext.extension),
-                          ),
-                      ],
+                    child: Center(
+                      child: ConstrainedBox(
+                        constraints: const BoxConstraints(maxWidth: 900),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.stretch,
+                          children: [
+                            Row(
+                              children: [
+                                Text(
+                                  'common.extension-installed'.i18n,
+                                  style: const TextStyle(
+                                    fontSize: 20,
+                                    fontWeight: FontWeight.bold,
+                                  ),
+                                ),
+                                const Spacer(),
+                                // Refrescar: no había forma de recargar en
+                                // desktop sin gesto de arrastrar (eso solo
+                                // existe en Android) — vuelve a leer las
+                                // extensiones instaladas Y limpia la caché de
+                                // versiones remotas, igual que el gesto de
+                                // Android.
+                                fluent.IconButton(
+                                  icon: const Icon(fluent.FluentIcons.refresh),
+                                  onPressed: () {
+                                    ExtensionUtils.clearRemoteVersionsCache();
+                                    c.onRefresh();
+                                  },
+                                ),
+                                const SizedBox(width: 4),
+                                // 错误按钮
+                                if (c.errors.isNotEmpty)
+                                  fluent.IconButton(
+                                    icon: const Icon(fluent.FluentIcons.error),
+                                    onPressed: () {
+                                      _loadErrorDialog();
+                                    },
+                                  ),
+                              ],
+                            ),
+                            const SizedBox(height: 16),
+                            if (c.runtimes.isEmpty)
+                              Expanded(
+                                child: Column(
+                                  mainAxisAlignment: MainAxisAlignment.center,
+                                  children: [
+                                    Text('common.no-extension'.i18n),
+                                    const SizedBox(height: 8),
+                                    fluent.FilledButton(
+                                      child: Text(
+                                        'common.extension-repo'.i18n,
+                                      ),
+                                      onPressed: () {
+                                        router.push('/extension_repo');
+                                      },
+                                    )
+                                  ],
+                                ),
+                              )
+                            else
+                              Expanded(
+                                // padding derecha: mismo motivo que el
+                                // repositorio — el scrollbar de desktop se
+                                // dibuja pegado al borde del Scrollable y
+                                // quedaba encima de las filas sin este margen.
+                                child: ListView(
+                                  padding: const EdgeInsets.only(
+                                    right: 12,
+                                    bottom: 24,
+                                  ),
+                                  children: [
+                                    for (final ext in c.runtimes.values)
+                                      Container(
+                                        margin: const EdgeInsets.only(
+                                          bottom: 8,
+                                        ),
+                                        child: ExtensionTile(ext.extension),
+                                      ),
+                                  ],
+                                ),
+                              ),
+                          ],
+                        ),
+                      ),
                     ),
-                  )
+                  ),
                 ],
               ),
             ),

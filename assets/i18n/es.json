@@ -78,7 +78,12 @@
     "official-badge": "PrismPlus",
     "update-required": "Actualización requerida",
     "update-required-dialog": "Esta extensión tiene una actualización pendiente. Debes actualizarla para poder usarla.",
-    "go-to-update": "Ir a actualizar"
+    "go-to-update": "Ir a actualizar",
+    "unstable": "Inestable",
+    "unstable-blocked": "Extensión inestable, en espera de actualización",
+    "nsfw-warning-title": "Contenido +18",
+    "nsfw-warning-content": "Esta extensión puede contener contenido para adultos (+18). ¿Querés continuar?",
+    "nsfw-setting-required": "Activá el contenido +18 en Ajustes > General antes de instalar o activar esta extensión."
   },
   "extension-repo": {
     "error": "¡Ha ocurrido un error!",

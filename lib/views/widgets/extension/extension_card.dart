@@ -23,6 +23,7 @@ class ExtensionCard extends StatefulWidget {
     required this.lang,
     required this.nsfw,
     required this.type,
+    this.unstable = false,
     this.url,
     this.webSite,
     this.license,
@@ -37,6 +38,11 @@ class ExtensionCard extends StatefulWidget {
   final String lang;
   final ExtensionType type;
   final bool nsfw;
+  // Marcada `unstable` en el índice remoto (extensión con un bug conocido sin
+  // arreglar todavía, ej. LaMovie) — bloquea instalarla de nuevo desde acá.
+  // Si YA está instalada, el bloqueo real corre en ExtensionTile vía
+  // hasExtensionUpdate (mismo mecanismo que "actualización requerida").
+  final bool unstable;
   final String? webSite;
   final String? license;
   final String? description;
@@ -65,6 +71,12 @@ class _ExtensionCardState extends State<ExtensionCard> {
     super.initState();
   }
 
+  // Instalar/Actualizar NUNCA piden confirmación +18 — ese aviso es solo al
+  // ACTIVAR la extensión (ver ExtensionTile._toggleEnabled), instalar y
+  // activar son acciones distintas. El repositorio ya oculta estas cards
+  // por completo cuando el ajuste NSFW está apagado (ver
+  // ExtensionRepoPageController.onRefresh), así que no hace falta repetir
+  // el gate acá.
   _install() async {
     setState(() {
       isLoading = true;
@@ -184,35 +196,66 @@ class _ExtensionCardState extends State<ExtensionCard> {
             fontSize: 12,
             color: Theme.of(context).textTheme.bodySmall!.color,
           ),
-          // Wrap en vez de Row: con varios badges juntos (versión + tipo +
-          // idioma + 18+ + oficial) en pantallas angostas de celular, un Row
-          // fijo tiraba RenderFlex overflow — confirmado en vivo ("overflow
-          // by 28 pixels"). Wrap baja el resto a una segunda línea en vez de
-          // desbordar, igual que ya hace la versión de escritorio.
-          child: Wrap(
-            crossAxisAlignment: WrapCrossAlignment.center,
-            spacing: 8,
-            runSpacing: 2,
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            mainAxisSize: MainAxisSize.min,
             children: [
-              Text(widget.version),
-              Text(ExtensionUtils.typeToString(widget.type)),
-              Text(widget.lang),
-              if (widget.nsfw)
-                const Text(
-                  '18+',
-                  style: TextStyle(
-                    color: Colors.redAccent,
-                  ),
-                ),
-              // Solo indica que el catálogo trae firma de prism+ (no
-              // valida acá — eso pasa recién al instalar, ver _install()).
-              // Es solo informativo, no editable.
-              if (widget.signature != null && widget.signature!.isNotEmpty)
-                Text(
-                  'extension.official-badge'.i18n,
-                  style: const TextStyle(
-                    color: HomeTheme.accentPink,
-                    fontWeight: FontWeight.w600,
+              // Wrap en vez de Row: con varios badges juntos (versión + tipo
+              // + idioma + 18+ + oficial) en pantallas angostas de celular,
+              // un Row fijo tiraba RenderFlex overflow — confirmado en vivo
+              // ("overflow by 28 pixels"). Wrap baja el resto a una segunda
+              // línea en vez de desbordar, igual que ya hace la versión de
+              // escritorio.
+              Wrap(
+                crossAxisAlignment: WrapCrossAlignment.center,
+                spacing: 8,
+                runSpacing: 2,
+                children: [
+                  Text(widget.version),
+                  Text(ExtensionUtils.typeToString(widget.type)),
+                  Text(widget.lang),
+                  if (widget.nsfw)
+                    const Text(
+                      '18+',
+                      style: TextStyle(
+                        color: Colors.redAccent,
+                      ),
+                    ),
+                  if (widget.unstable)
+                    Text(
+                      'extension.unstable'.i18n,
+                      style: const TextStyle(
+                        color: Colors.orange,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                  // Solo indica que el catálogo trae firma de prism+ (no
+                  // valida acá — eso pasa recién al instalar, ver
+                  // _install()). Es solo informativo, no editable.
+                  if (widget.signature != null &&
+                      widget.signature!.isNotEmpty)
+                    Text(
+                      'extension.official-badge'.i18n,
+                      style: const TextStyle(
+                        color: HomeTheme.accentPink,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                ],
+              ),
+              // Mensaje completo (ancho total de la fila, sin límite de
+              // líneas) en vez de meterlo adentro del trailing de 90px —
+              // ahí quedaba cortado contra el borde de la pantalla
+              // (confirmado en vivo).
+              if (widget.unstable && !isInstall)
+                Padding(
+                  padding: const EdgeInsets.only(top: 2),
+                  child: Text(
+                    'extension.unstable-blocked'.i18n,
+                    style: const TextStyle(
+                      fontSize: 11,
+                      color: Colors.orange,
+                    ),
                   ),
                 ),
             ],
@@ -225,6 +268,13 @@ class _ExtensionCardState extends State<ExtensionCard> {
                 height: 25,
                 child: ProgressRing(),
               )
+            // Inestable y todavía no instalada: bloqueada, no se ofrece
+            // "Instalar" — el mensaje ya se explica en el subtítulo de
+            // abajo. Si YA estaba instalada, se deja el flujo normal
+            // (Actualizar/Desinstalar) porque el bloqueo real de uso corre
+            // en ExtensionTile vía hasExtensionUpdate.
+            : (widget.unstable && !isInstall)
+                ? const SizedBox.shrink()
             : isInstall
                 ? Wrap(
                     alignment: WrapAlignment.end,
@@ -279,17 +329,25 @@ class _ExtensionCardState extends State<ExtensionCard> {
   }
 
   Widget _buildDesktop(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.all(14),
-      decoration: BoxDecoration(
-        color: HomeTheme.cardSurface,
-        borderRadius: BorderRadius.circular(14),
-        border: Border.all(color: HomeTheme.border),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-        children: [
+    // Alto fijo: todas las cards del grid miden lo mismo sin importar cuántos
+    // badges/botones tenga cada una — antes una card con más badges (18+ +
+    // inestable + PrismPlus) o con Actualizar+Desinstalar juntos crecía más
+    // que sus vecinas y desalineaba la fila (confirmado en vivo con
+    // ShadeManga). mainAxisAlignment.spaceBetween sigue repartiendo el
+    // espacio sobrante adentro del alto fijo.
+    return SizedBox(
+      height: 250,
+      child: Container(
+        padding: const EdgeInsets.all(14),
+        decoration: BoxDecoration(
+          color: HomeTheme.cardSurface,
+          borderRadius: BorderRadius.circular(14),
+          border: Border.all(color: HomeTheme.border),
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+          children: [
           _iconBox(size: 64, iconSize: 30),
           const SizedBox(height: 8),
           Text(widget.name, style: const TextStyle(fontSize: 17)),
@@ -298,7 +356,13 @@ class _ExtensionCardState extends State<ExtensionCard> {
               fontSize: 12,
               color: fluent.FluentTheme.of(context).inactiveColor,
             ),
-            child: Row(
+            // Wrap en vez de Row: con varios badges juntos (tipo + idioma +
+            // 18+ + inestable + oficial) en una card angosta del grid, un Row
+            // fijo tira RenderFlex overflow — confirmado en vivo con
+            // ShadeManga ("overflow by 14 pixels"). Mismo fix que ya tenía la
+            // versión Android.
+            child: Wrap(
+              crossAxisAlignment: WrapCrossAlignment.center,
               children: [
                 Padding(
                   padding: const EdgeInsets.only(right: 8),
@@ -315,6 +379,17 @@ class _ExtensionCardState extends State<ExtensionCard> {
                       '18+',
                       style: TextStyle(
                         color: Colors.redAccent,
+                      ),
+                    ),
+                  ),
+                if (widget.unstable)
+                  Padding(
+                    padding: const EdgeInsets.only(right: 8),
+                    child: Text(
+                      'extension.unstable'.i18n,
+                      style: const TextStyle(
+                        color: Colors.orange,
+                        fontWeight: FontWeight.w600,
                       ),
                     ),
                   ),
@@ -350,6 +425,11 @@ class _ExtensionCardState extends State<ExtensionCard> {
                   height: 25,
                   child: ProgressRing(),
                 )
+              else if (widget.unstable && !isInstall)
+                Text(
+                  'extension.unstable-blocked'.i18n,
+                  style: const TextStyle(fontSize: 12, color: Colors.orange),
+                )
               else if (isInstall)
                 Wrap(
                   spacing: 8,
@@ -360,15 +440,36 @@ class _ExtensionCardState extends State<ExtensionCard> {
                       // morado); Desinstalar queda como botón simple — antes
                       // los dos eran FilledButton y competían por atención,
                       // sin distinguir cuál es la acción recomendada.
+                      // Compactos (padding chico): con los dos juntos en una
+                      // card de 220px de ancho, el tamaño default de fluent
+                      // los mandaba cada uno a su propia línea — confirmado
+                      // en vivo, agrandaba la card y desalineaba la fila del
+                      // grid contra las demás.
                       fluent.FilledButton(
-                        child: Text('extension-repo.upgrade'.i18n),
+                        style: fluent.ButtonStyle(
+                          padding: fluent.WidgetStateProperty.all(
+                            const EdgeInsets.symmetric(horizontal: 10),
+                          ),
+                        ),
+                        child: Text(
+                          'extension-repo.upgrade'.i18n,
+                          style: const TextStyle(fontSize: 12),
+                        ),
                         onPressed: () async {
                           await _install();
                           setState(() {});
                         },
                       ),
                     fluent.Button(
-                      child: Text('common.uninstall'.i18n),
+                      style: fluent.ButtonStyle(
+                        padding: fluent.WidgetStateProperty.all(
+                          const EdgeInsets.symmetric(horizontal: 10),
+                        ),
+                      ),
+                      child: Text(
+                        'common.uninstall'.i18n,
+                        style: const TextStyle(fontSize: 12),
+                      ),
                       onPressed: () async {
                         await ExtensionUtils.uninstall(widget.package);
                         setState(() {
@@ -387,7 +488,8 @@ class _ExtensionCardState extends State<ExtensionCard> {
                 )
             ],
           ),
-        ],
+          ],
+        ),
       ),
     );
   }

@@ -49,6 +49,10 @@ class ExtensionUtils {
   // ExtensionTile). TTL corto: evita golpear el repo en cada tile, pero no
   // deja quedar una versión vieja cacheada por toda la sesión.
   static Map<String, String>? _remoteVersionsCache;
+  // Packages que el índice remoto marca `unstable` (string "true" en el
+  // manifest, igual convención que nsfw) — se llena en el MISMO fetch que
+  // _remoteVersionsCache, sin pedir el índice dos veces. Ver hasExtensionUpdate.
+  static Map<String, bool>? _remoteUnstableCache;
   static DateTime? _remoteVersionsFetchedAt;
   static const _remoteVersionsTtl = Duration(minutes: 10);
   // Dedup de llamadas EN VUELO — el cache de arriba solo evita refetches
@@ -66,6 +70,7 @@ class ExtensionUtils {
   // reiniciara la app (reportado en vivo con Olympus).
   static void clearRemoteVersionsCache() {
     _remoteVersionsCache = null;
+    _remoteUnstableCache = null;
     _remoteVersionsFetchedAt = null;
   }
 
@@ -100,12 +105,15 @@ class ExtensionUtils {
       final decoded = jsonDecode(res.data!);
       final list = decoded is Map ? (decoded['extensions'] ?? []) : decoded;
       final map = <String, String>{};
+      final unstableMap = <String, bool>{};
       for (final e in list) {
         final pkg = e['package'] as String?;
         final ver = e['version'] as String?;
         if (pkg != null && ver != null) map[pkg] = ver;
+        if (pkg != null) unstableMap[pkg] = e['unstable'] == 'true' || e['unstable'] == true;
       }
       _remoteVersionsCache = map;
+      _remoteUnstableCache = unstableMap;
       _remoteVersionsFetchedAt = DateTime.now();
       return map;
     } catch (e) {
@@ -116,14 +124,67 @@ class ExtensionUtils {
   }
 
   // True si el package instalado tiene una versión más nueva en el índice
-  // remoto del repo. Comparación por desigualdad de string (igual que
-  // ExtensionCard en el repositorio) — no hay parsing semver hoy.
+  // remoto del repo, O si el catálogo remoto la marca `unstable` (ver
+  // build.mjs/disabled-extensions) — reutiliza el mismo badge/diálogo
+  // bloqueante de "actualización requerida" para una extensión que quedó
+  // rota y en espera de que se arregle, sin necesitar UI nueva. Comparación
+  // de versión por desigualdad de string (igual que ExtensionCard en el
+  // repositorio) — no hay parsing semver hoy.
   static Future<bool> hasExtensionUpdate(String package) async {
     final installed = runtimes[package]?.extension.version;
     if (installed == null) return false;
     final remote = await _fetchRemoteVersions();
+    if (_remoteUnstableCache?[package] == true) return true;
     final remoteVersion = remote[package];
     return remoteVersion != null && remoteVersion != installed;
+  }
+
+  // Igual que hasExtensionUpdate pero devuelve SOLO el motivo "inestable"
+  // (no versión) — usado para el badge naranja "Inestable" en ExtensionTile,
+  // separado del badge rojo genérico de "actualización requerida". Comparte
+  // el mismo caché/TTL, no pega de nuevo al índice.
+  static Future<bool> isRemoteUnstable(String package) async {
+    await _fetchRemoteVersions();
+    return _remoteUnstableCache?[package] == true;
+  }
+
+  // Actualiza una extensión YA instalada bajando la versión del catálogo
+  // remoto y reinstalándola — usado por el botón "Actualizar" de
+  // ExtensionTile (Extensiones instaladas), para no obligar a navegar al
+  // repositorio solo para eso. Misma verificación de firma que ExtensionCard.
+  static Future<void> updateInstalledFromRepo(
+    String package,
+    BuildContext context,
+  ) async {
+    final repoUrl = PrismHubStorage.getSetting(SettingKey.prismhubRepoUrl);
+    final bust = DateTime.now().millisecondsSinceEpoch;
+    final smallFetch = Options(receiveTimeout: const Duration(seconds: 20));
+    final res = await dio.get<String>('$repoUrl/index.json?t=$bust',
+        options: smallFetch);
+    final decoded = jsonDecode(res.data!);
+    final List list = decoded is Map ? (decoded['extensions'] ?? []) : decoded;
+    final entry = list.cast<Map>().firstWhere(
+          (e) => e['package'] == package,
+          orElse: () => {},
+        );
+    final scriptUrl = (entry['script'] ?? entry['url'])?.toString();
+    if (scriptUrl == null) throw Exception('extension.invalid'.i18n);
+    final sep = scriptUrl.contains('?') ? '&' : '?';
+    final js = await dio.get<String>('$scriptUrl${sep}t=$bust',
+        options: smallFetch);
+    if (js.data == null || js.data!.isEmpty) {
+      throw Exception('extension.invalid'.i18n);
+    }
+    final signature = entry['signature']?.toString();
+    var officialVerified = false;
+    if (signature != null && signature.isNotEmpty) {
+      if (!ExtensionSignature.isOfficial(js.data!, signature)) {
+        throw Exception('extension.invalid-signature'.i18n);
+      }
+      officialVerified = true;
+    }
+    // ignore: use_build_context_synchronously
+    await installByScript(js.data!, context, officialVerified: officialVerified);
   }
 
   static String get extensionsDir => path.join(
@@ -174,7 +235,10 @@ class ExtensionUtils {
   // exista la entrada firmada en el catálogo.
   static const Set<String> defaultPackages = {
     'io.prismhub.jkanime', // anime ES — múltiples servidores confiables
-    'io.prismhub.manhwaweb', // manhwa/manga ES — ManhwaWeb
+    // Las demás extensiones oficiales (manhwaweb, shademanga, etc.) ya NO se
+    // auto-instalan: el usuario debe instalarlas y activarlas a mano desde
+    // el repositorio (varias tienen contenido +18, ver nsfw gating en
+    // ExtensionCard/ExtensionTile).
   };
 
   // Todos los paquetes oficiales de prism+. Bloqueados de instalar externamente
@@ -240,18 +304,22 @@ class ExtensionUtils {
           decoded is Map ? (decoded['extensions'] ?? []) : decoded;
       for (final e in list) {
         final pkg = e['package']?.toString();
-        final scriptUrl = (e['script'] ?? e['url'])?.toString();
-        if (pkg == null || scriptUrl == null) continue;
-        // Registrar TODA extensión del catálogo oficial (no solo las default)
-        // para bloquear sideloads que las dupliquen.
+        if (pkg == null) continue;
+        // Registrar TODA extensión del catálogo oficial (no solo las default,
+        // e incluso una marcada `unstable` sin script real todavía — ej.
+        // LaMovie en disabled-extensions/) para bloquear sideloads que
+        // dupliquen su nombre/package.
         officialPackages.add(pkg);
         final officialName = e['name']?.toString().toLowerCase().trim();
         if (officialName != null && officialName.isNotEmpty) {
           officialNames.add(officialName);
         }
-        // Solo los 3 paquetes por defecto se auto-instalan en primer launch.
-        // Los demás nativos están disponibles en el catálogo del repo.
-        if (!defaultPackages.contains(pkg)) continue;
+        final scriptUrl = (e['script'] ?? e['url'])?.toString();
+        // Solo los paquetes por defecto se auto-instalan en primer launch, y
+        // solo si de verdad traen un bundle (una unstable sin script no se
+        // auto-instala nunca). Los demás nativos están disponibles en el
+        // catálogo del repo para instalar a mano.
+        if (scriptUrl == null || !defaultPackages.contains(pkg)) continue;
 
         final dest = File(path.join(extensionsDir, '$pkg.js'));
         final exists = dest.existsSync();

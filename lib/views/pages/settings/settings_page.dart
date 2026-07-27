@@ -10,6 +10,7 @@ import 'package:prismhub/utils/log.dart';
 import 'package:prismhub/utils/request.dart';
 import 'package:prismhub/controllers/extension/extension_repo_controller.dart';
 import 'package:prismhub/controllers/settings_controller.dart';
+import 'package:prismhub/utils/extension.dart';
 import 'package:prismhub/views/widgets/settings/settings_expander_tile.dart';
 import 'package:prismhub/views/widgets/settings/settings_input_tile.dart';
 import 'package:prismhub/views/widgets/settings/settings_radios_tile.dart';
@@ -154,6 +155,18 @@ class _SettingsPageState extends State<SettingsPage> {
               },
               onChanged: (value) {
                 PrismHubStorage.setSetting(SettingKey.enableNSFW, value);
+                // Seguridad NSFW: si el usuario apaga el ajuste, cualquier
+                // extensión nsfw que haya quedado activada se desactiva sola
+                // — sin esto, una extensión +18 seguía funcionando aunque el
+                // ajuste que la habilitó ya no estuviera prendido.
+                if (!value) {
+                  for (final entry in ExtensionUtils.runtimes.entries) {
+                    if (entry.value.extension.nsfw &&
+                        ExtensionUtils.isEnabled(entry.key)) {
+                      ExtensionUtils.setExtensionEnabled(entry.key, false);
+                    }
+                  }
+                }
               },
             ),
           ],

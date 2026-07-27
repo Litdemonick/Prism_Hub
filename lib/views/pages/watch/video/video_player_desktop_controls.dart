@@ -91,18 +91,31 @@ class _VideoPlayerDesktopControlsState
   // de error: antes, al cerrar el WebView (botón atrás) y volver acá, no
   // había forma de reabrirlo salvo tocar el servidor de nuevo en la lista
   // (que ni siquiera reintenta el mismo, según el servidor elegido).
-  void _openWebView() {
+  Future<void> _openWebView() async {
     final fallback = _c.webViewFallback.value;
     if (fallback == null) return;
     _c.webViewOpenedOnce.value = true;
+    // Mismo motivo que en mobile: el reproductor nativo seguía con su
+    // textura de video activa de fondo mientras el WebView se abre encima
+    // (esta pantalla apila sobre la anterior, no la reemplaza) — dos motores
+    // de render nativos pesados compitiendo por GPU en la misma ventana en
+    // Windows es la causa confirmada (mismo problema reportado en los repos
+    // de flutter_inappwebview y media_kit) del freeze/"No responde" — tan
+    // severo que ni un hot restart lo recupera. player.stop() solo no
+    // alcanza (para de decodificar, pero no libera la textura nativa) —
+    // isWebViewActive saca el widget Video del árbol entero mientras el
+    // WebView esté arriba (ver VideoPlayerConten).
+    unawaited(_c.player.stop());
+    _c.isWebViewActive.value = true;
     final referer = fallback['referer'];
-    openWebViewPlayer(
+    await openWebViewPlayer(
       context,
       fallback['url']!,
       referer: (referer == null || referer.isEmpty) ? null : referer,
       title: _c.title,
       onProgress: _c.saveWebViewProgress,
     );
+    if (mounted) _c.isWebViewActive.value = false;
   }
 
   void _showResumeDialog(int secs) {
@@ -299,18 +312,16 @@ class _VideoPlayerDesktopControlsState
                         if (!_c.isPlaying.value) {
                           return const SizedBox.shrink();
                         }
-                        return StreamBuilder(
-                          stream: _c.player.stream.buffering,
-                          builder: (context, snapshot) {
-                            if (snapshot.hasData && snapshot.data! ||
-                                _c.player.state.buffering) {
-                              return const ProgressRing(
-                                activeColor: HomeTheme.accentPink,
-                              );
-                            }
-                            return const SizedBox.shrink();
-                          },
-                        );
+                        // isActuallyBuffering (no el flag crudo de mpv) ya
+                        // descuenta los casos en que el video sigue
+                        // avanzando de verdad pero el flag quedó pegado en
+                        // true — ver VideoPlayerController.
+                        if (_c.isActuallyBuffering.value) {
+                          return const ProgressRing(
+                            activeColor: HomeTheme.accentPink,
+                          );
+                        }
+                        return const SizedBox.shrink();
                       }
                       return Card(
                         child: Row(

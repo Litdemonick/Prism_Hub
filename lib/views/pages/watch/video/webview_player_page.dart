@@ -101,14 +101,18 @@ bool isKnownNativeServer(String serverName, String url) {
 /// bypasses the native player entirely, so it has no other way to report
 /// progress). The elapsed-time counter itself lives on the caller's side
 /// (survives across a server switch, unlike this page).
-void openWebViewPlayer(
+// Devuelve el Future del push (en vez de "fire and forget") para que el
+// caller pueda saber cuándo esta pantalla se cerró — VideoPlayerConten lo usa
+// para reponer el widget Video recién ahí (ver isWebViewActive en
+// video_controller.dart).
+Future<void> openWebViewPlayer(
   BuildContext context,
   String url, {
   String? referer,
   String title = '',
   void Function(Uint8List? screenshot, {bool isFinal})? onProgress,
 }) {
-  Navigator.of(context).push(
+  return Navigator.of(context).push(
     MaterialPageRoute(
       builder: (_) => WebViewPlayerPage(
         url: url,
@@ -311,9 +315,21 @@ class _WebViewPlayerPageState extends State<WebViewPlayerPage>
   // Espera a tener el entorno de WebView2 antes de montar el widget — sin
   // esto el InAppWebView se crearía sin entorno y caería en la llamada nativa
   // que falla (ver comentario del entorno compartido arriba).
+  //
+  // El margen NO es solo para el reintento de ESTA página: el sniffer
+  // (StreamSnifferService.sniff/sniffPage) también crea y destruye su propio
+  // HeadlessInAppWebView justo antes de que esta página se abra sola por el
+  // fallback automático de WebView (ever(webViewFallback,...) en los
+  // controles) — confirmado en vivo: la app se queda "No responde" (freeze
+  // total, no un error atajable) al abrir el WebView justo después de que el
+  // sniffer falló. Mismo problema de fondo que el reintento (WebView2 en
+  // Windows todavía liberando recursos del proceso anterior), pero antes el
+  // margen solo se aplicaba con autoReloadAttempt>0, así que la PRIMERA vez
+  // que se abre (el caso más común del fallback automático) no tenía nada
+  // que lo protegiera.
   Future<void> _prepareMount() async {
     final env = await ensureWebViewEnvironment();
-    if (widget.autoReloadAttempt > 0 && Platform.isWindows) {
+    if (Platform.isWindows) {
       await Future.delayed(const Duration(milliseconds: 700));
     }
     if (!mounted) return;

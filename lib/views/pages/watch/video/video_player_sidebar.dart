@@ -14,6 +14,7 @@ enum SidebarTab {
   qualitys,
   torrentFiles,
   tracks,
+  servers,
   settings,
 }
 
@@ -50,31 +51,41 @@ class _VideoPlayerSidebarState extends State<VideoPlayerSidebar> {
     ),
   };
 
+  // Cada botón del footer (episodios/servidor/calidad/pistas/ajustes) abre
+  // SOLO su propia lista acá — a pedido explícito, ya no comparten una tira
+  // de pestañas donde servidor/episodios quedaban mezclados con pistas y
+  // ajustes. reactivo a initSidebarTab: si el panel ya está abierto y se
+  // toca OTRO botón del footer, cambia el contenido en vez de solo cerrar
+  // (ver VideoPlayerController.toggleSideBar).
   Widget _buildAndroid(BuildContext context) {
     return Container(
       color: ThemeData.dark().colorScheme.surface,
-      child: DefaultTabController(
-        length: _tabs.length,
-        initialIndex: !_tabs.keys.toList().contains(_c.initSidebarTab.value)
-            ? 0
-            : _tabs.keys.toList().indexOf(_c.initSidebarTab.value),
-        child: Column(
+      child: Obx(() {
+        final tab = _c.initSidebarTab.value;
+        final content = _tabs[tab];
+        return Column(
           children: [
-            TabBar(
-              tabAlignment: TabAlignment.center,
-              isScrollable: true,
-              tabs: _tabs.keys
-                  .map((e) => Tab(text: _sidebarTabToString(e)))
-                  .toList(),
+            Row(
+              children: [
+                Expanded(
+                  child: Padding(
+                    padding: const EdgeInsets.only(left: 16),
+                    child: Text(
+                      _sidebarTabToString(tab),
+                      style: const TextStyle(fontWeight: FontWeight.bold),
+                    ),
+                  ),
+                ),
+                IconButton(
+                  icon: const Icon(Icons.close),
+                  onPressed: () => _c.showSidebar.value = false,
+                ),
+              ],
             ),
-            Expanded(
-              child: TabBarView(
-                children: _tabs.values.toList(),
-              ),
-            ),
+            Expanded(child: content ?? const SizedBox.shrink()),
           ],
-        ),
-      ),
+        );
+      }),
     );
   }
 
@@ -127,6 +138,16 @@ class _VideoPlayerSidebarState extends State<VideoPlayerSidebar> {
       _tabs.addAll(
         {
           SidebarTab.qualitys: _QualitySelector(
+            controller: _c,
+          ),
+        },
+      );
+    }
+
+    if (_c.availableServers.isNotEmpty) {
+      _tabs.addAll(
+        {
+          SidebarTab.servers: _ServerSelector(
             controller: _c,
           ),
         },
@@ -835,6 +856,34 @@ class _QualitySelectorState extends State<_QualitySelector> {
           ),
       ],
     );
+  }
+}
+
+// Lista de servidores dentro del sidebar (celular) — a pedido explícito,
+// ya no queda una tira de pestañas siempre visible tapando el video; ahora
+// se abre bajo demanda con el mismo mecanismo que calidad/pistas/episodios.
+class _ServerSelector extends StatelessWidget {
+  const _ServerSelector({required this.controller});
+  final VideoPlayerController controller;
+
+  @override
+  Widget build(BuildContext context) {
+    return Obx(() {
+      final current = controller.currentServerName.value;
+      return ListView(
+        children: [
+          for (final entry in controller.availableServers.entries)
+            ListTile(
+              selected: entry.key == current,
+              title: Text(entry.key),
+              onTap: () {
+                controller.selectServer(entry.key);
+                controller.showSidebar.value = false;
+              },
+            ),
+        ],
+      );
+    });
   }
 }
 

@@ -1,9 +1,10 @@
-import { motion } from 'motion/react';
+import { motion, AnimatePresence } from 'motion/react';
 import {
   Puzzle, Zap, BookOpen, Star, Tv2, Layers,
   Shield, Code2, ArrowUpRight, Download, Terminal,
+  Sparkles, ShieldAlert, Gauge, LayoutGrid, Monitor, Smartphone,
 } from 'lucide-react';
-import type { ReactElement } from 'react';
+import { useState, type ReactElement } from 'react';
 import { useNavigate } from 'react-router-dom';
 import Hero from '../components/Hero';
 import { REPO, formatSize, useExtensionCount, useLatestRelease } from '../lib/githubRelease';
@@ -69,6 +70,33 @@ const features = [
     bg: 'rgba(6,182,212,0.10)', border: 'rgba(6,182,212,0.24)',
   },
 ];
+
+const whatsNew = [
+  {
+    Icon: ShieldAlert, title: 'Extensiones +18 y control por el usuario',
+    desc: 'Las extensiones con contenido para adultos ahora se marcan explícitamente y piden confirmación al activarlas — y se desactivan solas si apagás el modo +18 en Ajustes.',
+  },
+  {
+    Icon: Gauge, title: 'Reproductor más fluido',
+    desc: 'Decodificación por hardware habilitada en Windows y Android (antes forzaba software en todos lados) — menos tirones, más fluido, más batería.',
+  },
+  {
+    Icon: LayoutGrid, title: 'Repositorio de extensiones rediseñado',
+    desc: 'Extensiones inestables se marcan en espera de actualización sin bloquear el resto, y la cuadrícula se reordena sola sin desbordes al crecer el catálogo.',
+  },
+] as const;
+
+const screenshots = {
+  desktop: [
+    { src: '/screenshots/desktop-home.png', alt: 'Inicio de PrismHub en Windows: continuar viendo, favoritos y catálogo destacado' },
+    { src: '/screenshots/desktop-search.png', alt: 'Búsqueda unificada en PrismHub: resultados de todas tus extensiones agrupados por fuente' },
+    { src: '/screenshots/desktop-extension.png', alt: 'Filtro de género dentro de una extensión (Olympus) en PrismHub' },
+  ],
+  mobile: [
+    { src: '/screenshots/mobile-home.jpeg', alt: 'Inicio de PrismHub en Android' },
+    { src: '/screenshots/mobile-search.jpeg', alt: 'Búsqueda de PrismHub en Android, agrupada por extensión' },
+  ],
+} as const;
 
 type Platform = {
   name: string;
@@ -145,6 +173,7 @@ export default function Home() {
   const navigate = useNavigate();
   const release = useLatestRelease();
   const extensionCount = useExtensionCount();
+  const [shotView, setShotView] = useState<'desktop' | 'mobile'>('desktop');
   const stats = [
     { value: extensionCount != null ? String(extensionCount) : '4', label: 'Extensiones' },
     ...baseStats,
@@ -167,6 +196,108 @@ export default function Home() {
           ))}
         </div>
       </motion.section>
+
+      {/* ───── NOVEDADES ───── */}
+      <section className="relative py-24 px-6">
+        <div className="max-w-6xl mx-auto">
+          <motion.div {...fadeUp()} className="text-center mb-14">
+            <span className="section-badge inline-flex items-center gap-1.5">
+              <Sparkles className="w-3 h-3" /> Novedades · Beta 1.0.1
+            </span>
+            <h2 className="text-3xl md:text-4xl font-light text-white leading-tight mt-5">
+              Qué trae esta <span className="prism-text">actualización</span>
+            </h2>
+          </motion.div>
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+            {whatsNew.map((n, i) => (
+              <motion.div
+                key={n.title}
+                initial={{ opacity: 0, y: 30 }}
+                whileInView={{ opacity: 1, y: 0 }}
+                viewport={{ once: true, margin: '-60px' }}
+                transition={{ duration: 0.5, delay: i * 0.08 }}
+                className="card-glow rounded-2xl p-6"
+              >
+                <div className="w-10 h-10 rounded-xl bg-violet-500/12 border border-violet-500/22 flex items-center justify-center mb-4">
+                  <n.Icon className="w-4 h-4 text-violet-300" />
+                </div>
+                <h3 className="text-white text-[14px] font-normal mb-2">{n.title}</h3>
+                <p className="text-white/40 text-[12.5px] leading-relaxed">{n.desc}</p>
+              </motion.div>
+            ))}
+          </div>
+        </div>
+      </section>
+
+      {/* ───── SCREENSHOTS ───── */}
+      <section className="relative py-24 px-6">
+        <div className="absolute inset-0 bg-gradient-to-b from-transparent via-cyan-950/6 to-transparent pointer-events-none" />
+        <div className="max-w-6xl mx-auto">
+          <motion.div {...fadeUp()} className="text-center mb-10">
+            <span className="section-badge">▣  Capturas</span>
+            <h2 className="text-3xl md:text-4xl font-light text-white leading-tight mt-5 mb-5">
+              Así se ve <span className="prism-text">PrismHub</span>
+            </h2>
+            <p className="text-white/40 max-w-md mx-auto text-base leading-relaxed">
+              La misma app, nativa en escritorio y en tu celular.
+            </p>
+          </motion.div>
+
+          <motion.div {...fadeUp(0.1)} className="flex items-center justify-center gap-2 mb-10">
+            {(['desktop', 'mobile'] as const).map((v) => (
+              <button
+                key={v}
+                onClick={() => setShotView(v)}
+                className={`flex items-center gap-2 px-5 py-2.5 rounded-full text-sm transition-all ${
+                  shotView === v
+                    ? 'bg-violet-500/15 border border-violet-500/40 text-white'
+                    : 'border border-white/10 text-white/40 hover:text-white/70'
+                }`}
+              >
+                {v === 'desktop' ? <Monitor className="w-4 h-4" /> : <Smartphone className="w-4 h-4" />}
+                {v === 'desktop' ? 'Escritorio' : 'Celular'}
+              </button>
+            ))}
+          </motion.div>
+
+          <AnimatePresence mode="wait">
+            {shotView === 'desktop' ? (
+              <motion.div
+                key="desktop"
+                initial={{ opacity: 0, y: 12 }}
+                animate={{ opacity: 1, y: 0 }}
+                exit={{ opacity: 0, y: -12 }}
+                transition={{ duration: 0.35 }}
+                className="grid grid-cols-1 md:grid-cols-3 gap-5"
+              >
+                {screenshots.desktop.map((s) => (
+                  <div key={s.src} className="card-glow rounded-2xl overflow-hidden">
+                    <img src={s.src} alt={s.alt} loading="lazy" className="w-full h-auto block" />
+                  </div>
+                ))}
+              </motion.div>
+            ) : (
+              <motion.div
+                key="mobile"
+                initial={{ opacity: 0, y: 12 }}
+                animate={{ opacity: 1, y: 0 }}
+                exit={{ opacity: 0, y: -12 }}
+                transition={{ duration: 0.35 }}
+                className="flex flex-wrap items-start justify-center gap-6"
+              >
+                {screenshots.mobile.map((s) => (
+                  <div
+                    key={s.src}
+                    className="card-glow rounded-[2rem] overflow-hidden w-full max-w-[280px] border-4 border-white/10"
+                  >
+                    <img src={s.src} alt={s.alt} loading="lazy" className="w-full h-auto block" />
+                  </div>
+                ))}
+              </motion.div>
+            )}
+          </AnimatePresence>
+        </div>
+      </section>
 
       {/* ───── FEATURES ───── */}
       <section className="relative py-32 px-6">
@@ -215,6 +346,20 @@ export default function Home() {
       <section className="relative py-32 px-6">
         <div className="max-w-6xl mx-auto">
           <motion.div {...fadeUp()} className="text-center mb-20">
+            <motion.div
+              initial={{ opacity: 0, scale: 0.85 }}
+              whileInView={{ opacity: 1, scale: 1 }}
+              viewport={{ once: true }}
+              transition={{ duration: 0.6 }}
+              className="relative w-20 h-20 mx-auto mb-6"
+            >
+              <div className="absolute inset-0 rounded-3xl bg-violet-600/30 blur-2xl" />
+              <img
+                src="/brand/logo.png"
+                alt="PrismHub"
+                className="relative w-20 h-20 rounded-3xl border border-violet-500/30"
+              />
+            </motion.div>
             <span className="section-badge">↓  Instalación</span>
             <h2 className="text-4xl md:text-5xl lg:text-[58px] font-light text-white leading-tight mt-5 mb-5">
               Un solo comando<br/>
