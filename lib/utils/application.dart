@@ -315,7 +315,7 @@ class ApplicationUtils {
 
       // Windows/Linux: descargar y reemplazar app
       final extractDir =
-          Directory('${tempDir.path}${Platform.pathSeparator}app');
+          Directory('${downloadDir.path}${Platform.pathSeparator}app');
       extractDir.createSync();
 
       if (Platform.isLinux) {
@@ -339,7 +339,7 @@ class ApplicationUtils {
       Get.back();
 
       final sourceDir = _findExtractedAppDir(extractDir);
-      await _replaceAndRestart(sourceDir, tempDir);
+      await _replaceAndRestart(sourceDir, downloadDir);
     } catch (e) {
       Get.back();
       if (context.mounted) {
