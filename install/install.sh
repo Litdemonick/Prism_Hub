@@ -283,60 +283,60 @@ check_dependencies() {
         # ── Arch Linux y derivadas ────────────────────────────────────────────
         arch|manjaro|endeavouros|artix|garuda|cachyos|arcolinux|crystal|\
 archlabs|archcraft|parabola|hyperbola|blackarch)
-            pkg_names=("gtk3" "mpv" "libx11")
-            pkg_check=("pacman -Qs '^gtk3$'" "pacman -Qs '^mpv$'" "pacman -Qs '^libx11$'")
-            pkg_install=("sudo pacman -S --noconfirm gtk3" "sudo pacman -S --noconfirm mpv" "sudo pacman -S --noconfirm libx11")
+            pkg_names=("gtk3" "mpv" "libx11" "webkit2gtk")
+            pkg_check=("pacman -Qs '^gtk3$'" "pacman -Qs '^mpv$'" "pacman -Qs '^libx11$'" "pacman -Qs '^webkit2gtk$'")
+            pkg_install=("sudo pacman -S --noconfirm gtk3" "sudo pacman -S --noconfirm mpv" "sudo pacman -S --noconfirm libx11" "sudo pacman -S --noconfirm webkit2gtk")
             ;;
         # ── Debian / Ubuntu y derivadas ───────────────────────────────────────
         debian|ubuntu|linuxmint|pop|elementary|zorin|neon|kali|\
 raspbian|mx|antix|pureos|tails|parrot|deepin|backbox)
-            pkg_names=("libgtk-3-0" "mpv" "libx11-6")
-            pkg_check=("dpkg -s libgtk-3-0 2>/dev/null" "dpkg -s mpv 2>/dev/null" "dpkg -s libx11-6 2>/dev/null")
-            pkg_install=("sudo apt-get install -y libgtk-3-0" "sudo apt-get install -y mpv" "sudo apt-get install -y libx11-6")
+            pkg_names=("libgtk-3-0" "mpv" "libx11-6" "libwebkit2gtk-4.0-37")
+            pkg_check=("dpkg -s libgtk-3-0 2>/dev/null" "dpkg -s mpv 2>/dev/null" "dpkg -s libx11-6 2>/dev/null" "dpkg -s libwebkit2gtk-4.0-37 2>/dev/null || dpkg -s libjavascriptcoregtk-4.0-18 2>/dev/null")
+            pkg_install=("sudo apt-get install -y libgtk-3-0" "sudo apt-get install -y mpv" "sudo apt-get install -y libx11-6" "sudo apt-get install -y libwebkit2gtk-4.0-37")
             ;;
         # ── Fedora / RHEL y derivadas ─────────────────────────────────────────
         fedora|rhel|centos|rocky|alma|nobara|ultramarine|mageia|openmandriva)
-            pkg_names=("gtk3" "mpv")
-            pkg_check=("rpm -q gtk3 2>/dev/null" "rpm -q mpv 2>/dev/null")
-            pkg_install=("sudo dnf install -y gtk3" "sudo dnf install -y mpv")
+            pkg_names=("gtk3" "mpv" "webkit2gtk3")
+            pkg_check=("rpm -q gtk3 2>/dev/null" "rpm -q mpv 2>/dev/null" "rpm -q webkit2gtk3 2>/dev/null")
+            pkg_install=("sudo dnf install -y gtk3" "sudo dnf install -y mpv" "sudo dnf install -y webkit2gtk3")
             ;;
         # ── openSUSE ──────────────────────────────────────────────────────────
         opensuse|suse)
-            pkg_names=("libgtk-3-0" "mpv")
-            pkg_check=("rpm -q libgtk-3-0 2>/dev/null" "rpm -q mpv 2>/dev/null")
-            pkg_install=("sudo zypper install -y libgtk-3-0 mpv")
+            pkg_names=("libgtk-3-0" "mpv" "libwebkit2gtk-4_0-37")
+            pkg_check=("rpm -q libgtk-3-0 2>/dev/null" "rpm -q mpv 2>/dev/null" "rpm -q libwebkit2gtk-4_0-37 2>/dev/null")
+            pkg_install=("sudo zypper install -y libgtk-3-0" "sudo zypper install -y mpv" "sudo zypper install -y libwebkit2gtk-4_0-37")
             ;;
         # ── Void Linux ────────────────────────────────────────────────────────
         void)
-            pkg_names=("gtk+3" "mpv")
-            pkg_check=("xbps-query gtk+3 2>/dev/null" "xbps-query mpv 2>/dev/null")
-            pkg_install=("sudo xbps-install -Sy gtk+3" "sudo xbps-install -Sy mpv")
+            pkg_names=("gtk+3" "mpv" "webkit2gtk")
+            pkg_check=("xbps-query gtk+3 2>/dev/null" "xbps-query mpv 2>/dev/null" "xbps-query webkit2gtk 2>/dev/null")
+            pkg_install=("sudo xbps-install -Sy gtk+3" "sudo xbps-install -Sy mpv" "sudo xbps-install -Sy webkit2gtk")
             ;;
         # ── Alpine Linux ──────────────────────────────────────────────────────
         alpine)
-            pkg_names=("gtk+3.0" "mpv")
-            pkg_check=("apk info gtk+3.0 2>/dev/null" "apk info mpv 2>/dev/null")
-            pkg_install=("sudo apk add --no-cache gtk+3.0" "sudo apk add --no-cache mpv")
+            pkg_names=("gtk+3.0" "mpv" "webkit2gtk")
+            pkg_check=("apk info gtk+3.0 2>/dev/null" "apk info mpv 2>/dev/null" "apk info webkit2gtk 2>/dev/null")
+            pkg_install=("sudo apk add --no-cache gtk+3.0" "sudo apk add --no-cache mpv" "sudo apk add --no-cache webkit2gtk")
             ;;
         # ── Gentoo / Funtoo ───────────────────────────────────────────────────
         gentoo)
-            pkg_names=("x11-libs/gtk+" "media-video/mpv")
-            pkg_check=("equery list gtk+ 2>/dev/null" "equery list mpv 2>/dev/null")
-            pkg_install=("sudo emerge -av x11-libs/gtk+" "sudo emerge -av media-video/mpv")
+            pkg_names=("x11-libs/gtk+" "media-video/mpv" "net-libs/webkit-gtk")
+            pkg_check=("equery list gtk+ 2>/dev/null" "equery list mpv 2>/dev/null" "equery list webkit-gtk 2>/dev/null")
+            pkg_install=("sudo emerge -av x11-libs/gtk+" "sudo emerge -av media-video/mpv" "sudo emerge -av net-libs/webkit-gtk")
             ;;
         # ── Solus ─────────────────────────────────────────────────────────────
         solus)
-            pkg_names=("libgtk-3" "mpv")
-            pkg_check=("eopkg info libgtk-3 2>/dev/null" "eopkg info mpv 2>/dev/null")
-            pkg_install=("sudo eopkg install -y libgtk-3" "sudo eopkg install -y mpv")
+            pkg_names=("libgtk-3" "mpv" "libwebkitgtk")
+            pkg_check=("eopkg info libgtk-3 2>/dev/null" "eopkg info mpv 2>/dev/null" "eopkg info libwebkitgtk 2>/dev/null")
+            pkg_install=("sudo eopkg install -y libgtk-3" "sudo eopkg install -y mpv" "sudo eopkg install -y libwebkitgtk")
             ;;
         # ── NixOS ─────────────────────────────────────────────────────────────
         nixos)
             print ""
             warn "NixOS detectado."
             info "En NixOS instala las dependencias con nix-env o en configuration.nix:"
-            info "  nix-env -iA nixpkgs.gtk3 nixpkgs.mpv"
-            info "O agrega a configuration.nix: environment.systemPackages = [ pkgs.gtk3 pkgs.mpv ];"
+            info "  nix-env -iA nixpkgs.gtk3 nixpkgs.mpv nixpkgs.webkitgtk"
+            info "O agrega a configuration.nix: environment.systemPackages = [ pkgs.gtk3 pkgs.mpv pkgs.webkitgtk ];"
             print ""
             read -rp "  $(t dep_skip) [s/N]: " confirm </dev/tty || true
             print "\n${C_DIM}└──────────────────────────────────────────────────────────────────────────┘${C_RESET}"
@@ -350,6 +350,7 @@ raspbian|mx|antix|pureos|tails|parrot|deepin|backbox)
             info "  • gtk3 (libgtk-3-0 en sistemas Debian/Ubuntu)"
             info "  • mpv"
             info "  • libx11"
+            info "  • webkit2gtk (libwebkit2gtk-4.0-37 en Debian/Ubuntu)"
             print ""
             read -rp "  $(t dep_skip) [s/N]: " confirm </dev/tty || true
             print "\n${C_DIM}└──────────────────────────────────────────────────────────────────────────┘${C_RESET}"
