@@ -134,11 +134,49 @@ jobs:
 
             ### 🧩 Novedades de ${{ github.ref_name }}
 
-            - ✅ **Correcciones críticas en Linux**: Estabilidad mejorada, funciona correctamente con extensiones
-            - ✅ **Sistema de actualización mejorado**: Instalación automática de APK en Android sin abrir navegador
-            - ✅ **Actualización robusta en Windows/Linux**: Script mejorado, mejor manejo de permisos y tiempos de espera
-            - ✅ **Mejor logging**: Diagnóstico más fácil en caso de problemas
-            - ✨ Reproductor con failover automático entre servidores
+            #### 🔧 **Correcciones críticas en Linux**
+            - ✅ Estabilidad mejorada en Linux
+            - ✅ Funciona correctamente con extensiones JavaScript
+            - ✅ Mejor manejo de permisos de archivo
+
+            #### 📲 **Sistema de actualización automática mejorado**
+
+            **Android:**
+            - ✅ Descarga e instalación automática de APK directamente desde la app (sin abrir navegador)
+            - ✅ Soporte completo para FileProvider (Android 7.0+) — seguridad mejorada
+            - ✅ Instalador de APK integrado con fallback automático
+            - ✅ Permiso `REQUEST_INSTALL_PACKAGES` configurado correctamente
+
+            **Windows:**
+            - ✅ Script PowerShell mejorado con mejor manejo de permisos
+            - ✅ Detección automática de instalación estándar vs. portable
+            - ✅ Soporte para elevar permisos cuando es necesario
+            - ✅ Timeout aumentado para procesos más lentos
+            - ✅ Logging detallado para diagnóstico
+
+            **Linux:**
+            - ✅ Extracción correcta de archivos con tar
+            - ✅ Permisos ejecutables garantizados (chmod +x)
+            - ✅ Reinicio de la aplicación en nuevo proceso sin bloqueos
+            - ✅ Mejor manejo de errores con fallback
+
+            #### 🎨 **Interfaz de actualización mejorada**
+            - ✅ Diálogo flotante y centrado (ya no ocupa toda la pantalla)
+            - ✅ Diseño responsive para desktop (máx. 600px) y mobile
+            - ✅ Barra de título movible en escritorio
+            - ✅ Fondo semi-transparente oscuro
+            - ✅ Mejor legibilidad del changelog
+
+            #### 🐛 **Mejoras generales**
+            - ✅ Descarga con indicador de progreso
+            - ✅ Mejor logging y diagnóstico de errores
+            - ✅ Manejo robusto de excepciones
+            - ✅ Botón "Download & Install" funcional en Windows/Linux
+            - ✅ Soporte MethodChannel para instalación de APK en Android
+            - ✅ Página web actualizada a v${{ github.ref_name }}
+
+            #### 🎯 **Características anteriores (v1.0.1)**
+            - 🎬 Reproductor con failover automático entre servidores
             - 📖 Lector de manga con modo paginado y modo cascada (webtoon)
             - 📋 Historial y favoritos con progreso guardado localmente
             - 🔄 Auto-actualización en Windows y Linux
