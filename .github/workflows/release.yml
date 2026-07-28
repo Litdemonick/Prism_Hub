@@ -4,12 +4,23 @@ on:
   push:
     tags:
       - v*
+  # Permite correr esto a mano (sin pushear ningún tag) para probar un build
+  # antes de publicarlo — ej. validar el fix de Linux en una VM real antes de
+  # confirmarlo como release público. El job de Linux sube el resultado como
+  # artifact de Actions (privado, no un release) cuando se dispara así; solo
+  # publica de verdad cuando lo dispara un push de tag v* (ver los "if:" más
+  # abajo en cada job "Release ...").
+  workflow_dispatch:
 
 permissions:
   contents: write
 
 jobs:
   build-and-release-android:
+    # Se salta en workflow_dispatch: un run manual es para probar el fix de
+    # Linux puntualmente, no hace falta gastar minutos de CI ni firmar un APK
+    # de Android que no cambió.
+    if: github.event_name == 'push'
     runs-on: ubuntu-latest
     permissions:
       contents: write
@@ -58,9 +69,13 @@ jobs:
     permissions:
       contents: write
     steps:
+      # Sin "ref: main" fijo (a propósito, solo acá): así un workflow_dispatch
+      # manual desde develop compila lo que hay en develop (para probar el fix
+      # de Linux antes de mergear a main), en vez de traer siempre main como
+      # hacen los otros dos jobs. Un push de tag v* sigue construyendo el
+      # commit exacto que apunta el tag, que es lo mismo que main en el flujo
+      # normal de release.
       - uses: actions/checkout@v4
-        with:
-          ref: main
       - uses: subosito/flutter-action@v2
         with:
           channel: stable
@@ -74,32 +89,69 @@ jobs:
       - run: flutter pub get
       - name: Build Linux
         run: flutter build linux --release
-      - name: Ensure QuickJS library is in bundle
+      - name: Rebuild QuickJS bridge (patched) and install into bundle
         run: |
           set -e
-          BUNDLE_LIB="build/linux/x64/release/bundle/lib"
+          REPO_ROOT="$(pwd)"
+          BUNDLE_LIB="$REPO_ROOT/build/linux/x64/release/bundle/lib"
           mkdir -p "$BUNDLE_LIB"
-          # flutter_js 0.8.x usa flutter_qjs_bundled_libraries (con qjs) en vez de
-          # flutter_js_bundled_libraries, por lo que el .so no se copia al bundle
-          # via PLUGIN_BUNDLED_LIBRARIES. El install() del CMake de flutter_js
-          # tampoco es confiable en CI. Lo copiamos manualmente.
-          SO_PATH=$(grep -A2 '"name": "flutter_js"' .dart_tool/package_config.json \
-            | grep '"rootUri"' \
-            | cut -d'"' -f4 \
-            | sed 's|file://||')
-          SO_SRC="${SO_PATH}/linux/shared/libquickjs_c_bridge_plugin.so"
-          if [ -f "$SO_SRC" ]; then
-            cp -v "$SO_SRC" "$BUNDLE_LIB/"
-            echo "✅ libquickjs_c_bridge_plugin.so copiado al bundle"
+          # El libquickjs_c_bridge_plugin.so que trae flutter_js 0.8.x es un
+          # binario precompilado en 2021 (repo abner/quickjs-c-bridge) —
+          # confirmado en vivo que crashea con SIGSEGV en distros Linux
+          # modernas (CachyOS) justo al crear el PRIMER contexto JS, dentro
+          # de JS_NewContext → JS_AddIntrinsicBasicObjects → js_new_shape
+          # (o sea, antes de correr una sola línea de JS de una extensión).
+          # El wrapper (cxx/libfastdev_quickjs_runtime.cpp) desactiva el GC
+          # por completo pasándole (size_t)-1 como umbral (el valor máximo
+          # posible) mientras deja un techo duro de memoria de 64MB — un
+          # valor centinela así en un motor de 2021 es sospechoso de un bug
+          # de comparación con/sin signo en esa ruta, justo la que se
+          # ejecuta al reservar las shapes de los objetos base. Se recompila
+          # el MISMO código (no se toca el motor QuickJS en sí, sigue siendo
+          # el de 2021) parcheando solo esa línea a un umbral finito y
+          # generoso, para no acercarse nunca al caso límite. Si la
+          # recompilación falla por lo que sea, cae al binario precompilado
+          # original (mismo comportamiento que había antes) en vez de romper
+          # el release entero.
+          set +e
+          (
+            set -e
+            git clone --quiet https://github.com/abner/quickjs-c-bridge.git /tmp/quickjs-c-bridge
+            cd /tmp/quickjs-c-bridge
+            git checkout --quiet 7204d9bf1afbe0550d51d7decdcce398b2c22e1a
+            sed -i \
+              's/JS_SetGCThreshold(runtime, (size_t)-1);.*/JS_SetGCThreshold(runtime, (size_t)0x2000000); \/\/ patched: umbral finito en vez de SIZE_MAX/' \
+              cxx/libfastdev_quickjs_runtime.cpp
+            grep -n "JS_SetGCThreshold" cxx/libfastdev_quickjs_runtime.cpp
+            cmake -S ./linux -B ./build/linux
+            cmake --build ./build/linux
+            SO_BUILT=$(find ./build/linux -iname "libquickjs_c_bridge_plugin.so" | head -1)
+            [ -n "$SO_BUILT" ]
+            cp -v "$SO_BUILT" "$BUNDLE_LIB/"
+          )
+          BUILD_STATUS=$?
+          set -e
+          if [ "$BUILD_STATUS" -eq 0 ]; then
+            echo "✅ libquickjs_c_bridge_plugin.so recompilado (GC threshold parcheado) e instalado en el bundle"
           else
-            echo "⚠️  No encontrado en $SO_SRC, buscando en pub cache..."
-            SO_FALLBACK=$(find "$HOME/.pub-cache" -path "*/flutter_js-*/linux/shared/libquickjs_c_bridge_plugin.so" 2>/dev/null | head -1)
-            if [ -n "$SO_FALLBACK" ]; then
-              cp -v "$SO_FALLBACK" "$BUNDLE_LIB/"
-              echo "✅ libquickjs_c_bridge_plugin.so copiado desde fallback"
+            echo "⚠️  La recompilación desde fuente falló — usando el binario precompilado de flutter_js como antes"
+            SO_PATH=$(grep -A2 '"name": "flutter_js"' .dart_tool/package_config.json \
+              | grep '"rootUri"' \
+              | cut -d'"' -f4 \
+              | sed 's|file://||')
+            SO_SRC="${SO_PATH}/linux/shared/libquickjs_c_bridge_plugin.so"
+            if [ -f "$SO_SRC" ]; then
+              cp -v "$SO_SRC" "$BUNDLE_LIB/"
+              echo "✅ libquickjs_c_bridge_plugin.so copiado al bundle (sin parche)"
             else
-              echo "❌ libquickjs_c_bridge_plugin.so no encontrado — el bundle no funcionará"
-              exit 1
+              SO_FALLBACK=$(find "$HOME/.pub-cache" -path "*/flutter_js-*/linux/shared/libquickjs_c_bridge_plugin.so" 2>/dev/null | head -1)
+              if [ -n "$SO_FALLBACK" ]; then
+                cp -v "$SO_FALLBACK" "$BUNDLE_LIB/"
+                echo "✅ libquickjs_c_bridge_plugin.so copiado desde fallback (sin parche)"
+              else
+                echo "❌ libquickjs_c_bridge_plugin.so no encontrado — el bundle no funcionará"
+                exit 1
+              fi
             fi
           fi
           echo "Contenido final de lib/:"
@@ -108,7 +160,20 @@ jobs:
         run: |
           cd build/linux/x64/release/bundle
           tar -czf ../../../../../PrismHub-${{ github.ref_name }}-linux-x64.tar.gz .
+      # Disparado a mano (workflow_dispatch, sin tag): sube el tar.gz como
+      # artifact privado de este run de Actions, para bajarlo y probar en una
+      # VM/máquina real ANTES de confirmarlo como release público.
+      - name: Upload test artifact
+        if: github.event_name == 'workflow_dispatch'
+        uses: actions/upload-artifact@v4
+        with:
+          name: PrismHub-linux-x64-test
+          path: PrismHub-${{ github.ref_name }}-linux-x64.tar.gz
+          retention-days: 7
+      # Solo publica de verdad cuando lo dispara un push de tag v* — un run
+      # manual (workflow_dispatch) nunca toca el release público.
       - name: Release Linux
+        if: github.event_name == 'push'
         uses: ncipollo/release-action@v1
         with:
           token: ${{ secrets.GITHUB_TOKEN }}
@@ -117,6 +182,8 @@ jobs:
           generateReleaseNotes: true
 
   build-and-release-windows:
+    # Se salta en workflow_dispatch — ver comentario en build-and-release-android.
+    if: github.event_name == 'push'
     runs-on: windows-2022
     permissions:
       contents: write
@@ -166,6 +233,10 @@ jobs:
             | `PrismHub-${{ github.ref_name }}-android-x86_64.apk` | Android | x86_64 (emuladores / tabletas x86) |
 
             ### 🧩 Novedades de ${{ github.ref_name }}
+
+            #### 🐧 **Linux — crash al abrir reparado**
+            - ✅ Reparado: la app instalaba pero se cerraba sola al abrir en Linux (crash nativo al cargar extensiones, confirmado en distros modernas como CachyOS)
+            - ✅ El bridge de QuickJS que ejecuta las extensiones se recompila desde el código fuente con un ajuste puntual de manejo de memoria, en vez de usar el binario precompilado de 2021 que traía el paquete
 
             #### 🎬 **Reproductor de video — estabilidad**
             - ✅ Reparado: la imagen no se veía (solo audio) al abrir un capítulo en algunos servidores
