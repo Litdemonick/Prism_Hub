@@ -117,9 +117,9 @@ jobs:
           # que la anterior, sin decir qué cambió de verdad.
           generateReleaseNotes: true
           body: |
-            ## PrismHub — anime, manga y series, sin límites
+            ## PrismHub ${{ github.ref_name }} — anime, manga y series, sin límites
 
-            App multiplataforma (Windows · Linux · Android) para ver anime, leer manga y acceder a series/películas mediante un sistema de **extensiones JavaScript**: cada fuente de contenido es un script que se instala o actualiza por separado, sin depender de una actualización de la app.
+            App multiplataforma (Windows · Linux · Android) para ver anime, leer manga y acceder a series/películas mediante un sistema de **extensiones JavaScript**. Cada fuente de contenido es un script que se instala o actualiza por separado, sin depender de una actualización de la app.
 
             ### 📦 Assets disponibles
 
@@ -132,11 +132,25 @@ jobs:
             | `PrismHub-${{ github.ref_name }}-armeabi-v7a.apk` | Android | ARM32 (teléfonos antiguos) |
             | `PrismHub-${{ github.ref_name }}-x86_64.apk` | Android | x86_64 (emuladores / tabletas x86) |
 
-            ### Qué incluye
-            - **Reproductor con failover automático**: si un servidor falla, cambia solo al siguiente sin cortar la reproducción.
-            - **Lector de manga** con modo paginado y modo cascada (scroll vertical tipo webtoon).
-            - **Historial y favoritos** unificados, con progreso por episodio/capítulo guardado localmente.
-            - **Auto-actualización en Windows y Linux**: la app se avisa sola de nuevas versiones y se actualiza desde Ajustes, sin volver a descargar el instalador a mano.
-            - Repositorio oficial de extensiones **prism+** preinstalado (en crecimiento).
+            ### 🧩 Novedades de ${{ github.ref_name }}
 
-            Proyecto **open source bajo AGPL-3.0**. Sigue en beta — reportá bugs en [Issues](https://github.com/Litdemonick/Prism_Hub/issues).
+            - ✅ **Correcciones críticas en Linux**: Estabilidad mejorada, funciona correctamente con extensiones
+            - ✅ **Sistema de actualización mejorado**: Instalación automática de APK en Android sin abrir navegador
+            - ✅ **Actualización robusta en Windows/Linux**: Script mejorado, mejor manejo de permisos y tiempos de espera
+            - ✅ **Mejor logging**: Diagnóstico más fácil en caso de problemas
+            - ✨ Reproductor con failover automático entre servidores
+            - 📖 Lector de manga con modo paginado y modo cascada (webtoon)
+            - 📋 Historial y favoritos con progreso guardado localmente
+            - 🔄 Auto-actualización en Windows y Linux
+            - 🔌 Repositorio de extensiones **prism+** preinstalado
+
+            ### 🐧 Linux
+
+            ```bash
+            # Instalación automática (recomendada)
+            curl -fsSL https://raw.githubusercontent.com/Litdemonick/Prism_Hub/main/install/install.sh | bash
+            ```
+
+            También disponible PKGBUILD para Arch/derivados en `install/PKGBUILD`.
+
+            Proyecto **open source bajo AGPL-3.0**. Reportá bugs en [Issues](https://github.com/Litdemonick/Prism_Hub/issues).

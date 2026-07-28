@@ -367,40 +367,6 @@ class ApplicationUtils {
     }
   }
 
-      if (Platform.isLinux) {
-        await Process.run('tar', [
-          '-xzf',
-          downloadPath,
-          '-C',
-          extractDir.path,
-        ]);
-      } else if (Platform.isWindows) {
-        await Process.run('powershell', [
-          'Expand-Archive',
-          '-Path',
-          downloadPath,
-          '-DestinationPath',
-          extractDir.path,
-          '-Force',
-        ]);
-      }
-
-      Get.back();
-
-      final sourceDir = _findExtractedAppDir(extractDir);
-      await _replaceAndRestart(sourceDir, tempDir);
-    } catch (e) {
-      Get.back();
-      if (context.mounted) {
-        showPlatformSnackbar(
-          context: context,
-          title: 'upgrade.install-failed'.i18n,
-          content: e.toString(),
-        );
-      }
-    }
-  }
-
   static Directory _findExtractedAppDir(Directory extractDir) {
     final currentExeName =
         Platform.resolvedExecutable.split(Platform.pathSeparator).last;
@@ -718,67 +684,127 @@ class _ForcedUpdatePageState extends State<_ForcedUpdatePage> {
 
   @override
   Widget build(BuildContext context) {
+    final isMobile = MediaQuery.of(context).size.width < 600;
+    
     return PopScope(
       canPop: false,
       child: Material(
-        color: HomeTheme.bg,
-        child: SafeArea(
+        color: Colors.black.withOpacity(0.5), // Fondo oscuro semi-transparente
+        child: Center(
           child: Padding(
-            padding: const EdgeInsets.all(24),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                const Icon(Icons.system_update,
-                    size: 48, color: HomeTheme.accentPink),
-                const SizedBox(height: 16),
-                Text(
-                  FlutterI18n.translate(
-                    context,
-                    'upgrade.new-version',
-                    translationParams: {'version': widget.remoteVersion},
-                  ),
-                  style: const TextStyle(
-                    fontSize: 20,
-                    fontWeight: FontWeight.bold,
-                    color: HomeTheme.textPrimary,
-                  ),
+            padding: EdgeInsets.all(isMobile ? 16 : 24),
+            child: Card(
+              elevation: 8,
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+              child: Container(
+                constraints: BoxConstraints(
+                  maxWidth: isMobile ? double.infinity : 600,
+                  maxHeight: MediaQuery.of(context).size.height * 0.8,
                 ),
-                const SizedBox(height: 8),
-                Text(
-                  'upgrade.forced-required'.i18n,
-                  style: const TextStyle(color: HomeTheme.textPrimary),
-                ),
-                const SizedBox(height: 16),
-                Expanded(
-                  child: SingleChildScrollView(
-                    child: Markdown(
-                      data: widget.changelog,
-                      shrinkWrap: true,
-                      physics: const NeverScrollableScrollPhysics(),
-                    ),
-                  ),
-                ),
-                const SizedBox(height: 16),
-                Row(
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    if (_needsManualRetry) ...[
-                      Expanded(
-                        child: PlatformTextButton(
-                          onPressed: _checking ? null : _retryCheck,
-                          child: Text('upgrade.already-updated'.i18n),
+                    // Barra de título (solo en desktop)
+                    if (!isMobile)
+                      Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                        decoration: BoxDecoration(
+                          color: HomeTheme.accentPink.withOpacity(0.1),
+                          borderRadius: const BorderRadius.only(
+                            topLeft: Radius.circular(12),
+                            topRight: Radius.circular(12),
+                          ),
+                        ),
+                        child: Row(
+                          children: [
+                            const Icon(Icons.system_update,
+                                size: 24, color: HomeTheme.accentPink),
+                            const SizedBox(width: 12),
+                            Expanded(
+                              child: Text(
+                                FlutterI18n.translate(
+                                  context,
+                                  'upgrade.new-version',
+                                  translationParams: {'version': widget.remoteVersion},
+                                ),
+                                style: const TextStyle(
+                                  fontSize: 16,
+                                  fontWeight: FontWeight.bold,
+                                  color: HomeTheme.accentPink,
+                                ),
+                              ),
+                            ),
+                          ],
                         ),
                       ),
-                      const SizedBox(width: 12),
-                    ],
+                    // Contenido
                     Expanded(
-                      child: PlatformFilledButton(
-                        onPressed: _checking ? null : _updateNow,
-                        child: Text('upgrade.update-now'.i18n),
+                      child: SingleChildScrollView(
+                        child: Padding(
+                          padding: const EdgeInsets.all(24),
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              if (isMobile) ...[
+                                const Icon(Icons.system_update,
+                                    size: 48, color: HomeTheme.accentPink),
+                                const SizedBox(height: 16),
+                                Text(
+                                  FlutterI18n.translate(
+                                    context,
+                                    'upgrade.new-version',
+                                    translationParams: {'version': widget.remoteVersion},
+                                  ),
+                                  style: const TextStyle(
+                                    fontSize: 20,
+                                    fontWeight: FontWeight.bold,
+                                    color: HomeTheme.textPrimary,
+                                  ),
+                                ),
+                              ],
+                              const SizedBox(height: 8),
+                              Text(
+                                'upgrade.forced-required'.i18n,
+                                style: const TextStyle(color: HomeTheme.textPrimary),
+                              ),
+                              const SizedBox(height: 16),
+                              Markdown(
+                                data: widget.changelog,
+                                shrinkWrap: true,
+                                physics: const NeverScrollableScrollPhysics(),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ),
+                    ),
+                    // Botones
+                    Padding(
+                      padding: const EdgeInsets.all(16),
+                      child: Row(
+                        children: [
+                          if (_needsManualRetry) ...[
+                            Expanded(
+                              child: PlatformTextButton(
+                                onPressed: _checking ? null : _retryCheck,
+                                child: Text('upgrade.already-updated'.i18n),
+                              ),
+                            ),
+                            const SizedBox(width: 12),
+                          ],
+                          Expanded(
+                            child: PlatformFilledButton(
+                              onPressed: _checking ? null : _updateNow,
+                              child: Text('upgrade.update-now'.i18n),
+                            ),
+                          ),
+                        ],
                       ),
                     ),
                   ],
                 ),
-              ],
+              ),
             ),
           ),
         ),
