@@ -283,22 +283,22 @@ check_dependencies() {
         # ── Arch Linux y derivadas (CachyOS, Manjaro, etc.) ─────────────────
         arch|manjaro|endeavouros|artix|garuda|cachyos|arcolinux|crystal|\
 archlabs|archcraft|parabola|hyperbola|blackarch)
-            # flutter_inappwebview 6.x necesita webkit2gtk-4.1 (paquete
-            # "webkit2gtk" en Arch).  Algunas derivadas solo tienen el
-            # "webkitgtk" legacy (4.0).  Detectamos cuál está disponible.
+            # El binario pre-compilado de GitHub Releases está linkeado contra
+            # webkit2gtk 4.0 → paquete "webkitgtk" en Arch.
+            # "webkit2gtk" es 4.1 y NO es compatible con el binario actual.
             local _wk_pkg _wk_check _wk_install
-            if pacman -Si webkit2gtk &>/dev/null; then
-                _wk_pkg="webkit2gtk"
-                _wk_check="pacman -Qs '^webkit2gtk$'"
-                _wk_install="sudo pacman -S --noconfirm webkit2gtk"
-            elif pacman -Si webkitgtk &>/dev/null; then
+            if pacman -Si webkitgtk &>/dev/null; then
                 _wk_pkg="webkitgtk"
                 _wk_check="pacman -Qs '^webkitgtk$'"
                 _wk_install="sudo pacman -S --noconfirm webkitgtk"
-            else
+            elif pacman -Si webkit2gtk &>/dev/null; then
                 _wk_pkg="webkit2gtk"
+                _wk_check="pacman -Qs '^webkit2gtk$'"
+                _wk_install="sudo pacman -S --noconfirm webkit2gtk"
+            else
+                _wk_pkg="webkitgtk"
                 _wk_check="false"
-                _wk_install="echo 'ADVERTENCIA: no se encontró webkit2gtk ni webkitgtk en los repositorios. Instálalo manualmente.'"
+                _wk_install="echo 'ADVERTENCIA: no se encontró webkitgtk ni webkit2gtk en los repositorios. Instálalo manualmente.'"
             fi
 
             pkg_names=("gtk3" "mpv" "libx11" "${_wk_pkg}")
