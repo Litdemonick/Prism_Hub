@@ -41,28 +41,34 @@ class _NovelReaderSettingsState extends State<NovelReaderSettings> {
   }
 
   Widget _buildDesktop(BuildContext context) {
-    return fluent.Card(
-      backgroundColor: fluent.FluentTheme.of(context).micaBackgroundColor,
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Text("novel-settings.font-size".i18n),
-          const SizedBox(height: 16),
-          Obx(
-            () => SizedBox(
-              width: 200,
-              child: fluent.Slider(
-                value: _c.fontSize.value,
-                onChanged: (value) {
-                  _c.fontSize.value = value;
-                },
-                min: 12,
-                max: 24,
+    // Center: el Flyout que abre esto (ControlPanelHeader) usa
+    // placementMode: full, que da toda la pantalla como constraints y deja
+    // que el contenido se posicione solo — sin esto quedaba pegado arriba a
+    // la izquierda en vez de en el medio.
+    return Center(
+      child: fluent.Card(
+        backgroundColor: fluent.FluentTheme.of(context).micaBackgroundColor,
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Text("novel-settings.font-size".i18n),
+            const SizedBox(height: 16),
+            Obx(
+              () => SizedBox(
+                width: 200,
+                child: fluent.Slider(
+                  value: _c.fontSize.value,
+                  onChanged: (value) {
+                    _c.fontSize.value = value;
+                  },
+                  min: 12,
+                  max: 24,
+                ),
               ),
             ),
-          ),
-        ],
+          ],
+        ),
       ),
     );
   }

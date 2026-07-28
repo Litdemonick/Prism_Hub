@@ -1,4 +1,4 @@
-﻿import 'package:fluent_ui/fluent_ui.dart' as fluent;
+import 'package:fluent_ui/fluent_ui.dart' as fluent;
 import 'package:flutter/material.dart';
 import 'package:prismhub/utils/i18n.dart';
 import 'package:prismhub/views/widgets/horizontal_scroll_fade.dart';
@@ -12,7 +12,7 @@ class HorizontalList extends StatefulWidget {
     this.itemCount,
     this.itemBuilder,
     this.contentBuilder,
-  })  : assert(
+  }) : assert(
           (itemCount != null && itemBuilder != null) || contentBuilder != null,
           "itemCount and itemBuilder or contentBuilder must not be null",
         );
@@ -154,7 +154,7 @@ class _HorizontalTitleState extends State<HorizontalTitle> {
   Widget build(BuildContext context) {
     return MouseRegion(
       cursor: SystemMouseCursors.click,
-      onHover: (event) {
+      onEnter: (event) {
         setState(() {
           _hoverTitle = true;
         });

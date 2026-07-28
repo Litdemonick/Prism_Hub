@@ -1,4 +1,4 @@
-﻿import 'dart:async';
+import 'dart:async';
 
 import 'package:get/get.dart';
 import 'package:prismhub/models/extension.dart';
@@ -58,12 +58,18 @@ class ReaderController<T> extends GetxController {
   late final index = playIndex.obs;
   get cuurentPlayUrl => playList[index.value].url;
   Timer? _timer;
+  DateTime? _lastControlPanelReset;
+  final List<Worker> _workers = [];
 
   @override
   void onInit() {
     getContent();
-    ever(index, (callback) => getContent());
+    addWorker(ever(index, (callback) => getContent()));
     super.onInit();
+  }
+
+  void addWorker(Worker worker) {
+    _workers.add(worker);
   }
 
   // Solo hace falta para una extensión "mixed" (ExtensionService.watch()
@@ -99,7 +105,17 @@ class ReaderController<T> extends GetxController {
   bool get clickPagingEnabled => true;
 
   showControlPanel() {
-    isShowControlPanel.value = true;
+    final now = DateTime.now();
+    if (isShowControlPanel.value &&
+        _lastControlPanelReset != null &&
+        now.difference(_lastControlPanelReset!) <
+            const Duration(milliseconds: 250)) {
+      return;
+    }
+    _lastControlPanelReset = now;
+    if (!isShowControlPanel.value) {
+      isShowControlPanel.value = true;
+    }
     _timer?.cancel();
     _timer = Timer(const Duration(seconds: 3), () {
       isShowControlPanel.value = false;
@@ -114,6 +130,10 @@ class ReaderController<T> extends GetxController {
     // dentro de los 3s siguientes el Timer sigue vivo y dispara después del
     // dispose, escribiendo sobre un Rx de un controller ya cerrado.
     _timer?.cancel();
+    for (final worker in _workers) {
+      worker.dispose();
+    }
+    _workers.clear();
     super.onClose();
   }
 

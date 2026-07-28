@@ -1,4 +1,4 @@
-﻿import 'package:flutter/material.dart';
+import 'package:flutter/material.dart';
 import 'package:fluent_ui/fluent_ui.dart' as fluent;
 import 'package:flutter/scheduler.dart';
 import 'package:get/get.dart';
@@ -16,11 +16,12 @@ class BTDialogController extends GetxController {
   final _mainController = Get.find<MainController>();
   late final isRuning = _mainController.btServerisRunning;
   late final version = _mainController.btServerVersion;
+  Worker? _runningWorker;
 
   @override
   void onInit() {
     super.onInit();
-    ever(
+    _runningWorker = ever(
       isRuning,
       (callback) {
         hasUpdate.value = version.value != remoteVersion.value;
@@ -30,6 +31,12 @@ class BTDialogController extends GetxController {
       isInstalled.value = await BTServerUtils.isInstalled();
       remoteVersion.value = await BTServerUtils.getRemoteVersion();
     });
+  }
+
+  @override
+  void onClose() {
+    _runningWorker?.dispose();
+    super.onClose();
   }
 
   downloadOrUpgradeServer(BuildContext context) async {

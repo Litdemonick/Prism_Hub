@@ -21,7 +21,6 @@ import 'package:prismhub/models/index.dart';
 import 'package:prismhub/utils/error.dart';
 import 'package:prismhub/utils/log.dart';
 import 'package:prismhub/utils/request.dart';
-import 'package:prismhub/utils/router.dart';
 import 'package:prismhub/views/dialogs/bt_dialog.dart';
 import 'package:prismhub/controllers/home_controller.dart';
 import 'package:prismhub/controllers/main_controller.dart';
@@ -46,6 +45,10 @@ import 'package:prismhub/utils/extension.dart';
 import 'package:flutter_hls_parser/flutter_hls_parser.dart';
 
 class VideoPlayerController extends GetxController {
+  static Future<void> _lastPlaybackShutdown = Future<void>.value();
+
+  static Future<void> waitForPreviousShutdown() => _lastPlaybackShutdown;
+
   final String title;
   final List<ExtensionEpisode> playList;
   final String detailUrl;
@@ -53,6 +56,7 @@ class VideoPlayerController extends GetxController {
   final int episodeGroupId;
   final ExtensionService runtime;
   final String anilistID;
+  final bool autoResume;
 
   VideoPlayerController({
     required this.title,
@@ -62,6 +66,7 @@ class VideoPlayerController extends GetxController {
     required this.episodeGroupId,
     required this.runtime,
     required this.anilistID,
+    this.autoResume = false,
   });
 
   // Antes el tag de Get.put/Get.find era solo el título — dos títulos
@@ -86,10 +91,7 @@ class VideoPlayerController extends GetxController {
   // 快捷键
   late final keyboardShortcuts = <KeyboardKey, VoidCallback>{
     LogicalKeyboardKey.escape: () {
-      if (isFullScreen.value) {
-        WindowManager.instance.setFullScreen(false);
-      }
-      RouterUtils.pop();
+      unawaited(closeRoute());
     },
     LogicalKeyboardKey.keyF: () => toggleFullscreen(),
     LogicalKeyboardKey.mediaPlay: () => player.play(),
@@ -213,8 +215,11 @@ class VideoPlayerController extends GetxController {
   // contenido ya cargó. Si la posición avanzó hace poco, no puede estar
   // bufferizando de verdad, sin importar lo que diga el flag crudo.
   final isActuallyBuffering = false.obs;
+  final isVideoSurfaceMounted = false.obs;
   DateTime? _lastPositionAdvanceAt;
   Duration? _lastPositionSeen;
+  DateTime? _lastHistoryTouchAt;
+  bool _historyTouchInFlight = false;
   // true cuando hay más de un servidor y todavía no se intentó reproducir
   // ninguno — la UI muestra la lista para elegir en vez de un spinner. Se
   // apaga en cuanto el usuario elige uno (switchServer).
@@ -276,6 +281,8 @@ class VideoPlayerController extends GetxController {
 
   // 定时器
   Timer? _dlnaTimer;
+  final List<Worker> _workers = [];
+  final List<StreamSubscription> _subscriptions = [];
 
   // URL de relay activa (si el stream necesitó headers) — se limpia del
   // servidor local al desconectar, ver disconnectDLNADevice().
@@ -376,6 +383,14 @@ class VideoPlayerController extends GetxController {
     super.onInit();
   }
 
+  void _addWorker(Worker worker) {
+    _workers.add(worker);
+  }
+
+  void _addSubscription(StreamSubscription subscription) {
+    _subscriptions.add(subscription);
+  }
+
   _initSettings() {
     subtitleFontSize.value =
         PrismHubStorage.getSetting(SettingKey.subtitleFontSize);
@@ -398,61 +413,61 @@ class VideoPlayerController extends GetxController {
       SettingKey.subtitleTextAlign,
     )];
 
-    ever(subtitleFontSize, (callback) {
+    _addWorker(ever(subtitleFontSize, (callback) {
       PrismHubStorage.setSetting(SettingKey.subtitleFontSize, callback);
-    });
-    ever(subtitleFontColor, (callback) {
+    }));
+    _addWorker(ever(subtitleFontColor, (callback) {
       PrismHubStorage.setSetting(
         SettingKey.subtitleFontColor,
         callback.toARGB32(),
       );
-    });
-    ever(subtitleFontWeight, (callback) {
+    }));
+    _addWorker(ever(subtitleFontWeight, (callback) {
       PrismHubStorage.setSetting(
         SettingKey.subtitleFontWeight,
         callback == FontWeight.bold ? 'bold' : 'normal',
       );
-    });
-    ever(subtitleBackgroundColor, (callback) {
+    }));
+    _addWorker(ever(subtitleBackgroundColor, (callback) {
       PrismHubStorage.setSetting(
         SettingKey.subtitleBackgroundColor,
         callback.toARGB32(),
       );
-    });
-    ever(subtitleBackgroundOpacity, (callback) {
+    }));
+    _addWorker(ever(subtitleBackgroundOpacity, (callback) {
       PrismHubStorage.setSetting(
         SettingKey.subtitleBackgroundOpacity,
         callback,
       );
-    });
-    ever(subtitleTextAlign, (callback) {
+    }));
+    _addWorker(ever(subtitleTextAlign, (callback) {
       PrismHubStorage.setSetting(
         SettingKey.subtitleTextAlign,
         callback.index,
       );
-    });
+    }));
   }
 
   _initPlayer() {
     // 切换剧集
-    ever(index, (callback) {
+    _addWorker(ever(index, (callback) {
       play();
-    });
+    }));
 
     // 切换倍速
-    ever(currentSpeed, (callback) {
+    _addWorker(ever(currentSpeed, (callback) {
       player.setRate(callback);
-    });
+    }));
 
     // 显示剧集列表
-    ever(showSidebar, (callback) {
+    _addWorker(ever(showSidebar, (callback) {
       if (!showSidebar.value) {
         isOpenSidebar.value = false;
       }
-    });
+    }));
 
     // 自动切换下一集
-    player.stream.completed.listen((event) {
+    _addSubscription(player.stream.completed.listen((event) {
       if (!event || playMode.value == PlaylistMode.single) {
         return;
       }
@@ -491,24 +506,24 @@ class VideoPlayerController extends GetxController {
       if (!player.state.buffering) {
         index.value++;
       }
-    });
+    }));
 
     // 讀取現在的畫質
-    player.stream.height.listen((event) async {
+    _addSubscription(player.stream.height.listen((event) async {
       if (player.state.width != null) {
         final width = player.state.width;
         currentQuality.value = "${width}x$event";
       }
-    });
+    }));
 
     // Primer cuadro real pintado — recién acá se apaga el spinner de carga
     // del centro (ver comentario en hasRenderedFrame).
-    player.stream.videoParams.listen((p) {
+    _addSubscription(player.stream.videoParams.listen((p) {
       if ((p.w ?? 0) > 0 && (p.h ?? 0) > 0) hasRenderedFrame.value = true;
-    });
+    }));
 
     // 自动恢复上次播放进度 (solo cuando el diálogo no lo maneja)
-    player.stream.duration.listen((event) async {
+    _addSubscription(player.stream.duration.listen((event) async {
       if (_isAutoSeekPosition || event.inSeconds == 0) return;
       // Si hay un diálogo de resume pendiente, él maneja el seek — no interferir.
       if (_pendingResumeSeconds != null || resumePrompt.value != null) {
@@ -530,10 +545,10 @@ class VideoPlayerController extends GetxController {
         player.seek(Duration(seconds: int.tryParse(history.progress) ?? 0));
         sendMessage(Message(Text('video.resume-last-playback'.i18n)));
       }
-    });
+    }));
 
     // 监听 track
-    player.stream.tracks.listen((event) {
+    _addSubscription(player.stream.tracks.listen((event) {
       if (event.subtitle.isEmpty) {
         return;
       }
@@ -561,26 +576,29 @@ class VideoPlayerController extends GetxController {
       if (subtitle != null) {
         player.setSubtitleTrack(subtitle);
       }
-    });
+    }));
 
     // 总时长监听
-    player.stream.duration.listen((event) {
+    _addSubscription(player.stream.duration.listen((event) {
       if (dlnaDevice.value != null) {
         return;
       }
       duration.value = event;
-    });
+    }));
 
     // 监听播放状态
-    player.stream.playing.listen((event) {
+    _addSubscription(player.stream.playing.listen((event) {
       if (dlnaDevice.value != null) {
         return;
       }
       isPlaying.value = event;
-    });
+      if (event) {
+        unawaited(_touchHistory());
+      }
+    }));
 
     // 监听进度
-    player.stream.position.listen((event) {
+    _addSubscription(player.stream.position.listen((event) {
       if (dlnaDevice.value != null) {
         return;
       }
@@ -593,10 +611,10 @@ class VideoPlayerController extends GetxController {
         _lastPositionAdvanceAt = DateTime.now();
         if (isActuallyBuffering.value) isActuallyBuffering.value = false;
       }
-    });
+    }));
 
     // Vigía de buffering atascado — ver comentario en _bufferingStallTimer.
-    player.stream.buffering.listen((buffering) {
+    _addSubscription(player.stream.buffering.listen((buffering) {
       if (dlnaDevice.value != null) return;
       // Si la posición avanzó hace menos de 800ms, el flag crudo está
       // desfasado (evento de "terminó de bufferizar" perdido) — se ignora.
@@ -639,10 +657,10 @@ class VideoPlayerController extends GetxController {
           }
         });
       }
-    });
+    }));
 
     // 错误监听 — detectar fallo de reproducción
-    player.stream.error.listen((event) {
+    _addSubscription(player.stream.error.listen((event) {
       // Errores de decodificación (audio/video corrupto) pueden llegar en
       // ráfaga, uno por cada frame roto — confirmado en vivo: cientos de
       // "Error decoding audio" por segundo, inundando el log para siempre
@@ -724,14 +742,13 @@ class VideoPlayerController extends GetxController {
           }
         }
       }
-    });
+    }));
   }
 
   // 播放
   play() async {
     // 如果已经 delete 当前 controller
-    if (!Get.isRegistered<VideoPlayerController>(
-        tag: buildTag(title, detailUrl, episodeGroupId))) {
+    if (_disposed) {
       return;
     }
     player.stop();
@@ -743,6 +760,8 @@ class VideoPlayerController extends GetxController {
     // spinner un instante porque todavía valía el timestamp viejo.
     _lastPositionAdvanceAt = null;
     _lastPositionSeen = null;
+    _lastHistoryTouchAt = null;
+    _historyTouchInFlight = false;
     isActuallyBuffering.value = false;
     _lastErrorEvent = '';
     _pageSniffAttempted = false;
@@ -756,7 +775,9 @@ class VideoPlayerController extends GetxController {
     _midStreamResumeAt = null;
     try {
       await getWatchData();
+      if (_disposed) return;
     } catch (e) {
+      if (_disposed) return;
       logger.severe(e);
       serverFailedMessage.value =
           'No se pudo cargar el episodio. Intentá más tarde.';
@@ -773,6 +794,7 @@ class VideoPlayerController extends GetxController {
         runtime.extension.package,
         detailUrl,
       );
+      if (_disposed) return;
       if (hist != null &&
           hist.progress.isNotEmpty &&
           hist.episodeId == index.value &&
@@ -806,7 +828,10 @@ class VideoPlayerController extends GetxController {
     if (watchData!.type != ExtensionWatchBangumiType.torrent &&
         dlnaDevice.value == null &&
         availableServers.length > 1) {
-      if (_applyPreferredServer()) {
+      if (autoResume && _applyPreferredServer()) {
+        if (_shouldResumeInWebView() && _openPreferredWebViewFallback()) {
+          return;
+        }
         // No tocar isGettingWatchData acá: switchServer ya lo pone en true
         // apenas arranca — pisarlo a false y volver a true un instante
         // después solo generaba un parpadeo del spinner de carga.
@@ -822,7 +847,9 @@ class VideoPlayerController extends GetxController {
       if (watchData!.type == ExtensionWatchBangumiType.torrent) {
         try {
           await getTorrentMediaFile();
+          if (_disposed) return;
         } catch (e) {
+          if (_disposed) return;
           logger.severe(e);
           error.value = friendlyError(e);
           return;
@@ -843,6 +870,7 @@ class VideoPlayerController extends GetxController {
       } else {
         if (dlnaDevice.value != null) {
           await dlnaDevice.value!.setUrl(watchData!.url);
+          if (_disposed) return;
           await dlnaDevice.value!.play();
         } else {
           // Si recordamos un servidor que ya funcionó en este episodio, usarlo
@@ -866,6 +894,7 @@ class VideoPlayerController extends GetxController {
             // directo al sniffer WebView, que sí sabe sacar el stream real.
             worked = await _trySniff(currentServerName.value, primaryUrl);
           }
+          if (_disposed) return;
 
           if (!worked &&
               watchData!.headers != null &&
@@ -877,6 +906,7 @@ class VideoPlayerController extends GetxController {
                 final altUrl = altUrlDyn.toString();
                 logger.info('Intentando URL alternativa: $altUrl');
                 worked = await _tryOpenPlayer(altUrl, watchData!.headers);
+                if (_disposed) return;
                 if (worked) {
                   watchData = ExtensionBangumiWatch(
                     type: watchData!.type,
@@ -940,7 +970,6 @@ class VideoPlayerController extends GetxController {
               // nativo exitoso, para que la próxima vez no haga elegir de
               // cero (ver comentario completo allá).
               if (currentServerName.value.isNotEmpty) {
-                _lastOpenedServerName = currentServerName.value;
                 unawaited(PrismHubStorage.setLastWorkingServer(
                   runtime.extension.package,
                   playList[index.value].url,
@@ -991,11 +1020,7 @@ class VideoPlayerController extends GetxController {
       // prueba primero y no se re-busca entre todos.
       if (currentServerName.value.isNotEmpty) {
         _lastOpenedServerName = currentServerName.value;
-        PrismHubStorage.setLastWorkingServer(
-          runtime.extension.package,
-          playList[index.value].url,
-          currentServerName.value,
-        );
+        _markNativePlayback(currentServerName.value);
       }
       isGettingWatchData.value = false;
       // 添加来自扩展的字幕
@@ -1107,6 +1132,15 @@ class VideoPlayerController extends GetxController {
   // YA en curso (eso depende del plugin nativo), pero evita encolar el
   // siguiente paso una vez que el actual termina.
   bool _disposed = false;
+  bool get disposed => _disposed;
+  final Completer<void> _shutdownCompleter = Completer<void>();
+  Future<void>? _shutdownFuture;
+  bool _playerDisposed = false;
+  bool _shutdownStarted = false;
+  bool _routeClosing = false;
+
+  bool _isPlaybackClosed([int? generation]) =>
+      _disposed || (generation != null && generation != _switchServerGen);
 
   // Reintento automático antes de rendirse: confirmado en vivo (Streamwish)
   // que algunos hosts asignan un servidor de backend al azar en CADA
@@ -1131,6 +1165,153 @@ class VideoPlayerController extends GetxController {
   // se cortó.
   Duration? _midStreamResumeAt;
 
+  void _beginPlaybackShutdown() {
+    ++_switchServerGen;
+    _disposed = true;
+    isVideoSurfaceMounted.value = false;
+    isWebViewActive.value = false;
+    if (!_shutdownCompleter.isCompleted) {
+      _shutdownCompleter.complete();
+    }
+    _dlnaTimer?.cancel();
+    _bufferingStallTimer?.cancel();
+    _qualitySwitchTimer?.cancel();
+    final device = dlnaDevice.value;
+    dlnaDevice.value = null;
+    if (device != null) {
+      try {
+        device.stop();
+      } catch (_) {}
+    }
+    if (_dlnaRelayUrl != null) {
+      CastRelayServer.unregister(_dlnaRelayUrl!);
+      _dlnaRelayUrl = null;
+    }
+  }
+
+  void stopPlaybackImmediately() {
+    _beginPlaybackShutdown();
+    unawaited(shutdownPlayback(saveHistory: false));
+  }
+
+  Future<void> _ensureVideoSurfaceMounted() async {
+    if (_disposed || isVideoSurfaceMounted.value) return;
+    isVideoSurfaceMounted.value = true;
+    await Future<void>.delayed(const Duration(milliseconds: 16));
+  }
+
+  Future<void> shutdownPlayback({bool saveHistory = true}) {
+    final future = _shutdownFuture ??= _shutdownPlayback(
+      saveHistory: saveHistory,
+    );
+    _lastPlaybackShutdown = future.catchError((_) {});
+    return future;
+  }
+
+  Future<void> _shutdownPlayback({required bool saveHistory}) async {
+    if (_playerDisposed) return;
+    if (_shutdownStarted) return;
+    _shutdownStarted = true;
+    _beginPlaybackShutdown();
+    await Future<void>.delayed(const Duration(milliseconds: 80));
+
+    if (saveHistory) {
+      try {
+        await _saveHistory(captureScreenshot: false);
+      } catch (_) {}
+    }
+
+    // Timeouts en cada paso: media_kit_video 1.2.5 (versión instalada) tiene
+    // un bug de threading confirmado en vivo en Windows ("channel sent a
+    // message from native to Flutter on a non-platform thread" — corregido
+    // recién en 1.3.1, que no se pudo traer porque arrastra un cascada de
+    // upgrades mayores incompatibles: volume_controller, screen_brightness,
+    // package_info_plus). Sin este timeout, si ESE bug deja a stop()/
+    // dispose() colgado esperando un callback nativo que nunca llega en el
+    // hilo correcto, este método (y por lo tanto _lastPlaybackShutdown) no
+    // termina NUNCA — waitForPreviousShutdown() en la próxima apertura queda
+    // esperando para siempre y toda la pantalla del reproductor se ve
+    // congelada (controles pintados pero nada responde). Preferible perder
+    // prolijitud en la liberación nativa a que un cuelgue de la librería
+    // tilde la apertura siguiente entera.
+    try {
+      await player.setVolume(0).timeout(const Duration(seconds: 2));
+    } catch (_) {}
+    try {
+      await player.pause().timeout(const Duration(seconds: 2));
+    } catch (_) {}
+    try {
+      await player.stop().timeout(const Duration(seconds: 3));
+      await Future<void>.delayed(const Duration(milliseconds: 180));
+    } catch (_) {}
+
+    if (_playerDisposed) return;
+    _playerDisposed = true;
+    try {
+      await player.dispose().timeout(const Duration(seconds: 3));
+    } catch (e) {
+      logger.severe('player.dispose error: $e');
+    }
+  }
+
+  Future<void> closeRoute([BuildContext? context]) async {
+    if (_routeClosing) return;
+    _routeClosing = true;
+    if (isFullScreen.value) {
+      await WindowManager.instance.setFullScreen(false);
+    }
+    final shutdown = shutdownPlayback();
+    var popped = false;
+    // Prioridad 1: el context DEL PROPIO widget de controles (pasado por el
+    // llamador). WatchPage/VideoPlayer se empuja con
+    // Navigator.of(context, rootNavigator: true).push(...) desde
+    // resume_history.dart/detail_controller.dart — "rootNavigator: true"
+    // busca el Navigator MÁS ANCESTRO en todo el árbol, que en desktop
+    // (fluent.FluentApp.router envolviendo un GoRouter con su propio
+    // ShellRoute) no es necesariamente el mismo que rootNavigatorKey de
+    // router.dart. Confirmado en vivo: con esa ruta abierta,
+    // rootNavigatorKey.currentState.maybePop() Y router.canPop()/pop()
+    // (que internamente hacen el mismo chequeo) no encontraban nada para
+    // popear — el reproductor quedaba en pantalla con el Player YA dispuesto
+    // (shutdownPlayback ya corrió arriba) y cada tap sobre los controles
+    // tiraba "[Player] has been disposed" hasta que había que cerrar la app
+    // entera a mano. Navigator.of(context) SIN rootNavigator busca el
+    // Navigator más CERCANO — que, desde un context que vive dentro de esta
+    // misma ruta, es por definición el Navigator que la aloja de verdad.
+    // ModalRoute.of(context) es la ruta que contiene ESTE reproductor
+    // puntual (no "lo que sea que esté arriba", que es lo que hacía
+    // ambigüo maybePop() cuando dos pantallas del mismo episodio llegaban a
+    // compartir tag de GetX — bug ya corregido de raíz en video_player.dart,
+    // tag único por sesión). Con esa causa resuelta, route.isCurrent es
+    // confiable: pop() anima la salida normal. removeRoute (sin animación)
+    // queda solo como red de seguridad si por lo que sea esta ruta ya no
+    // fuera la de arriba.
+    if (context != null && context.mounted) {
+      final nav = Navigator.maybeOf(context);
+      final route = ModalRoute.of(context);
+      if (nav != null && route != null && route.isActive) {
+        if (route.isCurrent) {
+          nav.pop();
+        } else {
+          nav.removeRoute(route);
+        }
+        popped = true;
+      }
+    }
+    if (!popped) {
+      popped = await rootNavigatorKey.currentState?.maybePop() ?? false;
+    }
+    if (!popped && Get.key.currentState?.canPop() == true) {
+      Get.back();
+      popped = true;
+    }
+    if (!popped && router.canPop()) {
+      router.pop();
+      popped = true;
+    }
+    unawaited(shutdown);
+  }
+
   // Tocar una pestaña de servidor solo ELIGE (marca cuál se va a intentar);
   // no resuelve ni reproduce nada todavía — eso pasa recién cuando el
   // usuario toca el botón de play (centro o abajo), que llama switchServer
@@ -1143,6 +1324,7 @@ class VideoPlayerController extends GetxController {
   // esto ese intento viejo podía terminar de cargar más tarde y pisar la
   // elección nueva — arrancaba a reproducir el que el usuario ya no quería.
   void selectServer(String name) {
+    if (_disposed) return;
     if (!availableServers.containsKey(name)) return;
     ++_switchServerGen;
     _serverRetryCount = 0;
@@ -1154,12 +1336,16 @@ class VideoPlayerController extends GetxController {
     // nada que recargar — antes esto forzaba un switchServer nuevo al tocar
     // "reproducir" y perdía el punto donde estaba, aunque en los hechos no se
     // había cambiado de servidor.
-    if (name == _lastOpenedServerName &&
-        player.state.duration > Duration.zero) {
+    final canResumeLoadedNativeServer = name == _lastOpenedServerName &&
+        hasRenderedFrame.value &&
+        serverFailedMessage.value.isEmpty &&
+        webViewFallback.value == null &&
+        player.state.duration > Duration.zero;
+    if (canResumeLoadedNativeServer) {
       currentServerName.value = name;
       awaitingServerChoice.value = false;
       serverFailedMessage.value = '';
-      player.play();
+      safePlay();
       return;
     }
 
@@ -1174,7 +1360,7 @@ class VideoPlayerController extends GetxController {
     webViewFallback.value = null;
     webViewOpenedOnce.value = false;
     _bufferingStallTimer?.cancel();
-    player.pause();
+    safePause();
   }
 
   // Cambia al servidor on-demand:
@@ -1184,6 +1370,7 @@ class VideoPlayerController extends GetxController {
   //        c) URL de episodio → extensión la procesa normalmente.
   //   2. Si la extensión no puede resolver (error/vacío) → fallback WebView sniffer.
   switchServer(String name) async {
+    if (_disposed) return;
     if (!availableServers.containsKey(name)) return;
     final myGen = ++_switchServerGen;
     serverFailedMessage.value = '';
@@ -1205,7 +1392,7 @@ class VideoPlayerController extends GetxController {
       newWatch = await runtime.watch(embedUrl, typeHint: ExtensionType.bangumi)
           as ExtensionBangumiWatch;
     } catch (e) {
-      if (myGen != _switchServerGen) return;
+      if (_isPlaybackClosed(myGen)) return;
       logger.severe('switchServer: runtime.watch falló para $name: $e');
       if (isDirectStream(embedUrl)) {
         // La extensión no sabe manejar URLs directas — intentar reproducir directo
@@ -1213,14 +1400,13 @@ class VideoPlayerController extends GetxController {
       } else {
         final ok = await _trySniff(name, embedUrl,
             timeout: const Duration(seconds: 5));
-        if (myGen != _switchServerGen) return;
+        if (_isPlaybackClosed(myGen)) return;
         if (!ok) {
           _failOrRetryServer(name);
         } else {
           _isAutoSeekPosition = true;
           _lastOpenedServerName = name;
-          unawaited(PrismHubStorage.setLastWorkingServer(
-              runtime.extension.package, playList[index.value].url, name));
+          _markNativePlayback(name);
           if (_pendingResumeSeconds != null) {
             await player.pause();
             resumePrompt.value = _pendingResumeSeconds;
@@ -1231,7 +1417,7 @@ class VideoPlayerController extends GetxController {
       if (myGen == _switchServerGen) isGettingWatchData.value = false;
       return;
     }
-    if (myGen != _switchServerGen) return;
+    if (_isPlaybackClosed(myGen)) return;
 
     if (newWatch.url.isEmpty ||
         newWatch.url.startsWith('error://') ||
@@ -1244,14 +1430,13 @@ class VideoPlayerController extends GetxController {
       } else {
         final ok = await _trySniff(name, embedUrl,
             timeout: const Duration(seconds: 5));
-        if (myGen != _switchServerGen) return;
+        if (_isPlaybackClosed(myGen)) return;
         if (!ok) {
           _failOrRetryServer(name);
         } else {
           _isAutoSeekPosition = true;
           _lastOpenedServerName = name;
-          unawaited(PrismHubStorage.setLastWorkingServer(
-              runtime.extension.package, playList[index.value].url, name));
+          _markNativePlayback(name);
           if (_pendingResumeSeconds != null) {
             await player.pause();
             resumePrompt.value = _pendingResumeSeconds;
@@ -1287,7 +1472,7 @@ class VideoPlayerController extends GetxController {
 
     final opened =
         await _tryOpenPlayer(newWatch.url, headers.isEmpty ? null : headers);
-    if (myGen != _switchServerGen) return;
+    if (_isPlaybackClosed(myGen)) return;
     if (!opened) {
       // La extensión "resolvió" algo (newWatch.url no está vacío/error/page)
       // pero media_kit no llegó a abrirlo a tiempo — antes de rendirse,
@@ -1299,9 +1484,8 @@ class VideoPlayerController extends GetxController {
       _serverRetryCount = 0;
       serverFailedMessage.value = '';
       _lastOpenedServerName = name;
+      _markNativePlayback(name);
       if (isDirectStream(newWatch.url)) unawaited(getQuality());
-      unawaited(PrismHubStorage.setLastWorkingServer(
-          runtime.extension.package, playList[index.value].url, name));
       // Si había un progreso guardado pendiente de confirmar (recién se
       // arrancó el episodio, no un cambio de servidor a mitad de reproducir),
       // preguntar acá — antes esto solo pasaba por la ruta de servidor único,
@@ -1471,9 +1655,11 @@ class VideoPlayerController extends GetxController {
   }
 
   // 播放 torrent 媒体文件
-  playTorrentFile(String file) {
+  playTorrentFile(String file) async {
     currentTorrentFile.value = file;
     (player.platform as NativePlayer).setProperty("network-timeout", "60");
+    await _ensureVideoSurfaceMounted();
+    if (_disposed) return;
     player.open(Media('${BTServerApi.baseApi}/torrent/$_torrenHash/$file'));
   }
 
@@ -1487,6 +1673,8 @@ class VideoPlayerController extends GetxController {
   switchQuality(String qualityUrl) async {
     final currentSecond = player.state.position.inSeconds;
     final headers = watchData!.headers;
+    await _ensureVideoSurfaceMounted();
+    if (_disposed) return;
     await player.open(
       Media(qualityUrl, httpHeaders: headers),
     );
@@ -1522,35 +1710,99 @@ class VideoPlayerController extends GetxController {
     );
   }
 
+  Future<String?> _historyCoverFallback([History? existing]) async {
+    final current = existing?.cover;
+    if (current != null && current.isNotEmpty) return current;
+    try {
+      final cached = await DatabaseService.getPrismHubDetail(
+        runtime.extension.package,
+        detailUrl,
+      );
+      if (cached == null) return null;
+      final detail = ExtensionDetail.fromJson(jsonDecode(cached.data));
+      final cover = detail.cover;
+      return cover != null && cover.isNotEmpty ? cover : null;
+    } catch (_) {
+      return null;
+    }
+  }
+
+  Future<void> _touchHistory({bool refreshHome = true}) async {
+    if (_disposed || _historyTouchInFlight) return;
+    final now = DateTime.now();
+    if (_lastHistoryTouchAt != null &&
+        now.difference(_lastHistoryTouchAt!) < const Duration(seconds: 5)) {
+      return;
+    }
+    _historyTouchInFlight = true;
+    _lastHistoryTouchAt = now;
+    try {
+      final existing = await DatabaseService.getHistoryByPackageAndUrl(
+        runtime.extension.package,
+        detailUrl,
+      );
+      if (_disposed) return;
+      final cover = await _historyCoverFallback(existing);
+      final epName = playList[index.value].name;
+      final totalSeconds = duration.value.inSeconds > 0
+          ? duration.value.inSeconds
+          : player.state.duration.inSeconds;
+      final progressSeconds = position.value.inSeconds > 0
+          ? position.value.inSeconds
+          : player.state.position.inSeconds;
+      await DatabaseService.putHistory(
+        History()
+          ..url = detailUrl
+          ..cover = cover
+          ..episodeGroupId = episodeGroupId
+          ..package = runtime.extension.package
+          ..type = ExtensionType.bangumi
+          ..episodeId = index.value
+          ..episodeTitle = epName
+          ..title = title
+          ..progress = progressSeconds.toString()
+          ..totalProgress = totalSeconds > 0 ? totalSeconds.toString() : '',
+      );
+      if (refreshHome && Get.isRegistered<HomePageController>()) {
+        await Get.find<HomePageController>().onRefresh();
+      }
+    } catch (e) {
+      logger.warning('touch history fallÃ³: $e');
+    } finally {
+      _historyTouchInFlight = false;
+    }
+  }
+
   // 保存历史记录
-  _saveHistory() async {
+  _saveHistory({bool captureScreenshot = true}) async {
     if (duration.value.inSeconds == 0) {
       return;
     }
 
     final tempDir = PrismHubDirectory.getCacheDirectory;
     final coverDir = path.join(tempDir, 'history_cover');
-    Directory(coverDir).createSync(recursive: true);
+    await Directory(coverDir).create(recursive: true);
     final epName = playList[index.value].name;
     final filename = '${title}_$epName';
     final file = File(
         path.join(coverDir, md5.convert(utf8.encode(filename)).toString()));
-    if (file.existsSync()) {
-      file.deleteSync(recursive: true);
+    if (captureScreenshot && hasRenderedFrame.value && !_disposed) {
+      final data = await player.screenshot();
+      if (data != null) {
+        if (await file.exists()) {
+          await file.delete(recursive: true);
+        }
+        await file.writeAsBytes(data);
+      }
     }
-
-    final data = await player.screenshot();
-    if (data == null) {
-      return;
-    }
-    await file.writeAsBytes(data);
 
     logger.info('save history');
 
+    final savedCover = await file.exists() ? file.path : null;
     await DatabaseService.putHistory(
       History()
         ..url = detailUrl
-        ..cover = file.path
+        ..cover = savedCover ?? await _historyCoverFallback()
         ..episodeGroupId = episodeGroupId
         ..package = runtime.extension.package
         // ExtensionType.bangumi fijo (no runtime.extension.type): este
@@ -1565,7 +1817,9 @@ class VideoPlayerController extends GetxController {
         ..progress = player.state.position.inSeconds.toString()
         ..totalProgress = player.state.duration.inSeconds.toString(),
     );
-    await Get.find<HomePageController>().onRefresh();
+    if (Get.isRegistered<HomePageController>()) {
+      await Get.find<HomePageController>().onRefresh();
+    }
   }
 
   // Progreso acumulado mientras se mira por el fallback de WebView. Vive acá
@@ -1628,7 +1882,7 @@ class VideoPlayerController extends GetxController {
     _webViewElapsedSeconds += 15;
     final tempDir = PrismHubDirectory.getCacheDirectory;
     final coverDir = path.join(tempDir, 'history_cover');
-    Directory(coverDir).createSync(recursive: true);
+    await Directory(coverDir).create(recursive: true);
     final epName = playList[index.value].name;
     final filename = '${title}_$epName';
     final file = File(
@@ -1638,18 +1892,20 @@ class VideoPlayerController extends GetxController {
     // llamadas periódicas (isFinal:false) ya vienen con screenshot:null
     // desde ahí, pero se chequea isFinal explícitamente para no depender
     // solo de esa convención.
+    final coverExists = await file.exists();
     if (isFinal &&
         screenshot != null &&
-        (_webViewOwnsScreenshotFile || !file.existsSync())) {
+        (_webViewOwnsScreenshotFile || !coverExists)) {
       await file.writeAsBytes(_cropWebViewPlayerBar(screenshot));
       _webViewOwnsScreenshotFile = true;
     }
-    if (!file.existsSync()) return;
+    final savedCover = await file.exists() ? file.path : null;
+    final fallbackCover = savedCover ?? await _historyCoverFallback();
 
     await DatabaseService.putHistory(
       History()
         ..url = detailUrl
-        ..cover = file.path
+        ..cover = fallbackCover
         ..episodeGroupId = episodeGroupId
         ..package = runtime.extension.package
         // ExtensionType.bangumi fijo (no runtime.extension.type): este
@@ -1726,7 +1982,7 @@ class VideoPlayerController extends GetxController {
     if (file == null) {
       return;
     }
-    final data = File(file.files.first.path!).readAsStringSync();
+    final data = await File(file.files.first.path!).readAsString();
     subtitles.add(
       SubtitleTrack.data(
         data,
@@ -1853,6 +2109,7 @@ class VideoPlayerController extends GetxController {
       '(KHTML, like Gecko) Chrome/125.0.0.0 Safari/537.36';
 
   Future<bool> _tryOpenPlayer(String url, Map<String, String>? headers) async {
+    if (_disposed) return false;
     if (url.startsWith('error://')) {
       logger.severe('URL de error recibida: $url');
       return false;
@@ -1860,11 +2117,28 @@ class VideoPlayerController extends GetxController {
     if (!await _isHostReachable(url)) {
       return false;
     }
+    if (_disposed) return false;
+    // Montar el widget Video ANTES de abrir la fuente — sin esto mpv nunca
+    // tiene una superficie real donde pintar (pantalla negra pese a que
+    // audio/progreso sí avanzan) y su pipeline de render queda a medio
+    // inicializar, el mismo estado que _safePlayerInit documenta como causa
+    // de SIGSEGV al hacer dispose/stop más tarde. playTorrentFile y
+    // switchQuality ya lo hacían; este es el chokepoint común de TODA la
+    // reproducción de servidores (primario, switchServer, fallback directo,
+    // sniffer), así que faltaba justo acá.
+    await _ensureVideoSurfaceMounted();
+    if (_disposed) return false;
     // Inyectar User-Agent de browser si no viene en los headers.
     // libmpv por defecto envía "Lavf/X.X.X" que los CDNs de streaming bloquean.
     final hdrs = <String, String>{'User-Agent': _browserUA};
     if (headers != null) hdrs.addAll(headers);
     await player.open(Media(url, httpHeaders: hdrs));
+    if (_disposed) {
+      try {
+        unawaited(player.stop());
+      } catch (_) {}
+      return false;
+    }
 
     // media_kit accepts any URL in open() but only reports an unplayable
     // source (e.g. "Failed to recognize file format" for an HTML embed like
@@ -1900,10 +2174,21 @@ class VideoPlayerController extends GetxController {
     // corto "por las dudas" — total nada queda esperando para siempre (y
     // ahora que un fallo pasa automáticamente al siguiente servidor, esperar
     // un poco más acá sale más barato que antes).
-    final ok = await completer.future
-        .timeout(const Duration(seconds: 35), onTimeout: () => false);
+    final ok = await Future.any<bool>([
+      completer.future.timeout(
+        const Duration(seconds: 35),
+        onTimeout: () => false,
+      ),
+      _shutdownCompleter.future.then((_) => false),
+    ]);
     for (final s in subs) {
       unawaited(s.cancel());
+    }
+    if (_disposed) {
+      try {
+        unawaited(player.stop());
+      } catch (_) {}
+      return false;
     }
     if (!ok) {
       logger.info('Fuente no reproducible, se intentará failover: $url');
@@ -1923,6 +2208,68 @@ class VideoPlayerController extends GetxController {
         runtime.extension.package,
         playList[index.value].url,
       );
+
+  bool _shouldResumeInWebView() {
+    return PrismHubStorage.getLastPlaybackMode(
+          runtime.extension.package,
+          playList[index.value].url,
+        ) ==
+        'webview';
+  }
+
+  bool _openPreferredWebViewFallback() {
+    final name = currentServerName.value;
+    if (name.isEmpty) return false;
+    final url = availableServers[name];
+    if (url == null || url.isEmpty || url.startsWith('error://')) {
+      return false;
+    }
+    webViewOpenedOnce.value = false;
+    webViewFallback.value = {
+      'url': url,
+      'name': name,
+      'referer': serverReferers[name] ?? '',
+    };
+    serverFailedMessage.value =
+        'No se puede reproducir en el reproductor nativo.\n'
+        'Puedes verlo desde el navegador interno.';
+    awaitingServerChoice.value = false;
+    isGettingWatchData.value = false;
+    return true;
+  }
+
+  void markWebViewPlayback(Map<String, String>? fallback) {
+    final episodeUrl = playList[index.value].url;
+    final name = fallback?['name'] ?? currentServerName.value;
+    if (name.isNotEmpty && availableServers.containsKey(name)) {
+      unawaited(PrismHubStorage.setLastWorkingServer(
+        runtime.extension.package,
+        episodeUrl,
+        name,
+      ));
+    }
+    unawaited(PrismHubStorage.setLastPlaybackMode(
+      runtime.extension.package,
+      episodeUrl,
+      'webview',
+    ));
+  }
+
+  void _markNativePlayback(String name) {
+    final episodeUrl = playList[index.value].url;
+    if (name.isNotEmpty) {
+      unawaited(PrismHubStorage.setLastWorkingServer(
+        runtime.extension.package,
+        episodeUrl,
+        name,
+      ));
+    }
+    unawaited(PrismHubStorage.setLastPlaybackMode(
+      runtime.extension.package,
+      episodeUrl,
+      'native',
+    ));
+  }
 
   // Si hay un servidor recordado para este episodio, se usa como primario
   // para no re-buscar entre todos. Devuelve true si currentServerName quedó
@@ -2025,7 +2372,6 @@ class VideoPlayerController extends GetxController {
       // cada vez que volvías, tocaba elegir servidor de la lista de cero
       // en vez de reintentar directo el mismo que ya sabías que funciona
       // (aunque sea por WebView).
-      _lastOpenedServerName = name;
       unawaited(PrismHubStorage.setLastWorkingServer(
         runtime.extension.package,
         playList[index.value].url,
@@ -2052,19 +2398,21 @@ class VideoPlayerController extends GetxController {
   // Intenta reproducir directamente una URL que ya es un stream (m3u8/mp4).
   // Usado cuando la extensión no sabe manejar la URL (ej: Desu ya resuelto).
   Future<void> _playDirectFallback(String name, String directUrl) async {
+    if (_disposed) return;
     currentServerName.value = name;
     final headers = <String, String>{};
     final referer = serverReferers[name];
     if (referer != null && referer.isNotEmpty) headers['Referer'] = referer;
     if (!await _tryOpenPlayer(directUrl, headers.isEmpty ? null : headers)) {
+      if (_disposed) return;
       _failOrRetryServer(name);
     } else {
+      if (_disposed) return;
       _serverRetryCount = 0;
       serverFailedMessage.value = '';
       webViewFallback.value = null;
       _lastOpenedServerName = name;
-      unawaited(PrismHubStorage.setLastWorkingServer(
-          runtime.extension.package, playList[index.value].url, name));
+      _markNativePlayback(name);
       if (_pendingResumeSeconds != null) {
         await player.pause();
         resumePrompt.value = _pendingResumeSeconds;
@@ -2108,6 +2456,7 @@ class VideoPlayerController extends GetxController {
         referer: referer,
         timeout: timeout,
       );
+      if (_disposed) return false;
       if (sniffed == null) {
         logger.info('Sniffer no encontró stream para $name');
         return false;
@@ -2115,6 +2464,7 @@ class VideoPlayerController extends GetxController {
       logger.info('Sniffer encontró stream para $name: ${sniffed.url}');
       final headers = {'Referer': sniffed.referer};
       if (!await _tryOpenPlayer(sniffed.url, headers)) {
+        if (_disposed) return false;
         logger.info(
             'Sniffer: media_kit rechazado por CDN → $name. Guardando para botón WebView.');
         // Guardar embed URL para botón "Ver en WebView" manual — NO abrir automáticamente.
@@ -2128,6 +2478,7 @@ class VideoPlayerController extends GetxController {
         };
         return false;
       }
+      if (_disposed) return false;
       currentServerName.value = name;
       watchData = ExtensionBangumiWatch(
         type: watchData!.type,
@@ -2176,6 +2527,7 @@ class VideoPlayerController extends GetxController {
         _episodePageUrl,
         timeout: const Duration(seconds: 15),
       );
+      if (_disposed) return false;
 
       if (embedUrls.isNotEmpty) {
         // Etapa 2: sniffear cada embed en WebView propio.
@@ -2204,6 +2556,7 @@ class VideoPlayerController extends GetxController {
         _episodePageUrl,
         timeout: const Duration(seconds: 15),
       );
+      if (_disposed) return false;
       if (sniffed == null) {
         logger.info('Page-sniff no encontró stream');
         return false;
@@ -2211,6 +2564,7 @@ class VideoPlayerController extends GetxController {
       logger.info('Page-sniff encontró stream: ${sniffed.url}');
       final headers = {'Referer': sniffed.referer};
       if (!await _tryOpenPlayer(sniffed.url, headers)) {
+        if (_disposed) return false;
         logger.info(
             'Page-sniff: media_kit rechazado. Guardando para botón WebView.');
         // Orden importa: ver comentario en play() sobre por qué el reset va
@@ -2223,6 +2577,7 @@ class VideoPlayerController extends GetxController {
         };
         return false;
       }
+      if (_disposed) return false;
       currentServerName.value =
           currentServerName.value.isEmpty ? 'Auto' : currentServerName.value;
       watchData = ExtensionBangumiWatch(
@@ -2245,6 +2600,7 @@ class VideoPlayerController extends GetxController {
   // nunca fue llamado: sin esto, mpv_render_context_free (video_output_dispose)
   // crashea con SIGSEGV porque el pipeline de render nunca procesó frames.
   Future<void> _safePlayerInit() async {
+    if (_disposed) return;
     try {
       // av://lavfi:color genera frames localmente sin red — siempre disponible
       // play:false evita que mpv empiece a reproducir (wakelock=1)
@@ -2252,13 +2608,16 @@ class VideoPlayerController extends GetxController {
         Media('av://lavfi:color=black:size=2x2:rate=1'),
         play: false,
       );
+      if (_disposed) return;
       // Esperar a que mpv procese el open antes de stop()
       await Future.delayed(const Duration(milliseconds: 300));
+      if (_disposed) return;
       await player.stop();
       // Esperar a que el stop complete (estado 'idle') antes de retornar
       // Si retornamos muy rápido y el usuario navega atrás, video_output_dispose
       // puede correr mientras el stop aún está en progreso → crash
       await Future.delayed(const Duration(milliseconds: 500));
+      if (_disposed) return;
       logger.info('_safePlayerInit completado');
     } catch (e) {
       logger.severe('_safePlayerInit error: $e');
@@ -2271,6 +2630,11 @@ class VideoPlayerController extends GetxController {
 
   // 播放器相关操作
   playOrPause() async {
+    // Red de seguridad: si por lo que sea la pantalla del reproductor sigue
+    // viva/tocable después de shutdownPlayback() (ver closeRoute), el Player
+    // nativo ya está disposed — llamarlo de nuevo tira una excepción de
+    // aserción de media_kit que terminaba matando la app entera.
+    if (_disposed) return;
     if (dlnaDevice.value == null) {
       player.playOrPause();
       return;
@@ -2282,7 +2646,31 @@ class VideoPlayerController extends GetxController {
     }
   }
 
+  // Wrappers seguros para los botones de play/pause "crudos" de los
+  // controles (antes llamaban controller.player.play/.pause DIRECTO, sin
+  // pasar por ningún guard) — confirmado en vivo que esos dos botones son
+  // los que seguían tirando "[Player] has been disposed" y tumbando la app
+  // entera incluso después de que closeRoute() cerrara la pantalla bien.
+  void safePlay() {
+    if (_disposed) return;
+    try {
+      player.play();
+    } catch (e) {
+      logger.severe('safePlay() error: $e');
+    }
+  }
+
+  void safePause() {
+    if (_disposed) return;
+    try {
+      player.pause();
+    } catch (e) {
+      logger.severe('safePause() error: $e');
+    }
+  }
+
   seek(Duration duration) async {
+    if (_disposed) return;
     if (dlnaDevice.value == null) {
       player.seek(duration);
       return;
@@ -2294,7 +2682,7 @@ class VideoPlayerController extends GetxController {
 
   @override
   void onClose() async {
-    _disposed = true;
+    _beginPlaybackShutdown();
     if (PrismHubStorage.getSetting(SettingKey.autoTracking) &&
         anilistID != "") {
       AniListProvider.editList(
@@ -2326,32 +2714,17 @@ class VideoPlayerController extends GetxController {
         SystemChrome.setPreferredOrientations(DeviceOrientation.values);
       }
     }
-    _dlnaTimer?.cancel();
-    _bufferingStallTimer?.cancel();
-    _qualitySwitchTimer?.cancel();
-    try {
-      player.pause();
-    } catch (_) {}
-    // _saveHistory() needs a live rendered frame for its screenshot — it
-    // MUST run before player.stop() clears the video output, or
-    // player.screenshot() silently returns null and _saveHistory() bails
-    // out before ever reaching DatabaseService.putHistory(). That's why
-    // watched videos were never showing up in "Continuar": every close
-    // stopped the player first, so the screenshot always failed and no
-    // history record was ever written.
-    try {
-      await _saveHistory();
-    } catch (_) {}
-    try {
-      await player.stop();
-      // Dar tiempo a libmpv para liquidar su estado antes de dispose
-      await Future.delayed(const Duration(milliseconds: 400));
-    } catch (_) {}
-    try {
-      player.dispose();
-    } catch (e) {
-      logger.severe('player.dispose error: $e');
+    for (final worker in _workers) {
+      worker.dispose();
     }
+    _workers.clear();
+    for (final subscription in _subscriptions) {
+      try {
+        await subscription.cancel();
+      } catch (_) {}
+    }
+    _subscriptions.clear();
+    await shutdownPlayback();
     logger.info('dispose video controller');
     super.onClose();
   }

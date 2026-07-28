@@ -7,7 +7,6 @@ import 'package:get/get.dart';
 import 'package:media_kit/media_kit.dart';
 import 'package:media_kit_video/media_kit_video.dart';
 import 'package:prismhub/controllers/watch/video_controller.dart';
-import 'package:prismhub/router/router.dart';
 import 'package:prismhub/views/pages/watch/video/video_player_cast.dart';
 import 'package:prismhub/views/pages/watch/video/webview_player_page.dart'
     show isKnownNativeServer, openWebViewPlayer;
@@ -40,8 +39,17 @@ class _VideoPlayerDesktopControlsState
   // versión mobile, con su propio timer de 3s de inactividad).
   bool _showControls = true;
   Timer? _hideTimer;
+  DateTime? _lastHideTimerReset;
 
   void _resetHideTimer() {
+    final now = DateTime.now();
+    if (_showControls &&
+        _lastHideTimerReset != null &&
+        now.difference(_lastHideTimerReset!) <
+            const Duration(milliseconds: 200)) {
+      return;
+    }
+    _lastHideTimerReset = now;
     _hideTimer?.cancel();
     if (!_showControls && mounted) setState(() => _showControls = true);
     _hideTimer = Timer(const Duration(seconds: 2), () {
@@ -95,6 +103,7 @@ class _VideoPlayerDesktopControlsState
     final fallback = _c.webViewFallback.value;
     if (fallback == null) return;
     _c.webViewOpenedOnce.value = true;
+    _c.markWebViewPlayback(fallback);
     // Mismo motivo que en mobile: el reproductor nativo seguía con su
     // textura de video activa de fondo mientras el WebView se abre encima
     // (esta pantalla apila sobre la anterior, no la reemplaza) — dos motores
@@ -115,6 +124,7 @@ class _VideoPlayerDesktopControlsState
       title: _c.title,
       onProgress: _c.saveWebViewProgress,
     );
+    await Future.delayed(const Duration(milliseconds: 180));
     if (mounted) _c.isWebViewActive.value = false;
   }
 
@@ -179,7 +189,13 @@ class _VideoPlayerDesktopControlsState
           focusNode: _focusNode,
           autofocus: true,
           onKeyEvent: (value) {
-            if (value is KeyDownEvent) {
+            // _c.disposed: la pantalla puede quedar montada un instante de
+            // más durante la transición de salida — sin este guard, un
+            // atajo de teclado (space, flechas, medios) tocado justo
+            // entonces llamaba directo al Player nativo ya disposed y
+            // tumbaba la app entera (mismo bug que los botones de play/
+            // pause/seek "crudos", ver safePlay/safePause/seek).
+            if (value is KeyDownEvent && !_c.disposed) {
               _c.keyboardShortcuts[value.logicalKey]?.call();
             }
           },
@@ -388,13 +404,8 @@ class _VideoPlayerDesktopControlsState
                             Obx(() => _Header(
                                   title: _c.title,
                                   episode: _c.playList[_c.index.value].name,
-                                  onClose: () {
-                                    if (_c.isFullScreen.value) {
-                                      WindowManager.instance
-                                          .setFullScreen(false);
-                                    }
-                                    router.pop();
-                                  },
+                                  onClose: () =>
+                                      unawaited(_c.closeRoute(context)),
                                 )),
                             // selector de servidores — pestañas arriba, no un
                             // botón escondido abajo (a pedido del usuario, y
@@ -817,7 +828,7 @@ class _Footer extends StatelessWidget {
                               if (snapshot.hasData && snapshot.data! ||
                                   controller.player.state.playing) {
                                 return IconButton(
-                                  onPressed: controller.player.pause,
+                                  onPressed: controller.safePause,
                                   icon: const Icon(
                                     FluentIcons.pause,
                                     size: 30,
@@ -825,7 +836,7 @@ class _Footer extends StatelessWidget {
                                 );
                               }
                               return IconButton(
-                                onPressed: controller.player.play,
+                                onPressed: controller.safePlay,
                                 icon: const Icon(
                                   FluentIcons.play,
                                   size: 30,
@@ -1703,7 +1714,7 @@ class _SeekBarState extends State<_SeekBar> {
             },
             onChangeEnd: (value) {
               _isDrag = false;
-              widget.controller.player.seek(
+              widget.controller.seek(
                 Duration(
                   seconds: value.toInt(),
                 ),

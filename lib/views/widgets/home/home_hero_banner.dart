@@ -40,6 +40,10 @@ class HomeHeroBanner extends StatelessWidget {
         final imageWidth = constraints.maxWidth.isFinite
             ? (constraints.maxWidth * 0.34).clamp(160.0, 420.0)
             : 280.0;
+        final isDesktop =
+            Platform.isWindows || Platform.isLinux || Platform.isMacOS;
+        final dpr = MediaQuery.devicePixelRatioOf(context);
+        final cacheWidth = (imageWidth * dpr).ceil().clamp(1, 4096).toInt();
 
         return Container(
           width: double.infinity,
@@ -60,32 +64,22 @@ class HomeHeroBanner extends StatelessWidget {
                   bottom: 0,
                   right: 0,
                   width: imageWidth,
-                  // AnimatedSwitcher: transición suave cuando cambia la
-                  // portada de fondo (crossfade), en vez de un corte seco.
-                  child: AnimatedSwitcher(
-                    duration: const Duration(milliseconds: 600),
-                    child: ShaderMask(
-                      key: ValueKey(background!.cover),
-                      blendMode: BlendMode.dstIn,
-                      shaderCallback: (rect) => const LinearGradient(
-                        begin: Alignment.centerLeft,
-                        end: Alignment.centerRight,
-                        colors: [Colors.transparent, Colors.white],
-                        stops: [0.0, 0.55],
-                      ).createShader(rect),
-                      child: CacheNetWorkImagePic(
-                        background!.cover,
-                        fit: BoxFit.cover,
-                        width: imageWidth,
-                        height: double.infinity,
-                        headers: background!.headers,
-                        filterQuality: FilterQuality.high,
-                        // Sesga el recorte hacia arriba — en una portada
-                        // vertical ahí suele estar la cara/personaje, no el
-                        // fondo/torso del centro.
-                        alignment: const Alignment(0, -0.5),
-                      ),
-                    ),
+                  // Sin key acá (a propósito): _HeroCover es el mismo Element
+                  // entre un refresh y otro, así que su AnimatedSwitcher
+                  // interno mantiene su estado y puede animar el crossfade
+                  // entre portada vieja y nueva. Con key: ValueKey(cover) acá
+                  // (como estaba antes) Flutter destruye y reconstruye TODO
+                  // el subárbol —AnimatedSwitcher incluido— en cada cambio de
+                  // portada, así que nunca llegaba a ver una portada
+                  // "anterior" de la cual hacer fade: la nueva aparecía de
+                  // golpe como si fuera la primera vez. La key que sí importa
+                  // para el AnimatedSwitcher va en el child real, más abajo.
+                  child: _HeroCover(
+                    background: background!,
+                    imageWidth: imageWidth,
+                    cacheWidth: cacheWidth,
+                    filterQuality:
+                        isDesktop ? FilterQuality.low : FilterQuality.medium,
                   ),
                 ),
               Padding(
@@ -102,7 +96,8 @@ class HomeHeroBanner extends StatelessWidget {
                           padding: const EdgeInsets.symmetric(
                               horizontal: 10, vertical: 4),
                           decoration: BoxDecoration(
-                            color: HomeTheme.textPrimary.withValues(alpha: 0.12),
+                            color:
+                                HomeTheme.textPrimary.withValues(alpha: 0.12),
                             borderRadius: BorderRadius.circular(6),
                           ),
                           child: const Text(
@@ -171,6 +166,52 @@ class HomeHeroBanner extends StatelessWidget {
           ),
         );
       },
+    );
+  }
+}
+
+class _HeroCover extends StatelessWidget {
+  const _HeroCover({
+    required this.background,
+    required this.imageWidth,
+    required this.cacheWidth,
+    required this.filterQuality,
+  });
+
+  final HeroBackground background;
+  final double imageWidth;
+  final int cacheWidth;
+  final FilterQuality filterQuality;
+
+  @override
+  Widget build(BuildContext context) {
+    final cover = CacheNetWorkImagePic(
+      background.cover,
+      fit: BoxFit.cover,
+      width: imageWidth,
+      height: double.infinity,
+      headers: background.headers,
+      filterQuality: filterQuality,
+      cacheWidth: cacheWidth,
+      alignment: const Alignment(0, -0.5),
+    );
+    final image = ShaderMask(
+      // Esta key es la que de verdad dispara el crossfade: AnimatedSwitcher
+      // solo anima cuando ve un child con una key DISTINTA a la anterior,
+      // manteniéndose él mismo montado (ver comentario en HomeHeroBanner).
+      key: ValueKey(background.cover),
+      blendMode: BlendMode.dstIn,
+      shaderCallback: (rect) => const LinearGradient(
+        begin: Alignment.centerLeft,
+        end: Alignment.centerRight,
+        colors: [Colors.transparent, Colors.white],
+        stops: [0.0, 0.55],
+      ).createShader(rect),
+      child: cover,
+    );
+    return AnimatedSwitcher(
+      duration: const Duration(milliseconds: 600),
+      child: image,
     );
   }
 }

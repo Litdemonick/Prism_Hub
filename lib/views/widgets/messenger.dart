@@ -35,10 +35,12 @@ showPlatformDialog({
   required Widget? content,
   required List<Widget>? actions,
   double? maxWidth,
+  bool barrierDismissible = true,
 }) {
   if (Platform.isAndroid) {
     return material.showDialog(
       context: context,
+      barrierDismissible: barrierDismissible,
       builder: (context) {
         return material.AlertDialog(
           scrollable: true,
@@ -51,6 +53,7 @@ showPlatformDialog({
   }
   return fluent.showDialog(
     context: context,
+    barrierDismissible: barrierDismissible,
     builder: (context) => fluent.ContentDialog(
       constraints: BoxConstraints(maxWidth: maxWidth ?? 368),
       title: Text(title),

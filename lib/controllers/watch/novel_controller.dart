@@ -1,4 +1,4 @@
-﻿import 'package:get/get.dart';
+import 'package:get/get.dart';
 import 'package:prismhub/models/index.dart';
 import 'package:prismhub/controllers/watch/reader_controller.dart';
 import 'package:prismhub/data/services/database_service.dart';
@@ -36,15 +36,16 @@ class NovelController extends ReaderController<ExtensionFikushonWatch> {
       final pos = itemPositionsListener.itemPositions.value.first;
       positions.value = pos.index;
     });
-    ever(
+    addWorker(ever(
       fontSize,
-      (callback) => PrismHubStorage.setSetting(SettingKey.novelFontSize, callback),
-    );
+      (callback) =>
+          PrismHubStorage.setSetting(SettingKey.novelFontSize, callback),
+    ));
 
     // 切换章节时重置页码
-    ever(index, (callback) => positions.value = 0);
+    addWorker(ever(index, (callback) => positions.value = 0));
 
-    ever(super.watchData, (callback) async {
+    addWorker(ever(super.watchData, (callback) async {
       if (isRecover.value || callback == null) {
         return;
       }
@@ -61,7 +62,7 @@ class NovelController extends ReaderController<ExtensionFikushonWatch> {
         return;
       }
       positions.value = int.tryParse(history.progress) ?? 0;
-    });
+    }));
   }
 
   @override

@@ -167,48 +167,26 @@ jobs:
 
             ### 🧩 Novedades de ${{ github.ref_name }}
 
-            #### 🐧 **Linux — extensiones JS funcionando**
-            - ✅ Reparado: `libquickjs_c_bridge_plugin.so` ahora se incluye en el bundle de Linux, las extensiones JavaScript ya no fallan al cargar
-            - ✅ Workaround en CI: copia manual del `.so` desde el pub cache al bundle (flutter_js 0.8.x tiene un bug con la variable `flutter_qjs_bundled_libraries`)
-            - ✅ Dependencias correctas para CachyOS, Arch, Ubuntu, Fedora (gtk3, mpv, libx11)
+            #### 🎬 **Reproductor de video — estabilidad**
+            - ✅ Reparado: la imagen no se veía (solo audio) al abrir un capítulo en algunos servidores
+            - ✅ Reparado: cerrar el reproductor podía dejarlo abierto con los controles sin responder
+            - ✅ Reparado: crash al tocar play/pausa/cambiar de servidor después de cerrar el reproductor
+            - ✅ Reparado: reabrir un capítulo justo después de cerrarlo podía dejar la pantalla nueva sin responder (bug de identificador interno compartido entre sesiones)
+            - ✅ Apagado del reproductor con límite de tiempo — nunca vuelve a colgar la apertura del siguiente capítulo
 
-            #### 📲 **Sistema de actualización automática mejorado**
+            #### 🎨 **Animaciones y transiciones (Windows/Linux)**
+            - ✅ Todas las pantallas de escritorio ahora animan al navegar (antes no había ninguna transición — cambio instantáneo)
+            - ✅ "Descubre tu próxima obsesión" en Home ahora hace crossfade entre portadas en vez de cambiar de golpe
+            - ✅ Flechas de scroll en Home animadas también en escritorio (antes solo en móvil)
 
-            **Android:**
-            - ✅ Descarga e instalación automática de APK directamente desde la app (sin abrir navegador)
-            - ✅ Soporte completo para FileProvider (Android 7.0+) — seguridad mejorada
-            - ✅ APK descargado en app cache (cubierto por FileProvider), no en system temp
-            - ✅ Instalador de APK integrado con fallback automático
-            - ✅ Permiso `REQUEST_INSTALL_PACKAGES` configurado correctamente
+            #### 📋 **Historial**
+            - ✅ Reparado: el botón de ocultar una tarjeta no refrescaba la vista en la sección Historial
+            - ✅ Tarjetas ocultas muestran el logo de PrismHub a pantalla completa en vez de una caja oscura recortada
+            - ✅ Capturas de video en las tarjetas (Continuar/Historial) ahora llenan la tarjeta correctamente en vez de verse achicadas con barras negras
 
-            **Windows:**
-            - ✅ Script PowerShell mejorado con mejor manejo de permisos
-            - ✅ Detección automática de instalación estándar vs. portable
-            - ✅ Soporte para elevar permisos cuando es necesario
-            - ✅ Timeout aumentado para procesos más lentos
-            - ✅ Logging detallado para diagnóstico
-
-            **Linux:**
-            - ✅ Extracción correcta de archivos con tar
-            - ✅ Permisos ejecutables garantizados (chmod +x)
-            - ✅ Reinicio de la aplicación en nuevo proceso sin bloqueos
-            - ✅ Mejor manejo de errores con fallback
-
-            #### 🎨 **Interfaz de actualización forzada mejorada**
-            - ✅ En desktop: diálogo centrado sin overlay de pantalla completa — la ventana del SO se puede mover libremente
-            - ✅ En mobile: mantiene pantalla completa forzada (sin forma de saltearlo) para garantizar la actualización
-            - ✅ Diseño responsive para desktop (máx. 600px) y mobile
-            - ✅ Barra de título movible en escritorio
-            - ✅ Fondo semi-transparente oscuro
-            - ✅ Mejor legibilidad del changelog
-
-            #### 🐛 **Mejoras generales**
-            - ✅ Descarga con indicador de progreso
-            - ✅ Mejor logging y diagnóstico de errores
-            - ✅ Manejo robusto de excepciones
-            - ✅ Botón "Download & Install" funcional en Windows/Linux
-            - ✅ Soporte MethodChannel para instalación de APK en Android
-            - ✅ Página web actualizada a v${{ github.ref_name }}
+            #### 📲 **Sistema de actualización**
+            - ✅ Reparado (Android): si faltaba el permiso "instalar apps desconocidas", el mensaje que explica cómo habilitarlo se perdía detrás de un error técnico confuso — ahora se ve el mensaje correcto
+            - ✅ Auditado de punta a punta en Windows, Linux y Android: nombres de assets, permisos y flujo de instalación verificados contra lo que publica este mismo pipeline
 
             #### 🎯 **Características anteriores**
             - 🎬 Reproductor con failover automático entre servidores

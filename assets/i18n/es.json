@@ -281,6 +281,7 @@
     "check-update": "Buscar actualizaciones",
     "new-version": "Nueva versión {version} detectada",
     "download": "Ir a actualizar",
+    "download-install": "Descargar e instalar",
     "no-update": "Ya actualizado",
     "not-now": "Ahora no",
     "error": "No se pudo verificar si hay actualizaciones, se produjo un error de red",

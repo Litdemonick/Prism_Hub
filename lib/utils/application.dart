@@ -1,4 +1,5 @@
-﻿// ignore_for_file: use_build_context_synchronously
+// ignore_for_file: use_build_context_synchronously
+import 'dart:async';
 import 'dart:io';
 
 import 'package:collection/collection.dart';
@@ -8,7 +9,6 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_i18n/flutter_i18n.dart';
 import 'package:flutter_markdown/flutter_markdown.dart';
-import 'package:get/get.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:prismhub/utils/i18n.dart';
 import 'package:prismhub/utils/request.dart';
@@ -19,6 +19,7 @@ import 'package:prismhub/views/widgets/messenger.dart';
 import 'package:url_launcher/url_launcher.dart';
 import 'package:package_info_plus/package_info_plus.dart';
 import 'package:device_info_plus/device_info_plus.dart';
+import 'package:window_manager/window_manager.dart';
 
 late PackageInfo packageInfo;
 late AndroidDeviceInfo androidDeviceInfo;
@@ -45,6 +46,53 @@ class ApplicationUtils {
 
   static String get _platformSuffix =>
       Platform.isWindows ? 'windows-x64.zip' : 'linux-x64.tar.gz';
+
+  static bool _forcedUpdatePageOpen = false;
+  static Future<void>? _forcedUpdateCheckInFlight;
+
+  static void scheduleForcedUpdateCheck(BuildContext context) {
+    if (kIsWeb) return;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!context.mounted) return;
+      unawaited(Future<void>.delayed(
+        const Duration(milliseconds: 250),
+        () {
+          if (context.mounted) {
+            return checkForcedUpdate(context);
+          }
+        },
+      ));
+    });
+  }
+
+  static List<int>? _versionParts(String version) {
+    final clean = version.replaceFirst(RegExp(r'^v'), '').split('+').first;
+    final parts = clean.split(RegExp(r'[.-]'));
+    if (parts.isEmpty) return null;
+    final numbers = <int>[];
+    for (final part in parts.take(3)) {
+      final value = int.tryParse(part);
+      if (value == null) return null;
+      numbers.add(value);
+    }
+    while (numbers.length < 3) {
+      numbers.add(0);
+    }
+    return numbers;
+  }
+
+  static bool _isRemoteVersionNewer(String remoteVersion) {
+    final remote = _versionParts(remoteVersion);
+    final local = _versionParts(packageInfo.version);
+    if (remote == null || local == null) {
+      return remoteVersion != packageInfo.version;
+    }
+    for (var i = 0; i < remote.length; i++) {
+      if (remote[i] > local[i]) return true;
+      if (remote[i] < local[i]) return false;
+    }
+    return false;
+  }
 
   static bool get _windowsInstallLooksManaged {
     if (!Platform.isWindows) return false;
@@ -106,33 +154,52 @@ class ApplicationUtils {
   // versión desplegada, no hay un "instalable" que forzar.
   static Future<void> checkForcedUpdate(BuildContext context) async {
     if (kIsWeb) return;
+    if (_forcedUpdatePageOpen) return;
+    final activeCheck = _forcedUpdateCheckInFlight;
+    if (activeCheck != null) return activeCheck;
+
+    _forcedUpdateCheckInFlight = _checkForcedUpdate(context);
+    try {
+      await _forcedUpdateCheckInFlight;
+    } finally {
+      _forcedUpdateCheckInFlight = null;
+    }
+  }
+
+  static Future<void> _checkForcedUpdate(BuildContext context) async {
     try {
       const url =
           "https://api.github.com/repos/Litdemonick/Prism_Hub/releases/latest";
       final res = await dio.get(url);
       final tagName = res.data["tag_name"] as String;
       final remoteVersion = tagName.replaceFirst('v', '');
-      if (packageInfo.version == remoteVersion) return;
+      if (!_isRemoteVersionNewer(remoteVersion)) return;
       if (!context.mounted) return;
 
       final asset = Platform.isAndroid
           ? _findAndroidAsset(res.data['assets'])
           : _findAsset(res.data['assets'], tagName);
 
-      await Navigator.of(context, rootNavigator: true).push(
-        PageRouteBuilder(
-          opaque: true,
-          pageBuilder: (context, animation, secondaryAnimation) =>
-              _ForcedUpdatePage(
-            remoteVersion: remoteVersion,
-            changelog: (res.data['body'] as String?) ?? '',
-            htmlUrl: res.data['html_url'] as String,
-            asset: asset,
+      _forcedUpdatePageOpen = true;
+      try {
+        await Navigator.of(context, rootNavigator: true).push(
+          PageRouteBuilder(
+            opaque: true,
+            pageBuilder: (context, animation, secondaryAnimation) =>
+                _ForcedUpdatePage(
+              remoteVersion: remoteVersion,
+              changelog: (res.data['body'] as String?) ?? '',
+              htmlUrl: res.data['html_url'] as String,
+              asset: asset,
+            ),
+            transitionsBuilder:
+                (context, animation, secondaryAnimation, child) =>
+                    FadeTransition(opacity: animation, child: child),
           ),
-          transitionsBuilder: (context, animation, secondaryAnimation, child) =>
-              FadeTransition(opacity: animation, child: child),
-        ),
-      );
+        );
+      } finally {
+        _forcedUpdatePageOpen = false;
+      }
     } catch (e) {
       // Silencioso: si no se puede chequear (sin internet, GitHub caído), no
       // hay que bloquear el uso de la app por un error de red — el gate solo
@@ -149,54 +216,53 @@ class ApplicationUtils {
       final tagName = res.data["tag_name"] as String;
       final remoteVersion = tagName.replaceFirst('v', '');
       debugPrint('remoteVersion: $remoteVersion');
-      if (packageInfo.version != remoteVersion) {
+      if (_isRemoteVersionNewer(remoteVersion)) {
+        final asset = Platform.isAndroid
+            ? _findAndroidAsset(res.data['assets'])
+            : _findAsset(res.data['assets'], tagName);
         if (Platform.isAndroid) {
-          final asset = _findAndroidAsset(res.data['assets']);
-          Get.to(
-            Scaffold(
-              appBar: AppBar(
-                title: Text(
-                  FlutterI18n.translate(
-                    context,
-                    'upgrade.new-version',
-                    translationParams: {
-                      'version': remoteVersion,
-                    },
-                  ),
-                ),
-              ),
-              body: Padding(
-                padding: const EdgeInsets.all(16),
-                child: Column(
-                  children: [
-                    Expanded(child: Markdown(data: res.data['body'])),
-                    const SizedBox(height: 16),
-                    SizedBox(
-                      width: double.infinity,
-                      child: PlatformFilledButton(
-                        onPressed: () {
-                          RouterUtils.pop();
-                          launchUrl(
-                            Uri.parse(
-                              (asset?['browser_download_url'] as String?) ??
-                                  res.data['html_url'] as String,
-                            ),
-                            mode: LaunchMode.externalApplication,
-                          );
-                        },
-                        child: Text('upgrade.download'.i18n),
-                      ),
-                    )
-                  ],
-                ),
-              ),
+          await showPlatformDialog(
+            context: context,
+            title: FlutterI18n.translate(
+              context,
+              'upgrade.new-version',
+              translationParams: {
+                'version': remoteVersion,
+              },
             ),
-            transition: Transition.rightToLeftWithFade,
+            content: Markdown(
+              shrinkWrap: true,
+              data: res.data['body'],
+            ),
+            actions: [
+              PlatformTextButton(
+                onPressed: () {
+                  RouterUtils.pop();
+                },
+                child: Text('upgrade.not-now'.i18n),
+              ),
+              PlatformFilledButton(
+                onPressed: () {
+                  RouterUtils.pop();
+                  if (asset != null) {
+                    _downloadAndInstall(context, asset, remoteVersion);
+                  } else {
+                    launchUrl(
+                      Uri.parse(res.data['html_url']),
+                      mode: LaunchMode.externalApplication,
+                    );
+                  }
+                },
+                child: Text(
+                  asset != null
+                      ? 'upgrade.download-install'.i18n
+                      : 'upgrade.download'.i18n,
+                ),
+              )
+            ],
           );
           return;
         }
-
-        final asset = _findAsset(res.data['assets'], tagName);
 
         showPlatformDialog(
           context: context,
@@ -231,7 +297,9 @@ class ApplicationUtils {
                 }
               },
               child: Text(
-                asset != null ? 'upgrade.download-install'.i18n : 'upgrade.download'.i18n,
+                asset != null
+                    ? 'upgrade.download-install'.i18n
+                    : 'upgrade.download'.i18n,
               ),
             )
           ],
@@ -263,52 +331,68 @@ class ApplicationUtils {
     Map<String, dynamic> asset,
     String version,
   ) async {
-    Get.dialog(
-      const Center(
-        child: Card(
-          child: Padding(
-            padding: EdgeInsets.all(32),
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                CircularProgressIndicator(),
-                SizedBox(height: 16),
-                Text('Descargando actualización...'),
-              ],
-            ),
+    var progressDialogOpen = false;
+    if (context.mounted) {
+      progressDialogOpen = true;
+      unawaited(showPlatformDialog(
+        context: context,
+        title: 'upgrade.check-update'.i18n,
+        content: Padding(
+          padding: const EdgeInsets.symmetric(vertical: 12),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              const SizedBox(
+                width: 22,
+                height: 22,
+                child: CircularProgressIndicator(strokeWidth: 3),
+              ),
+              const SizedBox(width: 16),
+              Flexible(child: Text('upgrade.downloading'.i18n)),
+            ],
           ),
         ),
-      ),
-      barrierDismissible: false,
-    );
+        actions: const [],
+        maxWidth: 360,
+        barrierDismissible: false,
+      ));
+      await Future<void>.delayed(Duration.zero);
+    }
 
     try {
       final url = asset['browser_download_url'] as String;
       // En Android usar app cache (cubierto por FileProvider), en desktop
       // system temp es suficiente porque no hay FileProvider de por medio.
       final downloadDir = Platform.isAndroid
-          ? Directory('${(await getTemporaryDirectory()).path}${Platform.pathSeparator}update')
+          ? Directory(
+              '${(await getTemporaryDirectory()).path}${Platform.pathSeparator}update',
+            )
           : Directory.systemTemp.createTempSync('PrismHub_update_');
       downloadDir.createSync(recursive: true);
-      final downloadPath = '${downloadDir.path}${Platform.pathSeparator}${asset['name']}';
+      final downloadPath =
+          '${downloadDir.path}${Platform.pathSeparator}${asset['name']}';
 
       // Descargar con progreso
       await dio.download(url, downloadPath, onReceiveProgress: (count, total) {
-        debugPrint('Download progress: ${(count / total * 100).toStringAsFixed(2)}%');
+        if (total > 0) {
+          debugPrint(
+            'Download progress: ${(count / total * 100).toStringAsFixed(2)}%',
+          );
+        }
       });
 
       final assetName = (asset['name'] as String).toLowerCase();
 
       // Android: descargar e instalar APK automáticamente
       if (Platform.isAndroid && assetName.endsWith('.apk')) {
-        Get.back(); // Cerrar dialogo
+        if (progressDialogOpen) RouterUtils.pop();
         await _installAndroidApk(downloadPath);
         return;
       }
 
       // Windows: instalador .exe
       if (Platform.isWindows && assetName.endsWith('.exe')) {
-        Get.back();
+        if (progressDialogOpen) RouterUtils.pop();
         await _runWindowsInstaller(downloadPath);
         return;
       }
@@ -319,14 +403,18 @@ class ApplicationUtils {
       extractDir.createSync();
 
       if (Platform.isLinux) {
-        await Process.run('tar', [
+        final result = await Process.run('tar', [
           '-xzf',
           downloadPath,
           '-C',
           extractDir.path,
         ]);
+        _throwIfProcessFailed('tar', result);
       } else if (Platform.isWindows) {
-        await Process.run('powershell', [
+        final result = await Process.run('powershell', [
+          '-NoProfile',
+          '-ExecutionPolicy',
+          'Bypass',
           'Expand-Archive',
           '-Path',
           downloadPath,
@@ -334,14 +422,15 @@ class ApplicationUtils {
           extractDir.path,
           '-Force',
         ]);
+        _throwIfProcessFailed('Expand-Archive', result);
       }
 
-      Get.back();
+      if (progressDialogOpen) RouterUtils.pop();
 
       final sourceDir = _findExtractedAppDir(extractDir);
       await _replaceAndRestart(sourceDir, downloadDir);
     } catch (e) {
-      Get.back();
+      if (progressDialogOpen) RouterUtils.pop();
       if (context.mounted) {
         showPlatformSnackbar(
           context: context,
@@ -353,25 +442,38 @@ class ApplicationUtils {
     }
   }
 
-  static Future<void> _installAndroidApk(String apkPath) async {
-    try {
-      final file = File(apkPath);
-      if (!await file.exists()) {
-        throw 'APK file not found: $apkPath';
-      }
+  static void _throwIfProcessFailed(String command, ProcessResult result) {
+    if (result.exitCode == 0) return;
+    throw '$command failed (${result.exitCode}): ${result.stderr}';
+  }
 
-      // Usar android_intent_plus para instalar el APK
-      const platform = MethodChannel('com.example.prismhub/update');
-      await platform.invokeMethod('installApk', {'apkPath': apkPath});
-    } catch (e) {
-      debugPrint('Android APK install error: $e');
-      // Fallback: abrir el APK con la aplicación predeterminada
-      try {
-        await launchUrl(Uri.file(apkPath), mode: LaunchMode.externalApplication);
-      } catch (_) {
-        rethrow;
-      }
+  static Future<void> _installAndroidApk(String apkPath) async {
+    final file = File(apkPath);
+    if (!await file.exists()) {
+      throw 'APK file not found: $apkPath';
     }
+
+    const platform = MethodChannel('com.example.prismhub/update');
+    final canInstall =
+        await platform.invokeMethod<bool>('canInstallApks') ?? false;
+    if (!canInstall) {
+      await platform.invokeMethod('openInstallSettings');
+      // Este throw NO debe caer en el fallback de más abajo (ya no existe
+      // acá): confirmado en el código que antes un catch genérico envolvía
+      // TODO esto, así que este mensaje específico ("habilitá instalar apps
+      // desconocidas") nunca llegaba al usuario — se perdía apenas se
+      // intentaba el fallback con launchUrl(Uri.file(...)), que en Android
+      // 7.0+ tira FileUriExposedException (un file:// crudo sin
+      // FileProvider) y esa SÍ era la excepción que terminaba viendo el
+      // usuario en el snackbar, sin ninguna pista de qué hacer.
+      throw 'Android bloqueó la instalación. Habilita "instalar apps desconocidas" para PrismHub y toca actualizar otra vez.';
+    }
+    // installApk (nativo) ya arma el intent con FileProvider — no hace
+    // falta ni conviene un fallback acá: cualquier fallback Dart-side con un
+    // Uri.file() crudo pisaría exactamente el mismo bug de FileUriExposedException
+    // de arriba. Si esto falla, el error real sube tal cual al snackbar de
+    // _downloadAndInstall.
+    await platform.invokeMethod('installApk', {'apkPath': apkPath});
   }
 
   static Directory _findExtractedAppDir(Directory extractDir) {
@@ -401,7 +503,8 @@ class ApplicationUtils {
           .listSync(recursive: true)
           .whereType<File>()
           .firstWhereOrNull(
-            (f) => f.uri.pathSegments.last.toLowerCase() ==
+            (f) =>
+                f.uri.pathSegments.last.toLowerCase() ==
                 currentName.toLowerCase(),
           );
       if (matchingFile != null) return matchingFile.parent;
@@ -448,10 +551,17 @@ class ApplicationUtils {
 
     if (Platform.isLinux) {
       try {
+        if (!_canWriteTo(installDir)) {
+          throw 'La carpeta de instalación no permite escritura: ${installDir.path}';
+        }
         // Copiar archivos con permisos
-        await Process.run('cp', ['-r', '${sourceDir.path}/.', installDir.path]);
+        final copyResult = await Process.run(
+            'cp', ['-r', '${sourceDir.path}/.', installDir.path]);
+        _throwIfProcessFailed('cp', copyResult);
         // Asegurar que el ejecutable sea ejecutable
-        await Process.run('chmod', ['+x', '${installDir.path}/$exeName']);
+        final chmodResult =
+            await Process.run('chmod', ['+x', '${installDir.path}/$exeName']);
+        _throwIfProcessFailed('chmod', chmodResult);
         // Iniciar la app actualizada en un nuevo proceso
         Process.start(
           '${installDir.path}/$exeName',
@@ -469,7 +579,7 @@ class ApplicationUtils {
       final scriptPath = '${tempDir.path}\\update.ps1';
       final logPath =
           '${Directory.systemTemp.path}\\PrismHub-update-${DateTime.now().millisecondsSinceEpoch}.log';
-      
+
       File(scriptPath).writeAsStringSync(
         r'''
 param(
@@ -519,14 +629,8 @@ try {
   
   # Copiar archivos
   Log "Copying files from $SourceDir to $InstallDir"
-  Get-ChildItem -Path $SourceDir -Recurse | 
-    Copy-Item -Destination { 
-      if ($_.PSIsContainer) {
-        Join-Path $InstallDir $_.FullName.Substring($SourceDir.Length)
-      } else {
-        Join-Path $InstallDir $_.FullName.Substring($SourceDir.Length)
-      }
-    } -Force -ErrorAction Continue
+  Get-ChildItem -LiteralPath $SourceDir -Force |
+    Copy-Item -Destination $InstallDir -Recurse -Force -ErrorAction Stop
   
   Log "Copy completed"
   
@@ -557,7 +661,7 @@ try {
 }
 ''',
       );
-      
+
       final args = [
         '-NoProfile',
         '-ExecutionPolicy',
@@ -577,18 +681,23 @@ try {
         '-AppPid',
         pid.toString(),
       ];
-      
+
       try {
         if (_canWriteTo(installDir)) {
           // Permisos suficientes: ejecutar sin elevar
-          Process.start('powershell', args, mode: ProcessStartMode.detached);
+          await Process.start(
+            'powershell',
+            args,
+            mode: ProcessStartMode.detached,
+          );
           debugPrint('Update script started with standard permissions');
         } else {
           // Sin permisos: elevar con RunAs
+          final argLine = args.map(_psQuote).join(' ');
           final command = 'Start-Process -FilePath powershell '
-              '-ArgumentList ${_psQuote(args.map(_psQuote).join(','))} '
+              '-ArgumentList ${_psQuote(argLine)} '
               '-Verb RunAs -WindowStyle Hidden';
-          Process.run('powershell', [
+          await Process.run('powershell', [
             '-NoProfile',
             '-ExecutionPolicy',
             'Bypass',
@@ -603,7 +712,7 @@ try {
         debugPrint('Failed to start update script: $e');
         rethrow;
       }
-      
+
       exit(0);
     }
   }
@@ -674,7 +783,8 @@ class _ForcedUpdatePageState extends State<_ForcedUpdatePage> {
         );
       } else {
         // Fallback: abrir GitHub si no hay asset
-        launchUrl(Uri.parse(widget.htmlUrl), mode: LaunchMode.externalApplication);
+        launchUrl(Uri.parse(widget.htmlUrl),
+            mode: LaunchMode.externalApplication);
       }
     } else if (widget.asset != null) {
       // Windows/Linux: con asset disponible
@@ -685,115 +795,136 @@ class _ForcedUpdatePageState extends State<_ForcedUpdatePage> {
       );
     } else {
       // Sin asset: abrir GitHub
-      launchUrl(Uri.parse(widget.htmlUrl), mode: LaunchMode.externalApplication);
+      launchUrl(Uri.parse(widget.htmlUrl),
+          mode: LaunchMode.externalApplication);
     }
   }
 
   @override
   Widget build(BuildContext context) {
     final isMobile = MediaQuery.of(context).size.width < 600;
-    
+
     if (!isMobile) {
-      // Desktop: diálogo centrado sin overlay de pantalla completa para
-      // que el usuario pueda seguir moviendo la ventana del SO y no se
-      // sienta atrapado en una pantalla que lo tapa todo.
       return PopScope(
         canPop: false,
-        child: Center(
-          child: Padding(
-            padding: const EdgeInsets.all(24),
-            child: Card(
-              elevation: 8,
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-              child: Container(
-                constraints: const BoxConstraints(
-                  maxWidth: 600,
-                  maxHeight: 500,
+        child: Column(
+          children: [
+            // Handle de arrastre para mover la ventana, visible solo en
+            // Windows/Linux donde window_manager está disponible.
+            if (Platform.isWindows || Platform.isLinux)
+              DragToMoveArea(
+                child: Container(
+                  height: 32,
+                  color: Colors.transparent,
                 ),
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-                      decoration: BoxDecoration(
-                        color: HomeTheme.accentPink.withOpacity(0.1),
-                        borderRadius: const BorderRadius.only(
-                          topLeft: Radius.circular(12),
-                          topRight: Radius.circular(12),
-                        ),
+              ),
+            Expanded(
+              child: Center(
+                child: Padding(
+                  padding: const EdgeInsets.all(24),
+                  child: Card(
+                    elevation: 8,
+                    shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(12)),
+                    child: Container(
+                      constraints: const BoxConstraints(
+                        maxWidth: 600,
+                        maxHeight: 500,
                       ),
-                      child: Row(
+                      child: Column(
+                        mainAxisSize: MainAxisSize.min,
+                        crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          const Icon(Icons.system_update,
-                              size: 24, color: HomeTheme.accentPink),
-                          const SizedBox(width: 12),
+                          Container(
+                            padding: const EdgeInsets.symmetric(
+                                horizontal: 16, vertical: 12),
+                            decoration: BoxDecoration(
+                              color:
+                                  HomeTheme.accentPink.withValues(alpha: 0.1),
+                              borderRadius: const BorderRadius.only(
+                                topLeft: Radius.circular(12),
+                                topRight: Radius.circular(12),
+                              ),
+                            ),
+                            child: Row(
+                              children: [
+                                const Icon(Icons.system_update,
+                                    size: 24, color: HomeTheme.accentPink),
+                                const SizedBox(width: 12),
+                                Expanded(
+                                  child: Text(
+                                    FlutterI18n.translate(
+                                      context,
+                                      'upgrade.new-version',
+                                      translationParams: {
+                                        'version': widget.remoteVersion
+                                      },
+                                    ),
+                                    style: const TextStyle(
+                                      fontSize: 16,
+                                      fontWeight: FontWeight.bold,
+                                      color: HomeTheme.accentPink,
+                                    ),
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
                           Expanded(
-                            child: Text(
-                              FlutterI18n.translate(
-                                context,
-                                'upgrade.new-version',
-                                translationParams: {'version': widget.remoteVersion},
+                            child: SingleChildScrollView(
+                              child: Padding(
+                                padding: const EdgeInsets.all(24),
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    Text(
+                                      'upgrade.forced-required'.i18n,
+                                      style: const TextStyle(
+                                          color: HomeTheme.textPrimary),
+                                    ),
+                                    const SizedBox(height: 16),
+                                    Markdown(
+                                      data: widget.changelog,
+                                      shrinkWrap: true,
+                                      physics:
+                                          const NeverScrollableScrollPhysics(),
+                                    ),
+                                  ],
+                                ),
                               ),
-                              style: const TextStyle(
-                                fontSize: 16,
-                                fontWeight: FontWeight.bold,
-                                color: HomeTheme.accentPink,
-                              ),
+                            ),
+                          ),
+                          Padding(
+                            padding: const EdgeInsets.all(16),
+                            child: Row(
+                              children: [
+                                if (_needsManualRetry) ...[
+                                  Expanded(
+                                    child: PlatformTextButton(
+                                      onPressed: _checking ? null : _retryCheck,
+                                      child:
+                                          Text('upgrade.already-updated'.i18n),
+                                    ),
+                                  ),
+                                  const SizedBox(width: 12),
+                                ],
+                                Expanded(
+                                  child: PlatformFilledButton(
+                                    onPressed: _checking ? null : _updateNow,
+                                    child: Text('upgrade.update-now'.i18n),
+                                  ),
+                                ),
+                              ],
                             ),
                           ),
                         ],
                       ),
                     ),
-                    Expanded(
-                      child: SingleChildScrollView(
-                        child: Padding(
-                          padding: const EdgeInsets.all(24),
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Text(
-                                'upgrade.forced-required'.i18n,
-                                style: const TextStyle(color: HomeTheme.textPrimary),
-                              ),
-                              const SizedBox(height: 16),
-                              Markdown(
-                                data: widget.changelog,
-                                shrinkWrap: true,
-                                physics: const NeverScrollableScrollPhysics(),
-                              ),
-                            ],
-                          ),
-                        ),
-                      ),
-                    ),
-                    Padding(
-                      padding: const EdgeInsets.all(16),
-                      child: Row(
-                        children: [
-                          if (_needsManualRetry) ...[
-                            Expanded(
-                              child: PlatformTextButton(
-                                onPressed: _checking ? null : _retryCheck,
-                                child: Text('upgrade.already-updated'.i18n),
-                              ),
-                            ),
-                            const SizedBox(width: 12),
-                          ],
-                          Expanded(
-                            child: PlatformFilledButton(
-                              onPressed: _checking ? null : _updateNow,
-                              child: Text('upgrade.update-now'.i18n),
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                  ],
+                  ),
                 ),
               ),
             ),
-          ),
+          ],
         ),
       );
     }
@@ -802,13 +933,14 @@ class _ForcedUpdatePageState extends State<_ForcedUpdatePage> {
     return PopScope(
       canPop: false,
       child: Material(
-        color: Colors.black.withOpacity(0.5),
+        color: Colors.black.withValues(alpha: 0.5),
         child: Center(
           child: Padding(
             padding: const EdgeInsets.all(16),
             child: Card(
               elevation: 8,
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+              shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(12)),
               child: Container(
                 constraints: BoxConstraints(
                   maxWidth: double.infinity,
@@ -832,7 +964,9 @@ class _ForcedUpdatePageState extends State<_ForcedUpdatePage> {
                                 FlutterI18n.translate(
                                   context,
                                   'upgrade.new-version',
-                                  translationParams: {'version': widget.remoteVersion},
+                                  translationParams: {
+                                    'version': widget.remoteVersion
+                                  },
                                 ),
                                 style: const TextStyle(
                                   fontSize: 20,
@@ -843,7 +977,8 @@ class _ForcedUpdatePageState extends State<_ForcedUpdatePage> {
                               const SizedBox(height: 8),
                               Text(
                                 'upgrade.forced-required'.i18n,
-                                style: const TextStyle(color: HomeTheme.textPrimary),
+                                style: const TextStyle(
+                                    color: HomeTheme.textPrimary),
                               ),
                               const SizedBox(height: 16),
                               Markdown(

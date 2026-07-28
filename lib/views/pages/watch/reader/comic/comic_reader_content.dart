@@ -851,6 +851,9 @@ class _PagedPageState extends State<_PagedPage> {
   // Solo se usa para la tira de manhwa (la página de manga no tiene nada que
   // scrollear, ya entra entera).
   final _stripScrollController = ScrollController();
+  static const _pagedScrollbarVisibleWidth = 10.0;
+  static const _pagedScrollbarHitWidth = 18.0;
+  bool _stripScrollbarReady = false;
 
   // Forwarding de la rueda: el zoom del InteractiveViewer va apagado en
   // desktop (`scaleEnabled: Platform.isAndroid`, ver más abajo) porque
@@ -872,6 +875,97 @@ class _PagedPageState extends State<_PagedPage> {
         position.jumpTo(target);
       }
     });
+  }
+
+  void _scheduleStripScrollbarRefresh() {
+    if (_stripScrollbarReady) return;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted || !_stripScrollController.hasClients) return;
+      setState(() => _stripScrollbarReady = true);
+    });
+  }
+
+  Widget _buildPagedStripScrollbar() {
+    void jumpToLocalY(double trackHeight, double localY) {
+      if (!_stripScrollController.hasClients) return;
+      final position = _stripScrollController.position;
+      if (position.maxScrollExtent <= 0) return;
+      final thumbHeight = _thumbHeight(trackHeight, position);
+      final usableTrack = trackHeight - thumbHeight;
+      final fraction = usableTrack <= 0
+          ? 0.0
+          : ((localY - thumbHeight / 2) / usableTrack).clamp(0.0, 1.0);
+      position.jumpTo(position.maxScrollExtent * fraction);
+    }
+
+    return Positioned(
+      right: 2,
+      top: 0,
+      bottom: 0,
+      width: _pagedScrollbarHitWidth,
+      child: LayoutBuilder(
+        builder: (context, box) {
+          final trackHeight = box.maxHeight;
+          return AnimatedBuilder(
+            animation: _stripScrollController,
+            builder: (context, _) {
+              if (!_stripScrollController.hasClients) {
+                return const SizedBox.shrink();
+              }
+              final position = _stripScrollController.position;
+              if (position.maxScrollExtent <= 0) {
+                return const SizedBox.shrink();
+              }
+              final thumbHeight = _thumbHeight(trackHeight, position);
+              final usableTrack = trackHeight - thumbHeight;
+              final top = usableTrack <= 0
+                  ? 0.0
+                  : usableTrack *
+                      (position.pixels / position.maxScrollExtent)
+                          .clamp(0.0, 1.0);
+              return Listener(
+                onPointerSignal: (event) =>
+                    _handleWheelSignal(event, isStrip: true),
+                child: GestureDetector(
+                  behavior: HitTestBehavior.opaque,
+                  onVerticalDragStart: (d) =>
+                      jumpToLocalY(trackHeight, d.localPosition.dy),
+                  onVerticalDragUpdate: (d) =>
+                      jumpToLocalY(trackHeight, d.localPosition.dy),
+                  onTapDown: (d) =>
+                      jumpToLocalY(trackHeight, d.localPosition.dy),
+                  child: Stack(
+                    children: [
+                      Positioned(
+                        top: top,
+                        right: 0,
+                        width: _pagedScrollbarVisibleWidth,
+                        height: thumbHeight,
+                        child: Container(
+                          decoration: BoxDecoration(
+                            color: Colors.white.withAlpha(140),
+                            borderRadius: BorderRadius.circular(
+                              _pagedScrollbarVisibleWidth / 2,
+                            ),
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              );
+            },
+          );
+        },
+      ),
+    );
+  }
+
+  double _thumbHeight(double trackHeight, ScrollPosition position) {
+    final contentExtent = position.maxScrollExtent + position.viewportDimension;
+    if (contentExtent <= 0) return trackHeight;
+    return (trackHeight * position.viewportDimension / contentExtent)
+        .clamp(32.0, trackHeight);
   }
 
   @override
@@ -896,6 +990,7 @@ class _PagedPageState extends State<_PagedPage> {
     if (oldWidget.url != widget.url) {
       _zoomedOut = false;
       _zoomed = false;
+      _stripScrollbarReady = false;
       _zoomController.value = Matrix4.identity();
       if (_stripScrollController.hasClients) {
         _stripScrollController.jumpTo(0);
@@ -962,8 +1057,7 @@ class _PagedPageState extends State<_PagedPage> {
           return Stack(
             children: [
               Listener(
-                onPointerSignal: (e) =>
-                    _handleWheelSignal(e, isStrip: false),
+                onPointerSignal: (e) => _handleWheelSignal(e, isStrip: false),
                 child: InteractiveViewer(
                   transformationController: _zoomController,
                   maxScale: 5,
@@ -1031,6 +1125,7 @@ class _PagedPageState extends State<_PagedPage> {
         // cascada), reportado en vivo. panEnabled solo con zoom aplicado,
         // mismo motivo que en la página de manga: sin zoom no hay nada que
         // desplazar y así no le roba el gesto al scroll ni al PageView.
+        if (!Platform.isAndroid) _scheduleStripScrollbarRefresh();
         return Stack(
           children: [
             Listener(
@@ -1043,50 +1138,55 @@ class _PagedPageState extends State<_PagedPage> {
                 scaleEnabled: Platform.isAndroid,
                 panEnabled: _zoomed,
                 onInteractionEnd: (_) => _syncZoomFlag(),
-                child: SingleChildScrollView(
-                  controller: _stripScrollController,
-                  child: Center(
-                    child: Column(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        SizedBox(
-                          width: stripWidth,
-                          child: CacheNetWorkImagePic(
-                            widget.url,
-                            width: double.infinity,
-                            fit: BoxFit.fitWidth,
-                            placeholder: widget.placeholder,
-                            fallback: const _PagedLoadError(),
-                            headers: widget.headers,
-                          ),
-                        ),
-                        if (fillerHeight > 0)
+                child: ScrollConfiguration(
+                  behavior: ScrollConfiguration.of(context)
+                      .copyWith(scrollbars: false),
+                  child: SingleChildScrollView(
+                    controller: _stripScrollController,
+                    child: Center(
+                      child: Column(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
                           SizedBox(
                             width: stripWidth,
-                            height: fillerHeight,
-                            // cover, no contain: con contain la carta (casi
-                            // cuadrada) quedaba chiquita y centrada dejando
-                            // franjas negras alrededor — un cuadradito feo
-                            // suelto en medio del hueco, reportado en vivo.
-                            // Con cover llena todo el ancho de la tira (la
-                            // misma zona que ocupa el manga arriba), recorte
-                            // mediante.
-                            child: ClipRect(
-                              child: Image.asset(
-                                'assets/carddefaultoffline.png',
-                                fit: BoxFit.cover,
-                                width: stripWidth,
-                                height: fillerHeight,
-                              ),
+                            child: CacheNetWorkImagePic(
+                              widget.url,
+                              width: double.infinity,
+                              fit: BoxFit.fitWidth,
+                              placeholder: widget.placeholder,
+                              fallback: const _PagedLoadError(),
+                              headers: widget.headers,
                             ),
                           ),
-                      ],
+                          if (fillerHeight > 0)
+                            SizedBox(
+                              width: stripWidth,
+                              height: fillerHeight,
+                              // cover, no contain: con contain la carta (casi
+                              // cuadrada) quedaba chiquita y centrada dejando
+                              // franjas negras alrededor — un cuadradito feo
+                              // suelto en medio del hueco, reportado en vivo.
+                              // Con cover llena todo el ancho de la tira (la
+                              // misma zona que ocupa el manga arriba), recorte
+                              // mediante.
+                              child: ClipRect(
+                                child: Image.asset(
+                                  'assets/carddefaultoffline.png',
+                                  fit: BoxFit.cover,
+                                  width: stripWidth,
+                                  height: fillerHeight,
+                                ),
+                              ),
+                            ),
+                        ],
+                      ),
                     ),
                   ),
                 ),
               ),
             ),
             _doubleTapZoomOverlay(),
+            if (!Platform.isAndroid) _buildPagedStripScrollbar(),
           ],
         );
       },

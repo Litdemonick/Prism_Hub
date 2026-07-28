@@ -1,7 +1,6 @@
-﻿import 'dart:io';
+import 'dart:io';
 
 import 'package:fluent_ui/fluent_ui.dart';
-import 'package:flutter_animate/flutter_animate.dart';
 import 'package:get/get.dart';
 import 'package:go_router/go_router.dart';
 import 'package:prismhub/data/providers/anilist_provider.dart';
@@ -27,7 +26,7 @@ BuildContext get currentContext {
   if (Platform.isAndroid) {
     return Get.context!;
   }
-  return _shellNavigatorKey.currentContext!;
+  return _shellNavigatorKey.currentContext ?? Get.context!;
 }
 
 final router = GoRouter(
@@ -45,11 +44,12 @@ final router = GoRouter(
       routes: [
         GoRoute(
           path: '/',
-          builder: (context, state) => _animation(const HomePage()),
+          pageBuilder: (context, state) => _animation(state, const HomePage()),
         ),
         GoRoute(
           path: '/history',
-          builder: (context, state) => _animation(
+          pageBuilder: (context, state) => _animation(
+            state,
             HistoryPage(
               initialTab: int.tryParse(
                     state.uri.queryParameters['tab'] ?? '',
@@ -60,7 +60,8 @@ final router = GoRouter(
         ),
         GoRoute(
           path: '/favorites',
-          builder: (context, state) => _animation(
+          pageBuilder: (context, state) => _animation(
+            state,
             FavoritesPage(
               type: ExtensionType.values[int.parse(
                 state.uri.queryParameters['type']!,
@@ -70,11 +71,12 @@ final router = GoRouter(
         ),
         GoRoute(
           path: '/search',
-          builder: (context, state) => _animation(const SearchPage()),
+          pageBuilder: (context, state) => _animation(state, const SearchPage()),
         ),
         GoRoute(
           path: '/search_extension',
-          builder: (context, state) => _animation(
+          pageBuilder: (context, state) => _animation(
+            state,
             ExtensionSearcherPage(
               package: state.uri.queryParameters['package']!,
               keyWord: state.uri.queryParameters['keyWord'],
@@ -83,11 +85,13 @@ final router = GoRouter(
         ),
         GoRoute(
           path: '/extension',
-          builder: (context, state) => _animation(const ExtensionPage()),
+          pageBuilder: (context, state) =>
+              _animation(state, const ExtensionPage()),
         ),
         GoRoute(
           path: '/extension_settings',
-          builder: (context, state) => _animation(
+          pageBuilder: (context, state) => _animation(
+            state,
             ExtensionSettingsPage(
               package: state.uri.queryParameters['package']!,
             ),
@@ -95,15 +99,18 @@ final router = GoRouter(
         ),
         GoRoute(
           path: '/settings',
-          builder: (context, state) => _animation(const SettingsPage()),
+          pageBuilder: (context, state) =>
+              _animation(state, const SettingsPage()),
         ),
         GoRoute(
           path: '/settings/anilist',
-          builder: (context, state) => _animation(const AniListTrackingPage()),
+          pageBuilder: (context, state) =>
+              _animation(state, const AniListTrackingPage()),
         ),
         GoRoute(
           path: '/settings/anilist_more',
-          builder: (context, state) => _animation(
+          pageBuilder: (context, state) => _animation(
+            state,
             AnilistMorePage(
               anilistType: AnilistType.values[int.parse(
                 state.uri.queryParameters['type']!,
@@ -113,23 +120,16 @@ final router = GoRouter(
         ),
         GoRoute(
           path: '/extension_repo',
-          builder: (context, state) => _animation(const ExtensionRepoPage()),
+          pageBuilder: (context, state) =>
+              _animation(state, const ExtensionRepoPage()),
         ),
         GoRoute(
           path: '/detail',
-          builder: (context, state) {
+          pageBuilder: (context, state) {
             final url = state.uri.queryParameters['url']!;
             final package = state.uri.queryParameters['package']!;
-            // GoRoute reutiliza el mismo Widget/State al navegar de un
-            // /detail a otro (mismo path, solo cambia el query) si no hay
-            // una Key que los distinga — initState no vuelve a correr, y
-            // quedaba viendo el detalle anterior hasta salir y volver a
-            // entrar (recién ahí se forzaba un Element nuevo). La Key
-            // fuerza un State nuevo por cada url/package distinto. El tag
-            // (antes ausente acá, null para TODO detalle de escritorio)
-            // también evita que el controller de GetX de un detalle
-            // pisara al de otro bajo el mismo tag compartido.
             return _animation(
+              state,
               DetailPage(
                 key: ValueKey('$package|$url'),
                 url: url,
@@ -144,12 +144,31 @@ final router = GoRouter(
   ],
 );
 
-_animation(Widget child) {
-  return Animate(
+// FluentApp.router no es MaterialApp ni CupertinoApp — go_router solo sabe
+// dar transición automática a esos dos tipos de app (ver
+// go_router/src/builder.dart, _pageBuilderForAppType), así que con
+// GoRoute.builder (lo que había acá antes) TODA la navegación de escritorio
+// quedaba con NoTransitionPage: un corte seco sin ninguna animación,
+// confirmado en vivo con el botón de detalle (se sentía brusco, no era un
+// problema de frames). CustomTransitionPage con un fade+slide corto arregla
+// esto para cualquier ruta que pase por acá.
+Page<void> _animation(GoRouterState state, Widget child) {
+  return CustomTransitionPage<void>(
+    key: state.pageKey,
     child: child,
-  ).moveY(
-    begin: 40,
-    end: 0,
-    curve: Curves.easeOutCubic,
+    transitionDuration: const Duration(milliseconds: 220),
+    reverseTransitionDuration: const Duration(milliseconds: 180),
+    transitionsBuilder: (context, animation, secondaryAnimation, child) {
+      return FadeTransition(
+        opacity: CurvedAnimation(parent: animation, curve: Curves.easeOut),
+        child: SlideTransition(
+          position: Tween<Offset>(
+            begin: const Offset(0, 0.02),
+            end: Offset.zero,
+          ).animate(CurvedAnimation(parent: animation, curve: Curves.easeOut)),
+          child: child,
+        ),
+      );
+    },
   );
 }

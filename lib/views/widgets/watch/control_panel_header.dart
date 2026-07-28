@@ -175,9 +175,20 @@ class _ControlPanelHeaderState<T extends ReaderController>
                 child: fluent.IconButton(
                   icon: const Icon(fluent.FluentIcons.settings),
                   onPressed: () {
-                    _settingFlayoutcontroller.showFlyout(builder: (context) {
-                      return widget.buildSettings!(context);
-                    });
+                    // full: sin esto el flyout se anclaba pegado al botón de
+                    // configuración (arriba a la derecha) — para un menú de
+                    // elegir modo de lectura eso queda perdido/incómodo de
+                    // leer. full le da todo el ancho de pantalla como
+                    // constraints y deja que el propio contenido se
+                    // posicione (ComicReaderSettings ya lo centra con
+                    // Center en su rama de escritorio).
+                    _settingFlayoutcontroller.showFlyout(
+                      placementMode: fluent.FlyoutPlacementMode.full,
+                      barrierColor: Colors.black.withValues(alpha: 0.35),
+                      builder: (context) {
+                        return widget.buildSettings!(context);
+                      },
+                    );
                   },
                 ),
               ),

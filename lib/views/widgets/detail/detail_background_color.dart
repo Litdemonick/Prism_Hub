@@ -14,17 +14,23 @@ class DetailBackgroundColor extends StatefulWidget {
 
 class _DetailBackgroundColorState extends State<DetailBackgroundColor> {
   double scrollOffset = 0;
+
   @override
   void initState() {
-    widget.controller.addListener(() {
-      setState(() {
-        scrollOffset = widget.controller.offset;
-        if (scrollOffset >= 255) {
-          scrollOffset = 255;
-        }
-      });
-    });
     super.initState();
+    widget.controller.addListener(_handleScroll);
+  }
+
+  @override
+  void dispose() {
+    widget.controller.removeListener(_handleScroll);
+    super.dispose();
+  }
+
+  void _handleScroll() {
+    final next = widget.controller.offset.clamp(0.0, 255.0);
+    if ((next - scrollOffset).abs() < 1) return;
+    setState(() => scrollOffset = next);
   }
 
   @override

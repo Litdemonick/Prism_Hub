@@ -1,5 +1,6 @@
-﻿import 'package:flutter/material.dart';
+import 'package:flutter/material.dart';
 import 'package:dlna_dart/dlna.dart';
+import 'dart:async';
 import 'package:prismhub/utils/i18n.dart';
 import 'package:prismhub/utils/log.dart';
 import 'package:prismhub/views/widgets/progress.dart';
@@ -16,7 +17,8 @@ class VideoPlayerCast extends StatefulWidget {
 }
 
 class _VideoPlayerCastState extends State<VideoPlayerCast> {
-  late DLNAManager searcher;
+  DLNAManager? searcher;
+  StreamSubscription? _devicesSub;
   Map<String, DLNADevice> deviceList = {};
 
   @override
@@ -28,9 +30,14 @@ class _VideoPlayerCastState extends State<VideoPlayerCast> {
   _init() async {
     searcher = DLNAManager();
     logger.info('DLNA searching devices...');
-    final m = await searcher.start();
-    m.devices.stream.listen((deviceList) {
+    final m = await searcher!.start();
+    if (!mounted) {
+      searcher?.stop();
+      return;
+    }
+    _devicesSub = m.devices.stream.listen((deviceList) {
       logger.info('DLNA devices: $deviceList');
+      if (!mounted) return;
       setState(() {
         this.deviceList = deviceList;
       });
@@ -40,7 +47,8 @@ class _VideoPlayerCastState extends State<VideoPlayerCast> {
   @override
   void dispose() {
     logger.info('DLNA stop searching devices...');
-    searcher.stop();
+    _devicesSub?.cancel();
+    searcher?.stop();
     super.dispose();
   }
 

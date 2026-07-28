@@ -1,6 +1,5 @@
-﻿import 'package:fluent_ui/fluent_ui.dart' as fluent;
+import 'package:fluent_ui/fluent_ui.dart' as fluent;
 import 'package:flutter/material.dart';
-import 'package:flutter_animate/flutter_animate.dart';
 import 'package:get/get.dart';
 import 'package:prismhub/data/providers/tmdb_provider.dart';
 import 'package:prismhub/models/extension.dart';
@@ -254,7 +253,7 @@ class _DetailPageState extends State<DetailPage> {
       }
       return Stack(
         children: [
-          Animate(
+          RepaintBoundary(
             child: Cover(
               alt: c.detail?.title ?? '',
               url: c.backgorund,
@@ -262,9 +261,6 @@ class _DetailPageState extends State<DetailPage> {
               headers: c.detail?.headers,
               alignment: const Alignment(0, 0.35),
             ),
-          ).blur(
-            begin: const Offset(10, 10),
-            end: const Offset(0, 0),
           ),
           Positioned.fill(
             child: DetailBackgroundColor(controller: c.scrollController),
@@ -333,16 +329,20 @@ class _DetailPageState extends State<DetailPage> {
                                   if (c.tmdbDetail != null)
                                     fluent.Button(
                                       style: fluent.ButtonStyle(
-                                        backgroundColor: fluent.WidgetStateProperty.all(
+                                        backgroundColor:
+                                            fluent.WidgetStateProperty.all(
                                           HomeTheme.cardSurface,
                                         ),
-                                        foregroundColor: fluent.WidgetStateProperty.all(
+                                        foregroundColor:
+                                            fluent.WidgetStateProperty.all(
                                           HomeTheme.textPrimary,
                                         ),
                                         shape: fluent.WidgetStateProperty.all(
                                           RoundedRectangleBorder(
-                                            borderRadius: BorderRadius.circular(999),
-                                            side: const BorderSide(color: HomeTheme.border),
+                                            borderRadius:
+                                                BorderRadius.circular(999),
+                                            side: const BorderSide(
+                                                color: HomeTheme.border),
                                           ),
                                         ),
                                       ),
@@ -357,7 +357,8 @@ class _DetailPageState extends State<DetailPage> {
                                           children: [
                                             Text("TMDB"),
                                             SizedBox(width: 8),
-                                            Icon(fluent.FluentIcons.pop_expand, size: 14)
+                                            Icon(fluent.FluentIcons.pop_expand,
+                                                size: 14)
                                           ],
                                         ),
                                       ),
@@ -377,7 +378,8 @@ class _DetailPageState extends State<DetailPage> {
                       ),
                     ),
                     const SizedBox(height: 30),
-                    if (c.detail?.episodes != null) DetailEpisodes(tag: widget.tag),
+                    if (c.detail?.episodes != null)
+                      DetailEpisodes(tag: widget.tag),
                     const SizedBox(height: 16),
                     Obx(
                       () {
@@ -482,7 +484,8 @@ class _DetailPageState extends State<DetailPage> {
                                             Text(
                                               cast.character,
                                               overflow: TextOverflow.ellipsis,
-                                              style: const TextStyle(color: HomeTheme.textMuted),
+                                              style: const TextStyle(
+                                                  color: HomeTheme.textMuted),
                                             ),
                                           ],
                                         ),
@@ -511,7 +514,9 @@ class _DetailPageState extends State<DetailPage> {
                                 hasDesc ? desc : "detail.no-description".i18n,
                                 style: TextStyle(
                                   height: 2,
-                                  color: hasDesc ? HomeTheme.textPrimary : HomeTheme.textMuted,
+                                  color: hasDesc
+                                      ? HomeTheme.textPrimary
+                                      : HomeTheme.textMuted,
                                 ),
                               ),
                             ),

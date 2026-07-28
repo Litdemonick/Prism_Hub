@@ -1,4 +1,4 @@
-﻿import 'package:flutter/material.dart';
+import 'package:flutter/material.dart';
 import 'package:prismhub/utils/color.dart';
 import 'package:prismhub/views/widgets/cache_network_image.dart';
 
@@ -24,12 +24,25 @@ class Cover extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     if (url?.isNotEmpty == true) {
-      return CacheNetWorkImagePic(
-        url!,
-        width: double.infinity,
-        height: double.infinity,
-        headers: headers,
-        alignment: alignment,
+      return LayoutBuilder(
+        builder: (context, constraints) {
+          final bounded =
+              constraints.maxWidth.isFinite && constraints.maxHeight.isFinite;
+          final dpr = MediaQuery.devicePixelRatioOf(context);
+          return CacheNetWorkImagePic(
+            url!,
+            width: double.infinity,
+            height: double.infinity,
+            headers: headers,
+            alignment: alignment,
+            cacheWidth: bounded
+                ? (constraints.maxWidth * dpr).ceil().clamp(1, 4096).toInt()
+                : null,
+            cacheHeight: bounded
+                ? (constraints.maxHeight * dpr).ceil().clamp(1, 4096).toInt()
+                : null,
+          );
+        },
       );
     }
 

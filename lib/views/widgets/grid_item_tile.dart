@@ -1,4 +1,4 @@
-﻿import 'package:flutter/material.dart';
+import 'package:flutter/material.dart';
 import 'package:prismhub/models/extension.dart';
 import 'package:prismhub/views/widgets/cover.dart';
 import 'package:prismhub/views/widgets/extension_type_badge.dart';
@@ -117,70 +117,70 @@ class _GridItemTileState extends State<GridItemTile> {
   }
 
   Widget _buildDesktop(BuildContext context) {
-    return MouseRegion(
-      cursor: SystemMouseCursors.click,
-      onHover: (event) {
-        setState(() {
-          _isHover = true;
-        });
-      },
-      onExit: (event) {
-        setState(() {
-          _isHover = false;
-        });
-      },
-      child: Column(
-        // 居左
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Expanded(
-            child: GestureDetector(
-              onTap: () {
-                widget.onTap?.call();
-              },
+    return GestureDetector(
+      behavior: HitTestBehavior.opaque,
+      onTap: widget.onTap,
+      child: MouseRegion(
+        cursor: SystemMouseCursors.click,
+        onEnter: (event) {
+          setState(() {
+            _isHover = true;
+          });
+        },
+        onExit: (event) {
+          setState(() {
+            _isHover = false;
+          });
+        },
+        child: Column(
+          // 居左
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Expanded(
               child: Container(
-                  decoration: const BoxDecoration(
-                    borderRadius: BorderRadius.all(Radius.circular(8)),
-                  ),
-                  clipBehavior: Clip.antiAlias,
-                  child: Stack(
-                    children: [
-                      AnimatedScale(
-                        scale: _isHover ? 1.05 : 1,
-                        duration: const Duration(milliseconds: 80),
-                        child: Cover(
-                          alt: widget.title,
-                          url: widget.cover,
-                          headers: widget.headers,
-                        ),
+                decoration: const BoxDecoration(
+                  borderRadius: BorderRadius.all(Radius.circular(8)),
+                ),
+                clipBehavior: Clip.antiAlias,
+                child: Stack(
+                  children: [
+                    AnimatedScale(
+                      scale: _isHover ? 1.05 : 1,
+                      duration: const Duration(milliseconds: 80),
+                      child: Cover(
+                        alt: widget.title,
+                        url: widget.cover,
+                        headers: widget.headers,
                       ),
-                      if (widget.type != null)
-                        Positioned(
-                          top: 6,
-                          left: 6,
-                          child: ExtensionTypeBadge(type: widget.type!),
-                        ),
-                    ],
-                  )),
-            ),
-          ),
-          const SizedBox(height: 8),
-          // 文字只显示一行
-          SizedBox(
-            height: 20,
-            child: Text(
-              widget.title,
-              overflow: TextOverflow.ellipsis,
-            ),
-          ),
-          if (widget.subtitle != null)
-            Text(
-              widget.subtitle.toString(),
-              style: const TextStyle(
-                fontSize: 12,
+                    ),
+                    if (widget.type != null)
+                      Positioned(
+                        top: 6,
+                        left: 6,
+                        child: ExtensionTypeBadge(type: widget.type!),
+                      ),
+                  ],
+                ),
               ),
             ),
-        ],
+            const SizedBox(height: 8),
+            // 文字只显示一行
+            SizedBox(
+              height: 20,
+              child: Text(
+                widget.title,
+                overflow: TextOverflow.ellipsis,
+              ),
+            ),
+            if (widget.subtitle != null)
+              Text(
+                widget.subtitle.toString(),
+                style: const TextStyle(
+                  fontSize: 12,
+                ),
+              ),
+          ],
+        ),
       ),
     );
   }

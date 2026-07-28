@@ -2,7 +2,6 @@ import 'dart:io';
 
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
-import 'package:prismhub/utils/layout.dart';
 import 'package:prismhub/views/widgets/watch/control_panel_footer.dart';
 import 'package:prismhub/views/widgets/watch/control_panel_header.dart';
 import 'package:prismhub/controllers/watch/reader_controller.dart';
@@ -31,7 +30,7 @@ class ReaderView<T extends ReaderController> extends StatelessWidget {
               if (event.position.dy < 60) {
                 c.showControlPanel();
               }
-              if (event.position.dy > LayoutUtils.height - 60) {
+              if (event.position.dy > MediaQuery.of(context).size.height - 60) {
                 c.showControlPanel();
               }
             },
@@ -84,7 +83,7 @@ class ReaderView<T extends ReaderController> extends StatelessWidget {
                         // sea cómoda de acertar.
                         const edge = 80.0;
                         final xPos = details.globalPosition.dx;
-                        final width = LayoutUtils.width;
+                        final width = MediaQuery.of(context).size.width;
                         if (xPos < edge) {
                           c.previousPage();
                         } else if (xPos > width - edge) {

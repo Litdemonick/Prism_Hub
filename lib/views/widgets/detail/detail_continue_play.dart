@@ -1,4 +1,4 @@
-﻿import 'package:fluent_ui/fluent_ui.dart' as fluent;
+import 'package:fluent_ui/fluent_ui.dart' as fluent;
 import 'package:flutter/material.dart';
 import 'package:flutter_i18n/flutter_i18n.dart';
 import 'package:get/get.dart';
@@ -23,15 +23,30 @@ class DetailContinuePlay extends StatefulWidget {
 class _DetailContinuePlayState extends State<DetailContinuePlay> {
   late DetailPageController c = Get.find<DetailPageController>(tag: widget.tag);
 
+  bool _canContinue(History? history) {
+    final episodes = c.detail?.episodes;
+    if (history == null || history.episodeTitle.isEmpty) return false;
+    if (episodes == null || episodes.isEmpty) return false;
+    if (history.episodeGroupId < 0 ||
+        history.episodeGroupId >= episodes.length) {
+      return false;
+    }
+    final urls = episodes[history.episodeGroupId].urls;
+    return history.episodeId >= 0 && history.episodeId < urls.length;
+  }
+
   // episodeTitle a veces queda igual al título de la obra (sin número
   // propio) — el número real (extraído del título si lo trae, o la
   // posición como última opción) es lo que de verdad identifica en qué
   // episodio/capítulo vas.
   String _episodeLabel(History history) {
-    final number = ExtensionUtils.episodeNumberLabel(history.episodeTitle, history.episodeId);
+    final number = ExtensionUtils.episodeNumberLabel(
+        history.episodeTitle, history.episodeId);
     return c.type == ExtensionType.bangumi
-        ? FlutterI18n.translate(context, 'detail.episode-label', translationParams: {'ep': number})
-        : FlutterI18n.translate(context, 'detail.chapter-label', translationParams: {'ep': number});
+        ? FlutterI18n.translate(context, 'detail.episode-label',
+            translationParams: {'ep': number})
+        : FlutterI18n.translate(context, 'detail.chapter-label',
+            translationParams: {'ep': number});
   }
 
   Widget _buildAndroid(BuildContext context) {
@@ -68,14 +83,16 @@ class _DetailContinuePlayState extends State<DetailContinuePlay> {
         return noEpisodes;
       }
       // 之前弄错了，所以需要判断标题是否为空
-      if (c.history.value != null && c.history.value!.episodeTitle.isNotEmpty) {
+      if (_canContinue(history)) {
+        final continueHistory = history!;
         return FilledButton.icon(
           onPressed: () {
             c.goWatch(
               context,
-              data!.episodes![history.episodeGroupId].urls,
-              history.episodeId,
-              history.episodeGroupId,
+              data!.episodes![continueHistory.episodeGroupId].urls,
+              continueHistory.episodeId,
+              continueHistory.episodeGroupId,
+              autoResume: true,
             );
           },
           icon: const Icon(Icons.play_arrow),
@@ -84,7 +101,7 @@ class _DetailContinuePlayState extends State<DetailContinuePlay> {
               context,
               'detail.continue-watching',
               translationParams: {
-                'episode': _episodeLabel(history!),
+                'episode': _episodeLabel(continueHistory),
               },
             ),
             maxLines: 1,
@@ -95,7 +112,9 @@ class _DetailContinuePlayState extends State<DetailContinuePlay> {
               const Size(double.infinity, 50),
             ),
             side: WidgetStateProperty.all(
-              BorderSide(color: HomeTheme.accentPink.withValues(alpha: 0.6), width: 1.5),
+              BorderSide(
+                  color: HomeTheme.accentPink.withValues(alpha: 0.6),
+                  width: 1.5),
             ),
           ),
         );
@@ -117,7 +136,9 @@ class _DetailContinuePlayState extends State<DetailContinuePlay> {
               const Size(double.infinity, 50),
             ),
             side: WidgetStateProperty.all(
-              BorderSide(color: HomeTheme.accentPink.withValues(alpha: 0.6), width: 1.5),
+              BorderSide(
+                  color: HomeTheme.accentPink.withValues(alpha: 0.6),
+                  width: 1.5),
             ),
           ),
         );
@@ -130,10 +151,12 @@ class _DetailContinuePlayState extends State<DetailContinuePlay> {
     return Obx(() {
       final history = c.history.value;
       final data = c.detail!;
-      if (history != null && c.history.value!.episodeTitle.isNotEmpty) {
+      if (_canContinue(history)) {
+        final continueHistory = history!;
         return fluent.Button(
           style: fluent.ButtonStyle(
-            backgroundColor: fluent.WidgetStateProperty.all(HomeTheme.accentPink),
+            backgroundColor:
+                fluent.WidgetStateProperty.all(HomeTheme.accentPink),
             foregroundColor: fluent.WidgetStateProperty.all(HomeTheme.bg),
             shape: fluent.WidgetStateProperty.all(
               RoundedRectangleBorder(borderRadius: BorderRadius.circular(999)),
@@ -142,9 +165,9 @@ class _DetailContinuePlayState extends State<DetailContinuePlay> {
           onPressed: () {
             c.goWatch(
               context,
-              data.episodes![history.episodeGroupId].urls,
-              history.episodeId,
-              history.episodeGroupId,
+              data.episodes![continueHistory.episodeGroupId].urls,
+              continueHistory.episodeId,
+              continueHistory.episodeGroupId,
             );
           },
           child: Padding(
@@ -162,7 +185,7 @@ class _DetailContinuePlayState extends State<DetailContinuePlay> {
                       context,
                       'detail.continue-watching',
                       translationParams: {
-                        'episode': _episodeLabel(history),
+                        'episode': _episodeLabel(continueHistory),
                       },
                     ),
                     maxLines: 1,

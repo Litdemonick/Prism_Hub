@@ -76,6 +76,12 @@ class _HomePageState extends State<HomePage> {
     );
   }
 
+  bool _isRemoteCover(String? cover) {
+    if (cover == null || cover.isEmpty) return false;
+    final normalized = cover.toLowerCase();
+    return normalized.startsWith('http://') || normalized.startsWith('https://');
+  }
+
   Widget _buildContent() {
     return Obx(
       () {
@@ -146,6 +152,10 @@ class _HomePageState extends State<HomePage> {
                                   // Sin este Obx acá, togglear "ocultar" no
                                   // refrescaba la tarjeta hasta reconstruir toda
                                   // la página (cambiar de pestaña y volver).
+                                  final isVideo =
+                                      h.type == ExtensionType.bangumi;
+                                  final remoteVideoCover =
+                                      isVideo && _isRemoteCover(h.cover);
                                   return Obx(() => HomeMediaCard(
                                         title: h.title,
                                         subtitle: FlutterI18n.translate(
@@ -171,15 +181,15 @@ class _HomePageState extends State<HomePage> {
                                         // tratarla como red siempre fallaba y caía
                                         // al PRISM_HUB default, aunque la captura
                                         // real existiera (Historial sí lo hacía bien).
-                                        cover: h.type == ExtensionType.bangumi
-                                            ? null
+                                        cover: isVideo
+                                            ? (remoteVideoCover ? h.cover : null)
                                             : h.cover,
-                                        coverFile:
-                                            h.type == ExtensionType.bangumi &&
-                                                    h.cover != null
-                                                ? File(h.cover!)
-                                                : null,
-                                        headers: h.type == ExtensionType.bangumi
+                                        coverFile: isVideo &&
+                                                h.cover != null &&
+                                                !remoteVideoCover
+                                            ? File(h.cover!)
+                                            : null,
+                                        headers: isVideo && !remoteVideoCover
                                             ? null
                                             : c.headersForPackage(h.package),
                                         // Sin barra de progreso — el texto de arriba

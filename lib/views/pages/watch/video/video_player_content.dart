@@ -1,4 +1,4 @@
-﻿import 'dart:io';
+import 'dart:io';
 
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
@@ -10,9 +10,9 @@ import 'package:prismhub/views/pages/watch/video/video_player_mobile_controls.da
 class VideoPlayerConten extends StatefulWidget {
   const VideoPlayerConten({
     super.key,
-    required this.tag,
+    required this.controller,
   });
-  final String tag;
+  final VideoPlayerController controller;
 
   @override
   State<VideoPlayerConten> createState() => _VideoPlayerContenState();
@@ -32,7 +32,7 @@ class _VideoPlayerContenState extends State<VideoPlayerConten> {
 
   @override
   Widget build(BuildContext context) {
-    final c = Get.find<VideoPlayerController>(tag: widget.tag);
+    final c = widget.controller;
     Widget controls() {
       if (Platform.isAndroid) {
         return VideoPlayerMobileControls(key: _controlsKey, controller: c);
@@ -49,7 +49,7 @@ class _VideoPlayerContenState extends State<VideoPlayerConten> {
       // al punto de congelar la app entera ("No responde", ni con hot
       // restart) mientras el WebView de respaldo está abierto encima. Sacar
       // Video del árbol por completo mientras tanto libera esa textura.
-      if (c.isWebViewActive.value) {
+      if (c.isWebViewActive.value || !c.isVideoSurfaceMounted.value) {
         return Container(color: Colors.black, child: controls());
       }
       return Video(

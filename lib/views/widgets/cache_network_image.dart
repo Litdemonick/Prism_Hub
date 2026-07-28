@@ -27,6 +27,8 @@ class CacheNetWorkImagePic extends StatefulWidget {
     this.initGestureConfigHandler,
     this.alignment = Alignment.center,
     this.filterQuality = FilterQuality.low,
+    this.cacheWidth,
+    this.cacheHeight,
   });
   final String url;
   final BoxFit fit;
@@ -40,6 +42,8 @@ class CacheNetWorkImagePic extends StatefulWidget {
   final InitGestureConfigHandler? initGestureConfigHandler;
   final Alignment alignment;
   final FilterQuality filterQuality;
+  final int? cacheWidth;
+  final int? cacheHeight;
 
   @override
   State<CacheNetWorkImagePic> createState() => _CacheNetWorkImagePicState();
@@ -92,15 +96,19 @@ class _CacheNetWorkImagePicState extends State<CacheNetWorkImagePic> {
     // y cae al tamaño por aspect ratio, que es seguro.
     return LayoutBuilder(
       builder: (context, constraints) {
-        final bounded = constraints.maxWidth.isFinite && constraints.maxHeight.isFinite;
+        final bounded =
+            constraints.maxWidth.isFinite && constraints.maxHeight.isFinite;
         return ColoredBox(
           color: Colors.black,
-          child: Image.asset(
-            'assets/carddefaultoffline.png',
-            fit: BoxFit.cover,
-            alignment: Alignment.center,
-            width: bounded ? double.infinity : null,
-            height: bounded ? double.infinity : null,
+          child: Padding(
+            padding: bounded ? const EdgeInsets.all(28) : EdgeInsets.zero,
+            child: Image.asset(
+              'assets/carddefaultoffline.png',
+              fit: BoxFit.contain,
+              alignment: Alignment.center,
+              width: bounded ? double.infinity : null,
+              height: bounded ? double.infinity : null,
+            ),
           ),
         );
       },
@@ -127,6 +135,8 @@ class _CacheNetWorkImagePicState extends State<CacheNetWorkImagePic> {
       alignment: widget.alignment,
       filterQuality: widget.filterQuality,
       cache: true,
+      cacheWidth: widget.cacheWidth,
+      cacheHeight: widget.cacheHeight,
       mode: widget.mode,
       // En una grilla, decenas de tarjetas piden su portada al mismo tiempo
       // — bajo esa contención el intento por defecto (3 reintentos a 100ms)

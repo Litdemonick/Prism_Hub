@@ -34,15 +34,25 @@ class _DetailAppbarflexibleSpaceState extends State<DetailAppbarflexibleSpace> {
   late DetailPageController c = Get.find(tag: widget.tag);
 
   double _offset = 1;
+  double _opacity = 1;
 
   @override
   void initState() {
-    c.scrollController.addListener(() {
-      setState(() {
-        _offset = c.scrollController.offset;
-      });
-    });
     super.initState();
+    c.scrollController.addListener(_handleScroll);
+  }
+
+  @override
+  void dispose() {
+    c.scrollController.removeListener(_handleScroll);
+    super.dispose();
+  }
+
+  void _handleScroll() {
+    _offset = c.scrollController.offset;
+    final next = _scrollListener();
+    if ((next - _opacity).abs() < 0.02) return;
+    setState(() => _opacity = next);
   }
 
   // Distancia real de scroll en la que el SliverAppBar colapsa: el 300 fijo
@@ -236,12 +246,9 @@ class _DetailAppbarflexibleSpaceState extends State<DetailAppbarflexibleSpace> {
     const tabBarHeight = 48.0;
     const topGap = 8.0;
     const bottomGap = 8.0;
-    final contentHeight = (widget.height -
-            toolbarHeight -
-            tabBarHeight -
-            topGap -
-            bottomGap)
-        .clamp(36.0, 100.0);
+    final contentHeight =
+        (widget.height - toolbarHeight - tabBarHeight - topGap - bottomGap)
+            .clamp(36.0, 100.0);
     final thumbHeight = contentHeight.clamp(36.0, 80.0);
     final thumbWidth = thumbHeight * (100 / 150);
 
@@ -304,7 +311,7 @@ class _DetailAppbarflexibleSpaceState extends State<DetailAppbarflexibleSpace> {
   Widget build(BuildContext context) {
     return Obx(
       () => Opacity(
-        opacity: _scrollListener(),
+        opacity: _opacity,
         child: widget.landscape ? _buildLandscape() : _buildPortrait(),
       ),
     );

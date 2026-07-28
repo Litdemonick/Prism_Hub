@@ -31,19 +31,18 @@
         <meta-data
             android:name="flutterEmbedding"
             android:value="2" />
-        <!-- Impeller (renderer nuevo, default en Android desde Flutter 3.29+)
-             mostraba texto con artefactos (líneas/contornos raros que se
-             corrigen solos al frame siguiente) durante transiciones rápidas
-             de las cards — es un patrón de bug conocido de Impeller
-             (shader warm-up). Se vuelve a Skia, el renderer estable anterior. -->
-        <meta-data
-            android:name="io.flutter.embedding.android.EnableImpeller"
-            android:value="false" />
+        <!-- Impeller activado (default desde Flutter 3.29+): renderiza con
+             Vulkan en GPU compatible, elimina los tirones de compilación de
+             shaders y reduce drásticamente el raster time. El opt-out a Skia
+             está deprecado y será eliminado en una versión futura de Flutter.
+             Si aparecen artefactos visuales raros, reportar el bug a Flutter
+             en vez de re-desactivar. -->
         <!-- FileProvider para instalar APK automáticamente en Android 7.0+ -->
         <provider
             android:name="androidx.core.content.FileProvider"
             android:authorities="${applicationId}.fileprovider"
-            android:exported="false">
+            android:exported="false"
+            android:grantUriPermissions="true">
             <meta-data
                 android:name="android.support.FILE_PROVIDER_PATHS"
                 android:resource="@xml/file_paths" />

@@ -49,9 +49,22 @@ class _HomeSectionState extends State<HomeSection> {
 
   @override
   Widget build(BuildContext context) {
+    final isAndroidLandscape = Platform.isAndroid &&
+        MediaQuery.of(context).orientation == Orientation.landscape;
+    final cardWidth = isAndroidLandscape
+        ? HomeMediaCard.androidLandscapeWidth
+        : Platform.isAndroid
+            ? HomeMediaCard.androidWidth
+            : HomeMediaCard.desktopWidth;
+    final cardHeight = isAndroidLandscape
+        ? HomeMediaCard.androidLandscapeHeight
+        : Platform.isAndroid
+            ? HomeMediaCard.androidHeight
+            : HomeMediaCard.desktopHeight;
     final list = ListView.builder(
       scrollDirection: Axis.horizontal,
       controller: _controller,
+      itemExtent: cardWidth + 16,
       itemCount: widget.itemCount,
       itemBuilder: (context, index) => Padding(
         padding: const EdgeInsets.only(right: 16),
@@ -76,7 +89,9 @@ class _HomeSectionState extends State<HomeSection> {
                     AnimatedDefaultTextStyle(
                       duration: const Duration(milliseconds: 150),
                       style: TextStyle(
-                        color: _headerHover ? HomeTheme.accentPink : HomeTheme.textPrimary,
+                        color: _headerHover
+                            ? HomeTheme.accentPink
+                            : HomeTheme.textPrimary,
                         fontSize: 17,
                         fontWeight: FontWeight.w700,
                       ),
@@ -86,12 +101,15 @@ class _HomeSectionState extends State<HomeSection> {
                     AnimatedDefaultTextStyle(
                       duration: const Duration(milliseconds: 150),
                       style: TextStyle(
-                        color: _headerHover ? HomeTheme.accentPink : HomeTheme.textMuted,
+                        color: _headerHover
+                            ? HomeTheme.accentPink
+                            : HomeTheme.textMuted,
                         fontSize: 15,
                       ),
                       child: AnimatedSlide(
                         duration: const Duration(milliseconds: 150),
-                        offset: _headerHover ? const Offset(0.25, 0) : Offset.zero,
+                        offset:
+                            _headerHover ? const Offset(0.25, 0) : Offset.zero,
                         child: const Text('›'),
                       ),
                     ),
@@ -114,14 +132,7 @@ class _HomeSectionState extends State<HomeSection> {
           // desborda (visto en vivo: "overflowed by 44/26 pixels"). En
           // Android horizontal, HomeMediaCard usa su variante más chica
           // (ver androidLandscapeHeight) — hay que matchear acá también.
-          height: (Platform.isAndroid &&
-                      MediaQuery.of(context).orientation ==
-                          Orientation.landscape
-                  ? HomeMediaCard.androidLandscapeHeight
-                  : Platform.isAndroid
-                      ? HomeMediaCard.androidHeight
-                      : HomeMediaCard.desktopHeight) +
-              50,
+          height: cardHeight + 50,
           child: HorizontalScrollFade(controller: _controller, child: list),
         ),
       ],
@@ -193,13 +204,15 @@ class HomeGhostCard extends StatelessWidget {
                     width: 1.5,
                   ),
                 ),
-                child: const Icon(Icons.add, color: HomeTheme.textMuted, size: 20),
+                child:
+                    const Icon(Icons.add, color: HomeTheme.textMuted, size: 20),
               ),
               const SizedBox(height: 10),
               Text(
                 text,
                 textAlign: TextAlign.center,
-                style: const TextStyle(color: HomeTheme.textMuted, fontSize: 12.5, height: 1.4),
+                style: const TextStyle(
+                    color: HomeTheme.textMuted, fontSize: 12.5, height: 1.4),
               ),
             ],
           ),
@@ -208,4 +221,3 @@ class HomeGhostCard extends StatelessWidget {
     );
   }
 }
-

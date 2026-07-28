@@ -1,5 +1,6 @@
-﻿import 'dart:async';
+import 'dart:async';
 
+import 'package:flutter/scheduler.dart';
 import 'package:get/get.dart';
 import 'package:prismhub/models/extension.dart';
 import 'package:prismhub/utils/connectivity.dart';
@@ -18,15 +19,22 @@ class SearchPageController extends GetxController {
       searchResultList.where((element) => element.completed).length;
   bool needRefresh = true;
   bool isPageOpen = false;
+  Worker? _searchWorker;
   // 是否打开了这个页面
 
   @override
   void onInit() {
-    ever(search, (callback) {
+    _searchWorker = ever(search, (callback) {
       _randomKey = DateTime.now().millisecondsSinceEpoch.toString();
       getResult(_randomKey);
     });
     super.onInit();
+  }
+
+  @override
+  void onClose() {
+    _searchWorker?.dispose();
+    super.onClose();
   }
 
   getRuntime({Set<ExtensionType>? types}) {
@@ -82,7 +90,7 @@ class SearchPageController extends GetxController {
       searchResultList.refresh();
       return;
     }
-    final futures = <Future>[];
+    final pending = <SearchResult>[];
     // 最后一个有结果的搜索结果索引
     var lastResultIndex = -1;
     for (var i = 0; i < searchResultList.length; i++) {
@@ -106,40 +114,43 @@ class SearchPageController extends GetxController {
       // apretaba Actualizar, aunque la extensión siguiera sin internet un
       // instante después. Mismo criterio que no resetear result: evitar
       // cualquier cambio visual antes de tener un resultado real nuevo.
-      Future<List<ExtensionListItem>> resultFuture;
+      pending.add(element);
+    }
 
-      // try/catch acá a propósito: si latest()/search() explota de forma
-      // SÍNCRONA (antes de devolver el future — ej. la extensión falla al
-      // armar la petición), sin esto la excepción se llevaba puesto todo el
-      // getResult(). Las extensiones que faltaban por recorrer nunca se
-      // pedían y esta quedaba con completed=false para siempre, así que la
-      // barra de progreso se quedaba trabada sin llegar nunca al final
-      // (reportado en vivo). Marcándola como terminada con su error, el
-      // resto sigue normalmente.
-      try {
-        if (search.value.isEmpty) {
-          resultFuture = element.runitme.latest(1);
-        } else {
-          resultFuture = element.runitme.search(search.value, 1);
+    const batchSize = 2;
+    for (var i = 0; i < pending.length; i += batchSize) {
+      if (_randomKey != key) {
+        for (var j = i; j < pending.length; j++) {
+          pending[j].isFetching = false;
+          pending[j].completed = true;
         }
-      } catch (e) {
-        element.error = e;
-        element.completed = true;
-        element.isFetching = false;
         searchResultList.refresh();
-        continue;
+        break;
       }
+      final batch = pending.skip(i).take(batchSize);
+      await Future.wait(batch.map((element) {
+        element.isFetching = true;
+        Future<List<ExtensionListItem>> resultFuture;
+        try {
+          if (search.value.isEmpty) {
+            resultFuture = element.runitme.latest(1);
+          } else {
+            resultFuture = element.runitme.search(search.value, 1);
+          }
+        } catch (e) {
+          element.error = e;
+          element.completed = true;
+          element.isFetching = false;
+          searchResultList.refresh();
+          return Future<void>.value();
+        }
 
-      // Timeout por extensión: si tarda más de 15 s se marca como error
-      // en vez de colgar la tab indefinidamente.
-      final timedFuture = resultFuture.timeout(
-        const Duration(seconds: 15),
-        onTimeout: () => throw TimeoutException('Tiempo de espera agotado'),
-      );
-
-      element.isFetching = true;
-      futures.add(
-        timedFuture.then((result) {
+        return resultFuture
+            .timeout(
+          const Duration(seconds: 15),
+          onTimeout: () => throw TimeoutException('Tiempo de espera agotado'),
+        )
+            .then((result) {
           if (_randomKey != key) {
             return;
           }
@@ -178,11 +189,11 @@ class SearchPageController extends GetxController {
           // "cargando" para siempre en la barra de progreso).
           element.isFetching = false;
           element.completed = true;
-        }),
-      );
+        });
+      }));
+      await SchedulerBinding.instance.endOfFrame;
+      await Future<void>.delayed(const Duration(milliseconds: 8));
     }
-
-    await Future.wait(futures);
 
     // Red de seguridad: si por lo que sea quedó alguna sin marcar (una
     // extensión que se agregó a la lista después de arrancar este ciclo, o

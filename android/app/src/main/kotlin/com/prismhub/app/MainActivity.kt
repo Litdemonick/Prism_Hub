@@ -3,6 +3,7 @@
 import android.content.Intent
 import android.net.Uri
 import android.os.Build
+import android.provider.Settings
 import androidx.core.content.FileProvider
 import io.flutter.embedding.android.FlutterActivity
 import io.flutter.embedding.engine.FlutterEngine
@@ -18,6 +19,13 @@ class MainActivity: FlutterActivity() {
         MethodChannel(flutterEngine.dartExecutor.binaryMessenger, CHANNEL)
             .setMethodCallHandler { call, result ->
                 when (call.method) {
+                    "canInstallApks" -> {
+                        result.success(canInstallApks())
+                    }
+                    "openInstallSettings" -> {
+                        openInstallSettings()
+                        result.success(null)
+                    }
                     "installApk" -> {
                         val apkPath = call.argument<String>("apkPath")
                         if (apkPath != null) {
@@ -34,6 +42,23 @@ class MainActivity: FlutterActivity() {
                     else -> result.notImplemented()
                 }
             }
+    }
+
+    private fun canInstallApks(): Boolean {
+        return Build.VERSION.SDK_INT < Build.VERSION_CODES.O ||
+            packageManager.canRequestPackageInstalls()
+    }
+
+    private fun openInstallSettings() {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            val intent = Intent(
+                Settings.ACTION_MANAGE_UNKNOWN_APP_SOURCES,
+                Uri.parse("package:$packageName")
+            ).apply {
+                flags = Intent.FLAG_ACTIVITY_NEW_TASK
+            }
+            startActivity(intent)
+        }
     }
 
     private fun installApk(apkPath: String) {

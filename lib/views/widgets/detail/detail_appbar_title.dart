@@ -14,24 +14,28 @@ class DetailAppbarTitle extends StatefulWidget {
 }
 
 class _DetailAppbarTitleState extends State<DetailAppbarTitle> {
-  double _offset = 0;
+  bool _visible = false;
 
   @override
   void initState() {
-    widget.controller.addListener(() {
-      setState(() {
-        _offset = widget.controller.offset;
-      });
-    });
     super.initState();
+    widget.controller.addListener(_handleScroll);
+  }
+
+  @override
+  void dispose() {
+    widget.controller.removeListener(_handleScroll);
+    super.dispose();
+  }
+
+  void _handleScroll() {
+    final visible = widget.controller.offset > 300;
+    if (visible == _visible) return;
+    setState(() => _visible = visible);
   }
 
   double _scrollListener() {
-    if (_offset <= 300) {
-      return 0;
-    } else {
-      return 1;
-    }
+    return _visible ? 1 : 0;
   }
 
   @override

@@ -1,4 +1,4 @@
-﻿import 'dart:async';
+import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 import 'dart:ui' as ui;
@@ -42,20 +42,19 @@ void main(List<String> args) async {
 
     WidgetsFlutterBinding.ensureInitialized();
 
-    // Instrumentación temporal de frames — para diagnosticar tirones
-    // reportados en toda la app (botones, scroll, cambio de pestaña) sin
-    // seguir adivinando. Loggea CUALQUIER frame cuya duración total pase
-    // los 100ms (muy por encima del presupuesto de 16ms a 60fps, así que
-    // esto no debería dispararse en un frame normal ni typing/scrolling
-    // fluido) junto con cuánto de eso fue build (Dart/UI thread) vs. raster
-    // (GPU thread) — decisivo para saber si el cuello de botella está en
-    // lógica Dart o en composición/GPU.
+    // Instrumentación temporal de frames — para diagnosticar tirones reales.
+    // En Windows debug, totalSpan también sube cuando hay huecos entre frames
+    // durante hot restart/arranque aunque build+raster hayan costado casi
+    // nada (ej. total=10s, build=2ms, raster=1ms). Eso no es jank visible de
+    // la UI; reportamos solo cuando el hilo UI o raster sí hicieron trabajo
+    // pesado.
     WidgetsBinding.instance.addTimingsCallback((List<ui.FrameTiming> timings) {
       for (final timing in timings) {
         final buildMs = timing.buildDuration.inMilliseconds;
         final rasterMs = timing.rasterDuration.inMilliseconds;
         final totalMs = timing.totalSpan.inMilliseconds;
-        if (totalMs > 100) {
+        final workMs = buildMs + rasterMs;
+        if (buildMs > 50 || rasterMs > 50 || workMs > 80) {
           logger.warning(
             'FRAME LENTO: build=${buildMs}ms raster=${rasterMs}ms total=${totalMs}ms',
           );
@@ -105,9 +104,25 @@ void main(List<String> args) async {
 
     if (!Platform.isAndroid) {
       await windowManager.ensureInitialized();
-      final windowSize = PrismHubStorage.getSetting(SettingKey.windowSize) ?? "1280,720";
-      final sizeArr = windowSize.split(",");
-      final size = Size(double.parse(sizeArr[0]), double.parse(sizeArr[1]));
+      const minWindowSize = Size(900, 600);
+      const defaultWindowSize = Size(1280, 720);
+      var size = defaultWindowSize;
+      final windowSize = PrismHubStorage.getSetting(SettingKey.windowSize);
+      if (windowSize is String) {
+        try {
+          final sizeArr = windowSize.split(",");
+          final saved = Size(
+            double.parse(sizeArr[0]),
+            double.parse(sizeArr[1]),
+          );
+          if (saved.width.isFinite &&
+              saved.height.isFinite &&
+              saved.width >= minWindowSize.width &&
+              saved.height >= minWindowSize.height) {
+            size = saved;
+          }
+        } catch (_) {}
+      }
       WindowOptions windowOptions = WindowOptions(
         size: size,
         center: true,
@@ -116,7 +131,7 @@ void main(List<String> args) async {
       );
       windowManager.waitUntilReadyToShow(windowOptions, () async {
         // 900×600 is the minimum viable reading size; prevents layout breaks.
-        await windowManager.setMinimumSize(const Size(900, 600));
+        await windowManager.setMinimumSize(minWindowSize);
         final position = PrismHubStorage.getSetting(SettingKey.windowPosition);
         if (position != null) {
           final offsetArr = position.split(",");
@@ -280,21 +295,66 @@ class _MainAppState extends State<MainApp> {
   TextTheme _buildTextTheme(Brightness brightness, List<String> fallback) {
     final color = brightness == Brightness.dark ? Colors.white : Colors.black;
     return TextTheme(
-      displayLarge: TextStyle(fontFamily: "Noto Sans CJK SC", fontFamilyFallback: fallback, color: color),
-      displayMedium: TextStyle(fontFamily: "Noto Sans CJK SC", fontFamilyFallback: fallback, color: color),
-      displaySmall: TextStyle(fontFamily: "Noto Sans CJK SC", fontFamilyFallback: fallback, color: color),
-      headlineLarge: TextStyle(fontFamily: "Noto Sans CJK SC", fontFamilyFallback: fallback, color: color),
-      headlineMedium: TextStyle(fontFamily: "Noto Sans CJK SC", fontFamilyFallback: fallback, color: color),
-      headlineSmall: TextStyle(fontFamily: "Noto Sans CJK SC", fontFamilyFallback: fallback, color: color),
-      titleLarge: TextStyle(fontFamily: "Noto Sans CJK SC", fontFamilyFallback: fallback, color: color),
-      titleMedium: TextStyle(fontFamily: "Noto Sans CJK SC", fontFamilyFallback: fallback, color: color),
-      titleSmall: TextStyle(fontFamily: "Noto Sans CJK SC", fontFamilyFallback: fallback, color: color),
-      bodyLarge: TextStyle(fontFamily: "Noto Sans CJK SC", fontFamilyFallback: fallback, color: color),
-      bodyMedium: TextStyle(fontFamily: "Noto Sans CJK SC", fontFamilyFallback: fallback, color: color),
-      bodySmall: TextStyle(fontFamily: "Noto Sans CJK SC", fontFamilyFallback: fallback, color: color),
-      labelLarge: TextStyle(fontFamily: "Noto Sans CJK SC", fontFamilyFallback: fallback, color: color),
-      labelMedium: TextStyle(fontFamily: "Noto Sans CJK SC", fontFamilyFallback: fallback, color: color),
-      labelSmall: TextStyle(fontFamily: "Noto Sans CJK SC", fontFamilyFallback: fallback, color: color),
+      displayLarge: TextStyle(
+          fontFamily: "Noto Sans CJK SC",
+          fontFamilyFallback: fallback,
+          color: color),
+      displayMedium: TextStyle(
+          fontFamily: "Noto Sans CJK SC",
+          fontFamilyFallback: fallback,
+          color: color),
+      displaySmall: TextStyle(
+          fontFamily: "Noto Sans CJK SC",
+          fontFamilyFallback: fallback,
+          color: color),
+      headlineLarge: TextStyle(
+          fontFamily: "Noto Sans CJK SC",
+          fontFamilyFallback: fallback,
+          color: color),
+      headlineMedium: TextStyle(
+          fontFamily: "Noto Sans CJK SC",
+          fontFamilyFallback: fallback,
+          color: color),
+      headlineSmall: TextStyle(
+          fontFamily: "Noto Sans CJK SC",
+          fontFamilyFallback: fallback,
+          color: color),
+      titleLarge: TextStyle(
+          fontFamily: "Noto Sans CJK SC",
+          fontFamilyFallback: fallback,
+          color: color),
+      titleMedium: TextStyle(
+          fontFamily: "Noto Sans CJK SC",
+          fontFamilyFallback: fallback,
+          color: color),
+      titleSmall: TextStyle(
+          fontFamily: "Noto Sans CJK SC",
+          fontFamilyFallback: fallback,
+          color: color),
+      bodyLarge: TextStyle(
+          fontFamily: "Noto Sans CJK SC",
+          fontFamilyFallback: fallback,
+          color: color),
+      bodyMedium: TextStyle(
+          fontFamily: "Noto Sans CJK SC",
+          fontFamilyFallback: fallback,
+          color: color),
+      bodySmall: TextStyle(
+          fontFamily: "Noto Sans CJK SC",
+          fontFamilyFallback: fallback,
+          color: color),
+      labelLarge: TextStyle(
+          fontFamily: "Noto Sans CJK SC",
+          fontFamilyFallback: fallback,
+          color: color),
+      labelMedium: TextStyle(
+          fontFamily: "Noto Sans CJK SC",
+          fontFamilyFallback: fallback,
+          color: color),
+      labelSmall: TextStyle(
+          fontFamily: "Noto Sans CJK SC",
+          fontFamilyFallback: fallback,
+          color: color),
     );
   }
 

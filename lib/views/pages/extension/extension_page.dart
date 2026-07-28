@@ -107,11 +107,6 @@ class _ExtensionPageState extends State<ExtensionPage> {
         body: Stack(
           children: [
             const Positioned.fill(child: AnimatedBackgroundGlow()),
-            // Deslizar para actualizar: re-lee las extensiones instaladas y
-            // vuelve a consultar qué versiones hay en el repo. Sin esto, una
-            // extensión recién actualizada seguía marcada como "actualización
-            // requerida" hasta cerrar y reabrir la app (reportado en vivo con
-            // Olympus).
             RefreshIndicator(
               onRefresh: () async {
                 ExtensionUtils.clearRemoteVersionsCache();
@@ -119,25 +114,27 @@ class _ExtensionPageState extends State<ExtensionPage> {
               },
               color: HomeTheme.accentPink,
               backgroundColor: HomeTheme.cardSurface,
-              child: ListView(
-                // Sin esto, con pocas extensiones el contenido entra entero
-                // en pantalla y no se puede hacer el gesto de arrastrar.
-                physics: const AlwaysScrollableScrollPhysics(),
-                children: [
-                  if (c.runtimes.isEmpty)
-                    SizedBox(
-                      height: 300,
-                      child: Column(
-                        mainAxisAlignment: MainAxisAlignment.center,
-                        children: [
-                          Text('common.no-extension'.i18n),
-                        ],
-                      ),
+              child: c.runtimes.isEmpty
+                  ? ListView(
+                      physics: const AlwaysScrollableScrollPhysics(),
+                      children: [
+                        SizedBox(
+                          height: 300,
+                          child: Center(
+                            child: Text('common.no-extension'.i18n),
+                          ),
+                        ),
+                      ],
+                    )
+                  : ListView.builder(
+                      physics: const AlwaysScrollableScrollPhysics(),
+                      itemCount: c.runtimes.length,
+                      itemBuilder: (_, i) {
+                        final ext =
+                            c.runtimes.values.toList(growable: false)[i];
+                        return ExtensionTile(ext.extension);
+                      },
                     ),
-                  for (final ext in c.runtimes.values)
-                    ExtensionTile(ext.extension),
-                ],
-              ),
             ),
           ],
         ),
@@ -224,24 +221,22 @@ class _ExtensionPageState extends State<ExtensionPage> {
                               )
                             else
                               Expanded(
-                                // padding derecha: mismo motivo que el
-                                // repositorio — el scrollbar de desktop se
-                                // dibuja pegado al borde del Scrollable y
-                                // quedaba encima de las filas sin este margen.
-                                child: ListView(
+                                child: ListView.builder(
                                   padding: const EdgeInsets.only(
                                     right: 12,
                                     bottom: 24,
                                   ),
-                                  children: [
-                                    for (final ext in c.runtimes.values)
-                                      Container(
-                                        margin: const EdgeInsets.only(
-                                          bottom: 8,
-                                        ),
-                                        child: ExtensionTile(ext.extension),
+                                  itemCount: c.runtimes.length,
+                                  itemBuilder: (_, i) {
+                                    final ext = c.runtimes.values
+                                        .toList(growable: false)[i];
+                                    return Container(
+                                      margin: const EdgeInsets.only(
+                                        bottom: 8,
                                       ),
-                                  ],
+                                      child: ExtensionTile(ext.extension),
+                                    );
+                                  },
                                 ),
                               ),
                           ],

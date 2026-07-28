@@ -156,83 +156,111 @@ class _HistoryPageState extends State<HistoryPage> {
   }
 
   Widget _buildGrid() {
-    final items = _onFavoritesTab
-        ? _filteredFavorites().map((f) {
-            return HomeMediaCard(
-              key: ValueKey('fav-${f.package}-${f.url}'),
-              title: f.title,
-              subtitle: 'home.favorite'.i18n,
-              type: f.type,
-              cover: f.cover,
-              headers: _c.headersForPackage(f.package),
-              onTap: () => _openDetail(f.url, f.package),
-              onDelete: () => _deleteFavorite(f),
-              hidden: HiddenCards.isHidden(f.package, f.url),
-              onToggleHide: () => HiddenCards.toggle(f.package, f.url),
-            );
-          }).toList()
-        : _filteredHistory().map((h) {
-            return HomeMediaCard(
-              key: ValueKey('hist-${h.package}-${h.url}'),
-              title: h.title,
-              // episodeTitle a veces queda igual al título de la obra (sin
-              // número propio) — pero cuando sí trae un número real (lo más
-              // común), ese número es más confiable que la posición en la
-              // lista (episodeId+1), que puede no coincidir con la
-              // numeración real de la fuente (specials, offsets distintos).
-              subtitle: FlutterI18n.translate(
-                context,
-                h.type == ExtensionType.bangumi
-                    ? 'home.watched-episode'
-                    : 'home.watched-chapter',
-                translationParams: {
-                  'ep': ExtensionUtils.episodeNumberLabel(
-                      h.episodeTitle, h.episodeId),
-                },
-              ),
-              type: h.type,
-              cover: h.type == ExtensionType.bangumi ? null : h.cover,
-              coverFile: h.type == ExtensionType.bangumi && h.cover != null
-                  ? File(h.cover!)
-                  : null,
-              headers: h.type == ExtensionType.bangumi
-                  ? null
-                  : _c.headersForPackage(h.package),
-              onTap: () => _openDetail(h.url, h.package),
-              onDelete: () => _deleteHistory(h),
-              hidden: HiddenCards.isHidden(h.package, h.url),
-              onToggleHide: () => HiddenCards.toggle(h.package, h.url),
-            );
-          }).toList();
+    final favorites = _onFavoritesTab ? _filteredFavorites() : null;
+    final history = _onFavoritesTab ? null : _filteredHistory();
+    final itemCount = favorites?.length ?? history!.length;
 
-    if (items.isEmpty) {
+    if (itemCount == 0) {
       final nothingAtAll = _c.resents.isEmpty && _c.favorites.isEmpty;
-      // Expanded no sirve acá (el padre es un Column dentro de un scroll):
-      // el ConstrainedBox de _buildBody ya fuerza el alto mínimo de
-      // pantalla, así que basta con centrarse en el espacio sobrante.
-      return Padding(
+      return SliverPadding(
         padding: const EdgeInsets.symmetric(vertical: 80),
-        child: Center(
-          child: Text(
-            nothingAtAll ? 'home.no-record'.i18n : 'common.no-result'.i18n,
-            style: const TextStyle(color: HomeTheme.textMuted),
+        sliver: SliverFillRemaining(
+          hasScrollBody: false,
+          child: Center(
+            child: Text(
+              nothingAtAll ? 'home.no-record'.i18n : 'common.no-result'.i18n,
+              style: const TextStyle(color: HomeTheme.textMuted),
+            ),
           ),
         ),
       );
     }
 
-    // Sin scroll propio: ahora scrollea el contenedor de afuera junto con
-    // las pestañas y el buscador (ver _buildBody) — en horizontal, con el
-    // encabezado fijo al grid le quedaba tan poco alto que las tarjetas se
-    // veían cortadas por abajo y no había forma de llegar a verlas enteras.
-    return Padding(
+    final isAndroidLandscape = Platform.isAndroid &&
+        MediaQuery.of(context).orientation == Orientation.landscape;
+    final cardWidth = isAndroidLandscape
+        ? HomeMediaCard.androidLandscapeWidth
+        : Platform.isAndroid
+            ? HomeMediaCard.androidWidth
+            : HomeMediaCard.desktopWidth;
+    final cardHeight = isAndroidLandscape
+        ? HomeMediaCard.androidLandscapeHeight
+        : Platform.isAndroid
+            ? HomeMediaCard.androidHeight
+            : HomeMediaCard.desktopHeight;
+
+    return SliverPadding(
       padding: const EdgeInsets.all(16),
-      child: Wrap(
-        spacing: 16,
-        runSpacing: 20,
-        children: items,
+      sliver: SliverGrid(
+        gridDelegate: SliverGridDelegateWithMaxCrossAxisExtent(
+          maxCrossAxisExtent: cardWidth + 16,
+          mainAxisExtent: cardHeight + 50,
+          mainAxisSpacing: 20,
+          crossAxisSpacing: 16,
+        ),
+        delegate: SliverChildBuilderDelegate(
+          (context, index) {
+            final card = _onFavoritesTab
+                ? _buildFavoriteCard(favorites![index])
+                : _buildHistoryCard(history![index]);
+            return Align(
+              alignment: Alignment.topCenter,
+              child: card,
+            );
+          },
+          childCount: itemCount,
+        ),
       ),
     );
+  }
+
+  Widget _buildFavoriteCard(Favorite f) {
+    // Obx: igual que en home_page.dart — sin esto, togglear "ocultar" no
+    // refrescaba la tarjeta acá (el RxSet de HiddenCards cambia, pero nada
+    // en esta pantalla estaba suscripto a él) hasta reconstruir toda la
+    // página (cambiar de pestaña y volver).
+    return Obx(() => HomeMediaCard(
+          key: ValueKey('fav-${f.package}-${f.url}'),
+          title: f.title,
+          subtitle: 'home.favorite'.i18n,
+          type: f.type,
+          cover: f.cover,
+          headers: _c.headersForPackage(f.package),
+          onTap: () => _openDetail(f.url, f.package),
+          onDelete: () => _deleteFavorite(f),
+          hidden: HiddenCards.isHidden(f.package, f.url),
+          onToggleHide: () => HiddenCards.toggle(f.package, f.url),
+        ));
+  }
+
+  Widget _buildHistoryCard(History h) {
+    // Obx: ver comentario en _buildFavoriteCard.
+    return Obx(() => HomeMediaCard(
+          key: ValueKey('hist-${h.package}-${h.url}'),
+          title: h.title,
+          subtitle: FlutterI18n.translate(
+            context,
+            h.type == ExtensionType.bangumi
+                ? 'home.watched-episode'
+                : 'home.watched-chapter',
+            translationParams: {
+              'ep': ExtensionUtils.episodeNumberLabel(
+                  h.episodeTitle, h.episodeId),
+            },
+          ),
+          type: h.type,
+          cover: h.type == ExtensionType.bangumi ? null : h.cover,
+          coverFile: h.type == ExtensionType.bangumi && h.cover != null
+              ? File(h.cover!)
+              : null,
+          headers: h.type == ExtensionType.bangumi
+              ? null
+              : _c.headersForPackage(h.package),
+          onTap: () => _openDetail(h.url, h.package),
+          onDelete: () => _deleteHistory(h),
+          hidden: HiddenCards.isHidden(h.package, h.url),
+          onToggleHide: () => HiddenCards.toggle(h.package, h.url),
+        ));
   }
 
   Widget _buildTabs() {
@@ -386,24 +414,14 @@ class _HistoryPageState extends State<HistoryPage> {
               // grid le quedaban ~150px y las tarjetas se cortaban sin poder
               // llegar a verlas enteras. Así el encabezado se desplaza y las
               // tarjetas usan toda la pantalla.
-              LayoutBuilder(
-                builder: (context, constraints) => SingleChildScrollView(
-                  // minHeight = alto visible: sin esto el contenido solo mide
-                  // lo que ocupa (ej. el estado vacío "Sin resultados"), y el
-                  // fondo con el glow quedaba cortado a media pantalla en vez
-                  // de llegar hasta abajo.
-                  child: ConstrainedBox(
-                    constraints:
-                        BoxConstraints(minHeight: constraints.maxHeight),
-                    child: Column(
-                      children: [
-                        const SizedBox(height: 8),
-                        _buildTabs(),
-                        _buildSearchAndActions(),
-                        _buildGrid(),
-                      ],
-                    ),
-                  ),
+              Positioned.fill(
+                child: CustomScrollView(
+                  slivers: [
+                    const SliverToBoxAdapter(child: SizedBox(height: 8)),
+                    SliverToBoxAdapter(child: _buildTabs()),
+                    SliverToBoxAdapter(child: _buildSearchAndActions()),
+                    _buildGrid(),
+                  ],
                 ),
               ),
             ],

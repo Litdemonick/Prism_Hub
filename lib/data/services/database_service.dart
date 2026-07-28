@@ -1,4 +1,4 @@
-﻿// ignore_for_file: experimental_member_use
+// ignore_for_file: experimental_member_use
 import 'dart:convert';
 
 import 'package:fluent_ui/fluent_ui.dart';
@@ -97,6 +97,7 @@ class DatabaseService {
   // 更新历史
 
   static Future<Id> putHistory(History history) async {
+    history.date = DateTime.now();
     return db.writeTxn(() => db.historys.putByIndex(r'package&url', history));
   }
 

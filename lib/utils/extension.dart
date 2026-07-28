@@ -1,10 +1,13 @@
 import 'dart:convert';
+import 'dart:async';
 import 'dart:io';
 
 import 'package:dio/dio.dart';
 import 'package:desktop_multi_window/desktop_multi_window.dart';
 import 'package:fluent_ui/fluent_ui.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/scheduler.dart';
 import 'package:get/get.dart';
 import 'package:prismhub/models/extension.dart';
 import 'package:prismhub/controllers/extension/extension_controller.dart';
@@ -55,6 +58,11 @@ class ExtensionUtils {
   static Map<String, bool>? _remoteUnstableCache;
   static DateTime? _remoteVersionsFetchedAt;
   static const _remoteVersionsTtl = Duration(minutes: 10);
+  static List<dynamic>? _repoIndexCache;
+  static DateTime? _repoIndexFetchedAt;
+  static Future<List<dynamic>>? _repoIndexInFlight;
+  static const _repoIndexTtl = Duration(minutes: 2);
+  static StreamSubscription<FileSystemEvent>? _extensionDirWatcher;
   // Dedup de llamadas EN VUELO — el cache de arriba solo evita refetches
   // una vez que YA hay un resultado completo, pero con N extensiones
   // instaladas, sus ExtensionTile montan en el mismo frame y todas llaman
@@ -72,6 +80,8 @@ class ExtensionUtils {
     _remoteVersionsCache = null;
     _remoteUnstableCache = null;
     _remoteVersionsFetchedAt = null;
+    _repoIndexCache = null;
+    _repoIndexFetchedAt = null;
   }
 
   static Future<Map<String, String>> _fetchRemoteVersions() async {
@@ -96,21 +106,16 @@ class ExtensionUtils {
   static Future<Map<String, String>> _doFetchRemoteVersions() async {
     final cached = _remoteVersionsCache;
     try {
-      final url =
-          '${PrismHubStorage.getSetting(SettingKey.prismhubRepoUrl)}/index.json';
-      final res = await dio.get<String>(
-        url,
-        options: Options(receiveTimeout: const Duration(seconds: 20)),
-      );
-      final decoded = jsonDecode(res.data!);
-      final list = decoded is Map ? (decoded['extensions'] ?? []) : decoded;
+      final list = await fetchRepoIndex();
       final map = <String, String>{};
       final unstableMap = <String, bool>{};
       for (final e in list) {
         final pkg = e['package'] as String?;
         final ver = e['version'] as String?;
         if (pkg != null && ver != null) map[pkg] = ver;
-        if (pkg != null) unstableMap[pkg] = e['unstable'] == 'true' || e['unstable'] == true;
+        if (pkg != null) {
+          unstableMap[pkg] = e['unstable'] == 'true' || e['unstable'] == true;
+        }
       }
       _remoteVersionsCache = map;
       _remoteUnstableCache = unstableMap;
@@ -120,6 +125,62 @@ class ExtensionUtils {
       // Sin conexión / repo caído: no bloquear extensiones por no poder
       // chequear — devolver la última caché conocida (o vacío).
       return cached ?? {};
+    }
+  }
+
+  static Future<List<dynamic>> fetchRepoIndex({
+    bool forceRefresh = false,
+    bool cacheBust = false,
+  }) async {
+    final cached = _repoIndexCache;
+    final fetchedAt = _repoIndexFetchedAt;
+    if (!forceRefresh &&
+        cached != null &&
+        fetchedAt != null &&
+        DateTime.now().difference(fetchedAt) < _repoIndexTtl) {
+      return cached;
+    }
+    final inFlight = _repoIndexInFlight;
+    if (inFlight != null) return inFlight;
+
+    final future = _doFetchRepoIndex(cacheBust: cacheBust || forceRefresh);
+    _repoIndexInFlight = future;
+    try {
+      return await future;
+    } finally {
+      _repoIndexInFlight = null;
+    }
+  }
+
+  static Future<List<dynamic>> _doFetchRepoIndex({
+    required bool cacheBust,
+  }) async {
+    final repoUrl = PrismHubStorage.getSetting(SettingKey.prismhubRepoUrl);
+    final bust = DateTime.now().millisecondsSinceEpoch;
+    final url =
+        cacheBust ? '$repoUrl/index.json?t=$bust' : '$repoUrl/index.json';
+    final res = await dio.get<String>(
+      url,
+      options: Options(receiveTimeout: const Duration(seconds: 20)),
+    );
+    final decoded = await compute(jsonDecode, res.data!);
+    final list = decoded is Map ? (decoded['extensions'] ?? []) : decoded;
+    final normalized = List<dynamic>.from(list);
+    _rememberOfficialCatalogEntries(normalized);
+    _repoIndexCache = normalized;
+    _repoIndexFetchedAt = DateTime.now();
+    return normalized;
+  }
+
+  static void _rememberOfficialCatalogEntries(List<dynamic> list) {
+    for (final e in list) {
+      if (e is! Map) continue;
+      final pkg = e['package']?.toString();
+      if (pkg != null && pkg.isNotEmpty) officialPackages.add(pkg);
+      final officialName = e['name']?.toString().toLowerCase().trim();
+      if (officialName != null && officialName.isNotEmpty) {
+        officialNames.add(officialName);
+      }
     }
   }
 
@@ -156,13 +217,9 @@ class ExtensionUtils {
     String package,
     BuildContext context,
   ) async {
-    final repoUrl = PrismHubStorage.getSetting(SettingKey.prismhubRepoUrl);
     final bust = DateTime.now().millisecondsSinceEpoch;
     final smallFetch = Options(receiveTimeout: const Duration(seconds: 20));
-    final res = await dio.get<String>('$repoUrl/index.json?t=$bust',
-        options: smallFetch);
-    final decoded = jsonDecode(res.data!);
-    final List list = decoded is Map ? (decoded['extensions'] ?? []) : decoded;
+    final list = await fetchRepoIndex(forceRefresh: true);
     final entry = list.cast<Map>().firstWhere(
           (e) => e['package'] == package,
           orElse: () => {},
@@ -170,8 +227,8 @@ class ExtensionUtils {
     final scriptUrl = (entry['script'] ?? entry['url'])?.toString();
     if (scriptUrl == null) throw Exception('extension.invalid'.i18n);
     final sep = scriptUrl.contains('?') ? '&' : '?';
-    final js = await dio.get<String>('$scriptUrl${sep}t=$bust',
-        options: smallFetch);
+    final js =
+        await dio.get<String>('$scriptUrl${sep}t=$bust', options: smallFetch);
     if (js.data == null || js.data!.isEmpty) {
       throw Exception('extension.invalid'.i18n);
     }
@@ -184,7 +241,8 @@ class ExtensionUtils {
       officialVerified = true;
     }
     // ignore: use_build_context_synchronously
-    await installByScript(js.data!, context, officialVerified: officialVerified);
+    await installByScript(js.data!, context,
+        officialVerified: officialVerified);
   }
 
   static String get extensionsDir => path.join(
@@ -289,7 +347,6 @@ class ExtensionUtils {
   // prism+ stays the single source of truth (no bundled copies). Offline-safe.
   static Future<void> _installDefaultsFromRepo() async {
     try {
-      final repoUrl = PrismHubStorage.getSetting(SettingKey.prismhubRepoUrl);
       // Cache-bust: GitHub raw caches index.json/dist for minutes, which would
       // hide a freshly pushed extension/resolver fix.
       final bust = DateTime.now().millisecondsSinceEpoch;
@@ -297,11 +354,7 @@ class ExtensionUtils {
       // en una red restrictiva (universidad, etc.) preferimos fallar rápido
       // y reintentar en el próximo arranque, en vez de quedar colgados.
       final smallFetch = Options(receiveTimeout: const Duration(seconds: 20));
-      final res = await dio.get<String>('$repoUrl/index.json?t=$bust',
-          options: smallFetch);
-      final decoded = jsonDecode(res.data!);
-      final List list =
-          decoded is Map ? (decoded['extensions'] ?? []) : decoded;
+      final list = await fetchRepoIndex(forceRefresh: true);
       for (final e in list) {
         final pkg = e['package']?.toString();
         if (pkg == null) continue;
@@ -322,14 +375,14 @@ class ExtensionUtils {
         if (scriptUrl == null || !defaultPackages.contains(pkg)) continue;
 
         final dest = File(path.join(extensionsDir, '$pkg.js'));
-        final exists = dest.existsSync();
+        final exists = await dest.exists();
         // Los 3 defaults se garantizan siempre presentes: si falta uno (p.ej.
         // cambió el set de defaults tras el primer arranque), se instala. Así el
         // equipo siempre tiene exactamente las 3 oficiales por defecto.
         // Already installed: only re-download when the repo version is different.
         if (exists) {
           final repoVersion = e['version']?.toString().replaceFirst('v', '');
-          final localVersion = _scriptVersion(dest.readAsStringSync());
+          final localVersion = _scriptVersion(await dest.readAsString());
           if (repoVersion == null || repoVersion == localVersion) continue;
         }
         final sep = scriptUrl.contains('?') ? '&' : '?';
@@ -344,7 +397,7 @@ class ExtensionUtils {
                 'Firma inválida o ausente para $pkg — no se instala (posible manipulación).');
             continue;
           }
-          dest.writeAsStringSync(js.data!);
+          await dest.writeAsString(js.data!);
         }
       }
       await PrismHubStorage.setSetting(
@@ -357,14 +410,14 @@ class ExtensionUtils {
       // el catálogo se descargó bien (officialPackages no vacío), para no borrar
       // nada estando offline.
       if (officialPackages.isNotEmpty) {
-        for (final f in Directory(extensionsDir).listSync()) {
+        await for (final f in Directory(extensionsDir).list()) {
           if (path.extension(f.path) != '.js') continue;
           final pkg = path.basenameWithoutExtension(f.path);
           if (pkg.startsWith('io.prismhub.') &&
               !officialPackages.contains(pkg) &&
               !nativePackages.contains(pkg)) {
             try {
-              File(f.path).deleteSync();
+              await File(f.path).delete();
               runtimes.remove(pkg);
               debugPrint('Extensión oficial huérfana eliminada: $pkg');
             } catch (_) {}
@@ -384,13 +437,15 @@ class ExtensionUtils {
     Directory(extensionsDir).createSync(recursive: true);
     // Purga offline de paquetes retirados: se elimina el JS aunque no haya red,
     // así el usuario no ve extensiones obsoletas al abrir la app.
-    _purgeRemovedPackages();
+    await _purgeRemovedPackages();
+    // Descarga defaults (I/O, no bloquea el isolate).
     await _installDefaultsFromRepo();
-    await _loadExtensions();
     // Limpia el Hive disabled-list de entradas muertas (paquetes sin JS).
-    _cleanStaleDisabledList();
+    await _cleanStaleDisabledList();
     // 监听目录变化
-    Directory(extensionsDir).watch().listen((event) async {
+    await _extensionDirWatcher?.cancel();
+    _extensionDirWatcher =
+        Directory(extensionsDir).watch().listen((event) async {
       if (path.extension(event.path) == '.js') {
         final package = path.basenameWithoutExtension(event.path);
         debugPrint('extension event: ${event.path} ${event.type}');
@@ -402,7 +457,6 @@ class ExtensionUtils {
             break;
           case FileSystemEvent.create:
           case FileSystemEvent.modify:
-            // Skip if this package is already being installed (e.g. by install())
             if (_loading.contains(package)) break;
             runtimes.remove(package);
             extensionErrorMap.remove(event.path);
@@ -412,30 +466,49 @@ class ExtensionUtils {
         }
       }
     });
+    // Carga secuencial con yields: se espera a que terminen para que el
+    // splash oculte la carga de extensiones (en vez de que jankeen la UI
+    // después). El yield entre cada una permite que la animación del splash
+    // se renderice sin congelarse 800ms seguidos.
+    await _loadExtensions();
   }
 
   static _loadExtensions() async {
-    final extensionsList = Directory(extensionsDir).listSync();
-    // Carga en paralelo: con 3-10 extensiones instaladas ahorra ~0.5-2 s
-    // en el arranque del app versus la carga secuencial original.
-    await Future.wait(extensionsList.map((e) => installByPath(e.path)));
+    final d = Directory(extensionsDir);
+    if (!await d.exists()) return;
+    final extensionsList =
+        await d.list().where((e) => path.extension(e.path) == '.js').toList();
+    extensionsList.sort((a, b) => a.path.compareTo(b.path));
+    // Secuencial con yield entre cada una: Future.wait no acelera porque
+    // initRuntime es CPU-bound (QuickJS) — bloquea el isolate entero.
+    // El yield permite al UI renderizar frames entre extensiones.
+    // Se salta archivos que no son .js (cachés, temporales, etc.).
+    for (final e in extensionsList) {
+      await installByPath(e.path);
+      await _yieldToNextFrame();
+    }
     _reloadPage();
+  }
+
+  static Future<void> _yieldToNextFrame() async {
+    await SchedulerBinding.instance.endOfFrame;
+    await Future<void>.delayed(const Duration(milliseconds: 8));
   }
 
   static uninstall(String package) async {
     final file = File(path.join(extensionsDir, '$package.js'));
-    if (file.existsSync()) {
-      file.deleteSync();
+    if (await file.exists()) {
+      await file.delete();
     }
   }
 
   // Borra sin necesidad de red los .js de paquetes retirados del catálogo.
-  static void _purgeRemovedPackages() {
+  static Future<void> _purgeRemovedPackages() async {
     for (final pkg in _removedPackages) {
       try {
         final f = File(path.join(extensionsDir, '$pkg.js'));
-        if (f.existsSync()) {
-          f.deleteSync();
+        if (await f.exists()) {
+          await f.delete();
           debugPrint('Paquete retirado eliminado del dispositivo: $pkg');
         }
       } catch (_) {}
@@ -444,15 +517,16 @@ class ExtensionUtils {
 
   // Elimina del Hive disabled-list los package IDs que ya no tienen JS en disco,
   // evitando datos muertos que confundan el estado de la UI.
-  static void _cleanStaleDisabledList() {
+  static Future<void> _cleanStaleDisabledList() async {
     final raw = PrismHubStorage.getSetting(SettingKey.disabledExtensions);
     if (raw == null) return;
     final List<String> list = raw is List ? List<String>.from(raw) : <String>[];
-    final existingPkgs = Directory(extensionsDir)
-        .listSync()
-        .where((e) => path.extension(e.path) == '.js')
-        .map((e) => path.basenameWithoutExtension(e.path))
-        .toSet();
+    final existingPkgs = <String>{};
+    await for (final e in Directory(extensionsDir).list()) {
+      if (path.extension(e.path) == '.js') {
+        existingPkgs.add(path.basenameWithoutExtension(e.path));
+      }
+    }
     final cleaned = list.where(existingPkgs.contains).toList();
     if (cleaned.length != list.length) {
       PrismHubStorage.setSetting(SettingKey.disabledExtensions, cleaned);
@@ -502,7 +576,7 @@ class ExtensionUtils {
     }
     final savePath = path.join(extensionsDir, '$pkg.js');
     _loading.add(pkg);
-    File(savePath).writeAsStringSync(script);
+    await File(savePath).writeAsString(script);
     try {
       runtimes[pkg] = await ExtensionService().initRuntime(ext);
     } catch (e) {
@@ -510,7 +584,7 @@ class ExtensionUtils {
       // and break loading on the next launch.
       runtimes.remove(pkg);
       try {
-        File(savePath).deleteSync();
+        await File(savePath).delete();
       } catch (_) {}
       rethrow;
     } finally {

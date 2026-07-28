@@ -1,4 +1,4 @@
-﻿import 'dart:async';
+import 'dart:async';
 import 'dart:convert';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
@@ -26,8 +26,18 @@ class ExtensionService {
   String evalString = '';
   late JsBridge jsBridge;
   static Map<dynamic, dynamic> evalMap = {};
+  static Future<List<String>>? _coreScriptsFuture;
   String className = '';
   bool isinit = false;
+
+  static Future<List<String>> _loadCoreScripts() {
+    return _coreScriptsFuture ??= Future.wait([
+      rootBundle.loadString('assets/js/CryptoJS.min.js'),
+      rootBundle.loadString('assets/js/jsencrypt.min.js'),
+      rootBundle.loadString('assets/js/md5.min.js'),
+    ]);
+  }
+
   initRuntime(Extension ext) async {
     extension = ext;
     className = extension.package.replaceAll('.', '');
@@ -85,7 +95,8 @@ class ExtensionService {
       );
 
       try {
-        final res = await PrismRequest.dioForPackage(extension.package).request<String>(
+        final res =
+            await PrismRequest.dioForPackage(extension.package).request<String>(
           url,
           data: requestBody,
           queryParameters: args[1]['queryParameters'] ?? {},
@@ -304,9 +315,10 @@ class ExtensionService {
   }
 
   _initRunExtension(String extScript) async {
-    final cryptoJs = await rootBundle.loadString('assets/js/CryptoJS.min.js');
-    final jsencrypt = await rootBundle.loadString('assets/js/jsencrypt.min.js');
-    final md5 = await rootBundle.loadString('assets/js/md5.min.js');
+    final coreScripts = await _loadCoreScripts();
+    final cryptoJs = coreScripts[0];
+    final jsencrypt = coreScripts[1];
+    final md5 = coreScripts[2];
     runtime.evaluate(Platform.isLinux
         ? '''
 $cryptoJs
@@ -669,18 +681,21 @@ async function stringify(callback) {
 
   // 清理 cookie
   cleanCookie() async {
-    await PrismRequest.cleanCookieForPackage(extension.package, extension.webSite);
+    await PrismRequest.cleanCookieForPackage(
+        extension.package, extension.webSite);
   }
 
   /// 添加 cookie
   /// key=value; key=value
   setCookie(String cookies) async {
-    await PrismRequest.setCookieForPackage(extension.package, cookies, extension.webSite);
+    await PrismRequest.setCookieForPackage(
+        extension.package, cookies, extension.webSite);
   }
 
   // 列出所有的 cookie
   Future<String> listCookie() async {
-    return await PrismRequest.getCookieForPackage(extension.package, extension.webSite);
+    return await PrismRequest.getCookieForPackage(
+        extension.package, extension.webSite);
   }
 
   Future<T> runExtension<T>(Future<T> Function() fun) async {
@@ -711,6 +726,23 @@ async function stringify(callback) {
     };
   }
 
+  Future<dynamic> _decodeJsonResult(String source) {
+    if (source.length < 4096) {
+      return Future.value(jsonDecode(source));
+    }
+    return compute(jsonDecode, source);
+  }
+
+  Future<void> _fillMissingHeaders(List<ExtensionListItem> result) async {
+    if (result.isEmpty || result.every((element) => element.headers != null)) {
+      return;
+    }
+    final headers = await _defaultHeaders;
+    for (var element in result) {
+      element.headers ??= headers;
+    }
+  }
+
   Future<List<ExtensionListItem>> latest(int page) async {
     return runExtension(() async {
       final jsResult = await runtime.handlePromise(
@@ -719,13 +751,11 @@ async function stringify(callback) {
             : 'stringify(()=>${className}Instance.latest($page))'),
       );
 
-      List<ExtensionListItem> result =
-          jsonDecode(jsResult.stringResult).map<ExtensionListItem>((e) {
+      final decoded = await _decodeJsonResult(jsResult.stringResult);
+      List<ExtensionListItem> result = decoded.map<ExtensionListItem>((e) {
         return ExtensionListItem.fromJson(e);
       }).toList();
-      for (var element in result) {
-        element.headers ??= await _defaultHeaders;
-      }
+      await _fillMissingHeaders(result);
       return result;
     });
   }
@@ -746,13 +776,11 @@ async function stringify(callback) {
             ? '${className}Instance.search($kwJs,$page,${filter == null ? null : jsonEncode(filter)})'
             : 'stringify(()=>${className}Instance.search($kwJs,$page,${filter == null ? null : jsonEncode(filter)}))'),
       );
-      List<ExtensionListItem> result =
-          jsonDecode(jsResult.stringResult).map<ExtensionListItem>((e) {
+      final decoded = await _decodeJsonResult(jsResult.stringResult);
+      List<ExtensionListItem> result = decoded.map<ExtensionListItem>((e) {
         return ExtensionListItem.fromJson(e);
       }).toList();
-      for (var element in result) {
-        element.headers ??= await _defaultHeaders;
-      }
+      await _fillMissingHeaders(result);
       return result;
     });
   }
@@ -781,7 +809,8 @@ async function stringify(callback) {
       final jsResult = await runtime.handlePromise(
         await runtime.evaluateAsync(eval),
       );
-      Map<String, dynamic> result = jsonDecode(jsResult.stringResult);
+      Map<String, dynamic> result = Map<String, dynamic>.from(
+          await _decodeJsonResult(jsResult.stringResult));
       return result.map(
         (key, value) => MapEntry(
           key,
@@ -806,13 +835,11 @@ async function stringify(callback) {
             ? '${className}Instance.top(${filter == null ? null : jsonEncode(filter)},$page)'
             : 'stringify(()=>${className}Instance.top(${filter == null ? null : jsonEncode(filter)},$page))'),
       );
-      List<ExtensionListItem> result =
-          jsonDecode(jsResult.stringResult).map<ExtensionListItem>((e) {
+      final decoded = await _decodeJsonResult(jsResult.stringResult);
+      List<ExtensionListItem> result = decoded.map<ExtensionListItem>((e) {
         return ExtensionListItem.fromJson(e);
       }).toList();
-      for (var element in result) {
-        element.headers ??= await _defaultHeaders;
-      }
+      await _fillMissingHeaders(result);
       return result;
     });
   }
@@ -824,7 +851,8 @@ async function stringify(callback) {
             ? '${className}Instance.createTopFilter()'
             : 'stringify(()=>${className}Instance.createTopFilter())'),
       );
-      Map<String, dynamic> result = jsonDecode(jsResult.stringResult);
+      Map<String, dynamic> result = Map<String, dynamic>.from(
+          await _decodeJsonResult(jsResult.stringResult));
       return result.map(
         (key, value) => MapEntry(
           key,
@@ -842,8 +870,8 @@ async function stringify(callback) {
             ? '${className}Instance.detail($urlJs)'
             : 'stringify(()=>${className}Instance.detail($urlJs))'),
       );
-      final result =
-          ExtensionDetail.fromJson(jsonDecode(jsResult.stringResult));
+      final decoded = await _decodeJsonResult(jsResult.stringResult);
+      final result = ExtensionDetail.fromJson(decoded);
       result.headers ??= await _defaultHeaders;
       return result;
     });
@@ -863,7 +891,7 @@ async function stringify(callback) {
             ? '${className}Instance.watch($urlJs)'
             : 'stringify(()=>${className}Instance.watch($urlJs))'),
       );
-      final data = jsonDecode(jsResult.stringResult);
+      final data = await _decodeJsonResult(jsResult.stringResult);
 
       switch (typeHint ?? extension.type) {
         case ExtensionType.bangumi:

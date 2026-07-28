@@ -1,4 +1,4 @@
-﻿import 'package:flutter/material.dart';
+import 'package:flutter/material.dart';
 import 'package:flutter_i18n/flutter_i18n.dart';
 import 'package:prismhub/models/extension.dart';
 import 'package:prismhub/views/pages/watch/reader/comic/comic_reader.dart';
@@ -19,6 +19,7 @@ class WatchPage extends StatelessWidget {
     this.cover,
     this.typeOverride,
     this.cameFromDetail = false,
+    this.autoResume = false,
   });
   final List<ExtensionEpisode> playList;
   final int playerIndex;
@@ -36,6 +37,7 @@ class WatchPage extends StatelessWidget {
   final ExtensionType? typeOverride;
   // Solo el lector (Comic/Novel) lo usa — ver ReaderController.cameFromDetail.
   final bool cameFromDetail;
+  final bool autoResume;
 
   @override
   Widget build(BuildContext context) {
@@ -70,6 +72,7 @@ class WatchPage extends StatelessWidget {
           episodeGroupId: episodeGroupId,
           detailUrl: detailUrl,
           anilistID: anilistID,
+          autoResume: autoResume,
         );
       case ExtensionType.manga:
         return ComicReader(

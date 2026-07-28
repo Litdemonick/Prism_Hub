@@ -10,7 +10,6 @@ import 'package:prismhub/utils/i18n.dart';
 import 'package:prismhub/views/pages/watch/video/webview_player_page.dart'
     show openWebViewPlayer;
 import 'package:prismhub/utils/layout.dart';
-import 'package:prismhub/utils/router.dart';
 import 'package:prismhub/views/pages/watch/video/video_player_cast.dart';
 import 'package:prismhub/views/pages/watch/video/video_player_sidebar.dart';
 import 'package:prismhub/views/widgets/cache_network_image.dart';
@@ -27,8 +26,7 @@ class VideoPlayerMobileControls extends StatefulWidget {
       _VideoPlayerMobileControlsState();
 }
 
-class _VideoPlayerMobileControlsState
-    extends State<VideoPlayerMobileControls> {
+class _VideoPlayerMobileControlsState extends State<VideoPlayerMobileControls> {
   late final VideoPlayerController _c = widget.controller;
   final _subtitleViewKey = GlobalKey<SubtitleViewState>();
   bool _showControls = true;
@@ -115,6 +113,7 @@ class _VideoPlayerMobileControlsState
     final fallback = _c.webViewFallback.value;
     if (fallback == null) return;
     _c.webViewOpenedOnce.value = true;
+    _c.markWebViewPlayback(fallback);
     // El reproductor nativo (media_kit/mpv) seguía con su textura de video
     // activa de fondo mientras el WebView se abre ENCIMA (esta pantalla no
     // reemplaza la ruta anterior, la apila) — dos motores de render nativos
@@ -136,6 +135,8 @@ class _VideoPlayerMobileControlsState
       title: _c.title,
       onProgress: _c.saveWebViewProgress,
     );
+    await Future.delayed(const Duration(milliseconds: 180));
+    if (mounted) _c.isWebViewActive.value = false;
   }
 
   void _showResumeDialog(int secs) {
@@ -268,57 +269,57 @@ class _VideoPlayerMobileControlsState
                   if (_activePointers > 0) _activePointers--;
                 },
                 child: GestureDetector(
-                behavior: HitTestBehavior.opaque,
-                onTap: () {
-                  if (_showControls) {
-                    _showControls = false;
+                  behavior: HitTestBehavior.opaque,
+                  onTap: () {
+                    if (_showControls) {
+                      _showControls = false;
+                      setState(() {});
+                      return;
+                    }
+                    _updateTimer();
+                  },
+                  onDoubleTapDown: (details) {
+                    if (!_debounce(const Duration(milliseconds: 400))) return;
+                    final dx = details.localPosition.dx;
+                    final width = LayoutUtils.width / 3;
+                    if (dx < width) {
+                      _c.seek(_c.position.value - const Duration(seconds: 10));
+                    } else if (dx > width * 2) {
+                      _c.seek(_c.position.value + const Duration(seconds: 10));
+                    } else {
+                      _c.playOrPause();
+                    }
+                  },
+                  // Deslizar vertical = volumen, en cualquier parte de la
+                  // pantalla — a pedido explícito, el reproductor ya no toca
+                  // el brillo del sistema (antes la mitad izquierda lo hacía).
+                  // Se ignora con más de un dedo apoyado (pellizcar) — sin
+                  // esto, un pellizco (que no debe hacer nada, no hay zoom por
+                  // pellizco) igual subía/bajaba el volumen con el movimiento
+                  // de uno de los 2 dedos.
+                  onVerticalDragUpdate: (details) {
+                    if (_activePointers > 1) return;
+                    final add = details.delta.dy / 500;
+                    _currentVolume = (_currentVolume - add).clamp(0, 1);
+                    VolumeController().setVolume(_currentVolume);
+                    _isAdjusting = true;
                     setState(() {});
-                    return;
-                  }
-                  _updateTimer();
-                },
-                onDoubleTapDown: (details) {
-                  if (!_debounce(const Duration(milliseconds: 400))) return;
-                  final dx = details.localPosition.dx;
-                  final width = LayoutUtils.width / 3;
-                  if (dx < width) {
-                    _c.seek(_c.position.value - const Duration(seconds: 10));
-                  } else if (dx > width * 2) {
-                    _c.seek(_c.position.value + const Duration(seconds: 10));
-                  } else {
-                    _c.playOrPause();
-                  }
-                },
-                // Deslizar vertical = volumen, en cualquier parte de la
-                // pantalla — a pedido explícito, el reproductor ya no toca
-                // el brillo del sistema (antes la mitad izquierda lo hacía).
-                // Se ignora con más de un dedo apoyado (pellizcar) — sin
-                // esto, un pellizco (que no debe hacer nada, no hay zoom por
-                // pellizco) igual subía/bajaba el volumen con el movimiento
-                // de uno de los 2 dedos.
-                onVerticalDragUpdate: (details) {
-                  if (_activePointers > 1) return;
-                  final add = details.delta.dy / 500;
-                  _currentVolume = (_currentVolume - add).clamp(0, 1);
-                  VolumeController().setVolume(_currentVolume);
-                  _isAdjusting = true;
-                  setState(() {});
-                },
-                onVerticalDragEnd: (details) {
-                  _isAdjusting = false;
-                  setState(() {});
-                },
-                onLongPressStart: (details) {
-                  _isLongPress = true;
-                  _c.player.setRate(3.0);
-                  setState(() {});
-                },
-                onLongPressEnd: (details) {
-                  _c.player.setRate(_c.currentSpeed.value);
-                  _isLongPress = false;
-                  setState(() {});
-                },
-                child: const SizedBox.expand(),
+                  },
+                  onVerticalDragEnd: (details) {
+                    _isAdjusting = false;
+                    setState(() {});
+                  },
+                  onLongPressStart: (details) {
+                    _isLongPress = true;
+                    _c.player.setRate(3.0);
+                    setState(() {});
+                  },
+                  onLongPressEnd: (details) {
+                    _c.player.setRate(_c.currentSpeed.value);
+                    _isLongPress = false;
+                    setState(() {});
+                  },
+                  child: const SizedBox.expand(),
                 ),
               ),
             ),
@@ -452,7 +453,8 @@ class _VideoPlayerMobileControlsState
                         // descuenta los casos en que el video sigue avanzando
                         // de verdad pero el flag quedó pegado en true — ver
                         // VideoPlayerController.
-                        if (_c.isActuallyBuffering.value && _c.isPlaying.value) {
+                        if (_c.isActuallyBuffering.value &&
+                            _c.isPlaying.value) {
                           return const ProgressRing();
                         }
                         if (_c.dlnaDevice.value != null) {
@@ -569,21 +571,14 @@ class _VideoPlayerMobileControlsState
                       SafeArea(
                         bottom: false,
                         child: Padding(
-                          padding: const EdgeInsets.symmetric(
-                              horizontal: 12, vertical: 6),
+                          padding: EdgeInsets.zero,
                           child: Row(
                             children: [
                               // Volver, a pedido explícito ahora se oculta
                               // junto con el resto del header (antes estaba
                               // marcada como "siempre visible" a pedido
                               // anterior — se revirtió ese criterio).
-                              IconButton(
-                                icon: const Icon(Icons.arrow_back,
-                                    color: Colors.white),
-                                onPressed: () {
-                                  RouterUtils.pop();
-                                },
-                              ),
+                              SizedBox.shrink(),
                             ],
                           ),
                         ),
@@ -660,6 +655,11 @@ class _Header extends StatelessWidget {
       padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
       child: Row(
         children: [
+          IconButton(
+            icon: const Icon(Icons.arrow_back, color: Colors.white),
+            onPressed: () => unawaited(controller.closeRoute(context)),
+          ),
+          const SizedBox(width: 4),
           Expanded(
             child: Obx(() {
               final data = controller.playList[controller.index.value];
@@ -1008,6 +1008,7 @@ class _SeekBarState extends State<_SeekBar> {
 
     _bufferSubscription =
         widget.controller.player.stream.buffer.listen((event) {
+      if (!mounted) return;
       setState(() {
         _buffer = event;
       });

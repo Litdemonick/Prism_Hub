@@ -304,6 +304,7 @@
     "check-update": "Check for Updates",
     "new-version": "New version {version} detected",
     "download": "Go to Update",
+    "download-install": "Download and install",
     "no-update": "Already up to date",
     "not-now": "Not now",
     "error": "Failed to check for updates, network error occurred",

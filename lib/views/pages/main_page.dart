@@ -1,4 +1,4 @@
-﻿import 'package:fluent_ui/fluent_ui.dart' as fluent;
+import 'package:fluent_ui/fluent_ui.dart' as fluent;
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 import 'package:go_router/go_router.dart';
@@ -66,12 +66,12 @@ class _DesktopMainPageState extends State<DesktopMainPage> with WindowListener {
 
   @override
   void initState() {
+    super.initState();
     c = Get.put(MainController());
     if (PrismHubStorage.getSetting(SettingKey.autoCheckUpdate)) {
-      ApplicationUtils.checkForcedUpdate(context);
+      ApplicationUtils.scheduleForcedUpdateCheck(context);
     }
     windowManager.addListener(this);
-    super.initState();
   }
 
   @override
@@ -138,8 +138,6 @@ class _DesktopMainPageState extends State<DesktopMainPage> with WindowListener {
         );
       },
       pane: fluent.NavigationPane(
-        // 200 cortaba "Repositorio de extensiones" (el ítem más largo del
-        // panel) contra el borde.
         size: const fluent.NavigationPaneSize(openMaxWidth: 230),
         selected: c.selectedTab.value,
         onChanged: c.changeTab,
@@ -195,22 +193,33 @@ class _DesktopMainPageState extends State<DesktopMainPage> with WindowListener {
 
   @override
   void onWindowResize() {
-    WindowManager.instance.getSize().then((value) {
-      PrismHubStorage.setSetting(
-        SettingKey.windowSize,
-        "${value.width},${value.height}",
-      );
-    });
+    _saveWindowSize();
+  }
+
+  Future<void> _saveWindowSize() async {
+    if (await WindowManager.instance.isFullScreen()) return;
+    if (await WindowManager.instance.isMaximized()) return;
+    final value = await WindowManager.instance.getSize();
+    if (value.width < 900 || value.height < 600) return;
+    await PrismHubStorage.setSetting(
+      SettingKey.windowSize,
+      "${value.width},${value.height}",
+    );
   }
 
   @override
   void onWindowMove() {
-    WindowManager.instance.getPosition().then((value) {
-      PrismHubStorage.setSetting(
-        SettingKey.windowPosition,
-        "${value.dx},${value.dy}",
-      );
-    });
+    _saveWindowPosition();
+  }
+
+  Future<void> _saveWindowPosition() async {
+    if (await WindowManager.instance.isFullScreen()) return;
+    if (await WindowManager.instance.isMaximized()) return;
+    final value = await WindowManager.instance.getPosition();
+    await PrismHubStorage.setSetting(
+      SettingKey.windowPosition,
+      "${value.dx},${value.dy}",
+    );
   }
 }
 
@@ -233,11 +242,11 @@ class _AndroidMainPageState extends fluent.State<AndroidMainPage> {
 
   @override
   void initState() {
+    super.initState();
     c = Get.put(MainController());
     if (PrismHubStorage.getSetting(SettingKey.autoCheckUpdate)) {
-      ApplicationUtils.checkForcedUpdate(context);
+      ApplicationUtils.scheduleForcedUpdateCheck(context);
     }
-    super.initState();
   }
 
   @override
@@ -332,9 +341,11 @@ class _AndroidMainPageState extends fluent.State<AndroidMainPage> {
       index: c.selectedTab.value,
       children: [
         for (var i = 0; i < pages.length; i++)
-          TickerMode(
-            enabled: i == c.selectedTab.value,
-            child: pages[i],
+          RepaintBoundary(
+            child: TickerMode(
+              enabled: i == c.selectedTab.value,
+              child: pages[i],
+            ),
           ),
       ],
     );

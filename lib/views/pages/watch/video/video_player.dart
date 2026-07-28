@@ -1,4 +1,4 @@
-﻿import 'package:flutter/material.dart';
+import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 import 'package:prismhub/models/extension.dart';
 import 'package:prismhub/controllers/watch/video_controller.dart';
@@ -6,6 +6,7 @@ import 'package:prismhub/views/pages/watch/video/video_player_sidebar.dart';
 import 'package:prismhub/views/pages/watch/video/video_player_content.dart';
 import 'package:prismhub/data/services/extension_service.dart';
 import 'package:prismhub/views/widgets/platform_widget.dart';
+import 'package:prismhub/views/widgets/progress.dart';
 
 class VideoPlayer extends StatefulWidget {
   const VideoPlayer({
@@ -17,6 +18,7 @@ class VideoPlayer extends StatefulWidget {
     required this.title,
     required this.detailUrl,
     required this.anilistID,
+    this.autoResume = false,
   });
 
   final String title;
@@ -26,18 +28,48 @@ class VideoPlayer extends StatefulWidget {
   final int episodeGroupId;
   final ExtensionService runtime;
   final String anilistID;
+  final bool autoResume;
 
   @override
   State<VideoPlayer> createState() => _VideoPlayerState();
 }
 
 class _VideoPlayerState extends State<VideoPlayer> {
-  late VideoPlayerController _c;
-  late final String _tag = VideoPlayerController.buildTag(
-      widget.title, widget.detailUrl, widget.episodeGroupId);
+  VideoPlayerController? _c;
+  bool _contentReady = false;
+
+  // Contador global de sesiones: el tag lleva un sufijo único por CADA
+  // pantalla de reproductor creada. Antes el tag era solo título+url+grupo,
+  // así que dos pantallas del mismo episodio lo compartían — y como Flutter
+  // construye la pantalla nueva ANTES de destruir la vieja, el dispose() de
+  // la vieja borraba del tag el controller de la NUEVA, que quedaba muerta
+  // apenas nacía (se veía bien pero no respondía nada). Con un tag propio
+  // por sesión ese cruce es imposible por construcción.
+  static int _sessionSeq = 0;
+  late final String _tag =
+      '${VideoPlayerController.buildTag(widget.title, widget.detailUrl, widget.episodeGroupId)}#${++_sessionSeq}';
 
   @override
   void initState() {
+    super.initState();
+    _initController();
+  }
+
+  Future<void> _initController() async {
+    // Esperar a que el reproductor ANTERIOR termine de apagarse (dos
+    // instancias de mpv vivas a la vez pelean por la GPU en Windows), pero
+    // nunca para siempre: si ese apagado se cuelga —el bug de threading de
+    // media_kit_video 1.2.5 lo hace posible— sin este límite la pantalla
+    // nueva se quedaba en negro con el spinner eternamente, sin cargar nada
+    // ni responder (confirmado en vivo). Mejor arrancar igual que no
+    // arrancar nunca.
+    try {
+      await VideoPlayerController.waitForPreviousShutdown()
+          .timeout(const Duration(seconds: 4));
+    } catch (_) {}
+    if (!mounted) return;
+    // Sin lógica de "borrar el controller anterior de este tag": el tag ahora
+    // es único por sesión (ver _tag), así que nunca hay uno previo que pisar.
     _c = Get.put(
       VideoPlayerController(
         title: widget.title,
@@ -47,19 +79,38 @@ class _VideoPlayerState extends State<VideoPlayer> {
         episodeGroupId: widget.episodeGroupId,
         runtime: widget.runtime,
         anilistID: widget.anilistID,
+        autoResume: widget.autoResume,
       ),
       tag: _tag,
     );
-    super.initState();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      setState(() => _contentReady = true);
+    });
   }
 
   @override
   void dispose() {
-    Get.delete<VideoPlayerController>(tag: _tag);
+    // El tag es único por sesión, así que lo registrado acá solo puede ser
+    // nuestro propio controller — no hay riesgo de borrar el de otra
+    // pantalla. El identical() queda igual como red de seguridad barata.
+    final c = _c;
+    if (c != null &&
+        Get.isRegistered<VideoPlayerController>(tag: _tag) &&
+        identical(Get.find<VideoPlayerController>(tag: _tag), c)) {
+      Get.delete<VideoPlayerController>(tag: _tag);
+    }
     super.dispose();
   }
 
   _buildContent() {
+    final c = _c;
+    if (c == null || !_contentReady) {
+      return const ColoredBox(
+        color: Colors.black,
+        child: Center(child: ProgressRing()),
+      );
+    }
     return Obx(() {
       final maxWidth = MediaQuery.of(context).size.width;
       // El área del video SIEMPRE usa Expanded (nunca un ancho fijo en
@@ -74,9 +125,9 @@ class _VideoPlayerState extends State<VideoPlayer> {
           Expanded(
             child: Stack(
               children: [
-                VideoPlayerConten(tag: _tag),
+                VideoPlayerConten(controller: c),
                 // 消息弹出
-                if (_c.cuurentMessageWidget.value != null)
+                if (c.cuurentMessageWidget.value != null)
                   Positioned(
                     left: 0,
                     bottom: 100,
@@ -97,7 +148,7 @@ class _VideoPlayerState extends State<VideoPlayer> {
                         style: const TextStyle(
                           color: Colors.white,
                         ),
-                        child: _c.cuurentMessageWidget.value!,
+                        child: c.cuurentMessageWidget.value!,
                       ),
                     ),
                   ),
@@ -106,19 +157,19 @@ class _VideoPlayerState extends State<VideoPlayer> {
           ),
           AnimatedContainer(
             onEnd: () {
-              _c.isOpenSidebar.value = _c.showSidebar.value;
+              c.isOpenSidebar.value = c.showSidebar.value;
             },
-            width: _c.showSidebar.value ? 300 : 0,
+            width: c.showSidebar.value ? 300 : 0,
             duration: const Duration(milliseconds: 120),
             clipBehavior: Clip.hardEdge,
             decoration: const BoxDecoration(),
-            child: _c.isOpenSidebar.value || _c.showSidebar.value
+            child: c.isOpenSidebar.value || c.showSidebar.value
                 ? OverflowBox(
                     minWidth: 300,
                     maxWidth: 300,
                     alignment: Alignment.centerRight,
                     child: VideoPlayerSidebar(
-                      controller: _c,
+                      controller: c,
                     ),
                   )
                 : null,

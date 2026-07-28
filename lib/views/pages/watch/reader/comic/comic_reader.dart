@@ -1,4 +1,5 @@
-﻿import 'package:fluent_ui/fluent_ui.dart';
+import 'package:fluent_ui/fluent_ui.dart';
+import 'package:flutter/material.dart' as material;
 import 'package:get/get.dart';
 import 'package:prismhub/models/extension.dart';
 import 'package:prismhub/views/pages/watch/reader/comic/comic_reader_content.dart';
@@ -6,6 +7,7 @@ import 'package:prismhub/views/pages/watch/reader/comic/comic_reader_settings.da
 import 'package:prismhub/controllers/watch/comic_controller.dart';
 import 'package:prismhub/controllers/watch/reader_controller.dart';
 import 'package:prismhub/views/widgets/platform_widget.dart';
+import 'package:prismhub/views/widgets/progress.dart' as prism_progress;
 // import 'package:prismhub/views/pages/watch/reader/comic/comic_zoom.dart';
 import 'package:prismhub/data/services/extension_service.dart';
 import 'package:prismhub/views/widgets/watch/reader_view.dart';
@@ -41,34 +43,50 @@ class ComicReader extends StatefulWidget {
 class _ComicReaderState extends State<ComicReader> {
   late final String _tag = ReaderController.buildTag(
       widget.title, widget.detailUrl, widget.episodeGroupId);
+  bool _ready = false;
+  bool _registered = false;
 
   @override
   void initState() {
-    Get.put(
-      ComicController(
-        title: widget.title,
-        playList: widget.playList,
-        detailUrl: widget.detailUrl,
-        playIndex: widget.playerIndex,
-        episodeGroupId: widget.episodeGroupId,
-        runtime: widget.runtime,
-        cover: widget.cover,
-        anilistID: widget.anilistID,
-        cameFromDetail: widget.cameFromDetail,
-      ),
-      tag: _tag,
-    );
     super.initState();
+    material.WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      Get.put(
+        ComicController(
+          title: widget.title,
+          playList: widget.playList,
+          detailUrl: widget.detailUrl,
+          playIndex: widget.playerIndex,
+          episodeGroupId: widget.episodeGroupId,
+          runtime: widget.runtime,
+          cover: widget.cover,
+          anilistID: widget.anilistID,
+          cameFromDetail: widget.cameFromDetail,
+        ),
+        tag: _tag,
+      );
+      _registered = true;
+      if (mounted) setState(() => _ready = true);
+    });
   }
 
   @override
   void dispose() {
-    Get.delete<ComicController>(tag: _tag);
+    if (_registered) {
+      Get.delete<ComicController>(tag: _tag);
+    }
     super.dispose();
   }
 
   @override
   Widget build(BuildContext context) {
+    if (!_ready) {
+      return const material.ColoredBox(
+        color: material.Colors.black,
+        child: material.Center(child: prism_progress.ProgressRing()),
+      );
+    }
+
     return ReaderView<ComicController>(
       _tag,
       content: PlatformWidget(

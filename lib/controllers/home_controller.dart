@@ -1,12 +1,15 @@
 import 'dart:async';
 import 'dart:math';
 
+import 'package:flutter/scheduler.dart';
 import 'package:get/get.dart';
+import 'package:prismhub/data/services/extension_service.dart';
 import 'package:prismhub/models/index.dart';
 import 'package:prismhub/data/services/database_service.dart';
 import 'package:prismhub/utils/connectivity.dart';
 import 'package:prismhub/utils/extension.dart';
 import 'package:prismhub/utils/prismhub_storage.dart';
+import 'package:prismhub/utils/resume_history.dart';
 
 class HomePageController extends GetxController {
   final RxList<History> resents = <History>[].obs;
@@ -84,7 +87,7 @@ class HomePageController extends GetxController {
     // Kick off all independent reads before awaiting any — corre todo en
     // paralelo en vez de uno atrás del otro.
     final historyFuture = DatabaseService.getHistorysByType();
-    final favoritesFuture = DatabaseService.getFavoritesByType(limit: 20);
+    final favoritesFuture = DatabaseService.getFavoritesByType();
 
     // "Continuar viendo" mezcla todos los tipos (video + lectura) — un solo
     // lugar para retomar donde quedaste, sin separar por tipo.
@@ -92,6 +95,7 @@ class HomePageController extends GetxController {
     final favoritesData = _onlyEnabled(await favoritesFuture, (f) => f.package);
     resents.value = resentsData;
     favorites.value = favoritesData;
+    unawaited(prewarmResumeHistoryTargets(resentsData));
     // Si por lo que sea el hero todavía no tiene nada (primera vez real,
     // el fetch inicial falló, tardó más de la cuenta) lo reintenta acá —
     // pero solo cuando está vacío: si ya hay una imagen puesta, refrescar
@@ -155,23 +159,20 @@ class HomePageController extends GetxController {
       return;
     }
 
-    final results = await Future.wait(exts.map((runtime) async {
-      try {
-        final items = await runtime.latest(1).timeout(
-              const Duration(seconds: 15),
-              onTimeout: () =>
-                  throw TimeoutException('Tiempo de espera agotado'),
-            );
-        return items
-            .take(3)
-            .where((i) => i.cover?.isNotEmpty == true)
-            .map((i) => (i.cover!, i.headers))
-            .toList();
-      } catch (_) {
-        return <(String, Map<String, String>?)>[];
+    final results = <(String, Map<String, String>?)>[];
+    const batchSize = 2;
+    for (var i = 0; i < exts.length; i += batchSize) {
+      final batch = exts.skip(i).take(batchSize);
+      final batchResults = await Future.wait(batch.map(_fetchHeroItems));
+      results.addAll(batchResults.expand((e) => e));
+      if (heroBackground.value == null && results.isNotEmpty) {
+        _extensionPool = results;
+        _pickHeroBackground();
       }
-    }));
-    _extensionPool = results.expand((e) => e).toList();
+      await SchedulerBinding.instance.endOfFrame;
+      await Future<void>.delayed(const Duration(milliseconds: 8));
+    }
+    _extensionPool = results;
     _hasLoadedPoolOnce = true;
     _pickHeroBackground();
     // Si after todo esto el hero sigue vacío (arranque en frío — DNS/TLS
@@ -189,6 +190,24 @@ class HomePageController extends GetxController {
   }
 
   Timer? _coldStartRetry;
+
+  Future<List<(String, Map<String, String>?)>> _fetchHeroItems(
+    ExtensionService runtime,
+  ) async {
+    try {
+      final items = await runtime.latest(1).timeout(
+            const Duration(seconds: 15),
+            onTimeout: () => throw TimeoutException('Tiempo de espera agotado'),
+          );
+      return items
+          .take(3)
+          .where((i) => i.cover?.isNotEmpty == true)
+          .map((i) => (i.cover!, i.headers))
+          .toList();
+    } catch (_) {
+      return <(String, Map<String, String>?)>[];
+    }
+  }
 
   void _pickHeroBackground() {
     // Prioriza el pool de tus extensiones (contenido real, elegido al azar

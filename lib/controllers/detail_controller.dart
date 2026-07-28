@@ -13,6 +13,8 @@ import 'package:prismhub/views/dialogs/tmdb_binding.dart';
 import 'package:prismhub/controllers/home_controller.dart';
 import 'package:prismhub/controllers/main_controller.dart';
 import 'package:prismhub/views/pages/watch/watch_page.dart';
+import 'package:prismhub/views/widgets/deferred_route_content.dart';
+import 'package:prismhub/views/widgets/progress.dart';
 import 'package:prismhub/router/router.dart';
 import 'package:prismhub/data/services/database_service.dart';
 import 'package:prismhub/utils/error.dart';
@@ -369,12 +371,9 @@ class DetailPageController extends GetxController {
     Get.find<HomePageController>().onRefresh();
   }
 
-  goWatch(
-    BuildContext context,
-    List<ExtensionEpisode> urls,
-    int index,
-    int selectEpGroup,
-  ) async {
+  goWatch(BuildContext context, List<ExtensionEpisode> urls, int index,
+      int selectEpGroup,
+      {bool autoResume = false}) async {
     if (runtime.value == null) {
       showPlatformSnackbar(
         context: currentContext,
@@ -448,17 +447,31 @@ class DetailPageController extends GetxController {
                 curve: Curves.ease,
               ),
             ),
-            child: WatchPage(
-              cover: detail!.cover,
-              playList: urls,
-              package: package,
-              playerIndex: index,
-              title: detail!.title,
-              episodeGroupId: selectEpGroup,
-              detailUrl: url,
-              anilistID: aniListID.value,
-              typeOverride: type,
-              cameFromDetail: true,
+            // Sin este diferido, WatchPage (Get.put del controller + Player()
+            // nativo de media_kit) se construía en el mismo frame en que
+            // arranca el push, compitiendo por CPU con la transición de
+            // 600ms recién empezada — se sentía como un tirón al abrir.
+            // DeferredRouteContent espera a que la animación termine antes
+            // de montar el contenido real.
+            child: DeferredRouteContent(
+              pushAnimation: animation,
+              placeholder: const Scaffold(
+                backgroundColor: Colors.black,
+                body: Center(child: ProgressRing()),
+              ),
+              builder: (context) => WatchPage(
+                cover: detail!.cover,
+                playList: urls,
+                package: package,
+                playerIndex: index,
+                title: detail!.title,
+                episodeGroupId: selectEpGroup,
+                detailUrl: url,
+                anilistID: aniListID.value,
+                typeOverride: type,
+                cameFromDetail: true,
+                autoResume: autoResume,
+              ),
             ),
           );
         }),

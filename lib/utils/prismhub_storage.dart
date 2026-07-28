@@ -226,6 +226,16 @@ class PrismHubStorage {
     await settings.put('lastServer:$package:$episodeUrl', server);
   }
 
+  static String? getLastPlaybackMode(String package, String episodeUrl) {
+    final v = settings.get('lastPlaybackMode:$package:$episodeUrl');
+    return v is String && v.isNotEmpty ? v : null;
+  }
+
+  static setLastPlaybackMode(
+      String package, String episodeUrl, String mode) async {
+    await settings.put('lastPlaybackMode:$package:$episodeUrl', mode);
+  }
+
   // Recuerda el embed URL del page-sniff que reprodujo bien el episodio.
   // Permite saltarse el escaneo de toda la página y probar ese embed directo.
   static String? getPageSniffEmbed(String package, String episodeUrl) {

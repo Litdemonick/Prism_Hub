@@ -45,7 +45,9 @@ Future<WebViewEnvironment?> ensureWebViewEnvironment() {
 Future<WebViewEnvironment?> _createWebViewEnvironment() async {
   try {
     final dir = Directory(p.join(PrismHubDirectory.getDirectory, 'webview2'));
-    if (!dir.existsSync()) dir.createSync(recursive: true);
+    if (!await dir.exists()) {
+      await dir.create(recursive: true);
+    }
     final env = await WebViewEnvironment.create(
       settings: WebViewEnvironmentSettings(userDataFolder: dir.path),
     );
@@ -189,6 +191,8 @@ class _WebViewPlayerPageState extends State<WebViewPlayerPage>
   // Evita procesar el mismo fallo de creación dos veces (ej. si
   // FlutterError.onError se dispara más de una vez para la misma causa).
   bool _creationFailed = false;
+  bool _webViewShuttingDown = false;
+  bool _returningToNativePlayer = false;
   void Function(FlutterErrorDetails)? _previousOnError;
   // Referencia al wrapper propio — al encadenar reintentos (pushReplacement),
   // la página nueva ya instaló el suyo antes de que esta se destruya, así
@@ -208,10 +212,20 @@ class _WebViewPlayerPageState extends State<WebViewPlayerPage>
   // menos vuelve a mostrarlos apenas se acerca a los bordes.
   bool _showControls = true;
   Timer? _hideTimer;
+  DateTime? _lastHideTimerReset;
 
   void _resetHideTimer() {
+    if (_webViewShuttingDown) return;
+    final now = DateTime.now();
+    if (_showControls &&
+        _lastHideTimerReset != null &&
+        now.difference(_lastHideTimerReset!) <
+            const Duration(milliseconds: 200)) {
+      return;
+    }
+    _lastHideTimerReset = now;
     _hideTimer?.cancel();
-    if (!_showControls) setState(() => _showControls = true);
+    if (!_showControls && mounted) setState(() => _showControls = true);
     _hideTimer = Timer(const Duration(seconds: 2), () {
       if (mounted) setState(() => _showControls = false);
     });
@@ -293,7 +307,7 @@ class _WebViewPlayerPageState extends State<WebViewPlayerPage>
     // suele ser un hipo transitorio del proceso de WebView2, no algo
     // permanente.
     _loadTimeoutTimer = Timer(const Duration(seconds: 15), () {
-      if (!mounted || !_loading) return;
+      if (!mounted || !_loading || _webViewShuttingDown) return;
       if (widget.autoReloadAttempt < _maxAutoReloads) {
         _reloadAfterCrash();
       } else {
@@ -332,7 +346,7 @@ class _WebViewPlayerPageState extends State<WebViewPlayerPage>
     if (Platform.isWindows) {
       await Future.delayed(const Duration(milliseconds: 700));
     }
-    if (!mounted) return;
+    if (!mounted || _webViewShuttingDown) return;
     setState(() {
       _environment = env;
       _readyToMount = true;
@@ -346,7 +360,9 @@ class _WebViewPlayerPageState extends State<WebViewPlayerPage>
   static const _maxAutoReloads = 2;
 
   Future<void> _checkAlive() async {
-    if (!mounted || _loading || _webViewCrashed) return;
+    if (!mounted || _loading || _webViewCrashed || _webViewShuttingDown) {
+      return;
+    }
     try {
       await _webViewController
           ?.evaluateJavascript(source: '1')
@@ -355,7 +371,7 @@ class _WebViewPlayerPageState extends State<WebViewPlayerPage>
     } catch (_) {
       _heartbeatFailures++;
       // 2 fallos seguidos (~40s sin responder) — no un solo hipo puntual.
-      if (_heartbeatFailures >= 2 && mounted) {
+      if (_heartbeatFailures >= 2 && mounted && !_webViewShuttingDown) {
         setState(() => _webViewCrashed = true);
         if (widget.autoReloadAttempt < _maxAutoReloads) {
           _reloadAfterCrash();
@@ -365,6 +381,7 @@ class _WebViewPlayerPageState extends State<WebViewPlayerPage>
   }
 
   void _reloadAfterCrash() {
+    if (_webViewShuttingDown || !mounted) return;
     Navigator.of(context).pushReplacement(
       MaterialPageRoute(
         builder: (_) => WebViewPlayerPage(
@@ -395,6 +412,39 @@ class _WebViewPlayerPageState extends State<WebViewPlayerPage>
     widget.onProgress!(shot, isFinal: true);
   }
 
+  void _shutdownWebView() {
+    if (_webViewShuttingDown) return;
+    _webViewShuttingDown = true;
+    _progressTimer?.cancel();
+    _loadTimeoutTimer?.cancel();
+    _heartbeatTimer?.cancel();
+    _hideTimer?.cancel();
+    _noticeTimer?.cancel();
+    final controller = _webViewController;
+    if (controller == null) return;
+    try {
+      unawaited(controller.evaluateJavascript(source: '''
+        for (const v of document.querySelectorAll('video, audio')) {
+          try {
+            v.pause();
+            v.removeAttribute('src');
+            v.load();
+          } catch (_) {}
+        }
+      '''));
+    } catch (_) {}
+    try {
+      unawaited(controller.stopLoading());
+    } catch (_) {}
+    Timer(const Duration(milliseconds: 80), () {
+      try {
+        unawaited(controller.loadUrl(
+          urlRequest: URLRequest(url: WebUri('about:blank')),
+        ));
+      } catch (_) {}
+    });
+  }
+
   // No async/await acá a propósito: esperar la captura (hasta 3s de
   // takeScreenshot) antes de volver hacía que el botón atrás se sintiera
   // colgado/lento (reportado en vivo). Se dispara la captura en paralelo y
@@ -402,6 +452,7 @@ class _WebViewPlayerPageState extends State<WebViewPlayerPage>
   // background/cierre en didChangeAppLifecycleState.
   void _exitAndCaptureProgress() {
     unawaited(_captureFinalProgress());
+    _returningToNativePlayer = true;
     if (mounted) Navigator.of(context).pop();
   }
 
@@ -414,6 +465,7 @@ class _WebViewPlayerPageState extends State<WebViewPlayerPage>
     if (state == AppLifecycleState.paused ||
         state == AppLifecycleState.hidden) {
       unawaited(_captureFinalProgress());
+      _shutdownWebView();
     }
   }
 
@@ -435,6 +487,9 @@ class _WebViewPlayerPageState extends State<WebViewPlayerPage>
 
   @override
   void dispose() {
+    if (!_returningToNativePlayer) {
+      _shutdownWebView();
+    }
     if (identical(FlutterError.onError, _myOnError)) {
       FlutterError.onError = _previousOnError;
     }

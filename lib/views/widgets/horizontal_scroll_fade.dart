@@ -25,16 +25,23 @@ class _HorizontalScrollFadeState extends State<HorizontalScrollFade>
     with SingleTickerProviderStateMixin {
   bool _canScrollLeft = false;
   bool _canScrollRight = false;
-  late final AnimationController _bounce = AnimationController(
-    vsync: this,
-    duration: const Duration(milliseconds: 700),
-  )..repeat(reverse: true);
-  late final Animation<double> _bounceOffset =
-      CurvedAnimation(parent: _bounce, curve: Curves.easeInOut);
+  late final AnimationController _bounce;
+  late final Animation<double> _bounceOffset;
 
   @override
   void initState() {
     super.initState();
+    // Antes solo corría en touch (Platform.isAndroid etc, "!_isDesktop") —
+    // en desktop las flechas quedaban quietas, sin ningún indicio animado de
+    // que hay más contenido para el costado. El mismo rebote sutil funciona
+    // igual de bien con mouse que con dedo, así que ya no hay razón para
+    // cortarlo por plataforma.
+    _bounce = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 700),
+    );
+    _bounceOffset = CurvedAnimation(parent: _bounce, curve: Curves.easeInOut);
+    _bounce.repeat(reverse: true);
     widget.controller.addListener(_update);
     WidgetsBinding.instance.addPostFrameCallback((_) => _update());
   }
@@ -109,27 +116,31 @@ class _HorizontalScrollFadeState extends State<HorizontalScrollFade>
               offset: Offset(dir * 5 * _bounceOffset.value, 0),
               child: child,
             ),
-            child: Container(
-              width: 26,
-              height: 26,
-              decoration: BoxDecoration(
-                shape: BoxShape.circle,
-                color: Colors.black.withValues(alpha: 0.55),
-                boxShadow: [
-                  BoxShadow(
-                    color: Colors.black.withValues(alpha: 0.3),
-                    blurRadius: 4,
-                  ),
-                ],
-              ),
-              child: Icon(
-                right ? Icons.chevron_right : Icons.chevron_left,
-                color: Colors.white,
-                size: 18,
-              ),
-            ),
+            child: _edgeIcon(right),
           ),
         ),
+      ),
+    );
+  }
+
+  Widget _edgeIcon(bool right) {
+    return Container(
+      width: 26,
+      height: 26,
+      decoration: BoxDecoration(
+        shape: BoxShape.circle,
+        color: Colors.black.withValues(alpha: 0.55),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: 0.3),
+            blurRadius: 4,
+          ),
+        ],
+      ),
+      child: Icon(
+        right ? Icons.chevron_right : Icons.chevron_left,
+        color: Colors.white,
+        size: 18,
       ),
     );
   }

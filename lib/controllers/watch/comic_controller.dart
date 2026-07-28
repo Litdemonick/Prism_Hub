@@ -115,15 +115,15 @@ class ComicController extends ReaderController<ExtensionMangaWatch> {
     });
 
     // 如果切换章节，重置当前页码
-    ever(super.index, (callback) {
+    addWorker(ever(super.index, (callback) {
       currentPage.value = 0;
       // Capítulo nuevo: volver a la primera página, después de que el
       // PageView del capítulo nuevo esté montado.
       if (isPaged) {
         SchedulerBinding.instance.addPostFrameCallback((_) => _gotoPage(0));
       }
-    });
-    ever(super.watchData, (callback) async {
+    }));
+    addWorker(ever(super.watchData, (callback) async {
       if (isRecover.value || callback == null) {
         return;
       }
@@ -164,7 +164,7 @@ class ComicController extends ReaderController<ExtensionMangaWatch> {
       SchedulerBinding.instance.addPostFrameCallback((_) {
         _jumpPage(currentPage.value);
       });
-    });
+    }));
     super.onInit();
   }
 
