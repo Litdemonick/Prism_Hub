@@ -39,6 +39,15 @@
         <meta-data
             android:name="io.flutter.embedding.android.EnableImpeller"
             android:value="false" />
+        <!-- FileProvider para instalar APK automáticamente en Android 7.0+ -->
+        <provider
+            android:name="androidx.core.content.FileProvider"
+            android:authorities="${applicationId}.fileprovider"
+            android:exported="false">
+            <meta-data
+                android:name="android.support.FILE_PROVIDER_PATHS"
+                android:resource="@xml/file_paths" />
+        </provider>
     </application>
     <uses-permission android:name="android.permission.INTERNET" />
     <uses-permission android:name="android.permission.WAKE_LOCK" />
@@ -48,5 +57,9 @@
          plugin falla silenciosamente y no hay forma de detectar un
          cambio real de red sin reiniciar la app). -->
     <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
+    <!-- Permiso necesario para instalar APK automáticamente en Android 8.0+ -->
+    <uses-permission android:name="android.permission.REQUEST_INSTALL_PACKAGES" />
+    <!-- Permiso para leer archivos del sistema de archivos para el APK -->
+    <uses-permission android:name="android.permission.READ_EXTERNAL_STORAGE" />
 
 </manifest>

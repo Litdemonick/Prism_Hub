@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="utf-8"?>
+<paths xmlns:android="http://schemas.android.com/apk/res/android">
+    <!-- Permitir acceso a la carpeta de caché temporal del sistema -->
+    <cache-path name="temp" path="." />
+    <!-- Permitir acceso a descargas -->
+    <external-path name="downloads" path="Download" />
+    <!-- Permitir acceso a archivos externos -->
+    <external-files-path name="files" path="." />
+</paths>

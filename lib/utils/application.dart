@@ -229,7 +229,7 @@ class ApplicationUtils {
                 }
               },
               child: Text(
-                asset != null ? 'Download & Install' : 'upgrade.download'.i18n,
+                asset != null ? 'upgrade.download-install'.i18n : 'upgrade.download'.i18n,
               ),
             )
           ],
@@ -271,7 +271,7 @@ class ApplicationUtils {
               children: [
                 CircularProgressIndicator(),
                 SizedBox(height: 16),
-                Text('Downloading update...'),
+                Text('Descargando actualización...'),
               ],
             ),
           ),
@@ -285,18 +285,87 @@ class ApplicationUtils {
       final tempDir = Directory.systemTemp.createTempSync('PrismHub_update_');
       final downloadPath = '${tempDir.path}/${asset['name']}';
 
-      await dio.download(url, downloadPath);
+      // Descargar con progreso
+      await dio.download(url, downloadPath, onReceiveProgress: (count, total) {
+        debugPrint('Download progress: ${(count / total * 100).toStringAsFixed(2)}%');
+      });
 
       final assetName = (asset['name'] as String).toLowerCase();
+
+      // Android: descargar e instalar APK automáticamente
+      if (Platform.isAndroid && assetName.endsWith('.apk')) {
+        Get.back(); // Cerrar dialogo
+        await _installAndroidApk(downloadPath);
+        return;
+      }
+
+      // Windows: instalador .exe
       if (Platform.isWindows && assetName.endsWith('.exe')) {
         Get.back();
         await _runWindowsInstaller(downloadPath);
         return;
       }
 
+      // Windows/Linux: descargar y reemplazar app
       final extractDir =
           Directory('${tempDir.path}${Platform.pathSeparator}app');
       extractDir.createSync();
+
+      if (Platform.isLinux) {
+        await Process.run('tar', [
+          '-xzf',
+          downloadPath,
+          '-C',
+          extractDir.path,
+        ]);
+      } else if (Platform.isWindows) {
+        await Process.run('powershell', [
+          'Expand-Archive',
+          '-Path',
+          downloadPath,
+          '-DestinationPath',
+          extractDir.path,
+          '-Force',
+        ]);
+      }
+
+      Get.back();
+
+      final sourceDir = _findExtractedAppDir(extractDir);
+      await _replaceAndRestart(sourceDir, tempDir);
+    } catch (e) {
+      Get.back();
+      if (context.mounted) {
+        showPlatformSnackbar(
+          context: context,
+          title: 'upgrade.install-failed'.i18n,
+          content: e.toString(),
+        );
+      }
+      debugPrint('Download/install error: $e');
+    }
+  }
+
+  static Future<void> _installAndroidApk(String apkPath) async {
+    try {
+      final file = File(apkPath);
+      if (!await file.exists()) {
+        throw 'APK file not found: $apkPath';
+      }
+
+      // Usar android_intent_plus para instalar el APK
+      const platform = MethodChannel('com.example.prismhub/update');
+      await platform.invokeMethod('installApk', {'apkPath': apkPath});
+    } catch (e) {
+      debugPrint('Android APK install error: $e');
+      // Fallback: abrir el APK con la aplicación predeterminada
+      try {
+        await launchUrl(Uri.file(apkPath), mode: LaunchMode.externalApplication);
+      } catch (_) {
+        rethrow;
+      }
+    }
+  }
 
       if (Platform.isLinux) {
         await Process.run('tar', [
@@ -405,17 +474,29 @@ class ApplicationUtils {
     final exeName = currentExe.split(Platform.pathSeparator).last;
 
     if (Platform.isLinux) {
-      await Process.run('cp', ['-r', '${sourceDir.path}/.', installDir.path]);
-      Process.start(
-        '${installDir.path}/$exeName',
-        [],
-        mode: ProcessStartMode.normal,
-      );
-      exit(0);
+      try {
+        // Copiar archivos con permisos
+        await Process.run('cp', ['-r', '${sourceDir.path}/.', installDir.path]);
+        // Asegurar que el ejecutable sea ejecutable
+        await Process.run('chmod', ['+x', '${installDir.path}/$exeName']);
+        // Iniciar la app actualizada en un nuevo proceso
+        Process.start(
+          '${installDir.path}/$exeName',
+          [],
+          mode: ProcessStartMode.detached,
+        );
+        // Dar tiempo para que el nuevo proceso inicie antes de salir
+        await Future.delayed(const Duration(milliseconds: 500));
+        exit(0);
+      } catch (e) {
+        debugPrint('Linux update failed: $e');
+        rethrow;
+      }
     } else if (Platform.isWindows) {
       final scriptPath = '${tempDir.path}\\update.ps1';
       final logPath =
           '${Directory.systemTemp.path}\\PrismHub-update-${DateTime.now().millisecondsSinceEpoch}.log';
+      
       File(scriptPath).writeAsStringSync(
         r'''
 param(
@@ -426,26 +507,84 @@ param(
   [string]$LogPath,
   [int]$AppPid
 )
-$ErrorActionPreference = 'Stop'
+
+$ErrorActionPreference = 'Continue'
+$VerbosePreference = 'Continue'
+
 function Log([string]$Message) {
-  Add-Content -LiteralPath $LogPath -Value "[$(Get-Date -Format o)] $Message"
+  $timestamp = Get-Date -Format "yyyy-MM-dd HH:mm:ss.fff"
+  $logMessage = "[$timestamp] $Message"
+  Write-Host $logMessage
+  Add-Content -LiteralPath $LogPath -Value $logMessage
 }
+
+Log "Update script started"
+Log "Source: $SourceDir"
+Log "Install: $InstallDir"
+Log "App PID: $AppPid"
+
 try {
-  Log "Waiting for PrismHub process $AppPid to exit"
-  Wait-Process -Id $AppPid -Timeout 30 -ErrorAction SilentlyContinue
-  Log "Copying from $SourceDir to $InstallDir"
-  New-Item -ItemType Directory -Path $InstallDir -Force | Out-Null
-  Copy-Item -Path (Join-Path $SourceDir '*') -Destination $InstallDir -Recurse -Force
-  Log "Starting $ExeName"
-  Start-Process -FilePath (Join-Path $InstallDir $ExeName)
-  Log "Cleaning temp dir $TempDir"
-  Remove-Item -LiteralPath $TempDir -Recurse -Force -ErrorAction SilentlyContinue
+  # Esperar a que la aplicación se cierre (máximo 30 segundos)
+  Log "Waiting for PrismHub process $AppPid to exit..."
+  try {
+    $process = Get-Process -Id $AppPid -ErrorAction SilentlyContinue
+    if ($process) {
+      $process.WaitForExit(30000)
+      Log "Process exited"
+    } else {
+      Log "Process not found, proceeding with update"
+    }
+  } catch {
+    Log "Could not wait for process: $_"
+  }
+  
+  # Crear directorio de instalación si no existe
+  if (-not (Test-Path $InstallDir)) {
+    Log "Creating install directory: $InstallDir"
+    New-Item -ItemType Directory -Path $InstallDir -Force | Out-Null
+  }
+  
+  # Copiar archivos
+  Log "Copying files from $SourceDir to $InstallDir"
+  Get-ChildItem -Path $SourceDir -Recurse | 
+    Copy-Item -Destination { 
+      if ($_.PSIsContainer) {
+        Join-Path $InstallDir $_.FullName.Substring($SourceDir.Length)
+      } else {
+        Join-Path $InstallDir $_.FullName.Substring($SourceDir.Length)
+      }
+    } -Force -ErrorAction Continue
+  
+  Log "Copy completed"
+  
+  # Iniciar la aplicación actualizada
+  $exePath = Join-Path $InstallDir $ExeName
+  Log "Starting $exePath"
+  Start-Process -FilePath $exePath -PassThru
+  Log "Application started"
+  
 } catch {
   Log "ERROR: $($_.Exception.Message)"
-  try { Start-Process -FilePath (Join-Path $InstallDir $ExeName) } catch {}
+  Log "Attempting to start existing application..."
+  try {
+    Start-Process -FilePath (Join-Path $InstallDir $ExeName)
+  } catch {
+    Log "Failed to start application: $_"
+  }
+} finally {
+  Log "Cleaning up temp directory..."
+  try {
+    Start-Sleep -Milliseconds 500
+    Remove-Item -LiteralPath $TempDir -Recurse -Force -ErrorAction SilentlyContinue
+    Log "Temp directory cleaned"
+  } catch {
+    Log "Could not clean temp: $_"
+  }
+  Log "Update script finished"
 }
 ''',
       );
+      
       final args = [
         '-NoProfile',
         '-ExecutionPolicy',
@@ -465,20 +604,33 @@ try {
         '-AppPid',
         pid.toString(),
       ];
-      if (_canWriteTo(installDir)) {
-        Process.start('powershell', args, mode: ProcessStartMode.normal);
-      } else {
-        final command = 'Start-Process -FilePath powershell '
-            '-ArgumentList ${_psQuote(args.map(_psQuote).join(' '))} '
-            '-Verb RunAs';
-        await Process.run('powershell', [
-          '-NoProfile',
-          '-ExecutionPolicy',
-          'Bypass',
-          '-Command',
-          command,
-        ]);
+      
+      try {
+        if (_canWriteTo(installDir)) {
+          // Permisos suficientes: ejecutar sin elevar
+          Process.start('powershell', args, mode: ProcessStartMode.detached);
+          debugPrint('Update script started with standard permissions');
+        } else {
+          // Sin permisos: elevar con RunAs
+          final command = 'Start-Process -FilePath powershell '
+              '-ArgumentList ${_psQuote(args.map(_psQuote).join(','))} '
+              '-Verb RunAs -WindowStyle Hidden';
+          Process.run('powershell', [
+            '-NoProfile',
+            '-ExecutionPolicy',
+            'Bypass',
+            '-Command',
+            command,
+          ]);
+          debugPrint('Update script started with elevated permissions');
+        }
+        // Esperar un poco antes de salir para que PowerShell inicie
+        await Future.delayed(const Duration(milliseconds: 1000));
+      } catch (e) {
+        debugPrint('Failed to start update script: $e');
+        rethrow;
       }
+      
       exit(0);
     }
   }
@@ -540,16 +692,26 @@ class _ForcedUpdatePageState extends State<_ForcedUpdatePage> {
 
   void _updateNow() {
     if (Platform.isAndroid) {
-      final url =
-          (widget.asset?['browser_download_url'] as String?) ?? widget.htmlUrl;
-      launchUrl(Uri.parse(url), mode: LaunchMode.externalApplication);
+      // Android: descargar e instalar automáticamente
+      if (widget.asset != null) {
+        ApplicationUtils._downloadAndInstall(
+          context,
+          widget.asset!,
+          widget.remoteVersion,
+        );
+      } else {
+        // Fallback: abrir GitHub si no hay asset
+        launchUrl(Uri.parse(widget.htmlUrl), mode: LaunchMode.externalApplication);
+      }
     } else if (widget.asset != null) {
+      // Windows/Linux: con asset disponible
       ApplicationUtils._downloadAndInstall(
         context,
         widget.asset!,
         widget.remoteVersion,
       );
     } else {
+      // Sin asset: abrir GitHub
       launchUrl(Uri.parse(widget.htmlUrl), mode: LaunchMode.externalApplication);
     }
   }
