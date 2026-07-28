@@ -1,0 +1,37 @@
+name: Build Linux
+
+on:
+  push:
+    tags:
+      - "v*"
+
+jobs:
+  build-linux:
+    runs-on: ubuntu-latest
+    container:
+      image: ghcr.io/cirruslabs/flutter:3.44.1
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Linux deps
+        run: |
+          apt-get update && apt-get install -y --no-install-recommends \
+            clang cmake ninja-build pkg-config \
+            libgtk-3-dev liblzma-dev libstdc++-12-dev \
+            && rm -rf /var/lib/apt/lists/*
+
+      - name: Build
+        run: |
+          flutter pub get
+          flutter build linux --release
+
+      - name: Package
+        run: |
+          cd build/linux/x64/release
+          tar -czf PrismHub-${GITHUB_REF_NAME}-linux-x64.tar.gz bundle
+
+      - name: Upload to release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: build/linux/x64/release/PrismHub-*-linux-x64.tar.gz
