@@ -280,12 +280,30 @@ check_dependencies() {
     local -a pkg_install=()
 
     case "$distro" in
-        # ── Arch Linux y derivadas ────────────────────────────────────────────
+        # ── Arch Linux y derivadas (CachyOS, Manjaro, etc.) ─────────────────
         arch|manjaro|endeavouros|artix|garuda|cachyos|arcolinux|crystal|\
 archlabs|archcraft|parabola|hyperbola|blackarch)
-            pkg_names=("gtk3" "mpv" "libx11" "webkitgtk")
-            pkg_check=("pacman -Qs '^gtk3$'" "pacman -Qs '^mpv$'" "pacman -Qs '^libx11$'" "pacman -Qs '^webkitgtk$'")
-            pkg_install=("sudo pacman -Sy --noconfirm gtk3" "sudo pacman -S --noconfirm mpv" "sudo pacman -S --noconfirm libx11" "sudo pacman -Sy --noconfirm webkitgtk")
+            # flutter_inappwebview 6.x necesita webkit2gtk-4.1 (paquete
+            # "webkit2gtk" en Arch).  Algunas derivadas solo tienen el
+            # "webkitgtk" legacy (4.0).  Detectamos cuál está disponible.
+            local _wk_pkg _wk_check _wk_install
+            if pacman -Si webkit2gtk &>/dev/null; then
+                _wk_pkg="webkit2gtk"
+                _wk_check="pacman -Qs '^webkit2gtk$'"
+                _wk_install="sudo pacman -S --noconfirm webkit2gtk"
+            elif pacman -Si webkitgtk &>/dev/null; then
+                _wk_pkg="webkitgtk"
+                _wk_check="pacman -Qs '^webkitgtk$'"
+                _wk_install="sudo pacman -S --noconfirm webkitgtk"
+            else
+                _wk_pkg="webkit2gtk"
+                _wk_check="false"
+                _wk_install="echo 'ADVERTENCIA: no se encontró webkit2gtk ni webkitgtk en los repositorios. Instálalo manualmente.'"
+            fi
+
+            pkg_names=("gtk3" "mpv" "libx11" "${_wk_pkg}")
+            pkg_check=("pacman -Qs '^gtk3$'" "pacman -Qs '^mpv$'" "pacman -Qs '^libx11$'" "${_wk_check}")
+            pkg_install=("sudo pacman -S --noconfirm gtk3" "sudo pacman -S --noconfirm mpv" "sudo pacman -S --noconfirm libx11" "${_wk_install}")
             ;;
         # ── Debian / Ubuntu y derivadas ───────────────────────────────────────
         debian|ubuntu|linuxmint|pop|elementary|zorin|neon|kali|\
@@ -363,6 +381,11 @@ raspbian|mx|antix|pureos|tails|parrot|deepin|backbox)
         error "$(t dep_sudo_fail)"
         print "\n${C_DIM}└──────────────────────────────────────────────────────────────────────────┘${C_RESET}"
         return 1
+    fi
+
+    # Sincronizar DB de pacman antes de instalar (solo Arch y derivadas)
+    if command -v pacman &>/dev/null; then
+        sudo pacman -Sy --noconfirm >/dev/null 2>&1 || true
     fi
 
     local errors=0
