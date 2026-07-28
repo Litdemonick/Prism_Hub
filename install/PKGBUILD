@@ -12,6 +12,7 @@ depends=(
     'gtk3'
     'mpv'
     'libx11'
+    'webkit2gtk'
     'libxrandr'
     'libxinerama'
     'libxcursor'
