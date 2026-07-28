@@ -9,17 +9,27 @@ import 'package:prismhub/utils/prismhub_directory.dart';
 import 'package:path/path.dart' as p;
 
 class PrismHubStorage {
-  static late final Isar database;
-  static late final Box settings;
+  static Isar? database;
+  static Box? settings;
   static const int _lastDatabaseVersion = 2;
   static late String _path;
+  static bool _initialized = false;
+
+  static bool get isInitialized => _initialized;
 
   static ensureInitialized() async {
     _path = PrismHubDirectory.getDirectory;
     // 初始化设置
-    await Hive.initFlutter(_path);
-    settings = await Hive.openBox("settings");
-    await _initSettings();
+    try {
+      await Hive.initFlutter(_path);
+      settings = await Hive.openBox("settings");
+      await _initSettings();
+    } catch (e) {
+      debugPrint('ERROR: Hive init failed: $e');
+      // No podemos continuar sin settings — dejamos settings como null
+      // y getSetting devolverá valores por defecto.
+      return;
+    }
 
     // 初始化数据库
     // inspector: false — Isar lo activa solo por defecto en builds que no
@@ -28,21 +38,30 @@ class PrismHubStorage {
     // directamente, pero tiene un costo de fondo real en modo debug — para
     // reactivarlo temporalmente (ej. inspeccionar datos a mano), comentar
     // esta línea nomás.
-    database = await Isar.open(
-      [
-        FavoriteSchema,
-        HistorySchema,
-        ExtensionSettingSchema,
-        MangaSettingSchema,
-        PrismHubDetailSchema,
-        TMDBSchema,
-      ],
-      directory: _path,
-      inspector: false,
-    );
+    try {
+      database = await Isar.open(
+        [
+          FavoriteSchema,
+          HistorySchema,
+          ExtensionSettingSchema,
+          MangaSettingSchema,
+          PrismHubDetailSchema,
+          TMDBSchema,
+        ],
+        directory: _path,
+        inspector: false,
+      );
 
-    // 数据库升级
-    await performMigrationIfNeeded();
+      // 数据库升级
+      await performMigrationIfNeeded();
+    } catch (e) {
+      debugPrint('ERROR: Isar init failed: $e');
+      // Isar puede fallar (DB corrupta, esquema incompatible),
+      // la app arranca sin base de datos — funciones que la usen
+      // fallarán individualmente.
+    }
+
+    _initialized = true;
   }
 
   static performMigrationIfNeeded() async {
@@ -184,7 +203,7 @@ class PrismHubStorage {
   }
 
   static getSetting(String key) {
-    return settings.get(key);
+    return settings?.get(key);
   }
 
   static getUASetting() {

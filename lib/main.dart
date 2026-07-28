@@ -84,7 +84,14 @@ void main(List<String> args) async {
     // durante el splash, ya con algo visible en pantalla en vez de una
     // ventana oculta/en blanco mientras carga.
     await PrismHubDirectory.ensureInitialized();
-    await PrismHubStorage.ensureInitialized();
+    try {
+      await PrismHubStorage.ensureInitialized();
+    } catch (e) {
+      // Si Hive/Isar falla (DB corrupta, esquema incompatible, permisos),
+      // la app no puede funcionar pero al menos mostramos el splash en vez
+      // de abrir y cerrar sin dar ninguna señal al usuario.
+      debugPrint('ERROR: PrismHubStorage.ensureInitialized falló: $e');
+    }
 
     // Crea el entorno de WebView2 ya al arrancar, mientras COM del proceso
     // está recién inicializado y sano (ver el comentario largo en
@@ -98,7 +105,8 @@ void main(List<String> args) async {
 
     if (!Platform.isAndroid) {
       await windowManager.ensureInitialized();
-      final sizeArr = PrismHubStorage.getSetting(SettingKey.windowSize).split(",");
+      final windowSize = PrismHubStorage.getSetting(SettingKey.windowSize) ?? "1280,720";
+      final sizeArr = windowSize.split(",");
       final size = Size(double.parse(sizeArr[0]), double.parse(sizeArr[1]));
       WindowOptions windowOptions = WindowOptions(
         size: size,
@@ -164,11 +172,31 @@ class _AppRootState extends State<_AppRoot> {
     // tan rápido termine todo lo demás.
     final minDuration = Future.delayed(const Duration(milliseconds: 1400));
     PrismLog.ensureInitialized();
-    await ApplicationUtils.ensureInitialized();
-    await ConnectivityUtils.ensureInitialized();
-    await PrismRequest.ensureInitialized();
-    await ExtensionUtils.ensureInitialized();
-    MediaKit.ensureInitialized();
+    try {
+      await ApplicationUtils.ensureInitialized();
+    } catch (e) {
+      debugPrint('ERROR: ApplicationUtils.ensureInitialized falló: $e');
+    }
+    try {
+      await ConnectivityUtils.ensureInitialized();
+    } catch (e) {
+      debugPrint('ERROR: ConnectivityUtils.ensureInitialized falló: $e');
+    }
+    try {
+      await PrismRequest.ensureInitialized();
+    } catch (e) {
+      debugPrint('ERROR: PrismRequest.ensureInitialized falló: $e');
+    }
+    try {
+      await ExtensionUtils.ensureInitialized();
+    } catch (e) {
+      debugPrint('ERROR: ExtensionUtils.ensureInitialized falló: $e');
+    }
+    try {
+      MediaKit.ensureInitialized();
+    } catch (e) {
+      debugPrint('ERROR: MediaKit.ensureInitialized falló: $e');
+    }
     await minDuration;
     if (mounted) setState(() => _ready = true);
   }
