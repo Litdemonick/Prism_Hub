@@ -43,7 +43,7 @@ jobs:
           for f in app-*-release.apk; do
             arch="${f#app-}"
             arch="${arch%-release.apk}"
-            mv "$f" "PrismHub-${{ github.ref_name }}-$arch.apk"
+            mv "$f" "PrismHub-${{ github.ref_name }}-android-$arch.apk"
           done
       - name: Release Android
         uses: ncipollo/release-action@v1
@@ -161,9 +161,9 @@ jobs:
             | `PrismHub-setup-${{ github.ref_name }}.exe` | Windows x64 | Instalador (recomendado) |
             | `PrismHub-${{ github.ref_name }}-windows-x64.zip` | Windows x64 | Versión portable (sin instalador) |
             | `PrismHub-${{ github.ref_name }}-linux-x64.tar.gz` | Linux x64 | Binario precompilado |
-            | `PrismHub-${{ github.ref_name }}-arm64-v8a.apk` | Android | ARM64 (teléfonos modernos — **recomendado**) |
-            | `PrismHub-${{ github.ref_name }}-armeabi-v7a.apk` | Android | ARM32 (teléfonos antiguos) |
-            | `PrismHub-${{ github.ref_name }}-x86_64.apk` | Android | x86_64 (emuladores / tabletas x86) |
+            | `PrismHub-${{ github.ref_name }}-android-arm64-v8a.apk` | Android | ARM64 (teléfonos modernos — **recomendado**) |
+            | `PrismHub-${{ github.ref_name }}-android-armeabi-v7a.apk` | Android | ARM32 (teléfonos antiguos) |
+            | `PrismHub-${{ github.ref_name }}-android-x86_64.apk` | Android | x86_64 (emuladores / tabletas x86) |
 
             ### 🧩 Novedades de ${{ github.ref_name }}
 
