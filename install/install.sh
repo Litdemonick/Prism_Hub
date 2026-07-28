@@ -285,7 +285,7 @@ check_dependencies() {
 archlabs|archcraft|parabola|hyperbola|blackarch)
             pkg_names=("gtk3" "mpv" "libx11" "webkit2gtk")
             pkg_check=("pacman -Qs '^gtk3$'" "pacman -Qs '^mpv$'" "pacman -Qs '^libx11$'" "pacman -Qs '^webkit2gtk$'")
-            pkg_install=("sudo pacman -S --noconfirm gtk3" "sudo pacman -S --noconfirm mpv" "sudo pacman -S --noconfirm libx11" "sudo pacman -S --noconfirm webkit2gtk")
+            pkg_install=("sudo pacman -Sy --noconfirm gtk3" "sudo pacman -S --noconfirm mpv" "sudo pacman -S --noconfirm libx11" "sudo pacman -Sy --noconfirm webkit2gtk")
             ;;
         # ── Debian / Ubuntu y derivadas ───────────────────────────────────────
         debian|ubuntu|linuxmint|pop|elementary|zorin|neon|kali|\
@@ -376,16 +376,23 @@ raspbian|mx|antix|pureos|tails|parrot|deepin|backbox)
             info "$(t dep_installing) ${pkg}..."
             log "Installing dependency: $pkg"
 
+            local install_log
+            install_log=$(mktemp)
             (
-                eval "${pkg_install[$i]}" >/dev/null 2>&1
+                eval "${pkg_install[$i]}" > "$install_log" 2>&1
             ) &
             local pid=$!
             spinner $pid "$(t dep_installing) ${pkg}..."
 
             if wait $pid 2>/dev/null; then
+                rm -f "$install_log"
                 success "$(printf '%-25s' "$pkg") $(t dep_ok)"
             else
                 error "$(t dep_fail) $(printf '%-25s' "$pkg")"
+                if [[ -f "$install_log" ]]; then
+                    cat "$install_log"
+                    rm -f "$install_log"
+                fi
                 ((errors++))
             fi
         fi
