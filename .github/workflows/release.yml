@@ -121,16 +121,22 @@ jobs:
 
             App multiplataforma (Windows · Linux · Android) para ver anime, leer manga y acceder a series/películas mediante un sistema de **extensiones JavaScript**: cada fuente de contenido es un script que se instala o actualiza por separado, sin depender de una actualización de la app.
 
+            ### 📦 Assets disponibles
+
+            | Archivo | Plataforma | Descripción |
+            |---------|-----------|------------|
+            | `PrismHub-setup-${{ github.ref_name }}.exe` | Windows x64 | Instalador (recomendado) |
+            | `PrismHub-${{ github.ref_name }}-windows-x64.zip` | Windows x64 | Versión portable (sin instalador) |
+            | `PrismHub-${{ github.ref_name }}-linux-x64.tar.gz` | Linux x64 | Binario precompilado |
+            | `PrismHub-${{ github.ref_name }}-arm64-v8a.apk` | Android | ARM64 (teléfonos modernos — **recomendado**) |
+            | `PrismHub-${{ github.ref_name }}-armeabi-v7a.apk` | Android | ARM32 (teléfonos antiguos) |
+            | `PrismHub-${{ github.ref_name }}-x86_64.apk` | Android | x86_64 (emuladores / tabletas x86) |
+
             ### Qué incluye
             - **Reproductor con failover automático**: si un servidor falla, cambia solo al siguiente sin cortar la reproducción.
             - **Lector de manga** con modo paginado y modo cascada (scroll vertical tipo webtoon).
             - **Historial y favoritos** unificados, con progreso por episodio/capítulo guardado localmente.
             - **Auto-actualización en Windows y Linux**: la app se avisa sola de nuevas versiones y se actualiza desde Ajustes, sin volver a descargar el instalador a mano.
             - Repositorio oficial de extensiones **prism+** preinstalado (en crecimiento).
-
-            ### Instalación
-            - **Windows**: instalador `.exe` o el `.zip` portable.
-            - **Linux**: `.tar.gz` (x64) — también hay script de instalación y PKGBUILD para Arch en el repo.
-            - **Android**: elegí el `.apk` según tu arquitectura (`arm64-v8a` cubre la gran mayoría de equipos modernos).
 
             Proyecto **open source bajo AGPL-3.0**. Sigue en beta — reportá bugs en [Issues](https://github.com/Litdemonick/Prism_Hub/issues).
