@@ -1,7 +1,7 @@
 ﻿name: prismhub
 description: PrismHub - Anime, manga and novels streaming application
 publish_to: "none"
-version: 1.0.3+1
+version: 1.0.4+1
 
 environment:
   sdk: ">=3.0.3 <4.0.0"
