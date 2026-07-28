@@ -24,6 +24,7 @@ jobs:
             clang cmake ninja-build pkg-config \
             libgtk-3-dev liblzma-dev libstdc++-12-dev \
             libwebkit2gtk-4.1-dev libjavascriptcoregtk-4.1-dev \
+            libmpv-dev mpv \
             && sudo rm -rf /var/lib/apt/lists/*
 
       - name: Build
