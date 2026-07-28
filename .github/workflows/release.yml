@@ -167,16 +167,17 @@ jobs:
 
             ### 🧩 Novedades de ${{ github.ref_name }}
 
-            #### 🔧 **Correcciones críticas en Linux**
-            - ✅ Estabilidad mejorada en Linux
-            - ✅ Funciona correctamente con extensiones JavaScript
-            - ✅ Mejor manejo de permisos de archivo
+            #### 🐧 **Linux — extensiones JS funcionando**
+            - ✅ Reparado: `libquickjs_c_bridge_plugin.so` ahora se incluye en el bundle de Linux, las extensiones JavaScript ya no fallan al cargar
+            - ✅ Workaround en CI: copia manual del `.so` desde el pub cache al bundle (flutter_js 0.8.x tiene un bug con la variable `flutter_qjs_bundled_libraries`)
+            - ✅ Dependencias correctas para CachyOS, Arch, Ubuntu, Fedora (gtk3, mpv, libx11)
 
             #### 📲 **Sistema de actualización automática mejorado**
 
             **Android:**
             - ✅ Descarga e instalación automática de APK directamente desde la app (sin abrir navegador)
             - ✅ Soporte completo para FileProvider (Android 7.0+) — seguridad mejorada
+            - ✅ APK descargado en app cache (cubierto por FileProvider), no en system temp
             - ✅ Instalador de APK integrado con fallback automático
             - ✅ Permiso `REQUEST_INSTALL_PACKAGES` configurado correctamente
 
@@ -193,8 +194,9 @@ jobs:
             - ✅ Reinicio de la aplicación en nuevo proceso sin bloqueos
             - ✅ Mejor manejo de errores con fallback
 
-            #### 🎨 **Interfaz de actualización mejorada**
-            - ✅ Diálogo flotante y centrado (ya no ocupa toda la pantalla)
+            #### 🎨 **Interfaz de actualización forzada mejorada**
+            - ✅ En desktop: diálogo centrado sin overlay de pantalla completa — la ventana del SO se puede mover libremente
+            - ✅ En mobile: mantiene pantalla completa forzada (sin forma de saltearlo) para garantizar la actualización
             - ✅ Diseño responsive para desktop (máx. 600px) y mobile
             - ✅ Barra de título movible en escritorio
             - ✅ Fondo semi-transparente oscuro
@@ -208,7 +210,7 @@ jobs:
             - ✅ Soporte MethodChannel para instalación de APK en Android
             - ✅ Página web actualizada a v${{ github.ref_name }}
 
-            #### 🎯 **Características anteriores (v1.0.1)**
+            #### 🎯 **Características anteriores**
             - 🎬 Reproductor con failover automático entre servidores
             - 📖 Lector de manga con modo paginado y modo cascada (webtoon)
             - 📋 Historial y favoritos con progreso guardado localmente

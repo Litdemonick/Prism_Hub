@@ -9,6 +9,7 @@ import 'package:flutter/services.dart';
 import 'package:flutter_i18n/flutter_i18n.dart';
 import 'package:flutter_markdown/flutter_markdown.dart';
 import 'package:get/get.dart';
+import 'package:path_provider/path_provider.dart';
 import 'package:prismhub/utils/i18n.dart';
 import 'package:prismhub/utils/request.dart';
 import 'package:prismhub/utils/router.dart';
@@ -283,8 +284,13 @@ class ApplicationUtils {
 
     try {
       final url = asset['browser_download_url'] as String;
-      final tempDir = Directory.systemTemp.createTempSync('PrismHub_update_');
-      final downloadPath = '${tempDir.path}/${asset['name']}';
+      // En Android usar app cache (cubierto por FileProvider), en desktop
+      // system temp es suficiente porque no hay FileProvider de por medio.
+      final downloadDir = Platform.isAndroid
+          ? Directory('${(await getTemporaryDirectory()).path}${Platform.pathSeparator}update')
+          : Directory.systemTemp.createTempSync('PrismHub_update_');
+      downloadDir.createSync(recursive: true);
+      final downloadPath = '${downloadDir.path}${Platform.pathSeparator}${asset['name']}';
 
       // Descargar con progreso
       await dio.download(url, downloadPath, onReceiveProgress: (count, total) {
@@ -687,59 +693,58 @@ class _ForcedUpdatePageState extends State<_ForcedUpdatePage> {
   Widget build(BuildContext context) {
     final isMobile = MediaQuery.of(context).size.width < 600;
     
-    return PopScope(
-      canPop: false,
-      child: Material(
-        color: Colors.black.withOpacity(0.5), // Fondo oscuro semi-transparente
+    if (!isMobile) {
+      // Desktop: diálogo centrado sin overlay de pantalla completa para
+      // que el usuario pueda seguir moviendo la ventana del SO y no se
+      // sienta atrapado en una pantalla que lo tapa todo.
+      return PopScope(
+        canPop: false,
         child: Center(
           child: Padding(
-            padding: EdgeInsets.all(isMobile ? 16 : 24),
+            padding: const EdgeInsets.all(24),
             child: Card(
               elevation: 8,
               shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
               child: Container(
-                constraints: BoxConstraints(
-                  maxWidth: isMobile ? double.infinity : 600,
-                  maxHeight: MediaQuery.of(context).size.height * 0.8,
+                constraints: const BoxConstraints(
+                  maxWidth: 600,
+                  maxHeight: 500,
                 ),
                 child: Column(
                   mainAxisSize: MainAxisSize.min,
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    // Barra de título (solo en desktop)
-                    if (!isMobile)
-                      Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-                        decoration: BoxDecoration(
-                          color: HomeTheme.accentPink.withOpacity(0.1),
-                          borderRadius: const BorderRadius.only(
-                            topLeft: Radius.circular(12),
-                            topRight: Radius.circular(12),
-                          ),
-                        ),
-                        child: Row(
-                          children: [
-                            const Icon(Icons.system_update,
-                                size: 24, color: HomeTheme.accentPink),
-                            const SizedBox(width: 12),
-                            Expanded(
-                              child: Text(
-                                FlutterI18n.translate(
-                                  context,
-                                  'upgrade.new-version',
-                                  translationParams: {'version': widget.remoteVersion},
-                                ),
-                                style: const TextStyle(
-                                  fontSize: 16,
-                                  fontWeight: FontWeight.bold,
-                                  color: HomeTheme.accentPink,
-                                ),
-                              ),
-                            ),
-                          ],
+                    Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                      decoration: BoxDecoration(
+                        color: HomeTheme.accentPink.withOpacity(0.1),
+                        borderRadius: const BorderRadius.only(
+                          topLeft: Radius.circular(12),
+                          topRight: Radius.circular(12),
                         ),
                       ),
-                    // Contenido
+                      child: Row(
+                        children: [
+                          const Icon(Icons.system_update,
+                              size: 24, color: HomeTheme.accentPink),
+                          const SizedBox(width: 12),
+                          Expanded(
+                            child: Text(
+                              FlutterI18n.translate(
+                                context,
+                                'upgrade.new-version',
+                                translationParams: {'version': widget.remoteVersion},
+                              ),
+                              style: const TextStyle(
+                                fontSize: 16,
+                                fontWeight: FontWeight.bold,
+                                color: HomeTheme.accentPink,
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
                     Expanded(
                       child: SingleChildScrollView(
                         child: Padding(
@@ -747,23 +752,94 @@ class _ForcedUpdatePageState extends State<_ForcedUpdatePage> {
                           child: Column(
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
-                              if (isMobile) ...[
-                                const Icon(Icons.system_update,
-                                    size: 48, color: HomeTheme.accentPink),
-                                const SizedBox(height: 16),
-                                Text(
-                                  FlutterI18n.translate(
-                                    context,
-                                    'upgrade.new-version',
-                                    translationParams: {'version': widget.remoteVersion},
-                                  ),
-                                  style: const TextStyle(
-                                    fontSize: 20,
-                                    fontWeight: FontWeight.bold,
-                                    color: HomeTheme.textPrimary,
-                                  ),
+                              Text(
+                                'upgrade.forced-required'.i18n,
+                                style: const TextStyle(color: HomeTheme.textPrimary),
+                              ),
+                              const SizedBox(height: 16),
+                              Markdown(
+                                data: widget.changelog,
+                                shrinkWrap: true,
+                                physics: const NeverScrollableScrollPhysics(),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ),
+                    ),
+                    Padding(
+                      padding: const EdgeInsets.all(16),
+                      child: Row(
+                        children: [
+                          if (_needsManualRetry) ...[
+                            Expanded(
+                              child: PlatformTextButton(
+                                onPressed: _checking ? null : _retryCheck,
+                                child: Text('upgrade.already-updated'.i18n),
+                              ),
+                            ),
+                            const SizedBox(width: 12),
+                          ],
+                          Expanded(
+                            child: PlatformFilledButton(
+                              onPressed: _checking ? null : _updateNow,
+                              child: Text('upgrade.update-now'.i18n),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ),
+        ),
+      );
+    }
+
+    // Mobile: pantalla completa forzada (sin forma de salir)
+    return PopScope(
+      canPop: false,
+      child: Material(
+        color: Colors.black.withOpacity(0.5),
+        child: Center(
+          child: Padding(
+            padding: const EdgeInsets.all(16),
+            child: Card(
+              elevation: 8,
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+              child: Container(
+                constraints: BoxConstraints(
+                  maxWidth: double.infinity,
+                  maxHeight: MediaQuery.of(context).size.height * 0.8,
+                ),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Expanded(
+                      child: SingleChildScrollView(
+                        child: Padding(
+                          padding: const EdgeInsets.all(24),
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              const Icon(Icons.system_update,
+                                  size: 48, color: HomeTheme.accentPink),
+                              const SizedBox(height: 16),
+                              Text(
+                                FlutterI18n.translate(
+                                  context,
+                                  'upgrade.new-version',
+                                  translationParams: {'version': widget.remoteVersion},
                                 ),
-                              ],
+                                style: const TextStyle(
+                                  fontSize: 20,
+                                  fontWeight: FontWeight.bold,
+                                  color: HomeTheme.textPrimary,
+                                ),
+                              ),
                               const SizedBox(height: 8),
                               Text(
                                 'upgrade.forced-required'.i18n,
@@ -780,7 +856,6 @@ class _ForcedUpdatePageState extends State<_ForcedUpdatePage> {
                         ),
                       ),
                     ),
-                    // Botones
                     Padding(
                       padding: const EdgeInsets.all(16),
                       child: Row(
