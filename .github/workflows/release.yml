@@ -74,6 +74,36 @@ jobs:
       - run: flutter pub get
       - name: Build Linux
         run: flutter build linux --release
+      - name: Ensure QuickJS library is in bundle
+        run: |
+          set -e
+          BUNDLE_LIB="build/linux/x64/release/bundle/lib"
+          mkdir -p "$BUNDLE_LIB"
+          # flutter_js 0.8.x usa flutter_qjs_bundled_libraries (con qjs) en vez de
+          # flutter_js_bundled_libraries, por lo que el .so no se copia al bundle
+          # via PLUGIN_BUNDLED_LIBRARIES. El install() del CMake de flutter_js
+          # tampoco es confiable en CI. Lo copiamos manualmente.
+          SO_PATH=$(grep -A2 '"name": "flutter_js"' .dart_tool/package_config.json \
+            | grep '"rootUri"' \
+            | cut -d'"' -f4 \
+            | sed 's|file://||')
+          SO_SRC="${SO_PATH}/linux/shared/libquickjs_c_bridge_plugin.so"
+          if [ -f "$SO_SRC" ]; then
+            cp -v "$SO_SRC" "$BUNDLE_LIB/"
+            echo "✅ libquickjs_c_bridge_plugin.so copiado al bundle"
+          else
+            echo "⚠️  No encontrado en $SO_SRC, buscando en pub cache..."
+            SO_FALLBACK=$(find "$HOME/.pub-cache" -path "*/flutter_js-*/linux/shared/libquickjs_c_bridge_plugin.so" 2>/dev/null | head -1)
+            if [ -n "$SO_FALLBACK" ]; then
+              cp -v "$SO_FALLBACK" "$BUNDLE_LIB/"
+              echo "✅ libquickjs_c_bridge_plugin.so copiado desde fallback"
+            else
+              echo "❌ libquickjs_c_bridge_plugin.so no encontrado — el bundle no funcionará"
+              exit 1
+            fi
+          fi
+          echo "Contenido final de lib/:"
+          ls -la "$BUNDLE_LIB/"
       - name: Package
         run: |
           cd build/linux/x64/release/bundle
