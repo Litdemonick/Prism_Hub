@@ -283,27 +283,29 @@ check_dependencies() {
         # ── Arch Linux y derivadas (CachyOS, Manjaro, etc.) ─────────────────
         arch|manjaro|endeavouros|artix|garuda|cachyos|arcolinux|crystal|\
 archlabs|archcraft|parabola|hyperbola|blackarch)
-            # El binario pre-compilado de GitHub Releases está linkeado contra
-            # webkit2gtk 4.0 → paquete "webkitgtk" en Arch.
-            # "webkit2gtk" es 4.1 y NO es compatible con el binario actual.
+            # NOTA: webkitgtk/2gtk ya no es obligatorio (QuickJS reemplazó a
+            # JavaScriptCore en Linux). Solo se instala si está disponible
+            # para dar soporte a WebView (flutter_inappwebview). Sin bloqueo.
             local _wk_pkg _wk_check _wk_install
-            if pacman -Si webkitgtk &>/dev/null; then
-                _wk_pkg="webkitgtk"
-                _wk_check="pacman -Qs '^webkitgtk$'"
-                _wk_install="sudo pacman -S --noconfirm webkitgtk"
-            elif pacman -Si webkit2gtk &>/dev/null; then
+            if pacman -Si webkit2gtk &>/dev/null; then
                 _wk_pkg="webkit2gtk"
                 _wk_check="pacman -Qs '^webkit2gtk$'"
                 _wk_install="sudo pacman -S --noconfirm webkit2gtk"
-            else
+            elif pacman -Si webkitgtk &>/dev/null; then
                 _wk_pkg="webkitgtk"
-                _wk_check="false"
-                _wk_install="echo 'ADVERTENCIA: no se encontró webkitgtk ni webkit2gtk en los repositorios. Instálalo manualmente.'"
+                _wk_check="pacman -Qs '^webkitgtk$'"
+                _wk_install="sudo pacman -S --noconfirm webkitgtk"
             fi
 
-            pkg_names=("gtk3" "mpv" "libx11" "${_wk_pkg}")
-            pkg_check=("pacman -Qs '^gtk3$'" "pacman -Qs '^mpv$'" "pacman -Qs '^libx11$'" "${_wk_check}")
-            pkg_install=("sudo pacman -S --noconfirm gtk3" "sudo pacman -S --noconfirm mpv" "sudo pacman -S --noconfirm libx11" "${_wk_install}")
+            pkg_names=("gtk3" "mpv" "libx11")
+            pkg_check=("pacman -Qs '^gtk3$'" "pacman -Qs '^mpv$'" "pacman -Qs '^libx11$'")
+            pkg_install=("sudo pacman -S --noconfirm gtk3" "sudo pacman -S --noconfirm mpv" "sudo pacman -S --noconfirm libx11")
+
+            if [[ -n "${_wk_pkg:-}" ]]; then
+                pkg_names+=("${_wk_pkg}")
+                pkg_check+=("${_wk_check}")
+                pkg_install+=("${_wk_install}")
+            fi
             ;;
         # ── Debian / Ubuntu y derivadas ───────────────────────────────────────
         debian|ubuntu|linuxmint|pop|elementary|zorin|neon|kali|\
@@ -368,7 +370,7 @@ raspbian|mx|antix|pureos|tails|parrot|deepin|backbox)
             info "  • gtk3 (libgtk-3-0 en sistemas Debian/Ubuntu)"
             info "  • mpv"
             info "  • libx11"
-            info "  • webkit2gtk (libwebkit2gtk-4.0-37 en Debian/Ubuntu)"
+            info "  • webkit2gtk (opcional, solo para WebView)"
             print ""
             read -rp "  $(t dep_skip) [s/N]: " confirm </dev/tty || true
             print "\n${C_DIM}└──────────────────────────────────────────────────────────────────────────┘${C_RESET}"
