@@ -283,9 +283,9 @@ check_dependencies() {
         # ── Arch Linux y derivadas ────────────────────────────────────────────
         arch|manjaro|endeavouros|artix|garuda|cachyos|arcolinux|crystal|\
 archlabs|archcraft|parabola|hyperbola|blackarch)
-            pkg_names=("gtk3" "mpv" "libx11" "webkit2gtk")
-            pkg_check=("pacman -Qs '^gtk3$'" "pacman -Qs '^mpv$'" "pacman -Qs '^libx11$'" "pacman -Qs '^webkit2gtk$'")
-            pkg_install=("sudo pacman -Sy --noconfirm gtk3" "sudo pacman -S --noconfirm mpv" "sudo pacman -S --noconfirm libx11" "sudo pacman -Sy --noconfirm webkit2gtk")
+            pkg_names=("gtk3" "mpv" "libx11" "webkitgtk")
+            pkg_check=("pacman -Qs '^gtk3$'" "pacman -Qs '^mpv$'" "pacman -Qs '^libx11$'" "pacman -Qs '^webkitgtk$'")
+            pkg_install=("sudo pacman -Sy --noconfirm gtk3" "sudo pacman -S --noconfirm mpv" "sudo pacman -S --noconfirm libx11" "sudo pacman -Sy --noconfirm webkitgtk")
             ;;
         # ── Debian / Ubuntu y derivadas ───────────────────────────────────────
         debian|ubuntu|linuxmint|pop|elementary|zorin|neon|kali|\
