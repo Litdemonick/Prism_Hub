@@ -746,9 +746,8 @@ async function stringify(callback) {
   Future<List<ExtensionListItem>> latest(int page) async {
     return runExtension(() async {
       final jsResult = await runtime.handlePromise(
-        await runtime.evaluateAsync(Platform.isLinux
-            ? '${className}Instance.latest($page)'
-            : 'stringify(()=>${className}Instance.latest($page))'),
+        await runtime.evaluateAsync(
+            'stringify(()=>${className}Instance.latest($page))'),
       );
 
       final decoded = await _decodeJsonResult(jsResult.stringResult);
@@ -772,9 +771,8 @@ async function stringify(callback) {
       // búsqueda fallaba con un error genérico en vez de escaparlo bien.
       final kwJs = jsonEncode(kw);
       final jsResult = await runtime.handlePromise(
-        await runtime.evaluateAsync(Platform.isLinux
-            ? '${className}Instance.search($kwJs,$page,${filter == null ? null : jsonEncode(filter)})'
-            : 'stringify(()=>${className}Instance.search($kwJs,$page,${filter == null ? null : jsonEncode(filter)}))'),
+        await runtime.evaluateAsync(
+            'stringify(()=>${className}Instance.search($kwJs,$page,${filter == null ? null : jsonEncode(filter)}))'),
       );
       final decoded = await _decodeJsonResult(jsResult.stringResult);
       List<ExtensionListItem> result = decoded.map<ExtensionListItem>((e) {
@@ -797,13 +795,10 @@ async function stringify(callback) {
     // filtro con un SyntaxError, en el peor caso inyectaba JS arbitrario.
     late String eval;
     if (filter == null) {
-      eval = Platform.isLinux
-          ? '${className}Instance.createFilter()'
-          : 'stringify(()=>${className}Instance.createFilter())';
+      eval = 'stringify(()=>${className}Instance.createFilter())';
     } else {
-      eval = Platform.isLinux
-          ? '${className}Instance.createFilter(${jsonEncode(filter)})'
-          : 'stringify(()=>${className}Instance.createFilter(${jsonEncode(filter)}))';
+      eval =
+          'stringify(()=>${className}Instance.createFilter(${jsonEncode(filter)}))';
     }
     return runExtension(() async {
       final jsResult = await runtime.handlePromise(
@@ -831,9 +826,8 @@ async function stringify(callback) {
   }) async {
     return runExtension(() async {
       final jsResult = await runtime.handlePromise(
-        await runtime.evaluateAsync(Platform.isLinux
-            ? '${className}Instance.top(${filter == null ? null : jsonEncode(filter)},$page)'
-            : 'stringify(()=>${className}Instance.top(${filter == null ? null : jsonEncode(filter)},$page))'),
+        await runtime.evaluateAsync(
+            'stringify(()=>${className}Instance.top(${filter == null ? null : jsonEncode(filter)},$page))'),
       );
       final decoded = await _decodeJsonResult(jsResult.stringResult);
       List<ExtensionListItem> result = decoded.map<ExtensionListItem>((e) {
@@ -847,9 +841,8 @@ async function stringify(callback) {
   Future<Map<String, ExtensionFilter>> createTopFilter() async {
     return runExtension(() async {
       final jsResult = await runtime.handlePromise(
-        await runtime.evaluateAsync(Platform.isLinux
-            ? '${className}Instance.createTopFilter()'
-            : 'stringify(()=>${className}Instance.createTopFilter())'),
+        await runtime.evaluateAsync(
+            'stringify(()=>${className}Instance.createTopFilter())'),
       );
       Map<String, dynamic> result = Map<String, dynamic>.from(
           await _decodeJsonResult(jsResult.stringResult));
@@ -866,9 +859,8 @@ async function stringify(callback) {
     return runExtension(() async {
       final urlJs = jsonEncode(url);
       final jsResult = await runtime.handlePromise(
-        await runtime.evaluateAsync(Platform.isLinux
-            ? '${className}Instance.detail($urlJs)'
-            : 'stringify(()=>${className}Instance.detail($urlJs))'),
+        await runtime.evaluateAsync(
+            'stringify(()=>${className}Instance.detail($urlJs))'),
       );
       final decoded = await _decodeJsonResult(jsResult.stringResult);
       final result = ExtensionDetail.fromJson(decoded);
@@ -887,9 +879,8 @@ async function stringify(callback) {
     return runExtension(() async {
       final urlJs = jsonEncode(url);
       final jsResult = await runtime.handlePromise(
-        await runtime.evaluateAsync(Platform.isLinux
-            ? '${className}Instance.watch($urlJs)'
-            : 'stringify(()=>${className}Instance.watch($urlJs))'),
+        await runtime.evaluateAsync(
+            'stringify(()=>${className}Instance.watch($urlJs))'),
       );
       final data = await _decodeJsonResult(jsResult.stringResult);
 
