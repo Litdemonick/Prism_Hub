@@ -123,7 +123,13 @@ jobs:
               's/JS_SetGCThreshold(runtime, (size_t)-1);.*/JS_SetGCThreshold(runtime, (size_t)0x2000000); \/\/ patched: umbral finito en vez de SIZE_MAX/' \
               cxx/libfastdev_quickjs_runtime.cpp
             grep -n "JS_SetGCThreshold" cxx/libfastdev_quickjs_runtime.cpp
-            cmake -S ./linux -B ./build/linux
+            # -Bsymbolic-functions: fuerza que las llamadas de ESTE .so a sus
+            # propias funciones se resuelvan contra sí mismo primero, sin
+            # pasar por el scope global del proceso. El GC-threshold ya se
+            # probó y NO arregla el crash (confirmado en Linux real) — esto
+            # es un intento aparte, más genérico, por si la interposición no
+            # es por nombre exacto sino por orden de búsqueda en el PLT.
+            cmake -S ./linux -B ./build/linux -DCMAKE_SHARED_LINKER_FLAGS="-Wl,-Bsymbolic-functions"
             cmake --build ./build/linux
             SO_BUILT=$(find ./build/linux -iname "libquickjs_c_bridge_plugin.so" | head -1)
             [ -n "$SO_BUILT" ]
@@ -317,6 +323,11 @@ jobs:
           echo "Probando: con GLIBC_TUNABLES=glibc.rtld.optional_static_tls=4096 (margen TLS agrandado)"
           echo "=============================================="
           GLIBC_TUNABLES=glibc.rtld.optional_static_tls=4096 /tmp/qjs_smoke "$BUNDLE_SO" "$MPV_SO"
+          echo "exit code: $?"
+          echo "=============================================="
+          echo "Probando: con GLIBC_TUNABLES=glibc.rtld.optional_static_tls=1048576 (margen MUCHO mas grande, 1MB, por si 4096 no alcanzaba)"
+          echo "=============================================="
+          GLIBC_TUNABLES=glibc.rtld.optional_static_tls=1048576 /tmp/qjs_smoke "$BUNDLE_SO" "$MPV_SO"
           echo "exit code: $?"
           echo "RESULTADO_FINAL_SMOKE_TEST_FIN"
           echo "exit code: $?"
