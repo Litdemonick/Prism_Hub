@@ -238,6 +238,18 @@ jobs:
               | awk '$4 ~ /FUNC|OBJECT/ && ($5=="GLOBAL"||$5=="WEAK") && $7!="UND" {print $8}' \
               | sort -u
           }
+          # Símbolos que "$1" IMPORTA (no los define, Ndx==UND) — son los que
+          # este .so espera resolver contra OTRA librería ya cargada (típico:
+          # libc). Si una de esas coincide con algo que libmpv SÍ define en
+          # GLOBAL, y libmpv queda antes que libc en el orden de búsqueda del
+          # scope global, QuickJS terminaría llamando a la función de libmpv
+          # en vez de la de libc con el mismo nombre — interposición real que
+          # el chequeo anterior (definido vs definido) no puede detectar.
+          undefined_syms() {
+            readelf --dyn-syms -W "$1" 2>/dev/null \
+              | awk '$4 ~ /FUNC|OBJECT/ && $7=="UND" {print $NF}' \
+              | sort -u
+          }
           MPV_SO=$(ldconfig -p 2>/dev/null | awk '/libmpv\.so/ {print $NF}' | head -1)
           echo "libmpv encontrada en: ${MPV_SO:-(ninguna)}"
           if [ -n "$MPV_SO" ]; then
@@ -248,6 +260,12 @@ jobs:
             echo "##### Símbolos que AMBAS definen (colisión real de interposición) #####"
             comm -12 /tmp/syms_qjs.txt /tmp/syms_mpv.txt | tee /tmp/syms_collision.txt
             echo "(total en colisión: $(wc -l < /tmp/syms_collision.txt))"
+            echo ""
+            echo "##### Símbolos que QuickJS IMPORTA (espera de libc/etc) y que libmpv YA DEFINE global (interposición real) #####"
+            undefined_syms "$BUNDLE_SO" > /tmp/syms_qjs_undef.txt
+            echo "(símbolos importados por qjs: $(wc -l < /tmp/syms_qjs_undef.txt))"
+            comm -12 /tmp/syms_qjs_undef.txt /tmp/syms_mpv.txt | tee /tmp/syms_interposed.txt
+            echo "(total interpuesto: $(wc -l < /tmp/syms_interposed.txt))"
           fi
           echo ""
           # Sin colisión de nombres (0), el sospechoso ahora es OTRA categoría
