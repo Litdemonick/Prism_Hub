@@ -170,6 +170,18 @@ jobs:
           #include <stddef.h>
           #include <dlfcn.h>
           int main(int argc, char **argv) {
+            // argv[2] (opcional): librería a cargar ANTES con RTLD_GLOBAL, para
+            // reproducir la interposición de símbolos que ocurre dentro de la
+            // app real (donde libmpv de media_kit se carga primero). Si mpv
+            // está compilado con soporte de JavaScript (MuJS), exporta
+            // js_malloc/js_free con la MISMA firma de nombre que QuickJS pero
+            // semántica distinta — y en Linux el primero que carga gana para
+            // todos, así que las llamadas internas de QuickJS terminarían
+            // saltando a las de MuJS.
+            if (argc > 2 && argv[2][0]) {
+              void *pre = dlopen(argv[2], RTLD_NOW | RTLD_GLOBAL);
+              printf("preload %s -> %s\n", argv[2], pre ? "OK" : dlerror());
+            }
             void *h = dlopen(argv[1], RTLD_NOW);
             if (!h) { printf("DLOPEN FAIL: %s\n", dlerror()); return 2; }
             void *(*jsNewRuntime)(void*, long long) =
@@ -194,21 +206,49 @@ jobs:
           }
           SMOKE_EOF
           gcc -o /tmp/qjs_smoke /tmp/qjs_smoke.c -ldl
+          BUNDLE_SO="build/linux/x64/release/bundle/lib/libquickjs_c_bridge_plugin.so"
           run_smoke() {
             echo "=============================================="
-            echo "Probando: $1"
+            echo "Probando: $1  ${2:+(con preload: $2)}"
             echo "=============================================="
             if [ ! -f "$1" ]; then echo "(no existe, se saltea)"; return; fi
-            /tmp/qjs_smoke "$1"
+            /tmp/qjs_smoke "$1" "${2:-}"
             echo "exit code: $?"
           }
-          # 1) El .so que quedó instalado en el bundle (el recompilado, si la
-          #    recompilación anduvo).
-          run_smoke "build/linux/x64/release/bundle/lib/libquickjs_c_bridge_plugin.so"
-          # 2) El binario precompilado original que trae flutter_js, para
-          #    comparar si uno crashea y el otro no.
+          echo "##### Símbolos js_* que EXPORTA el bridge de QuickJS #####"
+          # Si estos están en la tabla dinámica, son interponibles: otra
+          # librería cargada antes con los mismos nombres los secuestra.
+          readelf --dyn-syms -W "$BUNDLE_SO" 2>/dev/null \
+            | awk '$8 ~ /^js_/ && $5 == "GLOBAL" {print $8}' | sort -u | head -40
+          echo "(total js_* globales exportados:" \
+            "$(readelf --dyn-syms -W "$BUNDLE_SO" 2>/dev/null | awk '$8 ~ /^js_/ && $5 == "GLOBAL"' | wc -l))"
+          echo ""
+          echo "##### ¿libmpv exporta símbolos js_* que colisionen? #####"
+          MPV_SO=$(ldconfig -p 2>/dev/null | awk '/libmpv\.so/ {print $NF}' | head -1)
+          echo "libmpv encontrada en: ${MPV_SO:-(ninguna)}"
+          if [ -n "$MPV_SO" ]; then
+            readelf --dyn-syms -W "$MPV_SO" 2>/dev/null \
+              | awk '$8 ~ /^js_/ {print $8}' | sort -u | head -40
+            echo "(total js_* en libmpv:" \
+              "$(readelf --dyn-syms -W "$MPV_SO" 2>/dev/null | awk '$8 ~ /^js_/' | wc -l))"
+            echo ""
+            echo "##### Símbolos js_* presentes en AMBAS (colisión real) #####"
+            comm -12 \
+              <(readelf --dyn-syms -W "$BUNDLE_SO" 2>/dev/null | awk '$8 ~ /^js_/ && $5 == "GLOBAL" {print $8}' | sort -u) \
+              <(readelf --dyn-syms -W "$MPV_SO" 2>/dev/null | awk '$8 ~ /^js_/ {print $8}' | sort -u)
+          fi
+          echo ""
+          # 1) El .so del bundle, solo.
+          run_smoke "$BUNDLE_SO"
+          # 2) El precompilado original de flutter_js, solo.
           PREBUILT=$(find "$HOME/.pub-cache" -path "*/flutter_js-*/linux/shared/libquickjs_c_bridge_plugin.so" 2>/dev/null | head -1)
           run_smoke "$PREBUILT"
+          # 3) LA PRUEBA CLAVE: con libmpv cargada ANTES (como hace la app
+          #    real, ver "package:media_kit_libs_linux registered" en el log
+          #    justo antes del SIGSEGV). Si acá revienta, la causa es
+          #    interposición de símbolos y el fix es -Bsymbolic / visibilidad.
+          run_smoke "$BUNDLE_SO" "$MPV_SO"
+          run_smoke "$PREBUILT" "$MPV_SO"
       - name: Package
         run: |
           cd build/linux/x64/release/bundle
