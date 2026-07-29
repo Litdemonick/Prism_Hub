@@ -185,8 +185,14 @@ jobs:
             // todos, así que las llamadas internas de QuickJS terminarían
             // saltando a las de MuJS.
             if (argc > 2 && argv[2][0]) {
-              void *pre = dlopen(argv[2], RTLD_NOW | RTLD_GLOBAL);
-              printf("preload %s -> %s\n", argv[2], pre ? "OK" : dlerror());
+              // argv[3]=="local": reproduce el flag REAL que usa Dart FFI
+              // (DynamicLibrary.open llama a dlopen sin RTLD_GLOBAL, o sea
+              // RTLD_LOCAL). Antes esta prueba siempre forzaba RTLD_GLOBAL,
+              // que no es necesariamente lo que pasa en la app real.
+              int local = (argc > 3 && argv[3][0] == 'l');
+              void *pre = dlopen(argv[2], RTLD_NOW | (local ? RTLD_LOCAL : RTLD_GLOBAL));
+              printf("preload %s -> %s (%s)\n", argv[2], pre ? "OK" : dlerror(),
+                     local ? "RTLD_LOCAL" : "RTLD_GLOBAL");
             }
             void *h = dlopen(argv[1], RTLD_NOW);
             if (!h) { printf("DLOPEN FAIL: %s\n", dlerror()); return 2; }
@@ -215,10 +221,10 @@ jobs:
           BUNDLE_SO="build/linux/x64/release/bundle/lib/libquickjs_c_bridge_plugin.so"
           run_smoke() {
             echo "=============================================="
-            echo "Probando: $1  ${2:+(con preload: $2)}"
+            echo "Probando: $1  ${2:+(con preload: $2, modo: ${3:-global})}"
             echo "=============================================="
             if [ ! -f "$1" ]; then echo "(no existe, se saltea)"; return; fi
-            /tmp/qjs_smoke "$1" "${2:-}"
+            /tmp/qjs_smoke "$1" "${2:-}" "${3:-}"
             echo "exit code: $?"
           }
           # DEFINIDOS (no importados: Ndx != UND) y GLOBAL/WEAK, de tipo FUNC u
@@ -272,6 +278,17 @@ jobs:
           #    interposición de símbolos y el fix es -Bsymbolic / visibilidad.
           run_smoke "$BUNDLE_SO" "$MPV_SO"
           run_smoke "$PREBUILT" "$MPV_SO"
+          # 3b) MISMA prueba pero precargando libmpv con RTLD_LOCAL en vez de
+          #    RTLD_GLOBAL. Dart FFI (DynamicLibrary.open, usado tanto por
+          #    flutter_js como por media_kit) llama a dlopen SIN pasar
+          #    RTLD_GLOBAL, o sea que en la app real libmpv se carga con
+          #    RTLD_LOCAL — no con GLOBAL como forzaban las pruebas de arriba.
+          #    Si con LOCAL no revienta, la interposición vía scope global no
+          #    es el mecanismo real (o algo más deja a libmpv con scope
+          #    GLOBAL igual, por ejemplo si ya fue cargada antes por GTK/GIO
+          #    con RTLD_GLOBAL "pegado" para el resto del proceso).
+          run_smoke "$BUNDLE_SO" "$MPV_SO" "local"
+          run_smoke "$PREBUILT" "$MPV_SO" "local"
           # 4) MISMO caso que revienta arriba, pero con el margen de TLS
           #    estático de glibc agrandado a mano (tunable moderno, glibc
           #    2.35+). Si esto lo arregla, confirma que la causa es TLS
