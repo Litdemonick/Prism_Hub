@@ -156,6 +156,59 @@ jobs:
           fi
           echo "Contenido final de lib/:"
           ls -la "$BUNDLE_LIB/"
+      # Smoke test: aísla el crash de Linux del resto de la app. Carga el .so
+      # directo y hace lo MÍNIMO que hace PrismHub al arrancar (crear runtime
+      # + contexto JS), que es exactamente donde revienta con SIGSEGV en las
+      # máquinas de prueba. Sirve para saber si el crash se reproduce acá en
+      # Ubuntu (y poder iterar el fix en CI) o si es específico de distros más
+      # nuevas. continue-on-error: es diagnóstico, nunca debe frenar el build.
+      - name: Smoke test QuickJS bridge
+        continue-on-error: true
+        run: |
+          cat > /tmp/qjs_smoke.c <<'SMOKE_EOF'
+          #include <stdio.h>
+          #include <stddef.h>
+          #include <dlfcn.h>
+          int main(int argc, char **argv) {
+            void *h = dlopen(argv[1], RTLD_NOW);
+            if (!h) { printf("DLOPEN FAIL: %s\n", dlerror()); return 2; }
+            void *(*jsNewRuntime)(void*, long long) =
+              (void *(*)(void*, long long))dlsym(h, "jsNewRuntime");
+            void (*jsSetMaxStackSize)(void*, size_t) =
+              (void (*)(void*, size_t))dlsym(h, "jsSetMaxStackSize");
+            void *(*jsNewContext)(void*) =
+              (void *(*)(void*))dlsym(h, "jsNewContext");
+            printf("syms: jsNewRuntime=%p jsSetMaxStackSize=%p jsNewContext=%p\n",
+                   (void*)jsNewRuntime, (void*)jsSetMaxStackSize, (void*)jsNewContext);
+            if (!jsNewRuntime || !jsNewContext) { printf("MISSING SYMBOLS\n"); return 3; }
+            void *rt = jsNewRuntime(0, 0);
+            printf("runtime = %p\n", rt);
+            if (jsSetMaxStackSize) {
+              jsSetMaxStackSize(rt, 1024 * 1024);
+              printf("stack size set OK\n");
+            }
+            void *ctx = jsNewContext(rt);
+            printf("context = %p\n", ctx);
+            printf("SMOKE OK\n");
+            return 0;
+          }
+          SMOKE_EOF
+          gcc -o /tmp/qjs_smoke /tmp/qjs_smoke.c -ldl
+          run_smoke() {
+            echo "=============================================="
+            echo "Probando: $1"
+            echo "=============================================="
+            if [ ! -f "$1" ]; then echo "(no existe, se saltea)"; return; fi
+            /tmp/qjs_smoke "$1"
+            echo "exit code: $?"
+          }
+          # 1) El .so que quedó instalado en el bundle (el recompilado, si la
+          #    recompilación anduvo).
+          run_smoke "build/linux/x64/release/bundle/lib/libquickjs_c_bridge_plugin.so"
+          # 2) El binario precompilado original que trae flutter_js, para
+          #    comparar si uno crashea y el otro no.
+          PREBUILT=$(find "$HOME/.pub-cache" -path "*/flutter_js-*/linux/shared/libquickjs_c_bridge_plugin.so" 2>/dev/null | head -1)
+          run_smoke "$PREBUILT"
       - name: Package
         run: |
           cd build/linux/x64/release/bundle
