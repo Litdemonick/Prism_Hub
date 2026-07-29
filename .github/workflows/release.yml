@@ -215,27 +215,27 @@ jobs:
             /tmp/qjs_smoke "$1" "${2:-}"
             echo "exit code: $?"
           }
-          echo "##### Símbolos js_* que EXPORTA el bridge de QuickJS #####"
-          # Si estos están en la tabla dinámica, son interponibles: otra
-          # librería cargada antes con los mismos nombres los secuestra.
-          readelf --dyn-syms -W "$BUNDLE_SO" 2>/dev/null \
-            | awk '$8 ~ /^js_/ && $5 == "GLOBAL" {print $8}' | sort -u | head -40
-          echo "(total js_* globales exportados:" \
-            "$(readelf --dyn-syms -W "$BUNDLE_SO" 2>/dev/null | awk '$8 ~ /^js_/ && $5 == "GLOBAL"' | wc -l))"
-          echo ""
-          echo "##### ¿libmpv exporta símbolos js_* que colisionen? #####"
+          # DEFINIDOS (no importados: Ndx != UND) y GLOBAL/WEAK, de tipo FUNC u
+          # OBJECT — son los que de verdad "ganan" la interposición si otra
+          # librería cargada antes define el MISMO nombre. Sin filtrar por
+          # prefijo js_: la colisión real puede estar en cualquier símbolo
+          # (ej. utilidades genéricas como dbuf_*, hash_*, etc. que ambas
+          # librerías podrían exportar con el mismo nombre).
+          defined_syms() {
+            readelf --dyn-syms -W "$1" 2>/dev/null \
+              | awk '$4 ~ /FUNC|OBJECT/ && ($5=="GLOBAL"||$5=="WEAK") && $7!="UND" {print $8}' \
+              | sort -u
+          }
           MPV_SO=$(ldconfig -p 2>/dev/null | awk '/libmpv\.so/ {print $NF}' | head -1)
           echo "libmpv encontrada en: ${MPV_SO:-(ninguna)}"
           if [ -n "$MPV_SO" ]; then
-            readelf --dyn-syms -W "$MPV_SO" 2>/dev/null \
-              | awk '$8 ~ /^js_/ {print $8}' | sort -u | head -40
-            echo "(total js_* en libmpv:" \
-              "$(readelf --dyn-syms -W "$MPV_SO" 2>/dev/null | awk '$8 ~ /^js_/' | wc -l))"
+            defined_syms "$BUNDLE_SO" > /tmp/syms_qjs.txt
+            defined_syms "$MPV_SO" > /tmp/syms_mpv.txt
+            echo "(símbolos GLOBAL/WEAK definidos: qjs=$(wc -l < /tmp/syms_qjs.txt), mpv=$(wc -l < /tmp/syms_mpv.txt))"
             echo ""
-            echo "##### Símbolos js_* presentes en AMBAS (colisión real) #####"
-            comm -12 \
-              <(readelf --dyn-syms -W "$BUNDLE_SO" 2>/dev/null | awk '$8 ~ /^js_/ && $5 == "GLOBAL" {print $8}' | sort -u) \
-              <(readelf --dyn-syms -W "$MPV_SO" 2>/dev/null | awk '$8 ~ /^js_/ {print $8}' | sort -u)
+            echo "##### Símbolos que AMBAS definen (colisión real de interposición) #####"
+            comm -12 /tmp/syms_qjs.txt /tmp/syms_mpv.txt | tee /tmp/syms_collision.txt
+            echo "(total en colisión: $(wc -l < /tmp/syms_collision.txt))"
           fi
           echo ""
           # 1) El .so del bundle, solo.
