@@ -238,6 +238,23 @@ jobs:
             echo "(total en colisión: $(wc -l < /tmp/syms_collision.txt))"
           fi
           echo ""
+          # Sin colisión de nombres (0), el sospechoso ahora es OTRA categoría
+          # de bug de Linux con dlopen: TLS ESTÁTICO agotado. glibc reserva un
+          # margen chico de "TLS surplus" para librerías que se cargan con
+          # dlopen DESPUÉS del arranque — si suficientes librerías con bloques
+          # TLS (PT_TLS, variables __thread/thread_local) se cargan antes
+          # (media_kit trae MUCHAS: libmpv, GTK, etc.), ese margen se agota, y
+          # el siguiente acceso a una variable TLS cae en una página sin
+          # permisos: exactamente SEGV_ACCERR, el mismo síntoma que tenemos.
+          echo "##### ¿El bridge de QuickJS tiene bloque TLS (PT_TLS)? #####"
+          readelf -l -W "$BUNDLE_SO" 2>/dev/null | grep -A1 "TLS" || echo "(sin segmento TLS)"
+          echo ""
+          echo "##### ¿libmpv tiene bloque TLS (PT_TLS)? #####"
+          readelf -l -W "$MPV_SO" 2>/dev/null | grep -A1 "TLS" || echo "(sin segmento TLS)"
+          echo ""
+          echo "##### Tamaño del margen de TLS estático que ve este proceso #####"
+          getconf GNU_LIBC_VERSION 2>/dev/null || true
+          ldd --version 2>/dev/null | head -1
           # 1) El .so del bundle, solo.
           run_smoke "$BUNDLE_SO"
           # 2) El precompilado original de flutter_js, solo.
@@ -249,6 +266,17 @@ jobs:
           #    interposición de símbolos y el fix es -Bsymbolic / visibilidad.
           run_smoke "$BUNDLE_SO" "$MPV_SO"
           run_smoke "$PREBUILT" "$MPV_SO"
+          # 4) MISMO caso que revienta arriba, pero con el margen de TLS
+          #    estático de glibc agrandado a mano (tunable moderno, glibc
+          #    2.35+). Si esto lo arregla, confirma que la causa es TLS
+          #    estático agotado por dlopen — y de paso da el workaround real
+          #    (esta misma variable de entorno, puesta en el launcher/.desktop
+          #    de Linux antes de correr PrismHub).
+          echo "=============================================="
+          echo "Probando: con GLIBC_TUNABLES=glibc.rtld.optional_static_tls=4096 (margen TLS agrandado)"
+          echo "=============================================="
+          GLIBC_TUNABLES=glibc.rtld.optional_static_tls=4096 /tmp/qjs_smoke "$BUNDLE_SO" "$MPV_SO"
+          echo "exit code: $?"
       - name: Package
         run: |
           cd build/linux/x64/release/bundle
