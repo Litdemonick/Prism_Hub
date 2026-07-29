@@ -165,6 +165,12 @@ jobs:
       - name: Smoke test QuickJS bridge
         continue-on-error: true
         run: |
+          # GitHub Actions corre cada step de "run:" con `bash -e` por
+          # default. Los smoke tests de más abajo REVIENTAN a propósito
+          # (SIGSEGV, exit 139) para reproducir el bug — sin "set +e" acá,
+          # bash aborta el script entero en el primer crash y las pruebas
+          # siguientes (la del tunable de TLS) nunca llegan a correr.
+          set +e
           cat > /tmp/qjs_smoke.c <<'SMOKE_EOF'
           #include <stdio.h>
           #include <stddef.h>
@@ -276,6 +282,8 @@ jobs:
           echo "Probando: con GLIBC_TUNABLES=glibc.rtld.optional_static_tls=4096 (margen TLS agrandado)"
           echo "=============================================="
           GLIBC_TUNABLES=glibc.rtld.optional_static_tls=4096 /tmp/qjs_smoke "$BUNDLE_SO" "$MPV_SO"
+          echo "exit code: $?"
+          echo "RESULTADO_FINAL_SMOKE_TEST_FIN"
           echo "exit code: $?"
       - name: Package
         run: |
