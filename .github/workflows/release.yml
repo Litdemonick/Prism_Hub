@@ -312,8 +312,14 @@ jobs:
           set +e
           BIN="build/linux/x64/release/bundle/PrismHub"
           chmod +x "$BIN"
-          echo "##### Corriendo la app real bajo Xvfb, 15s, con LD_DEBUG=all #####"
-          xvfb-run -a env LD_DEBUG=all LD_DEBUG_OUTPUT=/tmp/lddebug timeout 15 "$BIN" > /tmp/app_stdout.log 2>&1
+          # 60s en vez de 15: ExtensionUtils.ensureInitialized() instala
+          # extensiones por defecto desde un repo remoto (red) y recién
+          # DESPUÉS de eso llama a initRuntime() (que es lo que carga la
+          # librería de QuickJS) — 15s no le daba tiempo a llegar ahí, por
+          # eso la primera corrida ni cargaba quickjs (timeout 124, sin
+          # crashear, pero sin haber probado nada real todavía).
+          echo "##### Corriendo la app real bajo Xvfb, 60s, con LD_DEBUG=all #####"
+          xvfb-run -a env LD_DEBUG=all LD_DEBUG_OUTPUT=/tmp/lddebug timeout 60 "$BIN" > /tmp/app_stdout.log 2>&1
           echo "exit code app: $?"
           echo ""
           echo "##### stdout/stderr de la app (ultimas 60 lineas) #####"
