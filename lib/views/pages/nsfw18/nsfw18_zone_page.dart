@@ -298,6 +298,7 @@ class _Nsfw18ZonePageState extends State<Nsfw18ZonePage> {
           final f = items[index];
           // Obx por tarjeta: ver el mismo comentario en _continuarSecciones.
           return Obx(() => HomeMediaCard(
+                key: ValueKey('fav-${f.package}|${f.url}'),
                 horizontal: ancha,
                 // El tipo lo dice el título de la sección.
                 type: null,
@@ -566,6 +567,57 @@ class _Nsfw18ZonePageState extends State<Nsfw18ZonePage> {
   }
 }
 
+void _abrirHistorialZona(BuildContext context) {
+  // zone: true — el Historial de la Zona +18, no el general.
+  if (Platform.isAndroid) {
+    Get.to(() => const HistoryPage(zone: true));
+    return;
+  }
+  router.push('/nsfw18/history');
+}
+
+/// Botón al Historial cuando la zona está vacía. Ver el mismo widget en
+/// home_page.dart: se repite acá porque los dos son privados de su archivo y
+/// compartirlo obligaría a exponerlo solo por esto.
+class _VerHistorialBoton extends StatelessWidget {
+  const _VerHistorialBoton({required this.accent, required this.onTap});
+  final Color accent;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      onTap: onTap,
+      child: MouseRegion(
+        cursor: SystemMouseCursors.click,
+        child: Container(
+          padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 10),
+          decoration: BoxDecoration(
+            color: accent.withValues(alpha: 0.16),
+            borderRadius: BorderRadius.circular(999),
+            border: Border.all(color: accent),
+          ),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Icon(Icons.history_rounded, size: 17, color: accent),
+              const SizedBox(width: 8),
+              Text(
+                'home.see-history'.i18n,
+                style: TextStyle(
+                  color: accent,
+                  fontSize: 13,
+                  fontWeight: FontWeight.w700,
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
 class _Nsfw18EmptyState extends StatefulWidget {
   const _Nsfw18EmptyState();
 
@@ -640,6 +692,13 @@ class _Nsfw18EmptyStateState extends State<_Nsfw18EmptyState>
                 textAlign: TextAlign.center,
                 style:
                     const TextStyle(color: HomeTheme.textMuted, fontSize: 13.5),
+              ),
+              const SizedBox(height: 18),
+              // Mismo botón que el Home normal, con el acento de esta zona y
+              // llevando al Historial +18, no al general.
+              _VerHistorialBoton(
+                accent: HomeTheme.accentRed,
+                onTap: () => _abrirHistorialZona(context),
               ),
             ],
           ),

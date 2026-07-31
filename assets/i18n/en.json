@@ -70,7 +70,8 @@
     "continue-reading": "Continue reading",
     "favorite-video": "Favorites — Video",
     "favorite-reading": "Favorites — Reading",
-    "remove-from-continue": "Remove from Continue"
+    "remove-from-continue": "Remove from Continue",
+    "see-history": "View history"
   },
   "search": {
     "hint-text": "Please use search wisely!~",
@@ -377,7 +378,8 @@
     "already-updated": "I already updated",
     "downloading": "Downloading update...",
     "install-failed": "Update failed",
-    "still-outdated": "The update wasn't detected yet. Finish installing it and try again."
+    "still-outdated": "The update wasn't detected yet. Finish installing it and try again.",
+    "assets-not-ready": "The new version is still being published. Once the files for every platform are ready, the update shows up on its own."
   },
   "extension-install-error": "Failed to install extension",
   "extension-type": {

@@ -143,6 +143,17 @@ class DatabaseService {
   /// nada. Para cambios de estado (marcar visto, quitar una novedad) donde
   /// mover el ítem al principio del Historial sería mentir sobre cuándo se vio.
   static Future<void> putHistoryRaw(History history) async {
+    // Se resuelve el registro REAL por package&url antes de escribir.
+    //
+    // Los objetos que llegan acá vienen de listas en memoria (Continuar,
+    // Historial) que pueden estar desfasadas. Si el `id` de ese objeto no es
+    // el de la base, `put` NO actualiza: inserta una fila nueva y deja la
+    // original intacta. Se veía como que "quitar de Continuar" no hacía nada —
+    // la tarjeta desaparecía un momento y volvía al refrescar, porque el
+    // registro que la alimentaba nunca se había tocado.
+    final actual =
+        await getHistoryByPackageAndUrl(history.package, history.url);
+    if (actual != null) history.id = actual.id;
     await db.writeTxn(() => db.historys.put(history));
   }
 

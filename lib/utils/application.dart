@@ -105,6 +105,49 @@ class ApplicationUtils {
     return hasInnoUninstaller || lower.contains(r'\program files');
   }
 
+  /// ¿El release está COMPLETO? Tiene que traer el archivo de las tres
+  /// plataformas: Windows, Linux y Android.
+  ///
+  /// Cada job del workflow sube lo suyo al terminar, así que un release recién
+  /// publicado pasa por estados intermedios — visto en vivo: Linux listo a los
+  /// 4 minutos, Windows y Android todavía compilando. Si en esa ventana se
+  /// anuncia la versión nueva, quien la reciba se encuentra con una descarga
+  /// que no existe, o peor, con un release al que después le falta su archivo
+  /// porque ese job falló.
+  ///
+  /// Mientras falte cualquiera de las tres, no se avisa a NADIE. Se vuelve a
+  /// mirar en la próxima comprobación y, cuando esté entero, llega solo.
+  static bool _releaseCompleto(dynamic assets, String tagName) {
+    try {
+      final list = (assets as List).cast<Map<String, dynamic>>();
+      final nombres = list
+          .map((a) => (a['name'] as String?)?.toLowerCase() ?? '')
+          .where((n) => n.isNotEmpty)
+          .toList();
+      if (nombres.isEmpty) return false;
+
+      // Un asset a medio subir aparece en la API con state "uploaded" recién
+      // cuando terminó; cualquier otro estado significa que sigue en curso.
+      final subiendo = list.any((a) {
+        final estado = (a['state'] as String?)?.toLowerCase();
+        return estado != null && estado != 'uploaded';
+      });
+      if (subiendo) return false;
+
+      final hayAndroid = nombres.any((n) => n.endsWith('.apk'));
+      final hayLinux = nombres.any((n) => n.contains('linux'));
+      // En Windows puede venir el instalador, el comprimido, o los dos.
+      final hayWindows = nombres.any(
+        (n) => n.endsWith('.exe') || n.contains('windows'),
+      );
+      return hayAndroid && hayLinux && hayWindows;
+    } catch (_) {
+      // Ante un formato inesperado se asume incompleto: no avisar de más es
+      // preferible a mandar a alguien a una descarga rota.
+      return false;
+    }
+  }
+
   static Map<String, dynamic>? _findAsset(dynamic assets, String tagName) {
     final expectedName = 'PrismHub-$tagName-$_platformSuffix';
     final expectedSetupName = 'PrismHub-setup-$tagName.exe';
@@ -176,9 +219,24 @@ class ApplicationUtils {
       if (!_isRemoteVersionNewer(remoteVersion)) return;
       if (!context.mounted) return;
 
+      // Un release se publica ANTES de que todas las plataformas terminen de
+      // subir lo suyo: cada job del workflow sube su archivo cuando acaba. O
+      // sea que hay una ventana en la que el release ya existe pero el
+      // instalador de ESTA plataforma todavía no está — por ejemplo Linux
+      // termina primero y un usuario de Android vería "hay 1.0.9" con nada
+      // que descargar.
+      //
+      // Así que la versión nueva no se anuncia hasta que el archivo que le
+      // toca a este dispositivo esté realmente publicado. Si falta, se sale en
+      // silencio y se vuelve a mirar en la próxima comprobación.
+      // Release incompleto: todavía se están subiendo archivos, o alguno de
+      // los jobs falló. En cualquiera de los dos casos no se avisa.
+      if (!_releaseCompleto(res.data['assets'], tagName)) return;
+
       final asset = Platform.isAndroid
           ? _findAndroidAsset(res.data['assets'])
           : _findAsset(res.data['assets'], tagName);
+      if (asset == null) return;
 
       _forcedUpdatePageOpen = true;
       try {
@@ -217,9 +275,26 @@ class ApplicationUtils {
       final remoteVersion = tagName.replaceFirst('v', '');
       debugPrint('remoteVersion: $remoteVersion');
       if (_isRemoteVersionNewer(remoteVersion)) {
-        final asset = Platform.isAndroid
-            ? _findAndroidAsset(res.data['assets'])
-            : _findAsset(res.data['assets'], tagName);
+        // Ver el comentario largo de la comprobación al arrancar: mientras el
+        // archivo de esta plataforma no esté subido, no se ofrece nada.
+        final completo = _releaseCompleto(res.data['assets'], tagName);
+        final asset = completo
+            ? (Platform.isAndroid
+                ? _findAndroidAsset(res.data['assets'])
+                : _findAsset(res.data['assets'], tagName))
+            : null;
+        if (asset == null) {
+          // Acá SÍ se avisa, a diferencia del arranque: el usuario apretó
+          // "Comprobar" y dejarlo sin respuesta parecería que el botón no
+          // hace nada.
+          if (showSnackbar && context.mounted) {
+            showPlatformSnackbar(
+              context: context,
+              content: 'upgrade.assets-not-ready'.i18n,
+            );
+          }
+          return;
+        }
         if (Platform.isAndroid) {
           await showPlatformDialog(
             context: context,

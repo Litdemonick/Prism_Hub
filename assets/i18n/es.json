@@ -63,7 +63,8 @@
     "continue-reading": "Continuar leyendo",
     "favorite-video": "Favoritos — Vídeo",
     "favorite-reading": "Favoritos — Lectura",
-    "remove-from-continue": "Quitar de Continuar"
+    "remove-from-continue": "Quitar de Continuar",
+    "see-history": "Ver historial"
   },
   "search": {
     "hint-text": "¡Por favor, busca ampliamente!~",
@@ -366,7 +367,8 @@
     "already-updated": "Ya actualicé",
     "downloading": "Descargando actualización...",
     "install-failed": "Error al actualizar",
-    "still-outdated": "Todavía no se detectó la actualización. Terminá de instalarla y probá de nuevo."
+    "still-outdated": "Todavía no se detectó la actualización. Terminá de instalarla y probá de nuevo.",
+    "assets-not-ready": "La versión nueva se está publicando todavía. Cuando estén listos los archivos de todas las plataformas, la actualización aparece sola."
   },
   "extension-install-error": "No se pudo instalar la extensión",
   "extension-type": {

@@ -116,6 +116,7 @@ class _HomePageState extends State<HomePage> {
           final f = items[index];
           // Obx por tarjeta: ver el mismo comentario en _continuarSecciones.
           return Obx(() => HomeMediaCard(
+                key: ValueKey('fav-${f.package}|${f.url}'),
                 horizontal: ancha,
                 // El tipo lo dice el título de la sección.
                 type: null,
@@ -363,6 +364,56 @@ class _HomePageState extends State<HomePage> {
 // Estado vacío cuando no hay ni Continuar viendo ni Favoritos — un área
 // marcada (borde suave) con un ícono que pulsa despacio, en vez de dejar el
 // home con un hueco sin nada debajo del banner.
+// Navega al Historial desde el estado vacío. Ramificado por plataforma como
+// el resto: en Android es una pestaña del shell, en escritorio una ruta.
+void _abrirHistorial(BuildContext context) {
+  if (Platform.isAndroid) {
+    Get.to(() => const HistoryPage());
+    return;
+  }
+  router.push('/history');
+}
+
+/// Botón discreto para llegar al Historial cuando el Inicio está vacío.
+class _VerHistorialBoton extends StatelessWidget {
+  const _VerHistorialBoton({required this.accent, required this.onTap});
+  final Color accent;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      onTap: onTap,
+      child: MouseRegion(
+        cursor: SystemMouseCursors.click,
+        child: Container(
+          padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 10),
+          decoration: BoxDecoration(
+            color: accent.withValues(alpha: 0.16),
+            borderRadius: BorderRadius.circular(999),
+            border: Border.all(color: accent),
+          ),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Icon(Icons.history_rounded, size: 17, color: accent),
+              const SizedBox(width: 8),
+              Text(
+                'home.see-history'.i18n,
+                style: TextStyle(
+                  color: accent,
+                  fontSize: 13,
+                  fontWeight: FontWeight.w700,
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
 class _HomeEmptyState extends StatefulWidget {
   const _HomeEmptyState();
 
@@ -438,6 +489,13 @@ class _HomeEmptyStateState extends State<_HomeEmptyState>
                 style:
                     const TextStyle(color: HomeTheme.textMuted, fontSize: 13.5),
               ),
+              const SizedBox(height: 18),
+              // Botón al Historial: con los estados de seguimiento, terminar
+              // todo deja el Home vacío aunque el Historial tenga contenido —
+              // sin este acceso parecería que se perdió todo.
+              _VerHistorialBoton(
+                  accent: HomeTheme.accentPink,
+                  onTap: () => _abrirHistorial(context)),
             ],
           ),
         ),

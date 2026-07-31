@@ -37,6 +37,28 @@ jobs:
           channel: stable
       - name: Setup Android SDK 36
         run: echo "y" | $ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager "platforms;android-36"
+      # Sin llave de firma NO se publica. Antes este paso escribía un archivo
+      # vacío cuando el secreto no existía, Gradle veía que "el keystore
+      # existe" pero sin contraseña, y caía en silencio a la llave de
+      # DEPURACIÓN. El resultado: todos los APK publicados hasta la 1.0.9
+      # salieron firmados como "Android Debug", y cada corrida de CI genera una
+      # llave distinta — así que Android rechazaba SIEMPRE la actualización
+      # encima y el usuario tenía que desinstalar para poder actualizar.
+      #
+      # Verificado comparando los APK publicados: 1.0.8 con huella d4529e8e…
+      # y 1.0.9 con 962433ca…, las dos "Android Debug" y distintas entre sí.
+      - name: Verificar que existe la llave de firma
+        run: |
+          if [ -z "$ENCODED_KEYSTORE" ] || [ -z "$KEYSTORE_PASSWORD" ] || [ -z "$KEY_ALIAS" ] || [ -z "$KEY_PASSWORD" ]; then
+            echo "::error::Faltan los secretos de firma (KEYSTORE, KEYSTORE_PASSWORD, KEY_ALIAS, KEY_PASSWORD)."
+            echo "::error::Sin ellos el APK saldría firmado con la llave de depuración y nadie podría actualizar encima."
+            exit 1
+          fi
+        env:
+          ENCODED_KEYSTORE: ${{ secrets.KEYSTORE }}
+          KEYSTORE_PASSWORD: ${{ secrets.KEYSTORE_PASSWORD }}
+          KEY_ALIAS: ${{ secrets.KEY_ALIAS }}
+          KEY_PASSWORD: ${{ secrets.KEY_PASSWORD }}
       - name: Decode keystore
         run: echo $ENCODED_KEYSTORE | base64 -di > android/app/keystore.jks
         env:
@@ -48,6 +70,18 @@ jobs:
           KEYSTORE_PASSWORD: ${{ secrets.KEYSTORE_PASSWORD }}
           KEY_ALIAS: ${{ secrets.KEY_ALIAS }}
           KEY_PASSWORD: ${{ secrets.KEY_PASSWORD }}
+      # Red de seguridad: aunque los secretos existan, un alias equivocado o un
+      # keystore corrupto harían que Gradle vuelva a caer a depuración. Se
+      # comprueba el resultado real antes de publicar nada.
+      - name: Comprobar que el APK no quedó firmado como depuración
+        run: |
+          APK=$(ls build/app/outputs/flutter-apk/app-arm64-v8a-release.apk)
+          SIGNER=$("$ANDROID_HOME"/build-tools/*/apksigner verify --print-certs "$APK" | grep -m1 "certificate DN" || true)
+          echo "Firmante: $SIGNER"
+          if echo "$SIGNER" | grep -qi "Android Debug"; then
+            echo "::error::El APK quedó firmado con la llave de DEPURACIÓN. No se publica."
+            exit 1
+          fi
       - name: Rename APKs
         run: |
           cd build/app/outputs/flutter-apk
