@@ -1,5 +1,6 @@
 import 'package:fluent_ui/fluent_ui.dart' as fluent;
 import 'package:flutter/material.dart';
+import 'package:prismhub/views/widgets/messenger.dart';
 import 'package:prismhub/utils/i18n.dart';
 import 'package:prismhub/views/widgets/home/home_theme.dart';
 import 'package:prismhub/views/widgets/platform_widget.dart';
@@ -80,7 +81,13 @@ class _SettingsIntpuTileState extends fluent.State<SettingsIntpuTile> {
       ),
       trailing: widget.trailing,
       onTap: !widget.enabled
-          ? null
+          // Con onTap en null el campo no hacía absolutamente nada al tocarlo
+          // y parecía que la app se había colgado. Mejor decir por qué no se
+          // puede editar.
+          ? () => showPlatformSnackbar(
+                context: context,
+                content: 'settings.locked-field'.i18n,
+              )
           : () {
               showDialog(
                 context: context,

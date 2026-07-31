@@ -5,12 +5,15 @@ import android.net.Uri
 import android.os.Build
 import android.provider.Settings
 import androidx.core.content.FileProvider
-import io.flutter.embedding.android.FlutterActivity
+// FlutterFragmentActivity y no FlutterActivity: local_auth muestra el
+// diálogo de huella con BiometricPrompt, que necesita una FragmentActivity.
+// Con la clase normal el plugin falla en tiempo de ejecución.
+import io.flutter.embedding.android.FlutterFragmentActivity
 import io.flutter.embedding.engine.FlutterEngine
 import io.flutter.plugin.common.MethodChannel
 import java.io.File
 
-class MainActivity: FlutterActivity() {
+class MainActivity: FlutterFragmentActivity() {
     private val CHANNEL = "com.example.prismhub/update"
 
     override fun configureFlutterEngine(flutterEngine: FlutterEngine) {

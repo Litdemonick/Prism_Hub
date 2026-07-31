@@ -4,7 +4,6 @@ import 'package:get/get.dart';
 import 'package:prismhub/models/index.dart';
 import 'package:prismhub/utils/connectivity.dart';
 import 'package:prismhub/utils/extension.dart';
-import 'package:prismhub/utils/prismhub_storage.dart';
 
 class ExtensionRepoPageController extends GetxController {
   List<dynamic> extensions = <dynamic>[].obs;
@@ -16,6 +15,9 @@ class ExtensionRepoPageController extends GetxController {
   // Set en vez de un tipo único — "Lectura" agrupa manga+novela.
   final Rx<Set<ExtensionType>?> searchType = Rx(null);
   final RxString searchLang = 'all'.obs;
+  // 'all' | 'stable' | 'unstable' — filtra por el flag `unstable` del
+  // catálogo (ver ExtensionCard.unstable), no por si está instalada.
+  final RxString searchLevel = 'all'.obs;
 
   static const List<String> availableLangs = [
     'all',
@@ -58,16 +60,11 @@ class ExtensionRepoPageController extends GetxController {
       extensions = List<dynamic>.from(
         await ExtensionUtils.fetchRepoIndex(forceRefresh: forceRefresh),
       );
-      // Con el ajuste apagado se oculta el nsfw solo de lo que TODAVÍA no
-      // está instalado (no se puede instalar de nuevo sin prenderlo) — una
-      // que el usuario ya tenía instalada (ej. ShadeManga/ManhwaWeb) sigue
-      // viéndose en "Instaladas" para poder gestionarla/desinstalarla; antes
-      // desaparecía de la lista por completo, como si se hubiera borrado.
-      if (!PrismHubStorage.getSetting(SettingKey.enableNSFW)) {
-        extensions.removeWhere((element) =>
-            element['nsfw'] == "true" &&
-            !ExtensionUtils.runtimes.containsKey(element['package']));
-      }
+      // El repositorio nunca oculta nada, instalada o no, tenga NSFW o no:
+      // el catálogo completo siempre se ve. El filtro del switch de
+      // Ajustes solo bloquea la instalación/activación (con aviso, ver
+      // ExtensionUtils.installWithNsfwGuard) y saca el contenido +18 de
+      // Home/Búsqueda — nunca esconde la existencia de la extensión acá.
       extensionsTemp.clear();
       extensionsTemp.addAll(extensions);
     } catch (e) {

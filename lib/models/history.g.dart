@@ -42,36 +42,67 @@ const HistorySchema = CollectionSchema(
       name: r'episodeTitle',
       type: IsarType.string,
     ),
-    r'package': PropertySchema(
+    r'isNsfw': PropertySchema(
       id: 5,
+      name: r'isNsfw',
+      type: IsarType.bool,
+    ),
+    r'knownEpisodeCount': PropertySchema(
+      id: 6,
+      name: r'knownEpisodeCount',
+      type: IsarType.long,
+    ),
+    r'lastCheckedAt': PropertySchema(
+      id: 7,
+      name: r'lastCheckedAt',
+      type: IsarType.dateTime,
+    ),
+    r'newEpisodeLabel': PropertySchema(
+      id: 8,
+      name: r'newEpisodeLabel',
+      type: IsarType.string,
+    ),
+    r'package': PropertySchema(
+      id: 9,
       name: r'package',
       type: IsarType.string,
     ),
     r'progress': PropertySchema(
-      id: 6,
+      id: 10,
       name: r'progress',
       type: IsarType.string,
     ),
+    r'seriesFinished': PropertySchema(
+      id: 11,
+      name: r'seriesFinished',
+      type: IsarType.bool,
+    ),
     r'title': PropertySchema(
-      id: 7,
+      id: 12,
       name: r'title',
       type: IsarType.string,
     ),
     r'totalProgress': PropertySchema(
-      id: 8,
+      id: 13,
       name: r'totalProgress',
       type: IsarType.string,
     ),
     r'type': PropertySchema(
-      id: 9,
+      id: 14,
       name: r'type',
       type: IsarType.string,
       enumMap: _HistorytypeEnumValueMap,
     ),
     r'url': PropertySchema(
-      id: 10,
+      id: 15,
       name: r'url',
       type: IsarType.string,
+    ),
+    r'watchState': PropertySchema(
+      id: 16,
+      name: r'watchState',
+      type: IsarType.string,
+      enumMap: _HistorywatchStateEnumValueMap,
     )
   },
   estimateSize: _historyEstimateSize,
@@ -120,12 +151,19 @@ int _historyEstimateSize(
     }
   }
   bytesCount += 3 + object.episodeTitle.length * 3;
+  {
+    final value = object.newEpisodeLabel;
+    if (value != null) {
+      bytesCount += 3 + value.length * 3;
+    }
+  }
   bytesCount += 3 + object.package.length * 3;
   bytesCount += 3 + object.progress.length * 3;
   bytesCount += 3 + object.title.length * 3;
   bytesCount += 3 + object.totalProgress.length * 3;
   bytesCount += 3 + object.type.name.length * 3;
   bytesCount += 3 + object.url.length * 3;
+  bytesCount += 3 + object.watchState.name.length * 3;
   return bytesCount;
 }
 
@@ -140,12 +178,18 @@ void _historySerialize(
   writer.writeLong(offsets[2], object.episodeGroupId);
   writer.writeLong(offsets[3], object.episodeId);
   writer.writeString(offsets[4], object.episodeTitle);
-  writer.writeString(offsets[5], object.package);
-  writer.writeString(offsets[6], object.progress);
-  writer.writeString(offsets[7], object.title);
-  writer.writeString(offsets[8], object.totalProgress);
-  writer.writeString(offsets[9], object.type.name);
-  writer.writeString(offsets[10], object.url);
+  writer.writeBool(offsets[5], object.isNsfw);
+  writer.writeLong(offsets[6], object.knownEpisodeCount);
+  writer.writeDateTime(offsets[7], object.lastCheckedAt);
+  writer.writeString(offsets[8], object.newEpisodeLabel);
+  writer.writeString(offsets[9], object.package);
+  writer.writeString(offsets[10], object.progress);
+  writer.writeBool(offsets[11], object.seriesFinished);
+  writer.writeString(offsets[12], object.title);
+  writer.writeString(offsets[13], object.totalProgress);
+  writer.writeString(offsets[14], object.type.name);
+  writer.writeString(offsets[15], object.url);
+  writer.writeString(offsets[16], object.watchState.name);
 }
 
 History _historyDeserialize(
@@ -161,13 +205,22 @@ History _historyDeserialize(
   object.episodeId = reader.readLong(offsets[3]);
   object.episodeTitle = reader.readString(offsets[4]);
   object.id = id;
-  object.package = reader.readString(offsets[5]);
-  object.progress = reader.readString(offsets[6]);
-  object.title = reader.readString(offsets[7]);
-  object.totalProgress = reader.readString(offsets[8]);
-  object.type = _HistorytypeValueEnumMap[reader.readStringOrNull(offsets[9])] ??
-      ExtensionType.manga;
-  object.url = reader.readString(offsets[10]);
+  object.isNsfw = reader.readBool(offsets[5]);
+  object.knownEpisodeCount = reader.readLong(offsets[6]);
+  object.lastCheckedAt = reader.readDateTimeOrNull(offsets[7]);
+  object.newEpisodeLabel = reader.readStringOrNull(offsets[8]);
+  object.package = reader.readString(offsets[9]);
+  object.progress = reader.readString(offsets[10]);
+  object.seriesFinished = reader.readBool(offsets[11]);
+  object.title = reader.readString(offsets[12]);
+  object.totalProgress = reader.readString(offsets[13]);
+  object.type =
+      _HistorytypeValueEnumMap[reader.readStringOrNull(offsets[14])] ??
+          ExtensionType.manga;
+  object.url = reader.readString(offsets[15]);
+  object.watchState =
+      _HistorywatchStateValueEnumMap[reader.readStringOrNull(offsets[16])] ??
+          WatchState.pending;
   return object;
 }
 
@@ -189,18 +242,31 @@ P _historyDeserializeProp<P>(
     case 4:
       return (reader.readString(offset)) as P;
     case 5:
-      return (reader.readString(offset)) as P;
+      return (reader.readBool(offset)) as P;
     case 6:
-      return (reader.readString(offset)) as P;
+      return (reader.readLong(offset)) as P;
     case 7:
-      return (reader.readString(offset)) as P;
+      return (reader.readDateTimeOrNull(offset)) as P;
     case 8:
-      return (reader.readString(offset)) as P;
+      return (reader.readStringOrNull(offset)) as P;
     case 9:
-      return (_HistorytypeValueEnumMap[reader.readStringOrNull(offset)] ??
-          ExtensionType.manga) as P;
+      return (reader.readString(offset)) as P;
     case 10:
       return (reader.readString(offset)) as P;
+    case 11:
+      return (reader.readBool(offset)) as P;
+    case 12:
+      return (reader.readString(offset)) as P;
+    case 13:
+      return (reader.readString(offset)) as P;
+    case 14:
+      return (_HistorytypeValueEnumMap[reader.readStringOrNull(offset)] ??
+          ExtensionType.manga) as P;
+    case 15:
+      return (reader.readString(offset)) as P;
+    case 16:
+      return (_HistorywatchStateValueEnumMap[reader.readStringOrNull(offset)] ??
+          WatchState.pending) as P;
     default:
       throw IsarError('Unknown property with id $propertyId');
   }
@@ -217,6 +283,14 @@ const _HistorytypeValueEnumMap = {
   r'bangumi': ExtensionType.bangumi,
   r'fikushon': ExtensionType.fikushon,
   r'mixed': ExtensionType.mixed,
+};
+const _HistorywatchStateEnumValueMap = {
+  r'pending': r'pending',
+  r'completed': r'completed',
+};
+const _HistorywatchStateValueEnumMap = {
+  r'pending': WatchState.pending,
+  r'completed': WatchState.completed,
 };
 
 Id _historyGetId(History object) {
@@ -887,6 +961,295 @@ extension HistoryQueryFilter
     });
   }
 
+  QueryBuilder<History, History, QAfterFilterCondition> isNsfwEqualTo(
+      bool value) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.equalTo(
+        property: r'isNsfw',
+        value: value,
+      ));
+    });
+  }
+
+  QueryBuilder<History, History, QAfterFilterCondition>
+      knownEpisodeCountEqualTo(int value) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.equalTo(
+        property: r'knownEpisodeCount',
+        value: value,
+      ));
+    });
+  }
+
+  QueryBuilder<History, History, QAfterFilterCondition>
+      knownEpisodeCountGreaterThan(
+    int value, {
+    bool include = false,
+  }) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.greaterThan(
+        include: include,
+        property: r'knownEpisodeCount',
+        value: value,
+      ));
+    });
+  }
+
+  QueryBuilder<History, History, QAfterFilterCondition>
+      knownEpisodeCountLessThan(
+    int value, {
+    bool include = false,
+  }) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.lessThan(
+        include: include,
+        property: r'knownEpisodeCount',
+        value: value,
+      ));
+    });
+  }
+
+  QueryBuilder<History, History, QAfterFilterCondition>
+      knownEpisodeCountBetween(
+    int lower,
+    int upper, {
+    bool includeLower = true,
+    bool includeUpper = true,
+  }) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.between(
+        property: r'knownEpisodeCount',
+        lower: lower,
+        includeLower: includeLower,
+        upper: upper,
+        includeUpper: includeUpper,
+      ));
+    });
+  }
+
+  QueryBuilder<History, History, QAfterFilterCondition> lastCheckedAtIsNull() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(const FilterCondition.isNull(
+        property: r'lastCheckedAt',
+      ));
+    });
+  }
+
+  QueryBuilder<History, History, QAfterFilterCondition>
+      lastCheckedAtIsNotNull() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(const FilterCondition.isNotNull(
+        property: r'lastCheckedAt',
+      ));
+    });
+  }
+
+  QueryBuilder<History, History, QAfterFilterCondition> lastCheckedAtEqualTo(
+      DateTime? value) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.equalTo(
+        property: r'lastCheckedAt',
+        value: value,
+      ));
+    });
+  }
+
+  QueryBuilder<History, History, QAfterFilterCondition>
+      lastCheckedAtGreaterThan(
+    DateTime? value, {
+    bool include = false,
+  }) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.greaterThan(
+        include: include,
+        property: r'lastCheckedAt',
+        value: value,
+      ));
+    });
+  }
+
+  QueryBuilder<History, History, QAfterFilterCondition> lastCheckedAtLessThan(
+    DateTime? value, {
+    bool include = false,
+  }) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.lessThan(
+        include: include,
+        property: r'lastCheckedAt',
+        value: value,
+      ));
+    });
+  }
+
+  QueryBuilder<History, History, QAfterFilterCondition> lastCheckedAtBetween(
+    DateTime? lower,
+    DateTime? upper, {
+    bool includeLower = true,
+    bool includeUpper = true,
+  }) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.between(
+        property: r'lastCheckedAt',
+        lower: lower,
+        includeLower: includeLower,
+        upper: upper,
+        includeUpper: includeUpper,
+      ));
+    });
+  }
+
+  QueryBuilder<History, History, QAfterFilterCondition>
+      newEpisodeLabelIsNull() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(const FilterCondition.isNull(
+        property: r'newEpisodeLabel',
+      ));
+    });
+  }
+
+  QueryBuilder<History, History, QAfterFilterCondition>
+      newEpisodeLabelIsNotNull() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(const FilterCondition.isNotNull(
+        property: r'newEpisodeLabel',
+      ));
+    });
+  }
+
+  QueryBuilder<History, History, QAfterFilterCondition> newEpisodeLabelEqualTo(
+    String? value, {
+    bool caseSensitive = true,
+  }) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.equalTo(
+        property: r'newEpisodeLabel',
+        value: value,
+        caseSensitive: caseSensitive,
+      ));
+    });
+  }
+
+  QueryBuilder<History, History, QAfterFilterCondition>
+      newEpisodeLabelGreaterThan(
+    String? value, {
+    bool include = false,
+    bool caseSensitive = true,
+  }) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.greaterThan(
+        include: include,
+        property: r'newEpisodeLabel',
+        value: value,
+        caseSensitive: caseSensitive,
+      ));
+    });
+  }
+
+  QueryBuilder<History, History, QAfterFilterCondition> newEpisodeLabelLessThan(
+    String? value, {
+    bool include = false,
+    bool caseSensitive = true,
+  }) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.lessThan(
+        include: include,
+        property: r'newEpisodeLabel',
+        value: value,
+        caseSensitive: caseSensitive,
+      ));
+    });
+  }
+
+  QueryBuilder<History, History, QAfterFilterCondition> newEpisodeLabelBetween(
+    String? lower,
+    String? upper, {
+    bool includeLower = true,
+    bool includeUpper = true,
+    bool caseSensitive = true,
+  }) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.between(
+        property: r'newEpisodeLabel',
+        lower: lower,
+        includeLower: includeLower,
+        upper: upper,
+        includeUpper: includeUpper,
+        caseSensitive: caseSensitive,
+      ));
+    });
+  }
+
+  QueryBuilder<History, History, QAfterFilterCondition>
+      newEpisodeLabelStartsWith(
+    String value, {
+    bool caseSensitive = true,
+  }) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.startsWith(
+        property: r'newEpisodeLabel',
+        value: value,
+        caseSensitive: caseSensitive,
+      ));
+    });
+  }
+
+  QueryBuilder<History, History, QAfterFilterCondition> newEpisodeLabelEndsWith(
+    String value, {
+    bool caseSensitive = true,
+  }) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.endsWith(
+        property: r'newEpisodeLabel',
+        value: value,
+        caseSensitive: caseSensitive,
+      ));
+    });
+  }
+
+  QueryBuilder<History, History, QAfterFilterCondition> newEpisodeLabelContains(
+      String value,
+      {bool caseSensitive = true}) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.contains(
+        property: r'newEpisodeLabel',
+        value: value,
+        caseSensitive: caseSensitive,
+      ));
+    });
+  }
+
+  QueryBuilder<History, History, QAfterFilterCondition> newEpisodeLabelMatches(
+      String pattern,
+      {bool caseSensitive = true}) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.matches(
+        property: r'newEpisodeLabel',
+        wildcard: pattern,
+        caseSensitive: caseSensitive,
+      ));
+    });
+  }
+
+  QueryBuilder<History, History, QAfterFilterCondition>
+      newEpisodeLabelIsEmpty() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.equalTo(
+        property: r'newEpisodeLabel',
+        value: '',
+      ));
+    });
+  }
+
+  QueryBuilder<History, History, QAfterFilterCondition>
+      newEpisodeLabelIsNotEmpty() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.greaterThan(
+        property: r'newEpisodeLabel',
+        value: '',
+      ));
+    });
+  }
+
   QueryBuilder<History, History, QAfterFilterCondition> packageEqualTo(
     String value, {
     bool caseSensitive = true,
@@ -1143,6 +1506,16 @@ extension HistoryQueryFilter
       return query.addFilterCondition(FilterCondition.greaterThan(
         property: r'progress',
         value: '',
+      ));
+    });
+  }
+
+  QueryBuilder<History, History, QAfterFilterCondition> seriesFinishedEqualTo(
+      bool value) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.equalTo(
+        property: r'seriesFinished',
+        value: value,
       ));
     });
   }
@@ -1668,6 +2041,136 @@ extension HistoryQueryFilter
       ));
     });
   }
+
+  QueryBuilder<History, History, QAfterFilterCondition> watchStateEqualTo(
+    WatchState value, {
+    bool caseSensitive = true,
+  }) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.equalTo(
+        property: r'watchState',
+        value: value,
+        caseSensitive: caseSensitive,
+      ));
+    });
+  }
+
+  QueryBuilder<History, History, QAfterFilterCondition> watchStateGreaterThan(
+    WatchState value, {
+    bool include = false,
+    bool caseSensitive = true,
+  }) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.greaterThan(
+        include: include,
+        property: r'watchState',
+        value: value,
+        caseSensitive: caseSensitive,
+      ));
+    });
+  }
+
+  QueryBuilder<History, History, QAfterFilterCondition> watchStateLessThan(
+    WatchState value, {
+    bool include = false,
+    bool caseSensitive = true,
+  }) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.lessThan(
+        include: include,
+        property: r'watchState',
+        value: value,
+        caseSensitive: caseSensitive,
+      ));
+    });
+  }
+
+  QueryBuilder<History, History, QAfterFilterCondition> watchStateBetween(
+    WatchState lower,
+    WatchState upper, {
+    bool includeLower = true,
+    bool includeUpper = true,
+    bool caseSensitive = true,
+  }) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.between(
+        property: r'watchState',
+        lower: lower,
+        includeLower: includeLower,
+        upper: upper,
+        includeUpper: includeUpper,
+        caseSensitive: caseSensitive,
+      ));
+    });
+  }
+
+  QueryBuilder<History, History, QAfterFilterCondition> watchStateStartsWith(
+    String value, {
+    bool caseSensitive = true,
+  }) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.startsWith(
+        property: r'watchState',
+        value: value,
+        caseSensitive: caseSensitive,
+      ));
+    });
+  }
+
+  QueryBuilder<History, History, QAfterFilterCondition> watchStateEndsWith(
+    String value, {
+    bool caseSensitive = true,
+  }) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.endsWith(
+        property: r'watchState',
+        value: value,
+        caseSensitive: caseSensitive,
+      ));
+    });
+  }
+
+  QueryBuilder<History, History, QAfterFilterCondition> watchStateContains(
+      String value,
+      {bool caseSensitive = true}) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.contains(
+        property: r'watchState',
+        value: value,
+        caseSensitive: caseSensitive,
+      ));
+    });
+  }
+
+  QueryBuilder<History, History, QAfterFilterCondition> watchStateMatches(
+      String pattern,
+      {bool caseSensitive = true}) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.matches(
+        property: r'watchState',
+        wildcard: pattern,
+        caseSensitive: caseSensitive,
+      ));
+    });
+  }
+
+  QueryBuilder<History, History, QAfterFilterCondition> watchStateIsEmpty() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.equalTo(
+        property: r'watchState',
+        value: '',
+      ));
+    });
+  }
+
+  QueryBuilder<History, History, QAfterFilterCondition> watchStateIsNotEmpty() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.greaterThan(
+        property: r'watchState',
+        value: '',
+      ));
+    });
+  }
 }
 
 extension HistoryQueryObject
@@ -1737,6 +2240,54 @@ extension HistoryQuerySortBy on QueryBuilder<History, History, QSortBy> {
     });
   }
 
+  QueryBuilder<History, History, QAfterSortBy> sortByIsNsfw() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addSortBy(r'isNsfw', Sort.asc);
+    });
+  }
+
+  QueryBuilder<History, History, QAfterSortBy> sortByIsNsfwDesc() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addSortBy(r'isNsfw', Sort.desc);
+    });
+  }
+
+  QueryBuilder<History, History, QAfterSortBy> sortByKnownEpisodeCount() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addSortBy(r'knownEpisodeCount', Sort.asc);
+    });
+  }
+
+  QueryBuilder<History, History, QAfterSortBy> sortByKnownEpisodeCountDesc() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addSortBy(r'knownEpisodeCount', Sort.desc);
+    });
+  }
+
+  QueryBuilder<History, History, QAfterSortBy> sortByLastCheckedAt() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addSortBy(r'lastCheckedAt', Sort.asc);
+    });
+  }
+
+  QueryBuilder<History, History, QAfterSortBy> sortByLastCheckedAtDesc() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addSortBy(r'lastCheckedAt', Sort.desc);
+    });
+  }
+
+  QueryBuilder<History, History, QAfterSortBy> sortByNewEpisodeLabel() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addSortBy(r'newEpisodeLabel', Sort.asc);
+    });
+  }
+
+  QueryBuilder<History, History, QAfterSortBy> sortByNewEpisodeLabelDesc() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addSortBy(r'newEpisodeLabel', Sort.desc);
+    });
+  }
+
   QueryBuilder<History, History, QAfterSortBy> sortByPackage() {
     return QueryBuilder.apply(this, (query) {
       return query.addSortBy(r'package', Sort.asc);
@@ -1758,6 +2309,18 @@ extension HistoryQuerySortBy on QueryBuilder<History, History, QSortBy> {
   QueryBuilder<History, History, QAfterSortBy> sortByProgressDesc() {
     return QueryBuilder.apply(this, (query) {
       return query.addSortBy(r'progress', Sort.desc);
+    });
+  }
+
+  QueryBuilder<History, History, QAfterSortBy> sortBySeriesFinished() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addSortBy(r'seriesFinished', Sort.asc);
+    });
+  }
+
+  QueryBuilder<History, History, QAfterSortBy> sortBySeriesFinishedDesc() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addSortBy(r'seriesFinished', Sort.desc);
     });
   }
 
@@ -1806,6 +2369,18 @@ extension HistoryQuerySortBy on QueryBuilder<History, History, QSortBy> {
   QueryBuilder<History, History, QAfterSortBy> sortByUrlDesc() {
     return QueryBuilder.apply(this, (query) {
       return query.addSortBy(r'url', Sort.desc);
+    });
+  }
+
+  QueryBuilder<History, History, QAfterSortBy> sortByWatchState() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addSortBy(r'watchState', Sort.asc);
+    });
+  }
+
+  QueryBuilder<History, History, QAfterSortBy> sortByWatchStateDesc() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addSortBy(r'watchState', Sort.desc);
     });
   }
 }
@@ -1884,6 +2459,54 @@ extension HistoryQuerySortThenBy
     });
   }
 
+  QueryBuilder<History, History, QAfterSortBy> thenByIsNsfw() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addSortBy(r'isNsfw', Sort.asc);
+    });
+  }
+
+  QueryBuilder<History, History, QAfterSortBy> thenByIsNsfwDesc() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addSortBy(r'isNsfw', Sort.desc);
+    });
+  }
+
+  QueryBuilder<History, History, QAfterSortBy> thenByKnownEpisodeCount() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addSortBy(r'knownEpisodeCount', Sort.asc);
+    });
+  }
+
+  QueryBuilder<History, History, QAfterSortBy> thenByKnownEpisodeCountDesc() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addSortBy(r'knownEpisodeCount', Sort.desc);
+    });
+  }
+
+  QueryBuilder<History, History, QAfterSortBy> thenByLastCheckedAt() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addSortBy(r'lastCheckedAt', Sort.asc);
+    });
+  }
+
+  QueryBuilder<History, History, QAfterSortBy> thenByLastCheckedAtDesc() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addSortBy(r'lastCheckedAt', Sort.desc);
+    });
+  }
+
+  QueryBuilder<History, History, QAfterSortBy> thenByNewEpisodeLabel() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addSortBy(r'newEpisodeLabel', Sort.asc);
+    });
+  }
+
+  QueryBuilder<History, History, QAfterSortBy> thenByNewEpisodeLabelDesc() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addSortBy(r'newEpisodeLabel', Sort.desc);
+    });
+  }
+
   QueryBuilder<History, History, QAfterSortBy> thenByPackage() {
     return QueryBuilder.apply(this, (query) {
       return query.addSortBy(r'package', Sort.asc);
@@ -1905,6 +2528,18 @@ extension HistoryQuerySortThenBy
   QueryBuilder<History, History, QAfterSortBy> thenByProgressDesc() {
     return QueryBuilder.apply(this, (query) {
       return query.addSortBy(r'progress', Sort.desc);
+    });
+  }
+
+  QueryBuilder<History, History, QAfterSortBy> thenBySeriesFinished() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addSortBy(r'seriesFinished', Sort.asc);
+    });
+  }
+
+  QueryBuilder<History, History, QAfterSortBy> thenBySeriesFinishedDesc() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addSortBy(r'seriesFinished', Sort.desc);
     });
   }
 
@@ -1955,6 +2590,18 @@ extension HistoryQuerySortThenBy
       return query.addSortBy(r'url', Sort.desc);
     });
   }
+
+  QueryBuilder<History, History, QAfterSortBy> thenByWatchState() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addSortBy(r'watchState', Sort.asc);
+    });
+  }
+
+  QueryBuilder<History, History, QAfterSortBy> thenByWatchStateDesc() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addSortBy(r'watchState', Sort.desc);
+    });
+  }
 }
 
 extension HistoryQueryWhereDistinct
@@ -1991,6 +2638,32 @@ extension HistoryQueryWhereDistinct
     });
   }
 
+  QueryBuilder<History, History, QDistinct> distinctByIsNsfw() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addDistinctBy(r'isNsfw');
+    });
+  }
+
+  QueryBuilder<History, History, QDistinct> distinctByKnownEpisodeCount() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addDistinctBy(r'knownEpisodeCount');
+    });
+  }
+
+  QueryBuilder<History, History, QDistinct> distinctByLastCheckedAt() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addDistinctBy(r'lastCheckedAt');
+    });
+  }
+
+  QueryBuilder<History, History, QDistinct> distinctByNewEpisodeLabel(
+      {bool caseSensitive = true}) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addDistinctBy(r'newEpisodeLabel',
+          caseSensitive: caseSensitive);
+    });
+  }
+
   QueryBuilder<History, History, QDistinct> distinctByPackage(
       {bool caseSensitive = true}) {
     return QueryBuilder.apply(this, (query) {
@@ -2002,6 +2675,12 @@ extension HistoryQueryWhereDistinct
       {bool caseSensitive = true}) {
     return QueryBuilder.apply(this, (query) {
       return query.addDistinctBy(r'progress', caseSensitive: caseSensitive);
+    });
+  }
+
+  QueryBuilder<History, History, QDistinct> distinctBySeriesFinished() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addDistinctBy(r'seriesFinished');
     });
   }
 
@@ -2031,6 +2710,13 @@ extension HistoryQueryWhereDistinct
       {bool caseSensitive = true}) {
     return QueryBuilder.apply(this, (query) {
       return query.addDistinctBy(r'url', caseSensitive: caseSensitive);
+    });
+  }
+
+  QueryBuilder<History, History, QDistinct> distinctByWatchState(
+      {bool caseSensitive = true}) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addDistinctBy(r'watchState', caseSensitive: caseSensitive);
     });
   }
 }
@@ -2073,6 +2759,30 @@ extension HistoryQueryProperty
     });
   }
 
+  QueryBuilder<History, bool, QQueryOperations> isNsfwProperty() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addPropertyName(r'isNsfw');
+    });
+  }
+
+  QueryBuilder<History, int, QQueryOperations> knownEpisodeCountProperty() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addPropertyName(r'knownEpisodeCount');
+    });
+  }
+
+  QueryBuilder<History, DateTime?, QQueryOperations> lastCheckedAtProperty() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addPropertyName(r'lastCheckedAt');
+    });
+  }
+
+  QueryBuilder<History, String?, QQueryOperations> newEpisodeLabelProperty() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addPropertyName(r'newEpisodeLabel');
+    });
+  }
+
   QueryBuilder<History, String, QQueryOperations> packageProperty() {
     return QueryBuilder.apply(this, (query) {
       return query.addPropertyName(r'package');
@@ -2082,6 +2792,12 @@ extension HistoryQueryProperty
   QueryBuilder<History, String, QQueryOperations> progressProperty() {
     return QueryBuilder.apply(this, (query) {
       return query.addPropertyName(r'progress');
+    });
+  }
+
+  QueryBuilder<History, bool, QQueryOperations> seriesFinishedProperty() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addPropertyName(r'seriesFinished');
     });
   }
 
@@ -2106,6 +2822,12 @@ extension HistoryQueryProperty
   QueryBuilder<History, String, QQueryOperations> urlProperty() {
     return QueryBuilder.apply(this, (query) {
       return query.addPropertyName(r'url');
+    });
+  }
+
+  QueryBuilder<History, WatchState, QQueryOperations> watchStateProperty() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addPropertyName(r'watchState');
     });
   }
 }

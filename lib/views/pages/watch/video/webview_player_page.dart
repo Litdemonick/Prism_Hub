@@ -1,10 +1,12 @@
 import 'dart:async';
 import 'dart:io';
 
+import 'package:auto_orientation/auto_orientation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_inappwebview/flutter_inappwebview.dart';
 import 'package:path/path.dart' as p;
+import 'package:prismhub/utils/layout.dart';
 import 'package:prismhub/utils/log.dart';
 import 'package:prismhub/utils/prismhub_directory.dart';
 import 'package:prismhub/utils/prismhub_storage.dart';
@@ -193,6 +195,18 @@ class _WebViewPlayerPageState extends State<WebViewPlayerPage>
   bool _creationFailed = false;
   bool _webViewShuttingDown = false;
   bool _returningToNativePlayer = false;
+  // Android: la portada se captura en segundo plano cada tanto y al salir se
+  // usa la última guardada, en vez de pedir una nueva. takeScreenshot() se
+  // inicia de forma síncrona y ocupa el hilo de plataforma leyendo la
+  // superficie del WebView; hacerlo justo en el frame de la animación de salida
+  // era lo que dejaba la flecha de atrás ~1s colgada y visualmente pixelada
+  // (reportado en vivo en Android). En Windows/Linux esa captura al salir no se
+  // nota, así que ahí se mantiene el comportamiento de antes — portada del
+  // momento exacto en que se salió, sin capturas de más durante la sesión.
+  static bool get _cachesCoverShot => Platform.isAndroid;
+  Uint8List? _lastShot;
+  bool _shotInFlight = false;
+  Timer? _firstShotTimer;
   void Function(FlutterErrorDetails)? _previousOnError;
   // Referencia al wrapper propio — al encadenar reintentos (pushReplacement),
   // la página nueva ya instaló el suyo antes de que esta se destruya, así
@@ -290,12 +304,24 @@ class _WebViewPlayerPageState extends State<WebViewPlayerPage>
       // Estas llamadas periódicas NO tocan la portada guardada (isFinal
       // implícito en false) — solo van sumando el contador de segundos
       // transcurridos para que el progreso mostrado en "Continuar viendo"
-      // sea razonable. La imagen de portada se captura UNA sola vez, recién
-      // al salir (ver _captureFinalAndPop/didChangeAppLifecycleState), para
-      // que muestre el momento en el que el usuario realmente se quedó, no
-      // un frame al azar de mitad de sesión.
-      _progressTimer = Timer.periodic(
-          const Duration(seconds: 15), (_) => widget.onProgress!(null));
+      // sea razonable. OJO: saveWebViewProgress suma 15s fijos por llamada, así
+      // que la cantidad de llamadas a onProgress no se puede cambiar sin
+      // falsear el tiempo visto — la captura de portada de Android va aparte
+      // (_refreshCoverShot), sin pasar por onProgress.
+      //
+      // La portada se guarda UNA sola vez, con isFinal:true al salir (ver
+      // _captureFinalProgress/didChangeAppLifecycleState).
+      _progressTimer = Timer.periodic(const Duration(seconds: 15), (_) {
+        widget.onProgress!(null);
+        unawaited(_refreshCoverShot());
+      });
+      // Una captura temprana para que una sesión más corta que el primer tick
+      // igual deje portada (en Android, donde la del momento de salir ya no se
+      // pide — ver _cachesCoverShot).
+      if (_cachesCoverShot) {
+        _firstShotTimer = Timer(
+            const Duration(seconds: 6), () => unawaited(_refreshCoverShot()));
+      }
     }
     // Sin esto, si el WebView nativo nunca llega a crearse (ej. falla de
     // COM/WebView2 en Windows — confirmado en vivo: "Cannot create the
@@ -403,6 +429,15 @@ class _WebViewPlayerPageState extends State<WebViewPlayerPage>
   Future<void> _captureFinalProgress() async {
     if (_finalCaptureDone || widget.onProgress == null) return;
     _finalCaptureDone = true;
+    if (_cachesCoverShot) {
+      // Android: se usa la última captura de fondo, sin tocar el hilo de
+      // plataforma acá — así la salida es instantánea. La portada puede ser de
+      // hasta ~15s antes del momento exacto en que se salió. Si todavía no se
+      // alcanzó a tomar ninguna (sesión de pocos segundos), va null y
+      // saveWebViewProgress deja la portada anterior / el fallback.
+      widget.onProgress!(_lastShot, isFinal: true);
+      return;
+    }
     Uint8List? shot;
     try {
       shot = await _webViewController
@@ -412,10 +447,30 @@ class _WebViewPlayerPageState extends State<WebViewPlayerPage>
     widget.onProgress!(shot, isFinal: true);
   }
 
+  // Captura de fondo (solo Android, ver _cachesCoverShot). Corre mientras el
+  // usuario mira, nunca durante la salida.
+  Future<void> _refreshCoverShot() async {
+    if (!_cachesCoverShot || _shotInFlight || _finalCaptureDone) return;
+    // Nada que capturar si todavía está el spinner, si ya se está cerrando o si
+    // el render murió — en esos casos la captura sale en blanco o falla.
+    if (_loading || _webViewShuttingDown || _webViewCrashed) return;
+    _shotInFlight = true;
+    try {
+      final shot = await _webViewController
+          ?.takeScreenshot()
+          .timeout(const Duration(seconds: 3));
+      if (shot != null) _lastShot = shot;
+    } catch (_) {
+    } finally {
+      _shotInFlight = false;
+    }
+  }
+
   void _shutdownWebView() {
     if (_webViewShuttingDown) return;
     _webViewShuttingDown = true;
     _progressTimer?.cancel();
+    _firstShotTimer?.cancel();
     _loadTimeoutTimer?.cancel();
     _heartbeatTimer?.cancel();
     _hideTimer?.cancel();
@@ -451,9 +506,21 @@ class _WebViewPlayerPageState extends State<WebViewPlayerPage>
   // se vuelve al instante — best-effort, igual que el caso de
   // background/cierre en didChangeAppLifecycleState.
   void _exitAndCaptureProgress() {
-    unawaited(_captureFinalProgress());
     _returningToNativePlayer = true;
-    if (mounted) Navigator.of(context).pop();
+    if (!mounted) {
+      unawaited(_captureFinalProgress());
+      return;
+    }
+    // El pop va PRIMERO y la captura después. En Android la captura de acá ya
+    // no toca el hilo de plataforma (usa la última de fondo, ver
+    // _cachesCoverShot), pero en escritorio sigue pidiendo una nueva: aunque
+    // esté sin await, takeScreenshot() se INICIA de forma síncrona y deja al
+    // hilo nativo leyendo la superficie del WebView. Popeando primero, la
+    // animación arranca limpia y la captura corre en la ventana en la que la
+    // ruta todavía se está yendo pero el WebView sigue vivo (dispose recién
+    // corre al terminar la transición), así que la portada se guarda igual.
+    Navigator.of(context).pop();
+    unawaited(_captureFinalProgress());
   }
 
   @override
@@ -465,8 +532,41 @@ class _WebViewPlayerPageState extends State<WebViewPlayerPage>
     if (state == AppLifecycleState.paused ||
         state == AppLifecycleState.hidden) {
       unawaited(_captureFinalProgress());
-      _shutdownWebView();
+      // SOLO se pausa el vídeo — antes acá se llamaba a _shutdownWebView(), que
+      // manda el WebView a about:blank y cancela todos los timers. Apagar la
+      // pantalla del celular pasa la app a `paused`, así que eso DESTRUÍA el
+      // reproductor: al volver a encenderla quedaba todo en negro y sin
+      // siquiera el botón de atrás (reportado en vivo).
+      //
+      // El desmontaje de verdad sigue estando donde corresponde: al salir del
+      // reproductor y en dispose. Pausar acá igual es necesario para que el
+      // audio no siga sonando con la pantalla apagada.
+      _pauseMedia();
+      return;
     }
+    if (state == AppLifecycleState.resumed) {
+      // Al volver, mostrar los controles y reiniciar el auto-ocultado: si la
+      // pantalla se apagó con los controles ya escondidos, al despertar no
+      // había nada visible y parecía que el reproductor se había colgado.
+      if (mounted) setState(() => _showControls = true);
+      _resetHideTimer();
+    }
+  }
+
+  // Pausa el vídeo/audio del sitio sin tocar nada más: no descarga la fuente, no
+  // corta la carga, no cancela timers y no navega a otra página. Sirve para
+  // segundo plano, donde el reproductor tiene que seguir vivo para cuando el
+  // usuario vuelva.
+  void _pauseMedia() {
+    final controller = _webViewController;
+    if (controller == null) return;
+    try {
+      unawaited(controller.evaluateJavascript(source: '''
+        for (const v of document.querySelectorAll('video, audio')) {
+          try { v.pause(); } catch (_) {}
+        }
+      '''));
+    } catch (_) {}
   }
 
   // Solo Windows: en Android se probó pedirle al <video> del sitio que
@@ -495,6 +595,7 @@ class _WebViewPlayerPageState extends State<WebViewPlayerPage>
     }
     WidgetsBinding.instance.removeObserver(this);
     _progressTimer?.cancel();
+    _firstShotTimer?.cancel();
     _loadTimeoutTimer?.cancel();
     _heartbeatTimer?.cancel();
     _hideTimer?.cancel();
@@ -502,9 +603,53 @@ class _WebViewPlayerPageState extends State<WebViewPlayerPage>
     if (Platform.isWindows && _isFullScreen) {
       unawaited(WindowManager.instance.setFullScreen(false));
     }
-    SystemChrome.setEnabledSystemUIMode(SystemUiMode.edgeToEdge);
-    SystemChrome.setPreferredOrientations(DeviceOrientation.values);
+    // Solo si NO se vuelve al reproductor nativo. Con la flecha de atrás se
+    // vuelve a él (ver _exitAndCaptureProgress), y ese sigue abierto queriendo
+    // horizontal + pantalla completa: restaurar acá forzaba rotación libre y
+    // barras visibles, el nativo las volvía a cambiar enseguida, y esos dos
+    // relayouts encadenados hacían que la flecha se sintiera colgada varios
+    // segundos en Android (reportado en vivo; en Windows no se nota porque no
+    // hay cambio de orientación). Cuando de verdad se sale del reproductor,
+    // quien restaura es VideoPlayerController (closeRoute/onClose), que es el
+    // dueño real de ese estado.
+    if (!_returningToNativePlayer) {
+      _restoreSystemUiOnExit();
+    }
     super.dispose();
+  }
+
+  // Devuelve barras de sistema y rotación al estado normal al salir del
+  // reproductor. Es EXACTAMENTE lo mismo que hace VideoPlayerController.onClose
+  // — antes acá se hacía distinto y eso provocaba los dos bugs reportados en
+  // vivo en Android:
+  //
+  // 1) `edgeToEdge` dejaba la hora/batería/notificaciones "comidas": el
+  //    SafeArea de la pantalla de destino no llegaba a refrescar su padding
+  //    superior tras el cambio de modo, así que el contenido se dibujaba
+  //    encima del status bar. Pedir `manual` con TODOS los overlays fuerza a
+  //    que ambas barras vuelvan reservando su espacio, sin depender de ese
+  //    timing.
+  //
+  // 2) El celular quedaba trabado en horizontal para toda la app. El
+  //    reproductor nativo deja un bloqueo NATIVO de orientación
+  //    (AutoOrientation.landscapeAutoMode(forceSensor: true) en su onInit) que
+  //    solo libera fullAutoMode(). Acá solo se llamaba a
+  //    setPreferredOrientations, que NO alcanza para soltar ese bloqueo — y
+  //    como a esta pantalla se puede llegar desde el reproductor nativo (ver
+  //    el comentario en initState), salir por acá dejaba el bloqueo puesto y
+  //    nada más en la app volvía a pedir rotación libre.
+  void _restoreSystemUiOnExit() {
+    SystemChrome.setEnabledSystemUIMode(
+      SystemUiMode.manual,
+      overlays: SystemUiOverlay.values,
+    );
+    if (!Platform.isAndroid) return;
+    // Mismo criterio que el reproductor nativo: en tablet no se toca la
+    // orientación (nunca se la forzó).
+    if (!LayoutUtils.isTablet) {
+      unawaited(AutoOrientation.fullAutoMode());
+      SystemChrome.setPreferredOrientations(DeviceOrientation.values);
+    }
   }
 
   @override

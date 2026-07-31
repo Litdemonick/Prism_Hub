@@ -1,4 +1,4 @@
-﻿import 'package:flutter/material.dart';
+import 'package:flutter/material.dart';
 import 'package:flutter_i18n/flutter_i18n.dart';
 import 'package:get/get.dart';
 import 'package:prismhub/controllers/detail_controller.dart';
@@ -45,19 +45,87 @@ class _StatusBadge extends StatelessWidget {
     final color = _statusColor(status);
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+      // Fondo SÓLIDO y borde sólido. Antes el relleno iba al 16% y el borde
+      // al 70%, así que sobre la portada del detalle —que puede ser clara o
+      // de colores fuertes— el distintivo se mezclaba y casi no se leía. Con
+      // el color pleno y el texto en blanco se ve igual sobre cualquier
+      // imagen, que es lo único que importa acá.
       decoration: BoxDecoration(
-        color: color.withValues(alpha: 0.16),
+        color: color,
         borderRadius: BorderRadius.circular(999),
-        border: Border.all(color: color.withValues(alpha: 0.7)),
+        border: Border.all(color: Colors.white.withValues(alpha: 0.55)),
       ),
       child: Text(
         _statusLabel(status)!,
-        style: TextStyle(
-          color: color,
+        style: const TextStyle(
+          color: Colors.white,
           fontSize: 12,
           fontWeight: FontWeight.w600,
         ),
       ),
+    );
+  }
+}
+
+/// Aviso de extensión marcada inestable, dentro de la ficha.
+///
+/// Reemplaza al diálogo que antes cortaba la entrada: se puede mirar el
+/// detalle igual, con el motivo a la vista. Si la extensión vuelve a
+/// funcionar, el catálogo la desmarca y este aviso desaparece solo.
+class _UnstableNotice extends StatelessWidget {
+  const _UnstableNotice({required this.package});
+  final String package;
+
+  String _texto(BuildContext context, String? motivo) {
+    switch (motivo) {
+      case 'site-down':
+        return 'extension.unstable-site-down'.i18n;
+      case 'outdated':
+        return 'extension.unstable-outdated'.i18n;
+      default:
+        return 'extension.unstable-broken'.i18n;
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return FutureBuilder<bool>(
+      future: ExtensionUtils.isRemoteUnstable(package),
+      builder: (context, snap) {
+        if (snap.data != true) return const SizedBox.shrink();
+        return FutureBuilder<String?>(
+          future: ExtensionUtils.remoteUnstableReason(package),
+          builder: (context, motivo) {
+            return Container(
+              margin: const EdgeInsets.only(top: 12),
+              padding: const EdgeInsets.all(12),
+              decoration: BoxDecoration(
+                color: const Color(0xFFF59E0B).withValues(alpha: 0.12),
+                borderRadius: BorderRadius.circular(10),
+                border: Border.all(color: const Color(0xFFF59E0B)),
+              ),
+              child: Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  const Icon(Icons.warning_amber_rounded,
+                      size: 18, color: Color(0xFFF59E0B)),
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: Text(
+                      _texto(context, motivo.data),
+                      style: const TextStyle(
+                        color: HomeTheme.textMuted,
+                        fontSize: 12.5,
+                        height: 1.4,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            );
+          },
+        );
+      },
     );
   }
 }
@@ -100,56 +168,66 @@ class DetailExtensionTile extends StatelessWidget {
       // portada — con Row se cortaba el badge de estado fuera de pantalla
       // ("RIGHT OVERFLOWED", reportado en vivo con captura). Con Wrap, lo
       // que no entra baja a una segunda línea en vez de desbordar.
-      return Wrap(
-        crossAxisAlignment: WrapCrossAlignment.center,
-        runSpacing: 4,
+      // Column para poder colgar el aviso de inestable DEBAJO de la línea de
+      // identificación, sin meterlo dentro del Wrap (ahí competiría por el
+      // ancho con el nombre y el estado, y en celular bajaría partido).
+      return Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        mainAxisSize: MainAxisSize.min,
         children: [
-          if (c.extension!.icon != null)
-            Container(
-              margin: const EdgeInsets.only(right: 8),
-              decoration: const BoxDecoration(
-                shape: BoxShape.circle,
+          Wrap(
+            crossAxisAlignment: WrapCrossAlignment.center,
+            runSpacing: 4,
+            children: [
+              if (c.extension!.icon != null)
+                Container(
+                  margin: const EdgeInsets.only(right: 8),
+                  decoration: const BoxDecoration(
+                    shape: BoxShape.circle,
+                  ),
+                  clipBehavior: Clip.antiAlias,
+                  child: CacheNetWorkImagePic(
+                    c.extension!.icon!,
+                    width: 20,
+                  ),
+                ),
+              Text(
+                c.extension!.name,
+                style: const TextStyle(
+                  color: HomeTheme.textPrimary,
+                  fontWeight: FontWeight.w600,
+                ),
               ),
-              clipBehavior: Clip.antiAlias,
-              child: CacheNetWorkImagePic(
-                c.extension!.icon!,
-                width: 20,
-              ),
-            ),
-          Text(
-            c.extension!.name,
-            style: const TextStyle(
-              color: HomeTheme.textPrimary,
-              fontWeight: FontWeight.w600,
-            ),
+              if (typeKnown) ...[
+                const SizedBox(width: 8),
+                const DecoratedBox(
+                  decoration: BoxDecoration(
+                    shape: BoxShape.circle,
+                    color: HomeTheme.textMuted,
+                  ),
+                  child: SizedBox(width: 4, height: 4),
+                ),
+                const SizedBox(width: 8),
+                // Mismo color que el badge de tipo en las tarjetas (azul para
+                // vídeo, morado para lectura) — antes era gris apagado y no se
+                // distinguía de un texto secundario cualquiera.
+                Text(
+                  ExtensionUtils.typeToString(c.type),
+                  style: TextStyle(
+                    color: _typeColor(c.type),
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+              ],
+              // Estado de publicación (en emisión / finalizado / ...). Solo se
+              // muestra si la extensión lo manda — ver ExtensionDetail.status.
+              if (_statusLabel(c.detail?.status) != null) ...[
+                const SizedBox(width: 10),
+                _StatusBadge(status: c.detail!.status!),
+              ],
+            ],
           ),
-          if (typeKnown) ...[
-            const SizedBox(width: 8),
-            const DecoratedBox(
-              decoration: BoxDecoration(
-                shape: BoxShape.circle,
-                color: HomeTheme.textMuted,
-              ),
-              child: SizedBox(width: 4, height: 4),
-            ),
-            const SizedBox(width: 8),
-            // Mismo color que el badge de tipo en las tarjetas (azul para
-            // vídeo, morado para lectura) — antes era gris apagado y no se
-            // distinguía de un texto secundario cualquiera.
-            Text(
-              ExtensionUtils.typeToString(c.type),
-              style: TextStyle(
-                color: _typeColor(c.type),
-                fontWeight: FontWeight.w600,
-              ),
-            ),
-          ],
-          // Estado de publicación (en emisión / finalizado / ...). Solo se
-          // muestra si la extensión lo manda — ver ExtensionDetail.status.
-          if (_statusLabel(c.detail?.status) != null) ...[
-            const SizedBox(width: 10),
-            _StatusBadge(status: c.detail!.status!),
-          ],
+          _UnstableNotice(package: c.package),
         ],
       );
     });

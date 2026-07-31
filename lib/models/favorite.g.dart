@@ -27,24 +27,29 @@ const FavoriteSchema = CollectionSchema(
       name: r'date',
       type: IsarType.dateTime,
     ),
-    r'package': PropertySchema(
+    r'isNsfw': PropertySchema(
       id: 2,
+      name: r'isNsfw',
+      type: IsarType.bool,
+    ),
+    r'package': PropertySchema(
+      id: 3,
       name: r'package',
       type: IsarType.string,
     ),
     r'title': PropertySchema(
-      id: 3,
+      id: 4,
       name: r'title',
       type: IsarType.string,
     ),
     r'type': PropertySchema(
-      id: 4,
+      id: 5,
       name: r'type',
       type: IsarType.string,
       enumMap: _FavoritetypeEnumValueMap,
     ),
     r'url': PropertySchema(
-      id: 5,
+      id: 6,
       name: r'url',
       type: IsarType.string,
     )
@@ -109,10 +114,11 @@ void _favoriteSerialize(
 ) {
   writer.writeString(offsets[0], object.cover);
   writer.writeDateTime(offsets[1], object.date);
-  writer.writeString(offsets[2], object.package);
-  writer.writeString(offsets[3], object.title);
-  writer.writeString(offsets[4], object.type.name);
-  writer.writeString(offsets[5], object.url);
+  writer.writeBool(offsets[2], object.isNsfw);
+  writer.writeString(offsets[3], object.package);
+  writer.writeString(offsets[4], object.title);
+  writer.writeString(offsets[5], object.type.name);
+  writer.writeString(offsets[6], object.url);
 }
 
 Favorite _favoriteDeserialize(
@@ -125,12 +131,13 @@ Favorite _favoriteDeserialize(
   object.cover = reader.readStringOrNull(offsets[0]);
   object.date = reader.readDateTime(offsets[1]);
   object.id = id;
-  object.package = reader.readString(offsets[2]);
-  object.title = reader.readString(offsets[3]);
+  object.isNsfw = reader.readBool(offsets[2]);
+  object.package = reader.readString(offsets[3]);
+  object.title = reader.readString(offsets[4]);
   object.type =
-      _FavoritetypeValueEnumMap[reader.readStringOrNull(offsets[4])] ??
+      _FavoritetypeValueEnumMap[reader.readStringOrNull(offsets[5])] ??
           ExtensionType.manga;
-  object.url = reader.readString(offsets[5]);
+  object.url = reader.readString(offsets[6]);
   return object;
 }
 
@@ -146,13 +153,15 @@ P _favoriteDeserializeProp<P>(
     case 1:
       return (reader.readDateTime(offset)) as P;
     case 2:
-      return (reader.readString(offset)) as P;
+      return (reader.readBool(offset)) as P;
     case 3:
       return (reader.readString(offset)) as P;
     case 4:
+      return (reader.readString(offset)) as P;
+    case 5:
       return (_FavoritetypeValueEnumMap[reader.readStringOrNull(offset)] ??
           ExtensionType.manga) as P;
-    case 5:
+    case 6:
       return (reader.readString(offset)) as P;
     default:
       throw IsarError('Unknown property with id $propertyId');
@@ -598,6 +607,16 @@ extension FavoriteQueryFilter
         includeLower: includeLower,
         upper: upper,
         includeUpper: includeUpper,
+      ));
+    });
+  }
+
+  QueryBuilder<Favorite, Favorite, QAfterFilterCondition> isNsfwEqualTo(
+      bool value) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.equalTo(
+        property: r'isNsfw',
+        value: value,
       ));
     });
   }
@@ -1154,6 +1173,18 @@ extension FavoriteQuerySortBy on QueryBuilder<Favorite, Favorite, QSortBy> {
     });
   }
 
+  QueryBuilder<Favorite, Favorite, QAfterSortBy> sortByIsNsfw() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addSortBy(r'isNsfw', Sort.asc);
+    });
+  }
+
+  QueryBuilder<Favorite, Favorite, QAfterSortBy> sortByIsNsfwDesc() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addSortBy(r'isNsfw', Sort.desc);
+    });
+  }
+
   QueryBuilder<Favorite, Favorite, QAfterSortBy> sortByPackage() {
     return QueryBuilder.apply(this, (query) {
       return query.addSortBy(r'package', Sort.asc);
@@ -1241,6 +1272,18 @@ extension FavoriteQuerySortThenBy
     });
   }
 
+  QueryBuilder<Favorite, Favorite, QAfterSortBy> thenByIsNsfw() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addSortBy(r'isNsfw', Sort.asc);
+    });
+  }
+
+  QueryBuilder<Favorite, Favorite, QAfterSortBy> thenByIsNsfwDesc() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addSortBy(r'isNsfw', Sort.desc);
+    });
+  }
+
   QueryBuilder<Favorite, Favorite, QAfterSortBy> thenByPackage() {
     return QueryBuilder.apply(this, (query) {
       return query.addSortBy(r'package', Sort.asc);
@@ -1305,6 +1348,12 @@ extension FavoriteQueryWhereDistinct
     });
   }
 
+  QueryBuilder<Favorite, Favorite, QDistinct> distinctByIsNsfw() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addDistinctBy(r'isNsfw');
+    });
+  }
+
   QueryBuilder<Favorite, Favorite, QDistinct> distinctByPackage(
       {bool caseSensitive = true}) {
     return QueryBuilder.apply(this, (query) {
@@ -1351,6 +1400,12 @@ extension FavoriteQueryProperty
   QueryBuilder<Favorite, DateTime, QQueryOperations> dateProperty() {
     return QueryBuilder.apply(this, (query) {
       return query.addPropertyName(r'date');
+    });
+  }
+
+  QueryBuilder<Favorite, bool, QQueryOperations> isNsfwProperty() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addPropertyName(r'isNsfw');
     });
   }
 

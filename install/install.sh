@@ -110,6 +110,7 @@ declare -A I18N_ES=(
     [dep_installing]="Instalando"
     [dep_ok]="instalado correctamente"
     [dep_fail]="Error instalando"
+    [dep_skip_optional]="omitido (opcional, no está en tu distro)"
     [dep_distro_unknown]="No se pudo detectar tu distribución automáticamente."
     [dep_manual_list]="Asegúrate de tener instalado:"
     [dep_sudo]="Verificando acceso sudo..."
@@ -153,6 +154,7 @@ declare -A I18N_EN=(
     [dep_installing]="Installing"
     [dep_ok]="installed successfully"
     [dep_fail]="Error installing"
+    [dep_skip_optional]="skipped (optional, not in your distro)"
     [dep_distro_unknown]="Could not detect your distribution automatically."
     [dep_manual_list]="Make sure you have installed:"
     [dep_sudo]="Verifying sudo access..."
@@ -278,6 +280,36 @@ check_dependencies() {
     local -a pkg_names=()
     local -a pkg_check=()
     local -a pkg_install=()
+    # Paralelo a los de arriba: "1" = si falla, se avisa y se sigue. Solo
+    # webkit lo usa (ver la nota de por qué es opcional más abajo). Se lee con
+    # ${pkg_optional[$i]:-0}, así que las ramas que no lo llenen siguen
+    # tratando todo como obligatorio, igual que antes.
+    local -a pkg_optional=()
+    # Qué gestor usar para averiguar si un paquete existe (ver
+    # _pick_available_pkg). Lo setea cada rama del case.
+    local PKG_PROBE=""
+
+    # Elige el PRIMER nombre de paquete que de verdad exista en los repos de
+    # esta máquina. Los nombres de webkit cambian entre versiones de cada
+    # distro (Debian 11 traía libwebkit2gtk-4.0-37, Debian 12/Kali actuales
+    # traen libwebkit2gtk-4.1-0; Fedora pasó de webkit2gtk3 a webkit2gtk4.1),
+    # así que un nombre fijo rompe la instalación en cuanto la distro avanza
+    # — reportado en vivo en Kali: "E: Unable to locate package
+    # libwebkit2gtk-4.0-37" y el instalador cortaba con error.
+    #
+    # Imprime el nombre elegido, o nada si ninguno está disponible.
+    _pick_available_pkg() {
+        local candidate
+        for candidate in "$@"; do
+            case "$PKG_PROBE" in
+                apt)    apt-cache show "$candidate" &>/dev/null && { echo "$candidate"; return 0; } ;;
+                dnf)    dnf --cacheonly info "$candidate" &>/dev/null && { echo "$candidate"; return 0; } ;;
+                zypper) zypper --non-interactive info "$candidate" 2>/dev/null | grep -q "^Name" && { echo "$candidate"; return 0; } ;;
+                xbps)   xbps-query -Rs "$candidate" 2>/dev/null | grep -q . && { echo "$candidate"; return 0; } ;;
+            esac
+        done
+        return 1
+    }
 
     case "$distro" in
         # ── Arch Linux y derivadas (CachyOS, Manjaro, etc.) ─────────────────
@@ -300,35 +332,72 @@ archlabs|archcraft|parabola|hyperbola|blackarch)
             pkg_names=("gtk3" "mpv" "libx11")
             pkg_check=("pacman -Qs '^gtk3$'" "pacman -Qs '^mpv$'" "pacman -Qs '^libx11$'")
             pkg_install=("sudo pacman -S --noconfirm gtk3" "sudo pacman -S --noconfirm mpv" "sudo pacman -S --noconfirm libx11")
+            pkg_optional=("0" "0" "0")
 
             if [[ -n "${_wk_pkg:-}" ]]; then
                 pkg_names+=("${_wk_pkg}")
                 pkg_check+=("${_wk_check}")
                 pkg_install+=("${_wk_install}")
+                pkg_optional+=("1")
             fi
             ;;
         # ── Debian / Ubuntu y derivadas ───────────────────────────────────────
         debian|ubuntu|linuxmint|pop|elementary|zorin|neon|kali|\
 raspbian|mx|antix|pureos|tails|parrot|deepin|backbox)
-            pkg_names=("libgtk-3-0" "mpv" "libx11-6" "libwebkit2gtk-4.0-37")
-            pkg_check=("dpkg -s libgtk-3-0 2>/dev/null" "dpkg -s mpv 2>/dev/null" "dpkg -s libx11-6 2>/dev/null" "dpkg -s libwebkit2gtk-4.0-37 2>/dev/null || dpkg -s libjavascriptcoregtk-4.0-18 2>/dev/null")
-            pkg_install=("sudo apt-get install -y libgtk-3-0" "sudo apt-get install -y mpv" "sudo apt-get install -y libx11-6" "sudo apt-get install -y libwebkit2gtk-4.0-37")
+            PKG_PROBE=apt
+            pkg_names=("libgtk-3-0" "mpv" "libx11-6")
+            pkg_check=("dpkg -s libgtk-3-0 2>/dev/null" "dpkg -s mpv 2>/dev/null" "dpkg -s libx11-6 2>/dev/null")
+            pkg_install=("sudo apt-get install -y libgtk-3-0" "sudo apt-get install -y mpv" "sudo apt-get install -y libx11-6")
+            pkg_optional=("0" "0" "0")
+
+            # 4.1 primero (Debian 12, Ubuntu 24.04, Kali actual), 4.0 como
+            # respaldo para las viejas. Si no está ninguno, webkit se omite.
+            local _wk
+            if _wk=$(_pick_available_pkg libwebkit2gtk-4.1-0 libwebkit2gtk-4.0-37); then
+                pkg_names+=("$_wk")
+                pkg_check+=("dpkg -s $_wk 2>/dev/null")
+                pkg_install+=("sudo apt-get install -y $_wk")
+                pkg_optional+=("1")
+            fi
             ;;
         # ── Fedora / RHEL y derivadas ─────────────────────────────────────────
         fedora|rhel|centos|rocky|alma|nobara|ultramarine|mageia|openmandriva)
-            pkg_names=("gtk3" "mpv" "webkit2gtk3")
-            pkg_check=("rpm -q gtk3 2>/dev/null" "rpm -q mpv 2>/dev/null" "rpm -q webkit2gtk3 2>/dev/null")
-            pkg_install=("sudo dnf install -y gtk3" "sudo dnf install -y mpv" "sudo dnf install -y webkit2gtk3")
+            PKG_PROBE=dnf
+            pkg_names=("gtk3" "mpv")
+            pkg_check=("rpm -q gtk3 2>/dev/null" "rpm -q mpv 2>/dev/null")
+            pkg_install=("sudo dnf install -y gtk3" "sudo dnf install -y mpv")
+            pkg_optional=("0" "0")
+
+            # Fedora renombró webkit2gtk3 -> webkit2gtk4.1 (y 4.0 en el medio).
+            local _wk
+            if _wk=$(_pick_available_pkg webkit2gtk4.1 webkit2gtk3 webkit2gtk4.0); then
+                pkg_names+=("$_wk")
+                pkg_check+=("rpm -q $_wk 2>/dev/null")
+                pkg_install+=("sudo dnf install -y $_wk")
+                pkg_optional+=("1")
+            fi
             ;;
         # ── openSUSE ──────────────────────────────────────────────────────────
         opensuse|suse)
-            pkg_names=("libgtk-3-0" "mpv" "libwebkit2gtk-4_0-37")
-            pkg_check=("rpm -q libgtk-3-0 2>/dev/null" "rpm -q mpv 2>/dev/null" "rpm -q libwebkit2gtk-4_0-37 2>/dev/null")
-            pkg_install=("sudo zypper install -y libgtk-3-0" "sudo zypper install -y mpv" "sudo zypper install -y libwebkit2gtk-4_0-37")
+            PKG_PROBE=zypper
+            pkg_names=("libgtk-3-0" "mpv")
+            pkg_check=("rpm -q libgtk-3-0 2>/dev/null" "rpm -q mpv 2>/dev/null")
+            pkg_install=("sudo zypper install -y libgtk-3-0" "sudo zypper install -y mpv")
+            pkg_optional=("0" "0")
+
+            local _wk
+            if _wk=$(_pick_available_pkg libwebkit2gtk-4_1-0 libwebkit2gtk-4_0-37); then
+                pkg_names+=("$_wk")
+                pkg_check+=("rpm -q $_wk 2>/dev/null")
+                pkg_install+=("sudo zypper install -y $_wk")
+                pkg_optional+=("1")
+            fi
             ;;
         # ── Void Linux ────────────────────────────────────────────────────────
         void)
+            PKG_PROBE=xbps
             pkg_names=("gtk+3" "mpv" "webkit2gtk")
+            pkg_optional=("0" "0" "1")
             pkg_check=("xbps-query gtk+3 2>/dev/null" "xbps-query mpv 2>/dev/null" "xbps-query webkit2gtk 2>/dev/null")
             pkg_install=("sudo xbps-install -Sy gtk+3" "sudo xbps-install -Sy mpv" "sudo xbps-install -Sy webkit2gtk")
             ;;
@@ -412,6 +481,15 @@ raspbian|mx|antix|pureos|tails|parrot|deepin|backbox)
             if wait $pid 2>/dev/null; then
                 rm -f "$install_log"
                 success "$(printf '%-25s' "$pkg") $(t dep_ok)"
+            elif [[ "${pkg_optional[$i]:-0}" == "1" ]]; then
+                # Opcional: webkit solo agrega soporte de WebView. QuickJS ya
+                # reemplazó a JavaScriptCore para ejecutar las extensiones, así
+                # que el app arranca y funciona sin él — cortar la instalación
+                # por esto dejaba a distros con otro nombre de paquete sin
+                # poder instalar nada (reportado en vivo en Kali).
+                rm -f "$install_log"
+                warn "$(printf '%-25s' "$pkg") $(t dep_skip_optional)"
+                log "Optional dependency skipped: $pkg"
             else
                 error "$(t dep_fail) $(printf '%-25s' "$pkg")"
                 if [[ -f "$install_log" ]]; then

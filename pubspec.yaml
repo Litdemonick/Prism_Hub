@@ -1,7 +1,7 @@
 ﻿name: prismhub
 description: PrismHub - Anime, manga and novels streaming application
 publish_to: "none"
-version: 1.0.8+1
+version: 1.0.9+1
 
 environment:
   sdk: ">=3.0.3 <4.0.0"
@@ -15,6 +15,11 @@ dependencies:
   easy_refresh: ^3.3.2+1
   fluent_ui: ^4.7.6
   flutter:
+    sdk: flutter
+  # Traducciones de los widgets NATIVOS de Flutter (selector de fecha, menús
+  # de texto, etiquetas de accesibilidad). Sin esto salían siempre en inglés
+  # por más que la app estuviera en español.
+  flutter_localizations:
     sdk: flutter
   flutter_animate: ^4.1.1+1
   flutter_code_editor: ^0.3.0
@@ -33,6 +38,9 @@ dependencies:
   media_kit: ^1.1.10+1
   media_kit_video: ^1.2.4
   media_kit_libs_video: ^1.0.4
+  # Biometría / credencial del sistema para la Zona +18 (huella en Android,
+  # Windows Hello en Windows). En Linux no hay implementación y se cae al PIN.
+  local_auth: ^2.3.0
   package_info_plus: ^4.2.0
   palette_generator: ^0.3.3+2
   path: ^1.8.3

@@ -3,7 +3,8 @@
     "allow": [
       "Bash(git commit *)",
       "Bash(git push *)",
-      "Bash(git merge *)"
+      "Bash(git merge *)",
+      "Bash(dart analyze *)"
     ]
   }
 }

@@ -231,13 +231,41 @@ class AniListProvider {
             romaji
             english
             native
-            userPreferred 
+            userPreferred
         }
+        synonyms
     }
   }}
   """;
     final res = await postRequest(queryString: nameQuery);
     return res["data"]["Page"]["media"];
+  }
+
+  // Títulos alternativos (romaji/english/native/synonyms) del primer
+  // resultado para `query` — usado como "probar con otro título" cuando una
+  // extensión no encuentra nada con lo que el usuario escribió (puede tener
+  // el catálogo en otro idioma). Requiere sesión de AniList (mismo
+  // mediaQuerypage de arriba, mismo token); si no hay ninguna coincidencia
+  // devuelve una lista vacía en vez de lanzar.
+  static Future<List<String>> searchAlternateTitles(
+    String query,
+    AnilistType type,
+  ) async {
+    final results = await mediaQuerypage(searchString: query, type: type);
+    if (results.isEmpty) return const [];
+    final title = results.first["title"] as Map<String, dynamic>?;
+    final synonyms = (results.first["synonyms"] as List?)?.cast<String>();
+    final normalizedQuery = query.trim().toLowerCase();
+    final candidates = <String>{
+      if (title?["english"] != null) title!["english"] as String,
+      if (title?["romaji"] != null) title!["romaji"] as String,
+      if (title?["native"] != null) title!["native"] as String,
+      ...?synonyms,
+    };
+    // Saca el/los que sean igual (sin importar mayúsculas) a lo que el
+    // usuario ya escribió — no tiene sentido "reintentar" con lo mismo.
+    candidates.removeWhere((t) => t.trim().toLowerCase() == normalizedQuery);
+    return candidates.toList();
   }
 
   static Future<String> editList({

@@ -11,12 +11,30 @@ final _context =
     Platform.isAndroid ? Get.context! : rootNavigatorKey.currentContext!;
 
 class I18nUtils {
+  // Los únicos idiomas que la app trae traducidos. Tener archivos a medio
+  // traducir era una fuente silenciosa de fallos: una clave que falta en un
+  // idioma no se nota hasta que alguien abre esa pantalla en ese idioma.
+  static const supportedLanguages = {'en', 'es'};
+  static const fallbackLanguage = 'es';
+
+  // getSetting devuelve null si el almacenamiento no llegó a inicializar, y
+  // Locale() pide un String NO nulable: pasarle null tira "type 'Null' is not
+  // a subtype of type 'String'" mientras se construye la app, o sea pantalla
+  // muerta sin explicación. También se valida contra la lista: un idioma
+  // guardado que ya no existe (ej. de una versión anterior con más idiomas)
+  // dejaría al cargador buscando un archivo que no está.
+  static String get currentLanguageCode {
+    final saved = PrismHubStorage.getSetting(SettingKey.language);
+    if (saved is String && supportedLanguages.contains(saved)) return saved;
+    return fallbackLanguage;
+  }
+
   static final flutterI18nDelegate = FlutterI18nDelegate(
     translationLoader: FileTranslationLoader(
       useCountryCode: false,
       fallbackFile: 'en',
       basePath: 'assets/i18n',
-      forcedLocale: Locale(PrismHubStorage.getSetting(SettingKey.language)),
+      forcedLocale: Locale(currentLanguageCode),
       decodeStrategies: [JsonDecodeStrategy()],
     ),
   );

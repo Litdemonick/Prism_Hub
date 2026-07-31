@@ -57,7 +57,9 @@ class _RefreshButtonState extends State<RefreshButton>
           duration: const Duration(milliseconds: 150),
           padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
           decoration: BoxDecoration(
-            color: _isHover ? HomeTheme.accentPink.withValues(alpha: 0.18) : HomeTheme.cardSurface,
+            color: _isHover
+                ? HomeTheme.accentPink.withValues(alpha: 0.18)
+                : HomeTheme.cardSurface,
             borderRadius: BorderRadius.circular(999),
             border: Border.all(
               color: _isHover ? HomeTheme.accentPink : HomeTheme.border,
@@ -71,7 +73,8 @@ class _RefreshButtonState extends State<RefreshButton>
                 child: Icon(
                   Icons.refresh_rounded,
                   size: 16,
-                  color: _isHover ? HomeTheme.accentPink : HomeTheme.textPrimary,
+                  color:
+                      _isHover ? HomeTheme.accentPink : HomeTheme.textPrimary,
                 ),
               ),
               const SizedBox(width: 6),
@@ -80,7 +83,8 @@ class _RefreshButtonState extends State<RefreshButton>
                 style: TextStyle(
                   fontSize: 12.5,
                   fontWeight: FontWeight.w600,
-                  color: _isHover ? HomeTheme.accentPink : HomeTheme.textPrimary,
+                  color:
+                      _isHover ? HomeTheme.accentPink : HomeTheme.textPrimary,
                 ),
               ),
             ],

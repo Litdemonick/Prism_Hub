@@ -6,13 +6,54 @@ import 'package:get/get.dart';
 import 'package:prismhub/data/services/extension_service.dart';
 import 'package:prismhub/models/index.dart';
 import 'package:prismhub/data/services/database_service.dart';
+import 'package:prismhub/utils/novedades.dart';
 import 'package:prismhub/utils/connectivity.dart';
 import 'package:prismhub/utils/extension.dart';
-import 'package:prismhub/utils/prismhub_storage.dart';
 import 'package:prismhub/utils/resume_history.dart';
 
 class HomePageController extends GetxController {
+  // Tag con el que se registra la instancia de la Zona +18 (mismo
+  // controller, ver Nsfw18ZonePage) — así ambas instancias conviven sin
+  // pisarse: Get.find<HomePageController>() sin tag sigue resolviendo
+  // siempre la del Home normal.
+  static const zoneTag = 'nsfw18-zone';
+
+  // Refresca la instancia normal Y la de la Zona +18 (si está montada) —
+  // usado por los sitios que tocan History/Favorite (detail/video/reader
+  // controllers) para que ambas vistas queden al día sin importar desde
+  // cuál de las dos se guardó el cambio.
+  static Future<void> refreshAll() async {
+    await Future.wait(<Future<void>>[
+      if (Get.isRegistered<HomePageController>())
+        Get.find<HomePageController>().onRefresh(),
+      if (Get.isRegistered<HomePageController>(tag: zoneTag))
+        Get.find<HomePageController>(tag: zoneTag).onRefresh(),
+    ]);
+  }
+
+  static Future<void> callRefreshAll() async {
+    await Future.wait(<Future<void>>[
+      if (Get.isRegistered<HomePageController>())
+        Get.find<HomePageController>().callRefresh(),
+      if (Get.isRegistered<HomePageController>(tag: zoneTag))
+        Get.find<HomePageController>(tag: zoneTag).callRefresh(),
+    ]);
+  }
+
+  // Zona +18: cuando es true, este controller muestra SOLO lo marcado +18
+  // (Continuar/Favoritos/hero rotando con extensiones 100% nsfw) — en vez
+  // de duplicar toda la lógica de rotación/pool en una clase aparte.
+  final bool nsfwOnly;
+  HomePageController({this.nsfwOnly = false});
+
+  /// Lo que va en "Continuar": historial en curso, sin lo ya completado y con
+  /// las novedades ordenadas detrás de lo más reciente.
   final RxList<History> resents = <History>[].obs;
+
+  /// TODO el historial de la zona, completados incluidos. El Historial es un
+  /// archivo, no una cola de pendientes: terminar algo no puede hacerlo
+  /// desaparecer de ahí. Se guarda aparte porque `resents` sí filtra.
+  final RxList<History> allHistory = <History>[].obs;
   // All favorited types mixed together (Home shows one "Favoritos" section,
   // not one per type — the History page's Favoritos tab still lets you see
   // where each one came from).
@@ -70,13 +111,54 @@ class HomePageController extends GetxController {
     super.onClose();
   }
 
+  // Borrar desde el Home, sin tener que entrar al Historial. Viven acá y no en
+  // cada página porque el Home normal y la Zona +18 usan ESTE mismo controller
+  // (con tag distinto), así que una sola implementación sirve para los dos.
+  /// Saca el ítem de "Continuar" SIN borrar nada: se marca como visto.
+  ///
+  /// Antes el botón de la tarjeta llamaba directo a deleteHistory, y eso
+  /// borraba el registro entero — se perdía el progreso, la marca de obra
+  /// finalizada, y el título desaparecía también del Historial. Demasiado
+  /// destructivo para lo que el usuario está pidiendo, que es ordenar su fila
+  /// de pendientes.
+  ///
+  /// Borrar de verdad sigue existiendo, pero en el Historial, que es donde uno
+  /// va a administrar el archivo.
+  Future<void> quitarDeContinuar(History h) async {
+    h.watchState = WatchState.completed;
+    h.newEpisodeLabel = null;
+    await DatabaseService.putHistoryRaw(h);
+    await refreshHistory();
+  }
+
+  Future<void> deleteHistory(History h) async {
+    await DatabaseService.deleteHistoryByPackageAndUrl(h.package, h.url);
+    await refreshHistory();
+  }
+
+  Future<void> deleteFavorite(Favorite f) async {
+    await DatabaseService.deleteFavorite(f.package, f.url);
+    // onRefresh y no refreshHistory: favoritos e historial se releen juntos.
+    await onRefresh();
+  }
+
+  Future<void> _comprobarNovedades(List<History> historial) async {
+    final hubo = await Novedades.comprobar(historial);
+    if (hubo) await refreshHistory();
+  }
+
   refreshHistory() async {
     // Fetch first, THEN swap — clearing before the await let the "no
     // history" empty state flash on screen for every refresh (including
     // the one that fires on every visit to Home), even when there was
     // data the whole time.
     final data = await DatabaseService.getHistorysByType();
-    resents.value = _onlyEnabled(data, (h) => h.package);
+    final historialZona = _onlyEnabled(data, (h) => h.package, (h) => h.isNsfw);
+    // Las DOS listas, no solo resents: borrar una tarjeta desde el Home
+    // llamaba acá y dejaba allHistory con el ítem ya borrado, así que el
+    // Historial lo seguía mostrando hasta el próximo refresco completo.
+    allHistory.value = historialZona;
+    resents.value = _soloEnCurso(historialZona);
   }
 
   // Refresco manual (deslizar en Android / botón "Actualizar" en PC) — trae
@@ -91,11 +173,19 @@ class HomePageController extends GetxController {
 
     // "Continuar viendo" mezcla todos los tipos (video + lectura) — un solo
     // lugar para retomar donde quedaste, sin separar por tipo.
-    final resentsData = _onlyEnabled(await historyFuture, (h) => h.package);
-    final favoritesData = _onlyEnabled(await favoritesFuture, (f) => f.package);
+    final historialZona =
+        _onlyEnabled(await historyFuture, (h) => h.package, (h) => h.isNsfw);
+    final resentsData = _soloEnCurso(historialZona);
+    final favoritesData =
+        _onlyEnabled(await favoritesFuture, (f) => f.package, (f) => f.isNsfw);
+    allHistory.value = historialZona;
     resents.value = resentsData;
     favorites.value = favoritesData;
     unawaited(prewarmResumeHistoryTargets(resentsData));
+    // En segundo plano y sin await: son peticiones de red por obra, y el Home
+    // no puede quedarse esperándolas. Cuando termina, si encontró algo, se
+    // releen las listas para que la tarjeta aparezca sola.
+    unawaited(_comprobarNovedades(historialZona));
     // Si por lo que sea el hero todavía no tiene nada (primera vez real,
     // el fetch inicial falló, tardó más de la cuenta) lo reintenta acá —
     // pero solo cuando está vacío: si ya hay una imagen puesta, refrescar
@@ -119,9 +209,61 @@ class HomePageController extends GetxController {
   // Oculta (no borra) historial/favoritos de extensiones desinstaladas o
   // desactivadas — si el usuario la vuelve a activar, vuelven a aparecer
   // solos porque el dato sigue intacto en la base, solo se filtra acá.
-  List<T> _onlyEnabled<T>(List<T> list, String Function(T) packageOf) {
+  // También separa +18 del resto (isNsfwOf): la instancia normal de Home
+  // solo muestra lo NO marcado +18; la instancia de la Zona +18 (nsfwOnly)
+  // es exactamente al revés.
+  // "Continuar" es para lo que está a medias. Lo que ya se terminó de ver o
+  // leer sale de la fila: si no, quedaría ahí para siempre invitando a
+  // retomar algo que ya no tiene nada pendiente.
+  //
+  // No se borra nada — el ítem sigue en el Historial, y vuelve solo a
+  // "Continuar" cuando salga un capítulo o episodio nuevo (ver
+  // History.newEpisodeLabel).
+  List<History> _soloEnCurso(List<History> list) {
+    final enCurso = list
+        .where((h) =>
+            h.watchState != WatchState.completed ||
+            // Con novedad vuelve SIEMPRE, aunque siga marcado completado y
+            // aunque el usuario haya marcado la obra como finalizada: que
+            // llegue un capítulo nuevo demuestra que no lo estaba, o que
+            // volvió. La marca del usuario no puede esconder contenido nuevo
+            // — para eso está el filtro del Historial, no esta lista.
+            h.hasNewEpisode)
+        .toList();
+    return _ordenarContinuar(enCurso);
+  }
+
+  /// Orden de "Continuar": primero lo último que el usuario estuvo viendo, y
+  /// justo detrás lo que tiene capítulo o episodio nuevo.
+  ///
+  /// El primer lugar NO se le da a una novedad a propósito: si el usuario dejó
+  /// algo a medias hace cinco minutos, eso es lo que quiere retomar al abrir la
+  /// app. Las novedades van segundas, que es donde se ven sin desplazar y sin
+  /// desplazar lo que estaba haciendo. El resto sigue por fecha, así que a
+  /// medida que aparecen novedades las demás se corren hacia atrás solas.
+  ///
+  /// La lista ya viene ordenada por fecha desde la base (sortByDateDesc).
+  List<History> _ordenarContinuar(List<History> list) {
+    if (list.length < 3) return list;
+    final novedades = list.where((h) => h.hasNewEpisode).toList();
+    if (novedades.isEmpty) return list;
+    final primero = list.first;
+    // Si lo más reciente ES una novedad, ya está en su lugar y no hay nada que
+    // reordenar más allá de agrupar el resto detrás.
+    final resto = list.skip(1).where((h) => !h.hasNewEpisode).toList();
+    final novedadesDetras = list.skip(1).where((h) => h.hasNewEpisode).toList();
+    return [primero, ...novedadesDetras, ...resto];
+  }
+
+  List<T> _onlyEnabled<T>(
+    List<T> list,
+    String Function(T) packageOf,
+    bool Function(T) isNsfwOf,
+  ) {
     return list
-        .where((e) => ExtensionUtils.enabledRuntimes.containsKey(packageOf(e)))
+        .where((e) =>
+            ExtensionUtils.enabledRuntimes.containsKey(packageOf(e)) &&
+            isNsfwOf(e) == nsfwOnly)
         .toList();
   }
 
@@ -141,9 +283,17 @@ class HomePageController extends GetxController {
 
   Future<void> _refreshHeroPool() async {
     final exts = ExtensionUtils.enabledRuntimes.values.toList();
-    if (!PrismHubStorage.getSetting(SettingKey.enableNSFW)) {
-      exts.removeWhere((element) => element.extension.nsfw);
-    }
+    // Zona +18: el pool del hero sale SOLO de extensiones 100% nsfw — una
+    // extensión "mixta" (ej. ShadeManga) no sirve acá porque latest(1)
+    // ignora el filtro adulto, así que no hay forma de garantizar que lo
+    // que devuelve sea +18.
+    //
+    // Home normal: SOLO extensiones no-nsfw, sin excepción. Antes esto usaba
+    // isNsfwVisibleOutsideZone, que deja pasar las +18 cuando el switch de NSFW
+    // está prendido — y así la portada del hero del Home normal podía salir de
+    // una extensión +18 (reportado en vivo). El mismo criterio exacto que ya
+    // usan las secciones de contenido de más arriba (isNsfwOf(e) == nsfwOnly).
+    exts.removeWhere((element) => element.extension.nsfw != nsfwOnly);
     if (exts.isEmpty) {
       _extensionPool = [];
       _hasLoadedPoolOnce = true;

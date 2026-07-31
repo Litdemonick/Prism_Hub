@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_i18n/flutter_i18n.dart';
 import 'package:get/get.dart';
 import 'package:media_kit_video/media_kit_video.dart';
+import 'package:prismhub/utils/prismhub_storage.dart';
 import 'package:prismhub/controllers/watch/video_controller.dart';
 import 'package:prismhub/utils/i18n.dart';
 import 'package:prismhub/views/pages/watch/video/webview_player_page.dart'
@@ -68,6 +69,28 @@ class _VideoPlayerMobileControlsState extends State<VideoPlayerMobileControls> {
     );
   }
 
+  // Valor del ajuste, en segundos y siempre positivo: el sentido del salto lo
+  // decide el lado de la pantalla, no el signo guardado.
+  double _saltoConfigurado(String key) {
+    final v = PrismHubStorage.getSetting(key);
+    final d = v is num ? v.toDouble() : 10.0;
+    final abs = d.abs();
+    return abs == 0 ? 10.0 : abs;
+  }
+
+  // Cartel breve con cuántos segundos se saltó — sin esto el doble toque no
+  // daba ninguna devolución y no se notaba si había hecho algo.
+  int? _saltoVisible;
+  Timer? _saltoTimer;
+
+  void _mostrarSalto(int segundos) {
+    setState(() => _saltoVisible = segundos);
+    _saltoTimer?.cancel();
+    _saltoTimer = Timer(const Duration(milliseconds: 900), () {
+      if (mounted) setState(() => _saltoVisible = null);
+    });
+  }
+
   _init() async {
     _updateTimer();
     VolumeController().showSystemUI = false;
@@ -102,6 +125,7 @@ class _VideoPlayerMobileControlsState extends State<VideoPlayerMobileControls> {
   void dispose() {
     _webViewWorker?.dispose();
     _resumeWorker?.dispose();
+    _saltoTimer?.cancel();
     _timer?.cancel();
     super.dispose();
   }
@@ -193,6 +217,71 @@ class _VideoPlayerMobileControlsState extends State<VideoPlayerMobileControls> {
         data: ThemeData.dark(useMaterial3: true),
         child: Stack(
           children: [
+            // Rueda de carga mientras el reproductor bufferiza (al
+            // adelantar, al cambiar de servidor o si la red se pone lenta).
+            // El controller ya calculaba isActuallyBuffering —con la
+            // corrección de los eventos desfasados de mpv— pero NADIE lo
+            // mostraba: adelantar un minuto dejaba la imagen congelada sin
+            // ninguna señal de que estaba cargando.
+            Positioned.fill(
+              child: IgnorePointer(
+                child: Obx(() => AnimatedOpacity(
+                      duration: const Duration(milliseconds: 150),
+                      // Mismas condiciones que el panel de estado de más
+                      // abajo, si no esta rueda se montaba encima del cartel
+                      // de "Obteniendo enlace...": ahí todavía no hay vídeo
+                      // que bufferizar, así que girar no significa nada.
+                      // Tampoco con el vídeo pausado (mpv sigue llenando el
+                      // buffer a propósito) ni antes del primer frame.
+                      // isSeeking aparte del buffering: al buscar en la
+                      // barra, el flag de buffering se apaga solo (la
+                      // posición cambia y eso se lee como "hay frames
+                      // nuevos"), así que sin esto la imagen se congelaba
+                      // sin ninguna señal. isPlaying tampoco sirve durante
+                      // la búsqueda, porque mpv se pausa mientras resuelve.
+                      // Tres momentos distintos en los que hay que
+                      // esperar, y ninguno se pisa con el cartel de
+                      // "Obteniendo enlace" (isGettingWatchData), que tiene
+                      // su propia tarjeta:
+                      //  1. Enlace ya resuelto pero primer cuadro sin
+                      //     pintar. Acá solo había un anillo chico y la
+                      //     pantalla se veía negra y trabada, sobre todo
+                      //     con HLS.
+                      //  2. Salto en curso (barra, teclas o flechas).
+                      //  3. Buffer vacío durante la reproducción.
+                      opacity: ((!_c.isGettingWatchData.value &&
+                                  !_c.hasRenderedFrame.value) ||
+                              (_c.hasRenderedFrame.value &&
+                                  (_c.isSeeking.value ||
+                                      (_c.isPlaying.value &&
+                                          _c.isActuallyBuffering.value))))
+                          ? 1
+                          : 0,
+                      child: const Center(
+                        child: DecoratedBox(
+                          decoration: BoxDecoration(
+                            // Disco oscuro detrás: sobre un fotograma claro
+                            // el círculo morado solo se perdía.
+                            shape: BoxShape.circle,
+                            color: Color(0xB3000000),
+                          ),
+                          child: Padding(
+                            padding: EdgeInsets.all(14),
+                            child: SizedBox(
+                              width: 40,
+                              height: 40,
+                              child: CircularProgressIndicator(
+                                strokeWidth: 3.5,
+                                valueColor: AlwaysStoppedAnimation(
+                                    HomeTheme.accentPink),
+                              ),
+                            ),
+                          ),
+                        ),
+                      ),
+                    )),
+              ),
+            ),
             // 字幕
             Positioned.fill(
               child: Obx(
@@ -258,6 +347,60 @@ class _VideoPlayerMobileControlsState extends State<VideoPlayerMobileControls> {
                 ),
               ),
             ),
+            // Devolución visual del doble toque: cuántos segundos se
+            // saltó y hacia dónde. Va sobre la capa de gestos para que no la
+            // tape, y con IgnorePointer para no robar toques.
+            Positioned.fill(
+              child: IgnorePointer(
+                child: Align(
+                    // Arriba del centro, no en el centro: ahí está la rueda de
+                    // carga, y al saltar a un tramo sin cargar aparecen las dos
+                    // cosas a la vez y se pisaban. Misma posición que en PC.
+                    alignment: const Alignment(0, -0.55),
+                    child: AnimatedScale(
+                      // Rebote corto: aparece de golpe y se asienta. Con solo la
+                      // opacidad a 150ms el cartel se sentia lento justo cuando
+                      // el gesto ya paso.
+                      duration: const Duration(milliseconds: 120),
+                      curve: Curves.easeOutBack,
+                      scale: _saltoVisible == null ? 0.85 : 1,
+                      child: AnimatedOpacity(
+                        duration: const Duration(milliseconds: 90),
+                        opacity: _saltoVisible == null ? 0 : 1,
+                        child: Container(
+                          padding: const EdgeInsets.symmetric(
+                              horizontal: 18, vertical: 10),
+                          decoration: BoxDecoration(
+                            color: const Color(0xB3000000),
+                            borderRadius: BorderRadius.circular(999),
+                            border: Border.all(color: HomeTheme.accentPink),
+                          ),
+                          child: Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              Icon(
+                                (_saltoVisible ?? 0) < 0
+                                    ? Icons.fast_rewind
+                                    : Icons.fast_forward,
+                                color: HomeTheme.accentPink,
+                                size: 20,
+                              ),
+                              const SizedBox(width: 8),
+                              Text(
+                                '${(_saltoVisible ?? 0).abs()} s',
+                                style: const TextStyle(
+                                  color: Colors.white,
+                                  fontWeight: FontWeight.w700,
+                                  fontSize: 15,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ),
+                    )),
+              ),
+            ),
             // 手势层
             Positioned.fill(
               child: Listener(
@@ -282,10 +425,28 @@ class _VideoPlayerMobileControlsState extends State<VideoPlayerMobileControls> {
                     if (!_debounce(const Duration(milliseconds: 400))) return;
                     final dx = details.localPosition.dx;
                     final width = LayoutUtils.width / 3;
+                    // Los 10 segundos estaban fijos en el código, así que el
+                    // ajuste "Saltar intervalo" no tenía ningún efecto en
+                    // celular. En el teléfono el doble toque es el ÚNICO
+                    // atajo de salto (no hay teclado), así que es el que debe
+                    // respetar ese ajuste: arrowLeft para el lado izquierdo y
+                    // arrowRight para el derecho, los mismos que en PC usan
+                    // las flechas. Se toma el valor absoluto porque el signo
+                    // ya lo decide el lado que se tocó.
+                    final atras = Duration(
+                        milliseconds:
+                            (_saltoConfigurado(SettingKey.arrowLeft) * 1000)
+                                .round());
+                    final adelante = Duration(
+                        milliseconds:
+                            (_saltoConfigurado(SettingKey.arrowRight) * 1000)
+                                .round());
                     if (dx < width) {
-                      _c.seek(_c.position.value - const Duration(seconds: 10));
+                      _c.seek(_c.position.value - atras);
+                      _mostrarSalto(-atras.inSeconds);
                     } else if (dx > width * 2) {
-                      _c.seek(_c.position.value + const Duration(seconds: 10));
+                      _c.seek(_c.position.value + adelante);
+                      _mostrarSalto(adelante.inSeconds);
                     } else {
                       _c.playOrPause();
                     }
@@ -440,7 +601,9 @@ class _VideoPlayerMobileControlsState extends State<VideoPlayerMobileControls> {
                     // nada (sobre todo HLS) y quedaba una pantalla negra sin
                     // spinner, como si estuviera trabada de verdad.
                     if (!_c.hasRenderedFrame.value) {
-                      return const ProgressRing();
+                      // Ver el mismo cambio en desktop: la capa de
+                      // carga de arriba ya la muestra.
+                      return const SizedBox.shrink();
                     }
                     return Builder(
                       builder: (context) {
@@ -455,7 +618,7 @@ class _VideoPlayerMobileControlsState extends State<VideoPlayerMobileControls> {
                         // VideoPlayerController.
                         if (_c.isActuallyBuffering.value &&
                             _c.isPlaying.value) {
-                          return const ProgressRing();
+                          return const SizedBox.shrink();
                         }
                         if (_c.dlnaDevice.value != null) {
                           return Column(

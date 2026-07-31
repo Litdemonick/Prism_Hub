@@ -1,3 +1,6 @@
+import 'dart:io';
+
+import 'package:fluent_ui/fluent_ui.dart' as fluent;
 import 'package:flutter/material.dart';
 
 /// Wraps a horizontally-scrolling [child] with a visible "there's more"
@@ -12,10 +15,31 @@ class HorizontalScrollFade extends StatefulWidget {
     required this.controller,
     required this.child,
     this.fadeWidth = 40,
+    this.arrowCenterFromTop,
+    this.pageScroll = false,
+    this.showFade = true,
+    this.arrowColor,
   });
   final ScrollController controller;
   final Widget child;
   final double fadeWidth;
+  // Dónde centrar verticalmente la flecha, medido desde arriba. Sin esto se
+  // centra en TODO el alto de la fila — que en el Home incluye el título y
+  // el subtítulo de debajo de la portada, así que la flecha quedaba más
+  // abajo que las imágenes con las que se supone que está alineada.
+  final double? arrowCenterFromTop;
+  // true = cada toque avanza una pantalla entera en vez de 260px. Es la
+  // división pedida: estas flechas de los costados pasan RÁPIDO, mientras
+  // los botones ‹ › del encabezado del Home siguen avanzando de a poco.
+  final bool pageScroll;
+  // false = solo la flecha, sin el degradado de fondo. En las filas del Home
+  // ese velo tapaba el borde de la portada sin aportar nada: las flechas ya
+  // se ven solas sobre la imagen gracias a su propio círculo oscuro.
+  final bool showFade;
+  // Color del círculo de la flecha. Sin esto queda negro semitransparente,
+  // que sobre una portada oscura casi no se distingue. El Home le pasa su
+  // acento (morado en el normal, rojo en la Zona +18).
+  final Color? arrowColor;
 
   @override
   State<HorizontalScrollFade> createState() => _HorizontalScrollFadeState();
@@ -78,19 +102,32 @@ class _HorizontalScrollFadeState extends State<HorizontalScrollFade>
     }
   }
 
-  void _scrollBy(double delta) {
+  void _scrollBy(double dir) {
     final pos = widget.controller.position;
+    // Menos 80px para que quede una card de referencia a la vista y no se
+    // pierda el hilo de dónde estabas.
+    final step = widget.pageScroll
+        ? (pos.viewportDimension - 80).clamp(200.0, 2000.0)
+        : 260.0;
+    final delta = step * dir;
     final target = (widget.controller.offset + delta)
         .clamp(pos.minScrollExtent, pos.maxScrollExtent);
     widget.controller.animateTo(
       target,
-      duration: const Duration(milliseconds: 300),
-      curve: Curves.easeOut,
+      duration: const Duration(milliseconds: 260),
+      curve: Curves.easeOutCubic,
     );
   }
 
   Widget _edge({required bool right}) {
-    final bg = Theme.of(context).scaffoldBackgroundColor;
+    // OJO: Theme.of() a secas daba BLANCO en escritorio. Ahí la raíz es
+    // FluentApp, que no pone un Theme de Material en el árbol, así que
+    // Theme.of cae al tema CLARO por defecto — y el degradado, que debía
+    // fundirse con el fondo, aparecía como un resplandor blanco sobre una
+    // interfaz oscura. En escritorio hay que preguntarle a FluentTheme.
+    final bg = Platform.isAndroid
+        ? Theme.of(context).scaffoldBackgroundColor
+        : fluent.FluentTheme.of(context).scaffoldBackgroundColor;
     final dir = right ? 1 : -1;
     return Positioned(
       right: right ? 0 : null,
@@ -99,17 +136,30 @@ class _HorizontalScrollFadeState extends State<HorizontalScrollFade>
       bottom: 0,
       child: GestureDetector(
         behavior: HitTestBehavior.translucent,
-        onTap: () => _scrollBy(260.0 * dir),
+        onTap: () => _scrollBy(dir.toDouble()),
         child: Container(
           width: widget.fadeWidth,
-          alignment: Alignment.center,
-          decoration: BoxDecoration(
-            gradient: LinearGradient(
-              begin: right ? Alignment.centerRight : Alignment.centerLeft,
-              end: right ? Alignment.centerLeft : Alignment.centerRight,
-              colors: [bg.withValues(alpha: 0.85), bg.withValues(alpha: 0)],
-            ),
-          ),
+          alignment: widget.arrowCenterFromTop == null
+              ? Alignment.center
+              : Alignment.topCenter,
+          padding: widget.arrowCenterFromTop == null
+              ? null
+              : EdgeInsets.only(
+                  // 13 = medio alto del círculo de la flecha (26).
+                  top: (widget.arrowCenterFromTop! - 13).clamp(0.0, 4096.0),
+                ),
+          decoration: widget.showFade
+              ? BoxDecoration(
+                  gradient: LinearGradient(
+                    begin: right ? Alignment.centerRight : Alignment.centerLeft,
+                    end: right ? Alignment.centerLeft : Alignment.centerRight,
+                    colors: [
+                      bg.withValues(alpha: 0.85),
+                      bg.withValues(alpha: 0),
+                    ],
+                  ),
+                )
+              : null,
           child: AnimatedBuilder(
             animation: _bounceOffset,
             builder: (context, child) => Transform.translate(
@@ -124,16 +174,17 @@ class _HorizontalScrollFadeState extends State<HorizontalScrollFade>
   }
 
   Widget _edgeIcon(bool right) {
+    final color = widget.arrowColor;
     return Container(
       width: 26,
       height: 26,
       decoration: BoxDecoration(
         shape: BoxShape.circle,
-        color: Colors.black.withValues(alpha: 0.55),
+        color: color ?? Colors.black.withValues(alpha: 0.55),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withValues(alpha: 0.3),
-            blurRadius: 4,
+            color: (color ?? Colors.black).withValues(alpha: 0.45),
+            blurRadius: 8,
           ),
         ],
       ),

@@ -44,7 +44,7 @@ import 'package:prismhub/utils/prismhub_storage.dart';
 import 'package:prismhub/utils/extension.dart';
 import 'package:flutter_hls_parser/flutter_hls_parser.dart';
 
-class VideoPlayerController extends GetxController {
+class VideoPlayerController extends GetxController with WidgetsBindingObserver {
   static Future<void> _lastPlaybackShutdown = Future<void>.value();
 
   static Future<void> waitForPreviousShutdown() => _lastPlaybackShutdown;
@@ -57,6 +57,9 @@ class VideoPlayerController extends GetxController {
   final ExtensionService runtime;
   final String anilistID;
   final bool autoResume;
+  // Zona +18: viene de DetailPageController.isNsfw — ver el mismo campo en
+  // ReaderController para el porqué.
+  final bool isNsfw;
 
   VideoPlayerController({
     required this.title,
@@ -67,6 +70,7 @@ class VideoPlayerController extends GetxController {
     required this.runtime,
     required this.anilistID,
     this.autoResume = false,
+    this.isNsfw = false,
   });
 
   // Antes el tag de Get.put/Get.find era solo el título — dos títulos
@@ -106,14 +110,14 @@ class VideoPlayerController extends GetxController {
             milliseconds:
                 (PrismHubStorage.getSetting(SettingKey.keyJ) * 1000).toInt(),
           );
-      player.seek(rate);
+      _seekFromShortcut(rate);
     },
     LogicalKeyboardKey.keyI: () {
       final rate = player.state.position +
           Duration(
               milliseconds:
                   (PrismHubStorage.getSetting(SettingKey.keyI) * 1000).toInt());
-      player.seek(rate);
+      _seekFromShortcut(rate);
     },
     LogicalKeyboardKey.arrowLeft: () {
       final rate = player.state.position +
@@ -121,7 +125,7 @@ class VideoPlayerController extends GetxController {
               milliseconds:
                   (PrismHubStorage.getSetting(SettingKey.arrowLeft) * 1000)
                       .toInt());
-      player.seek(rate);
+      _seekFromShortcut(rate);
     },
     LogicalKeyboardKey.arrowRight: () {
       final rate = player.state.position +
@@ -129,7 +133,7 @@ class VideoPlayerController extends GetxController {
               milliseconds:
                   (PrismHubStorage.getSetting(SettingKey.arrowRight) * 1000)
                       .toInt());
-      player.seek(rate);
+      _seekFromShortcut(rate);
     },
     LogicalKeyboardKey.arrowUp: () {
       final volume = player.state.volume + 5.0;
@@ -215,6 +219,69 @@ class VideoPlayerController extends GetxController {
   // contenido ya cargó. Si la posición avanzó hace poco, no puede estar
   // bufferizando de verdad, sin importar lo que diga el flag crudo.
   final isActuallyBuffering = false.obs;
+
+  // Búsqueda en curso (arrastrar o tocar la barra de progreso). Hace falta
+  // aparte de isActuallyBuffering porque ese flag se APAGA justo en este caso:
+  // al buscar, la posición cambia, y el listener de posición interpreta
+  // cualquier avance como "hay frames nuevos, no está bufferizando". Sin esto
+  // la imagen se congelaba unos segundos sin ninguna señal de que estaba
+  // cargando.
+  final isSeeking = false.obs;
+  Timer? _seekWatchdog;
+  // Primera posición que llega DESPUÉS del salto. Apagar la rueda en cuanto
+  // la posición cambia no servía: al saltar, mpv actualiza la posición al
+  // destino de inmediato —antes de reportar que está bufferizando—, así que
+  // la condición de apagado se cumplía en milisegundos y la rueda se iba
+  // justo antes de que la imagen se congelara. Se espera a la SEGUNDA
+  // posición distinta: esa ya es reproducción de verdad avanzando.
+  Duration? _positionAfterSeek;
+
+  void markSeeking() {
+    isSeeking.value = true;
+    _positionAfterSeek = null;
+    _seekWatchdog?.cancel();
+    // Red de seguridad: si el servidor no responde nunca, la rueda no se
+    // queda girando para siempre.
+    _seekWatchdog = Timer(const Duration(seconds: 8), () {
+      isSeeking.value = false;
+    });
+  }
+
+  // Los atajos de teclado llamaban a player.seek() DIRECTO, salteándose la
+  // marca de búsqueda que sí hace seek(): con las teclas y las flechas la
+  // imagen se congelaba sin ninguna rueda, aunque con la barra de progreso
+  // funcionara. Todos pasan por acá.
+  void _seekFromShortcut(Duration to) {
+    final salto = (to - player.state.position).inSeconds;
+    markSeeking();
+    _anunciarSalto(salto);
+    player.seek(to);
+  }
+
+  // Cuántos segundos saltó el último atajo, para mostrarlo en pantalla. Vive
+  // en el controller y no en la vista porque el salto se dispara desde acá
+  // (los atajos de teclado son del controller) y así la misma señal sirve en
+  // escritorio y en celular.
+  final lastSkipSeconds = Rx<int?>(null);
+  Timer? _skipBadgeTimer;
+
+  void _anunciarSalto(int segundos) {
+    if (segundos == 0) return;
+    lastSkipSeconds.value = segundos;
+    _skipBadgeTimer?.cancel();
+    _skipBadgeTimer = Timer(const Duration(milliseconds: 900), () {
+      lastSkipSeconds.value = null;
+    });
+  }
+
+  void _clearSeeking() {
+    if (!isSeeking.value) return;
+    isSeeking.value = false;
+    _positionAfterSeek = null;
+    _seekWatchdog?.cancel();
+    _seekWatchdog = null;
+  }
+
   final isVideoSurfaceMounted = false.obs;
   DateTime? _lastPositionAdvanceAt;
   Duration? _lastPositionSeen;
@@ -290,6 +357,7 @@ class VideoPlayerController extends GetxController {
 
   @override
   void onInit() async {
+    WidgetsBinding.instance.addObserver(this);
     if (Platform.isAndroid) {
       // 切换到横屏
       SystemChrome.setPreferredOrientations(
@@ -610,6 +678,21 @@ class VideoPlayerController extends GetxController {
         _lastPositionSeen = event;
         _lastPositionAdvanceAt = DateTime.now();
         if (isActuallyBuffering.value) isActuallyBuffering.value = false;
+        // La búsqueda terminó: hay frames nuevos y ya no se está llenando el
+        // buffer. Se comprueba el flag crudo de mpv, no isActuallyBuffering,
+        // que acabamos de apagar dos líneas arriba.
+        if (isSeeking.value) {
+          if (_positionAfterSeek == null) {
+            // El salto en sí. Todavía no hay reproducción.
+            _positionAfterSeek = event;
+          } else if (event != _positionAfterSeek && !player.state.buffering) {
+            // Segunda posición distinta y sin buffer pendiente: ya está
+            // reproduciendo. Si el tramo estaba cargado esto llega en el
+            // frame siguiente y la rueda apenas parpadea; si no, se queda
+            // girando hasta que llegue.
+            _clearSeeking();
+          }
+        }
       }
     }));
 
@@ -1260,6 +1343,12 @@ class VideoPlayerController extends GetxController {
     if (isFullScreen.value) {
       await WindowManager.instance.setFullScreen(false);
     }
+    // ANTES de popear: así las barras de sistema y la rotación ya están
+    // normales cuando la pantalla de destino se dibuja, en vez de depender de
+    // que onClose (que corre al destruirse el controller, después del pop)
+    // llegue a tiempo. Es idempotente, onClose lo vuelve a llamar sin
+    // problema.
+    await restoreSystemUiOnExit();
     final shutdown = shutdownPlayback();
     var popped = false;
     // Prioridad 1: el context DEL PROPIO widget de controles (pasado por el
@@ -1380,6 +1469,7 @@ class VideoPlayerController extends GetxController {
     _lastPositionAdvanceAt = null;
     _lastPositionSeen = null;
     isActuallyBuffering.value = false;
+    _clearSeeking();
     _bufferingStallTimer?.cancel();
 
     final embedUrl = availableServers[name]!;
@@ -1727,10 +1817,31 @@ class VideoPlayerController extends GetxController {
     }
   }
 
-  Future<void> _touchHistory({bool refreshHome = true}) async {
+  // Apagar la pantalla o irse a otra app manda la app a `paused`, y Android
+  // puede matar el proceso desde ahí sin volver a avisar: onClose no llega a
+  // correr nunca y se pierde el minuto que llevabas viendo. Este es el último
+  // momento garantizado para dejarlo escrito.
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.paused ||
+        state == AppLifecycleState.hidden) {
+      // refreshHome en false: la pantalla de Home no está visible en ese
+      // momento, y refrescarla mientras la app se va es trabajo al pedo.
+      unawaited(_touchHistory(refreshHome: false, force: true));
+    }
+  }
+
+  Future<void> _touchHistory({
+    bool refreshHome = true,
+    // El anti-rebote de 5s existe para no escribir en cada tick de
+    // reproducción, pero al pasar a segundo plano hay UNA sola oportunidad:
+    // si justo se guardó hace 4 segundos, saltearla perdía ese tramo.
+    bool force = false,
+  }) async {
     if (_disposed || _historyTouchInFlight) return;
     final now = DateTime.now();
-    if (_lastHistoryTouchAt != null &&
+    if (!force &&
+        _lastHistoryTouchAt != null &&
         now.difference(_lastHistoryTouchAt!) < const Duration(seconds: 5)) {
       return;
     }
@@ -1761,10 +1872,20 @@ class VideoPlayerController extends GetxController {
           ..episodeTitle = epName
           ..title = title
           ..progress = progressSeconds.toString()
-          ..totalProgress = totalSeconds > 0 ? totalSeconds.toString() : '',
+          ..totalProgress = totalSeconds > 0 ? totalSeconds.toString() : ''
+          ..isNsfw = isNsfw
+          // Al día si este es el último episodio de la lista. Es el único
+          // punto donde conviven la lista completa y la posición del usuario.
+          ..watchState = index.value >= playList.length - 1
+              ? WatchState.completed
+              : WatchState.pending
+          // Referencia para detectar episodios nuevos más adelante.
+          ..knownEpisodeCount = playList.length
+          // Abrió el episodio: la novedad deja de serlo.
+          ..newEpisodeLabel = null,
       );
-      if (refreshHome && Get.isRegistered<HomePageController>()) {
-        await Get.find<HomePageController>().onRefresh();
+      if (refreshHome) {
+        await HomePageController.refreshAll();
       }
     } catch (e) {
       logger.warning('touch history fallÃ³: $e');
@@ -1775,50 +1896,68 @@ class VideoPlayerController extends GetxController {
 
   // 保存历史记录
   _saveHistory({bool captureScreenshot = true}) async {
-    if (duration.value.inSeconds == 0) {
-      return;
-    }
-
-    final tempDir = PrismHubDirectory.getCacheDirectory;
-    final coverDir = path.join(tempDir, 'history_cover');
-    await Directory(coverDir).create(recursive: true);
-    final epName = playList[index.value].name;
-    final filename = '${title}_$epName';
-    final file = File(
-        path.join(coverDir, md5.convert(utf8.encode(filename)).toString()));
-    if (captureScreenshot && hasRenderedFrame.value && !_disposed) {
-      final data = await player.screenshot();
-      if (data != null) {
-        if (await file.exists()) {
-          await file.delete(recursive: true);
-        }
-        await file.writeAsBytes(data);
+    // Envuelto entero: crea directorios, saca una captura del player y
+    // escribe archivos. Cualquiera de esas cosas puede fallar por espacio,
+    // permisos o porque el player ya se está cerrando — y como esto se
+    // llama desde caminos sin await (cierre, cambio de episodio), una
+    // excepción acá sería un error asíncrono sin dueño. Guardar el
+    // progreso es "mejor esfuerzo": que falle no debe romper nada más.
+    try {
+      if (duration.value.inSeconds == 0) {
+        return;
       }
-    }
 
-    logger.info('save history');
+      final tempDir = PrismHubDirectory.getCacheDirectory;
+      final coverDir = path.join(tempDir, 'history_cover');
+      await Directory(coverDir).create(recursive: true);
+      final epName = playList[index.value].name;
+      final filename = '${title}_$epName';
+      final file = File(
+          path.join(coverDir, md5.convert(utf8.encode(filename)).toString()));
+      if (captureScreenshot && hasRenderedFrame.value && !_disposed) {
+        final data = await player.screenshot();
+        if (data != null) {
+          if (await file.exists()) {
+            await file.delete(recursive: true);
+          }
+          await file.writeAsBytes(data);
+        }
+      }
 
-    final savedCover = await file.exists() ? file.path : null;
-    await DatabaseService.putHistory(
-      History()
-        ..url = detailUrl
-        ..cover = savedCover ?? await _historyCoverFallback()
-        ..episodeGroupId = episodeGroupId
-        ..package = runtime.extension.package
-        // ExtensionType.bangumi fijo (no runtime.extension.type): este
-        // controller SOLO se usa para video — para una extensión "mixed"
-        // (ej. ShadeManga) usar el tipo fijo de la extensión guardaría
-        // "mixed" en el historial, que ExtensionTypeBadge/typeToString no
-        // saben mostrar como "video" ni "lectura".
-        ..type = ExtensionType.bangumi
-        ..episodeId = index.value
-        ..episodeTitle = epName
-        ..title = title
-        ..progress = player.state.position.inSeconds.toString()
-        ..totalProgress = player.state.duration.inSeconds.toString(),
-    );
-    if (Get.isRegistered<HomePageController>()) {
-      await Get.find<HomePageController>().onRefresh();
+      logger.info('save history');
+
+      final savedCover = await file.exists() ? file.path : null;
+      await DatabaseService.putHistory(
+        History()
+          ..url = detailUrl
+          ..cover = savedCover ?? await _historyCoverFallback()
+          ..episodeGroupId = episodeGroupId
+          ..package = runtime.extension.package
+          // ExtensionType.bangumi fijo (no runtime.extension.type): este
+          // controller SOLO se usa para video — para una extensión "mixed"
+          // (ej. ShadeManga) usar el tipo fijo de la extensión guardaría
+          // "mixed" en el historial, que ExtensionTypeBadge/typeToString no
+          // saben mostrar como "video" ni "lectura".
+          ..type = ExtensionType.bangumi
+          ..episodeId = index.value
+          ..episodeTitle = epName
+          ..title = title
+          ..progress = player.state.position.inSeconds.toString()
+          ..totalProgress = player.state.duration.inSeconds.toString()
+          ..isNsfw = isNsfw
+          // Al día si este es el último episodio de la lista. Es el único
+          // punto donde conviven la lista completa y la posición del usuario.
+          ..watchState = index.value >= playList.length - 1
+              ? WatchState.completed
+              : WatchState.pending
+          // Referencia para detectar episodios nuevos más adelante.
+          ..knownEpisodeCount = playList.length
+          // Abrió el episodio: la novedad deja de serlo.
+          ..newEpisodeLabel = null,
+      );
+      await HomePageController.refreshAll();
+    } catch (e, st) {
+      logger.warning('No se pudo guardar el historial de vídeo: \$e', e, st);
     }
   }
 
@@ -1921,9 +2060,19 @@ class VideoPlayerController extends GetxController {
         // Total desconocido a propósito (no hay forma de saber la duración
         // real del video del sitio desde acá) — el resto de la app ya trata
         // un totalProgress vacío como "sin dato", no como "recién empezado".
-        ..totalProgress = '',
+        ..totalProgress = ''
+        ..isNsfw = isNsfw
+        // Al día si este es el último episodio de la lista. Es el único
+        // punto donde conviven la lista completa y la posición del usuario.
+        ..watchState = index.value >= playList.length - 1
+            ? WatchState.completed
+            : WatchState.pending
+        // Referencia para detectar episodios nuevos más adelante.
+        ..knownEpisodeCount = playList.length
+        // Abrió el episodio: la novedad deja de serlo.
+        ..newEpisodeLabel = null,
     );
-    await Get.find<HomePageController>().onRefresh();
+    await HomePageController.refreshAll();
   }
 
   // 判断文件是否是字幕
@@ -2671,6 +2820,10 @@ class VideoPlayerController extends GetxController {
 
   seek(Duration duration) async {
     if (_disposed) return;
+    // Acá y no en cada botón: seek() es el único punto de entrada para la
+    // barra de progreso, los atajos de teclado y los saltos, así que marcarlo
+    // una vez cubre todos los casos en las tres plataformas.
+    markSeeking();
     if (dlnaDevice.value == null) {
       player.seek(duration);
       return;
@@ -2680,10 +2833,42 @@ class VideoPlayerController extends GetxController {
     await dlnaDevice.value!.seekByCurrent(curr, diff.inSeconds);
   }
 
+  // Devuelve barras de sistema y rotación al estado normal. Es idempotente a
+  // propósito: se llama tanto desde onClose (destrucción del controller) como
+  // desde closeRoute (salida explícita del usuario). Antes solo estaba en
+  // onClose, y si por lo que sea ese no llegaba a correr, el celular quedaba
+  // trabado en horizontal para TODA la app hasta reiniciarla — reportado en
+  // vivo. Llamarlo dos veces no molesta; no llamarlo nunca sí.
+  Future<void> restoreSystemUiOnExit() async {
+    if (!Platform.isAndroid) return;
+    // manual + overlays completos (no edgeToEdge): confirmado en vivo que
+    // volver a edgeToEdge al salir dejaba la hora/batería "comidas" por el
+    // SafeArea de la página de destino — MediaQuery no llegaba a refrescar el
+    // padding superior a tiempo tras el cambio de modo, así que el contenido
+    // se dibujaba encima de donde iría el status bar. Pedir manual con TODOS
+    // los overlays fuerza que ambas barras vuelvan a mostrarse reservando su
+    // espacio, sin depender de ese timing.
+    SystemChrome.setEnabledSystemUIMode(
+      SystemUiMode.manual,
+      overlays: SystemUiOverlay.values,
+    );
+    // 如果是平板则不改变
+    // Libera el bloqueo nativo que dejó landscapeAutoMode(forceSensor: true)
+    // en onInit — pedir portraitUp/portraitDown acá bloqueaba la rotación
+    // libre para siempre (hasta reiniciar la app), porque nada más en la app
+    // vuelve a pedir "todas las orientaciones". fullAutoMode restaura la
+    // auto-rotación real según el sensor/config del sistema.
+    if (!LayoutUtils.isTablet) {
+      await AutoOrientation.fullAutoMode();
+      SystemChrome.setPreferredOrientations(DeviceOrientation.values);
+    }
+  }
+
   @override
   void onClose() async {
+    WidgetsBinding.instance.removeObserver(this);
     _beginPlaybackShutdown();
-    if (PrismHubStorage.getSetting(SettingKey.autoTracking) &&
+    if (PrismHubStorage.getSetting(SettingKey.autoTracking) == true &&
         anilistID != "") {
       AniListProvider.editList(
         status: AnilistMediaListStatus.current,
@@ -2691,29 +2876,7 @@ class VideoPlayerController extends GetxController {
         mediaId: anilistID,
       );
     }
-    if (Platform.isAndroid) {
-      // manual + overlays completos (no edgeToEdge): confirmado en vivo que
-      // volver a edgeToEdge al salir dejaba la hora/batería "comidas" por el
-      // SafeArea de la página de destino — MediaQuery no llegaba a
-      // refrescar el padding superior a tiempo tras el cambio de modo, así
-      // que el contenido se dibujaba encima de donde iría el status bar.
-      // Pedir manual con TODOS los overlays fuerza que ambas barras vuelvan
-      // a mostrarse reservando su espacio, sin depender de ese timing.
-      SystemChrome.setEnabledSystemUIMode(
-        SystemUiMode.manual,
-        overlays: SystemUiOverlay.values,
-      );
-      // 如果是平板则不改变
-      // Libera el bloqueo nativo que dejó landscapeAutoMode(forceSensor:
-      // true) en onInit — pedir portraitUp/portraitDown acá bloqueaba la
-      // rotación libre para siempre (hasta reiniciar la app), porque nada
-      // más en la app vuelve a pedir "todas las orientaciones". fullAutoMode
-      // restaura la auto-rotación real según el sensor/config del sistema.
-      if (!LayoutUtils.isTablet) {
-        await AutoOrientation.fullAutoMode();
-        SystemChrome.setPreferredOrientations(DeviceOrientation.values);
-      }
-    }
+    await restoreSystemUiOnExit();
     for (final worker in _workers) {
       worker.dispose();
     }

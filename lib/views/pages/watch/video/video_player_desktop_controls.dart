@@ -181,6 +181,9 @@ class _VideoPlayerDesktopControlsState
   Widget build(BuildContext context) {
     return MouseRegion(
       onHover: (_) => _resetHideTimer(),
+      // El puntero se esconde junto con los controles: quedaba una flecha
+      // flotando sobre el vídeo a pantalla completa.
+      cursor: _showControls ? MouseCursor.defer : SystemMouseCursors.none,
       child: FluentTheme(
         data: FluentThemeData(
           brightness: Brightness.dark,
@@ -201,6 +204,125 @@ class _VideoPlayerDesktopControlsState
           },
           child: Stack(
             children: [
+              // Cuánto saltó el último atajo (teclas I/J y flechas). Sin
+              // esto no había ninguna devolución: se apretaba una tecla y no
+              // se sabía si había hecho algo ni cuánto se movió.
+              Positioned.fill(
+                child: IgnorePointer(
+                  child: Obx(() {
+                    final salto = _c.lastSkipSeconds.value;
+                    return AnimatedScale(
+                      // Ver el mismo cartel en mobile: entra con un rebote
+                      // corto para que acompañe al gesto y no llegue tarde.
+                      duration: const Duration(milliseconds: 120),
+                      curve: Curves.easeOutBack,
+                      scale: salto == null ? 0.85 : 1,
+                      child: AnimatedOpacity(
+                        duration: const Duration(milliseconds: 90),
+                        opacity: salto == null ? 0 : 1,
+                        child: Align(
+                          alignment: const Alignment(0, -0.55),
+                          child: Container(
+                            padding: const EdgeInsets.symmetric(
+                                horizontal: 18, vertical: 10),
+                            decoration: BoxDecoration(
+                              color: const Color(0xB3000000),
+                              borderRadius: BorderRadius.circular(999),
+                              border: Border.all(color: HomeTheme.accentPink),
+                            ),
+                            child: Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                material.Icon(
+                                  (salto ?? 0) < 0
+                                      ? material.Icons.fast_rewind
+                                      : material.Icons.fast_forward,
+                                  color: HomeTheme.accentPink,
+                                  size: 20,
+                                ),
+                                const SizedBox(width: 8),
+                                Text(
+                                  '${(salto ?? 0).abs()} s',
+                                  style: const TextStyle(
+                                    color: material.Colors.white,
+                                    fontWeight: FontWeight.w700,
+                                    fontSize: 15,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                        ),
+                      ),
+                    );
+                  }),
+                ),
+              ),
+              // Rueda de carga mientras el reproductor bufferiza (al
+              // adelantar, al cambiar de servidor o si la red se pone lenta).
+              // El controller ya calculaba isActuallyBuffering —con la
+              // corrección de los eventos desfasados de mpv— pero NADIE lo
+              // mostraba: adelantar un minuto dejaba la imagen congelada sin
+              // ninguna señal de que estaba cargando.
+              Positioned.fill(
+                child: IgnorePointer(
+                  child: Obx(() => AnimatedOpacity(
+                        duration: const Duration(milliseconds: 150),
+                        // Mismas condiciones que el panel de estado de más
+                        // abajo, si no esta rueda se montaba encima del cartel
+                        // de "Obteniendo enlace...": ahí todavía no hay vídeo
+                        // que bufferizar, así que girar no significa nada.
+                        // Tampoco con el vídeo pausado (mpv sigue llenando el
+                        // buffer a propósito) ni antes del primer frame.
+                        // isSeeking aparte del buffering: al buscar en la
+                        // barra, el flag de buffering se apaga solo (la
+                        // posición cambia y eso se lee como "hay frames
+                        // nuevos"), así que sin esto la imagen se congelaba
+                        // sin ninguna señal. isPlaying tampoco sirve durante
+                        // la búsqueda, porque mpv se pausa mientras resuelve.
+                        // Tres momentos distintos en los que hay que
+                        // esperar, y ninguno se pisa con el cartel de
+                        // "Obteniendo enlace" (isGettingWatchData), que tiene
+                        // su propia tarjeta:
+                        //  1. Enlace ya resuelto pero primer cuadro sin
+                        //     pintar. Acá solo había un anillo chico y la
+                        //     pantalla se veía negra y trabada, sobre todo
+                        //     con HLS.
+                        //  2. Salto en curso (barra, teclas o flechas).
+                        //  3. Buffer vacío durante la reproducción.
+                        opacity: ((!_c.isGettingWatchData.value &&
+                                    !_c.hasRenderedFrame.value) ||
+                                (_c.hasRenderedFrame.value &&
+                                    (_c.isSeeking.value ||
+                                        (_c.isPlaying.value &&
+                                            _c.isActuallyBuffering.value))))
+                            ? 1
+                            : 0,
+                        child: const Center(
+                          child: DecoratedBox(
+                            decoration: BoxDecoration(
+                              // Disco oscuro detrás: sobre un fotograma claro
+                              // el círculo morado solo se perdía.
+                              shape: BoxShape.circle,
+                              color: Color(0xB3000000),
+                            ),
+                            child: Padding(
+                              padding: EdgeInsets.all(14),
+                              child: SizedBox(
+                                width: 40,
+                                height: 40,
+                                child: material.CircularProgressIndicator(
+                                  strokeWidth: 3.5,
+                                  valueColor: material.AlwaysStoppedAnimation(
+                                      HomeTheme.accentPink),
+                                ),
+                              ),
+                            ),
+                          ),
+                        ),
+                      )),
+                ),
+              ),
               // subtitle
               Positioned.fill(
                 child: Obx(
@@ -314,9 +436,13 @@ class _VideoPlayerDesktopControlsState
                         // sin esto quedaba una pantalla negra sin ningún
                         // spinner, como si estuviera trabada de verdad.
                         if (!_c.hasRenderedFrame.value) {
-                          return const ProgressRing(
-                            activeColor: HomeTheme.accentPink,
-                          );
+                          // Sin rueda acá: la capa de carga de arriba del
+                          // Stack ya la muestra, más grande y con su disco
+                          // oscuro. Antes se dibujaban las DOS a la vez, una
+                          // encima de otra, porque comparten condiciones.
+                          // Aquella además cubre el salto, que este panel no
+                          // detectaba.
+                          return const SizedBox.shrink();
                         }
                         // Pausado: nunca mostrar el spinner. mpv sigue
                         // llenando el buffer en segundo plano estando en
@@ -333,9 +459,13 @@ class _VideoPlayerDesktopControlsState
                         // avanzando de verdad pero el flag quedó pegado en
                         // true — ver VideoPlayerController.
                         if (_c.isActuallyBuffering.value) {
-                          return const ProgressRing(
-                            activeColor: HomeTheme.accentPink,
-                          );
+                          // Sin rueda acá: la capa de carga de arriba del
+                          // Stack ya la muestra, más grande y con su disco
+                          // oscuro. Antes se dibujaban las DOS a la vez, una
+                          // encima de otra, porque comparten condiciones.
+                          // Aquella además cubre el salto, que este panel no
+                          // detectaba.
+                          return const SizedBox.shrink();
                         }
                         return const SizedBox.shrink();
                       }

@@ -6,21 +6,27 @@ import 'package:dio/dio.dart';
 import 'package:desktop_multi_window/desktop_multi_window.dart';
 import 'package:fluent_ui/fluent_ui.dart';
 import 'package:flutter/foundation.dart';
-import 'package:flutter/material.dart';
+import 'package:flutter_i18n/flutter_i18n.dart';
 import 'package:flutter/scheduler.dart';
 import 'package:get/get.dart';
 import 'package:prismhub/models/extension.dart';
 import 'package:prismhub/controllers/extension/extension_controller.dart';
 import 'package:prismhub/controllers/home_controller.dart';
+import 'package:prismhub/controllers/main_controller.dart';
 import 'package:prismhub/controllers/search_controller.dart';
 import 'package:prismhub/controllers/settings_controller.dart';
+import 'package:prismhub/data/services/database_service.dart';
 import 'package:prismhub/data/services/extension_service.dart';
+import 'package:prismhub/utils/log.dart';
+import 'package:prismhub/utils/error.dart';
 import 'package:prismhub/utils/extension_signature.dart';
 import 'package:prismhub/utils/i18n.dart';
 import 'package:prismhub/utils/prismhub_directory.dart';
 import 'package:prismhub/utils/prismhub_storage.dart';
 import 'package:prismhub/utils/request.dart';
 import 'package:prismhub/utils/router.dart';
+import 'package:prismhub/router/router.dart' show router;
+import 'package:prismhub/views/pages/detail_page.dart';
 import 'package:prismhub/views/widgets/button.dart';
 import 'package:prismhub/views/widgets/messenger.dart';
 import 'package:path/path.dart' as path;
@@ -56,8 +62,13 @@ class ExtensionUtils {
   // manifest, igual convención que nsfw) — se llena en el MISMO fetch que
   // _remoteVersionsCache, sin pedir el índice dos veces. Ver hasExtensionUpdate.
   static Map<String, bool>? _remoteUnstableCache;
-  static DateTime? _remoteVersionsFetchedAt;
-  static const _remoteVersionsTtl = Duration(minutes: 10);
+  // Motivo por el que el índice la marcó inestable — lo setea solo el chequeo
+  // de salud de prism-plus (scripts/health-check.mjs) o se pone a mano al
+  // subir un arreglo en curso. Valores conocidos: 'site-down' (la página está
+  // caída), 'broken' (responde pero no entrega contenido), 'outdated'
+  // (necesita actualizarse). Un valor desconocido o ausente cae al aviso
+  // genérico de siempre, así que un índice más nuevo nunca rompe un app viejo.
+  static Map<String, String>? _remoteUnstableReasonCache;
   static List<dynamic>? _repoIndexCache;
   static DateTime? _repoIndexFetchedAt;
   static Future<List<dynamic>>? _repoIndexInFlight;
@@ -79,19 +90,11 @@ class ExtensionUtils {
   static void clearRemoteVersionsCache() {
     _remoteVersionsCache = null;
     _remoteUnstableCache = null;
-    _remoteVersionsFetchedAt = null;
     _repoIndexCache = null;
     _repoIndexFetchedAt = null;
   }
 
   static Future<Map<String, String>> _fetchRemoteVersions() async {
-    final cached = _remoteVersionsCache;
-    final fetchedAt = _remoteVersionsFetchedAt;
-    if (cached != null &&
-        fetchedAt != null &&
-        DateTime.now().difference(fetchedAt) < _remoteVersionsTtl) {
-      return cached;
-    }
     final inFlight = _remoteVersionsInFlight;
     if (inFlight != null) return inFlight;
     final future = _doFetchRemoteVersions();
@@ -103,23 +106,34 @@ class ExtensionUtils {
     }
   }
 
+  // Sin TTL propio a propósito — antes tenía uno independiente de 10
+  // minutos, separado del TTL de 2 minutos de fetchRepoIndex(). Esto
+  // desincronizaba Instaladas vs Repositorio: refrescar el catálogo desde
+  // una de las dos páginas no se reflejaba en la otra hasta que venciera
+  // por separado (confirmado: "actualización requerida" tardaba hasta 10
+  // min en aparecer aunque el repositorio ya mostrara la versión nueva).
+  // Ahora reusa el MISMO caché/TTL de fetchRepoIndex, así que ambas
+  // pantallas siempre están mirando el mismo índice.
   static Future<Map<String, String>> _doFetchRemoteVersions() async {
     final cached = _remoteVersionsCache;
     try {
       final list = await fetchRepoIndex();
       final map = <String, String>{};
       final unstableMap = <String, bool>{};
+      final reasonMap = <String, String>{};
       for (final e in list) {
         final pkg = e['package'] as String?;
         final ver = e['version'] as String?;
         if (pkg != null && ver != null) map[pkg] = ver;
         if (pkg != null) {
           unstableMap[pkg] = e['unstable'] == 'true' || e['unstable'] == true;
+          final reason = e['unstableReason'];
+          if (reason is String && reason.isNotEmpty) reasonMap[pkg] = reason;
         }
       }
       _remoteVersionsCache = map;
       _remoteUnstableCache = unstableMap;
-      _remoteVersionsFetchedAt = DateTime.now();
+      _remoteUnstableReasonCache = reasonMap;
       return map;
     } catch (e) {
       // Sin conexión / repo caído: no bloquear extensiones por no poder
@@ -155,7 +169,13 @@ class ExtensionUtils {
   static Future<List<dynamic>> _doFetchRepoIndex({
     required bool cacheBust,
   }) async {
-    final repoUrl = PrismHubStorage.getSetting(SettingKey.prismhubRepoUrl);
+    // Con el ajuste en null esto construía "null/index.json" y dio fallaba
+    // con "No host specified in URI" — que en pantalla se ve igual que estar
+    // sin internet, así que el síntoma no tenía nada que ver con la causa.
+    final savedRepoUrl = PrismHubStorage.getSetting(SettingKey.prismhubRepoUrl);
+    final repoUrl = savedRepoUrl is String && savedRepoUrl.isNotEmpty
+        ? savedRepoUrl
+        : PrismHubStorage.defaultRepoUrl;
     final bust = DateTime.now().millisecondsSinceEpoch;
     final url =
         cacheBust ? '$repoUrl/index.json?t=$bust' : '$repoUrl/index.json';
@@ -163,13 +183,71 @@ class ExtensionUtils {
       url,
       options: Options(receiveTimeout: const Duration(seconds: 20)),
     );
-    final decoded = await compute(jsonDecode, res.data!);
-    final list = decoded is Map ? (decoded['extensions'] ?? []) : decoded;
+    // El índice es contenido EXTERNO: viene de un repo público que el usuario
+    // puede incluso cambiar por otro en Ajustes. No se asume nada de su forma.
+    // Antes, `res.data!` reventaba con una respuesta vacía, y
+    // List.from() con un `extensions` que no fuera lista (ej. un número o un
+    // objeto) tiraba una excepción que salía de acá — y este método lo llaman
+    // varias pantallas sin try, así que un índice roto o manipulado podía
+    // dejar el catálogo inusable en vez de simplemente vacío.
+    final body = res.data;
+    if (body == null || body.isEmpty) return const [];
+    final dynamic decoded;
+    try {
+      decoded = await compute(jsonDecode, body);
+    } catch (e) {
+      logger.warning('index.json no es JSON válido: $e');
+      return const [];
+    }
+    final list = decoded is Map ? (decoded['extensions'] ?? const []) : decoded;
+    if (list is! Iterable) {
+      logger.warning('index.json: "extensions" no es una lista');
+      return const [];
+    }
     final normalized = List<dynamic>.from(list);
+    // Contrato app <-> repo. El índice ya publicaba `protocolVersion` desde
+    // siempre, pero el app nunca lo miraba: hoy funciona porque nada rompió el
+    // contrato todavía, y el día que se rompa habría fallado de forma confusa
+    // (extensiones que se instalan y se comportan raro) en vez de decirlo. Esto
+    // es lo que hace SEGURO publicar extensiones sin actualizar el app.
+    _repoProtocolVersion =
+        decoded is Map ? _parseProtocolVersion(decoded['protocolVersion']) : 1;
     _rememberOfficialCatalogEntries(normalized);
     _repoIndexCache = normalized;
     _repoIndexFetchedAt = DateTime.now();
     return normalized;
+  }
+
+  // El repo lo escribe como string ("1"), pero se acepta número por si cambia.
+  // Si no se entiende, se asume la versión soportada: un índice raro no debería
+  // dejar al usuario sin extensiones.
+  static int _parseProtocolVersion(dynamic raw) {
+    if (raw is int) return raw;
+    if (raw is String) return int.tryParse(raw) ?? supportedProtocolVersion;
+    return supportedProtocolVersion;
+  }
+
+  // Máxima versión del contrato que este app entiende. Se sube a mano cuando se
+  // agregue algo al contrato (un tipo de filtro nuevo, un campo nuevo que el
+  // app tenga que interpretar), junto con el `protocolVersion` de prism-plus.
+  static const int supportedProtocolVersion = 1;
+  static int? _repoProtocolVersion;
+
+  // true cuando el repo habla un contrato más nuevo que este app. En ese caso
+  // no se rompe nada ni se bloquea el catálogo entero: las extensiones que ya
+  // andan siguen andando, pero quien muestre el repositorio puede avisar que
+  // conviene actualizar PrismHub para tener todo.
+  static bool get repoNeedsNewerApp =>
+      (_repoProtocolVersion ?? supportedProtocolVersion) >
+      supportedProtocolVersion;
+
+  // Una extensión puede declarar `minProtocol` en su manifest si usa algo que
+  // solo entiende un app más nuevo. Se chequea antes de instalar, para decirlo
+  // claro en vez de instalarla y que falle raro después.
+  static bool entryNeedsNewerApp(Map entry) {
+    final raw = entry['minProtocol'];
+    final min = raw == null ? 1 : _parseProtocolVersion(raw);
+    return min > supportedProtocolVersion;
   }
 
   static void _rememberOfficialCatalogEntries(List<dynamic> list) {
@@ -191,11 +269,26 @@ class ExtensionUtils {
   // rota y en espera de que se arregle, sin necesitar UI nueva. Comparación
   // de versión por desigualdad de string (igual que ExtensionCard en el
   // repositorio) — no hay parsing semver hoy.
+  /// SOLO compara versiones. Antes devolvía true también cuando el catálogo
+  /// marcaba la extensión `unstable`, y eso mezclaba dos cosas que se arreglan
+  /// distinto:
+  ///
+  /// - versión nueva → se soluciona actualizando;
+  /// - inestable → NO se soluciona actualizando, porque el problema está del
+  ///   otro lado (la página caída, la extensión sin entregar contenido).
+  ///
+  /// Mezcladas, una extensión marcada inestable con la versión YA al día
+  /// mostraba "Actualización requerida" para siempre: al tocar Actualizar se
+  /// reinstalaba lo mismo, el motivo real seguía ahí y el botón no se iba
+  /// nunca. Pasó en vivo con ShadeManga, TuMangaOnline y VeoHentai, marcadas
+  /// por un falso positivo del chequeo de salud.
+  ///
+  /// El estado inestable se muestra aparte, con su propio aviso y su motivo
+  /// (ver [isRemoteUnstable] y [remoteUnstableReason]).
   static Future<bool> hasExtensionUpdate(String package) async {
     final installed = runtimes[package]?.extension.version;
     if (installed == null) return false;
     final remote = await _fetchRemoteVersions();
-    if (_remoteUnstableCache?[package] == true) return true;
     final remoteVersion = remote[package];
     return remoteVersion != null && remoteVersion != installed;
   }
@@ -204,9 +297,228 @@ class ExtensionUtils {
   // (no versión) — usado para el badge naranja "Inestable" en ExtensionTile,
   // separado del badge rojo genérico de "actualización requerida". Comparte
   // el mismo caché/TTL, no pega de nuevo al índice.
+  /// Igual que [isRemoteUnstable] pero SIN esperar: usa lo que ya haya en
+  /// caché. Sirve para filtrar una lista mientras se construye, donde no se
+  /// puede await. Si el índice todavía no se descargó devuelve false, y el
+  /// filtro se corrige solo en cuanto llega (la página se reconstruye).
+  static bool isRemoteUnstableCached(String package) =>
+      _remoteUnstableCache?[package] == true;
+
   static Future<bool> isRemoteUnstable(String package) async {
     await _fetchRemoteVersions();
     return _remoteUnstableCache?[package] == true;
+  }
+
+  // Motivo del "inestable" tal como lo publica el índice, o null si no vino
+  // ninguno. Comparte el caché de arriba, no pega de nuevo al índice.
+  static Future<String?> remoteUnstableReason(String package) async {
+    await _fetchRemoteVersions();
+    if (_remoteUnstableCache?[package] != true) return null;
+    return _remoteUnstableReasonCache?[package];
+  }
+
+  // Texto para mostrarle al usuario según el motivo. Un motivo desconocido
+  // (índice más nuevo que este app) cae al genérico en vez de mostrar la clave
+  // cruda o quedar en blanco.
+  static String unstableReasonLabel(String? reason) {
+    switch (reason) {
+      case 'site-down':
+        return 'extension.unstable-site-down'.i18n;
+      case 'broken':
+        return 'extension.unstable-broken'.i18n;
+      case 'outdated':
+        return 'extension.unstable-outdated'.i18n;
+      default:
+        return 'extension.unstable-generic'.i18n;
+    }
+  }
+
+  // Chequeo compartido de "esta extensión necesita actualizarse" antes de
+  // dejar entrar a su contenido — antes este aviso solo vivía en
+  // ExtensionTile (Instaladas) y en ExtensionSearcherPage (buscar dentro de
+  // una extensión), cada uno con su propia copia del diálogo. Tocar una
+  // card desde Home, Zona +18, Favoritos (standalone o dentro de
+  // Historial) o la búsqueda general no pasaba por NINGÚN chequeo y
+  // entraba directo aunque la extensión estuviera desactualizada.
+  // Devuelve true si BLOQUEÓ (ya mostró el aviso, no hay que seguir),
+  // false si está todo bien y se puede continuar.
+  static Future<bool> blockedByPendingUpdate(
+    BuildContext context,
+    String package,
+  ) async {
+    // 1. No instalada / 2. desactivada — se chequean ANTES que la versión,
+    // porque en esos casos no tiene sentido hablar de actualizar. Antes esto
+    // no estaba acá: tocar una card de una extensión desactivada ABRÍA
+    // DetailPage y recién adentro fallaba (detail_controller deja el runtime
+    // en null y tira 'common.extension-disabled'), así que el usuario veía la
+    // pantalla abrirse y romperse en vez de un aviso claro. Ahora se corta
+    // antes de entrar, y como todos los caminos a contenido pasan por esta
+    // función, vale igual desde Home, Zona +18, Historial, Favoritos, la
+    // búsqueda, "Continuar" y "Ver detalle" del reproductor.
+    final installed = runtimes[package];
+    if (installed == null) {
+      if (!context.mounted) return true;
+      showPlatformSnackbar(
+        context: context,
+        content: FlutterI18n.translate(
+          context,
+          'common.extension-missing',
+          translationParams: {'package': package},
+        ),
+        severity: InfoBarSeverity.error,
+      );
+      return true;
+    }
+    if (!isEnabled(package)) {
+      if (!context.mounted) return true;
+      await _showDisabledDialog(context, package);
+      return true;
+    }
+
+    // 3. Inestable o desactualizada. Se consultan por SEPARADO: desde que
+    // hasExtensionUpdate mira solo la versión, el estado inestable hay que
+    // pedirlo aparte o una extensión marcada rota dejaría de avisar acá. Las
+    // dos siguen bloqueando el contenido, pero el aviso que se muestra —y si
+    // se ofrece actualizar— depende de cuál sea.
+    final needsUpdate = await hasExtensionUpdate(package);
+    if (!context.mounted) return true;
+    final reason = await remoteUnstableReason(package);
+    if (!context.mounted) return true;
+    final isUnstable = reason != null || await isRemoteUnstable(package);
+    if (!context.mounted) return true;
+
+    // Inestable YA NO bloquea. Antes cortaba la entrada con un diálogo, y eso
+    // dejaba al usuario sin poder ni mirar la ficha de algo que ya tenía en su
+    // historial — encima por un motivo que muchas veces es temporal (un sitio
+    // caído un rato) o directamente un falso positivo del chequeo de salud,
+    // como pasó con ShadeManga, TuMangaOnline y VeoHentai.
+    //
+    // Ahora se entra normalmente y el aviso se muestra DENTRO del detalle (ver
+    // DetailExtensionTile). Si la extensión vuelve a andar, la ficha carga sola
+    // sin que el usuario tenga que hacer nada.
+    //
+    // La versión desactualizada sí sigue cortando: ahí el código instalado
+    // puede no entenderse con lo que devuelve el sitio, y actualizar lo
+    // arregla de verdad.
+    if (!needsUpdate) return false;
+
+    // Actualizar solo se ofrece cuando de verdad puede arreglar algo: si la
+    // página está caída o la extensión está rota esperando corrección,
+    // reinstalar la misma versión no cambia nada, así que se ofrece solo
+    // cerrar en vez de prometer un arreglo que no va a pasar.
+    final canFixByUpdating = !isUnstable || reason == 'outdated';
+
+    final update = await showPlatformDialog(
+      context: context,
+      title: isUnstable
+          ? 'extension.unstable-title'.i18n
+          : 'extension.update-required'.i18n,
+      content: Text(
+        isUnstable
+            ? unstableReasonLabel(reason)
+            : 'extension.update-required-dialog'.i18n,
+      ),
+      actions: [
+        if (canFixByUpdating)
+          PlatformTextButton(
+            onPressed: () => RouterUtils.pop(false),
+            child: Text('common.cancel'.i18n),
+          ),
+        PlatformFilledButton(
+          onPressed: () => RouterUtils.pop(canFixByUpdating),
+          child: Text(
+            canFixByUpdating
+                ? 'extension.update-now'.i18n
+                : 'common.understood'.i18n,
+          ),
+        ),
+      ],
+    );
+    if (update != true || !context.mounted) return true;
+    // El botón actualiza ACÁ MISMO en vez de navegar al repositorio. Antes
+    // hacía `router.push('/extension_repo')`, que en Android no hace nada
+    // (router es go_router, solo se usa en escritorio; en Android el
+    // repositorio es una pestaña del shell y además el usuario suele estar
+    // YA en la pantalla de extensiones cuando toca esto) — reportado en
+    // vivo: "ir a actualizar... pero ya estoy ahí, no hace nada".
+    try {
+      await updateInstalledFromRepo(package, context);
+    } catch (e) {
+      if (context.mounted) {
+        showPlatformSnackbar(
+          context: context,
+          content: friendlyError(e),
+          severity: InfoBarSeverity.error,
+        );
+      }
+    }
+    return true;
+  }
+
+  // Aviso de "extensión desactivada" con acción para ir a activarla. La
+  // navegación se ramifica por plataforma porque en Android Extensiones es una
+  // pestaña del shell principal (router/go_router solo se usa en escritorio) —
+  // mismo criterio que el botón "Ir a Ajustes" de la Zona +18.
+  static Future<void> _showDisabledDialog(
+    BuildContext context,
+    String package,
+  ) async {
+    final go = await showPlatformDialog(
+      context: context,
+      title: 'extension.disabled-title'.i18n,
+      content: Text('extension.disabled-dialog'.i18n),
+      actions: [
+        PlatformTextButton(
+          onPressed: () => RouterUtils.pop(false),
+          child: Text('common.cancel'.i18n),
+        ),
+        PlatformFilledButton(
+          onPressed: () => RouterUtils.pop(true),
+          child: Text('extension.go-to-installed'.i18n),
+        ),
+      ],
+    );
+    if (go != true) return;
+    if (Platform.isAndroid) {
+      Get.find<MainController>().changeTab(2);
+      return;
+    }
+    router.go('/extension');
+  }
+
+  // Navegación compartida a DetailPage — antes duplicada (con pequeñas
+  // variaciones de copy/paste) en ExtensionItemCard, home_page.dart,
+  // nsfw18_zone_page.dart y history_page.dart, ninguna con chequeo de
+  // actualización. Ahora todas pasan por acá: si hace falta actualizar,
+  // corta con el aviso de blockedByPendingUpdate en vez de entrar.
+  static Future<void> openExtensionDetail(
+    BuildContext context, {
+    required String package,
+    required String url,
+    bool isAdultOption = false,
+  }) async {
+    if (await blockedByPendingUpdate(context, package)) return;
+    if (!context.mounted) return;
+    if (Platform.isAndroid) {
+      Get.to(DetailPage(
+        key: ValueKey('$package|$url'),
+        url: url,
+        package: package,
+        tag: '$package|$url',
+        isAdultOption: isAdultOption,
+      ));
+      return;
+    }
+    router.push(
+      Uri(
+        path: '/detail',
+        queryParameters: {
+          'url': url,
+          'package': package,
+          if (isAdultOption) 'adult': '1',
+        },
+      ).toString(),
+    );
   }
 
   // Actualiza una extensión YA instalada bajando la versión del catálogo
@@ -259,6 +571,13 @@ class ExtensionUtils {
 
   static bool isEnabled(String package) =>
       !disabledExtensions.contains(package);
+
+  // Único punto de verdad para "¿se puede ver esta extensión NSFW fuera de
+  // la Zona +18?" — antes esta misma condición estaba reimplementada por
+  // separado en home_controller, search_controller y
+  // extension_repo_controller, cada una con matices ligeramente distintos.
+  static bool isNsfwVisibleOutsideZone(bool extensionIsNsfw) =>
+      !extensionIsNsfw || PrismHubStorage.getSetting(SettingKey.enableNSFW);
 
   // Join an extension's webSite with a possibly-relative url, guaranteeing
   // exactly one slash. Extensions are inconsistent: some return '/path', some
@@ -471,6 +790,49 @@ class ExtensionUtils {
     // después). El yield entre cada una permite que la animación del splash
     // se renderice sin congelarse 800ms seguidos.
     await _loadExtensions();
+    // Recién ahora runtimes está poblado — necesario para saber qué
+    // packages son nsfw:true.
+    await _migrateNsfwHistoryFavorites();
+  }
+
+  // Ver DatabaseService.markNsfwByPackages: marca retroactivamente el
+  // History/Favorite ya guardado de una extensión 100% nsfw SIN partición
+  // segura/+18 (osea, TODO lo que devuelve es +18 — no hay filtro
+  // adultOption que separe algo "normal" dentro de ella). Para una
+  // extensión MIXTA (ShadeManga, ManhwaWeb: tienen contenido normal Y +18,
+  // separados por un filtro con adultOption) no se puede migrar en bloque:
+  // el History/Favorite guardado ANTES de este campo no registró si vino
+  // de la sección +18 o de la normal, así que no hay forma de saber cuál
+  // ítem viejo es cuál — se deja tal cual (sigue en Continuar/Favoritos
+  // normal) en vez de arriesgarse a mover contenido normal a la Zona +18
+  // por error. Solo lo NUEVO (a partir de esta versión) separa bien.
+  // Corre una sola vez por instalación (flag en Hive).
+  static Future<void> _migrateNsfwHistoryFavorites() async {
+    if (PrismHubStorage.getSetting(SettingKey.nsfw18RetroactiveMigrationDone) ==
+        true) {
+      return;
+    }
+    try {
+      final fullyAdultPackages = <String>{};
+      for (final entry in runtimes.entries) {
+        if (!entry.value.extension.nsfw) continue;
+        var hasAdultPartition = false;
+        try {
+          final filters = await entry.value.createFilter();
+          hasAdultPartition = filters.values.any((f) => f.adultOption != null);
+        } catch (_) {
+          // No se pudo determinar (createFilter falló) — más seguro asumir
+          // que SÍ podría tener partición y no migrarla en bloque.
+          hasAdultPartition = true;
+        }
+        if (!hasAdultPartition) fullyAdultPackages.add(entry.key);
+      }
+      await DatabaseService.markNsfwByPackages(fullyAdultPackages);
+    } catch (e) {
+      debugPrint('ERROR: migración retroactiva de NSFW falló: $e');
+    }
+    await PrismHubStorage.setSetting(
+        SettingKey.nsfw18RetroactiveMigrationDone, true);
   }
 
   static _loadExtensions() async {
@@ -685,9 +1047,7 @@ class ExtensionUtils {
     // Home (Continuar/Favoritos/fondo del hero) — sin esto, desactivar o
     // desinstalar una extensión dejaba su contenido visible en Home hasta
     // el próximo refresco manual o hasta reabrir la página.
-    if (Get.isRegistered<HomePageController>()) {
-      Get.find<HomePageController>().callRefresh();
-    }
+    HomePageController.callRefreshAll();
   }
 
   static final RegExp _episodeNumberPattern = RegExp(r'\d+(?:\.\d+)?');

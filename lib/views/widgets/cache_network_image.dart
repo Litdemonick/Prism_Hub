@@ -82,34 +82,29 @@ class _CacheNetWorkImagePicState extends State<CacheNetWorkImagePic> {
     if (widget.fallback != null) {
       return widget.fallback!;
     }
-    // cover para que llene la tarjeta entera (nada de franjas negras) — el
-    // arte es un logo centrado sobre fondo liso, así que recortar el margen
-    // no se nota. OJO: `fit` solo pinta los píxeles DENTRO de la caja que
-    // Image ya decidió — si el padre da constraints sueltas (loose, con
-    // mínimo 0 — ej. un Stack normal, fit: loose por defecto), Image elige
-    // su PROPIA caja preservando el aspect ratio de la imagen (como si
-    // fuera contain), dejando un resto sin pintar aunque el fit diga
-    // "cover". Por eso acá se fuerza width/height infinitos (rellenan lo
-    // que el padre dé) — pero SOLO cuando el alto está acotado: en el
-    // lector (alto sin acotar a propósito) forzarlo rompe el layout
-    // (crashea el hit-test, app se cuelga), así que ahí se deja sin forzar
-    // y cae al tamaño por aspect ratio, que es seguro.
+    // Full-bleed (BoxFit.cover, sin padding ni caja negra alrededor) —
+    // mismo criterio que el fallback de tarjeta oculta en Home
+    // (home_media_card.dart hiddenCover): antes tenía un margen de 28 +
+    // BoxFit.contain sobre fondo negro, así que se veía como un logo
+    // chico flotando en una caja oscura en vez de una portada de verdad.
+    // OJO: `fit` solo pinta los píxeles DENTRO de la caja que Image ya
+    // decidió — si el padre da constraints sueltas (loose, con mínimo 0 —
+    // ej. un Stack normal), Image elige su PROPIA caja preservando el
+    // aspect ratio (como si fuera contain) aunque el fit diga "cover". Por
+    // eso se fuerza width/height infinitos — pero SOLO cuando el alto está
+    // acotado: en el lector (alto sin acotar a propósito) forzarlo rompe
+    // el layout (crashea el hit-test, app se cuelga), así que ahí se deja
+    // sin forzar y cae al tamaño por aspect ratio, que es seguro.
     return LayoutBuilder(
       builder: (context, constraints) {
         final bounded =
             constraints.maxWidth.isFinite && constraints.maxHeight.isFinite;
-        return ColoredBox(
-          color: Colors.black,
-          child: Padding(
-            padding: bounded ? const EdgeInsets.all(28) : EdgeInsets.zero,
-            child: Image.asset(
-              'assets/carddefaultoffline.png',
-              fit: BoxFit.contain,
-              alignment: Alignment.center,
-              width: bounded ? double.infinity : null,
-              height: bounded ? double.infinity : null,
-            ),
-          ),
+        return Image.asset(
+          'assets/carddefaultoffline.png',
+          fit: BoxFit.cover,
+          alignment: Alignment.center,
+          width: bounded ? double.infinity : null,
+          height: bounded ? double.infinity : null,
         );
       },
     );

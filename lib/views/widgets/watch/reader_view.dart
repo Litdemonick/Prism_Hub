@@ -51,7 +51,11 @@ class ReaderView<T extends ReaderController> extends StatelessWidget {
               // in the same gesture arena as the scrollbar's own drag
               // recognizer for any click/drag over it, causing the
               // scrollbar to jump erratically instead of dragging smoothly.
-              right: Platform.isAndroid ? 0 : 20,
+              // 24 y no 20: la barra del lector se ensanchó a 16px y su franja
+              // de agarre es ancho+6 = 22 (ver _cascadeScrollbarWidth /
+              // scrollbarStrip en comic_reader_content.dart). Con 20 los
+              // últimos 2px de la franja volvían a quedar bajo esta capa.
+              right: Platform.isAndroid ? 0 : 24,
               child: GestureDetector(
                 behavior: HitTestBehavior.translucent,
                 onTap: () {

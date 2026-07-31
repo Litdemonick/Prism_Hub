@@ -21,6 +21,7 @@ class ComicController extends ReaderController<ExtensionMangaWatch> {
     required super.cover,
     required super.anilistID,
     super.cameFromDetail,
+    super.isNsfw,
   });
 
   // Modo de lectura. webTonn = cascada vertical continua (por defecto, es lo
@@ -271,18 +272,24 @@ class ComicController extends ReaderController<ExtensionMangaWatch> {
     }
   }
 
+  // Mismo guardado que hacía onClose, ahora en un método propio para que el
+  // ciclo de vida (pantalla apagada / app en segundo plano) pueda volcarlo
+  // sin esperar a que se cierre el lector — ver ReaderController.
+  @override
+  void saveProgressNow() {
+    final data = super.watchData.value;
+    if (data == null) return;
+    super.addHistory(
+      currentPage.value.toString(),
+      data.urls.length.toString(),
+    );
+  }
+
   @override
   void onClose() {
     pageController.dispose();
-    if (super.watchData.value != null) {
-      // 获取所有页数量
-      final pages = super.watchData.value!.urls.length;
-      super.addHistory(
-        currentPage.value.toString(),
-        pages.toString(),
-      );
-    }
-    if (PrismHubStorage.getSetting(SettingKey.autoTracking) &&
+    saveProgressNow();
+    if (PrismHubStorage.getSetting(SettingKey.autoTracking) == true &&
         anilistID != "") {
       AniListProvider.editList(
         status: AnilistMediaListStatus.current,

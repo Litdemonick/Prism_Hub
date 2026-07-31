@@ -1,9 +1,9 @@
 import 'dart:io';
 
 import 'package:flutter/material.dart';
+import 'package:flutter_i18n/flutter_i18n.dart';
 import 'package:prismhub/controllers/search_controller.dart';
 import 'package:prismhub/utils/error.dart';
-import 'package:prismhub/utils/i18n.dart';
 import 'package:prismhub/views/widgets/extension_item_card.dart';
 import 'package:prismhub/views/widgets/home/home_theme.dart';
 import 'package:prismhub/views/widgets/horizontal_list.dart';
@@ -43,8 +43,18 @@ class _SearchAllTileState extends State<SearchAllTile> {
           // Los errores de conexión sin datos no llegan acá: SearchAllExtSearch
           // los saca de la lista y los agrupa en un único banner arriba
           // (ver comentario ahí) — este Text queda para errores propios de
-          // la extensión (no de red) o de conexión sin nada previo.
-          return Text(friendlyError(widget.searchResult.error!));
+          // la extensión (no de red) o de conexión sin nada previo. Mismo
+          // alto que las demás filas (antes un Text suelto sin SizedBox
+          // hacía que la fila se "achicara" comparada con una con contenido).
+          return SizedBox(
+            height: Platform.isAndroid ? 170 : 280,
+            child: Center(
+              child: Text(
+                friendlyError(widget.searchResult.error!),
+                textAlign: TextAlign.center,
+              ),
+            ),
+          );
         }
         // Todavía no resolvió — antes esto se ocultaba entero (para evitar
         // el parpadeo de "aparece y desaparece" al refrescar), pero para
@@ -56,24 +66,65 @@ class _SearchAllTileState extends State<SearchAllTile> {
         if (data == null) {
           return SizedBox(
             height: Platform.isAndroid ? 170 : 280,
-            child: ListView.builder(
-              scrollDirection: Axis.horizontal,
-              // physics fijo: mientras carga no hay nada real que scrollear
-              // y dejarlo scrolleable hacía que la fila se moviera sola
-              // bajo el dedo justo antes de que llegara el contenido.
-              physics: const NeverScrollableScrollPhysics(),
-              itemCount: 4,
-              itemBuilder: (context, index) => Container(
-                width: Platform.isAndroid ? 110 : 170,
-                margin: const EdgeInsets.only(right: 16),
-                child: const CardDefaultPlaceholder(),
-              ),
+            child: Stack(
+              alignment: Alignment.center,
+              children: [
+                ListView.builder(
+                  scrollDirection: Axis.horizontal,
+                  // physics fijo: mientras carga no hay nada real que
+                  // scrollear y dejarlo scrolleable hacía que la fila se
+                  // moviera sola bajo el dedo justo antes de que llegara
+                  // el contenido.
+                  physics: const NeverScrollableScrollPhysics(),
+                  itemCount: 4,
+                  itemBuilder: (context, index) => Container(
+                    width: Platform.isAndroid ? 110 : 170,
+                    margin: const EdgeInsets.only(right: 16),
+                    child: const CardDefaultPlaceholder(),
+                  ),
+                ),
+                // Spinner real encima de las placeholder — antes solo se
+                // veía la imagen estática sin ningún indicio de que algo
+                // seguía cargando (se sentía "plantado" en vez de
+                // "cargando"). No se toca CardDefaultPlaceholder (su
+                // diseño estático fue un pedido explícito anterior).
+                SizedBox(
+                  width: 26,
+                  height: 26,
+                  child: CircularProgressIndicator(
+                    strokeWidth: 2.4,
+                    valueColor: AlwaysStoppedAnimation(
+                      HomeTheme.accentPink.withValues(alpha: 0.85),
+                    ),
+                  ),
+                ),
+              ],
             ),
           );
         }
 
+        // Mismo alto que las demás filas (antes un Text suelto sin SizedBox
+        // hacía que la fila se "achicara" al no encontrar nada, en vez de
+        // quedar del mismo tamaño que cuando carga o trae resultados).
+        // Menciona la extensión — antes decía lo mismo genérico en cada
+        // fila, sin aclarar CUÁL de todas es la que no encontró nada.
         if (data.isEmpty) {
-          return Text('common.no-result'.i18n);
+          return SizedBox(
+            height: Platform.isAndroid ? 170 : 280,
+            child: Center(
+              child: Text(
+                FlutterI18n.translate(
+                  context,
+                  'common.no-result-in-extension',
+                  translationParams: {
+                    'extension': widget.searchResult.runitme.extension.name,
+                  },
+                ),
+                textAlign: TextAlign.center,
+                style: const TextStyle(color: HomeTheme.textMuted),
+              ),
+            ),
+          );
         }
 
         return SizedBox(

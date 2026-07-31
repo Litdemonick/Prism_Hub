@@ -3,6 +3,7 @@ import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:flutter_i18n/flutter_i18n.dart';
 import 'package:get/get.dart';
+import 'package:prismhub/models/favorite.dart';
 import 'package:prismhub/controllers/home_controller.dart';
 import 'package:prismhub/models/index.dart';
 import 'package:prismhub/router/router.dart';
@@ -10,7 +11,6 @@ import 'package:prismhub/utils/extension.dart';
 import 'package:prismhub/utils/hidden_cards.dart';
 import 'package:prismhub/utils/i18n.dart';
 import 'package:prismhub/utils/resume_history.dart';
-import 'package:prismhub/views/pages/detail_page.dart';
 import 'package:prismhub/views/pages/history_page.dart';
 import 'package:prismhub/views/widgets/home/animated_background_glow.dart';
 import 'package:prismhub/views/widgets/home/home_hero_banner.dart';
@@ -18,6 +18,17 @@ import 'package:prismhub/views/widgets/home/home_media_card.dart';
 import 'package:prismhub/views/widgets/home/home_section.dart';
 import 'package:prismhub/views/widgets/home/home_theme.dart';
 import 'package:prismhub/views/widgets/platform_widget.dart';
+
+// Card ancha estilo Crunchyroll: solo en escritorio (Windows/Linux). En
+// Android se mantiene la vertical, que es la que entra bien en pantallas
+// chicas tanto en vertical como en horizontal.
+final bool _wideCards = !Platform.isAndroid;
+
+// true en horizontal de celular, donde el alto útil es ~300-390 y cada bloque
+// de aire vertical se nota muchísimo más que en vertical o en escritorio.
+bool _tightTop(BuildContext context) =>
+    Platform.isAndroid &&
+    MediaQuery.of(context).orientation == Orientation.landscape;
 
 class HomePage extends StatefulWidget {
   const HomePage({super.key});
@@ -48,21 +59,7 @@ class _HomePageState extends State<HomePage> {
   }
 
   void _openDetail(String url, String package) {
-    if (Platform.isAndroid) {
-      Get.to(DetailPage(
-        key: ValueKey('$package|$url'),
-        url: url,
-        package: package,
-        tag: '$package|$url',
-      ));
-      return;
-    }
-    router.push(
-      Uri(
-        path: '/detail',
-        queryParameters: {'url': url, 'package': package},
-      ).toString(),
-    );
+    ExtensionUtils.openExtensionDetail(context, package: package, url: url);
   }
 
   void _openHistoryTab(int tab) {
@@ -79,7 +76,178 @@ class _HomePageState extends State<HomePage> {
   bool _isRemoteCover(String? cover) {
     if (cover == null || cover.isEmpty) return false;
     final normalized = cover.toLowerCase();
-    return normalized.startsWith('http://') || normalized.startsWith('https://');
+    return normalized.startsWith('http://') ||
+        normalized.startsWith('https://');
+  }
+
+  // "Continuar" partido en dos: los vídeos con la card ancha 16:9 (que es la
+  // forma real de sus capturas) y la lectura con la card vertical, donde un
+  // póster entra entero sin recortar ni dejar franjas. Mezclados en una sola
+  // fila era imposible: la fila reserva UN alto y una forma, así que uno de
+  // los dos tipos siempre quedaba mal.
+
+  // Favoritos con el mismo criterio que "Continuar": vídeo en la card ancha
+  // 16:9 y lectura en la vertical, cada uno con la forma que le corresponde.
+  // Mezclados, la fila reserva un solo alto y una sola forma, así que uno de
+  // los dos tipos siempre quedaba recortado o con franjas.
+  List<Widget> _favoritosSecciones(BuildContext context) {
+    final videos = c.favorites
+        .where((f) => f.type == ExtensionType.bangumi)
+        .toList(growable: false);
+    final lectura = c.favorites
+        .where((f) => f.type != ExtensionType.bangumi)
+        .toList(growable: false);
+
+    Widget seccion({
+      required String titulo,
+      required List<Favorite> items,
+      required bool ancha,
+    }) {
+      return HomeSection(
+        itemWidth: ancha ? HomeMediaCard.wideWidth : null,
+        itemHeight: ancha ? HomeMediaCard.wideTotalHeight : null,
+        itemCoverHeight: ancha ? HomeMediaCard.wideImageHeight : null,
+        boxed: true,
+        accent: HomeTheme.accentPink,
+        title: titulo,
+        onClickMore: () => _openHistoryTab(_favoritesTabIndex),
+        itemCount: items.length,
+        itemBuilder: (context, index) {
+          final f = items[index];
+          // Obx por tarjeta: ver el mismo comentario en _continuarSecciones.
+          return Obx(() => HomeMediaCard(
+                horizontal: ancha,
+                // El tipo lo dice el título de la sección.
+                type: null,
+                title: f.title,
+                subtitle: 'home.favorite'.i18n,
+                extensionName:
+                    ExtensionUtils.runtimes[f.package]?.extension.name,
+                cover: f.cover,
+                headers: c.headersForPackage(f.package),
+                onTap: () => _openDetail(f.url, f.package),
+                onDelete: () => c.deleteFavorite(f),
+                hidden: HiddenCards.isHidden(f.package, f.url),
+                onToggleHide: () => HiddenCards.toggle(f.package, f.url),
+                accent: HomeTheme.accentPink,
+              ));
+        },
+      );
+    }
+
+    return [
+      if (videos.isNotEmpty) ...[
+        seccion(
+          titulo: 'home.favorite-video'.i18n,
+          items: videos,
+          ancha: _wideCards,
+        ),
+        const SizedBox(height: 32),
+      ],
+      if (lectura.isNotEmpty) ...[
+        seccion(
+          titulo: 'home.favorite-reading'.i18n,
+          items: lectura,
+          ancha: false,
+        ),
+        const SizedBox(height: 32),
+      ],
+    ];
+  }
+
+  List<Widget> _continuarSecciones(BuildContext context) {
+    final videos = c.resents
+        .where((h) => h.type == ExtensionType.bangumi)
+        .toList(growable: false);
+    final lectura = c.resents
+        .where((h) => h.type != ExtensionType.bangumi)
+        .toList(growable: false);
+
+    Widget seccion({
+      required String titulo,
+      required List<History> items,
+      required bool ancha,
+    }) {
+      return HomeSection(
+        // La ancha usa su propio tamaño; la vertical deja los valores por
+        // defecto, que ya se adaptan a cada plataforma y orientación.
+        itemWidth: ancha ? HomeMediaCard.wideWidth : null,
+        itemHeight: ancha ? HomeMediaCard.wideTotalHeight : null,
+        itemCoverHeight: ancha ? HomeMediaCard.wideImageHeight : null,
+        boxed: true,
+        accent: HomeTheme.accentPink,
+        title: titulo,
+        onClickMore: () => _openHistoryTab(0),
+        itemCount: items.length,
+        itemBuilder: (context, index) {
+          final h = items[index];
+          // Obx propio por tarjeta — ListView.builder arma cada ítem de forma
+          // perezosa, FUERA del alcance del Obx que envuelve la página, así
+          // que sin esto togglear "ocultar" no refrescaba la tarjeta.
+          final isVideo = h.type == ExtensionType.bangumi;
+          final remoteVideoCover = isVideo && _isRemoteCover(h.cover);
+          return Obx(() => HomeMediaCard(
+                horizontal: ancha,
+                // El tipo ya lo dice el título de la sección: repetirlo en
+                // cada tarjeta era ruido.
+                type: null,
+                title: h.title,
+                subtitle: FlutterI18n.translate(
+                  context,
+                  isVideo ? 'home.watched-episode' : 'home.watched-chapter',
+                  translationParams: {
+                    'ep': ExtensionUtils.episodeNumberLabel(
+                      h.episodeTitle,
+                      h.episodeId,
+                    ),
+                  },
+                ),
+                extensionName:
+                    ExtensionUtils.runtimes[h.package]?.extension.name,
+                // El historial de VÍDEO guarda una captura LOCAL como portada
+                // (no una URL de red) — tratarla como red siempre fallaba.
+                cover: isVideo ? (remoteVideoCover ? h.cover : null) : h.cover,
+                coverFile: isVideo && h.cover != null && !remoteVideoCover
+                    ? File(h.cover!)
+                    : null,
+                headers: isVideo && !remoteVideoCover
+                    ? null
+                    : c.headersForPackage(h.package),
+                newEpisodeLabel: h.newEpisodeLabel,
+                onTap: () => resumeHistoryItem(context, h),
+                // No borra: saca el ítem de Continuar marcándolo visto. El
+                // borrado real vive en el Historial, que es donde uno
+                // administra el archivo.
+                onDelete: () => c.quitarDeContinuar(h),
+                deleteLabel: 'home.remove-from-continue'.i18n,
+                hidden: HiddenCards.isHidden(h.package, h.url),
+                onToggleHide: () => HiddenCards.toggle(h.package, h.url),
+                accent: HomeTheme.accentPink,
+              ));
+        },
+      );
+    }
+
+    return [
+      if (videos.isNotEmpty) ...[
+        seccion(
+          titulo: 'home.continue-video'.i18n,
+          items: videos,
+          // La card ancha es solo de escritorio; en celular no entra.
+          ancha: _wideCards,
+        ),
+        const SizedBox(height: 32),
+      ],
+      if (lectura.isNotEmpty) ...[
+        seccion(
+          titulo: 'home.continue-reading'.i18n,
+          items: lectura,
+          // Lectura SIEMPRE vertical: es la forma de un póster.
+          ancha: false,
+        ),
+        const SizedBox(height: 32),
+      ],
+    ];
   }
 
   Widget _buildContent() {
@@ -127,7 +295,11 @@ class _HomePageState extends State<HomePage> {
                             // 20s) del resto de Home — ver comentario arriba.
                             Obx(() => HomeHeroBanner(
                                 background: c.heroBackground.value)),
-                            const SizedBox(height: 32),
+                            // El aire entre el hero y la primera fila se
+                            // achica en horizontal de celular: ahí el alto
+                            // total es ~300-390 y 32px de hueco eran una
+                            // porción visible de la pantalla.
+                            SizedBox(height: _tightTop(context) ? 14 : 32),
                             if (isEmpty)
                               SizedBox(
                                 // 32 (padding vertical del Column) + 32 (gap
@@ -138,103 +310,8 @@ class _HomePageState extends State<HomePage> {
                                         .clamp(220.0, double.infinity),
                                 child: const _HomeEmptyState(),
                               ),
-                            if (c.resents.isNotEmpty) ...[
-                              HomeSection(
-                                title: 'home.continue-watching'.i18n,
-                                onClickMore: () => _openHistoryTab(0),
-                                itemCount: c.resents.length,
-                                itemBuilder: (context, index) {
-                                  final h = c.resents[index];
-                                  // Obx propio por tarjeta — ListView.builder
-                                  // (dentro de HomeSection) arma cada ítem de
-                                  // forma perezosa, FUERA del alcance síncrono
-                                  // del Obx exterior que envuelve todo _buildContent.
-                                  // Sin este Obx acá, togglear "ocultar" no
-                                  // refrescaba la tarjeta hasta reconstruir toda
-                                  // la página (cambiar de pestaña y volver).
-                                  final isVideo =
-                                      h.type == ExtensionType.bangumi;
-                                  final remoteVideoCover =
-                                      isVideo && _isRemoteCover(h.cover);
-                                  return Obx(() => HomeMediaCard(
-                                        title: h.title,
-                                        subtitle: FlutterI18n.translate(
-                                          context,
-                                          h.type == ExtensionType.bangumi
-                                              ? 'home.watched-episode'
-                                              : 'home.watched-chapter',
-                                          translationParams: {
-                                            'ep': ExtensionUtils
-                                                .episodeNumberLabel(
-                                              h.episodeTitle,
-                                              h.episodeId,
-                                            ),
-                                          },
-                                        ),
-                                        type: h.type,
-                                        extensionName: ExtensionUtils
-                                            .runtimes[h.package]
-                                            ?.extension
-                                            .name,
-                                        // El historial de VIDEO guarda una captura
-                                        // LOCAL como portada (no una URL de red) —
-                                        // tratarla como red siempre fallaba y caía
-                                        // al PRISM_HUB default, aunque la captura
-                                        // real existiera (Historial sí lo hacía bien).
-                                        cover: isVideo
-                                            ? (remoteVideoCover ? h.cover : null)
-                                            : h.cover,
-                                        coverFile: isVideo &&
-                                                h.cover != null &&
-                                                !remoteVideoCover
-                                            ? File(h.cover!)
-                                            : null,
-                                        headers: isVideo && !remoteVideoCover
-                                            ? null
-                                            : c.headersForPackage(h.package),
-                                        // Sin barra de progreso — el texto de arriba
-                                        // ya dice el episodio, la tarjeta es solo
-                                        // para retomar donde quedaste.
-                                        onTap: () =>
-                                            resumeHistoryItem(context, h),
-                                        hidden: HiddenCards.isHidden(
-                                            h.package, h.url),
-                                        onToggleHide: () => HiddenCards.toggle(
-                                            h.package, h.url),
-                                      ));
-                                },
-                              ),
-                              const SizedBox(height: 32),
-                            ],
-                            if (c.favorites.isNotEmpty) ...[
-                              HomeSection(
-                                title: 'home.favorite'.i18n,
-                                onClickMore: () =>
-                                    _openHistoryTab(_favoritesTabIndex),
-                                itemCount: c.favorites.length,
-                                itemBuilder: (context, index) {
-                                  final f = c.favorites[index];
-                                  return Obx(() => HomeMediaCard(
-                                        title: f.title,
-                                        subtitle: 'home.favorite'.i18n,
-                                        type: f.type,
-                                        extensionName: ExtensionUtils
-                                            .runtimes[f.package]
-                                            ?.extension
-                                            .name,
-                                        cover: f.cover,
-                                        headers: c.headersForPackage(f.package),
-                                        onTap: () =>
-                                            _openDetail(f.url, f.package),
-                                        hidden: HiddenCards.isHidden(
-                                            f.package, f.url),
-                                        onToggleHide: () => HiddenCards.toggle(
-                                            f.package, f.url),
-                                      ));
-                                },
-                              ),
-                              const SizedBox(height: 32),
-                            ],
+                            ..._continuarSecciones(context),
+                            ..._favoritosSecciones(context),
                           ],
                         ),
                       ),

@@ -4,6 +4,8 @@ import 'package:get/get.dart';
 import 'package:prismhub/models/extension.dart';
 import 'package:prismhub/controllers/search_controller.dart';
 import 'package:prismhub/utils/extension.dart';
+import 'package:prismhub/utils/prismhub_storage.dart';
+import 'package:prismhub/views/pages/nsfw18/nsfw18_search_page.dart';
 import 'package:prismhub/views/pages/search/extension_searcher_page.dart';
 import 'package:prismhub/views/widgets/home/animated_background_glow.dart';
 import 'package:prismhub/views/widgets/home/home_theme.dart';
@@ -20,7 +22,12 @@ import 'package:prismhub/views/widgets/search_appbar.dart';
 // son compartidos con otras páginas (ver comentario histórico en
 // home_section.dart), esto solo restila el marco propio de esta página.
 class SearchPage extends StatefulWidget {
-  const SearchPage({super.key});
+  const SearchPage({super.key, this.nsfwOnly = false});
+
+  // true = zona +18 del buscador (solo extensiones marcadas +18, acento rojo).
+  // Se llega únicamente pasando por Nsfw18SearchGate, que pide confirmación y
+  // PIN cada vez.
+  final bool nsfwOnly;
 
   @override
   State<SearchPage> createState() => _SearchPageState();
@@ -29,6 +36,11 @@ class SearchPage extends StatefulWidget {
 class _SearchPageState extends State<SearchPage> {
   late SearchPageController c;
   final _searchController = TextEditingController();
+
+  // Todo lo que en el buscador normal es rosa, en la zona +18 va en rojo —
+  // mismo criterio que la Zona +18 del Home (ver HomeTheme.accentRed).
+  Color get _accent =>
+      widget.nsfwOnly ? HomeTheme.accentRed : HomeTheme.accentPink;
 
   // "Lectura" agrupa manga+novela — de cara al usuario es una sola
   // categoría (ambos son texto para leer), aunque internamente sigan
@@ -55,9 +67,14 @@ class _SearchPageState extends State<SearchPage> {
     // las extensiones parpadearan de nuevo a "cargando" sin importar los
     // fixes de getRuntime()/getResult() — esos solo evitan el parpadeo
     // DENTRO de la misma instancia del controller, no entre instancias.
-    c = Get.isRegistered<SearchPageController>()
-        ? Get.find<SearchPageController>()
-        : Get.put(SearchPageController());
+    // La zona +18 usa su propia instancia bajo tag (igual que la Zona +18 del
+    // Home con HomePageController.zoneTag) — si compartieran instancia, entrar
+    // a la zona +18 pisaría los resultados del buscador normal y al volver
+    // habría que recargar todo.
+    final tag = widget.nsfwOnly ? SearchPageController.zoneTag : null;
+    c = Get.isRegistered<SearchPageController>(tag: tag)
+        ? Get.find<SearchPageController>(tag: tag)
+        : Get.put(SearchPageController(nsfwOnly: widget.nsfwOnly), tag: tag);
     c.isPageOpen = true;
     if (c.needRefresh) {
       c.getRuntime();
@@ -86,17 +103,17 @@ class _SearchPageState extends State<SearchPage> {
             padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 9),
             decoration: BoxDecoration(
               color: selected
-                  ? HomeTheme.accentPink.withValues(alpha: 0.18)
+                  ? _accent.withValues(alpha: 0.18)
                   : HomeTheme.cardSurface,
               borderRadius: BorderRadius.circular(999),
               border: Border.all(
-                color: selected ? HomeTheme.accentPink : HomeTheme.border,
+                color: selected ? _accent : HomeTheme.border,
               ),
             ),
             child: Text(
               _typeLabels[index].i18n,
               style: TextStyle(
-                color: selected ? HomeTheme.accentPink : HomeTheme.textPrimary,
+                color: selected ? _accent : HomeTheme.textPrimary,
                 fontSize: 13,
                 fontWeight: FontWeight.w600,
               ),
@@ -109,14 +126,19 @@ class _SearchPageState extends State<SearchPage> {
 
   // Versión Android: ancho completo, centrada, se puede envolver a una
   // segunda línea (no hay nada más en esa fila).
-  Widget _buildTypeChips() {
+  Widget _buildTypeChips(BuildContext context) {
     return SizedBox(
       width: double.infinity,
       child: Wrap(
         alignment: WrapAlignment.center,
         spacing: 10,
         runSpacing: 10,
-        children: List.generate(_types.length, _chip),
+        children: [
+          ...List.generate(_types.length, _chip),
+          // Va en la misma fila de chips: comparte forma y alto, así que en
+          // celular se acomoda solo si no entra (el Wrap lo baja de línea).
+          _buildNsfwButton(context),
+        ],
       ),
     );
   }
@@ -136,6 +158,23 @@ class _SearchPageState extends State<SearchPage> {
         ],
       ),
     );
+  }
+
+  // Botón de entrada a la zona +18 del buscador. Solo aparece en el buscador
+  // normal (dentro de la zona +18 no tiene sentido) y solo si el switch de NSFW
+  // de Ajustes está prendido — si está apagado, el contenido +18 no existe para
+  // la app y ofrecer la puerta sería confuso.
+  Widget _buildNsfwButton(BuildContext context) {
+    if (widget.nsfwOnly) return const SizedBox.shrink();
+    // Obx y no una lectura suelta: ver PrismHubStorage.nsfwEnabled — en
+    // Android esta página no se reconstruye al volver de Ajustes, así que
+    // con la lectura directa el botón quedaba visible con el switch apagado.
+    return Obx(() {
+      if (!PrismHubStorage.nsfwEnabled.value) return const SizedBox.shrink();
+      return _Nsfw18SearchButton(
+        onTap: () => openNsfw18Search(context),
+      );
+    });
   }
 
   Widget _buildProgress() {
@@ -160,7 +199,7 @@ class _SearchPageState extends State<SearchPage> {
                 value: total == 0 ? null : c.finishCount / total,
                 minHeight: 3,
                 backgroundColor: HomeTheme.border,
-                valueColor: const AlwaysStoppedAnimation(HomeTheme.accentPink),
+                valueColor: AlwaysStoppedAnimation(_accent),
               ),
             ),
           ),
@@ -204,14 +243,32 @@ class _SearchPageState extends State<SearchPage> {
         onChanged: (value) {
           if (value.isEmpty) c.search.value = '';
         },
-        onSubmitted: (value) => c.search.value = value,
+        onSubmitted: c.submitSearch,
         hintText: "search.hint-text".i18n,
-        title: "common.search".i18n,
+        // Zona +18: título propio, tinte rojo y flecha para salir. El buscador
+        // normal es una pestaña del shell (no tiene a dónde volver), así que
+        // ahí estos tres van en null y queda igual que siempre.
+        title: widget.nsfwOnly
+            ? "nsfw18.search-zone-title".i18n
+            : "common.search".i18n,
+        backgroundColor: widget.nsfwOnly
+            ? HomeTheme.accentRed.withValues(alpha: 0.22)
+            : null,
+        leading: widget.nsfwOnly
+            ? IconButton(
+                icon: const Icon(Icons.arrow_back),
+                onPressed: () {
+                  if (Navigator.of(context).canPop()) {
+                    Navigator.of(context).pop();
+                  }
+                },
+              )
+            : null,
       ),
       body: RefreshIndicator(
         onRefresh: () async =>
             c.getRuntime(types: c.cuurentExtensionType.value),
-        color: HomeTheme.accentPink,
+        color: _accent,
         backgroundColor: HomeTheme.cardSurface,
         child: Container(
           color: HomeTheme.bg,
@@ -226,7 +283,7 @@ class _SearchPageState extends State<SearchPage> {
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                         _buildProgress(),
-                        _buildTypeChips(),
+                        _buildTypeChips(context),
                       ],
                     ),
                   ),
@@ -278,10 +335,16 @@ class _SearchPageState extends State<SearchPage> {
                     // scrollean horizontal si no entran, nunca cambian de
                     // alto ni empujan al resto. Un VerticalDivider separa
                     // visualmente el grupo de filtros del de acciones.
-                    Row(
-                      crossAxisAlignment: CrossAxisAlignment.center,
-                      children: [
-                        Expanded(child: _buildTypeChipsScrollable()),
+                    // La barra se acomoda al ancho REAL disponible. Con el
+                    // panel lateral abierto, la caja de búsqueda y los botones
+                    // (de ancho fijo) se comían todo el espacio y los chips de
+                    // tipo quedaban recortados hasta desaparecer — "Vídeo" y
+                    // "Lectura" directamente no se veían. Por debajo de cierto
+                    // ancho, los filtros bajan a su propia línea en vez de
+                    // pelear por el que queda.
+                    LayoutBuilder(builder: (context, constraints) {
+                      final acciones = <Widget>[
+                        _buildNsfwButton(context),
                         const SizedBox(width: 16),
                         const SizedBox(
                           height: 32,
@@ -328,8 +391,7 @@ class _SearchPageState extends State<SearchPage> {
                                   onChanged: (value) {
                                     if (value.isEmpty) c.search.value = '';
                                   },
-                                  onSubmitted: (value) =>
-                                      c.search.value = value,
+                                  onSubmitted: c.submitSearch,
                                   suffix: fluent.IconButton(
                                     icon: const Icon(
                                         fluent.FluentIcons.chrome_close,
@@ -346,8 +408,26 @@ class _SearchPageState extends State<SearchPage> {
                             ],
                           ),
                         ),
-                      ],
-                    ),
+                      ];
+                      if (constraints.maxWidth >= 980) {
+                        return Row(
+                          crossAxisAlignment: CrossAxisAlignment.center,
+                          children: [
+                            Expanded(child: _buildTypeChipsScrollable()),
+                            const SizedBox(width: 12),
+                            ...acciones,
+                          ],
+                        );
+                      }
+                      return Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          _buildTypeChipsScrollable(),
+                          const SizedBox(height: 12),
+                          Row(children: acciones),
+                        ],
+                      );
+                    }),
                   ],
                 ),
               ),
@@ -374,6 +454,67 @@ class _SearchPageState extends State<SearchPage> {
     return PlatformBuildWidget(
       androidBuilder: _buildAndroidSearch,
       desktopBuilder: _buildDesktopSearch,
+    );
+  }
+}
+
+// Puerta a la zona +18 del buscador. En rojo a propósito (mismo acento que la
+// Zona +18 del Home) y con el aviso de que pide PIN, para que se entienda a qué
+// lleva antes de tocarlo. Se usa igual en Windows, Linux y Android: es un widget
+// Material puro (no depende del árbol fluent) y el hover solo cambia el color,
+// así que se ve y se comporta igual en las tres plataformas.
+class _Nsfw18SearchButton extends StatefulWidget {
+  const _Nsfw18SearchButton({required this.onTap});
+
+  final VoidCallback onTap;
+
+  @override
+  State<_Nsfw18SearchButton> createState() => _Nsfw18SearchButtonState();
+}
+
+class _Nsfw18SearchButtonState extends State<_Nsfw18SearchButton> {
+  bool _hovered = false;
+
+  @override
+  Widget build(BuildContext context) {
+    return MouseRegion(
+      cursor: SystemMouseCursors.click,
+      onEnter: (_) => setState(() => _hovered = true),
+      onExit: (_) => setState(() => _hovered = false),
+      child: GestureDetector(
+        onTap: widget.onTap,
+        child: AnimatedContainer(
+          duration: const Duration(milliseconds: 150),
+          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 9),
+          decoration: BoxDecoration(
+            color:
+                HomeTheme.accentRed.withValues(alpha: _hovered ? 0.26 : 0.14),
+            borderRadius: BorderRadius.circular(999),
+            border: Border.all(
+              color: HomeTheme.accentRed.withValues(alpha: _hovered ? 1 : 0.55),
+            ),
+          ),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              const Icon(Icons.warning_amber_rounded,
+                  size: 15, color: HomeTheme.accentRed),
+              const SizedBox(width: 6),
+              Text(
+                'nsfw18.search-button'.i18n,
+                style: const TextStyle(
+                  color: HomeTheme.accentRed,
+                  fontSize: 13,
+                  fontWeight: FontWeight.w700,
+                ),
+              ),
+              const SizedBox(width: 5),
+              Icon(Icons.lock_outline,
+                  size: 13, color: HomeTheme.accentRed.withValues(alpha: 0.75)),
+            ],
+          ),
+        ),
+      ),
     );
   }
 }

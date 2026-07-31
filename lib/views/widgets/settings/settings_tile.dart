@@ -1,4 +1,5 @@
 ﻿import 'package:flutter/material.dart';
+import 'package:prismhub/views/widgets/settings/settings_subtitle.dart';
 import 'package:prismhub/views/widgets/home/home_theme.dart';
 import 'package:prismhub/views/widgets/platform_widget.dart';
 
@@ -31,11 +32,11 @@ class _SettingsTileState extends State<SettingsTile> {
         widget.title,
         style: const TextStyle(color: HomeTheme.textPrimary),
       ),
+      // SettingsSubtitle y no un Text pelado: es el que resalta "+18" en
+      // rojo. Este camino (el ListTile de Android) se me había quedado sin
+      // cambiar, así que el color solo se veía en escritorio.
       subtitle: widget.buildSubtitle != null
-          ? Text(
-              widget.buildSubtitle!.call(),
-              style: const TextStyle(color: HomeTheme.textMuted),
-            )
+          ? SettingsSubtitle(widget.buildSubtitle!.call(), fontSize: 13)
           : null,
       trailing: widget.trailing,
       onTap: widget.onTap,
@@ -66,11 +67,7 @@ class _SettingsTileState extends State<SettingsTile> {
                 style: const TextStyle(color: HomeTheme.textPrimary),
               ),
               if (widget.buildSubtitle != null)
-                Text(
-                  widget.buildSubtitle!.call(),
-                  style:
-                      const TextStyle(fontSize: 12, color: HomeTheme.textMuted),
-                )
+                SettingsSubtitle(widget.buildSubtitle!.call())
             ],
           ),
         ),
@@ -93,9 +90,15 @@ class _SettingsTileState extends State<SettingsTile> {
     if (widget.isCard) {
       return Container(
         padding: const EdgeInsets.all(12),
+        // clipBehavior + el mismo radio de 12 que el resto de las tarjetas de
+        // la app: sin recorte, el contenido (y el área táctil) pisaba las
+        // esquinas redondeadas y se veían mordidas o cuadradas según el
+        // ancho, sobre todo en celular. También unifica el radio, que acá era
+        // 10 y en las demás 12.
+        clipBehavior: Clip.antiAlias,
         decoration: BoxDecoration(
           color: HomeTheme.cardSurface,
-          borderRadius: BorderRadius.circular(10),
+          borderRadius: BorderRadius.circular(12),
           border: Border.all(color: HomeTheme.border),
         ),
         child: content,

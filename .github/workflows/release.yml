@@ -4,12 +4,23 @@ on:
   push:
     tags:
       - v*
+  # Permite correr esto a mano (sin pushear ningún tag) para probar un build
+  # antes de publicarlo — ej. validar el fix de Linux en una VM real antes de
+  # confirmarlo como release público. El job de Linux sube el resultado como
+  # artifact de Actions (privado, no un release) cuando se dispara así; solo
+  # publica de verdad cuando lo dispara un push de tag v* (ver los "if:" más
+  # abajo en cada job "Release ...").
+  workflow_dispatch:
 
 permissions:
   contents: write
 
 jobs:
   build-and-release-android:
+    # Se salta en workflow_dispatch: un run manual es para probar el fix de
+    # Linux puntualmente, no hace falta gastar minutos de CI ni firmar un APK
+    # de Android que no cambió.
+    if: github.event_name == 'push'
     runs-on: ubuntu-latest
     permissions:
       contents: write
@@ -58,9 +69,13 @@ jobs:
     permissions:
       contents: write
     steps:
+      # Sin "ref: main" fijo (a propósito, solo acá): así un workflow_dispatch
+      # manual desde develop compila lo que hay en develop (para probar el fix
+      # de Linux antes de mergear a main), en vez de traer siempre main como
+      # hacen los otros dos jobs. Un push de tag v* sigue construyendo el
+      # commit exacto que apunta el tag, que es lo mismo que main en el flujo
+      # normal de release.
       - uses: actions/checkout@v4
-        with:
-          ref: main
       - uses: subosito/flutter-action@v2
         with:
           channel: stable
@@ -70,45 +85,296 @@ jobs:
           sudo apt-get install -y clang cmake ninja-build pkg-config \
             libgtk-3-dev liblzma-dev libstdc++-12-dev \
             libwebkit2gtk-4.1-dev libjavascriptcoregtk-4.1-dev \
-            libmpv-dev mpv
+            libmpv-dev mpv xvfb
       - run: flutter pub get
       - name: Build Linux
         run: flutter build linux --release
-      - name: Ensure QuickJS library is in bundle
+      - name: Rebuild QuickJS bridge (patched) and install into bundle
         run: |
           set -e
-          BUNDLE_LIB="build/linux/x64/release/bundle/lib"
+          REPO_ROOT="$(pwd)"
+          BUNDLE_LIB="$REPO_ROOT/build/linux/x64/release/bundle/lib"
           mkdir -p "$BUNDLE_LIB"
-          # flutter_js 0.8.x usa flutter_qjs_bundled_libraries (con qjs) en vez de
-          # flutter_js_bundled_libraries, por lo que el .so no se copia al bundle
-          # via PLUGIN_BUNDLED_LIBRARIES. El install() del CMake de flutter_js
-          # tampoco es confiable en CI. Lo copiamos manualmente.
-          SO_PATH=$(grep -A2 '"name": "flutter_js"' .dart_tool/package_config.json \
-            | grep '"rootUri"' \
-            | cut -d'"' -f4 \
-            | sed 's|file://||')
-          SO_SRC="${SO_PATH}/linux/shared/libquickjs_c_bridge_plugin.so"
-          if [ -f "$SO_SRC" ]; then
-            cp -v "$SO_SRC" "$BUNDLE_LIB/"
-            echo "✅ libquickjs_c_bridge_plugin.so copiado al bundle"
+          # El libquickjs_c_bridge_plugin.so que trae flutter_js 0.8.x es un
+          # binario precompilado en 2021 (repo abner/quickjs-c-bridge) —
+          # confirmado en vivo que crashea con SIGSEGV en distros Linux
+          # modernas (CachyOS) justo al crear el PRIMER contexto JS, dentro
+          # de JS_NewContext → JS_AddIntrinsicBasicObjects → js_new_shape
+          # (o sea, antes de correr una sola línea de JS de una extensión).
+          # El wrapper (cxx/libfastdev_quickjs_runtime.cpp) desactiva el GC
+          # por completo pasándole (size_t)-1 como umbral (el valor máximo
+          # posible) mientras deja un techo duro de memoria de 64MB — un
+          # valor centinela así en un motor de 2021 es sospechoso de un bug
+          # de comparación con/sin signo en esa ruta, justo la que se
+          # ejecuta al reservar las shapes de los objetos base. Se recompila
+          # el MISMO código (no se toca el motor QuickJS en sí, sigue siendo
+          # el de 2021) parcheando solo esa línea a un umbral finito y
+          # generoso, para no acercarse nunca al caso límite. Si la
+          # recompilación falla por lo que sea, cae al binario precompilado
+          # original (mismo comportamiento que había antes) en vez de romper
+          # el release entero.
+          set +e
+          (
+            set -e
+            git clone --quiet https://github.com/abner/quickjs-c-bridge.git /tmp/quickjs-c-bridge
+            cd /tmp/quickjs-c-bridge
+            git checkout --quiet 7204d9bf1afbe0550d51d7decdcce398b2c22e1a
+            sed -i \
+              's/JS_SetGCThreshold(runtime, (size_t)-1);.*/JS_SetGCThreshold(runtime, (size_t)0x2000000); \/\/ patched: umbral finito en vez de SIZE_MAX/' \
+              cxx/libfastdev_quickjs_runtime.cpp
+            grep -n "JS_SetGCThreshold" cxx/libfastdev_quickjs_runtime.cpp
+            # -Bsymbolic-functions: fuerza que las llamadas de ESTE .so a sus
+            # propias funciones se resuelvan contra sí mismo primero, sin
+            # pasar por el scope global del proceso. El GC-threshold ya se
+            # probó y NO arregla el crash (confirmado en Linux real) — esto
+            # es un intento aparte, más genérico, por si la interposición no
+            # es por nombre exacto sino por orden de búsqueda en el PLT.
+            cmake -S ./linux -B ./build/linux -DCMAKE_SHARED_LINKER_FLAGS="-Wl,-Bsymbolic-functions"
+            cmake --build ./build/linux
+            SO_BUILT=$(find ./build/linux -iname "libquickjs_c_bridge_plugin.so" | head -1)
+            [ -n "$SO_BUILT" ]
+            cp -v "$SO_BUILT" "$BUNDLE_LIB/"
+          )
+          BUILD_STATUS=$?
+          set -e
+          if [ "$BUILD_STATUS" -eq 0 ]; then
+            echo "✅ libquickjs_c_bridge_plugin.so recompilado (GC threshold parcheado) e instalado en el bundle"
           else
-            echo "⚠️  No encontrado en $SO_SRC, buscando en pub cache..."
-            SO_FALLBACK=$(find "$HOME/.pub-cache" -path "*/flutter_js-*/linux/shared/libquickjs_c_bridge_plugin.so" 2>/dev/null | head -1)
-            if [ -n "$SO_FALLBACK" ]; then
-              cp -v "$SO_FALLBACK" "$BUNDLE_LIB/"
-              echo "✅ libquickjs_c_bridge_plugin.so copiado desde fallback"
+            echo "⚠️  La recompilación desde fuente falló — usando el binario precompilado de flutter_js como antes"
+            SO_PATH=$(grep -A2 '"name": "flutter_js"' .dart_tool/package_config.json \
+              | grep '"rootUri"' \
+              | cut -d'"' -f4 \
+              | sed 's|file://||')
+            SO_SRC="${SO_PATH}/linux/shared/libquickjs_c_bridge_plugin.so"
+            if [ -f "$SO_SRC" ]; then
+              cp -v "$SO_SRC" "$BUNDLE_LIB/"
+              echo "✅ libquickjs_c_bridge_plugin.so copiado al bundle (sin parche)"
             else
-              echo "❌ libquickjs_c_bridge_plugin.so no encontrado — el bundle no funcionará"
-              exit 1
+              SO_FALLBACK=$(find "$HOME/.pub-cache" -path "*/flutter_js-*/linux/shared/libquickjs_c_bridge_plugin.so" 2>/dev/null | head -1)
+              if [ -n "$SO_FALLBACK" ]; then
+                cp -v "$SO_FALLBACK" "$BUNDLE_LIB/"
+                echo "✅ libquickjs_c_bridge_plugin.so copiado desde fallback (sin parche)"
+              else
+                echo "❌ libquickjs_c_bridge_plugin.so no encontrado — el bundle no funcionará"
+                exit 1
+              fi
             fi
           fi
           echo "Contenido final de lib/:"
           ls -la "$BUNDLE_LIB/"
+      # Smoke test: aísla el crash de Linux del resto de la app. Carga el .so
+      # directo y hace lo MÍNIMO que hace PrismHub al arrancar (crear runtime
+      # + contexto JS), que es exactamente donde revienta con SIGSEGV en las
+      # máquinas de prueba. Sirve para saber si el crash se reproduce acá en
+      # Ubuntu (y poder iterar el fix en CI) o si es específico de distros más
+      # nuevas. continue-on-error: es diagnóstico, nunca debe frenar el build.
+      - name: Smoke test QuickJS bridge
+        continue-on-error: true
+        run: |
+          # GitHub Actions corre cada step de "run:" con `bash -e` por
+          # default. Los smoke tests de más abajo REVIENTAN a propósito
+          # (SIGSEGV, exit 139) para reproducir el bug — sin "set +e" acá,
+          # bash aborta el script entero en el primer crash y las pruebas
+          # siguientes (la del tunable de TLS) nunca llegan a correr.
+          set +e
+          cat > /tmp/qjs_smoke.c <<'SMOKE_EOF'
+          #include <stdio.h>
+          #include <stddef.h>
+          #include <dlfcn.h>
+          int main(int argc, char **argv) {
+            // argv[2] (opcional): librería a cargar ANTES con RTLD_GLOBAL, para
+            // reproducir la interposición de símbolos que ocurre dentro de la
+            // app real (donde libmpv de media_kit se carga primero). Si mpv
+            // está compilado con soporte de JavaScript (MuJS), exporta
+            // js_malloc/js_free con la MISMA firma de nombre que QuickJS pero
+            // semántica distinta — y en Linux el primero que carga gana para
+            // todos, así que las llamadas internas de QuickJS terminarían
+            // saltando a las de MuJS.
+            if (argc > 2 && argv[2][0]) {
+              // argv[3]=="local": reproduce el flag REAL que usa Dart FFI
+              // (DynamicLibrary.open llama a dlopen sin RTLD_GLOBAL, o sea
+              // RTLD_LOCAL). Antes esta prueba siempre forzaba RTLD_GLOBAL,
+              // que no es necesariamente lo que pasa en la app real.
+              int local = (argc > 3 && argv[3][0] == 'l');
+              void *pre = dlopen(argv[2], RTLD_NOW | (local ? RTLD_LOCAL : RTLD_GLOBAL));
+              printf("preload %s -> %s (%s)\n", argv[2], pre ? "OK" : dlerror(),
+                     local ? "RTLD_LOCAL" : "RTLD_GLOBAL");
+            }
+            void *h = dlopen(argv[1], RTLD_NOW);
+            if (!h) { printf("DLOPEN FAIL: %s\n", dlerror()); return 2; }
+            void *(*jsNewRuntime)(void*, long long) =
+              (void *(*)(void*, long long))dlsym(h, "jsNewRuntime");
+            void (*jsSetMaxStackSize)(void*, size_t) =
+              (void (*)(void*, size_t))dlsym(h, "jsSetMaxStackSize");
+            void *(*jsNewContext)(void*) =
+              (void *(*)(void*))dlsym(h, "jsNewContext");
+            printf("syms: jsNewRuntime=%p jsSetMaxStackSize=%p jsNewContext=%p\n",
+                   (void*)jsNewRuntime, (void*)jsSetMaxStackSize, (void*)jsNewContext);
+            if (!jsNewRuntime || !jsNewContext) { printf("MISSING SYMBOLS\n"); return 3; }
+            void *rt = jsNewRuntime(0, 0);
+            printf("runtime = %p\n", rt);
+            if (jsSetMaxStackSize) {
+              jsSetMaxStackSize(rt, 1024 * 1024);
+              printf("stack size set OK\n");
+            }
+            void *ctx = jsNewContext(rt);
+            printf("context = %p\n", ctx);
+            printf("SMOKE OK\n");
+            return 0;
+          }
+          SMOKE_EOF
+          gcc -o /tmp/qjs_smoke /tmp/qjs_smoke.c -ldl
+          BUNDLE_SO="build/linux/x64/release/bundle/lib/libquickjs_c_bridge_plugin.so"
+          run_smoke() {
+            echo "=============================================="
+            echo "Probando: $1  ${2:+(con preload: $2, modo: ${3:-global})}"
+            echo "=============================================="
+            if [ ! -f "$1" ]; then echo "(no existe, se saltea)"; return; fi
+            /tmp/qjs_smoke "$1" "${2:-}" "${3:-}"
+            echo "exit code: $?"
+          }
+          # DEFINIDOS (no importados: Ndx != UND) y GLOBAL/WEAK, de tipo FUNC u
+          # OBJECT — son los que de verdad "ganan" la interposición si otra
+          # librería cargada antes define el MISMO nombre. Sin filtrar por
+          # prefijo js_: la colisión real puede estar en cualquier símbolo
+          # (ej. utilidades genéricas como dbuf_*, hash_*, etc. que ambas
+          # librerías podrían exportar con el mismo nombre).
+          defined_syms() {
+            readelf --dyn-syms -W "$1" 2>/dev/null \
+              | awk '$4 ~ /FUNC|OBJECT/ && ($5=="GLOBAL"||$5=="WEAK") && $7!="UND" {print $8}' \
+              | sort -u
+          }
+          # Símbolos que "$1" IMPORTA (no los define, Ndx==UND) — son los que
+          # este .so espera resolver contra OTRA librería ya cargada (típico:
+          # libc). Si una de esas coincide con algo que libmpv SÍ define en
+          # GLOBAL, y libmpv queda antes que libc en el orden de búsqueda del
+          # scope global, QuickJS terminaría llamando a la función de libmpv
+          # en vez de la de libc con el mismo nombre — interposición real que
+          # el chequeo anterior (definido vs definido) no puede detectar.
+          undefined_syms() {
+            readelf --dyn-syms -W "$1" 2>/dev/null \
+              | awk '$4 ~ /FUNC|OBJECT/ && $7=="UND" {print $NF}' \
+              | sort -u
+          }
+          MPV_SO=$(ldconfig -p 2>/dev/null | awk '/libmpv\.so/ {print $NF}' | head -1)
+          echo "libmpv encontrada en: ${MPV_SO:-(ninguna)}"
+          if [ -n "$MPV_SO" ]; then
+            defined_syms "$BUNDLE_SO" > /tmp/syms_qjs.txt
+            defined_syms "$MPV_SO" > /tmp/syms_mpv.txt
+            echo "(símbolos GLOBAL/WEAK definidos: qjs=$(wc -l < /tmp/syms_qjs.txt), mpv=$(wc -l < /tmp/syms_mpv.txt))"
+            echo ""
+            echo "##### Símbolos que AMBAS definen (colisión real de interposición) #####"
+            comm -12 /tmp/syms_qjs.txt /tmp/syms_mpv.txt | tee /tmp/syms_collision.txt
+            echo "(total en colisión: $(wc -l < /tmp/syms_collision.txt))"
+            echo ""
+            echo "##### Símbolos que QuickJS IMPORTA (espera de libc/etc) y que libmpv YA DEFINE global (interposición real) #####"
+            undefined_syms "$BUNDLE_SO" > /tmp/syms_qjs_undef.txt
+            echo "(símbolos importados por qjs: $(wc -l < /tmp/syms_qjs_undef.txt))"
+            comm -12 /tmp/syms_qjs_undef.txt /tmp/syms_mpv.txt | tee /tmp/syms_interposed.txt
+            echo "(total interpuesto: $(wc -l < /tmp/syms_interposed.txt))"
+          fi
+          echo ""
+          # Sin colisión de nombres (0), el sospechoso ahora es OTRA categoría
+          # de bug de Linux con dlopen: TLS ESTÁTICO agotado. glibc reserva un
+          # margen chico de "TLS surplus" para librerías que se cargan con
+          # dlopen DESPUÉS del arranque — si suficientes librerías con bloques
+          # TLS (PT_TLS, variables __thread/thread_local) se cargan antes
+          # (media_kit trae MUCHAS: libmpv, GTK, etc.), ese margen se agota, y
+          # el siguiente acceso a una variable TLS cae en una página sin
+          # permisos: exactamente SEGV_ACCERR, el mismo síntoma que tenemos.
+          echo "##### ¿El bridge de QuickJS tiene bloque TLS (PT_TLS)? #####"
+          readelf -l -W "$BUNDLE_SO" 2>/dev/null | grep -A1 "TLS" || echo "(sin segmento TLS)"
+          echo ""
+          echo "##### ¿libmpv tiene bloque TLS (PT_TLS)? #####"
+          readelf -l -W "$MPV_SO" 2>/dev/null | grep -A1 "TLS" || echo "(sin segmento TLS)"
+          echo ""
+          echo "##### Tamaño del margen de TLS estático que ve este proceso #####"
+          getconf GNU_LIBC_VERSION 2>/dev/null || true
+          ldd --version 2>/dev/null | head -1
+          # 1) El .so del bundle, solo.
+          run_smoke "$BUNDLE_SO"
+          # 2) El precompilado original de flutter_js, solo.
+          PREBUILT=$(find "$HOME/.pub-cache" -path "*/flutter_js-*/linux/shared/libquickjs_c_bridge_plugin.so" 2>/dev/null | head -1)
+          run_smoke "$PREBUILT"
+          # 3) LA PRUEBA CLAVE: con libmpv cargada ANTES (como hace la app
+          #    real, ver "package:media_kit_libs_linux registered" en el log
+          #    justo antes del SIGSEGV). Si acá revienta, la causa es
+          #    interposición de símbolos y el fix es -Bsymbolic / visibilidad.
+          run_smoke "$BUNDLE_SO" "$MPV_SO"
+          run_smoke "$PREBUILT" "$MPV_SO"
+          # 3b) MISMA prueba pero precargando libmpv con RTLD_LOCAL en vez de
+          #    RTLD_GLOBAL. Dart FFI (DynamicLibrary.open, usado tanto por
+          #    flutter_js como por media_kit) llama a dlopen SIN pasar
+          #    RTLD_GLOBAL, o sea que en la app real libmpv se carga con
+          #    RTLD_LOCAL — no con GLOBAL como forzaban las pruebas de arriba.
+          #    Si con LOCAL no revienta, la interposición vía scope global no
+          #    es el mecanismo real (o algo más deja a libmpv con scope
+          #    GLOBAL igual, por ejemplo si ya fue cargada antes por GTK/GIO
+          #    con RTLD_GLOBAL "pegado" para el resto del proceso).
+          run_smoke "$BUNDLE_SO" "$MPV_SO" "local"
+          run_smoke "$PREBUILT" "$MPV_SO" "local"
+          # 4) MISMO caso que revienta arriba, pero con el margen de TLS
+          #    estático de glibc agrandado a mano (tunable moderno, glibc
+          #    2.35+). Si esto lo arregla, confirma que la causa es TLS
+          #    estático agotado por dlopen — y de paso da el workaround real
+          #    (esta misma variable de entorno, puesta en el launcher/.desktop
+          #    de Linux antes de correr PrismHub).
+          echo "=============================================="
+          echo "Probando: con GLIBC_TUNABLES=glibc.rtld.optional_static_tls=4096 (margen TLS agrandado)"
+          echo "=============================================="
+          GLIBC_TUNABLES=glibc.rtld.optional_static_tls=4096 /tmp/qjs_smoke "$BUNDLE_SO" "$MPV_SO"
+          echo "exit code: $?"
+          echo "=============================================="
+          echo "Probando: con GLIBC_TUNABLES=glibc.rtld.optional_static_tls=1048576 (margen MUCHO mas grande, 1MB, por si 4096 no alcanzaba)"
+          echo "=============================================="
+          GLIBC_TUNABLES=glibc.rtld.optional_static_tls=1048576 /tmp/qjs_smoke "$BUNDLE_SO" "$MPV_SO"
+          echo "exit code: $?"
+          echo "RESULTADO_FINAL_SMOKE_TEST_FIN"
+          echo "exit code: $?"
+      # Corre el binario REAL (no el harness sintético de más arriba) bajo
+      # Xvfb con LD_DEBUG, para confirmar en CI si el crash reproduce igual
+      # que en la máquina del usuario y ver con qué flags/orden el linker de
+      # verdad carga libmpv vs el bridge de QuickJS dentro de la app.
+      - name: Run real app headless (LD_DEBUG)
+        continue-on-error: true
+        run: |
+          set +e
+          BIN="build/linux/x64/release/bundle/PrismHub"
+          chmod +x "$BIN"
+          # 60s en vez de 15: ExtensionUtils.ensureInitialized() instala
+          # extensiones por defecto desde un repo remoto (red) y recién
+          # DESPUÉS de eso llama a initRuntime() (que es lo que carga la
+          # librería de QuickJS) — 15s no le daba tiempo a llegar ahí, por
+          # eso la primera corrida ni cargaba quickjs (timeout 124, sin
+          # crashear, pero sin haber probado nada real todavía).
+          echo "##### Corriendo la app real bajo Xvfb, 60s, con LD_DEBUG=all #####"
+          xvfb-run -a env LD_DEBUG=all LD_DEBUG_OUTPUT=/tmp/lddebug timeout 60 "$BIN" > /tmp/app_stdout.log 2>&1
+          echo "exit code app: $?"
+          echo ""
+          echo "##### stdout/stderr de la app (ultimas 60 lineas) #####"
+          tail -60 /tmp/app_stdout.log
+          echo ""
+          echo "##### LD_DEBUG: lineas con mpv/quickjs/global/local/scope cerca del final #####"
+          cat /tmp/lddebug.* 2>/dev/null | grep -iE "mpv|quickjs|global scope|local scope|calling init|initialize" | tail -100
+          echo "RESULTADO_LD_DEBUG_FIN"
       - name: Package
         run: |
           cd build/linux/x64/release/bundle
           tar -czf ../../../../../PrismHub-${{ github.ref_name }}-linux-x64.tar.gz .
+      # Disparado a mano (workflow_dispatch, sin tag): sube el tar.gz como
+      # artifact privado de este run de Actions, para bajarlo y probar en una
+      # VM/máquina real ANTES de confirmarlo como release público.
+      - name: Upload test artifact
+        if: github.event_name == 'workflow_dispatch'
+        uses: actions/upload-artifact@v4
+        with:
+          name: PrismHub-linux-x64-test
+          path: PrismHub-${{ github.ref_name }}-linux-x64.tar.gz
+          retention-days: 7
+      # Solo publica de verdad cuando lo dispara un push de tag v* — un run
+      # manual (workflow_dispatch) nunca toca el release público.
       - name: Release Linux
+        if: github.event_name == 'push'
         uses: ncipollo/release-action@v1
         with:
           token: ${{ secrets.GITHUB_TOKEN }}
@@ -117,6 +383,8 @@ jobs:
           generateReleaseNotes: true
 
   build-and-release-windows:
+    # Se salta en workflow_dispatch — ver comentario en build-and-release-android.
+    if: github.event_name == 'push'
     runs-on: windows-2022
     permissions:
       contents: write
@@ -166,6 +434,10 @@ jobs:
             | `PrismHub-${{ github.ref_name }}-android-x86_64.apk` | Android | x86_64 (emuladores / tabletas x86) |
 
             ### 🧩 Novedades de ${{ github.ref_name }}
+
+            #### 🐧 **Linux — crash al abrir reparado**
+            - ✅ Reparado: la app instalaba pero se cerraba sola al abrir en Linux (crash nativo al cargar extensiones, confirmado en distros modernas como CachyOS)
+            - ✅ El bridge de QuickJS que ejecuta las extensiones se recompila desde el código fuente con un ajuste puntual de manejo de memoria, en vez de usar el binario precompilado de 2021 que traía el paquete
 
             #### 🎬 **Reproductor de video — estabilidad**
             - ✅ Reparado: la imagen no se veía (solo audio) al abrir un capítulo en algunos servidores
