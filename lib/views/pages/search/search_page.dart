@@ -166,12 +166,15 @@ class _SearchPageState extends State<SearchPage> {
   // la app y ofrecer la puerta sería confuso.
   Widget _buildNsfwButton(BuildContext context) {
     if (widget.nsfwOnly) return const SizedBox.shrink();
-    if (PrismHubStorage.getSetting(SettingKey.enableNSFW) != true) {
-      return const SizedBox.shrink();
-    }
-    return _Nsfw18SearchButton(
-      onTap: () => openNsfw18Search(context),
-    );
+    // Obx y no una lectura suelta: ver PrismHubStorage.nsfwEnabled — en
+    // Android esta página no se reconstruye al volver de Ajustes, así que
+    // con la lectura directa el botón quedaba visible con el switch apagado.
+    return Obx(() {
+      if (!PrismHubStorage.nsfwEnabled.value) return const SizedBox.shrink();
+      return _Nsfw18SearchButton(
+        onTap: () => openNsfw18Search(context),
+      );
+    });
   }
 
   Widget _buildProgress() {

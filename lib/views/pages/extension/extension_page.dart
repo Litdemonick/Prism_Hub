@@ -2,6 +2,7 @@ import 'package:fluent_ui/fluent_ui.dart' as fluent;
 import 'package:flutter/material.dart';
 import 'package:flutter_i18n/flutter_i18n.dart';
 import 'package:get/get.dart';
+import 'package:prismhub/models/extension.dart';
 import 'package:prismhub/controllers/extension/extension_controller.dart';
 import 'package:prismhub/views/widgets/extension/extension_tile.dart';
 import 'package:prismhub/views/pages/extension/extension_repo_page.dart';
@@ -39,6 +40,9 @@ class _ExtensionPageState extends State<ExtensionPage> {
   // uno de los dos builders está montado a la vez). Estado local, no en el
   // controller.
   String _search = '';
+  // Filtro por categoría. Compartido entre Android y escritorio igual que
+  // _search: solo uno de los dos builders está montado a la vez.
+  _ExtFilter _filter = _ExtFilter.todas;
   // Controller propio (no uno nuevo por build) — en Android lo usa
   // SearchAppBar (mismo patrón que el repositorio: el buscador se abre
   // adentro de la propia AppBar, no en un diálogo aparte).
@@ -48,6 +52,59 @@ class _ExtensionPageState extends State<ExtensionPage> {
   // adivinen entre sí) — sin esto el scrollbar no se puede arrastrar con el
   // mouse, mismo bug ya visto y arreglado en el repositorio de extensiones.
   final _scrollController = ScrollController();
+
+  // Filtra por nombre Y por categoría. Antes cada builder repetía el filtro
+  // de búsqueda por su cuenta; con dos criterios repetirlo era pedir que se
+  // desincronizaran, así que vive en un solo lugar.
+  List<T> _applyFilters<T extends dynamic>(List<T> all) {
+    return all.where((e) {
+      final ext = e.extension;
+      if (_search.isNotEmpty && !SearchText.matchesQuery(ext.name, _search)) {
+        return false;
+      }
+      switch (_filter) {
+        case _ExtFilter.todas:
+          return true;
+        case _ExtFilter.normales:
+          return !ext.nsfw;
+        case _ExtFilter.nsfw:
+          return ext.nsfw;
+        case _ExtFilter.video:
+          return ext.type == ExtensionType.bangumi;
+        case _ExtFilter.lectura:
+          // Manga, novela y todo lo que se lee. `mixed` entra en las dos
+          // porque una extensión así sirve para ambas cosas.
+          return ext.type == ExtensionType.manga ||
+              ext.type == ExtensionType.fikushon ||
+              ext.type == ExtensionType.mixed;
+        case _ExtFilter.desactivadas:
+          return !ExtensionUtils.isEnabled(ext.package);
+      }
+    }).toList();
+  }
+
+  Widget _buildFilterChips() {
+    return SingleChildScrollView(
+      scrollDirection: Axis.horizontal,
+      child: Row(
+        children: [
+          for (final f in _ExtFilter.values) ...[
+            if (f != _ExtFilter.todas) const SizedBox(width: 8),
+            _ExtFilterChip(
+              label: f.label,
+              selected: _filter == f,
+              onTap: () => setState(() {
+                _filter = f;
+                // La página vuelve a 0: con menos resultados, quedarse en la
+                // página 3 mostraba una lista vacía sin explicación.
+                _page = 0;
+              }),
+            ),
+          ],
+        ],
+      ),
+    );
+  }
 
   @override
   void initState() {
@@ -167,11 +224,7 @@ class _ExtensionPageState extends State<ExtensionPage> {
   Widget _buildAndroid(BuildContext context) {
     return Obx(() {
       final installedAll = c.runtimes.values.toList(growable: false);
-      final installed = _search.isEmpty
-          ? installedAll
-          : installedAll
-              .where((e) => SearchText.matchesQuery(e.extension.name, _search))
-              .toList();
+      final installed = _applyFilters(installedAll);
       final totalPages =
           installed.isEmpty ? 0 : (installed.length / _pageSize).ceil();
       final page = totalPages == 0 ? 0 : _page.clamp(0, totalPages - 1);
@@ -221,6 +274,10 @@ class _ExtensionPageState extends State<ExtensionPage> {
                 const SizedBox(height: 8),
                 // Paginación arriba de la lista (no abajo) — mismo criterio
                 // que el repositorio de extensiones.
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(16, 0, 16, 10),
+                  child: _buildFilterChips(),
+                ),
                 if (totalPages > 1)
                   Padding(
                     padding: const EdgeInsets.only(bottom: 8),
@@ -352,8 +409,8 @@ class _ExtensionPageState extends State<ExtensionPage> {
                                 placeholder: 'common.search'.i18n,
                                 prefix: const Padding(
                                   padding: EdgeInsets.only(left: 8),
-                                  child: Icon(fluent.FluentIcons.search,
-                                      size: 14),
+                                  child:
+                                      Icon(fluent.FluentIcons.search, size: 14),
                                 ),
                                 // Solo visible con texto — antes no había
                                 // forma de limpiar la búsqueda en desktop
@@ -413,7 +470,9 @@ class _ExtensionPageState extends State<ExtensionPage> {
                   ),
                 ),
               ),
-              const SizedBox(height: 20),
+              const SizedBox(height: 16),
+              _buildFilterChips(),
+              const SizedBox(height: 16),
               Expanded(
                 child: Obx(() {
                   final installedAll =
@@ -435,21 +494,14 @@ class _ExtensionPageState extends State<ExtensionPage> {
                       ),
                     );
                   }
-                  final filtered = _search.isEmpty
-                      ? installedAll
-                      : installedAll
-                          .where((e) =>
-                              SearchText.matchesQuery(e.extension.name, _search))
-                          .toList();
+                  final filtered = _applyFilters(installedAll);
                   final totalPages = filtered.isEmpty
                       ? 0
                       : (filtered.length / _pageSize).ceil();
                   final page =
                       totalPages == 0 ? 0 : _page.clamp(0, totalPages - 1);
-                  final pageItems = filtered
-                      .skip(page * _pageSize)
-                      .take(_pageSize)
-                      .toList();
+                  final pageItems =
+                      filtered.skip(page * _pageSize).take(_pageSize).toList();
                   // Scrollbar de sistema pegado al borde derecho real de la
                   // ventana (mismo criterio que el repositorio, ver
                   // extension_repo_page.dart) — el grid centrado adentro
@@ -517,6 +569,72 @@ class _ExtensionPageState extends State<ExtensionPage> {
     return PlatformBuildWidget(
       androidBuilder: _buildAndroid,
       desktopBuilder: _buildDesktop,
+    );
+  }
+}
+
+// Categorías de filtro de Extensiones instaladas. El orden es el de la fila
+// de chips.
+enum _ExtFilter { todas, normales, nsfw, video, lectura, desactivadas }
+
+extension _ExtFilterLabel on _ExtFilter {
+  String get label {
+    switch (this) {
+      case _ExtFilter.todas:
+        return 'extension.filter-all'.i18n;
+      case _ExtFilter.normales:
+        return 'extension.filter-normal'.i18n;
+      case _ExtFilter.nsfw:
+        return 'extension.filter-nsfw'.i18n;
+      case _ExtFilter.video:
+        return 'extension.filter-video'.i18n;
+      case _ExtFilter.lectura:
+        return 'extension.filter-reading'.i18n;
+      case _ExtFilter.desactivadas:
+        return 'extension.filter-disabled'.i18n;
+    }
+  }
+}
+
+class _ExtFilterChip extends StatelessWidget {
+  const _ExtFilterChip({
+    required this.label,
+    required this.selected,
+    required this.onTap,
+  });
+
+  final String label;
+  final bool selected;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      onTap: onTap,
+      child: MouseRegion(
+        cursor: SystemMouseCursors.click,
+        child: AnimatedContainer(
+          duration: const Duration(milliseconds: 150),
+          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 7),
+          decoration: BoxDecoration(
+            color: selected
+                ? HomeTheme.accentPink.withValues(alpha: 0.18)
+                : HomeTheme.cardSurface,
+            borderRadius: BorderRadius.circular(999),
+            border: Border.all(
+              color: selected ? HomeTheme.accentPink : HomeTheme.border,
+            ),
+          ),
+          child: Text(
+            label,
+            style: TextStyle(
+              color: selected ? HomeTheme.accentPink : HomeTheme.textMuted,
+              fontSize: 12.5,
+              fontWeight: selected ? FontWeight.w700 : FontWeight.w500,
+            ),
+          ),
+        ),
+      ),
     );
   }
 }

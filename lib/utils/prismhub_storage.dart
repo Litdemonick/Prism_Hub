@@ -2,6 +2,7 @@ import 'dart:convert';
 import 'dart:io';
 
 import 'package:flutter/material.dart';
+import 'package:get/get.dart';
 import 'package:hive_flutter/adapters.dart';
 import 'package:isar/isar.dart';
 import 'package:prismhub/utils/log.dart';
@@ -17,6 +18,13 @@ class PrismHubStorage {
   // de dónde sacarla si el ajuste venía en null.
   static const String defaultRepoUrl =
       "https://raw.githubusercontent.com/Litdemonick/prism-plus/main";
+
+  // Espejo reactivo del switch de NSFW de Ajustes. Leer el ajuste al
+  // construir no alcanza: en Android el shell mantiene las páginas vivas en
+  // un IndexedStack, así que apagar el switch y volver a Buscar NO
+  // reconstruye esa página — el botón +18 seguía visible (la puerta sí
+  // bloqueaba al tocarlo, pero visualmente parecía habilitado).
+  static final RxBool nsfwEnabled = false.obs;
 
   static late final Isar database;
   static late final Box settings;
@@ -196,6 +204,7 @@ class PrismHubStorage {
     await _initSetting(SettingKey.novelFontSize, 18.0);
     await _initSetting(SettingKey.theme, 'system');
     await _initSetting(SettingKey.enableNSFW, false);
+    nsfwEnabled.value = getSetting(SettingKey.enableNSFW) == true;
     await _initSetting(SettingKey.videoPlayer, 'built-in');
     await _initSetting(SettingKey.listMode, "grid");
     await _initSetting(SettingKey.keyI, 10.0);
@@ -260,6 +269,11 @@ class PrismHubStorage {
 
   static setSetting(String key, dynamic value) async {
     await settings.put(key, value);
+    // Se mantiene en sincronía desde acá —el único punto de escritura— para
+    // que no pueda quedar desfasado del valor real.
+    if (key == SettingKey.enableNSFW) {
+      nsfwEnabled.value = value == true;
+    }
   }
 
   // Devolver null desde acá es peligroso: casi todos los llamadores usan el

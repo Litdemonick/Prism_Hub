@@ -107,7 +107,13 @@
     "unstable-broken": "La extensión está inestable y en espera de corrección. Por ahora no entrega contenido.",
     "unstable-outdated": "Esta extensión necesita actualizarse para volver a funcionar.",
     "unstable-generic": "Esta extensión está marcada como inestable. Por ahora no se puede abrir su contenido.",
-    "needs-newer-app": "Necesita una versión más nueva de PrismHub. Actualizá la app para poder instalarla."
+    "needs-newer-app": "Necesita una versión más nueva de PrismHub. Actualizá la app para poder instalarla.",
+    "filter-all": "Todas",
+    "filter-normal": "Normales",
+    "filter-nsfw": "+18",
+    "filter-video": "Vídeo",
+    "filter-reading": "Lectura",
+    "filter-disabled": "Desactivadas"
   },
   "extension-repo": {
     "error": "¡Ha ocurrido un error!",

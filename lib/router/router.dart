@@ -92,7 +92,7 @@ final router = GoRouter(
           pageBuilder: (context, state) => _animation(
             state,
             ExtensionSearcherPage(
-              package: state.uri.queryParameters['package']!,
+              package: state.uri.queryParameters['package'] ?? '',
               keyWord: state.uri.queryParameters['keyWord'],
             ),
           ),
@@ -107,7 +107,7 @@ final router = GoRouter(
           pageBuilder: (context, state) => _animation(
             state,
             ExtensionSettingsPage(
-              package: state.uri.queryParameters['package']!,
+              package: state.uri.queryParameters['package'] ?? '',
             ),
           ),
         ),
@@ -148,8 +148,13 @@ final router = GoRouter(
         GoRoute(
           path: '/detail',
           pageBuilder: (context, state) {
-            final url = state.uri.queryParameters['url']!;
-            final package = state.uri.queryParameters['package']!;
+            // Sin `!`: un parámetro ausente (una ruta mal armada o un enlace
+            // externo) tiraba un error de null que se llevaba puesta la
+            // pantalla entera. Con la cadena vacía, las páginas caen por su
+            // camino normal de "extensión no encontrada", que ya existe y da
+            // un mensaje claro.
+            final url = state.uri.queryParameters['url'] ?? '';
+            final package = state.uri.queryParameters['package'] ?? '';
             return _animation(
               state,
               DetailPage(

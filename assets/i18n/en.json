@@ -115,7 +115,13 @@
     "unstable-broken": "This extension is unstable and awaiting a fix. It is not returning content right now.",
     "unstable-outdated": "This extension needs an update to work again.",
     "unstable-generic": "This extension is flagged as unstable. Its content cannot be opened right now.",
-    "needs-newer-app": "Requires a newer version of PrismHub. Update the app to install it."
+    "needs-newer-app": "Requires a newer version of PrismHub. Update the app to install it.",
+    "filter-all": "All",
+    "filter-normal": "Normal",
+    "filter-nsfw": "+18",
+    "filter-video": "Video",
+    "filter-reading": "Reading",
+    "filter-disabled": "Disabled"
   },
   "extension-repo": {
     "error": "An error occurred!",

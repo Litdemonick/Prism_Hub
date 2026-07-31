@@ -727,6 +727,57 @@ async function stringify(callback) {
     };
   }
 
+  // Las extensiones son código de terceros: pueden devolver algo que no es
+  // una lista, elementos que no son objetos, o un ítem sin título (que en
+  // ExtensionListItem es un String obligatorio, así que fromJson tira "type
+  // 'Null' is not a subtype of type 'String'"). Con un .map() pelado, UN
+  // ítem malo hacía fallar la tanda ENTERA: la extensión se veía como si no
+  // tuviera nada. Se descarta lo que no se puede leer y se conserva el resto,
+  // que es lo que el usuario quiere ver.
+  List<ExtensionListItem> _parseListItems(dynamic decoded) {
+    if (decoded is! List) {
+      logger.warning(
+          '${extension.package}: se esperaba una lista y llegó ${decoded.runtimeType}');
+      return const [];
+    }
+    final items = <ExtensionListItem>[];
+    var descartados = 0;
+    for (final e in decoded) {
+      if (e is! Map) {
+        descartados++;
+        continue;
+      }
+      try {
+        items.add(ExtensionListItem.fromJson(Map<String, dynamic>.from(e)));
+      } catch (_) {
+        descartados++;
+      }
+    }
+    if (descartados > 0) {
+      logger.warning(
+          '${extension.package}: $descartados ítem(s) con formato inválido descartados');
+    }
+    return items;
+  }
+
+  // Mismo criterio que _parseListItems: un filtro mal armado descarta ESE
+  // filtro, no los demás. Antes bastaba con uno malo para que el botón de
+  // filtros de esa extensión no abriera nada.
+  Map<String, ExtensionFilter> _parseFilters(dynamic decoded) {
+    if (decoded is! Map) return {};
+    final filters = <String, ExtensionFilter>{};
+    decoded.forEach((key, value) {
+      if (key is! String || value is! Map) return;
+      try {
+        filters[key] =
+            ExtensionFilter.fromJson(Map<String, dynamic>.from(value));
+      } catch (_) {
+        logger.warning('${extension.package}: filtro "$key" inválido');
+      }
+    });
+    return filters;
+  }
+
   Future<dynamic> _decodeJsonResult(String source) {
     if (source.length < 4096) {
       return Future.value(jsonDecode(source));
@@ -752,9 +803,7 @@ async function stringify(callback) {
       );
 
       final decoded = await _decodeJsonResult(jsResult.stringResult);
-      List<ExtensionListItem> result = decoded.map<ExtensionListItem>((e) {
-        return ExtensionListItem.fromJson(e);
-      }).toList();
+      final result = _parseListItems(decoded);
       await _fillMissingHeaders(result);
       return result;
     });
@@ -776,9 +825,7 @@ async function stringify(callback) {
             'stringify(()=>${className}Instance.search($kwJs,$page,${filter == null ? null : jsonEncode(filter)}))'),
       );
       final decoded = await _decodeJsonResult(jsResult.stringResult);
-      List<ExtensionListItem> result = decoded.map<ExtensionListItem>((e) {
-        return ExtensionListItem.fromJson(e);
-      }).toList();
+      final result = _parseListItems(decoded);
       await _fillMissingHeaders(result);
       return result;
     });
@@ -833,14 +880,7 @@ async function stringify(callback) {
       final jsResult = await runtime.handlePromise(
         await runtime.evaluateAsync(eval),
       );
-      Map<String, dynamic> result = Map<String, dynamic>.from(
-          await _decodeJsonResult(jsResult.stringResult));
-      return result.map(
-        (key, value) => MapEntry(
-          key,
-          ExtensionFilter.fromJson(value),
-        ),
-      );
+      return _parseFilters(await _decodeJsonResult(jsResult.stringResult));
     });
   }
 
@@ -859,9 +899,7 @@ async function stringify(callback) {
             'stringify(()=>${className}Instance.top(${filter == null ? null : jsonEncode(filter)},$page))'),
       );
       final decoded = await _decodeJsonResult(jsResult.stringResult);
-      List<ExtensionListItem> result = decoded.map<ExtensionListItem>((e) {
-        return ExtensionListItem.fromJson(e);
-      }).toList();
+      final result = _parseListItems(decoded);
       await _fillMissingHeaders(result);
       return result;
     });
@@ -873,14 +911,7 @@ async function stringify(callback) {
         await runtime.evaluateAsync(
             'stringify(()=>${className}Instance.createTopFilter())'),
       );
-      Map<String, dynamic> result = Map<String, dynamic>.from(
-          await _decodeJsonResult(jsResult.stringResult));
-      return result.map(
-        (key, value) => MapEntry(
-          key,
-          ExtensionFilter.fromJson(value),
-        ),
-      );
+      return _parseFilters(await _decodeJsonResult(jsResult.stringResult));
     });
   }
 
@@ -892,7 +923,20 @@ async function stringify(callback) {
             'stringify(()=>${className}Instance.detail($urlJs))'),
       );
       final decoded = await _decodeJsonResult(jsResult.stringResult);
-      final result = ExtensionDetail.fromJson(decoded);
+      // Mensaje propio en vez de dejar salir el error crudo del generador de
+      // json_serializable ("type 'Null' is not a subtype of type 'String'"),
+      // que no le dice nada a nadie sobre cuál es el problema real.
+      if (decoded is! Map) {
+        throw Exception(
+            '${extension.name}: el detalle no vino en el formato esperado');
+      }
+      final ExtensionDetail result;
+      try {
+        result = ExtensionDetail.fromJson(Map<String, dynamic>.from(decoded));
+      } catch (e) {
+        throw Exception(
+            '${extension.name}: el detalle llegó incompleto o mal formado');
+      }
       result.headers ??= await _defaultHeaders;
       return result;
     });
