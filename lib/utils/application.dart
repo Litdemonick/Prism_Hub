@@ -305,10 +305,7 @@ class ApplicationUtils {
                 'version': remoteVersion,
               },
             ),
-            content: Markdown(
-              shrinkWrap: true,
-              data: res.data['body'],
-            ),
+            content: _notasDeVersion(res.data['body']),
             actions: [
               PlatformTextButton(
                 onPressed: () {
@@ -348,10 +345,8 @@ class ApplicationUtils {
               'version': remoteVersion,
             },
           ),
-          content: Markdown(
-            shrinkWrap: true,
-            data: res.data['body'],
-          ),
+          content: _notasDeVersion(res.data['body']),
+          maxWidth: _anchoDialogoNotas,
           actions: [
             PlatformTextButton(
               onPressed: () {
@@ -401,6 +396,34 @@ class ApplicationUtils {
     }
   }
 
+  /// Ancho del diálogo de "hay versión nueva" en escritorio. El valor por
+  /// defecto de showPlatformDialog (368) es para avisos de una línea: las notas
+  /// de versión, que son varios párrafos con listas y enlaces, quedaban
+  /// partidas en una columna angosta y altísima.
+  static const double _anchoDialogoNotas = 560;
+
+  /// Notas de la versión, listas para meter en un diálogo.
+  ///
+  /// El Markdown NO puede traer scroll propio. En Android el AlertDialog ya es
+  /// `scrollable: true`, y dos áreas desplazables anidadas se pelean el gesto:
+  /// el de adentro se lo queda y el contenido se corta o rebota. En escritorio
+  /// pasa lo contrario — el ContentDialog no desplaza solo — así que el scroll
+  /// lo pone este widget, con un alto máximo para que el diálogo no crezca más
+  /// que la pantalla.
+  static Widget _notasDeVersion(dynamic body) {
+    final markdown = Markdown(
+      data: body is String ? body : '',
+      shrinkWrap: true,
+      physics: const NeverScrollableScrollPhysics(),
+      padding: EdgeInsets.zero,
+    );
+    if (Platform.isAndroid) return markdown;
+    return ConstrainedBox(
+      constraints: const BoxConstraints(maxHeight: 420),
+      child: SingleChildScrollView(child: markdown),
+    );
+  }
+
   static Future<void> _downloadAndInstall(
     BuildContext context,
     Map<String, dynamic> asset,
@@ -427,7 +450,9 @@ class ApplicationUtils {
             ],
           ),
         ),
-        actions: const [],
+        // null y no []: con una lista vacia, fluent dibuja igual la barra
+        // de acciones y se veia un recuadro oscuro suelto abajo del dialogo.
+        actions: null,
         maxWidth: 360,
         barrierDismissible: false,
       ));
@@ -461,7 +486,7 @@ class ApplicationUtils {
       // Android: descargar e instalar APK automáticamente
       if (Platform.isAndroid && assetName.endsWith('.apk')) {
         if (progressDialogOpen) RouterUtils.pop();
-        await _installAndroidApk(downloadPath);
+        await _installAndroidApk(downloadPath, context);
         return;
       }
 
@@ -522,26 +547,81 @@ class ApplicationUtils {
     throw '$command failed (${result.exitCode}): ${result.stderr}';
   }
 
-  static Future<void> _installAndroidApk(String apkPath) async {
+  static const _canalActualizacion =
+      MethodChannel('com.example.prismhub/update');
+
+  /// Reintenta la instalación sola cuando el usuario vuelve de la pantalla de
+  /// permisos de Android.
+  ///
+  /// Antes, si faltaba el permiso de "instalar apps desconocidas", se abría
+  /// Ajustes y se lanzaba un error: el APK recién descargado se daba por
+  /// perdido y el aviso de "actualizando" desaparecía. Al volver, la app se
+  /// veía igual que siempre y no quedaba ninguna señal de que hubiera una
+  /// actualización a medio instalar — había que ir a Ajustes, comprobar de
+  /// nuevo y volver a descargar todo.
+  ///
+  /// Ahora el APK ya bajado se conserva y la instalación se retoma sola al
+  /// volver a la app, que es lo que el usuario espera después de haber dado el
+  /// permiso.
+  static Future<void> _instalarAlVolver(
+    String apkPath,
+    BuildContext context,
+  ) async {
+    final observador = _EsperaPermisoDeInstalacion(() async {
+      // El permiso puede tardar un instante en verse reflejado justo después
+      // de volver, así que se consulta un par de veces antes de rendirse.
+      for (var intento = 0; intento < 3; intento++) {
+        final permitido = await _canalActualizacion
+                .invokeMethod<bool>('canInstallApks') ??
+            false;
+        if (permitido) {
+          try {
+            await _canalActualizacion
+                .invokeMethod('installApk', {'apkPath': apkPath});
+          } catch (e) {
+            debugPrint('Reintento de instalación falló: $e');
+          }
+          return;
+        }
+        await Future<void>.delayed(const Duration(milliseconds: 400));
+      }
+      // Siguió sin permiso: se avisa con el APK todavía guardado, así que
+      // tocar actualizar otra vez no vuelve a descargar nada.
+      if (context.mounted) {
+        showPlatformSnackbar(
+          context: context,
+          title: 'upgrade.install-failed'.i18n,
+          content: 'upgrade.needs-install-permission'.i18n,
+        );
+      }
+    });
+    observador.empezar();
+    await _canalActualizacion.invokeMethod('openInstallSettings');
+  }
+
+  static Future<void> _installAndroidApk(
+    String apkPath,
+    BuildContext context,
+  ) async {
     final file = File(apkPath);
     if (!await file.exists()) {
       throw 'APK file not found: $apkPath';
     }
 
-    const platform = MethodChannel('com.example.prismhub/update');
+    const platform = _canalActualizacion;
     final canInstall =
         await platform.invokeMethod<bool>('canInstallApks') ?? false;
     if (!canInstall) {
-      await platform.invokeMethod('openInstallSettings');
-      // Este throw NO debe caer en el fallback de más abajo (ya no existe
-      // acá): confirmado en el código que antes un catch genérico envolvía
-      // TODO esto, así que este mensaje específico ("habilitá instalar apps
-      // desconocidas") nunca llegaba al usuario — se perdía apenas se
-      // intentaba el fallback con launchUrl(Uri.file(...)), que en Android
-      // 7.0+ tira FileUriExposedException (un file:// crudo sin
-      // FileProvider) y esa SÍ era la excepción que terminaba viendo el
-      // usuario en el snackbar, sin ninguna pista de qué hacer.
-      throw 'Android bloqueó la instalación. Habilita "instalar apps desconocidas" para PrismHub y toca actualizar otra vez.';
+      // Ya NO se lanza un error acá. Se abre Ajustes y queda esperando la
+      // vuelta para instalar solo (ver _instalarAlVolver): lanzar cortaba el
+      // flujo y obligaba a rehacer todo desde cero.
+      //
+      // OJO con volver a un fallback tipo launchUrl(Uri.file(...)): en Android
+      // 7.0+ un file:// crudo sin FileProvider tira FileUriExposedException, y
+      // esa excepción tapaba el mensaje útil sin dejar ninguna pista de qué
+      // hacer. installApk (nativo) ya arma el intent con FileProvider.
+      await _instalarAlVolver(apkPath, context);
+      return;
     }
     // installApk (nativo) ya arma el intent con FileProvider — no hace
     // falta ni conviene un fallback acá: cualquier fallback Dart-side con un
@@ -1096,5 +1176,27 @@ class _ForcedUpdatePageState extends State<_ForcedUpdatePage> {
         ),
       ),
     );
+  }
+}
+
+/// Espera a que la app vuelva al frente para retomar algo que quedo pendiente
+/// en una pantalla del sistema (ver ApplicationUtils._instalarAlVolver).
+///
+/// Se desengancha solo despues del primer regreso: no puede quedar escuchando
+/// para siempre ni disparar dos veces.
+class _EsperaPermisoDeInstalacion with WidgetsBindingObserver {
+  _EsperaPermisoDeInstalacion(this._alVolver);
+
+  final Future<void> Function() _alVolver;
+  bool _terminado = false;
+
+  void empezar() => WidgetsBinding.instance.addObserver(this);
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (_terminado || state != AppLifecycleState.resumed) return;
+    _terminado = true;
+    WidgetsBinding.instance.removeObserver(this);
+    unawaited(_alVolver());
   }
 }

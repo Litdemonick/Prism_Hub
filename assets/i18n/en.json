@@ -379,7 +379,8 @@
     "downloading": "Downloading update...",
     "install-failed": "Update failed",
     "still-outdated": "The update wasn't detected yet. Finish installing it and try again.",
-    "assets-not-ready": "The new version is still being published. Once the files for every platform are ready, the update shows up on its own."
+    "assets-not-ready": "The new version is still being published. Once the files for every platform are ready, the update shows up on its own.",
+    "needs-install-permission": "The permission to install unknown apps is missing. Enable it for PrismHub and tap update again: the download is already saved, it will not be downloaded again."
   },
   "extension-install-error": "Failed to install extension",
   "extension-type": {

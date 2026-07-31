@@ -168,23 +168,37 @@ void main(List<String> args) async {
           }
         } catch (_) {}
       }
+      // La posición guardada se lee ANTES de armar las opciones: si hay una,
+      // no se centra. Centrar y después mover son dos órdenes que se pisan
+      // durante el arranque.
+      final offsetGuardado = _leerPosicionGuardada();
       WindowOptions windowOptions = WindowOptions(
         size: size,
-        center: true,
+        center: offsetGuardado == null,
         skipTaskbar: false,
         titleBarStyle: TitleBarStyle.hidden,
       );
       windowManager.waitUntilReadyToShow(windowOptions, () async {
         // 900×600 is the minimum viable reading size; prevents layout breaks.
         await windowManager.setMinimumSize(minWindowSize);
-        final position = PrismHubStorage.getSetting(SettingKey.windowPosition);
-        if (position != null) {
-          final offsetArr = position.split(",");
-          final offset = Offset(
-            double.parse(offsetArr[0]),
-            double.parse(offsetArr[1]),
-          );
-          await windowManager.setPosition(offset);
+        if (offsetGuardado != null) {
+          await windowManager.setPosition(offsetGuardado);
+          // Reaplicar el tamaño DESPUÉS de mover, y no solo en WindowOptions.
+          //
+          // El tamaño guardado está en píxeles lógicos, y Windows lo convierte
+          // a físicos con el DPI del monitor donde está la ventana en ese
+          // momento. Al arrancar, la ventana nace en el monitor primario; si la
+          // posición guardada la manda a otro monitor con escala distinta
+          // (100% vs 150%, lo normal con un portátil y una pantalla externa),
+          // Windows dispara WM_DPICHANGED y reescala el marco, pero el surface
+          // de Flutter ya se había armado con la escala anterior. Se veía como
+          // la app chica y pixelada dentro de la ventana, incluso en la
+          // pantalla de carga, y se arreglaba sola al reabrir porque la segunda
+          // vez la ventana ya nacía en el monitor correcto.
+          //
+          // Volver a pedir el tamaño con la ventana ya en su monitor final
+          // fuerza el recálculo con el DPI que corresponde.
+          await windowManager.setSize(size);
         }
         // NO gatear este show() contra el primer frame de Flutter: el runner
         // nativo de Windows ya lo hace por su cuenta
@@ -212,6 +226,29 @@ void main(List<String> args) async {
   }, (error, stack) {
     logger.severe("", error, stack);
   });
+}
+
+/// Posición de la ventana de la sesión anterior, o null si no hay una usable.
+///
+/// Descarta valores rotos (texto mal formado, NaN, infinito) y también los
+/// absurdos: un monitor que se desconectó deja guardada una posición que ya no
+/// existe, y restaurarla abre la ventana fuera de la pantalla. El límite de
+/// ±32000 es el rango de coordenadas que maneja Windows; cualquier cosa afuera
+/// de eso es basura, no una pantalla.
+Offset? _leerPosicionGuardada() {
+  final crudo = PrismHubStorage.getSetting(SettingKey.windowPosition);
+  if (crudo is! String || crudo.isEmpty) return null;
+  try {
+    final partes = crudo.split(',');
+    if (partes.length != 2) return null;
+    final x = double.parse(partes[0]);
+    final y = double.parse(partes[1]);
+    if (!x.isFinite || !y.isFinite) return null;
+    if (x.abs() > 32000 || y.abs() > 32000) return null;
+    return Offset(x, y);
+  } catch (_) {
+    return null;
+  }
 }
 
 // Muestra el splash animado mientras corre el resto de la inicialización

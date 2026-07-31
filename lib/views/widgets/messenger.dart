@@ -3,6 +3,7 @@ import 'dart:io';
 import 'package:fluent_ui/fluent_ui.dart' as fluent;
 import 'package:flutter/material.dart' as material;
 import 'package:flutter/widgets.dart';
+import 'package:window_manager/window_manager.dart' show DragToMoveArea;
 
 showPlatformSnackbar({
   required BuildContext context,
@@ -67,7 +68,25 @@ showPlatformDialog({
     barrierDismissible: barrierDismissible,
     builder: (context) => fluent.ContentDialog(
       constraints: BoxConstraints(maxWidth: maxWidth ?? 368),
-      title: Text(title),
+      // El título hace de barra de ventana.
+      //
+      // En escritorio la barra de título nativa está oculta
+      // (TitleBarStyle.hidden en main.dart), así que la app se mueve
+      // arrastrando sus propias zonas. Un diálogo modal tapa todas esas zonas:
+      // mientras estaba abierto — el aviso de beta al arrancar es el caso
+      // claro, que además no se puede cerrar tocando afuera — la ventana
+      // quedaba clavada en su lugar y no había forma de correrla.
+      //
+      // Arrastrar por el título es lo que hace cualquier diálogo del sistema,
+      // así que no hay nada nuevo que aprender.
+      //
+      // Ancho completo a propósito: envolviendo solo el Text, la zona
+      // arrastrable terminaba donde terminan las letras, así que en un título
+      // corto quedaba una franja de pocos píxeles.
+      title: SizedBox(
+        width: double.infinity,
+        child: DragToMoveArea(child: Text(title)),
+      ),
       content: content,
       actions: actions,
     ),

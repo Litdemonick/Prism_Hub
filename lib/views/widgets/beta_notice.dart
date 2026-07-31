@@ -30,7 +30,7 @@ Future<void> showBetaNoticeIfNeeded(BuildContext context) async {
     final confirmado = await showPlatformDialog(
       context: context,
       title: 'beta.title'.i18n,
-      maxWidth: 460,
+      maxWidth: 520,
       // No se cierra tocando afuera: la idea es que quede constancia de que se
       // leyó. Si se pudiera esquivar, el aviso volvería en cada arranque y
       // terminaría siendo una molestia en vez de una advertencia.
@@ -215,7 +215,10 @@ class _BetaContentState extends State<_BetaContent> {
               Icons.desktop_access_disabled_outlined, 'beta.point-linux'.i18n),
         _punto(Icons.construction, 'beta.point-author'.i18n),
         _punto(Icons.favorite_outline, 'beta.point-thanks'.i18n),
-        const SizedBox(height: 2),
+        // El aviso legal es un bloque aparte, no un punto mas de la lista:
+        // sin esta separacion quedaba pegado al ultimo item y se leia como si
+        // fuera parte de la enumeracion.
+        const SizedBox(height: 10),
         // Aviso legal. Va DENTRO del aviso que todo usuario nuevo tiene que
         // aceptar, no escondido en un menú: si nadie lo lee, no cumple su
         // función. Se guarda que fue aceptado junto con el resto.
