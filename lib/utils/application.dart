@@ -12,6 +12,7 @@ import 'package:flutter_markdown/flutter_markdown.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:prismhub/utils/i18n.dart';
 import 'package:prismhub/utils/request.dart';
+import 'package:prismhub/utils/prismhub_storage.dart';
 import 'package:prismhub/utils/router.dart';
 import 'package:prismhub/views/widgets/button.dart';
 import 'package:prismhub/views/widgets/home/home_theme.dart';
@@ -490,6 +491,41 @@ class ApplicationUtils {
   /// Notas de la versión, listas para meter en un diálogo.
   static Widget _notasDeVersion(dynamic body) =>
       _NotasDeVersion(body is String ? body : '');
+
+  // Comprobación periódica mientras la app está abierta.
+  //
+  // Antes solo se miraba al ARRANCAR. Si el release terminaba de publicarse
+  // con la app ya abierta —lo normal, porque los tres jobs tardan unos minutos
+  // en subir lo suyo— no había forma de enterarse hasta cerrarla y volver a
+  // abrirla.
+  //
+  // El aviso aparece encima de lo que sea que esté en pantalla: los diálogos se
+  // muestran sobre el navegador raíz, así que salen igual sobre el reproductor
+  // nativo, sobre el de WebView, sobre el lector o sobre cualquier página. Es
+  // descartable con "Ahora no" — no interrumpe de forma definitiva a nadie.
+  static Timer? _chequeoPeriodico;
+  static const _cadaCuanto = Duration(minutes: 30);
+
+  static void iniciarChequeoPeriodico(BuildContext context) {
+    if (kIsWeb) return;
+    // Uno solo: en Android el shell se reconstruye al cambiar de pestaña, y sin
+    // esto quedaba un temporizador nuevo por cada reconstrucción.
+    _chequeoPeriodico?.cancel();
+    _chequeoPeriodico = Timer.periodic(_cadaCuanto, (_) {
+      // Se relee el ajuste en cada vuelta: si el usuario lo apaga mientras
+      // tanto, esto deja de molestar sin necesidad de reiniciar nada.
+      if (PrismHubStorage.getSetting(SettingKey.autoCheckUpdate) != true) return;
+      if (!context.mounted) return;
+      // showSnackbar en false: nadie pidió esta comprobación, así que si no hay
+      // nada nuevo no aparece ningún mensaje.
+      unawaited(checkUpdate(context));
+    });
+  }
+
+  static void detenerChequeoPeriodico() {
+    _chequeoPeriodico?.cancel();
+    _chequeoPeriodico = null;
+  }
 
   // Reintento cuando el release todavía se está publicando.
   //

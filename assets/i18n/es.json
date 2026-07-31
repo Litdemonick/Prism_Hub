@@ -250,7 +250,10 @@
     "link-extensions-subtitle": "prism-plus, el catálogo oficial desde donde se descargan las extensiones.",
     "general-subtitle-android": "Idioma, tema, acceso a la Zona +18 y su PIN, clave de TMDB y buscar actualizaciones",
     "check-new-episodes": "Avisar de capítulos nuevos",
-    "check-new-episodes-subtitle": "Revisa cada 12 horas si salió algo nuevo de lo que ya terminaste, y lo devuelve a Continuar indicando cuál es. Consulta las extensiones en segundo plano; si preferís ahorrar datos, apagalo."
+    "check-new-episodes-subtitle": "Revisa cada 12 horas si salió algo nuevo de lo que ya terminaste, y lo devuelve a Continuar indicando cuál es. Consulta las extensiones en segundo plano; si preferís ahorrar datos, apagalo.",
+    "auto-check-update-off-title": "¿Desactivar las actualizaciones automáticas?",
+    "auto-check-update-off-body": "PrismHub va a dejar de avisarte cuando salga una versión nueva.\n\nLas correcciones importantes no te van a llegar, y las extensiones pueden dejar de funcionar cuando los sitios cambien, sin que sepas por qué. Vas a tener que comprobarlo a mano desde acá.\n\nPodés volver a activarlo cuando quieras.",
+    "auto-check-update-off-confirm": "Desactivar igual"
   },
   "external-player-launching": "Lanzando {player}",
   "detail": {

@@ -24,6 +24,7 @@ import 'package:prismhub/views/widgets/settings/settings_numberbox_button.dart';
 import 'package:prismhub/views/widgets/settings/settings_tile.dart';
 import 'package:prismhub/utils/i18n.dart';
 import 'package:prismhub/utils/prismhub_storage.dart';
+import 'package:prismhub/utils/router.dart';
 import 'package:prismhub/utils/application.dart';
 import 'package:prismhub/views/widgets/home/animated_background_glow.dart';
 import 'package:prismhub/views/widgets/home/home_theme.dart';
@@ -473,8 +474,42 @@ class _SettingsPageState extends State<SettingsPage> {
               buildSubtitle: () => 'settings.auto-check-update-subtitle'.i18n,
               buildValue: () =>
                   PrismHubStorage.getSetting(SettingKey.autoCheckUpdate),
-              onChanged: (value) {
-                PrismHubStorage.setSetting(SettingKey.autoCheckUpdate, value);
+              onChanged: (value) async {
+                // Encender no necesita permiso de nadie.
+                if (value) {
+                  await PrismHubStorage.setSetting(
+                      SettingKey.autoCheckUpdate, true);
+                  // `mounted` del State (no context.mounted): esto vive
+                  // dentro de _SettingsPageState, y es el chequeo que
+                  // corresponde despues de un await.
+                  if (mounted) {
+                    ApplicationUtils.iniciarChequeoPeriodico(context);
+                  }
+                  return;
+                }
+                // Apagar sí: se deja de recibir correcciones y, cuando los
+                // sitios cambien, las extensiones van a fallar sin que se
+                // entienda por que. Es el tipo de ajuste que conviene no
+                // desactivar de un toque sin querer.
+                final seguro = await showPlatformDialog(
+                  context: context,
+                  title: 'settings.auto-check-update-off-title'.i18n,
+                  content: Text('settings.auto-check-update-off-body'.i18n),
+                  actions: [
+                    PlatformTextButton(
+                      onPressed: () => RouterUtils.pop(false),
+                      child: Text('common.cancel'.i18n),
+                    ),
+                    PlatformFilledButton(
+                      onPressed: () => RouterUtils.pop(true),
+                      child: Text('settings.auto-check-update-off-confirm'.i18n),
+                    ),
+                  ],
+                );
+                if (seguro != true) return;
+                await PrismHubStorage.setSetting(
+                    SettingKey.autoCheckUpdate, false);
+                ApplicationUtils.detenerChequeoPeriodico();
               },
             ),
             SettingsSwitchTile(

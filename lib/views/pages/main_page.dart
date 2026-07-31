@@ -77,6 +77,9 @@ class _DesktopMainPageState extends State<DesktopMainPage> with WindowListener {
     });
     if (PrismHubStorage.getSetting(SettingKey.autoCheckUpdate) == true) {
       ApplicationUtils.scheduleForcedUpdateCheck(context);
+      // Y se sigue mirando cada tanto: si el release termina de publicarse con
+      // la app ya abierta, el aviso llega igual, sin tener que reiniciarla.
+      ApplicationUtils.iniciarChequeoPeriodico(context);
     }
     windowManager.addListener(this);
   }
@@ -84,6 +87,7 @@ class _DesktopMainPageState extends State<DesktopMainPage> with WindowListener {
   @override
   void dispose() {
     windowManager.removeListener(this);
+    ApplicationUtils.detenerChequeoPeriodico();
     super.dispose();
   }
 
@@ -281,6 +285,9 @@ class _AndroidMainPageState extends fluent.State<AndroidMainPage> {
     });
     if (PrismHubStorage.getSetting(SettingKey.autoCheckUpdate) == true) {
       ApplicationUtils.scheduleForcedUpdateCheck(context);
+      // Y se sigue mirando cada tanto: si el release termina de publicarse con
+      // la app ya abierta, el aviso llega igual, sin tener que reiniciarla.
+      ApplicationUtils.iniciarChequeoPeriodico(context);
     }
   }
 

@@ -258,7 +258,10 @@
     "link-extensions-subtitle": "prism-plus, the official catalog extensions are downloaded from.",
     "general-subtitle-android": "Language, theme, +18 Zone access and PIN, TMDB key and update checks",
     "check-new-episodes": "Notify about new chapters",
-    "check-new-episodes-subtitle": "Checks every 12 hours whether anything new came out for what you already finished, and brings it back to Continue showing which one it is. It queries extensions in the background; turn it off to save data."
+    "check-new-episodes-subtitle": "Checks every 12 hours whether anything new came out for what you already finished, and brings it back to Continue showing which one it is. It queries extensions in the background; turn it off to save data.",
+    "auto-check-update-off-title": "Turn off automatic updates?",
+    "auto-check-update-off-body": "PrismHub will stop telling you when a new version is out.\n\nImportant fixes will not reach you, and extensions may stop working when sites change, with no explanation. You will have to check by hand from here.\n\nYou can turn it back on whenever you want.",
+    "auto-check-update-off-confirm": "Turn it off anyway"
   },
   "external-player-launching": "Launching {player}",
   "detail": {

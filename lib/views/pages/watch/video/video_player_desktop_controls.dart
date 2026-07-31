@@ -188,19 +188,29 @@ class _VideoPlayerDesktopControlsState
         data: FluentThemeData(
           brightness: Brightness.dark,
         ),
-        child: KeyboardListener(
+        // Focus y no KeyboardListener: KeyboardListener NO consume la tecla,
+        // solo la escucha. El evento seguia su camino y Flutter aplicaba su
+        // accion por defecto para ESC, que es cerrar la ruta — asi que al
+        // apretar ESC en pantalla completa pasaban las DOS cosas: se salia de
+        // pantalla completa Y se cerraba el reproductor. Devolviendo
+        // `handled` el atajo se queda con la tecla y nadie mas la ve.
+        child: Focus(
           focusNode: _focusNode,
           autofocus: true,
-          onKeyEvent: (value) {
+          onKeyEvent: (node, value) {
             // _c.disposed: la pantalla puede quedar montada un instante de
             // más durante la transición de salida — sin este guard, un
             // atajo de teclado (space, flechas, medios) tocado justo
             // entonces llamaba directo al Player nativo ya disposed y
             // tumbaba la app entera (mismo bug que los botones de play/
             // pause/seek "crudos", ver safePlay/safePause/seek).
-            if (value is KeyDownEvent && !_c.disposed) {
-              _c.keyboardShortcuts[value.logicalKey]?.call();
+            if (value is! KeyDownEvent || _c.disposed) {
+              return KeyEventResult.ignored;
             }
+            final atajo = _c.keyboardShortcuts[value.logicalKey];
+            if (atajo == null) return KeyEventResult.ignored;
+            atajo();
+            return KeyEventResult.handled;
           },
           child: Stack(
             children: [
