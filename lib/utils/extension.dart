@@ -503,6 +503,10 @@ class ExtensionUtils {
     router.go('/extension');
   }
 
+  // Momento de la ultima apertura de detalle, para descartar el doble toque.
+  static DateTime? _ultimaAperturaDetalle;
+  static const _esperaEntreAperturas = Duration(milliseconds: 700);
+
   // Navegación compartida a DetailPage — antes duplicada (con pequeñas
   // variaciones de copy/paste) en ExtensionItemCard, home_page.dart,
   // nsfw18_zone_page.dart y history_page.dart, ninguna con chequeo de
@@ -514,6 +518,22 @@ class ExtensionUtils {
     required String url,
     bool isAdultOption = false,
   }) async {
+    // Anti doble toque. blockedByPendingUpdate puede tardar (consulta el
+    // catalogo), asi que entre el toque y la navegacion hay una ventana en la
+    // que un segundo toque entraba igual: se apilaban DOS DetailPage del mismo
+    // titulo, cada una con su controller y sus peticiones. Tocar rapido o
+    // insistir cuando tarda dejaba la navegacion hecha un desastre.
+    //
+    // Se usa una marca de tiempo y no un booleano: un booleano que no se
+    // libere por una excepcion en el medio dejaria la app sin poder abrir
+    // NINGUN detalle hasta reiniciarla.
+    final ahora = DateTime.now();
+    if (_ultimaAperturaDetalle != null &&
+        ahora.difference(_ultimaAperturaDetalle!) < _esperaEntreAperturas) {
+      return;
+    }
+    _ultimaAperturaDetalle = ahora;
+
     if (await blockedByPendingUpdate(context, package)) return;
     if (!context.mounted) return;
     if (Platform.isAndroid) {

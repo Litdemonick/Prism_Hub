@@ -53,6 +53,10 @@ class _ExtensionTileState extends State<ExtensionTile> {
   // era navegar al repositorio a mano. Reintenta el chequeo de actualización
   // al terminar para que el badge/botón desaparezcan solos si ya no hace falta.
   Future<void> _performUpdate() async {
+    // Guarda de reentrada: el boton no miraba _updating, asi que dos toques
+    // seguidos lanzaban dos actualizaciones en paralelo del mismo paquete,
+    // escribiendo el mismo archivo.
+    if (_updating) return;
     setState(() => _updating = true);
     try {
       await ExtensionUtils.updateInstalledFromRepo(
@@ -171,6 +175,9 @@ class _ExtensionTileState extends State<ExtensionTile> {
       }
       if (!await _confirmNsfw()) return;
     }
+    // mounted: arriba se pudo haber esperado el dialogo de confirmacion +18, y
+    // en ese rato la pantalla pudo cerrarse.
+    if (!mounted) return;
     setState(() => _enabled = value);
     await ExtensionUtils.setExtensionEnabled(widget.extension.package, value);
   }

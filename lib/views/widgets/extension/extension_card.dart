@@ -106,6 +106,12 @@ class _ExtensionCardState extends State<ExtensionCard> {
   }
 
   _install() async {
+    // Guarda de reentrada. `isLoading` solo se usaba para pintar la rueda, y
+    // ninguno de los cuatro botones que llaman aca lo miraba: tocar dos veces
+    // seguidas arrancaba DOS descargas del mismo script, las dos escribiendo el
+    // mismo archivo de extension y registrando el runtime en paralelo. De ahi
+    // que tocar rapido rompiera la pantalla.
+    if (isLoading) return;
     // Solo en la instalación de verdad, no en "Actualizar": si ya está
     // instalada es porque el usuario ya pasó este mismo aviso una vez.
     // Con el switch de NSFW apagado NO se bloquea instalar — se instala
@@ -123,6 +129,10 @@ class _ExtensionCardState extends State<ExtensionCard> {
         return;
       }
     }
+    // mounted: arriba se pudo haber esperado el dialogo de confirmacion +18, y
+    // en ese rato el usuario pudo cerrar la pantalla. Un setState sobre un
+    // widget ya desmontado tira excepcion.
+    if (!mounted) return;
     setState(() {
       isLoading = true;
     });
