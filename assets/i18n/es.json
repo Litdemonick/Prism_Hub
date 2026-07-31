@@ -117,7 +117,8 @@
     "filter-nsfw": "+18",
     "filter-video": "Vídeo",
     "filter-reading": "Lectura",
-    "filter-disabled": "Desactivadas"
+    "filter-disabled": "Desactivadas",
+    "filter-unstable": "Inestables"
   },
   "extension-repo": {
     "error": "¡Ha ocurrido un error!",
@@ -256,7 +257,9 @@
     "modify-tmdb-binding": "Modificar enlace a TMDB",
     "no-tmdb-data": "No hay datos de TMDB coincidentes, por favor, enlaza los datos tu mismo/a",
     "tmdb-key-missing": "Falta la clave de la API de TMDB, por favor, rellenala en los ajustes",
-    "tracker": "Siguiendo"
+    "tracker": "Siguiendo",
+    "finished": "Marcar como finalizada",
+    "finished-marked": "Obra finalizada"
   },
   "video": {
     "episodes": "Episodios",

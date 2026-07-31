@@ -1,4 +1,4 @@
-﻿import 'dart:io';
+import 'dart:io';
 
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
@@ -106,8 +106,10 @@ class _DetailTrackingButtonState extends State<DetailTrackingButton> {
     return _buildShow(
       fluent.Button(
         style: fluent.ButtonStyle(
-          backgroundColor: fluent.WidgetStateProperty.all(HomeTheme.cardSurface),
-          foregroundColor: fluent.WidgetStateProperty.all(HomeTheme.textPrimary),
+          backgroundColor:
+              fluent.WidgetStateProperty.all(HomeTheme.cardSurface),
+          foregroundColor:
+              fluent.WidgetStateProperty.all(HomeTheme.textPrimary),
           shape: fluent.WidgetStateProperty.all(
             RoundedRectangleBorder(
               borderRadius: BorderRadius.circular(999),

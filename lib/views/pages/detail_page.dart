@@ -1,6 +1,7 @@
 import 'package:fluent_ui/fluent_ui.dart' as fluent;
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
+import 'package:prismhub/views/widgets/detail/detail_finished_button.dart';
 import 'package:prismhub/data/providers/tmdb_provider.dart';
 import 'package:prismhub/models/extension.dart';
 import 'package:prismhub/controllers/detail_controller.dart';
@@ -361,6 +362,10 @@ class _DetailPageState extends State<DetailPage> {
                                 children: [
                                   // 收藏按钮
                                   DetailFavoriteButton(tag: widget.tag),
+                                  const SizedBox(width: 8),
+                                  // Se oculta solo en películas — ver
+                                  // DetailFinishedButton.
+                                  DetailFinishedButton(tag: widget.tag),
                                   const SizedBox(width: 8),
                                   DetailTrackingButton(
                                     tag: widget.tag,

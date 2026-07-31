@@ -269,11 +269,26 @@ class ExtensionUtils {
   // rota y en espera de que se arregle, sin necesitar UI nueva. Comparación
   // de versión por desigualdad de string (igual que ExtensionCard en el
   // repositorio) — no hay parsing semver hoy.
+  /// SOLO compara versiones. Antes devolvía true también cuando el catálogo
+  /// marcaba la extensión `unstable`, y eso mezclaba dos cosas que se arreglan
+  /// distinto:
+  ///
+  /// - versión nueva → se soluciona actualizando;
+  /// - inestable → NO se soluciona actualizando, porque el problema está del
+  ///   otro lado (la página caída, la extensión sin entregar contenido).
+  ///
+  /// Mezcladas, una extensión marcada inestable con la versión YA al día
+  /// mostraba "Actualización requerida" para siempre: al tocar Actualizar se
+  /// reinstalaba lo mismo, el motivo real seguía ahí y el botón no se iba
+  /// nunca. Pasó en vivo con ShadeManga, TuMangaOnline y VeoHentai, marcadas
+  /// por un falso positivo del chequeo de salud.
+  ///
+  /// El estado inestable se muestra aparte, con su propio aviso y su motivo
+  /// (ver [isRemoteUnstable] y [remoteUnstableReason]).
   static Future<bool> hasExtensionUpdate(String package) async {
     final installed = runtimes[package]?.extension.version;
     if (installed == null) return false;
     final remote = await _fetchRemoteVersions();
-    if (_remoteUnstableCache?[package] == true) return true;
     final remoteVersion = remote[package];
     return remoteVersion != null && remoteVersion != installed;
   }
@@ -282,6 +297,13 @@ class ExtensionUtils {
   // (no versión) — usado para el badge naranja "Inestable" en ExtensionTile,
   // separado del badge rojo genérico de "actualización requerida". Comparte
   // el mismo caché/TTL, no pega de nuevo al índice.
+  /// Igual que [isRemoteUnstable] pero SIN esperar: usa lo que ya haya en
+  /// caché. Sirve para filtrar una lista mientras se construye, donde no se
+  /// puede await. Si el índice todavía no se descargó devuelve false, y el
+  /// filtro se corrige solo en cuanto llega (la página se reconstruye).
+  static bool isRemoteUnstableCached(String package) =>
+      _remoteUnstableCache?[package] == true;
+
   static Future<bool> isRemoteUnstable(String package) async {
     await _fetchRemoteVersions();
     return _remoteUnstableCache?[package] == true;
@@ -353,18 +375,19 @@ class ExtensionUtils {
       return true;
     }
 
+    // 3. Inestable o desactualizada. Se consultan por SEPARADO: desde que
+    // hasExtensionUpdate mira solo la versión, el estado inestable hay que
+    // pedirlo aparte o una extensión marcada rota dejaría de avisar acá. Las
+    // dos siguen bloqueando el contenido, pero el aviso que se muestra —y si
+    // se ofrece actualizar— depende de cuál sea.
     final needsUpdate = await hasExtensionUpdate(package);
-    if (!needsUpdate) return false;
     if (!context.mounted) return true;
-
-    // 3. Inestable (con motivo) o desactualizada. El motivo lo publica el
-    // índice de prism-plus — lo setea solo el chequeo de salud de ese repo, o
-    // se pone a mano al subir un arreglo en curso. Así un sitio caído se
-    // avisa acá sin publicar una versión nueva del app.
     final reason = await remoteUnstableReason(package);
     if (!context.mounted) return true;
     final isUnstable = reason != null || await isRemoteUnstable(package);
     if (!context.mounted) return true;
+
+    if (!needsUpdate && !isUnstable) return false;
 
     // Actualizar solo se ofrece cuando de verdad puede arreglar algo: si la
     // página está caída o la extensión está rota esperando corrección,

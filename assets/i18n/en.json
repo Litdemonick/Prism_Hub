@@ -125,7 +125,8 @@
     "filter-nsfw": "+18",
     "filter-video": "Video",
     "filter-reading": "Reading",
-    "filter-disabled": "Disabled"
+    "filter-disabled": "Disabled",
+    "filter-unstable": "Unstable"
   },
   "extension-repo": {
     "error": "An error occurred!",
@@ -264,7 +265,9 @@
     "modify-tmdb-binding": "Modify TMDB Binding",
     "no-tmdb-data": "No TMDB data matched, please bind the data yourself",
     "tmdb-key-missing": "TMDB API Key missing, please fill in the settings",
-    "tracker": "Tracking"
+    "tracker": "Tracking",
+    "finished": "Mark as finished",
+    "finished-marked": "Series finished"
   },
   "video": {
     "episodes": "Episodes",

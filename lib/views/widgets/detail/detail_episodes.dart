@@ -1,4 +1,4 @@
-﻿import 'package:fluent_ui/fluent_ui.dart' as fluent;
+import 'package:fluent_ui/fluent_ui.dart' as fluent;
 import 'package:flutter/material.dart';
 import 'package:flutter_i18n/flutter_i18n.dart';
 import 'package:get/get.dart';
@@ -49,6 +49,7 @@ class _DetailEpisodesState extends State<DetailEpisodes> {
     if (name.trimLeft().startsWith(number)) return name;
     return '$number. $name';
   }
+
   Widget _buildAndroidEpisodes(BuildContext context) {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -120,39 +121,41 @@ class _DetailEpisodesState extends State<DetailEpisodes> {
             ),
           )
         else
-        Expanded(
-          child: ListView.builder(
-            padding: const EdgeInsets.all(0),
-            itemCount: episodes.isEmpty
-                ? 0
-                : episodes[c.selectEpGroup.value].urls.length,
-            itemBuilder: (context, index) {
-              final total = episodes[c.selectEpGroup.value].urls.length;
-              final name = isRevered
-                  ? episodes[c.selectEpGroup.value].urls[total - 1 - index].name
-                  : episodes[c.selectEpGroup.value].urls[index].name;
-              return ListTile(
-                title: Text(
-                  _episodeLabel(name),
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                ),
-                onTap: () {
-                  c.goWatch(
-                    context,
-                    episodes[c.selectEpGroup.value].urls,
-                    isRevered
-                        ? episodes[c.selectEpGroup.value].urls.length -
-                            1 -
-                            index
-                        : index,
-                    c.selectEpGroup.value,
-                  );
-                },
-              );
-            },
-          ),
-        )
+          Expanded(
+            child: ListView.builder(
+              padding: const EdgeInsets.all(0),
+              itemCount: episodes.isEmpty
+                  ? 0
+                  : episodes[c.selectEpGroup.value].urls.length,
+              itemBuilder: (context, index) {
+                final total = episodes[c.selectEpGroup.value].urls.length;
+                final name = isRevered
+                    ? episodes[c.selectEpGroup.value]
+                        .urls[total - 1 - index]
+                        .name
+                    : episodes[c.selectEpGroup.value].urls[index].name;
+                return ListTile(
+                  title: Text(
+                    _episodeLabel(name),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                  onTap: () {
+                    c.goWatch(
+                      context,
+                      episodes[c.selectEpGroup.value].urls,
+                      isRevered
+                          ? episodes[c.selectEpGroup.value].urls.length -
+                              1 -
+                              index
+                          : index,
+                      c.selectEpGroup.value,
+                    );
+                  },
+                );
+              },
+            ),
+          )
       ],
     );
   }
@@ -192,7 +195,8 @@ class _DetailEpisodesState extends State<DetailEpisodes> {
       episodesString = 'reader.chapters'.i18n;
       noEpisodesYetString = 'reader.no-chapters-yet'.i18n;
     }
-    final noEpisodes = episodes.isEmpty || episodes[c.selectEpGroup.value].urls.isEmpty;
+    final noEpisodes =
+        episodes.isEmpty || episodes[c.selectEpGroup.value].urls.isEmpty;
 
     Widget cardTile(Widget child) {
       return DetailCardTile(

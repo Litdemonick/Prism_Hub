@@ -147,6 +147,49 @@ class DatabaseService {
     return db.writeTxn(() => db.historys.putByIndex(r'package&url', history));
   }
 
+  /// Marca o desmarca que la OBRA terminó de publicarse.
+  ///
+  /// Si todavía no hay historial de este título —se puede marcar algo sin
+  /// haberlo empezado— se crea el registro con `completed`, NO con `pending`:
+  /// así aparece en el Historial (que es donde se va a filtrar por finalizado)
+  /// pero no en "Continuar", que es para lo que estás viendo ahora. Meterlo en
+  /// Continuar sería empujar al usuario a seguir algo que nunca abrió.
+  static Future<void> setSeriesFinished({
+    required String package,
+    required String url,
+    required bool finished,
+    required ExtensionType type,
+    required String title,
+    String? cover,
+    required bool isNsfw,
+  }) async {
+    final existente = await getHistoryByPackageAndUrl(package, url);
+    if (existente != null) {
+      existente.seriesFinished = finished;
+      // OJO: no se toca `date`. putHistory la pisa con "ahora" y eso mandaría
+      // el título al principio del Historial por marcar una casilla, como si
+      // lo acabaras de ver.
+      await db.writeTxn(() => db.historys.put(existente));
+      return;
+    }
+    if (!finished) return;
+    final nuevo = History()
+      ..package = package
+      ..url = url
+      ..cover = cover
+      ..type = type
+      ..episodeGroupId = 0
+      ..episodeId = 0
+      ..title = title
+      ..episodeTitle = ''
+      ..progress = ''
+      ..totalProgress = ''
+      ..isNsfw = isNsfw
+      ..seriesFinished = true
+      ..watchState = WatchState.completed;
+    await putHistory(nuevo);
+  }
+
   // 删除历史
   static Future<void> deleteHistoryByPackageAndUrl(
       String package, String url) async {

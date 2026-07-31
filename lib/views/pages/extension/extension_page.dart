@@ -79,6 +79,12 @@ class _ExtensionPageState extends State<ExtensionPage> {
               ext.type == ExtensionType.mixed;
         case _ExtFilter.desactivadas:
           return !ExtensionUtils.isEnabled(ext.package);
+        case _ExtFilter.inestables:
+          // Marcadas inestables por el catálogo: o la página está caída, o la
+          // extensión responde pero no entrega contenido, o quedó retirada
+          // (ver el chequeo de salud de prism-plus). Tenerlas juntas ayuda a
+          // ver de un vistazo qué dejó de andar sin recorrer toda la lista.
+          return ExtensionUtils.isRemoteUnstableCached(ext.package);
       }
     }).toList();
   }
@@ -575,7 +581,15 @@ class _ExtensionPageState extends State<ExtensionPage> {
 
 // Categorías de filtro de Extensiones instaladas. El orden es el de la fila
 // de chips.
-enum _ExtFilter { todas, normales, nsfw, video, lectura, desactivadas }
+enum _ExtFilter {
+  todas,
+  normales,
+  nsfw,
+  video,
+  lectura,
+  desactivadas,
+  inestables,
+}
 
 extension _ExtFilterLabel on _ExtFilter {
   String get label {
@@ -592,6 +606,8 @@ extension _ExtFilterLabel on _ExtFilter {
         return 'extension.filter-reading'.i18n;
       case _ExtFilter.desactivadas:
         return 'extension.filter-disabled'.i18n;
+      case _ExtFilter.inestables:
+        return 'extension.filter-unstable'.i18n;
     }
   }
 }

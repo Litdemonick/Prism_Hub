@@ -1,4 +1,4 @@
-﻿import 'package:fluent_ui/fluent_ui.dart' as fluent;
+import 'package:fluent_ui/fluent_ui.dart' as fluent;
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 import 'package:prismhub/controllers/detail_controller.dart';
@@ -35,8 +35,7 @@ class _DetailFavoriteButtonState extends State<DetailFavoriteButton> {
               const Size(double.infinity, 50),
             ),
             backgroundColor: isFavorite
-                ? WidgetStateProperty.all(
-                    Theme.of(context).colorScheme.primary)
+                ? WidgetStateProperty.all(Theme.of(context).colorScheme.primary)
                 : null,
             foregroundColor: isFavorite
                 ? WidgetStateProperty.all(
@@ -57,7 +56,9 @@ class _DetailFavoriteButtonState extends State<DetailFavoriteButton> {
       return fluent.Button(
         style: fluent.ButtonStyle(
           backgroundColor: fluent.WidgetStateProperty.all(
-            isFavorite ? HomeTheme.accentPink.withValues(alpha: 0.18) : HomeTheme.cardSurface,
+            isFavorite
+                ? HomeTheme.accentPink.withValues(alpha: 0.18)
+                : HomeTheme.cardSurface,
           ),
           foregroundColor: fluent.WidgetStateProperty.all(
             isFavorite ? HomeTheme.accentPink : HomeTheme.textPrimary,

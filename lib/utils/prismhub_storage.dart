@@ -33,7 +33,7 @@ class PrismHubStorage {
 
   static late final Isar database;
   static late final Box settings;
-  static const int _lastDatabaseVersion = 2;
+  static const int _lastDatabaseVersion = 3;
   static late String _path;
 
   static ensureInitialized() async {
@@ -121,22 +121,49 @@ class PrismHubStorage {
     await Hive.initFlutter(_path);
   }
 
+  // Migraciones ENCADENADAS: se aplican una tras otra desde la versión
+  // guardada hasta la actual. Antes era un switch que atendía una sola versión
+  // por arranque, así que quien viniera de la v1 con dos saltos pendientes
+  // quedaba a medio migrar.
+  //
+  // Y el `default: throw` de antes era peligroso: con una versión MAYOR a la
+  // soportada —alguien que instala una versión nueva, guarda datos y vuelve a
+  // una vieja— la excepción salía hasta el catch de Isar y la app arrancaba
+  // con una BASE TEMPORAL, o sea sin su historial y sin decir por qué. Ante
+  // datos más nuevos de lo que este app entiende, lo correcto es no tocar
+  // nada.
   static performMigrationIfNeeded() async {
-    final currentVersion = await getDatabaseVersion();
-    debugPrint(currentVersion.toString());
-    switch (currentVersion) {
-      case 1:
-        await migrateV1ToV2();
-        break;
-      case 2:
-        return;
-      default:
-        throw Exception('Unknown version: $currentVersion');
+    var version = await getDatabaseVersion();
+    if (version > _lastDatabaseVersion) {
+      logger.warning(
+        'La base es de una versión más nueva ($version) que la que entiende '
+        'este app ($_lastDatabaseVersion). No se migra nada.',
+      );
+      return;
+    }
+    if (version < 1) version = 1;
+
+    if (version == 1) {
+      await migrateV1ToV2();
+      version = 2;
+    }
+    if (version == 2) {
+      await _migrateV2ToV3();
+      version = 3;
     }
 
-    // 更新到最新版本
-    await settings.put(SettingKey.databaseVersion, _lastDatabaseVersion);
+    await settings.put(SettingKey.databaseVersion, version);
   }
+
+  // v2 → v3: campos de seguimiento en History (watchState, seriesFinished,
+  // knownEpisodeCount, newEpisodeLabel, lastCheckedAt).
+  //
+  // No recorre ni reescribe nada, y es a propósito: Isar completa los campos
+  // nuevos con su valor por defecto al leer un registro viejo, así que todo el
+  // historial existente queda como `pending` sin novedades — que es justo lo
+  // que corresponde. Tocar miles de registros para escribir el mismo valor que
+  // ya se obtiene solo sería trabajo y riesgo de más.
+  static Future<void> _migrateV2ToV3() async {}
 
   static migrateV1ToV2() async {
     // 获取所有的 TMDB 数据

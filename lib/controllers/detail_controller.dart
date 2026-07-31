@@ -108,6 +108,37 @@ class DetailPageController extends GetxController {
   ScrollController scrollController = ScrollController();
 
   final RxBool isFavorite = false.obs;
+
+  /// La OBRA terminó de publicarse (marcado a mano en el Detalle). Es un eje
+  /// aparte de si el usuario está al día — ver WatchState en history.dart.
+  final RxBool isSeriesFinished = false.obs;
+
+  /// Contenido por capítulos/episodios. Se decide por el ÍTEM y no por el tipo
+  /// de extensión: hay extensiones de vídeo que traen películas (un solo
+  /// "episodio") y extensiones mixtas con las dos cosas a la vez, así que el
+  /// tipo no alcanza para saberlo. Los botones de seguimiento solo tienen
+  /// sentido acá: en una película no hay nada que "completar".
+  bool get isSerialized {
+    // 1) Si la extensión informa estado de publicación, es una obra por
+    //    entregas y punto. Verificado en prism-plus: ContentStatus es un
+    //    conjunto cerrado —ongoing, completed, upcoming, hiatus— y las
+    //    extensiones de películas o vídeos sueltos (FuegoCine, VeoHentai,
+    //    XVideos) directamente NO lo informan.
+    //
+    //    Esto importa porque contar episodios NO alcanza: un anime recién
+    //    estrenado tiene UN episodio publicado y seguía sin botón, igual que
+    //    una serie ya finalizada de un solo capítulo — y en los dos casos el
+    //    usuario tiene que poder marcarla para filtrarla después.
+    final estado = detail?.status;
+    if (estado != null && estado.isNotEmpty) return true;
+
+    // 2) Sin estado: se cuenta. Más de un capítulo/episodio es serializado.
+    final grupos = detail?.episodes;
+    if (grupos == null || grupos.isEmpty) return false;
+    final total = grupos.fold<int>(0, (n, g) => n + (g.urls?.length ?? 0));
+    return total > 1;
+  }
+
   final Rx<ExtensionDetail?> data = Rx(null);
   final Rx<History?> history = Rx(null);
   final Rx<Favorite?> favorite = Rx(null);
@@ -194,6 +225,7 @@ class DetailPageController extends GetxController {
         ? ExtensionUtils.runtimes[package]
         : null;
     await refreshFavorite();
+    await refreshSeriesFinished();
     try {
       _prismDetail = await DatabaseService.getPrismHubDetail(package, url);
       _tmdbID = _prismDetail?.tmdbID ?? -1;
@@ -398,6 +430,41 @@ class DetailPageController extends GetxController {
     final f = await DatabaseService.getFavorite(package: package, url: url);
     favorite.value = f;
     isFavorite.value = f != null;
+  }
+
+  Future<void> refreshSeriesFinished() async {
+    final h = await DatabaseService.getHistoryByPackageAndUrl(package, url);
+    isSeriesFinished.value = h?.seriesFinished ?? false;
+  }
+
+  Future<void> toggleSeriesFinished(BuildContext context) async {
+    if (detail == null) return;
+    final marcar = !isSeriesFinished.value;
+    // Mismo diálogo de zona que Favoritos, y por el mismo motivo: si el ítem
+    // se guarda con la zona equivocada aparece en el Historial que no
+    // corresponde. Solo se pregunta al MARCAR; desmarcar no crea nada.
+    final nsfw = marcar ? await resolveIsNsfw(context, opening: false) : false;
+    if (nsfw == null) return;
+    try {
+      await DatabaseService.setSeriesFinished(
+        package: package,
+        url: url,
+        finished: marcar,
+        type: type,
+        title: detail!.title,
+        cover: detail!.cover,
+        isNsfw: nsfw,
+      );
+    } catch (e) {
+      showPlatformSnackbar(
+        context: currentContext,
+        content: e.toString().split('\n')[0],
+        severity: fluent.InfoBarSeverity.error,
+      );
+      rethrow;
+    }
+    await refreshSeriesFinished();
+    HomePageController.refreshAll();
   }
 
   // Se llama al quitar favorito o borrar historial (acá mismo, o desde

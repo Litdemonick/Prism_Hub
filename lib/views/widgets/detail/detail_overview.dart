@@ -1,4 +1,6 @@
-﻿import 'package:flutter/material.dart';
+﻿import 'package:prismhub/views/widgets/detail/detail_finished_button.dart';
+import 'dart:io';
+import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 import 'package:prismhub/data/providers/tmdb_provider.dart';
 import 'package:prismhub/controllers/detail_controller.dart';
@@ -26,6 +28,14 @@ class DetailOverView extends StatelessWidget {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
+            // En celular el botón va acá y no en el hero: ahí ya conviven
+            // "Continuar" y "Favorito" en un ancho justo, y en horizontal un
+            // tercero los dejaba ilegibles. Acá además queda al lado del
+            // estado que informa la extensión, que es con lo que dialoga.
+            if (Platform.isAndroid) ...[
+              DetailFinishedButton(tag: tag),
+              const SizedBox(height: 16),
+            ],
             Obx(() {
               if (c.tmdbDetail == null || c.tmdbDetail!.backdrop == null) {
                 return const SizedBox();
