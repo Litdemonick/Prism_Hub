@@ -369,8 +369,14 @@ class ApplicationUtils {
               content: 'upgrade.assets-not-ready'.i18n,
             );
           }
+          // El aviso promete que la actualización "aparece sola" — y hasta
+          // ahora era mentira: no se volvía a mirar nunca, así que había que
+          // reabrir la app o tocar el botón de nuevo. Se programa el reintento
+          // para que lo prometido se cumpla de verdad.
+          _programarReintento(context);
           return;
         }
+        _cancelarReintentos();
         if (Platform.isAndroid) {
           await showPlatformDialog(
             context: context,
@@ -484,6 +490,44 @@ class ApplicationUtils {
   /// Notas de la versión, listas para meter en un diálogo.
   static Widget _notasDeVersion(dynamic body) =>
       _NotasDeVersion(body is String ? body : '');
+
+  // Reintento cuando el release todavía se está publicando.
+  //
+  // Los tres jobs del workflow suben lo suyo al terminar, así que un release
+  // recién publicado pasa unos minutos incompleto (medido: hasta ~10 entre el
+  // primero y el último). En esa ventana no se ofrece nada, y el aviso dice que
+  // la actualización va a aparecer sola.
+  //
+  // Para que eso sea cierto hay que volver a mirar. Se hace un puñado de veces
+  // y se para: si después de media hora sigue sin estar, o el release quedó a
+  // medias por un job que falló, insistir para siempre solo gastaría datos.
+  static Timer? _reintentoActualizacion;
+  static int _reintentosHechos = 0;
+  static const _maxReintentos = 5;
+  static const _esperaEntreReintentos = Duration(minutes: 6);
+
+  static void _programarReintento(BuildContext context) {
+    if (_reintentosHechos >= _maxReintentos) return;
+    // Uno solo a la vez: tocar "Comprobar" varias veces no debe dejar cinco
+    // temporizadores pisándose.
+    _reintentoActualizacion?.cancel();
+    _reintentosHechos++;
+    _reintentoActualizacion = Timer(_esperaEntreReintentos, () {
+      if (!context.mounted) return;
+      // showSnackbar en false: este reintento no lo pidió el usuario, así que
+      // si sigue incompleto se queda callado. Cuando el release esté entero,
+      // el aviso de versión nueva sale solo, que es lo prometido.
+      unawaited(checkUpdate(context));
+    });
+  }
+
+  /// Corta los reintentos pendientes. Se llama al encontrar una versión nueva
+  /// —ya no hay nada que esperar— para no dejar un temporizador vivo.
+  static void _cancelarReintentos() {
+    _reintentoActualizacion?.cancel();
+    _reintentoActualizacion = null;
+    _reintentosHechos = 0;
+  }
 
   static Future<void> _downloadAndInstall(
     BuildContext context,
