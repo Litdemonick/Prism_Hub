@@ -37,18 +37,23 @@ class _HistoryPageState extends State<HistoryPage> {
   late final HomePageController _c = Get.find<HomePageController>(
     tag: widget.zone ? HomePageController.zoneTag : null,
   );
-  late final Color _accent = widget.zone ? HomeTheme.accentRed : HomeTheme.accentPink;
+  late final Color _accent =
+      widget.zone ? HomeTheme.accentRed : HomeTheme.accentPink;
   late int _tabIndex = widget.initialTab;
   final _searchController = TextEditingController();
   String _query = '';
 
   // "Lectura" agrupa manga+novela — de cara al usuario es una sola
   // categoría (ambos son texto para leer).
+  // Favoritos se parte en dos por el mismo motivo que se partió "Continuar"
+  // en el Home: vídeo y lectura no comparten forma de tarjeta, y mezclados
+  // uno de los dos siempre queda mal.
   static const _tabs = [
     'search.all',
     'extension-type.video',
     'extension-type.reading',
-    'home.favorite',
+    'history.favorites-video',
+    'history.favorites-reading',
   ];
 
   @override
@@ -57,33 +62,111 @@ class _HistoryPageState extends State<HistoryPage> {
     super.dispose();
   }
 
+  static const _video = {ExtensionType.bangumi};
+  static const _lectura = {ExtensionType.manga, ExtensionType.fikushon};
+
   Set<ExtensionType>? get _typeFilter {
     switch (_tabIndex) {
       case 1:
-        return {ExtensionType.bangumi};
+      case 3:
+        return _video;
       case 2:
-        return {ExtensionType.manga, ExtensionType.fikushon};
+      case 4:
+        return _lectura;
       default:
         return null;
     }
   }
 
-  bool get _onFavoritesTab => _tabIndex == 3;
+  bool get _onFavoritesTab => _tabIndex >= 3;
+
+  /// La pestaña actual muestra vídeo (tarjeta ancha) o lectura (vertical).
+  /// `null` en "Todo", donde conviven los dos.
+  bool? get _tabEsVideo {
+    if (_tabIndex == 1 || _tabIndex == 3) return true;
+    if (_tabIndex == 2 || _tabIndex == 4) return false;
+    return null;
+  }
+
+  // ── Filtros de estado y orden ─────────────────────────────────────────────
+  _EstadoFiltro _estado = _EstadoFiltro.todos;
+  _Orden _orden = _Orden.recientes;
+
+  List<History> _aplicarEstado(List<History> list) {
+    switch (_estado) {
+      case _EstadoFiltro.todos:
+        return list;
+      case _EstadoFiltro.pendiente:
+        return list.where((h) => h.watchState == WatchState.pending).toList();
+      case _EstadoFiltro.completado:
+        return list.where((h) => h.watchState == WatchState.completed).toList();
+      case _EstadoFiltro.finalizado:
+        // Eje distinto de los dos anteriores: acá se pregunta por la OBRA, no
+        // por el avance del usuario. Ver WatchState en history.dart.
+        return list.where((h) => h.seriesFinished).toList();
+    }
+  }
+
+  List<T> _aplicarOrden<T>(
+    List<T> list,
+    String Function(T) tituloDe,
+    DateTime Function(T) fechaDe,
+  ) {
+    final copia = [...list];
+    switch (_orden) {
+      case _Orden.recientes:
+        copia.sort((a, b) => fechaDe(b).compareTo(fechaDe(a)));
+      case _Orden.antiguos:
+        copia.sort((a, b) => fechaDe(a).compareTo(fechaDe(b)));
+      case _Orden.az:
+        copia.sort((a, b) =>
+            tituloDe(a).toLowerCase().compareTo(tituloDe(b).toLowerCase()));
+      case _Orden.za:
+        copia.sort((a, b) =>
+            tituloDe(b).toLowerCase().compareTo(tituloDe(a).toLowerCase()));
+    }
+    return copia;
+  }
 
   List<History> _filteredHistory() {
     final type = _typeFilter;
-    return _c.resents.where((h) {
+    // allHistory y no resents: el Historial muestra TODO, incluido lo
+    // completado. resents es la lista de "Continuar", que sí lo excluye.
+    final base = _c.allHistory.where((h) {
       if (type != null && !type.contains(h.type)) return false;
       if (!SearchText.matchesQuery(h.title, _query)) return false;
       return true;
     }).toList();
+    return _aplicarOrden(
+      _aplicarEstado(base),
+      (h) => h.title,
+      (h) => h.date,
+    );
   }
 
   List<Favorite> _filteredFavorites() {
-    if (_query.trim().isEmpty) return _c.favorites;
-    return _c.favorites
-        .where((f) => SearchText.matchesQuery(f.title, _query))
-        .toList();
+    final type = _typeFilter;
+    final base = _c.favorites.where((f) {
+      if (type != null && !type.contains(f.type)) return false;
+      if (!SearchText.matchesQuery(f.title, _query)) return false;
+      return true;
+    }).toList();
+    // Los favoritos no llevan estado de avance (eso vive en el historial), así
+    // que el filtro de estado no aplica — solo el orden.
+    return _aplicarOrden(base, (f) => f.title, (f) => f.date);
+  }
+
+  /// Alterna entre "en curso" y "visto". No toca la fecha: mover un título
+  /// entre estados no es haberlo visto de nuevo, y actualizarla lo mandaría al
+  /// principio del Historial sin motivo.
+  Future<void> _cambiarEstado(History h) async {
+    h.watchState = h.watchState == WatchState.completed
+        ? WatchState.pending
+        : WatchState.completed;
+    h.newEpisodeLabel = null;
+    await DatabaseService.putHistoryRaw(h);
+    await _c.onRefresh();
+    if (mounted) setState(() {});
   }
 
   void _openDetail(String url, String package) {
@@ -179,7 +262,9 @@ class _HistoryPageState extends State<HistoryPage> {
           child: Center(
             child: Text(
               nothingAtAll
-                  ? (widget.zone ? 'nsfw18.no-record'.i18n : 'home.no-record'.i18n)
+                  ? (widget.zone
+                      ? 'nsfw18.no-record'.i18n
+                      : 'home.no-record'.i18n)
                   : 'common.no-result'.i18n,
               style: const TextStyle(color: HomeTheme.textMuted),
             ),
@@ -190,31 +275,46 @@ class _HistoryPageState extends State<HistoryPage> {
 
     final isAndroidLandscape = Platform.isAndroid &&
         MediaQuery.of(context).orientation == Orientation.landscape;
-    final cardWidth = isAndroidLandscape
-        ? HomeMediaCard.androidLandscapeWidth
-        : Platform.isAndroid
-            ? HomeMediaCard.androidWidth
-            : HomeMediaCard.desktopWidth;
-    final cardHeight = isAndroidLandscape
-        ? HomeMediaCard.androidLandscapeHeight
-        : Platform.isAndroid
-            ? HomeMediaCard.androidHeight
-            : HomeMediaCard.desktopHeight;
+
+    // Tarjeta ancha 16:9 solo cuando la pestaña muestra SOLO vídeo y hay ancho
+    // para ella. En "Todo" conviven los dos tipos y la grilla reserva un único
+    // alto y una única forma, así que ahí manda la vertical: es la que sirve
+    // para ambos sin recortar. Es el mismo motivo por el que en el Home hubo
+    // que partir "Continuar" en dos filas.
+    final usarAncha = _tabEsVideo == true && !Platform.isAndroid;
+
+    final cardWidth = usarAncha
+        ? HomeMediaCard.wideWidth
+        : isAndroidLandscape
+            ? HomeMediaCard.androidLandscapeWidth
+            : Platform.isAndroid
+                ? HomeMediaCard.androidWidth
+                : HomeMediaCard.desktopWidth;
+    // La ancha ya trae su alto TOTAL (imagen + textos); la vertical solo el de
+    // la portada, así que a esa hay que sumarle lo que va debajo.
+    final cardExtent = usarAncha
+        ? HomeMediaCard.wideTotalHeight + 18
+        : (isAndroidLandscape
+                ? HomeMediaCard.androidLandscapeHeight
+                : Platform.isAndroid
+                    ? HomeMediaCard.androidHeight
+                    : HomeMediaCard.desktopHeight) +
+            70;
 
     return SliverPadding(
       padding: const EdgeInsets.all(16),
       sliver: SliverGrid(
         gridDelegate: SliverGridDelegateWithMaxCrossAxisExtent(
           maxCrossAxisExtent: cardWidth + 16,
-          mainAxisExtent: cardHeight + 50,
+          mainAxisExtent: cardExtent,
           mainAxisSpacing: 20,
           crossAxisSpacing: 16,
         ),
         delegate: SliverChildBuilderDelegate(
           (context, index) {
             final card = _onFavoritesTab
-                ? _buildFavoriteCard(favorites![index])
-                : _buildHistoryCard(history![index]);
+                ? _buildFavoriteCard(favorites![index], ancha: usarAncha)
+                : _buildHistoryCard(history![index], ancha: usarAncha);
             return Align(
               alignment: Alignment.topCenter,
               child: card,
@@ -226,12 +326,13 @@ class _HistoryPageState extends State<HistoryPage> {
     );
   }
 
-  Widget _buildFavoriteCard(Favorite f) {
+  Widget _buildFavoriteCard(Favorite f, {bool ancha = false}) {
     // Obx: igual que en home_page.dart — sin esto, togglear "ocultar" no
     // refrescaba la tarjeta acá (el RxSet de HiddenCards cambia, pero nada
     // en esta pantalla estaba suscripto a él) hasta reconstruir toda la
     // página (cambiar de pestaña y volver).
     return Obx(() => HomeMediaCard(
+          horizontal: ancha,
           key: ValueKey('fav-${f.package}-${f.url}'),
           title: f.title,
           subtitle: 'home.favorite'.i18n,
@@ -246,9 +347,10 @@ class _HistoryPageState extends State<HistoryPage> {
         ));
   }
 
-  Widget _buildHistoryCard(History h) {
+  Widget _buildHistoryCard(History h, {bool ancha = false}) {
     // Obx: ver comentario en _buildFavoriteCard.
     return Obx(() => HomeMediaCard(
+          horizontal: ancha,
           key: ValueKey('hist-${h.package}-${h.url}'),
           title: h.title,
           subtitle: FlutterI18n.translate(
@@ -271,10 +373,55 @@ class _HistoryPageState extends State<HistoryPage> {
               : _c.headersForPackage(h.package),
           onTap: () => _openDetail(h.url, h.package),
           onDelete: () => _deleteHistory(h),
+          // Mover entre "en curso" y "visto" sin abrir el título. Hasta ahora
+          // la única forma de devolver algo a Continuar era abrirlo y leer un
+          // capítulo, y la única de sacarlo era quitarlo desde el Home.
+          extraActionLabel: h.watchState == WatchState.completed
+              ? 'history.back-to-continue'.i18n
+              : 'history.mark-seen'.i18n,
+          extraActionIcon: h.watchState == WatchState.completed
+              ? Icons.replay_rounded
+              : Icons.check_rounded,
+          onExtraAction: () => _cambiarEstado(h),
           hidden: HiddenCards.isHidden(h.package, h.url),
           onToggleHide: () => HiddenCards.toggle(h.package, h.url),
           accent: _accent,
         ));
+  }
+
+  // Un solo chip para pestañas, estado y orden — antes el de pestañas estaba
+  // escrito inline y copiarlo dos veces más era garantizar que se separaran.
+  Widget _chip(String texto, bool seleccionado, VoidCallback onTap,
+      {double fontSize = 13}) {
+    return GestureDetector(
+      onTap: onTap,
+      child: MouseRegion(
+        cursor: SystemMouseCursors.click,
+        child: AnimatedContainer(
+          duration: const Duration(milliseconds: 150),
+          padding: EdgeInsets.symmetric(
+              horizontal: fontSize > 12 ? 16 : 12,
+              vertical: fontSize > 12 ? 9 : 6),
+          decoration: BoxDecoration(
+            color: seleccionado
+                ? _accent.withValues(alpha: 0.18)
+                : HomeTheme.cardSurface,
+            borderRadius: BorderRadius.circular(999),
+            border: Border.all(
+              color: seleccionado ? _accent : HomeTheme.border,
+            ),
+          ),
+          child: Text(
+            texto,
+            style: TextStyle(
+              color: seleccionado ? _accent : HomeTheme.textPrimary,
+              fontSize: fontSize,
+              fontWeight: FontWeight.w600,
+            ),
+          ),
+        ),
+      ),
+    );
   }
 
   Widget _buildTabs() {
@@ -283,38 +430,59 @@ class _HistoryPageState extends State<HistoryPage> {
       child: Wrap(
         spacing: 10,
         runSpacing: 10,
-        children: List.generate(_tabs.length, (index) {
-          final selected = index == _tabIndex;
-          return GestureDetector(
-            onTap: () => setState(() => _tabIndex = index),
-            child: MouseRegion(
-              cursor: SystemMouseCursors.click,
-              child: AnimatedContainer(
-                duration: const Duration(milliseconds: 150),
-                padding:
-                    const EdgeInsets.symmetric(horizontal: 16, vertical: 9),
-                decoration: BoxDecoration(
-                  color: selected
-                      ? _accent.withValues(alpha: 0.18)
-                      : HomeTheme.cardSurface,
-                  borderRadius: BorderRadius.circular(999),
-                  border: Border.all(
-                    color: selected ? _accent : HomeTheme.border,
-                  ),
-                ),
-                child: Text(
-                  _tabs[index].i18n,
-                  style: TextStyle(
-                    color:
-                        selected ? _accent : HomeTheme.textPrimary,
-                    fontSize: 13,
-                    fontWeight: FontWeight.w600,
-                  ),
-                ),
+        children: List.generate(
+          _tabs.length,
+          (index) => _chip(
+            _tabs[index].i18n,
+            index == _tabIndex,
+            () => setState(() => _tabIndex = index),
+          ),
+        ),
+      ),
+    );
+  }
+
+  // Estado y orden en una sola fila. El estado se oculta en Favoritos: ahí no
+  // hay avance del usuario que filtrar (eso vive en el historial), y dejar
+  // chips que no hacen nada confunde más que ayudar.
+  Widget _buildFiltrosYOrden() {
+    final etiquetasEstado = {
+      _EstadoFiltro.todos: 'history.state-all'.i18n,
+      _EstadoFiltro.pendiente: 'history.state-pending'.i18n,
+      _EstadoFiltro.completado: 'history.state-completed'.i18n,
+      _EstadoFiltro.finalizado: 'history.state-finished'.i18n,
+    };
+    final etiquetasOrden = {
+      _Orden.recientes: 'history.sort-recent'.i18n,
+      _Orden.antiguos: 'history.sort-oldest'.i18n,
+      _Orden.az: 'history.sort-az'.i18n,
+      _Orden.za: 'history.sort-za'.i18n,
+    };
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(16, 10, 16, 0),
+      child: Wrap(
+        spacing: 8,
+        runSpacing: 8,
+        crossAxisAlignment: WrapCrossAlignment.center,
+        children: [
+          if (!_onFavoritesTab)
+            for (final e in _EstadoFiltro.values)
+              _chip(
+                etiquetasEstado[e]!,
+                _estado == e,
+                () => setState(() => _estado = e),
+                fontSize: 12,
               ),
+          if (!_onFavoritesTab) const SizedBox(width: 12),
+          Icon(Icons.sort, size: 16, color: HomeTheme.textMuted),
+          for (final o in _Orden.values)
+            _chip(
+              etiquetasOrden[o]!,
+              _orden == o,
+              () => setState(() => _orden = o),
+              fontSize: 12,
             ),
-          );
-        }),
+        ],
       ),
     );
   }
@@ -381,8 +549,7 @@ class _HistoryPageState extends State<HistoryPage> {
         suffix: _query.isEmpty
             ? null
             : fluent.IconButton(
-                icon:
-                    const Icon(fluent.FluentIcons.chrome_close, size: 9.0),
+                icon: const Icon(fluent.FluentIcons.chrome_close, size: 9.0),
                 onPressed: () => setState(() {
                   _searchController.clear();
                   _query = '';
@@ -457,6 +624,7 @@ class _HistoryPageState extends State<HistoryPage> {
                   slivers: [
                     const SliverToBoxAdapter(child: SizedBox(height: 8)),
                     SliverToBoxAdapter(child: _buildTabs()),
+                    SliverToBoxAdapter(child: _buildFiltrosYOrden()),
                     SliverToBoxAdapter(child: _buildSearchAndActions()),
                     _buildGrid(),
                   ],
@@ -528,3 +696,9 @@ class _HistoryPageState extends State<HistoryPage> {
     );
   }
 }
+
+/// Filtro por estado del Historial. `finalizado` mira un eje distinto de los
+/// otros dos: si la OBRA terminó, no si el usuario está al día.
+enum _EstadoFiltro { todos, pendiente, completado, finalizado }
+
+enum _Orden { recientes, antiguos, az, za }

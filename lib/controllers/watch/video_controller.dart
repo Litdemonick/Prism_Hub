@@ -1873,7 +1873,16 @@ class VideoPlayerController extends GetxController with WidgetsBindingObserver {
           ..title = title
           ..progress = progressSeconds.toString()
           ..totalProgress = totalSeconds > 0 ? totalSeconds.toString() : ''
-          ..isNsfw = isNsfw,
+          ..isNsfw = isNsfw
+          // Al día si este es el último episodio de la lista. Es el único
+          // punto donde conviven la lista completa y la posición del usuario.
+          ..watchState = index.value >= playList.length - 1
+              ? WatchState.completed
+              : WatchState.pending
+          // Referencia para detectar episodios nuevos más adelante.
+          ..knownEpisodeCount = playList.length
+          // Abrió el episodio: la novedad deja de serlo.
+          ..newEpisodeLabel = null,
       );
       if (refreshHome) {
         await HomePageController.refreshAll();
@@ -1935,7 +1944,16 @@ class VideoPlayerController extends GetxController with WidgetsBindingObserver {
           ..title = title
           ..progress = player.state.position.inSeconds.toString()
           ..totalProgress = player.state.duration.inSeconds.toString()
-          ..isNsfw = isNsfw,
+          ..isNsfw = isNsfw
+          // Al día si este es el último episodio de la lista. Es el único
+          // punto donde conviven la lista completa y la posición del usuario.
+          ..watchState = index.value >= playList.length - 1
+              ? WatchState.completed
+              : WatchState.pending
+          // Referencia para detectar episodios nuevos más adelante.
+          ..knownEpisodeCount = playList.length
+          // Abrió el episodio: la novedad deja de serlo.
+          ..newEpisodeLabel = null,
       );
       await HomePageController.refreshAll();
     } catch (e, st) {
@@ -2043,7 +2061,16 @@ class VideoPlayerController extends GetxController with WidgetsBindingObserver {
         // real del video del sitio desde acá) — el resto de la app ya trata
         // un totalProgress vacío como "sin dato", no como "recién empezado".
         ..totalProgress = ''
-        ..isNsfw = isNsfw,
+        ..isNsfw = isNsfw
+        // Al día si este es el último episodio de la lista. Es el único
+        // punto donde conviven la lista completa y la posición del usuario.
+        ..watchState = index.value >= playList.length - 1
+            ? WatchState.completed
+            : WatchState.pending
+        // Referencia para detectar episodios nuevos más adelante.
+        ..knownEpisodeCount = playList.length
+        // Abrió el episodio: la novedad deja de serlo.
+        ..newEpisodeLabel = null,
     );
     await HomePageController.refreshAll();
   }

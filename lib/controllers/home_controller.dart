@@ -45,7 +45,14 @@ class HomePageController extends GetxController {
   final bool nsfwOnly;
   HomePageController({this.nsfwOnly = false});
 
+  /// Lo que va en "Continuar": historial en curso, sin lo ya completado y con
+  /// las novedades ordenadas detrás de lo más reciente.
   final RxList<History> resents = <History>[].obs;
+
+  /// TODO el historial de la zona, completados incluidos. El Historial es un
+  /// archivo, no una cola de pendientes: terminar algo no puede hacerlo
+  /// desaparecer de ahí. Se guarda aparte porque `resents` sí filtra.
+  final RxList<History> allHistory = <History>[].obs;
   // All favorited types mixed together (Home shows one "Favoritos" section,
   // not one per type — the History page's Favoritos tab still lets you see
   // where each one came from).
@@ -106,6 +113,23 @@ class HomePageController extends GetxController {
   // Borrar desde el Home, sin tener que entrar al Historial. Viven acá y no en
   // cada página porque el Home normal y la Zona +18 usan ESTE mismo controller
   // (con tag distinto), así que una sola implementación sirve para los dos.
+  /// Saca el ítem de "Continuar" SIN borrar nada: se marca como visto.
+  ///
+  /// Antes el botón de la tarjeta llamaba directo a deleteHistory, y eso
+  /// borraba el registro entero — se perdía el progreso, la marca de obra
+  /// finalizada, y el título desaparecía también del Historial. Demasiado
+  /// destructivo para lo que el usuario está pidiendo, que es ordenar su fila
+  /// de pendientes.
+  ///
+  /// Borrar de verdad sigue existiendo, pero en el Historial, que es donde uno
+  /// va a administrar el archivo.
+  Future<void> quitarDeContinuar(History h) async {
+    h.watchState = WatchState.completed;
+    h.newEpisodeLabel = null;
+    await DatabaseService.putHistoryRaw(h);
+    await refreshHistory();
+  }
+
   Future<void> deleteHistory(History h) async {
     await DatabaseService.deleteHistoryByPackageAndUrl(h.package, h.url);
     await refreshHistory();
@@ -123,7 +147,12 @@ class HomePageController extends GetxController {
     // the one that fires on every visit to Home), even when there was
     // data the whole time.
     final data = await DatabaseService.getHistorysByType();
-    resents.value = _onlyEnabled(data, (h) => h.package, (h) => h.isNsfw);
+    final historialZona = _onlyEnabled(data, (h) => h.package, (h) => h.isNsfw);
+    // Las DOS listas, no solo resents: borrar una tarjeta desde el Home
+    // llamaba acá y dejaba allHistory con el ítem ya borrado, así que el
+    // Historial lo seguía mostrando hasta el próximo refresco completo.
+    allHistory.value = historialZona;
+    resents.value = _soloEnCurso(historialZona);
   }
 
   // Refresco manual (deslizar en Android / botón "Actualizar" en PC) — trae
@@ -138,10 +167,12 @@ class HomePageController extends GetxController {
 
     // "Continuar viendo" mezcla todos los tipos (video + lectura) — un solo
     // lugar para retomar donde quedaste, sin separar por tipo.
-    final resentsData =
+    final historialZona =
         _onlyEnabled(await historyFuture, (h) => h.package, (h) => h.isNsfw);
+    final resentsData = _soloEnCurso(historialZona);
     final favoritesData =
         _onlyEnabled(await favoritesFuture, (f) => f.package, (f) => f.isNsfw);
+    allHistory.value = historialZona;
     resents.value = resentsData;
     favorites.value = favoritesData;
     unawaited(prewarmResumeHistoryTargets(resentsData));
@@ -171,6 +202,49 @@ class HomePageController extends GetxController {
   // También separa +18 del resto (isNsfwOf): la instancia normal de Home
   // solo muestra lo NO marcado +18; la instancia de la Zona +18 (nsfwOnly)
   // es exactamente al revés.
+  // "Continuar" es para lo que está a medias. Lo que ya se terminó de ver o
+  // leer sale de la fila: si no, quedaría ahí para siempre invitando a
+  // retomar algo que ya no tiene nada pendiente.
+  //
+  // No se borra nada — el ítem sigue en el Historial, y vuelve solo a
+  // "Continuar" cuando salga un capítulo o episodio nuevo (ver
+  // History.newEpisodeLabel).
+  List<History> _soloEnCurso(List<History> list) {
+    final enCurso = list
+        .where((h) =>
+            h.watchState != WatchState.completed ||
+            // Con novedad vuelve SIEMPRE, aunque siga marcado completado y
+            // aunque el usuario haya marcado la obra como finalizada: que
+            // llegue un capítulo nuevo demuestra que no lo estaba, o que
+            // volvió. La marca del usuario no puede esconder contenido nuevo
+            // — para eso está el filtro del Historial, no esta lista.
+            h.hasNewEpisode)
+        .toList();
+    return _ordenarContinuar(enCurso);
+  }
+
+  /// Orden de "Continuar": primero lo último que el usuario estuvo viendo, y
+  /// justo detrás lo que tiene capítulo o episodio nuevo.
+  ///
+  /// El primer lugar NO se le da a una novedad a propósito: si el usuario dejó
+  /// algo a medias hace cinco minutos, eso es lo que quiere retomar al abrir la
+  /// app. Las novedades van segundas, que es donde se ven sin desplazar y sin
+  /// desplazar lo que estaba haciendo. El resto sigue por fecha, así que a
+  /// medida que aparecen novedades las demás se corren hacia atrás solas.
+  ///
+  /// La lista ya viene ordenada por fecha desde la base (sortByDateDesc).
+  List<History> _ordenarContinuar(List<History> list) {
+    if (list.length < 3) return list;
+    final novedades = list.where((h) => h.hasNewEpisode).toList();
+    if (novedades.isEmpty) return list;
+    final primero = list.first;
+    // Si lo más reciente ES una novedad, ya está en su lugar y no hay nada que
+    // reordenar más allá de agrupar el resto detrás.
+    final resto = list.skip(1).where((h) => !h.hasNewEpisode).toList();
+    final novedadesDetras = list.skip(1).where((h) => h.hasNewEpisode).toList();
+    return [primero, ...novedadesDetras, ...resto];
+  }
+
   List<T> _onlyEnabled<T>(
     List<T> list,
     String Function(T) packageOf,

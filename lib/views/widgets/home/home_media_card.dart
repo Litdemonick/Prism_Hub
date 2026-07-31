@@ -109,6 +109,10 @@ class HomeMediaCard extends StatefulWidget {
     this.progress,
     this.onTap,
     this.onDelete,
+    this.deleteLabel,
+    this.extraActionLabel,
+    this.extraActionIcon,
+    this.onExtraAction,
     this.gradientSeed,
     this.hidden = false,
     this.onToggleHide,
@@ -138,6 +142,17 @@ class HomeMediaCard extends StatefulWidget {
   // Si se pasa, agrega "Eliminar" al menú de tres puntos (usado por
   // Historial/Favoritos y los dos Homes).
   final VoidCallback? onDelete;
+
+  /// Texto de la acción de borrar. En "Continuar" no borra nada —saca el ítem
+  /// de la fila— así que llamarlo "Eliminar" ahí asustaría sin motivo.
+  final String? deleteLabel;
+
+  /// Acción extra del menú de tres puntos, encima de ocultar y eliminar. La
+  /// usa el Historial para mover el ítem entre "en curso" y "visto" sin tener
+  /// que abrirlo y leer un capítulo, que hoy es la única forma.
+  final String? extraActionLabel;
+  final IconData? extraActionIcon;
+  final VoidCallback? onExtraAction;
   // Para elegir el degradado por posición cuando no hay portada — si no se
   // pasa, se deriva del título (mismo criterio que ColorUtils.getColorByText).
   final int? gradientSeed;
@@ -396,6 +411,10 @@ class _HomeMediaCardState extends State<HomeMediaCard> {
                         hidden: widget.hidden,
                         onDelete: widget.onDelete,
                         onToggleHide: widget.onToggleHide,
+                        deleteLabel: widget.deleteLabel,
+                        extraLabel: widget.extraActionLabel,
+                        extraIcon: widget.extraActionIcon,
+                        onExtra: widget.onExtraAction,
                       ),
                   ],
                 ),
@@ -420,7 +439,9 @@ class _HomeMediaCardState extends State<HomeMediaCard> {
     // poco más chico para que entren más columnas, mismo aspecto ~0.72:1.
     // En horizontal (Android), el tamaño "vertical" no entraba entero en
     // el poco alto disponible — se usa la variante landscape, más chica.
-    final hasMenu = widget.onDelete != null || widget.onToggleHide != null;
+    final hasMenu = widget.onDelete != null ||
+        widget.onToggleHide != null ||
+        widget.onExtraAction != null;
     final isAndroidLandscape = Platform.isAndroid &&
         MediaQuery.of(context).orientation == Orientation.landscape;
     final width = isAndroidLandscape
@@ -632,6 +653,10 @@ class _HomeMediaCardState extends State<HomeMediaCard> {
                         hidden: widget.hidden,
                         onDelete: widget.onDelete,
                         onToggleHide: widget.onToggleHide,
+                        deleteLabel: widget.deleteLabel,
+                        extraLabel: widget.extraActionLabel,
+                        extraIcon: widget.extraActionIcon,
+                        onExtra: widget.onExtraAction,
                       ),
                   ],
                 ),
@@ -653,6 +678,10 @@ class _WideMenuButton extends StatelessWidget {
     required this.hidden,
     this.onDelete,
     this.onToggleHide,
+    this.deleteLabel,
+    this.extraLabel,
+    this.extraIcon,
+    this.onExtra,
     this.iconColor = HomeTheme.textMuted,
     this.size = 28,
   });
@@ -660,6 +689,10 @@ class _WideMenuButton extends StatelessWidget {
   final bool hidden;
   final VoidCallback? onDelete;
   final VoidCallback? onToggleHide;
+  final String? deleteLabel;
+  final String? extraLabel;
+  final IconData? extraIcon;
+  final VoidCallback? onExtra;
   final Color iconColor;
   final double size;
 
@@ -728,7 +761,7 @@ class _WideMenuButton extends StatelessWidget {
                         size: 17, color: Colors.redAccent),
                     const SizedBox(width: 10),
                     Text(
-                      'common.delete'.i18n,
+                      deleteLabel ?? 'common.delete'.i18n,
                       style: const TextStyle(
                           color: Colors.redAccent, fontSize: 13),
                     ),

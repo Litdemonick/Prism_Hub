@@ -69,7 +69,8 @@
     "continue-video": "Continue watching",
     "continue-reading": "Continue reading",
     "favorite-video": "Favorites — Video",
-    "favorite-reading": "Favorites — Reading"
+    "favorite-reading": "Favorites — Reading",
+    "remove-from-continue": "Remove from Continue"
   },
   "search": {
     "hint-text": "Please use search wisely!~",
@@ -531,5 +532,20 @@
     "confirm-body": "This notice will not be shown again. It explains important things about how the app works: ads from extensions, features still under construction, how extensions update, and the legal notice.\n\nReading it before continuing is recommended. If you already did, carry on.",
     "confirm-yes": "Yes, I read it",
     "confirm-read-again": "Read it again"
+  },
+  "history": {
+    "favorites-video": "Fav. Video",
+    "favorites-reading": "Fav. Reading",
+    "state-all": "All",
+    "state-pending": "Pending",
+    "state-completed": "Completed",
+    "state-finished": "Finished",
+    "sort-recent": "Newest",
+    "sort-oldest": "Oldest",
+    "sort-az": "A–Z",
+    "sort-za": "Z–A",
+    "sort": "Sort",
+    "back-to-continue": "Back to Continue",
+    "mark-seen": "Mark as seen"
   }
 }

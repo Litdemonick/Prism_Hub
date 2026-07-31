@@ -62,7 +62,8 @@
     "continue-video": "Continuar viendo",
     "continue-reading": "Continuar leyendo",
     "favorite-video": "Favoritos — Vídeo",
-    "favorite-reading": "Favoritos — Lectura"
+    "favorite-reading": "Favoritos — Lectura",
+    "remove-from-continue": "Quitar de Continuar"
   },
   "search": {
     "hint-text": "¡Por favor, busca ampliamente!~",
@@ -524,5 +525,20 @@
     "confirm-body": "Este aviso no vuelve a mostrarse. Explica cosas importantes para entender cómo funciona el app: los anuncios de las extensiones, las funciones que todavía están en construcción, cómo se actualizan las extensiones y el aviso legal.\n\nTe recomiendo leerlo antes de continuar. Si ya lo hiciste, seguí adelante.",
     "confirm-yes": "Sí, ya lo leí",
     "confirm-read-again": "Volver a leerlo"
+  },
+  "history": {
+    "favorites-video": "Fav. Vídeo",
+    "favorites-reading": "Fav. Lectura",
+    "state-all": "Todos",
+    "state-pending": "Pendiente",
+    "state-completed": "Completado",
+    "state-finished": "Finalizada",
+    "sort-recent": "Más reciente",
+    "sort-oldest": "Más antiguo",
+    "sort-az": "A–Z",
+    "sort-za": "Z–A",
+    "sort": "Ordenar",
+    "back-to-continue": "Devolver a Continuar",
+    "mark-seen": "Marcar como visto"
   }
 }

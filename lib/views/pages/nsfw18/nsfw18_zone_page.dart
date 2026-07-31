@@ -396,7 +396,11 @@ class _Nsfw18ZonePageState extends State<Nsfw18ZonePage> {
                     ? null
                     : c.headersForPackage(h.package),
                 onTap: () => resumeHistoryItem(context, h),
-                onDelete: () => c.deleteHistory(h),
+                // No borra: saca el ítem de Continuar marcándolo visto. El
+                // borrado real vive en el Historial, que es donde uno
+                // administra el archivo.
+                onDelete: () => c.quitarDeContinuar(h),
+                deleteLabel: 'home.remove-from-continue'.i18n,
                 hidden: HiddenCards.isHidden(h.package, h.url),
                 onToggleHide: () => HiddenCards.toggle(h.package, h.url),
                 accent: HomeTheme.accentRed,

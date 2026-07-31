@@ -191,7 +191,18 @@ class ReaderController<T> extends GetxController with WidgetsBindingObserver {
         ..progress = progress
         ..totalProgress = totalProgress
         ..cover = cover
-        ..isNsfw = isNsfw,
+        ..isNsfw = isNsfw
+        // Al día si este es el último capítulo de la lista. Se calcula acá
+        // porque es el único momento en que se tiene la lista completa Y la
+        // posición del usuario a la vez.
+        ..watchState = index.value >= playList.length - 1
+            ? WatchState.completed
+            : WatchState.pending
+        // Referencia para detectar novedades más adelante: cuántos capítulos
+        // había cuando el usuario estuvo al día.
+        ..knownEpisodeCount = playList.length
+        // Abrió el capítulo, así que la novedad ya no es novedad.
+        ..newEpisodeLabel = null,
     );
     await HomePageController.refreshAll();
   }
