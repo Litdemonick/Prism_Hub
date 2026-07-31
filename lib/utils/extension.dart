@@ -94,6 +94,23 @@ class ExtensionUtils {
     _repoIndexFetchedAt = null;
   }
 
+  /// Vuelve a leer el catalogo IGNORANDO la cache, y actualiza de paso las
+  /// versiones disponibles y las marcas de inestable.
+  ///
+  /// Existe porque "Extensiones instaladas" no tenia forma de hacerlo: su
+  /// refresco solo releia los mapas que ya estaban en memoria, asi que tocar
+  /// Actualizar ahi no cambiaba absolutamente nada en pantalla. Si una
+  /// extension dejaba de estar marcada inestable en el repositorio, esa
+  /// pantalla lo seguia mostrando hasta que venciera el TTL de 2 minutos por
+  /// su cuenta o se reabriera la app.
+  static Future<void> refrescarCatalogo() async {
+    // cacheBust ademas de forceRefresh: raw.githubusercontent sirve el archivo
+    // por CDN y lo cachea unos minutos, asi que sin romper la URL se puede
+    // recibir la version vieja aunque el repositorio ya este actualizado.
+    await fetchRepoIndex(forceRefresh: true, cacheBust: true);
+    await _fetchRemoteVersions();
+  }
+
   static Future<Map<String, String>> _fetchRemoteVersions() async {
     final inFlight = _remoteVersionsInFlight;
     if (inFlight != null) return inFlight;

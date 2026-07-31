@@ -297,8 +297,13 @@ class _ExtensionPageState extends State<ExtensionPage> {
                 Expanded(
                   child: RefreshIndicator(
                     onRefresh: () async {
-                      ExtensionUtils.clearRemoteVersionsCache();
-                      await c.onRefresh();
+                      // desdeElBoton: lo pidio el usuario, asi que se vuelve a
+                      // pedir el catalogo de verdad. Limpiar la cache no
+                      // alcanzaba: onRefresh solo releia los mapas locales, y
+                      // el fetch recien salia cuando alguna tarjeta lo pedia
+                      // por su cuenta — para entonces la pantalla ya se habia
+                      // dibujado con los datos viejos.
+                      await c.onRefresh(desdeElBoton: true);
                     },
                     color: HomeTheme.accentPink,
                     backgroundColor: HomeTheme.cardSurface,
@@ -454,13 +459,22 @@ class _ExtensionPageState extends State<ExtensionPage> {
                             // en Android) — vuelve a leer las extensiones
                             // instaladas Y limpia la caché de versiones
                             // remotas, igual que el gesto de Android.
-                            fluent.IconButton(
-                              icon: const Icon(fluent.FluentIcons.refresh),
-                              onPressed: () {
-                                ExtensionUtils.clearRemoteVersionsCache();
-                                c.onRefresh();
-                              },
-                            ),
+                            Obx(() => fluent.IconButton(
+                                  icon: c.isRefreshing.value
+                                      // Que se vea que hizo algo: antes el
+                                      // boton no daba ninguna senal y parecia
+                                      // que no respondia.
+                                      ? const SizedBox(
+                                          width: 16,
+                                          height: 16,
+                                          child: fluent.ProgressRing(
+                                              strokeWidth: 2),
+                                        )
+                                      : const Icon(fluent.FluentIcons.refresh),
+                                  onPressed: c.isRefreshing.value
+                                      ? null
+                                      : () => c.onRefresh(desdeElBoton: true),
+                                )),
                             const SizedBox(width: 4),
                             if (c.errors.isNotEmpty)
                               fluent.IconButton(
