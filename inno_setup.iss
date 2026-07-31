@@ -38,6 +38,15 @@ RestartApplications=no
 ; idioma de la interfaz del sistema (la directiva LanguageDetection de Inno 5
 ; ya no existe: usarla aborta la compilación). Ver [Languages].
 ShowLanguageDialog=no
+; Y NO reutilizar el idioma de la instalacion anterior, que es lo que hace Inno
+; por defecto (UsePreviousLanguage=yes). Al actualizar, Setup lee el valor
+; "Inno Setup: Language" que dejo la instalacion previa y lo usa tal cual, sin
+; llegar a detectar nada. Como las versiones hasta la 1.0.13 se publicaron con
+; el instalador solo en ingles, ese valor quedo grabado como "english" en todas
+; las maquinas: por mas que ahora se declare el espanol, la deteccion no
+; alcanzaba a correr y el instalador seguia saliendo en ingles. Confirmado
+; leyendo esa clave en una instalacion real.
+UsePreviousLanguage=no
 ; La pantalla de bienvenida viene DESACTIVADA por defecto en Inno 6, y es
 ; justamente donde se avisa si esto es una actualización y entre qué versiones
 ; (ver InitializeWizard). Sin ella, el instalador arrancaba directo en "elegí

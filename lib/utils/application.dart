@@ -963,6 +963,19 @@ class _ForcedUpdatePage extends StatefulWidget {
 class _ForcedUpdatePageState extends State<_ForcedUpdatePage> {
   bool _checking = false;
 
+  // Uno por variante: solo se construye una de las dos, pero teniendolos
+  // separados un cambio de tamano de ventana (de la disposicion de escritorio a
+  // la de celular) no deja un mismo controller enganchado a dos vistas.
+  final _scrollEscritorio = ScrollController();
+  final _scrollMovil = ScrollController();
+
+  @override
+  void dispose() {
+    _scrollEscritorio.dispose();
+    _scrollMovil.dispose();
+    super.dispose();
+  }
+
   bool get _needsManualRetry => Platform.isAndroid || widget.asset == null;
 
   Future<void> _retryCheck() async {
@@ -1127,9 +1140,19 @@ class _ForcedUpdatePageState extends State<_ForcedUpdatePage> {
                             ),
                           ),
                           Expanded(
-                            child: SingleChildScrollView(
+                            child: Scrollbar(
+                              controller: _scrollEscritorio,
+                              // Siempre visible: es la unica pista de que las
+                              // notas siguen mas abajo. Por defecto aparece
+                              // solo mientras se arrastra, o sea justo cuando
+                              // ya te enteraste de que habia scroll.
+                              thumbVisibility: true,
+                              child: SingleChildScrollView(
+                              controller: _scrollEscritorio,
                               child: Padding(
-                                padding: const EdgeInsets.all(24),
+                                // Aire a la derecha para que la barra no quede
+                                // pintada encima del texto.
+                                padding: const EdgeInsets.fromLTRB(24, 24, 32, 24),
                                 child: Column(
                                   crossAxisAlignment: CrossAxisAlignment.start,
                                   children: [
@@ -1142,10 +1165,12 @@ class _ForcedUpdatePageState extends State<_ForcedUpdatePage> {
                                     MarkdownBody(
                                       data: widget.changelog,
                                       styleSheet: estiloNotasVersion(),
+                                      onTapLink: abrirEnlaceDeNotas,
                                     ),
                                   ],
                                 ),
                               ),
+                            ),
                             ),
                           ),
                           Padding(
@@ -1220,9 +1245,13 @@ class _ForcedUpdatePageState extends State<_ForcedUpdatePage> {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Expanded(
-                      child: SingleChildScrollView(
+                      child: Scrollbar(
+                        controller: _scrollMovil,
+                        thumbVisibility: true,
+                        child: SingleChildScrollView(
+                        controller: _scrollMovil,
                         child: Padding(
-                          padding: const EdgeInsets.all(24),
+                          padding: const EdgeInsets.fromLTRB(24, 24, 30, 20),
                           child: Column(
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
@@ -1253,31 +1282,39 @@ class _ForcedUpdatePageState extends State<_ForcedUpdatePage> {
                               MarkdownBody(
                                 data: widget.changelog,
                                 styleSheet: estiloNotasVersion(),
+                                onTapLink: abrirEnlaceDeNotas,
                               ),
                             ],
                           ),
                         ),
                       ),
+                      ),
                     ),
+                    // Botones en COLUMNA y no en fila. Con los dos al lado,
+                    // "Ya actualice" y "Actualizar ahora" se repartian medio
+                    // ancho de telefono cada uno: los textos entraban justos,
+                    // se partian en dos lineas o quedaban con puntos
+                    // suspensivos. Uno abajo del otro cada uno tiene el ancho
+                    // entero, y el principal queda primero, que es lo que se
+                    // espera que toques.
                     Padding(
-                      padding: const EdgeInsets.all(16),
-                      child: Row(
+                      padding: const EdgeInsets.fromLTRB(20, 4, 20, 20),
+                      child: Column(
+                        mainAxisSize: MainAxisSize.min,
                         children: [
-                          if (_needsManualRetry) ...[
-                            Expanded(
-                              child: PlatformTextButton(
-                                onPressed: _ocupado ? null : _retryCheck,
-                                child: Text('upgrade.already-updated'.i18n),
-                              ),
-                            ),
-                            const SizedBox(width: 12),
-                          ],
-                          Expanded(
-                            child: PlatformFilledButton(
-                              onPressed: _ocupado ? null : _updateNow,
-                              child: _etiquetaActualizar,
-                            ),
+                          _BotonActualizarMovil(
+                            onPressed: _ocupado ? null : _updateNow,
+                            principal: true,
+                            child: _etiquetaActualizar,
                           ),
+                          if (_needsManualRetry) ...[
+                            const SizedBox(height: 10),
+                            _BotonActualizarMovil(
+                              onPressed: _ocupado ? null : _retryCheck,
+                              principal: false,
+                              child: Text('upgrade.already-updated'.i18n),
+                            ),
+                          ],
                         ],
                       ),
                     ),
@@ -1371,10 +1408,7 @@ class _NotasDeVersionState extends State<_NotasDeVersion> {
           child: MarkdownBody(
             data: widget.body,
             styleSheet: _estilo,
-            onTapLink: (_, href, __) {
-              if (href == null || href.isEmpty) return;
-              launchUrl(Uri.parse(href), mode: LaunchMode.externalApplication);
-            },
+            onTapLink: abrirEnlaceDeNotas,
           ),
         ),
       ),
@@ -1563,6 +1597,104 @@ class _BotonVentanaState extends State<_BotonVentana> {
             color: _encima && widget.peligro
                 ? Colors.white
                 : HomeTheme.textPrimary,
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+
+/// Abre un enlace de las notas de version en el navegador del sistema.
+///
+/// Va aparte porque las notas se muestran en TRES lugares: el dialogo de "hay
+/// version nueva" y las dos variantes —escritorio y celular— de la pantalla de
+/// actualizacion obligatoria. En esas dos ultimas no habia manejador, asi que
+/// los enlaces se veian subrayados y con el color de acento pero tocarlos no
+/// hacia absolutamente nada.
+///
+/// La firma es la que espera MarkdownBody.onTapLink: (texto, href, titulo).
+///
+/// Nunca lanza: un href vacio o mal formado no puede tumbar la pantalla que
+/// justamente esta pidiendo actualizar.
+void abrirEnlaceDeNotas(String _, String? href, String __) {
+  if (href == null || href.trim().isEmpty) return;
+  try {
+    final uri = Uri.parse(href.trim());
+    // Sin esquema no hay a donde ir (un ancla interna del propio markdown, por
+    // ejemplo): se ignora en vez de abrir el navegador en cualquier lado.
+    if (!uri.hasScheme) return;
+    unawaited(launchUrl(uri, mode: LaunchMode.externalApplication));
+  } catch (e) {
+    debugPrint('No se pudo abrir el enlace de las notas: $e');
+  }
+}
+
+
+/// Boton de la pantalla de actualizacion en celular.
+///
+/// No usa PlatformFilledButton porque ese cae en el FilledButton de Material
+/// con el tema por defecto: color del sistema en vez del acento de la app, y
+/// una altura pensada para un boton de formulario, no para la accion principal
+/// de una pantalla que ocupa todo el ancho.
+class _BotonActualizarMovil extends StatelessWidget {
+  const _BotonActualizarMovil({
+    required this.child,
+    required this.onPressed,
+    required this.principal,
+  });
+
+  final Widget child;
+  final VoidCallback? onPressed;
+
+  /// El principal va relleno con el acento; el otro, solo con borde. Deja claro
+  /// cual es la accion que se espera sin tener que leer los dos.
+  final bool principal;
+
+  @override
+  Widget build(BuildContext context) {
+    final apagado = onPressed == null;
+    final fondo = !principal
+        ? Colors.transparent
+        : (apagado
+            // Apagado pero reconocible: en gris quedaba como si el boton no
+            // existiera, y este es JUSTO el momento en que se esta descargando
+            // y hay que ver que sigue ahi.
+            ? HomeTheme.accentPink.withValues(alpha: 0.35)
+            : HomeTheme.accentPink);
+    final texto = principal
+        ? Colors.white
+        : (apagado ? HomeTheme.textMuted : HomeTheme.textPrimary);
+    return SizedBox(
+      width: double.infinity,
+      height: 50,
+      child: Material(
+        color: fondo,
+        borderRadius: BorderRadius.circular(14),
+        child: InkWell(
+          onTap: onPressed,
+          borderRadius: BorderRadius.circular(14),
+          child: Container(
+            alignment: Alignment.center,
+            padding: const EdgeInsets.symmetric(horizontal: 16),
+            decoration: BoxDecoration(
+              borderRadius: BorderRadius.circular(14),
+              border: principal
+                  ? null
+                  : Border.all(
+                      color: apagado ? HomeTheme.border : HomeTheme.accentPink),
+            ),
+            child: DefaultTextStyle.merge(
+              style: TextStyle(
+                color: texto,
+                fontSize: 15,
+                fontWeight: FontWeight.w600,
+              ),
+              child: IconTheme.merge(
+                data: IconThemeData(color: texto),
+                child: child,
+              ),
+            ),
           ),
         ),
       ),
