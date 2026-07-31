@@ -48,6 +48,11 @@ showPlatformDialog({
   required List<Widget>? actions,
   double? maxWidth,
   bool barrierDismissible = true,
+  // Poner en false cuando el CONTENIDO ya trae su propia área desplazable (las
+  // notas de versión, por ejemplo). Dos scrolls anidados se pelean el gesto: el
+  // de adentro se lo queda y el de afuera no puede pasar de largo, así que el
+  // final del contenido queda cortado.
+  bool scrollable = true,
 }) {
   if (Platform.isAndroid) {
     return material.showDialog(
@@ -55,7 +60,7 @@ showPlatformDialog({
       barrierDismissible: barrierDismissible,
       builder: (context) {
         return material.AlertDialog(
-          scrollable: true,
+          scrollable: scrollable,
           title: Text(title),
           content: content,
           actions: actions,

@@ -382,6 +382,9 @@ class ApplicationUtils {
               },
             ),
             content: _notasDeVersion(res.data['body']),
+            // El contenido ya desplaza solo: ver el comentario de `scrollable`
+            // en showPlatformDialog.
+            scrollable: false,
             actions: [
               PlatformTextButton(
                 onPressed: () {
@@ -479,26 +482,8 @@ class ApplicationUtils {
   static const double _anchoDialogoNotas = 560;
 
   /// Notas de la versión, listas para meter en un diálogo.
-  ///
-  /// El Markdown NO puede traer scroll propio. En Android el AlertDialog ya es
-  /// `scrollable: true`, y dos áreas desplazables anidadas se pelean el gesto:
-  /// el de adentro se lo queda y el contenido se corta o rebota. En escritorio
-  /// pasa lo contrario — el ContentDialog no desplaza solo — así que el scroll
-  /// lo pone este widget, con un alto máximo para que el diálogo no crezca más
-  /// que la pantalla.
-  static Widget _notasDeVersion(dynamic body) {
-    final markdown = Markdown(
-      data: body is String ? body : '',
-      shrinkWrap: true,
-      physics: const NeverScrollableScrollPhysics(),
-      padding: EdgeInsets.zero,
-    );
-    if (Platform.isAndroid) return markdown;
-    return ConstrainedBox(
-      constraints: const BoxConstraints(maxHeight: 420),
-      child: SingleChildScrollView(child: markdown),
-    );
-  }
+  static Widget _notasDeVersion(dynamic body) =>
+      _NotasDeVersion(body is String ? body : '');
 
   static Future<void> _downloadAndInstall(
     BuildContext context,
@@ -1003,31 +988,60 @@ class _ForcedUpdatePageState extends State<_ForcedUpdatePage> {
     }
   }
 
-  void _updateNow() {
-    if (Platform.isAndroid) {
-      // Android: descargar e instalar automáticamente
-      if (widget.asset != null) {
-        ApplicationUtils._downloadAndInstall(
-          context,
-          widget.asset!,
-          widget.remoteVersion,
-        );
-      } else {
-        // Fallback: abrir GitHub si no hay asset
-        launchUrl(Uri.parse(widget.htmlUrl),
-            mode: LaunchMode.externalApplication);
-      }
-    } else if (widget.asset != null) {
-      // Windows/Linux: con asset disponible
-      ApplicationUtils._downloadAndInstall(
+  // Mientras se descarga, los botones quedan apagados. Sin esto, tocar
+  // "Actualizar ahora" dos veces arrancaba DOS descargas del mismo archivo
+  // sobre la misma ruta, cada una escribiendo encima de la otra: el instalador
+  // podía quedar a medio escribir y fallar sin motivo aparente.
+  bool _descargando = false;
+
+  bool get _ocupado => _checking || _descargando;
+
+  /// Etiqueta del boton principal. Mientras se descarga muestra una rueda y el
+  /// texto de "descargando": los botones quedan apagados, y sin ninguna senal
+  /// parecia que el toque no habia hecho nada y se volvia a tocar.
+  Widget get _etiquetaActualizar {
+    if (!_descargando) return Text('upgrade.update-now'.i18n);
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        const SizedBox(
+          width: 15,
+          height: 15,
+          child: CircularProgressIndicator(strokeWidth: 2),
+        ),
+        const SizedBox(width: 10),
+        Flexible(
+          child: Text(
+            'upgrade.downloading'.i18n,
+            overflow: TextOverflow.ellipsis,
+          ),
+        ),
+      ],
+    );
+  }
+
+  Future<void> _updateNow() async {
+    if (_ocupado) return;
+    // Sin asset no hay nada que descargar: se abre la página de versiones y
+    // listo, no hay estado que bloquear.
+    if (widget.asset == null) {
+      await launchUrl(
+        Uri.parse(widget.htmlUrl),
+        mode: LaunchMode.externalApplication,
+      );
+      return;
+    }
+    setState(() => _descargando = true);
+    try {
+      // Mismo camino en las tres plataformas: _downloadAndInstall ya ramifica
+      // adentro (APK en Android, instalador o comprimido en escritorio).
+      await ApplicationUtils._downloadAndInstall(
         context,
         widget.asset!,
         widget.remoteVersion,
       );
-    } else {
-      // Sin asset: abrir GitHub
-      launchUrl(Uri.parse(widget.htmlUrl),
-          mode: LaunchMode.externalApplication);
+    } finally {
+      if (mounted) setState(() => _descargando = false);
     }
   }
 
@@ -1038,25 +1052,36 @@ class _ForcedUpdatePageState extends State<_ForcedUpdatePage> {
     if (!isMobile) {
       return PopScope(
         canPop: false,
-        child: Column(
+        // Fondo propio: sin esto queda el negro crudo de la ventana, que no es
+        // el fondo de la app y se notaba sobre todo arriba, alrededor de la
+        // franja de arrastre.
+        child: ColoredBox(
+          color: HomeTheme.bg,
+          child: Column(
           children: [
-            // Handle de arrastre para mover la ventana, visible solo en
-            // Windows/Linux donde window_manager está disponible.
+            // Barra de ventana propia. La barra nativa de Windows esta oculta
+            // (TitleBarStyle.hidden en main.dart), asi que antes aca solo habia
+            // una franja transparente de 32px: se podia arrastrar, pero se veia
+            // como una banda negra sin nada y —mas importante— no habia NINGUNA
+            // forma de minimizar ni cerrar. Con esta pantalla abierta al
+            // arrancar, la unica salida era el administrador de tareas.
             if (Platform.isWindows || Platform.isLinux)
-              DragToMoveArea(
-                child: Container(
-                  height: 32,
-                  color: Colors.transparent,
-                ),
-              ),
+              const _BarraVentanaActualizacion(),
             Expanded(
               child: Center(
                 child: Padding(
                   padding: const EdgeInsets.all(24),
                   child: Card(
                     elevation: 8,
+                    // Colores de la app y no los de Material: en escritorio la
+                    // raiz es FluentApp, asi que no hay Theme y Card caia al
+                    // tema CLARO por defecto — tarjeta casi blanca sobre el
+                    // fondo oscuro.
+                    color: HomeTheme.cardSurface,
+                    surfaceTintColor: Colors.transparent,
                     shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(12)),
+                        borderRadius: BorderRadius.circular(12),
+                        side: const BorderSide(color: HomeTheme.border)),
                     child: Container(
                       constraints: const BoxConstraints(
                         maxWidth: 600,
@@ -1114,11 +1139,9 @@ class _ForcedUpdatePageState extends State<_ForcedUpdatePage> {
                                           color: HomeTheme.textPrimary),
                                     ),
                                     const SizedBox(height: 16),
-                                    Markdown(
+                                    MarkdownBody(
                                       data: widget.changelog,
-                                      shrinkWrap: true,
-                                      physics:
-                                          const NeverScrollableScrollPhysics(),
+                                      styleSheet: estiloNotasVersion(),
                                     ),
                                   ],
                                 ),
@@ -1132,7 +1155,7 @@ class _ForcedUpdatePageState extends State<_ForcedUpdatePage> {
                                 if (_needsManualRetry) ...[
                                   Expanded(
                                     child: PlatformTextButton(
-                                      onPressed: _checking ? null : _retryCheck,
+                                      onPressed: _ocupado ? null : _retryCheck,
                                       child:
                                           Text('upgrade.already-updated'.i18n),
                                     ),
@@ -1141,8 +1164,8 @@ class _ForcedUpdatePageState extends State<_ForcedUpdatePage> {
                                 ],
                                 Expanded(
                                   child: PlatformFilledButton(
-                                    onPressed: _checking ? null : _updateNow,
-                                    child: Text('upgrade.update-now'.i18n),
+                                    onPressed: _ocupado ? null : _updateNow,
+                                    child: _etiquetaActualizar,
                                   ),
                                 ),
                               ],
@@ -1157,6 +1180,7 @@ class _ForcedUpdatePageState extends State<_ForcedUpdatePage> {
             ),
           ],
         ),
+        ),
       );
     }
 
@@ -1170,12 +1194,26 @@ class _ForcedUpdatePageState extends State<_ForcedUpdatePage> {
             padding: const EdgeInsets.all(16),
             child: Card(
               elevation: 8,
+              // Ver el comentario de la tarjeta de escritorio.
+              color: HomeTheme.cardSurface,
+              surfaceTintColor: Colors.transparent,
               shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(12)),
+                  borderRadius: BorderRadius.circular(12),
+                  side: const BorderSide(color: HomeTheme.border)),
               child: Container(
                 constraints: BoxConstraints(
-                  maxWidth: double.infinity,
-                  maxHeight: MediaQuery.of(context).size.height * 0.8,
+                  // Tope de ancho: en horizontal, con el telefono acostado, la
+                  // tarjeta se estiraba de borde a borde y las lineas quedaban
+                  // larguisimas e incomodas de leer.
+                  maxWidth: 560,
+                  // En horizontal el alto util es la mitad, asi que 0.8 dejaba
+                  // el contenido apretado contra los bordes; se deja mas margen
+                  // cuando la pantalla es baja.
+                  maxHeight: MediaQuery.of(context).size.height *
+                      (MediaQuery.of(context).orientation ==
+                              Orientation.landscape
+                          ? 0.86
+                          : 0.8),
                 ),
                 child: Column(
                   mainAxisSize: MainAxisSize.min,
@@ -1212,10 +1250,9 @@ class _ForcedUpdatePageState extends State<_ForcedUpdatePage> {
                                     color: HomeTheme.textPrimary),
                               ),
                               const SizedBox(height: 16),
-                              Markdown(
+                              MarkdownBody(
                                 data: widget.changelog,
-                                shrinkWrap: true,
-                                physics: const NeverScrollableScrollPhysics(),
+                                styleSheet: estiloNotasVersion(),
                               ),
                             ],
                           ),
@@ -1229,7 +1266,7 @@ class _ForcedUpdatePageState extends State<_ForcedUpdatePage> {
                           if (_needsManualRetry) ...[
                             Expanded(
                               child: PlatformTextButton(
-                                onPressed: _checking ? null : _retryCheck,
+                                onPressed: _ocupado ? null : _retryCheck,
                                 child: Text('upgrade.already-updated'.i18n),
                               ),
                             ),
@@ -1237,8 +1274,8 @@ class _ForcedUpdatePageState extends State<_ForcedUpdatePage> {
                           ],
                           Expanded(
                             child: PlatformFilledButton(
-                              onPressed: _checking ? null : _updateNow,
-                              child: Text('upgrade.update-now'.i18n),
+                              onPressed: _ocupado ? null : _updateNow,
+                              child: _etiquetaActualizar,
                             ),
                           ),
                         ],
@@ -1274,5 +1311,261 @@ class _EsperaPermisoDeInstalacion with WidgetsBindingObserver {
     _terminado = true;
     WidgetsBinding.instance.removeObserver(this);
     unawaited(_alVolver());
+  }
+}
+
+
+/// Las notas de la version dentro del dialogo de "hay version nueva".
+///
+/// Tiene su propio ScrollController por dos motivos: hace falta para que la
+/// barra de desplazamiento sepa a que atarse (sin controller explicito no se
+/// dibuja), y siendo un StatefulWidget se puede liberar en dispose en vez de
+/// quedar colgado en cada apertura del dialogo.
+///
+/// Usa MarkdownBody y no Markdown: el segundo trae su propia area
+/// desplazable, y anidada dentro de otra las dos se pelean el gesto — el de
+/// adentro se lo queda y el contenido queda cortado o rebotando. MarkdownBody
+/// solo pinta, y el scroll lo pone este widget una sola vez.
+class _NotasDeVersion extends StatefulWidget {
+  const _NotasDeVersion(this.body);
+
+  final String body;
+
+  @override
+  State<_NotasDeVersion> createState() => _NotasDeVersionState();
+}
+
+class _NotasDeVersionState extends State<_NotasDeVersion> {
+  final _scroll = ScrollController();
+
+  @override
+  void dispose() {
+    _scroll.dispose();
+    super.dispose();
+  }
+
+  MarkdownStyleSheet get _estilo => estiloNotasVersion();
+
+  @override
+  Widget build(BuildContext context) {
+    // Alto acotado: sin esto el dialogo crece con el largo de las notas y se
+    // pasa de la pantalla. En el telefono se mide contra el alto real (funciona
+    // igual en vertical que en horizontal, donde el alto util es la mitad).
+    final alto = Platform.isAndroid
+        ? MediaQuery.of(context).size.height * 0.42
+        : 400.0;
+    return SizedBox(
+      width: double.maxFinite,
+      height: alto,
+      child: Scrollbar(
+        controller: _scroll,
+        // Siempre visible: es la unica pista de que hay mas texto abajo. Por
+        // defecto solo aparece mientras se arrastra, o sea justo cuando ya
+        // sabias que habia scroll.
+        thumbVisibility: true,
+        child: SingleChildScrollView(
+          controller: _scroll,
+          // Aire a la derecha para la barra. Sin esto queda pintada ENCIMA del
+          // texto, que era lo que se veia en escritorio.
+          padding: const EdgeInsets.only(right: 16),
+          child: MarkdownBody(
+            data: widget.body,
+            styleSheet: _estilo,
+            onTapLink: (_, href, __) {
+              if (href == null || href.isEmpty) return;
+              launchUrl(Uri.parse(href), mode: LaunchMode.externalApplication);
+            },
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+/// Colores de la app para las notas de version, en vez de los del tema por
+/// defecto.
+///
+/// Sin esto, en Android el Markdown se pintaba con los colores de Material:
+/// enlaces y titulos en azul sobre el fondo oscuro de la app, que ademas de
+/// no pegar con nada se leia mal. La usan el dialogo de "hay version nueva"
+/// y la pantalla de actualizacion obligatoria, que muestran lo mismo.
+MarkdownStyleSheet estiloNotasVersion() {
+  const cuerpo = TextStyle(
+    color: HomeTheme.textPrimary,
+    fontSize: 13.5,
+    height: 1.5,
+  );
+  const titulo = TextStyle(
+    color: HomeTheme.textPrimary,
+    fontWeight: FontWeight.w700,
+    height: 1.35,
+  );
+  return MarkdownStyleSheet(
+    p: cuerpo,
+    listBullet: cuerpo,
+    strong: cuerpo.copyWith(fontWeight: FontWeight.w700),
+    em: cuerpo.copyWith(fontStyle: FontStyle.italic),
+    // El acento de la app en vez del azul de Material.
+    a: cuerpo.copyWith(
+      color: HomeTheme.accentPink,
+      decoration: TextDecoration.underline,
+      decorationColor: HomeTheme.accentPink,
+    ),
+    h1: titulo.copyWith(fontSize: 19),
+    h2: titulo.copyWith(fontSize: 17),
+    h3: titulo.copyWith(fontSize: 15),
+    h1Padding: const EdgeInsets.only(top: 8, bottom: 4),
+    h2Padding: const EdgeInsets.only(top: 14, bottom: 4),
+    h3Padding: const EdgeInsets.only(top: 10, bottom: 2),
+    blockquote: cuerpo.copyWith(color: HomeTheme.textMuted),
+    blockquotePadding: const EdgeInsets.fromLTRB(12, 10, 12, 10),
+    blockquoteDecoration: BoxDecoration(
+      color: HomeTheme.cardSurface,
+      borderRadius: BorderRadius.circular(8),
+      border: const Border(
+        left: BorderSide(color: HomeTheme.accentPink, width: 3),
+      ),
+    ),
+    code: const TextStyle(
+      color: HomeTheme.accentPink,
+      fontSize: 12.5,
+      fontFamily: 'monospace',
+      backgroundColor: Colors.transparent,
+    ),
+    codeblockPadding: const EdgeInsets.all(12),
+    codeblockDecoration: BoxDecoration(
+      color: HomeTheme.cardSurface,
+      borderRadius: BorderRadius.circular(8),
+      border: Border.all(color: HomeTheme.border),
+    ),
+    horizontalRuleDecoration: const BoxDecoration(
+      border: Border(top: BorderSide(color: HomeTheme.border)),
+    ),
+    tableHead: cuerpo.copyWith(fontWeight: FontWeight.w700),
+    tableBody: cuerpo,
+    tableBorder: TableBorder.all(color: HomeTheme.border, width: 1),
+    tableCellsPadding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
+    listBulletPadding: const EdgeInsets.only(right: 6),
+    blockSpacing: 10,
+  );
+}
+
+
+/// Barra de ventana de la pantalla de actualizacion obligatoria.
+///
+/// La app oculta la barra de titulo nativa, asi que cada pantalla que pueda
+/// aparecer sola tiene que dibujar la suya. Esta pantalla se muestra ANTES que
+/// el resto de la interfaz, o sea antes de que exista cualquier otra barra.
+///
+/// Lleva minimizar y cerrar a proposito: la actualizacion es obligatoria para
+/// USAR la app, no para tenerla abierta. Sin estos botones, y con la barra
+/// nativa oculta, la unica manera de salir era matar el proceso.
+class _BarraVentanaActualizacion extends StatelessWidget {
+  const _BarraVentanaActualizacion();
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      height: 40,
+      decoration: const BoxDecoration(
+        color: HomeTheme.cardSurface,
+        border: Border(bottom: BorderSide(color: HomeTheme.border)),
+      ),
+      child: Row(
+        children: [
+          // El area arrastrable se queda con todo el espacio libre, no solo con
+          // el ancho del texto: asi se puede mover la ventana desde cualquier
+          // parte vacia de la barra, como en cualquier ventana del sistema.
+          Expanded(
+            child: DragToMoveArea(
+              child: Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 14),
+                child: Row(
+                  children: [
+                    const Icon(Icons.system_update,
+                        size: 16, color: HomeTheme.accentPink),
+                    const SizedBox(width: 10),
+                    const Text(
+                      'PrismHub',
+                      style: TextStyle(
+                        color: HomeTheme.textPrimary,
+                        fontSize: 13,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                    const SizedBox(width: 8),
+                    Text(
+                      'v${packageInfo.version}',
+                      style: const TextStyle(
+                        color: HomeTheme.textMuted,
+                        fontSize: 12,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ),
+          _BotonVentana(
+            icono: Icons.remove,
+            onTap: () => windowManager.minimize(),
+          ),
+          _BotonVentana(
+            icono: Icons.close,
+            peligro: true,
+            onTap: () => windowManager.close(),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _BotonVentana extends StatefulWidget {
+  const _BotonVentana({
+    required this.icono,
+    required this.onTap,
+    this.peligro = false,
+  });
+
+  final IconData icono;
+  final VoidCallback onTap;
+  /// Cerrar se pinta en rojo al pasar por encima, como en Windows.
+  final bool peligro;
+
+  @override
+  State<_BotonVentana> createState() => _BotonVentanaState();
+}
+
+class _BotonVentanaState extends State<_BotonVentana> {
+  bool _encima = false;
+
+  @override
+  Widget build(BuildContext context) {
+    final fondo = !_encima
+        ? Colors.transparent
+        : (widget.peligro
+            ? HomeTheme.accentRed
+            : Colors.white.withValues(alpha: 0.08));
+    return MouseRegion(
+      cursor: SystemMouseCursors.click,
+      onEnter: (_) => setState(() => _encima = true),
+      onExit: (_) => setState(() => _encima = false),
+      child: GestureDetector(
+        onTap: widget.onTap,
+        child: Container(
+          width: 46,
+          height: 40,
+          color: fondo,
+          child: Icon(
+            widget.icono,
+            size: 16,
+            color: _encima && widget.peligro
+                ? Colors.white
+                : HomeTheme.textPrimary,
+          ),
+        ),
+      ),
+    );
   }
 }
