@@ -37,8 +37,12 @@ class SearchPageController extends GetxController {
   @override
   void onInit() {
     _searchWorker = ever(search, (callback) {
-      _randomKey = DateTime.now().millisecondsSinceEpoch.toString();
-      getResult(_randomKey);
+      // getRuntime y no getResult a secas: la lista de extensiones a consultar
+      // ahora depende TAMBIEN de lo que se escribio (ver el filtro por nombre
+      // ahi adentro), asi que hay que rearmarla en cada cambio. getRuntime
+      // reusa los SearchResult ya cargados por paquete, o sea que esto no tira
+      // a la basura lo que ya estaba en pantalla.
+      getRuntime(types: cuurentExtensionType.value);
     });
     super.onInit();
   }
@@ -63,6 +67,29 @@ class SearchPageController extends GetxController {
     } else {
       exts.removeWhere((element) => element.extension.nsfw);
     }
+    // Escribir el NOMBRE de una extension la encuentra.
+    //
+    // Antes lo tecleado se le pasaba tal cual a search() de CADA extension, asi
+    // que buscar "jkanime" preguntaba por un titulo llamado "jkanime" en las
+    // ocho y no devolvia nada util. Si lo escrito coincide con el nombre de
+    // alguna extension, se consultan SOLO esas — que es lo que uno quiere
+    // cuando escribe el nombre de una fuente.
+    //
+    // Se aplica DESPUES de los filtros de tipo y de zona, asi que respeta
+    // Todo/Video/Lectura y no mezcla +18 con lo normal. Si no coincide con
+    // ninguna, no se descarta nada y la busqueda sigue como siempre.
+    final consulta = search.value.trim();
+    if (consulta.isNotEmpty) {
+      final porNombre = exts
+          .where((e) => SearchText.matchesQuery(e.extension.name, consulta))
+          .toList();
+      if (porNombre.isNotEmpty) {
+        exts
+          ..clear()
+          ..addAll(porNombre);
+      }
+    }
+
     // Reusa el SearchResult existente por package en vez de crear todos
     // nuevos: antes cada refresh/cambio de filtro tiraba a la basura los
     // resultados YA cargados (result -> null de golpe en todas), así que
