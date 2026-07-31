@@ -60,7 +60,14 @@ class _ExtensionRepoPageState extends State<ExtensionRepoPage> {
 
   @override
   void initState() {
-    c = Get.put(ExtensionRepoPageController());
+    // Reusar la instancia si ya existe, en vez de Get.put a secas: Get.put
+    // REEMPLAZA la registrada y destruye la anterior. Al reabrir esta pagina
+    // rapido —o al saltar entre pestanas en el celular— el refresco que habia
+    // quedado en vuelo terminaba escribiendo sobre un controller ya destruido.
+    // Mismo criterio que SearchPage y HomePage, que ya lo hacian asi.
+    c = Get.isRegistered<ExtensionRepoPageController>()
+        ? Get.find<ExtensionRepoPageController>()
+        : Get.put(ExtensionRepoPageController());
     super.initState();
   }
 
@@ -75,126 +82,141 @@ class _ExtensionRepoPageState extends State<ExtensionRepoPage> {
     super.dispose();
   }
 
-  // 筛选 dialog
+  // Hoja de filtros del celular.
+  //
+  // Antes cada control hacia Get.back() al elegir: la hoja se cerraba con el
+  // primer filtro y ya no se podian combinar dos, ademas de reconstruir la
+  // lista entera en cada toque. Ahora se elige todo sobre una copia local y
+  // recien al confirmar se vuelca al controller, o sea UNA sola reconstruccion.
   _filterDialog() {
+    // Copia de trabajo: mientras la hoja esta abierta no se toca el estado
+    // real, asi que cancelar (o deslizar para cerrar) deja todo como estaba.
+    Set<ExtensionType>? tipo = c.searchType.value;
+    var nivel = c.searchLevel.value;
+    var contenido = c.searchNsfw.value;
+    var estado = c.searchInstalled.value;
+
     showModalBottomSheet(
       context: context,
       showDragHandle: true,
       useSafeArea: true,
+      isScrollControlled: true,
       builder: (context) {
-        return SingleChildScrollView(
-          padding: const EdgeInsets.all(20),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              SizedBox(
-                width: double.infinity,
-                child: Obx(
-                  () => SegmentedButton<Set<ExtensionType>?>(
-                    segments: [
-                      ButtonSegment(
-                        value: null,
-                        label: Text('common.show-all'.i18n),
-                      ),
-                      ButtonSegment(
-                        value: _videoTypes,
-                        label: Text('extension-type.video'.i18n),
-                      ),
-                      ButtonSegment(
-                        value: _readingTypes,
-                        label: Text('extension-type.reading'.i18n),
-                      ),
-                    ],
-                    selected: <Set<ExtensionType>?>{c.searchType.value},
-                    onSelectionChanged: (value) {
-                      debugPrint(value.first.toString());
-                      c.searchType.value = value.first;
-                      Get.back();
-                    },
-                    showSelectedIcon: false,
+        return StatefulBuilder(
+          builder: (context, setSheetState) {
+            Widget grupo<T>({
+              required String titulo,
+              required List<(T, String)> opciones,
+              required T seleccion,
+              required void Function(T) alElegir,
+            }) {
+              return Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    titulo,
+                    style: const TextStyle(
+                      color: HomeTheme.textMuted,
+                      fontSize: 12,
+                      fontWeight: FontWeight.w600,
+                    ),
                   ),
-                ),
-              ),
-              const SizedBox(height: 12),
-              SizedBox(
-                width: double.infinity,
-                child: Obx(
-                  () => SegmentedButton<String>(
-                    segments: [
-                      ButtonSegment(
-                        value: 'all',
-                        label: Text('extension-repo.level-all'.i18n),
-                      ),
-                      ButtonSegment(
-                        value: 'stable',
-                        label: Text('extension-repo.level-stable'.i18n),
-                      ),
-                      ButtonSegment(
-                        value: 'unstable',
-                        label: Text('extension-repo.level-unstable'.i18n),
-                      ),
-                    ],
-                    selected: <String>{c.searchLevel.value},
-                    onSelectionChanged: (value) {
-                      c.searchLevel.value = value.first;
-                      Get.back();
-                    },
-                    showSelectedIcon: false,
+                  const SizedBox(height: 6),
+                  SizedBox(
+                    width: double.infinity,
+                    child: SegmentedButton<T>(
+                      segments: [
+                        for (final (valor, etiqueta) in opciones)
+                          ButtonSegment(value: valor, label: Text(etiqueta)),
+                      ],
+                      selected: <T>{seleccion},
+                      onSelectionChanged: (v) =>
+                          setSheetState(() => alElegir(v.first)),
+                      showSelectedIcon: false,
+                    ),
                   ),
-                ),
-              ),
-              const SizedBox(height: 12),
-              // Mismos filtros que en escritorio: el celular tenia solo tipo y
-              // nivel, asi que +18 e instaladas/nuevas no se podian usar ahi.
-              SizedBox(
-                width: double.infinity,
-                child: Obx(
-                  () => SegmentedButton<String>(
-                    segments: [
+                  const SizedBox(height: 16),
+                ],
+              );
+            }
+
+            return SingleChildScrollView(
+              padding: const EdgeInsets.fromLTRB(20, 4, 20, 24),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  grupo<Set<ExtensionType>?>(
+                    titulo: 'extension-repo.filter-type'.i18n,
+                    opciones: [
+                      (null, 'common.show-all'.i18n),
+                      (_videoTypes, 'extension-type.video'.i18n),
+                      (_readingTypes, 'extension-type.reading'.i18n),
+                    ],
+                    seleccion: tipo,
+                    alElegir: (v) => tipo = v,
+                  ),
+                  grupo<String>(
+                    titulo: 'extension-repo.filter-level'.i18n,
+                    opciones: [
+                      for (final v in ['all', 'stable', 'unstable'])
+                        (v, 'extension-repo.level-$v'.i18n),
+                    ],
+                    seleccion: nivel,
+                    alElegir: (v) => nivel = v,
+                  ),
+                  grupo<String>(
+                    titulo: 'extension-repo.filter-nsfw'.i18n,
+                    opciones: [
                       for (final v in ['all', 'sfw', 'nsfw'])
-                        ButtonSegment(
-                          value: v,
-                          label: Text('extension-repo.nsfw-$v'.i18n),
-                        ),
+                        (v, 'extension-repo.nsfw-$v'.i18n),
                     ],
-                    selected: <String>{c.searchNsfw.value},
-                    onSelectionChanged: (value) {
-                      c.searchNsfw.value = value.first;
-                      Get.back();
-                    },
-                    showSelectedIcon: false,
+                    seleccion: contenido,
+                    alElegir: (v) => contenido = v,
                   ),
-                ),
-              ),
-              const SizedBox(height: 12),
-              SizedBox(
-                width: double.infinity,
-                child: Obx(
-                  () => SegmentedButton<String>(
-                    segments: [
-                      for (final v in [
-                        'all',
-                        'installed',
-                        'available',
-                        'new',
-                      ])
-                        ButtonSegment(
-                          value: v,
-                          label: Text('extension-repo.installed-$v'.i18n),
-                        ),
+                  grupo<String>(
+                    titulo: 'extension-repo.filter-installed'.i18n,
+                    opciones: [
+                      for (final v in ['all', 'installed', 'available', 'new'])
+                        (v, 'extension-repo.installed-$v'.i18n),
                     ],
-                    selected: <String>{c.searchInstalled.value},
-                    onSelectionChanged: (value) {
-                      c.searchInstalled.value = value.first;
-                      Get.back();
-                    },
-                    showSelectedIcon: false,
+                    seleccion: estado,
+                    alElegir: (v) => estado = v,
                   ),
-                ),
+                  Row(
+                    children: [
+                      Expanded(
+                        child: OutlinedButton(
+                          onPressed: () => setSheetState(() {
+                            tipo = null;
+                            nivel = 'all';
+                            contenido = 'all';
+                            estado = 'all';
+                          }),
+                          child: Text('common.show-all'.i18n),
+                        ),
+                      ),
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: FilledButton(
+                          onPressed: () {
+                            // Todo junto y una sola vez: cambiar cada valor por
+                            // separado disparaba una reconstruccion por filtro.
+                            c.searchType.value = tipo;
+                            c.searchLevel.value = nivel;
+                            c.searchNsfw.value = contenido;
+                            c.searchInstalled.value = estado;
+                            Navigator.of(context).pop();
+                          },
+                          child: Text('common.confirm'.i18n),
+                        ),
+                      ),
+                    ],
+                  ),
+                ],
               ),
-            ],
-          ),
+            );
+          },
         );
       },
     );

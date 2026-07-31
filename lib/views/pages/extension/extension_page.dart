@@ -114,7 +114,14 @@ class _ExtensionPageState extends State<ExtensionPage> {
 
   @override
   void initState() {
-    c = Get.put(ExtensionPageController());
+    // Reusar la instancia si ya existe, en vez de Get.put a secas: Get.put
+    // REEMPLAZA la registrada y destruye la anterior. Al reabrir esta pagina
+    // rapido —o al saltar entre pestanas en el celular— el refresco que habia
+    // quedado en vuelo terminaba escribiendo sobre un controller ya destruido.
+    // Mismo criterio que SearchPage y HomePage, que ya lo hacian asi.
+    c = Get.isRegistered<ExtensionPageController>()
+        ? Get.find<ExtensionPageController>()
+        : Get.put(ExtensionPageController());
     c.isPageOpen = true;
     if (c.needRefresh) {
       c.onRefresh();
