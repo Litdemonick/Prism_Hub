@@ -60,3 +60,6 @@ Web/node_modules/
 .idea/
 # Android build artifacts
 /android/build/
+
+# Configuracion local de herramientas, no va al repositorio
+.claude/
