@@ -850,7 +850,6 @@ class VideoPlayerController extends GetxController with WidgetsBindingObserver {
     _lastErrorEvent = '';
     _pageSniffAttempted = false;
     _webViewElapsedSeconds = 0;
-    _webViewOwnsScreenshotFile = false;
     _pendingResumeSeconds = null;
     resumePrompt.value = null;
     _lastOpenedServerName = null;
@@ -1914,6 +1913,99 @@ class VideoPlayerController extends GetxController with WidgetsBindingObserver {
     }
   }
 
+  /// Nombre base de las capturas de ESTE episodio. Todas las versiones
+  /// guardadas empiezan así, y por eso se pueden encontrar y limpiar después.
+  String get _baseFrame =>
+      md5.convert(utf8.encode('${title}_${playList[index.value].name}')).toString();
+
+  Directory get _dirFrames =>
+      Directory(path.join(PrismHubDirectory.getCacheDirectory, 'history_cover'));
+
+  /// Guarda un frame nuevo y devuelve su ruta.
+  ///
+  /// La ruta lleva una marca de tiempo A PROPÓSITO. Antes era fija —el md5 del
+  /// título y el episodio— así que al volver a mirar se sobrescribía el MISMO
+  /// archivo. Flutter cachea las imágenes decodificadas por ruta, no por
+  /// contenido: la tarjeta seguía mostrando el primer frame para siempre aunque
+  /// en disco ya hubiera otro. Se veía como que la captura solo se actualizaba
+  /// la primera vez.
+  ///
+  /// Sacar la imagen de la caché a mano no alcanzaba: las tarjetas la piden con
+  /// `cacheWidth` (ver HomeMediaCard), y eso envuelve el proveedor en un
+  /// ResizeImage con su propia clave — y con tres anchos distintos según dónde
+  /// se dibuje. Con una ruta nueva por captura la clave cambia sola y no queda
+  /// nada que invalidar, ni en el Inicio, ni en la Zona +18, ni en el Historial.
+  ///
+  /// Las capturas anteriores de este mismo episodio se borran acá, así que en
+  /// disco queda siempre una sola por episodio.
+  Future<String?> _guardarFrame(Uint8List bytes) async {
+    try {
+      final dir = _dirFrames;
+      await dir.create(recursive: true);
+      final base = _baseFrame;
+      final destino = File(path.join(
+        dir.path,
+        '$base-${DateTime.now().millisecondsSinceEpoch}',
+      ));
+      await destino.writeAsBytes(bytes, flush: true);
+      await _limpiarFramesViejos(base, conservar: destino.path);
+      return destino.path;
+    } catch (e) {
+      logger.warning('No se pudo guardar el frame del vídeo: $e');
+      return null;
+    }
+  }
+
+  /// Borra las capturas anteriores del episodio, menos la que se acaba de
+  /// escribir. Incluye el archivo de nombre fijo que dejaban las versiones
+  /// anteriores de la app.
+  Future<void> _limpiarFramesViejos(String base,
+      {required String conservar}) async {
+    try {
+      final dir = _dirFrames;
+      if (!await dir.exists()) return;
+      await for (final entidad in dir.list()) {
+        if (entidad is! File) continue;
+        final nombre = path.basename(entidad.path);
+        if (nombre != base && !nombre.startsWith('$base-')) continue;
+        if (entidad.path == conservar) continue;
+        try {
+          await entidad.delete();
+        } catch (_) {
+          // Puede estar en uso por un decode en curso; se limpia la próxima vez.
+        }
+      }
+    } catch (e) {
+      logger.warning('No se pudieron limpiar los frames viejos: $e');
+    }
+  }
+
+  /// Última captura guardada de este episodio, o null si no hay ninguna. Se usa
+  /// cuando no se pudo tomar una nueva, para no perder la que ya había.
+  Future<String?> _frameGuardado() async {
+    try {
+      final dir = _dirFrames;
+      if (!await dir.exists()) return null;
+      final base = _baseFrame;
+      File? mejor;
+      DateTime? mejorFecha;
+      await for (final entidad in dir.list()) {
+        if (entidad is! File) continue;
+        final nombre = path.basename(entidad.path);
+        if (nombre != base && !nombre.startsWith('$base-')) continue;
+        final fecha = (await entidad.stat()).modified;
+        if (mejorFecha == null || fecha.isAfter(mejorFecha)) {
+          mejor = entidad;
+          mejorFecha = fecha;
+        }
+      }
+      return mejor?.path;
+    } catch (e) {
+      logger.warning('No se pudo leer el frame guardado: $e');
+      return null;
+    }
+  }
+
   /// Toma el frame que se está viendo justo ahora, para usarlo de portada en
   /// "Continuar viendo". Nunca lanza y nunca se cuelga: si no se puede, la
   /// tarjeta se queda con la portada de siempre.
@@ -1941,31 +2033,19 @@ class VideoPlayerController extends GetxController with WidgetsBindingObserver {
         return;
       }
 
-      final tempDir = PrismHubDirectory.getCacheDirectory;
-      final coverDir = path.join(tempDir, 'history_cover');
-      await Directory(coverDir).create(recursive: true);
       final epName = playList[index.value].name;
-      final filename = '${title}_$epName';
-      final file = File(
-          path.join(coverDir, md5.convert(utf8.encode(filename)).toString()));
       // El frame puede venir ya tomado desde _shutdownPlayback (el caso normal
       // al cerrar el reproductor, donde capturar acá sería tarde) o tomarse en
       // el momento, para las llamadas que ocurren con la reproducción viva.
       final data = frameCapturado ??
           (captureScreenshot ? await _capturarFrameActual() : null);
-      if (data != null) {
-        if (await file.exists()) {
-          await file.delete(recursive: true);
-        }
-        await file.writeAsBytes(data);
-        // Este frame nativo manda sobre cualquier captura previa de WebView
-        // para el mismo episodio: es la posición real del usuario.
-        _webViewOwnsScreenshotFile = false;
-      }
 
       logger.info('save history');
 
-      final savedCover = await file.exists() ? file.path : null;
+      // Si no se pudo capturar nada, se conserva la última que hubiera: no
+      // tener frame nuevo no es motivo para perder el que ya estaba.
+      final savedCover =
+          data != null ? await _guardarFrame(data) : await _frameGuardado();
       await DatabaseService.putHistory(
         History()
           ..url = detailUrl
@@ -2009,14 +2089,6 @@ class VideoPlayerController extends GetxController with WidgetsBindingObserver {
   // servidor reiniciaba el progreso guardado a 0. Se resetea en play() (nuevo
   // episodio), no al cambiar de servidor dentro del mismo episodio.
   int _webViewElapsedSeconds = 0;
-  // True una vez que ESTE controller ya escribió el archivo de portada del
-  // WebView al menos una vez — a partir de ahí, capturas sucesivas SÍ
-  // refrescan el frame (para que el card de "Continuar viendo" muestre algo
-  // reciente, no la primera captura congelada para siempre). Si el archivo
-  // ya existía por OTRA fuente (una sesión nativa anterior que guardó un
-  // frame real) y este flag sigue en false, no se toca — se sigue
-  // priorizando ese frame nativo sobre uno de WebView.
-  bool _webViewOwnsScreenshotFile = false;
 
   // Guarda progreso mientras se mira por el fallback de WebView (botón
   // "Abrir en el navegador"). Ese modo no usa el player nativo (media_kit),
@@ -2060,26 +2132,24 @@ class VideoPlayerController extends GetxController with WidgetsBindingObserver {
   Future<void> saveWebViewProgress(Uint8List? screenshot,
       {bool isFinal = false}) async {
     _webViewElapsedSeconds += 15;
-    final tempDir = PrismHubDirectory.getCacheDirectory;
-    final coverDir = path.join(tempDir, 'history_cover');
-    await Directory(coverDir).create(recursive: true);
     final epName = playList[index.value].name;
-    final filename = '${title}_$epName';
-    final file = File(
-        path.join(coverDir, md5.convert(utf8.encode(filename)).toString()));
     // Solo la captura FINAL (al salir/pasar a segundo plano) actualiza la
     // portada guardada — ver WebViewPlayerPage._captureFinalProgress. Las
     // llamadas periódicas (isFinal:false) ya vienen con screenshot:null
     // desde ahí, pero se chequea isFinal explícitamente para no depender
     // solo de esa convención.
-    final coverExists = await file.exists();
-    if (isFinal &&
-        screenshot != null &&
-        (_webViewOwnsScreenshotFile || !coverExists)) {
-      await file.writeAsBytes(_cropWebViewPlayerBar(screenshot));
-      _webViewOwnsScreenshotFile = true;
+    //
+    // Esa captura final SIEMPRE pisa a la anterior, venga de donde venga.
+    // Antes se protegía el frame nativo para que una captura de WebView no lo
+    // reemplazara, pero eso dejaba clavada la portada de la primera vez: si
+    // retomabas por WebView y salías en otro punto del vídeo, la tarjeta seguía
+    // mostrando dónde habías quedado la sesión anterior. Lo último que miraste
+    // es lo que corresponde ver.
+    String? savedCover;
+    if (isFinal && screenshot != null) {
+      savedCover = await _guardarFrame(_cropWebViewPlayerBar(screenshot));
     }
-    final savedCover = await file.exists() ? file.path : null;
+    savedCover ??= await _frameGuardado();
     final fallbackCover = savedCover ?? await _historyCoverFallback();
 
     await DatabaseService.putHistory(
