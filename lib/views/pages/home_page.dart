@@ -9,6 +9,7 @@ import 'package:prismhub/models/index.dart';
 import 'package:prismhub/router/router.dart';
 import 'package:prismhub/utils/extension.dart';
 import 'package:prismhub/utils/hidden_cards.dart';
+import 'package:prismhub/utils/history_cover.dart';
 import 'package:prismhub/utils/i18n.dart';
 import 'package:prismhub/utils/resume_history.dart';
 import 'package:prismhub/views/pages/history_page.dart';
@@ -42,7 +43,15 @@ class _HomePageState extends State<HomePage> {
 
   // Índice de la pestaña "Favoritos" en HistoryPage — bajó de 4 a 3 al
   // fusionar las pestañas Manga+Novela en una sola ("Lectura").
-  static const _favoritesTabIndex = 3;
+
+  // Destino del "Ver todo" de cada seccion, en el orden de pestanas de
+  // HistoryPage: Todo, Video, Lectura, Fav. Video, Fav. Lectura. Antes todas
+  // las secciones abrian la misma pestana, asi que tocar "Continuar leyendo"
+  // caia en "Todo" y los dos bloques de Favoritos caian en "Fav. Video".
+  static const _tabVideo = 1;
+  static const _tabLectura = 2;
+  static const _tabFavVideo = 3;
+  static const _tabFavLectura = 4;
 
   @override
   void initState() {
@@ -73,13 +82,6 @@ class _HomePageState extends State<HomePage> {
     );
   }
 
-  bool _isRemoteCover(String? cover) {
-    if (cover == null || cover.isEmpty) return false;
-    final normalized = cover.toLowerCase();
-    return normalized.startsWith('http://') ||
-        normalized.startsWith('https://');
-  }
-
   // "Continuar" partido en dos: los vídeos con la card ancha 16:9 (que es la
   // forma real de sus capturas) y la lectura con la card vertical, donde un
   // póster entra entero sin recortar ni dejar franjas. Mezclados en una sola
@@ -102,6 +104,7 @@ class _HomePageState extends State<HomePage> {
       required String titulo,
       required List<Favorite> items,
       required bool ancha,
+      required int tab,
     }) {
       return HomeSection(
         itemWidth: ancha ? HomeMediaCard.wideWidth : null,
@@ -110,7 +113,7 @@ class _HomePageState extends State<HomePage> {
         boxed: true,
         accent: HomeTheme.accentPink,
         title: titulo,
-        onClickMore: () => _openHistoryTab(_favoritesTabIndex),
+        onClickMore: () => _openHistoryTab(tab),
         itemCount: items.length,
         itemBuilder: (context, index) {
           final f = items[index];
@@ -140,6 +143,7 @@ class _HomePageState extends State<HomePage> {
       if (videos.isNotEmpty) ...[
         seccion(
           titulo: 'home.favorite-video'.i18n,
+          tab: _tabFavVideo,
           items: videos,
           ancha: _wideCards,
         ),
@@ -148,6 +152,7 @@ class _HomePageState extends State<HomePage> {
       if (lectura.isNotEmpty) ...[
         seccion(
           titulo: 'home.favorite-reading'.i18n,
+          tab: _tabFavLectura,
           items: lectura,
           ancha: false,
         ),
@@ -168,6 +173,7 @@ class _HomePageState extends State<HomePage> {
       required String titulo,
       required List<History> items,
       required bool ancha,
+      required int tab,
     }) {
       return HomeSection(
         // La ancha usa su propio tamaño; la vertical deja los valores por
@@ -178,7 +184,7 @@ class _HomePageState extends State<HomePage> {
         boxed: true,
         accent: HomeTheme.accentPink,
         title: titulo,
-        onClickMore: () => _openHistoryTab(0),
+        onClickMore: () => _openHistoryTab(tab),
         itemCount: items.length,
         itemBuilder: (context, index) {
           final h = items[index];
@@ -186,7 +192,9 @@ class _HomePageState extends State<HomePage> {
           // perezosa, FUERA del alcance del Obx que envuelve la página, así
           // que sin esto togglear "ocultar" no refrescaba la tarjeta.
           final isVideo = h.type == ExtensionType.bangumi;
-          final remoteVideoCover = isVideo && _isRemoteCover(h.cover);
+          // Ver PortadaHistorial: el mismo campo `cover` puede traer una
+          // captura local del frame o el poster de red.
+          final portada = PortadaHistorial.de(h);
           return Obx(() => HomeMediaCard(
                 horizontal: ancha,
                 // El tipo ya lo dice el título de la sección: repetirlo en
@@ -207,13 +215,11 @@ class _HomePageState extends State<HomePage> {
                     ExtensionUtils.runtimes[h.package]?.extension.name,
                 // El historial de VÍDEO guarda una captura LOCAL como portada
                 // (no una URL de red) — tratarla como red siempre fallaba.
-                cover: isVideo ? (remoteVideoCover ? h.cover : null) : h.cover,
-                coverFile: isVideo && h.cover != null && !remoteVideoCover
-                    ? File(h.cover!)
+                cover: portada.url,
+                coverFile: portada.archivo,
+                headers: portada.necesitaHeaders
+                    ? c.headersForPackage(h.package)
                     : null,
-                headers: isVideo && !remoteVideoCover
-                    ? null
-                    : c.headersForPackage(h.package),
                 newEpisodeLabel: h.newEpisodeLabel,
                 onTap: () => resumeHistoryItem(context, h),
                 // No borra: saca el ítem de Continuar marcándolo visto. El
@@ -233,6 +239,7 @@ class _HomePageState extends State<HomePage> {
       if (videos.isNotEmpty) ...[
         seccion(
           titulo: 'home.continue-video'.i18n,
+          tab: _tabVideo,
           items: videos,
           // La card ancha es solo de escritorio; en celular no entra.
           ancha: _wideCards,
@@ -242,6 +249,7 @@ class _HomePageState extends State<HomePage> {
       if (lectura.isNotEmpty) ...[
         seccion(
           titulo: 'home.continue-reading'.i18n,
+          tab: _tabLectura,
           items: lectura,
           // Lectura SIEMPRE vertical: es la forma de un póster.
           ancha: false,

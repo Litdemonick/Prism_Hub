@@ -9,6 +9,7 @@ import 'package:prismhub/data/services/database_service.dart';
 import 'package:prismhub/data/services/extension_service.dart';
 import 'package:prismhub/utils/error.dart';
 import 'package:prismhub/utils/log.dart';
+import 'package:prismhub/utils/watch_state.dart';
 
 class ReaderController<T> extends GetxController with WidgetsBindingObserver {
   final String title;
@@ -192,12 +193,15 @@ class ReaderController<T> extends GetxController with WidgetsBindingObserver {
         ..totalProgress = totalProgress
         ..cover = cover
         ..isNsfw = isNsfw
-        // Al día si este es el último capítulo de la lista. Se calcula acá
-        // porque es el único momento en que se tiene la lista completa Y la
-        // posición del usuario a la vez.
-        ..watchState = index.value >= playList.length - 1
-            ? WatchState.completed
-            : WatchState.pending
+        // Al día solo si es el último capítulo Y además lo terminó. Se calcula
+        // acá porque es el único momento en que se tiene la lista completa, la
+        // posición del usuario y su progreso dentro del capítulo a la vez.
+        ..watchState = calcularWatchStateDesdeTexto(
+          index: index.value,
+          total: playList.length,
+          progreso: progress,
+          progresoTotal: totalProgress,
+        )
         // Referencia para detectar novedades más adelante: cuántos capítulos
         // había cuando el usuario estuvo al día.
         ..knownEpisodeCount = playList.length

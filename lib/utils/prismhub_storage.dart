@@ -9,6 +9,7 @@ import 'package:prismhub/utils/log.dart';
 import 'package:prismhub/utils/i18n.dart';
 import 'package:prismhub/models/index.dart';
 import 'package:prismhub/utils/prismhub_directory.dart';
+import 'package:prismhub/utils/watch_state.dart';
 import 'package:path/path.dart' as p;
 
 class PrismHubStorage {
@@ -33,7 +34,7 @@ class PrismHubStorage {
 
   static late final Isar database;
   static late final Box settings;
-  static const int _lastDatabaseVersion = 3;
+  static const int _lastDatabaseVersion = 4;
   static late String _path;
 
   static ensureInitialized() async {
@@ -151,8 +152,66 @@ class PrismHubStorage {
       await _migrateV2ToV3();
       version = 3;
     }
+    if (version == 3) {
+      await _migrateV3ToV4();
+      version = 4;
+    }
 
     await settings.put(SettingKey.databaseVersion, version);
+  }
+
+  // v3 → v4: repara los "completado" que nunca debieron marcarse.
+  //
+  // Hasta la 1.0.11, `watchState` se decidía solo por la posición en la lista
+  // (`index >= playList.length - 1`), y como el historial se escribe apenas
+  // ARRANCA la reproducción, abrir el último episodio bastaba para marcarlo
+  // al día. Una película, que tiene un solo episodio, quedaba completada en el
+  // segundo uno y nunca aparecía en "Continuar viendo". Ver
+  // calcularWatchState en utils/watch_state.dart.
+  //
+  // Acá se recalcula con la regla nueva, pero SOLO donde se puede demostrar
+  // que el usuario no había terminado: hace falta saber cuántos capítulos
+  // había (knownEpisodeCount) y cuánto duraba (totalProgress). Sin esos datos
+  // no se toca nada — un registro viejo sin ellos se deja como está, porque
+  // "revivir" a Continuar todo el historial de alguien sería mucho peor que
+  // dejar algún completado de más.
+  //
+  // Nunca marca completado algo que estaba pendiente: solo va en la dirección
+  // segura.
+  static Future<void> _migrateV3ToV4() async {
+    try {
+      final completados = await database.historys
+          .filter()
+          .watchStateEqualTo(WatchState.completed)
+          .findAll();
+      final aReparar = completados.where((h) {
+        if (h.knownEpisodeCount <= 0) return false;
+        final total = num.tryParse(h.totalProgress) ?? 0;
+        if (total <= 0) return false;
+        return calcularWatchState(
+              index: h.episodeId,
+              total: h.knownEpisodeCount,
+              progreso: num.tryParse(h.progress) ?? 0,
+              progresoTotal: total,
+            ) ==
+            WatchState.pending;
+      }).toList();
+      if (aReparar.isEmpty) return;
+      await database.writeTxn(() async {
+        for (final h in aReparar) {
+          h.watchState = WatchState.pending;
+          await database.historys.put(h);
+        }
+      });
+      logger.info(
+        'Migración v3→v4: ${aReparar.length} registros volvieron a "en curso" '
+        '(estaban marcados al día sin haberse terminado).',
+      );
+    } catch (e, st) {
+      // Que falle la reparación no puede impedir que la app arranque: el dato
+      // sigue ahí, solo queda sin corregir.
+      logger.warning('No se pudo reparar el estado del historial: $e\n$st');
+    }
   }
 
   // v2 → v3: campos de seguimiento en History (watchState, seriesFinished,

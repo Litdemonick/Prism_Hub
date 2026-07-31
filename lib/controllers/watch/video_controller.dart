@@ -27,6 +27,7 @@ import 'package:prismhub/controllers/main_controller.dart';
 import 'package:prismhub/router/router.dart';
 import 'package:prismhub/utils/bt_server.dart';
 import 'package:prismhub/utils/cast_relay_server.dart';
+import 'package:prismhub/utils/watch_state.dart';
 import 'package:prismhub/data/services/database_service.dart';
 import 'package:prismhub/data/services/extension_service.dart';
 import 'package:prismhub/data/services/stream_sniffer_service.dart';
@@ -1295,12 +1296,26 @@ class VideoPlayerController extends GetxController with WidgetsBindingObserver {
     if (_playerDisposed) return;
     if (_shutdownStarted) return;
     _shutdownStarted = true;
+
+    // El frame se toma ACÁ, antes de tocar nada del player, y se pasa hecho a
+    // _saveHistory. Capturar más abajo (con el desarmado ya empezado) es lo
+    // que obligaba a pasar captureScreenshot:false: una vez que arrancó el
+    // shutdown, player.screenshot() puede quedarse esperando un callback
+    // nativo que ya no va a llegar — el mismo bug de threading de media_kit
+    // 1.2.5 que se explica más abajo. Pero sin captura, la tarjeta de
+    // "Continuar viendo" nunca mostraba dónde había quedado el usuario.
+    //
+    // Acá el player todavía está sano (es el mismo estado que en cualquier
+    // momento de la reproducción) y además va con timeout, así que en el peor
+    // caso se pierde la miniatura, nunca se cuelga el cierre.
+    final frame = saveHistory ? await _capturarFrameActual() : null;
+
     _beginPlaybackShutdown();
     await Future<void>.delayed(const Duration(milliseconds: 80));
 
     if (saveHistory) {
       try {
-        await _saveHistory(captureScreenshot: false);
+        await _saveHistory(frameCapturado: frame);
       } catch (_) {}
     }
 
@@ -1874,11 +1889,16 @@ class VideoPlayerController extends GetxController with WidgetsBindingObserver {
           ..progress = progressSeconds.toString()
           ..totalProgress = totalSeconds > 0 ? totalSeconds.toString() : ''
           ..isNsfw = isNsfw
-          // Al día si este es el último episodio de la lista. Es el único
-          // punto donde conviven la lista completa y la posición del usuario.
-          ..watchState = index.value >= playList.length - 1
-              ? WatchState.completed
-              : WatchState.pending
+          // Al día solo si es el último episodio Y ya lo terminó. OJO: esto
+          // corre apenas ARRANCA la reproducción, así que decidirlo solo por la
+          // posición en la lista marcaba completado en el segundo uno y sacaba
+          // el episodio de "Continuar viendo" mientras se estaba mirando.
+          ..watchState = calcularWatchState(
+            index: index.value,
+            total: playList.length,
+            progreso: progressSeconds,
+            progresoTotal: totalSeconds,
+          )
           // Referencia para detectar episodios nuevos más adelante.
           ..knownEpisodeCount = playList.length
           // Abrió el episodio: la novedad deja de serlo.
@@ -1894,8 +1914,22 @@ class VideoPlayerController extends GetxController with WidgetsBindingObserver {
     }
   }
 
+  /// Toma el frame que se está viendo justo ahora, para usarlo de portada en
+  /// "Continuar viendo". Nunca lanza y nunca se cuelga: si no se puede, la
+  /// tarjeta se queda con la portada de siempre.
+  Future<Uint8List?> _capturarFrameActual() async {
+    // hasRenderedFrame: sin un frame pintado, screenshot() devuelve negro.
+    if (_disposed || _playerDisposed || !hasRenderedFrame.value) return null;
+    try {
+      return await player.screenshot().timeout(const Duration(seconds: 2));
+    } catch (e) {
+      logger.warning('No se pudo capturar el frame del video: $e');
+      return null;
+    }
+  }
+
   // 保存历史记录
-  _saveHistory({bool captureScreenshot = true}) async {
+  _saveHistory({bool captureScreenshot = true, Uint8List? frameCapturado}) async {
     // Envuelto entero: crea directorios, saca una captura del player y
     // escribe archivos. Cualquiera de esas cosas puede fallar por espacio,
     // permisos o porque el player ya se está cerrando — y como esto se
@@ -1914,14 +1948,19 @@ class VideoPlayerController extends GetxController with WidgetsBindingObserver {
       final filename = '${title}_$epName';
       final file = File(
           path.join(coverDir, md5.convert(utf8.encode(filename)).toString()));
-      if (captureScreenshot && hasRenderedFrame.value && !_disposed) {
-        final data = await player.screenshot();
-        if (data != null) {
-          if (await file.exists()) {
-            await file.delete(recursive: true);
-          }
-          await file.writeAsBytes(data);
+      // El frame puede venir ya tomado desde _shutdownPlayback (el caso normal
+      // al cerrar el reproductor, donde capturar acá sería tarde) o tomarse en
+      // el momento, para las llamadas que ocurren con la reproducción viva.
+      final data = frameCapturado ??
+          (captureScreenshot ? await _capturarFrameActual() : null);
+      if (data != null) {
+        if (await file.exists()) {
+          await file.delete(recursive: true);
         }
+        await file.writeAsBytes(data);
+        // Este frame nativo manda sobre cualquier captura previa de WebView
+        // para el mismo episodio: es la posición real del usuario.
+        _webViewOwnsScreenshotFile = false;
       }
 
       logger.info('save history');
@@ -1945,11 +1984,13 @@ class VideoPlayerController extends GetxController with WidgetsBindingObserver {
           ..progress = player.state.position.inSeconds.toString()
           ..totalProgress = player.state.duration.inSeconds.toString()
           ..isNsfw = isNsfw
-          // Al día si este es el último episodio de la lista. Es el único
-          // punto donde conviven la lista completa y la posición del usuario.
-          ..watchState = index.value >= playList.length - 1
-              ? WatchState.completed
-              : WatchState.pending
+          // Al día solo si es el último episodio Y llegó al final de verdad.
+          ..watchState = calcularWatchState(
+            index: index.value,
+            total: playList.length,
+            progreso: player.state.position.inSeconds,
+            progresoTotal: player.state.duration.inSeconds,
+          )
           // Referencia para detectar episodios nuevos más adelante.
           ..knownEpisodeCount = playList.length
           // Abrió el episodio: la novedad deja de serlo.
@@ -2062,11 +2103,16 @@ class VideoPlayerController extends GetxController with WidgetsBindingObserver {
         // un totalProgress vacío como "sin dato", no como "recién empezado".
         ..totalProgress = ''
         ..isNsfw = isNsfw
-        // Al día si este es el último episodio de la lista. Es el único
-        // punto donde conviven la lista completa y la posición del usuario.
-        ..watchState = index.value >= playList.length - 1
-            ? WatchState.completed
-            : WatchState.pending
+        // Por WebView no hay duración real del video del sitio, así que
+        // calcularWatchState no puede confirmar que haya terminado y lo deja
+        // en curso. Es a propósito: preferimos que sobre en "Continuar" antes
+        // que esconder algo a medias.
+        ..watchState = calcularWatchState(
+          index: index.value,
+          total: playList.length,
+          progreso: _webViewElapsedSeconds,
+          progresoTotal: 0,
+        )
         // Referencia para detectar episodios nuevos más adelante.
         ..knownEpisodeCount = playList.length
         // Abrió el episodio: la novedad deja de serlo.

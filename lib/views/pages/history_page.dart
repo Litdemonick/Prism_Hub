@@ -10,6 +10,7 @@ import 'package:prismhub/data/services/database_service.dart';
 import 'package:prismhub/models/index.dart';
 import 'package:prismhub/utils/extension.dart';
 import 'package:prismhub/utils/hidden_cards.dart';
+import 'package:prismhub/utils/history_cover.dart';
 import 'package:prismhub/utils/i18n.dart';
 import 'package:prismhub/utils/search_text.dart';
 import 'package:prismhub/views/widgets/home/animated_background_glow.dart';
@@ -348,6 +349,12 @@ class _HistoryPageState extends State<HistoryPage> {
   }
 
   Widget _buildHistoryCard(History h, {bool ancha = false}) {
+    // La portada de vídeo puede ser una captura local O el póster de red (ver
+    // PortadaHistorial). Antes acá se asumía siempre archivo local, así que un
+    // ítem con póster de red hacía File("https://...") y la tarjeta quedaba
+    // sin imagen — se notaba sobre todo en la Zona +18, y parecía que el botón
+    // de mostrar/ocultar imagen se rompía.
+    final portada = PortadaHistorial.de(h);
     // Obx: ver comentario en _buildFavoriteCard.
     return Obx(() => HomeMediaCard(
           horizontal: ancha,
@@ -364,13 +371,11 @@ class _HistoryPageState extends State<HistoryPage> {
             },
           ),
           type: h.type,
-          cover: h.type == ExtensionType.bangumi ? null : h.cover,
-          coverFile: h.type == ExtensionType.bangumi && h.cover != null
-              ? File(h.cover!)
+          cover: portada.url,
+          coverFile: portada.archivo,
+          headers: portada.necesitaHeaders
+              ? _c.headersForPackage(h.package)
               : null,
-          headers: h.type == ExtensionType.bangumi
-              ? null
-              : _c.headersForPackage(h.package),
           onTap: () => _openDetail(h.url, h.package),
           onDelete: () => _deleteHistory(h),
           // Mover entre "en curso" y "visto" sin abrir el título. Hasta ahora
