@@ -4,11 +4,20 @@ import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:hive_flutter/adapters.dart';
 import 'package:isar/isar.dart';
+import 'package:prismhub/utils/log.dart';
+import 'package:prismhub/utils/i18n.dart';
 import 'package:prismhub/models/index.dart';
 import 'package:prismhub/utils/prismhub_directory.dart';
 import 'package:path/path.dart' as p;
 
 class PrismHubStorage {
+  // Fuente única de la URL del repositorio: la usa tanto la inicialización de
+  // ajustes como el respaldo de ExtensionUtils cuando el ajuste guardado no
+  // sirve. Antes era una constante local acá, así que el otro lado no tenía
+  // de dónde sacarla si el ajuste venía en null.
+  static const String defaultRepoUrl =
+      "https://raw.githubusercontent.com/Litdemonick/prism-plus/main";
+
   static late final Isar database;
   static late final Box settings;
   static const int _lastDatabaseVersion = 2;
@@ -16,13 +25,41 @@ class PrismHubStorage {
 
   static ensureInitialized() async {
     _path = PrismHubDirectory.getDirectory;
+    await Hive.initFlutter(_path);
     try {
-      await Hive.initFlutter(_path);
       settings = await Hive.openBox("settings");
+    } catch (e, st) {
+      // La caja quedó ilegible. El caso visto en vivo fue
+      // "unknown typeId: 115": el archivo de Hive se escribe agregando al
+      // final, así que si el sistema mata el proceso a mitad de una escritura
+      // (por ejemplo apagando la pantalla durante la reproducción) queda un
+      // registro truncado que ya no se puede leer.
+      logger.severe('La caja de ajustes está corrupta', e, st);
+      try {
+        // Se APARTA el archivo, no se borra: los ajustes viejos ya son
+        // ilegibles de todos modos, pero dejarlos guardados permite
+        // recuperarlos después si hiciera falta.
+        await _quarantineCorruptBox('settings');
+        settings = await Hive.openBox("settings");
+        logger.warning('Ajustes reiniciados a los valores de fábrica');
+      } catch (e2, st2) {
+        // Último recurso. Ojo: una caja temporal se pierde en cada arranque,
+        // así que esto NO es una solución, solo evita quedarse sin nada.
+        logger.severe('No se pudo recrear la caja de ajustes', e2, st2);
+        settings = await Hive.openBox("settings_tmp");
+      }
+    }
+
+    // SIEMPRE, pase lo que pase arriba. Antes esto vivía DENTRO del try, así
+    // que al caer a la caja temporal no se ejecutaba nunca y la app arrancaba
+    // sin un solo valor por defecto: la URL del repositorio quedaba en null
+    // ("No host specified in URI null/index.json") y el proxy también
+    // ("Invalid proxy configuration null null"), o sea que no cargaba
+    // absolutamente nada y parecía que no había internet.
+    try {
       await _initSettings();
-    } catch (e) {
-      debugPrint('ERROR: Hive init falló, usando caja temporal: $e');
-      settings = await Hive.openBox("settings_tmp");
+    } catch (e, st) {
+      logger.severe('No se pudieron inicializar los ajustes', e, st);
     }
 
     try {
@@ -55,6 +92,20 @@ class PrismHubStorage {
         inspector: false,
       );
     }
+  }
+
+  // Mueve los archivos de una caja ilegible a un nombre con marca de tiempo,
+  // para que Hive pueda crear una limpia sin destruir lo anterior.
+  static Future<void> _quarantineCorruptBox(String name) async {
+    await Hive.close();
+    final stamp = DateTime.now().millisecondsSinceEpoch;
+    for (final ext in const ['.hive', '.lock']) {
+      final file = File(p.join(_path, '$name$ext'));
+      if (await file.exists()) {
+        await file.rename(p.join(_path, '$name.corrupt-$stamp$ext'));
+      }
+    }
+    await Hive.initFlutter(_path);
   }
 
   static performMigrationIfNeeded() async {
@@ -123,8 +174,7 @@ class PrismHubStorage {
   }
 
   static _initSettings() async {
-    const correctRepoUrl =
-        "https://raw.githubusercontent.com/Litdemonick/prism-plus/main";
+    const correctRepoUrl = defaultRepoUrl;
     final savedUrl = settings.get(SettingKey.prismhubRepoUrl);
     if (savedUrl != null &&
         (savedUrl.toString().contains("jephersonrd.github.io") ||
@@ -134,9 +184,15 @@ class PrismHubStorage {
     await _initSetting(SettingKey.prismhubRepoUrl, correctRepoUrl);
     await _initSetting(SettingKey.tmdbKey, "");
     await _initSetting(SettingKey.autoCheckUpdate, true);
+    // Solo se guarda el idioma del sistema si la app lo tiene traducido; con
+    // cualquier otro se dejaba guardado un código sin archivo (ej. 'pt' en un
+    // teléfono en portugués), y el selector de Ajustes quedaba sin ninguna
+    // opción marcada. La lista de idiomas soportados vive en I18nUtils.
     final systemLang = Platform.localeName.split('_').first;
     await _initSetting(
-        SettingKey.language, systemLang.isNotEmpty ? systemLang : 'en');
+      SettingKey.language,
+      I18nUtils.supportedLanguages.contains(systemLang) ? systemLang : 'en',
+    );
     await _initSetting(SettingKey.novelFontSize, 18.0);
     await _initSetting(SettingKey.theme, 'system');
     await _initSetting(SettingKey.enableNSFW, false);
@@ -185,25 +241,44 @@ class PrismHubStorage {
     await _initSetting(SettingKey.subtitleTextAlign, TextAlign.center.index);
   }
 
+  // OJO con containsKey a secas: una clave que EXISTE con valor null pasaba
+  // el chequeo y nunca se corregía. Ese fue el fallo real de "type 'Null' is
+  // not a subtype of type 'bool'" en main_page: autoCheckUpdate estaba
+  // guardado como null y getSetting lo devolvía crudo a un `if`.
   static _initSetting(String key, dynamic value) async {
-    if (!settings.containsKey(key)) {
+    if (!settings.containsKey(key) || settings.get(key) == null) {
       await settings.put(key, value);
     }
+    _defaults[key] = value;
   }
+
+  // Último valor por defecto conocido de cada ajuste, para que getSetting
+  // NUNCA devuelva null en una clave que tiene default. Se llena desde el
+  // mismo _initSetting, así que no hay una segunda lista que mantener en
+  // sincronía (y por lo tanto no puede quedar desactualizada).
+  static final Map<String, dynamic> _defaults = {};
 
   static setSetting(String key, dynamic value) async {
     await settings.put(key, value);
   }
 
+  // Devolver null desde acá es peligroso: casi todos los llamadores usan el
+  // resultado directamente como bool/String/double (`if (getSetting(x))`,
+  // `Locale(getSetting(y))`), así que un null no da un valor raro — tumba la
+  // pantalla entera con un error de tipo. Con el default de respaldo, un
+  // ajuste corrupto o borrado degrada al comportamiento de fábrica en vez de
+  // romper el app.
   static getSetting(String key) {
-    return settings.get(key);
+    final value = settings.get(key);
+    if (value != null) return value;
+    return _defaults[key];
   }
 
   static getUASetting() {
     if (Platform.isAndroid) {
-      return settings.get(SettingKey.androidWebviewUA);
+      return getSetting(SettingKey.androidWebviewUA);
     }
-    return settings.get(SettingKey.windowsWebviewUA); // Windows & Linux
+    return getSetting(SettingKey.windowsWebviewUA); // Windows & Linux
   }
 
   static setUASetting(String value) async {
@@ -286,4 +361,7 @@ class SettingKey {
   static const subtitleTextAlign = "SubtitleTextAlign";
   static const subtitleLastLanguageSelected = "SubtitleLastLanguageSelected";
   static const subtitleLastTitleSelected = "SubtitleLastTitleSelected";
+  // Ver ExtensionUtils._migrateNsfwHistoryFavorites — corre una sola vez.
+  static const nsfw18RetroactiveMigrationDone =
+      "Nsfw18RetroactiveMigrationDone";
 }

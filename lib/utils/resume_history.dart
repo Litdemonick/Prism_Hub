@@ -6,13 +6,10 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/scheduler.dart';
 import 'package:flutter_i18n/flutter_i18n.dart';
-import 'package:get/get.dart';
 import 'package:prismhub/data/services/database_service.dart';
 import 'package:prismhub/data/services/extension_service.dart';
 import 'package:prismhub/models/index.dart';
-import 'package:prismhub/router/router.dart';
 import 'package:prismhub/utils/extension.dart';
-import 'package:prismhub/views/pages/detail_page.dart';
 import 'package:prismhub/views/pages/watch/watch_page.dart';
 import 'package:prismhub/views/widgets/deferred_route_content.dart';
 import 'package:prismhub/views/widgets/home/home_theme.dart';
@@ -38,6 +35,15 @@ Future<void> resumeHistoryItem(BuildContext context, History history) async {
     );
     return;
   }
+
+  // Antes de resolver el destino (que ya llama a la extensión vía
+  // runtime.detail más abajo si no hay caché), se chequea si hace falta
+  // actualizar — "Continuar" no pasaba por Instaladas/ExtensionSearcherPage,
+  // así que este aviso nunca corría acá.
+  if (await ExtensionUtils.blockedByPendingUpdate(context, history.package)) {
+    return;
+  }
+  if (!context.mounted) return;
 
   final isDesktop = Platform.isWindows || Platform.isLinux || Platform.isMacOS;
   final cachedTarget = _resumeTargetCache[_resumeKey(history, runtime)];
@@ -264,7 +270,7 @@ class _ResumeHistoryLoaderPageState extends State<_ResumeHistoryLoaderPage> {
 
     if (target == null) {
       Navigator.of(context, rootNavigator: true).pop();
-      _openDetailPageFallback(widget.history);
+      _openDetailPageFallback(context, widget.history);
       return;
     }
 
@@ -313,21 +319,11 @@ Route<void> _resumeWatchRoute(History history, _ResumeTarget target) {
   );
 }
 
-void _openDetailPageFallback(History history) {
-  if (Platform.isAndroid) {
-    Get.to(DetailPage(
-      key: ValueKey('${history.package}|${history.url}'),
-      url: history.url,
-      package: history.package,
-      tag: '${history.package}|${history.url}',
-    ));
-    return;
-  }
-  router.push(
-    Uri(
-      path: '/detail',
-      queryParameters: {'url': history.url, 'package': history.package},
-    ).toString(),
+void _openDetailPageFallback(BuildContext context, History history) {
+  ExtensionUtils.openExtensionDetail(
+    context,
+    package: history.package,
+    url: history.url,
   );
 }
 
@@ -361,6 +357,12 @@ class _DeferredResumeWatchPage extends StatelessWidget {
         anilistID: target.anilistId,
         typeOverride: target.resolvedType,
         autoResume: true,
+        // Sin esto, retomar "Continuar" de un título +18 volvía a guardar
+        // el History con isNsfw=false (default) al primer touch, pisando
+        // la marca +18 que ya tenía — se "salía" de la Zona +18 solo con
+        // seguir mirando. history.isNsfw YA tiene la respuesta correcta,
+        // no hace falta volver a preguntar nada acá.
+        isNsfw: history.isNsfw,
       ),
     );
   }

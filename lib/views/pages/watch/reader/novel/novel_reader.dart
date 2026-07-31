@@ -21,6 +21,7 @@ class NovelReader extends StatefulWidget {
     required this.anilistID,
     this.cover,
     this.cameFromDetail = false,
+    this.isNsfw = false,
   });
 
   final String title;
@@ -32,6 +33,7 @@ class NovelReader extends StatefulWidget {
   final String? cover;
   final String anilistID;
   final bool cameFromDetail;
+  final bool isNsfw;
 
   @override
   State<NovelReader> createState() => _NovelReaderState();
@@ -59,6 +61,7 @@ class _NovelReaderState extends State<NovelReader> {
           cover: widget.cover,
           anilistID: widget.anilistID,
           cameFromDetail: widget.cameFromDetail,
+          isNsfw: widget.isNsfw,
         ),
         tag: _tag,
       );

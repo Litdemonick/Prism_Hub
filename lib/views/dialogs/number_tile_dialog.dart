@@ -109,7 +109,17 @@ class _NumberTileDialogState extends State<NumberTileDialog> {
                         ),
                         FilledButton(
                           onPressed: () {
-                            widget.onChange(double.parse(_controller.text));
+                            // double.parse revienta con cualquier cosa que no
+                            // sea un número: vacío, letras, o una coma decimal
+                            // (que es lo NORMAL de teclear en español). O sea
+                            // que el usuario rompía el app simplemente
+                            // escribiendo "1,5" y apretando Confirmar. Con
+                            // tryParse, un valor inválido no hace nada y el
+                            // diálogo queda abierto para corregirlo.
+                            final value = double.tryParse(
+                                _controller.text.trim().replaceAll(',', '.'));
+                            if (value == null) return;
+                            widget.onChange(value);
                             Navigator.pop(context);
                           },
                           child: Text("common.confirm".i18n),

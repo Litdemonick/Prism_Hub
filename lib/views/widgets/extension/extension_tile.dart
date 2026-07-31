@@ -1,11 +1,16 @@
+import 'dart:io';
+
 import 'package:fluent_ui/fluent_ui.dart' as fluent;
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 import 'package:prismhub/models/extension.dart';
 import 'package:prismhub/router/router.dart';
+import 'package:prismhub/views/pages/nsfw18/nsfw18_access.dart';
+import 'package:prismhub/views/pages/search/extension_searcher_page.dart';
 import 'package:prismhub/utils/extension.dart';
 import 'package:prismhub/utils/i18n.dart';
 import 'package:prismhub/utils/prismhub_storage.dart';
+import 'package:prismhub/utils/request.dart';
 import 'package:prismhub/utils/router.dart';
 import 'package:prismhub/views/widgets/button.dart';
 import 'package:prismhub/views/widgets/cache_network_image.dart';
@@ -61,11 +66,31 @@ class _ExtensionTileState extends State<ExtensionTile> {
           severity: fluent.InfoBarSeverity.success,
         );
       }
+      // Invalida el caché del índice ANTES de re-chequear. Sin esto el
+      // re-chequeo puede resolverse contra la copia cacheada y dejar el botón
+      // "Actualizar" encendido para siempre aunque la instalación haya salido
+      // bien — es el mismo problema que ya se había arreglado para el
+      // deslizar-para-refrescar de esta misma página (ver
+      // clearRemoteVersionsCache, reportado en vivo con Olympus), pero este
+      // camino, el del botón, se había quedado sin la invalidación.
+      ExtensionUtils.clearRemoteVersionsCache();
       final stillRequired =
           await ExtensionUtils.hasExtensionUpdate(widget.extension.package);
       if (mounted) setState(() => _updateRequired = stillRequired);
     } catch (e) {
+      // Antes esto era solo un debugPrint: si la actualización fallaba (firma
+      // inválida, red, repo caído) el spinner paraba, el botón seguía ahí y el
+      // usuario no se enteraba de NADA — imposible de diagnosticar desde el
+      // otro lado. Ahora el motivo real se muestra.
       debugPrint(e.toString());
+      if (mounted) {
+        showPlatformSnackbar(
+          context: context,
+          title: 'extension.update-failed'.i18n,
+          content: e.toString(),
+          severity: fluent.InfoBarSeverity.error,
+        );
+      }
     } finally {
       if (mounted) setState(() => _updating = false);
     }
@@ -105,27 +130,6 @@ class _ExtensionTileState extends State<ExtensionTile> {
     });
   }
 
-  void _showUpdateRequiredDialog(BuildContext context) {
-    showPlatformDialog(
-      context: context,
-      title: 'extension.update-required'.i18n,
-      content: Text('extension.update-required-dialog'.i18n),
-      actions: [
-        PlatformTextButton(
-          onPressed: () => RouterUtils.pop(),
-          child: Text('common.cancel'.i18n),
-        ),
-        PlatformFilledButton(
-          onPressed: () {
-            RouterUtils.pop();
-            router.push('/extension_repo');
-          },
-          child: Text('extension.go-to-update'.i18n),
-        ),
-      ],
-    );
-  }
-
   // Confirmación +18 antes de activar una extensión nsfw — mismo diálogo que
   // ExtensionCard usa al instalar (ver ese archivo), acá se repite porque no
   // comparten contexto de widget.
@@ -155,7 +159,7 @@ class _ExtensionTileState extends State<ExtensionTile> {
     // confirmación +18 antes de activarla de verdad. Desactivar nunca se
     // bloquea.
     if (value && widget.extension.nsfw) {
-      if (!PrismHubStorage.getSetting(SettingKey.enableNSFW)) {
+      if (PrismHubStorage.getSetting(SettingKey.enableNSFW) != true) {
         if (mounted) {
           showPlatformSnackbar(
             context: context,
@@ -171,12 +175,83 @@ class _ExtensionTileState extends State<ExtensionTile> {
     await ExtensionUtils.setExtensionEnabled(widget.extension.package, value);
   }
 
-  void _openExtensionSearch(BuildContext context) {
+  // Borra las cookies guardadas de ESTA extensión. El frasco es persistente y
+  // está ligado al paquete, así que desinstalar y reinstalar NO lo limpia: una
+  // sesión que queda en mal estado sobrevive a cualquier versión nueva, y hasta
+  // ahora la única salida era borrar los datos del app entero.
+  //
+  // Va con confirmación porque en extensiones que requieren login esto cierra
+  // la sesión — es reversible volviendo a entrar, pero no debería pasar por un
+  // toque accidental.
+  Future<void> _clearCookies() async {
+    if (!mounted) return;
+    final ok = await showPlatformDialog(
+      context: context,
+      title: 'extension.clear-cookies'.i18n,
+      content: Text('extension.clear-cookies-confirm'.i18n),
+      actions: [
+        PlatformTextButton(
+          onPressed: () => RouterUtils.pop(false),
+          child: Text('common.cancel'.i18n),
+        ),
+        PlatformFilledButton(
+          onPressed: () => RouterUtils.pop(true),
+          child: Text('common.confirm'.i18n),
+        ),
+      ],
+    );
+    if (ok != true) return;
+    try {
+      await PrismRequest.clearCookiesForPackage(widget.extension.package);
+      if (mounted) {
+        showPlatformSnackbar(
+          context: context,
+          content: 'extension.clear-cookies-done'.i18n,
+          severity: fluent.InfoBarSeverity.success,
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        showPlatformSnackbar(
+          context: context,
+          title: 'extension.clear-cookies'.i18n,
+          content: e.toString(),
+          severity: fluent.InfoBarSeverity.error,
+        );
+      }
+    }
+  }
+
+  void _openExtensionSearch(BuildContext context) async {
     if (_updateRequired) {
-      _showUpdateRequiredDialog(context);
+      // Mismo diálogo compartido que usan ahora todos los demás puntos de
+      // entrada a contenido de una extensión (ver ExtensionUtils) — antes
+      // era una copia propia acá.
+      await ExtensionUtils.blockedByPendingUpdate(
+        context,
+        widget.extension.package,
+      );
       return;
     }
     if (!_enabled) return;
+    // Extensión marcada +18: no se entra directo desde Instaladas. Pide
+    // confirmación y PIN, igual que la Zona +18 y que el botón +18 del buscador
+    // — antes desde acá se llegaba a su contenido salteando las dos cosas.
+    if (widget.extension.nsfw) {
+      final allowed = await confirmNsfw18Access(context);
+      if (!allowed || !context.mounted) return;
+    }
+    // Ramifica por plataforma igual que ExtensionUtils.openExtensionDetail, y no
+    // por gusto: en Android el árbol es GetMaterialApp con home:AndroidMainPage,
+    // o sea que go_router NO está montado y router.push no hace nada. Se notaba
+    // solo en las extensiones +18: como el gate de arriba come el toque con el
+    // diálogo y el PIN, el usuario confirmaba y después no pasaba nada
+    // (reportado en vivo). Get.to sí navega en Android; en escritorio es al
+    // revés y manda go_router.
+    if (Platform.isAndroid) {
+      Get.to(() => ExtensionSearcherPage(package: widget.extension.package));
+      return;
+    }
     router.push(Uri(
       path: '/search_extension',
       queryParameters: {'package': widget.extension.package},
@@ -208,92 +283,122 @@ class _ExtensionTileState extends State<ExtensionTile> {
     );
   }
 
+  // Container con superficie propia (mismo tratamiento que las cards del
+  // repositorio, ver ExtensionCard._buildAndroid) — antes esta fila iba
+  // suelta contra el fondo de la página, sin ninguna separación visual
+  // clara entre una extensión y la siguiente.
   Widget _buildAndroid(BuildContext context) {
-    return ListTile(
-      leading: Opacity(
-        opacity: _enabled ? 1 : 0.4,
-        child: _iconBox(size: 40, iconSize: 20),
+    return Opacity(
+      opacity: _enabled ? 1 : 0.7,
+      child: Container(
+        margin: const EdgeInsets.only(bottom: 14),
+        decoration: BoxDecoration(
+          color: HomeTheme.cardSurface,
+          borderRadius: BorderRadius.circular(14),
+          border: Border.all(color: HomeTheme.border),
+        ),
+        clipBehavior: Clip.antiAlias,
+        child: _buildAndroidTile(context),
       ),
+    );
+  }
+
+  Widget _buildAndroidTile(BuildContext context) {
+    return ListTile(
+      leading: _iconBox(size: 40, iconSize: 20),
       title: Text(
         widget.extension.name,
+        maxLines: 1,
         overflow: TextOverflow.ellipsis,
+        style: const TextStyle(fontWeight: FontWeight.w600),
       ),
       subtitle: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         mainAxisSize: MainAxisSize.min,
         children: [
-          // Wrap: con varios badges juntos (versión + tipo + 18+ +
-          // inestable) en pantallas angostas, un Row fijo desborda — mismo
-          // fix ya aplicado en ExtensionCard del repositorio.
+          // Wrap de pills (antes Text sueltos de distinto tamaño que en
+          // desktop) — mismo _badge() que usa la card de escritorio, para
+          // que se vea y mida igual en las dos plataformas.
           Wrap(
             crossAxisAlignment: WrapCrossAlignment.center,
-            spacing: 8,
-            runSpacing: 2,
+            spacing: 6,
+            runSpacing: 6,
             children: [
-              Text(
-                widget.extension.version,
-                style: const TextStyle(fontSize: 12),
-              ),
-              Text(
-                ExtensionUtils.typeToString(widget.extension.type),
-                style: const TextStyle(fontSize: 12),
-              ),
-              if (widget.extension.nsfw)
-                const Text(
-                  '18+',
-                  style: TextStyle(
-                    fontSize: 12,
-                    color: Colors.redAccent,
-                    fontWeight: FontWeight.bold,
-                  ),
-                ),
+              _badge(widget.extension.version),
+              _badge(ExtensionUtils.typeToString(widget.extension.type)),
+              if (widget.extension.nsfw) _badge('18+', color: Colors.redAccent),
               if (_unstable)
-                Text(
-                  'extension.unstable'.i18n,
-                  style: const TextStyle(
-                    fontSize: 12,
-                    color: Colors.orange,
-                    fontWeight: FontWeight.w600,
-                  ),
-                ),
+                _badge('extension.unstable'.i18n, color: Colors.orange),
             ],
           ),
+          // Descripción — de qué va la extensión (anime, lectura, series,
+          // películas, etc), antes no se mostraba en ningún lado pese a que
+          // el catálogo ya la trae.
+          if (widget.extension.description != null &&
+              widget.extension.description!.trim().isNotEmpty &&
+              widget.extension.description != widget.extension.name)
+            Padding(
+              padding: const EdgeInsets.only(top: 2),
+              child: Text(
+                widget.extension.description!,
+                maxLines: 2,
+                overflow: TextOverflow.ellipsis,
+              ),
+            ),
+          // Botón real (antes era un texto rojo subrayado, se sentía como
+          // un link roto en vez de una acción) — mismo look que el botón
+          // "Actualizar" de la card de escritorio, adaptado a Material.
           if (_updateRequired)
-            Wrap(
-              crossAxisAlignment: WrapCrossAlignment.center,
-              spacing: 4,
-              runSpacing: 2,
-              children: [
-                const Icon(Icons.system_update,
-                    size: 13, color: Colors.redAccent),
-                Text(
-                  'extension.update-required'.i18n,
-                  style: const TextStyle(
-                    fontSize: 11,
-                    color: Colors.redAccent,
-                    fontWeight: FontWeight.bold,
-                  ),
-                ),
-                if (_updating)
-                  const SizedBox(
-                    width: 14,
-                    height: 14,
-                    child: ProgressRing(),
-                  )
-                else
-                  GestureDetector(
-                    onTap: _performUpdate,
-                    child: Text(
-                      'extension-repo.upgrade'.i18n,
-                      style: const TextStyle(
-                        fontSize: 11,
-                        color: Colors.redAccent,
-                        fontWeight: FontWeight.bold,
-                        decoration: TextDecoration.underline,
+            Padding(
+              padding: const EdgeInsets.only(top: 4),
+              child: Wrap(
+                crossAxisAlignment: WrapCrossAlignment.center,
+                spacing: 8,
+                runSpacing: 4,
+                children: [
+                  Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      const Icon(Icons.system_update,
+                          size: 13, color: Colors.redAccent),
+                      const SizedBox(width: 4),
+                      Text(
+                        'extension.update-required'.i18n,
+                        style: const TextStyle(
+                          fontSize: 11,
+                          color: Colors.redAccent,
+                          fontWeight: FontWeight.bold,
+                        ),
                       ),
-                    ),
+                    ],
                   ),
-              ],
+                  SizedBox(
+                    height: 28,
+                    child: _updating
+                        ? const SizedBox(
+                            width: 14,
+                            height: 14,
+                            child: ProgressRing(),
+                          )
+                        : FilledButton(
+                            style: FilledButton.styleFrom(
+                              minimumSize: Size.zero,
+                              padding:
+                                  const EdgeInsets.symmetric(horizontal: 10),
+                              backgroundColor:
+                                  Colors.redAccent.withValues(alpha: 0.15),
+                              foregroundColor: Colors.redAccent,
+                              textStyle: const TextStyle(
+                                fontSize: 11,
+                                fontWeight: FontWeight.bold,
+                              ),
+                            ),
+                            onPressed: _performUpdate,
+                            child: Text('extension-repo.upgrade'.i18n),
+                          ),
+                  ),
+                ],
+              ),
             ),
           if (ExtensionUtils.isFailing(widget.extension.package))
             Row(
@@ -333,6 +438,15 @@ class _ExtensionTileState extends State<ExtensionTile> {
                     mainAxisSize: MainAxisSize.min,
                     children: [
                       ListTile(
+                        leading: const Icon(Icons.cleaning_services_outlined),
+                        title: Text('extension.clear-cookies'.i18n),
+                        subtitle: Text('extension.clear-cookies-subtitle'.i18n),
+                        onTap: () {
+                          Get.back();
+                          _clearCookies();
+                        },
+                      ),
+                      ListTile(
                         leading: const Icon(Icons.delete),
                         title: Text('common.uninstall'.i18n),
                         onTap: () {
@@ -352,214 +466,275 @@ class _ExtensionTileState extends State<ExtensionTile> {
     );
   }
 
-  Widget _buildDesktop(BuildContext context) {
-    // minHeight (no fijo): todas las filas quedan alineadas parejo aunque
-    // esta tenga badges/botón de más — a diferencia de la card del
-    // repositorio, acá se usa mínimo en vez de fijo porque el nombre puede
-    // ser largo y forzar una segunda línea; con fijo se recortaría.
-    return ConstrainedBox(
-      constraints: const BoxConstraints(minHeight: 68),
-      child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-        decoration: BoxDecoration(
-          color: HomeTheme.cardSurface,
-          borderRadius: BorderRadius.circular(12),
-          border: Border.all(color: HomeTheme.border),
-        ),
-        child: Row(
+  // Descripción con "ver más" — mismo widget que ExtensionCard del
+  // repositorio, repetido acá porque no comparten archivo.
+  Widget _descriptionWithSeeMore(
+    BuildContext context, {
+    required String text,
+    required TextStyle style,
+    required int maxLines,
+  }) {
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final tp = TextPainter(
+          text: TextSpan(text: text, style: style),
+          maxLines: maxLines,
+          textAlign: TextAlign.center,
+          textDirection: TextDirection.ltr,
+        )..layout(maxWidth: constraints.maxWidth);
+        final overflow = tp.didExceedMaxLines;
+        return Column(
+          mainAxisSize: MainAxisSize.min,
           children: [
-            Expanded(
-              flex: 3,
-              child: GestureDetector(
-                behavior: HitTestBehavior.opaque,
-                onTap: _enabled || _updateRequired
-                    ? () => _openExtensionSearch(context)
-                    : null,
-                child: MouseRegion(
-                  cursor: _enabled || _updateRequired
-                      ? SystemMouseCursors.click
-                      : SystemMouseCursors.basic,
-                  child: Row(
-                    children: [
-                      _iconBox(size: 45, iconSize: 22),
-                      const SizedBox(width: 16),
-                      Expanded(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text(
-                              widget.extension.name,
-                              style: const TextStyle(
-                                fontSize: 17,
-                                overflow: TextOverflow.ellipsis,
-                              ),
-                            ),
-                            Text(
-                              widget.extension.author,
-                              style: const TextStyle(fontSize: 12),
-                            ),
-                            // Wrap: con 18+/inestable sumados a nombre+autor en una
-                            // card angosta del grid/lista, un Row fijo desborda —
-                            // mismo fix que ExtensionCard del repositorio.
-                            if (widget.extension.nsfw || _unstable)
-                              Wrap(
-                                crossAxisAlignment: WrapCrossAlignment.center,
-                                spacing: 8,
-                                runSpacing: 2,
-                                children: [
-                                  if (widget.extension.nsfw)
-                                    const Text(
-                                      '18+',
-                                      style: TextStyle(
-                                        fontSize: 11,
-                                        color: Colors.redAccent,
-                                        fontWeight: FontWeight.bold,
-                                      ),
-                                    ),
-                                  if (_unstable)
-                                    Text(
-                                      'extension.unstable'.i18n,
-                                      style: const TextStyle(
-                                        fontSize: 11,
-                                        color: Colors.orange,
-                                        fontWeight: FontWeight.w600,
-                                      ),
-                                    ),
-                                ],
-                              ),
-                            if (_updateRequired)
-                              Wrap(
-                                crossAxisAlignment: WrapCrossAlignment.center,
-                                spacing: 4,
-                                runSpacing: 2,
-                                children: [
-                                  const Icon(fluent.FluentIcons.installation,
-                                      size: 12, color: Colors.redAccent),
-                                  Text(
-                                    'extension.update-required'.i18n,
-                                    style: const TextStyle(
-                                      fontSize: 11,
-                                      color: Colors.redAccent,
-                                      fontWeight: FontWeight.bold,
-                                    ),
-                                  ),
-                                ],
-                              ),
-                            if (ExtensionUtils.isFailing(
-                                widget.extension.package))
-                              Row(
-                                children: [
-                                  const Icon(fluent.FluentIcons.warning,
-                                      size: 12, color: Colors.orange),
-                                  const SizedBox(width: 4),
-                                  Flexible(
-                                    child: Text(
-                                      'extension.not-working'.i18n,
-                                      style: const TextStyle(
-                                          fontSize: 11, color: Colors.orange),
-                                      overflow: TextOverflow.ellipsis,
-                                    ),
-                                  ),
-                                ],
-                              ),
-                          ],
-                        ),
-                      ),
-                    ],
+            Text(
+              text,
+              textAlign: TextAlign.center,
+              maxLines: maxLines,
+              overflow: TextOverflow.ellipsis,
+              style: style,
+            ),
+            if (overflow)
+              GestureDetector(
+                onTap: () => showPlatformDialog(
+                  context: context,
+                  title: widget.extension.name,
+                  content: SingleChildScrollView(child: Text(text)),
+                  actions: [
+                    PlatformFilledButton(
+                      onPressed: () => RouterUtils.pop(),
+                      child: Text('common.confirm'.i18n),
+                    ),
+                  ],
+                ),
+                child: Padding(
+                  padding: const EdgeInsets.only(top: 2),
+                  child: Text(
+                    'common.see-more'.i18n,
+                    style: const TextStyle(
+                      fontSize: 10,
+                      color: HomeTheme.accentPink,
+                      fontWeight: FontWeight.w700,
+                      decoration: TextDecoration.underline,
+                    ),
                   ),
                 ),
               ),
+          ],
+        );
+      },
+    );
+  }
+
+  // Pill con fondo propio para cada badge — mismo widget que ExtensionCard
+  // del repositorio, repetido acá porque no comparten archivo.
+  Widget _badge(String text, {Color? color}) {
+    final c = color ?? HomeTheme.textMuted;
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+      decoration: BoxDecoration(
+        color: c.withValues(alpha: 0.14),
+        borderRadius: BorderRadius.circular(6),
+      ),
+      child: Text(
+        text,
+        style: TextStyle(fontSize: 11, color: c, fontWeight: FontWeight.w600),
+      ),
+    );
+  }
+
+  Widget _buildDesktop(BuildContext context) {
+    // Card vertical de alto fijo (mismo criterio que ExtensionCard del
+    // repositorio, ver ese archivo) — esta vista ahora se arma como grid de
+    // cards en vez de una lista de filas horizontales (ver
+    // extension_page.dart), así que necesita el mismo tratamiento: alto
+    // fijo + Spacer para que el botón/switch de abajo quede anclado
+    // siempre en el mismo lugar sin importar cuántos badges haya arriba.
+    return Opacity(
+      opacity: _enabled ? 1 : 0.7,
+      child: Container(
+        height: 335,
+        padding: const EdgeInsets.all(14),
+        decoration: BoxDecoration(
+          color: HomeTheme.cardSurface,
+          borderRadius: BorderRadius.circular(14),
+          border: Border.all(color: HomeTheme.border),
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.center,
+          children: [
+            GestureDetector(
+              behavior: HitTestBehavior.opaque,
+              onTap: _enabled || _updateRequired
+                  ? () => _openExtensionSearch(context)
+                  : null,
+              child: MouseRegion(
+                cursor: _enabled || _updateRequired
+                    ? SystemMouseCursors.click
+                    : SystemMouseCursors.basic,
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.center,
+                  children: [
+                    _iconBox(size: 40, iconSize: 20),
+                    const SizedBox(height: 10),
+                    Text(
+                      widget.extension.name,
+                      textAlign: TextAlign.center,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: const TextStyle(
+                        fontSize: 15,
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
+                    const SizedBox(height: 2),
+                    Text(
+                      widget.extension.author,
+                      textAlign: TextAlign.center,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: const TextStyle(
+                        fontSize: 11,
+                        color: HomeTheme.textMuted,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
             ),
-            // Wrap en vez de columnas Expanded + Spacer fijos: con el botón
-            // "Actualizar" sumado a versión/tipo/switch/acciones, una ventana
-            // angosta de escritorio desbordaba (confirmado en vivo con el
-            // overflow de ShadeManga) — acá reflowea a una línea de abajo en
-            // vez de desbordar.
-            Expanded(
-              flex: 2,
-              child: Wrap(
-                alignment: WrapAlignment.end,
-                crossAxisAlignment: WrapCrossAlignment.center,
-                spacing: 12,
-                runSpacing: 8,
-                children: [
-                  Text(widget.extension.version),
-                  Text(ExtensionUtils.typeToString(widget.extension.type)),
-                  if (_updateRequired)
-                    _updating
-                        ? const SizedBox(
+            // Descripción — de qué va la extensión (anime, lectura, series,
+            // películas, etc), antes no se mostraba en ningún lado pese a
+            // que el catálogo ya la trae.
+            if (widget.extension.description != null &&
+                widget.extension.description!.trim().isNotEmpty &&
+                widget.extension.description != widget.extension.name) ...[
+              const SizedBox(height: 6),
+              _descriptionWithSeeMore(
+                context,
+                text: widget.extension.description!,
+                maxLines: 2,
+                style: const TextStyle(
+                  fontSize: 11,
+                  color: HomeTheme.textMuted,
+                ),
+              ),
+            ],
+            const SizedBox(height: 8),
+            // Un solo Wrap para todos los badges (antes versión/tipo iban en
+            // una columna aparte y "actualización requerida"/"no funciona"
+            // eran filas propias) — mismo criterio que ExtensionCard: reflowa
+            // en varias líneas en vez de desbordar, y el alto fijo de más
+            // arriba ya deja lugar para hasta 3.
+            Wrap(
+              alignment: WrapAlignment.center,
+              crossAxisAlignment: WrapCrossAlignment.center,
+              spacing: 6,
+              runSpacing: 6,
+              children: [
+                _badge(widget.extension.version),
+                _badge(ExtensionUtils.typeToString(widget.extension.type)),
+                if (widget.extension.nsfw)
+                  _badge('18+', color: Colors.redAccent),
+                if (_unstable)
+                  _badge('extension.unstable'.i18n, color: Colors.orange),
+                if (_updateRequired)
+                  _badge('extension.update-required'.i18n,
+                      color: Colors.redAccent),
+                if (ExtensionUtils.isFailing(widget.extension.package))
+                  _badge('extension.not-working'.i18n, color: Colors.orange),
+              ],
+            ),
+            const Spacer(),
+            if (_updateRequired)
+              Padding(
+                padding: const EdgeInsets.only(bottom: 8),
+                child: SizedBox(
+                  width: double.infinity,
+                  height: 32,
+                  child: _updating
+                      ? const Center(
+                          child: SizedBox(
                             width: 20,
                             height: 20,
                             child: ProgressRing(),
-                          )
-                        // Compacto (padding chico): el tamaño default de
-                        // fluent sumado al switch/buscar/más mandaba el "..."
-                        // solo a su propia línea en ventanas no muy anchas —
-                        // confirmado en vivo, desalineaba la fila contra las
-                        // demás de la lista.
-                        : fluent.FilledButton(
-                            style: fluent.ButtonStyle(
-                              padding: fluent.WidgetStateProperty.all(
-                                const EdgeInsets.symmetric(horizontal: 10),
-                              ),
-                            ),
-                            onPressed: _performUpdate,
-                            child: Text(
-                              'extension-repo.upgrade'.i18n,
-                              style: const TextStyle(fontSize: 12),
-                            ),
                           ),
-                  fluent.ToggleSwitch(
-                    checked: _enabled,
-                    onChanged: _toggleEnabled,
-                  ),
-                  fluent.Tooltip(
-                    message: 'Abrir',
-                    child: fluent.IconButton(
-                      icon: const Icon(fluent.FluentIcons.search),
-                      // Deshabilitada / actualización pendiente: mismo bloqueo
-                      // que en la versión móvil.
-                      onPressed: _enabled || _updateRequired
-                          ? () => _openExtensionSearch(context)
-                          : null,
-                    ),
-                  ),
-                  // "..." solo con Desinstalar — ajustes/editar código
-                  // quitados a pedido del usuario.
-                  fluent.FlyoutTarget(
-                    controller: moreFlyoutController,
-                    child: fluent.IconButton(
-                      icon: const Icon(fluent.FluentIcons.more),
-                      onPressed: () {
-                        moreFlyoutController.showFlyout(
-                          autoModeConfiguration: fluent.FlyoutAutoConfiguration(
-                            preferredMode:
-                                fluent.FlyoutPlacementMode.bottomLeft,
+                        )
+                      : fluent.FilledButton(
+                          onPressed: _performUpdate,
+                          child: Text(
+                            'extension-repo.upgrade'.i18n,
+                            style: const TextStyle(fontSize: 12),
                           ),
-                          builder: (context) {
-                            return fluent.MenuFlyout(
-                              items: [
-                                fluent.MenuFlyoutItem(
-                                  leading:
-                                      const Icon(fluent.FluentIcons.delete),
-                                  text: Text('common.uninstall'.i18n),
-                                  onPressed: () {
-                                    ExtensionUtils.uninstall(
-                                        widget.extension.package);
-                                    fluent.Flyout.of(context).close();
-                                  },
-                                ),
-                              ],
-                            );
-                          },
-                          barrierDismissible: true,
-                          dismissWithEsc: true,
-                        );
-                      },
-                    ),
-                  ),
-                ],
+                        ),
+                ),
               ),
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                fluent.ToggleSwitch(
+                  checked: _enabled,
+                  onChanged: _toggleEnabled,
+                ),
+                Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    fluent.Tooltip(
+                      message: 'Abrir',
+                      child: fluent.IconButton(
+                        icon: const Icon(fluent.FluentIcons.search),
+                        // Deshabilitada / actualización pendiente: mismo
+                        // bloqueo que en la versión móvil.
+                        onPressed: _enabled || _updateRequired
+                            ? () => _openExtensionSearch(context)
+                            : null,
+                      ),
+                    ),
+                    // "..." solo con Desinstalar — ajustes/editar código
+                    // quitados a pedido del usuario.
+                    fluent.FlyoutTarget(
+                      controller: moreFlyoutController,
+                      child: fluent.IconButton(
+                        icon: const Icon(fluent.FluentIcons.more),
+                        onPressed: () {
+                          moreFlyoutController.showFlyout(
+                            autoModeConfiguration:
+                                fluent.FlyoutAutoConfiguration(
+                              preferredMode:
+                                  fluent.FlyoutPlacementMode.bottomLeft,
+                            ),
+                            builder: (context) {
+                              return fluent.MenuFlyout(
+                                items: [
+                                  fluent.MenuFlyoutItem(
+                                    leading: const Icon(
+                                        fluent.FluentIcons.clear_formatting),
+                                    text: Text('extension.clear-cookies'.i18n),
+                                    onPressed: () {
+                                      fluent.Flyout.of(context).close();
+                                      _clearCookies();
+                                    },
+                                  ),
+                                  fluent.MenuFlyoutItem(
+                                    leading:
+                                        const Icon(fluent.FluentIcons.delete),
+                                    text: Text('common.uninstall'.i18n),
+                                    onPressed: () {
+                                      ExtensionUtils.uninstall(
+                                          widget.extension.package);
+                                      fluent.Flyout.of(context).close();
+                                    },
+                                  ),
+                                ],
+                              );
+                            },
+                            barrierDismissible: true,
+                            dismissWithEsc: true,
+                          );
+                        },
+                      ),
+                    ),
+                  ],
+                ),
+              ],
             ),
           ],
         ),

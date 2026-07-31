@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:io';
 
 import 'package:easy_refresh/easy_refresh.dart';
@@ -6,10 +7,14 @@ import 'package:flutter/material.dart';
 import 'package:flutter/scheduler.dart';
 import 'package:flutter_i18n/flutter_i18n.dart';
 import 'package:get/get.dart';
+import 'package:prismhub/controllers/tracking_page_controller.dart';
+import 'package:prismhub/data/providers/anilist_provider.dart';
 import 'package:prismhub/models/index.dart';
 import 'package:prismhub/router/router.dart';
 import 'package:prismhub/utils/extension.dart';
 import 'package:prismhub/utils/prismhub_storage.dart';
+import 'package:prismhub/utils/search_text.dart';
+import 'package:prismhub/views/widgets/button.dart';
 import 'package:prismhub/data/services/extension_service.dart';
 import 'package:prismhub/utils/error.dart';
 import 'package:prismhub/utils/i18n.dart';
@@ -67,6 +72,15 @@ class _ExtensionSearcherPageState extends fluent.State<ExtensionSearcherPage> {
   // vacía sin explicación (o, peor, mostrar contenido +18 sin querer).
   bool _nsfwBlocked = false;
 
+  // Bloqueo por actualización pendiente — antes esta pantalla no chequeaba
+  // nada (solo Instaladas/Repositorio lo mostraban), así que se podía
+  // entrar y buscar normalmente en una extensión desactualizada sin
+  // enterarse. null = todavía no se sabe (mientras se resuelve, no se
+  // carga nada ni se deja ver la grilla); true = bloqueada de verdad, no
+  // solo un aviso arriba.
+  bool? _hasUpdate;
+  bool _updatingExtension = false;
+
   bool get _adultOptionSelected {
     if (_filters == null) return false;
     for (final entry in _filters!.entries) {
@@ -104,16 +118,146 @@ class _ExtensionSearcherPageState extends fluent.State<ExtensionSearcherPage> {
 
   late final _textEditingController = TextEditingController(text: _keyWord);
 
+  // Autocompletado (texto sugerido ADENTRO del mismo campo, seleccionado —
+  // no un panel de opciones aparte) + placeholder rotativo. Usa los
+  // títulos que ESTA extensión ya trajo (modo "latest"/explorar, _data en
+  // Android o _browseData en desktop), sin pedir nada nuevo.
+  String _typedText = '';
+  // Prefijo que YA tiene una sugerencia puesta (seleccionada) en el campo
+  // — si el próximo cambio vuelve a ser exactamente este valor (el usuario
+  // borró la selección con Backspace, rechazando la sugerencia), no se
+  // vuelve a autocompletar en el mismo golpe. Sin esto, Backspace sobre la
+  // sugerencia quedaba "pegado" (borra la sugerencia → se vuelve a poner
+  // sola de inmediato).
+  String? _ghostBase;
+  // true mientras estamos nosotros mismos poniendo el texto completado en
+  // el controller — evita reprocesar ESE cambio como si fuera una tecla
+  // real del usuario.
+  bool _isProgrammaticTextChange = false;
+  Timer? _placeholderTimer;
+  int _placeholderIndex = 0;
+
+  // Hasta 20 títulos, sin duplicados y sin vacíos — alcanza para
+  // sugerencias/rotación sin guardar listas gigantes en memoria.
+  List<String> get _sampleTitles {
+    final source = Platform.isAndroid ? _data : _browseData;
+    final seen = <String>{};
+    final titles = <String>[];
+    for (final item in source) {
+      final title = item.title.trim();
+      if (title.isEmpty || !seen.add(title)) continue;
+      titles.add(title);
+      if (titles.length >= 20) break;
+    }
+    return titles;
+  }
+
+  String _placeholderText(BuildContext context) {
+    final titles = _sampleTitles;
+    if (titles.isEmpty) return 'search.hint-text'.i18n;
+    final title = titles[_placeholderIndex % titles.length];
+    return FlutterI18n.translate(
+      context,
+      'extension-searcher.placeholder-example',
+      translationParams: {'title': title},
+    );
+  }
+
+  // Handler único para el campo de búsqueda en las dos plataformas — pone
+  // el resto del título sugerido directo en el mismo controller, con esa
+  // parte seleccionada (mismo truco que usaba el explorador de Windows
+  // viejo): seguir escribiendo la reemplaza, Enter/Tab la acepta tal cual
+  // porque el campo YA tiene el texto completo.
+  void _onSearchFieldChanged(String value) {
+    if (_isProgrammaticTextChange) {
+      _isProgrammaticTextChange = false;
+      if (value.isEmpty) _onSearch(value);
+      return;
+    }
+    if (value.isEmpty) {
+      _typedText = '';
+      _ghostBase = null;
+      _onSearch(value);
+      return;
+    }
+    final wasLonger = value.length < _typedText.length;
+    final backedOutOfGhost = value == _ghostBase;
+    _typedText = value;
+    _ghostBase = null;
+    // Borrando, o Backspace justo sobre la sugerencia (la está rechazando)
+    // — no autocompletar de nuevo en este mismo golpe.
+    if (wasLonger || backedOutOfGhost) return;
+    final lower = value.toLowerCase();
+    final match = _sampleTitles.firstWhere(
+      (title) =>
+          title.length > value.length && title.toLowerCase().startsWith(lower),
+      orElse: () => '',
+    );
+    if (match.isEmpty) return;
+    _ghostBase = value;
+    _isProgrammaticTextChange = true;
+    _textEditingController.value = TextEditingValue(
+      text: match,
+      selection:
+          TextSelection(baseOffset: value.length, extentOffset: match.length),
+    );
+  }
+
   @override
   void initState() {
     super.initState();
-    SchedulerBinding.instance.addPostFrameCallback((timeStamp) {
-      _initFilters();
+    // El chequeo de actualización va ANTES que todo lo demás — con
+    // _hasUpdate en null todavía no se llama a _initFilters() ni se pide
+    // nada a la extensión, así una desactualizada nunca llega a mostrar
+    // sus cards (antes el bloqueo real solo vivía en Instaladas/
+    // ExtensionTile, así que entrar desde Búsqueda general, Continuar o un
+    // "ver más" pasaba por completo esa validación).
+    ExtensionUtils.hasExtensionUpdate(widget.package).then((value) {
+      if (!mounted) return;
+      setState(() => _hasUpdate = value);
+      if (!value) {
+        SchedulerBinding.instance.addPostFrameCallback((timeStamp) {
+          _initFilters();
+        });
+      }
     });
+    // Cada 10s, mientras el campo esté vacío no se ve nada distinto (el
+    // placeholder solo se muestra sin texto), así que no hace falta pausar
+    // el timer según foco/contenido.
+    _placeholderTimer = Timer.periodic(const Duration(seconds: 10), (_) {
+      if (!mounted) return;
+      setState(() => _placeholderIndex++);
+    });
+  }
+
+  Future<void> _performExtensionUpdate() async {
+    setState(() => _updatingExtension = true);
+    try {
+      await ExtensionUtils.updateInstalledFromRepo(widget.package, context);
+      if (mounted) {
+        showPlatformSnackbar(
+          context: context,
+          content: 'extension.install-success'.i18n,
+          severity: fluent.InfoBarSeverity.success,
+        );
+      }
+      final stillNeeded =
+          await ExtensionUtils.hasExtensionUpdate(widget.package);
+      if (mounted) setState(() => _hasUpdate = stillNeeded);
+      // Ya actualizada: recién ahora se deja cargar la grilla — antes de
+      // esto, _initFilters() nunca había corrido porque _hasUpdate seguía
+      // en true desde el initState.
+      if (!stillNeeded && mounted) _initFilters();
+    } catch (e) {
+      debugPrint(e.toString());
+    } finally {
+      if (mounted) setState(() => _updatingExtension = false);
+    }
   }
 
   @override
   void dispose() {
+    _placeholderTimer?.cancel();
     _textEditingController.dispose();
     super.dispose();
   }
@@ -184,16 +328,33 @@ class _ExtensionSearcherPageState extends fluent.State<ExtensionSearcherPage> {
     });
     try {
       final collected = <ExtensionListItem>[];
+      final seenUrls = <String>{};
       var gotAny = false;
+      // Cuántos intentos seguidos no sumaron NADA nuevo (todo ya visto en
+      // este mismo llamado) — algunas fuentes (confirmado en vivo con
+      // AnimeFenix buscando) no paginan de verdad: cada pedido devuelve un
+      // subconjunto medio mezclado del mismo puñado chico de resultados en
+      // vez de contenido nuevo, así que sin deduplicar por url la misma
+      // portada aparecía repetida varias veces seguidas en la grilla. Cortar
+      // después de 2 intentos sin nada nuevo evita seguir insistiendo contra
+      // una fuente que ya mostró todo lo que tiene.
+      var noNewInARow = 0;
       for (var attempts = 0;
-          attempts < 4 && collected.length < _minItemsPerViewPage;
+          attempts < 4 &&
+              collected.length < _minItemsPerViewPage &&
+              noNewInARow < 2;
           attempts++) {
         List<ExtensionListItem> batch;
         try {
           batch = _keyWord.isEmpty && !_hasActiveFilters
               ? await _runtime.latest(_rawPage)
-              : await _runtime.search(_keyWord, _rawPage,
-                  filter: _selectedFilters);
+              : (_rawPage == 1
+                  ? await _runtime.searchFirstPageWithBroadening(
+                      SearchText.sanitizeForRemoteQuery(_keyWord),
+                      filter: _selectedFilters)
+                  : await _runtime.search(
+                      SearchText.sanitizeForRemoteQuery(_keyWord), _rawPage,
+                      filter: _selectedFilters));
         } catch (e) {
           // Pedir de más para "rellenar" la página de vista es best-effort:
           // muchas fuentes (confirmado en vivo con animeytx, sitio WordPress)
@@ -217,7 +378,14 @@ class _ExtensionSearcherPageState extends fluent.State<ExtensionSearcherPage> {
         if (myGen != _requestGen) return;
         if (batch.isEmpty) break;
         gotAny = true;
-        collected.addAll(batch);
+        var addedNew = false;
+        for (final item in batch) {
+          if (seenUrls.add(item.url)) {
+            collected.add(item);
+            addedNew = true;
+          }
+        }
+        noNewInARow = addedNew ? 0 : noNewInARow + 1;
         _rawPage++;
       }
       if (!mounted || myGen != _requestGen) return;
@@ -232,6 +400,25 @@ class _ExtensionSearcherPageState extends fluent.State<ExtensionSearcherPage> {
           severity: fluent.InfoBarSeverity.warning,
         );
       } else {
+        // "Inteligente hasta el alcance de la extensión": no controlamos
+        // el motor de búsqueda del sitio remoto, pero sí podemos priorizar
+        // LOCALMENTE los ítems cuyo título matchea la palabra buscada —
+        // una sola vez, cuando esta página YA llegó completa (no reordena
+        // nada mientras todavía está cargando). No oculta nada, solo
+        // prioriza. Sin palabra clave (modo "latest") no se toca el orden
+        // que manda el sitio.
+        if (_keyWord.trim().isNotEmpty) {
+          // Tokeniza UNA vez afuera del comparator — sort() llama al
+          // comparator O(n log n) veces, así que renormalizar _keyWord dos
+          // veces POR COMPARACIÓN sería trabajo repetido de sobra.
+          final tokens = SearchText.queryTokens(_keyWord);
+          collected.sort((a, b) {
+            final aMatches = SearchText.matchesTokens(a.title, tokens);
+            final bMatches = SearchText.matchesTokens(b.title, tokens);
+            if (aMatches == bMatches) return 0;
+            return aMatches ? -1 : 1;
+          });
+        }
         _virtualPages.add(collected);
         setState(() => _browseData = collected);
       }
@@ -285,8 +472,13 @@ class _ExtensionSearcherPageState extends fluent.State<ExtensionSearcherPage> {
         try {
           data = _keyWord.isEmpty && !_hasActiveFilters
               ? await _runtime.latest(_page)
-              : await _runtime.search(_keyWord, _page,
-                  filter: _selectedFilters);
+              : (_page == 1
+                  ? await _runtime.searchFirstPageWithBroadening(
+                      SearchText.sanitizeForRemoteQuery(_keyWord),
+                      filter: _selectedFilters)
+                  : await _runtime.search(
+                      SearchText.sanitizeForRemoteQuery(_keyWord), _page,
+                      filter: _selectedFilters));
         } catch (e) {
           // Mismo caso que en desktop: pasarse de la última página real
           // suele tirar 404 en vez de una lista vacía. Si esta llamada ya
@@ -323,11 +515,28 @@ class _ExtensionSearcherPageState extends fluent.State<ExtensionSearcherPage> {
           severity: fluent.InfoBarSeverity.warning,
         );
       }
+      // Mismo criterio que en desktop, pero solo dentro del lote NUEVO que
+      // se está por agregar — reordenar TODO `_data` en cada tanda movería
+      // ítems que el usuario ya está viendo/scrolleando (peor que el salto
+      // que se quiere evitar). Cada lote nuevo llega con sus propios
+      // matches primero, sin tocar lo que ya estaba en pantalla.
+      if (_keyWord.trim().isNotEmpty) {
+        // Tokeniza UNA vez afuera del comparator, mismo motivo que en
+        // desktop (ver _goToPage).
+        final tokens = SearchText.queryTokens(_keyWord);
+        fresh.sort((a, b) {
+          final aMatches = SearchText.matchesTokens(a.title, tokens);
+          final bMatches = SearchText.matchesTokens(b.title, tokens);
+          if (aMatches == bMatches) return 0;
+          return aMatches ? -1 : 1;
+        });
+      }
       _data.addAll(fresh);
     } catch (e) {
       if (myGen != _requestGen) return;
-      // ignore: use_build_context_synchronously
+      if (!mounted) rethrow;
       showPlatformSnackbar(
+          // ignore: use_build_context_synchronously
           context: context,
           content: friendlyError(e),
           severity: fluent.InfoBarSeverity.error);
@@ -341,6 +550,10 @@ class _ExtensionSearcherPageState extends fluent.State<ExtensionSearcherPage> {
   // ── Shared ───────────────────────────────────────────────────────────────
 
   _onSearch(String keyWord) {
+    // Bloqueada por actualización pendiente (o todavía sin confirmar): ni
+    // el InfiniteScroller/EasyRefresh están montados en ese estado (ver
+    // build), así que dispararlo desde acá no tendría a dónde ir.
+    if (_hasUpdate != false) return;
     _keyWord = keyWord;
     if (Platform.isAndroid) {
       _easyRefreshController.callRefresh();
@@ -502,6 +715,151 @@ class _ExtensionSearcherPageState extends fluent.State<ExtensionSearcherPage> {
     );
   }
 
+  // Bloqueo COMPLETO por actualización pendiente (no un banner arriba de la
+  // grilla — eso dejaba las cards visibles y la búsqueda funcionando
+  // igual, confirmado en vivo que se podía seguir usando la extensión
+  // vieja). Mismo tamaño que el área de contenido normal, para que no
+  // "salte" al pasar de bloqueada a cargada tras actualizar.
+  Widget _buildUpdateBlockedMessage() {
+    return Center(
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 32),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const Icon(Icons.system_update, color: Colors.redAccent, size: 40),
+            const SizedBox(height: 12),
+            Text(
+              'extension-searcher.update-available'.i18n,
+              textAlign: TextAlign.center,
+              style: const TextStyle(
+                color: Colors.redAccent,
+                fontSize: 14,
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+            const SizedBox(height: 16),
+            _updatingExtension
+                ? const SizedBox(
+                    width: 24,
+                    height: 24,
+                    child: CircularProgressIndicator(
+                      strokeWidth: 2,
+                      color: Colors.redAccent,
+                    ),
+                  )
+                // PlatformFilledButton (no el FilledButton de Material
+                // directo) — este método se comparte entre Android y
+                // desktop; un widget de Material sin ancestro Material
+                // (desktop corre sobre fluent_ui/FluentApp) es justo el
+                // tipo de cosa que ya crasheó antes en este archivo con
+                // TextField ("No Material widget found").
+                : PlatformFilledButton(
+                    onPressed: _performExtensionUpdate,
+                    child: Text('extension-repo.upgrade'.i18n),
+                  ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  // Container persistente de "sin resultados" — antes solo había un
+  // snackbar transitorio ("no-more-data"/"no-more-data-filtered") que el
+  // usuario se podía perder fácil; esto se queda visible mientras la
+  // búsqueda/filtro siga sin traer nada.
+  // ANIME si el tipo de la extensión cae en videoTypes, MANGA si cae en
+  // readingTypes (mismos grupos que ya usan los chips de filtro) — null si
+  // no aplica ninguno. "mixed" cae en los dos grupos; ANIME gana ahí por
+  // default, no hay forma de saber cuál es sin un detalle puntual.
+  AnilistType? get _anilistTypeForExtension {
+    final type = _runtime.extension.type;
+    if (ExtensionUtils.videoTypes.contains(type)) return AnilistType.anime;
+    if (ExtensionUtils.readingTypes.contains(type)) return AnilistType.manga;
+    return null;
+  }
+
+  bool _tryingAlternateTitle = false;
+
+  // Un solo intento manual (no reintentos en cadena) — sin sesión de
+  // AniList esto ni se ofrece (ver _buildNoResultsMessage), así que acá ya
+  // se sabe que hay token. No fuerza tolerancia de orden de palabras en el
+  // motor de la extensión (no lo controlamos); solo prueba con el título
+  // que AniList tiene en otro idioma, por si la extensión lo tiene así.
+  Future<void> _tryAlternateTitle() async {
+    final type = _anilistTypeForExtension;
+    if (type == null || _keyWord.trim().isEmpty) return;
+    setState(() => _tryingAlternateTitle = true);
+    try {
+      final alternates = await AniListProvider.searchAlternateTitles(
+        SearchText.sanitizeForRemoteQuery(_keyWord),
+        type,
+      );
+      if (!mounted) return;
+      if (alternates.isEmpty) {
+        showPlatformSnackbar(
+          context: context,
+          content: 'extension-searcher.no-alternate-title'.i18n,
+          severity: fluent.InfoBarSeverity.warning,
+        );
+        return;
+      }
+      _textEditingController.text = alternates.first;
+      _onSearch(alternates.first);
+    } catch (e) {
+      if (mounted) {
+        showPlatformSnackbar(
+          context: context,
+          content: friendlyError(e),
+          severity: fluent.InfoBarSeverity.error,
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _tryingAlternateTitle = false);
+    }
+  }
+
+  Widget _buildNoResultsMessage() {
+    // Sin sesión de AniList (o extensión ni anime ni manga) esta parte
+    // simplemente no se ofrece — no tiene sentido empujar un login solo
+    // para esto, y sin token la llamada fallaría igual.
+    final anilistType = _anilistTypeForExtension;
+    final showAlternateButton = anilistType != null &&
+        _keyWord.trim().isNotEmpty &&
+        Get.put(TrackingPageController()).anilistIsLogin.value;
+    return Center(
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 32),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const Icon(Icons.search_off, color: HomeTheme.textMuted, size: 40),
+            const SizedBox(height: 12),
+            Text(
+              'extension-searcher.no-results'.i18n,
+              textAlign: TextAlign.center,
+              style: const TextStyle(color: HomeTheme.textMuted, fontSize: 14),
+            ),
+            if (showAlternateButton) ...[
+              const SizedBox(height: 16),
+              _tryingAlternateTitle
+                  ? const SizedBox(
+                      width: 20,
+                      height: 20,
+                      child: CircularProgressIndicator(strokeWidth: 2),
+                    )
+                  : PlatformFilledButton(
+                      onPressed: _tryAlternateTitle,
+                      child:
+                          Text('extension-searcher.try-alternate-title'.i18n),
+                    ),
+            ],
+          ],
+        ),
+      ),
+    );
+  }
+
   Widget _buildAndroid(BuildContext context) {
     return Scaffold(
       backgroundColor: HomeTheme.bg,
@@ -511,11 +869,18 @@ class _ExtensionSearcherPageState extends fluent.State<ExtensionSearcherPage> {
       resizeToAvoidBottomInset: false,
       appBar: SearchAppBar(
         title: _runtime.extension.name,
+        // Más alto que el default (kToolbarHeight=56) — pedido explícito
+        // de agrandar el buscador. AppBar ya suma el padding de status
+        // bar/notch aparte de esto, así que no hay riesgo de SafeArea acá.
+        toolbarHeight: 64,
+        hintText: _placeholderText(context),
         textEditingController: _textEditingController,
-        onChanged: (value) {
-          if (value.isEmpty) _onSearch(value);
+        onChanged: _onSearchFieldChanged,
+        onSubmitted: (value) {
+          _typedText = '';
+          _ghostBase = null;
+          _onSearch(value);
         },
-        onSubmitted: _onSearch,
         actions: [
           if (_filters != null)
             IconButton(
@@ -529,39 +894,55 @@ class _ExtensionSearcherPageState extends fluent.State<ExtensionSearcherPage> {
         child: Stack(
           children: [
             const Positioned.fill(child: AnimatedBackgroundGlow()),
-            InfiniteScroller(
-              onRefresh: _onRefresh,
-              onLoad: _onLoad,
-              easyRefreshController: _easyRefreshController,
-              child: _nsfwBlocked
-                  ? _buildNsfwBlockedMessage()
-                  : LayoutBuilder(
-                      builder: (context, constraints) => ExcludeSemantics(
-                        child: GridView.builder(
-                          padding: const EdgeInsets.symmetric(horizontal: 16),
-                          gridDelegate:
-                              SliverGridDelegateWithFixedCrossAxisCount(
-                            crossAxisCount: constraints.maxWidth ~/ 120,
-                            childAspectRatio: 0.7,
-                            crossAxisSpacing: 16,
-                            mainAxisSpacing: 16,
+            // Mientras no se sepa si hace falta actualizar (null) o si SÍ
+            // hace falta (true), ni se pide ni se muestra ninguna card —
+            // antes esto era solo un banner arriba con la grilla
+            // funcionando debajo igual, así que se podía seguir buscando
+            // en una extensión desactualizada sin problema.
+            if (_hasUpdate == null)
+              const Center(
+                child: CircularProgressIndicator(color: HomeTheme.accentPink),
+              )
+            else if (_hasUpdate == true)
+              _buildUpdateBlockedMessage()
+            else ...[
+              InfiniteScroller(
+                onRefresh: _onRefresh,
+                onLoad: _onLoad,
+                easyRefreshController: _easyRefreshController,
+                child: _nsfwBlocked
+                    ? _buildNsfwBlockedMessage()
+                    : LayoutBuilder(
+                        builder: (context, constraints) => ExcludeSemantics(
+                          child: GridView.builder(
+                            padding: const EdgeInsets.symmetric(horizontal: 16),
+                            gridDelegate:
+                                SliverGridDelegateWithFixedCrossAxisCount(
+                              crossAxisCount: constraints.maxWidth ~/ 120,
+                              childAspectRatio: 0.7,
+                              crossAxisSpacing: 16,
+                              mainAxisSpacing: 16,
+                            ),
+                            itemCount: _data.length,
+                            itemBuilder: (context, index) {
+                              final item = _data[index];
+                              return ExtensionItemCard(
+                                title: item.title,
+                                url: item.url,
+                                package: widget.package,
+                                cover: item.cover,
+                                update: item.update,
+                                headers: item.headers,
+                                isAdultOption: _adultOptionSelected,
+                              );
+                            },
                           ),
-                          itemCount: _data.length,
-                          itemBuilder: (context, index) {
-                            final item = _data[index];
-                            return ExtensionItemCard(
-                              title: item.title,
-                              url: item.url,
-                              package: widget.package,
-                              cover: item.cover,
-                              update: item.update,
-                              headers: item.headers,
-                            );
-                          },
                         ),
                       ),
-                    ),
-            ),
+              ),
+              if (!_isLoading && !_nsfwBlocked && _data.isEmpty)
+                _buildNoResultsMessage(),
+            ],
           ],
         ),
       ),
@@ -602,6 +983,8 @@ class _ExtensionSearcherPageState extends fluent.State<ExtensionSearcherPage> {
           icon: const Icon(fluent.FluentIcons.chrome_close, size: 9.0),
           onPressed: () {
             _textEditingController.clear();
+            _typedText = '';
+            _ghostBase = null;
             _onSearch("");
           },
         ),
@@ -656,63 +1039,74 @@ class _ExtensionSearcherPageState extends fluent.State<ExtensionSearcherPage> {
                       ),
                     ),
                     const Spacer(),
-                    RefreshButton(onTap: () => _goToPage(1)),
-                    const SizedBox(width: 8),
-                    if (_filters != null) ...[
-                      GestureDetector(
-                        onTap: () => _onFilter(context),
-                        child: MouseRegion(
-                          cursor: SystemMouseCursors.click,
-                          child: Container(
-                            width: 40,
-                            height: 40,
-                            decoration: BoxDecoration(
-                              color: HomeTheme.cardSurface,
-                              borderRadius: BorderRadius.circular(10),
-                              border: Border.all(color: HomeTheme.border),
+                    // Buscador/filtro/refrescar solo tienen sentido si de
+                    // verdad se puede buscar — mientras haya una
+                    // actualización pendiente (o no se sepa todavía) no se
+                    // muestran, para que no parezca que se puede seguir
+                    // usando la extensión desactualizada.
+                    if (_hasUpdate == false) ...[
+                      RefreshButton(onTap: () => _goToPage(1)),
+                      const SizedBox(width: 8),
+                      if (_filters != null) ...[
+                        GestureDetector(
+                          onTap: () => _onFilter(context),
+                          child: MouseRegion(
+                            cursor: SystemMouseCursors.click,
+                            child: Container(
+                              width: 40,
+                              height: 40,
+                              decoration: BoxDecoration(
+                                color: HomeTheme.cardSurface,
+                                borderRadius: BorderRadius.circular(10),
+                                border: Border.all(color: HomeTheme.border),
+                              ),
+                              child: const Icon(Icons.filter_alt_rounded,
+                                  size: 18, color: HomeTheme.textPrimary),
                             ),
-                            child: const Icon(Icons.filter_alt_rounded,
-                                size: 18, color: HomeTheme.textPrimary),
                           ),
                         ),
-                      ),
-                      const SizedBox(width: 8),
-                    ],
-                    Container(
-                      width: 300,
-                      height: 40,
-                      padding: const EdgeInsets.symmetric(horizontal: 12),
-                      decoration: BoxDecoration(
-                        color: HomeTheme.cardSurface,
-                        borderRadius: BorderRadius.circular(10),
-                        border: Border.all(color: HomeTheme.border),
-                      ),
-                      child: Row(
-                        children: [
-                          const Icon(Icons.search,
-                              size: 18, color: HomeTheme.textMuted),
-                          const SizedBox(width: 8),
-                          Expanded(
-                            child: fluent.TextBox(
-                              controller: TextEditingController(text: _keyWord),
-                              decoration:
-                                  const WidgetStatePropertyAll(BoxDecoration()),
-                              style: const TextStyle(
-                                  color: HomeTheme.textPrimary, fontSize: 14),
-                              placeholderStyle:
-                                  const TextStyle(color: HomeTheme.textMuted),
-                              onChanged: (value) {
-                                if (value.isEmpty) _onSearch(value);
-                              },
-                              suffix: suffix,
-                              suffixMode: fluent.OverlayVisibilityMode.editing,
-                              onSubmitted: _onSearch,
-                              placeholder: 'search.hint-text'.i18n,
+                        const SizedBox(width: 8),
+                      ],
+                      Container(
+                        // Agrandado (antes 300x40) — pedido explícito.
+                        width: 340,
+                        height: 44,
+                        padding: const EdgeInsets.symmetric(horizontal: 12),
+                        decoration: BoxDecoration(
+                          color: HomeTheme.cardSurface,
+                          borderRadius: BorderRadius.circular(10),
+                          border: Border.all(color: HomeTheme.border),
+                        ),
+                        child: Row(
+                          children: [
+                            const Icon(Icons.search,
+                                size: 18, color: HomeTheme.textMuted),
+                            const SizedBox(width: 8),
+                            Expanded(
+                              child: fluent.TextBox(
+                                controller: _textEditingController,
+                                decoration: const WidgetStatePropertyAll(
+                                    BoxDecoration()),
+                                style: const TextStyle(
+                                    color: HomeTheme.textPrimary, fontSize: 14),
+                                placeholderStyle:
+                                    const TextStyle(color: HomeTheme.textMuted),
+                                onChanged: _onSearchFieldChanged,
+                                suffix: suffix,
+                                suffixMode:
+                                    fluent.OverlayVisibilityMode.editing,
+                                onSubmitted: (value) {
+                                  _typedText = '';
+                                  _ghostBase = null;
+                                  _onSearch(value);
+                                },
+                                placeholder: _placeholderText(context),
+                              ),
                             ),
-                          ),
-                        ],
+                          ],
+                        ),
                       ),
-                    ),
+                    ],
                   ],
                 ),
               ),
@@ -721,74 +1115,91 @@ class _ExtensionSearcherPageState extends fluent.State<ExtensionSearcherPage> {
               // flotando encima de la grilla — así nunca se superponen a una
               // tarjeta, sea cual sea el ancho de la ventana.
               Expanded(
-                child: Row(
-                  crossAxisAlignment: CrossAxisAlignment.stretch,
-                  children: [
-                    SizedBox(
-                      width: 44,
-                      child: Center(
-                        child: _browsePage > 1
-                            ? _navButton(
-                                icon: Icons.chevron_left,
-                                onTap: _isLoading
-                                    ? null
-                                    : () => _goToPage(_browsePage - 1),
-                              )
-                            : const SizedBox.shrink(),
-                      ),
-                    ),
-                    Expanded(
-                      child: _nsfwBlocked
-                          ? _buildNsfwBlockedMessage()
-                          : _isLoading && _browseData.isEmpty
-                              ? const Center(
-                                  child: CircularProgressIndicator(
-                                      color: HomeTheme.accentPink),
-                                )
-                              : LayoutBuilder(
-                                  builder: (ctx, constraints) =>
-                                      ExcludeSemantics(
-                                    child: GridView.builder(
-                                      padding: const EdgeInsets.symmetric(
-                                          horizontal: 8, vertical: 8),
-                                      gridDelegate:
-                                          SliverGridDelegateWithFixedCrossAxisCount(
-                                        crossAxisCount:
-                                            (constraints.maxWidth ~/ 160)
-                                                .clamp(1, 20),
-                                        childAspectRatio: 0.6,
-                                        crossAxisSpacing: 12,
-                                        mainAxisSpacing: 12,
-                                      ),
-                                      itemCount: _browseData.length,
-                                      itemBuilder: (ctx, i) {
-                                        final item = _browseData[i];
-                                        return ExtensionItemCard(
-                                          title: item.title,
-                                          url: item.url,
-                                          package: widget.package,
-                                          cover: item.cover,
-                                          update: item.update,
-                                          headers: item.headers,
-                                        );
-                                      },
-                                    ),
+                child: _hasUpdate == null
+                    ? const Center(
+                        child: CircularProgressIndicator(
+                            color: HomeTheme.accentPink),
+                      )
+                    : _hasUpdate == true
+                        ? _buildUpdateBlockedMessage()
+                        : Row(
+                            crossAxisAlignment: CrossAxisAlignment.stretch,
+                            children: [
+                              SizedBox(
+                                width: 44,
+                                child: Center(
+                                  child: _browsePage > 1
+                                      ? _navButton(
+                                          icon: Icons.chevron_left,
+                                          onTap: _isLoading
+                                              ? null
+                                              : () =>
+                                                  _goToPage(_browsePage - 1),
+                                        )
+                                      : const SizedBox.shrink(),
+                                ),
+                              ),
+                              Expanded(
+                                child: _nsfwBlocked
+                                    ? _buildNsfwBlockedMessage()
+                                    : _isLoading && _browseData.isEmpty
+                                        ? const Center(
+                                            child: CircularProgressIndicator(
+                                                color: HomeTheme.accentPink),
+                                          )
+                                        : (!_isLoading && _browseData.isEmpty)
+                                            ? _buildNoResultsMessage()
+                                            : LayoutBuilder(
+                                                builder: (ctx, constraints) =>
+                                                    ExcludeSemantics(
+                                                  child: GridView.builder(
+                                                    padding: const EdgeInsets
+                                                        .symmetric(
+                                                        horizontal: 8,
+                                                        vertical: 8),
+                                                    gridDelegate:
+                                                        SliverGridDelegateWithFixedCrossAxisCount(
+                                                      crossAxisCount:
+                                                          (constraints.maxWidth ~/
+                                                                  160)
+                                                              .clamp(1, 20),
+                                                      childAspectRatio: 0.6,
+                                                      crossAxisSpacing: 12,
+                                                      mainAxisSpacing: 12,
+                                                    ),
+                                                    itemCount:
+                                                        _browseData.length,
+                                                    itemBuilder: (ctx, i) {
+                                                      final item =
+                                                          _browseData[i];
+                                                      return ExtensionItemCard(
+                                                        title: item.title,
+                                                        url: item.url,
+                                                        package: widget.package,
+                                                        cover: item.cover,
+                                                        update: item.update,
+                                                        headers: item.headers,
+                                                        isAdultOption:
+                                                            _adultOptionSelected,
+                                                      );
+                                                    },
+                                                  ),
+                                                ),
+                                              ),
+                              ),
+                              SizedBox(
+                                width: 44,
+                                child: Center(
+                                  child: _navButton(
+                                    icon: Icons.chevron_right,
+                                    onTap: _isLoading
+                                        ? null
+                                        : () => _goToPage(_browsePage + 1),
                                   ),
                                 ),
-                    ),
-                    SizedBox(
-                      width: 44,
-                      child: Center(
-                        child: _navButton(
-                          icon: Icons.chevron_right,
-                          onTap: _isLoading
-                              ? null
-                              : () => _goToPage(_browsePage + 1),
-                        ),
-                      ),
-                    ),
-                  ],
-                ),
+                              ),
+                            ],
+                          ),
               ),
             ],
           ),

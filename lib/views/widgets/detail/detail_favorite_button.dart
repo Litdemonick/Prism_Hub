@@ -44,7 +44,7 @@ class _DetailFavoriteButtonState extends State<DetailFavoriteButton> {
                 : null,
           ),
           onPressed: () async {
-            await c.toggleFavorite();
+            await c.toggleFavorite(context);
           },
         );
       },
@@ -72,7 +72,7 @@ class _DetailFavoriteButtonState extends State<DetailFavoriteButton> {
           ),
         ),
         onPressed: () async {
-          await c.toggleFavorite();
+          await c.toggleFavorite(context);
         },
         child: Padding(
           padding:

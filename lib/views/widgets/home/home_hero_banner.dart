@@ -22,10 +22,30 @@ import 'package:prismhub/views/widgets/home/home_theme.dart';
 // reconocible — y se difumina con una máscara hacia el degradado de la
 // izquierda, donde va el texto.
 class HomeHeroBanner extends StatelessWidget {
-  const HomeHeroBanner({super.key, this.background});
+  const HomeHeroBanner({
+    super.key,
+    this.background,
+    this.gradient = HomeTheme.heroGradient,
+    this.onExploreCatalog,
+  });
   final HeroBackground? background;
+  // Zona +18: se pasa HomeTheme.heroGradientRed para diferenciar esa
+  // pantalla del Home normal.
+  final Gradient gradient;
+  // Zona +18 en Android se llega empujándola ENCIMA del shell principal
+  // (Get.to, no es una tab del bottom-nav) — el default de acá
+  // (Get.find<MainController>().changeTab) cambiaba la tab del shell que
+  // quedó TAPADO debajo, sin mostrarse (confirmado en vivo: "Explorar
+  // catálogo" no hacía nada visible en Zona +18/Android, en PC sí porque
+  // router.go reemplaza la ruta actual sea cual sea). Zona +18 pasa acá su
+  // propio callback (cerrar esta pantalla y RECIÉN AHÍ cambiar de tab).
+  final VoidCallback? onExploreCatalog;
 
   void _openSearch() {
+    if (onExploreCatalog != null) {
+      onExploreCatalog!();
+      return;
+    }
     if (Platform.isAndroid) {
       Get.find<MainController>().changeTab(1);
       return;
@@ -42,20 +62,27 @@ class HomeHeroBanner extends StatelessWidget {
             : 280.0;
         final isDesktop =
             Platform.isWindows || Platform.isLinux || Platform.isMacOS;
+        // En horizontal de celular la pantalla mide ~300-390 de alto: el hero
+        // con su tamaño normal (220 de mínimo + 28 de padding arriba y abajo)
+        // se comía TODA la ventana, así que al hacer scroll no quedaba lugar
+        // para las filas de cards y el inicio se sentía apretado. Acá se pone
+        // compacto — mismo contenido, menos aire y tipografía más chica.
+        final compact = Platform.isAndroid &&
+            MediaQuery.of(context).orientation == Orientation.landscape;
         final dpr = MediaQuery.devicePixelRatioOf(context);
         final cacheWidth = (imageWidth * dpr).ceil().clamp(1, 4096).toInt();
 
         return Container(
           width: double.infinity,
-          constraints: const BoxConstraints(minHeight: 220),
+          constraints: BoxConstraints(minHeight: compact ? 132 : 220),
           clipBehavior: Clip.antiAlias,
           decoration: BoxDecoration(borderRadius: BorderRadius.circular(20)),
           child: Stack(
             fit: StackFit.passthrough,
             children: [
-              const Positioned.fill(
+              Positioned.fill(
                 child: DecoratedBox(
-                  decoration: BoxDecoration(gradient: HomeTheme.heroGradient),
+                  decoration: BoxDecoration(gradient: gradient),
                 ),
               ),
               if (background != null)
@@ -83,7 +110,7 @@ class HomeHeroBanner extends StatelessWidget {
                   ),
                 ),
               Padding(
-                padding: const EdgeInsets.all(28),
+                padding: EdgeInsets.all(compact ? 16 : 28),
                 child: Align(
                   alignment: Alignment.bottomLeft,
                   child: ConstrainedBox(
@@ -109,27 +136,32 @@ class HomeHeroBanner extends StatelessWidget {
                             ),
                           ),
                         ),
-                        const SizedBox(height: 14),
+                        SizedBox(height: compact ? 8 : 14),
                         Text(
                           'home.hero-title'.i18n,
-                          style: const TextStyle(
+                          style: TextStyle(
                             color: HomeTheme.textPrimary,
-                            fontSize: 30,
+                            fontSize: compact ? 21 : 30,
                             fontWeight: FontWeight.w800,
                             height: 1.1,
                             letterSpacing: -0.2,
                           ),
                         ),
-                        const SizedBox(height: 10),
+                        SizedBox(height: compact ? 6 : 10),
                         Text(
                           'home.hero-subtitle'.i18n,
+                          // Compacto: el subtítulo es lo primero que sobra
+                          // cuando el alto escasea, así que se acota en vez de
+                          // empujar el CTA fuera de la vista.
+                          maxLines: compact ? 2 : 4,
+                          overflow: TextOverflow.ellipsis,
                           style: TextStyle(
                             color: HomeTheme.textPrimary.withValues(alpha: 0.8),
-                            fontSize: 14.5,
-                            height: 1.5,
+                            fontSize: compact ? 12.5 : 14.5,
+                            height: compact ? 1.3 : 1.5,
                           ),
                         ),
-                        const SizedBox(height: 18),
+                        SizedBox(height: compact ? 10 : 18),
                         Row(
                           mainAxisSize: MainAxisSize.min,
                           children: [

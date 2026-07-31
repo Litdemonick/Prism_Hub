@@ -11,6 +11,8 @@ import 'package:prismhub/utils/request.dart';
 import 'package:prismhub/controllers/extension/extension_repo_controller.dart';
 import 'package:prismhub/controllers/settings_controller.dart';
 import 'package:prismhub/utils/extension.dart';
+import 'package:prismhub/views/pages/nsfw18/nsfw18_pin_settings_tile.dart';
+import 'package:prismhub/views/pages/nsfw18/nsfw18_zone_page.dart';
 import 'package:prismhub/views/widgets/settings/settings_expander_tile.dart';
 import 'package:prismhub/views/widgets/settings/settings_input_tile.dart';
 import 'package:prismhub/views/widgets/settings/settings_radios_tile.dart';
@@ -112,20 +114,8 @@ class _SettingsPageState extends State<SettingsPage> {
             SettingsRadiosTile(
               title: 'settings.language'.i18n,
               itemNameValue: {
-                'languages.be'.i18n: 'be',
                 'languages.en'.i18n: 'en',
                 'languages.es'.i18n: 'es',
-                'languages.fr'.i18n: 'fr',
-                'languages.hu'.i18n: 'hu',
-                'languages.hi'.i18n: 'hi',
-                'languages.id'.i18n: 'id',
-                'languages.ja'.i18n: 'ja',
-                'languages.pl'.i18n: 'pl',
-                'languages.ru'.i18n: 'ru',
-                'languages.ryu'.i18n: 'ryu',
-                'languages.uk'.i18n: 'uk',
-                'languages.zh'.i18n: 'zh',
-                'languages.zhHant'.i18n: 'zhHant',
               },
               buildSubtitle: () => 'settings.language-subtitle'.i18n,
               applyValue: (value) {
@@ -133,7 +123,10 @@ class _SettingsPageState extends State<SettingsPage> {
                 I18nUtils.changeLanguage(value);
               },
               buildGroupValue: () {
-                return PrismHubStorage.getSetting(SettingKey.language);
+                // Validado, no crudo: si quedó guardado un idioma que ya no
+                // existe, esto devuelve el de respaldo y el selector marca
+                // algo, en vez de quedar sin ninguna opción elegida.
+                return I18nUtils.currentLanguageCode;
               },
             ),
             // 启动检查更新
@@ -169,6 +162,18 @@ class _SettingsPageState extends State<SettingsPage> {
                 }
               },
             ),
+            // Desktop ya tiene su propia entrada discreta en el panel de
+            // navegación (footerItems, ver main_page.dart) — acá solo hace
+            // falta en Android, que no tiene ese panel.
+            if (Platform.isAndroid)
+              SettingsTile(
+                icon: const Icon(Icons.warning_amber_rounded,
+                    color: Color(0xFFE5484D)),
+                title: 'nsfw18.menu-label'.i18n,
+                trailing: const Icon(Icons.chevron_right),
+                onTap: () => Get.to(const Nsfw18ZoneGate()),
+              ),
+            const Nsfw18PinSettingsTile(),
           ],
         ),
       ),

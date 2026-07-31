@@ -16,6 +16,7 @@ class NovelController extends ReaderController<ExtensionFikushonWatch> {
     required super.cover,
     required super.anilistID,
     super.cameFromDetail,
+    super.isNsfw,
   });
 
   // 字体大小
@@ -65,15 +66,21 @@ class NovelController extends ReaderController<ExtensionFikushonWatch> {
     }));
   }
 
+  // Ver ReaderController.saveProgressNow: se vuelca también al pasar a
+  // segundo plano, no solo al cerrar el lector.
+  @override
+  void saveProgressNow() {
+    final data = super.watchData.value;
+    if (data == null) return;
+    super.addHistory(
+      positions.value.toString(),
+      data.content.length.toString(),
+    );
+  }
+
   @override
   void onClose() {
-    if (super.watchData.value != null) {
-      final totalProgress = watchData.value!.content.length.toString();
-      super.addHistory(
-        positions.value.toString(),
-        totalProgress,
-      );
-    }
+    saveProgressNow();
     super.onClose();
   }
 }

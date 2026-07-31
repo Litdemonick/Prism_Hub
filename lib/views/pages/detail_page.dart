@@ -27,10 +27,12 @@ class DetailPage extends StatefulWidget {
     required this.url,
     required this.package,
     this.tag,
+    this.isAdultOption = false,
   });
   final String url;
   final String package;
   final String? tag;
+  final bool isAdultOption;
 
   @override
   State<DetailPage> createState() => _DetailPageState();
@@ -46,6 +48,7 @@ class _DetailPageState extends State<DetailPage> {
         package: widget.package,
         url: widget.url,
         heroTag: widget.tag,
+        isAdultOption: widget.isAdultOption,
       ),
       tag: widget.tag,
     );
@@ -75,6 +78,44 @@ class _DetailPageState extends State<DetailPage> {
             child: Text(c.error.value),
           );
         }
+
+        // Android no miraba isLoading (escritorio sí, más abajo): armaba la
+        // pantalla entera de una con el detalle todavía en null, así que se
+        // veía el hero vacío, el título en blanco y las pestañas sin nada
+        // hasta que llegaba la respuesta de la extensión. Ahora espera igual
+        // que en PC: rueda girando y recién después la info.
+        if (c.isLoading.value) {
+          return ColoredBox(
+            color: HomeTheme.bg,
+            child: Stack(
+              children: [
+                const Center(
+                  child: CircularProgressIndicator(
+                    strokeWidth: 3,
+                    valueColor: AlwaysStoppedAnimation(HomeTheme.accentPink),
+                  ),
+                ),
+                // Botón de volver propio: mientras carga no existe todavía
+                // el SliverAppBar que lo trae, y una extensión lenta dejaba
+                // la pantalla sin salida visible.
+                SafeArea(
+                  child: Align(
+                    alignment: Alignment.topLeft,
+                    child: IconButton(
+                      icon: const Icon(Icons.arrow_back,
+                          color: HomeTheme.textPrimary),
+                      // Navigator directo, no RouterUtils: esta rama es solo
+                      // Android, donde la página se empuja con Get.to sobre
+                      // el navegador de GetMaterialApp.
+                      onPressed: () => Navigator.of(context).maybePop(),
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          );
+        }
+
         final tabs = [
           if (!LayoutUtils.isTablet) Tab(text: episodesString),
           Tab(text: 'detail.overview'.i18n),

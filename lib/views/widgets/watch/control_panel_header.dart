@@ -1,15 +1,13 @@
-﻿import 'dart:io';
-
-import 'package:fluent_ui/fluent_ui.dart' as fluent;
+﻿import 'package:fluent_ui/fluent_ui.dart' as fluent;
 import 'package:flutter/material.dart';
 import 'package:flutter/scheduler.dart';
 import 'package:flutter_animate/flutter_animate.dart';
 import 'package:get/get.dart';
-import 'package:prismhub/views/pages/detail_page.dart';
+import 'package:prismhub/utils/extension.dart';
+import 'package:prismhub/utils/router.dart';
 import 'package:prismhub/views/widgets/watch/playlist.dart';
 import 'package:prismhub/controllers/watch/reader_controller.dart';
 import 'package:prismhub/router/router.dart';
-import 'package:prismhub/utils/router.dart';
 import 'package:prismhub/views/widgets/platform_widget.dart';
 import 'package:window_manager/window_manager.dart';
 
@@ -34,21 +32,6 @@ class _ControlPanelHeaderState<T extends ReaderController>
   final fluent.FlyoutController _settingFlayoutcontroller =
       fluent.FlyoutController();
 
-  // Vuelve a la ficha de detalle de lo que se está leyendo/viendo — separado
-  // del botón de "atrás" genérico, que solo cierra el lector y depende de
-  // desde dónde se haya entrado (a veces no es el detalle).
-  //
-  // El lector (WatchPage/ComicReader) se abre con un
-  // Navigator.of(context, rootNavigator: true).push(...) manual (ver
-  // detail_controller.dart/resume_history.dart), que queda por ENCIMA del
-  // ShellRoute de go_router (con su propia navigatorKey — ver router.dart)
-  // donde vive DetailPage con los controles de ventana (minimizar/cerrar).
-  // Empujar el detalle directo sobre el rootNavigator (como se intentó
-  // antes) lo mostraba, pero SIN esos controles porque quedaba fuera del
-  // shell que los provee — no hay forma de que algo en el shell se vea
-  // "encima" de algo ya en el rootNavigator. La solución es cerrar el
-  // lector primero (sacándolo del rootNavigator) y RECIÉN AHÍ navegar al
-  // detalle por la ruta normal de go_router, que si pasa por el shell.
   void _goToDetail(BuildContext context) {
     Navigator.of(context, rootNavigator: true).pop();
     // Si se entró desde la propia página de detalle (goWatch), ya hay un
@@ -74,21 +57,11 @@ class _ControlPanelHeaderState<T extends ReaderController>
       // ExtensionItemCard._buildAndroid). Usar router.push también en
       // Android empujaba una ruta que nada mostraba: confirmado en vivo,
       // "Ver detalle" no hacía nada ahí aunque en PC sí funcionaba.
-      if (Platform.isAndroid) {
-        Get.to(DetailPage(
-          key: ValueKey('$package|$url'),
-          url: url,
-          package: package,
-          tag: '$package|$url',
-        ));
-      } else {
-        router.push(
-          Uri(
-            path: '/detail',
-            queryParameters: {'url': url, 'package': package},
-          ).toString(),
-        );
-      }
+      ExtensionUtils.openExtensionDetail(
+        context,
+        package: package,
+        url: url,
+      );
     });
   }
 
@@ -154,9 +127,7 @@ class _ControlPanelHeaderState<T extends ReaderController>
           children: [
             fluent.IconButton(
               icon: const Icon(fluent.FluentIcons.back),
-              onPressed: () {
-                RouterUtils.pop();
-              },
+              onPressed: () => RouterUtils.closeReader(context),
             ),
             const SizedBox(width: 16),
             // DragToMoveArea only on the title text — buttons stay outside

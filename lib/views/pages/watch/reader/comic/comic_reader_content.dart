@@ -3,10 +3,12 @@ import 'dart:io';
 import 'package:extended_image/extended_image.dart';
 import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:get/get.dart';
 import 'package:prismhub/models/index.dart';
 import 'package:prismhub/controllers/watch/comic_controller.dart';
 import 'package:prismhub/utils/i18n.dart';
+import 'package:prismhub/utils/router.dart';
 import 'package:prismhub/views/widgets/button.dart';
 import 'package:prismhub/views/widgets/cache_network_image.dart';
 import 'package:prismhub/views/widgets/home/animated_background_glow.dart';
@@ -52,6 +54,53 @@ class _ComicReaderContentState extends State<ComicReaderContent> {
   }
 
   late final _c = Get.find<ComicController>(tag: widget.tag);
+
+  // Precarga hacia adelante: además de agrandar el cache extent de la lista
+  // (que adelanta el BUILD), se mete en el caché de imágenes las próximas
+  // páginas aunque estén lejos de construirse. Así el lector se siente fluido
+  // en vez de mostrar el placeholder en cada página nueva.
+  //
+  // Se usa el MISMO ExtendedNetworkImageProvider con cache:true que usa
+  // CacheNetWorkImagePic para dibujar (ver _resolveAspect), así la precarga y
+  // el dibujado comparten entrada de caché y nunca hay una segunda descarga
+  // del mismo archivo.
+  static const _precacheAhead = 4;
+  int _lastPrecachedFrom = -1;
+  final Set<String> _precached = {};
+
+  void _precacheAround(List<String> images, int index) {
+    if (images.isEmpty) return;
+    // Una sola vez por página: itemPositions dispara muy seguido mientras se
+    // scrollea y no hace falta reintentar lo ya pedido.
+    if (_lastPrecachedFrom == index) return;
+    _lastPrecachedFrom = index;
+    final headers = _c.watchData.value?.headers;
+    final end = (index + _precacheAhead).clamp(0, images.length - 1);
+    for (var i = index; i <= end; i++) {
+      final url = images[i];
+      if (!_precached.add(url)) continue;
+      // Best-effort: un fallo acá no debe romper la lectura — la imagen se
+      // vuelve a pedir cuando la lista la construya de verdad.
+      //
+      // El listener se SACA al resolver (igual que hace precacheImage de
+      // Flutter): dejarlo puesto mantendría vivo el ImageStream de cada
+      // página precargada para toda la sesión, que en un capítulo largo es
+      // una fuga de memoria seria.
+      final stream =
+          ExtendedNetworkImageProvider(url, headers: headers, cache: true)
+              .resolve(const ImageConfiguration());
+      late final ImageStreamListener listener;
+      listener = ImageStreamListener(
+        (_, __) => stream.removeListener(listener),
+        onError: (_, __) {
+          stream.removeListener(listener);
+          // Se saca del set así un reintento posterior puede volver a pedirla.
+          _precached.remove(url);
+        },
+      );
+      stream.addListener(listener);
+    }
+  }
 
   // Tracked by NotificationListener so border wheel-forwarding knows
   // the current absolute pixel offset without needing a ScrollController.
@@ -126,7 +175,27 @@ class _ComicReaderContentState extends State<ComicReaderContent> {
   // to a wildly wrong distance as that estimate keeps shifting underneath
   // it. Tracking by ITEM INDEX instead is always exact — itemCount never
   // changes — so a drag tracks the mouse 1:1 with no jump/lurch.
-  static const _cascadeScrollbarWidth = 10.0;
+  // Más ancha que la de antes (10px): a pedido explícito, era finita y difícil
+  // de agarrar con el mouse en escritorio.
+  static const _cascadeScrollbarWidth = 16.0;
+
+  // Arriba se recorta lo que mide el panel de control superior
+  // (control_panel_header: 40px en escritorio), que se dibuja ENCIMA de la
+  // barra: sin esto el extremo de arriba del riel quedaba tapado y no se podía
+  // ni ver ni agarrar (reportado en vivo).
+  //
+  // Abajo NO se recorta el footer (80px). Se probó y el riel quedaba cortado
+  // TODO el tiempo, sin llegar al fondo, aunque el footer solo aparece cuando
+  // se abren las opciones — a pedido explícito, el riel llega hasta abajo así
+  // se puede arrastrar hasta el final del capítulo. Los 8px son solo aire para
+  // que el thumb no toque el borde de la ventana.
+  //
+  // El recorte de arriba es FIJO, no atado a si el panel está visible: si el
+  // riel cambiara de alto al mostrar/ocultar los paneles, el thumb —cuya
+  // posición se calcula sobre el alto del riel— saltaría de lugar en cada
+  // toggle.
+  static const _cascadeScrollbarTopInset = 40.0;
+  static const _cascadeScrollbarBottomInset = 8.0;
 
   Widget _buildCascadeScrollbar(int itemCount) {
     if (itemCount <= 1) return const SizedBox.shrink();
@@ -140,6 +209,23 @@ class _ComicReaderContentState extends State<ComicReaderContent> {
       final fraction = usableTrack <= 0
           ? 0.0
           : ((localY - thumbHeight / 2) / usableTrack).clamp(0.0, 1.0);
+      // Al fondo del riel: se salta al final REAL en píxeles, no al índice de
+      // la última página. Saltar por índice deja el scroll al COMIENZO de esa
+      // última imagen, así que su parte de abajo quedaba inalcanzable
+      // arrastrando la barra — reportado en vivo ("no llega para ver todo el
+      // contenido"). Se usa el mismo ScrollPosition que la rueda del mouse; si
+      // todavía no está disponible se cae al salto por índice de siempre.
+      if (fraction >= 0.999) {
+        final position = _cascadeScrollPosition;
+        if (position != null) {
+          try {
+            position.jumpTo(position.maxScrollExtent);
+            return;
+          } catch (_) {
+            // ScrollPosition ya disposed — sigue por el camino de abajo.
+          }
+        }
+      }
       final index = (fraction * (itemCount - 1)).round();
       if (_c.itemScrollController.isAttached) {
         _c.itemScrollController.jumpTo(index: index);
@@ -148,8 +234,8 @@ class _ComicReaderContentState extends State<ComicReaderContent> {
 
     return Positioned(
       right: 2,
-      top: 0,
-      bottom: 0,
+      top: _cascadeScrollbarTopInset,
+      bottom: _cascadeScrollbarBottomInset,
       width: _cascadeScrollbarWidth,
       child: LayoutBuilder(
         builder: (context, box) {
@@ -215,6 +301,86 @@ class _ComicReaderContentState extends State<ComicReaderContent> {
   // (DrivenScrollActivity's constructor also asserts `duration > Duration.zero`
   // — animateScroll with a literal zero duration throws that assertion on
   // every call. jumpTo has no such restriction.)
+  // Flechas del teclado. En modo cascada NO se delega al controller: ahí
+  // `onKey` llamaba a nextPage/previousPage, que hacen un scrollTo por ÍNDICE
+  // con animación de 300ms y sin ninguna protección contra repetición. Al
+  // mantener la flecha, cada KeyRepeatEvent (unos 30 por segundo) arrancaba un
+  // scroll nuevo hacia currentPage+1, y como currentPage se va actualizando
+  // mientras anima, los destinos se encadenaban y la lectura se iba
+  // volando (reportado en vivo: "las flechitas se va super rápido").
+  //
+  // Acá se scrollea por PÍXELES con el mismo jumpTo que usa la rueda del
+  // mouse (ver _forwardBorderWheelScroll): mantener la flecha simplemente
+  // suma pasos chicos, que es el comportamiento normal de cualquier lector.
+  // El modo paginado sigue yendo por el controller, donde una flecha = una
+  // página es lo correcto y ya está protegido por _animatingTo.
+  static const _keyScrollStep = 48.0;
+  static const _keyPageStepFactor = 0.9;
+
+  void _onKeyEvent(KeyEvent event) {
+    // Escape cierra el lector, como el botón de atrás. Va PRIMERO y para
+    // cualquier modo (paginado o cascada): es lo que espera cualquiera al
+    // estar leyendo a pantalla completa. Usa el mismo RouterUtils.closeReader
+    // que el botón, así no hay dos formas distintas de salir que se puedan
+    // desincronizar.
+    if (event is KeyDownEvent &&
+        event.logicalKey == LogicalKeyboardKey.escape) {
+      RouterUtils.closeReader(context);
+      return;
+    }
+    // El controller mantiene el estado de zoom (Ctrl) y el modo paginado.
+    if (_c.isPaged || Platform.isAndroid) {
+      _c.onKey(event);
+      return;
+    }
+    if (event is! KeyDownEvent && event is! KeyRepeatEvent) {
+      _c.onKey(event);
+      return;
+    }
+    final key = event.logicalKey;
+    final viewport = _cascadeScrollPosition?.viewportDimension ?? 0;
+    double? delta;
+    if (key == LogicalKeyboardKey.arrowDown ||
+        key == LogicalKeyboardKey.arrowRight) {
+      delta = _keyScrollStep;
+    } else if (key == LogicalKeyboardKey.arrowUp ||
+        key == LogicalKeyboardKey.arrowLeft) {
+      delta = -_keyScrollStep;
+    } else if (key == LogicalKeyboardKey.pageDown) {
+      delta = viewport * _keyPageStepFactor;
+    } else if (key == LogicalKeyboardKey.pageUp) {
+      delta = -viewport * _keyPageStepFactor;
+    }
+    if (delta == null || delta == 0) {
+      _c.onKey(event);
+      return;
+    }
+    _scrollCascadeBy(delta);
+  }
+
+  // Mismo camino que la rueda del mouse: jumpTo directo sobre el
+  // ScrollPosition real (instantáneo, sin máquina de animación que se
+  // reinicie con cada evento), con el fallback animado para la ventanita
+  // inicial en la que todavía no llegó ninguna notificación de scroll.
+  void _scrollCascadeBy(double dy) {
+    final target = (_cascadeScrollOffset + dy).clamp(0.0, _cascadeScrollMax);
+    if (target == _cascadeScrollOffset) return;
+    final position = _cascadeScrollPosition;
+    if (position != null) {
+      try {
+        position.jumpTo(target);
+      } catch (_) {
+        // ScrollPosition ya disposed (se salió del lector en el medio).
+      }
+      return;
+    }
+    _c.scrollOffsetController.animateScroll(
+      offset: target - _cascadeScrollOffset,
+      duration: const Duration(milliseconds: 1),
+      curve: Curves.linear,
+    );
+  }
+
   void _forwardBorderWheelScroll(PointerSignalEvent event) {
     if (event is PointerScrollEvent) {
       GestureBinding.instance.pointerSignalResolver.register(event, (e) {
@@ -348,7 +514,7 @@ class _ComicReaderContentState extends State<ComicReaderContent> {
       child: KeyboardListener(
         focusNode: _keyboardFocusNode,
         autofocus: true,
-        onKeyEvent: _c.onKey,
+        onKeyEvent: _onKeyEvent,
         child: Container(
           color: backgroundColor,
           width: double.infinity,
@@ -392,6 +558,11 @@ class _ComicReaderContentState extends State<ComicReaderContent> {
                   if (!identical(_lastWatchData, _c.watchData.value)) {
                     _lastWatchData = _c.watchData.value;
                     _cascadeScrollPosition = null;
+                    // Capítulo nuevo = otras URLs: se limpia el registro de
+                    // precargadas para que no crezca sin límite a lo largo de
+                    // una sesión de lectura larga.
+                    _precached.clear();
+                    _lastPrecachedFrom = -1;
                   }
 
                   // Lo MISMO al cambiar de modo: pasar a paginado destruye la
@@ -562,6 +733,9 @@ class _ComicReaderContentState extends State<ComicReaderContent> {
                       if (n is ScrollUpdateNotification) {
                         _cascadeScrollOffset = n.metrics.pixels;
                         _cascadeScrollMax = n.metrics.maxScrollExtent;
+                        // Va pidiendo las próximas páginas mientras se lee, no
+                        // solo al abrir el capítulo.
+                        _precacheAround(images, _c.currentPage.value);
                       }
                       return false;
                     },
@@ -574,7 +748,23 @@ class _ComicReaderContentState extends State<ComicReaderContent> {
                       itemScrollController: _c.itemScrollController,
                       itemPositionsListener: _c.itemPositionsListener,
                       scrollOffsetController: _c.scrollOffsetController,
+                      // Sin esto la lista solo construía lo que está por
+                      // entrar en pantalla, así que cada imagen recién
+                      // empezaba a bajar cuando ya casi se veía: leyendo se
+                      // topaba con el placeholder una página tras otra
+                      // (reportado en vivo, peor en las extensiones con
+                      // imágenes grandes o servidor lento). Con un cache
+                      // extent grande la lista construye bastante más
+                      // adelante, así que la descarga arranca mucho antes de
+                      // que llegues. Va acompañado del precache de más abajo:
+                      // esto adelanta el BUILD, y el precache adelanta la
+                      // DESCARGA incluso más lejos.
+                      minCacheExtent: 3000,
                       itemBuilder: (context, index) {
+                        // Al construir una página se piden también las que
+                        // vienen: cubre el arranque del capítulo, cuando
+                        // todavía no hubo ningún scroll que lo dispare.
+                        _precacheAround(images, index);
                         final url = images[index];
                         return CacheNetWorkImagePic(
                           url,

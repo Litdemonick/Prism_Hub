@@ -7,6 +7,8 @@ import 'package:prismhub/utils/extension_signature.dart';
 import 'package:prismhub/utils/i18n.dart';
 import 'package:prismhub/utils/prismhub_storage.dart';
 import 'package:prismhub/utils/request.dart';
+import 'package:prismhub/utils/router.dart';
+import 'package:prismhub/views/widgets/button.dart';
 import 'package:prismhub/views/widgets/cache_network_image.dart';
 import 'package:prismhub/views/widgets/home/home_theme.dart';
 import 'package:prismhub/views/widgets/messenger.dart';
@@ -24,6 +26,7 @@ class ExtensionCard extends StatefulWidget {
     required this.nsfw,
     required this.type,
     this.unstable = false,
+    this.blockedReasonKey = 'extension.unstable-blocked',
     this.url,
     this.webSite,
     this.license,
@@ -43,6 +46,11 @@ class ExtensionCard extends StatefulWidget {
   // Si YA está instalada, el bloqueo real corre en ExtensionTile vía
   // hasExtensionUpdate (mismo mecanismo que "actualización requerida").
   final bool unstable;
+  // Clave i18n del texto que explica POR QUÉ está bloqueada. Por defecto el
+  // genérico de inestable; se cambia, por ejemplo, cuando la extensión declara
+  // un `minProtocol` mayor al que entiende este app (ahí lo que falta es
+  // actualizar PrismHub, no esperar un arreglo de la extensión).
+  final String blockedReasonKey;
   final String? webSite;
   final String? license;
   final String? description;
@@ -71,13 +79,50 @@ class _ExtensionCardState extends State<ExtensionCard> {
     super.initState();
   }
 
-  // Instalar/Actualizar NUNCA piden confirmación +18 — ese aviso es solo al
-  // ACTIVAR la extensión (ver ExtensionTile._toggleEnabled), instalar y
-  // activar son acciones distintas. El repositorio ya oculta estas cards
-  // por completo cuando el ajuste NSFW está apagado (ver
-  // ExtensionRepoPageController.onRefresh), así que no hace falta repetir
-  // el gate acá.
+  // Mismo diálogo que ExtensionTile._toggleEnabled usa al activar — se
+  // repite acá porque no comparten contexto de widget. El repositorio
+  // ahora SIEMPRE muestra todas las extensiones (nunca oculta nsfw, ni
+  // instaladas ni no instaladas), así que instalar una nsfw:true necesita
+  // el mismo aviso/bloqueo que activar, no alcanza con confiar en que ya
+  // esté filtrada de la lista.
+  Future<bool> _confirmNsfw() async {
+    if (!mounted) return false;
+    final result = await showPlatformDialog(
+      context: context,
+      title: 'extension.nsfw-warning-title'.i18n,
+      content: Text('extension.nsfw-warning-content'.i18n),
+      actions: [
+        PlatformTextButton(
+          onPressed: () => RouterUtils.pop(false),
+          child: Text('common.cancel'.i18n),
+        ),
+        PlatformFilledButton(
+          onPressed: () => RouterUtils.pop(true),
+          child: Text('common.confirm'.i18n),
+        ),
+      ],
+    );
+    return result == true;
+  }
+
   _install() async {
+    // Solo en la instalación de verdad, no en "Actualizar": si ya está
+    // instalada es porque el usuario ya pasó este mismo aviso una vez.
+    // Con el switch de NSFW apagado NO se bloquea instalar — se instala
+    // igual pero queda desactivada (mismo criterio que activar una
+    // extensión nsfw a mano estando el switch apagado). Bloquear instalar
+    // del todo escondía la extensión del catálogo de facto; así el usuario
+    // la ve, la puede instalar cuando quiera, y decide activarla recién
+    // cuando prenda el switch — con un aviso claro de por qué no funciona
+    // todavía en vez de dejarla "perdida" sin explicación.
+    var installDisabled = false;
+    if (widget.nsfw && !isInstall) {
+      if (PrismHubStorage.getSetting(SettingKey.enableNSFW) != true) {
+        installDisabled = true;
+      } else if (!await _confirmNsfw()) {
+        return;
+      }
+    }
     setState(() {
       isLoading = true;
     });
@@ -119,12 +164,13 @@ class _ExtensionCardState extends State<ExtensionCard> {
         final header = '// ==PrismHubExtension==\n'
             '// @name         ${widget.name}\n'
             '// @version      ${widget.version}\n'
-            '// @author       PrismHub\n'
+            '// @author       PrismPlus\n'
             '// @lang         ${widget.lang}\n'
             '// @license      ${widget.license ?? "MIT"}\n'
             '// @icon         ${widget.icon ?? ""}\n'
             '// @package      ${widget.package}\n'
             '// @type         $typeName\n'
+            '// @nsfw         ${widget.nsfw}\n'
             '// @webSite      ${widget.webSite ?? ""}\n'
             '// @description  ${widget.description ?? widget.name}\n'
             '// ==/PrismHubExtension==\n\n';
@@ -133,13 +179,20 @@ class _ExtensionCardState extends State<ExtensionCard> {
       if (!mounted) return;
       await ExtensionUtils.installByScript(script, context,
           officialVerified: officialVerified);
+      if (installDisabled) {
+        await ExtensionUtils.setExtensionEnabled(widget.package, false);
+      }
       // Confirmación visible: antes el éxito no avisaba nada y parecía que
       // "no pasó nada" al instalar.
       if (mounted) {
         showPlatformSnackbar(
           context: context,
-          content: 'extension.install-success'.i18n,
-          severity: fluent.InfoBarSeverity.success,
+          content: installDisabled
+              ? 'extension.install-success-disabled-nsfw'.i18n
+              : 'extension.install-success'.i18n,
+          severity: installDisabled
+              ? fluent.InfoBarSeverity.warning
+              : fluent.InfoBarSeverity.success,
         );
       }
     } catch (e) {
@@ -161,18 +214,103 @@ class _ExtensionCardState extends State<ExtensionCard> {
     }
   }
 
+  // Descripción con "ver más" — cuando el texto no entra en `maxLines`
+  // (TextPainter mide contra el ancho real disponible), se agrega un link
+  // chico debajo que abre un diálogo con el texto completo, en vez de
+  // dejarla cortada con "..." sin forma de leerla entera.
+  Widget _descriptionWithSeeMore(
+    BuildContext context, {
+    required String text,
+    required TextStyle style,
+    required int maxLines,
+  }) {
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final tp = TextPainter(
+          text: TextSpan(text: text, style: style),
+          maxLines: maxLines,
+          textAlign: TextAlign.center,
+          textDirection: TextDirection.ltr,
+        )..layout(maxWidth: constraints.maxWidth);
+        final overflow = tp.didExceedMaxLines;
+        return Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Text(
+              text,
+              textAlign: TextAlign.center,
+              maxLines: maxLines,
+              overflow: TextOverflow.ellipsis,
+              style: style,
+            ),
+            if (overflow)
+              GestureDetector(
+                onTap: () => showPlatformDialog(
+                  context: context,
+                  title: widget.name,
+                  content: SingleChildScrollView(child: Text(text)),
+                  actions: [
+                    PlatformFilledButton(
+                      onPressed: () => RouterUtils.pop(),
+                      child: Text('common.confirm'.i18n),
+                    ),
+                  ],
+                ),
+                child: Padding(
+                  padding: const EdgeInsets.only(top: 2),
+                  child: Text(
+                    'common.see-more'.i18n,
+                    style: const TextStyle(
+                      fontSize: 10,
+                      color: HomeTheme.accentPink,
+                      fontWeight: FontWeight.w700,
+                      decoration: TextDecoration.underline,
+                    ),
+                  ),
+                ),
+              ),
+          ],
+        );
+      },
+    );
+  }
+
+  // Pill con fondo propio para cada badge (versión/tipo/idioma/18+/
+  // inestable/oficial) — antes eran Text sueltos uno al lado del otro en
+  // un Wrap, así que sin ningún límite visual entre ellos se leían todos
+  // pegados como una sola frase corrida ("Lectura es 18+ PrismPlus").
+  Widget _badge(String text, {Color? color}) {
+    final c = color ?? HomeTheme.textMuted;
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+      decoration: BoxDecoration(
+        color: c.withValues(alpha: 0.14),
+        borderRadius: BorderRadius.circular(6),
+      ),
+      child: Text(
+        text,
+        style: TextStyle(
+          fontSize: 11,
+          color: c,
+          fontWeight: FontWeight.w600,
+        ),
+      ),
+    );
+  }
+
   // Caja con fondo propio para el ícono — antes el ícono (o su fallback,
   // cuando la extensión no trae uno) quedaba flotando suelto sobre el fondo
   // de la tarjeta; con marca (borde + superficie) se ve intencional en vez
-  // de una imagen rota.
+  // de una imagen rota. Tinte morado (en vez de gris neutro) para que se
+  // sienta parte de la identidad de la app en vez de una caja genérica.
   Widget _iconBox({required double size, required double iconSize}) {
     return Container(
       width: size,
       height: size,
       decoration: BoxDecoration(
-        color: HomeTheme.cardSurface,
+        color: HomeTheme.accentPink.withValues(alpha: 0.16),
         borderRadius: BorderRadius.circular(size / 4),
-        border: Border.all(color: HomeTheme.border),
+        border: Border.all(color: HomeTheme.accentPink.withValues(alpha: 0.3)),
       ),
       clipBehavior: Clip.antiAlias,
       child: CacheNetWorkImagePic(
@@ -187,7 +325,47 @@ class _ExtensionCardState extends State<ExtensionCard> {
     );
   }
 
+  // Circulito con check arriba a la derecha de la card — de un vistazo,
+  // sin tener que leer el botón de abajo, se sabe si esta ya está
+  // instalada. Sutil (contorno, no relleno sólido) para no competir con el
+  // resto de la card.
+  Widget _installedBadge() {
+    return Container(
+      width: 18,
+      height: 18,
+      decoration: BoxDecoration(
+        color: HomeTheme.cardSurface,
+        shape: BoxShape.circle,
+        border: Border.all(color: HomeTheme.accentPink, width: 1.4),
+      ),
+      child: const Icon(Icons.check, size: 11, color: HomeTheme.accentPink),
+    );
+  }
+
   Widget _buildAndroid(BuildContext context) {
+    // Container con superficie propia (mismo tratamiento que las cards de
+    // escritorio) — antes era un ListTile sin fondo ni borde, flotando
+    // suelto contra el fondo de la página, sin separación visual clara
+    // entre una extensión y la siguiente.
+    return Container(
+      margin: const EdgeInsets.only(bottom: 10),
+      decoration: BoxDecoration(
+        color: HomeTheme.cardSurface,
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: HomeTheme.border),
+      ),
+      clipBehavior: Clip.antiAlias,
+      child: Stack(
+        children: [
+          _buildAndroidTile(context),
+          if (isInstall)
+            Positioned(top: 8, right: 8, child: _installedBadge()),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildAndroidTile(BuildContext context) {
     return ListTile(
       leading: _iconBox(size: 40, iconSize: 20),
       title: Text(widget.name),
@@ -208,60 +386,68 @@ class _ExtensionCardState extends State<ExtensionCard> {
               // escritorio.
               Wrap(
                 crossAxisAlignment: WrapCrossAlignment.center,
-                spacing: 8,
-                runSpacing: 2,
+                spacing: 6,
+                runSpacing: 6,
                 children: [
-                  Text(widget.version),
-                  Text(ExtensionUtils.typeToString(widget.type)),
-                  Text(widget.lang),
-                  if (widget.nsfw)
-                    const Text(
-                      '18+',
-                      style: TextStyle(
-                        color: Colors.redAccent,
-                      ),
-                    ),
+                  _badge(widget.version),
+                  _badge(ExtensionUtils.typeToString(widget.type)),
+                  _badge(widget.lang),
+                  if (widget.nsfw) _badge('18+', color: Colors.redAccent),
                   if (widget.unstable)
-                    Text(
-                      'extension.unstable'.i18n,
-                      style: const TextStyle(
-                        color: Colors.orange,
-                        fontWeight: FontWeight.w600,
-                      ),
-                    ),
+                    _badge('extension.unstable'.i18n, color: Colors.orange),
                   // Solo indica que el catálogo trae firma de prism+ (no
                   // valida acá — eso pasa recién al instalar, ver
                   // _install()). Es solo informativo, no editable.
-                  if (widget.signature != null &&
-                      widget.signature!.isNotEmpty)
-                    Text(
-                      'extension.official-badge'.i18n,
-                      style: const TextStyle(
-                        color: HomeTheme.accentPink,
-                        fontWeight: FontWeight.w600,
-                      ),
-                    ),
+                  if (widget.signature != null && widget.signature!.isNotEmpty)
+                    _badge('extension.official-badge'.i18n,
+                        color: HomeTheme.accentPink),
                 ],
               ),
+              // Descripción — de qué va la extensión (anime, lectura,
+              // series, películas, etc), antes no se mostraba en ningún
+              // lado pese a que el catálogo ya la trae.
+              if (widget.description != null &&
+                  widget.description!.trim().isNotEmpty &&
+                  widget.description != widget.name)
+                Padding(
+                  padding: const EdgeInsets.only(top: 4),
+                  child: Text(
+                    widget.description!,
+                    maxLines: 2,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                ),
               // Mensaje completo (ancho total de la fila, sin límite de
               // líneas) en vez de meterlo adentro del trailing de 90px —
               // ahí quedaba cortado contra el borde de la pantalla
-              // (confirmado en vivo).
-              if (widget.unstable && !isInstall)
-                Padding(
-                  padding: const EdgeInsets.only(top: 2),
-                  child: Text(
-                    'extension.unstable-blocked'.i18n,
-                    style: const TextStyle(
-                      fontSize: 11,
-                      color: Colors.orange,
+              // (confirmado en vivo). Visibility con maintainSize en vez de
+              // un `if`: al instalar, este mensaje desaparece — sin reservar
+              // su espacio el tile se achica de golpe y toda la lista salta
+              // hacia arriba justo al tocar el botón.
+              if (widget.unstable)
+                Visibility(
+                  visible: !isInstall,
+                  maintainSize: true,
+                  maintainAnimation: true,
+                  maintainState: true,
+                  child: Padding(
+                    padding: const EdgeInsets.only(top: 2),
+                    child: Text(
+                      widget.blockedReasonKey.i18n,
+                      style: const TextStyle(
+                        fontSize: 11,
+                        color: Colors.orange,
+                      ),
                     ),
                   ),
                 ),
             ],
           )),
+      // Ancho SIEMPRE fijo (antes 90/96 según hasUpgrade) — que cambie de
+      // 90 a 96 al instalar corría el botón unos píxeles hacia la
+      // izquierda justo al tocarlo, se sentía como que "la card se mueve".
       trailing: SizedBox(
-        width: hasUpgrade ? 96 : 90,
+        width: 96,
         child: isLoading
             ? const SizedBox(
                 width: 25,
@@ -329,168 +515,217 @@ class _ExtensionCardState extends State<ExtensionCard> {
   }
 
   Widget _buildDesktop(BuildContext context) {
-    // Alto fijo: todas las cards del grid miden lo mismo sin importar cuántos
-    // badges/botones tenga cada una — antes una card con más badges (18+ +
-    // inestable + PrismPlus) o con Actualizar+Desinstalar juntos crecía más
-    // que sus vecinas y desalineaba la fila (confirmado en vivo con
-    // ShadeManga). mainAxisAlignment.spaceBetween sigue repartiendo el
-    // espacio sobrante adentro del alto fijo.
-    return SizedBox(
-      height: 250,
-      child: Container(
-        padding: const EdgeInsets.all(14),
-        decoration: BoxDecoration(
-          color: HomeTheme.cardSurface,
-          borderRadius: BorderRadius.circular(14),
-          border: Border.all(color: HomeTheme.border),
-        ),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          mainAxisAlignment: MainAxisAlignment.spaceBetween,
-          children: [
-          _iconBox(size: 64, iconSize: 30),
-          const SizedBox(height: 8),
-          Text(widget.name, style: const TextStyle(fontSize: 17)),
-          DefaultTextStyle(
-            style: TextStyle(
-              fontSize: 12,
-              color: fluent.FluentTheme.of(context).inactiveColor,
-            ),
-            // Wrap en vez de Row: con varios badges juntos (tipo + idioma +
-            // 18+ + inestable + oficial) en una card angosta del grid, un Row
-            // fijo tira RenderFlex overflow — confirmado en vivo con
-            // ShadeManga ("overflow by 14 pixels"). Mismo fix que ya tenía la
-            // versión Android.
-            child: Wrap(
-              crossAxisAlignment: WrapCrossAlignment.center,
-              children: [
-                Padding(
-                  padding: const EdgeInsets.only(right: 8),
-                  child: Text(ExtensionUtils.typeToString(widget.type)),
-                ),
-                Padding(
-                  padding: const EdgeInsets.only(right: 8),
-                  child: Text(widget.lang),
-                ),
-                if (widget.nsfw)
-                  const Padding(
-                    padding: EdgeInsets.only(right: 8),
-                    child: Text(
-                      '18+',
-                      style: TextStyle(
-                        color: Colors.redAccent,
-                      ),
-                    ),
-                  ),
-                if (widget.unstable)
-                  Padding(
-                    padding: const EdgeInsets.only(right: 8),
-                    child: Text(
-                      'extension.unstable'.i18n,
-                      style: const TextStyle(
-                        color: Colors.orange,
-                        fontWeight: FontWeight.w600,
-                      ),
-                    ),
-                  ),
-                if (widget.signature != null && widget.signature!.isNotEmpty)
-                  Padding(
-                    padding: const EdgeInsets.only(right: 8),
-                    child: Text(
-                      'extension.official-badge'.i18n,
-                      style: const TextStyle(
-                        color: HomeTheme.accentPink,
-                        fontWeight: FontWeight.w600,
-                      ),
-                    ),
-                  ),
-              ],
-            ),
+    // Alto FIJO (antes ajustado al contenido con mainAxisSize.min) — con
+    // cantidad de badges variable (1 línea vs 2 según la extensión) las
+    // cards quedaban de distinto tamaño en la misma fila del grid
+    // (confirmado en vivo comparando ManhwaWeb/ShadeManga contra el resto).
+    // Con alto fijo + Spacer, todas miden lo mismo y el botón de acción
+    // siempre queda anclado abajo sin importar cuánto contenido haya arriba.
+    // Contenido centrado (ícono/texto/badges/botón) para que se lea como
+    // una tarjeta de "app store" en vez de un bloque alineado a la
+    // izquierda.
+    return Stack(
+      children: [
+        Container(
+          height: 315,
+          padding: const EdgeInsets.all(14),
+          decoration: BoxDecoration(
+            color: HomeTheme.cardSurface,
+            borderRadius: BorderRadius.circular(14),
+            border: Border.all(color: HomeTheme.border),
           ),
-          Wrap(
-            crossAxisAlignment: WrapCrossAlignment.center,
-            alignment: WrapAlignment.spaceBetween,
-            runSpacing: 8,
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.center,
             children: [
-              Padding(
-                padding: const EdgeInsets.only(right: 8),
-                child: Text(
-                  widget.version,
-                  style: const TextStyle(fontSize: 12),
+              _iconBox(size: 40, iconSize: 20),
+              const SizedBox(height: 10),
+              Text(
+                widget.name,
+                textAlign: TextAlign.center,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: const TextStyle(
+                  fontSize: 15,
+                  fontWeight: FontWeight.w700,
                 ),
               ),
-              if (isLoading)
-                const SizedBox(
-                  width: 25,
-                  height: 25,
-                  child: ProgressRing(),
-                )
-              else if (widget.unstable && !isInstall)
+              const SizedBox(height: 2),
+              Text(
+                'v ${widget.version}',
+                textAlign: TextAlign.center,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: TextStyle(
+                  fontSize: 11,
+                  color: fluent.FluentTheme.of(context).inactiveColor,
+                ),
+              ),
+              // Descripción — de qué va la extensión (anime, lectura,
+              // series, películas, etc), antes no se mostraba en ningún
+              // lado pese a que el catálogo ya la trae.
+              if (widget.description != null &&
+                  widget.description!.trim().isNotEmpty &&
+                  widget.description != widget.name) ...[
+                const SizedBox(height: 6),
+                _descriptionWithSeeMore(
+                  context,
+                  text: widget.description!,
+                  maxLines: 2,
+                  style: const TextStyle(
+                    fontSize: 11,
+                    color: HomeTheme.textMuted,
+                  ),
+                ),
+              ],
+              const SizedBox(height: 8),
+              // Wrap en vez de Row: con varios badges juntos (tipo + idioma +
+              // 18+ + inestable + oficial) en una card angosta del grid, un
+              // Row fijo tira RenderFlex overflow — confirmado en vivo con
+              // ShadeManga ("overflow by 14 pixels").
+              Wrap(
+                alignment: WrapAlignment.center,
+                crossAxisAlignment: WrapCrossAlignment.center,
+                spacing: 6,
+                runSpacing: 6,
+                children: [
+                  _badge(ExtensionUtils.typeToString(widget.type)),
+                  _badge(widget.lang),
+                  if (widget.nsfw) _badge('18+', color: Colors.redAccent),
+                  if (widget.unstable)
+                    _badge('extension.unstable'.i18n, color: Colors.orange),
+                  if (widget.signature != null && widget.signature!.isNotEmpty)
+                    _badge('extension.official-badge'.i18n,
+                        color: HomeTheme.accentPink),
+                ],
+              ),
+              if (widget.unstable && !isInstall) ...[
+                const SizedBox(height: 8),
                 Text(
-                  'extension.unstable-blocked'.i18n,
-                  style: const TextStyle(fontSize: 12, color: Colors.orange),
-                )
-              else if (isInstall)
-                Wrap(
-                  spacing: 8,
-                  runSpacing: 8,
-                  children: [
-                    if (hasUpgrade)
-                      // Actualizar es la acción destacada (relleno, acento
-                      // morado); Desinstalar queda como botón simple — antes
-                      // los dos eran FilledButton y competían por atención,
-                      // sin distinguir cuál es la acción recomendada.
-                      // Compactos (padding chico): con los dos juntos en una
-                      // card de 220px de ancho, el tamaño default de fluent
-                      // los mandaba cada uno a su propia línea — confirmado
-                      // en vivo, agrandaba la card y desalineaba la fila del
-                      // grid contra las demás.
-                      fluent.FilledButton(
-                        style: fluent.ButtonStyle(
-                          padding: fluent.WidgetStateProperty.all(
-                            const EdgeInsets.symmetric(horizontal: 10),
-                          ),
-                        ),
-                        child: Text(
-                          'extension-repo.upgrade'.i18n,
-                          style: const TextStyle(fontSize: 12),
-                        ),
-                        onPressed: () async {
-                          await _install();
-                          setState(() {});
-                        },
-                      ),
-                    fluent.Button(
-                      style: fluent.ButtonStyle(
-                        padding: fluent.WidgetStateProperty.all(
-                          const EdgeInsets.symmetric(horizontal: 10),
-                        ),
-                      ),
-                      child: Text(
-                        'common.uninstall'.i18n,
-                        style: const TextStyle(fontSize: 12),
-                      ),
-                      onPressed: () async {
-                        await ExtensionUtils.uninstall(widget.package);
-                        setState(() {
-                          isInstall = false;
-                        });
-                      },
-                    ),
-                  ],
-                )
-              else
-                fluent.FilledButton(
-                  onPressed: () async {
-                    await _install();
-                  },
-                  child: Text('common.install'.i18n),
-                )
+                  widget.blockedReasonKey.i18n,
+                  textAlign: TextAlign.center,
+                  style: const TextStyle(fontSize: 11, color: Colors.orange),
+                  maxLines: 2,
+                  overflow: TextOverflow.ellipsis,
+                ),
+              ],
+              const Spacer(),
+              // Alto fijo (36) para el área de acción entera — antes cada
+              // rama (spinner/botón único/par de botones) tenía su propio
+              // tamaño implícito y la fila se veía "saltar" de tamaño card
+              // a card. minimumSize en cada botón: mismo ancho mínimo sin
+              // importar si dice "Instalar" o "No disponible".
+              SizedBox(
+                height: 36,
+                child: Center(
+                  child: isLoading
+                      ? const SizedBox(
+                          width: 20,
+                          height: 20,
+                          child: ProgressRing(),
+                        )
+                      : (widget.unstable && !isInstall)
+                          ? ConstrainedBox(
+                              constraints: const BoxConstraints(
+                                minWidth: 110,
+                                minHeight: 36,
+                              ),
+                              child: fluent.FilledButton(
+                                onPressed: null,
+                                child: Text('extension.not-available'.i18n),
+                              ),
+                            )
+                          : isInstall
+                              ? Wrap(
+                                  alignment: WrapAlignment.center,
+                                  crossAxisAlignment:
+                                      WrapCrossAlignment.center,
+                                  spacing: 8,
+                                  runSpacing: 8,
+                                  children: [
+                                    if (hasUpgrade)
+                                      // Actualizar es la acción destacada
+                                      // (relleno, acento morado); Desinstalar
+                                      // queda como link — antes los dos eran
+                                      // FilledButton y competían por atención.
+                                      ConstrainedBox(
+                                        constraints: const BoxConstraints(
+                                          minWidth: 90,
+                                          minHeight: 36,
+                                        ),
+                                        child: fluent.FilledButton(
+                                          style: fluent.ButtonStyle(
+                                            padding: fluent.WidgetStateProperty
+                                                .all(
+                                              const EdgeInsets.symmetric(
+                                                  horizontal: 10),
+                                            ),
+                                          ),
+                                          child: Text(
+                                            'extension-repo.upgrade'.i18n,
+                                            style: const TextStyle(
+                                                fontSize: 12),
+                                          ),
+                                          onPressed: () async {
+                                            await _install();
+                                            setState(() {});
+                                          },
+                                        ),
+                                      ),
+                                    ConstrainedBox(
+                                      constraints: const BoxConstraints(
+                                        minHeight: 36,
+                                      ),
+                                      child: fluent.HyperlinkButton(
+                                        style: fluent.ButtonStyle(
+                                          padding: fluent.WidgetStateProperty
+                                              .all(
+                                            const EdgeInsets.symmetric(
+                                                horizontal: 4),
+                                          ),
+                                        ),
+                                        child: Text(
+                                          'common.uninstall'.i18n,
+                                          style: const TextStyle(
+                                            fontSize: 12,
+                                            color: HomeTheme.accentPink,
+                                            fontWeight: FontWeight.w600,
+                                          ),
+                                        ),
+                                        onPressed: () async {
+                                          await ExtensionUtils.uninstall(
+                                              widget.package);
+                                          setState(() {
+                                            isInstall = false;
+                                          });
+                                        },
+                                      ),
+                                    ),
+                                  ],
+                                )
+                              : ConstrainedBox(
+                                  constraints: const BoxConstraints(
+                                    minWidth: 110,
+                                    minHeight: 36,
+                                  ),
+                                  child: fluent.FilledButton(
+                                    onPressed: () async {
+                                      await _install();
+                                    },
+                                    child: Text('common.install'.i18n),
+                                  ),
+                                ),
+                ),
+              ),
             ],
           ),
-          ],
         ),
-      ),
+        if (isInstall)
+          Positioned(
+            top: 8,
+            right: 8,
+            child: _installedBadge(),
+          ),
+      ],
     );
   }
 

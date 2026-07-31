@@ -18,6 +18,7 @@ import 'package:flutter_js/flutter_js.dart';
 import 'package:prismhub/models/index.dart';
 import 'package:prismhub/data/services/database_service.dart';
 import 'package:prismhub/utils/extension.dart';
+import 'package:prismhub/utils/search_text.dart';
 import 'package:flutter_js/javascriptcore/jscore_runtime.dart';
 
 class ExtensionService {
@@ -746,8 +747,8 @@ async function stringify(callback) {
   Future<List<ExtensionListItem>> latest(int page) async {
     return runExtension(() async {
       final jsResult = await runtime.handlePromise(
-        await runtime.evaluateAsync(
-            'stringify(()=>${className}Instance.latest($page))'),
+        await runtime
+            .evaluateAsync('stringify(()=>${className}Instance.latest($page))'),
       );
 
       final decoded = await _decodeJsonResult(jsResult.stringResult);
@@ -781,6 +782,34 @@ async function stringify(callback) {
       await _fillMissingHeaders(result);
       return result;
     });
+  }
+
+  // Búsqueda de UNA página (la 1) con red de seguridad: si la query
+  // completa no encuentra nada, se reintenta con una versión más genérica
+  // (menos palabras, ver SearchText.broadenedRemoteQueries) porque algunas
+  // extensiones exigen que el título empiece exactamente con lo escrito.
+  // En el caso normal (la query encuentra algo) es UN solo pedido, igual
+  // que antes — importante para la velocidad: la búsqueda general dispara
+  // esto por CADA extensión instalada.
+  //
+  // Acá hubo, y se sacó, un recolector multi-página (hasta 6 pedidos
+  // secuenciales por extensión, más una consulta suplementaria): fue un
+  // intento equivocado de compensar desde el app que el buscador de
+  // AnimeFenix omitía resultados. La causa real estaba en el sitio (no
+  // devolvía ciertos títulos sin ?tipo=) y quedó resuelta dentro de esa
+  // extensión, que ahora hace la unión por tipos ella misma. Mantener el
+  // multi-página además de eso multiplicaba los pedidos (hasta ~50 por
+  // búsqueda con esa extensión) y era la causa principal de que la barra
+  // de carga quedara colgada un buen rato — confirmado en vivo.
+  Future<List<ExtensionListItem>> searchFirstPageWithBroadening(
+    String kw, {
+    Map<String, List<String>>? filter,
+  }) async {
+    for (final query in SearchText.broadenedRemoteQueries(kw)) {
+      final result = await search(query, 1, filter: filter);
+      if (result.isNotEmpty) return result;
+    }
+    return const [];
   }
 
   Future<Map<String, ExtensionFilter>> createFilter({
@@ -879,8 +908,8 @@ async function stringify(callback) {
     return runExtension(() async {
       final urlJs = jsonEncode(url);
       final jsResult = await runtime.handlePromise(
-        await runtime.evaluateAsync(
-            'stringify(()=>${className}Instance.watch($urlJs))'),
+        await runtime
+            .evaluateAsync('stringify(()=>${className}Instance.watch($urlJs))'),
       );
       final data = await _decodeJsonResult(jsResult.stringResult);
 

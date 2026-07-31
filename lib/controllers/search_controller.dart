@@ -5,10 +5,22 @@ import 'package:get/get.dart';
 import 'package:prismhub/models/extension.dart';
 import 'package:prismhub/utils/connectivity.dart';
 import 'package:prismhub/utils/extension.dart';
+import 'package:prismhub/utils/search_text.dart';
 import 'package:prismhub/data/services/extension_service.dart';
-import 'package:prismhub/utils/prismhub_storage.dart';
 
 class SearchPageController extends GetxController {
+  // Mismo esquema que HomePageController: la búsqueda normal usa la instancia
+  // por defecto y la zona +18 registra la suya aparte bajo este tag, con
+  // nsfwOnly en true. Así las dos conviven sin pisarse los resultados.
+  static const zoneTag = 'nsfw18-search';
+
+  // true = SOLO extensiones marcadas +18 (la zona +18 del buscador).
+  // false = NUNCA extensiones +18, ni siquiera con el switch de NSFW prendido:
+  // el contenido para adultos vive únicamente detrás del botón +18, que pide
+  // confirmación y PIN.
+  final bool nsfwOnly;
+  SearchPageController({this.nsfwOnly = false});
+
   // Set en vez de un tipo único — el filtro "Lectura" agrupa manga+novela
   // (ambos son texto para leer, de cara al usuario es una sola categoría).
   Rx<Set<ExtensionType>?> cuurentExtensionType = Rx(null);
@@ -43,7 +55,12 @@ class SearchPageController extends GetxController {
     if (types != null) {
       exts.removeWhere((element) => !types.contains(element.extension.type));
     }
-    if (!PrismHubStorage.getSetting(SettingKey.enableNSFW)) {
+    // Zona +18 del buscador: solo extensiones marcadas +18. Buscador normal:
+    // ninguna, sin excepción — antes bastaba con tener el switch de NSFW
+    // prendido para que apareciesen acá mezcladas con el resto.
+    if (nsfwOnly) {
+      exts.removeWhere((element) => !element.extension.nsfw);
+    } else {
       exts.removeWhere((element) => element.extension.nsfw);
     }
     // Reusa el SearchResult existente por package en vez de crear todos
@@ -56,11 +73,20 @@ class SearchPageController extends GetxController {
     final byPackage = {
       for (final r in searchResultList) r.runitme.extension.package: r,
     };
-    searchResultList.value = exts
-        .map((element) =>
-            byPackage[element.extension.package] ??
-            SearchResult(runitme: element))
-        .toList();
+    searchResultList.value = exts.map((element) {
+      final cached = byPackage[element.extension.package];
+      // Solo se reusa si es EXACTAMENTE el mismo runtime. Al actualizar o
+      // reinstalar una extensión, ExtensionUtils crea un ExtensionService
+      // nuevo (con el JS nuevo cargado en su propio QuickJS), pero
+      // SearchResult.runitme es final — así que reusar el SearchResult viejo
+      // dejaba a esta página llamando para siempre al runtime ANTERIOR, con
+      // el código viejo, hasta reiniciar la app. Confirmado en vivo: después
+      // de actualizar AnimeFenix, buscar dentro de la extensión devolvía 4
+      // resultados (runtime nuevo) y la búsqueda general seguía mostrando 3
+      // (runtime viejo) con la misma palabra.
+      if (cached != null && identical(cached.runitme, element)) return cached;
+      return SearchResult(runitme: element);
+    }).toList();
     // Se asigna DESPUÉS de la lista: cuurentExtensionType compone la key que
     // fuerza remount de SearchAllExtSearch (ver search_page.dart) — si
     // cambiara primero, ese remount alcanzaba a ver la lista VIEJA por un
@@ -91,8 +117,14 @@ class SearchPageController extends GetxController {
       return;
     }
     final pending = <SearchResult>[];
-    // 最后一个有结果的搜索结果索引
-    var lastResultIndex = -1;
+    // Extensiones salteadas por tener un fetch de un ciclo anterior todavía
+    // en vuelo. Antes se descartaban y listo: ese fetch viejo terminaba,
+    // veía que la key ya no era la suya y se iba SIN escribir resultado, así
+    // que la extensión quedaba marcada como terminada pero con la card
+    // vacía — nunca cargaba, justo lo que pasaba al cambiar de filtro
+    // rápido entre Todo/Lectura/Vídeo. Ahora se las espera y se las vuelve
+    // a pedir para el ciclo actual.
+    final deferred = <SearchResult>[];
     for (var i = 0; i < searchResultList.length; i++) {
       final element = searchResultList[i];
       // Ya hay un fetch en vuelo para esta extensión (de un click anterior
@@ -104,7 +136,10 @@ class SearchPageController extends GetxController {
       // minutos de clickear seguido quedaba una cola larga de peticiones
       // ya inútiles pero todavía corriendo, y el app se sentía cada vez más
       // pesado/trabado cuanto más rato pasaba.
-      if (element.isFetching) continue;
+      if (element.isFetching) {
+        deferred.add(element);
+        continue;
+      }
       element.completed = false;
       // OJO: ni result NI error se resetean acá. Se actualizan recién
       // cuando el intento nuevo resuelve de verdad (éxito limpia error más
@@ -117,82 +152,133 @@ class SearchPageController extends GetxController {
       pending.add(element);
     }
 
-    const batchSize = 2;
-    for (var i = 0; i < pending.length; i += batchSize) {
-      if (_randomKey != key) {
-        for (var j = i; j < pending.length; j++) {
-          pending[j].isFetching = false;
-          pending[j].completed = true;
-        }
-        searchResultList.refresh();
-        break;
-      }
-      final batch = pending.skip(i).take(batchSize);
-      await Future.wait(batch.map((element) {
-        element.isFetching = true;
-        Future<List<ExtensionListItem>> resultFuture;
-        try {
-          if (search.value.isEmpty) {
-            resultFuture = element.runitme.latest(1);
-          } else {
-            resultFuture = element.runitme.search(search.value, 1);
-          }
-        } catch (e) {
-          element.error = e;
-          element.completed = true;
-          element.isFetching = false;
-          searchResultList.refresh();
-          return Future<void>.value();
-        }
+    // Pool de tareas en vez de tandas rígidas. Antes esto iba en batches de
+    // 2 con `Future.wait`, y eso esperaba a la MÁS LENTA de cada tanda antes
+    // de arrancar la siguiente: una sola extensión lenta (o que se va a su
+    // timeout de 15s) dejaba a su compañera terminada esperando al aire y
+    // frenaba todas las tandas que venían atrás — con 8 extensiones, la
+    // barra de carga se quedaba colgada un buen rato aunque casi todas
+    // hubieran respondido enseguida (confirmado en vivo buscando "one
+    // piece"). Con el pool, apenas una termina su hueco se lo queda la
+    // siguiente pendiente, así que SIEMPRE hay `maxConcurrent` pedidos en
+    // vuelo y una lenta solo se demora a sí misma.
+    //
+    // 4 en paralelo (antes 2 efectivos): el trabajo real es esperar red, no
+    // CPU, y cada respuesta sigue cediendo el frame antes de seguir para no
+    // trabar la UI al pintar las tarjetas nuevas.
+    const maxConcurrent = 4;
+    var nextIndex = 0;
 
-        return resultFuture
-            .timeout(
+    Future<void> runOne(SearchResult element) async {
+      element.isFetching = true;
+      final done = Completer<void>();
+      element.inFlight = done.future;
+      try {
+        final Future<List<ExtensionListItem>> resultFuture;
+        if (search.value.isEmpty) {
+          resultFuture = element.runitme.latest(1);
+        } else {
+          resultFuture = element.runitme.searchFirstPageWithBroadening(
+              SearchText.sanitizeForRemoteQuery(search.value));
+        }
+        final result = await resultFuture.timeout(
           const Duration(seconds: 15),
           onTimeout: () => throw TimeoutException('Tiempo de espera agotado'),
-        )
-            .then((result) {
-          if (_randomKey != key) {
-            return;
-          }
-          element.result = result;
-          element.error = null;
-          // 如果搜索结果不为空,
-          if (result.isNotEmpty) {
-            searchResultList.remove(element);
-            // 判断是否是第一个,将第一个放到最前面
-            if (lastResultIndex == -1) {
-              searchResultList.insert(0, element);
-              lastResultIndex = 0;
-            } else {
-              searchResultList.insert(lastResultIndex + 1, element);
-              lastResultIndex++;
-            }
-          } else {
-            searchResultList.refresh();
-          }
-        }).catchError((e) {
-          // Mismo chequeo que en el éxito: sin esto, un fetch VIEJO (de un
-          // filtro/búsqueda anterior, todavía en vuelo por su timeout de
-          // 15s) podía marcar error en un elemento reusado que ya se estaba
-          // mostrando bajo el filtro nuevo — se veía como que la extensión
-          // aparecía bien un instante y de golpe caía al banner de sin
-          // conexión, sin que el usuario hubiera hecho nada en el filtro
-          // actual.
-          if (_randomKey != key) return;
-          element.error = e;
-          searchResultList.refresh();
-        }).whenComplete(() {
-          // isFetching/completed SIEMPRE se actualizan, sin importar el key
-          // — pase lo que pase, este fetch puntual ya terminó, y si se
-          // dejara colgado en true por un chequeo de key ningún llamador
-          // futuro podría volver a intentar esta extensión (quedaría
-          // "cargando" para siempre en la barra de progreso).
-          element.isFetching = false;
-          element.completed = true;
-        });
+        );
+        // Un fetch VIEJO (de un filtro/búsqueda anterior, todavía en vuelo
+        // por su timeout de 15s) no debe pisar el estado del ciclo actual —
+        // sin esto se veía a una extensión aparecer bien un instante y de
+        // golpe caer al banner de sin conexión sin que el usuario tocara
+        // nada.
+        if (_randomKey != key) return;
+        element.result = result;
+        element.error = null;
+        // Ya NO se reordena acá extensión por extensión — antes cada una que
+        // respondía con resultados se movía al frente de una (remove+insert),
+        // lo que hacía "saltar" la lista entera fila por fila mientras
+        // cargaba (confirmado en vivo). El orden se queda estable durante
+        // toda la carga; el único reordenamiento por relevancia pasa UNA vez
+        // al final (ver el sort al cierre de este método).
+        searchResultList.refresh();
+      } catch (e) {
+        if (_randomKey != key) return;
+        element.error = e;
+        searchResultList.refresh();
+      } finally {
+        // isFetching/completed SIEMPRE se actualizan, sin importar el key —
+        // pase lo que pase, este fetch puntual ya terminó, y si se dejara
+        // colgado en true por un chequeo de key ningún llamador futuro
+        // podría volver a intentar esta extensión (quedaría "cargando" para
+        // siempre en la barra de progreso).
+        element.isFetching = false;
+        element.completed = true;
+        element.inFlight = null;
+        if (!done.isCompleted) done.complete();
+      }
+    }
+
+    Future<void> worker() async {
+      while (true) {
+        // Dart es single-threaded: leer e incrementar acá es atómico (no hay
+        // await en el medio), así que dos workers nunca se llevan el mismo
+        // índice.
+        if (_randomKey != key || nextIndex >= pending.length) return;
+        final element = pending[nextIndex++];
+        await runOne(element);
+        // Cede el frame para que la UI pinte las tarjetas que acaban de
+        // llegar antes de arrancar el próximo pedido.
+        await SchedulerBinding.instance.endOfFrame;
+      }
+    }
+
+    await Future.wait([
+      for (var i = 0; i < maxConcurrent && i < pending.length; i++) worker(),
+    ]);
+
+    // Segunda pasada por las salteadas: se espera a que su pedido viejo
+    // termine (como mucho su timeout de 15s) y recién ahí se las pide para
+    // el ciclo actual. Se reintentan siempre, no solo si están vacías: el
+    // resultado que puedan tener es de otra búsqueda o de otro filtro.
+    if (deferred.isNotEmpty && _randomKey == key) {
+      // La espera va en PARALELO: una por una, tres extensiones colgadas
+      // hasta su timeout eran 45 segundos antes de siquiera empezar a
+      // pedirlas de nuevo.
+      await Future.wait(deferred.map((element) async {
+        final inFlight = element.inFlight;
+        if (inFlight == null) return;
+        try {
+          await inFlight;
+        } catch (_) {
+          // runOne ya maneja sus propios errores; acá solo interesa que
+          // haya terminado.
+        }
       }));
-      await SchedulerBinding.instance.endOfFrame;
-      await Future<void>.delayed(const Duration(milliseconds: 8));
+      if (_randomKey == key) {
+        for (final element in deferred) {
+          element.completed = false;
+        }
+        // Se reusa el MISMO pool (mismo límite de concurrencia, misma cesión
+        // de frame) en vez de duplicar la lógica.
+        pending
+          ..clear()
+          ..addAll(deferred);
+        nextIndex = 0;
+        await Future.wait([
+          for (var i = 0; i < maxConcurrent && i < pending.length; i++)
+            worker(),
+        ]);
+      }
+    }
+
+    // Cancelado a mitad de camino: lo que nunca llegó a arrancar queda
+    // marcado como terminado para que la barra de progreso no se cuelgue
+    // esperando fetches que ya no van a pasar.
+    if (_randomKey != key) {
+      for (var j = nextIndex; j < pending.length; j++) {
+        pending[j].isFetching = false;
+        pending[j].completed = true;
+      }
+      searchResultList.refresh();
     }
 
     // Red de seguridad: si por lo que sea quedó alguna sin marcar (una
@@ -210,7 +296,50 @@ class SearchPageController extends GetxController {
         }
       }
       if (changed) searchResultList.refresh();
+
+      // Reordenamiento por relevancia — UNA sola vez, ahora que este ciclo
+      // ya terminó de verdad (no en cada respuesta individual, ver arriba).
+      // Solo tiene sentido con una búsqueda activa: en modo "latest"
+      // (explorar sin escribir nada) no hay ninguna palabra contra la cual
+      // priorizar, así que se deja el orden de siempre.
+      final query = search.value.trim();
+      if (query.isNotEmpty) {
+        // Se tokeniza UNA sola vez acá afuera — bucket() se llama por cada
+        // extensión Y por cada ítem de su resultado, así que renormalizar
+        // la misma query adentro del loop sería trabajo repetido de sobra.
+        final tokens = SearchText.queryTokens(query);
+        int bucket(SearchResult r) {
+          if (r.result != null && r.result!.isNotEmpty) {
+            final titleMatches = r.result!
+                .any((item) => SearchText.matchesTokens(item.title, tokens));
+            return titleMatches ? 0 : 1;
+          }
+          return r.error != null ? 2 : 1;
+        }
+
+        // List.sort de Dart es estable: dentro de cada bucket, el orden
+        // relativo que ya tenían se mantiene (no hay un segundo criterio
+        // de desempate que pueda "revolver" más de la cuenta).
+        searchResultList.sort((a, b) => bucket(a).compareTo(bucket(b)));
+        searchResultList.refresh();
+      }
     }
+  }
+
+  // Buscar de nuevo el MISMO texto tiene que volver a buscar de verdad.
+  // Antes las dos plataformas hacían `c.search.value = value` directo, y el
+  // setter de Rx en GetX corta si el valor es idéntico
+  // (`if (_value == val && !firstRebuild) return;` en rx_impl.dart), así que
+  // el worker `ever(search, ...)` no disparaba: apretar Enter dos veces con
+  // la misma palabra no hacía absolutamente nada, y los resultados viejos
+  // quedaban en pantalla incluso después de actualizar una extensión.
+  void submitSearch(String value) {
+    if (search.value == value) {
+      _randomKey = DateTime.now().millisecondsSinceEpoch.toString();
+      getResult(_randomKey);
+      return;
+    }
+    search.value = value;
   }
 
   getPackgeByIndex(int index) {
@@ -238,6 +367,10 @@ class SearchResult {
   // arrancar pedidos duplicados en paralelo si el usuario clickea
   // refrescar/cambiar de filtro varias veces seguidas (ver getResult()).
   bool isFetching = false;
+  // El fetch en vuelo, para poder esperarlo. Con solo el booleano se sabía
+  // que había uno corriendo pero no CUÁNDO terminaba, así que lo único que
+  // se podía hacer era saltear la extensión — y quedaba sin cargar.
+  Future<void>? inFlight;
   SearchResult({
     required this.runitme,
     this.error,

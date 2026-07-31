@@ -26,4 +26,9 @@ class History {
   // 当前章节/剧集总进度
   late String totalProgress;
   DateTime date = DateTime.now();
+  // Zona +18: true si este ítem se guardó desde una extensión 100% NSFW o
+  // desde la opción "adultos" de un filtro de una extensión mixta (ver
+  // ExtensionFilter.adultOption). Determina si aparece en el Continuar
+  // normal de Home o solo dentro de la Zona +18.
+  bool isNsfw = false;
 }

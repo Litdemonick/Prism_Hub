@@ -13,6 +13,8 @@ import 'package:prismhub/views/pages/favorites_page.dart';
 import 'package:prismhub/views/pages/history_page.dart';
 import 'package:prismhub/views/pages/home_page.dart';
 import 'package:prismhub/views/pages/main_page.dart';
+import 'package:prismhub/views/pages/nsfw18/nsfw18_search_page.dart';
+import 'package:prismhub/views/pages/nsfw18/nsfw18_zone_page.dart';
 import 'package:prismhub/views/pages/search/extension_searcher_page.dart';
 import 'package:prismhub/views/pages/search/search_page.dart';
 import 'package:prismhub/views/pages/settings/settings_page.dart';
@@ -55,6 +57,7 @@ final router = GoRouter(
                     state.uri.queryParameters['tab'] ?? '',
                   ) ??
                   0,
+              zone: state.uri.queryParameters['zone'] == '1',
             ),
           ),
         ),
@@ -63,15 +66,26 @@ final router = GoRouter(
           pageBuilder: (context, state) => _animation(
             state,
             FavoritesPage(
-              type: ExtensionType.values[int.parse(
-                state.uri.queryParameters['type']!,
-              )],
+              type: _enumFromQuery(
+                state.uri.queryParameters['type'],
+                ExtensionType.values,
+              ),
             ),
           ),
         ),
         GoRoute(
           path: '/search',
-          pageBuilder: (context, state) => _animation(state, const SearchPage()),
+          pageBuilder: (context, state) =>
+              _animation(state, const SearchPage()),
+        ),
+        // Zona +18 del buscador. En escritorio manda go_router (el navegador de
+        // GetX no está activo acá, ver main.dart), así que necesita su propia
+        // ruta — mismo criterio que /adult-zone y /detail. En Android no se usa:
+        // ahí se empuja con Get.to (ver openNsfw18Search).
+        GoRoute(
+          path: '/adult-search',
+          pageBuilder: (context, state) =>
+              _animation(state, const Nsfw18SearchGate()),
         ),
         GoRoute(
           path: '/search_extension',
@@ -112,10 +126,18 @@ final router = GoRouter(
           pageBuilder: (context, state) => _animation(
             state,
             AnilistMorePage(
-              anilistType: AnilistType.values[int.parse(
-                state.uri.queryParameters['type']!,
-              )],
+              anilistType: _enumFromQuery(
+                state.uri.queryParameters['type'],
+                AnilistType.values,
+              ),
             ),
+          ),
+        ),
+        GoRoute(
+          path: '/adult-zone',
+          pageBuilder: (context, state) => _animation(
+            state,
+            Nsfw18ZoneGate(from: state.uri.queryParameters['from']),
           ),
         ),
         GoRoute(
@@ -135,6 +157,7 @@ final router = GoRouter(
                 url: url,
                 package: package,
                 tag: '$package|$url',
+                isAdultOption: state.uri.queryParameters['adult'] == '1',
               ),
             );
           },
@@ -171,4 +194,15 @@ Page<void> _animation(GoRouterState state, Widget child) {
       );
     },
   );
+}
+
+// Los parámetros de una URL son texto arbitrario. Antes esto era
+// `Values[int.parse(params['type']!)]`, o sea tres formas de reventar en una
+// línea: `!` con el parámetro ausente, `int.parse` con algo que no es número,
+// y el índice fuera de rango con un número cualquiera. Una ruta mal armada
+// —o un enlace externo -- tumbaba la pantalla en vez de abrir algo razonable.
+T _enumFromQuery<T>(String? raw, List<T> values) {
+  final index = int.tryParse(raw ?? '') ?? 0;
+  if (index < 0 || index >= values.length) return values.first;
+  return values[index];
 }

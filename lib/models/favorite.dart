@@ -14,4 +14,6 @@ class Favorite {
   late String title;
   String? cover;
   DateTime date = DateTime.now();
+  // Zona +18: ver History.isNsfw — mismo criterio.
+  bool isNsfw = false;
 }

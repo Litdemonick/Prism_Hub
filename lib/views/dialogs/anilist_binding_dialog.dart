@@ -7,6 +7,7 @@ import 'package:get/get.dart';
 import 'package:prismhub/data/providers/anilist_provider.dart';
 import 'package:prismhub/router/router.dart';
 import 'package:prismhub/utils/i18n.dart';
+import 'package:prismhub/utils/search_text.dart';
 import 'package:prismhub/views/widgets/grid_item_tile.dart';
 import 'package:prismhub/views/widgets/infinite_scroller.dart';
 import 'package:prismhub/views/widgets/messenger.dart';
@@ -49,7 +50,7 @@ class _AnilistBindingDialogState extends State<AnilistBindingDialog> {
       _isLoading = true;
       setState(() {});
       final result = await AniListProvider.mediaQuerypage(
-        searchString: _keyWord,
+        searchString: SearchText.sanitizeForRemoteQuery(_keyWord),
         type: widget.type,
         page: _page,
       );
@@ -172,15 +173,32 @@ class _AnilistBindingDialogState extends State<AnilistBindingDialog> {
                 const Spacer(),
                 SizedBox(
                   width: 300,
-                  child: fluent.TextBox(
-                    onChanged: (value) {
-                      if (value.isEmpty) {
-                        _onSearch(value);
-                      }
-                    },
-                    onSubmitted: _onSearch,
-                    controller: _textEditingController,
-                    placeholder: 'search.hint-text'.i18n,
+                  // ValueListenableBuilder para que el botón de limpiar
+                  // (antes no existía en desktop) aparezca/desaparezca en
+                  // vivo mientras se escribe, sin necesitar setState propio.
+                  child: ValueListenableBuilder<TextEditingValue>(
+                    valueListenable: _textEditingController,
+                    builder: (context, value, _) => fluent.TextBox(
+                      onChanged: (value) {
+                        if (value.isEmpty) {
+                          _onSearch(value);
+                        }
+                      },
+                      onSubmitted: _onSearch,
+                      controller: _textEditingController,
+                      placeholder: 'search.hint-text'.i18n,
+                      suffix: value.text.isEmpty
+                          ? null
+                          : fluent.IconButton(
+                              icon: const Icon(
+                                  fluent.FluentIcons.chrome_close,
+                                  size: 9.0),
+                              onPressed: () {
+                                _textEditingController.clear();
+                                _onSearch('');
+                              },
+                            ),
+                    ),
                   ),
                 )
               ],

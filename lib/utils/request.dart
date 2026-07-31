@@ -1,4 +1,4 @@
-﻿import 'package:cookie_jar/cookie_jar.dart';
+import 'package:cookie_jar/cookie_jar.dart';
 import 'package:dio/dio.dart';
 import 'package:dio_cookie_manager/dio_cookie_manager.dart';
 import 'package:flutter_socks_proxy/socks_proxy.dart';
@@ -37,10 +37,15 @@ class PrismRequest {
   static refreshProxy() {
     String proxy = "";
     final type = PrismHubStorage.getSetting(SettingKey.proxyType);
-    if (type == "DIRECT") {
-      proxy = type;
+    // Cualquier cosa que no sea un tipo de proxy válido se trata como
+    // conexión directa. Con un ajuste en null esto armaba la cadena literal
+    // "null null" y SocksProxy la rechazaba con "Invalid proxy
+    // configuration", o sea que TODA la red de la app quedaba muerta.
+    if (type is! String || type.isEmpty || type == "DIRECT") {
+      proxy = "DIRECT";
     } else {
-      proxy = '$type ${PrismHubStorage.getSetting(SettingKey.proxy)}';
+      final host = PrismHubStorage.getSetting(SettingKey.proxy);
+      proxy = host is String && host.isNotEmpty ? '$type $host' : "DIRECT";
     }
 
     if (!_isInitialized) {
@@ -110,6 +115,20 @@ class PrismRequest {
     await cookieJarForPackage(package).delete(Uri.parse(url));
   }
 
+  // Borra TODAS las cookies de una extensión, no las de un sitio puntual.
+  //
+  // Hace falta porque el frasco es persistente y está ligado al paquete:
+  // desinstalar y reinstalar la extensión NO lo limpia, así que una sesión que
+  // queda en mal estado sobrevive a cualquier versión nueva y la única salida
+  // era borrar los datos del app entero (perdiendo extensiones, PIN e
+  // historial).
+  //
+  // A propósito NO se llama sola al actualizar: eso cerraría la sesión de las
+  // extensiones que dependen de un login. Es una acción explícita del usuario.
+  static Future<void> clearCookiesForPackage(String package) async {
+    await cookieJarForPackage(package).deleteAll();
+  }
+
   static Future<void> setCookieForPackage(
       String package, String cookies, String url) async {
     final cookieList = cookies.split(';');
@@ -122,7 +141,8 @@ class PrismRequest {
   }
 
   static Future<String> getCookieForPackage(String package, String url) async {
-    final cookies = await cookieJarForPackage(package).loadForRequest(Uri.parse(url));
+    final cookies =
+        await cookieJarForPackage(package).loadForRequest(Uri.parse(url));
     return cookies.map((e) => e.toString()).join(';');
   }
 }

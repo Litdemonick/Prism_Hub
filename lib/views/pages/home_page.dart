@@ -10,7 +10,6 @@ import 'package:prismhub/utils/extension.dart';
 import 'package:prismhub/utils/hidden_cards.dart';
 import 'package:prismhub/utils/i18n.dart';
 import 'package:prismhub/utils/resume_history.dart';
-import 'package:prismhub/views/pages/detail_page.dart';
 import 'package:prismhub/views/pages/history_page.dart';
 import 'package:prismhub/views/widgets/home/animated_background_glow.dart';
 import 'package:prismhub/views/widgets/home/home_hero_banner.dart';
@@ -18,6 +17,17 @@ import 'package:prismhub/views/widgets/home/home_media_card.dart';
 import 'package:prismhub/views/widgets/home/home_section.dart';
 import 'package:prismhub/views/widgets/home/home_theme.dart';
 import 'package:prismhub/views/widgets/platform_widget.dart';
+
+// Card ancha estilo Crunchyroll: solo en escritorio (Windows/Linux). En
+// Android se mantiene la vertical, que es la que entra bien en pantallas
+// chicas tanto en vertical como en horizontal.
+final bool _wideCards = !Platform.isAndroid;
+
+// true en horizontal de celular, donde el alto útil es ~300-390 y cada bloque
+// de aire vertical se nota muchísimo más que en vertical o en escritorio.
+bool _tightTop(BuildContext context) =>
+    Platform.isAndroid &&
+    MediaQuery.of(context).orientation == Orientation.landscape;
 
 class HomePage extends StatefulWidget {
   const HomePage({super.key});
@@ -48,21 +58,7 @@ class _HomePageState extends State<HomePage> {
   }
 
   void _openDetail(String url, String package) {
-    if (Platform.isAndroid) {
-      Get.to(DetailPage(
-        key: ValueKey('$package|$url'),
-        url: url,
-        package: package,
-        tag: '$package|$url',
-      ));
-      return;
-    }
-    router.push(
-      Uri(
-        path: '/detail',
-        queryParameters: {'url': url, 'package': package},
-      ).toString(),
-    );
+    ExtensionUtils.openExtensionDetail(context, package: package, url: url);
   }
 
   void _openHistoryTab(int tab) {
@@ -79,7 +75,8 @@ class _HomePageState extends State<HomePage> {
   bool _isRemoteCover(String? cover) {
     if (cover == null || cover.isEmpty) return false;
     final normalized = cover.toLowerCase();
-    return normalized.startsWith('http://') || normalized.startsWith('https://');
+    return normalized.startsWith('http://') ||
+        normalized.startsWith('https://');
   }
 
   Widget _buildContent() {
@@ -127,7 +124,11 @@ class _HomePageState extends State<HomePage> {
                             // 20s) del resto de Home — ver comentario arriba.
                             Obx(() => HomeHeroBanner(
                                 background: c.heroBackground.value)),
-                            const SizedBox(height: 32),
+                            // El aire entre el hero y la primera fila se
+                            // achica en horizontal de celular: ahí el alto
+                            // total es ~300-390 y 32px de hueco eran una
+                            // porción visible de la pantalla.
+                            SizedBox(height: _tightTop(context) ? 14 : 32),
                             if (isEmpty)
                               SizedBox(
                                 // 32 (padding vertical del Column) + 32 (gap
@@ -140,6 +141,17 @@ class _HomePageState extends State<HomePage> {
                               ),
                             if (c.resents.isNotEmpty) ...[
                               HomeSection(
+                                itemWidth:
+                                    _wideCards ? HomeMediaCard.wideWidth : null,
+                                itemHeight: _wideCards
+                                    ? HomeMediaCard.wideTotalHeight
+                                    : null,
+                                itemCoverHeight: _wideCards
+                                    ? HomeMediaCard.wideImageHeight
+                                    : null,
+                                // Panel de fondo por sección, para que
+                                // Continuar y Favoritos se lean separados.
+                                boxed: true,
                                 title: 'home.continue-watching'.i18n,
                                 onClickMore: () => _openHistoryTab(0),
                                 itemCount: c.resents.length,
@@ -157,6 +169,7 @@ class _HomePageState extends State<HomePage> {
                                   final remoteVideoCover =
                                       isVideo && _isRemoteCover(h.cover);
                                   return Obx(() => HomeMediaCard(
+                                        horizontal: _wideCards,
                                         title: h.title,
                                         subtitle: FlutterI18n.translate(
                                           context,
@@ -182,7 +195,9 @@ class _HomePageState extends State<HomePage> {
                                         // al PRISM_HUB default, aunque la captura
                                         // real existiera (Historial sí lo hacía bien).
                                         cover: isVideo
-                                            ? (remoteVideoCover ? h.cover : null)
+                                            ? (remoteVideoCover
+                                                ? h.cover
+                                                : null)
                                             : h.cover,
                                         coverFile: isVideo &&
                                                 h.cover != null &&
@@ -197,6 +212,9 @@ class _HomePageState extends State<HomePage> {
                                         // para retomar donde quedaste.
                                         onTap: () =>
                                             resumeHistoryItem(context, h),
+                                        // Borrar desde el propio Home, sin
+                                        // pasar por el Historial.
+                                        onDelete: () => c.deleteHistory(h),
                                         hidden: HiddenCards.isHidden(
                                             h.package, h.url),
                                         onToggleHide: () => HiddenCards.toggle(
@@ -208,6 +226,17 @@ class _HomePageState extends State<HomePage> {
                             ],
                             if (c.favorites.isNotEmpty) ...[
                               HomeSection(
+                                itemWidth:
+                                    _wideCards ? HomeMediaCard.wideWidth : null,
+                                itemHeight: _wideCards
+                                    ? HomeMediaCard.wideTotalHeight
+                                    : null,
+                                itemCoverHeight: _wideCards
+                                    ? HomeMediaCard.wideImageHeight
+                                    : null,
+                                // Panel de fondo por sección, para que
+                                // Continuar y Favoritos se lean separados.
+                                boxed: true,
                                 title: 'home.favorite'.i18n,
                                 onClickMore: () =>
                                     _openHistoryTab(_favoritesTabIndex),
@@ -215,6 +244,7 @@ class _HomePageState extends State<HomePage> {
                                 itemBuilder: (context, index) {
                                   final f = c.favorites[index];
                                   return Obx(() => HomeMediaCard(
+                                        horizontal: _wideCards,
                                         title: f.title,
                                         subtitle: 'home.favorite'.i18n,
                                         type: f.type,
@@ -226,6 +256,8 @@ class _HomePageState extends State<HomePage> {
                                         headers: c.headersForPackage(f.package),
                                         onTap: () =>
                                             _openDetail(f.url, f.package),
+                                        // Quitar de favoritos desde el Home.
+                                        onDelete: () => c.deleteFavorite(f),
                                         hidden: HiddenCards.isHidden(
                                             f.package, f.url),
                                         onToggleHide: () => HiddenCards.toggle(

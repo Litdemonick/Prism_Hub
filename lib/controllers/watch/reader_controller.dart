@@ -1,5 +1,6 @@
 import 'dart:async';
 
+import 'package:flutter/widgets.dart';
 import 'package:get/get.dart';
 import 'package:prismhub/models/extension.dart';
 import 'package:prismhub/models/history.dart';
@@ -7,8 +8,9 @@ import 'package:prismhub/controllers/home_controller.dart';
 import 'package:prismhub/data/services/database_service.dart';
 import 'package:prismhub/data/services/extension_service.dart';
 import 'package:prismhub/utils/error.dart';
+import 'package:prismhub/utils/log.dart';
 
-class ReaderController<T> extends GetxController {
+class ReaderController<T> extends GetxController with WidgetsBindingObserver {
   final String title;
   final List<ExtensionEpisode> playList;
   final String detailUrl;
@@ -26,6 +28,11 @@ class ReaderController<T> extends GetxController {
   // ahí sí hace falta abrir un detalle nuevo, o "Ver detalle" no llevaría
   // a ningún lado.
   final bool cameFromDetail;
+  // Zona +18: viene de DetailPageController.isNsfw (extensión 100% nsfw, o
+  // extensión mixta con la opción "adultos" del filtro seleccionada al
+  // buscar). Se copia al History guardado en addHistory() para que ese
+  // ítem puntual quede fuera del Continuar normal y solo se vea acá.
+  final bool isNsfw;
 
   ReaderController({
     required this.title,
@@ -37,6 +44,7 @@ class ReaderController<T> extends GetxController {
     required this.anilistID,
     this.cover,
     this.cameFromDetail = false,
+    this.isNsfw = false,
   });
 
   // Tag único para Get.put/Get.find/Get.delete — antes se usaba solo
@@ -63,10 +71,27 @@ class ReaderController<T> extends GetxController {
 
   @override
   void onInit() {
+    WidgetsBinding.instance.addObserver(this);
     getContent();
     addWorker(ever(index, (callback) => getContent()));
     super.onInit();
   }
+
+  // Guardar el progreso SOLO en onClose no alcanzaba: si el usuario apaga la
+  // pantalla leyendo y Android mata el proceso en segundo plano, onClose no
+  // llega a correr nunca y se pierde por dónde iba. Acá se vuelca apenas la
+  // app pasa a segundo plano, que es el último momento garantizado.
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.paused ||
+        state == AppLifecycleState.hidden) {
+      saveProgressNow();
+    }
+  }
+
+  // Cada lector sabe cómo se mide su progreso (página vs. posición de scroll).
+  // Vacío acá: los que no lo implementen simplemente no vuelcan nada.
+  void saveProgressNow() {}
 
   void addWorker(Worker worker) {
     _workers.add(worker);
@@ -124,6 +149,7 @@ class ReaderController<T> extends GetxController {
 
   @override
   void onClose() {
+    WidgetsBinding.instance.removeObserver(this);
     // showControlPanel() se dispara con solo mover el mouse cerca de los
     // bordes (ver reader_view.dart, onHover) — pasa en casi cualquier
     // sesión de lectura. Sin cancelar acá, si el usuario sale del lector
@@ -138,6 +164,18 @@ class ReaderController<T> extends GetxController {
   }
 
   addHistory(String progress, String totalProgress) async {
+    // try/catch obligatorio: esto se llama desde onClose y desde el callback
+    // de ciclo de vida, o sea desde lugares donde nadie está esperando el
+    // Future. Una excepción ahí sería un error asíncrono sin dueño — se ve
+    // como que la app "se rompió de la nada" y encima sin mensaje.
+    try {
+      await _putHistory(progress, totalProgress);
+    } catch (e, st) {
+      logger.severe('No se pudo guardar el progreso de lectura', e, st);
+    }
+  }
+
+  Future<void> _putHistory(String progress, String totalProgress) async {
     await DatabaseService.putHistory(
       History()
         ..url = detailUrl
@@ -152,8 +190,9 @@ class ReaderController<T> extends GetxController {
         ..title = title
         ..progress = progress
         ..totalProgress = totalProgress
-        ..cover = cover,
+        ..cover = cover
+        ..isNsfw = isNsfw,
     );
-    await Get.find<HomePageController>().onRefresh();
+    await HomePageController.refreshAll();
   }
 }

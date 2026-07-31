@@ -16,6 +16,11 @@ class HomeSection extends StatefulWidget {
     required this.itemCount,
     required this.itemBuilder,
     this.showNavButtons = true,
+    this.itemWidth,
+    this.itemHeight,
+    this.itemCoverHeight,
+    this.boxed = false,
+    this.accent = HomeTheme.accentPink,
   });
 
   final String title;
@@ -23,6 +28,22 @@ class HomeSection extends StatefulWidget {
   final int itemCount;
   final Widget Function(BuildContext, int) itemBuilder;
   final bool showNavButtons;
+  // Tamaño de ítem a medida — para filas que no usan la card vertical
+  // estándar (ej. la horizontal 16:9 del Home de escritorio).
+  final double? itemWidth;
+  final double? itemHeight;
+  // Alto SOLO de la portada, sin el título de abajo. Se usa para centrar las
+  // flechas flotantes de los costados: si se centran en el alto total de la
+  // fila quedan más abajo que las imágenes con las que se supone que están
+  // alineadas. Si no se pasa, se asume que el alto de ítem ya es el de la
+  // portada (que es el caso de la card vertical).
+  final double? itemCoverHeight;
+  // true = la sección se dibuja sobre su propio panel redondeado. Sirve para
+  // que "Continuar" y "Favoritos" se lean como dos bloques separados y no
+  // como una lista larga de cards sueltas sobre el fondo de la página.
+  final bool boxed;
+  // Zona +18: se pasa HomeTheme.accentRed para diferenciar esa pantalla.
+  final Color accent;
 
   @override
   State<HomeSection> createState() => _HomeSectionState();
@@ -32,6 +53,9 @@ class _HomeSectionState extends State<HomeSection> {
   final ScrollController _controller = ScrollController();
   bool _headerHover = false;
 
+  // Los botones ‹ › del encabezado avanzan DE A POCO (un par de cards) —
+  // para acomodar la fila con precisión. El salto largo es el de las flechas
+  // flotantes de los costados, que recorren una pantalla entera de una.
   void _move(bool left) {
     _controller.animateTo(
       (_controller.offset + (left ? -400 : 400))
@@ -61,10 +85,16 @@ class _HomeSectionState extends State<HomeSection> {
         : Platform.isAndroid
             ? HomeMediaCard.androidHeight
             : HomeMediaCard.desktopHeight;
+    // Overrides opcionales: sin esto el alto de la fila sale SIEMPRE de las
+    // constantes de la card vertical, así que cualquier card con otra forma
+    // (ej. la horizontal 16:9 del Home de escritorio) se veía recortada y
+    // parecía un bug del diseño cuando en realidad era el alto reservado acá.
+    final effWidth = widget.itemWidth ?? cardWidth;
+    final effHeight = widget.itemHeight ?? cardHeight;
     final list = ListView.builder(
       scrollDirection: Axis.horizontal,
       controller: _controller,
-      itemExtent: cardWidth + 16,
+      itemExtent: effWidth + 16,
       itemCount: widget.itemCount,
       itemBuilder: (context, index) => Padding(
         padding: const EdgeInsets.only(right: 16),
@@ -72,7 +102,7 @@ class _HomeSectionState extends State<HomeSection> {
       ),
     );
 
-    return Column(
+    final section = Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Row(
@@ -90,7 +120,7 @@ class _HomeSectionState extends State<HomeSection> {
                       duration: const Duration(milliseconds: 150),
                       style: TextStyle(
                         color: _headerHover
-                            ? HomeTheme.accentPink
+                            ? widget.accent
                             : HomeTheme.textPrimary,
                         fontSize: 17,
                         fontWeight: FontWeight.w700,
@@ -101,9 +131,8 @@ class _HomeSectionState extends State<HomeSection> {
                     AnimatedDefaultTextStyle(
                       duration: const Duration(milliseconds: 150),
                       style: TextStyle(
-                        color: _headerHover
-                            ? HomeTheme.accentPink
-                            : HomeTheme.textMuted,
+                        color:
+                            _headerHover ? widget.accent : HomeTheme.textMuted,
                         fontSize: 15,
                       ),
                       child: AnimatedSlide(
@@ -127,15 +156,49 @@ class _HomeSectionState extends State<HomeSection> {
         ),
         const SizedBox(height: 14),
         SizedBox(
-          // Alto de la portada (HomeMediaCard) + margen para el título y
-          // subtítulo que van DEBAJO de eso — sin el margen, la fila
+          // Con la card vertical, itemHeight es el alto de la PORTADA y hay
+          // que sumarle el título/subtítulo de abajo — sin ese margen la fila
           // desborda (visto en vivo: "overflowed by 44/26 pixels"). En
-          // Android horizontal, HomeMediaCard usa su variante más chica
-          // (ver androidLandscapeHeight) — hay que matchear acá también.
-          height: cardHeight + 50,
-          child: HorizontalScrollFade(controller: _controller, child: list),
+          // Android horizontal usa su variante más chica (ver
+          // androidLandscapeHeight) — hay que matchear acá también.
+          //
+          // Cuando se pasa itemHeight a mano (card ancha), ese número YA es el
+          // alto total de la card: sumarle 50 dejaba una franja muerta de 50px
+          // entre una sección y la siguiente. Solo se agrega un colchón chico
+          // por si el texto redondea distinto en otra densidad de pantalla.
+          height: widget.itemHeight != null ? effHeight + 8 : effHeight + 50,
+          child: HorizontalScrollFade(
+            controller: _controller,
+            // Se centran con la PORTADA, no con el alto total de la fila
+            // (que suma el título de abajo) — por eso quedaban corridas.
+            arrowCenterFromTop: (widget.itemCoverHeight ?? effHeight) / 2,
+            arrowColor: widget.accent,
+            // Salto largo: estas flechas son las de "pasar rápido".
+            pageScroll: true,
+            // Solo la flecha, sin el velo de fondo.
+            showFade: false,
+            child: list,
+          ),
         ),
       ],
+    );
+
+    if (!widget.boxed) return section;
+    return Container(
+      // En celular el panel va con menos aire a los costados: la página ya
+      // aporta 16 de margen, y sumarle otros 16 dejaba las cards con muy
+      // poco ancho útil en una pantalla angosta.
+      padding: Platform.isAndroid
+          ? const EdgeInsets.fromLTRB(10, 14, 10, 14)
+          : const EdgeInsets.fromLTRB(16, 16, 16, 18),
+      decoration: BoxDecoration(
+        // Apenas más claro que el fondo de la página, con un borde tenue: la
+        // idea es delimitar, no competir con las portadas.
+        color: HomeTheme.cardSurface.withValues(alpha: 0.55),
+        borderRadius: BorderRadius.circular(18),
+        border: Border.all(color: HomeTheme.border.withValues(alpha: 0.6)),
+      ),
+      child: section,
     );
   }
 }

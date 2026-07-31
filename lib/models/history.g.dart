@@ -42,34 +42,39 @@ const HistorySchema = CollectionSchema(
       name: r'episodeTitle',
       type: IsarType.string,
     ),
-    r'package': PropertySchema(
+    r'isNsfw': PropertySchema(
       id: 5,
+      name: r'isNsfw',
+      type: IsarType.bool,
+    ),
+    r'package': PropertySchema(
+      id: 6,
       name: r'package',
       type: IsarType.string,
     ),
     r'progress': PropertySchema(
-      id: 6,
+      id: 7,
       name: r'progress',
       type: IsarType.string,
     ),
     r'title': PropertySchema(
-      id: 7,
+      id: 8,
       name: r'title',
       type: IsarType.string,
     ),
     r'totalProgress': PropertySchema(
-      id: 8,
+      id: 9,
       name: r'totalProgress',
       type: IsarType.string,
     ),
     r'type': PropertySchema(
-      id: 9,
+      id: 10,
       name: r'type',
       type: IsarType.string,
       enumMap: _HistorytypeEnumValueMap,
     ),
     r'url': PropertySchema(
-      id: 10,
+      id: 11,
       name: r'url',
       type: IsarType.string,
     )
@@ -140,12 +145,13 @@ void _historySerialize(
   writer.writeLong(offsets[2], object.episodeGroupId);
   writer.writeLong(offsets[3], object.episodeId);
   writer.writeString(offsets[4], object.episodeTitle);
-  writer.writeString(offsets[5], object.package);
-  writer.writeString(offsets[6], object.progress);
-  writer.writeString(offsets[7], object.title);
-  writer.writeString(offsets[8], object.totalProgress);
-  writer.writeString(offsets[9], object.type.name);
-  writer.writeString(offsets[10], object.url);
+  writer.writeBool(offsets[5], object.isNsfw);
+  writer.writeString(offsets[6], object.package);
+  writer.writeString(offsets[7], object.progress);
+  writer.writeString(offsets[8], object.title);
+  writer.writeString(offsets[9], object.totalProgress);
+  writer.writeString(offsets[10], object.type.name);
+  writer.writeString(offsets[11], object.url);
 }
 
 History _historyDeserialize(
@@ -161,13 +167,15 @@ History _historyDeserialize(
   object.episodeId = reader.readLong(offsets[3]);
   object.episodeTitle = reader.readString(offsets[4]);
   object.id = id;
-  object.package = reader.readString(offsets[5]);
-  object.progress = reader.readString(offsets[6]);
-  object.title = reader.readString(offsets[7]);
-  object.totalProgress = reader.readString(offsets[8]);
-  object.type = _HistorytypeValueEnumMap[reader.readStringOrNull(offsets[9])] ??
-      ExtensionType.manga;
-  object.url = reader.readString(offsets[10]);
+  object.isNsfw = reader.readBool(offsets[5]);
+  object.package = reader.readString(offsets[6]);
+  object.progress = reader.readString(offsets[7]);
+  object.title = reader.readString(offsets[8]);
+  object.totalProgress = reader.readString(offsets[9]);
+  object.type =
+      _HistorytypeValueEnumMap[reader.readStringOrNull(offsets[10])] ??
+          ExtensionType.manga;
+  object.url = reader.readString(offsets[11]);
   return object;
 }
 
@@ -189,7 +197,7 @@ P _historyDeserializeProp<P>(
     case 4:
       return (reader.readString(offset)) as P;
     case 5:
-      return (reader.readString(offset)) as P;
+      return (reader.readBool(offset)) as P;
     case 6:
       return (reader.readString(offset)) as P;
     case 7:
@@ -197,9 +205,11 @@ P _historyDeserializeProp<P>(
     case 8:
       return (reader.readString(offset)) as P;
     case 9:
+      return (reader.readString(offset)) as P;
+    case 10:
       return (_HistorytypeValueEnumMap[reader.readStringOrNull(offset)] ??
           ExtensionType.manga) as P;
-    case 10:
+    case 11:
       return (reader.readString(offset)) as P;
     default:
       throw IsarError('Unknown property with id $propertyId');
@@ -883,6 +893,16 @@ extension HistoryQueryFilter
         includeLower: includeLower,
         upper: upper,
         includeUpper: includeUpper,
+      ));
+    });
+  }
+
+  QueryBuilder<History, History, QAfterFilterCondition> isNsfwEqualTo(
+      bool value) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.equalTo(
+        property: r'isNsfw',
+        value: value,
       ));
     });
   }
@@ -1737,6 +1757,18 @@ extension HistoryQuerySortBy on QueryBuilder<History, History, QSortBy> {
     });
   }
 
+  QueryBuilder<History, History, QAfterSortBy> sortByIsNsfw() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addSortBy(r'isNsfw', Sort.asc);
+    });
+  }
+
+  QueryBuilder<History, History, QAfterSortBy> sortByIsNsfwDesc() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addSortBy(r'isNsfw', Sort.desc);
+    });
+  }
+
   QueryBuilder<History, History, QAfterSortBy> sortByPackage() {
     return QueryBuilder.apply(this, (query) {
       return query.addSortBy(r'package', Sort.asc);
@@ -1884,6 +1916,18 @@ extension HistoryQuerySortThenBy
     });
   }
 
+  QueryBuilder<History, History, QAfterSortBy> thenByIsNsfw() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addSortBy(r'isNsfw', Sort.asc);
+    });
+  }
+
+  QueryBuilder<History, History, QAfterSortBy> thenByIsNsfwDesc() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addSortBy(r'isNsfw', Sort.desc);
+    });
+  }
+
   QueryBuilder<History, History, QAfterSortBy> thenByPackage() {
     return QueryBuilder.apply(this, (query) {
       return query.addSortBy(r'package', Sort.asc);
@@ -1991,6 +2035,12 @@ extension HistoryQueryWhereDistinct
     });
   }
 
+  QueryBuilder<History, History, QDistinct> distinctByIsNsfw() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addDistinctBy(r'isNsfw');
+    });
+  }
+
   QueryBuilder<History, History, QDistinct> distinctByPackage(
       {bool caseSensitive = true}) {
     return QueryBuilder.apply(this, (query) {
@@ -2070,6 +2120,12 @@ extension HistoryQueryProperty
   QueryBuilder<History, String, QQueryOperations> episodeTitleProperty() {
     return QueryBuilder.apply(this, (query) {
       return query.addPropertyName(r'episodeTitle');
+    });
+  }
+
+  QueryBuilder<History, bool, QQueryOperations> isNsfwProperty() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addPropertyName(r'isNsfw');
     });
   }
 

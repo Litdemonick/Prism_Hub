@@ -1,7 +1,9 @@
 ﻿import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:get/get.dart';
 import 'package:prismhub/controllers/watch/novel_controller.dart';
 import 'package:prismhub/utils/i18n.dart';
+import 'package:prismhub/utils/router.dart';
 import 'package:prismhub/views/widgets/button.dart';
 import 'package:prismhub/views/widgets/platform_widget.dart';
 import 'package:prismhub/views/widgets/progress.dart';
@@ -213,11 +215,37 @@ class _NovelReaderContentState extends State<NovelReaderContent> {
     );
   }
 
+  // Escape cierra el lector, igual que el botón de atrás y que en el lector de
+  // manga. Esta pantalla no tenía NINGÚN manejo de teclado propio, así que
+  // hace falta el FocusNode con autofocus para que los eventos lleguen; el
+  // scroll con flechas/rueda lo sigue manejando el Scrollable por defecto de
+  // Flutter, que acá anda bien (a diferencia del lector de manga, donde había
+  // un salto por página que se encadenaba).
+  final _keyboardFocusNode = FocusNode();
+
+  @override
+  void dispose() {
+    _keyboardFocusNode.dispose();
+    super.dispose();
+  }
+
+  void _onKeyEvent(KeyEvent event) {
+    if (event is KeyDownEvent &&
+        event.logicalKey == LogicalKeyboardKey.escape) {
+      RouterUtils.closeReader(context);
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
-    return PlatformBuildWidget(
-      androidBuilder: _buildAndroid,
-      desktopBuilder: _buildDesktop,
+    return KeyboardListener(
+      focusNode: _keyboardFocusNode,
+      autofocus: true,
+      onKeyEvent: _onKeyEvent,
+      child: PlatformBuildWidget(
+        androidBuilder: _buildAndroid,
+        desktopBuilder: _buildDesktop,
+      ),
     );
   }
 }

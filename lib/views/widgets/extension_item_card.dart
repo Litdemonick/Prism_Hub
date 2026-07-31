@@ -1,8 +1,6 @@
 ﻿import 'package:flutter/material.dart';
-import 'package:get/get.dart';
 import 'package:prismhub/models/extension.dart';
-import 'package:prismhub/views/pages/detail_page.dart';
-import 'package:prismhub/router/router.dart';
+import 'package:prismhub/utils/extension.dart';
 import 'package:prismhub/views/widgets/grid_item_tile.dart';
 import 'package:prismhub/views/widgets/platform_widget.dart';
 
@@ -16,6 +14,7 @@ class ExtensionItemCard extends StatefulWidget {
     this.update,
     this.headers,
     this.type,
+    this.isAdultOption = false,
   });
   final String title;
   final String? cover;
@@ -25,6 +24,11 @@ class ExtensionItemCard extends StatefulWidget {
   final Map<String, String>? headers;
   // Solo se pasa desde Home — en el resto de la app queda null.
   final ExtensionType? type;
+  // Zona +18: true cuando este resultado vino de la opción "adultos" de un
+  // filtro de una extensión mixta (ver
+  // ExtensionSearcherPage._adultOptionSelected). Viaja hasta DetailPage
+  // para que el Favorite/History que se guarde desde ahí quede marcado +18.
+  final bool isAdultOption;
 
   @override
   State<ExtensionItemCard> createState() => _ExtensionItemCardState();
@@ -44,14 +48,12 @@ class _ExtensionItemCardState extends State<ExtensionItemCard> {
       subtitle: widget.update,
       headers: widget.headers,
       type: widget.type,
-      onTap: () {
-        Get.to(DetailPage(
-          key: ValueKey('${widget.package}|${widget.url}'),
-          url: widget.url,
-          package: widget.package,
-          tag: '${widget.package}|${widget.url}',
-        ));
-      },
+      onTap: () => ExtensionUtils.openExtensionDetail(
+        context,
+        package: widget.package,
+        url: widget.url,
+        isAdultOption: widget.isAdultOption,
+      ),
     );
   }
 
@@ -62,17 +64,12 @@ class _ExtensionItemCardState extends State<ExtensionItemCard> {
       subtitle: widget.update,
       headers: widget.headers,
       type: widget.type,
-      onTap: () {
-        router.push(
-          Uri(
-            path: '/detail',
-            queryParameters: {
-              "url": widget.url,
-              "package": widget.package,
-            },
-          ).toString(),
-        );
-      },
+      onTap: () => ExtensionUtils.openExtensionDetail(
+        context,
+        package: widget.package,
+        url: widget.url,
+        isAdultOption: widget.isAdultOption,
+      ),
     );
   }
 

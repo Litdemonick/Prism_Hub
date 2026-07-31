@@ -20,6 +20,7 @@ class WatchPage extends StatelessWidget {
     this.typeOverride,
     this.cameFromDetail = false,
     this.autoResume = false,
+    this.isNsfw = false,
   });
   final List<ExtensionEpisode> playList;
   final int playerIndex;
@@ -38,6 +39,7 @@ class WatchPage extends StatelessWidget {
   // Solo el lector (Comic/Novel) lo usa — ver ReaderController.cameFromDetail.
   final bool cameFromDetail;
   final bool autoResume;
+  final bool isNsfw;
 
   @override
   Widget build(BuildContext context) {
@@ -73,6 +75,7 @@ class WatchPage extends StatelessWidget {
           detailUrl: detailUrl,
           anilistID: anilistID,
           autoResume: autoResume,
+          isNsfw: isNsfw,
         );
       case ExtensionType.manga:
         return ComicReader(
@@ -85,6 +88,7 @@ class WatchPage extends StatelessWidget {
           cover: cover,
           anilistID: anilistID,
           cameFromDetail: cameFromDetail,
+          isNsfw: isNsfw,
         );
       default:
         return NovelReader(
@@ -97,6 +101,7 @@ class WatchPage extends StatelessWidget {
           cover: cover,
           anilistID: anilistID,
           cameFromDetail: cameFromDetail,
+          isNsfw: isNsfw,
         );
     }
   }

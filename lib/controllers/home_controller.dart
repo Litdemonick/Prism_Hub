@@ -8,10 +8,43 @@ import 'package:prismhub/models/index.dart';
 import 'package:prismhub/data/services/database_service.dart';
 import 'package:prismhub/utils/connectivity.dart';
 import 'package:prismhub/utils/extension.dart';
-import 'package:prismhub/utils/prismhub_storage.dart';
 import 'package:prismhub/utils/resume_history.dart';
 
 class HomePageController extends GetxController {
+  // Tag con el que se registra la instancia de la Zona +18 (mismo
+  // controller, ver Nsfw18ZonePage) — así ambas instancias conviven sin
+  // pisarse: Get.find<HomePageController>() sin tag sigue resolviendo
+  // siempre la del Home normal.
+  static const zoneTag = 'nsfw18-zone';
+
+  // Refresca la instancia normal Y la de la Zona +18 (si está montada) —
+  // usado por los sitios que tocan History/Favorite (detail/video/reader
+  // controllers) para que ambas vistas queden al día sin importar desde
+  // cuál de las dos se guardó el cambio.
+  static Future<void> refreshAll() async {
+    await Future.wait(<Future<void>>[
+      if (Get.isRegistered<HomePageController>())
+        Get.find<HomePageController>().onRefresh(),
+      if (Get.isRegistered<HomePageController>(tag: zoneTag))
+        Get.find<HomePageController>(tag: zoneTag).onRefresh(),
+    ]);
+  }
+
+  static Future<void> callRefreshAll() async {
+    await Future.wait(<Future<void>>[
+      if (Get.isRegistered<HomePageController>())
+        Get.find<HomePageController>().callRefresh(),
+      if (Get.isRegistered<HomePageController>(tag: zoneTag))
+        Get.find<HomePageController>(tag: zoneTag).callRefresh(),
+    ]);
+  }
+
+  // Zona +18: cuando es true, este controller muestra SOLO lo marcado +18
+  // (Continuar/Favoritos/hero rotando con extensiones 100% nsfw) — en vez
+  // de duplicar toda la lógica de rotación/pool en una clase aparte.
+  final bool nsfwOnly;
+  HomePageController({this.nsfwOnly = false});
+
   final RxList<History> resents = <History>[].obs;
   // All favorited types mixed together (Home shows one "Favoritos" section,
   // not one per type — the History page's Favoritos tab still lets you see
@@ -70,13 +103,27 @@ class HomePageController extends GetxController {
     super.onClose();
   }
 
+  // Borrar desde el Home, sin tener que entrar al Historial. Viven acá y no en
+  // cada página porque el Home normal y la Zona +18 usan ESTE mismo controller
+  // (con tag distinto), así que una sola implementación sirve para los dos.
+  Future<void> deleteHistory(History h) async {
+    await DatabaseService.deleteHistoryByPackageAndUrl(h.package, h.url);
+    await refreshHistory();
+  }
+
+  Future<void> deleteFavorite(Favorite f) async {
+    await DatabaseService.deleteFavorite(f.package, f.url);
+    // onRefresh y no refreshHistory: favoritos e historial se releen juntos.
+    await onRefresh();
+  }
+
   refreshHistory() async {
     // Fetch first, THEN swap — clearing before the await let the "no
     // history" empty state flash on screen for every refresh (including
     // the one that fires on every visit to Home), even when there was
     // data the whole time.
     final data = await DatabaseService.getHistorysByType();
-    resents.value = _onlyEnabled(data, (h) => h.package);
+    resents.value = _onlyEnabled(data, (h) => h.package, (h) => h.isNsfw);
   }
 
   // Refresco manual (deslizar en Android / botón "Actualizar" en PC) — trae
@@ -91,8 +138,10 @@ class HomePageController extends GetxController {
 
     // "Continuar viendo" mezcla todos los tipos (video + lectura) — un solo
     // lugar para retomar donde quedaste, sin separar por tipo.
-    final resentsData = _onlyEnabled(await historyFuture, (h) => h.package);
-    final favoritesData = _onlyEnabled(await favoritesFuture, (f) => f.package);
+    final resentsData =
+        _onlyEnabled(await historyFuture, (h) => h.package, (h) => h.isNsfw);
+    final favoritesData =
+        _onlyEnabled(await favoritesFuture, (f) => f.package, (f) => f.isNsfw);
     resents.value = resentsData;
     favorites.value = favoritesData;
     unawaited(prewarmResumeHistoryTargets(resentsData));
@@ -119,9 +168,18 @@ class HomePageController extends GetxController {
   // Oculta (no borra) historial/favoritos de extensiones desinstaladas o
   // desactivadas — si el usuario la vuelve a activar, vuelven a aparecer
   // solos porque el dato sigue intacto en la base, solo se filtra acá.
-  List<T> _onlyEnabled<T>(List<T> list, String Function(T) packageOf) {
+  // También separa +18 del resto (isNsfwOf): la instancia normal de Home
+  // solo muestra lo NO marcado +18; la instancia de la Zona +18 (nsfwOnly)
+  // es exactamente al revés.
+  List<T> _onlyEnabled<T>(
+    List<T> list,
+    String Function(T) packageOf,
+    bool Function(T) isNsfwOf,
+  ) {
     return list
-        .where((e) => ExtensionUtils.enabledRuntimes.containsKey(packageOf(e)))
+        .where((e) =>
+            ExtensionUtils.enabledRuntimes.containsKey(packageOf(e)) &&
+            isNsfwOf(e) == nsfwOnly)
         .toList();
   }
 
@@ -141,9 +199,17 @@ class HomePageController extends GetxController {
 
   Future<void> _refreshHeroPool() async {
     final exts = ExtensionUtils.enabledRuntimes.values.toList();
-    if (!PrismHubStorage.getSetting(SettingKey.enableNSFW)) {
-      exts.removeWhere((element) => element.extension.nsfw);
-    }
+    // Zona +18: el pool del hero sale SOLO de extensiones 100% nsfw — una
+    // extensión "mixta" (ej. ShadeManga) no sirve acá porque latest(1)
+    // ignora el filtro adulto, así que no hay forma de garantizar que lo
+    // que devuelve sea +18.
+    //
+    // Home normal: SOLO extensiones no-nsfw, sin excepción. Antes esto usaba
+    // isNsfwVisibleOutsideZone, que deja pasar las +18 cuando el switch de NSFW
+    // está prendido — y así la portada del hero del Home normal podía salir de
+    // una extensión +18 (reportado en vivo). El mismo criterio exacto que ya
+    // usan las secciones de contenido de más arriba (isNsfwOf(e) == nsfwOnly).
+    exts.removeWhere((element) => element.extension.nsfw != nsfwOnly);
     if (exts.isEmpty) {
       _extensionPool = [];
       _hasLoadedPoolOnce = true;

@@ -24,12 +24,14 @@ import 'package:prismhub/utils/external_player.dart';
 import 'package:prismhub/utils/i18n.dart';
 import 'package:prismhub/utils/prismhub_storage.dart';
 import 'package:prismhub/views/widgets/messenger.dart';
+import 'package:prismhub/views/widgets/nsfw_confirm_dialog.dart';
 
 class DetailPageController extends GetxController {
   DetailPageController({
     required this.package,
     required this.url,
     this.heroTag,
+    this.isAdultOption = false,
   });
 
   // Caché en memoria por sesión: evita re-fetch al volver al mismo detalle.
@@ -52,12 +54,63 @@ class DetailPageController extends GetxController {
   final String package;
   final String url;
   final String? heroTag;
+  // Zona +18: true si se llegó acá desde la opción "adultos" de un filtro
+  // de una extensión mixta (ej. ShadeManga/ManhwaWeb — ver
+  // ExtensionFilter.adultOption y ExtensionSearcherPage._adultOptionSelected).
+  // Atajo: si ya viene en true, _resolveNsfwStatus no necesita preguntar.
+  final bool isAdultOption;
+
+  // No se puede saber automáticamente, ítem por ítem, si algo es +18 o no —
+  // así que se le pregunta al usuario UNA vez por título, al mirar/leer o al
+  // marcar favorito, y se recuerda la respuesta (queda guardada en el propio
+  // History/Favorite, así que no se vuelve a preguntar nunca por ese título).
+  //
+  // Se pregunta en TODA extensión, no solo en las marcadas nsfw:true: a pedido
+  // explícito, una extensión sin esa marca igual puede tener contenido +18
+  // suelto, y el usuario tiene que poder mandarlo a la Zona +18. Antes se
+  // cortaba acá para las no-nsfw y nunca preguntaba.
+  bool? _nsfwAnswer;
+
+  // null = el usuario canceló (tocó afuera del diálogo) sin elegir Sí/No —
+  // quien llama a esto DEBE tratar null como "abortar la acción entera"
+  // (no favoritear, no abrir el reproductor/lector), no como "No". Antes
+  // tocar afuera devolvía false igual que "No" y la acción seguía de largo
+  // (favoriteaba igual, mandándolo al Home normal sin querer).
+  Future<bool?> resolveIsNsfw(BuildContext context,
+      {bool opening = true}) async {
+    // Ya se guardó antes (con esta respuesta o con el default de un
+    // registro viejo, previo a este campo) — no se vuelve a preguntar.
+    if (history.value != null) return history.value!.isNsfw;
+    if (favorite.value != null) return favorite.value!.isNsfw;
+    if (_nsfwAnswer != null) return _nsfwAnswer!;
+    // Venir del filtro "+18" de la extensión ya NO responde solo: antes acá
+    // había un `if (isAdultOption) return true;` que daba por hecho el sí. A
+    // pedido explícito se pregunta igual — el filtro dice qué se está
+    // explorando, no que ESTE título puntual sea +18.
+    final result = await showNsfwConfirmDialog(
+      context,
+      title: detail?.title ?? '',
+      type: type,
+      opening: opening,
+      // Cambia el tono del aviso (rojo, con advertencia y la opción "sí"
+      // primero) cuando la extensión ya viene marcada +18 en el catálogo:
+      // preguntar en frío ahí quedaba raro, como si nada lo sugiriera.
+      extensionIsNsfw: extension?.nsfw ?? false,
+    );
+    // Tocar afuera: result queda null — NO se cachea nada en _nsfwAnswer,
+    // así que la próxima vez se vuelve a preguntar en vez de quedar
+    // "decidido" con una respuesta que el usuario nunca dio.
+    if (result == null) return null;
+    _nsfwAnswer = result == true;
+    return _nsfwAnswer!;
+  }
 
   ScrollController scrollController = ScrollController();
 
   final RxBool isFavorite = false.obs;
   final Rx<ExtensionDetail?> data = Rx(null);
   final Rx<History?> history = Rx(null);
+  final Rx<Favorite?> favorite = Rx(null);
   final RxString error = ''.obs;
   final RxBool isLoading = true.obs;
   final RxInt selectEpGroup = 0.obs;
@@ -342,22 +395,41 @@ class DetailPageController extends GetxController {
   }
 
   refreshFavorite() async {
-    isFavorite.value = await DatabaseService.isFavorite(
-      package: package,
-      url: url,
-    );
+    final f = await DatabaseService.getFavorite(package: package, url: url);
+    favorite.value = f;
+    isFavorite.value = f != null;
   }
 
-  toggleFavorite() async {
+  // Se llama al quitar favorito o borrar historial (acá mismo, o desde
+  // HistoryPage vía el tag de este controller) — "olvida" la respuesta de
+  // +18 que este título tenía guardada, para que la próxima vez que se
+  // toque favorito o un capítulo se vuelva a preguntar en vez de arrastrar
+  // una decisión vieja de contenido que el usuario ya sacó de encima.
+  void forgetNsfwDecision() {
+    history.value = null;
+    favorite.value = null;
+    _nsfwAnswer = null;
+  }
+
+  toggleFavorite(BuildContext context) async {
     if (detail == null) {
       return;
     }
+    // Solo pregunta "¿es +18?" al CREAR un favorito nuevo — si ya estaba
+    // favorito, esta llamada lo borra, no hace falta preguntar nada.
+    final wasFavorite = isFavorite.value;
+    final nsfw =
+        wasFavorite ? false : await resolveIsNsfw(context, opening: false);
+    // Canceló el diálogo (tocó afuera) — no favoritear nada, como si nunca
+    // hubiera tocado el botón.
+    if (nsfw == null) return;
     try {
       await DatabaseService.toggleFavorite(
         package: package,
         url: url,
         cover: detail!.cover,
         name: detail!.title,
+        isNsfw: nsfw,
       );
     } catch (e) {
       showPlatformSnackbar(
@@ -367,8 +439,9 @@ class DetailPageController extends GetxController {
       );
       rethrow;
     }
+    if (wasFavorite) forgetNsfwDecision();
     await refreshFavorite();
-    Get.find<HomePageController>().onRefresh();
+    HomePageController.refreshAll();
   }
 
   goWatch(BuildContext context, List<ExtensionEpisode> urls, int index,
@@ -388,6 +461,14 @@ class DetailPageController extends GetxController {
       );
       return;
     }
+
+    // Se resuelve ANTES de navegar: si hace falta preguntar, mejor que el
+    // diálogo aparezca acá (con el detalle todavía en pantalla) que a mitad
+    // de la transición hacia el reproductor/lector.
+    final nsfwResolved = await resolveIsNsfw(context);
+    // Canceló el diálogo (tocó afuera) — no abrir el reproductor/lector,
+    // como si nunca hubiera tocado el capítulo.
+    if (nsfwResolved == null) return;
 
     if (type == ExtensionType.bangumi) {
       final player = PrismHubStorage.getSetting(SettingKey.videoPlayer);
@@ -471,6 +552,7 @@ class DetailPageController extends GetxController {
                 typeOverride: type,
                 cameFromDetail: true,
                 autoResume: autoResume,
+                isNsfw: nsfwResolved,
               ),
             ),
           );

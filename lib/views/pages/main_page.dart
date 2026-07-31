@@ -4,6 +4,7 @@ import 'package:get/get.dart';
 import 'package:go_router/go_router.dart';
 import 'package:prismhub/views/pages/extension/extension_page.dart';
 import 'package:prismhub/views/pages/home_page.dart';
+import 'package:prismhub/views/pages/nsfw18/nsfw18_zone_page.dart';
 import 'package:prismhub/controllers/main_controller.dart';
 import 'package:prismhub/views/pages/search/search_page.dart';
 import 'package:prismhub/views/pages/settings/settings_page.dart';
@@ -68,7 +69,7 @@ class _DesktopMainPageState extends State<DesktopMainPage> with WindowListener {
   void initState() {
     super.initState();
     c = Get.put(MainController());
-    if (PrismHubStorage.getSetting(SettingKey.autoCheckUpdate)) {
+    if (PrismHubStorage.getSetting(SettingKey.autoCheckUpdate) == true) {
       ApplicationUtils.scheduleForcedUpdateCheck(context);
     }
     windowManager.addListener(this);
@@ -144,6 +145,29 @@ class _DesktopMainPageState extends State<DesktopMainPage> with WindowListener {
         displayMode: fluent.PaneDisplayMode.compact,
         footerItems: [
           fluent.PaneItemSeparator(),
+          fluent.PaneItem(
+            icon: const Icon(fluent.FluentIcons.warning,
+                color: Color(0xFFE5484D)),
+            title: Text('nsfw18.menu-label'.i18n),
+            body: const Nsfw18ZoneGate(),
+            onTap: () {
+              // Se manda la ruta actual (antes de entrar) como "from" — así,
+              // si se cancela/dice "no entrar" en la Zona +18, se vuelve
+              // ahí en vez de siempre a Home (ver Nsfw18ZoneGate/router.go
+              // reemplaza todo el stack, no hay "atrás" al que hacer pop).
+              // Si ya se estaba en /adult-zone (re-tocar el mismo item), no
+              // se manda from — evita un bucle donde cancelar reabre la
+              // misma Zona +18 y vuelve a preguntar.
+              final current = widget.state.uri.toString();
+              final from = current == '/adult-zone' ? null : current;
+              router.go(
+                Uri(
+                  path: '/adult-zone',
+                  queryParameters: from == null ? null : {'from': from},
+                ).toString(),
+              );
+            },
+          ),
           fluent.PaneItem(
             icon: const Icon(fluent.FluentIcons.repo),
             title: Text('common.extension-repo'.i18n),
@@ -244,7 +268,7 @@ class _AndroidMainPageState extends fluent.State<AndroidMainPage> {
   void initState() {
     super.initState();
     c = Get.put(MainController());
-    if (PrismHubStorage.getSetting(SettingKey.autoCheckUpdate)) {
+    if (PrismHubStorage.getSetting(SettingKey.autoCheckUpdate) == true) {
       ApplicationUtils.scheduleForcedUpdateCheck(context);
     }
   }

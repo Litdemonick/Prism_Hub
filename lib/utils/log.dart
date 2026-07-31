@@ -50,7 +50,7 @@ class PrismLog {
       return;
     }
 
-    if (!PrismHubStorage.getSetting(SettingKey.saveLog)) {
+    if (PrismHubStorage.getSetting(SettingKey.saveLog) != true) {
       return;
     }
     try {

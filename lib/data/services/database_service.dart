@@ -15,6 +15,7 @@ class DatabaseService {
     required String url,
     required String name,
     String? cover,
+    bool isNsfw = false,
   }) async {
     return db.writeTxn(() async {
       if (await isFavorite(
@@ -39,7 +40,8 @@ class DatabaseService {
             ..title = name
             ..package = extension.package
             ..type = extension.type
-            ..url = url,
+            ..url = url
+            ..isNsfw = isNsfw,
         );
       }
     });
@@ -56,6 +58,18 @@ class DatabaseService {
             .urlEqualTo(url)
             .findFirst()) !=
         null;
+  }
+
+  static Future<Favorite?> getFavorite({
+    required String package,
+    required String url,
+  }) async {
+    return db.favorites
+        .filter()
+        .packageEqualTo(package)
+        .and()
+        .urlEqualTo(url)
+        .findFirst();
   }
 
   static Future<List<Favorite>> getFavoritesByType({
@@ -92,6 +106,38 @@ class DatabaseService {
         .and()
         .urlEqualTo(url)
         .findFirst();
+  }
+
+  // Migración retroactiva (una sola vez, ver ExtensionUtils.ensureInitialized):
+  // marca isNsfw=true en el History/Favorite YA guardado de extensiones que
+  // son 100% nsfw. Los registros de ANTES de que existiera este campo se
+  // leen con isNsfw=false por defecto — sin esto, ese contenido viejo se
+  // quedaría en el Continuar/Favoritos normal en vez de la Zona +18 hasta
+  // que se volviera a tocar. No puede recuperar el caso de una extensión
+  // MIXTA (ej. ShadeManga) con la opción "adultos" del filtro: ese dato
+  // nunca se guardó antes, no hay de dónde inferirlo retroactivamente.
+  static Future<void> markNsfwByPackages(Set<String> packages) async {
+    if (packages.isEmpty) return;
+    await db.writeTxn(() async {
+      final histories = await db.historys
+          .filter()
+          .isNsfwEqualTo(false)
+          .findAll();
+      for (final h in histories) {
+        if (packages.contains(h.package)) {
+          h.isNsfw = true;
+          await db.historys.put(h);
+        }
+      }
+      final favs =
+          await db.favorites.filter().isNsfwEqualTo(false).findAll();
+      for (final f in favs) {
+        if (packages.contains(f.package)) {
+          f.isNsfw = true;
+          await db.favorites.put(f);
+        }
+      }
+    });
   }
 
   // 更新历史

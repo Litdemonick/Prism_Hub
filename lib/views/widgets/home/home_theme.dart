@@ -13,12 +13,25 @@ class HomeTheme {
   static const textPlaceholder = Color(0xFF676870);
   static const border = Color(0xFF2C2D35);
   static const accentPink = Color(0xFFD777ED);
+  // Acento de la Zona +18 — mismo rol que accentPink (hover, progreso,
+  // brillo ambiental) pero rojo, para que esa pantalla se sienta claramente
+  // distinta del Home normal. Ver AnimatedBackgroundGlow/HomeSection/
+  // HomeMediaCard, que aceptan `accent` en vez de tener este color fijo.
+  static const accentRed = Color(0xFFE5484D);
   static const cardSurface = Color(0xFF15151C);
 
   static const heroGradient = LinearGradient(
     begin: Alignment.topLeft,
     end: Alignment.bottomRight,
     colors: [Color(0xFF573160), Color(0xFF0C1A32), Color(0xFF0B0C16)],
+    stops: [0.0, 0.65, 1.0],
+  );
+
+  // Variante roja del hero, mismo patrón de 3 paradas — Zona +18.
+  static const heroGradientRed = LinearGradient(
+    begin: Alignment.topLeft,
+    end: Alignment.bottomRight,
+    colors: [Color(0xFF5C1B22), Color(0xFF2A0C10), Color(0xFF0B0C16)],
     stops: [0.0, 0.65, 1.0],
   );
 
@@ -32,5 +45,6 @@ class HomeTheme {
     [Color(0xFF654C00), Color(0xFF1F1702)], // dorado
   ];
 
-  static List<Color> gradientFor(int index) => cardGradients[index % cardGradients.length];
+  static List<Color> gradientFor(int index) =>
+      cardGradients[index % cardGradients.length];
 }

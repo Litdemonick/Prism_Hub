@@ -4,14 +4,14 @@ import 'package:fluent_ui/fluent_ui.dart' as fluent;
 import 'package:flutter/material.dart';
 import 'package:flutter_i18n/flutter_i18n.dart';
 import 'package:get/get.dart';
+import 'package:prismhub/controllers/detail_controller.dart';
 import 'package:prismhub/controllers/home_controller.dart';
 import 'package:prismhub/data/services/database_service.dart';
 import 'package:prismhub/models/index.dart';
-import 'package:prismhub/router/router.dart';
 import 'package:prismhub/utils/extension.dart';
 import 'package:prismhub/utils/hidden_cards.dart';
 import 'package:prismhub/utils/i18n.dart';
-import 'package:prismhub/views/pages/detail_page.dart';
+import 'package:prismhub/utils/search_text.dart';
 import 'package:prismhub/views/widgets/home/animated_background_glow.dart';
 import 'package:prismhub/views/widgets/home/home_media_card.dart';
 import 'package:prismhub/views/widgets/home/home_theme.dart';
@@ -23,15 +23,21 @@ import 'package:prismhub/views/widgets/platform_widget.dart';
 // needed for either). Mismo estilo visual que Home (HomeTheme + HomeMediaCard)
 // para que se sienta parte de la misma app, no una pantalla aparte.
 class HistoryPage extends StatefulWidget {
-  const HistoryPage({super.key, this.initialTab = 0});
+  const HistoryPage({super.key, this.initialTab = 0, this.zone = false});
   final int initialTab;
+  // true: instancia de la Zona +18 (HomePageController.zoneTag, tema rojo).
+  // Es la misma pantalla, apuntando a la OTRA instancia del controller.
+  final bool zone;
 
   @override
   State<HistoryPage> createState() => _HistoryPageState();
 }
 
 class _HistoryPageState extends State<HistoryPage> {
-  late final HomePageController _c = Get.find<HomePageController>();
+  late final HomePageController _c = Get.find<HomePageController>(
+    tag: widget.zone ? HomePageController.zoneTag : null,
+  );
+  late final Color _accent = widget.zone ? HomeTheme.accentRed : HomeTheme.accentPink;
   late int _tabIndex = widget.initialTab;
   final _searchController = TextEditingController();
   String _query = '';
@@ -66,48 +72,46 @@ class _HistoryPageState extends State<HistoryPage> {
 
   List<History> _filteredHistory() {
     final type = _typeFilter;
-    final q = _query.trim().toLowerCase();
     return _c.resents.where((h) {
       if (type != null && !type.contains(h.type)) return false;
-      if (q.isNotEmpty && !h.title.toLowerCase().contains(q)) return false;
+      if (!SearchText.matchesQuery(h.title, _query)) return false;
       return true;
     }).toList();
   }
 
   List<Favorite> _filteredFavorites() {
-    final q = _query.trim().toLowerCase();
-    if (q.isEmpty) return _c.favorites;
+    if (_query.trim().isEmpty) return _c.favorites;
     return _c.favorites
-        .where((f) => f.title.toLowerCase().contains(q))
+        .where((f) => SearchText.matchesQuery(f.title, _query))
         .toList();
   }
 
   void _openDetail(String url, String package) {
-    if (Platform.isAndroid) {
-      Get.to(DetailPage(
-        key: ValueKey('$package|$url'),
-        url: url,
-        package: package,
-        tag: '$package|$url',
-      ));
-      return;
+    ExtensionUtils.openExtensionDetail(context, package: package, url: url);
+  }
+
+  // Si hay un DetailPageController vivo para este título (la página de
+  // detalle sigue abierta en otra pestaña/ventana), le avisa que se olvide
+  // la decisión de +18 que tenía guardada — sin esto, borrar acá no
+  // afectaba esa instancia ya cargada, y volver a favoritear/mirar desde
+  // ahí mismo NO volvía a preguntar (arrastraba la respuesta vieja).
+  void _forgetNsfwDecisionIfOpen(String package, String url) {
+    final tag = '$package|$url';
+    if (Get.isRegistered<DetailPageController>(tag: tag)) {
+      Get.find<DetailPageController>(tag: tag).forgetNsfwDecision();
     }
-    router.push(
-      Uri(
-        path: '/detail',
-        queryParameters: {'url': url, 'package': package},
-      ).toString(),
-    );
   }
 
   Future<void> _deleteHistory(History h) async {
     await DatabaseService.deleteHistoryByPackageAndUrl(h.package, h.url);
+    _forgetNsfwDecisionIfOpen(h.package, h.url);
     await _c.refreshHistory();
     if (mounted) setState(() {});
   }
 
   Future<void> _deleteFavorite(Favorite f) async {
     await DatabaseService.deleteFavorite(f.package, f.url);
+    _forgetNsfwDecisionIfOpen(f.package, f.url);
     await _c.onRefresh();
     if (mounted) setState(() {});
   }
@@ -138,8 +142,14 @@ class _HistoryPageState extends State<HistoryPage> {
     );
     if (confirmed != true) return;
     if (_onFavoritesTab) {
+      for (final f in _c.favorites) {
+        _forgetNsfwDecisionIfOpen(f.package, f.url);
+      }
       await DatabaseService.deleteFavoritesByType(null);
     } else {
+      for (final h in _c.resents) {
+        _forgetNsfwDecisionIfOpen(h.package, h.url);
+      }
       final types = _typeFilter;
       if (types == null) {
         await DatabaseService.deleteHistoryByType(null);
@@ -168,7 +178,9 @@ class _HistoryPageState extends State<HistoryPage> {
           hasScrollBody: false,
           child: Center(
             child: Text(
-              nothingAtAll ? 'home.no-record'.i18n : 'common.no-result'.i18n,
+              nothingAtAll
+                  ? (widget.zone ? 'nsfw18.no-record'.i18n : 'home.no-record'.i18n)
+                  : 'common.no-result'.i18n,
               style: const TextStyle(color: HomeTheme.textMuted),
             ),
           ),
@@ -230,6 +242,7 @@ class _HistoryPageState extends State<HistoryPage> {
           onDelete: () => _deleteFavorite(f),
           hidden: HiddenCards.isHidden(f.package, f.url),
           onToggleHide: () => HiddenCards.toggle(f.package, f.url),
+          accent: _accent,
         ));
   }
 
@@ -260,6 +273,7 @@ class _HistoryPageState extends State<HistoryPage> {
           onDelete: () => _deleteHistory(h),
           hidden: HiddenCards.isHidden(h.package, h.url),
           onToggleHide: () => HiddenCards.toggle(h.package, h.url),
+          accent: _accent,
         ));
   }
 
@@ -281,18 +295,18 @@ class _HistoryPageState extends State<HistoryPage> {
                     const EdgeInsets.symmetric(horizontal: 16, vertical: 9),
                 decoration: BoxDecoration(
                   color: selected
-                      ? HomeTheme.accentPink.withValues(alpha: 0.18)
+                      ? _accent.withValues(alpha: 0.18)
                       : HomeTheme.cardSurface,
                   borderRadius: BorderRadius.circular(999),
                   border: Border.all(
-                    color: selected ? HomeTheme.accentPink : HomeTheme.border,
+                    color: selected ? _accent : HomeTheme.border,
                   ),
                 ),
                 child: Text(
                   _tabs[index].i18n,
                   style: TextStyle(
                     color:
-                        selected ? HomeTheme.accentPink : HomeTheme.textPrimary,
+                        selected ? _accent : HomeTheme.textPrimary,
                     fontSize: 13,
                     fontWeight: FontWeight.w600,
                   ),
@@ -333,6 +347,18 @@ class _HistoryPageState extends State<HistoryPage> {
                   border: InputBorder.none,
                   hintText: 'common.search'.i18n,
                   hintStyle: const TextStyle(color: HomeTheme.textMuted),
+                  // Solo visible con texto — antes no había forma de
+                  // limpiar la búsqueda salvo borrar a mano.
+                  suffixIcon: _query.isEmpty
+                      ? null
+                      : IconButton(
+                          icon: const Icon(Icons.close,
+                              size: 18, color: HomeTheme.textMuted),
+                          onPressed: () => setState(() {
+                            _searchController.clear();
+                            _query = '';
+                          }),
+                        ),
                 ),
                 onChanged: (value) => setState(() => _query = value),
               ),
@@ -350,6 +376,18 @@ class _HistoryPageState extends State<HistoryPage> {
           padding: EdgeInsets.only(left: 8),
           child: Icon(fluent.FluentIcons.search, size: 16),
         ),
+        // Solo visible con texto — antes no había forma de limpiar la
+        // búsqueda en desktop sin borrar a mano.
+        suffix: _query.isEmpty
+            ? null
+            : fluent.IconButton(
+                icon:
+                    const Icon(fluent.FluentIcons.chrome_close, size: 9.0),
+                onPressed: () => setState(() {
+                  _searchController.clear();
+                  _query = '';
+                }),
+              ),
         onChanged: (value) => setState(() => _query = value),
       ),
     );
@@ -408,7 +446,7 @@ class _HistoryPageState extends State<HistoryPage> {
           color: HomeTheme.bg,
           child: Stack(
             children: [
-              const Positioned.fill(child: AnimatedBackgroundGlow()),
+              Positioned.fill(child: AnimatedBackgroundGlow(accent: _accent)),
               // Todo (pestañas + buscador + tarjetas) en UN solo scroll: con
               // el encabezado fijo y el grid en un Expanded, en horizontal al
               // grid le quedaban ~150px y las tarjetas se cortaban sin poder
@@ -443,7 +481,7 @@ class _HistoryPageState extends State<HistoryPage> {
       appBar: AppBar(
         backgroundColor: HomeTheme.bg,
         title: Text(
-          'home.history'.i18n,
+          widget.zone ? 'nsfw18.title'.i18n : 'home.history'.i18n,
           style: const TextStyle(color: HomeTheme.textPrimary),
         ),
       ),
@@ -462,7 +500,7 @@ class _HistoryPageState extends State<HistoryPage> {
             Padding(
               padding: const EdgeInsets.symmetric(horizontal: 16),
               child: Text(
-                'home.history'.i18n,
+                widget.zone ? 'nsfw18.title'.i18n : 'home.history'.i18n,
                 style: const TextStyle(
                   fontSize: 22,
                   fontWeight: FontWeight.w800,

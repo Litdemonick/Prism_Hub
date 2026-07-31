@@ -19,6 +19,7 @@ class VideoPlayer extends StatefulWidget {
     required this.detailUrl,
     required this.anilistID,
     this.autoResume = false,
+    this.isNsfw = false,
   });
 
   final String title;
@@ -29,6 +30,7 @@ class VideoPlayer extends StatefulWidget {
   final ExtensionService runtime;
   final String anilistID;
   final bool autoResume;
+  final bool isNsfw;
 
   @override
   State<VideoPlayer> createState() => _VideoPlayerState();
@@ -80,6 +82,7 @@ class _VideoPlayerState extends State<VideoPlayer> {
         runtime: widget.runtime,
         anilistID: widget.anilistID,
         autoResume: widget.autoResume,
+        isNsfw: widget.isNsfw,
       ),
       tag: _tag,
     );
