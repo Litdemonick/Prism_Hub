@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:fluent_ui/fluent_ui.dart' as fluent;
 import 'package:get/get.dart';
+import 'package:prismhub/views/widgets/settings/settings_subtitle.dart';
 import 'package:prismhub/views/widgets/home/home_theme.dart';
 import 'package:prismhub/views/widgets/platform_widget.dart';
 import 'package:prismhub/views/widgets/settings/settings_tile.dart';
@@ -171,10 +172,7 @@ class _SettingsExpanderTileState extends State<SettingsExpanderTile> {
           Text(widget.title,
               style: const TextStyle(color: HomeTheme.textPrimary)),
           const SizedBox(height: 2),
-          Text(
-            widget.subTitle,
-            style: const TextStyle(fontSize: 12, color: HomeTheme.textMuted),
-          ),
+          SettingsSubtitle(widget.subTitle),
           const SizedBox(height: 15)
         ],
       ),

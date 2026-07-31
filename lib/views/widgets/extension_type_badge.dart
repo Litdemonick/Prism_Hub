@@ -16,23 +16,25 @@ class ExtensionTypeBadge extends StatelessWidget {
   // existe porque el switch expression de Dart exige cubrir el enum entero.
   Color get _color => switch (type) {
         ExtensionType.bangumi => const Color(0xFF3B82F6), // azul — video
-        ExtensionType.manga || ExtensionType.fikushon => const Color(0xFFA855F7), // violeta — lectura
-        ExtensionType.mixed => const Color(0xFF10B981), // verde esmeralda — mixta
+        ExtensionType.manga ||
+        ExtensionType.fikushon =>
+          const Color(0xFFA855F7), // violeta — lectura
+        ExtensionType.mixed =>
+          const Color(0xFF10B981), // verde esmeralda — mixta
       };
 
   @override
   Widget build(BuildContext context) {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+      // Color pleno y contorno claro. Con el 90% de opacidad, sobre una
+      // portada clara se transparentaba y el texto blanco se perdía; la
+      // sombra difusa no alcanzaba para separarlo del fondo. Un contorno
+      // nítido sí lo separa de cualquier imagen.
       decoration: BoxDecoration(
-        color: _color.withValues(alpha: 0.9),
+        color: _color,
         borderRadius: BorderRadius.circular(20),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withValues(alpha: 0.25),
-            blurRadius: 3,
-          ),
-        ],
+        border: Border.all(color: Colors.white.withValues(alpha: 0.55)),
       ),
       child: Text(
         ExtensionUtils.typeToString(type),

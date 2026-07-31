@@ -1,4 +1,4 @@
-﻿import 'dart:async';
+import 'dart:async';
 import 'dart:convert';
 
 import 'package:desktop_multi_window/desktop_multi_window.dart';
@@ -19,11 +19,6 @@ class SettingsController extends GetxController {
     _pollTimer?.cancel();
     super.onClose();
   }
-
-  final links = {
-    'Github': 'https://github.com/Litdemonick/Prism_Hub',
-    'Extensions': 'https://github.com/Litdemonick/prism-plus',
-  };
 
   @override
   void onInit() {
@@ -55,7 +50,8 @@ class SettingsController extends GetxController {
         }
       });
       _pollTimer?.cancel();
-      _pollTimer = Timer.periodic(const Duration(milliseconds: 500), (timer) async {
+      _pollTimer =
+          Timer.periodic(const Duration(milliseconds: 500), (timer) async {
         if (extensionLogWindowId.value == -1) {
           timer.cancel();
           return;

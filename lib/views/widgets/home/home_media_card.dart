@@ -26,11 +26,16 @@ Widget _bordeCard(Color accent, double radio) {
       child: DecoratedBox(
         decoration: BoxDecoration(
           borderRadius: BorderRadius.circular(radio),
-          // Color SÓLIDO, sin transparencia: a 0.7 el borde se mezclaba con
-          // la portada de abajo, y contra una imagen clara o de colores
-          // fuertes directamente desaparecía. Opaco se ve igual sobre
-          // cualquier portada.
-          border: Border.all(color: accent, width: 1.4),
+          // Sólido (con transparencia desaparecía sobre portadas claras) y
+          // aclarado un cuarto hacia el blanco: el morado y el rojo puros
+          // quedaban duros contra las portadas, y este tono conserva el color
+          // de cada zona pero se integra mejor. 2px para que la línea se lea
+          // también en las esquinas redondeadas, donde una más fina se
+          // adelgaza y parece cortarse.
+          border: Border.all(
+            color: Color.lerp(accent, const Color(0xFFFFFFFF), 0.25)!,
+            width: 2,
+          ),
         ),
       ),
     ),
@@ -44,8 +49,13 @@ Widget _bordeCard(Color accent, double radio) {
 // cover a pantalla completa se le cortaban las puntas —el logo no es
 // rectangular—. Así llena la card y se ve completo.
 Widget _arteRespaldo(int cacheWidth) {
-  // La imagen sola, llenando la card entera. Sin ColoredBox detrás ni margen:
-  // el pedido fue que ocupe toda la tarjeta, igual que una portada real.
+  // Solo la imagen, llenando la card entera. Sin fondo de ningún tipo.
+  //
+  // OJO si se vuelve a tocar esto: el logo es casi cuadrado y la card ancha
+  // es 16:9. En un marco así, o la imagen LLENA y pierde un poco arriba y
+  // abajo, o se ve entera y quedan barras a los costados. No hay una tercera
+  // opción con este asset. Se eligió llenar, porque las barras se ven como un
+  // fondo pegado detrás del logo y eso es justo lo que no se quiere.
   return Image.asset(
     'assets/carddefaultoffline.png',
     fit: BoxFit.cover,
@@ -153,9 +163,13 @@ class _HomeMediaCardState extends State<HomeMediaCard> {
   Widget _extensionNamePill() {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 4),
+      // Opaco, no semitransparente: este pill vive debajo de la portada,
+      // pero el mismo widget se usa en contextos donde queda encima, y ahí
+      // el 65% de opacidad dejaba ver la imagen a través del texto.
       decoration: BoxDecoration(
-        color: const Color(0xA6202030),
+        color: const Color(0xFF202030),
         borderRadius: BorderRadius.circular(6),
+        border: Border.all(color: HomeTheme.border),
       ),
       child: Text(
         widget.extensionName!,
@@ -550,16 +564,6 @@ class _HomeMediaCardState extends State<HomeMediaCard> {
                       // Ver la card ancha: los distintivos salieron de
                       // encima de la portada. Acá tapaban una esquina de cada
                       // lado, que en una card chica es bastante.
-                      if (hasMenu)
-                        Positioned(
-                          top: 8,
-                          right: 8,
-                          child: _CardOverlayMenu(
-                            hidden: widget.hidden,
-                            onDelete: widget.onDelete,
-                            onToggleHide: widget.onToggleHide,
-                          ),
-                        ),
                       if (widget.progress != null)
                         Positioned(
                           left: 0,
@@ -580,34 +584,57 @@ class _HomeMediaCardState extends State<HomeMediaCard> {
                   ),
                 ),
                 const SizedBox(height: 8),
-                Text(
-                  widget.title,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: const TextStyle(
-                    color: HomeTheme.textPrimary,
-                    fontSize: 13.5,
-                    fontWeight: FontWeight.w600,
-                  ),
-                ),
-                if (widget.extensionName?.isNotEmpty == true) ...[
-                  const SizedBox(height: 4),
-                  Align(
-                    alignment: Alignment.centerLeft,
-                    child: _extensionNamePill(),
-                  ),
-                ] else if (widget.subtitle != null) ...[
-                  const SizedBox(height: 2),
-                  Text(
-                    widget.subtitle!,
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: const TextStyle(
-                      color: HomeTheme.textMuted,
-                      fontSize: 12,
+                // Título y distintivo a la izquierda, menú de tres puntos a la
+                // derecha — la misma disposición que la card ancha. Antes el
+                // menú iba ENCIMA de la portada y tapaba una esquina de la
+                // imagen.
+                Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Text(
+                            widget.title,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: const TextStyle(
+                              color: HomeTheme.textPrimary,
+                              fontSize: 13.5,
+                              fontWeight: FontWeight.w600,
+                            ),
+                          ),
+                          if (widget.extensionName?.isNotEmpty == true) ...[
+                            const SizedBox(height: 4),
+                            Align(
+                              alignment: Alignment.centerLeft,
+                              child: _extensionNamePill(),
+                            ),
+                          ] else if (widget.subtitle != null) ...[
+                            const SizedBox(height: 2),
+                            Text(
+                              widget.subtitle!,
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style: const TextStyle(
+                                color: HomeTheme.textMuted,
+                                fontSize: 12,
+                              ),
+                            ),
+                          ],
+                        ],
+                      ),
                     ),
-                  ),
-                ],
+                    if (hasMenu)
+                      _WideMenuButton(
+                        hidden: widget.hidden,
+                        onDelete: widget.onDelete,
+                        onToggleHide: widget.onToggleHide,
+                      ),
+                  ],
+                ),
               ],
             ),
           ),

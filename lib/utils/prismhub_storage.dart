@@ -378,6 +378,12 @@ class SettingKey {
   static const language = 'Language';
   static const novelFontSize = 'NovelFontSize';
   static const enableNSFW = 'EnableNSFW';
+  // Versión en la que el usuario aceptó el aviso de beta. Vacío = todavía no
+  // lo aceptó, así que el aviso vuelve a salir en el próximo arranque.
+  static const betaNoticeAccepted = 'BetaNoticeAccepted';
+  // Paquetes +18 que el app desactivó SOLO al apagar el switch de NSFW, para
+  // poder devolverlos a como estaban cuando se vuelva a encender.
+  static const nsfw18AutoDisabled = 'Nsfw18AutoDisabled';
   static const videoPlayer = 'VideoPlayer';
   static const databaseVersion = 'DatabaseVersion';
   static const listMode = 'ListMode';

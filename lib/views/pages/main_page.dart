@@ -2,6 +2,7 @@ import 'package:fluent_ui/fluent_ui.dart' as fluent;
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 import 'package:go_router/go_router.dart';
+import 'package:prismhub/views/widgets/beta_notice.dart';
 import 'package:prismhub/views/pages/extension/extension_page.dart';
 import 'package:prismhub/views/pages/home_page.dart';
 import 'package:prismhub/views/pages/nsfw18/nsfw18_zone_page.dart';
@@ -69,6 +70,11 @@ class _DesktopMainPageState extends State<DesktopMainPage> with WindowListener {
   void initState() {
     super.initState();
     c = Get.put(MainController());
+    // Aviso de beta, una sola vez. Va en un post-frame porque acá el árbol
+    // todavía se está montando y el diálogo necesita un Navigator listo.
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) showBetaNoticeIfNeeded(context);
+    });
     if (PrismHubStorage.getSetting(SettingKey.autoCheckUpdate) == true) {
       ApplicationUtils.scheduleForcedUpdateCheck(context);
     }
@@ -268,6 +274,11 @@ class _AndroidMainPageState extends fluent.State<AndroidMainPage> {
   void initState() {
     super.initState();
     c = Get.put(MainController());
+    // Aviso de beta, una sola vez. Va en un post-frame porque acá el árbol
+    // todavía se está montando y el diálogo necesita un Navigator listo.
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) showBetaNoticeIfNeeded(context);
+    });
     if (PrismHubStorage.getSetting(SettingKey.autoCheckUpdate) == true) {
       ApplicationUtils.scheduleForcedUpdateCheck(context);
     }

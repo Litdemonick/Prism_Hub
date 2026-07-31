@@ -45,15 +45,20 @@ class _StatusBadge extends StatelessWidget {
     final color = _statusColor(status);
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+      // Fondo SÓLIDO y borde sólido. Antes el relleno iba al 16% y el borde
+      // al 70%, así que sobre la portada del detalle —que puede ser clara o
+      // de colores fuertes— el distintivo se mezclaba y casi no se leía. Con
+      // el color pleno y el texto en blanco se ve igual sobre cualquier
+      // imagen, que es lo único que importa acá.
       decoration: BoxDecoration(
-        color: color.withValues(alpha: 0.16),
+        color: color,
         borderRadius: BorderRadius.circular(999),
-        border: Border.all(color: color.withValues(alpha: 0.7)),
+        border: Border.all(color: Colors.white.withValues(alpha: 0.55)),
       ),
       child: Text(
         _statusLabel(status)!,
-        style: TextStyle(
-          color: color,
+        style: const TextStyle(
+          color: Colors.white,
           fontSize: 12,
           fontWeight: FontWeight.w600,
         ),

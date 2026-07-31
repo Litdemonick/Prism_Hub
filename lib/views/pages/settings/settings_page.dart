@@ -5,6 +5,7 @@ import 'package:fluent_ui/fluent_ui.dart' as fluent;
 import 'package:flutter/material.dart';
 import 'package:flutter_i18n/flutter_i18n.dart';
 import 'package:get/get.dart';
+import 'package:prismhub/views/widgets/button.dart';
 import 'package:prismhub/views/widgets/messenger.dart';
 import 'package:prismhub/data/providers/tmdb_provider.dart';
 import 'package:prismhub/utils/log.dart';
@@ -327,6 +328,72 @@ class _SettingsPageState extends State<SettingsPage> {
     );
   }
 
+  void _mostrarAvisoLegal() {
+    showPlatformDialog(
+      context: context,
+      title: 'settings.legal'.i18n,
+      maxWidth: 520,
+      content: Text(
+        'settings.legal-body'.i18n,
+        style: const TextStyle(
+          color: HomeTheme.textMuted,
+          fontSize: 13,
+          height: 1.5,
+        ),
+      ),
+      actions: [
+        Builder(
+          builder: (ctx) => PlatformFilledButton(
+            onPressed: () => Navigator.of(ctx).pop(),
+            child: Text('common.confirm'.i18n),
+          ),
+        ),
+      ],
+    );
+  }
+
+  // Fila con botón para un enlace del proyecto. Un solo lugar para las tres,
+  // que sólo cambian en icono, textos y URL.
+  Widget _enlaceTile({
+    required IconData androidIcon,
+    required IconData desktopIcon,
+    required String titulo,
+    required String subtitulo,
+    required String url,
+  }) {
+    void abrir() => launchUrl(
+          Uri.parse(url),
+          mode: LaunchMode.externalApplication,
+        );
+    return SettingsTile(
+      isCard: true,
+      icon: PlatformWidget(
+        androidWidget: Icon(androidIcon),
+        desktopWidget: Icon(desktopIcon, size: 24),
+      ),
+      title: titulo,
+      buildSubtitle: () => subtitulo,
+      trailing: PlatformWidget(
+        androidWidget: TextButton(
+          onPressed: abrir,
+          child: Text('settings.open'.i18n),
+        ),
+        desktopWidget: fluent.FilledButton(
+          onPressed: abrir,
+          child: Text('settings.open'.i18n),
+        ),
+      ),
+      onTap: abrir,
+    );
+  }
+
+  void _abrirSugerencias() {
+    launchUrl(
+      Uri.parse('https://github.com/Litdemonick/Prism_Hub/issues'),
+      mode: LaunchMode.externalApplication,
+    );
+  }
+
   List<Widget> _buildContent() {
     return [
       if (!Platform.isAndroid) ...[
@@ -345,7 +412,12 @@ class _SettingsPageState extends State<SettingsPage> {
         icon: fluent.FluentIcons.developer_tools,
         androidIcon: Icons.construction,
         title: 'settings.general'.i18n,
-        subTitle: 'settings.general-subtitle'.i18n,
+        // En celular la entrada a la Zona +18 vive DENTRO de General (en
+        // escritorio está en el panel lateral), así que el subtítulo lo dice
+        // solo ahí — si no, mandaría a buscar algo que en PC no está acá.
+        subTitle: Platform.isAndroid
+            ? 'settings.general-subtitle-android'.i18n
+            : 'settings.general-subtitle'.i18n,
         content: Column(
           children: [
             // TMDB KEY 设置
@@ -411,20 +483,42 @@ class _SettingsPageState extends State<SettingsPage> {
               buildValue: () {
                 return PrismHubStorage.getSetting(SettingKey.enableNSFW);
               },
-              onChanged: (value) {
-                PrismHubStorage.setSetting(SettingKey.enableNSFW, value);
-                // Seguridad NSFW: si el usuario apaga el ajuste, cualquier
-                // extensión nsfw que haya quedado activada se desactiva sola
-                // — sin esto, una extensión +18 seguía funcionando aunque el
-                // ajuste que la habilitó ya no estuviera prendido.
+              onChanged: (value) async {
+                await PrismHubStorage.setSetting(SettingKey.enableNSFW, value);
                 if (!value) {
+                  // Al APAGAR: cualquier extensión +18 que estuviera activa se
+                  // desactiva, porque si no seguiría funcionando pese a que el
+                  // ajuste que la habilitaba ya no está. Se anota CUÁLES se
+                  // tocaron, para no confundirlas con las que el usuario había
+                  // apagado a propósito antes.
+                  final apagadas = <String>[];
                   for (final entry in ExtensionUtils.runtimes.entries) {
                     if (entry.value.extension.nsfw &&
                         ExtensionUtils.isEnabled(entry.key)) {
                       ExtensionUtils.setExtensionEnabled(entry.key, false);
+                      apagadas.add(entry.key);
                     }
                   }
+                  await PrismHubStorage.setSetting(
+                      SettingKey.nsfw18AutoDisabled, apagadas.join(','));
+                  return;
                 }
+                // Al ENCENDER: se devuelven a como estaban. Antes esto no se
+                // hacía y había que volver a activarlas una por una desde
+                // Extensiones instaladas, sin ninguna pista de por qué habían
+                // quedado apagadas.
+                final guardadas =
+                    PrismHubStorage.getSetting(SettingKey.nsfw18AutoDisabled);
+                if (guardadas is! String || guardadas.isEmpty) return;
+                for (final pkg in guardadas.split(',')) {
+                  if (pkg.isEmpty) continue;
+                  // Solo las que siguen instaladas: una desinstalada de por
+                  // medio no debe reaparecer ni dar error.
+                  if (!ExtensionUtils.runtimes.containsKey(pkg)) continue;
+                  ExtensionUtils.setExtensionEnabled(pkg, true);
+                }
+                await PrismHubStorage.setSetting(
+                    SettingKey.nsfw18AutoDisabled, '');
               },
             ),
             // Desktop ya tiene su propia entrada discreta en el panel de
@@ -703,6 +797,71 @@ class _SettingsPageState extends State<SettingsPage> {
       const SizedBox(height: 20),
       ListTitle(title: 'settings.about'.i18n),
       const SizedBox(height: 20),
+      // Reportar fallos y proponer mejoras. Con fila y botón propios, no
+      // solo como enlace suelto entre los de abajo: estando en beta es lo
+      // que más conviene que el usuario encuentre.
+      SettingsTile(
+        isCard: true,
+        icon: const PlatformWidget(
+          androidWidget: Icon(Icons.feedback_outlined),
+          desktopWidget: Icon(fluent.FluentIcons.feedback, size: 24),
+        ),
+        title: 'settings.feedback'.i18n,
+        buildSubtitle: () => 'settings.feedback-subtitle'.i18n,
+        trailing: PlatformWidget(
+          androidWidget: TextButton(
+            onPressed: _abrirSugerencias,
+            child: Text('settings.feedback-button'.i18n),
+          ),
+          desktopWidget: fluent.FilledButton(
+            onPressed: _abrirSugerencias,
+            child: Text('settings.feedback-button'.i18n),
+          ),
+        ),
+      ),
+      const SizedBox(height: 10),
+      // El aviso legal también acá, para poder consultarlo cuando se quiera:
+      // el del arranque se acepta una vez y no vuelve a verse.
+      SettingsTile(
+        isCard: true,
+        icon: const PlatformWidget(
+          androidWidget: Icon(Icons.gavel_rounded),
+          desktopWidget: Icon(fluent.FluentIcons.script, size: 24),
+        ),
+        title: 'settings.legal'.i18n,
+        buildSubtitle: () => 'settings.legal-subtitle'.i18n,
+        trailing: PlatformWidget(
+          androidWidget: TextButton(
+            onPressed: _mostrarAvisoLegal,
+            child: Text('settings.open'.i18n),
+          ),
+          desktopWidget: fluent.FilledButton(
+            onPressed: _mostrarAvisoLegal,
+            child: Text('settings.open'.i18n),
+          ),
+        ),
+        onTap: _mostrarAvisoLegal,
+      ),
+      const SizedBox(height: 10),
+      // Los enlaces del proyecto dejan de ser texto suelto al final de
+      // "Acerca de" y pasan a filas con botón, igual que el resto: antes
+      // convivían dos formas distintas de ofrecer lo mismo.
+      _enlaceTile(
+        androidIcon: Icons.code,
+        desktopIcon: fluent.FluentIcons.git_graph,
+        titulo: 'settings.link-source'.i18n,
+        subtitulo: 'settings.link-source-subtitle'.i18n,
+        url: 'https://github.com/Litdemonick/Prism_Hub',
+      ),
+      const SizedBox(height: 10),
+      _enlaceTile(
+        androidIcon: Icons.extension_outlined,
+        desktopIcon: fluent.FluentIcons.repo,
+        titulo: 'settings.link-extensions'.i18n,
+        subtitulo: 'settings.link-extensions-subtitle'.i18n,
+        url: 'https://github.com/Litdemonick/prism-plus',
+      ),
+      const SizedBox(height: 10),
       SettingsTile(
         isCard: true,
         icon: const PlatformWidget(
@@ -783,40 +942,6 @@ class _SettingsPageState extends State<SettingsPage> {
             ),
             const SizedBox(height: 20),
             Text(
-              'settings.links'.i18n,
-              style: const TextStyle(color: HomeTheme.textPrimary),
-            ),
-            const SizedBox(height: 8),
-            Wrap(
-              alignment: Platform.isAndroid
-                  ? WrapAlignment.center
-                  : WrapAlignment.start,
-              children: [
-                for (final link in c.links.entries)
-                  fluent.Padding(
-                    padding: const EdgeInsets.only(right: 10),
-                    child: MouseRegion(
-                      cursor: SystemMouseCursors.click,
-                      child: GestureDetector(
-                        onTap: () async {
-                          await launchUrl(
-                            Uri.parse(link.value),
-                            mode: LaunchMode.externalApplication,
-                          );
-                        },
-                        child: Text(
-                          link.key,
-                          style: const TextStyle(
-                            color: HomeTheme.accentPink,
-                          ),
-                        ),
-                      ),
-                    ),
-                  )
-              ],
-            ),
-            const SizedBox(height: 10),
-            Text(
               'settings.contributors'.i18n,
               style: const TextStyle(color: HomeTheme.textPrimary),
             ),
@@ -870,10 +995,19 @@ class _SettingsPageState extends State<SettingsPage> {
         child: Stack(
           children: [
             const Positioned.fill(child: AnimatedBackgroundGlow()),
-            ListView(
-              padding: const EdgeInsets.symmetric(vertical: 10),
-              children: _buildContent(),
-            ),
+            // ListView.builder y no ListView(children:): la segunda forma
+            // MONTA todos los hijos de una, y esta página son varias secciones
+            // pesadas (en escritorio, Expander de fluent). Eso trababa la
+            // pantalla unos segundos la primera vez que se abría. Con builder
+            // solo se montan las que se ven.
+            Builder(builder: (context) {
+              final items = _buildContent();
+              return ListView.builder(
+                padding: const EdgeInsets.symmetric(vertical: 10),
+                itemCount: items.length,
+                itemBuilder: (context, i) => items[i],
+              );
+            }),
           ],
         ),
       ),
@@ -889,10 +1023,16 @@ class _SettingsPageState extends State<SettingsPage> {
         child: Stack(
           children: [
             const Positioned.fill(child: AnimatedBackgroundGlow()),
-            ListView(
-              padding: const EdgeInsets.symmetric(horizontal: 30, vertical: 20),
-              children: _buildContent(),
-            ),
+            // Ver el mismo cambio en la versión Android.
+            Builder(builder: (context) {
+              final items = _buildContent();
+              return ListView.builder(
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 30, vertical: 20),
+                itemCount: items.length,
+                itemBuilder: (context, i) => items[i],
+              );
+            }),
           ],
         ),
       ),

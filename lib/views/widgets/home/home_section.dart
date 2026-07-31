@@ -95,6 +95,10 @@ class _HomeSectionState extends State<HomeSection> {
       scrollDirection: Axis.horizontal,
       controller: _controller,
       itemExtent: effWidth + 16,
+      // Espacio arriba para la elevación de 4px que hace la card al pasar el
+      // mouse: sin esto la lista la recortaba justo por ese borde y parecía
+      // que se comía la tarjeta.
+      padding: const EdgeInsets.only(top: 6),
       itemCount: widget.itemCount,
       itemBuilder: (context, index) => Padding(
         padding: const EdgeInsets.only(right: 16),
@@ -166,7 +170,13 @@ class _HomeSectionState extends State<HomeSection> {
           // alto total de la card: sumarle 50 dejaba una franja muerta de 50px
           // entre una sección y la siguiente. Solo se agrega un colchón chico
           // por si el texto redondea distinto en otra densidad de pantalla.
-          height: widget.itemHeight != null ? effHeight + 8 : effHeight + 50,
+          // El margen debajo de la portada tiene que cubrir el título Y el pill de
+          // la extensión, más los 6px de aire para la elevación del hover. Con
+          // 56 alcanzaba justo en escritorio pero no en celular en vertical,
+          // donde el pill quedaba cortado por el borde del panel de la
+          // sección. NO cambia el tamaño de la card: solo el alto que la fila
+          // reserva para lo que va debajo.
+          height: widget.itemHeight != null ? effHeight + 18 : effHeight + 70,
           child: HorizontalScrollFade(
             controller: _controller,
             // Se centran con la PORTADA, no con el alto total de la fila

@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:flutter_i18n/flutter_i18n.dart';
 import 'package:prismhub/utils/i18n.dart';
+import 'package:prismhub/utils/nsfw18_biometric.dart';
 import 'package:prismhub/utils/nsfw18_zone.dart';
 import 'package:prismhub/views/widgets/home/home_theme.dart';
 
@@ -25,13 +27,29 @@ class _Nsfw18LockPageState extends State<Nsfw18LockPage> {
   final _focusNode = FocusNode();
   String? _error;
   bool _submitting = false;
+  // Mientras se resuelve la credencial del sistema no se muestra el teclado
+  // del PIN: primero la huella / Windows Hello, después el PIN.
+  bool _verificandoIdentidad = true;
+  bool _identidadRechazada = false;
 
   @override
   void initState() {
     super.initState();
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (mounted) _focusNode.requestFocus();
+    // La biometría va ACÁ y no en cada punto de entrada: esta pantalla es la
+    // única puerta a la Zona +18 (la usan el acceso general, la búsqueda +18 y
+    // la zona en sí), así que ponerla adentro la deja cubierta toda de una y
+    // no hay forma de olvidarse en un camino nuevo.
+    WidgetsBinding.instance.addPostFrameCallback((_) => _pedirIdentidad());
+  }
+
+  Future<void> _pedirIdentidad() async {
+    final ok = await Nsfw18Biometric.authenticate();
+    if (!mounted) return;
+    setState(() {
+      _verificandoIdentidad = false;
+      _identidadRechazada = !ok;
     });
+    if (ok) _focusNode.requestFocus();
   }
 
   @override
@@ -58,9 +76,32 @@ class _Nsfw18LockPageState extends State<Nsfw18LockPage> {
       widget.onUnlocked();
       return;
     }
-    if (!Nsfw18Zone.verifyPin(pin)) {
+    // Bloqueo por intentos fallidos: se avisa cuánto falta en vez de decir
+    // "PIN incorrecto", que haría pensar que el PIN dejó de servir.
+    final espera = Nsfw18Zone.lockedSeconds;
+    if (espera > 0) {
       setState(() {
-        _error = 'nsfw18.pin-wrong'.i18n;
+        _error = FlutterI18n.translate(
+          context,
+          'nsfw18.pin-locked',
+          translationParams: {'seconds': '$espera'},
+        );
+        _pinController.clear();
+      });
+      return;
+    }
+    final ok = await Nsfw18Zone.verifyPinChecked(pin);
+    if (!ok) {
+      if (!mounted) return;
+      final restante = Nsfw18Zone.lockedSeconds;
+      setState(() {
+        _error = restante > 0
+            ? FlutterI18n.translate(
+                context,
+                'nsfw18.pin-locked',
+                translationParams: {'seconds': '$restante'},
+              )
+            : 'nsfw18.pin-wrong'.i18n;
         _pinController.clear();
       });
       return;
@@ -86,6 +127,51 @@ class _Nsfw18LockPageState extends State<Nsfw18LockPage> {
 
   @override
   Widget build(BuildContext context) {
+    if (_verificandoIdentidad || _identidadRechazada) {
+      return Scaffold(
+        backgroundColor: HomeTheme.bg,
+        body: Center(
+          child: Padding(
+            padding: const EdgeInsets.all(28),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Icon(
+                  _identidadRechazada ? Icons.lock_outline : Icons.fingerprint,
+                  size: 52,
+                  color: HomeTheme.accentRed,
+                ),
+                const SizedBox(height: 18),
+                Text(
+                  _identidadRechazada
+                      ? 'nsfw18.biometric-denied'.i18n
+                      : 'nsfw18.biometric-checking'.i18n,
+                  textAlign: TextAlign.center,
+                  style: const TextStyle(
+                      color: HomeTheme.textPrimary, fontSize: 14, height: 1.4),
+                ),
+                if (_identidadRechazada) ...[
+                  const SizedBox(height: 20),
+                  FilledButton(
+                    style: FilledButton.styleFrom(
+                        backgroundColor: HomeTheme.accentRed),
+                    onPressed: () {
+                      setState(() {
+                        _verificandoIdentidad = true;
+                        _identidadRechazada = false;
+                      });
+                      _pedirIdentidad();
+                    },
+                    child: Text('nsfw18.biometric-retry'.i18n),
+                  ),
+                ],
+              ],
+            ),
+          ),
+        ),
+      );
+    }
+
     return Scaffold(
       backgroundColor: HomeTheme.bg,
       appBar: AppBar(

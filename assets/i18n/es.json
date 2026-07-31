@@ -221,7 +221,19 @@
     "skip-interval-short": "Segundos que avanza o retrocede cada atajo",
     "skip-interval-mobile-help": "En el teléfono se salta con doble toque: a la izquierda de la pantalla retrocede y a la derecha adelanta. Acá elegís cuántos segundos se mueve cada toque.",
     "skip-back": "Retroceder (doble toque a la izquierda)",
-    "skip-forward": "Adelantar (doble toque a la derecha)"
+    "skip-forward": "Adelantar (doble toque a la derecha)",
+    "legal": "Aviso legal",
+    "legal-subtitle": "Responsabilidad, derechos de autor y contenido +18",
+    "legal-body": "PrismHub es un cliente de código abierto. NO aloja, almacena ni distribuye contenido: solo muestra lo que devuelven extensiones de terceros desde sitios web públicos, igual que lo haría un navegador. Ni el proyecto ni sus autores tienen relación con esos sitios ni control sobre lo que publican.\n\nEl usuario es el único responsable del uso que le dé al programa y de cumplir las leyes de su país, incluidas las de derecho de autor. Si un contenido está protegido y no tenés derecho a consultarlo, no lo hagas.\n\nEl contenido marcado +18 está destinado exclusivamente a personas mayores de edad según la legislación de su jurisdicción. Viene desactivado de fábrica y requiere activarlo a propósito y confirmar la mayoría de edad.\n\nSi sos titular de derechos y considerás que una extensión del catálogo enlaza a material que infringe tus derechos, escribí a través del repositorio del proyecto en GitHub y esa extensión será retirada del catálogo.\n\nEl programa se entrega TAL CUAL, sin garantía de ningún tipo, bajo licencia AGPL-3.0.",
+    "feedback": "Sugerencias y reportes",
+    "feedback-subtitle": "PrismHub está en beta. Contá los fallos que encuentres o proponé mejoras: se revisan y se corrigen en las versiones siguientes.",
+    "feedback-button": "Abrir",
+    "open": "Abrir",
+    "link-source": "Código fuente",
+    "link-source-subtitle": "Repositorio de PrismHub en GitHub, bajo licencia AGPL-3.0.",
+    "link-extensions": "Repositorio de extensiones",
+    "link-extensions-subtitle": "prism-plus, el catálogo oficial desde donde se descargan las extensiones.",
+    "general-subtitle-android": "Idioma, tema, acceso a la Zona +18 y su PIN, clave de TMDB y buscar actualizaciones"
   },
   "external-player-launching": "Lanzando {player}",
   "detail": {
@@ -452,7 +464,7 @@
     "is-adult-recheck-back": "Mejor no, sí es +18",
     "is-adult-recheck-confirm": "Confirmo: no es +18",
     "disabled-title": "El contenido NSFW está desactivado",
-    "disabled-subtitle": "Activá \"Mostrar contenido NSFW\" en Ajustes para acceder a la Zona +18.",
+    "disabled-subtitle": "Andá a Ajustes → General y activá \"Mostrar contenido NSFW\" para acceder a la Zona +18. Se te va a pedir confirmar que sos mayor de edad.",
     "disabled-cta": "Ir a Ajustes",
     "no-record": "Sín favoritos ni registros en la Zona +18",
     "is-adult-title": "¿Es contenido +18?",
@@ -473,10 +485,41 @@
     "is-adult-yes-hint": "Aparece solo en la Zona +18, protegida con tu PIN",
     "is-adult-title-nsfw-ext": "Contenido para adultos",
     "is-adult-ext-warning": "Esta extensión está marcada +18",
-    "is-adult-question-nsfw-ext": "Confirmá si este título es +18. Si no lo es, podés mandarlo a tu Inicio normal."
+    "is-adult-question-nsfw-ext": "Confirmá si este título es +18. Si no lo es, podés mandarlo a tu Inicio normal.",
+    "pin-locked": "Demasiados intentos fallidos. Probá de nuevo en {seconds} s.",
+    "biometric-reason": "Confirmá tu identidad para entrar a la Zona +18",
+    "biometric-checking": "Verificando tu identidad…",
+    "biometric-denied": "No se pudo confirmar tu identidad. La Zona +18 necesita la huella, el rostro o la credencial de tu dispositivo antes de pedir el PIN.",
+    "biometric-retry": "Reintentar"
   },
   "languages": {
     "en": "Inglés",
     "es": "Español"
+  },
+  "beta": {
+    "title": "PrismHub está en fase beta",
+    "intro": "Gracias por probar PrismHub. Esta versión todavía está en desarrollo, así que es normal que te cruces con algún detalle sin pulir.",
+    "point-bugs": "Si te encontrás con un fallo, una pantalla rara o algo que no responde como esperás, reportalo desde el botón de abajo. También se agradecen ideas y sugerencias de mejora: es la forma más rápida de que el app crezca.",
+    "point-extensions": "El contenido lo traen extensiones de terceros. Si una página cambia o se cae, esa extensión puede dejar de funcionar hasta que se actualice.",
+    "point-updates": "Los problemas se van corrigiendo en las versiones siguientes. Conviene mantener la app y las extensiones al día.",
+    "point-thanks": "Nada de lo que guardes (historial, favoritos, ajustes) se pierde entre versiones.",
+    "accept": "Ir a disfrutar",
+    "feedback": "Enviar sugerencias",
+    "legal": "PrismHub no aloja ni distribuye contenido: solo muestra lo que devuelven extensiones de terceros desde sitios públicos. Sos responsable del uso que le des y de cumplir las leyes de tu país. Podés leer el aviso legal completo en Ajustes.",
+    "point-author": "Litdemonick, creador del proyecto, sigue trabajando en PrismHub: corrigiendo fallos, puliendo lo que ya está y sumando funciones nuevas en cada versión.",
+    "point-ext-updates": "Las extensiones se actualizan por separado, desde Extensiones instaladas: cuando una se arregla o mejora, la actualizás desde ahí y listo, sin esperar ni instalar una versión nueva de PrismHub.",
+    "ads-title": "Sobre los anuncios",
+    "ads-body": "En esta versión puede que aparezcan anuncios al usar algunas extensiones. PrismHub no muestra publicidad propia ni gana nada con ellos.\n\nSe pueden saltar o cerrar, no tapan el reproductor y no afectan al app ni a tu dispositivo: solo molestan un momento.\n\nEn próximas versiones llegará un bloqueador de anuncios para las extensiones. Va a poder desactivarse, porque bloquear de más a veces impide que el vídeo cargue en el reproductor del navegador — si no te molestan los anuncios, conviene dejarlo apagado.",
+    "point-design": "El diseño todavía se está puliendo y va a cambiar con las versiones. Se está adaptando a cada tipo de pantalla —computadora, teléfono, tableta, televisor— para que se vea y se use bien en todas.",
+    "point-wip": "Vas a ver opciones que todavía no hacen nada o quedan a medias. No es que se hayan roto: son funciones en construcción, ya identificadas, que se irán completando en las próximas versiones. Si algo así no responde, no te preocupes.",
+    "repo-title": "El catálogo de extensiones",
+    "repo-body": "Todas las extensiones vienen de prism-plus, el repositorio oficial y único de PrismHub. Es lo que garantiza que lo que instalás está revisado y firmado.\n\nEl catálogo está en crecimiento: se van a ir sumando muchas más con el tiempo, para todo tipo de contenido, y las que ya están se corrigen y mejoran por su cuenta. Recordá que se actualizan desde Extensiones instaladas, sin esperar una versión nueva del app.",
+    "repo-count": "Ahora mismo hay {count} extensiones disponibles, entre streaming, series, películas, anime, manga y novelas. La mayoría de lo que se busca ya está cubierto, pero prism-plus sigue creciendo: si no encontrás algo todavía, es probable que se sume más adelante.",
+    "point-settings": "Date una vuelta por Ajustes: ahí se configura casi todo el app. Idioma, tema, el acceso a la Zona +18 con su PIN, el reproductor y los saltos de vídeo, la red y los registros. Y al final, en «Acerca de», están la información del app y su versión, el aviso legal, el enlace para reportar fallos o proponer mejoras, y los repositorios del proyecto y de las extensiones.\n\nEsa sección también se está puliendo: hay opciones que todavía no hacen nada y otras que están bloqueadas a propósito, porque tocarlas hoy dejaría el app sin funcionar. Se irán habilitando a medida que estén listas.",
+    "point-linux": "La versión de Linux es la menos probada de las tres: puede que algo no arranque o se comporte distinto que en Windows y Android. No es intencional y se irá corrigiendo en las próximas versiones. Si te encontrás con algo, reportalo indicando tu distribución: ayuda muchísimo.",
+    "confirm-title": "¿Leíste la información?",
+    "confirm-body": "Este aviso no vuelve a mostrarse. Explica cosas importantes para entender cómo funciona el app: los anuncios de las extensiones, las funciones que todavía están en construcción, cómo se actualizan las extensiones y el aviso legal.\n\nTe recomiendo leerlo antes de continuar. Si ya lo hiciste, seguí adelante.",
+    "confirm-yes": "Sí, ya lo leí",
+    "confirm-read-again": "Volver a leerlo"
   }
 }
