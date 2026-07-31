@@ -446,68 +446,13 @@ jobs:
           token: ${{ secrets.GITHUB_TOKEN }}
           artifacts: "Output/*.exe,PrismHub-${{ github.ref_name }}-windows-x64.zip"
           allowUpdates: true
-          # generateReleaseNotes: agrega el "What's Changed" real (commits
-          # desde el tag anterior) debajo del body fijo — confirmado en vivo
-          # que sin esto, cada release repetía la MISMA descripción genérica
-          # que la anterior, sin decir qué cambió de verdad.
+          # generateReleaseNotes: arma el "What's Changed" real con los
+          # commits desde el tag anterior.
           generateReleaseNotes: true
-          body: |
-            ## PrismHub ${{ github.ref_name }} — anime, manga y series, sin límites
-
-            App multiplataforma (Windows · Linux · Android) para ver anime, leer manga y acceder a series/películas mediante un sistema de **extensiones JavaScript**. Cada fuente de contenido es un script que se instala o actualiza por separado, sin depender de una actualización de la app.
-
-            ### 📦 Assets disponibles
-
-            | Archivo | Plataforma | Descripción |
-            |---------|-----------|------------|
-            | `PrismHub-setup-${{ github.ref_name }}.exe` | Windows x64 | Instalador (recomendado) |
-            | `PrismHub-${{ github.ref_name }}-windows-x64.zip` | Windows x64 | Versión portable (sin instalador) |
-            | `PrismHub-${{ github.ref_name }}-linux-x64.tar.gz` | Linux x64 | Binario precompilado |
-            | `PrismHub-${{ github.ref_name }}-android-arm64-v8a.apk` | Android | ARM64 (teléfonos modernos — **recomendado**) |
-            | `PrismHub-${{ github.ref_name }}-android-armeabi-v7a.apk` | Android | ARM32 (teléfonos antiguos) |
-            | `PrismHub-${{ github.ref_name }}-android-x86_64.apk` | Android | x86_64 (emuladores / tabletas x86) |
-
-            ### 🧩 Novedades de ${{ github.ref_name }}
-
-            #### 🐧 **Linux — crash al abrir reparado**
-            - ✅ Reparado: la app instalaba pero se cerraba sola al abrir en Linux (crash nativo al cargar extensiones, confirmado en distros modernas como CachyOS)
-            - ✅ El bridge de QuickJS que ejecuta las extensiones se recompila desde el código fuente con un ajuste puntual de manejo de memoria, en vez de usar el binario precompilado de 2021 que traía el paquete
-
-            #### 🎬 **Reproductor de video — estabilidad**
-            - ✅ Reparado: la imagen no se veía (solo audio) al abrir un capítulo en algunos servidores
-            - ✅ Reparado: cerrar el reproductor podía dejarlo abierto con los controles sin responder
-            - ✅ Reparado: crash al tocar play/pausa/cambiar de servidor después de cerrar el reproductor
-            - ✅ Reparado: reabrir un capítulo justo después de cerrarlo podía dejar la pantalla nueva sin responder (bug de identificador interno compartido entre sesiones)
-            - ✅ Apagado del reproductor con límite de tiempo — nunca vuelve a colgar la apertura del siguiente capítulo
-
-            #### 🎨 **Animaciones y transiciones (Windows/Linux)**
-            - ✅ Todas las pantallas de escritorio ahora animan al navegar (antes no había ninguna transición — cambio instantáneo)
-            - ✅ "Descubre tu próxima obsesión" en Home ahora hace crossfade entre portadas en vez de cambiar de golpe
-            - ✅ Flechas de scroll en Home animadas también en escritorio (antes solo en móvil)
-
-            #### 📋 **Historial**
-            - ✅ Reparado: el botón de ocultar una tarjeta no refrescaba la vista en la sección Historial
-            - ✅ Tarjetas ocultas muestran el logo de PrismHub a pantalla completa en vez de una caja oscura recortada
-            - ✅ Capturas de video en las tarjetas (Continuar/Historial) ahora llenan la tarjeta correctamente en vez de verse achicadas con barras negras
-
-            #### 📲 **Sistema de actualización**
-            - ✅ Reparado (Android): si faltaba el permiso "instalar apps desconocidas", el mensaje que explica cómo habilitarlo se perdía detrás de un error técnico confuso — ahora se ve el mensaje correcto
-            - ✅ Auditado de punta a punta en Windows, Linux y Android: nombres de assets, permisos y flujo de instalación verificados contra lo que publica este mismo pipeline
-
-            #### 🎯 **Características anteriores**
-            - 🎬 Reproductor con failover automático entre servidores
-            - 📖 Lector de manga con modo paginado y modo cascada (webtoon)
-            - 📋 Historial y favoritos con progreso guardado localmente
-            - 🔄 Auto-actualización en Windows y Linux
-            - 🔌 Repositorio de extensiones **prism+** preinstalado
-
-            ### 🐧 Linux
-
-            ```bash
-            # Instalación automática (recomendada)
-            curl -fsSL https://raw.githubusercontent.com/Litdemonick/Prism_Hub/main/install/install.sh | bash
-            ```
-
-            También disponible PKGBUILD para Arch/derivados en `install/PKGBUILD`.
-
-            Proyecto **open source bajo AGPL-3.0**. Reportá bugs en [Issues](https://github.com/Litdemonick/Prism_Hub/issues).
+          # SIN texto fijo a proposito. Antes habia una descripcion generica
+          # de la app repetida palabra por palabra en cada version: el release
+          # quedaba publicado diciendo lo mismo que el anterior, sin una linea
+          # sobre que habia cambiado. Con generateReleaseNotes, GitHub arma el
+          # "What's Changed" real a partir de los commits desde el tag
+          # anterior, que al menos es especifico de esta version; las notas
+          # redactadas se publican encima despues (gh release edit).
