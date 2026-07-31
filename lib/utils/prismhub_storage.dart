@@ -260,6 +260,7 @@ class PrismHubStorage {
     await _initSetting(SettingKey.aniListToken, '');
     await _initSetting(SettingKey.aniListUserId, '');
     await _initSetting(SettingKey.autoTracking, true);
+    await _initSetting(SettingKey.checkNewEpisodes, true);
     await _initSetting(SettingKey.windowSize, "1280,720");
     await _initSetting(SettingKey.androidWebviewUA, _defaultAndroidUA);
     await _initSetting(SettingKey.windowsWebviewUA, _defaultDesktopUA);
@@ -411,6 +412,13 @@ class SettingKey {
   // Paquetes +18 que el app desactivó SOLO al apagar el switch de NSFW, para
   // poder devolverlos a como estaban cuando se vuelva a encender.
   static const nsfw18AutoDisabled = 'Nsfw18AutoDisabled';
+  // Comprobar si salieron capítulos/episodios nuevos de lo que ya terminaste.
+  // Hace red por obra, así que se puede apagar.
+  static const checkNewEpisodes = 'CheckNewEpisodes';
+  // Cuándo el usuario declaró ser mayor de edad al activar el +18. Se guarda
+  // la fecha de la DECLARACIÓN, no la de nacimiento: para el app alcanza con
+  // saber que declaró y cuándo, y el otro dato es personal y no hace falta.
+  static const adultDeclaredAt = 'AdultDeclaredAt';
   static const videoPlayer = 'VideoPlayer';
   static const databaseVersion = 'DatabaseVersion';
   static const listMode = 'ListMode';

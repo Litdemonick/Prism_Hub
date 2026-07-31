@@ -387,7 +387,20 @@ class ExtensionUtils {
     final isUnstable = reason != null || await isRemoteUnstable(package);
     if (!context.mounted) return true;
 
-    if (!needsUpdate && !isUnstable) return false;
+    // Inestable YA NO bloquea. Antes cortaba la entrada con un diálogo, y eso
+    // dejaba al usuario sin poder ni mirar la ficha de algo que ya tenía en su
+    // historial — encima por un motivo que muchas veces es temporal (un sitio
+    // caído un rato) o directamente un falso positivo del chequeo de salud,
+    // como pasó con ShadeManga, TuMangaOnline y VeoHentai.
+    //
+    // Ahora se entra normalmente y el aviso se muestra DENTRO del detalle (ver
+    // DetailExtensionTile). Si la extensión vuelve a andar, la ficha carga sola
+    // sin que el usuario tenga que hacer nada.
+    //
+    // La versión desactualizada sí sigue cortando: ahí el código instalado
+    // puede no entenderse con lo que devuelve el sitio, y actualizar lo
+    // arregla de verdad.
+    if (!needsUpdate) return false;
 
     // Actualizar solo se ofrece cuando de verdad puede arreglar algo: si la
     // página está caída o la extensión está rota esperando corrección,

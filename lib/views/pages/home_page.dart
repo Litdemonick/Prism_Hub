@@ -213,6 +213,7 @@ class _HomePageState extends State<HomePage> {
                 headers: isVideo && !remoteVideoCover
                     ? null
                     : c.headersForPackage(h.package),
+                newEpisodeLabel: h.newEpisodeLabel,
                 onTap: () => resumeHistoryItem(context, h),
                 // No borra: saca el ítem de Continuar marcándolo visto. El
                 // borrado real vive en el Historial, que es donde uno

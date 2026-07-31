@@ -110,6 +110,7 @@ class HomeMediaCard extends StatefulWidget {
     this.onTap,
     this.onDelete,
     this.deleteLabel,
+    this.newEpisodeLabel,
     this.extraActionLabel,
     this.extraActionIcon,
     this.onExtraAction,
@@ -150,6 +151,11 @@ class HomeMediaCard extends StatefulWidget {
   /// Acción extra del menú de tres puntos, encima de ocultar y eliminar. La
   /// usa el Historial para mover el ítem entre "en curso" y "visto" sin tener
   /// que abrirlo y leer un capítulo, que hoy es la única forma.
+  /// Texto del capítulo/episodio nuevo, si lo hay. Se muestra como distintivo
+  /// sobre la portada: es lo único que justifica que el ítem haya vuelto a
+  /// "Continuar", así que tiene que verse sin leer el título.
+  final String? newEpisodeLabel;
+
   final String? extraActionLabel;
   final IconData? extraActionIcon;
   final VoidCallback? onExtraAction;
@@ -327,6 +333,34 @@ class _HomeMediaCardState extends State<HomeMediaCard> {
                         // de tipo lo dice el título de la sección, y el de la
                         // extensión pasó abajo, junto al título. Sobre la
                         // imagen tapaban justo las esquinas del contenido.
+                        if (widget.newEpisodeLabel?.isNotEmpty == true)
+                          Positioned(
+                            top: 8,
+                            left: 8,
+                            child: Container(
+                              padding: const EdgeInsets.symmetric(
+                                  horizontal: 9, vertical: 4),
+                              decoration: BoxDecoration(
+                                // Sólido y con contorno, mismo criterio que el
+                                // resto de los distintivos: sobre una portada
+                                // clara uno translúcido no se lee.
+                                color: widget.accent,
+                                borderRadius: BorderRadius.circular(999),
+                                border:
+                                    Border.all(color: const Color(0x8CFFFFFF)),
+                              ),
+                              child: Text(
+                                widget.newEpisodeLabel!,
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                                style: const TextStyle(
+                                  color: Colors.white,
+                                  fontSize: 10.5,
+                                  fontWeight: FontWeight.w700,
+                                ),
+                              ),
+                            ),
+                          ),
                         if (widget.progress != null)
                           Positioned(
                             left: 0,

@@ -6,6 +6,7 @@ import 'package:get/get.dart';
 import 'package:prismhub/data/services/extension_service.dart';
 import 'package:prismhub/models/index.dart';
 import 'package:prismhub/data/services/database_service.dart';
+import 'package:prismhub/utils/novedades.dart';
 import 'package:prismhub/utils/connectivity.dart';
 import 'package:prismhub/utils/extension.dart';
 import 'package:prismhub/utils/resume_history.dart';
@@ -141,6 +142,11 @@ class HomePageController extends GetxController {
     await onRefresh();
   }
 
+  Future<void> _comprobarNovedades(List<History> historial) async {
+    final hubo = await Novedades.comprobar(historial);
+    if (hubo) await refreshHistory();
+  }
+
   refreshHistory() async {
     // Fetch first, THEN swap — clearing before the await let the "no
     // history" empty state flash on screen for every refresh (including
@@ -176,6 +182,10 @@ class HomePageController extends GetxController {
     resents.value = resentsData;
     favorites.value = favoritesData;
     unawaited(prewarmResumeHistoryTargets(resentsData));
+    // En segundo plano y sin await: son peticiones de red por obra, y el Home
+    // no puede quedarse esperándolas. Cuando termina, si encontró algo, se
+    // releen las listas para que la tarjeta aparezca sola.
+    unawaited(_comprobarNovedades(historialZona));
     // Si por lo que sea el hero todavía no tiene nada (primera vez real,
     // el fetch inicial falló, tardó más de la cuenta) lo reintenta acá —
     // pero solo cuando está vacío: si ya hay una imagen puesta, refrescar

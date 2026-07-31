@@ -108,9 +108,9 @@
     "disabled-dialog": "Esta extensión está desactivada, así que no se puede abrir su contenido. Andá a Extensiones instaladas y activala.",
     "go-to-installed": "Ir a Extensiones instaladas",
     "unstable-title": "Esta extensión está fallando",
-    "unstable-site-down": "La página de la extensión está caída. No se puede abrir su contenido hasta que vuelva.",
-    "unstable-broken": "La extensión está inestable y en espera de corrección. Por ahora no entrega contenido.",
-    "unstable-outdated": "Esta extensión necesita actualizarse para volver a funcionar.",
+    "unstable-site-down": "La página de esta extensión está caída. El contenido puede no cargar hasta que vuelva; no hace falta que hagas nada, se reactiva sola.",
+    "unstable-broken": "Esta extensión está marcada como inestable y en espera de corrección. Puede que no cargue contenido. Se desmarca sola en cuanto vuelva a funcionar.",
+    "unstable-outdated": "Esta extensión necesita actualizarse. Podés hacerlo desde Extensiones instaladas.",
     "unstable-generic": "Esta extensión está marcada como inestable. Por ahora no se puede abrir su contenido.",
     "needs-newer-app": "Necesita una versión más nueva de PrismHub. Actualizá la app para poder instalarla.",
     "filter-all": "Todas",
@@ -235,7 +235,9 @@
     "link-source-subtitle": "Repositorio de PrismHub en GitHub, bajo licencia AGPL-3.0.",
     "link-extensions": "Repositorio de extensiones",
     "link-extensions-subtitle": "prism-plus, el catálogo oficial desde donde se descargan las extensiones.",
-    "general-subtitle-android": "Idioma, tema, acceso a la Zona +18 y su PIN, clave de TMDB y buscar actualizaciones"
+    "general-subtitle-android": "Idioma, tema, acceso a la Zona +18 y su PIN, clave de TMDB y buscar actualizaciones",
+    "check-new-episodes": "Avisar de capítulos nuevos",
+    "check-new-episodes-subtitle": "Revisa cada 12 horas si salió algo nuevo de lo que ya terminaste, y lo devuelve a Continuar indicando cuál es. Consulta las extensiones en segundo plano; si preferís ahorrar datos, apagalo."
   },
   "external-player-launching": "Lanzando {player}",
   "detail": {
@@ -494,7 +496,10 @@
     "biometric-reason": "Confirmá tu identidad para entrar a la Zona +18",
     "biometric-checking": "Verificando tu identidad…",
     "biometric-denied": "No se pudo confirmar tu identidad. La Zona +18 necesita la huella, el rostro o la credencial de tu dispositivo antes de pedir el PIN.",
-    "biometric-retry": "Reintentar"
+    "biometric-retry": "Reintentar",
+    "age-help": "Elegí tu fecha de nacimiento",
+    "age-denied-title": "Contenido solo para mayores",
+    "age-denied": "Según la fecha que indicaste no alcanzás la edad mínima, así que esta sección no puede activarse.\n\nSi te equivocaste al elegirla, volvé a intentarlo."
   },
   "languages": {
     "en": "Inglés",

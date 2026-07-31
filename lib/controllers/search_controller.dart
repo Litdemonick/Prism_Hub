@@ -308,13 +308,21 @@ class SearchPageController extends GetxController {
         // extensión Y por cada ítem de su resultado, así que renormalizar
         // la misma query adentro del loop sería trabajo repetido de sobra.
         final tokens = SearchText.queryTokens(query);
+        // Cuatro grupos, no tres. Antes "sin resultados" y "con resultados
+        // pero sin coincidencia en el título" caían los DOS en el 1, así que
+        // una extensión que no encontró nada quedaba mezclada entre las que sí
+        // — justo lo contrario de lo que este orden busca. Ahora lo vacío baja
+        // siempre por debajo de cualquier cosa que haya traído algo.
         int bucket(SearchResult r) {
-          if (r.result != null && r.result!.isNotEmpty) {
-            final titleMatches = r.result!
+          final tieneResultados = r.result != null && r.result!.isNotEmpty;
+          if (tieneResultados) {
+            final coincideTitulo = r.result!
                 .any((item) => SearchText.matchesTokens(item.title, tokens));
-            return titleMatches ? 0 : 1;
+            return coincideTitulo ? 0 : 1;
           }
-          return r.error != null ? 2 : 1;
+          // El error va último: no es que no haya nada, es que no se pudo
+          // preguntar, y eso el usuario ya lo ve en el aviso de la tarjeta.
+          return r.error != null ? 3 : 2;
         }
 
         // List.sort de Dart es estable: dentro de cada bucket, el orden

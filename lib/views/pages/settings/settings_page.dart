@@ -5,6 +5,7 @@ import 'package:fluent_ui/fluent_ui.dart' as fluent;
 import 'package:flutter/material.dart';
 import 'package:flutter_i18n/flutter_i18n.dart';
 import 'package:get/get.dart';
+import 'package:prismhub/views/pages/nsfw18/nsfw18_age_dialog.dart';
 import 'package:prismhub/views/widgets/button.dart';
 import 'package:prismhub/views/widgets/messenger.dart';
 import 'package:prismhub/data/providers/tmdb_provider.dart';
@@ -476,6 +477,16 @@ class _SettingsPageState extends State<SettingsPage> {
                 PrismHubStorage.setSetting(SettingKey.autoCheckUpdate, value);
               },
             ),
+            SettingsSwitchTile(
+              title: 'settings.check-new-episodes'.i18n,
+              buildSubtitle: () => 'settings.check-new-episodes-subtitle'.i18n,
+              buildValue: () =>
+                  PrismHubStorage.getSetting(SettingKey.checkNewEpisodes) !=
+                  false,
+              onChanged: (value) {
+                PrismHubStorage.setSetting(SettingKey.checkNewEpisodes, value);
+              },
+            ),
             // NSFW
             SettingsSwitchTile(
               title: 'settings.nsfw'.i18n,
@@ -484,6 +495,13 @@ class _SettingsPageState extends State<SettingsPage> {
                 return PrismHubStorage.getSetting(SettingKey.enableNSFW);
               },
               onChanged: (value) async {
+                // Al ACTIVAR se pide confirmar la mayoría de edad con la fecha
+                // de nacimiento, una sola vez por instalación. Si cancela o no
+                // llega a la edad, el interruptor no se mueve.
+                if (value && !await Nsfw18AgeDialog.confirmar(context)) {
+                  setState(() {});
+                  return;
+                }
                 await PrismHubStorage.setSetting(SettingKey.enableNSFW, value);
                 if (!value) {
                   // Al APAGAR: cualquier extensión +18 que estuviera activa se

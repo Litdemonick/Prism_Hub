@@ -116,9 +116,9 @@
     "disabled-dialog": "This extension is disabled, so its content cannot be opened. Go to Installed extensions and enable it.",
     "go-to-installed": "Go to Installed extensions",
     "unstable-title": "This extension is failing",
-    "unstable-site-down": "The extension site is down. Its content cannot be opened until it comes back.",
-    "unstable-broken": "This extension is unstable and awaiting a fix. It is not returning content right now.",
-    "unstable-outdated": "This extension needs an update to work again.",
+    "unstable-site-down": "This extension’s site is down. Content may not load until it is back; nothing to do on your side, it re-enables itself.",
+    "unstable-broken": "This extension is marked unstable and awaiting a fix. It may not load content. It gets unmarked automatically once it works again.",
+    "unstable-outdated": "This extension needs updating. You can do it from Installed extensions.",
     "unstable-generic": "This extension is flagged as unstable. Its content cannot be opened right now.",
     "needs-newer-app": "Requires a newer version of PrismHub. Update the app to install it.",
     "filter-all": "All",
@@ -243,7 +243,9 @@
     "link-source-subtitle": "The PrismHub repository on GitHub, licensed under AGPL-3.0.",
     "link-extensions": "Extensions repository",
     "link-extensions-subtitle": "prism-plus, the official catalog extensions are downloaded from.",
-    "general-subtitle-android": "Language, theme, +18 Zone access and PIN, TMDB key and update checks"
+    "general-subtitle-android": "Language, theme, +18 Zone access and PIN, TMDB key and update checks",
+    "check-new-episodes": "Notify about new chapters",
+    "check-new-episodes-subtitle": "Checks every 12 hours whether anything new came out for what you already finished, and brings it back to Continue showing which one it is. It queries extensions in the background; turn it off to save data."
   },
   "external-player-launching": "Launching {player}",
   "detail": {
@@ -505,7 +507,10 @@
     "biometric-reason": "Confirm your identity to enter the +18 Zone",
     "biometric-checking": "Verifying your identity…",
     "biometric-denied": "Your identity could not be confirmed. The +18 Zone needs your fingerprint, face or device credential before asking for the PIN.",
-    "biometric-retry": "Try again"
+    "biometric-retry": "Try again",
+    "age-help": "Select your date of birth",
+    "age-denied-title": "Adults only",
+    "age-denied": "Based on the date you entered you do not meet the minimum age, so this section cannot be enabled.\n\nIf you picked the wrong date, try again."
   },
   "beta": {
     "title": "PrismHub is in beta",
