@@ -291,7 +291,17 @@ class _VideoPlayerDesktopControlsState
                         //  2. Salto en curso (barra, teclas o flechas).
                         //  3. Buffer vacío durante la reproducción.
                         opacity: ((!_c.isGettingWatchData.value &&
-                                    !_c.hasRenderedFrame.value) ||
+                                    !_c.hasRenderedFrame.value &&
+                                    // Si hay un error en pantalla, ahi hay una
+                                    // tarjeta con su boton (reintentar / elegir
+                                    // otro servidor) y NO se esta cargando
+                                    // nada: la rueda girando detras hacia
+                                    // pensar que algo seguia en curso.
+                                    _c.error.value.isEmpty &&
+                                    // Con el reproductor de WebView activo no
+                                    // va a pintarse nunca un cuadro nativo, asi
+                                    // que esta rueda giraria para siempre.
+                                    !_c.isWebViewActive.value) ||
                                 (_c.hasRenderedFrame.value &&
                                     (_c.isSeeking.value ||
                                         (_c.isPlaying.value &&

@@ -250,7 +250,11 @@ class _VideoPlayerMobileControlsState extends State<VideoPlayerMobileControls> {
                       //  2. Salto en curso (barra, teclas o flechas).
                       //  3. Buffer vacío durante la reproducción.
                       opacity: ((!_c.isGettingWatchData.value &&
-                                  !_c.hasRenderedFrame.value) ||
+                                  !_c.hasRenderedFrame.value &&
+                                  // Ver el comentario equivalente en los
+                                  // controles de escritorio.
+                                  _c.error.value.isEmpty &&
+                                  !_c.isWebViewActive.value) ||
                               (_c.hasRenderedFrame.value &&
                                   (_c.isSeeking.value ||
                                       (_c.isPlaying.value &&

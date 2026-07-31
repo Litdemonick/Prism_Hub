@@ -96,6 +96,14 @@ class VideoPlayerController extends GetxController with WidgetsBindingObserver {
   // 快捷键
   late final keyboardShortcuts = <KeyboardKey, VoidCallback>{
     LogicalKeyboardKey.escape: () {
+      // Estando en pantalla completa, el primer ESC solo sale de ahi — que es
+      // lo que hace cualquier reproductor y lo que uno espera. Antes cerraba
+      // el reproductor de una, asi que apretar ESC para volver a la ventana
+      // terminaba sacandote del episodio.
+      if (isFullScreen.value) {
+        unawaited(toggleFullscreen());
+        return;
+      }
       unawaited(closeRoute());
     },
     LogicalKeyboardKey.keyF: () => toggleFullscreen(),
