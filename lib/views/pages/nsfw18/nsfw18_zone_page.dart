@@ -573,7 +573,12 @@ void _abrirHistorialZona(BuildContext context) {
     Get.to(() => const HistoryPage(zone: true));
     return;
   }
-  router.push('/nsfw18/history');
+  // La ruta es '/history' con zone=1, la MISMA que usa _openHistoryTab: no
+  // existe ninguna '/nsfw18/...' declarada en el router. Escrita así, go_router
+  // no encontraba la ruta y mostraba "Page Not Found" en vez del Historial.
+  router.push(
+    Uri(path: '/history', queryParameters: {'zone': '1'}).toString(),
+  );
 }
 
 /// Botón al Historial cuando la zona está vacía. Ver el mismo widget en

@@ -1,7 +1,13 @@
 ﻿name: prismhub
 description: PrismHub - Anime, manga and novels streaming application
 publish_to: "none"
-version: 1.0.10+1
+# El numero despues del "+" es el build, y de el sale el versionCode de Android
+# (android/app/build.gradle lo multiplica por 10 y le suma el codigo de ABI).
+# Android decide si algo es una actualizacion mirando ESE numero, no el "1.0.11":
+# tiene que subir en cada release o el instalador puede rechazar el APK.
+# Hasta la 1.0.10 quedo clavado en +1, asi que las tres primeras versiones
+# salieron con el mismo versionCode.
+version: 1.0.11+2
 
 environment:
   sdk: ">=3.0.3 <4.0.0"
