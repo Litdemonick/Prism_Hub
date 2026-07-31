@@ -117,7 +117,7 @@
     "disabled-dialog": "This extension is disabled, so its content cannot be opened. Go to Installed extensions and enable it.",
     "go-to-installed": "Go to Installed extensions",
     "unstable-title": "This extension is failing",
-    "unstable-site-down": "This extension’s site is down. Content may not load until it is back; nothing to do on your side, it re-enables itself.",
+    "unstable-site-down": "This extension's site is not responding — it may be down or under maintenance. Content will not load until it is back; you do not need to do anything, it re-enables itself.",
     "unstable-broken": "This extension is marked unstable and awaiting a fix. It may not load content. It gets unmarked automatically once it works again.",
     "unstable-outdated": "This extension needs updating. You can do it from Installed extensions.",
     "unstable-generic": "This extension is flagged as unstable. Its content cannot be opened right now.",
@@ -128,7 +128,10 @@
     "filter-video": "Video",
     "filter-reading": "Reading",
     "filter-disabled": "Disabled",
-    "filter-unstable": "Unstable"
+    "filter-unstable": "Unstable",
+    "unstable-short-site-down": "Down for maintenance",
+    "unstable-short-broken": "Being fixed",
+    "unstable-short-outdated": "Update needed"
   },
   "extension-repo": {
     "error": "An error occurred!",

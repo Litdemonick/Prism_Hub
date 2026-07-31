@@ -27,6 +27,7 @@ class ExtensionCard extends StatefulWidget {
     required this.type,
     this.unstable = false,
     this.blockedReasonKey = 'extension.unstable-blocked',
+    this.unstableReason,
     this.url,
     this.webSite,
     this.license,
@@ -51,6 +52,11 @@ class ExtensionCard extends StatefulWidget {
   // un `minProtocol` mayor al que entiende este app (ahí lo que falta es
   // actualizar PrismHub, no esperar un arreglo de la extensión).
   final String blockedReasonKey;
+
+  /// Motivo publicado por el catalogo ('site-down', 'broken',
+  /// 'outdated'). Decide el texto CORTO de la etiqueta; el largo sale
+  /// de blockedReasonKey.
+  final String? unstableReason;
   final String? webSite;
   final String? license;
   final String? description;
@@ -404,7 +410,8 @@ class _ExtensionCardState extends State<ExtensionCard> {
                   _badge(widget.lang),
                   if (widget.nsfw) _badge('18+', color: Colors.redAccent),
                   if (widget.unstable)
-                    _badge('extension.unstable'.i18n, color: Colors.orange),
+                    _badge(ExtensionUtils.etiquetaCortaInestable(widget.unstableReason),
+                        color: Colors.orange),
                   // Solo indica que el catálogo trae firma de prism+ (no
                   // valida acá — eso pasa recién al instalar, ver
                   // _install()). Es solo informativo, no editable.
@@ -602,7 +609,8 @@ class _ExtensionCardState extends State<ExtensionCard> {
                   _badge(widget.lang),
                   if (widget.nsfw) _badge('18+', color: Colors.redAccent),
                   if (widget.unstable)
-                    _badge('extension.unstable'.i18n, color: Colors.orange),
+                    _badge(ExtensionUtils.etiquetaCortaInestable(widget.unstableReason),
+                        color: Colors.orange),
                   if (widget.signature != null && widget.signature!.isNotEmpty)
                     _badge('extension.official-badge'.i18n,
                         color: HomeTheme.accentPink),

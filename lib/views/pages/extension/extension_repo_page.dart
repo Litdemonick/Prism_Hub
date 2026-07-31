@@ -456,9 +456,13 @@ class _ExtensionRepoPageState extends State<ExtensionRepoPage> {
           unstable: e['unstable'] == 'true' ||
               e['unstable'] == true ||
               ExtensionUtils.entryNeedsNewerApp(e),
+          // El motivo lo publica el catalogo (unstableReason). Antes se
+          // ignoraba y salia siempre el generico "en espera de actualizacion",
+          // aunque el sitio estuviera simplemente en mantenimiento.
           blockedReasonKey: ExtensionUtils.entryNeedsNewerApp(e)
               ? 'extension.needs-newer-app'
-              : 'extension.unstable-blocked',
+              : ExtensionUtils.claveMotivoInestable(e['unstableReason']),
+          unstableReason: e['unstableReason'] as String?,
           type: type);
     }).toList();
     // 过滤 — nombre tolerante a tildes/orden, O categoría/tipo si la

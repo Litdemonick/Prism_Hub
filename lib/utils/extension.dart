@@ -334,6 +334,47 @@ class ExtensionUtils {
     return _remoteUnstableReasonCache?[package];
   }
 
+  /// Clave i18n del texto LARGO segun el motivo — la misma que resuelve
+  /// unstableReasonLabel, pero devuelta sin traducir para los widgets que
+  /// reciben una clave en vez de un texto (ver ExtensionCard.blockedReasonKey).
+  static String claveMotivoInestable(dynamic reason) {
+    switch (reason) {
+      case 'site-down':
+        return 'extension.unstable-site-down';
+      case 'broken':
+        return 'extension.unstable-broken';
+      case 'outdated':
+        return 'extension.unstable-outdated';
+      default:
+        return 'extension.unstable-blocked';
+    }
+  }
+
+  /// Texto CORTO para la etiqueta de la tarjeta.
+  ///
+  /// Antes decia siempre "Inestable", que no distingue un sitio en
+  /// mantenimiento —donde no hay nada que hacer salvo esperar— de una
+  /// extension rota o de uma que necesita actualizarse. El catalogo ya publica
+  /// el motivo, solo faltaba mostrarlo.
+  static String etiquetaCortaInestable(String? reason) {
+    switch (reason) {
+      case 'site-down':
+        return 'extension.unstable-short-site-down'.i18n;
+      case 'broken':
+        return 'extension.unstable-short-broken'.i18n;
+      case 'outdated':
+        return 'extension.unstable-short-outdated'.i18n;
+      default:
+        return 'extension.unstable'.i18n;
+    }
+  }
+
+  /// Motivo publicado por el indice, leido de la cache ya cargada.
+  static String? unstableReasonCached(String package) {
+    if (_remoteUnstableCache?[package] != true) return null;
+    return _remoteUnstableReasonCache?[package];
+  }
+
   // Texto para mostrarle al usuario según el motivo. Un motivo desconocido
   // (índice más nuevo que este app) cae al genérico en vez de mostrar la clave
   // cruda o quedar en blanco.
@@ -642,7 +683,20 @@ class ExtensionUtils {
 
   // Only enabled runtimes — used for search/discovery so disabled sources hide.
   static Map<String, ExtensionService> get enabledRuntimes =>
-      Map.fromEntries(runtimes.entries.where((e) => isEnabled(e.key)));
+      Map.fromEntries(runtimes.entries.where(
+        // Tambien se excluyen las INESTABLES, no solo las desactivadas.
+        //
+        // Este getter es el unico punto por el que pasan Buscar, Inicio y el
+        // descubrimiento en general, asi que filtrar aca las saca de todas las
+        // zonas de una. Antes una inestable que ya estuviera activada seguia
+        // consultandose: devolvia listas vacias o a medias, y el usuario solo
+        // se enteraba al tocar un item y ver el aviso.
+        //
+        // Se usa la version CACHEADA (no la async) porque esto se lee dentro de
+        // builds. Si el catalogo todavia no se leyo, no excluye a nadie — el
+        // aviso por item sigue estando como red de seguridad.
+        (e) => isEnabled(e.key) && !isRemoteUnstableCached(e.key),
+      ));
 
   // Extensiones que se auto-instalan en el primer launch.
   // Solo las publicadas en prism+ index.json; añadir aquí solo cuando ya

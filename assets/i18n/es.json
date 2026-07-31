@@ -109,7 +109,7 @@
     "disabled-dialog": "Esta extensión está desactivada, así que no se puede abrir su contenido. Andá a Extensiones instaladas y activala.",
     "go-to-installed": "Ir a Extensiones instaladas",
     "unstable-title": "Esta extensión está fallando",
-    "unstable-site-down": "La página de esta extensión está caída. El contenido puede no cargar hasta que vuelva; no hace falta que hagas nada, se reactiva sola.",
+    "unstable-site-down": "La página de esta extensión no está respondiendo — puede estar en mantenimiento o caída. El contenido no va a cargar hasta que vuelva; no hace falta que hagas nada, se reactiva sola.",
     "unstable-broken": "Esta extensión está marcada como inestable y en espera de corrección. Puede que no cargue contenido. Se desmarca sola en cuanto vuelva a funcionar.",
     "unstable-outdated": "Esta extensión necesita actualizarse. Podés hacerlo desde Extensiones instaladas.",
     "unstable-generic": "Esta extensión está marcada como inestable. Por ahora no se puede abrir su contenido.",
@@ -120,7 +120,10 @@
     "filter-video": "Vídeo",
     "filter-reading": "Lectura",
     "filter-disabled": "Desactivadas",
-    "filter-unstable": "Inestables"
+    "filter-unstable": "Inestables",
+    "unstable-short-site-down": "En mantenimiento",
+    "unstable-short-broken": "En corrección",
+    "unstable-short-outdated": "Actualizar"
   },
   "extension-repo": {
     "error": "¡Ha ocurrido un error!",

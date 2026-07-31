@@ -34,6 +34,9 @@ class _ExtensionTileState extends State<ExtensionTile> {
   late bool _enabled = ExtensionUtils.isEnabled(widget.extension.package);
   bool _updateRequired = false;
   bool _unstable = false;
+  // Motivo publicado por el catalogo: decide si la etiqueta dice
+  // "En mantenimiento", "En correccion" o solo "Inestable".
+  String? _motivoInestable;
   bool _updating = false;
 
   @override
@@ -45,7 +48,13 @@ class _ExtensionTileState extends State<ExtensionTile> {
       if (mounted) setState(() => _updateRequired = value);
     });
     ExtensionUtils.isRemoteUnstable(widget.extension.package).then((value) {
-      if (mounted) setState(() => _unstable = value);
+      if (mounted) {
+        setState(() {
+          _unstable = value;
+          _motivoInestable =
+              ExtensionUtils.unstableReasonCached(widget.extension.package);
+        });
+      }
     });
   }
 
@@ -130,7 +139,13 @@ class _ExtensionTileState extends State<ExtensionTile> {
       }
     });
     ExtensionUtils.isRemoteUnstable(widget.extension.package).then((value) {
-      if (mounted && value != _unstable) setState(() => _unstable = value);
+      if (mounted && value != _unstable) {
+        setState(() {
+          _unstable = value;
+          _motivoInestable =
+              ExtensionUtils.unstableReasonCached(widget.extension.package);
+        });
+      }
     });
   }
 
@@ -158,6 +173,24 @@ class _ExtensionTileState extends State<ExtensionTile> {
   }
 
   Future<void> _toggleEnabled(bool value) async {
+    // Una extension marcada inestable no se puede ACTIVAR. Antes se podia:
+    // el interruptor la prendia igual y recien al tocar su contenido saltaba
+    // el aviso, asi que quedaba encendida en la lista y aportando resultados
+    // vacios a la busqueda. Apagarla siempre se permite.
+    if (value && _unstable) {
+      if (mounted) {
+        showPlatformSnackbar(
+          context: context,
+          title: 'extension.unstable-title'.i18n,
+          content: ExtensionUtils.unstableReasonLabel(_motivoInestable),
+          severity: fluent.InfoBarSeverity.warning,
+        );
+        // El interruptor ya se pinto encendido por el gesto: se vuelve a
+        // dibujar desde el estado real para que no quede mintiendo.
+        setState(() {});
+      }
+      return;
+    }
     // Activar una extensión nsfw: si el ajuste +18 de Ajustes está apagado no
     // se deja activar (mensaje explicando por qué); si está prendido, se pide
     // confirmación +18 antes de activarla de verdad. Desactivar nunca se
@@ -335,7 +368,8 @@ class _ExtensionTileState extends State<ExtensionTile> {
               _badge(ExtensionUtils.typeToString(widget.extension.type)),
               if (widget.extension.nsfw) _badge('18+', color: Colors.redAccent),
               if (_unstable)
-                _badge('extension.unstable'.i18n, color: Colors.orange),
+                _badge(ExtensionUtils.etiquetaCortaInestable(_motivoInestable),
+                    color: Colors.orange),
             ],
           ),
           // Descripción — de qué va la extensión (anime, lectura, series,
@@ -642,7 +676,8 @@ class _ExtensionTileState extends State<ExtensionTile> {
                 if (widget.extension.nsfw)
                   _badge('18+', color: Colors.redAccent),
                 if (_unstable)
-                  _badge('extension.unstable'.i18n, color: Colors.orange),
+                  _badge(ExtensionUtils.etiquetaCortaInestable(_motivoInestable),
+                    color: Colors.orange),
                 if (_updateRequired)
                   _badge('extension.update-required'.i18n,
                       color: Colors.redAccent),
