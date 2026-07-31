@@ -4,6 +4,7 @@ import 'dart:io';
 import 'dart:ui' as ui;
 import 'package:desktop_multi_window/desktop_multi_window.dart';
 import 'package:fluent_ui/fluent_ui.dart' as fluent;
+import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:get/get.dart';
@@ -316,7 +317,15 @@ class _MainAppState extends State<MainApp> {
       home: const AndroidMainPage(),
       localizationsDelegates: [
         I18nUtils.flutterI18nDelegate,
+        GlobalMaterialLocalizations.delegate,
+        GlobalWidgetsLocalizations.delegate,
+        GlobalCupertinoLocalizations.delegate,
       ],
+      // Sin supportedLocales, el resolvedor cae a inglés aunque los delegados
+      // estén puestos — por eso el selector de fecha salía en inglés con la
+      // app en español.
+      supportedLocales: const [Locale('es'), Locale('en')],
+      locale: Locale(I18nUtils.currentLanguageCode),
     );
   }
 
@@ -428,7 +437,12 @@ class _MainAppState extends State<MainApp> {
       ),
       localizationsDelegates: [
         I18nUtils.flutterI18nDelegate,
+        GlobalMaterialLocalizations.delegate,
+        GlobalWidgetsLocalizations.delegate,
+        GlobalCupertinoLocalizations.delegate,
       ],
+      supportedLocales: const [Locale('es'), Locale('en')],
+      locale: Locale(I18nUtils.currentLanguageCode),
       builder: (context, child) {
         return MediaQuery(
           data: MediaQuery.of(context).copyWith(

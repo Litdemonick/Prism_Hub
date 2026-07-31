@@ -165,21 +165,31 @@ class _BetaContentState extends State<_BetaContent> {
       crossAxisAlignment: CrossAxisAlignment.start,
       mainAxisSize: MainAxisSize.min,
       children: [
-        Container(
-          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 5),
-          decoration: BoxDecoration(
-            color: HomeTheme.accentPink.withValues(alpha: 0.16),
-            borderRadius: BorderRadius.circular(999),
-            border: Border.all(color: HomeTheme.accentPink),
-          ),
-          child: Text(
-            'BETA · v${widget.version}',
-            style: const TextStyle(
-              color: HomeTheme.accentPink,
-              fontSize: 12,
-              fontWeight: FontWeight.w700,
+        // Insignia e idioma en la misma línea. El selector va ACÁ porque este
+        // aviso es lo primero que ve alguien que recién instaló: si el app
+        // arrancó en un idioma que no entiende, obligarlo a leer todo esto y
+        // buscar Ajustes después no tiene sentido.
+        Row(
+          children: [
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 5),
+              decoration: BoxDecoration(
+                color: HomeTheme.accentPink.withValues(alpha: 0.16),
+                borderRadius: BorderRadius.circular(999),
+                border: Border.all(color: HomeTheme.accentPink),
+              ),
+              child: Text(
+                'BETA · v${widget.version}',
+                style: const TextStyle(
+                  color: HomeTheme.accentPink,
+                  fontSize: 12,
+                  fontWeight: FontWeight.w700,
+                ),
+              ),
             ),
-          ),
+            const Spacer(),
+            _SelectorIdioma(onCambio: () => setState(() {})),
+          ],
         ),
         const SizedBox(height: 14),
         Text(
@@ -249,6 +259,63 @@ class _BetaContentState extends State<_BetaContent> {
           padding: const EdgeInsets.only(right: 14, bottom: 8),
           child: contenido,
         ),
+      ),
+    );
+  }
+}
+
+/// Selector de idioma compacto: dos mitades en una misma cápsula, la activa
+/// resaltada. Un desplegable para dos opciones sería un toque de más, y en
+/// este aviso el idioma tiene que poder cambiarse de un vistazo.
+class _SelectorIdioma extends StatelessWidget {
+  const _SelectorIdioma({required this.onCambio});
+  final VoidCallback onCambio;
+
+  @override
+  Widget build(BuildContext context) {
+    final actual = I18nUtils.currentLanguageCode;
+    Widget mitad(String codigo, String etiqueta) {
+      final activo = actual == codigo;
+      return GestureDetector(
+        onTap: activo
+            ? null
+            : () async {
+                await PrismHubStorage.setSetting(SettingKey.language, codigo);
+                await I18nUtils.changeLanguage(codigo);
+                onCambio();
+              },
+        child: MouseRegion(
+          cursor: activo ? SystemMouseCursors.basic : SystemMouseCursors.click,
+          child: AnimatedContainer(
+            duration: const Duration(milliseconds: 150),
+            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+            decoration: BoxDecoration(
+              color: activo ? HomeTheme.accentPink : Colors.transparent,
+              borderRadius: BorderRadius.circular(999),
+            ),
+            child: Text(
+              etiqueta,
+              style: TextStyle(
+                color: activo ? Colors.white : HomeTheme.textMuted,
+                fontSize: 11.5,
+                fontWeight: FontWeight.w700,
+              ),
+            ),
+          ),
+        ),
+      );
+    }
+
+    return Container(
+      padding: const EdgeInsets.all(3),
+      decoration: BoxDecoration(
+        color: HomeTheme.bg,
+        borderRadius: BorderRadius.circular(999),
+        border: Border.all(color: HomeTheme.border),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [mitad('es', 'ES'), mitad('en', 'EN')],
       ),
     );
   }

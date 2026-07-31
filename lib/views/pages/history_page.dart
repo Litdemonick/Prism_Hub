@@ -428,6 +428,12 @@ class _HistoryPageState extends State<HistoryPage> {
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 16),
       child: Wrap(
+        // Centrados en celular: las pestañas ocupan dos líneas en pantalla
+        // angosta y alineadas a la izquierda la segunda quedaba colgando sola
+        // en un costado. En escritorio entran en una línea y ahí el alineado a
+        // la izquierda es lo correcto.
+        alignment:
+            Platform.isAndroid ? WrapAlignment.center : WrapAlignment.start,
         spacing: 10,
         runSpacing: 10,
         children: List.generate(
@@ -461,6 +467,8 @@ class _HistoryPageState extends State<HistoryPage> {
     return Padding(
       padding: const EdgeInsets.fromLTRB(16, 10, 16, 0),
       child: Wrap(
+        alignment:
+            Platform.isAndroid ? WrapAlignment.center : WrapAlignment.start,
         spacing: 8,
         runSpacing: 8,
         crossAxisAlignment: WrapCrossAlignment.center,

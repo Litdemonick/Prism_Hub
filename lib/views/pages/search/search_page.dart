@@ -335,13 +335,15 @@ class _SearchPageState extends State<SearchPage> {
                     // scrollean horizontal si no entran, nunca cambian de
                     // alto ni empujan al resto. Un VerticalDivider separa
                     // visualmente el grupo de filtros del de acciones.
-                    Row(
-                      crossAxisAlignment: CrossAxisAlignment.center,
-                      children: [
-                        Expanded(child: _buildTypeChipsScrollable()),
-                        const SizedBox(width: 12),
-                        // Del lado de los filtros (antes del divisor), no del de
-                        // acciones: es otra forma de acotar QUÉ se busca.
+                    // La barra se acomoda al ancho REAL disponible. Con el
+                    // panel lateral abierto, la caja de búsqueda y los botones
+                    // (de ancho fijo) se comían todo el espacio y los chips de
+                    // tipo quedaban recortados hasta desaparecer — "Vídeo" y
+                    // "Lectura" directamente no se veían. Por debajo de cierto
+                    // ancho, los filtros bajan a su propia línea en vez de
+                    // pelear por el que queda.
+                    LayoutBuilder(builder: (context, constraints) {
+                      final acciones = <Widget>[
                         _buildNsfwButton(context),
                         const SizedBox(width: 16),
                         const SizedBox(
@@ -406,8 +408,26 @@ class _SearchPageState extends State<SearchPage> {
                             ],
                           ),
                         ),
-                      ],
-                    ),
+                      ];
+                      if (constraints.maxWidth >= 980) {
+                        return Row(
+                          crossAxisAlignment: CrossAxisAlignment.center,
+                          children: [
+                            Expanded(child: _buildTypeChipsScrollable()),
+                            const SizedBox(width: 12),
+                            ...acciones,
+                          ],
+                        );
+                      }
+                      return Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          _buildTypeChipsScrollable(),
+                          const SizedBox(height: 12),
+                          Row(children: acciones),
+                        ],
+                      );
+                    }),
                   ],
                 ),
               ),

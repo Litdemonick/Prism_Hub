@@ -16,6 +16,11 @@ dependencies:
   fluent_ui: ^4.7.6
   flutter:
     sdk: flutter
+  # Traducciones de los widgets NATIVOS de Flutter (selector de fecha, menús
+  # de texto, etiquetas de accesibilidad). Sin esto salían siempre en inglés
+  # por más que la app estuviera en español.
+  flutter_localizations:
+    sdk: flutter
   flutter_animate: ^4.1.1+1
   flutter_code_editor: ^0.3.0
   flutter_highlight: ^0.7.0

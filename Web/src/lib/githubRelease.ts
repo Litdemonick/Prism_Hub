@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 
 export const REPO = 'Litdemonick/Prism_Hub';
-export const APP_VERSION = 'v1.0.2';
+export const APP_VERSION = 'v1.0.9';
 
 export type ReleaseAsset = { name: string; browser_download_url: string; size: number };
 export type ReleaseInfo = {
