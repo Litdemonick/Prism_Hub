@@ -84,11 +84,14 @@ Future<bool?> showNsfwConfirmDialog(
       // Más ancho que el default (368): con el título en una sola línea y el
       // texto de la consecuencia respirando, se lee mucho mejor.
       maxWidth: 440,
-      // No se cierra tocando afuera: es una pregunta que hay que responder con
-      // uno de los dos botones. Con el cierre por barrera, un toque al costado
-      // devolvía null y se tomaba como respuesta — el contenido quedaba marcado
-      // +18 solo, sin que el usuario eligiera nada (reportado en vivo).
-      barrierDismissible: false,
+      // Se puede cerrar tocando afuera, y eso CANCELA: no cambia nada. Estuvo
+      // en false un tiempo por un motivo que ya no aplica — antes cualquier
+      // cosa distinta de "true" se tomaba como "sí es +18", así que un toque
+      // al costado marcaba el contenido solo. Ahora el resultado tiene tres
+      // valores y el null se maneja como cancelación (ver más abajo), así que
+      // dejar salir por la barrera es seguro y es lo que se espera de un
+      // diálogo de confirmación.
+      barrierDismissible: true,
       content: const _RecheckContent(),
       // Se cierra con el Navigator DEL DIÁLOGO (de ahí el Builder), nunca con
       // RouterUtils.pop: en escritorio eso es router.pop() de go_router y este

@@ -5,6 +5,7 @@ import 'package:fluent_ui/fluent_ui.dart' as fluent;
 import 'package:flutter/material.dart';
 import 'package:flutter_i18n/flutter_i18n.dart';
 import 'package:get/get.dart';
+import 'package:prismhub/views/widgets/messenger.dart';
 import 'package:prismhub/data/providers/tmdb_provider.dart';
 import 'package:prismhub/utils/log.dart';
 import 'package:prismhub/utils/request.dart';
@@ -38,6 +39,47 @@ import 'package:url_launcher/url_launcher.dart';
 // (dominio + ruta) y se reconstruye el esquema completo al guardar.
 String _stripUrlScheme(String url) =>
     url.replaceFirst(RegExp(r'^https?://'), '');
+// Deja SIEMPRE una URL usable. Borrar el campo guardaba una cadena vacía, y
+// con eso el app armaba "/index.json" sin host: no cargaba ninguna extensión
+// y en pantalla se veía como si no hubiera internet, sin ninguna pista de que
+// el problema era este ajuste. Ante cualquier valor que no sirva se vuelve al
+// repositorio oficial en vez de dejar el app sin catálogo.
+// Pone los controles de a dos por fila solo si el ancho alcanza; si no, uno
+// debajo del otro. Un umbral por ancho real y no por plataforma: un celular
+// en horizontal sí tiene lugar para dos, y una ventana angosta en escritorio
+// no.
+Widget _parDeControles(BuildContext context, List<Widget> hijos) {
+  final ancho = MediaQuery.sizeOf(context).width;
+  if (ancho < 620) {
+    return Column(
+      children: [
+        for (var i = 0; i < hijos.length; i++) ...[
+          if (i > 0) const SizedBox(height: 8),
+          hijos[i],
+        ],
+      ],
+    );
+  }
+  return Row(
+    children: [
+      for (var i = 0; i < hijos.length; i++) ...[
+        if (i > 0) const SizedBox(width: 30),
+        Expanded(child: hijos[i]),
+      ],
+    ],
+  );
+}
+
+String _sanitizeRepoUrl(String value) {
+  final withScheme = _withUrlScheme(value);
+  if (withScheme.isEmpty) return PrismHubStorage.defaultRepoUrl;
+  final uri = Uri.tryParse(withScheme);
+  if (uri == null || !uri.hasAuthority || uri.host.isEmpty) {
+    return PrismHubStorage.defaultRepoUrl;
+  }
+  return withScheme;
+}
+
 String _withUrlScheme(String value) {
   final v = value.trim();
   if (v.isEmpty || v.startsWith('http://') || v.startsWith('https://')) {
@@ -60,6 +102,229 @@ class _SettingsPageState extends State<SettingsPage> {
   void initState() {
     c = Get.put(SettingsController());
     super.initState();
+  }
+
+  List<Widget> _buildSkipIntervalChildren() {
+    return [
+      Text("settings.skip-interval".i18n),
+      const SizedBox(height: 2),
+      Text(
+        "settings.skip-interval-subtitle".i18n,
+        style: const TextStyle(fontSize: 12),
+      ),
+      const SizedBox(height: 15),
+      Column(
+        children: [
+          // Dos por fila SOLO si hay ancho. En un celular en vertical
+          // cada control quedaba con ~150px y el número se partía en
+          // cuatro líneas ("-", "1", "0", "s"). Se decide con el ancho
+          // real disponible, así sirve igual en horizontal, donde sí
+          // entran dos.
+          _parDeControles(context, [
+            SettingNumboxButton(
+              title: "key I",
+              button1text: "1s",
+              button2text: "0.1s",
+              onChanged: (value) {
+                PrismHubStorage.setSetting(SettingKey.keyI, value ??= 10.0);
+              },
+              numberBoxvalue:
+                  PrismHubStorage.getSetting(SettingKey.keyI) ?? 10.0,
+            ),
+            SettingNumboxButton(
+              title: "key J",
+              button1text: "1s",
+              button2text: "0.1s",
+              onChanged: (value) {
+                PrismHubStorage.setSetting(SettingKey.keyJ, value ??= -10.0);
+              },
+              numberBoxvalue:
+                  PrismHubStorage.getSetting(SettingKey.keyJ) ?? -10.0,
+            ),
+          ]),
+          const SizedBox(height: 8),
+          _parDeControles(context, [
+            SettingNumboxButton(
+              title: "arrow left",
+              icon: const Icon(fluent.FluentIcons.chevron_left_med),
+              button1text: "1s",
+              button2text: "0.1s",
+              numberBoxvalue:
+                  PrismHubStorage.getSetting(SettingKey.arrowLeft) ?? -2.0,
+              onChanged: (value) {
+                PrismHubStorage.setSetting(
+                    SettingKey.arrowLeft, value ??= -2.0);
+              },
+            ),
+            SettingNumboxButton(
+              title: "arrow right",
+              icon: const Icon(fluent.FluentIcons.chevron_right_med),
+              button1text: "1s",
+              button2text: "0.1s",
+              onChanged: (value) {
+                PrismHubStorage.setSetting(SettingKey.arrowRight, value ??= 2);
+              },
+              numberBoxvalue:
+                  PrismHubStorage.getSetting(SettingKey.arrowRight) ?? 2.0,
+            ),
+          ]),
+          const SizedBox(height: 12),
+          Align(
+            alignment: Alignment.centerLeft,
+            child: TextButton.icon(
+              style: TextButton.styleFrom(
+                foregroundColor: HomeTheme.accentPink,
+              ),
+              icon: const Icon(Icons.restart_alt, size: 18),
+              label: Text('settings.restore-defaults'.i18n),
+              onPressed: () async {
+                // Los mismos valores con los que arranca el app (ver
+                // PrismHubStorage._initSettings): dejar la lista
+                // duplicada acá sería pedir que se desincronicen, pero
+                // no hay un punto único todavía — al menos quedan los
+                // dos lugares señalados entre sí.
+                await PrismHubStorage.setSetting(SettingKey.keyI, 10.0);
+                await PrismHubStorage.setSetting(SettingKey.keyJ, -10.0);
+                await PrismHubStorage.setSetting(SettingKey.arrowLeft, -2.0);
+                await PrismHubStorage.setSetting(SettingKey.arrowRight, 2.0);
+                if (!context.mounted) return;
+                setState(() {});
+                showPlatformSnackbar(
+                  context: context,
+                  content: 'settings.restore-defaults-done'.i18n,
+                );
+              },
+            ),
+          ),
+        ],
+      ),
+    ];
+  }
+
+  Widget _buildSkipIntervalContent() {
+    // En celular NO hay teclado: el unico atajo de salto es el doble toque a
+    // izquierda o derecha, asi que mostrar "key I", "key J" y las flechas era
+    // ofrecer cuatro ajustes de los que dos no hacen absolutamente nada. Se
+    // muestran solo los dos que el doble toque usa de verdad, con nombres que
+    // dicen que gesto configuran.
+    if (Platform.isAndroid) return _buildSkipIntervalMobile();
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: _buildSkipIntervalChildren(),
+    );
+  }
+
+  Widget _skipCard(String etiqueta, IconData icono, String key, double porDef) {
+    return Container(
+      margin: const EdgeInsets.only(bottom: 10),
+      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+      decoration: BoxDecoration(
+        color: HomeTheme.cardSurface,
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: HomeTheme.border),
+      ),
+      child: Row(
+        children: [
+          Icon(icono, color: HomeTheme.accentPink, size: 22),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Text(
+              etiqueta,
+              style:
+                  const TextStyle(color: HomeTheme.textPrimary, fontSize: 14),
+            ),
+          ),
+          _MobileStepper(settingKey: key, fallback: porDef),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildSkipIntervalMobile() {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        // La explicacion va en su propia tarjeta, no como parrafo suelto.
+        Container(
+          padding: const EdgeInsets.all(14),
+          margin: const EdgeInsets.only(bottom: 16),
+          decoration: BoxDecoration(
+            color: HomeTheme.accentPink.withValues(alpha: 0.10),
+            borderRadius: BorderRadius.circular(12),
+            border:
+                Border.all(color: HomeTheme.accentPink.withValues(alpha: 0.45)),
+          ),
+          child: Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              const Icon(Icons.touch_app,
+                  color: HomeTheme.accentPink, size: 22),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Text(
+                  'settings.skip-interval-mobile-help'.i18n,
+                  style: const TextStyle(
+                      color: HomeTheme.textMuted, fontSize: 13, height: 1.4),
+                ),
+              ),
+            ],
+          ),
+        ),
+        _skipCard('settings.skip-back'.i18n, Icons.fast_rewind,
+            SettingKey.arrowLeft, -2.0),
+        _skipCard('settings.skip-forward'.i18n, Icons.fast_forward,
+            SettingKey.arrowRight, 2.0),
+        const SizedBox(height: 4),
+        Align(
+          alignment: Alignment.centerLeft,
+          child: TextButton.icon(
+            style: TextButton.styleFrom(foregroundColor: HomeTheme.accentPink),
+            icon: const Icon(Icons.restart_alt, size: 18),
+            label: Text('settings.restore-defaults'.i18n),
+            onPressed: () async {
+              await PrismHubStorage.setSetting(SettingKey.arrowLeft, -2.0);
+              await PrismHubStorage.setSetting(SettingKey.arrowRight, 2.0);
+              if (!context.mounted) return;
+              setState(() {});
+              showPlatformSnackbar(
+                context: context,
+                content: 'settings.restore-defaults-done'.i18n,
+              );
+            },
+          ),
+        ),
+      ],
+    );
+  }
+
+  // Navigator directo y NO Get.to: esta página se abre DESDE otra que ya se
+  // empujó con Get.to (la subpágina de "Reproductor de vídeo" en Android), y
+  // ahí el segundo Get.to no navegaba — mismo problema que ya habíamos visto
+  // con la página del PIN de la zona +18, resuelto igual.
+  void _openSkipIntervalPage(BuildContext context) {
+    Navigator.of(context).push(
+      MaterialPageRoute(
+        builder: (_) => Scaffold(
+          backgroundColor: HomeTheme.bg,
+          appBar: AppBar(
+            backgroundColor: HomeTheme.bg,
+            title: Text(
+              'settings.skip-interval'.i18n,
+              style: const TextStyle(color: HomeTheme.textPrimary),
+            ),
+          ),
+          body: SingleChildScrollView(
+            padding: const EdgeInsets.all(16),
+            child: StatefulBuilder(
+              // StatefulBuilder propio: esta página vive fuera del árbol de
+              // Ajustes, así que el setState de allá no la alcanza — sin esto
+              // el botón de restablecer no refrescaba los números.
+              builder: (context, _) => _buildSkipIntervalContent(),
+            ),
+          ),
+        ),
+      ),
+    );
   }
 
   List<Widget> _buildContent() {
@@ -188,6 +453,12 @@ class _SettingsPageState extends State<SettingsPage> {
           children: [
             SettingsIntpuTile(
               title: 'settings.repo-url'.i18n,
+              // Bloqueado, igual que el proxy. Vaciarlo o escribir cualquier
+              // cosa dejaba al app sin catálogo y el síntoma en pantalla era
+              // "no hay internet", sin ninguna pista de que el problema era
+              // este campo. El repositorio oficial es el único soportado; si
+              // alguna vez hace falta cambiarlo, se desbloquea acá.
+              enabled: false,
               buildSubtitle: () {
                 if (!Platform.isAndroid) {
                   return 'settings.repo-url-subtitle'.i18n;
@@ -196,8 +467,16 @@ class _SettingsPageState extends State<SettingsPage> {
                     PrismHubStorage.getSetting(SettingKey.prismhubRepoUrl));
               },
               onChanged: (value) {
-                PrismHubStorage.setSetting(
-                    SettingKey.prismhubRepoUrl, _withUrlScheme(value));
+                final sane = _sanitizeRepoUrl(value);
+                PrismHubStorage.setSetting(SettingKey.prismhubRepoUrl, sane);
+                // Si lo que escribió no servía, se avisa: cambiar el ajuste y
+                // que calladamente quede otro valor sería peor que el error.
+                if (sane != _withUrlScheme(value)) {
+                  showPlatformSnackbar(
+                    context: context,
+                    content: 'settings.repo-url-restored'.i18n,
+                  );
+                }
                 Get.find<ExtensionRepoPageController>().onRefresh();
               },
               buildText: () {
@@ -257,80 +536,15 @@ class _SettingsPageState extends State<SettingsPage> {
               },
             ),
             const SizedBox(height: 10),
-            if (!Platform.isAndroid) ...[
-              Text("settings.skip-interval".i18n),
-              const SizedBox(height: 2),
-              Text(
-                "settings.skip-interval-subtitle".i18n,
-                style: const TextStyle(fontSize: 12),
-              ),
-              const SizedBox(height: 15),
-              Column(
-                children: [
-                  Row(children: [
-                    Expanded(
-                        child: SettingNumboxButton(
-                      title: "key I",
-                      button1text: "1s",
-                      button2text: "0.1s",
-                      onChanged: (value) {
-                        PrismHubStorage.setSetting(
-                            SettingKey.keyI, value ??= -10.0);
-                      },
-                      numberBoxvalue:
-                          PrismHubStorage.getSetting(SettingKey.keyI) ?? -10.0,
-                    )),
-                    const SizedBox(width: 30),
-                    Expanded(
-                        child: SettingNumboxButton(
-                      title: "key J",
-                      button1text: "1s",
-                      button2text: "0.1s",
-                      onChanged: (value) {
-                        PrismHubStorage.setSetting(
-                            SettingKey.keyJ, value ??= 10.0);
-                      },
-                      numberBoxvalue:
-                          PrismHubStorage.getSetting(SettingKey.keyJ) ?? 10.0,
-                    ))
-                  ]),
-                  const SizedBox(height: 8),
-                  Row(
-                    children: [
-                      Expanded(
-                          child: SettingNumboxButton(
-                        title: "arrow left",
-                        icon: const Icon(fluent.FluentIcons.chevron_left_med),
-                        button1text: "1s",
-                        button2text: "0.1s",
-                        numberBoxvalue:
-                            PrismHubStorage.getSetting(SettingKey.arrowLeft) ??
-                                10.0,
-                        onChanged: (value) {
-                          PrismHubStorage.setSetting(
-                              SettingKey.arrowLeft, value ??= -2.0);
-                        },
-                      )),
-                      const SizedBox(width: 30),
-                      Expanded(
-                          child: SettingNumboxButton(
-                        title: "arrow right",
-                        icon: const Icon(fluent.FluentIcons.chevron_right_med),
-                        button1text: "1s",
-                        button2text: "0.1s",
-                        onChanged: (value) {
-                          PrismHubStorage.setSetting(
-                              SettingKey.arrowRight, value ??= 2);
-                        },
-                        numberBoxvalue:
-                            PrismHubStorage.getSetting(SettingKey.arrowRight) ??
-                                10.0,
-                      ))
-                    ],
-                  )
-                ],
-              ),
-            ]
+            const SizedBox(height: 10),
+            // En celular esto va detrás de un botón: los cuatro controles más
+            // su explicación ocupaban media pantalla de texto plano dentro de
+            // una lista de ajustes. En escritorio hay ancho de sobra, así que
+            // se deja a la vista.
+            if (Platform.isAndroid)
+              _SkipIntervalTile(onOpen: _openSkipIntervalPage)
+            else
+              ..._buildSkipIntervalChildren(),
           ],
         ),
       ),
@@ -351,6 +565,12 @@ class _SettingsPageState extends State<SettingsPage> {
             // UA
             SettingsIntpuTile(
               title: 'settings.network-ua'.i18n,
+              // Bloqueado: un User-Agent vacío o mal armado hace que los
+              // sitios rechacen TODAS las peticiones de las extensiones, y el
+              // usuario ve "sin conexión" sin manera de relacionarlo con este
+              // campo. El valor correcto ya lo elige el app según la
+              // plataforma (móvil en Android, escritorio en Windows/Linux).
+              enabled: false,
               buildSubtitle: () {
                 if (!Platform.isAndroid) {
                   return 'settings.network-ua-subtitle'.i18n;
@@ -530,7 +750,13 @@ class _SettingsPageState extends State<SettingsPage> {
         open: true,
         noPage: true,
         content: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
+          // Centrado en celular: ahí el bloque ocupa el ancho completo de una
+          // pantalla angosta y el badge BETA suelto contra el borde izquierdo,
+          // con el párrafo largo debajo, quedaba desalineado. En escritorio se
+          // deja alineado a la izquierda, que es como está el resto de Ajustes.
+          crossAxisAlignment: Platform.isAndroid
+              ? CrossAxisAlignment.center
+              : CrossAxisAlignment.start,
           children: [
             Container(
               padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
@@ -551,7 +777,9 @@ class _SettingsPageState extends State<SettingsPage> {
             const SizedBox(height: 10),
             SelectableText(
               'settings.about-description'.i18n,
-              style: const TextStyle(color: HomeTheme.textPrimary),
+              textAlign:
+                  Platform.isAndroid ? TextAlign.center : TextAlign.start,
+              style: const TextStyle(color: HomeTheme.textPrimary, height: 1.4),
             ),
             const SizedBox(height: 20),
             Text(
@@ -560,6 +788,9 @@ class _SettingsPageState extends State<SettingsPage> {
             ),
             const SizedBox(height: 8),
             Wrap(
+              alignment: Platform.isAndroid
+                  ? WrapAlignment.center
+                  : WrapAlignment.start,
               children: [
                 for (final link in c.links.entries)
                   fluent.Padding(
@@ -665,6 +896,146 @@ class _SettingsPageState extends State<SettingsPage> {
           ],
         ),
       ),
+    );
+  }
+}
+
+// Entrada a los ajustes de salto en celular: una fila con su icono, título y
+// resumen, del mismo estilo que el resto de Ajustes, en vez de volcar cuatro
+// controles y un párrafo en el medio de la lista.
+class _SkipIntervalTile extends StatelessWidget {
+  const _SkipIntervalTile({required this.onOpen});
+  // Recibe el context de la FILA, no el de la página de Ajustes: es el que
+  // está dentro del Navigator donde hay que empujar.
+  final void Function(BuildContext) onOpen;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      decoration: BoxDecoration(
+        color: HomeTheme.cardSurface,
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: HomeTheme.border),
+      ),
+      clipBehavior: Clip.antiAlias,
+      child: Material(
+        color: Colors.transparent,
+        child: InkWell(
+          onTap: () => onOpen(context),
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 14),
+            child: Row(
+              children: [
+                const Icon(Icons.fast_forward,
+                    color: HomeTheme.accentPink, size: 22),
+                const SizedBox(width: 14),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        'settings.skip-interval'.i18n,
+                        style: const TextStyle(
+                          color: HomeTheme.textPrimary,
+                          fontSize: 15,
+                        ),
+                      ),
+                      const SizedBox(height: 2),
+                      Text(
+                        'settings.skip-interval-short'.i18n,
+                        style: const TextStyle(
+                          color: HomeTheme.textMuted,
+                          fontSize: 12,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                const Icon(Icons.chevron_right,
+                    color: HomeTheme.textMuted, size: 20),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+// Paso compacto para celular: menos, valor, mas. Sin la pastilla de precision
+// (con el dedo, saltos de 0,1s no tienen sentido) y con el valor SIEMPRE
+// positivo: el sentido lo decide el lado de la pantalla que se toca, asi que
+// mostrar "-2 s" en "Retroceder" solo confundia.
+class _MobileStepper extends StatefulWidget {
+  const _MobileStepper({required this.settingKey, required this.fallback});
+  final String settingKey;
+  final double fallback;
+
+  @override
+  State<_MobileStepper> createState() => _MobileStepperState();
+}
+
+class _MobileStepperState extends State<_MobileStepper> {
+  late double _valor = _leer();
+
+  double _leer() {
+    final v = PrismHubStorage.getSetting(widget.settingKey);
+    final d = v is num ? v.toDouble() : widget.fallback;
+    final abs = d.abs();
+    return abs == 0 ? widget.fallback.abs() : abs;
+  }
+
+  @override
+  void didUpdateWidget(covariant _MobileStepper old) {
+    super.didUpdateWidget(old);
+    final actual = _leer();
+    if (actual != _valor) _valor = actual;
+  }
+
+  void _cambiar(double delta) {
+    final nuevo = (_valor + delta).clamp(1.0, 120.0);
+    if (nuevo == _valor) return;
+    setState(() => _valor = nuevo);
+    // Se guarda con el signo que espera el reproductor: negativo para atras.
+    final signo = widget.fallback < 0 ? -1 : 1;
+    PrismHubStorage.setSetting(widget.settingKey, nuevo * signo);
+  }
+
+  Widget _boton(IconData icono, VoidCallback onTap) {
+    return Material(
+      color: HomeTheme.bg,
+      shape: const CircleBorder(),
+      child: InkWell(
+        onTap: onTap,
+        customBorder: const CircleBorder(),
+        child: Padding(
+          padding: const EdgeInsets.all(7),
+          child: Icon(icono, size: 18, color: HomeTheme.textPrimary),
+        ),
+      ),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        _boton(Icons.remove, () => _cambiar(-1)),
+        SizedBox(
+          width: 46,
+          child: Text(
+            '${_valor.round()} s',
+            textAlign: TextAlign.center,
+            style: const TextStyle(
+              color: HomeTheme.textPrimary,
+              fontWeight: FontWeight.w700,
+              fontSize: 15,
+            ),
+          ),
+        ),
+        _boton(Icons.add, () => _cambiar(1)),
+      ],
     );
   }
 }

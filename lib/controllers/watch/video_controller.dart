@@ -110,14 +110,14 @@ class VideoPlayerController extends GetxController with WidgetsBindingObserver {
             milliseconds:
                 (PrismHubStorage.getSetting(SettingKey.keyJ) * 1000).toInt(),
           );
-      player.seek(rate);
+      _seekFromShortcut(rate);
     },
     LogicalKeyboardKey.keyI: () {
       final rate = player.state.position +
           Duration(
               milliseconds:
                   (PrismHubStorage.getSetting(SettingKey.keyI) * 1000).toInt());
-      player.seek(rate);
+      _seekFromShortcut(rate);
     },
     LogicalKeyboardKey.arrowLeft: () {
       final rate = player.state.position +
@@ -125,7 +125,7 @@ class VideoPlayerController extends GetxController with WidgetsBindingObserver {
               milliseconds:
                   (PrismHubStorage.getSetting(SettingKey.arrowLeft) * 1000)
                       .toInt());
-      player.seek(rate);
+      _seekFromShortcut(rate);
     },
     LogicalKeyboardKey.arrowRight: () {
       final rate = player.state.position +
@@ -133,7 +133,7 @@ class VideoPlayerController extends GetxController with WidgetsBindingObserver {
               milliseconds:
                   (PrismHubStorage.getSetting(SettingKey.arrowRight) * 1000)
                       .toInt());
-      player.seek(rate);
+      _seekFromShortcut(rate);
     },
     LogicalKeyboardKey.arrowUp: () {
       final volume = player.state.volume + 5.0;
@@ -219,6 +219,69 @@ class VideoPlayerController extends GetxController with WidgetsBindingObserver {
   // contenido ya cargó. Si la posición avanzó hace poco, no puede estar
   // bufferizando de verdad, sin importar lo que diga el flag crudo.
   final isActuallyBuffering = false.obs;
+
+  // Búsqueda en curso (arrastrar o tocar la barra de progreso). Hace falta
+  // aparte de isActuallyBuffering porque ese flag se APAGA justo en este caso:
+  // al buscar, la posición cambia, y el listener de posición interpreta
+  // cualquier avance como "hay frames nuevos, no está bufferizando". Sin esto
+  // la imagen se congelaba unos segundos sin ninguna señal de que estaba
+  // cargando.
+  final isSeeking = false.obs;
+  Timer? _seekWatchdog;
+  // Primera posición que llega DESPUÉS del salto. Apagar la rueda en cuanto
+  // la posición cambia no servía: al saltar, mpv actualiza la posición al
+  // destino de inmediato —antes de reportar que está bufferizando—, así que
+  // la condición de apagado se cumplía en milisegundos y la rueda se iba
+  // justo antes de que la imagen se congelara. Se espera a la SEGUNDA
+  // posición distinta: esa ya es reproducción de verdad avanzando.
+  Duration? _positionAfterSeek;
+
+  void markSeeking() {
+    isSeeking.value = true;
+    _positionAfterSeek = null;
+    _seekWatchdog?.cancel();
+    // Red de seguridad: si el servidor no responde nunca, la rueda no se
+    // queda girando para siempre.
+    _seekWatchdog = Timer(const Duration(seconds: 8), () {
+      isSeeking.value = false;
+    });
+  }
+
+  // Los atajos de teclado llamaban a player.seek() DIRECTO, salteándose la
+  // marca de búsqueda que sí hace seek(): con las teclas y las flechas la
+  // imagen se congelaba sin ninguna rueda, aunque con la barra de progreso
+  // funcionara. Todos pasan por acá.
+  void _seekFromShortcut(Duration to) {
+    final salto = (to - player.state.position).inSeconds;
+    markSeeking();
+    _anunciarSalto(salto);
+    player.seek(to);
+  }
+
+  // Cuántos segundos saltó el último atajo, para mostrarlo en pantalla. Vive
+  // en el controller y no en la vista porque el salto se dispara desde acá
+  // (los atajos de teclado son del controller) y así la misma señal sirve en
+  // escritorio y en celular.
+  final lastSkipSeconds = Rx<int?>(null);
+  Timer? _skipBadgeTimer;
+
+  void _anunciarSalto(int segundos) {
+    if (segundos == 0) return;
+    lastSkipSeconds.value = segundos;
+    _skipBadgeTimer?.cancel();
+    _skipBadgeTimer = Timer(const Duration(milliseconds: 900), () {
+      lastSkipSeconds.value = null;
+    });
+  }
+
+  void _clearSeeking() {
+    if (!isSeeking.value) return;
+    isSeeking.value = false;
+    _positionAfterSeek = null;
+    _seekWatchdog?.cancel();
+    _seekWatchdog = null;
+  }
+
   final isVideoSurfaceMounted = false.obs;
   DateTime? _lastPositionAdvanceAt;
   Duration? _lastPositionSeen;
@@ -615,6 +678,21 @@ class VideoPlayerController extends GetxController with WidgetsBindingObserver {
         _lastPositionSeen = event;
         _lastPositionAdvanceAt = DateTime.now();
         if (isActuallyBuffering.value) isActuallyBuffering.value = false;
+        // La búsqueda terminó: hay frames nuevos y ya no se está llenando el
+        // buffer. Se comprueba el flag crudo de mpv, no isActuallyBuffering,
+        // que acabamos de apagar dos líneas arriba.
+        if (isSeeking.value) {
+          if (_positionAfterSeek == null) {
+            // El salto en sí. Todavía no hay reproducción.
+            _positionAfterSeek = event;
+          } else if (event != _positionAfterSeek && !player.state.buffering) {
+            // Segunda posición distinta y sin buffer pendiente: ya está
+            // reproduciendo. Si el tramo estaba cargado esto llega en el
+            // frame siguiente y la rueda apenas parpadea; si no, se queda
+            // girando hasta que llegue.
+            _clearSeeking();
+          }
+        }
       }
     }));
 
@@ -1391,6 +1469,7 @@ class VideoPlayerController extends GetxController with WidgetsBindingObserver {
     _lastPositionAdvanceAt = null;
     _lastPositionSeen = null;
     isActuallyBuffering.value = false;
+    _clearSeeking();
     _bufferingStallTimer?.cancel();
 
     final embedUrl = availableServers[name]!;
@@ -2714,6 +2793,10 @@ class VideoPlayerController extends GetxController with WidgetsBindingObserver {
 
   seek(Duration duration) async {
     if (_disposed) return;
+    // Acá y no en cada botón: seek() es el único punto de entrada para la
+    // barra de progreso, los atajos de teclado y los saltos, así que marcarlo
+    // una vez cubre todos los casos en las tres plataformas.
+    markSeeking();
     if (dlnaDevice.value == null) {
       player.seek(duration);
       return;

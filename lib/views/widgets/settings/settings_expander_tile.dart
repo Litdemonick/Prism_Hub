@@ -5,7 +5,7 @@ import 'package:prismhub/views/widgets/home/home_theme.dart';
 import 'package:prismhub/views/widgets/platform_widget.dart';
 import 'package:prismhub/views/widgets/settings/settings_tile.dart';
 
-class SettingsExpanderTile extends StatelessWidget {
+class SettingsExpanderTile extends StatefulWidget {
   const SettingsExpanderTile({
     super.key,
     this.icon,
@@ -27,8 +27,31 @@ class SettingsExpanderTile extends StatelessWidget {
   // 不使用二级页面
   final bool noPage;
 
+  @override
+  State<SettingsExpanderTile> createState() => _SettingsExpanderTileState();
+}
+
+class _SettingsExpanderTileState extends State<SettingsExpanderTile> {
+  // El Expander de fluent ANIMA la apertura en el primer frame cuando arranca
+  // expandido, así que al entrar a Ajustes la sección de "Acerca de" se abría
+  // sola con animación y empujaba todo lo de abajo: la página entera se movía
+  // sin que el usuario tocara nada. Se desactiva la animación SOLO para ese
+  // primer frame; a partir de ahí vuelve a la normal, así desplegar y plegar
+  // a mano se sigue viendo igual que siempre.
+  Duration _animation = Duration.zero;
+
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) {
+        setState(() => _animation = const Duration(milliseconds: 150));
+      }
+    });
+  }
+
   Widget _buildAndroid(BuildContext context) {
-    if (noPage) {
+    if (widget.noPage) {
       return Padding(
         padding: const EdgeInsets.symmetric(horizontal: 16),
         child: Column(
@@ -36,27 +59,27 @@ class SettingsExpanderTile extends StatelessWidget {
           children: [
             const SizedBox(height: 10),
             Text(
-              title,
+              widget.title,
               style:
                   const TextStyle(fontSize: 20, color: HomeTheme.textPrimary),
             ),
             const SizedBox(height: 2),
             Text(
-              subTitle,
+              widget.subTitle,
               style: const TextStyle(fontSize: 12, color: HomeTheme.textMuted),
             ),
             const SizedBox(height: 15),
-            content,
+            widget.content,
           ],
         ),
       );
     }
 
-    Widget iconWidget = androidIcon != null
-        ? Icon(androidIcon, size: 24, color: HomeTheme.accentPink)
-        : icon != null
-            ? Icon(icon, size: 24, color: HomeTheme.accentPink)
-            : leading!;
+    Widget iconWidget = widget.androidIcon != null
+        ? Icon(widget.androidIcon, size: 24, color: HomeTheme.accentPink)
+        : widget.icon != null
+            ? Icon(widget.icon, size: 24, color: HomeTheme.accentPink)
+            : widget.leading!;
 
     return Container(
       margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
@@ -75,8 +98,8 @@ class SettingsExpanderTile extends StatelessWidget {
         color: HomeTheme.cardSurface,
         child: SettingsTile(
           icon: iconWidget,
-          title: title,
-          buildSubtitle: () => subTitle,
+          title: widget.title,
+          buildSubtitle: () => widget.subTitle,
           onTap: () {
             Get.to(
               () => Scaffold(
@@ -87,7 +110,7 @@ class SettingsExpanderTile extends StatelessWidget {
                 resizeToAvoidBottomInset: false,
                 appBar: AppBar(
                   backgroundColor: HomeTheme.bg,
-                  title: Text(title,
+                  title: Text(widget.title,
                       style: const TextStyle(color: HomeTheme.textPrimary)),
                 ),
                 // SingleChildScrollView: en horizontal el alto útil es la
@@ -96,7 +119,21 @@ class SettingsExpanderTile extends StatelessWidget {
                 // en vivo en la subpágina "General").
                 body: SingleChildScrollView(
                   padding: const EdgeInsets.all(16),
-                  child: content,
+                  // FluentTheme acá porque en Android NO hay ninguno: la raíz
+                  // es GetMaterialApp y FluentApp solo se monta en escritorio.
+                  // Algunas secciones usan widgets de fluent (el selector
+                  // numérico del reproductor, por ejemplo), que llaman a
+                  // FluentTheme.of(context) y revientan sin uno arriba — la
+                  // subpágina no llegaba a construirse y parecía que el botón
+                  // no hacía nada.
+                  child: fluent.FluentTheme(
+                    data: fluent.FluentThemeData(
+                      brightness: Brightness.dark,
+                      accentColor: fluent.Colors.purple,
+                      scaffoldBackgroundColor: HomeTheme.bg,
+                    ),
+                    child: widget.content,
+                  ),
                 ),
               ),
             );
@@ -108,7 +145,8 @@ class SettingsExpanderTile extends StatelessWidget {
 
   Widget _buildDesktop(BuildContext context) {
     return fluent.Expander(
-      initiallyExpanded: open,
+      initiallyExpanded: widget.open,
+      animationDuration: _animation,
       headerBackgroundColor:
           fluent.WidgetStateProperty.all(HomeTheme.cardSurface),
       contentBackgroundColor: HomeTheme.cardSurface,
@@ -123,23 +161,24 @@ class SettingsExpanderTile extends StatelessWidget {
         borderRadius: BorderRadius.vertical(bottom: Radius.circular(10)),
         side: BorderSide(color: HomeTheme.border),
       ),
-      leading: icon != null
-          ? Icon(icon, size: 24, color: HomeTheme.accentPink)
-          : leading,
+      leading: widget.icon != null
+          ? Icon(widget.icon, size: 24, color: HomeTheme.accentPink)
+          : widget.leading,
       header: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           const SizedBox(height: 10),
-          Text(title, style: const TextStyle(color: HomeTheme.textPrimary)),
+          Text(widget.title,
+              style: const TextStyle(color: HomeTheme.textPrimary)),
           const SizedBox(height: 2),
           Text(
-            subTitle,
+            widget.subTitle,
             style: const TextStyle(fontSize: 12, color: HomeTheme.textMuted),
           ),
           const SizedBox(height: 15)
         ],
       ),
-      content: content,
+      content: widget.content,
     );
   }
 

@@ -16,6 +16,11 @@ class PrismHubStorage {
   // ajustes como el respaldo de ExtensionUtils cuando el ajuste guardado no
   // sirve. Antes era una constante local acá, así que el otro lado no tenía
   // de dónde sacarla si el ajuste venía en null.
+  static const String _defaultAndroidUA =
+      "Mozilla/5.0 (Linux; Android 13; Android) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.6099.43 Mobile Safari/537.36";
+  static const String _defaultDesktopUA =
+      "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36 Edg/120.0.0.0";
+
   static const String defaultRepoUrl =
       "https://raw.githubusercontent.com/Litdemonick/prism-plus/main";
 
@@ -190,6 +195,19 @@ class PrismHubStorage {
       await settings.put(SettingKey.prismhubRepoUrl, correctRepoUrl);
     }
     await _initSetting(SettingKey.prismhubRepoUrl, correctRepoUrl);
+    // La URL del repositorio quedó bloqueada en Ajustes (el oficial es el
+    // único soportado), así que se fuerza de vuelta — mismo criterio que con
+    // proxyType y videoPlayer más abajo, que también se bloquearon.
+    //
+    // Hace falta forzar el valor ENTERO y no solo validar que tenga host:
+    // borrando unos caracteres se llega a algo como
+    // "raw.githubusercontent.com/Litdemonick/pri", que pasa cualquier chequeo
+    // de forma —el host existe— pero apunta a una ruta que no existe, así que
+    // el índice da 404 y el app se queda sin catálogo. Y _initSetting no
+    // ayuda: la clave existe, solo que con un valor equivocado.
+    if (settings.get(SettingKey.prismhubRepoUrl) != correctRepoUrl) {
+      await settings.put(SettingKey.prismhubRepoUrl, correctRepoUrl);
+    }
     await _initSetting(SettingKey.tmdbKey, "");
     await _initSetting(SettingKey.autoCheckUpdate, true);
     // Solo se guarda el idioma del sistema si la app lo tiene traducido; con
@@ -216,10 +234,21 @@ class PrismHubStorage {
     await _initSetting(SettingKey.aniListUserId, '');
     await _initSetting(SettingKey.autoTracking, true);
     await _initSetting(SettingKey.windowSize, "1280,720");
-    await _initSetting(SettingKey.androidWebviewUA,
-        "Mozilla/5.0 (Linux; Android 13; Android) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.6099.43 Mobile Safari/537.36");
-    await _initSetting(SettingKey.windowsWebviewUA,
-        "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36 Edg/120.0.0.0");
+    await _initSetting(SettingKey.androidWebviewUA, _defaultAndroidUA);
+    await _initSetting(SettingKey.windowsWebviewUA, _defaultDesktopUA);
+    // Los User-Agent quedaron bloqueados en Ajustes: se fuerzan de vuelta si
+    // quedó guardado uno vacío o recortado de antes del bloqueo. Con un UA
+    // inválido los sitios rechazan todo y el síntoma es "sin conexión", que
+    // no se parece en nada a la causa.
+    for (final entry in {
+      SettingKey.androidWebviewUA: _defaultAndroidUA,
+      SettingKey.windowsWebviewUA: _defaultDesktopUA,
+    }.entries) {
+      final stored = settings.get(entry.key);
+      if (stored is! String || stored.trim().length < 20) {
+        await settings.put(entry.key, entry.value);
+      }
+    }
     await _initSetting(SettingKey.proxy, '');
     await _initSetting(SettingKey.proxyType, 'DIRECT');
     // El tipo de proxy quedó bloqueado en Ajustes (SOCKS5/SOCKS4/PROXY

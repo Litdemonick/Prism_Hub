@@ -12,10 +12,21 @@ showPlatformSnackbar({
   fluent.InfoBarSeverity severity = fluent.InfoBarSeverity.info,
 }) {
   if (Platform.isAndroid) {
-    return material.ScaffoldMessenger.of(context).showSnackBar(
+    final messenger = material.ScaffoldMessenger.of(context);
+    // Los SnackBar de Material se ENCOLAN: cada uno espera a que termine el
+    // anterior. Instalar o actualizar varias extensiones disparaba un mensaje
+    // por cada una y había que esperar la cola completa —cuatro segundos por
+    // mensaje— viendo avisos de algo que ya había pasado. Se descarta lo que
+    // esté en pantalla para que siempre se vea el ÚLTIMO, que es el que
+    // importa.
+    messenger.removeCurrentSnackBar();
+    return messenger.showSnackBar(
       material.SnackBar(
-        content: Text("$title $content"),
+        content: Text("$title $content".trim()),
         action: action,
+        // 4s por mensaje era mucho para un aviso de "listo".
+        duration: const Duration(milliseconds: 2200),
+        behavior: material.SnackBarBehavior.floating,
       ),
     );
   }

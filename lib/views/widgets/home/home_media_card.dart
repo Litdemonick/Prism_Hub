@@ -16,6 +16,45 @@ import 'package:prismhub/views/widgets/home/home_theme.dart';
 // comentario donde se usa: sin él la imagen toca los bordes y parece cortada.
 const double _coverInset = 8;
 
+// Borde dibujado ENCIMA del contenido, como última capa del Stack. Puesto en
+// la decoración del Container que recorta la portada, el propio recorte lo
+// pisaba y en las esquinas redondeadas la línea desaparecía a trozos. Como
+// capa de arriba queda entera y del color correcto.
+Widget _bordeCard(Color accent, double radio) {
+  return Positioned.fill(
+    child: IgnorePointer(
+      child: DecoratedBox(
+        decoration: BoxDecoration(
+          borderRadius: BorderRadius.circular(radio),
+          // Color SÓLIDO, sin transparencia: a 0.7 el borde se mezclaba con
+          // la portada de abajo, y contra una imagen clara o de colores
+          // fuertes directamente desaparecía. Opaco se ve igual sobre
+          // cualquier portada.
+          border: Border.all(color: accent, width: 1.4),
+        ),
+      ),
+    ),
+  );
+}
+
+// Arte de respaldo (portada que no cargó, o card ocultada por el usuario)
+// mostrado ENTERO pero sin caja oscura detrás: el fondo es la misma imagen
+// ampliada y desenfocada, igual que se hace con las portadas. Con contain
+// sobre un ColoredBox quedaba como un logo chico dentro de un recuadro, y con
+// cover a pantalla completa se le cortaban las puntas —el logo no es
+// rectangular—. Así llena la card y se ve completo.
+Widget _arteRespaldo(int cacheWidth) {
+  // La imagen sola, llenando la card entera. Sin ColoredBox detrás ni margen:
+  // el pedido fue que ocupe toda la tarjeta, igual que una portada real.
+  return Image.asset(
+    'assets/carddefaultoffline.png',
+    fit: BoxFit.cover,
+    width: double.infinity,
+    height: double.infinity,
+    cacheWidth: cacheWidth,
+  );
+}
+
 class HomeMediaCard extends StatefulWidget {
   // Expuestas como static para que HomeSection sepa cuánto alto reservar
   // para la fila entera (portada + título/subtítulo debajo) sin duplicar
@@ -144,10 +183,15 @@ class _HomeMediaCardState extends State<HomeMediaCard> {
     final hasCover = !widget.hidden &&
         (widget.cover?.isNotEmpty == true || widget.coverFile != null);
 
+    // Arte de respaldo cuando la portada no carga. Va con contain y margen:
+    // el respaldo interno de CacheNetWorkImagePic lo pinta a pantalla completa
+    // con cover, y este logo NO es rectangular, así que le cortaba las puntas
+    // (se veía la estrella partida arriba y abajo en las cards del Home).
+    final arteDefault = _arteRespaldo(imgW);
+
     Widget cover;
     if (widget.hidden) {
-      cover = Image.asset('assets/carddefaultoffline.png',
-          fit: BoxFit.cover, cacheWidth: imgW);
+      cover = arteDefault;
     } else if (widget.coverFile != null) {
       // Los frames ya son 16:9, o sea la MISMA forma que la card: acá cover no
       // recorta casi nada y no hace falta el fondo borroso de la variante
@@ -158,38 +202,20 @@ class _HomeMediaCardState extends State<HomeMediaCard> {
           errorBuilder: (_, __, ___) =>
               const ColoredBox(color: Color(0xFF15151C)));
     } else if (hasCover) {
-      // Las portadas de red son de aspecto DESCONOCIDO: en "Continuar" suelen
-      // ser 16:9, pero en Favoritos son pósters 2:3. Con BoxFit.cover un póster
-      // en un marco 16:9 pierde cabeza y pies. Con contain sobre un fondo
-      // borroso de la misma imagen, el 16:9 llena exacto (el fondo ni se ve) y
-      // el póster se muestra entero — sirve para los dos sin saber el aspecto.
-      final blurred = ImageFiltered(
-        imageFilter: ImageFilter.blur(sigmaX: 18, sigmaY: 18),
-        child: CacheNetWorkImagePic(widget.cover!,
-            fit: BoxFit.cover,
-            width: double.infinity,
-            height: double.infinity,
-            headers: widget.headers,
-            cacheWidth: (imgW / 4).ceil().clamp(1, 4096)),
-      );
-      cover = Stack(fit: StackFit.expand, children: [
-        blurred,
-        const ColoredBox(color: Color(0x66000000)),
-        // El margen NO es decorativo: con contain a secas, un póster alto
-        // ocupa EXACTAMENTE el alto del marco, así que queda pegado al borde
-        // de arriba y al de abajo y se lee como si estuviera cortado (fue
-        // justo el reclamo: "se come la imagen"). Con este respiro se ve que
-        // la portada entra entera y termina donde tiene que terminar.
-        Padding(
-          padding: const EdgeInsets.all(_coverInset),
-          child: CacheNetWorkImagePic(widget.cover!,
-              fit: BoxFit.contain,
-              width: double.infinity,
-              height: double.infinity,
-              headers: widget.headers,
-              cacheWidth: imgW),
-        ),
-      ]);
+      // cover y NO contain: una portada de lectura es ~2:3 y la card ~0.72:1,
+      // formas casi iguales, así que llena el marco entero recortando apenas
+      // un 7% a los costados —imperceptible— en vez de dejar franjas del
+      // fondo arriba y abajo. Ahora que "Continuar" está partido en dos, cada
+      // tipo va en la card con su forma, así que esto ya no perjudica al
+      // vídeo. El arte de respaldo sigue con contain (ver arteDefault): ese
+      // logo NO es rectangular y con cover se le cortan las puntas.
+      cover = CacheNetWorkImagePic(widget.cover!,
+          fit: BoxFit.cover,
+          width: double.infinity,
+          height: double.infinity,
+          headers: widget.headers,
+          fallback: arteDefault,
+          cacheWidth: imgW);
     } else {
       cover = DecoratedBox(
         decoration: BoxDecoration(
@@ -217,8 +243,15 @@ class _HomeMediaCardState extends State<HomeMediaCard> {
               crossAxisAlignment: CrossAxisAlignment.start,
               mainAxisSize: MainAxisSize.min,
               children: [
-                ClipRRect(
-                  borderRadius: BorderRadius.circular(8),
+                // Borde con el acento de la zona (morado en el Home normal,
+                // rojo en la Zona +18): sobre el panel de la sección, que es
+                // de un tono muy parecido al de la card, no se veía dónde
+                // terminaba cada tarjeta.
+                Container(
+                  clipBehavior: Clip.antiAlias,
+                  decoration: BoxDecoration(
+                    borderRadius: BorderRadius.circular(8),
+                  ),
                   child: SizedBox(
                     width: HomeMediaCard.wideWidth,
                     height: HomeMediaCard.wideImageHeight,
@@ -261,24 +294,10 @@ class _HomeMediaCardState extends State<HomeMediaCard> {
                             ),
                           ),
                         ),
-                        // El badge de tipo y el pill de extensión siguen siendo
-                        // los MISMOS widgets que en la card vertical — el tag
-                        // tiene que verse igual en las dos formas.
-                        if (widget.type != null)
-                          Positioned(
-                            top: 8,
-                            left: 8,
-                            child: ExtensionTypeBadge(type: widget.type!),
-                          ),
-                        if (widget.extensionName?.isNotEmpty == true)
-                          Positioned(
-                            top: 8,
-                            right: 8,
-                            child: ConstrainedBox(
-                              constraints: const BoxConstraints(maxWidth: 130),
-                              child: _extensionNamePill(),
-                            ),
-                          ),
+                        // Los distintivos ya no van ENCIMA de la portada: el
+                        // de tipo lo dice el título de la sección, y el de la
+                        // extensión pasó abajo, junto al título. Sobre la
+                        // imagen tapaban justo las esquinas del contenido.
                         if (widget.progress != null)
                           Positioned(
                             left: 0,
@@ -292,6 +311,7 @@ class _HomeMediaCardState extends State<HomeMediaCard> {
                               valueColor: AlwaysStoppedAnimation(widget.accent),
                             ),
                           ),
+                        _bordeCard(widget.accent, 8),
                       ],
                     ),
                   ),
@@ -305,22 +325,36 @@ class _HomeMediaCardState extends State<HomeMediaCard> {
                         crossAxisAlignment: CrossAxisAlignment.start,
                         mainAxisSize: MainAxisSize.min,
                         children: [
-                          if (widget.subtitle?.isNotEmpty == true)
-                            Text(
-                              widget.subtitle!.toUpperCase(),
-                              maxLines: 1,
-                              overflow: TextOverflow.ellipsis,
-                              style: const TextStyle(
-                                color: HomeTheme.textMuted,
-                                fontSize: 10.5,
-                                fontWeight: FontWeight.w700,
-                                letterSpacing: 0.6,
-                              ),
-                            ),
+                          // Subtítulo y pill en la MISMA línea: puestos uno
+                          // debajo del otro la card crecía, y el alto de la
+                          // fila tiene que quedar igual que antes.
+                          Row(
+                            children: [
+                              if (widget.subtitle?.isNotEmpty == true)
+                                Flexible(
+                                  child: Text(
+                                    widget.subtitle!.toUpperCase(),
+                                    maxLines: 1,
+                                    overflow: TextOverflow.ellipsis,
+                                    style: const TextStyle(
+                                      color: HomeTheme.textMuted,
+                                      fontSize: 10.5,
+                                      fontWeight: FontWeight.w700,
+                                      letterSpacing: 0.6,
+                                    ),
+                                  ),
+                                ),
+                            ],
+                          ),
                           const SizedBox(height: 3),
                           Text(
                             widget.title,
-                            maxLines: 2,
+                            // Una línea y no dos: el pill de la extensión pasa
+                            // a ir DEBAJO del título, y con el título en dos
+                            // líneas el bloque no entraba en el alto de la
+                            // fila y el pill quedaba cortado por el borde del
+                            // panel.
+                            maxLines: 1,
                             overflow: TextOverflow.ellipsis,
                             style: const TextStyle(
                               color: HomeTheme.textPrimary,
@@ -329,6 +363,13 @@ class _HomeMediaCardState extends State<HomeMediaCard> {
                               height: 1.25,
                             ),
                           ),
+                          if (widget.extensionName?.isNotEmpty == true) ...[
+                            const SizedBox(height: 5),
+                            Align(
+                              alignment: Alignment.centerLeft,
+                              child: _extensionNamePill(),
+                            ),
+                          ],
                         ],
                       ),
                     ),
@@ -380,28 +421,16 @@ class _HomeMediaCardState extends State<HomeMediaCard> {
             : HomeMediaCard.desktopHeight;
     final dpr = MediaQuery.devicePixelRatioOf(context);
     final cacheWidth = (width * dpr).ceil().clamp(1, 4096).toInt();
-    final defaultCover = ColoredBox(
-      color: const Color(0xFF15151C),
-      child: Padding(
-        padding: EdgeInsets.all(width * 0.18),
-        child: Image.asset(
-          'assets/carddefaultoffline.png',
-          fit: BoxFit.contain,
-          cacheWidth: cacheWidth,
-        ),
-      ),
-    );
+    final defaultCover = _arteRespaldo(cacheWidth);
     // Tarjeta "oculta": mismo asset (carddefaultoffline.png) que el resto de
     // los placeholders default de la app, pero a pantalla completa (cover,
     // sin caja oscura ni padding) — el pedido fue sacar el recuadro, no la
     // imagen en sí.
-    final hiddenCover = Image.asset(
-      'assets/carddefaultoffline.png',
-      fit: BoxFit.cover,
-      width: double.infinity,
-      height: double.infinity,
-      cacheWidth: cacheWidth,
-    );
+    // Tarjeta oculta: el MISMO arte que el resto de los respaldos, con
+    // contain y margen. Antes iba con cover a pantalla completa —"sacar el
+    // recuadro"— pero el logo no es rectangular, así que al ocultar una card
+    // se le cortaban las puntas y quedaba partido arriba y abajo.
+    final hiddenCover = defaultCover;
 
     return GestureDetector(
       behavior: HitTestBehavior.opaque,
@@ -495,85 +524,32 @@ class _HomeMediaCardState extends State<HomeMediaCard> {
                           ],
                         )
                       else if (hasCover)
-                        // Mismo criterio que el frame de vídeo de arriba, y por
-                        // el mismo motivo: la card es ~0.72:1 y un póster de
-                        // lectura es 2:3 (0.667), así que con cover se le
-                        // comían los bordes. Se muestra ENTERA sobre un fondo
-                        // borroso de sí misma — llena la card igual, sin
-                        // recortar nada. Sirve para cualquier aspecto: una
-                        // portada que ya venga con la forma de la card llena
-                        // exacto y el fondo ni se ve.
-                        Stack(
-                          fit: StackFit.expand,
-                          children: [
-                            ImageFiltered(
-                              imageFilter:
-                                  ImageFilter.blur(sigmaX: 18, sigmaY: 18),
-                              child: CacheNetWorkImagePic(
-                                widget.cover!,
-                                fit: BoxFit.cover,
-                                width: double.infinity,
-                                height: double.infinity,
-                                headers: widget.headers,
-                                cacheWidth:
-                                    (cacheWidth / 4).ceil().clamp(1, 4096),
-                              ),
-                            ),
-                            const ColoredBox(color: Color(0x66000000)),
-                            Padding(
-                              padding: const EdgeInsets.all(_coverInset),
-                              child: CacheNetWorkImagePic(
-                                widget.cover!,
-                                fit: BoxFit.contain,
-                                width: double.infinity,
-                                height: double.infinity,
-                                headers: widget.headers,
-                                cacheWidth: cacheWidth,
-                              ),
-                            ),
-                          ],
+                        // El fondo borroso se puso cuando la imagen llegaba
+                        // DEFORMADA (cacheWidth+cacheHeight juntos hacían que
+                        // el decoder ignorara el aspecto original). Arreglado
+                        // eso, un póster de lectura (2:3) contra una card de
+                        // ~0.72:1 llena casi exacto con cover: se recorta un
+                        // 7% a los costados, imperceptible, y se ve como una
+                        // portada de verdad en vez de una imagen chica dentro
+                        // de un marco. El fondo borroso queda SOLO para el
+                        // caso donde de verdad hace falta: un frame de vídeo
+                        // (16:9) metido en una card alta, donde cover dejaría
+                        // una franja irreconocible.
+                        // Ver el mismo caso en la card ancha: cover para
+                        // que la portada llene la tarjeta, y el respaldo con
+                        // contain para que el logo no se corte.
+                        CacheNetWorkImagePic(
+                          widget.cover!,
+                          fit: BoxFit.cover,
+                          width: double.infinity,
+                          height: double.infinity,
+                          headers: widget.headers,
+                          fallback: defaultCover,
+                          cacheWidth: cacheWidth,
                         ),
-                      // Badge de tipo + pill de extensión — comparten Row (o
-                      // Column en cards angostas) para saber cuánto espacio
-                      // le queda a cada uno en vez de superponerse sin
-                      // avisar. En landscape Android (card de 112px) los dos
-                      // lado a lado no entraban — el pill de extensión
-                      // quedaba recortado a 2-3 letras ("JK...", ilegible).
-                      // Apilados en columna, cada uno usa el ANCHO completo
-                      // de la card en vez de competir por él.
-                      if (widget.type != null || widget.extensionName != null)
-                        Positioned(
-                          top: 10,
-                          left: 10,
-                          // Deja libre la esquina superior derecha para el
-                          // menú de tres puntos, que ahora está siempre.
-                          right: hasMenu ? 40 : 10,
-                          child: isAndroidLandscape
-                              ? Column(
-                                  crossAxisAlignment: CrossAxisAlignment.start,
-                                  children: [
-                                    if (widget.type != null)
-                                      ExtensionTypeBadge(type: widget.type!),
-                                    if (widget.type != null &&
-                                        widget.extensionName != null)
-                                      const SizedBox(height: 4),
-                                    if (widget.extensionName != null)
-                                      _extensionNamePill(),
-                                  ],
-                                )
-                              : Row(
-                                  crossAxisAlignment: CrossAxisAlignment.start,
-                                  children: [
-                                    if (widget.type != null)
-                                      ExtensionTypeBadge(type: widget.type!),
-                                    if (widget.type != null &&
-                                        widget.extensionName != null)
-                                      const SizedBox(width: 6),
-                                    if (widget.extensionName != null)
-                                      Flexible(child: _extensionNamePill()),
-                                  ],
-                                ),
-                        ),
+                      // Ver la card ancha: los distintivos salieron de
+                      // encima de la portada. Acá tapaban una esquina de cada
+                      // lado, que en una card chica es bastante.
                       if (hasMenu)
                         Positioned(
                           top: 8,
@@ -599,6 +575,7 @@ class _HomeMediaCardState extends State<HomeMediaCard> {
                             ),
                           ),
                         ),
+                      _bordeCard(widget.accent, 14),
                     ],
                   ),
                 ),
@@ -613,7 +590,13 @@ class _HomeMediaCardState extends State<HomeMediaCard> {
                     fontWeight: FontWeight.w600,
                   ),
                 ),
-                if (widget.subtitle != null) ...[
+                if (widget.extensionName?.isNotEmpty == true) ...[
+                  const SizedBox(height: 4),
+                  Align(
+                    alignment: Alignment.centerLeft,
+                    child: _extensionNamePill(),
+                  ),
+                ] else if (widget.subtitle != null) ...[
                   const SizedBox(height: 2),
                   Text(
                     widget.subtitle!,
