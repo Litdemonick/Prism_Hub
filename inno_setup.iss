@@ -34,9 +34,36 @@ WizardStyle=modern
 ; sentido reabrir el reproductor solo.
 CloseApplications=force
 RestartApplications=no
+; Idioma automático según Windows, sin preguntar. Inno 6 detecta solo por el
+; idioma de la interfaz del sistema (la directiva LanguageDetection de Inno 5
+; ya no existe: usarla aborta la compilación). Ver [Languages].
+ShowLanguageDialog=no
+; La pantalla de bienvenida viene DESACTIVADA por defecto en Inno 6, y es
+; justamente donde se avisa si esto es una actualización y entre qué versiones
+; (ver InitializeWizard). Sin ella, el instalador arrancaba directo en "elegí
+; carpeta" y nunca decía qué se estaba instalando ni sobre qué.
+DisableWelcomePage=no
+; Muestra "PrismHub <versión>" en el título del asistente.
+AppVerName={#MyAppName} {#MyAppVersion}
 
 [Languages]
+; El instalador salía siempre en inglés, aunque Windows estuviera en español.
+; Inno elige solo según el idioma de Windows y no pregunta nada
+; (ShowLanguageDialog=no); si el sistema está en cualquier otro idioma cae en el
+; primero de la lista, que es inglés.
 Name: "english"; MessagesFile: "compiler:Default.isl"
+Name: "spanish"; MessagesFile: "compiler:Languages\Spanish.isl"
+
+[CustomMessages]
+; %1 = versión instalada, %2 = versión que se va a instalar.
+english.PrismUpdateTitle=Updating PrismHub
+spanish.PrismUpdateTitle=Actualizando PrismHub
+english.PrismUpdateBody=PrismHub %1 is already installed. It will be updated to version %2.%n%nYour history, favorites and settings are kept: they are stored outside the program folder.
+spanish.PrismUpdateBody=Ya tenés instalado PrismHub %1. Se va a actualizar a la versión %2.%n%nTu historial, favoritos y ajustes se conservan: se guardan fuera de la carpeta del programa.
+english.PrismFreshTitle=Installing PrismHub
+spanish.PrismFreshTitle=Instalando PrismHub
+english.PrismFreshBody=PrismHub %1 will be installed on this computer.%n%nAnime, manga and series through extensions that install and update on their own.
+spanish.PrismFreshBody=Se va a instalar PrismHub %1 en este equipo.%n%nAnime, manga y series mediante extensiones que se instalan y actualizan por su cuenta.
 
 [Tasks]
 Name: "desktopicon"; Description: "{cm:CreateDesktopIcon}"; GroupDescription: "{cm:AdditionalIcons}"; Flags: unchecked
@@ -53,4 +80,64 @@ Name: "{autodesktop}\{#MyAppName}"; Filename: "{app}\{#MyAppExeName}"; Tasks: de
 
 [Run]
 Filename: "{app}\{#MyAppExeName}"; Description: "{cm:LaunchProgram,{#StringChange(MyAppName, '&', '&&')}}"; Flags: nowait postinstall skipifsilent
+
+[Code]
+// La versión llega desde el workflow como nombre del tag ("v1.0.13"), y lo
+// mismo quedó guardado en el registro. Mostrarla tal cual daba "versión
+// v1.0.13"; se le saca la v para que el texto se lea normal.
+function SinV(const S: String): String;
+begin
+  Result := S;
+  if (Length(Result) > 1) and ((Result[1] = 'v') or (Result[1] = 'V')) then
+    Result := Copy(Result, 2, Length(Result) - 1);
+end;
+
+// Versión que ya está instalada, leída de la clave de desinstalación que crea
+// el propio Inno. Cadena vacía si es una instalación nueva.
+//
+// OJO: el GUID va literal y tiene que coincidir con AppId de [Setup]. No se usa
+// SetupSetting("AppId") porque ahí el valor viene con la llave doble de escape
+// ({{...}) y quedaría una llave de más en la ruta del registro.
+//
+// Se miran las dos vistas del registro y las dos raíces: el instalador corre en
+// 32 bits, así que HKLM le resuelve a Wow6432Node, pero una instalación hecha
+// por otro medio pudo dejar la clave en la vista de 64 bits o por usuario.
+function VersionInstalada(): String;
+var
+  Clave: String;
+  Valor: String;
+begin
+  Result := '';
+  Clave := 'Software\Microsoft\Windows\CurrentVersion\Uninstall\{3C6BC9E1-F61D-4FD6-BDA6-3BC203E88418}_is1';
+  if RegQueryStringValue(HKLM, Clave, 'DisplayVersion', Valor) then
+    Result := Valor
+  else if RegQueryStringValue(HKCU, Clave, 'DisplayVersion', Valor) then
+    Result := Valor
+  else if RegQueryStringValue(HKLM64, Clave, 'DisplayVersion', Valor) then
+    Result := Valor
+  else if RegQueryStringValue(HKCU64, Clave, 'DisplayVersion', Valor) then
+    Result := Valor;
+end;
+
+procedure InitializeWizard();
+var
+  Anterior: String;
+begin
+  Anterior := VersionInstalada();
+  if Anterior <> '' then
+  begin
+    WizardForm.WelcomeLabel1.Caption := CustomMessage('PrismUpdateTitle');
+    // OJO: el arreglo de argumentos NO puede quedar al principio de una línea.
+    // Inno lee una línea que empieza con "[" como etiqueta de sección y aborta
+    // con "Invalid section tag", aunque esté dentro de [Code].
+    WizardForm.WelcomeLabel2.Caption := FmtMessage(
+      CustomMessage('PrismUpdateBody'), [SinV(Anterior), SinV('{#MyAppVersion}')]);
+  end
+  else
+  begin
+    WizardForm.WelcomeLabel1.Caption := CustomMessage('PrismFreshTitle');
+    WizardForm.WelcomeLabel2.Caption :=
+      FmtMessage(CustomMessage('PrismFreshBody'), [SinV('{#MyAppVersion}')]);
+  end;
+end;
 
