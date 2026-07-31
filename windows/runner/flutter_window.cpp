@@ -27,9 +27,20 @@ bool FlutterWindow::OnCreate() {
   RegisterPlugins(flutter_controller_->engine());
   SetChildContent(flutter_controller_->view()->GetNativeWindow());
 
-  flutter_controller_->engine()->SetNextFrameCallback([&]() {
-    this->Show();
-  });
+  // OJO: acá NO se muestra la ventana. La plantilla de Flutter la muestra
+  // apenas hay primer frame, y eso ocurre ANTES de que Dart alcance a aplicar
+  // el tamaño y la posición guardados (ver main.dart, waitUntilReadyToShow).
+  //
+  // Consecuencias que se veían: la ventana aparecía en la posición por defecto
+  // del monitor primario y después saltaba a su lugar; y si al moverse cruzaba
+  // a un monitor con otra escala, el surface ya se había presentado con la
+  // escala anterior — la app quedaba dibujada chica dentro de la ventana, con
+  // franjas negras alrededor.
+  //
+  // Ahora la muestra Dart una sola vez, con la geometría ya definitiva. Si
+  // aquello fallara, el bloque `finally` de main.dart la muestra igual: no hay
+  // ningún camino que deje la ventana invisible.
+  flutter_controller_->engine()->SetNextFrameCallback([]() {});
 
   // Flutter can complete the first frame before the "show window" callback is
   // registered. The following call ensures a frame is pending to ensure the

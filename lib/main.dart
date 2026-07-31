@@ -179,38 +179,20 @@ void main(List<String> args) async {
         titleBarStyle: TitleBarStyle.hidden,
       );
       windowManager.waitUntilReadyToShow(windowOptions, () async {
-        // 900×600 is the minimum viable reading size; prevents layout breaks.
-        await windowManager.setMinimumSize(minWindowSize);
-        if (offsetGuardado != null) {
-          await windowManager.setPosition(offsetGuardado);
-          // Reaplicar el tamaño DESPUÉS de mover, y no solo en WindowOptions.
-          //
-          // El tamaño guardado está en píxeles lógicos, y Windows lo convierte
-          // a físicos con el DPI del monitor donde está la ventana en ese
-          // momento. Al arrancar, la ventana nace en el monitor primario; si la
-          // posición guardada la manda a otro monitor con escala distinta
-          // (100% vs 150%, lo normal con un portátil y una pantalla externa),
-          // Windows dispara WM_DPICHANGED y reescala el marco, pero el surface
-          // de Flutter ya se había armado con la escala anterior. Se veía como
-          // la app chica y pixelada dentro de la ventana, incluso en la
-          // pantalla de carga, y se arreglaba sola al reabrir porque la segunda
-          // vez la ventana ya nacía en el monitor correcto.
-          //
-          // Volver a pedir el tamaño con la ventana ya en su monitor final
-          // fuerza el recálculo con el DPI que corresponde.
-          await windowManager.setSize(size);
+        try {
+          // 900×600 is the minimum viable reading size; prevents layout breaks.
+          await windowManager.setMinimumSize(minWindowSize);
+          await _restaurarGeometria(size, offsetGuardado);
+        } catch (e, st) {
+          logger.warning('No se pudo restaurar la geometría de la ventana', e, st);
+        } finally {
+          // SIEMPRE, pase lo que pase arriba. El runner nativo ya NO muestra la
+          // ventana por su cuenta (ver windows/runner/flutter_window.cpp): si
+          // este show() no corriera, la app quedaría sin ninguna ventana
+          // visible y solo se la vería en el administrador de tareas.
+          await windowManager.show();
+          await windowManager.focus();
         }
-        // NO gatear este show() contra el primer frame de Flutter: el runner
-        // nativo de Windows ya lo hace por su cuenta
-        // (SetNextFrameCallback -> this->Show() en flutter_window.cpp), así que
-        // esperar acá al primer frame hace que los DOS shows disparen en el
-        // mismo instante y compitan entre sí y con el setPosition de arriba.
-        // Resultado confirmado en vivo: la ventana quedaba con un tamaño y el
-        // surface de Flutter pintado con otro — app chica dentro de un marco
-        // negro. Mostrar acá cuanto antes es lo correcto; el gate del primer
-        // frame ya lo cubre el lado nativo.
-        await windowManager.show();
-        await windowManager.focus();
       });
     }
 
@@ -226,6 +208,50 @@ void main(List<String> args) async {
   }, (error, stack) {
     logger.severe("", error, stack);
   });
+}
+
+/// Deja la ventana en la posición y el tamaño de la sesión anterior, y
+/// comprueba que haya quedado ahí de verdad.
+///
+/// La comprobación no sobra. El tamaño guardado está en píxeles lógicos, y
+/// Windows lo convierte a físicos con el DPI del monitor donde esté la ventana
+/// en ese momento. Al arrancar, la ventana nace SIEMPRE en el monitor primario
+/// (ver windows/runner/main.cpp, que la crea en 10,10); si la posición guardada
+/// la manda a otro monitor con distinta escala —100% y 150%, lo normal con un
+/// portátil y una pantalla externa—, Windows dispara WM_DPICHANGED y reescala
+/// el marco. Y si el monitor de la sesión anterior ya no está conectado, la
+/// posición apunta a un lugar que no existe y Windows la reubica por su cuenta.
+///
+/// En vez de suponer que salió bien, se relee la geometría real: si la ventana
+/// terminó lejos de donde se pidió, o con otro tamaño, se cae a centrarla con
+/// el tamaño correcto. Así el peor caso es una ventana centrada, nunca una
+/// mitad fuera de pantalla o con el contenido a otra escala.
+Future<void> _restaurarGeometria(Size size, Offset? posicion) async {
+  if (posicion == null) {
+    await windowManager.setSize(size);
+    await windowManager.center();
+    return;
+  }
+  // setBounds y no setPosition + setSize: una sola orden, sin un estado
+  // intermedio en el que la ventana ya se movió pero todavía mide otra cosa.
+  await windowManager.setBounds(
+    Rect.fromLTWH(posicion.dx, posicion.dy, size.width, size.height),
+  );
+
+  final real = await windowManager.getBounds();
+  final seMovio = (real.left - posicion.dx).abs() > 100 ||
+      (real.top - posicion.dy).abs() > 100;
+  final cambioDeTamano = (real.width - size.width).abs() > 40 ||
+      (real.height - size.height).abs() > 40;
+  if (seMovio || cambioDeTamano) {
+    logger.warning(
+      'La ventana no quedó donde se pidió (pedido: '
+      '${posicion.dx}x${posicion.dy} ${size.width}x${size.height}, real: '
+      '${real.left}x${real.top} ${real.width}x${real.height}). Se centra.',
+    );
+    await windowManager.setSize(size);
+    await windowManager.center();
+  }
 }
 
 /// Posición de la ventana de la sesión anterior, o null si no hay una usable.
