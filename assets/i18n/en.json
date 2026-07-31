@@ -145,7 +145,16 @@
     "level-stable": "Stable",
     "level-unstable": "Unstable",
     "stats": "{total} extensions - {installed} installed - {available} available",
-    "stats-badge": "{installed} installed"
+    "stats-badge": "{installed} installed",
+    "filter-nsfw": "Content",
+    "nsfw-all": "All",
+    "nsfw-sfw": "No +18",
+    "nsfw-nsfw": "+18 only",
+    "filter-installed": "Status",
+    "installed-all": "All",
+    "installed-installed": "Installed",
+    "installed-available": "Not installed",
+    "installed-new": "New"
   },
   "extension-searcher": {
     "nsfw-blocked": "This content is 18+. Enable adult content in Settings > General to view it.",
@@ -380,7 +389,8 @@
     "install-failed": "Update failed",
     "still-outdated": "The update wasn't detected yet. Finish installing it and try again.",
     "assets-not-ready": "The new version is still being published. Once the files for every platform are ready, the update shows up on its own.",
-    "needs-install-permission": "The permission to install unknown apps is missing. Enable it for PrismHub and tap update again: the download is already saved, it will not be downloaded again."
+    "needs-install-permission": "The permission to install unknown apps is missing. Enable it for PrismHub and tap update again: the download is already saved, it will not be downloaded again.",
+    "too-old-to-update": "This version is too old to update on its own. Download the installer from the releases page and install it by hand once."
   },
   "extension-install-error": "Failed to install extension",
   "extension-type": {

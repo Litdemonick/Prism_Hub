@@ -460,6 +460,11 @@ class SettingKey {
   static const defaultExtensionsInstalled = "DefaultExtensionsInstalled";
   static const disabledExtensions = "DisabledExtensions";
   static const hiddenCards = "HiddenCards";
+  // Paquetes del catalogo ya vistos, para poder marcar cuales son NUEVOS. El
+  // indice del repositorio no trae fecha de publicacion, asi que "nueva" no se
+  // puede deducir de los datos: se calcula contra lo que este dispositivo ya
+  // habia visto.
+  static const seenRepoPackages = "SeenRepoPackages";
   static const tmdbKey = 'TMDBKey';
   static const autoCheckUpdate = 'AutoCheckUpdate';
   static const language = 'Language';

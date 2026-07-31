@@ -20,7 +20,29 @@ import 'package:prismhub/views/widgets/messenger.dart';
 // está activo (main.dart usa GetMaterialApp con home solo para Android) y por eso
 // Get.to allá NO HACE NADA — confirmado en vivo, el botón no abría en Windows
 // mientras en Android sí.
-Future<void> openNsfw18Search(BuildContext context) async {
+Future<void> openNsfw18Search(
+  BuildContext context, {
+  // true cuando se llama desde ADENTRO de la Zona +18, donde el usuario ya pasó
+  // por la confirmación y el PIN para entrar. Volver a pedírselos para moverse
+  // dentro de la misma zona es pedir la llave de una puerta que ya está
+  // abierta, y encima la biometría se dispara de nuevo.
+  bool yaAutorizado = false,
+}) async {
+  if (yaAutorizado) {
+    // Navigator y no el router ni Get.to, en las tres plataformas:
+    // - el router obligaría a marcar "ya autorizado" en la URL, o sea dejar
+    //   publicada una ruta que entra al contenido +18 SIN compuerta;
+    // - Get.to no navega en escritorio (ver el comentario de abajo).
+    //
+    // Además queda apilada ENCIMA de la Zona +18, así que volver atrás cae
+    // siempre en el home +18, que es lo que se espera al entrar desde ahí.
+    await Navigator.of(context).push(
+      MaterialPageRoute<void>(
+        builder: (_) => const Nsfw18SearchGate(yaAutorizado: true),
+      ),
+    );
+    return;
+  }
   if (Platform.isAndroid) {
     await Get.to(() => const Nsfw18SearchGate());
     return;
@@ -34,15 +56,20 @@ Future<void> openNsfw18Search(BuildContext context) async {
 // 3. PIN (o configurarlo la primera vez) — SIEMPRE también, sin recordar el
 //    desbloqueo entre entradas (ver el comentario de Nsfw18Zone).
 class Nsfw18SearchGate extends StatefulWidget {
-  const Nsfw18SearchGate({super.key});
+  const Nsfw18SearchGate({super.key, this.yaAutorizado = false});
+
+  /// Se entra desde adentro de la Zona +18, donde la compuerta ya se pasó.
+  /// Ver openNsfw18Search. El switch de NSFW se sigue mirando igual: si se
+  /// apagó mientras tanto, esta pantalla se cierra sola.
+  final bool yaAutorizado;
 
   @override
   State<Nsfw18SearchGate> createState() => _Nsfw18SearchGateState();
 }
 
 class _Nsfw18SearchGateState extends State<Nsfw18SearchGate> {
-  bool _confirmed = false;
-  bool _unlocked = false;
+  late bool _confirmed = widget.yaAutorizado;
+  late bool _unlocked = widget.yaAutorizado;
   bool _askedConfirm = false;
 
   bool get _nsfwEnabled =>
@@ -51,7 +78,7 @@ class _Nsfw18SearchGateState extends State<Nsfw18SearchGate> {
   @override
   void initState() {
     super.initState();
-    if (_nsfwEnabled) {
+    if (_nsfwEnabled && !widget.yaAutorizado) {
       WidgetsBinding.instance.addPostFrameCallback((_) => _confirmEnter());
     }
   }

@@ -1,9 +1,9 @@
-import 'package:fluent_ui/fluent_ui.dart';
 import 'package:flutter/foundation.dart';
 import 'package:get/get.dart';
 import 'package:prismhub/models/index.dart';
 import 'package:prismhub/utils/connectivity.dart';
 import 'package:prismhub/utils/extension.dart';
+import 'package:prismhub/utils/prismhub_storage.dart';
 
 class ExtensionRepoPageController extends GetxController {
   List<dynamic> extensions = <dynamic>[].obs;
@@ -18,6 +18,44 @@ class ExtensionRepoPageController extends GetxController {
   // 'all' | 'stable' | 'unstable' — filtra por el flag `unstable` del
   // catálogo (ver ExtensionCard.unstable), no por si está instalada.
   final RxString searchLevel = 'all'.obs;
+  // 'all' | 'sfw' | 'nsfw' — por el flag `nsfw` del catálogo. El repositorio
+  // sigue mostrando todo por defecto (ver el comentario de onRefresh): esto es
+  // una ayuda para encontrar, no una censura.
+  final RxString searchNsfw = 'all'.obs;
+  // 'all' | 'installed' | 'available' | 'new'
+  final RxString searchInstalled = 'all'.obs;
+
+  /// Paquetes que este dispositivo ya vio en el catálogo. Sirve para saber
+  /// cuáles son NUEVOS: el índice no trae fecha de publicación, así que no hay
+  /// forma de deducirlo de los datos.
+  final RxSet<String> _vistos = <String>{}.obs;
+
+  bool esNueva(String package) =>
+      _vistos.isNotEmpty && !_vistos.contains(package);
+
+  /// Marca todo el catálogo actual como visto.
+  ///
+  /// La PRIMERA vez se guarda en silencio, sin marcar nada como nuevo: si no,
+  /// al estrenar la función las 12 extensiones aparecerían como novedad, que es
+  /// exactamente lo contrario de lo que sirve. A partir de ahí, lo que aparezca
+  /// después se destaca hasta que se vuelva a abrir el repositorio.
+  Future<void> _registrarVistas(Iterable<String> paquetes) async {
+    final guardado = PrismHubStorage.getSetting(SettingKey.seenRepoPackages);
+    if (guardado is List) {
+      _vistos
+        ..clear()
+        ..addAll(guardado.cast<String>());
+    }
+    final todos = paquetes.toSet();
+    // Se guarda SIEMPRE el catálogo completo: lo que hoy es nuevo deja de
+    // serlo la próxima vez que se abra esta pantalla.
+    if (!setEquals(_vistos.toSet(), todos)) {
+      await PrismHubStorage.setSetting(
+        SettingKey.seenRepoPackages,
+        todos.toList(),
+      );
+    }
+  }
 
   static const List<String> availableLangs = [
     'all',
@@ -67,6 +105,15 @@ class ExtensionRepoPageController extends GetxController {
       // Home/Búsqueda — nunca esconde la existencia de la extensión acá.
       extensionsTemp.clear();
       extensionsTemp.addAll(extensions);
+      // OJO: esto deja _vistos con el catálogo ANTERIOR y guarda el actual. Es
+      // a propósito — durante esta sesión se puede decir qué apareció desde la
+      // última vez, y la próxima vez ya no serán novedad.
+      await _registrarVistas(
+        extensions
+            .map((e) => e['package'])
+            .whereType<String>()
+            .where((p) => p.isNotEmpty),
+      );
     } catch (e) {
       isError.value = true;
       debugPrint('❌ Extension repo error: ${e.toString()}');

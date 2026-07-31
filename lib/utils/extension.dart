@@ -1040,9 +1040,17 @@ class ExtensionUtils {
     if (Get.isRegistered<ExtensionPageController>()) {
       Get.find<ExtensionPageController>().callRefresh();
     }
-    // 重载搜索页面
-    if (Get.isRegistered<SearchPageController>()) {
-      Get.find<SearchPageController>().callRefresh();
+    // 重载搜索页面 — las DOS instancias, no solo la normal.
+    //
+    // La búsqueda de la Zona +18 se registra con SearchPageController.zoneTag
+    // (ver search_page.dart: comparten clase pero no instancia, igual que los
+    // dos Home). Refrescando solo la instancia sin tag, instalar o activar una
+    // extensión +18 no llegaba nunca a esa pantalla: seguía mostrando "Sin
+    // extensiones instaladas" hasta que el usuario tocaba "Actualizar" a mano.
+    for (final tag in <String?>[null, SearchPageController.zoneTag]) {
+      if (Get.isRegistered<SearchPageController>(tag: tag)) {
+        Get.find<SearchPageController>(tag: tag).callRefresh();
+      }
     }
     // Home (Continuar/Favoritos/fondo del hero) — sin esto, desactivar o
     // desinstalar una extensión dejaba su contenido visible en Home hasta

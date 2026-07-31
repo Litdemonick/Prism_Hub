@@ -137,7 +137,16 @@
     "level-stable": "Estables",
     "level-unstable": "Inestables",
     "stats": "{total} extensiones - {installed} instaladas - {available} disponibles",
-    "stats-badge": "{installed} instaladas"
+    "stats-badge": "{installed} instaladas",
+    "filter-nsfw": "Contenido",
+    "nsfw-all": "Todo",
+    "nsfw-sfw": "Sin +18",
+    "nsfw-nsfw": "Solo +18",
+    "filter-installed": "Estado",
+    "installed-all": "Todas",
+    "installed-installed": "Instaladas",
+    "installed-available": "Sin instalar",
+    "installed-new": "Nuevas"
   },
   "extension-searcher": {
     "nsfw-blocked": "Este contenido es +18. Activá el contenido para adultos en Ajustes > General para poder verlo.",
@@ -369,7 +378,8 @@
     "install-failed": "Error al actualizar",
     "still-outdated": "Todavía no se detectó la actualización. Terminá de instalarla y probá de nuevo.",
     "assets-not-ready": "La versión nueva se está publicando todavía. Cuando estén listos los archivos de todas las plataformas, la actualización aparece sola.",
-    "needs-install-permission": "Falta el permiso para instalar apps desconocidas. Habilitalo para PrismHub y tocá actualizar otra vez: la descarga ya está guardada, no se baja de nuevo."
+    "needs-install-permission": "Falta el permiso para instalar apps desconocidas. Habilitalo para PrismHub y tocá actualizar otra vez: la descarga ya está guardada, no se baja de nuevo.",
+    "too-old-to-update": "Esta version es demasiado antigua para actualizarse sola. Descarga el instalador desde la pagina de versiones e instalalo a mano una unica vez."
   },
   "extension-install-error": "No se pudo instalar la extensión",
   "extension-type": {

@@ -41,6 +41,8 @@ class _ExtensionRepoPageState extends State<ExtensionRepoPage> {
   final _typeFlyoutController = fluent.FlyoutController();
   final _levelFlyoutController = fluent.FlyoutController();
   final _langFlyoutController = fluent.FlyoutController();
+  final _nsfwFlyoutController = fluent.FlyoutController();
+  final _installedFlyoutController = fluent.FlyoutController();
 
   // Paginación de "Instaladas"/"Disponibles" — con muchas extensiones el
   // grid/lista se volvía larguísimo de scrollear. Estado local (no en el
@@ -67,6 +69,8 @@ class _ExtensionRepoPageState extends State<ExtensionRepoPage> {
     _typeFlyoutController.dispose();
     _levelFlyoutController.dispose();
     _langFlyoutController.dispose();
+    _nsfwFlyoutController.dispose();
+    _installedFlyoutController.dispose();
     _desktopScrollController.dispose();
     super.dispose();
   }
@@ -78,7 +82,7 @@ class _ExtensionRepoPageState extends State<ExtensionRepoPage> {
       showDragHandle: true,
       useSafeArea: true,
       builder: (context) {
-        return Padding(
+        return SingleChildScrollView(
           padding: const EdgeInsets.all(20),
           child: Column(
             mainAxisSize: MainAxisSize.min,
@@ -134,6 +138,55 @@ class _ExtensionRepoPageState extends State<ExtensionRepoPage> {
                     selected: <String>{c.searchLevel.value},
                     onSelectionChanged: (value) {
                       c.searchLevel.value = value.first;
+                      Get.back();
+                    },
+                    showSelectedIcon: false,
+                  ),
+                ),
+              ),
+              const SizedBox(height: 12),
+              // Mismos filtros que en escritorio: el celular tenia solo tipo y
+              // nivel, asi que +18 e instaladas/nuevas no se podian usar ahi.
+              SizedBox(
+                width: double.infinity,
+                child: Obx(
+                  () => SegmentedButton<String>(
+                    segments: [
+                      for (final v in ['all', 'sfw', 'nsfw'])
+                        ButtonSegment(
+                          value: v,
+                          label: Text('extension-repo.nsfw-$v'.i18n),
+                        ),
+                    ],
+                    selected: <String>{c.searchNsfw.value},
+                    onSelectionChanged: (value) {
+                      c.searchNsfw.value = value.first;
+                      Get.back();
+                    },
+                    showSelectedIcon: false,
+                  ),
+                ),
+              ),
+              const SizedBox(height: 12),
+              SizedBox(
+                width: double.infinity,
+                child: Obx(
+                  () => SegmentedButton<String>(
+                    segments: [
+                      for (final v in [
+                        'all',
+                        'installed',
+                        'available',
+                        'new',
+                      ])
+                        ButtonSegment(
+                          value: v,
+                          label: Text('extension-repo.installed-$v'.i18n),
+                        ),
+                    ],
+                    selected: <String>{c.searchInstalled.value},
+                    onSelectionChanged: (value) {
+                      c.searchInstalled.value = value.first;
                       Get.back();
                     },
                     showSelectedIcon: false,
@@ -419,6 +472,25 @@ class _ExtensionRepoPageState extends State<ExtensionRepoPage> {
       extensionCards.removeWhere(
         (element) => element.unstable != wantUnstable,
       );
+    }
+    if (c.searchNsfw.value != 'all') {
+      final quiereNsfw = c.searchNsfw.value == 'nsfw';
+      extensionCards.removeWhere((element) => element.nsfw != quiereNsfw);
+    }
+    switch (c.searchInstalled.value) {
+      case 'installed':
+        extensionCards.removeWhere(
+          (e) => !ExtensionUtils.runtimes.containsKey(e.package),
+        );
+      case 'available':
+        extensionCards.removeWhere(
+          (e) => ExtensionUtils.runtimes.containsKey(e.package),
+        );
+      case 'new':
+        // "Nueva" = no estaba en el catálogo la última vez que se abrió esta
+        // pantalla. El índice no trae fecha de publicación, así que no se puede
+        // deducir de los datos — ver ExtensionRepoPageController.esNueva.
+        extensionCards.removeWhere((e) => !c.esNueva(e.package));
     }
 
     if (extensionCards.isEmpty) {
@@ -799,6 +871,50 @@ class _ExtensionRepoPageState extends State<ExtensionRepoPage> {
                                         onPressed: () {
                                           fluent.Flyout.of(context).close();
                                           c.searchLevel.value = level;
+                                        },
+                                      ),
+                                  ],
+                                )),
+                            Obx(() => _filterChip(
+                                  controller: _nsfwFlyoutController,
+                                  label: 'extension-repo.filter-nsfw'.i18n,
+                                  value:
+                                      'extension-repo.nsfw-${c.searchNsfw.value}'
+                                          .i18n,
+                                  items: (context) => [
+                                    for (final v in ['all', 'sfw', 'nsfw'])
+                                      fluent.MenuFlyoutItem(
+                                        text: Text(
+                                          'extension-repo.nsfw-$v'.i18n,
+                                        ),
+                                        onPressed: () {
+                                          fluent.Flyout.of(context).close();
+                                          c.searchNsfw.value = v;
+                                        },
+                                      ),
+                                  ],
+                                )),
+                            Obx(() => _filterChip(
+                                  controller: _installedFlyoutController,
+                                  label:
+                                      'extension-repo.filter-installed'.i18n,
+                                  value:
+                                      'extension-repo.installed-${c.searchInstalled.value}'
+                                          .i18n,
+                                  items: (context) => [
+                                    for (final v in [
+                                      'all',
+                                      'installed',
+                                      'available',
+                                      'new',
+                                    ])
+                                      fluent.MenuFlyoutItem(
+                                        text: Text(
+                                          'extension-repo.installed-$v'.i18n,
+                                        ),
+                                        onPressed: () {
+                                          fluent.Flyout.of(context).close();
+                                          c.searchInstalled.value = v;
                                         },
                                       ),
                                   ],

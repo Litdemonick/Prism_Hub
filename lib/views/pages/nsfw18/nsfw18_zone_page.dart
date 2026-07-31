@@ -17,6 +17,7 @@ import 'package:prismhub/utils/resume_history.dart';
 import 'package:prismhub/utils/router.dart';
 import 'package:prismhub/views/pages/history_page.dart';
 import 'package:prismhub/views/pages/nsfw18/nsfw18_lock_page.dart';
+import 'package:prismhub/views/pages/nsfw18/nsfw18_search_page.dart';
 import 'package:prismhub/views/widgets/button.dart';
 import 'package:prismhub/views/widgets/home/animated_background_glow.dart';
 import 'package:prismhub/views/widgets/home/home_hero_banner.dart';
@@ -468,53 +469,29 @@ class _Nsfw18ZonePageState extends State<Nsfw18ZonePage> {
                             Obx(() => HomeHeroBanner(
                                   background: c.heroBackground.value,
                                   gradient: HomeTheme.heroGradientRed,
-                                  // Android: esta pantalla se llegó con Get.to
-                                  // (empujada encima del shell principal), así
-                                  // que hay que cambiar la pestaña Y cerrarla.
+                                  // Estando DENTRO de la Zona +18, el
+                                  // catálogo que corresponde es el +18, no el
+                                  // normal. Antes esto mandaba al buscador
+                                  // general: en Android cambiaba a la pestaña
+                                  // Buscar y cerraba la zona entera, y en
+                                  // escritorio el default iba a /search.
                                   //
-                                  // La pestaña se cambia ANTES del pop, no
-                                  // después: al revés había una carrera con la
-                                  // animación del pop y el cambio no se
-                                  // aplicaba — entrando desde Ajustes, tocar
-                                  // "Explorar catálogo" devolvía a Ajustes en
-                                  // vez de ir a Buscar (confirmado en vivo).
-                                  // Poniéndola primero, cuando el pop revela
-                                  // el shell ya está en Buscar y no hay carrera
-                                  // posible.
+                                  // yaAutorizado: la confirmación y el PIN ya
+                                  // se pasaron para entrar acá; volver a
+                                  // pedirlos para moverse dentro de la misma
+                                  // zona no protege nada y encima dispara la
+                                  // biometría de nuevo.
                                   //
-                                  // En desktop el default ya anda bien
-                                  // (router.go reemplaza la ruta actual sea
-                                  // cual sea, confirmado en vivo).
-                                  onExploreCatalog: Platform.isAndroid
-                                      ? () {
-                                          // isRegistered y no try/catch: si
-                                          // por lo que sea el controller no
-                                          // está, el pop TIENE que pasar igual
-                                          // — si no, se queda atrapado acá.
-                                          // isRegistered y no try/catch: si
-                                          // por lo que sea el controller no
-                                          // está, el pop TIENE que pasar igual
-                                          // — si no, se queda atrapado acá.
-                                          if (Get.isRegistered<
-                                              MainController>()) {
-                                            Get.find<MainController>()
-                                                .changeTab(1);
-                                          }
-                                          // until(isFirst) y no un back()
-                                          // simple: un back() cierra UNA capa
-                                          // y deja lo que haya abajo. Medido
-                                          // en vivo con logs: la pestaña
-                                          // quedaba correcta en Buscar y el
-                                          // shell la dibujaba, pero el usuario
-                                          // seguía viendo Ajustes — o sea que
-                                          // había otra ruta apilada encima del
-                                          // shell tapándolo. Volviendo hasta
-                                          // la primera ruta se llega al shell
-                                          // sí o sí, sin importar cuántas
-                                          // capas haya quedado en el medio.
-                                          Get.until((route) => route.isFirst);
-                                        }
-                                      : null,
+                                  // Se apila ENCIMA de esta pantalla, así que
+                                  // volver atrás cae siempre en el home +18,
+                                  // sin importar desde dónde se haya entrado.
+                                  // Sin ramificar por plataforma: openNsfw18Search
+                                  // usa Navigator, que funciona igual en las
+                                  // tres.
+                                  onExploreCatalog: () => openNsfw18Search(
+                                        context,
+                                        yaAutorizado: true,
+                                      ),
                                 )),
                             // El aire entre el hero y la primera fila se
                             // achica en horizontal de celular: ahí el alto

@@ -148,6 +148,46 @@ class ApplicationUtils {
     }
   }
 
+  /// ¿La versión instalada es demasiado vieja para instalarle ESTE release
+  /// encima?
+  ///
+  /// El piso se declara en el cuerpo del release con un comentario HTML:
+  ///
+  ///     <!-- min-update-from: 1.0.10 -->
+  ///
+  /// No se ve en la página de GitHub pero sí se puede leer desde acá. Va en el
+  /// release y NO en el código a propósito: así el bloqueo se puede activar en
+  /// una publicación futura sin que nadie tenga que actualizar el app primero.
+  ///
+  /// Para qué sirve: hay cambios que impiden instalar encima —el más claro fue
+  /// la firma de Android en la 1.0.10, donde había que desinstalar primero—. En
+  /// esos casos, ofrecer la actualización automática es mandar al usuario a un
+  /// error de instalación sin explicación. Mejor decirle de una que la baje a
+  /// mano.
+  ///
+  /// OJO con lo que esto NO puede hacer: la comprobación corre en el app
+  /// INSTALADO, así que solo la respetan las versiones que ya traen este
+  /// código. Una versión anterior va a seguir ofreciendo la actualización pase
+  /// lo que pase; eso no se puede arreglar desde acá.
+  ///
+  /// Ante cualquier duda (sin marca, marca ilegible, versión local rara) se
+  /// devuelve false y todo sigue como siempre: este freno solo se activa cuando
+  /// está declarado explícitamente.
+  static bool _demasiadoViejoParaActualizar(dynamic body) {
+    if (body is! String) return false;
+    final marca = RegExp(r'min-update-from:\s*v?(\d+(?:\.\d+){0,2})')
+        .firstMatch(body);
+    if (marca == null) return false;
+    final piso = _versionParts(marca.group(1)!);
+    final local = _versionParts(packageInfo.version);
+    if (piso == null || local == null) return false;
+    for (var i = 0; i < piso.length; i++) {
+      if (local[i] > piso[i]) return false;
+      if (local[i] < piso[i]) return true;
+    }
+    return false;
+  }
+
   static Map<String, dynamic>? _findAsset(dynamic assets, String tagName) {
     final expectedName = 'PrismHub-$tagName-$_platformSuffix';
     final expectedSetupName = 'PrismHub-setup-$tagName.exe';
@@ -275,6 +315,42 @@ class ApplicationUtils {
       final remoteVersion = tagName.replaceFirst('v', '');
       debugPrint('remoteVersion: $remoteVersion');
       if (_isRemoteVersionNewer(remoteVersion)) {
+        // Esta versión es demasiado vieja para instalar la nueva encima: no se
+        // ofrece la actualización automática, se manda a la página de
+        // versiones. Ver _demasiadoViejoParaActualizar.
+        if (_demasiadoViejoParaActualizar(res.data['body'])) {
+          // Diálogo y no un aviso pasajero: esto no es "che, hay novedades",
+          // es "esta actualización NO se va a poder instalar sola". Si se va
+          // solo a los dos segundos, el usuario se queda sin saber qué hacer.
+          if (context.mounted) {
+            await showPlatformDialog(
+              context: context,
+              title: FlutterI18n.translate(
+                context,
+                'upgrade.new-version',
+                translationParams: {'version': remoteVersion},
+              ),
+              content: Text('upgrade.too-old-to-update'.i18n),
+              actions: [
+                PlatformTextButton(
+                  onPressed: () => RouterUtils.pop(),
+                  child: Text('upgrade.not-now'.i18n),
+                ),
+                PlatformFilledButton(
+                  onPressed: () {
+                    RouterUtils.pop();
+                    launchUrl(
+                      Uri.parse(res.data['html_url'] as String),
+                      mode: LaunchMode.externalApplication,
+                    );
+                  },
+                  child: Text('upgrade.download'.i18n),
+                ),
+              ],
+            );
+          }
+          return;
+        }
         // Ver el comentario largo de la comprobación al arrancar: mientras el
         // archivo de esta plataforma no esté subido, no se ofrece nada.
         final completo = _releaseCompleto(res.data['assets'], tagName);
