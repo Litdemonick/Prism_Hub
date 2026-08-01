@@ -906,6 +906,10 @@ class _PanelCasteando extends StatelessWidget {
     return Obx(() {
       final device = controller.dlnaDevice.value;
       if (device == null) return const SizedBox.shrink();
+      // Enganchando: mandarle el video al aparato y que arranque puede tardar
+      // varios segundos, y en ese rato no se veia nada — parecia que el toque
+      // no habia hecho efecto.
+      final conectando = controller.castConectando.value;
       final reproduciendo = controller.isPlaying.value;
       return Container(
         margin: const EdgeInsets.symmetric(horizontal: 32),
@@ -918,11 +922,24 @@ class _PanelCasteando extends StatelessWidget {
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            Icon(
-              reproduciendo ? Icons.cast_connected : Icons.pause_circle_outline,
-              size: 44,
-              color: HomeTheme.accentPink,
-            ),
+            if (conectando)
+              const SizedBox(
+                width: 44,
+                height: 44,
+                child: CircularProgressIndicator(
+                  strokeWidth: 3.5,
+                  valueColor:
+                      AlwaysStoppedAnimation<Color>(HomeTheme.accentPink),
+                ),
+              )
+            else
+              Icon(
+                reproduciendo
+                    ? Icons.cast_connected
+                    : Icons.pause_circle_outline,
+                size: 44,
+                color: HomeTheme.accentPink,
+              ),
             const SizedBox(height: 14),
             Text(
               device.info.friendlyName,
@@ -935,9 +952,11 @@ class _PanelCasteando extends StatelessWidget {
             ),
             const SizedBox(height: 6),
             Text(
-              reproduciendo
-                  ? 'video.cast-playing-here'.i18n
-                  : 'video.cast-paused-here'.i18n,
+              conectando
+                  ? 'video.cast-connecting'.i18n
+                  : reproduciendo
+                      ? 'video.cast-playing-here'.i18n
+                      : 'video.cast-paused-here'.i18n,
               textAlign: TextAlign.center,
               style: TextStyle(
                 fontSize: 13,

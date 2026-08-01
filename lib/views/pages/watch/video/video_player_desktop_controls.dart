@@ -1575,6 +1575,9 @@ class _PanelCasteando extends StatelessWidget {
     return Obx(() {
       final device = controller.dlnaDevice.value;
       if (device == null) return const SizedBox.shrink();
+      // Enganchando: mandarle el vídeo al aparato y que arranque puede tardar
+      // varios segundos, y en ese rato no se veía nada.
+      final conectando = controller.castConectando.value;
       final reproduciendo = controller.isPlaying.value;
       return Container(
         padding: const EdgeInsets.symmetric(horizontal: 30, vertical: 24),
@@ -1586,13 +1589,24 @@ class _PanelCasteando extends StatelessWidget {
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            Icon(
-              reproduciendo
-                  ? material.Icons.cast_connected
-                  : material.Icons.pause_circle_outline,
-              size: 46,
-              color: HomeTheme.accentPink,
-            ),
+            if (conectando)
+              const SizedBox(
+                width: 46,
+                height: 46,
+                child: material.CircularProgressIndicator(
+                  strokeWidth: 3.5,
+                  valueColor:
+                      material.AlwaysStoppedAnimation(HomeTheme.accentPink),
+                ),
+              )
+            else
+              Icon(
+                reproduciendo
+                    ? material.Icons.cast_connected
+                    : material.Icons.pause_circle_outline,
+                size: 46,
+                color: HomeTheme.accentPink,
+              ),
             const SizedBox(height: 14),
             Text(
               device.info.friendlyName,
@@ -1607,9 +1621,11 @@ class _PanelCasteando extends StatelessWidget {
             ConstrainedBox(
               constraints: const BoxConstraints(maxWidth: 360),
               child: Text(
-                reproduciendo
-                    ? 'video.cast-playing-desktop'.i18n
-                    : 'video.cast-paused-desktop'.i18n,
+                conectando
+                    ? 'video.cast-connecting'.i18n
+                    : reproduciendo
+                        ? 'video.cast-playing-desktop'.i18n
+                        : 'video.cast-paused-desktop'.i18n,
                 textAlign: TextAlign.center,
                 style: TextStyle(
                   fontSize: 13,

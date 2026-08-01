@@ -385,6 +385,11 @@ class VideoPlayerController extends GetxController with WidgetsBindingObserver {
   // por segundo mientras corre el timer de estado.
   String? _fallaDeCastAvisada;
 
+  /// Enganchando con el aparato: mandarle el video y que arranque puede tardar
+  /// varios segundos, y hasta ahora no se veia nada en ese rato — parecia que
+  /// el toque no habia hecho efecto. Tambien evita que se dispare dos veces.
+  final castConectando = false.obs;
+
   /// Si tiene sentido ofrecer el casteo AHORA.
   ///
   /// Regla: si el reproductor nativo no esta reproduciendo bien, castear
@@ -2755,6 +2760,32 @@ class VideoPlayerController extends GetxController with WidgetsBindingObserver {
       sendMessage(Message(Text('等待视频加载'.i18n)));
       return;
     }
+    // Dos conexiones a la vez no: tocar el aparato dos veces, o elegir otro
+    // mientras el primero todavia esta enganchando, dejaba dos enganches
+    // pisandose y el estado a medio armar.
+    if (castConectando.value) return;
+    castConectando.value = true;
+
+    // Si ya se estaba transmitiendo a OTRO aparato, hay que soltar el anterior
+    // ANTES de enganchar el nuevo. Sin esto el televisor viejo se quedaba
+    // reproduciendo por su cuenta —nadie le decia que parara— y su relay
+    // quedaba registrado para siempre, porque _dlnaRelayUrl se pisaba con el
+    // nuevo sin soltar el de antes.
+    final anterior = dlnaDevice.value;
+    if (anterior != null && anterior != device) {
+      unawaited(Future(() async {
+        try {
+          await anterior.stop();
+        } catch (e) {
+          logger.warning('El aparato anterior no respondio al soltarlo', e);
+        }
+      }));
+    }
+    if (_dlnaRelayUrl != null) {
+      CastRelayServer.unregister(_dlnaRelayUrl!);
+      _dlnaRelayUrl = null;
+    }
+
     var url = watchData!.url;
     // El tipo se saca de la direccion REAL, no de la del relay: la del relay
     // termina en /relay/<token> y no dice nada del formato.
@@ -2780,17 +2811,35 @@ class VideoPlayerController extends GetxController with WidgetsBindingObserver {
       }
     }
     dlnaDevice.value = device;
-    // Con ficha DIDL completa: sin protocolInfo, Kodi anota
-    // "invalid protocol info ':::'" y tiene que adivinar el formato.
-    // Ver cast_metadata.dart.
-    await castearConMetadata(
-      device,
-      url,
-      titulo: '$title — ${playList[index.value].name}',
-      mime: mimeDeUrl(urlOriginal),
-    );
-    await device.play();
+    try {
+      // Con ficha DIDL completa: sin protocolInfo, Kodi anota
+      // "invalid protocol info ':::'" y tiene que adivinar el formato.
+      // Ver cast_metadata.dart.
+      await castearConMetadata(
+        device,
+        url,
+        titulo: '$title — ${playList[index.value].name}',
+        mime: mimeDeUrl(urlOriginal),
+      );
+      await device.play();
+    } catch (e) {
+      // Un aparato que no contesta dejaba la excepcion suelta y la pantalla en
+      // modo casteo sin que nada se estuviera reproduciendo. Se deshace todo y
+      // se avisa, que es lo unico honesto que se puede hacer.
+      logger.warning('El aparato no acepto el video', e);
+      dlnaDevice.value = null;
+      if (_dlnaRelayUrl != null) {
+        CastRelayServer.unregister(_dlnaRelayUrl!);
+        _dlnaRelayUrl = null;
+      }
+      castConectando.value = false;
+      sendMessage(Message(Text('video.cast-failed'.i18n)));
+      return;
+    }
+    // Recien aca se para el reproductor de aca: si se paraba antes y el
+    // televisor terminaba fallando, quedaban los dos sin reproducir nada.
     await player.stop();
+    castConectando.value = false;
     // Cancelar cualquier timer previo antes de crear uno nuevo — si el
     // usuario elige otro dispositivo DLNA sin desconectar el anterior
     // primero, sin esto quedaban DOS timers corriendo _getDLNAStatus() cada
@@ -2875,6 +2924,7 @@ class VideoPlayerController extends GetxController with WidgetsBindingObserver {
     // saldria de nuevo el aviso de un error que ya paso.
     CastRelayServer.ultimoError = null;
     _fallaDeCastAvisada = null;
+    castConectando.value = false;
 
     // Y el reproductor local vuelve a andar.
     //
