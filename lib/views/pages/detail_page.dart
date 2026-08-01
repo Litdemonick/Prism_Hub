@@ -64,6 +64,28 @@ class _DetailPageState extends State<DetailPage> {
     super.dispose();
   }
 
+  // Funde entre los tres estados de la pantalla —error, cargando y contenido—
+  // en vez de cambiarlos de golpe.
+  //
+  // Antes el salto era seco: la rueda desaparecía y en el mismo fotograma
+  // aparecía la pantalla entera armada, con la portada, el título y las
+  // pestañas de una. Se notaba como un parpadeo, sobre todo cuando la
+  // extensión responde rápido y la rueda apenas alcanza a verse.
+  //
+  // Todos los caminos tienen que devolver ESTO desde la misma posición del
+  // árbol: así Flutter reutiliza el mismo AnimatedSwitcher entre
+  // reconstrucciones y lo único que le cambia es la clave del hijo, que es lo
+  // que dispara la animación. Devolver un AnimatedSwitcher nuevo por rama no
+  // animaría nada.
+  static Widget _transicion(String estado, Widget hijo) => AnimatedSwitcher(
+        // Corto a propósito: es para suavizar el cambio, no para hacer
+        // esperar.
+        duration: const Duration(milliseconds: 240),
+        switchInCurve: Curves.easeOut,
+        switchOutCurve: Curves.easeIn,
+        child: KeyedSubtree(key: ValueKey(estado), child: hijo),
+      );
+
   Widget _buildAndroidDetail(BuildContext context) {
     return Scaffold(
       body: Obx(() {
@@ -75,9 +97,7 @@ class _DetailPageState extends State<DetailPage> {
         }
 
         if (c.error.value.isNotEmpty) {
-          return Center(
-            child: Text(c.error.value),
-          );
+          return _transicion('error', Center(child: Text(c.error.value)));
         }
 
         // Android no miraba isLoading (escritorio sí, más abajo): armaba la
@@ -86,35 +106,38 @@ class _DetailPageState extends State<DetailPage> {
         // hasta que llegaba la respuesta de la extensión. Ahora espera igual
         // que en PC: rueda girando y recién después la info.
         if (c.isLoading.value) {
-          return ColoredBox(
-            color: HomeTheme.bg,
-            child: Stack(
-              children: [
-                const Center(
-                  child: CircularProgressIndicator(
-                    strokeWidth: 3,
-                    valueColor: AlwaysStoppedAnimation(HomeTheme.accentPink),
-                  ),
-                ),
-                // Botón de volver propio: mientras carga no existe todavía
-                // el SliverAppBar que lo trae, y una extensión lenta dejaba
-                // la pantalla sin salida visible.
-                SafeArea(
-                  child: Align(
-                    alignment: Alignment.topLeft,
-                    child: IconButton(
-                      icon: const Icon(Icons.arrow_back,
-                          color: HomeTheme.textPrimary),
-                      // Navigator directo, no RouterUtils: esta rama es solo
-                      // Android, donde la página se empuja con Get.to sobre
-                      // el navegador de GetMaterialApp.
-                      onPressed: () => Navigator.of(context).maybePop(),
+          return _transicion(
+              'cargando',
+              ColoredBox(
+                color: HomeTheme.bg,
+                child: Stack(
+                  children: [
+                    const Center(
+                      child: CircularProgressIndicator(
+                        strokeWidth: 3,
+                        valueColor:
+                            AlwaysStoppedAnimation(HomeTheme.accentPink),
+                      ),
                     ),
-                  ),
+                    // Botón de volver propio: mientras carga no existe todavía
+                    // el SliverAppBar que lo trae, y una extensión lenta dejaba
+                    // la pantalla sin salida visible.
+                    SafeArea(
+                      child: Align(
+                        alignment: Alignment.topLeft,
+                        child: IconButton(
+                          icon: const Icon(Icons.arrow_back,
+                              color: HomeTheme.textPrimary),
+                          // Navigator directo, no RouterUtils: esta rama es solo
+                          // Android, donde la página se empuja con Get.to sobre
+                          // el navegador de GetMaterialApp.
+                          onPressed: () => Navigator.of(context).maybePop(),
+                        ),
+                      ),
+                    ),
+                  ],
                 ),
-              ],
-            ),
-          );
+              ));
         }
 
         final tabs = [
@@ -266,7 +289,7 @@ class _DetailPageState extends State<DetailPage> {
             ],
           );
         }
-        return content;
+        return _transicion('listo', content);
       }),
     );
   }
@@ -274,26 +297,32 @@ class _DetailPageState extends State<DetailPage> {
   Widget _buildDesktopDetail(BuildContext context) {
     return Obx(() {
       if (c.error.value.isNotEmpty) {
-        return ColoredBox(
-          color: HomeTheme.bg,
-          child: Center(
-            child: Text(
-              c.error.value,
-              style: const TextStyle(color: HomeTheme.textPrimary),
-            ),
-          ),
-        );
+        return _transicion(
+            'error',
+            ColoredBox(
+              color: HomeTheme.bg,
+              child: Center(
+                child: Text(
+                  c.error.value,
+                  style: const TextStyle(color: HomeTheme.textPrimary),
+                ),
+              ),
+            ));
       }
 
       if (c.isLoading.value) {
-        return const ColoredBox(
-          color: HomeTheme.bg,
-          child: Center(
-            child: fluent.ProgressRing(activeColor: HomeTheme.accentPink),
-          ),
-        );
+        return _transicion(
+            'cargando',
+            const ColoredBox(
+              color: HomeTheme.bg,
+              child: Center(
+                child: fluent.ProgressRing(activeColor: HomeTheme.accentPink),
+              ),
+            ));
       }
-      return Stack(
+      // Nombrado y no devuelto directo: envolver el Stack entero en la llamada
+      // reindentaría sus trescientas y pico de líneas por un cambio de dos.
+      final contenido = Stack(
         children: [
           RepaintBoundary(
             child: Cover(
@@ -624,6 +653,7 @@ class _DetailPageState extends State<DetailPage> {
           ))
         ],
       );
+      return _transicion('listo', contenido);
     });
   }
 
