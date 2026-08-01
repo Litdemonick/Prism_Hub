@@ -387,7 +387,8 @@
     "assets-not-ready": "La versión nueva se está publicando todavía. Cuando estén listos los archivos de todas las plataformas, la actualización aparece sola.",
     "needs-install-permission": "Falta el permiso para instalar apps desconocidas. Habilitalo para PrismHub y tocá actualizar otra vez: la descarga ya está guardada, no se baja de nuevo.",
     "too-old-to-update": "Esta version es demasiado antigua para actualizarse sola. Descarga el instalador desde la pagina de versiones e instalalo a mano una unica vez.",
-    "from-to": "De la {actual} a la {nueva}"
+    "from-to": "De la {actual} a la {nueva}",
+    "notes-not-ready": "La versión nueva se está publicando todavía: faltan las notas de qué trae. Cuando estén, la actualización aparece sola."
   },
   "extension-install-error": "No se pudo instalar la extensión",
   "extension-type": {

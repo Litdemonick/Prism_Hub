@@ -149,6 +149,31 @@ class ApplicationUtils {
     }
   }
 
+  /// ¿Las notas de la versión ya están escritas?
+  ///
+  /// Mismo razonamiento que _releaseCompleto, pero para el texto en vez de los
+  /// archivos. Un release se puede publicar con el cuerpo vacío y editarse
+  /// después: en esa ventana el aviso llegaba igual y aparecía la pantalla que
+  /// TAPA la app entera, con el título de la versión y debajo un hueco. Y como
+  /// el aviso es bloqueante, lo único que quedaba era actualizar a ciegas o
+  /// posponer, sin ninguna forma de saber qué traía.
+  ///
+  /// Faltando las notas no se avisa a nadie y se vuelve a mirar en la próxima
+  /// comprobación, igual que cuando falta un instalador. La actualización no se
+  /// pierde: llega sola apenas el release está entero.
+  ///
+  /// No alcanza con que el cuerpo no sea nulo. Los marcadores que la propia app
+  /// lee —hoy min-update-from— van como comentarios HTML, así que un cuerpo que
+  /// solo tenga eso se ve vacío en pantalla aunque no lo esté. Se miden los
+  /// caracteres que QUEDAN después de sacarlos.
+  static bool _notasPublicadas(dynamic body) {
+    if (body is! String) return false;
+    final visible = body.replaceAll(RegExp(r'<!--[\s\S]*?-->'), '').trim();
+    // Un puñado de caracteres sueltos no son notas: con un título de sección o
+    // una línea a medio escribir, la pantalla se sigue viendo vacía.
+    return visible.length >= 40;
+  }
+
   /// ¿La versión instalada es demasiado vieja para instalarle ESTE release
   /// encima?
   ///
@@ -274,6 +299,11 @@ class ApplicationUtils {
       // los jobs falló. En cualquiera de los dos casos no se avisa.
       if (!_releaseCompleto(res.data['assets'], tagName)) return;
 
+      // Y tampoco se avisa con las notas todavía sin escribir: esta pantalla
+      // tapa la app entera, así que salir sin explicar qué trae la versión deja
+      // al usuario eligiendo a ciegas. Ver _notasPublicadas.
+      if (!_notasPublicadas(res.data['body'])) return;
+
       final asset = Platform.isAndroid
           ? _findAndroidAsset(res.data['assets'])
           : _findAsset(res.data['assets'], tagName);
@@ -360,14 +390,22 @@ class ApplicationUtils {
                 ? _findAndroidAsset(res.data['assets'])
                 : _findAsset(res.data['assets'], tagName))
             : null;
-        if (asset == null) {
+        // Las notas se tratan igual que los archivos: un release se puede
+        // publicar con el cuerpo vacío y editarse después, y ofrecer la
+        // actualización en esa ventana es pedirle al usuario que decida sin
+        // saber qué trae. Ver _notasPublicadas.
+        final notasListas = _notasPublicadas(res.data['body']);
+        if (asset == null || !notasListas) {
           // Acá SÍ se avisa, a diferencia del arranque: el usuario apretó
           // "Comprobar" y dejarlo sin respuesta parecería que el botón no
-          // hace nada.
+          // hace nada. Y se dice QUÉ falta, que no es lo mismo esperar a que
+          // termine de compilar que esperar a que escriban las notas.
           if (showSnackbar && context.mounted) {
             showPlatformSnackbar(
               context: context,
-              content: 'upgrade.assets-not-ready'.i18n,
+              content: asset == null
+                  ? 'upgrade.assets-not-ready'.i18n
+                  : 'upgrade.notes-not-ready'.i18n,
             );
           }
           // El aviso promete que la actualización "aparece sola" — y hasta
@@ -399,23 +437,18 @@ class ApplicationUtils {
                 },
                 child: Text('upgrade.not-now'.i18n),
               ),
+              // Sin la rama de "abrir GitHub": para llegar hasta acá el archivo
+              // de esta plataforma ya tiene que estar publicado — si falta, se
+              // sale bastante más arriba con el aviso de que todavía se está
+              // publicando. Antes se comprobaba igual, y el resultado era una
+              // rama muerta que hacía parecer que el botón podía terminar
+              // llevando al navegador.
               PlatformFilledButton(
                 onPressed: () {
                   RouterUtils.pop();
-                  if (asset != null) {
-                    _downloadAndInstall(context, asset, remoteVersion);
-                  } else {
-                    launchUrl(
-                      Uri.parse(res.data['html_url']),
-                      mode: LaunchMode.externalApplication,
-                    );
-                  }
+                  _downloadAndInstall(context, asset, remoteVersion);
                 },
-                child: Text(
-                  asset != null
-                      ? 'upgrade.download-install'.i18n
-                      : 'upgrade.download'.i18n,
-                ),
+                child: Text('upgrade.download-install'.i18n),
               )
             ],
           );
@@ -440,23 +473,14 @@ class ApplicationUtils {
               },
               child: Text('upgrade.not-now'.i18n),
             ),
+            // Ver el comentario del botón equivalente en la rama de Android:
+            // acá el archivo ya está publicado sí o sí.
             PlatformFilledButton(
               onPressed: () {
                 RouterUtils.pop();
-                if (asset != null) {
-                  _downloadAndInstall(context, asset, remoteVersion);
-                } else {
-                  launchUrl(
-                    Uri.parse(res.data['html_url']),
-                    mode: LaunchMode.externalApplication,
-                  );
-                }
+                _downloadAndInstall(context, asset, remoteVersion);
               },
-              child: Text(
-                asset != null
-                    ? 'upgrade.download-install'.i18n
-                    : 'upgrade.download'.i18n,
-              ),
+              child: Text('upgrade.download-install'.i18n),
             )
           ],
         );
