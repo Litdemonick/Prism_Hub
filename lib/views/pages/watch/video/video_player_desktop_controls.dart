@@ -1180,7 +1180,15 @@ class _VolumeState extends State<_Volume> {
                             height: 30,
                             child: Slider(
                               value: _volume.value,
-                              max: 100,
+                              // Pasa de 100 —el volumen original— para poder
+                              // levantar material grabado bajo. Ver
+                              // VideoPlayerController.volumenMaximo.
+                              max: VideoPlayerController.volumenMaximo,
+                              // El 100 marcado: es el punto donde deja de
+                              // subirse el volumen y empieza a amplificarse,
+                              // asi que conviene verlo.
+                              divisions: VideoPlayerController.volumenMaximo ~/ 5,
+                              label: '${_volume.value.round()}%',
                               onChanged: _onVolumeChanged,
                             ),
                           ),

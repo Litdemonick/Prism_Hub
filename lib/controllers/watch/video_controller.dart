@@ -85,6 +85,13 @@ class VideoPlayerController extends GetxController with WidgetsBindingObserver {
   }
 
   // 播放器
+  // Techo del volumen del reproductor, en por ciento del original.
+  //
+  // 100 es "como se grabó". Por encima de eso se amplifica, que es lo que hace
+  // falta con material grabado bajo. Ver donde se aplica (volume-max) para por
+  // qué justo 200.
+  static const double volumenMaximo = 200;
+
   final player = Player();
   late final videoController = VideoController(player);
 
@@ -144,13 +151,15 @@ class VideoPlayerController extends GetxController with WidgetsBindingObserver {
                       .toInt());
       _seekFromShortcut(rate);
     },
+    // El tope era 100, o sea el volumen original: con una pista grabada baja no
+    // quedaba nada por hacer. Ahora llega hasta volumenMaximo.
     LogicalKeyboardKey.arrowUp: () {
       final volume = player.state.volume + 5.0;
-      player.setVolume(volume.clamp(0.0, 100.0));
+      player.setVolume(volume.clamp(0.0, volumenMaximo));
     },
     LogicalKeyboardKey.arrowDown: () {
       final volume = player.state.volume - 5.0;
-      player.setVolume(volume.clamp(0.0, 100.0));
+      player.setVolume(volume.clamp(0.0, volumenMaximo));
     },
   };
 
@@ -420,6 +429,26 @@ class VideoPlayerController extends GetxController with WidgetsBindingObserver {
       // Muchos m3u8 de hosts (voe, netu, etc.) referencian segmentos en otro
       // dominio; mpv los marca "unsafe" y se niega a cargarlos.
       await np.setProperty('load-unsafe-playlists', 'yes');
+
+      // Subir el volumen MÁS ALLÁ del original.
+      //
+      // Hay material que viene grabado muy bajo —doblajes caseros, capturas de
+      // stream— y con el volumen del sistema al máximo igual no se escucha. El
+      // tope de mpv es 100 (o sea, el original), así que no había nada que
+      // hacer desde la app.
+      //
+      // Dos cosas distintas y las dos hacen falta:
+      //
+      //  - volume-max sube el techo. Se queda en 200: hasta ahí el aumento es
+      //    aprovechable, y más arriba lo único que se gana es recortar los
+      //    picos, que es exactamente "dañar el audio".
+      //  - replaygain-clip evita justamente ese recorte cuando la pista ya
+      //    venía fuerte y se la empuja igual.
+      //
+      // Esto solo levanta el techo; el volumen sigue donde estaba hasta que
+      // alguien lo suba a mano.
+      await np.setProperty('volume-max', '$volumenMaximo');
+      await np.setProperty('replaygain-clip', 'no');
       // UA de navegador: CDNs de anime (luluvdo, streamwish, etc.) bloquean
       // el UA por defecto de mpv ("Lavf/xx.xx"). Usar el mismo UA que el app.
       final ua = PrismHubStorage.getUASetting();

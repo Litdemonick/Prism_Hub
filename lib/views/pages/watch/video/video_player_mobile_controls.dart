@@ -32,6 +32,16 @@ class _VideoPlayerMobileControlsState extends State<VideoPlayerMobileControls> {
   final _subtitleViewKey = GlobalKey<SubtitleViewState>();
   bool _showControls = true;
   double _currentVolume = 0;
+  // Amplificación por ENCIMA del volumen del sistema, en por ciento.
+  //
+  // Deslizar hacia arriba sube el volumen del teléfono, y ahí se terminaba:
+  // con el sistema al máximo y una pista grabada baja no quedaba nada por
+  // hacer. Pasado ese punto, seguir deslizando amplifica desde el reproductor
+  // —que es lo único que puede dar más de lo que se grabó—, hasta el techo de
+  // VideoPlayerController.volumenMaximo.
+  //
+  // 100 = sin amplificar, o sea el comportamiento de siempre.
+  double _boost = 100;
   bool _isAdjusting = false;
   bool _isLongPress = false;
   // Velocidad del adelantado con el dedo apoyado.
@@ -366,8 +376,15 @@ class _VideoPlayerMobileControlsState extends State<VideoPlayerMobileControls> {
                             children: [
                               const Icon(Icons.volume_up),
                               const SizedBox(width: 5),
+                              // Con amplificación se muestra ESA, que es lo
+                              // que está cambiando el gesto en ese tramo. Sin
+                              // el signo, 150 y 100 se leerían igual de
+                              // "normales" y no se entendería que una está
+                              // amplificada.
                               Text(
-                                (_currentVolume * 100).toStringAsFixed(0),
+                                _boost > 100
+                                    ? '+${(_boost - 100).toStringAsFixed(0)}%'
+                                    : (_currentVolume * 100).toStringAsFixed(0),
                               ),
                             ],
                           ),
@@ -491,8 +508,26 @@ class _VideoPlayerMobileControlsState extends State<VideoPlayerMobileControls> {
                   onVerticalDragUpdate: (details) {
                     if (_activePointers > 1) return;
                     final add = details.delta.dy / 500;
-                    _currentVolume = (_currentVolume - add).clamp(0, 1);
-                    VolumeController().setVolume(_currentVolume);
+                    // Dos tramos con un solo gesto: primero el volumen del
+                    // teléfono y, una vez al tope, la amplificación del
+                    // reproductor. Al bajar se recorren al revés — se baja
+                    // primero la amplificación y recién después el sistema,
+                    // porque si no bajar el volumen no haría nada audible
+                    // hasta soltar todo el aumento.
+                    if (add < 0 && _currentVolume >= 1) {
+                      // Subiendo con el sistema ya al máximo: amplificar.
+                      _boost = (_boost - add * 200)
+                          .clamp(100.0, VideoPlayerController.volumenMaximo);
+                      _c.player.setVolume(_boost);
+                    } else if (add > 0 && _boost > 100) {
+                      // Bajando y todavía amplificado: soltar el aumento.
+                      _boost = (_boost - add * 200)
+                          .clamp(100.0, VideoPlayerController.volumenMaximo);
+                      _c.player.setVolume(_boost);
+                    } else {
+                      _currentVolume = (_currentVolume - add).clamp(0, 1);
+                      VolumeController().setVolume(_currentVolume);
+                    }
                     _isAdjusting = true;
                     setState(() {});
                   },
