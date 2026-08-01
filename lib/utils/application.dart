@@ -185,7 +185,11 @@ class ApplicationUtils {
     r'^\s*(\*\*)?(Changelog|Full Changelog|Changelog completo)(\*\*)?\s*:?.*$'
     r'|^\s*https?://\S+/compare/\S+$'
     r'|^\s*\|.*\|\s*$'
-    r'|^\s*#{1,6}\s*(📦\s*)?Descargas?\s*$',
+    r'|^\s*#{1,6}\s*(📦\s*)?Descargas?\s*$'
+    // El encabezado con el nombre y la versión: sale igual en todos los
+    // releases y no cuenta como haber escrito nada. Se descuenta para poder
+    // bajar el umbral sin que un título suelto se haga pasar por notas.
+    r'|^\s*#{0,6}\s*\*{0,2}PrismHub\s*v?\d[\d.]*\*{0,2}\s*(—.*)?$',
     multiLine: true,
     caseSensitive: false,
   );
@@ -198,9 +202,20 @@ class ApplicationUtils {
         // descargas, no cuenta como haber escrito las notas.
         .replaceAll(_lineasAutomaticas, '')
         .trim();
-    // Un puñado de caracteres sueltos no son notas: con un título de sección o
-    // una línea a medio escribir, la pantalla se sigue viendo vacía.
-    return visible.length >= 40;
+    // Bajo a propósito: lo que llega hasta acá ya es texto escrito a mano,
+    // porque arriba se descontó todo lo que sale solo —el changelog de GitHub,
+    // la tabla de descargas, el encabezado con la versión y los marcadores que
+    // lee la app—.
+    //
+    // Estaba en 40 y eso dejaba afuera notas cortas pero legítimas: un release
+    // que arregla una sola cosa se describe en menos. Ese release no le habría
+    // avisado a nadie, nunca — y sin ningún error, simplemente callado, que es
+    // la peor forma de fallar.
+    //
+    // 15 alcanza para una frase de verdad y sigue descartando lo que queda
+    // cuando alguien publicó sin escribir: un signo suelto, dos palabras a
+    // medio tipear.
+    return visible.length >= 15;
   }
 
   /// ¿La versión instalada es demasiado vieja para instalarle ESTE release
