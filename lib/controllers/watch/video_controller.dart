@@ -1508,15 +1508,20 @@ class VideoPlayerController extends GetxController with WidgetsBindingObserver {
     if (_routeClosing) return;
     _routeClosing = true;
 
-    // El apagado arranca ACÁ, lo primero de todo.
+    // Callar el audio: lo primero de todo, y SOLO eso.
     //
-    // Estaba más abajo, después de salir de pantalla completa y de restaurar
-    // las barras del sistema — dos operaciones que van al sistema operativo y
-    // vuelven, y que se esperaban una tras otra. Recién después se empezaba a
-    // callar el audio, así que a los segundos que ya costaba el apagado se le
-    // sumaban esos. Lanzarlo primero no cambia nada de lo que hacen las otras
-    // dos, que siguen igual: solo dejan de ir adelante en la fila.
-    final shutdown = shutdownPlayback();
+    // Antes acá se lanzaba el apagado entero. Eso callaba rápido, pero dejaba
+    // la captura del fotograma corriendo AL MISMO TIEMPO que la salida de
+    // pantalla completa — y esa salida redimensiona la superficie de video
+    // justo mientras screenshot() espera un cuadro. Una carrera que a veces se
+    // pierde, y cuando se pierde la miniatura de "Continuar viendo" se queda
+    // con la del cierre anterior.
+    //
+    // Bajar el volumen es instantáneo y no toca el video, así que da lo que se
+    // buscaba —que deje de sonar apenas se toca salir— sin competir con nada.
+    // El apagado, con la captura adentro, va más abajo, cuando la ventana ya
+    // dejó de moverse.
+    unawaited(player.setVolume(0).catchError((_) {}));
 
     if (isFullScreen.value) {
       await WindowManager.instance.setFullScreen(false);
@@ -1527,6 +1532,11 @@ class VideoPlayerController extends GetxController with WidgetsBindingObserver {
     // llegue a tiempo. Es idempotente, onClose lo vuelve a llamar sin
     // problema.
     await restoreSystemUiOnExit();
+
+    // Recién ahora el apagado completo. La ventana ya terminó de acomodarse,
+    // así que la captura del fotograma no compite con un redimensionado.
+    final shutdown = shutdownPlayback();
+
     var popped = false;
     // Prioridad 1: el context DEL PROPIO widget de controles (pasado por el
     // llamador). WatchPage/VideoPlayer se empuja con
