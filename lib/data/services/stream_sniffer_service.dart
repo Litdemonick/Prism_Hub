@@ -5,6 +5,7 @@ import 'dart:convert';
 import 'package:flutter_inappwebview/flutter_inappwebview.dart';
 import 'package:prismhub/utils/log.dart';
 import 'package:prismhub/utils/prismhub_storage.dart';
+import 'package:prismhub/views/pages/watch/video/webview_player_page.dart' show ensureWebViewEnvironment;
 
 /// Stream de video capturado por el sniffer: URL directa + Referer necesario.
 class SniffedStream {
@@ -270,6 +271,16 @@ class StreamSnifferService {
 
     try {
       webView = HeadlessInAppWebView(
+        // Entorno COMPARTIDO, con la carpeta de datos en Documentos.
+        //
+        // Sin esto, WebView2 usa su carpeta por defecto: una junto al propio
+        // ejecutable ("PrismHub.exe.WebView2\\EBWebView"). Instalando con el
+        // instalador, eso cae dentro de Program Files, donde un usuario normal
+        // no puede escribir — y Edge levanta un cartel de "no hemos podido
+        // crear el directorio de datos" y la reproduccion falla sin explicar
+        // nada (reportado en vivo). Solo se notaba con la version instalada,
+        // no corriendo la portable desde una carpeta escribible.
+        webViewEnvironment: await ensureWebViewEnvironment(),
         initialUrlRequest: URLRequest(
           url: WebUri(embedUrl),
           headers: referer != null ? {'Referer': referer} : null,
@@ -373,6 +384,8 @@ class StreamSnifferService {
 
     try {
       webView = HeadlessInAppWebView(
+        // Ver el comentario del otro HeadlessInAppWebView de este archivo.
+        webViewEnvironment: await ensureWebViewEnvironment(),
         initialUrlRequest: URLRequest(url: WebUri(pageUrl)),
         initialSettings: InAppWebViewSettings(
           userAgent: PrismHubStorage.getUASetting(),
