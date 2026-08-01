@@ -490,6 +490,8 @@ class SettingKey {
   static const keyJ = 'KeyJ';
   static const arrowLeft = 'Arrowleft';
   static const arrowRight = 'Arrowright';
+  /// Si ya se mostro el tutorial de gestos del reproductor.
+  static const tutorialReproductorVisto = 'TutorialReproductorVisto';
   static const readingMode = 'ReadingMode';
   static const aniListToken = 'AniListToken';
   static const aniListUserId = 'AniListUserId';

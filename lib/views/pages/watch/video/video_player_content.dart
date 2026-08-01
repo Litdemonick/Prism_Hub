@@ -6,6 +6,7 @@ import 'package:media_kit_video/media_kit_video.dart';
 import 'package:prismhub/controllers/watch/video_controller.dart';
 import 'package:prismhub/views/pages/watch/video/video_player_desktop_controls.dart';
 import 'package:prismhub/views/pages/watch/video/video_player_mobile_controls.dart';
+import 'package:prismhub/views/widgets/watch/tutorial_reproductor.dart';
 
 class VideoPlayerConten extends StatefulWidget {
   const VideoPlayerConten({
@@ -30,6 +31,13 @@ class _VideoPlayerContenState extends State<VideoPlayerConten> {
   // funcionaría — Flutter lo trataría como una identidad nueva cada vez.
   final _controlsKey = GlobalKey();
 
+  /// Si toca mostrar el tutorial de gestos en esta sesion del reproductor.
+  ///
+  /// Se decide UNA vez, al montar, y no en cada build: leerlo en build haria
+  /// que el tutorial reapareciera solo con que algo reconstruya la pantalla, y
+  /// que desapareciera a mitad de un paso.
+  late bool _mostrarTutorial = !TutorialReproductor.yaVisto;
+
   @override
   Widget build(BuildContext context) {
     final c = widget.controller;
@@ -50,26 +58,60 @@ class _VideoPlayerContenState extends State<VideoPlayerConten> {
       // restart) mientras el WebView de respaldo está abierto encima. Sacar
       // Video del árbol por completo mientras tanto libera esa textura.
       if (c.isWebViewActive.value || !c.isVideoSurfaceMounted.value) {
-        return Container(color: Colors.black, child: controls());
+        return _conTutorial(
+            c, Container(color: Colors.black, child: controls()));
       }
-      return Video(
-        controller: c.videoController,
-        // Con el modo VR puesto, la imagen LLENA la pantalla.
-        //
-        // Al recortar un VR a la mitad izquierda queda un cuadro con otra
-        // proporción, y ajustándolo entero (lo de siempre) sobran barras
-        // negras a los costados o arriba: en el teléfono se veía una franja
-        // chica en el medio de una pantalla casi toda negra.
-        //
-        // Solo en modo VR. Para un vídeo normal recortar sería peor —se
-        // perdería parte de la imagen sin que nadie lo haya pedido— así que
-        // ahí se sigue mostrando entero como siempre.
-        fit: c.vrUnaPantalla.value ? BoxFit.cover : BoxFit.contain,
-        subtitleViewConfiguration: const SubtitleViewConfiguration(
-          visible: false,
+      return _conTutorial(
+        c,
+        Video(
+          controller: c.videoController,
+          // Con el modo VR puesto, la imagen LLENA la pantalla.
+          //
+          // Al recortar un VR a la mitad izquierda queda un cuadro con otra
+          // proporción, y ajustándolo entero (lo de siempre) sobran barras
+          // negras a los costados o arriba: en el teléfono se veía una franja
+          // chica en el medio de una pantalla casi toda negra.
+          //
+          // Solo en modo VR. Para un vídeo normal recortar sería peor —se
+          // perdería parte de la imagen sin que nadie lo haya pedido— así que
+          // ahí se sigue mostrando entero como siempre.
+          fit: c.vrUnaPantalla.value ? BoxFit.cover : BoxFit.contain,
+          subtitleViewConfiguration: const SubtitleViewConfiguration(
+            visible: false,
+          ),
+          controls: (state) => controls(),
         ),
-        controls: (state) => controls(),
       );
     });
+  }
+
+  /// Pone el tutorial ENCIMA del reproductor, sin cambiar nada de abajo.
+  ///
+  /// Va como una capa aparte y no dentro de los controles a proposito: asi el
+  /// reproductor se arma exactamente igual con tutorial o sin el, y quitarlo no
+  /// puede romper nada de lo que ya andaba.
+  ///
+  /// Solo tapa; no pausa ni toca el video. Quien abre un episodio quiere verlo,
+  /// y el tutorial se cierra en dos toques.
+  Widget _conTutorial(VideoPlayerController c, Widget hijo) {
+    if (!_mostrarTutorial) return hijo;
+    return Stack(
+      children: [
+        hijo,
+        Positioned.fill(
+          child: TutorialReproductor(
+            // Los VR vienen con las dos vistas lado a lado, o sea el doble de
+            // ancho que de alto para una proporcion que normalmente ronda 16:9.
+            // Con eso alcanza para saber si corresponde explicar lo del VR, sin
+            // pedirle nada al sitio.
+            esVr:
+                (c.player.state.width ?? 0) >= (c.player.state.height ?? 1) * 3,
+            onCerrar: () {
+              if (mounted) setState(() => _mostrarTutorial = false);
+            },
+          ),
+        ),
+      ],
+    );
   }
 }
