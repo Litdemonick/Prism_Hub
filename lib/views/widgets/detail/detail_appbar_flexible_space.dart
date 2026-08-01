@@ -8,6 +8,7 @@ import 'package:prismhub/views/widgets/detail/detail_share_button.dart';
 import 'package:prismhub/views/widgets/cache_network_image.dart';
 import 'package:prismhub/views/widgets/cover.dart';
 import 'package:prismhub/views/widgets/home/home_theme.dart';
+import 'package:prismhub/views/widgets/boton_pulsable.dart';
 
 class DetailAppbarflexibleSpace extends StatefulWidget {
   const DetailAppbarflexibleSpace({
@@ -159,74 +160,99 @@ class _DetailAppbarflexibleSpaceState extends State<DetailAppbarflexibleSpace> {
   }
 
   Widget _buildPortrait() {
-    // Escala proporcional al 400 de diseño original (hoy en vertical
-    // siempre es 400, pero se deja general por si cambia).
-    final scale = widget.height / 400;
-    final coverThumbHeight = (150 * scale).clamp(0.0, 150.0);
+    // Todo el bloque se apoya en el BORDE DE ABAJO y crece hacia arriba, en vez
+    // de colgar cada pieza de una distancia fija.
+    //
+    // Antes el titulo y la fila de botones eran dos Positioned con numeros
+    // calculados a mano sobre un alto de 400 (170 y 65, por una escala). Con
+    // eso nada podia crecer: el titulo quedaba clavado a dos lineas con puntos
+    // suspensivos aunque hubiera lugar, y los botones caian donde caian —
+    // apretados contra el texto en unos telefonos y sueltos en otros. Cada
+    // ajuste era volver a tocar esos numeros a ojo.
+    //
+    // Con una columna anclada abajo, cada pieza ocupa lo que necesita y el aire
+    // entre ellas es el mismo en cualquier pantalla. El titulo ahora entra en
+    // tres lineas: es lo primero que uno quiere leer y venia cortado.
+    final coverThumbHeight = (150 * (widget.height / 400)).clamp(0.0, 150.0);
     final coverThumbWidth = coverThumbHeight * (100 / 150);
-    // 170 (antes 105, luego 130): confirmado en vivo que seguía quedando
-    // bajo, con mucho espacio vacío arriba entre la toolbar y la portada —
-    // subido más para centrarla mejor en el hueco libre entre la toolbar
-    // (termina ~104) y el TabBar (empieza en el último tramo del hero).
-    final titleRowBottom = 170 * scale;
-    // 65 (antes 40): quedaban casi pegados contra el TabBar de abajo —
-    // confirmado en vivo, se veían encimados. Más aire.
-    final buttonsRowBottom = 65 * scale;
 
     return Stack(
       children: [
         _background(),
         Positioned(
           left: 20,
-          bottom: titleRowBottom,
           right: 20,
-          child: Row(
+          bottom: 18,
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              if (_needShowCover())
-                _coverThumb(height: coverThumbHeight, width: coverThumbWidth),
-              Expanded(
-                child: Container(
-                  padding: const EdgeInsets.only(left: 20),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        c.isLoading.value ? "" : c.data.value!.title,
-                        softWrap: true,
-                        maxLines: 2,
-                        overflow: TextOverflow.ellipsis,
-                        style: const TextStyle(
-                          fontSize: 26,
-                          fontWeight: FontWeight.w800,
-                          color: HomeTheme.textPrimary,
-                        ),
+              Row(
+                crossAxisAlignment: CrossAxisAlignment.end,
+                children: [
+                  if (_needShowCover())
+                    _coverThumb(
+                        height: coverThumbHeight, width: coverThumbWidth),
+                  Expanded(
+                    child: Padding(
+                      padding: EdgeInsets.only(
+                          left: _needShowCover() ? 16 : 0, bottom: 2),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Text(
+                            c.isLoading.value ? "" : c.data.value!.title,
+                            softWrap: true,
+                            maxLines: 3,
+                            overflow: TextOverflow.ellipsis,
+                            style: const TextStyle(
+                              // 26 era mucho para un titulo largo en un
+                              // telefono: comia dos lineas enteras con pocas
+                              // palabras. 21 deja entrar bastante mas texto sin
+                              // dejar de ser el titulo de la pantalla.
+                              fontSize: 21,
+                              height: 1.2,
+                              fontWeight: FontWeight.w800,
+                              color: HomeTheme.textPrimary,
+                            ),
+                          ),
+                          const SizedBox(height: 8),
+                          DetailExtensionTile(tag: widget.tag),
+                        ],
                       ),
-                      const SizedBox(height: 10),
-                      DetailExtensionTile(tag: widget.tag),
-                    ],
+                    ),
                   ),
-                ),
-              )
-            ],
-          ),
-        ),
-        Positioned(
-          left: 20,
-          right: 20,
-          bottom: buttonsRowBottom,
-          child: Row(
-            children: [
-              // 50/50 recortaba "Continuar Capítulo 30" con "..." — el
-              // texto es bastante más largo que "Favorito", así que le
-              // toca más lugar real en vez de partir el ancho parejo.
-              Expanded(flex: 3, child: DetailContinuePlay(tag: widget.tag)),
-              const SizedBox(width: 12),
-              Expanded(flex: 2, child: DetailFavoriteButton(tag: widget.tag)),
-              const SizedBox(width: 4),
-              // Compartir la obra. Va acá y no en el menú: es una acción que
-              // se busca a propósito, no algo escondido. Compacto porque la
-              // fila ya la ocupan "Continuar" y "Favorito".
-              DetailShareButton(tag: widget.tag, compacto: true),
+                ],
+              ),
+              const SizedBox(height: 18),
+              Row(
+                children: [
+                  // 50/50 recortaba "Continuar Capitulo 30" con "..." — el
+                  // texto es bastante mas largo que "Favorito", asi que le
+                  // toca mas lugar real en vez de partir el ancho parejo.
+                  // BotonPulsable: los botones no daban ninguna señal al
+                  // tocarlos, y en el telefono eso lleva a tocar dos veces.
+                  Expanded(
+                    flex: 3,
+                    child: BotonPulsable(
+                        child: DetailContinuePlay(tag: widget.tag)),
+                  ),
+                  const SizedBox(width: 10),
+                  Expanded(
+                    flex: 2,
+                    child: BotonPulsable(
+                        child: DetailFavoriteButton(tag: widget.tag)),
+                  ),
+                  const SizedBox(width: 2),
+                  // Compartir la obra. Va aca y no en el menu: es una accion que
+                  // se busca a proposito, no algo escondido. Compacto porque la
+                  // fila ya la ocupan "Continuar" y "Favorito".
+                  BotonPulsable(
+                    child: DetailShareButton(tag: widget.tag, compacto: true),
+                  ),
+                ],
+              ),
             ],
           ),
         ),

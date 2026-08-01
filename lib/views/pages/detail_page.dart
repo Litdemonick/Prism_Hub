@@ -21,6 +21,7 @@ import 'package:prismhub/views/widgets/detail/detail_card_tile.dart';
 import 'package:prismhub/views/widgets/detail/detail_tracking_button.dart';
 import 'package:prismhub/views/widgets/home/home_theme.dart';
 import 'package:prismhub/views/widgets/platform_widget.dart';
+import 'package:prismhub/views/widgets/boton_pulsable.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 class DetailPage extends StatefulWidget {
@@ -406,9 +407,15 @@ class _DetailPageState extends State<DetailPage> {
                               Row(
                                 children: [
                                   // 收藏按钮
-                                  DetailFavoriteButton(tag: widget.tag),
+                                  // Ver BotonPulsable: la misma señal al
+                                  // tocar que en el telefono.
+                                  BotonPulsable(
+                                      child: DetailFavoriteButton(
+                                          tag: widget.tag)),
                                   const SizedBox(width: 8),
-                                  DetailShareButton(tag: widget.tag),
+                                  BotonPulsable(
+                                      child:
+                                          DetailShareButton(tag: widget.tag)),
                                   const SizedBox(width: 8),
                                   // Se oculta solo en películas — ver
                                   // DetailFinishedButton.
