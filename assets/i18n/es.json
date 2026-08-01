@@ -378,7 +378,7 @@
     "not-now": "Ahora no",
     "error": "No se pudo verificar si hay actualizaciones, se produjo un error de red",
     "forced-title": "Actualización requerida",
-    "forced-required": "Hay una nueva versión de PrismHub disponible. Debes actualizar para seguir usando la aplicación.",
+    "forced-required": "Tenés la versión {actual} y hay una más nueva. Para seguir usando PrismHub hay que actualizar: las correcciones no llegan de otra forma, y las extensiones pueden dejar de funcionar cuando los sitios cambien.",
     "update-now": "Actualizar ahora",
     "already-updated": "Ya actualicé",
     "downloading": "Descargando actualización...",
@@ -386,7 +386,8 @@
     "still-outdated": "Todavía no se detectó la actualización. Terminá de instalarla y probá de nuevo.",
     "assets-not-ready": "La versión nueva se está publicando todavía. Cuando estén listos los archivos de todas las plataformas, la actualización aparece sola.",
     "needs-install-permission": "Falta el permiso para instalar apps desconocidas. Habilitalo para PrismHub y tocá actualizar otra vez: la descarga ya está guardada, no se baja de nuevo.",
-    "too-old-to-update": "Esta version es demasiado antigua para actualizarse sola. Descarga el instalador desde la pagina de versiones e instalalo a mano una unica vez."
+    "too-old-to-update": "Esta version es demasiado antigua para actualizarse sola. Descarga el instalador desde la pagina de versiones e instalalo a mano una unica vez.",
+    "from-to": "De la {actual} a la {nueva}"
   },
   "extension-install-error": "No se pudo instalar la extensión",
   "extension-type": {

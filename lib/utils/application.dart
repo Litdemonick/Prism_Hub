@@ -837,15 +837,55 @@ class ApplicationUtils {
   }
 
   static Future<void> _runWindowsInstaller(String installerPath) async {
-    final command =
-        'Start-Process -FilePath ${_psQuote(installerPath)} -Verb RunAs';
-    await Process.run('powershell', [
-      '-NoProfile',
-      '-ExecutionPolicy',
-      'Bypass',
-      '-Command',
-      command,
-    ]);
+    // El instalador arranca DESPUES de que este proceso se haya ido.
+    //
+    // Antes se lanzaba de inmediato y recien despues se llamaba a exit(0). El
+    // instalador usa el Restart Manager para detectar la app abierta, y ese
+    // escaneo ocurria mientras PrismHub todavia estaba vivo: aparecia la
+    // pantalla de "hay que cerrar estas aplicaciones" y quedaba en manos del
+    // usuario aceptar. Si la cerraba mal, o el proceso quedaba a medio salir,
+    // la actualizacion podia escribir sobre archivos en uso.
+    //
+    // Con la espera, cuando el instalador mira ya no hay nada corriendo y hace
+    // su trabajo sin preguntar nada.
+    //
+    // El comando va en un archivo .ps1 y no en -Command: encadenar la espera y
+    // el Start-Process en una sola linea obliga a anidar comillas dentro de
+    // comillas, y basta con que la ruta de instalacion tenga un espacio o un
+    // apostrofo para que se rompa de formas dificiles de ver.
+    final script = File(
+      '${Directory.systemTemp.path}${Platform.pathSeparator}'
+      'prismhub-update-${DateTime.now().millisecondsSinceEpoch}.ps1',
+    );
+    await script.writeAsString(
+      // 3 segundos: de sobra para que el proceso muera, y poco como para que
+      // no parezca que el boton no hizo nada.
+      'Start-Sleep -Seconds 3\n'
+      'Start-Process -FilePath ${_psQuote(installerPath)} -Verb RunAs\n'
+      // El script se borra solo: es temporal y no tiene por que quedar.
+      'Remove-Item -LiteralPath ${_psQuote(script.path)} -Force '
+      '-ErrorAction SilentlyContinue\n',
+    );
+
+    // Sin await: este powershell tiene que SOBREVIVIR al exit(0) de abajo. Con
+    // Process.run se esperaria a que termine, y lo que hace es justamente
+    // esperar a que nos vayamos.
+    unawaited(Process.start(
+      'powershell',
+      [
+        '-NoProfile',
+        '-ExecutionPolicy',
+        'Bypass',
+        '-WindowStyle',
+        'Hidden',
+        '-File',
+        script.path,
+      ],
+      mode: ProcessStartMode.detached,
+    ));
+
+    // Un respiro para que el proceso hijo quede lanzado antes de irnos.
+    await Future<void>.delayed(const Duration(milliseconds: 300));
     exit(0);
   }
 
@@ -1249,7 +1289,13 @@ class _ForcedUpdatePageState extends State<_ForcedUpdatePage> {
                                   crossAxisAlignment: CrossAxisAlignment.start,
                                   children: [
                                     Text(
-                                      'upgrade.forced-required'.i18n,
+                                      FlutterI18n.translate(
+                                        context,
+                                        'upgrade.forced-required',
+                                        translationParams: {
+                                          'actual': packageInfo.version
+                                        },
+                                      ),
                                       style: const TextStyle(
                                           color: HomeTheme.textPrimary),
                                     ),
@@ -1366,7 +1412,13 @@ class _ForcedUpdatePageState extends State<_ForcedUpdatePage> {
                               ),
                               const SizedBox(height: 8),
                               Text(
-                                'upgrade.forced-required'.i18n,
+                                FlutterI18n.translate(
+                                        context,
+                                        'upgrade.forced-required',
+                                        translationParams: {
+                                          'actual': packageInfo.version
+                                        },
+                                      ),
                                 style: const TextStyle(
                                     color: HomeTheme.textPrimary),
                               ),
