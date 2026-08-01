@@ -308,9 +308,15 @@ class _DetailAppbarflexibleSpaceState extends State<DetailAppbarflexibleSpace> {
                 child: Text(
                   c.isLoading.value ? "" : c.data.value!.title,
                   softWrap: true,
-                  maxLines: 1,
+                  // Dos lineas: en horizontal el titulo comparte fila con los
+                  // botones y con una sola se cortaba casi siempre. El ancho
+                  // que le faltaba sale de hacer compactos Favorito y
+                  // Compartir, que decian con palabras lo que su icono ya
+                  // dice.
+                  maxLines: 2,
                   overflow: TextOverflow.ellipsis,
                   style: const TextStyle(
+                    height: 1.15,
                     fontSize: 16,
                     fontWeight: FontWeight.w800,
                     color: HomeTheme.textPrimary,
@@ -323,18 +329,21 @@ class _DetailAppbarflexibleSpaceState extends State<DetailAppbarflexibleSpace> {
               // que mostrar. Hay ancho real de sobra en horizontal (se ve
               // el hueco vacío entre el título corto y los botones), así
               // que ensancharlos no le quita lugar a nada.
+              // Este SI conserva su texto: dice en que capitulo se quedo,
+              // que es informacion y no una etiqueta.
               SizedBox(
-                width: 260,
-                child: DetailContinuePlay(tag: widget.tag),
+                width: 230,
+                child: BotonPulsable(
+                  child: DetailContinuePlay(tag: widget.tag),
+                ),
               ),
               const SizedBox(width: 10),
-              SizedBox(
-                width: 140,
-                child: DetailFavoriteButton(tag: widget.tag),
+              // Compactos los dos: en esta fila cada punto de ancho que no
+              // usan es ancho que gana el titulo.
+              BotonPulsable(
+                child: DetailFavoriteButton(tag: widget.tag, compacto: true),
               ),
-              // Faltaba en el diseño horizontal: estaba solo en el vertical.
-              Padding(
-                padding: const EdgeInsets.only(top: 8),
+              BotonPulsable(
                 child: DetailShareButton(tag: widget.tag, compacto: true),
               ),
             ],

@@ -10,8 +10,16 @@ class DetailFavoriteButton extends StatefulWidget {
   const DetailFavoriteButton({
     super.key,
     this.tag,
+    this.compacto = false,
   });
   final String? tag;
+
+  /// Solo el icono, sin la palabra "Favorito".
+  ///
+  /// En horizontal el titulo comparte fila con los botones, y este ocupaba 140
+  /// puntos para decir algo que el corazon ya dice. Ese ancho es justo el que
+  /// le faltaba al titulo para no cortarse.
+  final bool compacto;
 
   @override
   fluent.State<DetailFavoriteButton> createState() =>
@@ -25,6 +33,20 @@ class _DetailFavoriteButtonState extends State<DetailFavoriteButton> {
     return Obx(
       () {
         final isFavorite = c.isFavorite.value;
+        if (widget.compacto) {
+          return IconButton(
+            tooltip: isFavorite
+                ? 'detail.favorited'.i18n
+                : 'detail.favorite'.i18n,
+            icon: Icon(
+              isFavorite ? Icons.favorite : Icons.favorite_border,
+              color: isFavorite ? Theme.of(context).colorScheme.primary : null,
+            ),
+            onPressed: () async {
+              await c.toggleFavorite(context);
+            },
+          );
+        }
         return OutlinedButton.icon(
           icon: Icon(isFavorite ? Icons.favorite : Icons.favorite_border),
           label: Text(

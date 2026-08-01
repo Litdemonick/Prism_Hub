@@ -664,6 +664,27 @@ class _VideoPlayerDesktopControlsState
                         return GestureDetector(
                           behavior: HitTestBehavior.opaque,
                           onTap: () => _c.playOrPause(),
+                          // Arrastrar con el boton apretado mueve la camara del
+                          // VR. Un clic suelto sigue pausando como siempre:
+                          // GestureDetector distingue solo un toque de un
+                          // arrastre, asi que los dos gestos conviven sin
+                          // pisarse.
+                          //
+                          // Solo hace algo con el modo VR puesto; sin el,
+                          // arrastrar sobre el video no hacia nada y sigue sin
+                          // hacerlo.
+                          //
+                          // El desplazamiento va en fraccion del ancho de la
+                          // ventana, asi el recorrido se siente igual en una
+                          // pantalla chica que en uno grande. Negativo porque
+                          // arrastrar hacia la izquierda mueve la vista hacia
+                          // la derecha, como al empujar una foto.
+                          onHorizontalDragUpdate: (d) {
+                            if (!_c.vrUnaPantalla.value) return;
+                            final ancho = MediaQuery.of(context).size.width;
+                            if (ancho <= 0) return;
+                            _c.moverVr(-d.delta.dx / ancho);
+                          },
                           child: content,
                         );
                       }),

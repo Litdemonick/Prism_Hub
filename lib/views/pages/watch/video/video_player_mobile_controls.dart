@@ -521,6 +521,25 @@ class _VideoPlayerMobileControlsState extends State<VideoPlayerMobileControls> {
                   // esto, un pellizco (que no debe hacer nada, no hay zoom por
                   // pellizco) igual subía/bajaba el volumen con el movimiento
                   // de uno de los 2 dedos.
+                  // Arrastrar de lado mueve la camara del VR.
+                  //
+                  // No pisa nada de lo que ya habia: el vertical es el volumen
+                  // y el toque suelto pausa. Este gesto solo existe con el modo
+                  // VR puesto; sin el, arrastrar de lado no hacia nada y sigue
+                  // sin hacerlo.
+                  //
+                  // El desplazamiento va en fraccion del ancho de la pantalla,
+                  // asi el recorrido se siente igual en un telefono chico que
+                  // en una tablet. Negativo porque arrastrar hacia la izquierda
+                  // tiene que mover la vista hacia la derecha, como al empujar
+                  // una foto.
+                  onHorizontalDragUpdate: (details) {
+                    if (_activePointers > 1) return;
+                    if (!_c.vrUnaPantalla.value) return;
+                    final ancho = MediaQuery.of(context).size.width;
+                    if (ancho <= 0) return;
+                    _c.moverVr(-details.delta.dx / ancho);
+                  },
                   onVerticalDragUpdate: (details) {
                     if (_activePointers > 1) return;
                     final add = details.delta.dy / 500;
