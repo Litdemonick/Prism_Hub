@@ -2868,6 +2868,11 @@ class VideoPlayerController extends GetxController with WidgetsBindingObserver {
     final headers = watchData!.headers;
     CastRelayServer.ultimoError = null;
     _fallaDeCastAvisada = null;
+    // Cuenta limpia para el vigilante de estado: los fallos y el "ya lo vi
+    // reproducir" de una transmision anterior no valen para esta.
+    _fallosDeCastSeguidos = 0;
+    _vioReproduciendoEnCast = false;
+    _consultandoCast = false;
     // El renderer DLNA pide la URL con SU propio cliente HTTP — no hay
     // forma de decirle que mande el Referer/User-Agent que la fuente
     // exige. Sin esto, cualquier fuente con headers obligatorios se veía
@@ -3049,12 +3054,32 @@ class VideoPlayerController extends GetxController with WidgetsBindingObserver {
     }
   }
 
+  // Consultas al aparato que ya estan en vuelo, fallos seguidos, y si alguna
+  // vez llego a reproducir. Ver _getDLNAStatus.
+  bool _consultandoCast = false;
+  int _fallosDeCastSeguidos = 0;
+  bool _vioReproduciendoEnCast = false;
+
+  /// Cuantas consultas seguidas pueden fallar antes de dar la transmision por
+  /// perdida. Se consulta cada segundo, asi que son ~5 segundos de silencio:
+  /// suficiente para aguantar un bache de red y poco para que se note.
+  static const _fallosParaDarPorPerdido = 5;
+
   // 获取 DLNA 播放状态
   _getDLNAStatus() async {
     final device = dlnaDevice.value;
     if (device == null) {
       return;
     }
+    // Una consulta por vez.
+    //
+    // El timer dispara cada segundo y NO espera a que esta funcion termine. Con
+    // el televisor apagado, cada consulta se queda colgada hasta que la red se
+    // rinda —decenas de segundos— y mientras tanto arrancaba otra cada segundo:
+    // se apilaban conexiones muertas de a montones, justo cuando el aparato ya
+    // no estaba para contestar ninguna.
+    if (_consultandoCast) return;
+    _consultandoCast = true;
     // Este método corre desde un Timer.periodic de 1s mientras dure el cast
     // (ver connectDLNADevice) — sin try/catch, un TV desconectado/
     // inalcanzable o un formato de posición inesperado (firmware distinto)
@@ -3070,9 +3095,33 @@ class VideoPlayerController extends GetxController with WidgetsBindingObserver {
       sendMessage(Message(Text(falla), time: const Duration(seconds: 6)));
     }
     try {
-      final transportInfo = await device.getTransportInfo();
-      isPlaying.value = transportInfo.contains("PLAYING");
-      final dlnaPosition = await device.position();
+      final transportInfo = await device
+          .getTransportInfo()
+          .timeout(const Duration(seconds: 4));
+      // Contesto: lo que hubiera pasado antes fue un bache y ya paso.
+      _fallosDeCastSeguidos = 0;
+      final reproduciendo = transportInfo.contains('PLAYING');
+      isPlaying.value = reproduciendo;
+      if (reproduciendo) _vioReproduciendoEnCast = true;
+
+      // Lo pararon DESDE el televisor (con su control remoto, o porque
+      // termino). Se distingue de una pausa: pausar informa PAUSED_PLAYBACK,
+      // parar informa STOPPED o que ya no hay nada cargado.
+      //
+      // Antes esto se leia como "no esta reproduciendo" a secas, asi que la
+      // pantalla decia "En pausa, toca para seguir" y tocar no hacia nada:
+      // se le pedia reanudar a un aparato que ya no tenia el video cargado.
+      final parado = transportInfo.contains('STOPPED') ||
+          transportInfo.contains('NO_MEDIA_PRESENT');
+      if (parado && _vioReproduciendoEnCast) {
+        logger.info('La transmision se corto desde el aparato');
+        sendMessage(Message(Text('video.cast-stopped-device'.i18n)));
+        await disconnectDLNADevice();
+        return;
+      }
+
+      final dlnaPosition =
+          await device.position().timeout(const Duration(seconds: 4));
       final positionParser = PositionParser(dlnaPosition);
       final absTimeArr = positionParser.AbsTime.split(":");
       if (absTimeArr.length < 3) return;
@@ -3084,7 +3133,25 @@ class VideoPlayerController extends GetxController with WidgetsBindingObserver {
       position.value = absTime;
       duration.value = Duration(seconds: positionParser.TrackDurationInt);
     } catch (e) {
-      logger.warning('_getDLNAStatus falló: $e');
+      // Se apago, se quedo sin red, o se salio de la app del televisor.
+      //
+      // Antes esto solo dejaba una linea en el registro, una vez por segundo y
+      // para siempre: la app seguia diciendo "Reproduciendo en <aparato>" sobre
+      // una pantalla negra, sin ninguna señal de que ya no habia nadie del otro
+      // lado. Se aguantan unos segundos por si es un bache, y si no vuelve se
+      // da por perdida y se retoma aca donde iba.
+      _fallosDeCastSeguidos++;
+      logger.warning('_getDLNAStatus falló '
+          '($_fallosDeCastSeguidos/$_fallosParaDarPorPerdido): $e');
+      if (_fallosDeCastSeguidos >= _fallosParaDarPorPerdido) {
+        sendMessage(Message(Text('video.cast-lost'.i18n),
+            time: const Duration(seconds: 5)));
+        await disconnectDLNADevice();
+      }
+    } finally {
+      // Siempre, pase lo que pase: si quedara en true, no se volveria a
+      // consultar nunca y el estado del televisor se congelaria.
+      _consultandoCast = false;
     }
   }
 
