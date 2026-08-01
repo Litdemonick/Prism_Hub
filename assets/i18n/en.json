@@ -290,7 +290,8 @@
     "tracker": "Tracking",
     "finished": "Mark as finished",
     "finished-marked": "Series finished",
-    "share": "Share"
+    "share": "Share",
+    "share-copied": "Link copied"
   },
   "video": {
     "episodes": "Episodes",

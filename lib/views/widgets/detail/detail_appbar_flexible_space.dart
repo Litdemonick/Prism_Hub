@@ -222,10 +222,11 @@ class _DetailAppbarflexibleSpaceState extends State<DetailAppbarflexibleSpace> {
               Expanded(flex: 3, child: DetailContinuePlay(tag: widget.tag)),
               const SizedBox(width: 12),
               Expanded(flex: 2, child: DetailFavoriteButton(tag: widget.tag)),
-              const SizedBox(width: 12),
+              const SizedBox(width: 4),
               // Compartir la obra. Va acá y no en el menú: es una acción que
-              // se busca a propósito, no algo escondido.
-              DetailShareButton(tag: widget.tag),
+              // se busca a propósito, no algo escondido. Compacto porque la
+              // fila ya la ocupan "Continuar" y "Favorito".
+              DetailShareButton(tag: widget.tag, compacto: true),
             ],
           ),
         ),
@@ -304,6 +305,11 @@ class _DetailAppbarflexibleSpaceState extends State<DetailAppbarflexibleSpace> {
               SizedBox(
                 width: 140,
                 child: DetailFavoriteButton(tag: widget.tag),
+              ),
+              // Faltaba en el diseño horizontal: estaba solo en el vertical.
+              Padding(
+                padding: const EdgeInsets.only(top: 8),
+                child: DetailShareButton(tag: widget.tag, compacto: true),
               ),
             ],
           ),

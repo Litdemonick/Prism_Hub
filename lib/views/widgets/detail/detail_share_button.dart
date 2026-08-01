@@ -4,6 +4,7 @@ import 'package:get/get.dart';
 import 'package:prismhub/controllers/detail_controller.dart';
 import 'package:prismhub/utils/compartir.dart';
 import 'package:prismhub/utils/i18n.dart';
+import 'package:prismhub/views/widgets/messenger.dart';
 import 'package:prismhub/views/widgets/home/home_theme.dart';
 import 'package:prismhub/views/widgets/platform_widget.dart';
 
@@ -13,9 +14,17 @@ import 'package:prismhub/views/widgets/platform_widget.dart';
 /// Calcado de DetailFavoriteButton para que entre en el mismo lugar sin tocar
 /// el diseño de la ficha en ninguna de las dos plataformas.
 class DetailShareButton extends StatelessWidget {
-  const DetailShareButton({super.key, this.tag});
+  const DetailShareButton({super.key, this.tag, this.compacto = false});
 
   final String? tag;
+
+  /// Solo el icono, sin texto ni ancho propio.
+  ///
+  /// En la cabecera de la ficha de Android este boton comparte fila con
+  /// "Continuar" y "Favorito", que ya se reparten el ancho. Puesto ahi como
+  /// boton normal —con ancho minimo infinito, como el de favorito— desbordaba
+  /// la fila y no se veia en pantalla.
+  final bool compacto;
 
   DetailPageController get _c => Get.find<DetailPageController>(tag: tag);
 
@@ -28,7 +37,7 @@ class DetailShareButton extends StatelessWidget {
   }
 
   Future<void> _compartir(BuildContext context) async {
-    await Compartir.compartirDetalle(
+    final copiado = await Compartir.compartirDetalle(
       titulo: _c.detail?.title ?? '',
       package: _c.package,
       url: _c.url,
@@ -37,9 +46,24 @@ class DetailShareButton extends StatelessWidget {
       adulto: _c.isAdultOption,
       origen: _origen(context),
     );
+    // En escritorio no hay menú de compartir, así que el enlace queda copiado
+    // y hay que decirlo: sin aviso, el botón parece que no hizo nada.
+    if (copiado && context.mounted) {
+      showPlatformSnackbar(
+        context: context,
+        content: 'detail.share-copied'.i18n,
+      );
+    }
   }
 
   Widget _buildAndroid(BuildContext context) {
+    if (compacto) {
+      return IconButton(
+        tooltip: 'detail.share'.i18n,
+        icon: const Icon(Icons.share_outlined),
+        onPressed: () => _compartir(context),
+      );
+    }
     return OutlinedButton.icon(
       icon: const Icon(Icons.share_outlined),
       label: Text('detail.share'.i18n),

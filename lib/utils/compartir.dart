@@ -150,7 +150,9 @@ class Compartir {
   /// [origen] posiciona el menú en iPad y en escritorio, donde el sistema lo
   /// ancla a lo que se tocó en vez de mostrarlo centrado. Sin eso revienta en
   /// iPad y en escritorio aparece en una esquina cualquiera.
-  static Future<void> compartirDetalle({
+  /// Devuelve true si terminó copiando al portapapeles en vez de abrir el menú
+  /// del sistema, para que quien llama pueda avisarlo.
+  static Future<bool> compartirDetalle({
     required String titulo,
     required String package,
     required String url,
@@ -158,10 +160,26 @@ class Compartir {
     Rect? origen,
   }) async {
     final enlace = enlaceDetalle(package: package, url: url, adulto: adulto);
-    await Share.share(
-      '$titulo\n\n$enlace',
-      subject: titulo,
-      sharePositionOrigin: origen,
-    );
+    final texto = titulo.isEmpty ? enlace : '$titulo\n\n$enlace';
+
+    // En escritorio no hay menú de compartir del sistema como en el teléfono:
+    // Windows y Linux no exponen nada equivalente, así que el plugin no tiene
+    // a quién pedírselo y el botón no hacía absolutamente nada. Copiar el
+    // enlace es lo que se puede ofrecer ahí, y es lo que uno termina haciendo
+    // igual para pegarlo en un chat.
+    if (!Platform.isAndroid && !Platform.isIOS) {
+      await Clipboard.setData(ClipboardData(text: texto));
+      return true;
+    }
+
+    try {
+      await Share.share(texto, subject: titulo, sharePositionOrigin: origen);
+      return false;
+    } catch (_) {
+      // Sin ninguna app que sepa recibir el texto, o el plugin no disponible:
+      // mejor dejar el enlace copiado que no hacer nada.
+      await Clipboard.setData(ClipboardData(text: texto));
+      return true;
+    }
   }
 }

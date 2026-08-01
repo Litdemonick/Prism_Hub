@@ -282,7 +282,8 @@
     "tracker": "Siguiendo",
     "finished": "Marcar como finalizada",
     "finished-marked": "Obra finalizada",
-    "share": "Compartir"
+    "share": "Compartir",
+    "share-copied": "Enlace copiado"
   },
   "video": {
     "episodes": "Episodios",
