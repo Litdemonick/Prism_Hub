@@ -44,7 +44,8 @@
     "no": "No",
     "no-result-in-extension": "{extension} no encontró resultados",
     "understood": "Entendido",
-    "search-filters-ignored": "Con los filtros puestos no había resultados, así que se buscó sin ellos. Lo que se ve puede no cumplir los filtros marcados."
+    "search-filters-ignored": "Con los filtros puestos no había resultados, así que se buscó sin ellos. Lo que se ve puede no cumplir los filtros marcados.",
+    "source-timeout": "Esta fuente tardó demasiado en responder. Podés reintentar; las demás extensiones siguen buscando igual."
   },
   "home": {
     "continue-watching": "Continuar",
