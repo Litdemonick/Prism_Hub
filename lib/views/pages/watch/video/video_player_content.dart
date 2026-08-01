@@ -53,6 +53,10 @@ class _VideoPlayerContenState extends State<VideoPlayerConten> {
     // de nuevo cada vez, peleando con el usuario si le da play desde los
     // controles.
     if (_mostrarTutorial) {
+      // Se avisa al controlador para que nada de afuera se meta encima ni
+      // arranque el video: el dialogo de "parece que estabas mirando esto"
+      // salia sobre el tutorial y aceptarlo lo mandaba a reproducir.
+      widget.controller.tutorialArriba.value = true;
       WidgetsBinding.instance.addPostFrameCallback((_) {
         // safePause y no player.pause(): si el usuario sale del episodio con el
         // tutorial arriba, el Player nativo ya esta disposed y llamarlo directo
@@ -83,6 +87,10 @@ class _VideoPlayerContenState extends State<VideoPlayerConten> {
   @override
   void dispose() {
     _vigilante?.cancel();
+    // Si se sale del episodio con el tutorial puesto, la bandera tiene que
+    // quedar limpia: si no, el proximo video entraria creyendo que todavia hay
+    // un tutorial encima y nunca mostraria el dialogo de continuar.
+    if (_mostrarTutorial) widget.controller.tutorialArriba.value = false;
     super.dispose();
   }
 
@@ -157,6 +165,7 @@ class _VideoPlayerContenState extends State<VideoPlayerConten> {
             onCerrar: () {
               if (!mounted) return;
               setState(() => _mostrarTutorial = false);
+              widget.controller.tutorialArriba.value = false;
               _vigilante?.cancel();
               _vigilante = null;
               // Al cerrarlo arranca: quien abrio el episodio lo hizo para

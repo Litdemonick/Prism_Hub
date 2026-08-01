@@ -64,6 +64,7 @@ class _VideoPlayerMobileControlsState extends State<VideoPlayerMobileControls> {
   Timer? _timer;
   Worker? _webViewWorker;
   Worker? _resumeWorker;
+  Worker? _tutorialWorker;
   // Debounce: ignores taps within 600 ms to prevent double-trigger on fast touch.
   DateTime? _lastTap;
   bool _debounce([Duration d = const Duration(milliseconds: 600)]) {
@@ -139,7 +140,17 @@ class _VideoPlayerMobileControlsState extends State<VideoPlayerMobileControls> {
     // Mostrar diálogo de continuación cuando el controlador emite la señal.
     _resumeWorker = ever(_c.resumePrompt, (secs) {
       if (secs == null || !mounted) return;
+      // Con el tutorial puesto NO se muestra: salia encima y aceptarlo mandaba
+      // a reproducir con el tutorial todavia tapando la pantalla. No se
+      // descarta, se espera — el worker de abajo lo saca al cerrarse.
+      if (_c.tutorialArriba.value) return;
       _showResumeDialog(secs);
+    });
+    // Al cerrarse el tutorial, si habia quedado un aviso pendiente, ahora si.
+    _tutorialWorker = ever(_c.tutorialArriba, (arriba) {
+      if (arriba == true || !mounted) return;
+      final secs = _c.resumePrompt.value;
+      if (secs != null) _showResumeDialog(secs);
     });
   }
 
@@ -147,6 +158,7 @@ class _VideoPlayerMobileControlsState extends State<VideoPlayerMobileControls> {
   void dispose() {
     _webViewWorker?.dispose();
     _resumeWorker?.dispose();
+    _tutorialWorker?.dispose();
     _saltoTimer?.cancel();
     _timer?.cancel();
     super.dispose();

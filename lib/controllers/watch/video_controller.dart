@@ -186,6 +186,17 @@ class VideoPlayerController extends GetxController with WidgetsBindingObserver {
   // Señal para la UI: cuando tiene valor, mostrar el diálogo "¿Continuar?".
   final Rxn<int> resumePrompt = Rxn<int>(null);
 
+  /// Si el tutorial de gestos esta tapando el reproductor ahora mismo.
+  ///
+  /// Vive en el controlador y no en el widget del tutorial porque hay tres
+  /// piezas separadas que necesitan saberlo: el propio tutorial, y los controles
+  /// de celular y de escritorio, que son los que abren el dialogo de "parece que
+  /// estabas mirando esto". Ese dialogo salia ENCIMA del tutorial, y aceptarlo
+  /// mandaba a reproducir con el tutorial todavia puesto.
+  ///
+  /// Lo pone y lo saca VideoPlayerConten, que es quien decide mostrarlo.
+  final tutorialArriba = false.obs;
+
   // 信息列队
   final messageQueue = <Message>[];
   final Rx<Widget?> cuurentMessageWidget = Rx(null);
@@ -3496,6 +3507,9 @@ class VideoPlayerController extends GetxController with WidgetsBindingObserver {
     // nativo ya está disposed — llamarlo de nuevo tira una excepción de
     // aserción de media_kit que terminaba matando la app entera.
     if (_disposed) return;
+    // Mismo motivo que en safePlay: con el tutorial arriba nada arranca el
+    // video, ni siquiera un atajo de teclado que se cuele.
+    if (tutorialArriba.value) return;
     if (dlnaDevice.value == null) {
       player.playOrPause();
       return;
@@ -3514,6 +3528,13 @@ class VideoPlayerController extends GetxController with WidgetsBindingObserver {
   // entera incluso después de que closeRoute() cerrara la pantalla bien.
   void safePlay() {
     if (_disposed) return;
+    // Con el tutorial encima el video se queda quieto. El vigilante de
+    // VideoPlayerConten ya vuelve a pausar si algo lo arranca, pero eso deja
+    // sonar un instante; cortarlo aca evita que llegue a empezar.
+    //
+    // No frena al propio tutorial: al cerrarse baja esta bandera ANTES de pedir
+    // que arranque.
+    if (tutorialArriba.value) return;
     try {
       player.play();
     } catch (e) {

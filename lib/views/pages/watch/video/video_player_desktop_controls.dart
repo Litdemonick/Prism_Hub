@@ -36,6 +36,7 @@ class _VideoPlayerDesktopControlsState
   final _subtitleViewKey = GlobalKey<SubtitleViewState>();
   Worker? _webViewWorker;
   Worker? _resumeWorker;
+  Worker? _tutorialWorker;
   // Se ocultan rápido si el mouse no se mueve (mismo patrón que ya usa la
   // versión mobile, con su propio timer de 3s de inactividad).
   bool _showControls = true;
@@ -82,7 +83,17 @@ class _VideoPlayerDesktopControlsState
     // Mostrar diálogo de continuación cuando el controlador emite la señal.
     _resumeWorker = ever(_c.resumePrompt, (secs) {
       if (secs == null || !mounted) return;
+      // Con el tutorial puesto NO se muestra: salia encima y aceptarlo mandaba
+      // a reproducir con el tutorial todavia tapando la pantalla. No se
+      // descarta, se espera — el worker de abajo lo saca al cerrarse.
+      if (_c.tutorialArriba.value) return;
       _showResumeDialog(secs);
+    });
+    // Al cerrarse el tutorial, si habia quedado un aviso pendiente, ahora si.
+    _tutorialWorker = ever(_c.tutorialArriba, (arriba) {
+      if (arriba == true || !mounted) return;
+      final secs = _c.resumePrompt.value;
+      if (secs != null) _showResumeDialog(secs);
     });
   }
 
@@ -90,6 +101,7 @@ class _VideoPlayerDesktopControlsState
   void dispose() {
     _webViewWorker?.dispose();
     _resumeWorker?.dispose();
+    _tutorialWorker?.dispose();
     _hideTimer?.cancel();
     _focusNode.dispose();
     super.dispose();
