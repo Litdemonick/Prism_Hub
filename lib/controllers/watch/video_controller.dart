@@ -2362,6 +2362,40 @@ class VideoPlayerController extends GetxController with WidgetsBindingObserver {
   SidebarTab get pestanaDeCalidad =>
       qualityMap.isNotEmpty ? SidebarTab.qualitys : SidebarTab.servers;
 
+  /// Ver un vídeo VR en una sola imagen, sin gafas.
+  ///
+  /// Los vídeos VR vienen con las dos vistas lado a lado en el mismo cuadro:
+  /// la del ojo izquierdo y la del derecho, casi iguales. Con gafas eso da la
+  /// profundidad; sin gafas se ve la misma escena repetida dos veces, cada una
+  /// aplastada a la mitad del ancho. Es inmirable, y es lo que le pasa a
+  /// cualquiera que abra un VR en un teléfono o en la computadora.
+  ///
+  /// Activado, se recorta el cuadro a la mitad izquierda y se muestra solo esa
+  /// vista. Se pierde el efecto 3D —que sin gafas no existía igual— y queda una
+  /// imagen normal, con su proporción correcta.
+  ///
+  /// Es un filtro de mpv y no un recorte del reproductor: el recorte se hace
+  /// antes de dibujar, así que no cuesta un cuadro de más ni pelea con el
+  /// tamaño de la ventana.
+  final vrUnaPantalla = false.obs;
+
+  Future<void> alternarVrUnaPantalla() async {
+    final nuevo = !vrUnaPantalla.value;
+    if (player.platform is! NativePlayer) return;
+    final np = player.platform as NativePlayer;
+    try {
+      // iw/ih son el ancho y el alto de ENTRADA: sirve para cualquier
+      // resolución sin tener que consultarla antes. La posición 0:0 toma la
+      // mitad izquierda, que es la vista del ojo izquierdo.
+      await np.setProperty('vf', nuevo ? 'crop=iw/2:ih:0:0' : '');
+      vrUnaPantalla.value = nuevo;
+    } catch (e) {
+      // Un filtro rechazado no puede dejar el interruptor diciendo que está
+      // puesto cuando la imagen no cambió.
+      logger.warning('No se pudo cambiar el modo VR', e);
+    }
+  }
+
   /// ¿El botón de servidores aporta algo APARTE del de calidad?
   ///
   /// Los dos abren el mismo panel cuando la extensión entrega sus calidades por

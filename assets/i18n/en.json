@@ -349,7 +349,9 @@
         "loop": "Loop",
         "single": "Single",
         "auto-next": "Auto next"
-      }
+      },
+      "vr-single": "Watch VR on one screen",
+      "vr-single-hint": "VR videos carry one image per eye. Turn this on to see just one, without goggles."
     },
     "servers": "Servers",
     "webview-server": "Opens in browser",

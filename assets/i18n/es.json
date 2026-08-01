@@ -338,7 +338,9 @@
         "loop": "Repetir todo",
         "single": "Repetir uno",
         "auto-next": "Siguiente automático"
-      }
+      },
+      "vr-single": "Ver VR en una pantalla",
+      "vr-single-hint": "Los vídeos VR traen la imagen repetida para cada ojo. Activalo para ver una sola, sin gafas."
     },
     "servers": "Servidores",
     "webview-server": "Abre en el navegador",

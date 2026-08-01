@@ -188,6 +188,36 @@ class _SideBarSettingsState extends State<_SideBarSettings> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
+        // Ver VideoPlayerController.vrUnaPantalla. Mismo interruptor que en el
+        // telefono: un VR sin gafas se ve igual de mal en las dos pantallas.
+        fluent.Card(
+          child: Obx(
+            () => Row(
+              children: [
+                Expanded(
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text('video.sidebar.vr-single'.i18n),
+                      const SizedBox(height: 2),
+                      Text(
+                        'video.sidebar.vr-single-hint'.i18n,
+                        style: const TextStyle(fontSize: 12),
+                      ),
+                    ],
+                  ),
+                ),
+                const SizedBox(width: 10),
+                fluent.ToggleSwitch(
+                  checked: _c.vrUnaPantalla.value,
+                  onChanged: (_) => _c.alternarVrUnaPantalla(),
+                ),
+              ],
+            ),
+          ),
+        ),
+        const SizedBox(height: 10),
         fluent.Card(
           child: Column(
             mainAxisSize: MainAxisSize.min,
@@ -558,6 +588,21 @@ class _SideBarSettingsState extends State<_SideBarSettings> {
     return ListView(
       padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 10),
       children: [
+        // Ver VideoPlayerController.vrUnaPantalla. Va primero porque cuando
+        // hace falta, hace falta ANTES de poder mirar nada.
+        Obx(
+          () => SwitchListTile(
+            contentPadding: EdgeInsets.zero,
+            value: _c.vrUnaPantalla.value,
+            onChanged: (_) => _c.alternarVrUnaPantalla(),
+            title: Text('video.sidebar.vr-single'.i18n),
+            subtitle: Text(
+              'video.sidebar.vr-single-hint'.i18n,
+              style: const TextStyle(fontSize: 12),
+            ),
+          ),
+        ),
+        const Divider(),
         Text(
           'video.sidebar.subtitle.title'.i18n,
           style: TextStyle(color: Theme.of(context).colorScheme.primary),
