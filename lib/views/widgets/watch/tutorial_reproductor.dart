@@ -478,6 +478,20 @@ class _TutorialReproductorState extends State<TutorialReproductor>
                         style: const TextStyle(color: HomeTheme.textMuted),
                       ),
                     ),
+                    // Volver atras: los pasos traen el numero de segundos que
+                    // cada uno tiene configurado, y sin esto un paso que se
+                    // pasó de largo no se podia releer sin repetir el tutorial
+                    // entero desde los ajustes.
+                    if (i > 0) ...[
+                      const SizedBox(width: 8),
+                      TextButton(
+                        onPressed: () => setState(() => _indice = i - 1),
+                        child: Text(
+                          'video.tutorial.back'.i18n,
+                          style: const TextStyle(color: HomeTheme.textPrimary),
+                        ),
+                      ),
+                    ],
                     const SizedBox(width: 12),
                     FilledButton(
                       style: FilledButton.styleFrom(

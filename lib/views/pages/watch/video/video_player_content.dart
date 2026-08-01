@@ -54,7 +54,10 @@ class _VideoPlayerContenState extends State<VideoPlayerConten> {
     // controles.
     if (_mostrarTutorial) {
       WidgetsBinding.instance.addPostFrameCallback((_) {
-        if (mounted) widget.controller.player.pause();
+        // safePause y no player.pause(): si el usuario sale del episodio con el
+        // tutorial arriba, el Player nativo ya esta disposed y llamarlo directo
+        // tira la asercion de media_kit que tumba la app entera.
+        if (mounted) widget.controller.safePause();
       });
       // Y se queda pausado: pausar una sola vez no alcanza.
       //
@@ -68,7 +71,7 @@ class _VideoPlayerContenState extends State<VideoPlayerConten> {
       _vigilante =
           widget.controller.player.stream.playing.listen((reproduciendo) {
         if (reproduciendo && _mostrarTutorial && mounted) {
-          widget.controller.player.pause();
+          widget.controller.safePause();
         }
       });
     }
@@ -158,7 +161,7 @@ class _VideoPlayerContenState extends State<VideoPlayerConten> {
               _vigilante = null;
               // Al cerrarlo arranca: quien abrio el episodio lo hizo para
               // verlo, y quedaria pausado sin explicacion.
-              widget.controller.player.play();
+              widget.controller.safePlay();
             },
           ),
         ),
