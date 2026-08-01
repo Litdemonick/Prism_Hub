@@ -54,6 +54,17 @@ class _VideoPlayerContenState extends State<VideoPlayerConten> {
       }
       return Video(
         controller: c.videoController,
+        // Con el modo VR puesto, la imagen LLENA la pantalla.
+        //
+        // Al recortar un VR a la mitad izquierda queda un cuadro con otra
+        // proporción, y ajustándolo entero (lo de siempre) sobran barras
+        // negras a los costados o arriba: en el teléfono se veía una franja
+        // chica en el medio de una pantalla casi toda negra.
+        //
+        // Solo en modo VR. Para un vídeo normal recortar sería peor —se
+        // perdería parte de la imagen sin que nadie lo haya pedido— así que
+        // ahí se sigue mostrando entero como siempre.
+        fit: c.vrUnaPantalla.value ? BoxFit.cover : BoxFit.contain,
         subtitleViewConfiguration: const SubtitleViewConfiguration(
           visible: false,
         ),

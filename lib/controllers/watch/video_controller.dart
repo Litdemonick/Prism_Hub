@@ -1437,10 +1437,20 @@ class VideoPlayerController extends GetxController with WidgetsBindingObserver {
     // Los dos intentos van en paralelo: alcanza con que uno llegue para que
     // deje de sonar, y si uno se cuelga —el bug de hilos que se explica mas
     // abajo— ya no demora al otro.
-    await Future.wait<void>([
-      player.setVolume(0).timeout(const Duration(seconds: 2)).catchError((_) {}),
-      player.pause().timeout(const Duration(seconds: 2)).catchError((_) {}),
-    ]);
+    // SOLO el volumen. Pausar va DESPUES de capturar el fotograma.
+    //
+    // Se habian adelantado los dos juntos y eso rompio la captura: screenshot()
+    // le pide un cuadro al reproductor, y con el reproductor ya pausado se
+    // queda esperando uno que nadie va a renderizar — visto en el log,
+    // "TimeoutException after 0:00:02" justo al salir.
+    //
+    // Bajar el volumen no tiene ese problema: no toca el video, solo el audio.
+    // Asi se consigue lo que se buscaba —que deje de sonar al instante— sin
+    // perder la miniatura de "Continuar viendo".
+    await player
+        .setVolume(0)
+        .timeout(const Duration(seconds: 2))
+        .catchError((_) {});
 
     // El frame se toma ACÁ, antes de tocar nada del player, y se pasa hecho a
     // _saveHistory. Capturar más abajo (con el desarmado ya empezado) es lo
@@ -1454,6 +1464,9 @@ class VideoPlayerController extends GetxController with WidgetsBindingObserver {
     // momento de la reproducción) y además va con timeout, así que en el peor
     // caso se pierde la miniatura, nunca se cuelga el cierre.
     final frame = saveHistory ? await _capturarFrameActual() : null;
+
+    // Recien aca se pausa: el fotograma ya esta tomado.
+    await player.pause().timeout(const Duration(seconds: 2)).catchError((_) {});
 
     _beginPlaybackShutdown();
     await Future<void>.delayed(const Duration(milliseconds: 80));
