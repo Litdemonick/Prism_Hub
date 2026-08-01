@@ -393,7 +393,15 @@
       "show-again": "Show the tutorial again",
       "show-again-hint": "The player gestures and shortcuts, explained once more.",
       "show-again-action": "Show",
-      "will-show": "It will appear when you open the next video"
+      "will-show": "It will appear when you open the next video",
+      "settings-title": "All of this is adjustable",
+      "settings-body": "In the player settings —the gear— you change subtitles, audio tracks and how far each shortcut skips.",
+      "cast-title": "Send it to the TV",
+      "cast-body": "The cast button sends the video to a TV or another device on your network, and you keep controlling it from here.",
+      "servers-title": "If it will not load, switch server",
+      "servers-body": "Many sources ship several. The servers button lists the ones available.",
+      "quality-title": "Quality",
+      "quality-body": "The quality button shows what that video offers. If there is none, the source only ships one."
     }
   },
   "comic-settings": {

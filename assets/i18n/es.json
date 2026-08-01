@@ -389,7 +389,15 @@
       "show-again": "Ver el tutorial de nuevo",
       "show-again-hint": "Los gestos y atajos del reproductor, explicados otra vez.",
       "show-again-action": "Mostrar",
-      "will-show": "Va a salir al abrir el próximo vídeo"
+      "will-show": "Va a salir al abrir el próximo vídeo",
+      "settings-title": "Todo esto se ajusta",
+      "settings-body": "En Ajustes del reproductor —el engranaje— cambiás subtítulos, pistas de audio y cuánto salta cada atajo.",
+      "cast-title": "Mandalo al televisor",
+      "cast-body": "Con el botón de transmitir enviás el vídeo a un televisor o a otro dispositivo de la red, y seguís controlándolo desde acá.",
+      "servers-title": "Si no carga, cambiá de servidor",
+      "servers-body": "Muchas fuentes traen varios. El botón de servidores lista los disponibles.",
+      "quality-title": "Calidad",
+      "quality-body": "El botón de calidad muestra las que ofrece ese vídeo. Si no hay ninguna, es que la fuente entrega una sola."
     }
   },
   "comic-settings": {

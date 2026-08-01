@@ -70,8 +70,7 @@ class _AvisoCentrado extends StatelessWidget {
             color: Colors.transparent,
             child: Container(
               margin: const EdgeInsets.symmetric(horizontal: 40),
-              padding:
-                  const EdgeInsets.symmetric(horizontal: 22, vertical: 16),
+              padding: const EdgeInsets.symmetric(horizontal: 22, vertical: 16),
               decoration: BoxDecoration(
                 // Sólido: sobre un fotograma claro, un fondo traslúcido dejaba
                 // el texto ilegible.
@@ -255,6 +254,29 @@ class _TutorialReproductorState extends State<TutorialReproductor>
           detalle: t('fill-body'),
           icono: Icons.fullscreen_rounded,
         ),
+        // Comunes a las dos plataformas: no son gestos sino donde encontrar
+        // las cosas. Van al final, despues de lo que hace falta para mirar un
+        // video, que es lo urgente.
+        _Paso(
+          titulo: t('servers-title'),
+          detalle: t('servers-body'),
+          icono: Icons.dns_outlined,
+        ),
+        _Paso(
+          titulo: t('quality-title'),
+          detalle: t('quality-body'),
+          icono: Icons.hd_outlined,
+        ),
+        _Paso(
+          titulo: t('cast-title'),
+          detalle: t('cast-body'),
+          icono: Icons.cast_rounded,
+        ),
+        _Paso(
+          titulo: t('settings-title'),
+          detalle: t('settings-body'),
+          icono: Icons.tune_rounded,
+        ),
       ];
     }
 
@@ -299,6 +321,29 @@ class _TutorialReproductorState extends State<TutorialReproductor>
           detalle: t('vr-single-body'),
           icono: Icons.settings_outlined,
         ),
+      // Comunes a las dos plataformas: no son gestos sino donde encontrar
+      // las cosas. Van al final, despues de lo que hace falta para mirar un
+      // video, que es lo urgente.
+      _Paso(
+        titulo: t('servers-title'),
+        detalle: t('servers-body'),
+        icono: Icons.dns_outlined,
+      ),
+      _Paso(
+        titulo: t('quality-title'),
+        detalle: t('quality-body'),
+        icono: Icons.hd_outlined,
+      ),
+      _Paso(
+        titulo: t('cast-title'),
+        detalle: t('cast-body'),
+        icono: Icons.cast_rounded,
+      ),
+      _Paso(
+        titulo: t('settings-title'),
+        detalle: t('settings-body'),
+        icono: Icons.tune_rounded,
+      ),
     ];
   }
 
