@@ -25,6 +25,7 @@ import 'package:prismhub/utils/i18n.dart';
 import 'package:prismhub/utils/prismhub_storage.dart';
 import 'package:prismhub/utils/application.dart';
 import 'package:prismhub/views/widgets/platform_widget.dart';
+import 'package:prismhub/utils/compartir.dart';
 import 'package:window_manager/window_manager.dart';
 import 'package:package_info_plus/package_info_plus.dart';
 
@@ -204,6 +205,12 @@ void main(List<String> args) async {
       SystemChrome.setSystemUIOverlayStyle(style);
     }
 
+    // Si la app se abrió por un enlace compartido, se anota para navegar
+    // cuando el árbol ya exista. No se usa como ruta inicial a propósito: así
+    // el arranque es el de siempre y la ficha queda ENCIMA de la pantalla
+    // principal, con su botón de volver funcionando como cualquier otra.
+    Compartir.enlacePendiente = Compartir.enlaceDeArranque(args);
+
     runApp(const _AppRoot());
   }, (error, stack) {
     logger.severe("", error, stack);
@@ -331,6 +338,42 @@ class _AppRootState extends State<_AppRoot> {
     }
     await minDuration;
     if (mounted) setState(() => _ready = true);
+    _abrirEnlacePendiente();
+    // Android entrega los enlaces por su propio canal, no por argumentos: el
+    // que abrio la app y tambien los que llegan con la app ya abierta.
+    unawaited(Compartir.escucharAndroid(_irAlEnlace));
+  }
+
+  /// Abre la ficha del enlace con el que se arrancó, si hubo uno.
+  ///
+  /// Va DESPUÉS de que todo lo de arriba terminó, y no antes: sin las
+  /// extensiones cargadas la ficha no tendría con qué resolverse y se abriría
+  /// directo en "extensión no encontrada" aunque estuviera instalada.
+  ///
+  /// Se navega a la ruta interna de siempre —la misma que usa un toque en una
+  /// tarjeta— así el enlace pasa por las mismas comprobaciones: extensión
+  /// instalada, activada, sin actualización pendiente, y la pregunta de +18. No
+  /// hay una entrada paralela que se saltee nada de eso.
+  void _abrirEnlacePendiente() {
+    final uri = Compartir.enlacePendiente;
+    if (uri == null) return;
+    // Se limpia ANTES de navegar: si algo reconstruye esta pantalla, el enlace
+    // ya no está y no se vuelve a abrir la misma ficha encima.
+    Compartir.enlacePendiente = null;
+    _irAlEnlace(uri);
+  }
+
+  /// Navega a la ficha de un enlace ya validado.
+  void _irAlEnlace(Uri uri) {
+    final ruta = Compartir.rutaInterna(uri);
+    if (ruta == null) return;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      try {
+        router.go(ruta);
+      } catch (e, st) {
+        logger.warning('No se pudo abrir el enlace compartido', e, st);
+      }
+    });
   }
 
   @override

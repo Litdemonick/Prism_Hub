@@ -27,6 +27,17 @@
                 <action android:name="android.intent.action.MAIN" />
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
+            <!-- Enlaces compartidos: prismhub://detail?package=...&url=...
+                 BROWSABLE es lo que permite que lo abra otra app (WhatsApp,
+                 el navegador); sin esa categoria el enlace se ve como texto
+                 muerto. DEFAULT hace falta para que el sistema lo resuelva
+                 sin que nadie nombre la actividad a mano. -->
+            <intent-filter>
+                <action android:name="android.intent.action.VIEW" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <category android:name="android.intent.category.BROWSABLE" />
+                <data android:scheme="prismhub" android:host="detail" />
+            </intent-filter>
         </activity>
         <!-- Don't delete the meta-data below.
              This is used by the Flutter tool to generate GeneratedPluginRegistrant.java -->

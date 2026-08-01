@@ -2,6 +2,9 @@
 ; SEE THE DOCUMENTATION FOR DETAILS ON CREATING INNO SETUP SCRIPT FILES!
 
 #define MyAppName "PrismHub"
+; Tiene que coincidir con Compartir.esquema (lib/utils/compartir.dart)
+; y con el intent-filter de AndroidManifest.xml.
+#define MyAppScheme "prismhub"
 #define MyAppPublisher "PrismHub"
 #define MyAppURL "https://github.com/Litdemonick/Prism_Hub"
 #define MyAppExeName "PrismHub.exe"
@@ -82,6 +85,27 @@ Source: ".\build\windows\x64\runner\Release\{#MyAppExeName}"; DestDir: "{app}"; 
 Source: ".\build\windows\x64\runner\Release\*"; DestDir: "{app}"; Flags: ignoreversion
 Source: ".\build\windows\x64\runner\Release\data\*"; DestDir: "{app}\data"; Flags: ignoreversion recursesubdirs createallsubdirs
 ; NOTE: Don't use "Flags: ignoreversion" on any shared system files
+
+[Registry]
+; Enlaces compartidos: prismhub://detail?package=...&url=...
+;
+; Windows resuelve un esquema propio mirando HKCR\<esquema>. Sin estas claves,
+; el enlace que alguien recibe por chat es texto muerto: no hay nada que le
+; diga al sistema que PrismHub lo entiende.
+;
+; Van bajo Software\Classes del usuario y no en HKEY_CLASSES_ROOT a secas: el
+; instalador puede correr sin permisos de administrador, y ahi HKCR no se puede
+; escribir. Registrado por usuario funciona igual para quien instalo.
+;
+; "URL Protocol" tiene que existir aunque este vacio — es la marca por la que
+; Windows reconoce la clave como un esquema y no como un tipo de archivo.
+Root: HKA; Subkey: "Software\Classes\{#MyAppScheme}"; ValueType: string; ValueName: ""; ValueData: "URL:{#MyAppName}"; Flags: uninsdeletekey
+Root: HKA; Subkey: "Software\Classes\{#MyAppScheme}"; ValueType: string; ValueName: "URL Protocol"; ValueData: ""
+Root: HKA; Subkey: "Software\Classes\{#MyAppScheme}\DefaultIcon"; ValueType: string; ValueName: ""; ValueData: "{app}\{#MyAppExeName},0"
+; El "%1" es la direccion completa que se abrio, y va entre comillas porque
+; puede traer espacios y ampersands: sin ellas el enlace llega cortado en el
+; primer simbolo raro.
+Root: HKA; Subkey: "Software\Classes\{#MyAppScheme}\shell\open\command"; ValueType: string; ValueName: ""; ValueData: """{app}\{#MyAppExeName}"" ""%1"""
 
 [Icons]
 Name: "{autoprograms}\{#MyAppName}"; Filename: "{app}\{#MyAppExeName}"

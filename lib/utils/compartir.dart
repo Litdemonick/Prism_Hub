@@ -1,4 +1,7 @@
+import 'dart:io';
+
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:share_plus/share_plus.dart';
 
 /// Enlaces para compartir contenido, y cómo se vuelven a leer al abrirlos.
@@ -60,6 +63,83 @@ class Compartir {
       url: url,
       adulto: uri.queryParameters['adult'] == '1',
     );
+  }
+
+  /// Enlace recibido que todavía no se pudo abrir.
+  ///
+  /// Se anota al arrancar y se consume cuando el árbol de widgets ya existe:
+  /// navegar antes de eso no tiene a dónde ir. Se limpia al consumirlo para que
+  /// no se vuelva a abrir la misma ficha si algo reconstruye la pantalla.
+  static Uri? enlacePendiente;
+
+  /// El enlace con el que arrancó la app, si arrancó por uno.
+  ///
+  /// En escritorio el sistema pasa la dirección como un argumento más del
+  /// proceso: al abrir un `prismhub://…`, Windows ejecuta el programa
+  /// registrado con esa dirección al final de la línea de comandos. Se recorren
+  /// los argumentos en vez de mirar solo el primero porque el orden no está
+  /// garantizado y pueden venir otros banderines por delante.
+  ///
+  /// Devuelve null si ninguno es un enlace nuestro, que es el caso normal.
+  static Uri? enlaceDeArranque(List<String> args) {
+    for (final a in args) {
+      if (!a.startsWith('$esquema:')) continue;
+      final uri = Uri.tryParse(a);
+      if (uri != null && leerEnlace(uri) != null) return uri;
+    }
+    return null;
+  }
+
+  /// Convierte un enlace recibido en la ruta interna del app.
+  ///
+  /// Es la MISMA ruta que usa la navegación normal, así que la ficha se abre
+  /// por el camino de siempre: con su comprobación de extensión instalada, su
+  /// bloqueo por actualización pendiente y su pregunta de +18. No hay una
+  /// entrada paralela que se saltee esos pasos.
+  static String? rutaInterna(Uri uri) {
+    final datos = leerEnlace(uri);
+    if (datos == null) return null;
+    return '/detail?package=${Uri.encodeQueryComponent(datos.package)}'
+        '&url=${Uri.encodeQueryComponent(datos.url)}'
+        '${datos.adulto ? '&adult=1' : ''}';
+  }
+
+  /// Canal con la actividad de Android. Ver MainActivity.kt.
+  static const _canalAndroid = MethodChannel('com.prismhub.app/enlaces');
+
+  /// Empieza a atender los enlaces que llegan en Android.
+  ///
+  /// Hacen falta las dos vías y no alcanza con una:
+  ///
+  ///  - El enlace que ABRIÓ la app. La actividad lo guarda porque el intent
+  ///    llega antes de que Dart esté listo para escuchar.
+  ///  - Los que llegan con la app YA abierta. La actividad está declarada
+  ///    singleTop, así que no se crea otra instancia y el intent entra por
+  ///    onNewIntent; sin atender eso, compartir algo mientras PrismHub está
+  ///    abierto no hacía nada.
+  ///
+  /// En escritorio no se usa: ahí el enlace viene en los argumentos del
+  /// proceso (ver enlaceDeArranque).
+  static Future<void> escucharAndroid(void Function(Uri) alRecibir) async {
+    if (!Platform.isAndroid) return;
+
+    void manejar(String? crudo) {
+      if (crudo == null || crudo.isEmpty) return;
+      final uri = Uri.tryParse(crudo);
+      if (uri != null && leerEnlace(uri) != null) alRecibir(uri);
+    }
+
+    _canalAndroid.setMethodCallHandler((call) async {
+      if (call.method == 'enlaceNuevo') manejar(call.arguments as String?);
+      return null;
+    });
+
+    try {
+      manejar(await _canalAndroid.invokeMethod<String>('enlaceInicial'));
+    } catch (_) {
+      // Versión vieja de la actividad sin el canal: no es motivo para romper
+      // el arranque, simplemente no hay enlace que abrir.
+    }
   }
 
   /// Abre el menú de compartir del sistema con el título y el enlace.

@@ -1,4 +1,4 @@
-﻿package com.prismhub.app
+package com.prismhub.app
 
 import android.content.Intent
 import android.net.Uri
@@ -16,9 +16,36 @@ import java.io.File
 class MainActivity: FlutterFragmentActivity() {
     private val CHANNEL = "com.example.prismhub/update"
 
+    // Enlaces compartidos (prismhub://detail?...). En Android no llegan como
+    // argumentos del proceso —eso es cosa de escritorio— sino dentro del
+    // Intent que abre la actividad, asi que hay que leerlos aca y pasarlos.
+    private val CANAL_ENLACES = "com.prismhub.app/enlaces"
+    private var canalEnlaces: MethodChannel? = null
+
+    // El enlace con el que se abrio la app. Se guarda porque el Intent llega
+    // antes de que Dart este listo para escuchar: cuando Dart pregunta, ya
+    // paso. Se entrega una sola vez y se limpia, para que volver a la app no
+    // reabra la misma ficha.
+    private var enlaceInicial: String? = null
+
     override fun configureFlutterEngine(flutterEngine: FlutterEngine) {
         super.configureFlutterEngine(flutterEngine)
         
+        canalEnlaces = MethodChannel(
+            flutterEngine.dartExecutor.binaryMessenger, CANAL_ENLACES
+        ).apply {
+            setMethodCallHandler { call, result ->
+                when (call.method) {
+                    "enlaceInicial" -> {
+                        result.success(enlaceInicial)
+                        enlaceInicial = null
+                    }
+                    else -> result.notImplemented()
+                }
+            }
+        }
+        enlaceInicial = enlaceDe(intent)
+
         MethodChannel(flutterEngine.dartExecutor.binaryMessenger, CHANNEL)
             .setMethodCallHandler { call, result ->
                 when (call.method) {
@@ -87,5 +114,26 @@ class MainActivity: FlutterFragmentActivity() {
         }
 
         startActivity(intent)
+    }
+
+    // La actividad es singleTop: con la app ya abierta, un enlace nuevo NO
+    // crea otra instancia, entra por aca. Sin esto, compartir algo mientras
+    // PrismHub esta abierto no hacia absolutamente nada.
+    override fun onNewIntent(intent: Intent) {
+        super.onNewIntent(intent)
+        setIntent(intent)
+        val enlace = enlaceDe(intent) ?: return
+        // Si Dart todavia no engancho el canal, se guarda para cuando pregunte.
+        if (canalEnlaces == null) {
+            enlaceInicial = enlace
+        } else {
+            canalEnlaces?.invokeMethod("enlaceNuevo", enlace)
+        }
+    }
+
+    private fun enlaceDe(intent: Intent?): String? {
+        if (intent?.action != Intent.ACTION_VIEW) return null
+        val data = intent.data ?: return null
+        return if (data.scheme == "prismhub") data.toString() else null
     }
 }
