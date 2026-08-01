@@ -2362,6 +2362,20 @@ class VideoPlayerController extends GetxController with WidgetsBindingObserver {
   SidebarTab get pestanaDeCalidad =>
       qualityMap.isNotEmpty ? SidebarTab.qualitys : SidebarTab.servers;
 
+  /// ¿El botón de servidores aporta algo APARTE del de calidad?
+  ///
+  /// Los dos abren el mismo panel cuando la extensión entrega sus calidades por
+  /// X-Servers, que es lo que hacen los sitios con un MP4 por resolución. En el
+  /// teléfono eso dejaba dos botones pegados haciendo exactamente lo mismo: uno
+  /// decía "1080p" y el otro era el de servidores, y los dos abrían la misma
+  /// lista de calidades.
+  ///
+  /// Solo tiene sentido por separado cuando hay servidores de verdad —una lista
+  /// de fuentes alternativas— Y ADEMÁS calidades propias del stream, que es el
+  /// caso de las extensiones que devuelven varios embeds con su HLS cada uno.
+  bool get servidoresSonAparte =>
+      availableServers.isNotEmpty && qualityMap.isNotEmpty;
+
   toggleSideBar(SidebarTab tab) {
     if (showSidebar.value && initSidebarTab.value == tab) {
       showSidebar.value = false;

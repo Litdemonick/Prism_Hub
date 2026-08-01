@@ -1193,7 +1193,11 @@ class _Footer extends StatelessWidget {
                 // visible tapando el video; a pedido explícito ahora se
                 // esconde detrás de este botón, igual que calidad/pistas.
                 Obx(() {
-                  if (controller.availableServers.isEmpty) {
+                  // Ver servidoresSonAparte: con las extensiones que entregan
+                  // un MP4 por resolución, este botón y el de calidad abrían la
+                  // MISMA lista. Quedaban dos botones pegados haciendo lo
+                  // mismo, uno de ellos sin decir de qué era.
+                  if (!controller.servidoresSonAparte) {
                     return const SizedBox.shrink();
                   }
                   return IconButton(

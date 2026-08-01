@@ -1908,7 +1908,11 @@ class _ServerTabBar extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Obx(() {
-      if (controller.availableServers.isEmpty) return const SizedBox.shrink();
+      // Ver servidoresSonAparte: esta tira es para elegir FUENTE. Cuando la
+      // extension entrega un MP4 por resolucion, lo que hay aca no son
+      // servidores sino las mismas calidades que ya ofrece el boton de abajo, y
+      // quedaban las dos cosas en pantalla diciendo lo mismo.
+      if (!controller.servidoresSonAparte) return const SizedBox.shrink();
       final current = controller.currentServerName.value;
       return Container(
         width: double.infinity,
