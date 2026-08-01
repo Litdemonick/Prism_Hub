@@ -1438,12 +1438,55 @@ class _ExtensionFilterWidgetState extends State<_ExtensionFilterWidget> {
                       const Divider(color: HomeTheme.border, height: 1),
                     const SizedBox(height: 16),
                   ],
+                  // Al pie y no arriba: es contexto util, no algo que haga
+                  // falta leer antes de elegir. Los filtros salen de
+                  // createFilter() de cada extension, asi que una extension
+                  // actualizada puede traer opciones nuevas sin que cambie
+                  // nada del app — conviene decirlo para que no parezca que
+                  // los filtros "cambiaron solos".
+                  const _NotaDeFiltros(),
                 ],
               ),
             ),
           ),
         ),
       ],
+    );
+  }
+}
+
+/// Aclaracion al pie del panel de filtros.
+class _NotaDeFiltros extends StatelessWidget {
+  const _NotaDeFiltros();
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      margin: const EdgeInsets.only(top: 4, bottom: 8),
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+      decoration: BoxDecoration(
+        color: HomeTheme.cardSurface,
+        borderRadius: BorderRadius.circular(10),
+        border: Border.all(color: HomeTheme.border),
+      ),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Icon(Icons.info_outline_rounded,
+              size: 16, color: HomeTheme.textMuted),
+          const SizedBox(width: 10),
+          Expanded(
+            child: Text(
+              'search.filters-note'.i18n,
+              style: const TextStyle(
+                color: HomeTheme.textMuted,
+                fontSize: 12,
+                height: 1.45,
+              ),
+            ),
+          ),
+        ],
+      ),
     );
   }
 }

@@ -31,6 +31,10 @@ class SearchPageController extends GetxController {
       searchResultList.where((element) => element.completed).length;
   bool needRefresh = true;
   bool isPageOpen = false;
+  // Paquetes cuyo NOMBRE coincide con lo tecleado. A esos se les muestra su
+  // catalogo en vez de buscarles un titulo con ese texto.
+  final Set<String> _coincidenPorNombre = <String>{};
+
   Worker? _searchWorker;
   // 是否打开了这个页面
 
@@ -79,6 +83,7 @@ class SearchPageController extends GetxController {
     // Todo/Video/Lectura y no mezcla +18 con lo normal. Si no coincide con
     // ninguna, no se descarta nada y la busqueda sigue como siempre.
     final consulta = search.value.trim();
+    _coincidenPorNombre.clear();
     if (consulta.isNotEmpty) {
       final porNombre = exts
           .where((e) => SearchText.matchesQuery(e.extension.name, consulta))
@@ -87,6 +92,14 @@ class SearchPageController extends GetxController {
         exts
           ..clear()
           ..addAll(porNombre);
+        // Se anotan para que a ESTAS no se les pida un titulo con ese texto,
+        // sino su catalogo. Ver runOne(): sin esto, escribir "Ikigai" reducia
+        // bien la lista a esa extension y acto seguido le preguntaba por una
+        // obra llamada "Ikigai" — que no existe — asi que la pantalla
+        // terminaba diciendo "sin resultados" igual.
+        for (final e in porNombre) {
+          _coincidenPorNombre.add(e.extension.package);
+        }
       }
     }
 
@@ -202,7 +215,12 @@ class SearchPageController extends GetxController {
       element.inFlight = done.future;
       try {
         final Future<List<ExtensionListItem>> resultFuture;
-        if (search.value.isEmpty) {
+        // Se pide el CATALOGO cuando no hay texto, y tambien cuando lo tecleado
+        // es el nombre de esta extension: quien escribe "Ikigai" quiere ver lo
+        // que tiene Ikigai, no una obra que se llame asi.
+        final esNombreDeLaExtension =
+            _coincidenPorNombre.contains(element.runitme.extension.package);
+        if (search.value.isEmpty || esNombreDeLaExtension) {
           resultFuture = element.runitme.latest(1);
         } else {
           resultFuture = element.runitme.searchFirstPageWithBroadening(

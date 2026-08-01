@@ -77,7 +77,8 @@
     "hint-text": "Please use search wisely!~",
     "all": "All",
     "filter": "Filter",
-    "reset-filters": "Reset filters"
+    "reset-filters": "Reset filters",
+    "filters-note": "Filters are defined by each extension. Updating them can bring new options, or change the ones already here, without updating PrismHub."
   },
   "extension": {
     "import": {
