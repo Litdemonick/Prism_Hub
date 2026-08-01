@@ -1321,7 +1321,11 @@ class _QualityState extends State<_Quality> {
       child: Button(
         child: Text(widget.controller.currentQuality.value),
         onPressed: () {
-          if (widget.controller.qualityMap.isEmpty) {
+          // Ver hayCalidades en el controlador: pueden venir del playlist HLS
+          // o de la cabecera X-Servers de la extensión. Mirando solo el
+          // primero, este botón decía "no hay calidades" en vídeos que traen
+          // siete — Eporner entrega las suyas por ese camino.
+          if (!widget.controller.hayCalidades) {
             widget.controller.sendMessage(
               Message(Text("video.no-qualities".i18n)),
             );
@@ -1340,19 +1344,35 @@ class _QualityState extends State<_Quality> {
                     constraints: const BoxConstraints(
                       maxHeight: 300,
                     ),
+                    // Las dos fuentes en la MISMA lista: el usuario abre
+                    // "calidad" y ve calidades, sin tener que saber si el
+                    // sitio las entrega como playlist o como una url por
+                    // resolución. Cada una se cambia con su propio método,
+                    // que es lo único que difiere por detrás.
                     child: ListView(
                       children: [
-                        for (final quality
-                            in widget.controller.qualityMap.entries)
-                          ListTile(
-                            title: Text(quality.key),
-                            onPressed: () {
-                              widget.controller.switchQuality(
-                                quality.value,
-                              );
-                              Flyout.of(context).close();
-                            },
-                          ),
+                        if (widget.controller.qualityMap.isNotEmpty)
+                          for (final quality
+                              in widget.controller.qualityMap.entries)
+                            ListTile(
+                              title: Text(quality.key),
+                              onPressed: () {
+                                widget.controller.switchQuality(
+                                  quality.value,
+                                );
+                                Flyout.of(context).close();
+                              },
+                            )
+                        else
+                          for (final servidor
+                              in widget.controller.availableServers.keys)
+                            ListTile(
+                              title: Text(servidor),
+                              onPressed: () {
+                                widget.controller.switchServer(servidor);
+                                Flyout.of(context).close();
+                              },
+                            ),
                       ],
                     ),
                   ),

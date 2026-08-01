@@ -2338,6 +2338,30 @@ class VideoPlayerController extends GetxController with WidgetsBindingObserver {
   // el panel ya está abierto cambia el contenido en vez de solo cerrarlo —
   // antes cualquier botón cerraba el panel sin importar cuál se tocó, así
   // que ir de "Episodios" a "Servidor" necesitaba dos toques.
+  /// ¿Hay algo entre lo que elegir para cambiar la calidad?
+  ///
+  /// Las calidades llegan por DOS caminos distintos y hasta ahora solo se
+  /// miraba uno:
+  ///
+  ///  - `qualityMap` se llena leyendo el playlist maestro de un HLS.
+  ///  - `availableServers` se llena con la cabecera X-Servers que manda la
+  ///    extensión, y ahí es donde vienen las calidades de los sitios que
+  ///    entregan un MP4 por resolución — Eporner manda las siete así.
+  ///
+  /// El nombre "servidores" quedó de cuando esa cabecera se usaba solo para
+  /// eso, pero lo que trae es lo que la extensión ofrezca: en unos casos son
+  /// servidores alternativos y en otros son calidades.
+  ///
+  /// Mirando solo `qualityMap`, el botón de calidad respondía "no hay
+  /// calidades" en un vídeo que tenía siete. Se veía en el teléfono, donde el
+  /// botón de calidad es la única forma de cambiarla.
+  bool get hayCalidades =>
+      qualityMap.isNotEmpty || availableServers.length > 1;
+
+  /// Qué panel abrir al tocar el botón de calidad, según de dónde vengan.
+  SidebarTab get pestanaDeCalidad =>
+      qualityMap.isNotEmpty ? SidebarTab.qualitys : SidebarTab.servers;
+
   toggleSideBar(SidebarTab tab) {
     if (showSidebar.value && initSidebarTab.value == tab) {
       showSidebar.value = false;

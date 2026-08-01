@@ -1102,7 +1102,12 @@ class _Footer extends StatelessWidget {
                   }
                   return FilledButton.tonal(
                     onPressed: () {
-                      if (controller.qualityMap.isEmpty) {
+                      // Ver hayCalidades: las calidades pueden venir del
+                      // playlist HLS o de la cabecera X-Servers de la
+                      // extensión. Mirando solo el primero, este botón decía
+                      // "no hay calidades" en vídeos que traen siete, y en el
+                      // teléfono es la única forma de cambiarla.
+                      if (!controller.hayCalidades) {
                         controller.sendMessage(
                           Message(
                             Text(
@@ -1112,7 +1117,7 @@ class _Footer extends StatelessWidget {
                         );
                         return;
                       }
-                      controller.toggleSideBar(SidebarTab.qualitys);
+                      controller.toggleSideBar(controller.pestanaDeCalidad);
                     },
                     style: ButtonStyle(
                       padding: WidgetStateProperty.all(
