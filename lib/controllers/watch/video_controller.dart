@@ -642,6 +642,8 @@ class VideoPlayerController extends GetxController with WidgetsBindingObserver {
         // puesta.
         final etiqueta = etiquetaCalidad(width, event);
         currentQuality.value = etiqueta.isEmpty ? "${width}x$event" : etiqueta;
+        // Mismo lugar: es donde se conocen las medidas reales del video.
+        esVideoVr.value = _pareceVr(width, event);
       }
     }));
 
@@ -2520,12 +2522,21 @@ class VideoPlayerController extends GetxController with WidgetsBindingObserver {
   /// Se mira desde UN solo lugar para que los ajustes y el tutorial coincidan:
   /// no puede pasar que el tutorial explique como mover la camara y el ajuste
   /// para hacerlo no este.
-  bool get esVideoVr {
-    final w = player.state.width ?? 0;
-    final h = player.state.height ?? 0;
-    if (w <= 0 || h <= 0) return false;
-    // 3:1 y no 2:1 exacto: un side-by-side de 16:9 da 3,55, y hay videos
-    // panoramicos normales que rondan 2,4 sin ser VR.
+  /// OBSERVABLE y no un getter suelto.
+  ///
+  /// Como getter leia player.state, que no es reactivo, asi que un Obx que solo
+  /// mirara esto no tenia a que suscribirse: GetX lo detecta y tira "improper
+  /// use of a GetX has been detected", con el panel de ajustes mostrando el
+  /// error en vez de los ajustes.
+  ///
+  /// Siendo observable, ademas, la interfaz se acomoda sola cuando el video
+  /// termina de cargar y recien ahi se conocen sus medidas.
+  final esVideoVr = false.obs;
+
+  /// 3:1 y no 2:1 exacto: un side-by-side de 16:9 da 3,55, y hay videos
+  /// panoramicos normales que rondan 2,4 sin ser VR.
+  static bool _pareceVr(int? w, int? h) {
+    if (w == null || h == null || w <= 0 || h <= 0) return false;
     return w >= h * 3;
   }
 

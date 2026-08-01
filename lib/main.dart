@@ -185,14 +185,25 @@ void main(List<String> args) async {
           await windowManager.setMinimumSize(minWindowSize);
           await _restaurarGeometria(size, offsetGuardado);
         } catch (e, st) {
-          logger.warning('No se pudo restaurar la geometría de la ventana', e, st);
+          logger.warning(
+              'No se pudo restaurar la geometría de la ventana', e, st);
         } finally {
-          // SIEMPRE, pase lo que pase arriba. El runner nativo ya NO muestra la
-          // ventana por su cuenta (ver windows/runner/flutter_window.cpp): si
-          // este show() no corriera, la app quedaría sin ninguna ventana
-          // visible y solo se la vería en el administrador de tareas.
-          await windowManager.show();
-          await windowManager.focus();
+          // La ventana se muestra recién cuando Flutter YA pintó algo.
+          //
+          // Antes se mostraba acá mismo, y eso deja un hueco: en este punto la
+          // geometría ya está puesta pero runApp todavía no corrió, así que el
+          // motor no tiene ni un fotograma dibujado al tamaño nuevo. Lo que se
+          // ve en ese hueco es la superficie vieja —del tamaño con el que se
+          // creó la ventana— estirada o encogida dentro del marco nuevo: el
+          // contenido chico en una esquina con franjas negras alrededor.
+          //
+          // En release el hueco son milisegundos y casi no se nota. Con
+          // `flutter run` la compilación en caliente lo estira muchísimo, que
+          // es por qué ahí se ve siempre.
+          //
+          // Ver _mostrarVentanaCuandoHayaFotograma: se muestra en el primer
+          // post-frame, con red de seguridad por si ese fotograma nunca llega.
+          _mostrarVentanaCuandoHayaFotograma();
         }
       });
     }
@@ -215,6 +226,37 @@ void main(List<String> args) async {
   }, (error, stack) {
     logger.severe("", error, stack);
   });
+}
+
+/// Muestra la ventana en cuanto Flutter haya pintado su primer fotograma.
+///
+/// Mostrarla antes deja ver la superficie vieja dentro del marco nuevo (ver
+/// dónde se llama). Esperando al primer fotograma, lo primero que se ve ya está
+/// dibujado al tamaño correcto.
+///
+/// La red de seguridad NO es opcional: el runner nativo ya no muestra la
+/// ventana por su cuenta (ver windows/runner/flutter_window.cpp), así que si el
+/// primer fotograma no llegara —un fallo al construir el árbol, por ejemplo— la
+/// app quedaría corriendo sin ninguna ventana visible, solo en el administrador
+/// de tareas. Pasado el plazo se muestra igual, aunque se vea mal: es mejor una
+/// ventana fea que ninguna.
+void _mostrarVentanaCuandoHayaFotograma() {
+  var mostrada = false;
+  Future<void> mostrar() async {
+    if (mostrada) return;
+    mostrada = true;
+    try {
+      await windowManager.show();
+      await windowManager.focus();
+    } catch (e, st) {
+      logger.warning('No se pudo mostrar la ventana', e, st);
+    }
+  }
+
+  WidgetsBinding.instance.addPostFrameCallback((_) => mostrar());
+  // Dos segundos: de sobra para el primer fotograma incluso arrancando en
+  // frío, y poco como para que un arranque roto no parezca un cuelgue.
+  Timer(const Duration(seconds: 2), mostrar);
 }
 
 /// Deja la ventana en la posición y el tamaño de la sesión anterior, y

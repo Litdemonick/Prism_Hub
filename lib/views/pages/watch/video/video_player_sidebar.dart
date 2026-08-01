@@ -226,7 +226,7 @@ class _SideBarSettingsState extends State<_SideBarSettings> {
         // En escritorio no va el de llenar pantalla: ahi la pantalla completa
         // ya ocupa todo, asi que seria un interruptor que no cambia nada.
         Obx(
-          () => !_c.esVideoVr
+          () => !_c.esVideoVr.value
               ? const SizedBox.shrink()
               : fluent.Card(
                   child: Obx(
@@ -658,7 +658,7 @@ class _SideBarSettingsState extends State<_SideBarSettings> {
         // El de VR SOLO en videos VR. En uno normal recortaba media imagen
         // sin motivo, asi que ahi en su lugar va el de llenar la pantalla.
         Obx(
-          () => _c.esVideoVr
+          () => _c.esVideoVr.value
               ? SwitchListTile(
                   contentPadding: EdgeInsets.zero,
                   value: _c.vrUnaPantalla.value,

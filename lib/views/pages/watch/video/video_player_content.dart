@@ -150,7 +150,7 @@ class _VideoPlayerContenState extends State<VideoPlayerConten> {
         Positioned.fill(
           child: TutorialReproductor(
             // Ver esVideoVr en el controlador.
-            esVr: c.esVideoVr,
+            esVr: c.esVideoVr.value,
             onCerrar: () {
               if (!mounted) return;
               setState(() => _mostrarTutorial = false);
