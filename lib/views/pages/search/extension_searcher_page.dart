@@ -130,6 +130,31 @@ class _ExtensionSearcherPageState extends fluent.State<ExtensionSearcherPage> {
     );
   }
 
+  // Cuántos títulos hay cargados ahora mismo en esta pantalla.
+  //
+  // Es lo CARGADO, no el total del sitio: ninguna extensión sabe cuántas obras
+  // tiene su catálogo —los sitios no lo publican— y no vale la pena inventar un
+  // número. Sirve igual para lo que hace falta: ver de un vistazo si una página
+  // vino corta o si un filtro dejó afuera casi todo, sin tener que contar
+  // tarjetas a ojo.
+  //
+  // En escritorio se cuenta la página que se está viendo, que es lo que la
+  // pantalla muestra; en móvil, donde el scroll va agregando tandas a la misma
+  // lista, se cuenta el acumulado. Es el mismo criterio que usa el
+  // autocompletado más abajo para saber qué lista se está dibujando.
+  int get _cargados => (Platform.isAndroid ? _data : _browseData).length;
+
+  // "1.234" y no "1234": son números que se leen de reojo.
+  String get _cargadosTexto {
+    final n = _cargados.toString();
+    final buf = StringBuffer();
+    for (var i = 0; i < n.length; i++) {
+      if (i > 0 && (n.length - i) % 3 == 0) buf.write('.');
+      buf.write(n[i]);
+    }
+    return buf.toString();
+  }
+
   late final _textEditingController = TextEditingController(text: _keyWord);
 
   // Autocompletado (texto sugerido ADENTRO del mismo campo, seleccionado —
@@ -884,7 +909,11 @@ class _ExtensionSearcherPageState extends fluent.State<ExtensionSearcherPage> {
       // desborda.
       resizeToAvoidBottomInset: false,
       appBar: SearchAppBar(
-        title: _runtime.extension.name,
+        // El contador va pegado al nombre porque SearchAppBar recibe un texto,
+        // no un widget. Ver _cargados.
+        title: _cargados == 0
+            ? _runtime.extension.name
+            : '${_runtime.extension.name}  ·  $_cargadosTexto',
         // Más alto que el default (kToolbarHeight=56) — pedido explícito
         // de agrandar el buscador. AppBar ya suma el padding de status
         // bar/notch aparte de esto, así que no hay riesgo de SafeArea acá.
@@ -1045,13 +1074,36 @@ class _ExtensionSearcherPageState extends fluent.State<ExtensionSearcherPage> {
                   children: [
                     Expanded(
                       flex: 2,
-                      child: Text(
-                        _runtime.extension.name,
-                        style: const TextStyle(
-                          fontSize: 20,
-                          fontWeight: FontWeight.w800,
-                          color: HomeTheme.textPrimary,
-                        ),
+                      child: Row(
+                        crossAxisAlignment: CrossAxisAlignment.baseline,
+                        textBaseline: TextBaseline.alphabetic,
+                        children: [
+                          Flexible(
+                            child: Text(
+                              _runtime.extension.name,
+                              overflow: TextOverflow.ellipsis,
+                              style: const TextStyle(
+                                fontSize: 20,
+                                fontWeight: FontWeight.w800,
+                                color: HomeTheme.textPrimary,
+                              ),
+                            ),
+                          ),
+                          // Cuántos títulos hay cargados — ver _cargados. Más
+                          // chico y apagado: acompaña al nombre, no compite
+                          // con él.
+                          if (_cargados > 0) ...[
+                            const SizedBox(width: 10),
+                            Text(
+                              _cargadosTexto,
+                              style: const TextStyle(
+                                fontSize: 14,
+                                fontWeight: FontWeight.w600,
+                                color: HomeTheme.textMuted,
+                              ),
+                            ),
+                          ],
+                        ],
                       ),
                     ),
                     const Spacer(),
