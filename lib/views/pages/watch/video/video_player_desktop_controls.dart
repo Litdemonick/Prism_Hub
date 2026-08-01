@@ -301,7 +301,12 @@ class _VideoPlayerDesktopControlsState
                         //     con HLS.
                         //  2. Salto en curso (barra, teclas o flechas).
                         //  3. Buffer vacío durante la reproducción.
-                        opacity: ((!_c.isGettingWatchData.value &&
+                        // Casteando no gira NINGUNA rueda: el reproductor de
+                        // aca esta parado a proposito, asi que "cargando" y
+                        // "sin buffer" no describen nada de lo que pasa en el
+                        // televisor. Mismo criterio que en celular.
+                        opacity: (_c.dlnaDevice.value == null &&
+                                ((!_c.isGettingWatchData.value &&
                                     !_c.hasRenderedFrame.value &&
                                     // Si hay un error en pantalla, ahi hay una
                                     // tarjeta con su boton (reintentar / elegir
@@ -327,7 +332,7 @@ class _VideoPlayerDesktopControlsState
                                 (_c.hasRenderedFrame.value &&
                                     (_c.isSeeking.value ||
                                         (_c.isPlaying.value &&
-                                            _c.isActuallyBuffering.value))))
+                                            _c.isActuallyBuffering.value)))))
                             ? 1
                             : 0,
                         child: const Center(
@@ -386,6 +391,13 @@ class _VideoPlayerDesktopControlsState
                 child: SizedBox.expand(
                   child: Center(
                     child: Obx(() {
+                      // Casteando: esto va ANTES que todo lo demas, igual que
+                      // en celular. El reproductor de aca esta parado a
+                      // proposito, asi que ningun aviso de carga o de servidor
+                      // describe lo que se ve en el televisor.
+                      if (_c.dlnaDevice.value != null) {
+                        return _PanelCasteando(controller: _c);
+                      }
                       if (_c.error.value.isNotEmpty) {
                         return Column(
                           mainAxisSize: MainAxisSize.min,
@@ -1538,6 +1550,69 @@ class _TrackState extends State<_Track> {
 // Material — ese widget usa ListTile de Material, que sin un ancestro
 // Material tira "No Material widget found" en este árbol, que corre sobre
 // fluent_ui (mismo problema ya conocido en este codebase para TextField).
+/// Lo que se ve en el medio mientras el vídeo corre en otro aparato.
+///
+/// Sin botones: reintentar y desconectar viven en el menú del botón de
+/// transmitir, en la barra de abajo, fuera de la imagen.
+class _PanelCasteando extends StatelessWidget {
+  const _PanelCasteando({required this.controller});
+  final VideoPlayerController controller;
+
+  @override
+  Widget build(BuildContext context) {
+    return Obx(() {
+      final device = controller.dlnaDevice.value;
+      if (device == null) return const SizedBox.shrink();
+      final reproduciendo = controller.isPlaying.value;
+      return Container(
+        padding: const EdgeInsets.symmetric(horizontal: 30, vertical: 24),
+        decoration: BoxDecoration(
+          color: const Color(0xB8000000),
+          borderRadius: BorderRadius.circular(16),
+          border: Border.all(color: Colors.white.withValues(alpha: 0.12)),
+        ),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(
+              reproduciendo
+                  ? material.Icons.cast_connected
+                  : material.Icons.pause_circle_outline,
+              size: 46,
+              color: HomeTheme.accentPink,
+            ),
+            const SizedBox(height: 14),
+            Text(
+              device.info.friendlyName,
+              textAlign: TextAlign.center,
+              style: const TextStyle(
+                fontSize: 18,
+                fontWeight: FontWeight.bold,
+                color: Colors.white,
+              ),
+            ),
+            const SizedBox(height: 6),
+            ConstrainedBox(
+              constraints: const BoxConstraints(maxWidth: 360),
+              child: Text(
+                reproduciendo
+                    ? 'video.cast-playing-desktop'.i18n
+                    : 'video.cast-paused-desktop'.i18n,
+                textAlign: TextAlign.center,
+                style: TextStyle(
+                  fontSize: 13,
+                  height: 1.4,
+                  color: Colors.white.withValues(alpha: 0.75),
+                ),
+              ),
+            ),
+          ],
+        ),
+      );
+    });
+  }
+}
+
 class _Cast extends StatefulWidget {
   const _Cast({required this.controller});
   final VideoPlayerController controller;
