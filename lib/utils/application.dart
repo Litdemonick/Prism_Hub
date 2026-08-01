@@ -168,9 +168,36 @@ class ApplicationUtils {
   /// lee —hoy min-update-from— van como comentarios HTML, así que un cuerpo que
   /// solo tenga eso se ve vacío en pantalla aunque no lo esté. Se miden los
   /// caracteres que QUEDAN después de sacarlos.
+  /// Lo que GitHub agrega SOLO al publicar, sin que nadie lo escriba.
+  ///
+  /// Al crear un release, GitHub puede sumar por su cuenta un enlace de
+  /// comparación entre versiones ("Changelog completo: …/compare/v1.0.17...").
+  /// Esa línea aparece antes de que nadie escriba una palabra, y sola pasaba el
+  /// umbral de caracteres: un release publicado con las notas todavía vacías
+  /// contaba como "notas listas" y disparaba el aviso antes de tiempo.
+  ///
+  /// Lo mismo con la lista de descargas y el enlace al historial completo, que
+  /// son plantilla fija de cada release y no dicen nada de ESTA versión.
+  ///
+  /// No se saca del aviso —ahí se sigue viendo todo, changelog incluido—, solo
+  /// se descuenta al DECIDIR si hay notas de verdad.
+  static final _lineasAutomaticas = RegExp(
+    r'^\s*(\*\*)?(Changelog|Full Changelog|Changelog completo)(\*\*)?\s*:?.*$'
+    r'|^\s*https?://\S+/compare/\S+$'
+    r'|^\s*\|.*\|\s*$'
+    r'|^\s*#{1,6}\s*(📦\s*)?Descargas?\s*$',
+    multiLine: true,
+    caseSensitive: false,
+  );
+
   static bool _notasPublicadas(dynamic body) {
     if (body is! String) return false;
-    final visible = body.replaceAll(RegExp(r'<!--[\s\S]*?-->'), '').trim();
+    final visible = body
+        .replaceAll(RegExp(r'<!--[\s\S]*?-->'), '')
+        // Ver _lineasAutomaticas: lo que pone GitHub solo, o la plantilla de
+        // descargas, no cuenta como haber escrito las notas.
+        .replaceAll(_lineasAutomaticas, '')
+        .trim();
     // Un puñado de caracteres sueltos no son notas: con un título de sección o
     // una línea a medio escribir, la pantalla se sigue viendo vacía.
     return visible.length >= 40;
