@@ -499,10 +499,14 @@ class ApplicationUtils {
   // en subir lo suyo— no había forma de enterarse hasta cerrarla y volver a
   // abrirla.
   //
-  // El aviso aparece encima de lo que sea que esté en pantalla: los diálogos se
-  // muestran sobre el navegador raíz, así que salen igual sobre el reproductor
-  // nativo, sobre el de WebView, sobre el lector o sobre cualquier página. Es
-  // descartable con "Ahora no" — no interrumpe de forma definitiva a nadie.
+  // El aviso aparece encima de lo que sea que esté en pantalla —reproductor
+  // nativo, WebView, lector o cualquier página— y BLOQUEA hasta actualizar, la
+  // misma pantalla que sale al arrancar. Es a propósito: una version vieja se
+  // queda sin correcciones y sus extensiones empiezan a fallar cuando los
+  // sitios cambian, sin que se entienda por qué.
+  //
+  // La contra, dicha claramente: puede interrumpir a alguien a mitad de un
+  // episodio. Se acepta a cambio de que nadie se quede atras sin enterarse.
   static Timer? _chequeoPeriodico;
   static const _cadaCuanto = Duration(minutes: 30);
 
@@ -516,9 +520,17 @@ class ApplicationUtils {
       // tanto, esto deja de molestar sin necesidad de reiniciar nada.
       if (PrismHubStorage.getSetting(SettingKey.autoCheckUpdate) != true) return;
       if (!context.mounted) return;
-      // showSnackbar en false: nadie pidió esta comprobación, así que si no hay
-      // nada nuevo no aparece ningún mensaje.
-      unawaited(checkUpdate(context));
+      // checkForcedUpdate y no checkUpdate: cuando aparece una version nueva
+      // con la app abierta, el aviso BLOQUEA hasta actualizar, igual que el
+      // que sale al arrancar. Antes esta comprobacion mostraba el dialogo
+      // descartable, asi que se podia seguir usando una version vieja sin
+      // enterarse — que es justo lo que se queria evitar.
+      //
+      // Es seguro llamarlo cada tanto: tiene guardas propias para no apilar la
+      // pantalla si ya esta abierta (_forcedUpdatePageOpen) ni lanzar dos
+      // comprobaciones a la vez (_forcedUpdateCheckInFlight). Y si no hay
+      // version nueva no muestra nada.
+      unawaited(checkForcedUpdate(context));
     });
   }
 
