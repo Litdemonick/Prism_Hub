@@ -636,7 +636,11 @@ class VideoPlayerController extends GetxController with WidgetsBindingObserver {
     _addSubscription(player.stream.height.listen((event) async {
       if (player.state.width != null) {
         final width = player.state.width;
-        currentQuality.value = "${width}x$event";
+        // Mismo nombre que en el menú de calidades: antes acá decía
+        // "1920x1080" y en el menú otra cosa, y no se entendía cuál estaba
+        // puesta.
+        final etiqueta = etiquetaCalidad(width, event);
+        currentQuality.value = etiqueta.isEmpty ? "${width}x$event" : etiqueta;
       }
     }));
 
@@ -1793,20 +1797,50 @@ class VideoPlayerController extends GetxController with WidgetsBindingObserver {
 
     if (playlist is HlsMasterPlaylist) {
       try {
-        final urlList = playlist.mediaPlaylistUrls
-            .map(
-              (e) => e.toString(),
-            )
-            .toList();
-        final resolution = playlist.variants.map(
-          (it) => "${it.format.width}x${it.format.height}",
-        );
-        qualityMap.addAll(
-          Map.fromIterables(
-            resolution,
-            urlList,
-          ),
-        );
+        // Cada calidad sale de SU variante, con la url que trae la variante.
+        //
+        // Antes se armaba emparejando dos listas por posición: los nombres
+        // salían de `variants` y las urls de `mediaPlaylistUrls`. No son la
+        // misma lista — mediaPlaylistUrls son las variantes MÁS las pistas de
+        // audio, vídeo y subtítulos declaradas aparte. Con que el stream
+        // trajera una sola pista de audio separada, los largos ya no
+        // coincidían, Map.fromIterables tiraba error, se lo comía el catch de
+        // acá y el menú de calidades quedaba VACÍO.
+        //
+        // Y ahí está lo peor: los streams que ofrecen 1440 y 4K son
+        // justamente los que traen el audio aparte. O sea que el menú fallaba
+        // sobre todo en los videos donde más importaba. Cuando los largos
+        // coincidían de casualidad, el emparejamiento por posición podía
+        // asignarle a una resolución la url de otra.
+        final porResolucion = <String, _VarianteCalidad>{};
+        for (final v in playlist.variants) {
+          final w = v.format.width;
+          final h = v.format.height;
+          final bw = v.format.bitrate ?? 0;
+          // Hay variantes que declaran solo BANDWIDTH, sin RESOLUTION. Antes
+          // entraban al menú como "nullxnull"; ahora se las nombra por su
+          // caudal, que es el único dato que dieron.
+          final nombre = (w != null && h != null)
+              ? etiquetaCalidad(w, h)
+              : bw > 0
+                  ? '${(bw / 1000000).toStringAsFixed(1)} Mb/s'
+                  : '';
+          if (nombre.isEmpty) continue;
+          // Misma resolución declarada dos veces (distinto caudal): se queda
+          // la de mejor calidad en vez de la que viniera última.
+          final previa = porResolucion[nombre];
+          if (previa != null && previa.bitrate >= bw) continue;
+          porResolucion[nombre] =
+              _VarianteCalidad(v.url.toString(), bw, (h ?? 0) * 100000 + bw);
+        }
+
+        // De mayor a menor: 4K y 1440 arriba de todo, que es donde se las
+        // busca. Antes salían en el orden en que las listaba el sitio.
+        final ordenadas = porResolucion.entries.toList()
+          ..sort((a, b) => b.value.orden.compareTo(a.value.orden));
+        for (final e in ordenadas) {
+          qualityMap[e.key] = e.value.url;
+        }
       } catch (e) {
         logger.severe(e);
       }
@@ -3068,4 +3102,35 @@ class Message {
   final Widget child;
   final Duration time;
   Message(this.child, {this.time = const Duration(seconds: 3)});
+}
+
+// Una variante de calidad del stream, mientras se arma el menú.
+class _VarianteCalidad {
+  const _VarianteCalidad(this.url, this.bitrate, this.orden);
+
+  final String url;
+  final int bitrate;
+  // Para ordenar de mayor a menor: manda la altura y el caudal desempata.
+  final int orden;
+}
+
+/// Cómo se llama una calidad en el menú: "4K", "1440p", "1080p"…
+///
+/// Antes se mostraba la resolución cruda ("1920x1080"). Es exacta pero no es
+/// como la gente pide una calidad, y con números grandes ("3840x2160") cuesta
+/// más reconocer de un vistazo que eso es el 4K.
+///
+/// Se nombra por la ALTURA, que es la convención de todos lados. La resolución
+/// completa se sigue mostrando al lado cuando no es una de las conocidas: hay
+/// recortes panorámicos donde la altura sola engaña.
+String etiquetaCalidad(int? width, int? height) {
+  if (height == null || height <= 0) return '';
+  if (height >= 4320) return '8K';
+  if (height >= 2160) return '4K';
+  if (height >= 1440) return '1440p';
+  if (height >= 1080) return '1080p';
+  if (height >= 720) return '720p';
+  if (height >= 480) return '480p';
+  if (height >= 360) return '360p';
+  return '${height}p';
 }
