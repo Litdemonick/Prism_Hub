@@ -40,10 +40,17 @@
   a.secundario {
     display: inline-block; margin-top: 14px; color: #a8a8b3; font-size: .9rem;
   }
+  /* La portada de la obra. Se oculta sola si no vino ninguna o si no carga
+     (una portada caida no tiene que dejar un hueco roto en el medio). */
+  #portada {
+    display: none; max-width: 190px; width: 60%; border-radius: 14px;
+    margin: 0 auto 18px; box-shadow: 0 8px 24px rgba(0,0,0,.45);
+  }
 </style>
 </head>
 <body>
   <div class="caja">
+    <img id="portada" alt="" />
     <h1>Abrir en PrismHub</h1>
     <p id="detalle">Abriendo…</p>
     <a class="boton" id="abrir" href="#">Abrir en la app</a>
@@ -89,6 +96,18 @@
     detalle.querySelector('.titulo-obra').textContent = titulo;
   } else {
     detalle.textContent = 'Abriendo en PrismHub…';
+  }
+
+  // La portada solo en contenido normal. Con +18 no viaja en el enlace, asi
+  // que aca no hay nada que mostrar y queda el logo del app — que es
+  // justamente lo que se quiere: que abrir el enlace delante de otra persona no
+  // destape de que se trata.
+  var img = p.get('img') || '';
+  if (img && !adulto) {
+    var portada = document.getElementById('portada');
+    portada.onload = function () { portada.style.display = 'block'; };
+    portada.onerror = function () { portada.style.display = 'none'; };
+    portada.src = img;
   }
 
   if (adulto) {

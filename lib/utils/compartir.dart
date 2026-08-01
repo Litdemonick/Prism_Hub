@@ -2,6 +2,7 @@ import 'dart:io';
 
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:prismhub/models/extension.dart';
 import 'package:share_plus/share_plus.dart';
 
 /// Enlaces para compartir contenido, y cómo se vuelven a leer al abrirlos.
@@ -42,6 +43,7 @@ class Compartir {
     required String url,
     bool adulto = false,
     String titulo = '',
+    String portada = '',
   }) {
     final partes = <String>[
       'package=${Uri.encodeQueryComponent(package)}',
@@ -52,6 +54,10 @@ class Compartir {
       // Para que la página puente pueda decir QUÉ se está abriendo. La app lo
       // ignora: el título real lo saca de la extensión.
       if (titulo.isNotEmpty) 't=${Uri.encodeQueryComponent(titulo)}',
+      // La portada la muestra la página puente al abrirla. Nunca con contenido
+      // para adultos: ahí la página se queda con el logo del app.
+      if (!adulto && portada.isNotEmpty)
+        'img=${Uri.encodeQueryComponent(portada)}',
     ];
     return '$_puente?${partes.join('&')}';
   }
@@ -183,6 +189,23 @@ class Compartir {
   /// [origen] posiciona el menú en iPad y en escritorio, donde el sistema lo
   /// ancla a lo que se tocó en vez de mostrarlo centrado. Sin eso revienta en
   /// iPad y en escritorio aparece en una esquina cualquiera.
+  /// Cómo se nombra lo que se comparte, según con qué se abre.
+  ///
+  /// El tipo es lo más fino que se puede saber sin volver a preguntarle al
+  /// sitio: dice si esto se mira o se lee, no si es anime, película o manhwa.
+  /// Se redacta con eso y no se inventa una precisión que no hay.
+  static (String, String) _emojiYFrase(ExtensionType? tipo) {
+    switch (tipo) {
+      case ExtensionType.manga:
+      case ExtensionType.mixedReading:
+        return ('📖', 'Disfrutá esta lectura');
+      case ExtensionType.fikushon:
+        return ('📚', 'Disfrutá esta novela');
+      default:
+        return ('🍿', 'Disfrutá este vídeo');
+    }
+  }
+
   /// Devuelve true si terminó copiando al portapapeles en vez de abrir el menú
   /// del sistema, para que quien llama pueda avisarlo.
   static Future<bool> compartirDetalle({
@@ -190,11 +213,41 @@ class Compartir {
     required String package,
     required String url,
     bool adulto = false,
+    ExtensionType? tipo,
+    String portada = '',
     Rect? origen,
   }) async {
     final enlace = enlaceDetalle(
-        package: package, url: url, adulto: adulto, titulo: titulo);
-    final texto = titulo.isEmpty ? enlace : '$titulo\n\n$enlace';
+      package: package,
+      url: url,
+      adulto: adulto,
+      titulo: titulo,
+      portada: portada,
+    );
+
+    // El mensaje es lo que va a leer la otra persona, así que se escribe como
+    // un mensaje y no como un volcado de datos: qué es, por qué se lo mandan y
+    // dónde tocar.
+    //
+    // Con contenido para adultos NO va ni el título ni la portada. Ese texto
+    // puede quedar a la vista de cualquiera en una notificación o en la vista
+    // previa del chat, y quien lo comparte no eligió eso.
+    final String texto;
+    if (adulto) {
+      texto = '🔞 Te comparto algo en PrismHub\n\n'
+          'Contenido para adultos: se abre solo con la Zona +18 activada.\n\n'
+          '👉 $enlace';
+    } else {
+      final (emoji, frase) = _emojiYFrase(tipo);
+      texto = [
+        '✨ Mirá esto en PrismHub',
+        '',
+        if (titulo.isNotEmpty) '$emoji $titulo',
+        frase,
+        '',
+        '👉 $enlace',
+      ].join('\n');
+    }
 
     // En escritorio no hay menú de compartir del sistema como en el teléfono:
     // Windows y Linux no exponen nada equivalente, así que el plugin no tiene

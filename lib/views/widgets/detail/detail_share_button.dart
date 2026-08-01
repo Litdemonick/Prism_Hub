@@ -44,6 +44,10 @@ class DetailShareButton extends StatelessWidget {
       // Se marca en el enlace para que, al abrirlo, el otro app sepa que hay
       // que pedir permiso ANTES de mostrar nada. Ver la puerta en el router.
       adulto: _c.isAdultOption,
+      // Para redactar el mensaje según con qué se abre esto: no es lo mismo
+      // "disfrutá esta lectura" que "disfrutá este vídeo".
+      tipo: _c.type,
+      portada: _c.detail?.cover ?? '',
       origen: _origen(context),
     );
     // En escritorio no hay menú de compartir, así que el enlace queda copiado
