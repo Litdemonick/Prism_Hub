@@ -534,6 +534,11 @@ class _SettingsPageState extends State<SettingsPage> {
                 // de nacimiento, una sola vez por instalación. Si cancela o no
                 // llega a la edad, el interruptor no se mueve.
                 if (value && !await Nsfw18AgeDialog.confirmar(context)) {
+                  // mounted: el dialogo de edad espera al usuario, y en ese
+                  // rato la pantalla de ajustes puede irse (atras, cambio de
+                  // pestaña). setState sobre un widget ya desmontado tira
+                  // "setState() called after dispose()".
+                  if (!mounted) return;
                   setState(() {});
                   return;
                 }
