@@ -271,7 +271,12 @@ class _VideoPlayerMobileControlsState extends State<VideoPlayerMobileControls> {
                       //     con HLS.
                       //  2. Salto en curso (barra, teclas o flechas).
                       //  3. Buffer vacío durante la reproducción.
-                      opacity: ((!_c.isGettingWatchData.value &&
+                      // Casteando no se muestra NINGUNA rueda: el reproductor
+                      // de aca esta parado a proposito, asi que "cargando" y
+                      // "sin buffer" no describen nada de lo que pasa en el
+                      // televisor. Era esto lo que aparecia al adelantar.
+                      opacity: (_c.dlnaDevice.value == null &&
+                              ((!_c.isGettingWatchData.value &&
                                   !_c.hasRenderedFrame.value &&
                                   // Ver el comentario equivalente en los
                                   // controles de escritorio.
@@ -296,7 +301,7 @@ class _VideoPlayerMobileControlsState extends State<VideoPlayerMobileControls> {
                               (_c.hasRenderedFrame.value &&
                                   (_c.isSeeking.value ||
                                       (_c.isPlaying.value &&
-                                          _c.isActuallyBuffering.value))))
+                                          _c.isActuallyBuffering.value)))))
                           ? 1
                           : 0,
                       child: const Center(
@@ -587,6 +592,17 @@ class _VideoPlayerMobileControlsState extends State<VideoPlayerMobileControls> {
             Positioned.fill(
               child: Center(
                 child: Obx(() {
+                  // Casteando: esto va ANTES que todo lo demas.
+                  //
+                  // Mientras el video corre en el televisor, el reproductor de
+                  // aca esta parado a proposito, asi que los avisos de carga y
+                  // de buffer no describen nada real — y era justo eso lo que
+                  // hacia aparecer la rueda girando al adelantar. En su lugar
+                  // se muestra donde se esta viendo, y nada mas: los botones de
+                  // reintentar y desconectar viven arriba, fuera del video.
+                  if (_c.dlnaDevice.value != null) {
+                    return _PanelCasteando(controller: _c);
+                  }
                   if (_c.error.value.isNotEmpty) {
                     return Column(
                       mainAxisSize: MainAxisSize.min,
@@ -718,51 +734,6 @@ class _VideoPlayerMobileControlsState extends State<VideoPlayerMobileControls> {
                         if (_c.isActuallyBuffering.value &&
                             _c.isPlaying.value) {
                           return const SizedBox.shrink();
-                        }
-                        if (_c.dlnaDevice.value != null) {
-                          return Column(
-                            mainAxisSize: MainAxisSize.min,
-                            children: [
-                              Text(
-                                FlutterI18n.translate(
-                                  context,
-                                  'video.cast-device',
-                                  translationParams: {
-                                    'device':
-                                        _c.dlnaDevice.value!.info.friendlyName,
-                                  },
-                                ),
-                                style: const TextStyle(
-                                  fontSize: 16,
-                                  fontWeight: FontWeight.bold,
-                                ),
-                              ),
-                              const SizedBox(height: 10),
-                              // Reintentar antes que desconectar: si el
-                              // televisor fallo por algo pasajero, lo que uno
-                              // quiere es volver a intentarlo, no empezar de
-                              // cero eligiendo el aparato otra vez.
-                              Row(
-                                mainAxisSize: MainAxisSize.min,
-                                children: [
-                                  OutlinedButton.icon(
-                                    onPressed: () => _c.reintentarCast(),
-                                    icon: const Icon(Icons.refresh, size: 18),
-                                    label: Text('common.retry'.i18n),
-                                  ),
-                                  const SizedBox(width: 10),
-                                  FilledButton(
-                                    onPressed: () {
-                                      _c.disconnectDLNADevice();
-                                    },
-                                    child: Text(
-                                      'common.disconnect'.i18n,
-                                    ),
-                                  ),
-                                ],
-                              ),
-                            ],
-                          );
                         }
                         return const SizedBox.shrink();
                       },
@@ -909,6 +880,66 @@ class _VideoPlayerMobileControlsState extends State<VideoPlayerMobileControls> {
   }
 }
 
+/// Lo que se ve en el medio mientras el video corre en otro aparato.
+///
+/// No lleva botones a proposito: reintentar y desconectar viven en la barra de
+/// arriba. Antes estaban aca en el medio, tapando el centro de la pantalla, que
+/// es justo donde uno toca para pausar.
+class _PanelCasteando extends StatelessWidget {
+  const _PanelCasteando({required this.controller});
+  final VideoPlayerController controller;
+
+  @override
+  Widget build(BuildContext context) {
+    return Obx(() {
+      final device = controller.dlnaDevice.value;
+      if (device == null) return const SizedBox.shrink();
+      final reproduciendo = controller.isPlaying.value;
+      return Container(
+        margin: const EdgeInsets.symmetric(horizontal: 32),
+        padding: const EdgeInsets.symmetric(horizontal: 26, vertical: 22),
+        decoration: BoxDecoration(
+          color: Colors.black.withValues(alpha: 0.72),
+          borderRadius: BorderRadius.circular(16),
+          border: Border.all(color: Colors.white.withValues(alpha: 0.12)),
+        ),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(
+              reproduciendo ? Icons.cast_connected : Icons.pause_circle_outline,
+              size: 44,
+              color: HomeTheme.accentPink,
+            ),
+            const SizedBox(height: 14),
+            Text(
+              device.info.friendlyName,
+              textAlign: TextAlign.center,
+              style: const TextStyle(
+                fontSize: 17,
+                fontWeight: FontWeight.bold,
+                color: Colors.white,
+              ),
+            ),
+            const SizedBox(height: 6),
+            Text(
+              reproduciendo
+                  ? 'video.cast-playing-here'.i18n
+                  : 'video.cast-paused-here'.i18n,
+              textAlign: TextAlign.center,
+              style: TextStyle(
+                fontSize: 13,
+                height: 1.4,
+                color: Colors.white.withValues(alpha: 0.75),
+              ),
+            ),
+          ],
+        ),
+      );
+    });
+  }
+}
+
 class _Header extends StatelessWidget {
   const _Header({required this.controller});
   final VideoPlayerController controller;
@@ -970,6 +1001,27 @@ class _Header extends StatelessWidget {
           // asi que ofrecerlo igual solo termina en pantalla negra alla. Se
           // avisa el motivo al tocarlo. Ver puedeCastear en el controlador.
           Obx(() {
+            // Casteando: reintentar y desconectar, arriba y fuera del video.
+            // Antes estaban en el medio de la pantalla, encima de la imagen y
+            // justo donde se toca para pausar.
+            if (controller.dlnaDevice.value != null) {
+              return Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  IconButton(
+                    tooltip: 'common.retry'.i18n,
+                    icon: const Icon(Icons.refresh, color: Colors.white),
+                    onPressed: () => controller.reintentarCast(),
+                  ),
+                  IconButton(
+                    tooltip: 'common.disconnect'.i18n,
+                    icon: const Icon(Icons.cast_connected,
+                        color: HomeTheme.accentPink),
+                    onPressed: () => controller.disconnectDLNADevice(),
+                  ),
+                ],
+              );
+            }
             if (!controller.puedeCastear) {
               return IconButton(
                 icon: Icon(Icons.cast, color: Colors.white.withAlpha(90)),

@@ -307,6 +307,8 @@
     "cast": "Castear a un dispositivo",
     "cast-device": "Reproduciendo en {device}",
     "cast-disconnect": "Desconectar",
+    "cast-playing-here": "Se está viendo en este dispositivo. Controlalo desde acá: tocá el centro para pausar y los costados para adelantar o retroceder.",
+    "cast-paused-here": "En pausa. Tocá el centro de la pantalla para seguir.",
     "cast-wait": "Esperá a que cargue el vídeo para poder transmitir",
     "cast-webview": "Este servidor no se puede transmitir: el vídeo se reproduce dentro de una página web. Probá con otro servidor.",
     "cast-unavailable": "Solo se puede transmitir cuando el vídeo se está reproduciendo acá",

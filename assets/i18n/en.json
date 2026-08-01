@@ -328,6 +328,8 @@
     "cast": "Cast to device",
     "cast-device": "playing on {device}",
     "cast-disconnect": "Disconnect",
+    "cast-playing-here": "Playing on this device. Control it from here: tap the centre to pause, tap the sides to skip.",
+    "cast-paused-here": "Paused. Tap the centre of the screen to resume.",
     "cast-wait": "Wait for the video to load before casting",
     "cast-webview": "This server can't be cast: the video plays inside a web page. Try another server.",
     "cast-unavailable": "You can only cast while the video is playing here",
