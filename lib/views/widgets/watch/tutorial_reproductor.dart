@@ -205,6 +205,41 @@ class _TutorialReproductorState extends State<TutorialReproductor>
 
   @override
   Widget build(BuildContext context) {
+    // Fondo SÓLIDO y que se come todos los toques.
+    //
+    // Antes era negro traslúcido dentro de un Material, y eso dejaba pasar los
+    // gestos: un Material con color pinta, pero no consume eventos. El toque
+    // atravesaba el tutorial y llegaba a los controles del reproductor, así que
+    // leyendo "tocá el centro para pausar" se pausaba el vídeo de atrás sin
+    // querer, o se abría un panel debajo del tutorial.
+    //
+    // El GestureDetector opaco de abajo absorbe lo que no toque un botón del
+    // tutorial. Va DENTRO y no envolviendo todo, para que los botones propios
+    // —siguiente, saltar— sigan recibiendo lo suyo: están más arriba en el
+    // Stack y se quedan con el evento primero.
+    return Material(
+      color: Colors.black,
+      child: Stack(
+        children: [
+          Positioned.fill(
+            child: GestureDetector(
+              behavior: HitTestBehavior.opaque,
+              // Sin acciones: el único trabajo de esta capa es que nada de lo
+              // que hay detrás se entere de que la tocaron.
+              onTap: () {},
+              onDoubleTap: () {},
+              onLongPress: () {},
+              onVerticalDragUpdate: (_) {},
+              onHorizontalDragUpdate: (_) {},
+            ),
+          ),
+          _contenido(context),
+        ],
+      ),
+    );
+  }
+
+  Widget _contenido(BuildContext context) {
     final pasos = _pasos;
     // Un paso que ya no existe (se cambio de video VR a normal) dejaria el
     // indice fuera de rango.
@@ -212,92 +247,89 @@ class _TutorialReproductorState extends State<TutorialReproductor>
     final paso = pasos[i];
     final ultimo = i == pasos.length - 1;
 
-    return Material(
-      color: Colors.black.withValues(alpha: 0.88),
-      child: SafeArea(
-        child: Center(
-          child: SingleChildScrollView(
-            padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 20),
-            child: ConstrainedBox(
-              constraints: const BoxConstraints(maxWidth: 460),
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  _DemoGesto(gesto: paso.gesto, anim: _anim, icono: paso.icono),
-                  const SizedBox(height: 22),
-                  Text(
-                    paso.titulo,
-                    textAlign: TextAlign.center,
-                    style: const TextStyle(
-                      color: HomeTheme.textPrimary,
-                      fontSize: 19,
-                      fontWeight: FontWeight.w800,
-                    ),
+    return SafeArea(
+      child: Center(
+        child: SingleChildScrollView(
+          padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 20),
+          child: ConstrainedBox(
+            constraints: const BoxConstraints(maxWidth: 460),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                _DemoGesto(gesto: paso.gesto, anim: _anim, icono: paso.icono),
+                const SizedBox(height: 22),
+                Text(
+                  paso.titulo,
+                  textAlign: TextAlign.center,
+                  style: const TextStyle(
+                    color: HomeTheme.textPrimary,
+                    fontSize: 19,
+                    fontWeight: FontWeight.w800,
                   ),
-                  const SizedBox(height: 8),
-                  Text(
-                    paso.detalle,
-                    textAlign: TextAlign.center,
-                    style: const TextStyle(
-                      color: HomeTheme.textMuted,
-                      fontSize: 14,
-                      height: 1.4,
-                    ),
+                ),
+                const SizedBox(height: 8),
+                Text(
+                  paso.detalle,
+                  textAlign: TextAlign.center,
+                  style: const TextStyle(
+                    color: HomeTheme.textMuted,
+                    fontSize: 14,
+                    height: 1.4,
                   ),
-                  const SizedBox(height: 22),
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    children: [
-                      for (var k = 0; k < pasos.length; k++)
-                        AnimatedContainer(
-                          duration: const Duration(milliseconds: 200),
-                          margin: const EdgeInsets.symmetric(horizontal: 3),
-                          width: k == i ? 18 : 6,
-                          height: 6,
-                          decoration: BoxDecoration(
-                            color: k == i
-                                ? HomeTheme.accentPink
-                                : Colors.white.withValues(alpha: 0.28),
-                            borderRadius: BorderRadius.circular(999),
-                          ),
-                        ),
-                    ],
-                  ),
-                  const SizedBox(height: 20),
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    children: [
-                      TextButton(
-                        onPressed: _terminar,
-                        child: Text(
-                          'video.tutorial.skip'.i18n,
-                          style: const TextStyle(color: HomeTheme.textMuted),
+                ),
+                const SizedBox(height: 22),
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    for (var k = 0; k < pasos.length; k++)
+                      AnimatedContainer(
+                        duration: const Duration(milliseconds: 200),
+                        margin: const EdgeInsets.symmetric(horizontal: 3),
+                        width: k == i ? 18 : 6,
+                        height: 6,
+                        decoration: BoxDecoration(
+                          color: k == i
+                              ? HomeTheme.accentPink
+                              : Colors.white.withValues(alpha: 0.28),
+                          borderRadius: BorderRadius.circular(999),
                         ),
                       ),
-                      const SizedBox(width: 12),
-                      FilledButton(
-                        style: FilledButton.styleFrom(
-                          backgroundColor: HomeTheme.accentPink,
-                          padding: const EdgeInsets.symmetric(
-                              horizontal: 26, vertical: 12),
-                        ),
-                        onPressed: () {
-                          if (ultimo) {
-                            _terminar();
-                          } else {
-                            setState(() => _indice = i + 1);
-                          }
-                        },
-                        child: Text(
-                          ultimo
-                              ? 'video.tutorial.done'.i18n
-                              : 'video.tutorial.next'.i18n,
-                        ),
+                  ],
+                ),
+                const SizedBox(height: 20),
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    TextButton(
+                      onPressed: _terminar,
+                      child: Text(
+                        'video.tutorial.skip'.i18n,
+                        style: const TextStyle(color: HomeTheme.textMuted),
                       ),
-                    ],
-                  ),
-                ],
-              ),
+                    ),
+                    const SizedBox(width: 12),
+                    FilledButton(
+                      style: FilledButton.styleFrom(
+                        backgroundColor: HomeTheme.accentPink,
+                        padding: const EdgeInsets.symmetric(
+                            horizontal: 26, vertical: 12),
+                      ),
+                      onPressed: () {
+                        if (ultimo) {
+                          _terminar();
+                        } else {
+                          setState(() => _indice = i + 1);
+                        }
+                      },
+                      child: Text(
+                        ultimo
+                            ? 'video.tutorial.done'.i18n
+                            : 'video.tutorial.next'.i18n,
+                      ),
+                    ),
+                  ],
+                ),
+              ],
             ),
           ),
         ),
