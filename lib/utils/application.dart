@@ -17,6 +17,8 @@ import 'package:prismhub/utils/router.dart';
 import 'package:prismhub/views/widgets/button.dart';
 import 'package:prismhub/views/widgets/home/home_theme.dart';
 import 'package:prismhub/views/widgets/messenger.dart';
+import 'package:prismhub/controllers/watch/video_controller.dart';
+import 'package:prismhub/views/pages/watch/video/webview_player_page.dart';
 import 'package:url_launcher/url_launcher.dart';
 import 'package:package_info_plus/package_info_plus.dart';
 import 'package:device_info_plus/device_info_plus.dart';
@@ -282,7 +284,12 @@ class ApplicationUtils {
       final res = await dio.get(url);
       final tagName = res.data["tag_name"] as String;
       final remoteVersion = tagName.replaceFirst('v', '');
-      if (!_isRemoteVersionNewer(remoteVersion)) return;
+      if (!_isRemoteVersionNewer(remoteVersion)) {
+        // Nada nuevo: si venia esperando un release a medio publicar, ya no
+        // hay por que seguir mirando seguido.
+        _esperandoReleaseIncompleto = false;
+        return;
+      }
       if (!context.mounted) return;
 
       // Un release se publica ANTES de que todas las plataformas terminen de
@@ -297,17 +304,49 @@ class ApplicationUtils {
       // silencio y se vuelve a mirar en la próxima comprobación.
       // Release incompleto: todavía se están subiendo archivos, o alguno de
       // los jobs falló. En cualquiera de los dos casos no se avisa.
-      if (!_releaseCompleto(res.data['assets'], tagName)) return;
+      if (!_releaseCompleto(res.data['assets'], tagName)) {
+        // Hay version nueva pero le faltan archivos: se mira seguido hasta que
+        // termine de publicarse (ver _cadaCuantoEsperando).
+        _esperandoReleaseIncompleto = true;
+        return;
+      }
 
       // Y tampoco se avisa con las notas todavía sin escribir: esta pantalla
       // tapa la app entera, así que salir sin explicar qué trae la versión deja
       // al usuario eligiendo a ciegas. Ver _notasPublicadas.
-      if (!_notasPublicadas(res.data['body'])) return;
+      if (!_notasPublicadas(res.data['body'])) {
+        // Mismo caso: estan los archivos pero falta el texto.
+        _esperandoReleaseIncompleto = true;
+        return;
+      }
 
       final asset = Platform.isAndroid
           ? _findAndroidAsset(res.data['assets'])
           : _findAsset(res.data['assets'], tagName);
-      if (asset == null) return;
+      if (asset == null) {
+        _esperandoReleaseIncompleto = true;
+        return;
+      }
+      // Release entero y a punto de avisar: se vuelve al ritmo normal.
+      _esperandoReleaseIncompleto = false;
+
+      // Se calla lo que se esté reproduciendo ANTES de tapar la pantalla.
+      //
+      // El aviso sale encima de cualquier cosa y bloquea, que es a propósito.
+      // Pero sin esto el vídeo seguía sonando detrás: quedaba el audio de algo
+      // que ya no se ve, y había que adivinar de dónde salía.
+      //
+      // Son dos motores distintos y hay que pedírselo a los dos: el
+      // reproductor nativo maneja su audio con media_kit, y el de WebView lo
+      // maneja la propia página. Pausar uno no toca al otro.
+      //
+      // Pausar y no cerrar: se puede posponer la actualización, y en ese caso
+      // el episodio tiene que seguir donde estaba. Las dos llamadas tienen su
+      // propio tope de tiempo, así que un reproductor colgado no puede impedir
+      // que el aviso aparezca.
+      await VideoPlayerController.pausarLoQueSuene();
+      await WebViewPlayerPause.pausarLoQueSuene();
+      if (!context.mounted) return;
 
       _forcedUpdatePageOpen = true;
       try {
@@ -532,14 +571,53 @@ class ApplicationUtils {
   // La contra, dicha claramente: puede interrumpir a alguien a mitad de un
   // episodio. Se acepta a cambio de que nadie se quede atras sin enterarse.
   static Timer? _chequeoPeriodico;
-  static const _cadaCuanto = Duration(minutes: 30);
+
+  // Cada cuánto se pregunta si hay versión nueva.
+  //
+  // Estaba en 30 minutos y era demasiado: un release puede estar listo y el
+  // usuario enterarse media hora después.
+  //
+  // No se baja a "cada un minuto" porque la consulta va a la API de GitHub, que
+  // sin credenciales corta a 60 llamadas por hora y por IP. A un minuto se
+  // consume el cupo entero solo con esto, y una casa con dos dispositivos
+  // empezaría a recibir respuestas de "demasiadas peticiones" — o sea, dejaría
+  // de avisar justo cuando hay algo que avisar.
+  //
+  // Cinco minutos deja el cupo en doce llamadas por hora, con lugar de sobra.
+  static const _cadaCuanto = Duration(minutes: 5);
+
+  // Y cuando ya se sabe que hay algo por salir, se mira seguido.
+  //
+  // Un release se publica por partes: cada plataforma sube su archivo al
+  // terminar de compilar, y las notas pueden escribirse después. En esa ventana
+  // la comprobación ve la versión nueva pero no avisa, porque avisar a medias
+  // manda a una descarga que no existe o deja al usuario eligiendo sin saber
+  // qué trae.
+  //
+  // Ahí es cuando conviene mirar seguido: falta poco y ya se sabe. Se pasa a un
+  // minuto hasta que el release esté entero, y recién ahí sale el aviso — que
+  // es exactamente el momento pedido: "cuando la release completa todo, ahí
+  // sale". Es una ráfaga corta y acotada, no el ritmo permanente.
+  static const _cadaCuantoEsperando = Duration(minutes: 1);
+
+  /// Hay una versión más nueva pero el release todavía no está entero.
+  static bool _esperandoReleaseIncompleto = false;
 
   static void iniciarChequeoPeriodico(BuildContext context) {
     if (kIsWeb) return;
     // Uno solo: en Android el shell se reconstruye al cambiar de pestaña, y sin
     // esto quedaba un temporizador nuevo por cada reconstrucción.
     _chequeoPeriodico?.cancel();
-    _chequeoPeriodico = Timer.periodic(_cadaCuanto, (_) {
+    // El temporizador late al ritmo RÁPIDO siempre, y adentro se decide si toca
+    // preguntar. Así el cambio de ritmo no obliga a destruir y recrear el
+    // temporizador, que es donde se cuelan los duplicados.
+    var pulsos = 0;
+    _chequeoPeriodico = Timer.periodic(_cadaCuantoEsperando, (_) {
+      pulsos++;
+      final cadaCuantosPulsos = _esperandoReleaseIncompleto
+          ? 1
+          : _cadaCuanto.inMinutes ~/ _cadaCuantoEsperando.inMinutes;
+      if (pulsos % cadaCuantosPulsos != 0) return;
       // Se relee el ajuste en cada vuelta: si el usuario lo apaga mientras
       // tanto, esto deja de molestar sin necesidad de reiniciar nada.
       if (PrismHubStorage.getSetting(SettingKey.autoCheckUpdate) != true) return;

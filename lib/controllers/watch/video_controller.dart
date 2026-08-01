@@ -375,6 +375,7 @@ class VideoPlayerController extends GetxController with WidgetsBindingObserver {
 
   @override
   void onInit() async {
+    _enUso = this;
     WidgetsBinding.instance.addObserver(this);
     if (Platform.isAndroid) {
       // 切换到横屏
@@ -1311,6 +1312,29 @@ class VideoPlayerController extends GetxController with WidgetsBindingObserver {
   // WebView nativo y dejando la app sintiéndose trabada. No cancela el paso
   // YA en curso (eso depende del plugin nativo), pero evita encolar el
   // siguiente paso una vez que el actual termina.
+  /// El reproductor que se esta usando ahora, si hay alguno.
+  ///
+  /// Existe para que el aviso de actualizacion pueda callar lo que se este
+  /// reproduciendo antes de taparlo. Ese aviso sale encima de cualquier
+  /// pantalla y bloquea a proposito, pero sin esto el video seguia sonando
+  /// detras: quedaba el audio de algo que ya no se ve, y el usuario tenia que
+  /// adivinar de donde salia.
+  static VideoPlayerController? _enUso;
+
+  /// Pausa lo que se este reproduciendo. No falla si no hay nada.
+  static Future<void> pausarLoQueSuene() async {
+    final c = _enUso;
+    if (c == null || c._disposed) return;
+    try {
+      // Con tope: si el reproductor esta colgado, el aviso NO puede quedarse
+      // esperandolo. Vale mas mostrar la actualizacion que apagar el audio.
+      await c.player.pause().timeout(const Duration(seconds: 2));
+    } catch (_) {
+      // Un reproductor a medio cerrar puede rechazar la orden. No es motivo
+      // para no mostrar el aviso.
+    }
+  }
+
   bool _disposed = false;
   bool get disposed => _disposed;
   final Completer<void> _shutdownCompleter = Completer<void>();
@@ -1348,6 +1372,9 @@ class VideoPlayerController extends GetxController with WidgetsBindingObserver {
   void _beginPlaybackShutdown() {
     ++_switchServerGen;
     _disposed = true;
+    // Solo si sigo siendo yo: entre dos episodios puede haberse registrado ya
+    // el controlador siguiente, y borrarlo dejaria el aviso sin a quien pausar.
+    if (identical(_enUso, this)) _enUso = null;
     isVideoSurfaceMounted.value = false;
     isWebViewActive.value = false;
     if (!_shutdownCompleter.isCompleted) {
