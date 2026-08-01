@@ -2991,27 +2991,44 @@ class VideoPlayerController extends GetxController with WidgetsBindingObserver {
   Future<void> reintentarCast() async {
     final device = dlnaDevice.value;
     if (device == null) return;
-    // Se limpia el relay anterior: registrar uno nuevo sin soltar el viejo deja
-    // entradas colgadas por cada reintento.
-    if (_dlnaRelayUrl != null) {
-      CastRelayServer.unregister(_dlnaRelayUrl!);
-      _dlnaRelayUrl = null;
-    }
+    // Ya hay un reintento o un enganche en curso: tocar de nuevo no encola otro.
+    if (castConectando.value) return;
+    // Se enciende YA, antes de tocar la red.
+    //
+    // Volver a resolver el video puede tardar varios segundos, y en ese rato el
+    // boton no daba ninguna señal: parecia que no habia hecho nada y se
+    // terminaba tocando de nuevo. Ahora el panel muestra la rueda desde el
+    // primer momento y el boton queda bloqueado.
+    castConectando.value = true;
     try {
-      await device.stop();
-    } catch (_) {
-      // Puede estar ya parado o no responder: no es motivo para no reintentar.
+      // Se limpia el relay anterior: registrar uno nuevo sin soltar el viejo
+      // deja entradas colgadas por cada reintento.
+      if (_dlnaRelayUrl != null) {
+        CastRelayServer.unregister(_dlnaRelayUrl!);
+        _dlnaRelayUrl = null;
+      }
+      try {
+        await device.stop();
+      } catch (_) {
+        // Puede estar ya parado o no responder: no frena el reintento.
+      }
+      // Direccion nueva y fresca. Si esto falla se avisa y no se sigue:
+      // castear con la vieja seria repetir el mismo error a proposito.
+      try {
+        await getWatchData();
+      } catch (e) {
+        logger.warning('No se pudo volver a resolver el video para el cast', e);
+        sendMessage(Message(Text(friendlyError(e))));
+        return;
+      }
+      if (_disposed || watchData == null) return;
+    } finally {
+      // Se apaga justo antes de pasarle la posta a connectDLNADevice, que la
+      // vuelve a encender de inmediato (su cuerpo corre sin ningun await de por
+      // medio hasta ahi, asi que no se ve ningun parpadeo). Sin esto, su propia
+      // proteccion contra dobles enganches cortaria el reintento en seco.
+      castConectando.value = false;
     }
-    // Direccion nueva y fresca. Si esto falla se avisa y no se sigue: castear
-    // con la vieja seria repetir el mismo error a proposito.
-    try {
-      await getWatchData();
-    } catch (e) {
-      logger.warning('No se pudo volver a resolver el video para el cast', e);
-      sendMessage(Message(Text(friendlyError(e))));
-      return;
-    }
-    if (_disposed || watchData == null) return;
     await connectDLNADevice(device);
   }
 

@@ -426,60 +426,6 @@ class _VideoPlayerMobileControlsState extends State<VideoPlayerMobileControls> {
                 ),
               ),
             ),
-            // Devolución visual del doble toque: cuántos segundos se
-            // saltó y hacia dónde. Va sobre la capa de gestos para que no la
-            // tape, y con IgnorePointer para no robar toques.
-            Positioned.fill(
-              child: IgnorePointer(
-                child: Align(
-                    // Arriba del centro, no en el centro: ahí está la rueda de
-                    // carga, y al saltar a un tramo sin cargar aparecen las dos
-                    // cosas a la vez y se pisaban. Misma posición que en PC.
-                    alignment: const Alignment(0, -0.55),
-                    child: AnimatedScale(
-                      // Rebote corto: aparece de golpe y se asienta. Con solo la
-                      // opacidad a 150ms el cartel se sentia lento justo cuando
-                      // el gesto ya paso.
-                      duration: const Duration(milliseconds: 120),
-                      curve: Curves.easeOutBack,
-                      scale: _saltoVisible == null ? 0.85 : 1,
-                      child: AnimatedOpacity(
-                        duration: const Duration(milliseconds: 90),
-                        opacity: _saltoVisible == null ? 0 : 1,
-                        child: Container(
-                          padding: const EdgeInsets.symmetric(
-                              horizontal: 18, vertical: 10),
-                          decoration: BoxDecoration(
-                            color: const Color(0xB3000000),
-                            borderRadius: BorderRadius.circular(999),
-                            border: Border.all(color: HomeTheme.accentPink),
-                          ),
-                          child: Row(
-                            mainAxisSize: MainAxisSize.min,
-                            children: [
-                              Icon(
-                                (_saltoVisible ?? 0) < 0
-                                    ? Icons.fast_rewind
-                                    : Icons.fast_forward,
-                                color: HomeTheme.accentPink,
-                                size: 20,
-                              ),
-                              const SizedBox(width: 8),
-                              Text(
-                                '${(_saltoVisible ?? 0).abs()} s',
-                                style: const TextStyle(
-                                  color: Colors.white,
-                                  fontWeight: FontWeight.w700,
-                                  fontSize: 15,
-                                ),
-                              ),
-                            ],
-                          ),
-                        ),
-                      ),
-                    )),
-              ),
-            ),
             // 手势层
             Positioned.fill(
               child: Listener(
@@ -810,6 +756,67 @@ class _VideoPlayerMobileControlsState extends State<VideoPlayerMobileControls> {
                     ),
                   );
                 }),
+              ),
+            ),
+            // Devolución visual del doble toque: cuántos segundos se saltó y
+            // hacia dónde.
+            //
+            // Va DESPUÉS del bloque del centro a propósito. Estaba antes, así
+            // que al transmitir el panel de casteo —que ocupa el centro— se
+            // dibujaba encima y el cartel quedaba tapado justo cuando más hacía
+            // falta: al hacer doble toque mientras se castea, no se veía nada y
+            // parecía que el gesto no había hecho efecto.
+            //
+            // IgnorePointer para no robar toques a la capa de gestos.
+            Positioned.fill(
+              child: IgnorePointer(
+                child: Align(
+                    // Arriba del centro, no en el centro: ahí está la rueda de
+                    // carga, y al saltar a un tramo sin cargar aparecen las dos
+                    // cosas a la vez y se pisaban. Misma posición que en PC.
+                    alignment: const Alignment(0, -0.55),
+                    child: AnimatedScale(
+                      // Rebote corto: aparece de golpe y se asienta. Con solo la
+                      // opacidad a 150ms el cartel se sentia lento justo cuando
+                      // el gesto ya paso.
+                      duration: const Duration(milliseconds: 120),
+                      curve: Curves.easeOutBack,
+                      scale: _saltoVisible == null ? 0.85 : 1,
+                      child: AnimatedOpacity(
+                        duration: const Duration(milliseconds: 90),
+                        opacity: _saltoVisible == null ? 0 : 1,
+                        child: Container(
+                          padding: const EdgeInsets.symmetric(
+                              horizontal: 18, vertical: 10),
+                          decoration: BoxDecoration(
+                            color: const Color(0xB3000000),
+                            borderRadius: BorderRadius.circular(999),
+                            border: Border.all(color: HomeTheme.accentPink),
+                          ),
+                          child: Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              Icon(
+                                (_saltoVisible ?? 0) < 0
+                                    ? Icons.fast_rewind
+                                    : Icons.fast_forward,
+                                color: HomeTheme.accentPink,
+                                size: 20,
+                              ),
+                              const SizedBox(width: 8),
+                              Text(
+                                '${(_saltoVisible ?? 0).abs()} s',
+                                style: const TextStyle(
+                                  color: Colors.white,
+                                  fontWeight: FontWeight.w700,
+                                  fontSize: 15,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ),
+                    )),
               ),
             ),
             // Header y footer — se ocultan al tocar la pantalla y vuelven a
@@ -1146,10 +1153,20 @@ class _Header extends StatelessWidget {
               return Row(
                 mainAxisSize: MainAxisSize.min,
                 children: [
+                  // Bloqueado mientras reintenta: tocarlo de nuevo no encola
+                  // otro intento, y sin apagarlo no se notaba que ya estaba
+                  // trabajando.
                   IconButton(
                     tooltip: 'common.retry'.i18n,
-                    icon: const Icon(Icons.refresh, color: Colors.white),
-                    onPressed: () => controller.reintentarCast(),
+                    icon: Icon(
+                      Icons.refresh,
+                      color: controller.castConectando.value
+                          ? Colors.white.withAlpha(90)
+                          : Colors.white,
+                    ),
+                    onPressed: controller.castConectando.value
+                        ? null
+                        : () => controller.reintentarCast(),
                   ),
                   IconButton(
                     tooltip: 'common.disconnect'.i18n,

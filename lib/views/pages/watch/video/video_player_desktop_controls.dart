@@ -1859,12 +1859,19 @@ class _CastState extends State<_Cast> {
                                 Row(
                                   mainAxisSize: MainAxisSize.min,
                                   children: [
+                                    // Bloqueado mientras reintenta: sin esto no
+                                    // se notaba que ya estaba trabajando y se
+                                    // terminaba tocando de nuevo.
                                     Button(
+                                      onPressed:
+                                          widget.controller.castConectando.value
+                                              ? null
+                                              : () {
+                                                  widget.controller
+                                                      .reintentarCast();
+                                                  Flyout.of(context).close();
+                                                },
                                       child: Text('common.retry'.i18n),
-                                      onPressed: () {
-                                        widget.controller.reintentarCast();
-                                        Flyout.of(context).close();
-                                      },
                                     ),
                                     const SizedBox(width: 10),
                                     FilledButton(
