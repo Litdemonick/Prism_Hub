@@ -13,6 +13,7 @@ import 'package:prismhub/views/pages/watch/video/webview_player_page.dart'
 import 'package:prismhub/utils/i18n.dart';
 import 'package:prismhub/views/widgets/cache_network_image.dart';
 import 'package:prismhub/views/widgets/home/home_theme.dart';
+import 'package:prismhub/views/widgets/window_caption_buttons.dart';
 import 'package:prismhub/views/widgets/watch/playlist.dart';
 import 'package:window_manager/window_manager.dart';
 
@@ -781,62 +782,14 @@ class _VideoWindowCaptionButtons extends StatefulWidget {
       _VideoWindowCaptionButtonsState();
 }
 
-class _VideoWindowCaptionButtonsState extends State<_VideoWindowCaptionButtons>
-    with WindowListener {
-  bool _isMaximized = false;
-
+class _VideoWindowCaptionButtonsState
+    extends State<_VideoWindowCaptionButtons> {
+  // Los tres botones viven ahora en BotonesVentana, compartidos con la ventana
+  // principal. Estaban escritos dos veces —casi igual— y cada arreglo entraba
+  // en uno solo; el de la guarda de pantalla completa es el ultimo ejemplo.
   @override
-  void initState() {
-    super.initState();
-    windowManager.addListener(this);
-    windowManager.isMaximized().then((value) {
-      if (mounted) setState(() => _isMaximized = value);
-    });
-  }
-
-  @override
-  void dispose() {
-    windowManager.removeListener(this);
-    super.dispose();
-  }
-
-  @override
-  void onWindowMaximize() => setState(() => _isMaximized = true);
-
-  @override
-  void onWindowUnmaximize() => setState(() => _isMaximized = false);
-
-  @override
-  Widget build(BuildContext context) {
-    return Row(
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        WindowCaptionButton.minimize(
-          brightness: Brightness.dark,
-          onPressed: () async {
-            if (await windowManager.isMinimized()) {
-              windowManager.restore();
-            } else {
-              windowManager.minimize();
-            }
-          },
-        ),
-        _isMaximized
-            ? WindowCaptionButton.unmaximize(
-                brightness: Brightness.dark,
-                onPressed: () => windowManager.unmaximize(),
-              )
-            : WindowCaptionButton.maximize(
-                brightness: Brightness.dark,
-                onPressed: () => windowManager.maximize(),
-              ),
-        WindowCaptionButton.close(
-          brightness: Brightness.dark,
-          onPressed: () => windowManager.close(),
-        ),
-      ],
-    );
-  }
+  Widget build(BuildContext context) =>
+      const BotonesVentana(brightness: Brightness.dark);
 }
 
 class _Footer extends StatelessWidget {

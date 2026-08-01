@@ -15,6 +15,7 @@ import 'package:prismhub/utils/connectivity.dart';
 import 'package:prismhub/utils/i18n.dart';
 import 'package:prismhub/utils/layout.dart';
 import 'package:prismhub/utils/prismhub_storage.dart';
+import 'package:prismhub/views/widgets/window_caption_buttons.dart';
 import 'package:window_manager/window_manager.dart';
 
 // Banner único de "sin conexión", visible en toda la app (cualquier pestaña)
@@ -130,8 +131,9 @@ class _DesktopMainPageState extends State<DesktopMainPage> with WindowListener {
               SizedBox(
                 width: 138,
                 height: 50,
-                child: WindowCaption(
-                  backgroundColor: Colors.transparent,
+                // Ver BotonesVentana: el maximizar del WindowCaption del
+                // paquete dejaba de responder despues de achicar la ventana.
+                child: BotonesVentana(
                   brightness: fluent.FluentTheme.of(context).brightness,
                 ),
               )

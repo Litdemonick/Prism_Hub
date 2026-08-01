@@ -9,6 +9,7 @@ import 'package:prismhub/views/widgets/watch/playlist.dart';
 import 'package:prismhub/controllers/watch/reader_controller.dart';
 import 'package:prismhub/router/router.dart';
 import 'package:prismhub/views/widgets/platform_widget.dart';
+import 'package:prismhub/views/widgets/window_caption_buttons.dart';
 import 'package:window_manager/window_manager.dart';
 
 class ControlPanelHeader<T extends ReaderController> extends StatefulWidget {
@@ -199,8 +200,9 @@ class _ControlPanelHeaderState<T extends ReaderController>
             ),
             SizedBox(
               width: 138,
-              child: WindowCaption(
-                backgroundColor: Colors.transparent,
+              // La tercera copia de los mismos tres botones. Ver
+              // BotonesVentana.
+              child: BotonesVentana(
                 brightness: fluent.FluentTheme.of(context).brightness,
               ),
             ),
