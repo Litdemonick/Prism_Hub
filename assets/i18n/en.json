@@ -348,6 +348,8 @@
     "paused-cant-skip": "Can't skip: it is paused",
     "paused": "Video paused",
     "cast-hint-doubletap": "double tap",
+    "cast-speed": "Speeding up ×{speed}",
+    "cast-seeking": "Jumping there, hold on…",
     "cast-connecting": "Connecting to the device…",
     "cast-failed": "The device did not accept the video. Try again or pick another one.",
     "cast-wait": "Wait for the video to load before casting",

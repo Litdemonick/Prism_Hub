@@ -1056,7 +1056,11 @@ class _PanelCasteandoState extends State<_PanelCasteando>
       // varios segundos, y en ese rato no se veia nada — parecia que el toque
       // no habia hecho efecto.
       final cambiandoEpisodio = controller.castCambiandoEpisodio.value;
-      final conectando = controller.castConectando.value || cambiandoEpisodio;
+      final buscando = controller.castBuscando.value;
+      // "conectando" tambien enciende la rueda: buscar un momento del video en
+      // el aparato es otra espera, y se muestra igual.
+      final conectando =
+          controller.castConectando.value || cambiandoEpisodio || buscando;
       final reproduciendo = controller.isPlaying.value;
       return Container(
         margin: const EdgeInsets.symmetric(horizontal: 32),
@@ -1103,15 +1107,26 @@ class _PanelCasteandoState extends State<_PanelCasteando>
             // todo lo que el usuario necesita leer esta en el mismo lugar.
             Builder(builder: (context) {
               final aviso = controller.castAviso.value;
+              // Acelerado DESDE el aparato: la barra corre distinto y sin
+              // decirlo no se entiende por que.
+              final velocidad = controller.castVelocidad.value;
+              final estado = cambiandoEpisodio
+                  ? 'video.cast-changing-episode'.i18n
+                  : buscando
+                      ? 'video.cast-seeking'.i18n
+                      : conectando
+                          ? 'video.cast-connecting'.i18n
+                      : !reproduciendo
+                          ? 'video.cast-paused-here'.i18n
+                          : velocidad != null
+                              ? FlutterI18n.translate(
+                                  context,
+                                  'video.cast-speed',
+                                  translationParams: {'speed': velocidad},
+                                )
+                              : 'video.cast-on-device'.i18n;
               return Text(
-                aviso ??
-                    (cambiandoEpisodio
-                        ? 'video.cast-changing-episode'.i18n
-                        : conectando
-                            ? 'video.cast-connecting'.i18n
-                            : reproduciendo
-                                ? 'video.cast-on-device'.i18n
-                                : 'video.cast-paused-here'.i18n),
+                aviso ?? estado,
                 textAlign: TextAlign.center,
                 style: TextStyle(
                   fontSize: 13,

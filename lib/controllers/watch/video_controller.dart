@@ -402,6 +402,46 @@ class VideoPlayerController extends GetxController with WidgetsBindingObserver {
   /// primera; adentro es una sola cosa que cambia de texto.
   final castAviso = Rxn<String>();
 
+  /// Velocidad que informa el aparato, cuando no es la normal.
+  ///
+  /// Si desde el televisor se pone x2, x4..., la app no se enteraba: seguia
+  /// diciendo "transmitiendo" como si nada, y el usuario veia la barra de
+  /// progreso corriendo raro sin explicacion. El estado que devuelve el aparato
+  /// trae la velocidad, asi que se lee de ahi.
+  final castVelocidad = Rxn<String>();
+
+  /// Saltando a otro punto del video EN el aparato.
+  ///
+  /// El televisor tarda en llegar y mientras tanto deja la imagen congelada; de
+  /// este lado no pasaba nada y parecia que el salto se habia perdido. Con esto
+  /// el panel muestra la rueda y dice que espere.
+  final castBuscando = false.obs;
+  Duration? _objetivoDeSalto;
+  Timer? _castBuscandoTimer;
+
+  void _empezoSaltoEnCast(Duration objetivo) {
+    _objetivoDeSalto = objetivo;
+    castBuscando.value = true;
+    _castBuscandoTimer?.cancel();
+    // Techo por si el aparato nunca informa haber llegado: mejor soltar el
+    // aviso que dejarlo girando para siempre.
+    _castBuscandoTimer = Timer(const Duration(seconds: 8), () {
+      castBuscando.value = false;
+      _objetivoDeSalto = null;
+    });
+  }
+
+  void _revisarSaltoEnCast() {
+    final objetivo = _objetivoDeSalto;
+    if (!castBuscando.value || objetivo == null) return;
+    // Llego: el aparato ya informa una posicion cerca de donde se le pidio.
+    if ((position.value - objetivo).abs() <= const Duration(seconds: 3)) {
+      _castBuscandoTimer?.cancel();
+      castBuscando.value = false;
+      _objetivoDeSalto = null;
+    }
+  }
+
   // Foto del casteo justo antes de empezar a cerrar, para que el historial
   // pueda guardar por donde iba el TELEVISOR. Ver _beginPlaybackShutdown.
   bool _casteabaAlCerrar = false;
@@ -1501,6 +1541,7 @@ class VideoPlayerController extends GetxController with WidgetsBindingObserver {
     // sobre observables de un controlador ya destruido.
     _seekWatchdog?.cancel();
     _skipBadgeTimer?.cancel();
+    _castBuscandoTimer?.cancel();
     final device = dlnaDevice.value;
     // Se anota que se estaba casteando y por donde iba ANTES de soltar nada.
     //
@@ -3256,6 +3297,19 @@ class VideoPlayerController extends GetxController with WidgetsBindingObserver {
       isPlaying.value = reproduciendo;
       if (reproduciendo) _vioReproduciendoEnCast = true;
 
+      // Velocidad puesta EN el aparato (x2, x4...). Viene en el mismo estado,
+      // como <CurrentSpeed>. Se guarda solo cuando no es la normal: con "1" no
+      // hay nada que decir. Se acepta tambien la forma con fraccion ("1/2") que
+      // usan algunos aparatos para la camara lenta.
+      final speed = RegExp(r'<CurrentSpeed>([^<]+)</CurrentSpeed>')
+          .firstMatch(transportInfo)
+          ?.group(1)
+          ?.trim();
+      castVelocidad.value =
+          (speed == null || speed.isEmpty || speed == '1' || speed == '1.0')
+              ? null
+              : speed;
+
       // Lo pararon DESDE el televisor (con su control remoto, o porque
       // termino). Se distingue de una pausa: pausar informa PAUSED_PLAYBACK,
       // parar informa STOPPED o que ya no hay nada cargado.
@@ -3340,6 +3394,8 @@ class VideoPlayerController extends GetxController with WidgetsBindingObserver {
       );
       position.value = absTime;
       duration.value = Duration(seconds: positionParser.TrackDurationInt);
+      // Ya llego a donde se le pidio? Entonces se saca la rueda de "buscando".
+      _revisarSaltoEnCast();
     } catch (e) {
       // Se apago, se quedo sin red, o se salio de la app del televisor.
       //
@@ -3977,6 +4033,9 @@ class VideoPlayerController extends GetxController with WidgetsBindingObserver {
       player.seek(duration);
       return;
     }
+    // El aparato tarda en llegar y deja la imagen congelada mientras tanto: se
+    // avisa antes de mandarlo, no despues.
+    _empezoSaltoEnCast(duration);
     final curr = await dlnaDevice.value!.position();
     final diff = duration - position.value;
     await dlnaDevice.value!.seekByCurrent(curr, diff.inSeconds);

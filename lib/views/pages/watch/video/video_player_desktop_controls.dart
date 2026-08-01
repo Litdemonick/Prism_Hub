@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:fluent_ui/fluent_ui.dart';
 import 'package:flutter/material.dart' as material;
 import 'package:flutter/services.dart';
+import 'package:flutter_i18n/flutter_i18n.dart';
 import 'package:get/get.dart';
 import 'package:media_kit/media_kit.dart';
 import 'package:media_kit_video/media_kit_video.dart';
@@ -1625,7 +1626,10 @@ class _PanelCasteandoState extends State<_PanelCasteando>
       // Enganchando: mandarle el vídeo al aparato y que arranque puede tardar
       // varios segundos, y en ese rato no se veía nada.
       final cambiandoEpisodio = controller.castCambiandoEpisodio.value;
-      final conectando = controller.castConectando.value || cambiandoEpisodio;
+      final buscando = controller.castBuscando.value;
+      // Buscar un momento del vídeo en el aparato es otra espera: misma rueda.
+      final conectando =
+          controller.castConectando.value || cambiandoEpisodio || buscando;
       final reproduciendo = controller.isPlaying.value;
       return Container(
         padding: const EdgeInsets.symmetric(horizontal: 30, vertical: 24),
@@ -1669,13 +1673,27 @@ class _PanelCasteandoState extends State<_PanelCasteando>
             ConstrainedBox(
               constraints: const BoxConstraints(maxWidth: 360),
               child: Text(
-                cambiandoEpisodio
-                    ? 'video.cast-changing-episode'.i18n
-                    : conectando
-                        ? 'video.cast-connecting'.i18n
-                        : reproduciendo
-                            ? 'video.cast-on-device'.i18n
-                            : 'video.cast-paused-desktop'.i18n,
+                // Mismo criterio que en celular: un aviso puntual pisa al
+                // estado, y si el aparato va acelerado se dice.
+                controller.castAviso.value ??
+                    (cambiandoEpisodio
+                        ? 'video.cast-changing-episode'.i18n
+                        : buscando
+                            ? 'video.cast-seeking'.i18n
+                            : conectando
+                                ? 'video.cast-connecting'.i18n
+                            : !reproduciendo
+                                ? 'video.cast-paused-desktop'.i18n
+                                : controller.castVelocidad.value != null
+                                    ? FlutterI18n.translate(
+                                        context,
+                                        'video.cast-speed',
+                                        translationParams: {
+                                          'speed':
+                                              controller.castVelocidad.value!
+                                        },
+                                      )
+                                    : 'video.cast-on-device'.i18n),
                 textAlign: TextAlign.center,
                 style: TextStyle(
                   fontSize: 13,

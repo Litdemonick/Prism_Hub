@@ -327,6 +327,8 @@
     "paused-cant-skip": "No se puede saltar: está pausado",
     "paused": "Vídeo pausado",
     "cast-hint-doubletap": "doble toque",
+    "cast-speed": "Acelerado ×{speed}",
+    "cast-seeking": "Buscando el momento, esperá…",
     "cast-connecting": "Conectando con el dispositivo…",
     "cast-failed": "El dispositivo no aceptó el vídeo. Probá de nuevo o elegí otro.",
     "cast-wait": "Esperá a que cargue el vídeo para poder transmitir",
