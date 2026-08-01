@@ -34,6 +34,18 @@ class _VideoPlayerMobileControlsState extends State<VideoPlayerMobileControls> {
   double _currentVolume = 0;
   bool _isAdjusting = false;
   bool _isLongPress = false;
+  // Velocidad del adelantado con el dedo apoyado.
+  //
+  // Estaba en 3x y se veia a tirones. No era un problema del gesto sino de
+  // trabajo: a 3x el decodificador tiene que sacar el triple de cuadros por
+  // segundo y ademas hay que reajustar el tono del audio sobre la marcha. En
+  // el telefono eso no entra, asi que empieza a saltear cuadros y se ve peor
+  // que el video normal — justo lo contrario de lo que uno espera al adelantar.
+  //
+  // A 2x el trabajo extra es la mitad y es la velocidad que usan los
+  // reproductores conocidos para este mismo gesto. Se deja con nombre para que
+  // cambiarla sea tocar un solo numero.
+  static const double _velocidadSostenida = 2.0;
   // Cuenta de dedos apoyados en la pantalla — sin esto, pellizcar con 2 dedos
   // (que el usuario espera que no haga nada, no hay zoom por pellizco, solo
   // doble tap) igual disparaba onVerticalDragUpdate con el movimiento de uno
@@ -328,9 +340,23 @@ class _VideoPlayerMobileControlsState extends State<VideoPlayerMobileControls> {
                     mainAxisSize: MainAxisSize.min,
                     children: [
                       if (_isLongPress)
-                        const Padding(
-                          padding: EdgeInsets.all(8.0),
-                          child: Text('Playing at 3x speed'),
+                        Padding(
+                          padding: const EdgeInsets.all(8.0),
+                          // El texto estaba escrito a mano y en ingles, con el
+                          // "3x" clavado adentro: cambiar la velocidad dejaba
+                          // el cartel mintiendo. Ahora sale la de verdad y en
+                          // el idioma del usuario.
+                          child: Text(
+                            FlutterI18n.translate(
+                              context,
+                              'video.holding-fast-forward',
+                              translationParams: {
+                                'x': _velocidadSostenida
+                                    .toStringAsFixed(
+                                        _velocidadSostenida % 1 == 0 ? 0 : 1)
+                              },
+                            ),
+                          ),
                         ),
                       if (_isAdjusting)
                         Padding(
@@ -476,7 +502,7 @@ class _VideoPlayerMobileControlsState extends State<VideoPlayerMobileControls> {
                   },
                   onLongPressStart: (details) {
                     _isLongPress = true;
-                    _c.player.setRate(3.0);
+                    _c.player.setRate(_velocidadSostenida);
                     setState(() {});
                   },
                   onLongPressEnd: (details) {

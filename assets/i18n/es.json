@@ -341,7 +341,8 @@
     },
     "servers": "Servidores",
     "webview-server": "Abre en el navegador",
-    "webview-server-return": "Volver al navegador"
+    "webview-server-return": "Volver al navegador",
+    "holding-fast-forward": "Adelantando a {x}x"
   },
   "comic-settings": {
     "read-mode": "Modo de lectura",

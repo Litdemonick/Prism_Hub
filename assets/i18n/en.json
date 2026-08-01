@@ -352,7 +352,8 @@
     },
     "servers": "Servers",
     "webview-server": "Opens in browser",
-    "webview-server-return": "Back to browser"
+    "webview-server-return": "Back to browser",
+    "holding-fast-forward": "Fast-forwarding at {x}x"
   },
   "comic-settings": {
     "read-mode": "Read mode",
