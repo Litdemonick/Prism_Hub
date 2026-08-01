@@ -203,7 +203,17 @@ void main(List<String> args) async {
           //
           // Ver _mostrarVentanaCuandoHayaFotograma: se muestra en el primer
           // post-frame, con red de seguridad por si ese fotograma nunca llega.
-          _mostrarVentanaCuandoHayaFotograma();
+          // El tamaño REAL que quedó, no el pedido: si Windows lo ajustó (otro
+          // monitor, otra escala), esperar a que la superficie mida el pedido
+          // sería esperar algo que nunca va a pasar.
+          var medida = size;
+          try {
+            final real = await windowManager.getSize();
+            if (real.width > 0 && real.height > 0) medida = real;
+          } catch (_) {
+            // Con el tamaño pedido alcanza; para eso está la tolerancia.
+          }
+          _mostrarVentanaCuandoHayaFotograma(medida);
         }
       });
     }
@@ -240,7 +250,7 @@ void main(List<String> args) async {
 /// app quedaría corriendo sin ninguna ventana visible, solo en el administrador
 /// de tareas. Pasado el plazo se muestra igual, aunque se vea mal: es mejor una
 /// ventana fea que ninguna.
-void _mostrarVentanaCuandoHayaFotograma() {
+void _mostrarVentanaCuandoHayaFotograma(Size esperada) {
   var mostrada = false;
   Future<void> mostrar() async {
     if (mostrada) return;
@@ -253,7 +263,50 @@ void _mostrarVentanaCuandoHayaFotograma() {
     }
   }
 
-  WidgetsBinding.instance.addPostFrameCallback((_) => mostrar());
+  // Esperar UN fotograma no alcanzaba.
+  //
+  // La ventana la crea el runner nativo con un tamaño, y recién después se le
+  // pide el guardado. Ese cambio de tamaño llega al motor como un WM_SIZE, que
+  // es asincrónico: si Flutter alcanza a pintar su primer cuadro antes de que
+  // llegue, ese cuadro está dibujado al tamaño VIEJO. Mostrando ahí se ve
+  // exactamente lo que se veía — el contenido chico arrinconado dentro de un
+  // marco más grande, con franjas negras arriba y a la derecha.
+  //
+  // Así que además de que haya cuadro, se espera a que la superficie mida lo
+  // que mide el marco y se quede quieta unos cuadros seguidos. La tolerancia
+  // absorbe el grosor del borde de la ventana, que no es parte del área que
+  // Flutter dibuja.
+  Size? anterior;
+  var estables = 0;
+  var cuadros = 0;
+  void comprobar(Duration _) {
+    if (mostrada) return;
+    cuadros++;
+    final vista = WidgetsBinding.instance.platformDispatcher.implicitView;
+    if (vista != null && vista.devicePixelRatio > 0) {
+      final actual = vista.physicalSize / vista.devicePixelRatio;
+      estables = (anterior != null && actual == anterior) ? estables + 1 : 0;
+      anterior = actual;
+      final coincide = (actual.width - esperada.width).abs() <= 24 &&
+          (actual.height - esperada.height).abs() <= 24;
+      if (coincide && estables >= 2) {
+        mostrar();
+        return;
+      }
+    }
+    // ~1,3 s a 60 cuadros: si en ese rato nunca coincidió, mostrarla igual es
+    // mejor que dejar al usuario mirando la nada.
+    if (cuadros > 80) {
+      mostrar();
+      return;
+    }
+    WidgetsBinding.instance.addPostFrameCallback(comprobar);
+    // Sin esto no habría más cuadros que mirar: con la pantalla quieta, Flutter
+    // no dibuja de nuevo y el callback no se volvería a llamar nunca.
+    WidgetsBinding.instance.scheduleFrame();
+  }
+
+  WidgetsBinding.instance.addPostFrameCallback(comprobar);
   // Dos segundos: de sobra para el primer fotograma incluso arrancando en
   // frío, y poco como para que un arranque roto no parezca un cuelgue.
   Timer(const Duration(seconds: 2), mostrar);
