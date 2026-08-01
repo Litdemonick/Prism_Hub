@@ -4,6 +4,8 @@ import 'package:flutter/material.dart';
 import 'package:prismhub/utils/i18n.dart';
 import 'package:prismhub/utils/prismhub_storage.dart';
 import 'package:prismhub/views/widgets/home/home_theme.dart';
+import 'package:window_manager/window_manager.dart';
+import 'package:prismhub/views/widgets/window_caption_buttons.dart';
 
 /// Un paso del tutorial: qué se hace y qué pasa.
 class _Paso {
@@ -234,6 +236,28 @@ class _TutorialReproductorState extends State<TutorialReproductor>
             ),
           ),
           _contenido(context),
+          // En Windows y Linux la ventana no tiene barra propia: la dibuja la
+          // app. Con el tutorial tapando todo, esa barra quedaba debajo y la
+          // ventana no se podia mover ni cerrar sin salir del tutorial primero.
+          //
+          // Se repone aca arriba: una franja para arrastrar y los tres botones
+          // de siempre. Va por encima del absorbedor de toques, asi que es lo
+          // unico de atras que sigue respondiendo — y tiene que serlo, porque
+          // si no la ventana queda atrapada.
+          if (!Platform.isAndroid)
+            Positioned(
+              top: 0,
+              left: 0,
+              right: 0,
+              child: Row(
+                children: [
+                  const Expanded(
+                    child: DragToMoveArea(child: SizedBox(height: 40)),
+                  ),
+                  const BotonesVentana(),
+                ],
+              ),
+            ),
         ],
       ),
     );

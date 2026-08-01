@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:io';
 
 import 'package:flutter/material.dart';
@@ -55,7 +56,31 @@ class _VideoPlayerContenState extends State<VideoPlayerConten> {
       WidgetsBinding.instance.addPostFrameCallback((_) {
         if (mounted) widget.controller.player.pause();
       });
+      // Y se queda pausado: pausar una sola vez no alcanza.
+      //
+      // El video puede arrancar SOLO despues, cuando termina de resolverse el
+      // servidor o al cambiar de calidad — son caminos que llaman a play() por
+      // su cuenta, sin saber que hay un tutorial encima. Sin esto, el episodio
+      // empezaba a correr a mitad de la lectura.
+      //
+      // Se corta apenas el tutorial se cierra (ver onCerrar), asi que no puede
+      // quedar peleandole al usuario despues.
+      _vigilante =
+          widget.controller.player.stream.playing.listen((reproduciendo) {
+        if (reproduciendo && _mostrarTutorial && mounted) {
+          widget.controller.player.pause();
+        }
+      });
     }
+  }
+
+  /// Mantiene el video pausado mientras el tutorial esta arriba.
+  StreamSubscription<bool>? _vigilante;
+
+  @override
+  void dispose() {
+    _vigilante?.cancel();
+    super.dispose();
   }
 
   @override
@@ -96,10 +121,10 @@ class _VideoPlayerContenState extends State<VideoPlayerConten> {
           // perdería parte de la imagen sin que nadie lo haya pedido— así que
           // ahí se sigue mostrando entero como siempre.
           // Recorta para llenar cuando el usuario lo pidio (video normal) o
-        // cuando el recorte del VR dejo un cuadro con otra proporcion.
-        fit: (c.vrUnaPantalla.value || c.llenarPantalla.value)
-            ? BoxFit.cover
-            : BoxFit.contain,
+          // cuando el recorte del VR dejo un cuadro con otra proporcion.
+          fit: (c.vrUnaPantalla.value || c.llenarPantalla.value)
+              ? BoxFit.cover
+              : BoxFit.contain,
           subtitleViewConfiguration: const SubtitleViewConfiguration(
             visible: false,
           ),
@@ -129,6 +154,8 @@ class _VideoPlayerContenState extends State<VideoPlayerConten> {
             onCerrar: () {
               if (!mounted) return;
               setState(() => _mostrarTutorial = false);
+              _vigilante?.cancel();
+              _vigilante = null;
               // Al cerrarlo arranca: quien abrio el episodio lo hizo para
               // verlo, y quedaria pausado sin explicacion.
               widget.controller.player.play();
