@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:fluent_ui/fluent_ui.dart' as fluent;
 import 'package:get/get.dart';
@@ -210,10 +211,10 @@ class _SideBarSettingsState extends State<_SideBarSettings> {
     await TutorialReproductor.reiniciar();
     if (!context.mounted) return;
     _c.showSidebar.value = false;
-    showPlatformSnackbar(
-      context: context,
-      content: 'video.tutorial.will-show'.i18n,
-    );
+    // Centrado y no en la barra de abajo: ahi quedaba pegado a un borde,
+    // tapado por los controles y con el video de fondo, o sea ilegible justo
+    // cuando hay que leerlo.
+    unawaited(mostrarAvisoCentrado(context, 'video.tutorial.will-show'.i18n));
   }
 
   Widget _buildDesktop(BuildContext context) {

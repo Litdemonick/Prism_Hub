@@ -1172,7 +1172,8 @@ class _VolumeState extends State<_Volume> {
                               // El 100 marcado: es el punto donde deja de
                               // subirse el volumen y empieza a amplificarse,
                               // asi que conviene verlo.
-                              divisions: VideoPlayerController.volumenMaximo ~/ 5,
+                              divisions:
+                                  VideoPlayerController.volumenMaximo ~/ 5,
                               label: '${_volume.value.round()}%',
                               onChanged: _onVolumeChanged,
                             ),
@@ -1937,9 +1938,48 @@ class _SeekBarState extends State<_SeekBar> {
 
 // ─── Selector de Servidores — fila de pestañas arriba del video ─────────────
 
-class _ServerTabBar extends StatelessWidget {
+class _ServerTabBar extends StatefulWidget {
   const _ServerTabBar({required this.controller});
   final VideoPlayerController controller;
+
+  @override
+  State<_ServerTabBar> createState() => _ServerTabBarState();
+}
+
+class _ServerTabBarState extends State<_ServerTabBar> {
+  final _scroll = ScrollController();
+  bool _desborda = false;
+
+  @override
+  void dispose() {
+    _scroll.dispose();
+    super.dispose();
+  }
+
+  /// Cuanto se corre con cada flecha. Casi todo el ancho visible, dejando un
+  /// pedacito a la vista para no perder la referencia de donde se estaba.
+  void _correr(double signo) {
+    if (!_scroll.hasClients) return;
+    final salto = _scroll.position.viewportDimension * 0.8;
+    _scroll.animateTo(
+      (_scroll.offset + salto * signo)
+          .clamp(0.0, _scroll.position.maxScrollExtent),
+      duration: const Duration(milliseconds: 240),
+      curve: Curves.easeOut,
+    );
+  }
+
+  /// Anota si hace falta mostrar las flechas.
+  ///
+  /// Se mira DESPUES de que la fila se midio: durante el build todavia no se
+  /// sabe cuanto ocupa, y preguntarlo ahi da siempre cero.
+  void _revisarDesborde() {
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted || !_scroll.hasClients) return;
+      final hay = _scroll.position.maxScrollExtent > 1;
+      if (hay != _desborda) setState(() => _desborda = hay);
+    });
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -1948,44 +1988,81 @@ class _ServerTabBar extends StatelessWidget {
       // extension entrega un MP4 por resolucion, lo que hay aca no son
       // servidores sino las mismas calidades que ya ofrece el boton de abajo, y
       // quedaban las dos cosas en pantalla diciendo lo mismo.
-      if (!controller.servidoresSonAparte) return const SizedBox.shrink();
-      final current = controller.currentServerName.value;
+      if (!widget.controller.servidoresSonAparte)
+        return const SizedBox.shrink();
+      final current = widget.controller.currentServerName.value;
+      _revisarDesborde();
+
+      // Sin titulo.
+      //
+      // Decia "Servidores disponibles" arriba de las pastillas y se veia
+      // pesado: una linea de texto fija encima del video, siempre, para
+      // nombrar algo que las propias pastillas ya dejan claro. El nombre sigue
+      // estando donde hace falta —el panel del telefono, que si es una lista
+      // dentro de un menu— pero aca sobra.
+      //
+      // Las flechas aparecen SOLO cuando los servidores no entran. Con tres o
+      // cuatro no hace falta nada; con diez, antes habia que arrastrar de
+      // costado sobre el video, que ademas peleaba con los gestos del
+      // reproductor.
       return Container(
         width: double.infinity,
         color: Colors.black.withValues(alpha: 0.35),
-        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
-        child: SingleChildScrollView(
-          scrollDirection: Axis.horizontal,
-          child: Row(
-            children: [
-              // Sin titulo, esta tira eran unas pastillas sueltas encima del
-              // video sin decir de que eran. Es el mismo texto que titula el
-              // panel del telefono, asi que las dos pantallas lo nombran igual.
-              Padding(
-                padding: const EdgeInsets.only(right: 12),
-                child: Text(
-                  'video.sidebar.tab.servers'.i18n,
-                  style: const TextStyle(
-                    color: HomeTheme.textMuted,
-                    fontSize: 12,
-                    fontWeight: FontWeight.w600,
-                  ),
+        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 8),
+        child: Row(
+          children: [
+            if (_desborda)
+              _FlechaTira(
+                icono: FluentIcons.chevron_left,
+                onTap: () => _correr(-1),
+              ),
+            Expanded(
+              child: SingleChildScrollView(
+                controller: _scroll,
+                scrollDirection: Axis.horizontal,
+                child: Row(
+                  children: [
+                    for (final entry
+                        in widget.controller.availableServers.entries) ...[
+                      _ServerTab(
+                        label: entry.key,
+                        selected: entry.key == current,
+                        isNative: isKnownNativeServer(entry.key, entry.value),
+                        onTap: () => widget.controller.selectServer(entry.key),
+                      ),
+                      const SizedBox(width: 8),
+                    ],
+                  ],
                 ),
               ),
-              for (final entry in controller.availableServers.entries) ...[
-                _ServerTab(
-                  label: entry.key,
-                  selected: entry.key == current,
-                  isNative: isKnownNativeServer(entry.key, entry.value),
-                  onTap: () => controller.selectServer(entry.key),
-                ),
-                const SizedBox(width: 8),
-              ],
-            ],
-          ),
+            ),
+            if (_desborda)
+              _FlechaTira(
+                icono: FluentIcons.chevron_right,
+                onTap: () => _correr(1),
+              ),
+          ],
         ),
       );
     });
+  }
+}
+
+/// Flecha para correr la tira de servidores cuando no entran todos.
+class _FlechaTira extends StatelessWidget {
+  const _FlechaTira({required this.icono, required this.onTap});
+  final IconData icono;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 2),
+      child: IconButton(
+        icon: Icon(icono, size: 12, color: HomeTheme.textPrimary),
+        onPressed: onTap,
+      ),
+    );
   }
 }
 

@@ -7,6 +7,108 @@ import 'package:prismhub/views/widgets/home/home_theme.dart';
 import 'package:window_manager/window_manager.dart';
 import 'package:prismhub/views/widgets/window_caption_buttons.dart';
 
+/// Aviso breve, centrado, que aparece y se va solo.
+///
+/// Se usa al pedir "ver el tutorial de nuevo": el mensaje de la barra inferior
+/// quedaba pegado a un borde, tapado por los controles del reproductor y con el
+/// fondo del video atrás, así que se leía mal justo cuando hay que leerlo.
+///
+/// Va por Overlay y no dentro de la pantalla: así no depende de que el panel de
+/// ajustes siga abierto —de hecho se cierra al tocar el botón— ni de que nadie
+/// reconstruya nada.
+Future<void> mostrarAvisoCentrado(BuildContext context, String texto) async {
+  final overlay = Overlay.maybeOf(context);
+  if (overlay == null) return;
+
+  // El estado va afuera del widget para poder animar la entrada y la salida
+  // sin reconstruir la entrada del overlay.
+  final controlador = _AvisoControlador(texto);
+  final entrada = OverlayEntry(
+    builder: (_) => _AvisoCentrado(controlador: controlador),
+  );
+  overlay.insert(entrada);
+
+  await Future<void>.delayed(const Duration(milliseconds: 40));
+  controlador.visible.value = true;
+  // Lo suficiente para leer una línea corta sin quedarse en el medio.
+  await Future<void>.delayed(const Duration(milliseconds: 2200));
+  controlador.visible.value = false;
+  // Se espera a que termine el desvanecido antes de sacarlo, si no desaparece
+  // de golpe.
+  await Future<void>.delayed(const Duration(milliseconds: 260));
+  entrada.remove();
+}
+
+class _AvisoControlador {
+  _AvisoControlador(this.texto);
+  final String texto;
+  final ValueNotifier<bool> visible = ValueNotifier(false);
+}
+
+class _AvisoCentrado extends StatelessWidget {
+  const _AvisoCentrado({required this.controlador});
+  final _AvisoControlador controlador;
+
+  @override
+  Widget build(BuildContext context) {
+    return IgnorePointer(
+      child: Center(
+        child: ValueListenableBuilder<bool>(
+          valueListenable: controlador.visible,
+          builder: (context, visible, child) => AnimatedOpacity(
+            opacity: visible ? 1 : 0,
+            duration: const Duration(milliseconds: 240),
+            curve: Curves.easeOut,
+            child: AnimatedScale(
+              scale: visible ? 1 : 0.94,
+              duration: const Duration(milliseconds: 240),
+              curve: Curves.easeOut,
+              child: child,
+            ),
+          ),
+          child: Material(
+            color: Colors.transparent,
+            child: Container(
+              margin: const EdgeInsets.symmetric(horizontal: 40),
+              padding:
+                  const EdgeInsets.symmetric(horizontal: 22, vertical: 16),
+              decoration: BoxDecoration(
+                // Sólido: sobre un fotograma claro, un fondo traslúcido dejaba
+                // el texto ilegible.
+                color: const Color(0xFF15151C),
+                borderRadius: BorderRadius.circular(14),
+                border: Border.all(color: HomeTheme.accentPink, width: 1.5),
+                boxShadow: const [
+                  BoxShadow(color: Color(0x66000000), blurRadius: 18),
+                ],
+              ),
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  const Icon(Icons.school_outlined,
+                      color: HomeTheme.accentPink, size: 20),
+                  const SizedBox(width: 12),
+                  Flexible(
+                    child: Text(
+                      controlador.texto,
+                      textAlign: TextAlign.center,
+                      style: const TextStyle(
+                        color: HomeTheme.textPrimary,
+                        fontSize: 14,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
 /// Un paso del tutorial: qué se hace y qué pasa.
 class _Paso {
   const _Paso({
