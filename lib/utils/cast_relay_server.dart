@@ -30,6 +30,22 @@ class CastRelayServer {
     final token = '${DateTime.now().microsecondsSinceEpoch}';
     _targets[token] = _RelayTarget(targetUrl, headers ?? const {});
     final ip = await _localLanAddress();
+    if (ip == null) {
+      // Sin una IP de red real no hay relay posible: lo unico que se le podria
+      // dar al televisor es 127.0.0.1, que apunta a ESTE dispositivo y nunca
+      // va a resolver desde el otro lado. Antes se devolvia igual, asi que el
+      // cast fallaba en silencio y desde afuera parecia que el televisor no
+      // soportaba el video.
+      //
+      // Se avisa con una excepcion para que el llamador lo registre y siga con
+      // la URL directa: sin cabeceras puede fallar tambien, pero al menos
+      // tiene una chance real.
+      _targets.remove(token);
+      throw StateError(
+        'Sin direccion de red alcanzable: el dispositivo de cast no podria '
+        'llegar a este equipo',
+      );
+    }
     return 'http://$ip:$_port/relay/$token';
   }
 
@@ -87,7 +103,8 @@ class CastRelayServer {
   // Primera IPv4 no-loopback de una interfaz real — es la que un
   // dispositivo de la MISMA red puede alcanzar (127.0.0.1 solo sirve
   // dentro de esta máquina).
-  static Future<String> _localLanAddress() async {
+  /// Devuelve null si no hay ninguna: ver el uso en registerAndGetUrl.
+  static Future<String?> _localLanAddress() async {
     final interfaces = await NetworkInterface.list(
       type: InternetAddressType.IPv4,
       includeLoopback: false,
@@ -98,7 +115,9 @@ class CastRelayServer {
         if (!addr.isLoopback) return addr.address;
       }
     }
-    return InternetAddress.loopbackIPv4.address;
+    // Nada alcanzable desde afuera. Devolver loopback seria peor que no
+    // devolver nada: parece una direccion valida y no lo es.
+    return null;
   }
 }
 
