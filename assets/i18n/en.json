@@ -379,6 +379,7 @@
         "auto-next": "Auto next"
       },
       "vr-single": "Watch VR on one screen",
+      "not-while-casting": "Not available while casting: the device receives the video as-is and processes it on its own.",
       "vr-single-hint": "VR videos carry one image per eye. Turn this on to see just one, without goggles.",
       "fill": "Fill the screen",
       "fill-hint": "Crops the sides a little so there are no black bars."

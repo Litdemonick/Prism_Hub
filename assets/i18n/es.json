@@ -372,6 +372,7 @@
         "auto-next": "Siguiente automático"
       },
       "vr-single": "Ver VR en una pantalla",
+      "not-while-casting": "No disponible mientras transmitís: el dispositivo recibe el vídeo tal cual y lo procesa por su cuenta.",
       "vr-single-hint": "Los vídeos VR traen la imagen repetida para cada ojo. Activalo para ver una sola, sin gafas.",
       "fill": "Llenar la pantalla",
       "fill-hint": "Recorta un poco a los lados para que no queden franjas negras."

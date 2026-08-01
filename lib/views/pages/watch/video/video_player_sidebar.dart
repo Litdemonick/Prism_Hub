@@ -240,7 +240,12 @@ class _SideBarSettingsState extends State<_SideBarSettings> {
                               Text('video.sidebar.vr-single'.i18n),
                               const SizedBox(height: 2),
                               Text(
-                                'video.sidebar.vr-single-hint'.i18n,
+                                // Mismo motivo que en el telefono: el recorte
+                                // lo hace mpv acá y el televisor decodifica por
+                                // su cuenta, así que no le llega.
+                                _c.dlnaDevice.value != null
+                                    ? 'video.sidebar.not-while-casting'.i18n
+                                    : 'video.sidebar.vr-single-hint'.i18n,
                                 style: const TextStyle(fontSize: 12),
                               ),
                             ],
@@ -249,7 +254,9 @@ class _SideBarSettingsState extends State<_SideBarSettings> {
                         const SizedBox(width: 10),
                         fluent.ToggleSwitch(
                           checked: _c.vrUnaPantalla.value,
-                          onChanged: (_) => _c.alternarVrUnaPantalla(),
+                          onChanged: _c.dlnaDevice.value != null
+                              ? null
+                              : (_) => _c.alternarVrUnaPantalla(),
                         ),
                       ],
                     ),
@@ -657,29 +664,48 @@ class _SideBarSettingsState extends State<_SideBarSettings> {
         // hace falta, hace falta ANTES de poder mirar nada.
         // El de VR SOLO en videos VR. En uno normal recortaba media imagen
         // sin motivo, asi que ahi en su lugar va el de llenar la pantalla.
-        Obx(
-          () => _c.esVideoVr.value
-              ? SwitchListTile(
-                  contentPadding: EdgeInsets.zero,
-                  value: _c.vrUnaPantalla.value,
-                  onChanged: (_) => _c.alternarVrUnaPantalla(),
-                  title: Text('video.sidebar.vr-single'.i18n),
-                  subtitle: Text(
-                    'video.sidebar.vr-single-hint'.i18n,
-                    style: const TextStyle(fontSize: 12),
-                  ),
-                )
-              : SwitchListTile(
-                  contentPadding: EdgeInsets.zero,
-                  value: _c.llenarPantalla.value,
-                  onChanged: (v) => _c.llenarPantalla.value = v,
-                  title: Text('video.sidebar.fill'.i18n),
-                  subtitle: Text(
-                    'video.sidebar.fill-hint'.i18n,
-                    style: const TextStyle(fontSize: 12),
-                  ),
-                ),
-        ),
+        Obx(() {
+          // Transmitiendo, ninguno de los dos puede hacer nada.
+          //
+          // Los dos trabajan sobre el reproductor de ACA: el de VR recorta la
+          // imagen con mpv y el de llenar cambia como se encaja el vídeo en la
+          // pantalla. Mientras se transmite, el televisor pide el vídeo por su
+          // cuenta y lo decodifica él, así que ni el recorte ni el encaje le
+          // llegan — para que llegaran habría que reconvertir el vídeo entero
+          // en el teléfono y mandárselo así.
+          //
+          // Antes quedaban tocables: el interruptor se encendía, el recorte se
+          // aplicaba a un reproductor que estaba parado, y el televisor seguía
+          // mostrando la imagen doble. Se veía como que la app no obedecía.
+          final casteando = _c.dlnaDevice.value != null;
+          final esVr = _c.esVideoVr.value;
+          return SwitchListTile(
+            contentPadding: EdgeInsets.zero,
+            value: esVr ? _c.vrUnaPantalla.value : _c.llenarPantalla.value,
+            onChanged: casteando
+                ? null
+                : (v) {
+                    if (esVr) {
+                      _c.alternarVrUnaPantalla();
+                    } else {
+                      _c.llenarPantalla.value = v;
+                    }
+                  },
+            title: Text(
+              esVr
+                  ? 'video.sidebar.vr-single'.i18n
+                  : 'video.sidebar.fill'.i18n,
+            ),
+            subtitle: Text(
+              casteando
+                  ? 'video.sidebar.not-while-casting'.i18n
+                  : esVr
+                      ? 'video.sidebar.vr-single-hint'.i18n
+                      : 'video.sidebar.fill-hint'.i18n,
+              style: const TextStyle(fontSize: 12),
+            ),
+          );
+        }),
         ListTile(
           contentPadding: EdgeInsets.zero,
           leading: const Icon(Icons.school_outlined),
