@@ -352,6 +352,26 @@ class CastRelayServer {
     }
     _targets.removeWhere((_, t) => t.sesion == sesion);
     _tokensPorUrl.removeWhere((clave, _) => clave.startsWith('$sesion|'));
+    _cerrarSiSobra();
+  }
+
+  /// Cierra el servidor cuando ya no queda nada que servir.
+  ///
+  /// Se abria en el primer casteo y no se cerraba nunca: quedaba un puerto
+  /// escuchando en la red local durante toda la vida de la app, aunque hiciera
+  /// rato que no se transmitiera nada. Al volver a castear se levanta solo.
+  static void _cerrarSiSobra() {
+    if (_targets.isNotEmpty) return;
+    final server = _server;
+    if (server == null) return;
+    _server = null;
+    _port = null;
+    _base = null;
+    // Sin force: si justo hay una respuesta a medio mandar, se la deja
+    // terminar en vez de cortarla por la mitad.
+    unawaited(server.close().catchError((Object e) {
+      logger.warning('No se pudo cerrar el servidor de casteo', e);
+    }));
   }
 
   // Primera IPv4 no-loopback de una interfaz real — es la que un

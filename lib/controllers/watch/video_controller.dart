@@ -390,6 +390,12 @@ class VideoPlayerController extends GetxController with WidgetsBindingObserver {
   /// el toque no habia hecho efecto. Tambien evita que se dispare dos veces.
   final castConectando = false.obs;
 
+  // Foto del casteo justo antes de empezar a cerrar, para que el historial
+  // pueda guardar por donde iba el TELEVISOR. Ver _beginPlaybackShutdown.
+  bool _casteabaAlCerrar = false;
+  Duration _posicionCastAlCerrar = Duration.zero;
+  Duration _duracionCastAlCerrar = Duration.zero;
+
   /// Si tiene sentido ofrecer el casteo AHORA.
   ///
   /// Regla: si el reproductor nativo no esta reproduciendo bien, castear
@@ -1450,12 +1456,32 @@ class VideoPlayerController extends GetxController with WidgetsBindingObserver {
     _dlnaTimer?.cancel();
     _bufferingStallTimer?.cancel();
     _qualitySwitchTimer?.cancel();
+    // Estos dos son de un solo disparo, asi que no dejan nada dando vueltas,
+    // pero si el reproductor se cierra en el medio saltan despues y escriben
+    // sobre observables de un controlador ya destruido.
+    _seekWatchdog?.cancel();
+    _skipBadgeTimer?.cancel();
     final device = dlnaDevice.value;
+    // Se anota que se estaba casteando y por donde iba ANTES de soltar nada.
+    //
+    // Esto corre antes de que se guarde el historial, y ahi hace falta saberlo:
+    // el reproductor de aca lleva parado desde que empezo la transmision, asi
+    // que su posicion vale cero y el progreso se perderia entero. Preguntar por
+    // dlnaDevice mas adelante no sirve, porque tres lineas mas abajo ya es null.
+    if (device != null && !_casteabaAlCerrar) {
+      _casteabaAlCerrar = true;
+      _posicionCastAlCerrar = position.value;
+      _duracionCastAlCerrar = duration.value;
+    }
     dlnaDevice.value = null;
     if (device != null) {
-      try {
-        device.stop();
-      } catch (_) {}
+      // unawaited + catchError: device.stop() devuelve un Future, asi que un
+      // try/catch alrededor NO atrapa nada — si el aparato esta apagado o fuera
+      // de la red, el fallo quedaba como error asincrono sin dueño.
+      unawaited(device.stop().catchError((Object e) {
+        logger.warning('El aparato no respondio al cerrar el reproductor', e);
+        return '';
+      }));
     }
     if (_dlnaRelayUrl != null) {
       CastRelayServer.unregister(_dlnaRelayUrl!);
@@ -1535,7 +1561,7 @@ class VideoPlayerController extends GetxController with WidgetsBindingObserver {
     // empezo la transmision, asi que saldria un cuadro negro que ademas pisaria
     // la miniatura buena que ya estaba guardada. En ese caso _saveHistory
     // conserva la anterior.
-    final frame = (saveHistory && dlnaDevice.value == null)
+    final frame = (saveHistory && dlnaDevice.value == null && !_casteabaAlCerrar)
         ? await _capturarFrameActual()
         : null;
 
@@ -2321,13 +2347,20 @@ class VideoPlayerController extends GetxController with WidgetsBindingObserver {
       // salir del episodio mientras se casteaba se guardaba progreso 0 y se
       // perdia todo lo visto. Las Rx position/duration si estan al dia, porque
       // el timer de estado las va llenando con lo que informa el aparato.
-      final casteando = dlnaDevice.value != null;
-      final posicionSeg = casteando
-          ? position.value.inSeconds
-          : player.state.position.inSeconds;
-      final duracionSeg = casteando
-          ? duration.value.inSeconds
-          : player.state.duration.inSeconds;
+      // Se mira tambien _casteabaAlCerrar: al cerrar el reproductor, el
+      // desmontaje suelta el aparato ANTES de llegar aca, asi que preguntar
+      // solo por dlnaDevice daria false justo en el caso que importa.
+      final casteando = dlnaDevice.value != null || _casteabaAlCerrar;
+      final posicionSeg = !casteando
+          ? player.state.position.inSeconds
+          : (dlnaDevice.value != null
+              ? position.value.inSeconds
+              : _posicionCastAlCerrar.inSeconds);
+      final duracionSeg = !casteando
+          ? player.state.duration.inSeconds
+          : (dlnaDevice.value != null
+              ? duration.value.inSeconds
+              : _duracionCastAlCerrar.inSeconds);
 
       // El frame puede venir ya tomado desde _shutdownPlayback (el caso normal
       // al cerrar el reproductor, donde capturar acá sería tarde) o tomarse en
@@ -2795,6 +2828,9 @@ class VideoPlayerController extends GetxController with WidgetsBindingObserver {
 
   // 连接 DLNA 设备
   connectDLNADevice(DLNADevice device) async {
+    // Se puede llegar aca despues de un await (cambio de episodio casteando)
+    // con el reproductor ya cerrado.
+    if (_disposed) return;
     if (watchData == null) {
       sendMessage(Message(Text('等待视频加载'.i18n)));
       return;
@@ -2871,19 +2907,35 @@ class VideoPlayerController extends GetxController with WidgetsBindingObserver {
         CastRelayServer.unregister(_dlnaRelayUrl!);
         _dlnaRelayUrl = null;
       }
-      castConectando.value = false;
       sendMessage(Message(Text('video.cast-failed'.i18n)));
       return;
+    } finally {
+      // En finally y no al final del camino feliz: si algo de lo que viene
+      // despues fallara, esta bandera quedaba en true PARA SIEMPRE y el boton
+      // de transmitir y el de reproducir se quedaban apagados sin forma de
+      // recuperarlos salvo salir del episodio.
+      castConectando.value = false;
     }
     // Recien aca se para el reproductor de aca: si se paraba antes y el
     // televisor terminaba fallando, quedaban los dos sin reproducir nada.
-    await player.stop();
-    castConectando.value = false;
+    //
+    // Con su propio catch: que no se pueda parar el de aca no invalida que el
+    // televisor ya este reproduciendo, y sin esto la excepcion se llevaba
+    // puesta la creacion del timer de estado — la transmision quedaba andando
+    // pero la app sin enterarse de nada de lo que pasaba en el televisor.
+    try {
+      await player.stop();
+    } catch (e) {
+      logger.warning('No se pudo parar el reproductor local al castear', e);
+    }
     // Cancelar cualquier timer previo antes de crear uno nuevo — si el
     // usuario elige otro dispositivo DLNA sin desconectar el anterior
     // primero, sin esto quedaban DOS timers corriendo _getDLNAStatus() cada
     // segundo para siempre (uno por cada dispositivo elegido en la sesión).
     _dlnaTimer?.cancel();
+    // Si el reproductor se cerro mientras se enganchaba, no se arranca ningun
+    // timer: quedaria latiendo cada segundo sobre un controlador destruido.
+    if (_disposed || dlnaDevice.value == null) return;
     _dlnaTimer = Timer.periodic(const Duration(seconds: 1), (timer) {
       _getDLNAStatus();
     });
@@ -3709,35 +3761,11 @@ class VideoPlayerController extends GetxController with WidgetsBindingObserver {
       } catch (_) {}
     }
     _subscriptions.clear();
-    // El timer de estado se corta YA: late una vez por segundo y seguia
-    // latiendo sobre un controlador que se esta destruyendo, avisando errores
-    // de un reproductor que ya no existe. La posicion para el historial no se
-    // pierde, viene de la ultima vuelta (hace menos de un segundo).
-    _dlnaTimer?.cancel();
-    // shutdownPlayback va ANTES de soltar el aparato: adentro se guarda el
-    // historial, y necesita saber que se estaba casteando para tomar la
-    // posicion del televisor en vez de la del reproductor local (que esta en
-    // cero desde que empezo la transmision).
+    // El corte de la transmision (parar el aparato, soltar el relay, cortar el
+    // timer de estado) ya lo hizo _beginPlaybackShutdown() al principio de este
+    // metodo, y ahi tambien quedo anotado por donde iba el televisor para que
+    // shutdownPlayback lo guarde en el historial.
     await shutdownPlayback();
-    // Y recien ahora se corta la transmision.
-    //
-    // Antes no se cortaba: al salir del episodio el televisor se quedaba
-    // reproduciendo solo, sin nada en la app desde donde pararlo, y encima el
-    // relay que le servia el video muere con la app — asi que terminaba
-    // mostrando un error en la pantalla grande.
-    final aparato = dlnaDevice.value;
-    if (aparato != null) {
-      dlnaDevice.value = null;
-      try {
-        await aparato.stop().timeout(const Duration(seconds: 2));
-      } catch (e) {
-        logger.warning('El aparato no respondio al salir del episodio', e);
-      }
-    }
-    if (_dlnaRelayUrl != null) {
-      CastRelayServer.unregister(_dlnaRelayUrl!);
-      _dlnaRelayUrl = null;
-    }
     logger.info('dispose video controller');
     super.onClose();
   }
