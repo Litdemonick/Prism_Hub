@@ -173,6 +173,10 @@ class _ExtensionSearcherPageState extends fluent.State<ExtensionSearcherPage> {
   // el controller — evita reprocesar ESE cambio como si fuera una tecla
   // real del usuario.
   bool _isProgrammaticTextChange = false;
+  // Cuánto hay que dejar de escribir para que aparezca la sugerencia. Ver
+  // _onSearchFieldChanged. Corto: es una pausa entre teclas, no una espera.
+  static const Duration _pausaAutocompletar = Duration(milliseconds: 500);
+  Timer? _autocompletarTimer;
   Timer? _placeholderTimer;
   int _placeholderIndex = 0;
 
@@ -207,12 +211,27 @@ class _ExtensionSearcherPageState extends fluent.State<ExtensionSearcherPage> {
   // parte seleccionada (mismo truco que usaba el explorador de Windows
   // viejo): seguir escribiendo la reemplaza, Enter/Tab la acepta tal cual
   // porque el campo YA tiene el texto completo.
+  //
+  // La sugerencia espera a que dejes de escribir. Antes saltaba en CADA tecla,
+  // y ahí es donde molestaba de verdad: cada pulsación reescribía el campo
+  // entero y movía el cursor, así que escribir algo que no fuera el título que
+  // la extensión adivinó era pelear contra el campo tecla por tecla. Peor en
+  // el teléfono, donde el teclado predictivo va corrigiendo sobre un texto que
+  // le cambia abajo de los pies.
+  //
+  // Con la pausa, mientras escribís el campo tiene EXACTAMENTE lo que
+  // escribiste y nada más. La sugerencia aparece recién cuando parás, que es
+  // cuando sirve y cuando no estorba.
   void _onSearchFieldChanged(String value) {
     if (_isProgrammaticTextChange) {
       _isProgrammaticTextChange = false;
       if (value.isEmpty) _onSearch(value);
       return;
     }
+    // Cualquier tecla cancela una sugerencia que estuviera por aparecer: si
+    // seguís escribiendo, la de hace un momento ya no corresponde.
+    _autocompletarTimer?.cancel();
+
     if (value.isEmpty) {
       _typedText = '';
       _ghostBase = null;
@@ -226,20 +245,32 @@ class _ExtensionSearcherPageState extends fluent.State<ExtensionSearcherPage> {
     // Borrando, o Backspace justo sobre la sugerencia (la está rechazando)
     // — no autocompletar de nuevo en este mismo golpe.
     if (wasLonger || backedOutOfGhost) return;
-    final lower = value.toLowerCase();
-    final match = _sampleTitles.firstWhere(
-      (title) =>
-          title.length > value.length && title.toLowerCase().startsWith(lower),
-      orElse: () => '',
-    );
-    if (match.isEmpty) return;
-    _ghostBase = value;
-    _isProgrammaticTextChange = true;
-    _textEditingController.value = TextEditingValue(
-      text: match,
-      selection:
-          TextSelection(baseOffset: value.length, extentOffset: match.length),
-    );
+
+    _autocompletarTimer = Timer(_pausaAutocompletar, () {
+      // El campo pudo cambiar entre medio (o la pantalla irse): solo se sugiere
+      // sobre el texto exacto que disparó esta espera.
+      if (!mounted || _textEditingController.text != value) return;
+      // Y solo con el cursor al final: si volviste a meter mano en el medio de
+      // lo escrito, completar el final no es lo que estás pidiendo.
+      final sel = _textEditingController.selection;
+      if (!sel.isCollapsed || sel.baseOffset != value.length) return;
+
+      final lower = value.toLowerCase();
+      final match = _sampleTitles.firstWhere(
+        (title) =>
+            title.length > value.length &&
+            title.toLowerCase().startsWith(lower),
+        orElse: () => '',
+      );
+      if (match.isEmpty) return;
+      _ghostBase = value;
+      _isProgrammaticTextChange = true;
+      _textEditingController.value = TextEditingValue(
+        text: match,
+        selection:
+            TextSelection(baseOffset: value.length, extentOffset: match.length),
+      );
+    });
   }
 
   @override
@@ -297,6 +328,9 @@ class _ExtensionSearcherPageState extends fluent.State<ExtensionSearcherPage> {
   @override
   void dispose() {
     _placeholderTimer?.cancel();
+    // Si no, una sugerencia pendiente se dispara con la pantalla ya cerrada y
+    // toca un controller que acaba de liberarse.
+    _autocompletarTimer?.cancel();
     _textEditingController.dispose();
     super.dispose();
   }
