@@ -188,7 +188,22 @@ class _DetailPageState extends State<DetailPage> {
                     preferredSize: const Size.fromHeight(48),
                     child: Container(
                       color: HomeTheme.bg,
-                      child: TabBar(tabs: tabs),
+                      // Sin estilar, TabBar usa los colores por defecto de
+                      // Material: el indicador sale MORADO —el color semilla
+                      // del tema, que no es el del app— y debajo queda una
+                      // línea divisoria GRIS que Material 3 dibuja sola. Las
+                      // dos cruzaban la ficha de lado a lado y no pegaban con
+                      // nada del diseño.
+                      child: TabBar(
+                        tabs: tabs,
+                        indicatorColor: HomeTheme.accentPink,
+                        labelColor: HomeTheme.textPrimary,
+                        unselectedLabelColor: HomeTheme.textMuted,
+                        // La franja de arriba ya la da el Container de acá, así
+                        // que la divisoria solo agregaba una raya suelta.
+                        dividerColor: Colors.transparent,
+                        indicatorSize: TabBarIndicatorSize.label,
+                      ),
                     ),
                   ),
                   actions: [
