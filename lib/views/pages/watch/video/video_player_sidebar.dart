@@ -9,6 +9,8 @@ import 'package:prismhub/views/widgets/list_title.dart';
 import 'package:prismhub/views/widgets/platform_widget.dart';
 import 'package:prismhub/views/widgets/watch/playlist.dart';
 import 'package:prismhub/views/widgets/home/home_theme.dart';
+import 'package:prismhub/views/widgets/watch/tutorial_reproductor.dart';
+import 'package:prismhub/views/widgets/messenger.dart';
 
 enum SidebarTab {
   episodes,
@@ -192,6 +194,28 @@ class _SideBarSettings extends StatefulWidget {
 class _SideBarSettingsState extends State<_SideBarSettings> {
   late final _c = widget.controller;
 
+  /// Deja el tutorial listo para salir la proxima vez que se abra un video.
+  ///
+  /// No se muestra ACA mismo a proposito. Este panel vive DENTRO del
+  /// reproductor: abrirlo encima taparia el video con un tutorial que explica
+  /// gestos sobre una pantalla que en ese momento esta ocupada por el propio
+  /// panel. Ademas el primer paso es "toca el centro para pausar", y con el
+  /// panel abierto ese toque no hace lo que dice.
+  ///
+  /// Marcandolo para la proxima, el tutorial sale sobre un video recien
+  /// abierto, que es donde los gestos se pueden probar de verdad mientras se
+  /// leen. Y sale UNA sola vez, como la primera: al cerrarlo se vuelve a
+  /// marcar como visto.
+  Future<void> _volverAVerTutorial(BuildContext context) async {
+    await TutorialReproductor.reiniciar();
+    if (!context.mounted) return;
+    _c.showSidebar.value = false;
+    showPlatformSnackbar(
+      context: context,
+      content: 'video.tutorial.will-show'.i18n,
+    );
+  }
+
   Widget _buildDesktop(BuildContext context) {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -223,6 +247,32 @@ class _SideBarSettingsState extends State<_SideBarSettings> {
                 ),
               ],
             ),
+          ),
+        ),
+        const SizedBox(height: 10),
+        fluent.Card(
+          child: Row(
+            children: [
+              Expanded(
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text('video.tutorial.show-again'.i18n),
+                    const SizedBox(height: 2),
+                    Text(
+                      'video.tutorial.show-again-hint'.i18n,
+                      style: const TextStyle(fontSize: 12),
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(width: 10),
+              fluent.Button(
+                onPressed: () => _volverAVerTutorial(context),
+                child: Text('video.tutorial.show-again-action'.i18n),
+              ),
+            ],
           ),
         ),
         const SizedBox(height: 10),
@@ -609,6 +659,16 @@ class _SideBarSettingsState extends State<_SideBarSettings> {
               style: const TextStyle(fontSize: 12),
             ),
           ),
+        ),
+        ListTile(
+          contentPadding: EdgeInsets.zero,
+          leading: const Icon(Icons.school_outlined),
+          title: Text('video.tutorial.show-again'.i18n),
+          subtitle: Text(
+            'video.tutorial.show-again-hint'.i18n,
+            style: const TextStyle(fontSize: 12),
+          ),
+          onTap: () => _volverAVerTutorial(context),
         ),
         const Divider(),
         Text(

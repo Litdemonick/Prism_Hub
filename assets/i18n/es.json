@@ -383,7 +383,11 @@
       "fullscreen-body": "Entra y sale de pantalla completa. ESC también sale.",
       "skip": "Saltar",
       "next": "Siguiente",
-      "done": "Entendido"
+      "done": "Entendido",
+      "show-again": "Ver el tutorial de nuevo",
+      "show-again-hint": "Los gestos y atajos del reproductor, explicados otra vez.",
+      "show-again-action": "Mostrar",
+      "will-show": "Va a salir al abrir el próximo vídeo"
     }
   },
   "comic-settings": {

@@ -387,7 +387,11 @@
       "fullscreen-body": "Enters and leaves fullscreen. ESC also leaves.",
       "skip": "Skip",
       "next": "Next",
-      "done": "Got it"
+      "done": "Got it",
+      "show-again": "Show the tutorial again",
+      "show-again-hint": "The player gestures and shortcuts, explained once more.",
+      "show-again-action": "Show",
+      "will-show": "It will appear when you open the next video"
     }
   },
   "comic-settings": {
