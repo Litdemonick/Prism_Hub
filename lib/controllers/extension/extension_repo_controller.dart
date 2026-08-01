@@ -3,6 +3,9 @@ import 'package:get/get.dart';
 import 'package:prismhub/models/index.dart';
 import 'package:prismhub/utils/connectivity.dart';
 import 'package:prismhub/utils/extension.dart';
+import 'package:prismhub/utils/i18n.dart';
+import 'package:prismhub/utils/log.dart';
+import 'package:prismhub/utils/error.dart';
 import 'package:prismhub/utils/prismhub_storage.dart';
 
 class ExtensionRepoPageController extends GetxController {
@@ -11,6 +14,8 @@ class ExtensionRepoPageController extends GetxController {
 
   final isLoading = false.obs;
   final isError = false.obs;
+  /// Motivo del último fallo, para poder decirlo en pantalla.
+  final errorDetalle = ''.obs;
   final search = ''.obs;
   // Set en vez de un tipo único — "Lectura" agrupa manga+novela.
   final Rx<Set<ExtensionType>?> searchType = Rx(null);
@@ -57,22 +62,8 @@ class ExtensionRepoPageController extends GetxController {
     }
   }
 
-  static const List<String> availableLangs = [
-    'all',
-    'en',
-    'es',
-    'zh',
-    'ja',
-    'ko',
-    'hi',
-    'ru',
-    'ar',
-    'id',
-    'vi',
-    'tr',
-    'th',
-    'it'
-  ];
+  // Ver _langLabels en extension_repo_page: solo los dos idiomas de la app.
+  static const List<String> availableLangs = ['all', 'es', 'en'];
 
   @override
   void onInit() {
@@ -83,6 +74,7 @@ class ExtensionRepoPageController extends GetxController {
   onRefresh({bool forceRefresh = true}) async {
     isLoading.value = true;
     isError.value = false;
+    errorDetalle.value = '';
 
     // Sin conexión detectada de entrada (ver ConnectivityUtils) — evita
     // esperar el timeout de 20s (peor todavía en el radio de Android) solo
@@ -90,6 +82,7 @@ class ExtensionRepoPageController extends GetxController {
     // podíamos saber sin intentar la petición.
     if (!ConnectivityUtils.isOnline.value) {
       isError.value = true;
+      errorDetalle.value = 'common.no-connection'.i18n;
       isLoading.value = false;
       return;
     }
@@ -114,9 +107,13 @@ class ExtensionRepoPageController extends GetxController {
             .whereType<String>()
             .where((p) => p.isNotEmpty),
       );
-    } catch (e) {
+    } catch (e, st) {
       isError.value = true;
-      debugPrint('❌ Extension repo error: ${e.toString()}');
+      // Se guarda el motivo REAL, no solo un booleano: la pantalla mostraba
+      // siempre el mismo error genérico y no había forma de distinguir "sin
+      // internet" de "el repositorio devolvió algo que no se entiende".
+      errorDetalle.value = friendlyError(e);
+      logger.warning('No se pudo leer el catálogo de extensiones', e, st);
     } finally {
       isLoading.value = false;
     }

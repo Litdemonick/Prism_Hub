@@ -11,6 +11,7 @@ import 'package:flutter/scheduler.dart';
 import 'package:get/get.dart';
 import 'package:prismhub/models/extension.dart';
 import 'package:prismhub/controllers/extension/extension_controller.dart';
+import 'package:prismhub/controllers/extension/extension_repo_controller.dart';
 import 'package:prismhub/controllers/home_controller.dart';
 import 'package:prismhub/controllers/main_controller.dart';
 import 'package:prismhub/controllers/search_controller.dart';
@@ -1143,6 +1144,15 @@ class ExtensionUtils {
         Get.find<SearchPageController>(tag: tag).callRefresh();
       }
     }
+    // Repositorio de extensiones. Faltaba, y era el unico de los cuatro que
+    // no se enteraba: instalar, desinstalar o activar algo desde Instaladas
+    // dejaba al Repositorio mostrando el estado viejo —una extension recien
+    // desinstalada seguia figurando como instalada— hasta reabrir la pagina
+    // o esperar a que venciera la cache.
+    if (Get.isRegistered<ExtensionRepoPageController>()) {
+      Get.find<ExtensionRepoPageController>().onRefresh(forceRefresh: false);
+    }
+
     // Home (Continuar/Favoritos/fondo del hero) — sin esto, desactivar o
     // desinstalar una extensión dejaba su contenido visible en Home hasta
     // el próximo refresco manual o hasta reabrir la página.

@@ -24,6 +24,9 @@ class ExtensionPageController extends GetxController {
     errors.clear();
     runtimes.addAll(ExtensionUtils.runtimes);
     errors.addAll(ExtensionUtils.extensionErrorMap);
+    // Ya quedo al dia: la bandera existe para que la pagina sepa si tiene que
+    // refrescar al abrirse, y sin apagarla aca no significaba nada.
+    needRefresh = false;
     if (!desdeElBoton) return;
     // Releer los mapas locales no alcanza: lo que decide si una extension sale
     // como "inestable" o "actualizacion requerida" viene del CATALOGO, y esto

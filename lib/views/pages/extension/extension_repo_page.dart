@@ -222,15 +222,13 @@ class _ExtensionRepoPageState extends State<ExtensionRepoPage> {
     );
   }
 
+  // Solo español e inglés: son los dos idiomas de la app, y el catálogo no
+  // publica extensiones en los demás. Ofrecer una lista de ocho idiomas era
+  // mandar al usuario a filtros que siempre devuelven vacío.
   static const Map<String, String> _langLabels = {
     'all': 'Todos',
-    'en': 'English',
     'es': 'Español',
-    'zh': '中文',
-    'ja': '日本語',
-    'ko': '한국어',
-    'hi': 'हिन्दी',
-    'ru': 'Русский',
+    'en': 'English',
   };
 
   // (total, instaladas, disponibles) — sobre el catálogo COMPLETO, sin
@@ -402,6 +400,24 @@ class _ExtensionRepoPageState extends State<ExtensionRepoPage> {
         mainAxisSize: MainAxisSize.min,
         children: [
           Text('extension-repo.error'.i18n),
+          // El motivo real debajo del titulo generico. Antes solo se veia
+          // "no se pudo cargar" y era imposible distinguir sin internet de
+          // un repositorio que devuelve algo que no se entiende.
+          if (c.errorDetalle.value.isNotEmpty) ...[
+            const SizedBox(height: 6),
+            ConstrainedBox(
+              constraints: const BoxConstraints(maxWidth: 420),
+              child: Text(
+                c.errorDetalle.value,
+                textAlign: TextAlign.center,
+                style: const TextStyle(
+                  color: HomeTheme.textMuted,
+                  fontSize: 12.5,
+                  height: 1.4,
+                ),
+              ),
+            ),
+          ],
           const SizedBox(height: 8),
           fluent.Padding(
             padding: const EdgeInsets.all(8.0),
