@@ -2511,6 +2511,35 @@ class VideoPlayerController extends GetxController with WidgetsBindingObserver {
   /// entre las dos. Sirve para mirar el resto del cuadro sin gafas.
   final vrDesplazamiento = 0.0.obs;
 
+  /// ¿Este video es VR?
+  ///
+  /// Los VR vienen con las dos vistas lado a lado, o sea el doble de ancho que
+  /// un video normal para la misma altura. Con eso alcanza para reconocerlos
+  /// sin preguntarle nada al sitio.
+  ///
+  /// Se mira desde UN solo lugar para que los ajustes y el tutorial coincidan:
+  /// no puede pasar que el tutorial explique como mover la camara y el ajuste
+  /// para hacerlo no este.
+  bool get esVideoVr {
+    final w = player.state.width ?? 0;
+    final h = player.state.height ?? 0;
+    if (w <= 0 || h <= 0) return false;
+    // 3:1 y no 2:1 exacto: un side-by-side de 16:9 da 3,55, y hay videos
+    // panoramicos normales que rondan 2,4 sin ser VR.
+    return w >= h * 3;
+  }
+
+  /// Estirar la imagen para que ocupe toda la pantalla.
+  ///
+  /// Para videos NORMALES. Un video con otra proporcion que la pantalla deja
+  /// franjas negras, y en el telefono —donde la pantalla es alta y angosta—
+  /// esas franjas se comen medio alto. Activado se recorta un poco a los lados
+  /// a cambio de llenar.
+  ///
+  /// Se guarda por video y no como ajuste global a proposito: es una decision
+  /// de "este contenido puntual", no una preferencia permanente.
+  final llenarPantalla = false.obs;
+
   /// Ya se reintento este contenido con decodificacion por software.
   /// Se limpia al cargar contenido nuevo (ver donde se reinicia el estado).
   bool _reintentoPorSoftware = false;

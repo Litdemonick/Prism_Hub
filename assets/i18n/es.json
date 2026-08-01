@@ -348,7 +348,9 @@
         "auto-next": "Siguiente automático"
       },
       "vr-single": "Ver VR en una pantalla",
-      "vr-single-hint": "Los vídeos VR traen la imagen repetida para cada ojo. Activalo para ver una sola, sin gafas."
+      "vr-single-hint": "Los vídeos VR traen la imagen repetida para cada ojo. Activalo para ver una sola, sin gafas.",
+      "fill": "Llenar la pantalla",
+      "fill-hint": "Recorta un poco a los lados para que no queden franjas negras."
     },
     "servers": "Servidores",
     "webview-server": "Abre en el navegador",

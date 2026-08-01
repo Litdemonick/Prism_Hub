@@ -222,32 +222,38 @@ class _SideBarSettingsState extends State<_SideBarSettings> {
       children: [
         // Ver VideoPlayerController.vrUnaPantalla. Mismo interruptor que en el
         // telefono: un VR sin gafas se ve igual de mal en las dos pantallas.
-        fluent.Card(
-          child: Obx(
-            () => Row(
-              children: [
-                Expanded(
-                  child: Column(
-                    mainAxisSize: MainAxisSize.min,
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text('video.sidebar.vr-single'.i18n),
-                      const SizedBox(height: 2),
-                      Text(
-                        'video.sidebar.vr-single-hint'.i18n,
-                        style: const TextStyle(fontSize: 12),
-                      ),
-                    ],
+        // En escritorio no va el de llenar pantalla: ahi la pantalla completa
+        // ya ocupa todo, asi que seria un interruptor que no cambia nada.
+        Obx(
+          () => !_c.esVideoVr
+              ? const SizedBox.shrink()
+              : fluent.Card(
+                  child: Obx(
+                    () => Row(
+                      children: [
+                        Expanded(
+                          child: Column(
+                            mainAxisSize: MainAxisSize.min,
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text('video.sidebar.vr-single'.i18n),
+                              const SizedBox(height: 2),
+                              Text(
+                                'video.sidebar.vr-single-hint'.i18n,
+                                style: const TextStyle(fontSize: 12),
+                              ),
+                            ],
+                          ),
+                        ),
+                        const SizedBox(width: 10),
+                        fluent.ToggleSwitch(
+                          checked: _c.vrUnaPantalla.value,
+                          onChanged: (_) => _c.alternarVrUnaPantalla(),
+                        ),
+                      ],
+                    ),
                   ),
                 ),
-                const SizedBox(width: 10),
-                fluent.ToggleSwitch(
-                  checked: _c.vrUnaPantalla.value,
-                  onChanged: (_) => _c.alternarVrUnaPantalla(),
-                ),
-              ],
-            ),
-          ),
         ),
         const SizedBox(height: 10),
         fluent.Card(
@@ -648,17 +654,30 @@ class _SideBarSettingsState extends State<_SideBarSettings> {
       children: [
         // Ver VideoPlayerController.vrUnaPantalla. Va primero porque cuando
         // hace falta, hace falta ANTES de poder mirar nada.
+        // El de VR SOLO en videos VR. En uno normal recortaba media imagen
+        // sin motivo, asi que ahi en su lugar va el de llenar la pantalla.
         Obx(
-          () => SwitchListTile(
-            contentPadding: EdgeInsets.zero,
-            value: _c.vrUnaPantalla.value,
-            onChanged: (_) => _c.alternarVrUnaPantalla(),
-            title: Text('video.sidebar.vr-single'.i18n),
-            subtitle: Text(
-              'video.sidebar.vr-single-hint'.i18n,
-              style: const TextStyle(fontSize: 12),
-            ),
-          ),
+          () => _c.esVideoVr
+              ? SwitchListTile(
+                  contentPadding: EdgeInsets.zero,
+                  value: _c.vrUnaPantalla.value,
+                  onChanged: (_) => _c.alternarVrUnaPantalla(),
+                  title: Text('video.sidebar.vr-single'.i18n),
+                  subtitle: Text(
+                    'video.sidebar.vr-single-hint'.i18n,
+                    style: const TextStyle(fontSize: 12),
+                  ),
+                )
+              : SwitchListTile(
+                  contentPadding: EdgeInsets.zero,
+                  value: _c.llenarPantalla.value,
+                  onChanged: (v) => _c.llenarPantalla.value = v,
+                  title: Text('video.sidebar.fill'.i18n),
+                  subtitle: Text(
+                    'video.sidebar.fill-hint'.i18n,
+                    style: const TextStyle(fontSize: 12),
+                  ),
+                ),
         ),
         ListTile(
           contentPadding: EdgeInsets.zero,

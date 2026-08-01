@@ -39,6 +39,26 @@ class _VideoPlayerContenState extends State<VideoPlayerConten> {
   late bool _mostrarTutorial = !TutorialReproductor.yaVisto;
 
   @override
+  void initState() {
+    super.initState();
+    // Con el tutorial arriba, el video queda PAUSADO.
+    //
+    // Antes seguia reproduciendo detras: se perdian los primeros minutos
+    // mientras se leia, y el audio sonaba sobre una pantalla tapada. Ademas los
+    // pasos hablan de pausar y adelantar, y no se entiende leerlos mientras el
+    // episodio avanza solo.
+    //
+    // Se hace en initState y no en build: build corre muchas veces y pausaria
+    // de nuevo cada vez, peleando con el usuario si le da play desde los
+    // controles.
+    if (_mostrarTutorial) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted) widget.controller.player.pause();
+      });
+    }
+  }
+
+  @override
   Widget build(BuildContext context) {
     final c = widget.controller;
     Widget controls() {
@@ -75,7 +95,11 @@ class _VideoPlayerContenState extends State<VideoPlayerConten> {
           // Solo en modo VR. Para un vídeo normal recortar sería peor —se
           // perdería parte de la imagen sin que nadie lo haya pedido— así que
           // ahí se sigue mostrando entero como siempre.
-          fit: c.vrUnaPantalla.value ? BoxFit.cover : BoxFit.contain,
+          // Recorta para llenar cuando el usuario lo pidio (video normal) o
+        // cuando el recorte del VR dejo un cuadro con otra proporcion.
+        fit: (c.vrUnaPantalla.value || c.llenarPantalla.value)
+            ? BoxFit.cover
+            : BoxFit.contain,
           subtitleViewConfiguration: const SubtitleViewConfiguration(
             visible: false,
           ),
@@ -100,14 +124,14 @@ class _VideoPlayerContenState extends State<VideoPlayerConten> {
         hijo,
         Positioned.fill(
           child: TutorialReproductor(
-            // Los VR vienen con las dos vistas lado a lado, o sea el doble de
-            // ancho que de alto para una proporcion que normalmente ronda 16:9.
-            // Con eso alcanza para saber si corresponde explicar lo del VR, sin
-            // pedirle nada al sitio.
-            esVr:
-                (c.player.state.width ?? 0) >= (c.player.state.height ?? 1) * 3,
+            // Ver esVideoVr en el controlador.
+            esVr: c.esVideoVr,
             onCerrar: () {
-              if (mounted) setState(() => _mostrarTutorial = false);
+              if (!mounted) return;
+              setState(() => _mostrarTutorial = false);
+              // Al cerrarlo arranca: quien abrio el episodio lo hizo para
+              // verlo, y quedaria pausado sin explicacion.
+              widget.controller.player.play();
             },
           ),
         ),
