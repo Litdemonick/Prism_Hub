@@ -234,7 +234,7 @@ class _DetailAppbarflexibleSpaceState extends State<DetailAppbarflexibleSpace> {
                   ),
                 ],
               ),
-              const SizedBox(height: 18),
+              const SizedBox(height: 14),
               // Dos filas, no una.
               //
               // Con los tres botones en la misma fila no entraba ninguna
@@ -252,7 +252,7 @@ class _DetailAppbarflexibleSpaceState extends State<DetailAppbarflexibleSpace> {
                 child: BotonPulsable(
                     child: DetailContinuePlay(tag: widget.tag)),
               ),
-              const SizedBox(height: 10),
+              const SizedBox(height: 8),
               Row(
                 children: [
                   Expanded(

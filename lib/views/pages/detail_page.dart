@@ -158,11 +158,16 @@ class _DetailPageState extends State<DetailPage> {
         // ancho de sobra en vez de pelear por la poca altura.
         final isLandscape =
             MediaQuery.of(context).orientation == Orientation.landscape;
-        // 470 en vertical (antes 400): los botones pasaron a dos filas para que
+        // 440 en vertical (antes 400): los botones pasaron a dos filas para que
         // las etiquetas entren enteras, y el titulo a cuatro lineas porque los
         // largos se cortaban. Con 400 ese bloque se desbordaba hacia arriba y
         // se metia debajo del boton de atras.
-        final heroHeight = isLandscape ? 200.0 : 470.0;
+        //
+        // Llego a estar en 470 con los botones de 50 de alto. Bajados a 42 y
+        // con menos aire entre filas, el bloque ocupa 30 menos: dejarlo en 470
+        // seria un encabezado innecesariamente alto que empuja los episodios
+        // fuera de la pantalla.
+        final heroHeight = isLandscape ? 200.0 : 440.0;
 
         final content = DefaultTabController(
           length: tabs.length,

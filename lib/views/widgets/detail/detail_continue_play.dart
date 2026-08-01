@@ -69,7 +69,7 @@ class _DetailContinuePlayState extends State<DetailContinuePlay> {
           backgroundColor: WidgetStateProperty.all(Colors.grey),
           foregroundColor: WidgetStateProperty.all(Colors.white),
           minimumSize: WidgetStateProperty.all(
-            const Size(double.infinity, 50),
+            const Size(double.infinity, 42),
           ),
           side: WidgetStateProperty.all(
             const BorderSide(color: Colors.white24, width: 1.5),
@@ -109,7 +109,7 @@ class _DetailContinuePlayState extends State<DetailContinuePlay> {
           ),
           style: ButtonStyle(
             minimumSize: WidgetStateProperty.all(
-              const Size(double.infinity, 50),
+              const Size(double.infinity, 42),
             ),
             side: WidgetStateProperty.all(
               BorderSide(
@@ -133,7 +133,7 @@ class _DetailContinuePlayState extends State<DetailContinuePlay> {
           label: Text(watchNowString),
           style: ButtonStyle(
             minimumSize: WidgetStateProperty.all(
-              const Size(double.infinity, 50),
+              const Size(double.infinity, 42),
             ),
             side: WidgetStateProperty.all(
               BorderSide(

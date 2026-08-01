@@ -58,7 +58,7 @@ class _DetailFavoriteButtonState extends State<DetailFavoriteButton> {
           ),
           style: ButtonStyle(
             minimumSize: WidgetStateProperty.all(
-              const Size(double.infinity, 50),
+              const Size(double.infinity, 42),
             ),
             backgroundColor: isFavorite
                 ? WidgetStateProperty.all(Theme.of(context).colorScheme.primary)

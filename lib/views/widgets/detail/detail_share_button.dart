@@ -72,7 +72,7 @@ class DetailShareButton extends StatelessWidget {
       icon: const Icon(Icons.share_outlined),
       label: Text('detail.share'.i18n),
       style: ButtonStyle(
-        minimumSize: WidgetStateProperty.all(const Size(double.infinity, 50)),
+        minimumSize: WidgetStateProperty.all(const Size(double.infinity, 42)),
       ),
       onPressed: () => _compartir(context),
     );
