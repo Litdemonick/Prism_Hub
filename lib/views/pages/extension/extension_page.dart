@@ -74,9 +74,7 @@ class _ExtensionPageState extends State<ExtensionPage> {
         case _ExtFilter.lectura:
           // Manga, novela y todo lo que se lee. `mixed` entra en las dos
           // porque una extensión así sirve para ambas cosas.
-          return ext.type == ExtensionType.manga ||
-              ext.type == ExtensionType.fikushon ||
-              ext.type == ExtensionType.mixed;
+          return ExtensionUtils.readingTypes.contains(ext.type);
         case _ExtFilter.desactivadas:
           return !ExtensionUtils.isEnabled(ext.package);
         case _ExtFilter.inestables:

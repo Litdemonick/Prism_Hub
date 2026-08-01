@@ -21,6 +21,9 @@ class ExtensionTypeBadge extends StatelessWidget {
           const Color(0xFFA855F7), // violeta — lectura
         ExtensionType.mixed =>
           const Color(0xFF10B981), // verde esmeralda — mixta
+        // Lectura de varias clases: mismo violeta que el resto de la lectura,
+        // porque para el usuario es eso — no una categoria aparte.
+        ExtensionType.mixedReading => const Color(0xFFA855F7),
       };
 
   @override

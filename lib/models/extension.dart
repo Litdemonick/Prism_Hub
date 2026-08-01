@@ -2,10 +2,20 @@ import 'package:json_annotation/json_annotation.dart';
 
 part 'extension.g.dart';
 
-// mixed va al FINAL — FavoritesPage llega por índice de ExtensionType.values
-// vía query param (router.dart), insertarlo en el medio correría los índices
-// de manga/bangumi/fikushon y rompería rutas ya guardadas/compartidas.
-enum ExtensionType { manga, bangumi, fikushon, mixed }
+// Los valores nuevos van SIEMPRE al final — FavoritesPage llega por índice de
+// ExtensionType.values vía query param (router.dart), así que insertar uno en
+// el medio correría los índices de los que ya están y rompería rutas guardadas
+// o compartidas. En la base se guardan por NOMBRE (@Enumerated(EnumType.name)
+// en History/Favorite), así que agregar al final no toca nada de lo guardado.
+//
+// mixed        = lectura Y vídeo en el mismo sitio (ej. ShadeManga: manga y
+//                anime de verdad).
+// mixedReading = varias clases de LECTURA y ningún vídeo (ej. Ikigai: cómics
+//                y novelas ligeras). Necesita tipo por obra igual que mixed
+//                —una novela es texto y un cómic imágenes, y cada uno abre con
+//                su lector— pero NO debe aparecer en los filtros de vídeo, que
+//                es lo que pasaba al declararla mixed.
+enum ExtensionType { manga, bangumi, fikushon, mixed, mixedReading }
 
 enum ExtensionWatchBangumiType { hls, mp4, torrent }
 

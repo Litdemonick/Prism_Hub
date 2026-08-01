@@ -1191,6 +1191,8 @@ class ExtensionUtils {
         return 'extension-type.reading'.i18n;
       case ExtensionType.mixed:
         return 'extension-type.mixed'.i18n;
+      case ExtensionType.mixedReading:
+        return 'extension-type.reading'.i18n;
     }
   }
 
@@ -1203,6 +1205,12 @@ class ExtensionUtils {
   // la misma lógica en DetailPageController, resumeHistoryItem, etc.
   static ExtensionType resolveType(
       Extension extension, ExtensionDetail? detail) {
+    // mixedReading tambien resuelve por obra, pero su respaldo es LECTURA:
+    // una extension sin video no puede caer en el reproductor solo porque el
+    // detalle no haya declarado su tipo.
+    if (extension.type == ExtensionType.mixedReading) {
+      return detail?.type ?? ExtensionType.manga;
+    }
     if (extension.type != ExtensionType.mixed) return extension.type;
     return detail?.type ?? ExtensionType.bangumi;
   }
@@ -1210,11 +1218,13 @@ class ExtensionUtils {
   // Único lugar con esta regla — antes estaba duplicada palabra por palabra
   // en search_page.dart y extension_repo_page.dart ("mixed entra en las
   // dos"), con el riesgo de que se actualizara en un lado y no en el otro.
+  // mixedReading NO entra en video a proposito: es lectura y nada mas.
   static const videoTypes = {ExtensionType.bangumi, ExtensionType.mixed};
   static const readingTypes = {
     ExtensionType.manga,
     ExtensionType.fikushon,
     ExtensionType.mixed,
+    ExtensionType.mixedReading,
   };
 
   static addLog(

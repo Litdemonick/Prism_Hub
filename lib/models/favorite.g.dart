@@ -173,12 +173,14 @@ const _FavoritetypeEnumValueMap = {
   r'bangumi': r'bangumi',
   r'fikushon': r'fikushon',
   r'mixed': r'mixed',
+  r'mixedReading': r'mixedReading',
 };
 const _FavoritetypeValueEnumMap = {
   r'manga': ExtensionType.manga,
   r'bangumi': ExtensionType.bangumi,
   r'fikushon': ExtensionType.fikushon,
   r'mixed': ExtensionType.mixed,
+  r'mixedReading': ExtensionType.mixedReading,
 };
 
 Id _favoriteGetId(Favorite object) {

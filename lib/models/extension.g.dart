@@ -41,6 +41,7 @@ const _$ExtensionTypeEnumMap = {
   ExtensionType.bangumi: 'bangumi',
   ExtensionType.fikushon: 'fikushon',
   ExtensionType.mixed: 'mixed',
+  ExtensionType.mixedReading: 'mixedReading',
 };
 
 ExtensionFilter _$ExtensionFilterFromJson(Map<String, dynamic> json) =>

@@ -277,12 +277,14 @@ const _HistorytypeEnumValueMap = {
   r'bangumi': r'bangumi',
   r'fikushon': r'fikushon',
   r'mixed': r'mixed',
+  r'mixedReading': r'mixedReading',
 };
 const _HistorytypeValueEnumMap = {
   r'manga': ExtensionType.manga,
   r'bangumi': ExtensionType.bangumi,
   r'fikushon': ExtensionType.fikushon,
   r'mixed': ExtensionType.mixed,
+  r'mixedReading': ExtensionType.mixedReading,
 };
 const _HistorywatchStateEnumValueMap = {
   r'pending': r'pending',

@@ -16,6 +16,7 @@ Color _typeColor(ExtensionType type) => switch (type) {
       ExtensionType.fikushon =>
         const Color(0xFFA855F7), // violeta — lectura
       ExtensionType.mixed => const Color(0xFF10B981), // verde — mixta
+      ExtensionType.mixedReading => const Color(0xFFA855F7), // violeta
     };
 
 // Los valores vienen del SDK ('ongoing' | 'completed' | 'upcoming' |
