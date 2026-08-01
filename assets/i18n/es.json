@@ -336,6 +336,7 @@
     "cast-volume": "Volumen",
     "cast-speed-unsupported": "Este dispositivo no acepta cambiar la velocidad",
     "cast-taken-over": "Otro dispositivo tomó el control del televisor. Seguí viendo acá desde donde ibas.",
+    "cast-hint-interval": "Salta {back} atrás y {forward} adelante — se cambia en Ajustes",
     "cast-connecting": "Conectando con el dispositivo…",
     "cast-failed": "El dispositivo no aceptó el vídeo. Probá de nuevo o elegí otro.",
     "cast-wait": "Esperá a que cargue el vídeo para poder transmitir",

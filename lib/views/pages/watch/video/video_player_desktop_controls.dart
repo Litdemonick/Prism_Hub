@@ -12,6 +12,7 @@ import 'package:prismhub/views/pages/watch/video/video_player_cast.dart';
 import 'package:prismhub/views/pages/watch/video/webview_player_page.dart'
     show isKnownNativeServer, openWebViewPlayer;
 import 'package:prismhub/utils/i18n.dart';
+import 'package:prismhub/utils/prismhub_storage.dart';
 import 'package:prismhub/views/widgets/cache_network_image.dart';
 import 'package:prismhub/views/widgets/home/home_theme.dart';
 import 'package:prismhub/views/widgets/window_caption_buttons.dart';
@@ -1786,20 +1787,56 @@ class _AyudaTeclasCast extends StatelessWidget {
   const _AyudaTeclasCast({required this.anim});
   final AnimationController anim;
 
+  /// Los segundos que tiene puesto ESE salto en Ajustes.
+  ///
+  /// Sin esto la ayuda decía "adelantar" sin decir cuánto, y el número no se
+  /// puede escribir fijo porque cada uno lo configura como quiere. Mismo
+  /// criterio que en el tutorial del reproductor.
+  static String _segundos(String clave, double porDefecto) {
+    final v = PrismHubStorage.getSetting(clave);
+    final n = v is num ? v.toDouble() : porDefecto;
+    final abs = n.abs();
+    // Sin decimales cuando es redondo: "10 s" se lee mejor que "10.0 s".
+    return abs == abs.roundToDouble()
+        ? '${abs.round()} s'
+        : '${abs.toStringAsFixed(1)} s';
+  }
+
   @override
   Widget build(BuildContext context) {
+    final atras = _segundos(SettingKey.arrowLeft, 2.0);
+    final adelante = _segundos(SettingKey.arrowRight, 2.0);
     return AnimatedBuilder(
       animation: anim,
       builder: (context, _) {
         final activo = (anim.value * 3).floor().clamp(0, 2);
-        return Row(
+        return Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            _pista('←', 'video.cast-hint-back'.i18n, activo == 0),
-            const SizedBox(width: 14),
-            _pista('Espacio', 'video.cast-hint-pause'.i18n, activo == 1),
-            const SizedBox(width: 14),
-            _pista('→', 'video.cast-hint-forward'.i18n, activo == 2),
+            Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                _pista('←', 'video.cast-hint-back'.i18n, activo == 0),
+                const SizedBox(width: 14),
+                _pista('Espacio', 'video.cast-hint-pause'.i18n, activo == 1),
+                const SizedBox(width: 14),
+                _pista('→', 'video.cast-hint-forward'.i18n, activo == 2),
+              ],
+            ),
+            const SizedBox(height: 10),
+            Text(
+              FlutterI18n.translate(
+                context,
+                'video.cast-hint-interval',
+                translationParams: {'back': atras, 'forward': adelante},
+              ),
+              textAlign: TextAlign.center,
+              style: TextStyle(
+                fontSize: 10.5,
+                fontStyle: FontStyle.italic,
+                color: Colors.white.withValues(alpha: 0.5),
+              ),
+            ),
           ],
         );
       },
