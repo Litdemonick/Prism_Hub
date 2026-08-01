@@ -1530,7 +1530,14 @@ class VideoPlayerController extends GetxController with WidgetsBindingObserver {
     // Acá el player todavía está sano (es el mismo estado que en cualquier
     // momento de la reproducción) y además va con timeout, así que en el peor
     // caso se pierde la miniatura, nunca se cuelga el cierre.
-    final frame = saveHistory ? await _capturarFrameActual() : null;
+    //
+    // Casteando no se captura: el reproductor de aca lleva parado desde que
+    // empezo la transmision, asi que saldria un cuadro negro que ademas pisaria
+    // la miniatura buena que ya estaba guardada. En ese caso _saveHistory
+    // conserva la anterior.
+    final frame = (saveHistory && dlnaDevice.value == null)
+        ? await _capturarFrameActual()
+        : null;
 
     // Recien aca se pausa: el fotograma ya esta tomado.
     await player.pause().timeout(const Duration(seconds: 2)).catchError((_) {});
@@ -2306,11 +2313,32 @@ class VideoPlayerController extends GetxController with WidgetsBindingObserver {
       }
 
       final epName = playList[index.value].name;
+
+      // Transmitiendo, el progreso lo lleva el TELEVISOR, no el reproductor de
+      // aca — que esta parado a proposito desde que empezo el casteo.
+      //
+      // Se leia player.state.position/duration, que en ese rato valen cero: al
+      // salir del episodio mientras se casteaba se guardaba progreso 0 y se
+      // perdia todo lo visto. Las Rx position/duration si estan al dia, porque
+      // el timer de estado las va llenando con lo que informa el aparato.
+      final casteando = dlnaDevice.value != null;
+      final posicionSeg = casteando
+          ? position.value.inSeconds
+          : player.state.position.inSeconds;
+      final duracionSeg = casteando
+          ? duration.value.inSeconds
+          : player.state.duration.inSeconds;
+
       // El frame puede venir ya tomado desde _shutdownPlayback (el caso normal
       // al cerrar el reproductor, donde capturar acá sería tarde) o tomarse en
       // el momento, para las llamadas que ocurren con la reproducción viva.
+      //
+      // Casteando no se intenta capturar: el reproductor de aca esta parado y
+      // la captura saldria negra, pisando la buena que ya estaba guardada.
       final data = frameCapturado ??
-          (captureScreenshot ? await _capturarFrameActual() : null);
+          ((captureScreenshot && !casteando)
+              ? await _capturarFrameActual()
+              : null);
 
       logger.info('save history');
 
@@ -2333,15 +2361,15 @@ class VideoPlayerController extends GetxController with WidgetsBindingObserver {
           ..episodeId = index.value
           ..episodeTitle = epName
           ..title = title
-          ..progress = player.state.position.inSeconds.toString()
-          ..totalProgress = player.state.duration.inSeconds.toString()
+          ..progress = posicionSeg.toString()
+          ..totalProgress = duracionSeg.toString()
           ..isNsfw = isNsfw
           // Al día solo si es el último episodio Y llegó al final de verdad.
           ..watchState = calcularWatchState(
             index: index.value,
             total: playList.length,
-            progreso: player.state.position.inSeconds,
-            progresoTotal: player.state.duration.inSeconds,
+            progreso: posicionSeg,
+            progresoTotal: duracionSeg,
           )
           // Referencia para detectar episodios nuevos más adelante.
           ..knownEpisodeCount = playList.length
@@ -3681,7 +3709,35 @@ class VideoPlayerController extends GetxController with WidgetsBindingObserver {
       } catch (_) {}
     }
     _subscriptions.clear();
+    // El timer de estado se corta YA: late una vez por segundo y seguia
+    // latiendo sobre un controlador que se esta destruyendo, avisando errores
+    // de un reproductor que ya no existe. La posicion para el historial no se
+    // pierde, viene de la ultima vuelta (hace menos de un segundo).
+    _dlnaTimer?.cancel();
+    // shutdownPlayback va ANTES de soltar el aparato: adentro se guarda el
+    // historial, y necesita saber que se estaba casteando para tomar la
+    // posicion del televisor en vez de la del reproductor local (que esta en
+    // cero desde que empezo la transmision).
     await shutdownPlayback();
+    // Y recien ahora se corta la transmision.
+    //
+    // Antes no se cortaba: al salir del episodio el televisor se quedaba
+    // reproduciendo solo, sin nada en la app desde donde pararlo, y encima el
+    // relay que le servia el video muere con la app — asi que terminaba
+    // mostrando un error en la pantalla grande.
+    final aparato = dlnaDevice.value;
+    if (aparato != null) {
+      dlnaDevice.value = null;
+      try {
+        await aparato.stop().timeout(const Duration(seconds: 2));
+      } catch (e) {
+        logger.warning('El aparato no respondio al salir del episodio', e);
+      }
+    }
+    if (_dlnaRelayUrl != null) {
+      CastRelayServer.unregister(_dlnaRelayUrl!);
+      _dlnaRelayUrl = null;
+    }
     logger.info('dispose video controller');
     super.onClose();
   }
