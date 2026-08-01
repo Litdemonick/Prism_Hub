@@ -804,6 +804,29 @@ class VideoPlayerController extends GetxController with WidgetsBindingObserver {
 
     // 错误监听 — detectar fallo de reproducción
     _addSubscription(player.stream.error.listen((event) {
+      // "Could not open codec": casi siempre es el decodificador por HARDWARE
+      // que no puede con este vídeo, no un vídeo roto.
+      //
+      // El caso que lo destapó: un VR de Eporner de 4320x2160. Los VR vienen
+      // side-by-side, o sea con el doble de ancho, y la mayoría de los
+      // decodificadores por hardware topan en 4096 — 4320 se pasa. mpv abre el
+      // stream, falla al abrir el códec y no se ve nada, aunque el archivo
+      // esté perfecto.
+      //
+      // Se reintenta UNA vez con decodificación por software, que no tiene ese
+      // límite. Cuesta más CPU, pero es la diferencia entre verlo y no verlo.
+      // Una sola vez: si con software tampoco abre, el problema es otro y
+      // seguir reintentando solo taparía el error real.
+      if (event.toLowerCase().contains('could not open codec') &&
+          !_reintentoPorSoftware &&
+          player.platform is NativePlayer) {
+        _reintentoPorSoftware = true;
+        logger.warning(
+            'Codec sin abrir — reintentando por software (posible video mas '
+            'ancho de lo que soporta el hardware)');
+        unawaited(_reintentarSinHardware());
+        return;
+      }
       // Errores de decodificación (audio/video corrupto) pueden llegar en
       // ráfaga, uno por cada frame roto — confirmado en vivo: cientos de
       // "Error decoding audio" por segundo, inundando el log para siempre
@@ -911,6 +934,8 @@ class VideoPlayerController extends GetxController with WidgetsBindingObserver {
     // streams directos: viniendo de uno HLS a uno que no lo es, no habria
     // pasado nunca por ahi y el menu se habria quedado con lo viejo.
     qualityMap.clear();
+    // Contenido nuevo: el reintento por software vuelve a estar disponible.
+    _reintentoPorSoftware = false;
     // No arrastrar el "avanzó hace poco" del video/servidor ANTERIOR — sin
     // esto, un corte real justo al cambiar de contenido podía quedar sin
     // spinner un instante porque todavía valía el timestamp viejo.
@@ -1368,6 +1393,28 @@ class VideoPlayerController extends GetxController with WidgetsBindingObserver {
     if (_shutdownStarted) return;
     _shutdownStarted = true;
 
+    // Lo PRIMERO de todo: callar el audio.
+    //
+    // Iba mucho mas abajo, despues de capturar el fotograma para "Continuar
+    // viendo" —que tiene su propio tope de 2 s— y de guardar el historial. O
+    // sea que al salir el video seguia sonando encima de la pantalla anterior
+    // todo ese rato. Reportado dos veces: "tarda 3-5 segundos en callarse".
+    //
+    // Se puede adelantar sin perder nada: bajar el volumen y pausar son
+    // operaciones normales del reproductor, de las que pasan mil veces durante
+    // la reproduccion, y no son parte del desarmado. La captura sigue andando
+    // igual porque toma el fotograma que ya esta en pantalla, que no depende
+    // del volumen ni de si esta pausado. Lo que NO se puede adelantar es
+    // stop()/dispose(), que es lo que deja al player sin poder capturar.
+    //
+    // Los dos intentos van en paralelo: alcanza con que uno llegue para que
+    // deje de sonar, y si uno se cuelga —el bug de hilos que se explica mas
+    // abajo— ya no demora al otro.
+    await Future.wait<void>([
+      player.setVolume(0).timeout(const Duration(seconds: 2)).catchError((_) {}),
+      player.pause().timeout(const Duration(seconds: 2)).catchError((_) {}),
+    ]);
+
     // El frame se toma ACÁ, antes de tocar nada del player, y se pasa hecho a
     // _saveHistory. Capturar más abajo (con el desarmado ya empezado) es lo
     // que obligaba a pasar captureScreenshot:false: una vez que arrancó el
@@ -1403,23 +1450,6 @@ class VideoPlayerController extends GetxController with WidgetsBindingObserver {
     // congelada (controles pintados pero nada responde). Preferible perder
     // prolijitud en la liberación nativa a que un cuelgue de la librería
     // tilde la apertura siguiente entera.
-    // Callar el audio va PRIMERO, y los dos intentos en paralelo.
-    //
-    // Antes iba encadenado: bajar el volumen y, recién cuando ESO terminaba,
-    // pausar. Con el tope de 2 s de cada paso, si el primero se colgaba —que es
-    // justo lo que hace el bug de hilos de arriba— había que esperarlo entero
-    // antes de siquiera intentar el segundo: hasta cuatro segundos de audio
-    // sonando con el reproductor ya cerrado y la pantalla anterior a la vista.
-    // Reportado en vivo como "tarda 3-5 segundos en callarse".
-    //
-    // En paralelo alcanza con que UNO de los dos llegue para que deje de sonar,
-    // y el que se cuelgue ya no demora al otro. En el caso normal, donde ninguno
-    // se cuelga, el audio se corta al instante igual que antes.
-    await Future.wait<void>([
-      player.setVolume(0).timeout(const Duration(seconds: 2)).catchError((_) {}),
-      player.pause().timeout(const Duration(seconds: 2)).catchError((_) {}),
-    ]);
-
     try {
       await player.stop().timeout(const Duration(seconds: 3));
       await Future<void>.delayed(const Duration(milliseconds: 180));
@@ -2425,11 +2455,88 @@ class VideoPlayerController extends GetxController with WidgetsBindingObserver {
   /// izquierda, que es la vista del ojo izquierdo.
   static const _filtroVr = 'lavfi=[crop=iw/2:ih:0:0]';
 
+  /// Desplazamiento del recorte, de 0 a 1, dentro de la mitad sobrante.
+  ///
+  /// 0 muestra la vista del ojo izquierdo, 1 la del derecho, y el medio queda
+  /// entre las dos. Sirve para mirar el resto del cuadro sin gafas.
+  final vrDesplazamiento = 0.0.obs;
+
+  /// Ya se reintento este contenido con decodificacion por software.
+  /// Se limpia al cargar contenido nuevo (ver donde se reinicia el estado).
+  bool _reintentoPorSoftware = false;
+
+  /// Vuelve a abrir lo mismo, pero decodificando por software.
+  ///
+  /// Se conserva la posicion: si el fallo aparecio a mitad de reproduccion, no
+  /// hay por que volver al principio.
+  Future<void> _reintentarSinHardware() async {
+    if (_disposed || player.platform is! NativePlayer) return;
+    final np = player.platform as NativePlayer;
+    final donde = position.value;
+    try {
+      await np.setProperty('hwdec', 'no');
+      final actual = watchData;
+      if (actual == null) return;
+      await player.open(Media(actual.url, httpHeaders: actual.headers));
+      if (donde > Duration.zero) await player.seek(donde);
+    } catch (e) {
+      logger.warning('El reintento por software tambien fallo', e);
+    }
+  }
+
+  /// Mueve la imagen del VR a lo ancho del cuadro.
+  ///
+  /// Con el recorte puesto se ve una porción del vídeo, y sin gafas no hay
+  /// forma de mirar el resto: la parte de afuera queda inalcanzable. Corriendo
+  /// el recorte se puede recorrer el cuadro entero.
+  ///
+  /// No hace nada si el modo VR está apagado: ahí se ve todo y no hay nada que
+  /// recorrer.
+  Future<void> moverVr(double delta) async {
+    if (!vrUnaPantalla.value || player.platform is! NativePlayer) return;
+    final nuevo = (vrDesplazamiento.value + delta).clamp(0.0, 1.0);
+    if (nuevo == vrDesplazamiento.value) return;
+    vrDesplazamiento.value = nuevo;
+    await _aplicarRecorteVr(player.platform as NativePlayer, true);
+  }
+
+  /// Aplica el recorte con las medidas REALES del vídeo.
+  ///
+  /// Se usa `video-crop`, que es la opción que mpv tiene para esto, en vez de
+  /// meter un filtro en la cadena de `vf`. Con `vf` hay que acertarle a una
+  /// sintaxis —`crop=…` es del mplayer viejo y no existe; el envoltorio
+  /// `lavfi` depende de cómo esté compilado— y si no se acierta, mpv rechaza la
+  /// orden y el recorte no pasa. `video-crop` toma píxeles y ya.
+  ///
+  /// Las medidas salen del propio reproductor, así que no hay que adivinar
+  /// resolución. Si todavía no las reporta, no se intenta: sin ancho no hay
+  /// mitad que recortar.
+  Future<bool> _aplicarRecorteVr(NativePlayer np, bool activar) async {
+    if (!activar) {
+      await np.setProperty('video-crop', '');
+      return (await np.getProperty('video-crop')).trim().isEmpty;
+    }
+    final w = player.state.width ?? 0;
+    final h = player.state.height ?? 0;
+    if (w <= 1 || h <= 1) return false;
+
+    final mitad = w ~/ 2;
+    final x = ((w - mitad) * vrDesplazamiento.value).round().clamp(0, w - mitad);
+    await np.setProperty('video-crop', '${mitad}x$h+$x+0');
+    return (await np.getProperty('video-crop')).trim().isNotEmpty;
+  }
+
   Future<void> alternarVrUnaPantalla() async {
     if (player.platform is! NativePlayer) return;
     final np = player.platform as NativePlayer;
     final nuevo = !vrUnaPantalla.value;
     try {
+      // Primero la vía de mpv pensada para esto. Si esta versión no la tiene,
+      // se cae al filtro, que es lo que había antes.
+      if (await _aplicarRecorteVr(np, nuevo)) {
+        vrUnaPantalla.value = nuevo;
+        return;
+      }
       await np.setProperty('vf', nuevo ? _filtroVr : '');
 
       // Se vuelve a leer para confirmar que quedó puesto.
