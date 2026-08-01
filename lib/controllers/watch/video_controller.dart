@@ -2400,20 +2400,43 @@ class VideoPlayerController extends GetxController with WidgetsBindingObserver {
   /// tamaño de la ventana.
   final vrUnaPantalla = false.obs;
 
+  /// El recorte, escrito para el mpv que trae media_kit.
+  ///
+  /// `crop` a secas NO existe: es sintaxis del mplayer viejo y mpv la rechaza
+  /// con "Option vf: crop doesn't exist" (visto en vivo al probar esto). El
+  /// recorte de verdad lo pone FFmpeg, y a los filtros de FFmpeg se llega por
+  /// el envoltorio `lavfi`.
+  ///
+  /// iw/ih son el ancho y el alto de ENTRADA, así que sirve para cualquier
+  /// resolución sin consultarla antes. La posición 0:0 toma la mitad
+  /// izquierda, que es la vista del ojo izquierdo.
+  static const _filtroVr = 'lavfi=[crop=iw/2:ih:0:0]';
+
   Future<void> alternarVrUnaPantalla() async {
-    final nuevo = !vrUnaPantalla.value;
     if (player.platform is! NativePlayer) return;
     final np = player.platform as NativePlayer;
+    final nuevo = !vrUnaPantalla.value;
     try {
-      // iw/ih son el ancho y el alto de ENTRADA: sirve para cualquier
-      // resolución sin tener que consultarla antes. La posición 0:0 toma la
-      // mitad izquierda, que es la vista del ojo izquierdo.
-      await np.setProperty('vf', nuevo ? 'crop=iw/2:ih:0:0' : '');
+      await np.setProperty('vf', nuevo ? _filtroVr : '');
+
+      // Se vuelve a leer para confirmar que quedó puesto.
+      //
+      // Que setProperty no tire excepción NO alcanza: mpv acepta la orden y
+      // recién después decide que el filtro no le sirve, y ese rechazo llega
+      // por su canal de errores, no por acá. Sin comprobarlo, el interruptor
+      // quedaba encendido mientras la imagen seguía igual — que es justo lo
+      // peor: parece que la función no hace nada en vez de avisar.
+      final puesto = (await np.getProperty('vf')).trim();
+      final quedoBien = nuevo ? puesto.isNotEmpty : puesto.isEmpty;
+      if (!quedoBien) {
+        logger.warning('mpv no aceptó el filtro de VR (vf="$puesto")');
+        vrUnaPantalla.value = false;
+        return;
+      }
       vrUnaPantalla.value = nuevo;
     } catch (e) {
-      // Un filtro rechazado no puede dejar el interruptor diciendo que está
-      // puesto cuando la imagen no cambió.
       logger.warning('No se pudo cambiar el modo VR', e);
+      vrUnaPantalla.value = false;
     }
   }
 
