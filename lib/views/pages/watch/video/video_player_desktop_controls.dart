@@ -1609,12 +1609,30 @@ class _CastState extends State<_Cast> {
                                   ),
                                 ),
                                 const SizedBox(height: 14),
-                                FilledButton(
-                                  child: Text('video.cast-disconnect'.i18n),
-                                  onPressed: () {
-                                    widget.controller.disconnectDLNADevice();
-                                    Flyout.of(context).close();
-                                  },
+                                // Mismo criterio que en el telefono:
+                                // reintentar primero. Si el televisor fallo por
+                                // algo pasajero, lo que uno quiere es volver a
+                                // intentarlo, no elegir el aparato de nuevo.
+                                Row(
+                                  mainAxisSize: MainAxisSize.min,
+                                  children: [
+                                    Button(
+                                      child: Text('common.retry'.i18n),
+                                      onPressed: () {
+                                        widget.controller.reintentarCast();
+                                        Flyout.of(context).close();
+                                      },
+                                    ),
+                                    const SizedBox(width: 10),
+                                    FilledButton(
+                                      child: Text('video.cast-disconnect'.i18n),
+                                      onPressed: () {
+                                        widget.controller
+                                            .disconnectDLNADevice();
+                                        Flyout.of(context).close();
+                                      },
+                                    ),
+                                  ],
                                 ),
                               ],
                             ),

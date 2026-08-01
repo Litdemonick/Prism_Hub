@@ -377,9 +377,8 @@ class _VideoPlayerMobileControlsState extends State<VideoPlayerMobileControls> {
                               context,
                               'video.holding-fast-forward',
                               translationParams: {
-                                'x': _velocidadSostenida
-                                    .toStringAsFixed(
-                                        _velocidadSostenida % 1 == 0 ? 0 : 1)
+                                'x': _velocidadSostenida.toStringAsFixed(
+                                    _velocidadSostenida % 1 == 0 ? 0 : 1)
                               },
                             ),
                           ),
@@ -739,13 +738,28 @@ class _VideoPlayerMobileControlsState extends State<VideoPlayerMobileControls> {
                                 ),
                               ),
                               const SizedBox(height: 10),
-                              FilledButton(
-                                onPressed: () {
-                                  _c.disconnectDLNADevice();
-                                },
-                                child: Text(
-                                  'common.disconnect'.i18n,
-                                ),
+                              // Reintentar antes que desconectar: si el
+                              // televisor fallo por algo pasajero, lo que uno
+                              // quiere es volver a intentarlo, no empezar de
+                              // cero eligiendo el aparato otra vez.
+                              Row(
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  OutlinedButton.icon(
+                                    onPressed: () => _c.reintentarCast(),
+                                    icon: const Icon(Icons.refresh, size: 18),
+                                    label: Text('common.retry'.i18n),
+                                  ),
+                                  const SizedBox(width: 10),
+                                  FilledButton(
+                                    onPressed: () {
+                                      _c.disconnectDLNADevice();
+                                    },
+                                    child: Text(
+                                      'common.disconnect'.i18n,
+                                    ),
+                                  ),
+                                ],
                               ),
                             ],
                           );

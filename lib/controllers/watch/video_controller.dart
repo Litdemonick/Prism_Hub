@@ -2120,11 +2120,12 @@ class VideoPlayerController extends GetxController with WidgetsBindingObserver {
 
   /// Nombre base de las capturas de ESTE episodio. Todas las versiones
   /// guardadas empiezan así, y por eso se pueden encontrar y limpiar después.
-  String get _baseFrame =>
-      md5.convert(utf8.encode('${title}_${playList[index.value].name}')).toString();
+  String get _baseFrame => md5
+      .convert(utf8.encode('${title}_${playList[index.value].name}'))
+      .toString();
 
-  Directory get _dirFrames =>
-      Directory(path.join(PrismHubDirectory.getCacheDirectory, 'history_cover'));
+  Directory get _dirFrames => Directory(
+      path.join(PrismHubDirectory.getCacheDirectory, 'history_cover'));
 
   /// Guarda un frame nuevo y devuelve su ruta.
   ///
@@ -2226,7 +2227,8 @@ class VideoPlayerController extends GetxController with WidgetsBindingObserver {
   }
 
   // 保存历史记录
-  _saveHistory({bool captureScreenshot = true, Uint8List? frameCapturado}) async {
+  _saveHistory(
+      {bool captureScreenshot = true, Uint8List? frameCapturado}) async {
     // Envuelto entero: crea directorios, saca una captura del player y
     // escribe archivos. Cualquiera de esas cosas puede fallar por espacio,
     // permisos o porque el player ya se está cerrando — y como esto se
@@ -2611,7 +2613,8 @@ class VideoPlayerController extends GetxController with WidgetsBindingObserver {
     if (w <= 1 || h <= 1) return false;
 
     final mitad = w ~/ 2;
-    final x = ((w - mitad) * vrDesplazamiento.value).round().clamp(0, w - mitad);
+    final x =
+        ((w - mitad) * vrDesplazamiento.value).round().clamp(0, w - mitad);
     await np.setProperty('video-crop', '${mitad}x$h+$x+0');
     return (await np.getProperty('video-crop')).trim().isNotEmpty;
   }
@@ -2736,18 +2739,67 @@ class VideoPlayerController extends GetxController with WidgetsBindingObserver {
     });
   }
 
+  /// Vuelve a mandarle el video al MISMO dispositivo.
+  ///
+  /// El televisor puede fallar por cosas pasajeras —un corte de red, que la
+  /// direccion firmada de la fuente caduco entre que se pidio y se envio, o que
+  /// el aparato todavia estaba ocupado con lo anterior— y hasta ahora la unica
+  /// salida era desconectar y volver a elegirlo de la lista.
+  ///
+  /// Se rearma la direccion desde cero en vez de reenviar la de antes: si la
+  /// que fallo estaba vencida, mandarla de nuevo falla igual.
+  Future<void> reintentarCast() async {
+    final device = dlnaDevice.value;
+    if (device == null) return;
+    // Se limpia el relay anterior: registrar uno nuevo sin soltar el viejo deja
+    // entradas colgadas por cada reintento.
+    if (_dlnaRelayUrl != null) {
+      CastRelayServer.unregister(_dlnaRelayUrl!);
+      _dlnaRelayUrl = null;
+    }
+    try {
+      await device.stop();
+    } catch (_) {
+      // Puede estar ya parado o no responder: no es motivo para no reintentar.
+    }
+    await connectDLNADevice(device);
+  }
+
   // 断开 DLNA 设备
   disconnectDLNADevice() async {
     if (dlnaDevice.value == null) {
       return;
     }
     final device = dlnaDevice.value!;
+    // Donde iba el televisor, para no volver al principio.
+    final donde = position.value;
     dlnaDevice.value = null;
     device.stop();
     _dlnaTimer?.cancel();
     if (_dlnaRelayUrl != null) {
       CastRelayServer.unregister(_dlnaRelayUrl!);
       _dlnaRelayUrl = null;
+    }
+
+    // Y el reproductor local vuelve a andar.
+    //
+    // Al empezar a transmitir se llama a player.stop(), porque el video pasa a
+    // verse en el televisor y dejarlo decodificando aca seria gastar bateria
+    // para nada. Pero al desconectar nadie lo volvia a abrir: quedaba la
+    // pantalla negra con los controles muertos, y la unica salida era salir del
+    // episodio y entrar de nuevo.
+    //
+    // Se retoma donde estaba el televisor, que es lo que uno espera al cortar
+    // la transmision para seguir mirando en el dispositivo.
+    if (_disposed) return;
+    final actual = watchData;
+    if (actual == null) return;
+    try {
+      await player.open(Media(actual.url, httpHeaders: actual.headers));
+      if (donde > Duration.zero) await player.seek(donde);
+    } catch (e) {
+      logger.warning(
+          'No se pudo retomar la reproduccion local tras el cast', e);
     }
   }
 
