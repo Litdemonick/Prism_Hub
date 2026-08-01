@@ -286,6 +286,12 @@ class _VideoPlayerMobileControlsState extends State<VideoPlayerMobileControls> {
                                   // `error` —tiene su propio campo— así que la
                                   // comprobación de arriba no lo cubría.
                                   _c.serverFailedMessage.value.isEmpty &&
+                                  // Esperando que se elija/confirme servidor:
+                                  // el boton de play esta ahi pidiendo un
+                                  // toque y no hay nada cargando. La rueda
+                                  // girando detras hacia parecer que si uno
+                                  // espera arranca solo.
+                                  !_c.awaitingServerChoice.value &&
                                   !_c.isWebViewActive.value) ||
                               (_c.hasRenderedFrame.value &&
                                   (_c.isSeeking.value ||

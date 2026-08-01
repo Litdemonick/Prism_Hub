@@ -2355,8 +2355,29 @@ class VideoPlayerController extends GetxController with WidgetsBindingObserver {
   /// Mirando solo `qualityMap`, el botón de calidad respondía "no hay
   /// calidades" en un vídeo que tenía siete. Se veía en el teléfono, donde el
   /// botón de calidad es la única forma de cambiarla.
-  bool get hayCalidades =>
-      qualityMap.isNotEmpty || availableServers.length > 1;
+  bool get hayCalidades => qualityMap.isNotEmpty || _servidoresSonCalidades;
+
+  /// ¿Lo que hay en `availableServers` son CALIDADES y no servidores?
+  ///
+  /// La cabecera X-Servers se usa para las dos cosas segun la extension: unas
+  /// mandan fuentes alternativas ("Voe", "StreamWish", "Servidor 2") y otras
+  /// una url por resolucion ("2160p(4K) HD", "1080p HD"). Por el nombre del
+  /// campo no se distinguen, pero por el de las entradas si.
+  ///
+  /// Se exige que TODAS parezcan una resolucion. Con una sola que no lo sea ya
+  /// es una lista de servidores: mejor mostrarla como servidores —que es lo que
+  /// mas se parece a la verdad— que esconder fuentes que el usuario necesita
+  /// para poder reproducir.
+  bool get _servidoresSonCalidades =>
+      availableServers.isNotEmpty &&
+      availableServers.keys.every(_pareceCalidad);
+
+  static bool _pareceCalidad(String nombre) {
+    final n = nombre.toLowerCase();
+    // "1080p", "2160p(4k) hd", "720 p"… y las formas cortas 4K/2K/8K.
+    return RegExp(r'\d{3,4}\s*p\b').hasMatch(n) ||
+        RegExp(r'\b[248]k\b').hasMatch(n);
+  }
 
   /// Qué panel abrir al tocar el botón de calidad, según de dónde vengan.
   SidebarTab get pestanaDeCalidad =>
@@ -2404,11 +2425,16 @@ class VideoPlayerController extends GetxController with WidgetsBindingObserver {
   /// decía "1080p" y el otro era el de servidores, y los dos abrían la misma
   /// lista de calidades.
   ///
-  /// Solo tiene sentido por separado cuando hay servidores de verdad —una lista
-  /// de fuentes alternativas— Y ADEMÁS calidades propias del stream, que es el
-  /// caso de las extensiones que devuelven varios embeds con su HLS cada uno.
+  /// Se esconde SOLO cuando esa lista son calidades disfrazadas de servidores,
+  /// que es cuando los dos botones abren lo mismo.
+  ///
+  /// La primera versión de esto exigía además que hubiera `qualityMap`, y eso
+  /// estuvo mal: `qualityMap` solo se llena con un playlist HLS, así que en la
+  /// mayoría de las extensiones está vacío aunque los servidores sean
+  /// servidores de verdad. Resultado: desaparecieron las fuentes alternativas
+  /// en casi todas y no se podía elegir servidor en ningún lado.
   bool get servidoresSonAparte =>
-      availableServers.isNotEmpty && qualityMap.isNotEmpty;
+      availableServers.isNotEmpty && !_servidoresSonCalidades;
 
   toggleSideBar(SidebarTab tab) {
     if (showSidebar.value && initSidebarTab.value == tab) {

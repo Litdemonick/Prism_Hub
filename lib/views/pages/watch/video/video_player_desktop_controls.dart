@@ -317,6 +317,9 @@ class _VideoPlayerDesktopControlsState
                                     // campo— asi que la comprobacion anterior
                                     // no lo cubria.
                                     _c.serverFailedMessage.value.isEmpty &&
+                                    // Mismo caso: el boton de play espera un
+                                    // clic, no hay nada cargando.
+                                    !_c.awaitingServerChoice.value &&
                                     // Con el reproductor de WebView activo no
                                     // va a pintarse nunca un cuadro nativo, asi
                                     // que esta rueda giraria para siempre.
