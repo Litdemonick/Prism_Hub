@@ -45,7 +45,11 @@
     "no-result-in-extension": "{extension} no encontró resultados",
     "understood": "Entendido",
     "search-filters-ignored": "Con los filtros puestos no había resultados, así que se buscó sin ellos. Lo que se ve puede no cumplir los filtros marcados.",
-    "source-timeout": "Esta fuente tardó demasiado en responder. Podés reintentar; las demás extensiones siguen buscando igual."
+    "source-timeout": "Esta fuente tardó demasiado en responder. Podés reintentar; las demás extensiones siguen buscando igual.",
+    "disconnect": "Desconectar",
+    "error-message": "Mensaje de error",
+    "off": "Desactivado",
+    "no-connection": "Sin conexión a internet"
   },
   "home": {
     "continue-watching": "Continuar",
@@ -81,7 +85,8 @@
       "url-label": "URL de la extensión",
       "tips": "Puedes importar extensiones mediante un enlace, o haciendo clic en el directorio de extensiones a continuación y colocar el archivo allí.",
       "extension-dir": "Directorio de extensiones",
-      "import-by-url": "Importar por URL"
+      "import-by-url": "Importar por URL",
+      "import-by-local": "Importar desde el equipo"
     },
     "error-dialog": "Mensaje de error",
     "installed": "Instalado",
@@ -347,7 +352,10 @@
     "servers": "Servidores",
     "webview-server": "Abre en el navegador",
     "webview-server-return": "Volver al navegador",
-    "holding-fast-forward": "Adelantando a {x}x"
+    "holding-fast-forward": "Adelantando a {x}x",
+    "audio": "Audio",
+    "no-qualities": "No hay calidades disponibles",
+    "streamlink-error": "No se pudo obtener el enlace del vídeo"
   },
   "comic-settings": {
     "read-mode": "Modo de lectura",

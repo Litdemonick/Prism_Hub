@@ -52,7 +52,8 @@
     "no-result-in-extension": "{extension} found no results",
     "understood": "Got it",
     "search-filters-ignored": "No results with the current filters, so the search ran without them. What you see may not match the filters you picked.",
-    "source-timeout": "This source took too long to respond. You can retry; the other extensions keep searching anyway."
+    "source-timeout": "This source took too long to respond. You can retry; the other extensions keep searching anyway.",
+    "no-connection": "No internet connection"
   },
   "home": {
     "continue-watching": "Continue",
