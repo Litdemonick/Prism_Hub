@@ -455,12 +455,30 @@ class VideoPlayerController extends GetxController with WidgetsBindingObserver {
       if (ua != null && ua.isNotEmpty) {
         await np.setProperty('user-agent', ua);
       }
-      // Buffer optimizado para streaming de anime (segmentos HLS de 5-10 s).
-      // 50 MiB es seguro en móvil; en desktop sube solo porque hay más RAM.
+      // Buffer para streaming (segmentos HLS de 5-10 s).
+      //
+      // Decía "en desktop sube solo porque hay más RAM" y no era cierto: el
+      // valor estaba fijo en 50 MiB en todas las plataformas.
+      //
+      // Con eso, 4K no llega a andar bien aunque el stream lo ofrezca. Se pide
+      // guardar 30 segundos por delante, pero 30 segundos de 4K a ~25 Mb/s son
+      // unos 94 MiB: el tope de 50 MiB corta el adelanto a la mitad, y cada
+      // bache de red se convierte en una pausa para cargar. En 1080p el mismo
+      // tope sobra —de ahí que nunca se hubiera notado—, así que subirlo no
+      // cambia nada de lo que ya funcionaba.
+      //
+      // En escritorio hay RAM para el caso completo. En el teléfono se sube
+      // menos: alcanza para que 4K deje de cortarse sin quedarse con una
+      // porción de memoria que el sistema pueda querer de vuelta.
       await np.setProperty('cache', 'yes');
       await np.setProperty('cache-secs', '30');
-      await np.setProperty('demuxer-max-bytes', '50MiB');
+      await np.setProperty(
+          'demuxer-max-bytes', Platform.isAndroid ? '96MiB' : '192MiB');
       await np.setProperty('demuxer-readahead-secs', '10');
+      // La variante de MAYOR calidad de las que ofrece el stream — o sea que
+      // cuando hay 4K, se usa 4K. La lista de calidades del menú sale de las
+      // variantes del propio playlist, sin tope puesto por la app, así que
+      // aparece cualquier resolución que el sitio publique.
       await np.setProperty('hls-bitrate', 'max');
       // Proxy de Ajustes → mpv: desbloquea CDNs filtrados por el ISP.
       // Sin esto el proxy solo llega a la resolución del embed, no al stream.
