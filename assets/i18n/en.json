@@ -74,7 +74,8 @@
     "favorite-video": "Favorites — Video",
     "favorite-reading": "Favorites — Reading",
     "remove-from-continue": "Remove from Continue",
-    "see-history": "View history"
+    "see-history": "View history",
+    "view-detail": "View details"
   },
   "search": {
     "hint-text": "Please use search wisely!~",

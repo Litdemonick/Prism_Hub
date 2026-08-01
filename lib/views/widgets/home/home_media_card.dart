@@ -113,6 +113,7 @@ class HomeMediaCard extends StatefulWidget {
     this.extraActionLabel,
     this.extraActionIcon,
     this.onExtraAction,
+    this.onVerDetalle,
     this.gradientSeed,
     this.hidden = false,
     this.onToggleHide,
@@ -158,6 +159,14 @@ class HomeMediaCard extends StatefulWidget {
   final String? extraActionLabel;
   final IconData? extraActionIcon;
   final VoidCallback? onExtraAction;
+
+  /// Abre la ficha del titulo desde el menu de tres puntos.
+  ///
+  /// Hace falta porque tocar la tarjeta NO siempre lleva ahi: en los dos Home,
+  /// "Continuar" retoma la reproduccion o la lectura donde habia quedado. Sin
+  /// esta opcion, para ver la ficha de algo que estabas siguiendo habia que
+  /// buscarlo de nuevo por el buscador.
+  final VoidCallback? onVerDetalle;
   // Para elegir el degradado por posición cuando no hay portada — si no se
   // pasa, se deriva del título (mismo criterio que ColorUtils.getColorByText).
   final int? gradientSeed;
@@ -448,6 +457,7 @@ class _HomeMediaCardState extends State<HomeMediaCard> {
                         extraLabel: widget.extraActionLabel,
                         extraIcon: widget.extraActionIcon,
                         onExtra: widget.onExtraAction,
+                        onVerDetalle: widget.onVerDetalle,
                       ),
                   ],
                 ),
@@ -474,7 +484,8 @@ class _HomeMediaCardState extends State<HomeMediaCard> {
     // el poco alto disponible — se usa la variante landscape, más chica.
     final hasMenu = widget.onDelete != null ||
         widget.onToggleHide != null ||
-        widget.onExtraAction != null;
+        widget.onExtraAction != null ||
+        widget.onVerDetalle != null;
     final isAndroidLandscape = Platform.isAndroid &&
         MediaQuery.of(context).orientation == Orientation.landscape;
     final width = isAndroidLandscape
@@ -690,6 +701,7 @@ class _HomeMediaCardState extends State<HomeMediaCard> {
                         extraLabel: widget.extraActionLabel,
                         extraIcon: widget.extraActionIcon,
                         onExtra: widget.onExtraAction,
+                        onVerDetalle: widget.onVerDetalle,
                       ),
                   ],
                 ),
@@ -715,6 +727,7 @@ class _WideMenuButton extends StatelessWidget {
     this.extraLabel,
     this.extraIcon,
     this.onExtra,
+    this.onVerDetalle,
   });
 
   // Eran parámetros, con estos mismos valores por defecto. El único que los
@@ -729,6 +742,7 @@ class _WideMenuButton extends StatelessWidget {
   final String? extraLabel;
   final IconData? extraIcon;
   final VoidCallback? onExtra;
+  final VoidCallback? onVerDetalle;
 
   @override
   Widget build(BuildContext context) {
@@ -762,8 +776,29 @@ class _WideMenuButton extends StatelessWidget {
             if (v == 0) onToggleHide?.call();
             if (v == 1) onDelete?.call();
             if (v == 2) onExtra?.call();
+            if (v == 3) onVerDetalle?.call();
           },
           itemBuilder: (context) => [
+            // Ver la ficha va arriba de todo: es a donde uno quiere ir cuando
+            // abre este menu desde una tarjeta que al tocarla hace otra cosa
+            // —en los Home, retomar donde habia quedado—.
+            if (onVerDetalle != null)
+              PopupMenuItem<int>(
+                value: 3,
+                height: 40,
+                child: Row(
+                  children: [
+                    const Icon(Icons.info_outline,
+                        size: 17, color: HomeTheme.textMuted),
+                    const SizedBox(width: 10),
+                    Text(
+                      'home.view-detail'.i18n,
+                      style: const TextStyle(
+                          color: HomeTheme.textPrimary, fontSize: 13),
+                    ),
+                  ],
+                ),
+              ),
             // La acción extra va primera: es la del contexto de la pantalla —
             // en el Historial, mover un título entre "en curso" y "visto"— y
             // por eso pesa más que ocultar o eliminar.

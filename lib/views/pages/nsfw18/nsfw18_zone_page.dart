@@ -315,6 +315,7 @@ class _Nsfw18ZonePageState extends State<Nsfw18ZonePage> {
                 headers: c.headersForPackage(f.package),
                 onTap: () => _openDetail(f.url, f.package),
                 onDelete: () => c.deleteFavorite(f),
+                onVerDetalle: () => _openDetail(f.url, f.package),
                 hidden: HiddenCards.isHidden(f.package, f.url),
                 onToggleHide: () => HiddenCards.toggle(f.package, f.url),
                 accent: HomeTheme.accentRed,
@@ -411,6 +412,7 @@ class _Nsfw18ZonePageState extends State<Nsfw18ZonePage> {
                 // administra el archivo.
                 onDelete: () => c.quitarDeContinuar(h),
                 deleteLabel: 'home.remove-from-continue'.i18n,
+                onVerDetalle: () => _openDetail(h.url, h.package),
                 hidden: HiddenCards.isHidden(h.package, h.url),
                 onToggleHide: () => HiddenCards.toggle(h.package, h.url),
                 accent: HomeTheme.accentRed,

@@ -342,6 +342,7 @@ class _HistoryPageState extends State<HistoryPage> {
           headers: _c.headersForPackage(f.package),
           onTap: () => _openDetail(f.url, f.package),
           onDelete: () => _deleteFavorite(f),
+          onVerDetalle: () => _openDetail(f.url, f.package),
           hidden: HiddenCards.isHidden(f.package, f.url),
           onToggleHide: () => HiddenCards.toggle(f.package, f.url),
           accent: _accent,
@@ -388,6 +389,7 @@ class _HistoryPageState extends State<HistoryPage> {
               ? Icons.replay_rounded
               : Icons.check_rounded,
           onExtraAction: () => _cambiarEstado(h),
+          onVerDetalle: () => _openDetail(h.url, h.package),
           hidden: HiddenCards.isHidden(h.package, h.url),
           onToggleHide: () => HiddenCards.toggle(h.package, h.url),
           accent: _accent,
