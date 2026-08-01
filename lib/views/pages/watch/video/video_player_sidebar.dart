@@ -8,6 +8,7 @@ import 'package:prismhub/utils/i18n.dart';
 import 'package:prismhub/views/widgets/list_title.dart';
 import 'package:prismhub/views/widgets/platform_widget.dart';
 import 'package:prismhub/views/widgets/watch/playlist.dart';
+import 'package:prismhub/views/widgets/home/home_theme.dart';
 
 enum SidebarTab {
   episodes,
@@ -916,16 +917,57 @@ class _ServerSelector extends StatelessWidget {
     return Obx(() {
       final current = controller.currentServerName.value;
       return ListView(
+        padding: const EdgeInsets.symmetric(vertical: 6, horizontal: 8),
         children: [
           for (final entry in controller.availableServers.entries)
-            ListTile(
-              selected: entry.key == current,
-              title: Text(entry.key),
-              onTap: () {
-                controller.selectServer(entry.key);
-                controller.showSidebar.value = false;
-              },
-            ),
+            // El activo se marcaba solo con `selected`, que se apoya en el
+            // color de selección del tema: sobre el fondo oscuro del
+            // reproductor la diferencia era casi invisible y no se sabía cuál
+            // estaba puesto. Ahora lleva su propio fondo, el texto en el color
+            // del app y una tilde a la derecha — tres señales en vez de un
+            // matiz. Este selector es el mismo en el teléfono y en escritorio,
+            // así que se ve igual en los dos.
+            Builder(builder: (context) {
+              final activo = entry.key == current;
+              return Padding(
+                padding: const EdgeInsets.only(bottom: 4),
+                child: Material(
+                  color: activo
+                      ? HomeTheme.accentPink.withValues(alpha: 0.18)
+                      : Colors.transparent,
+                  borderRadius: BorderRadius.circular(10),
+                  child: ListTile(
+                    dense: true,
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(10),
+                      side: BorderSide(
+                        color: activo
+                            ? HomeTheme.accentPink
+                            : Colors.white.withValues(alpha: 0.12),
+                      ),
+                    ),
+                    title: Text(
+                      entry.key,
+                      style: TextStyle(
+                        color: activo
+                            ? HomeTheme.accentPink
+                            : HomeTheme.textPrimary,
+                        fontWeight:
+                            activo ? FontWeight.w700 : FontWeight.w400,
+                      ),
+                    ),
+                    trailing: activo
+                        ? const Icon(Icons.check_rounded,
+                            size: 18, color: HomeTheme.accentPink)
+                        : null,
+                    onTap: () {
+                      controller.selectServer(entry.key);
+                      controller.showSidebar.value = false;
+                    },
+                  ),
+                ),
+              );
+            }),
         ],
       );
     });

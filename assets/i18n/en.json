@@ -332,7 +332,8 @@
         "qualitys": "Qualitys",
         "torrentFiles": "Torrent Files",
         "tracks": "Tracks",
-        "settings": "Settings"
+        "settings": "Settings",
+        "servers": "Available servers"
       },
       "subtitle": {
         "title": "Subtitle",

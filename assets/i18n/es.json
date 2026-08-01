@@ -321,7 +321,8 @@
         "qualitys": "Calidad",
         "torrentFiles": "Archivos torrent",
         "tracks": "Pistas",
-        "settings": "Ajustes"
+        "settings": "Ajustes",
+        "servers": "Servidores disponibles"
       },
       "subtitle": {
         "title": "Subtítulo",

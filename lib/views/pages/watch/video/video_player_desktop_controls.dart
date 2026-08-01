@@ -1925,6 +1925,20 @@ class _ServerTabBar extends StatelessWidget {
           scrollDirection: Axis.horizontal,
           child: Row(
             children: [
+              // Sin titulo, esta tira eran unas pastillas sueltas encima del
+              // video sin decir de que eran. Es el mismo texto que titula el
+              // panel del telefono, asi que las dos pantallas lo nombran igual.
+              Padding(
+                padding: const EdgeInsets.only(right: 12),
+                child: Text(
+                  'video.sidebar.tab.servers'.i18n,
+                  style: const TextStyle(
+                    color: HomeTheme.textMuted,
+                    fontSize: 12,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+              ),
               for (final entry in controller.availableServers.entries) ...[
                 _ServerTab(
                   label: entry.key,
