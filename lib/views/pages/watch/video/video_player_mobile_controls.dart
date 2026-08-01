@@ -106,6 +106,23 @@ class _VideoPlayerMobileControlsState extends State<VideoPlayerMobileControls> {
   int? _saltoVisible;
   Timer? _saltoTimer;
 
+  /// Aviso corto en el centro-arriba, aparte del cartel de segundos.
+  ///
+  /// Sirve para decir "el video esta pausado": adelantando con doble toque con
+  /// el video en pausa, la barra se movia pero la imagen no, y parecia que el
+  /// salto no habia funcionado.
+  String? _avisoCentro;
+  Timer? _avisoTimer;
+
+  void _mostrarAviso(String texto) {
+    if (!mounted) return;
+    setState(() => _avisoCentro = texto);
+    _avisoTimer?.cancel();
+    _avisoTimer = Timer(const Duration(milliseconds: 1100), () {
+      if (mounted) setState(() => _avisoCentro = null);
+    });
+  }
+
   void _mostrarSalto(int segundos) {
     setState(() => _saltoVisible = segundos);
     _saltoTimer?.cancel();
@@ -159,6 +176,7 @@ class _VideoPlayerMobileControlsState extends State<VideoPlayerMobileControls> {
     _webViewWorker?.dispose();
     _resumeWorker?.dispose();
     _tutorialWorker?.dispose();
+    _avisoTimer?.cancel();
     _saltoTimer?.cancel();
     _timer?.cancel();
     super.dispose();
@@ -477,14 +495,21 @@ class _VideoPlayerMobileControlsState extends State<VideoPlayerMobileControls> {
                         milliseconds:
                             (_saltoConfigurado(SettingKey.arrowRight) * 1000)
                                 .round());
+                    // En pausa se avisa: la barra se mueve pero la imagen no, y
+                    // sin decir nada parece que el salto no hizo efecto.
+                    final enPausa = !_c.isPlaying.value;
                     if (dx < width) {
                       _c.seek(_c.position.value - atras);
                       _mostrarSalto(-atras.inSeconds);
+                      if (enPausa) _mostrarAviso('video.paused'.i18n);
                     } else if (dx > width * 2) {
                       _c.seek(_c.position.value + adelante);
                       _mostrarSalto(adelante.inSeconds);
+                      if (enPausa) _mostrarAviso('video.paused'.i18n);
                     } else {
                       _c.playOrPause();
+                      // Estaba andando, asi que este toque lo pausa.
+                      if (!enPausa) _mostrarAviso('video.paused'.i18n);
                     }
                   },
                   // Deslizar vertical = volumen, en cualquier parte de la
@@ -836,6 +861,47 @@ class _VideoPlayerMobileControlsState extends State<VideoPlayerMobileControls> {
                     )),
               ),
             ),
+            // Aviso corto arriba del centro ("Vídeo pausado"). Va aparte del
+            // cartel de segundos porque los dos pueden salir a la vez: se
+            // adelanta con el vídeo pausado y hacen falta las dos cosas.
+            Positioned.fill(
+              child: IgnorePointer(
+                child: Align(
+                  alignment: const Alignment(0, -0.62),
+                  child: AnimatedOpacity(
+                    duration: const Duration(milliseconds: 120),
+                    opacity: _avisoCentro == null ? 0 : 1,
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 16, vertical: 8),
+                      decoration: BoxDecoration(
+                        color: const Color(0xCC000000),
+                        borderRadius: BorderRadius.circular(999),
+                        border: Border.all(
+                          color: Colors.white.withValues(alpha: 0.18),
+                        ),
+                      ),
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          const Icon(Icons.pause_rounded,
+                              size: 17, color: Colors.white),
+                          const SizedBox(width: 7),
+                          Text(
+                            _avisoCentro ?? '',
+                            style: const TextStyle(
+                              color: Colors.white,
+                              fontSize: 13,
+                              fontWeight: FontWeight.w600,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+            ),
             // Header y footer — se ocultan al tocar la pantalla y vuelven a
             // aparecer con otro toque (o solos a los 3s si estaban visibles).
             // IgnorePointer cuando están ocultos: evita que un botón invisible
@@ -1027,6 +1093,17 @@ class _PanelCasteandoState extends State<_PanelCasteando>
             if (!conectando) ...[
               const SizedBox(height: 18),
               _AyudaGestosCast(anim: _anim),
+              const SizedBox(height: 8),
+              // Sin esto los tres iconos no dicen COMO se activan, y un toque
+              // solo no hace nada de eso: muestra los controles.
+              Text(
+                'video.cast-hint-doubletap'.i18n,
+                style: TextStyle(
+                  fontSize: 10.5,
+                  fontStyle: FontStyle.italic,
+                  color: Colors.white.withValues(alpha: 0.55),
+                ),
+              ),
             ],
           ],
         ),

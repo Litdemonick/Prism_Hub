@@ -136,6 +136,24 @@ class _VideoPlayerContenState extends State<VideoPlayerConten> {
           fit: (c.vrUnaPantalla.value || c.llenarPantalla.value)
               ? BoxFit.cover
               : BoxFit.contain,
+          // Llenando la pantalla, el recorte se lleva la parte de ARRIBA.
+          //
+          // BoxFit.cover recorta centrado, o sea que saca lo mismo arriba que
+          // abajo — y abajo es justo donde van los subtitulos quemados en la
+          // imagen (los que vienen dentro del video, que no se pueden mover).
+          // Con "llenar pantalla" puesto se cortaban a la mitad o desaparecian.
+          //
+          // Anclando abajo, todo lo que sobra sale de arriba: la franja de
+          // subtitulos se salva entera. Se pierde mas cielo o fondo en la parte
+          // superior, que es lo que uno esta dispuesto a ceder cuando pide
+          // llenar la pantalla.
+          //
+          // En VR no: ahi el recorte ya lo hace el propio reproductor con las
+          // medidas reales (ver _aplicarRecorteVr), y mover el anclaje
+          // descuadraria esa cuenta.
+          alignment: (c.llenarPantalla.value && !c.vrUnaPantalla.value)
+              ? Alignment.bottomCenter
+              : Alignment.center,
           subtitleViewConfiguration: const SubtitleViewConfiguration(
             visible: false,
           ),

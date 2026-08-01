@@ -140,7 +140,14 @@ class _VideoPlayerState extends State<VideoPlayer> {
                   Positioned(
                     left: 0,
                     right: 0,
-                    bottom: 90,
+                    // Transmitiendo, el aviso se va ARRIBA.
+                    //
+                    // El panel del casteo ocupa el centro y es alto, asi que un
+                    // aviso a 90 del piso le quedaba encima: dos cajas oscuras
+                    // pisandose, ilegibles las dos. Arriba, debajo del titulo,
+                    // no se cruza con nada.
+                    top: c.dlnaDevice.value != null ? 74 : null,
+                    bottom: c.dlnaDevice.value != null ? null : 90,
                     child: IgnorePointer(
                       child: Center(
                         child: Container(

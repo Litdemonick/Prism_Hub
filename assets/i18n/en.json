@@ -345,6 +345,8 @@
     "cast-changing-episode": "Switching episode, hold on…",
     "cast-disconnect-title": "Stop casting",
     "cast-disconnect-confirm": "Close the connection to {device}? The video will carry on here from where it was.",
+    "paused": "Video paused",
+    "cast-hint-doubletap": "double tap",
     "cast-connecting": "Connecting to the device…",
     "cast-failed": "The device did not accept the video. Try again or pick another one.",
     "cast-wait": "Wait for the video to load before casting",
