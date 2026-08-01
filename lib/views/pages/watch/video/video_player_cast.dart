@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:dlna_dart/dlna.dart';
 import 'dart:async';
+import 'package:prismhub/utils/cast_discovery.dart';
 import 'package:prismhub/utils/i18n.dart';
 import 'package:prismhub/utils/log.dart';
 import 'package:prismhub/views/widgets/progress.dart';
@@ -17,7 +18,7 @@ class VideoPlayerCast extends StatefulWidget {
 }
 
 class _VideoPlayerCastState extends State<VideoPlayerCast> {
-  DLNAManager? searcher;
+  CastDiscovery? searcher;
   StreamSubscription? _devicesSub;
   Timer? _finDeBusqueda;
   Map<String, DLNADevice> deviceList = {};
@@ -45,14 +46,16 @@ class _VideoPlayerCastState extends State<VideoPlayerCast> {
 
   _init() async {
     setState(() => _buscando = true);
-    searcher = DLNAManager();
+    // Buscador propio: el del paquete no encuentra nada en Windows aunque el
+    // mismo aparato aparezca al toque desde el telefono. Ver cast_discovery.
+    searcher = CastDiscovery();
     logger.info('DLNA searching devices...');
-    final m = await searcher!.start();
+    await searcher!.start();
     if (!mounted) {
       searcher?.stop();
       return;
     }
-    _devicesSub = m.devices.stream.listen((deviceList) {
+    _devicesSub = searcher!.devices.listen((deviceList) {
       logger.info('DLNA devices: $deviceList');
       if (!mounted) return;
       setState(() {
