@@ -450,6 +450,29 @@ class VideoPlayerController extends GetxController with WidgetsBindingObserver {
   final castEsperandoPlay = false.obs;
   Timer? _esperaPlayTimer;
 
+  /// La direccion que le mandamos NOSOTROS al aparato.
+  ///
+  /// DLNA no tiene ningun bloqueo: si otro telefono le manda otro video al
+  /// mismo televisor, el segundo simplemente pisa al primero. Guardando lo que
+  /// mandamos se puede comparar contra lo que el aparato dice estar
+  /// reproduciendo y darnos cuenta de que ya no es nuestro.
+  String? _urlEnviadaAlCast;
+
+  /// Cada cuantas vueltas del sondeo se comprueba que el video siga siendo el
+  /// nuestro. Cada segundo seria un pedido de mas por segundo al televisor para
+  /// algo que no cambia casi nunca.
+  static const _vueltasEntreControles = 5;
+  int _vueltasDesdeElControl = 0;
+
+  /// Posicion del ultimo momento en que se confirmo que el video era nuestro.
+  ///
+  /// Entre un control y el siguiente pueden pasar unos segundos, y si en el
+  /// medio otro dispositivo tomo el televisor, la posicion que informa pasa a
+  /// ser la del OTRO video. Guardar esa en el historial escribiria el progreso
+  /// ajeno sobre el episodio propio, asi que al detectar el robo se vuelve a
+  /// este valor, que si era nuestro.
+  Duration _posicionUltimoControl = Duration.zero;
+
   /// Lee el volumen que tiene puesto el aparato, para arrancar desde ahi.
   Future<void> _leerVolumenDelCast(DLNADevice device) async {
     try {
@@ -3149,6 +3172,9 @@ class VideoPlayerController extends GetxController with WidgetsBindingObserver {
       }
     }
     dlnaDevice.value = device;
+    _urlEnviadaAlCast = url;
+    _vueltasDesdeElControl = 0;
+    _posicionUltimoControl = Duration.zero;
     try {
       // Con ficha DIDL completa: sin protocolInfo, Kodi anota
       // "invalid protocol info ':::'" y tiene que adivinar el formato.
@@ -3298,7 +3324,10 @@ class VideoPlayerController extends GetxController with WidgetsBindingObserver {
   }
 
   // 断开 DLNA 设备
-  disconnectDLNADevice() async {
+  //
+  // [pararAparato] en false cuando la transmision ya NO es nuestra: si otro
+  // dispositivo tomo el televisor, mandarle stop le cortaria el video a el.
+  disconnectDLNADevice({bool pararAparato = true}) async {
     if (dlnaDevice.value == null) {
       return;
     }
@@ -3314,13 +3343,16 @@ class VideoPlayerController extends GetxController with WidgetsBindingObserver {
     // Se le manda parar sin esperarlo, pero atajando el error: sin el catch, un
     // aparato ya apagado o fuera de la red tiraba una excepcion suelta que
     // nadie manejaba.
-    unawaited(Future(() async {
-      try {
-        await device.stop();
-      } catch (e) {
-        logger.warning('El aparato no respondio al cortar la transmision', e);
-      }
-    }));
+    if (pararAparato) {
+      unawaited(Future(() async {
+        try {
+          await device.stop();
+        } catch (e) {
+          logger.warning('El aparato no respondio al cortar la transmision', e);
+        }
+      }));
+    }
+    _urlEnviadaAlCast = null;
     if (_dlnaRelayUrl != null) {
       CastRelayServer.unregister(_dlnaRelayUrl!);
       _dlnaRelayUrl = null;
@@ -3387,6 +3419,54 @@ class VideoPlayerController extends GetxController with WidgetsBindingObserver {
   /// perdida. Se consulta cada segundo, asi que son ~5 segundos de silencio:
   /// suficiente para aguantar un bache de red y poco para que se note.
   static const _fallosParaDarPorPerdido = 5;
+
+  /// Comprueba que el aparato siga reproduciendo lo que le mandamos nosotros.
+  ///
+  /// Si otro dispositivo le mando otra cosa, se suelta la transmision SIN
+  /// pararle el video: ya no es nuestro, y pararlo seria cortarle la
+  /// reproduccion a quien la tomo.
+  Future<void> _comprobarQueSigaSiendoNuestro(DLNADevice device) async {
+    final nuestra = _urlEnviadaAlCast;
+    if (nuestra == null) return;
+    String info;
+    try {
+      info = await device.getMediaInfo().timeout(const Duration(seconds: 4));
+    } catch (_) {
+      // Un fallo suelto no prueba nada; el contador de fallos de arriba ya se
+      // ocupa de la perdida real del aparato.
+      return;
+    }
+    final actual = RegExp(r'<CurrentURI>([^<]*)</CurrentURI>')
+        .firstMatch(info)
+        ?.group(1)
+        ?.trim();
+    // Vacio o ilegible: no se concluye nada. Solo se actua cuando el aparato
+    // dice con todas las letras que esta con OTRA direccion.
+    if (actual == null || actual.isEmpty) return;
+    final mismaDireccion = actual == nuestra ||
+        // Algunos aparatos devuelven la direccion con las entidades XML
+        // escapadas o con la barra final agregada.
+        actual.replaceAll('&amp;', '&') == nuestra;
+    if (mismaDireccion) {
+      // Confirmado nuestro: se anota por donde iba, para poder volver a este
+      // punto si en el proximo control resulta que nos lo tomaron.
+      _posicionUltimoControl = position.value;
+      return;
+    }
+
+    logger.info('Otro dispositivo tomo el televisor: $actual');
+    // La posicion que informa el aparato ya es la del OTRO video. Se vuelve a
+    // la ultima que se confirmo nuestra ANTES de desconectar, que es la que va
+    // a usar el historial y la que retoma el reproductor de aca.
+    if (_posicionUltimoControl > Duration.zero) {
+      position.value = _posicionUltimoControl;
+    }
+    sendMessage(Message(
+      Text('video.cast-taken-over'.i18n),
+      time: const Duration(seconds: 6),
+    ));
+    await disconnectDLNADevice(pararAparato: false);
+  }
 
   // 获取 DLNA 播放状态
   _getDLNAStatus() async {
@@ -3540,6 +3620,19 @@ class VideoPlayerController extends GetxController with WidgetsBindingObserver {
       duration.value = Duration(seconds: positionParser.TrackDurationInt);
       // Ya llego a donde se le pidio? Entonces se saca la rueda de "buscando".
       _revisarSaltoEnCast();
+
+      // Sigue siendo NUESTRO video?
+      //
+      // DLNA no tiene ningun bloqueo: si otro telefono le manda otro video al
+      // mismo televisor, el segundo pisa al primero sin avisar a nadie. Del
+      // lado del primero no se notaba nada — seguia diciendo "transmitiendo",
+      // la barra pasaba a seguir el OTRO video, y lo peor: al guardar el
+      // historial se anotaba el progreso del video ajeno sobre el episodio
+      // propio. Y al desconectar le paraba la reproduccion al otro.
+      if (++_vueltasDesdeElControl >= _vueltasEntreControles) {
+        _vueltasDesdeElControl = 0;
+        await _comprobarQueSigaSiendoNuestro(device);
+      }
     } catch (e) {
       // Se apago, se quedo sin red, o se salio de la app del televisor.
       //
