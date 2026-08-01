@@ -130,28 +130,51 @@ class _VideoPlayerState extends State<VideoPlayer> {
               children: [
                 VideoPlayerConten(controller: c),
                 // 消息弹出
+                // Los avisos van CENTRADOS y con fondo solido.
+                //
+                // Estaban pegados al borde izquierdo, a media altura, con la
+                // caja recortada contra el borde y un negro al 50% que sobre
+                // una escena clara dejaba el texto ilegible. Ahi no los mira
+                // nadie: el ojo esta en el centro de la imagen.
                 if (c.cuurentMessageWidget.value != null)
                   Positioned(
                     left: 0,
-                    bottom: 100,
-                    child: Container(
-                      padding: const EdgeInsets.all(10),
-                      decoration: BoxDecoration(
-                        color: Colors.black.withValues(alpha: 0.5),
-                        borderRadius: const BorderRadius.only(
-                          topRight: Radius.circular(20),
-                          bottomRight: Radius.circular(20),
+                    right: 0,
+                    bottom: 90,
+                    child: IgnorePointer(
+                      child: Center(
+                        child: Container(
+                          margin: const EdgeInsets.symmetric(horizontal: 28),
+                          padding: const EdgeInsets.symmetric(
+                              horizontal: 22, vertical: 14),
+                          decoration: BoxDecoration(
+                            color: const Color(0xF01A1420),
+                            borderRadius: BorderRadius.circular(14),
+                            border: Border.all(
+                              color: Colors.white.withValues(alpha: 0.12),
+                            ),
+                            boxShadow: const [
+                              BoxShadow(
+                                color: Color(0x66000000),
+                                blurRadius: 18,
+                                offset: Offset(0, 6),
+                              ),
+                            ],
+                          ),
+                          constraints: BoxConstraints(
+                            maxHeight: 200,
+                            maxWidth: maxWidth * 0.8,
+                          ),
+                          child: DefaultTextStyle(
+                            style: const TextStyle(
+                              color: Colors.white,
+                              fontSize: 14,
+                              height: 1.35,
+                            ),
+                            textAlign: TextAlign.center,
+                            child: c.cuurentMessageWidget.value!,
+                          ),
                         ),
-                      ),
-                      constraints: BoxConstraints(
-                        maxHeight: 200,
-                        maxWidth: maxWidth,
-                      ),
-                      child: DefaultTextStyle(
-                        style: const TextStyle(
-                          color: Colors.white,
-                        ),
-                        child: c.cuurentMessageWidget.value!,
                       ),
                     ),
                   ),

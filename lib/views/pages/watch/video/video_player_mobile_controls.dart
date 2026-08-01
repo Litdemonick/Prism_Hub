@@ -897,12 +897,38 @@ class _VideoPlayerMobileControlsState extends State<VideoPlayerMobileControls> {
 /// No lleva botones a proposito: reintentar y desconectar viven en la barra de
 /// arriba. Antes estaban aca en el medio, tapando el centro de la pantalla, que
 /// es justo donde uno toca para pausar.
-class _PanelCasteando extends StatelessWidget {
+class _PanelCasteando extends StatefulWidget {
   const _PanelCasteando({required this.controller});
   final VideoPlayerController controller;
 
   @override
+  State<_PanelCasteando> createState() => _PanelCasteandoState();
+}
+
+class _PanelCasteandoState extends State<_PanelCasteando>
+    with SingleTickerProviderStateMixin {
+  late final AnimationController _anim = AnimationController(
+    vsync: this,
+    duration: const Duration(milliseconds: 1600),
+  )..repeat();
+
+  @override
+  void dispose() {
+    _anim.dispose();
+    super.dispose();
+  }
+
+  VideoPlayerController get controller => widget.controller;
+
+  @override
   Widget build(BuildContext context) {
+    // IgnorePointer: el panel esta ENCIMA del detector de gestos, asi que su
+    // caja se comia los toques justo en el centro de la pantalla — que es donde
+    // el propio panel dice que hay que tocar para pausar.
+    return IgnorePointer(child: _contenido());
+  }
+
+  Widget _contenido() {
     return Obx(() {
       final device = controller.dlnaDevice.value;
       if (device == null) return const SizedBox.shrink();
@@ -955,7 +981,7 @@ class _PanelCasteando extends StatelessWidget {
               conectando
                   ? 'video.cast-connecting'.i18n
                   : reproduciendo
-                      ? 'video.cast-playing-here'.i18n
+                      ? 'video.cast-on-device'.i18n
                       : 'video.cast-paused-here'.i18n,
               textAlign: TextAlign.center,
               style: TextStyle(
@@ -964,10 +990,91 @@ class _PanelCasteando extends StatelessWidget {
                 color: Colors.white.withValues(alpha: 0.75),
               ),
             ),
+            // La ayuda de gestos, dibujada y animada en vez de explicada en un
+            // parrafo. Un renglon largo diciendo "toca el centro para pausar y
+            // los costados para adelantar" se lee una vez y estorba siempre;
+            // tres iconos que laten se entienden de un vistazo.
+            //
+            // Solo cuando ya esta transmitiendo: mientras engancha no hay nada
+            // que controlar todavia.
+            if (!conectando) ...[
+              const SizedBox(height: 18),
+              _AyudaGestosCast(anim: _anim),
+            ],
           ],
         ),
       );
     });
+  }
+}
+
+/// Tres pistas que laten por turno: retroceder, pausar, adelantar.
+class _AyudaGestosCast extends StatelessWidget {
+  const _AyudaGestosCast({required this.anim});
+  final AnimationController anim;
+
+  @override
+  Widget build(BuildContext context) {
+    return AnimatedBuilder(
+      animation: anim,
+      builder: (context, _) {
+        // Cada pista se ilumina en su tercio del ciclo, de izquierda a derecha,
+        // que es el orden en que estan en la pantalla.
+        final activo = (anim.value * 3).floor().clamp(0, 2);
+        return Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            _pista(Icons.replay_10_rounded, 'video.cast-hint-back'.i18n,
+                activo == 0),
+            const SizedBox(width: 14),
+            _pista(Icons.touch_app_rounded, 'video.cast-hint-pause'.i18n,
+                activo == 1),
+            const SizedBox(width: 14),
+            _pista(Icons.forward_10_rounded, 'video.cast-hint-forward'.i18n,
+                activo == 2),
+          ],
+        );
+      },
+    );
+  }
+
+  Widget _pista(IconData icono, String texto, bool encendido) {
+    return AnimatedScale(
+      duration: const Duration(milliseconds: 260),
+      scale: encendido ? 1.0 : 0.9,
+      child: AnimatedOpacity(
+        duration: const Duration(milliseconds: 260),
+        opacity: encendido ? 1 : 0.45,
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Container(
+              padding: const EdgeInsets.all(9),
+              decoration: BoxDecoration(
+                shape: BoxShape.circle,
+                color: encendido
+                    ? HomeTheme.accentPink.withValues(alpha: 0.22)
+                    : Colors.white.withValues(alpha: 0.06),
+                border: Border.all(
+                  color: encendido
+                      ? HomeTheme.accentPink
+                      : Colors.white.withValues(alpha: 0.16),
+                ),
+              ),
+              child: Icon(icono, size: 19, color: Colors.white),
+            ),
+            const SizedBox(height: 6),
+            Text(
+              texto,
+              style: TextStyle(
+                fontSize: 10.5,
+                color: Colors.white.withValues(alpha: 0.8),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
   }
 }
 

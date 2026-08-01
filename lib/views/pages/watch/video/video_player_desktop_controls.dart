@@ -1592,13 +1592,34 @@ class _TrackState extends State<_Track> {
 ///
 /// Sin botones: reintentar y desconectar viven en el menú del botón de
 /// transmitir, en la barra de abajo, fuera de la imagen.
-class _PanelCasteando extends StatelessWidget {
+class _PanelCasteando extends StatefulWidget {
   const _PanelCasteando({required this.controller});
   final VideoPlayerController controller;
 
   @override
+  State<_PanelCasteando> createState() => _PanelCasteandoState();
+}
+
+class _PanelCasteandoState extends State<_PanelCasteando>
+    with SingleTickerProviderStateMixin {
+  late final AnimationController _anim = AnimationController(
+    vsync: this,
+    duration: const Duration(milliseconds: 1600),
+  )..repeat();
+
+  @override
+  void dispose() {
+    _anim.dispose();
+    super.dispose();
+  }
+
+  VideoPlayerController get controller => widget.controller;
+
+  @override
   Widget build(BuildContext context) {
-    return Obx(() {
+    // IgnorePointer: el panel esta encima del area del video, y su caja se
+    // comia los clics justo en el centro de la pantalla.
+    return IgnorePointer(child: Obx(() {
       final device = controller.dlnaDevice.value;
       if (device == null) return const SizedBox.shrink();
       // Enganchando: mandarle el vídeo al aparato y que arranque puede tardar
@@ -1650,7 +1671,7 @@ class _PanelCasteando extends StatelessWidget {
                 conectando
                     ? 'video.cast-connecting'.i18n
                     : reproduciendo
-                        ? 'video.cast-playing-desktop'.i18n
+                        ? 'video.cast-on-device'.i18n
                         : 'video.cast-paused-desktop'.i18n,
                 textAlign: TextAlign.center,
                 style: TextStyle(
@@ -1660,10 +1681,90 @@ class _PanelCasteando extends StatelessWidget {
                 ),
               ),
             ),
+            // Ayuda dibujada en vez de explicada en un parrafo, igual que en
+            // celular pero con las teclas que se usan aca.
+            if (!conectando) ...[
+              const SizedBox(height: 18),
+              _AyudaTeclasCast(anim: _anim),
+            ],
           ],
         ),
       );
-    });
+    }));
+  }
+}
+
+/// Tres pistas que laten por turno: retroceder, pausar, adelantar — con las
+/// teclas reales del reproductor en vez de gestos.
+class _AyudaTeclasCast extends StatelessWidget {
+  const _AyudaTeclasCast({required this.anim});
+  final AnimationController anim;
+
+  @override
+  Widget build(BuildContext context) {
+    return AnimatedBuilder(
+      animation: anim,
+      builder: (context, _) {
+        final activo = (anim.value * 3).floor().clamp(0, 2);
+        return Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            _pista('←', 'video.cast-hint-back'.i18n, activo == 0),
+            const SizedBox(width: 14),
+            _pista('Espacio', 'video.cast-hint-pause'.i18n, activo == 1),
+            const SizedBox(width: 14),
+            _pista('→', 'video.cast-hint-forward'.i18n, activo == 2),
+          ],
+        );
+      },
+    );
+  }
+
+  Widget _pista(String tecla, String texto, bool encendido) {
+    return AnimatedScale(
+      duration: const Duration(milliseconds: 260),
+      scale: encendido ? 1.0 : 0.92,
+      child: AnimatedOpacity(
+        duration: const Duration(milliseconds: 260),
+        opacity: encendido ? 1 : 0.45,
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Container(
+              padding:
+                  const EdgeInsets.symmetric(horizontal: 12, vertical: 7),
+              decoration: BoxDecoration(
+                borderRadius: BorderRadius.circular(8),
+                color: encendido
+                    ? HomeTheme.accentPink.withValues(alpha: 0.22)
+                    : Colors.white.withValues(alpha: 0.06),
+                border: Border.all(
+                  color: encendido
+                      ? HomeTheme.accentPink
+                      : Colors.white.withValues(alpha: 0.16),
+                ),
+              ),
+              child: Text(
+                tecla,
+                style: const TextStyle(
+                  fontSize: 13,
+                  fontWeight: FontWeight.w700,
+                  color: Colors.white,
+                ),
+              ),
+            ),
+            const SizedBox(height: 6),
+            Text(
+              texto,
+              style: TextStyle(
+                fontSize: 10.5,
+                color: Colors.white.withValues(alpha: 0.8),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
   }
 }
 
