@@ -1186,6 +1186,14 @@ class _Footer extends StatelessWidget {
                       icon: Icon(Icons.play_arrow, size: 30),
                     );
                   }
+                  // Mientras engancha con el aparato no hay a quien mandarle
+                  // nada todavia.
+                  if (controller.castConectando.value) {
+                    return const IconButton(
+                      onPressed: null,
+                      icon: Icon(Icons.play_arrow, size: 30),
+                    );
+                  }
                   if (controller.isPlaying.value) {
                     return IconButton(
                       onPressed: controller.playOrPause,

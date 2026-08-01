@@ -629,8 +629,19 @@ class VideoPlayerController extends GetxController with WidgetsBindingObserver {
 
   _initPlayer() {
     // 切换剧集
-    _addWorker(ever(index, (callback) {
-      play();
+    _addWorker(ever(index, (callback) async {
+      // Casteando, el episodio nuevo tiene que ir tambien al televisor.
+      //
+      // Antes play() abria el episodio nuevo ACA mientras el televisor seguia
+      // con el anterior: sonaban los dos a la vez, cada uno con otra cosa, y la
+      // unica salida era desconectar y volver a elegir el aparato.
+      final aparato = dlnaDevice.value;
+      await play();
+      if (aparato == null || _disposed || watchData == null) return;
+      // Sigue siendo el mismo aparato? Si el usuario desconecto o cambió
+      // mientras se resolvia el episodio, mandarselo seria pisarle la eleccion.
+      if (dlnaDevice.value != aparato) return;
+      await connectDLNADevice(aparato);
     }));
 
     // 切换倍速

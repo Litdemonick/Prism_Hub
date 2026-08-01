@@ -981,6 +981,32 @@ class _Footer extends StatelessWidget {
                               icon: Icon(FluentIcons.play, size: 30),
                             );
                           }
+                          // Casteando, este boton manda al TELEVISOR.
+                          //
+                          // Miraba el reproductor local, que mientras se
+                          // transmite esta parado a proposito: siempre se veia
+                          // "reproducir" y tocarlo arrancaba el video ACA
+                          // encima de lo que ya sonaba en el televisor, con el
+                          // audio duplicado y desfasado. playOrPause() del
+                          // controlador ya sabe a cual de los dos hablarle.
+                          if (controller.dlnaDevice.value != null) {
+                            // Mientras engancha no hay a quien mandarle nada.
+                            if (controller.castConectando.value) {
+                              return const IconButton(
+                                onPressed: null,
+                                icon: Icon(FluentIcons.play, size: 30),
+                              );
+                            }
+                            return IconButton(
+                              onPressed: controller.playOrPause,
+                              icon: Icon(
+                                controller.isPlaying.value
+                                    ? FluentIcons.pause
+                                    : FluentIcons.play,
+                                size: 30,
+                              ),
+                            );
+                          }
                           return StreamBuilder(
                             stream: controller.player.stream.playing,
                             builder: (context, snapshot) {
