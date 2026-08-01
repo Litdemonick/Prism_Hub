@@ -324,6 +324,7 @@
     "cast-changing-episode": "Cambiando de episodio, esperá…",
     "cast-disconnect-title": "Cortar la transmisión",
     "cast-disconnect-confirm": "¿Cerrar la conexión con {device}? El vídeo va a seguir acá desde donde iba.",
+    "paused-cant-skip": "No se puede saltar: está pausado",
     "paused": "Vídeo pausado",
     "cast-hint-doubletap": "doble toque",
     "cast-connecting": "Conectando con el dispositivo…",

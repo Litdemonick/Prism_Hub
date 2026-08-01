@@ -397,6 +397,11 @@ class VideoPlayerController extends GetxController with WidgetsBindingObserver {
   /// que de verdad esta pasando y puede tardar bastante mas.
   final castCambiandoEpisodio = false.obs;
 
+  /// Aviso breve que se muestra DENTRO del panel de casteo, en el renglon del
+  /// estado. Fuera del panel quedaba una segunda caja oscura encima de la
+  /// primera; adentro es una sola cosa que cambia de texto.
+  final castAviso = Rxn<String>();
+
   // Foto del casteo justo antes de empezar a cerrar, para que el historial
   // pueda guardar por donde iba el TELEVISOR. Ver _beginPlaybackShutdown.
   bool _casteabaAlCerrar = false;

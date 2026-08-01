@@ -116,9 +116,17 @@ class _VideoPlayerMobileControlsState extends State<VideoPlayerMobileControls> {
 
   void _mostrarAviso(String texto) {
     if (!mounted) return;
-    // Transmitiendo no hace falta: el panel del centro ya dice si esta en pausa
-    // o andando, y un cartel encima repitiendolo solo tapa.
-    if (_c.dlnaDevice.value != null) return;
+    // Transmitiendo, el aviso va DENTRO del panel del centro, en el renglon del
+    // estado. Como caja aparte quedaba una segunda caja oscura encima de la
+    // primera; adentro es una sola cosa que cambia de texto.
+    if (_c.dlnaDevice.value != null) {
+      _c.castAviso.value = texto;
+      _avisoTimer?.cancel();
+      _avisoTimer = Timer(const Duration(milliseconds: 1600), () {
+        _c.castAviso.value = null;
+      });
+      return;
+    }
     setState(() => _avisoCentro = texto);
     _avisoTimer?.cancel();
     _avisoTimer = Timer(const Duration(milliseconds: 1100), () {
@@ -498,12 +506,27 @@ class _VideoPlayerMobileControlsState extends State<VideoPlayerMobileControls> {
                         milliseconds:
                             (_saltoConfigurado(SettingKey.arrowRight) * 1000)
                                 .round());
-                    // En pausa se avisa: la barra se mueve pero la imagen no, y
-                    // sin decir nada parece que el salto no hizo efecto.
                     final enPausa = !_c.isPlaying.value;
+                    final casteando = _c.dlnaDevice.value != null;
+                    // Transmitiendo y en pausa, saltar no va a ningun lado: el
+                    // televisor no se mueve hasta que se reanude. Se dice corto
+                    // y no se intenta el salto, en vez de mandar una orden que
+                    // el aparato va a ignorar.
+                    final noSePuedeSaltar = casteando && enPausa;
+                    if (noSePuedeSaltar && dx < width * 2 && dx >= width) {
+                      // El centro sigue pausando/reanudando aunque este pausado.
+                      _c.playOrPause();
+                      return;
+                    }
+                    if (noSePuedeSaltar) {
+                      _mostrarAviso('video.paused-cant-skip'.i18n);
+                      return;
+                    }
                     if (dx < width) {
                       _c.seek(_c.position.value - atras);
                       _mostrarSalto(-atras.inSeconds);
+                      // En pausa (mirando aca) la barra se mueve pero la imagen
+                      // no, y sin decir nada parece que el salto no hizo efecto.
                       if (enPausa) _mostrarAviso('video.paused'.i18n);
                     } else if (dx > width * 2) {
                       _c.seek(_c.position.value + adelante);
@@ -511,8 +534,12 @@ class _VideoPlayerMobileControlsState extends State<VideoPlayerMobileControls> {
                       if (enPausa) _mostrarAviso('video.paused'.i18n);
                     } else {
                       _c.playOrPause();
+                      // Casteando no hace falta: el panel del centro ya dice si
+                      // esta andando o en pausa, y repetirlo encima solo tapa.
                       // Estaba andando, asi que este toque lo pausa.
-                      if (!enPausa) _mostrarAviso('video.paused'.i18n);
+                      if (!enPausa && !casteando) {
+                        _mostrarAviso('video.paused'.i18n);
+                      }
                     }
                   },
                   // Deslizar vertical = volumen, en cualquier parte de la
@@ -1071,21 +1098,31 @@ class _PanelCasteandoState extends State<_PanelCasteando>
               ),
             ),
             const SizedBox(height: 6),
-            Text(
-              cambiandoEpisodio
-                  ? 'video.cast-changing-episode'.i18n
-                  : conectando
-                      ? 'video.cast-connecting'.i18n
-                      : reproduciendo
-                          ? 'video.cast-on-device'.i18n
-                          : 'video.cast-paused-here'.i18n,
-              textAlign: TextAlign.center,
-              style: TextStyle(
-                fontSize: 13,
-                height: 1.4,
-                color: Colors.white.withValues(alpha: 0.75),
-              ),
-            ),
+            // Un aviso puntual (por ejemplo, que no se puede saltar porque
+            // esta pausado) reemplaza al estado por un momento, resaltado. Asi
+            // todo lo que el usuario necesita leer esta en el mismo lugar.
+            Builder(builder: (context) {
+              final aviso = controller.castAviso.value;
+              return Text(
+                aviso ??
+                    (cambiandoEpisodio
+                        ? 'video.cast-changing-episode'.i18n
+                        : conectando
+                            ? 'video.cast-connecting'.i18n
+                            : reproduciendo
+                                ? 'video.cast-on-device'.i18n
+                                : 'video.cast-paused-here'.i18n),
+                textAlign: TextAlign.center,
+                style: TextStyle(
+                  fontSize: 13,
+                  height: 1.4,
+                  fontWeight: aviso == null ? FontWeight.normal : FontWeight.w700,
+                  color: aviso == null
+                      ? Colors.white.withValues(alpha: 0.75)
+                      : HomeTheme.accentPink,
+                ),
+              );
+            }),
             // La ayuda de gestos, dibujada y animada en vez de explicada en un
             // parrafo. Un renglon largo diciendo "toca el centro para pausar y
             // los costados para adelantar" se lee una vez y estorba siempre;
