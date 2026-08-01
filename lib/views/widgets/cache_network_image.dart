@@ -58,7 +58,27 @@ class _CacheNetWorkImagePicState extends State<CacheNetWorkImagePic> {
   // vuelve a intentar la red, pasando un frame por "loading" (en blanco)
   // antes de volver a "failed" — el mismo parpadeo, ahora disparado por
   // cambiar de pestaña/página en vez de por un resize.
-  static final Set<String> _knownFailedUrls = <String>{};
+  // Se recuerda CUANDO fallo, no solo QUE fallo.
+  //
+  // Antes era un conjunto sin caducidad: la primera vez que una portada
+  // fallaba quedaba anotada para toda la sesion y ya no se reintentaba nunca.
+  // Pero el motivo mas comun de fallo aca es transitorio — decenas de tarjetas
+  // pidiendo su imagen a la vez, y alguna que no llega a tiempo (ver el
+  // comentario de `retries` mas abajo). El resultado era una tarjeta con el
+  // logo de relleno de forma permanente, mientras la MISMA imagen cargaba sin
+  // problema al abrir el detalle segundos despues, ya sin competencia.
+  // Reportado en vivo en dos extensiones distintas, que fue lo que dejo claro
+  // que el problema estaba aca y no en ninguna de ellas.
+  //
+  // Con caducidad se conserva lo que este registro venia a resolver —no
+  // parpadear al remontar la misma tarjeta— pero un fallo pasajero deja de ser
+  // definitivo: al volver a construirse pasada la ventana, se reintenta.
+  static final Map<String, DateTime> _fallosRecientes = <String, DateTime>{};
+
+  // Corto a proposito: lo suficiente para cubrir un resize o un cambio de
+  // pestana (que es cuando molestaba el parpadeo), y no tanto como para que
+  // una portada quede ausente un rato largo.
+  static const Duration _ventanaDeFallo = Duration(seconds: 20);
 
   // Incluye los headers en la clave — si la primera vez falló sin headers
   // (ej. un sitio que exige Referer y no se lo dimos) y después se reintenta
@@ -66,12 +86,25 @@ class _CacheNetWorkImagePicState extends State<CacheNetWorkImagePic> {
   // oportunidad real, no quedar bloqueado por el fallo anterior.
   String get _failureKey => '${widget.url}|${widget.headers ?? ''}';
 
-  bool get _failed => _knownFailedUrls.contains(_failureKey);
+  bool get _failed {
+    final cuando = _fallosRecientes[_failureKey];
+    if (cuando == null) return false;
+    if (DateTime.now().difference(cuando) < _ventanaDeFallo) return true;
+    // Se cumplio la ventana: se olvida y se le da otra oportunidad.
+    _fallosRecientes.remove(_failureKey);
+    return false;
+  }
 
   void _markFailed() {
-    if (_knownFailedUrls.add(_failureKey) && mounted) {
-      setState(() {});
-    }
+    final primeraVez = !_fallosRecientes.containsKey(_failureKey);
+    _fallosRecientes[_failureKey] = DateTime.now();
+    if (primeraVez && mounted) setState(() {});
+  }
+
+  // Cargo bien: se borra cualquier anotacion previa, para que un fallo viejo no
+  // siga contando en contra de una URL que evidentemente ya funciona.
+  void _markLoaded() {
+    _fallosRecientes.remove(_failureKey);
   }
 
   // Branded placeholder for a cover that failed to load — the source site
@@ -148,6 +181,8 @@ class _CacheNetWorkImagePicState extends State<CacheNetWorkImagePic> {
           case LoadState.loading:
             return widget.placeholder ?? const SizedBox();
           case LoadState.completed:
+            // Cargo bien: se olvida cualquier fallo anterior de esta URL.
+            WidgetsBinding.instance.addPostFrameCallback((_) => _markLoaded());
             // Algunas extensiones no tienen una portada real para un título
             // puntual y devuelven un ícono genérico chico (ej. un avatar
             // placeholder) en vez de un error de red — la imagen carga bien,
