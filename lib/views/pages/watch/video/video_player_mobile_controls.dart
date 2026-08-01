@@ -1098,8 +1098,12 @@ class _PanelCasteandoState extends State<_PanelCasteando>
       final buscando = controller.castBuscando.value;
       // "conectando" tambien enciende la rueda: buscar un momento del video en
       // el aparato es otra espera, y se muestra igual.
-      final conectando =
-          controller.castConectando.value || cambiandoEpisodio || buscando;
+      // castEsperandoPlay: el aparato ya acepto pero todavia no se ve nada.
+      // Aceptar y empezar a reproducir son dos cosas distintas.
+      final conectando = controller.castConectando.value ||
+          controller.castEsperandoPlay.value ||
+          cambiandoEpisodio ||
+          buscando;
       final reproduciendo = controller.isPlaying.value;
       return Container(
         margin: const EdgeInsets.symmetric(horizontal: 32),

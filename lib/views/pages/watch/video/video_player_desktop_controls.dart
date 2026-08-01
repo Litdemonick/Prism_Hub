@@ -1628,37 +1628,82 @@ class _PanelCasteandoState extends State<_PanelCasteando>
       final cambiandoEpisodio = controller.castCambiandoEpisodio.value;
       final buscando = controller.castBuscando.value;
       // Buscar un momento del vídeo en el aparato es otra espera: misma rueda.
-      final conectando =
-          controller.castConectando.value || cambiandoEpisodio || buscando;
+      // castEsperandoPlay: el aparato ya aceptó pero todavía no se ve nada.
+      final conectando = controller.castConectando.value ||
+          controller.castEsperandoPlay.value ||
+          cambiandoEpisodio ||
+          buscando;
       final reproduciendo = controller.isPlaying.value;
-      return Container(
-        padding: const EdgeInsets.symmetric(horizontal: 30, vertical: 24),
-        decoration: BoxDecoration(
-          color: const Color(0xB8000000),
-          borderRadius: BorderRadius.circular(16),
-          border: Border.all(color: Colors.white.withValues(alpha: 0.12)),
+      // El panel entra y cambia con animacion, no de golpe.
+      //
+      // Aparecia y desaparecia seco, y el icono saltaba de rueda a "conectado"
+      // sin transicion: se sentia tosco al lado del resto del reproductor.
+      return TweenAnimationBuilder<double>(
+        tween: Tween(begin: 0.92, end: 1),
+        duration: const Duration(milliseconds: 260),
+        curve: Curves.easeOutBack,
+        builder: (context, escala, hijo) => Transform.scale(
+          scale: escala,
+          child: Opacity(
+            // La opacidad sigue a la escala para que entren juntas.
+            opacity: ((escala - 0.92) / 0.08).clamp(0.0, 1.0),
+            child: hijo,
+          ),
         ),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            if (conectando)
-              const SizedBox(
-                width: 46,
-                height: 46,
-                child: material.CircularProgressIndicator(
-                  strokeWidth: 3.5,
-                  valueColor:
-                      material.AlwaysStoppedAnimation(HomeTheme.accentPink),
-                ),
-              )
-            else
-              Icon(
-                reproduciendo
-                    ? material.Icons.cast_connected
-                    : material.Icons.pause_circle_outline,
-                size: 46,
-                color: HomeTheme.accentPink,
+        child: AnimatedContainer(
+          duration: const Duration(milliseconds: 220),
+          curve: Curves.easeOut,
+          padding: const EdgeInsets.symmetric(horizontal: 30, vertical: 24),
+          decoration: BoxDecoration(
+            color: const Color(0xB8000000),
+            borderRadius: BorderRadius.circular(16),
+            border: Border.all(
+              // El borde se tiñe mientras espera: da una señal mas de que hay
+              // algo en curso, sin agregar otro elemento a la caja.
+              color: conectando
+                  ? HomeTheme.accentPink.withValues(alpha: 0.55)
+                  : Colors.white.withValues(alpha: 0.12),
+            ),
+            boxShadow: const [
+              BoxShadow(
+                color: Color(0x77000000),
+                blurRadius: 24,
+                offset: Offset(0, 8),
               ),
+            ],
+          ),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+            // El icono se funde en vez de saltar. Pasar de la rueda a
+            // "conectado" de golpe se sentia un corte, sobre todo porque es lo
+            // primero que mira el ojo.
+            AnimatedSwitcher(
+              duration: const Duration(milliseconds: 240),
+              transitionBuilder: (hijo, anim) => FadeTransition(
+                opacity: anim,
+                child: ScaleTransition(scale: anim, child: hijo),
+              ),
+              child: conectando
+                  ? const SizedBox(
+                      key: ValueKey('rueda'),
+                      width: 46,
+                      height: 46,
+                      child: material.CircularProgressIndicator(
+                        strokeWidth: 3.5,
+                        valueColor: material.AlwaysStoppedAnimation(
+                            HomeTheme.accentPink),
+                      ),
+                    )
+                  : Icon(
+                      reproduciendo
+                          ? material.Icons.cast_connected
+                          : material.Icons.pause_circle_outline,
+                      key: ValueKey(reproduciendo),
+                      size: 46,
+                      color: HomeTheme.accentPink,
+                    ),
+            ),
             const SizedBox(height: 14),
             Text(
               device.info.friendlyName,
@@ -1672,43 +1717,63 @@ class _PanelCasteandoState extends State<_PanelCasteando>
             const SizedBox(height: 6),
             ConstrainedBox(
               constraints: const BoxConstraints(maxWidth: 360),
-              child: Text(
-                // Mismo criterio que en celular: un aviso puntual pisa al
-                // estado, y si el aparato va acelerado se dice.
-                controller.castAviso.value ??
+              child: Builder(builder: (context) {
+                final aviso = controller.castAviso.value;
+                final texto = aviso ??
                     (cambiandoEpisodio
                         ? 'video.cast-changing-episode'.i18n
                         : buscando
                             ? 'video.cast-seeking'.i18n
                             : conectando
                                 ? 'video.cast-connecting'.i18n
-                            : !reproduciendo
-                                ? 'video.cast-paused-desktop'.i18n
-                                : controller.castVelocidad.value != null
-                                    ? FlutterI18n.translate(
-                                        context,
-                                        'video.cast-speed',
-                                        translationParams: {
-                                          'speed':
-                                              controller.castVelocidad.value!
-                                        },
-                                      )
-                                    : 'video.cast-on-device'.i18n),
-                textAlign: TextAlign.center,
-                style: TextStyle(
-                  fontSize: 13,
-                  height: 1.4,
-                  color: Colors.white.withValues(alpha: 0.75),
-                ),
-              ),
+                                : !reproduciendo
+                                    ? 'video.cast-paused-desktop'.i18n
+                                    : controller.castVelocidad.value != null
+                                        ? FlutterI18n.translate(
+                                            context,
+                                            'video.cast-speed',
+                                            translationParams: {
+                                              'speed': controller
+                                                  .castVelocidad.value!
+                                            },
+                                          )
+                                        : 'video.cast-on-device'.i18n);
+                // El texto tambien se funde: cambia seguido (conectando,
+                // buscando, volumen...) y saltar de uno a otro daba tirones.
+                return AnimatedSwitcher(
+                  duration: const Duration(milliseconds: 200),
+                  child: Text(
+                    texto,
+                    key: ValueKey(texto),
+                    textAlign: TextAlign.center,
+                    style: TextStyle(
+                      fontSize: 13,
+                      height: 1.4,
+                      fontWeight:
+                          aviso == null ? FontWeight.normal : FontWeight.w700,
+                      color: aviso == null
+                          ? Colors.white.withValues(alpha: 0.75)
+                          : HomeTheme.accentPink,
+                    ),
+                  ),
+                );
+              }),
             ),
             // Ayuda dibujada en vez de explicada en un parrafo, igual que en
-            // celular pero con las teclas que se usan aca.
-            if (!conectando) ...[
-              const SizedBox(height: 18),
-              _AyudaTeclasCast(anim: _anim),
-            ],
+            // celular pero con las teclas que se usan aca. Se pliega sola
+            // mientras hay algo en curso, en vez de desaparecer de golpe.
+            AnimatedSize(
+              duration: const Duration(milliseconds: 240),
+              curve: Curves.easeOut,
+              child: conectando
+                  ? const SizedBox(width: double.infinity)
+                  : Padding(
+                      padding: const EdgeInsets.only(top: 18),
+                      child: _AyudaTeclasCast(anim: _anim),
+                    ),
+            ),
           ],
+          ),
         ),
       );
     }));

@@ -439,6 +439,17 @@ class VideoPlayerController extends GetxController with WidgetsBindingObserver {
   /// Velocidad pedida al aparato manteniendo apretado (1 = normal).
   final castVelocidadPedida = 1.obs;
 
+  /// Se le mando el video y todavia no empezo a verse.
+  ///
+  /// Aceptar la orden y empezar a reproducir son dos cosas distintas: el
+  /// aparato contesta enseguida y despues se toma lo suyo para bajar y llenar
+  /// el buffer. Antes el aviso de carga se apagaba con la respuesta, asi que
+  /// desaparecia a los pocos milisegundos mientras la pantalla grande seguia en
+  /// negro. Esto se mantiene hasta que el aparato informa que esta
+  /// REPRODUCIENDO de verdad.
+  final castEsperandoPlay = false.obs;
+  Timer? _esperaPlayTimer;
+
   /// Lee el volumen que tiene puesto el aparato, para arrancar desde ahi.
   Future<void> _leerVolumenDelCast(DLNADevice device) async {
     try {
@@ -803,7 +814,9 @@ class VideoPlayerController extends GetxController with WidgetsBindingObserver {
         if (dlnaDevice.value != aparato) return;
         await connectDLNADevice(aparato);
       } finally {
-        castCambiandoEpisodio.value = false;
+        // Si el aparato acepto, el aviso sigue hasta que se vea de verdad —
+        // lo apaga el sondeo. Si no acepto, se apaga aca mismo.
+        if (!castEsperandoPlay.value) castCambiandoEpisodio.value = false;
         // El volumen vuelve siempre: si el casteo fallo y se sigue viendo aca,
         // dejarlo mudo seria peor que el problema que se estaba evitando.
         if (!_disposed) {
@@ -1632,6 +1645,7 @@ class VideoPlayerController extends GetxController with WidgetsBindingObserver {
     _skipBadgeTimer?.cancel();
     _castBuscandoTimer?.cancel();
     _volumenCastTimer?.cancel();
+    _esperaPlayTimer?.cancel();
     final device = dlnaDevice.value;
     // Se anota que se estaba casteando y por donde iba ANTES de soltar nada.
     //
@@ -3189,6 +3203,15 @@ class VideoPlayerController extends GetxController with WidgetsBindingObserver {
     // deslizamiento no le pegue un salto.
     unawaited(_leerVolumenDelCast(device));
     castVelocidadPedida.value = 1;
+    // Sigue "cargando" hasta que el aparato diga que reproduce de verdad.
+    castEsperandoPlay.value = true;
+    _esperaPlayTimer?.cancel();
+    // Techo por si nunca lo informa (firmware que no actualiza su estado): el
+    // aviso se va y quedan los controles, mejor que una rueda eterna.
+    _esperaPlayTimer = Timer(const Duration(seconds: 30), () {
+      castEsperandoPlay.value = false;
+      castCambiandoEpisodio.value = false;
+    });
     _dlnaTimer = Timer.periodic(const Duration(seconds: 1), (timer) {
       _getDLNAStatus();
     });
@@ -3306,7 +3329,20 @@ class VideoPlayerController extends GetxController with WidgetsBindingObserver {
     // saldria de nuevo el aviso de un error que ya paso.
     CastRelayServer.ultimoError = null;
     _fallaDeCastAvisada = null;
+    // Todos los estados del panel se apagan juntos: si alguno quedaba puesto,
+    // al volver a castear mas tarde el panel arrancaba mostrando una espera que
+    // ya no existia.
     castConectando.value = false;
+    castEsperandoPlay.value = false;
+    castCambiandoEpisodio.value = false;
+    castBuscando.value = false;
+    castVelocidad.value = null;
+    castVelocidadPedida.value = 1;
+    castAviso.value = null;
+    _objetivoDeSalto = null;
+    _castBuscandoTimer?.cancel();
+    _esperaPlayTimer?.cancel();
+    _volumenCastTimer?.cancel();
 
     // Y el reproductor local vuelve a andar.
     //
@@ -3389,7 +3425,19 @@ class VideoPlayerController extends GetxController with WidgetsBindingObserver {
       _fallosDeCastSeguidos = 0;
       final reproduciendo = transportInfo.contains('PLAYING');
       isPlaying.value = reproduciendo;
-      if (reproduciendo) _vioReproduciendoEnCast = true;
+      if (reproduciendo) {
+        _vioReproduciendoEnCast = true;
+        // Empezo de verdad: recien aca se saca el aviso de carga.
+        if (castEsperandoPlay.value) {
+          _esperaPlayTimer?.cancel();
+          castEsperandoPlay.value = false;
+          // El aviso de cambio de episodio dura hasta ACA, no hasta que el
+          // aparato acepta: si no, decia "cambiando de episodio" un instante y
+          // despues pasaba a "conectando" mientras la pantalla grande seguia
+          // en negro, contando dos cosas para una sola espera.
+          castCambiandoEpisodio.value = false;
+        }
+      }
 
       // Velocidad puesta EN el aparato (x2, x4...). Viene en el mismo estado,
       // como <CurrentSpeed>. Se guarda solo cuando no es la normal: con "1" no
