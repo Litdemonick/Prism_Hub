@@ -315,6 +315,7 @@ class ApplicationUtils {
         // Nada nuevo: si venia esperando un release a medio publicar, ya no
         // hay por que seguir mirando seguido.
         _esperandoReleaseIncompleto = false;
+        _rafagasRapidas = 0;
         return;
       }
       if (!context.mounted) return;
@@ -356,6 +357,7 @@ class ApplicationUtils {
       }
       // Release entero y a punto de avisar: se vuelve al ritmo normal.
       _esperandoReleaseIncompleto = false;
+      _rafagasRapidas = 0;
 
       // Se calla lo que se esté reproduciendo ANTES de tapar la pantalla.
       //
@@ -630,6 +632,22 @@ class ApplicationUtils {
   /// Hay una versión más nueva pero el release todavía no está entero.
   static bool _esperandoReleaseIncompleto = false;
 
+  /// Cuántas comprobaciones rápidas seguidas se llevan hechas.
+  ///
+  /// La ráfaga tiene techo a propósito. Un release puede quedar publicado y las
+  /// notas no escribirse nunca, o un job del CI fallar y ese archivo no llegar
+  /// jamás: ahí la espera no termina sola. Sin límite, la app se quedaría
+  /// mirando cada minuto para siempre — sesenta llamadas por hora, justo el
+  /// tope de la API de GitHub, así que el mecanismo puesto para avisar ANTES
+  /// terminaría agotando el cupo y dejando de avisar del todo.
+  ///
+  /// Veinte minutos alcanzan de sobra: un release que tarda más que eso en
+  /// completarse no se está completando. Pasado ese punto se vuelve al ritmo
+  /// normal, que igual lo va a encontrar cuando esté listo — solo que sin
+  /// insistir.
+  static int _rafagasRapidas = 0;
+  static const _maxRafagasRapidas = 20;
+
   static void iniciarChequeoPeriodico(BuildContext context) {
     if (kIsWeb) return;
     // Uno solo: en Android el shell se reconstruye al cambiar de pestaña, y sin
@@ -641,10 +659,14 @@ class ApplicationUtils {
     var pulsos = 0;
     _chequeoPeriodico = Timer.periodic(_cadaCuantoEsperando, (_) {
       pulsos++;
-      final cadaCuantosPulsos = _esperandoReleaseIncompleto
+      // Ver _maxRafagasRapidas: la espera acelerada tiene techo.
+      final rapido =
+          _esperandoReleaseIncompleto && _rafagasRapidas < _maxRafagasRapidas;
+      final cadaCuantosPulsos = rapido
           ? 1
           : _cadaCuanto.inMinutes ~/ _cadaCuantoEsperando.inMinutes;
       if (pulsos % cadaCuantosPulsos != 0) return;
+      if (rapido) _rafagasRapidas++;
       // Se relee el ajuste en cada vuelta: si el usuario lo apaga mientras
       // tanto, esto deja de molestar sin necesidad de reiniciar nada.
       if (PrismHubStorage.getSetting(SettingKey.autoCheckUpdate) != true) return;
