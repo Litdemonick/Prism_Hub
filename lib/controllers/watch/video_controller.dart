@@ -898,6 +898,19 @@ class VideoPlayerController extends GetxController with WidgetsBindingObserver {
     isGettingWatchData.value = true;
     awaitingServerChoice.value = false;
     hasRenderedFrame.value = false;
+    // Las calidades son de ESTE video, no de los anteriores.
+    //
+    // Se llenaba con qualityMap[...] = ... y no se limpiaba nunca, asi que
+    // cambiar de episodio iba APILANDO: en el menu aparecian las calidades del
+    // que se estaba viendo mas las de todos los anteriores de la sesion, y las
+    // viejas apuntaban a un stream que ya no era ese. Elegir una de esas
+    // reproducia otra cosa.
+    //
+    // Se limpia aca —donde ya se reinicia el resto del estado del contenido
+    // anterior— y no dentro de getQuality(), porque getQuality solo corre para
+    // streams directos: viniendo de uno HLS a uno que no lo es, no habria
+    // pasado nunca por ahi y el menu se habria quedado con lo viejo.
+    qualityMap.clear();
     // No arrastrar el "avanzó hace poco" del video/servidor ANTERIOR — sin
     // esto, un corte real justo al cambiar de contenido podía quedar sin
     // spinner un instante porque todavía valía el timestamp viejo.
