@@ -56,7 +56,12 @@ class _VideoPlayerCastState extends State<VideoPlayerCast> {
       return;
     }
     _devicesSub = searcher!.devices.listen((deviceList) {
-      logger.info('DLNA devices: $deviceList');
+      // Solo cuando CAMBIA la cantidad. Los aparatos se reanuncian solos, asi
+      // que esto llegaba muchas veces por segundo con la lista entera adentro,
+      // llenando el registro de lineas identicas.
+      if (deviceList.length != this.deviceList.length) {
+        logger.info('Aparatos encontrados: ${deviceList.length}');
+      }
       if (!mounted) return;
       setState(() {
         this.deviceList = deviceList;

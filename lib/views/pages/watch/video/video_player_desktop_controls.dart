@@ -1820,16 +1820,18 @@ class _CastState extends State<_Cast> {
           return Tooltip(
             message: widget.controller.motivoSinCast,
             child: const IconButton(
-              icon: Icon(FluentIcons.screen_cast),
+              // Los iconos de Material, iguales a los del telefono: los de
+              // Fluent para esto son una pantalla de tubo que no se parece a
+              // nada de lo que la gente reconoce como "transmitir".
+              icon: Icon(material.Icons.cast, size: 22),
               onPressed: null,
             ),
           );
         }
         return IconButton(
           icon: Icon(
-            connected
-                ? FluentIcons.t_v_monitor_selected
-                : FluentIcons.screen_cast,
+            connected ? material.Icons.cast_connected : material.Icons.cast,
+            size: 22,
             color: connected ? HomeTheme.accentPink : null,
           ),
           onPressed: () {

@@ -358,6 +358,15 @@ class VideoPlayerController extends GetxController with WidgetsBindingObserver {
   // 播放方式
   final playMode = PlaylistMode.none.obs;
 
+  /// Si al terminar un episodio hay que pasar solo al siguiente.
+  ///
+  /// Se lee del ajuste cada vez y no se guarda en un campo: asi cambiarlo desde
+  /// los ajustes vale de inmediato, sin tener que salir y volver a entrar al
+  /// episodio. Apagado por defecto — que el reproductor siga solo es algo que
+  /// se pide, no algo que deba pasar sin avisar.
+  bool get autoPlayNextActivado =>
+      PrismHubStorage.getSetting(SettingKey.autoPlayNext) == true;
+
   // 进度
   final position = Duration.zero.obs;
 
@@ -777,6 +786,11 @@ class VideoPlayerController extends GetxController with WidgetsBindingObserver {
 
       if (index.value == playList.length - 1) {
         sendMessage(Message(Text('video.play-complete'.i18n)));
+        return;
+      }
+      // Solo si el usuario lo pidio. Ver SettingKey.autoPlayNext.
+      if (!autoPlayNextActivado) {
+        sendMessage(Message(Text('video.episode-finished'.i18n)));
         return;
       }
       if (!player.state.buffering) {
@@ -3355,6 +3369,8 @@ class VideoPlayerController extends GetxController with WidgetsBindingObserver {
         }
 
         if (termino &&
+            // Mismo ajuste que mirando aca: encadenar es algo que se pide.
+            autoPlayNextActivado &&
             playMode.value != PlaylistMode.single &&
             index.value < playList.length - 1) {
           // Encadena al siguiente SIN soltar el aparato.

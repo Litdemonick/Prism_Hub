@@ -492,6 +492,13 @@ class SettingKey {
   static const arrowRight = 'Arrowright';
   /// Si ya se mostro el tutorial de gestos del reproductor.
   static const tutorialReproductorVisto = 'TutorialReproductorVisto';
+
+  /// Al terminar un episodio, pasar solo al siguiente.
+  ///
+  /// Vale igual mirando aca que transmitiendo a un televisor. Apagado deja el
+  /// episodio terminado y no toca nada, que es lo que quiere quien mira de a
+  /// uno o se queda dormido con el reproductor abierto.
+  static const autoPlayNext = 'AutoPlayNext';
   static const readingMode = 'ReadingMode';
   static const aniListToken = 'AniListToken';
   static const aniListUserId = 'AniListUserId';
