@@ -458,7 +458,25 @@ class _VideoPlayerMobileControlsState extends State<VideoPlayerMobileControls> {
             // 手势层
             Positioned.fill(
               child: Listener(
-                onPointerDown: (_) => _activePointers++,
+                onPointerDown: (_) {
+                  _activePointers++;
+                  // Un dedo mas apoyado MIENTRAS se mantiene apretado sube la
+                  // velocidad: x2, x4, x8, x16. Es el gesto que ya se usa en
+                  // otras apps para adelantar rapido sin soltar.
+                  //
+                  // Solo transmitiendo: aca el sostenido usa la velocidad fija
+                  // que el usuario configuro, y cambiarla a mitad de gesto seria
+                  // otra cosa distinta de la que ya conoce.
+                  if (_isLongPress &&
+                      _activePointers > 1 &&
+                      _c.dlnaDevice.value != null) {
+                    final actual = _c.castVelocidadPedida.value;
+                    // Techo en 16: mas rapido que eso ningun aparato lo hace
+                    // util, y varios directamente lo rechazan.
+                    final siguiente = actual >= 16 ? 2 : actual * 2;
+                    unawaited(_c.pedirVelocidadCast(siguiente));
+                  }
+                },
                 onPointerUp: (_) {
                   if (_activePointers > 0) _activePointers--;
                 },
@@ -571,6 +589,13 @@ class _VideoPlayerMobileControlsState extends State<VideoPlayerMobileControls> {
                   onVerticalDragUpdate: (details) {
                     if (_activePointers > 1) return;
                     final add = details.delta.dy / 500;
+                    // Transmitiendo, el volumen que importa es el del APARATO.
+                    // El del telefono no sale por ningun lado, porque el sonido
+                    // lo esta haciendo el televisor.
+                    if (_c.dlnaDevice.value != null) {
+                      _c.ajustarVolumenCast(-add);
+                      return;
+                    }
                     // Dos tramos con un solo gesto: primero el volumen del
                     // teléfono y, una vez al tope, la amplificación del
                     // reproductor. Al bajar se recorren al revés — se baja
@@ -600,12 +625,26 @@ class _VideoPlayerMobileControlsState extends State<VideoPlayerMobileControls> {
                   },
                   onLongPressStart: (details) {
                     _isLongPress = true;
+                    // Transmitiendo se le pide al APARATO, que es quien esta
+                    // reproduciendo. Arranca en x2 y sube tocando con otro dedo
+                    // sin soltar (ver onPointerDown del Listener de arriba).
+                    if (_c.dlnaDevice.value != null) {
+                      unawaited(_c.pedirVelocidadCast(2));
+                      setState(() {});
+                      return;
+                    }
                     _c.player.setRate(_velocidadSostenida);
                     setState(() {});
                   },
                   onLongPressEnd: (details) {
-                    _c.player.setRate(_c.currentSpeed.value);
                     _isLongPress = false;
+                    if (_c.dlnaDevice.value != null) {
+                      // Al soltar vuelve a la normal, como el sostenido de aca.
+                      unawaited(_c.pedirVelocidadCast(1));
+                      setState(() {});
+                      return;
+                    }
+                    _c.player.setRate(_c.currentSpeed.value);
                     setState(() {});
                   },
                   child: const SizedBox.expand(),

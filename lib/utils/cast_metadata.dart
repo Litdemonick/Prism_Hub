@@ -59,6 +59,34 @@ Future<void> castearConMetadata(
   return device.request('SetAVTransportURI', utf8.encode(sobre));
 }
 
+/// Pone a reproducir a una velocidad distinta de la normal.
+///
+/// El play() del paquete manda `<Speed>1</Speed>` fijo, así que no hay forma de
+/// pedir x2 o x4 con él. Se manda el mismo SOAP con la velocidad pedida.
+///
+/// OJO: muchos aparatos solo aceptan la velocidad 1 y contestan un error de
+/// SOAP. Devuelve si lo aceptó, para poder avisar en vez de dejar al usuario
+/// pensando que anda.
+Future<bool> reproducirAVelocidad(DLNADevice device, int velocidad) async {
+  final sobre = '<?xml version="1.0" encoding="utf-8" standalone="yes"?>'
+      '<s:Envelope xmlns:s="http://schemas.xmlsoap.org/soap/envelope/" '
+      's:encodingStyle="http://schemas.xmlsoap.org/soap/encoding/">'
+      '<s:Body>'
+      '<u:Play xmlns:u="urn:schemas-upnp-org:service:AVTransport:1">'
+      '<InstanceID>0</InstanceID>'
+      '<Speed>$velocidad</Speed>'
+      '</u:Play>'
+      '</s:Body>'
+      '</s:Envelope>';
+  try {
+    final respuesta = await device.request('Play', utf8.encode(sobre));
+    // Un aparato que no la soporta contesta con un cuerpo de fallo SOAP.
+    return !respuesta.contains('Fault') && !respuesta.contains('errorCode');
+  } catch (_) {
+    return false;
+  }
+}
+
 String _escapar(String texto) => texto
     .replaceAll('&', '&amp;')
     .replaceAll('<', '&lt;')

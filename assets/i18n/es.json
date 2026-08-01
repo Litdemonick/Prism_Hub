@@ -333,6 +333,8 @@
     "cast-speed": "Acelerado ×{speed}",
     "cast-seeking": "Buscando el momento, esperá…",
     "episode-finished": "Terminó el episodio. Elegí el siguiente en la lista, o activá el paso automático en Ajustes.",
+    "cast-volume": "Volumen",
+    "cast-speed-unsupported": "Este dispositivo no acepta cambiar la velocidad",
     "cast-connecting": "Conectando con el dispositivo…",
     "cast-failed": "El dispositivo no aceptó el vídeo. Probá de nuevo o elegí otro.",
     "cast-wait": "Esperá a que cargue el vídeo para poder transmitir",

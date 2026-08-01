@@ -428,6 +428,81 @@ class VideoPlayerController extends GetxController with WidgetsBindingObserver {
   Duration? _objetivoDeSalto;
   Timer? _castBuscandoTimer;
 
+  /// Volumen del APARATO, de 0 a 100.
+  ///
+  /// Deslizando de arriba abajo con la transmision puesta, lo que se movia era
+  /// el volumen del telefono — que no sale por ningun lado, porque el sonido lo
+  /// esta haciendo el televisor. Ahora se le manda a el.
+  final castVolumen = 50.obs;
+  Timer? _volumenCastTimer;
+
+  /// Velocidad pedida al aparato manteniendo apretado (1 = normal).
+  final castVelocidadPedida = 1.obs;
+
+  /// Lee el volumen que tiene puesto el aparato, para arrancar desde ahi.
+  Future<void> _leerVolumenDelCast(DLNADevice device) async {
+    try {
+      final xml = await device.getVolume().timeout(const Duration(seconds: 4));
+      final m = RegExp(r'<CurrentVolume>(\d+)</CurrentVolume>').firstMatch(xml);
+      final v = int.tryParse(m?.group(1) ?? '');
+      if (v != null) castVolumen.value = v.clamp(0, 100);
+    } catch (e) {
+      // Sin este dato se arranca desde el ultimo conocido: subir y bajar sigue
+      // andando, solo que la primera vez puede dar un salto.
+      logger.warning('El aparato no informo su volumen', e);
+    }
+  }
+
+  /// Sube o baja el volumen del aparato. [delta] va en fraccion (-1 a 1).
+  void ajustarVolumenCast(double delta) {
+    final device = dlnaDevice.value;
+    if (device == null) return;
+    final nuevo = (castVolumen.value + (delta * 100).round()).clamp(0, 100);
+    if (nuevo == castVolumen.value) return;
+    castVolumen.value = nuevo;
+    castAviso.value = '${'video.cast-volume'.i18n} $nuevo%';
+    // Se manda al soltar, no en cada pixel.
+    //
+    // Arrastrar dispara decenas de eventos por segundo y cada uno seria un
+    // pedido HTTP al televisor: se lo inundaba y el volumen llegaba tarde y a
+    // los saltos. Con este respiro se manda solo el ultimo valor.
+    _volumenCastTimer?.cancel();
+    _volumenCastTimer = Timer(const Duration(milliseconds: 220), () async {
+      try {
+        await device.volume(castVolumen.value);
+      } catch (e) {
+        logger.warning('El aparato no acepto el volumen', e);
+      }
+      // El cartel se va solo un rato despues del ultimo movimiento.
+      Timer(const Duration(milliseconds: 900), () {
+        if (castAviso.value?.startsWith('video.cast-volume'.i18n) ?? false) {
+          castAviso.value = null;
+        }
+      });
+    });
+  }
+
+  /// Manda al aparato a x2, x4, x8... o de vuelta a la normal.
+  ///
+  /// Muchos aparatos solo aceptan la velocidad normal y contestan un error; en
+  /// ese caso se avisa y se vuelve a 1, en vez de dejar creer que anda.
+  Future<void> pedirVelocidadCast(int velocidad) async {
+    final device = dlnaDevice.value;
+    if (device == null) return;
+    final acepto = await reproducirAVelocidad(device, velocidad);
+    if (!acepto) {
+      castVelocidadPedida.value = 1;
+      castAviso.value = 'video.cast-speed-unsupported'.i18n;
+      Timer(const Duration(milliseconds: 1800), () {
+        if (castAviso.value == 'video.cast-speed-unsupported'.i18n) {
+          castAviso.value = null;
+        }
+      });
+      return;
+    }
+    castVelocidadPedida.value = velocidad;
+  }
+
   void _empezoSaltoEnCast(Duration objetivo) {
     _objetivoDeSalto = objetivo;
     castBuscando.value = true;
@@ -1556,6 +1631,7 @@ class VideoPlayerController extends GetxController with WidgetsBindingObserver {
     _seekWatchdog?.cancel();
     _skipBadgeTimer?.cancel();
     _castBuscandoTimer?.cancel();
+    _volumenCastTimer?.cancel();
     final device = dlnaDevice.value;
     // Se anota que se estaba casteando y por donde iba ANTES de soltar nada.
     //
@@ -3109,6 +3185,10 @@ class VideoPlayerController extends GetxController with WidgetsBindingObserver {
     // Si el reproductor se cerro mientras se enganchaba, no se arranca ningun
     // timer: quedaria latiendo cada segundo sobre un controlador destruido.
     if (_disposed || dlnaDevice.value == null) return;
+    // Se arranca desde el volumen que YA tiene el aparato, para que el primer
+    // deslizamiento no le pegue un salto.
+    unawaited(_leerVolumenDelCast(device));
+    castVelocidadPedida.value = 1;
     _dlnaTimer = Timer.periodic(const Duration(seconds: 1), (timer) {
       _getDLNAStatus();
     });

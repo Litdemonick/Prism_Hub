@@ -354,6 +354,8 @@
     "cast-speed": "Speeding up ×{speed}",
     "cast-seeking": "Jumping there, hold on…",
     "episode-finished": "Episode finished. Pick the next one from the list, or turn on auto-play in Settings.",
+    "cast-volume": "Volume",
+    "cast-speed-unsupported": "This device does not support changing speed",
     "cast-connecting": "Connecting to the device…",
     "cast-failed": "The device did not accept the video. Try again or pick another one.",
     "cast-wait": "Wait for the video to load before casting",
