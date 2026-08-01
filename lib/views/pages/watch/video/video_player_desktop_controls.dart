@@ -1315,11 +1315,18 @@ class _QualityState extends State<_Quality> {
                     // que es lo único que difiere por detrás.
                     child: ListView(
                       children: [
+                        // La que se esta viendo lleva tilde y color: sin eso
+                        // la lista no decia cual estaba puesta.
                         if (widget.controller.qualityMap.isNotEmpty)
                           for (final quality
                               in widget.controller.qualityMap.entries)
                             ListTile(
                               title: Text(quality.key),
+                              trailing: quality.key ==
+                                      widget.controller.currentQuality.value
+                                  ? const Icon(FluentIcons.check_mark,
+                                      size: 12, color: HomeTheme.accentPink)
+                                  : null,
                               onPressed: () {
                                 widget.controller.switchQuality(
                                   quality.value,
@@ -1332,6 +1339,11 @@ class _QualityState extends State<_Quality> {
                               in widget.controller.availableServers.keys)
                             ListTile(
                               title: Text(servidor),
+                              trailing: servidor ==
+                                      widget.controller.currentServerName.value
+                                  ? const Icon(FluentIcons.check_mark,
+                                      size: 12, color: HomeTheme.accentPink)
+                                  : null,
                               onPressed: () {
                                 widget.controller.switchServer(servidor);
                                 Flyout.of(context).close();

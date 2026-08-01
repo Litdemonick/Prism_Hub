@@ -1,4 +1,4 @@
-﻿import 'package:flutter/material.dart';
+import 'package:flutter/material.dart';
 import 'package:fluent_ui/fluent_ui.dart' as fluent;
 import 'package:get/get.dart';
 import 'package:media_kit/media_kit.dart';
@@ -72,7 +72,14 @@ class _VideoPlayerSidebarState extends State<VideoPlayerSidebar> {
                   child: Padding(
                     padding: const EdgeInsets.only(left: 16),
                     child: Text(
-                      _sidebarTabToString(tab),
+                      // El panel de "servidores" tambien es el que abre el
+                      // boton de calidad cuando la extension entrega una url
+                      // por resolucion (Eporner). Ahi lo que se lista son
+                      // calidades, asi que titularlo "Servidores disponibles"
+                      // era mentir sobre lo que se esta eligiendo.
+                      tab == SidebarTab.servers && !_c.servidoresSonAparte
+                          ? _sidebarTabToString(SidebarTab.qualitys)
+                          : _sidebarTabToString(tab),
                       style: const TextStyle(fontWeight: FontWeight.bold),
                     ),
                   ),
@@ -873,6 +880,94 @@ class _SideBarSettingsState extends State<_SideBarSettings> {
   }
 }
 
+/// Una fila de una lista donde se elige algo: calidad o servidor.
+///
+/// Existe para que las dos se marquen IGUAL. Estaban escritas por separado y
+/// cada una marcaba lo elegido a su manera —o no lo marcaba—, así que en el
+/// panel de calidad no se sabía cuál estaba puesta.
+///
+/// El activo lleva tres señales y no una: fondo propio, el texto en el color
+/// del app y una tilde. Sobre el fondo oscuro del reproductor, un solo matiz de
+/// color no se distingue.
+class _FilaSeleccionable extends StatelessWidget {
+  const _FilaSeleccionable({
+    required this.texto,
+    required this.activo,
+    required this.onTap,
+  });
+
+  final String texto;
+  final bool activo;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 4),
+      child: Material(
+        color: activo
+            ? HomeTheme.accentPink.withValues(alpha: 0.18)
+            : Colors.transparent,
+        borderRadius: BorderRadius.circular(10),
+        child: ListTile(
+          dense: true,
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(10),
+            side: BorderSide(
+              color: activo
+                  ? HomeTheme.accentPink
+                  : Colors.white.withValues(alpha: 0.12),
+            ),
+          ),
+          title: Text(
+            texto,
+            style: TextStyle(
+              color: activo ? HomeTheme.accentPink : HomeTheme.textPrimary,
+              fontWeight: activo ? FontWeight.w700 : FontWeight.w400,
+            ),
+          ),
+          trailing: activo
+              ? const Icon(Icons.check_rounded,
+                  size: 18, color: HomeTheme.accentPink)
+              : null,
+          onTap: onTap,
+        ),
+      ),
+    );
+  }
+}
+
+/// Lo que se ve cuando una lista del panel no tiene nada.
+///
+/// Antes quedaba un rectangulo negro sin una palabra, que no distingue "no hay"
+/// de "se rompio algo". Es el mismo caso en calidad y en servidores.
+class _PanelVacio extends StatelessWidget {
+  const _PanelVacio({required this.texto});
+  final String texto;
+
+  @override
+  Widget build(BuildContext context) {
+    return Center(
+      child: Padding(
+        padding: const EdgeInsets.all(28),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(Icons.layers_clear_outlined,
+                size: 34, color: Colors.white.withValues(alpha: 0.35)),
+            const SizedBox(height: 12),
+            Text(
+              texto,
+              textAlign: TextAlign.center,
+              style: const TextStyle(color: HomeTheme.textMuted, fontSize: 13),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
 class _QualitySelector extends StatefulWidget {
   const _QualitySelector({
     required this.controller,
@@ -888,19 +983,26 @@ class _QualitySelectorState extends State<_QualitySelector> {
 
   @override
   Widget build(BuildContext context) {
-    return ListView(
-      children: [
-        for (final quality in _c.qualityMap.entries)
-          ListTile(
-            onTap: () {
-              _c.switchQuality(quality.value);
-              _c.showSidebar.value = false;
-            },
-            title: Text(
-              quality.key,
+    return Obx(
+      () => _c.qualityMap.isEmpty
+          ? _PanelVacio(texto: 'video.no-qualities'.i18n)
+          : ListView(
+              padding: const EdgeInsets.symmetric(vertical: 6, horizontal: 8),
+              children: [
+                for (final quality in _c.qualityMap.entries)
+                  _FilaSeleccionable(
+                    texto: quality.key,
+                    // currentQuality guarda la resolucion que se esta viendo, con el
+                    // mismo nombre que usa el menu (ver etiquetaCalidad), asi que
+                    // alcanza con compararlas.
+                    activo: quality.key == _c.currentQuality.value,
+                    onTap: () {
+                      _c.switchQuality(quality.value);
+                      _c.showSidebar.value = false;
+                    },
+                  ),
+              ],
             ),
-          ),
-      ],
     );
   }
 }
@@ -916,6 +1018,9 @@ class _ServerSelector extends StatelessWidget {
   Widget build(BuildContext context) {
     return Obx(() {
       final current = controller.currentServerName.value;
+      if (controller.availableServers.isEmpty) {
+        return _PanelVacio(texto: 'video.no-servers'.i18n);
+      }
       return ListView(
         padding: const EdgeInsets.symmetric(vertical: 6, horizontal: 8),
         children: [
@@ -927,47 +1032,14 @@ class _ServerSelector extends StatelessWidget {
             // del app y una tilde a la derecha — tres señales en vez de un
             // matiz. Este selector es el mismo en el teléfono y en escritorio,
             // así que se ve igual en los dos.
-            Builder(builder: (context) {
-              final activo = entry.key == current;
-              return Padding(
-                padding: const EdgeInsets.only(bottom: 4),
-                child: Material(
-                  color: activo
-                      ? HomeTheme.accentPink.withValues(alpha: 0.18)
-                      : Colors.transparent,
-                  borderRadius: BorderRadius.circular(10),
-                  child: ListTile(
-                    dense: true,
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(10),
-                      side: BorderSide(
-                        color: activo
-                            ? HomeTheme.accentPink
-                            : Colors.white.withValues(alpha: 0.12),
-                      ),
-                    ),
-                    title: Text(
-                      entry.key,
-                      style: TextStyle(
-                        color: activo
-                            ? HomeTheme.accentPink
-                            : HomeTheme.textPrimary,
-                        fontWeight:
-                            activo ? FontWeight.w700 : FontWeight.w400,
-                      ),
-                    ),
-                    trailing: activo
-                        ? const Icon(Icons.check_rounded,
-                            size: 18, color: HomeTheme.accentPink)
-                        : null,
-                    onTap: () {
-                      controller.selectServer(entry.key);
-                      controller.showSidebar.value = false;
-                    },
-                  ),
-                ),
-              );
-            }),
+            _FilaSeleccionable(
+              texto: entry.key,
+              activo: entry.key == current,
+              onTap: () {
+                controller.selectServer(entry.key);
+                controller.showSidebar.value = false;
+              },
+            ),
         ],
       );
     });

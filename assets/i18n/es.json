@@ -356,7 +356,8 @@
     "holding-fast-forward": "Adelantando a {x}x",
     "audio": "Audio",
     "no-qualities": "No hay calidades disponibles",
-    "streamlink-error": "No se pudo obtener el enlace del vídeo"
+    "streamlink-error": "No se pudo obtener el enlace del vídeo",
+    "no-servers": "Esta fuente no ofrece servidores para elegir"
   },
   "comic-settings": {
     "read-mode": "Modo de lectura",
