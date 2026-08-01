@@ -308,6 +308,14 @@ class _VideoPlayerDesktopControlsState
                                     // nada: la rueda girando detras hacia
                                     // pensar que algo seguia en curso.
                                     _c.error.value.isEmpty &&
+                                    // Mismo caso que el error de arriba: el
+                                    // aviso de "el servidor fallo, toca para
+                                    // reproducir" espera una accion y no hay
+                                    // nada cargando. El fallo de servidor no
+                                    // se guarda en `error` —tiene su propio
+                                    // campo— asi que la comprobacion anterior
+                                    // no lo cubria.
+                                    _c.serverFailedMessage.value.isEmpty &&
                                     // Con el reproductor de WebView activo no
                                     // va a pintarse nunca un cuadro nativo, asi
                                     // que esta rueda giraria para siempre.

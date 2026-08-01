@@ -276,6 +276,16 @@ class _VideoPlayerMobileControlsState extends State<VideoPlayerMobileControls> {
                                   // Ver el comentario equivalente en los
                                   // controles de escritorio.
                                   _c.error.value.isEmpty &&
+                                  // El aviso de "el servidor falló, tocá para
+                                  // reproducir" espera una acción del usuario:
+                                  // nada está cargando y la rueda no tiene por
+                                  // qué girar. Faltaba esta condición y se veía
+                                  // dando vueltas DETRÁS del aviso, que encima
+                                  // hace parecer que si uno espera se arregla
+                                  // solo. El fallo de servidor no se guarda en
+                                  // `error` —tiene su propio campo— así que la
+                                  // comprobación de arriba no lo cubría.
+                                  _c.serverFailedMessage.value.isEmpty &&
                                   !_c.isWebViewActive.value) ||
                               (_c.hasRenderedFrame.value &&
                                   (_c.isSeeking.value ||
