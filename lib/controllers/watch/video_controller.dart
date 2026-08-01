@@ -642,12 +642,38 @@ class VideoPlayerController extends GetxController with WidgetsBindingObserver {
       // con el anterior: sonaban los dos a la vez, cada uno con otra cosa, y la
       // unica salida era desconectar y volver a elegir el aparato.
       final aparato = dlnaDevice.value;
-      await play();
-      if (aparato == null || _disposed || watchData == null) return;
-      // Sigue siendo el mismo aparato? Si el usuario desconecto o cambió
-      // mientras se resolvia el episodio, mandarselo seria pisarle la eleccion.
-      if (dlnaDevice.value != aparato) return;
-      await connectDLNADevice(aparato);
+      if (aparato == null) {
+        await play();
+        return;
+      }
+      // Transmitiendo, el episodio nuevo se resuelve con el reproductor de aca
+      // EN SILENCIO.
+      //
+      // play() abre el video y arranca a reproducir; recien despues
+      // connectDLNADevice lo para. En ese hueco sonaba el episodio nuevo por el
+      // telefono encima de lo que ya estaba saliendo por el televisor.
+      final volumenPrevio = player.state.volume;
+      try {
+        await player.setVolume(0);
+      } catch (_) {
+        // Si no se puede bajar, igual conviene seguir: peor es no encadenar.
+      }
+      try {
+        await play();
+        if (_disposed || watchData == null) return;
+        // Sigue siendo el mismo aparato? Si se desconecto o se cambio mientras
+        // se resolvia el episodio, mandarselo seria pisarle la eleccion.
+        if (dlnaDevice.value != aparato) return;
+        await connectDLNADevice(aparato);
+      } finally {
+        // El volumen vuelve siempre: si el casteo fallo y se sigue viendo aca,
+        // dejarlo mudo seria peor que el problema que se estaba evitando.
+        if (!_disposed) {
+          try {
+            await player.setVolume(volumenPrevio);
+          } catch (_) {}
+        }
+      }
     }));
 
     // 切换倍速
@@ -3123,8 +3149,57 @@ class VideoPlayerController extends GetxController with WidgetsBindingObserver {
       // cortaba la transmision. Una parada de verdad sigue parada al segundo.
       _lecturasParadoSeguidas = parado ? _lecturasParadoSeguidas + 1 : 0;
       if (_lecturasParadoSeguidas >= 2 && _vioReproduciendoEnCast) {
+        // Se acabo el episodio, o lo pararon a mano? El aparato informa lo
+        // mismo en los dos casos, asi que se mira DONDE quedo.
+        //
+        // position/duration conservan la ultima lectura buena, porque la rama
+        // de parado corta antes de refrescarlas.
+        final dur = duration.value;
+        final pos = position.value;
+        final falta = dur - pos;
+        final termino = dur > Duration.zero &&
+            (falta <= const Duration(seconds: 15) ||
+                falta.inMilliseconds <= dur.inMilliseconds * 0.08);
+
+        if (termino && playMode.value == PlaylistMode.loop) {
+          // En bucle: de nuevo desde el principio, en el mismo aparato.
+          logger.info('Fin del episodio en el aparato: se repite');
+          _lecturasParadoSeguidas = 0;
+          try {
+            // seek() y no seekByCurrent(): el segundo espera el XML crudo que
+            // devuelve position(), no una hora suelta.
+            await device.seek('00:00:00');
+            await device.play();
+          } catch (e) {
+            logger.warning('No se pudo repetir el episodio en el aparato', e);
+          }
+          return;
+        }
+
+        if (termino &&
+            playMode.value != PlaylistMode.single &&
+            index.value < playList.length - 1) {
+          // Encadena al siguiente SIN soltar el aparato.
+          //
+          // El encadenado normal lo dispara player.stream.completed del
+          // reproductor de aca, que mientras se transmite esta parado a
+          // proposito y no emite nunca — asi que casteando no habia encadenado.
+          // Al mover el indice, el vigilante de episodio resuelve el siguiente
+          // y lo vuelve a mandar al MISMO aparato, sin cortar la transmision.
+          logger.info('Fin del episodio en el aparato: va el siguiente');
+          _lecturasParadoSeguidas = 0;
+          _vioReproduciendoEnCast = false;
+          index.value++;
+          return;
+        }
+
+        if (termino) {
+          // Era el ultimo (o la lista esta en modo de uno solo).
+          sendMessage(Message(Text('video.play-complete'.i18n)));
+        } else {
+          sendMessage(Message(Text('video.cast-stopped-device'.i18n)));
+        }
         logger.info('La transmision se corto desde el aparato');
-        sendMessage(Message(Text('video.cast-stopped-device'.i18n)));
         await disconnectDLNADevice();
         return;
       }
