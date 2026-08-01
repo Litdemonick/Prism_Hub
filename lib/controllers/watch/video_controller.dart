@@ -2872,6 +2872,7 @@ class VideoPlayerController extends GetxController with WidgetsBindingObserver {
     // reproducir" de una transmision anterior no valen para esta.
     _fallosDeCastSeguidos = 0;
     _vioReproduciendoEnCast = false;
+    _lecturasParadoSeguidas = 0;
     _consultandoCast = false;
     // El renderer DLNA pide la URL con SU propio cliente HTTP — no hay
     // forma de decirle que mande el Referer/User-Agent que la fuente
@@ -3059,6 +3060,7 @@ class VideoPlayerController extends GetxController with WidgetsBindingObserver {
   bool _consultandoCast = false;
   int _fallosDeCastSeguidos = 0;
   bool _vioReproduciendoEnCast = false;
+  int _lecturasParadoSeguidas = 0;
 
   /// Cuantas consultas seguidas pueden fallar antes de dar la transmision por
   /// perdida. Se consulta cada segundo, asi que son ~5 segundos de silencio:
@@ -3113,7 +3115,14 @@ class VideoPlayerController extends GetxController with WidgetsBindingObserver {
       // se le pedia reanudar a un aparato que ya no tenia el video cargado.
       final parado = transportInfo.contains('STOPPED') ||
           transportInfo.contains('NO_MEDIA_PRESENT');
-      if (parado && _vioReproduciendoEnCast) {
+      // Tiene que estar parado DOS vueltas seguidas.
+      //
+      // Manejando desde el control del televisor, adelantar hace que varios
+      // reproductores informen STOPPED un instante mientras vuelven a llenar el
+      // buffer. Con una sola lectura, usar el control remoto para adelantar
+      // cortaba la transmision. Una parada de verdad sigue parada al segundo.
+      _lecturasParadoSeguidas = parado ? _lecturasParadoSeguidas + 1 : 0;
+      if (_lecturasParadoSeguidas >= 2 && _vioReproduciendoEnCast) {
         logger.info('La transmision se corto desde el aparato');
         sendMessage(Message(Text('video.cast-stopped-device'.i18n)));
         await disconnectDLNADevice();
