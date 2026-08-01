@@ -848,13 +848,44 @@ async function stringify(callback) {
   // multi-página además de eso multiplicaba los pedidos (hasta ~50 por
   // búsqueda con esa extensión) y era la causa principal de que la barra
   // de carga quedara colgada un buen rato — confirmado en vivo.
+  //
+  // Segunda red de seguridad, esta sobre los FILTROS: si con los filtros
+  // puestos no aparece nada, se vuelve a buscar sin ellos.
+  //
+  // El motivo es que los filtros del panel se quedan puestos de una búsqueda a
+  // la otra. Alguien deja "Género: Romance" de un rato antes, después escribe
+  // el nombre de una obra que existe pero está catalogada en otro género, y la
+  // pantalla dice "no se encontraron resultados" — que es falso: la obra está,
+  // solo que no en ese género. Y no hay ninguna pista de que la culpa la tiene
+  // un filtro que quedó de antes.
+  //
+  // Cuando el reintento sí encuentra, se avisa por [onFiltrosIgnorados] para
+  // poder decirlo en pantalla: mostrar resultados que no cumplen los filtros
+  // sin explicar por qué sería igual de confuso que no mostrar nada.
+  //
+  // No cuesta pedidos de más en el caso normal: solo corre cuando ya se agotó
+  // todo lo anterior sin un solo resultado.
   Future<List<ExtensionListItem>> searchFirstPageWithBroadening(
     String kw, {
     Map<String, List<String>>? filter,
+    void Function()? onFiltrosIgnorados,
   }) async {
-    for (final query in SearchText.broadenedRemoteQueries(kw)) {
+    final queries = SearchText.broadenedRemoteQueries(kw);
+    for (final query in queries) {
       final result = await search(query, 1, filter: filter);
       if (result.isNotEmpty) return result;
+    }
+
+    final hayFiltros =
+        filter != null && filter.values.any((v) => v.isNotEmpty);
+    if (!hayFiltros) return const [];
+
+    for (final query in queries) {
+      final result = await search(query, 1);
+      if (result.isNotEmpty) {
+        onFiltrosIgnorados?.call();
+        return result;
+      }
     }
     return const [];
   }

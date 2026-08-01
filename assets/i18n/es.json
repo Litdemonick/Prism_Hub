@@ -43,7 +43,8 @@
     "yes": "Sí",
     "no": "No",
     "no-result-in-extension": "{extension} no encontró resultados",
-    "understood": "Entendido"
+    "understood": "Entendido",
+    "search-filters-ignored": "Con los filtros puestos no había resultados, así que se buscó sin ellos. Lo que se ve puede no cumplir los filtros marcados."
   },
   "home": {
     "continue-watching": "Continuar",

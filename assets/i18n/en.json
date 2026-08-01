@@ -50,7 +50,8 @@
     "yes": "Yes",
     "no": "No",
     "no-result-in-extension": "{extension} found no results",
-    "understood": "Got it"
+    "understood": "Got it",
+    "search-filters-ignored": "No results with the current filters, so the search ran without them. What you see may not match the filters you picked."
   },
   "home": {
     "continue-watching": "Continue",

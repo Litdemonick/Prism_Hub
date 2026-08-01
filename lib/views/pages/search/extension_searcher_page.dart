@@ -116,6 +116,20 @@ class _ExtensionSearcherPageState extends fluent.State<ExtensionSearcherPage> {
     return false;
   }
 
+  // Los filtros del panel quedan puestos de una búsqueda a la otra, así que uno
+  // que sobró de antes puede dejar sin resultados algo que la extensión SÍ
+  // tiene. Cuando la búsqueda se salva repitiéndola sin filtros (ver
+  // searchFirstPageWithBroadening), hay que decirlo: si no, la lista muestra
+  // cosas que no cumplen los filtros marcados y parece que el filtro no anda.
+  void _avisarFiltrosIgnorados() {
+    if (!mounted) return;
+    showPlatformSnackbar(
+      context: context,
+      content: 'common.search-filters-ignored'.i18n,
+      severity: fluent.InfoBarSeverity.info,
+    );
+  }
+
   late final _textEditingController = TextEditingController(text: _keyWord);
 
   // Autocompletado (texto sugerido ADENTRO del mismo campo, seleccionado —
@@ -351,7 +365,8 @@ class _ExtensionSearcherPageState extends fluent.State<ExtensionSearcherPage> {
               : (_rawPage == 1
                   ? await _runtime.searchFirstPageWithBroadening(
                       SearchText.sanitizeForRemoteQuery(_keyWord),
-                      filter: _selectedFilters)
+                      filter: _selectedFilters,
+                      onFiltrosIgnorados: _avisarFiltrosIgnorados)
                   : await _runtime.search(
                       SearchText.sanitizeForRemoteQuery(_keyWord), _rawPage,
                       filter: _selectedFilters));
@@ -475,7 +490,8 @@ class _ExtensionSearcherPageState extends fluent.State<ExtensionSearcherPage> {
               : (_page == 1
                   ? await _runtime.searchFirstPageWithBroadening(
                       SearchText.sanitizeForRemoteQuery(_keyWord),
-                      filter: _selectedFilters)
+                      filter: _selectedFilters,
+                      onFiltrosIgnorados: _avisarFiltrosIgnorados)
                   : await _runtime.search(
                       SearchText.sanitizeForRemoteQuery(_keyWord), _page,
                       filter: _selectedFilters));
