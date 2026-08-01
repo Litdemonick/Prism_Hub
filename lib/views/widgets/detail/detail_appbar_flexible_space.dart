@@ -69,7 +69,13 @@ class _DetailAppbarflexibleSpaceState extends State<DetailAppbarflexibleSpace> {
   double get _fadeDistance => (widget.height - 104).clamp(50.0, 400.0);
 
   double _scrollListener() {
-    final fadeDistance = _fadeDistance;
+    // Se desvanece en el primer 55% del recorrido, no en todo.
+    //
+    // Llegando a 0 justo al final, el titulo y los botones seguian visibles a
+    // media opacidad cuando ya estaban encima de la barra de pestañas: se veian
+    // los dos textos superpuestos y quedaba sucio. Terminando antes, el bloque
+    // ya no esta para cuando las piezas se cruzan.
+    final fadeDistance = _fadeDistance * 0.55;
     if (_offset <= 0) {
       return 1;
     } else if (_offset >= fadeDistance) {
@@ -204,7 +210,10 @@ class _DetailAppbarflexibleSpaceState extends State<DetailAppbarflexibleSpace> {
                           Text(
                             c.isLoading.value ? "" : c.data.value!.title,
                             softWrap: true,
-                            maxLines: 3,
+                            // 4 lineas (antes 3): hay titulos largos que a tres
+                            // lineas seguian cortandose con puntos suspensivos,
+                            // y el titulo es lo primero que uno quiere leer.
+                            maxLines: 4,
                             overflow: TextOverflow.ellipsis,
                             style: const TextStyle(
                               // 26 era mucho para un titulo largo en un
@@ -226,28 +235,33 @@ class _DetailAppbarflexibleSpaceState extends State<DetailAppbarflexibleSpace> {
                 ],
               ),
               const SizedBox(height: 18),
+              // Dos filas, no una.
+              //
+              // Con los tres botones en la misma fila no entraba ninguna
+              // etiqueta entera en un telefono: "Continuar Episodio 1" salia
+              // como "Continuar Epis..." y "Favorito" se partia en dos lineas
+              // ("Favorit" y abajo "o"). Repartir el ancho de otra forma no
+              // alcanzaba —los dos textos juntos no entran— asi que "Continuar"
+              // se queda con la fila entera, que ademas es la accion principal,
+              // y abajo van "Favorito" y compartir.
+              //
+              // BotonPulsable: los botones no daban ninguna señal al tocarlos, y
+              // en el telefono eso lleva a tocar dos veces.
+              SizedBox(
+                width: double.infinity,
+                child: BotonPulsable(
+                    child: DetailContinuePlay(tag: widget.tag)),
+              ),
+              const SizedBox(height: 10),
               Row(
                 children: [
-                  // 50/50 recortaba "Continuar Capitulo 30" con "..." — el
-                  // texto es bastante mas largo que "Favorito", asi que le
-                  // toca mas lugar real en vez de partir el ancho parejo.
-                  // BotonPulsable: los botones no daban ninguna señal al
-                  // tocarlos, y en el telefono eso lleva a tocar dos veces.
                   Expanded(
-                    flex: 3,
-                    child: BotonPulsable(
-                        child: DetailContinuePlay(tag: widget.tag)),
-                  ),
-                  const SizedBox(width: 10),
-                  Expanded(
-                    flex: 2,
                     child: BotonPulsable(
                         child: DetailFavoriteButton(tag: widget.tag)),
                   ),
-                  const SizedBox(width: 2),
+                  const SizedBox(width: 10),
                   // Compartir la obra. Va aca y no en el menu: es una accion que
-                  // se busca a proposito, no algo escondido. Compacto porque la
-                  // fila ya la ocupan "Continuar" y "Favorito".
+                  // se busca a proposito, no algo escondido.
                   BotonPulsable(
                     child: DetailShareButton(tag: widget.tag, compacto: true),
                   ),

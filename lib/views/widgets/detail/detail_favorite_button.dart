@@ -51,6 +51,10 @@ class _DetailFavoriteButtonState extends State<DetailFavoriteButton> {
           icon: Icon(isFavorite ? Icons.favorite : Icons.favorite_border),
           label: Text(
             isFavorite ? 'detail.favorited'.i18n : 'detail.favorite'.i18n,
+            // Sin esto la palabra se parte a la mitad cuando el boton queda
+            // angosto: en el telefono se leia "Favorit" y abajo "o".
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
           ),
           style: ButtonStyle(
             minimumSize: WidgetStateProperty.all(
