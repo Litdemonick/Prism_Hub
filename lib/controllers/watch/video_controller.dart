@@ -2840,13 +2840,30 @@ class VideoPlayerController extends GetxController with WidgetsBindingObserver {
     final device = dlnaDevice.value!;
     // Donde iba el televisor, para no volver al principio.
     final donde = position.value;
+    // Se suelta el aparato ANTES de nada: asi la pantalla deja de mostrar el
+    // modo casteo en el acto, sin esperar a que el televisor conteste. Un
+    // televisor lento tardaba segundos en responder al stop y en ese rato la
+    // app se veia trabada.
     dlnaDevice.value = null;
-    device.stop();
     _dlnaTimer?.cancel();
+    // Se le manda parar sin esperarlo, pero atajando el error: sin el catch, un
+    // aparato ya apagado o fuera de la red tiraba una excepcion suelta que
+    // nadie manejaba.
+    unawaited(Future(() async {
+      try {
+        await device.stop();
+      } catch (e) {
+        logger.warning('El aparato no respondio al cortar la transmision', e);
+      }
+    }));
     if (_dlnaRelayUrl != null) {
       CastRelayServer.unregister(_dlnaRelayUrl!);
       _dlnaRelayUrl = null;
     }
+    // Se limpia el ultimo fallo del relay: si no, al volver a castear mas tarde
+    // saldria de nuevo el aviso de un error que ya paso.
+    CastRelayServer.ultimoError = null;
+    _fallaDeCastAvisada = null;
 
     // Y el reproductor local vuelve a andar.
     //
@@ -2861,12 +2878,22 @@ class VideoPlayerController extends GetxController with WidgetsBindingObserver {
     if (_disposed) return;
     final actual = watchData;
     if (actual == null) return;
+    // Todavia no hay imagen: mpv tiene que volver a abrir el video desde cero.
+    // Sin esto quedaba en true de antes de castear y la rueda de carga no
+    // aparecia, asi que el rato hasta el primer cuadro se veia como una
+    // pantalla negra trabada.
+    hasRenderedFrame.value = false;
     try {
       await player.open(Media(actual.url, httpHeaders: actual.headers));
+      // El salto va DESPUES de que open() termino, que es cuando mpv ya conoce
+      // la duracion; pedirlo antes se pierde y el episodio arrancaba de cero.
       if (donde > Duration.zero) await player.seek(donde);
     } catch (e) {
       logger.warning(
           'No se pudo retomar la reproduccion local tras el cast', e);
+      // Que no quede la rueda girando para siempre si la reapertura fallo.
+      hasRenderedFrame.value = true;
+      sendMessage(Message(Text(friendlyError(e))));
     }
   }
 
