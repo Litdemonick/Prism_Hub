@@ -144,17 +144,50 @@ class _VideoPlayerCastState extends State<VideoPlayerCast> {
                 )
               // Terminada la busqueda hay algo que decir y algo que hacer, en
               // vez de una rueda girando para siempre sin explicar nada.
-              : Row(
+              //
+              // En COLUMNA y no en fila: el texto y el boton uno al lado del
+              // otro dejaban al texto en una tira de cuatro palabras de ancho
+              // que ademas se cortaba por abajo. Asi cada cosa usa el ancho
+              // entero.
+              : Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  mainAxisSize: MainAxisSize.min,
                   children: [
-                    Expanded(
-                      child: Text(
-                        deviceList.isEmpty
-                            ? 'video.cast-none-found'.i18n
-                            : 'video.cast-search-done'.i18n,
-                        style: const TextStyle(fontSize: 13),
-                      ),
+                    Row(
+                      children: [
+                        Icon(
+                          deviceList.isEmpty
+                              ? Icons.tv_off_rounded
+                              : Icons.check_circle_outline_rounded,
+                          size: 18,
+                        ),
+                        const SizedBox(width: 10),
+                        Expanded(
+                          child: Text(
+                            deviceList.isEmpty
+                                ? 'video.cast-none-found'.i18n
+                                : 'video.cast-search-done'.i18n,
+                            style: const TextStyle(
+                              fontSize: 13.5,
+                              fontWeight: FontWeight.w600,
+                            ),
+                          ),
+                        ),
+                      ],
                     ),
-                    const SizedBox(width: 12),
+                    // La explicacion de la red solo cuando no encontro nada:
+                    // encontrando algo no hay nada que explicar.
+                    if (deviceList.isEmpty) ...[
+                      const SizedBox(height: 8),
+                      Opacity(
+                        opacity: 0.7,
+                        child: Text(
+                          'video.cast-none-found-hint'.i18n,
+                          style: const TextStyle(fontSize: 12, height: 1.35),
+                        ),
+                      ),
+                    ],
+                    const SizedBox(height: 14),
                     TextButton.icon(
                       onPressed: _buscarDeNuevo,
                       icon: const Icon(Icons.refresh, size: 18),

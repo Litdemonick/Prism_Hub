@@ -1846,8 +1846,12 @@ class _CastState extends State<_Cast> {
                     useAcrylic: true,
                     padding: const EdgeInsets.all(0),
                     child: Container(
-                      width: 280,
-                      constraints: const BoxConstraints(maxHeight: 320),
+                      // 360 y 460 (antes 280 y 320): con 280 el aviso de "no
+                      // se encontro ningun dispositivo" quedaba en una tira de
+                      // cuatro palabras de ancho, y el tope de 320 lo cortaba
+                      // por abajo a mitad de frase.
+                      width: 360,
+                      constraints: const BoxConstraints(maxHeight: 460),
                       child: Obx(() {
                         final device = widget.controller.dlnaDevice.value;
                         if (device != null) {
