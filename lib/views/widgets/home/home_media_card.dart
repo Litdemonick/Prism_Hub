@@ -5,7 +5,6 @@ import 'package:flutter/material.dart';
 import 'package:prismhub/models/extension.dart';
 import 'package:prismhub/utils/i18n.dart';
 import 'package:prismhub/views/widgets/cache_network_image.dart';
-import 'package:prismhub/views/widgets/extension_type_badge.dart';
 import 'package:prismhub/views/widgets/home/home_theme.dart';
 
 // Tarjeta de medio — calca el spec exacto del diseño (MediaCard.dc.html):
@@ -716,9 +715,12 @@ class _WideMenuButton extends StatelessWidget {
     this.extraLabel,
     this.extraIcon,
     this.onExtra,
-    this.iconColor = HomeTheme.textMuted,
-    this.size = 28,
   });
+
+  // Eran parámetros, con estos mismos valores por defecto. El único que los
+  // pasaba distinto era el menú de encima de la portada, que ya no existe.
+  static const Color _iconColor = HomeTheme.textMuted;
+  static const double _size = 28;
 
   final bool hidden;
   final VoidCallback? onDelete;
@@ -727,8 +729,6 @@ class _WideMenuButton extends StatelessWidget {
   final String? extraLabel;
   final IconData? extraIcon;
   final VoidCallback? onExtra;
-  final Color iconColor;
-  final double size;
 
   @override
   Widget build(BuildContext context) {
@@ -740,8 +740,8 @@ class _WideMenuButton extends StatelessWidget {
     return Material(
       type: MaterialType.transparency,
       child: SizedBox(
-        width: size,
-        height: size,
+        width: _size,
+        height: _size,
         child: PopupMenuButton<int>(
           tooltip: '',
           padding: EdgeInsets.zero,
@@ -757,12 +757,47 @@ class _WideMenuButton extends StatelessWidget {
           // que se ve como "no abre nada". El tamaño del botón se controla con
           // el SizedBox de abajo.
           constraints: const BoxConstraints(minWidth: 170),
-          icon: Icon(Icons.more_vert, color: iconColor, size: 18),
+          icon: const Icon(Icons.more_vert, color: _iconColor, size: 18),
           onSelected: (v) {
             if (v == 0) onToggleHide?.call();
             if (v == 1) onDelete?.call();
+            if (v == 2) onExtra?.call();
           },
           itemBuilder: (context) => [
+            // La acción extra va primera: es la del contexto de la pantalla —
+            // en el Historial, mover un título entre "en curso" y "visto"— y
+            // por eso pesa más que ocultar o eliminar.
+            //
+            // Este bloque FALTABA. El botón recibía extraLabel, extraIcon y
+            // onExtra desde el Historial pero no los dibujaba en ningún lado ni
+            // los atendía en onSelected, así que la acción no existía para el
+            // usuario: el menú de una tarjeta de historial abría con dos
+            // opciones en vez de tres. Peor, `hasMenu` sí cuenta la acción
+            // extra, así que una tarjeta cuya única acción fuera esa abría un
+            // menú vacío.
+            if (onExtra != null && extraLabel != null)
+              PopupMenuItem<int>(
+                value: 2,
+                height: 40,
+                child: Row(
+                  children: [
+                    Icon(
+                      extraIcon ?? Icons.check_rounded,
+                      size: 17,
+                      color: HomeTheme.textMuted,
+                    ),
+                    const SizedBox(width: 10),
+                    Flexible(
+                      child: Text(
+                        extraLabel!,
+                        overflow: TextOverflow.ellipsis,
+                        style: const TextStyle(
+                            color: HomeTheme.textPrimary, fontSize: 13),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
             if (onToggleHide != null)
               PopupMenuItem<int>(
                 value: 0,
@@ -809,33 +844,8 @@ class _WideMenuButton extends StatelessWidget {
   }
 }
 
-// Igual que _WideMenuButton pero para la card vertical: acá el menú va ENCIMA
-// de la portada, así que necesita su propia chapa oscura para leerse sobre
-// cualquier imagen (el de la card ancha vive sobre el fondo de la página).
-class _CardOverlayMenu extends StatelessWidget {
-  const _CardOverlayMenu({
-    required this.hidden,
-    this.onDelete,
-    this.onToggleHide,
-  });
-
-  final bool hidden;
-  final VoidCallback? onDelete;
-  final VoidCallback? onToggleHide;
-
-  @override
-  Widget build(BuildContext context) {
-    return Material(
-      color: const Color(0x99202030),
-      shape: const CircleBorder(),
-      child: _WideMenuButton(
-        hidden: hidden,
-        onDelete: onDelete,
-        onToggleHide: onToggleHide,
-        iconColor: HomeTheme.textPrimary,
-        // Área táctil cómoda en celular sin agrandar el círculo.
-        size: 30,
-      ),
-    );
-  }
-}
+// Acá vivía _CardOverlayMenu, el menú que iba ENCIMA de la portada en la card
+// vertical. Cuando ese menú se movió abajo, al lado del título, dejó de usarse
+// pero quedó en el archivo: una segunda versión del menú que nadie dibujaba y
+// que no recibió ninguno de los arreglos posteriores. Se borra para que no haya
+// dos lugares donde parezca que hay que tocar.

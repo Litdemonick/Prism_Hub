@@ -957,19 +957,69 @@ async function stringify(callback) {
       );
       final data = await _decodeJsonResult(jsResult.stringResult);
 
-      switch (typeHint ?? extension.type) {
-        case ExtensionType.bangumi:
-          final result = ExtensionBangumiWatch.fromJson(data);
-          result.headers ??= await _defaultHeaders;
-          return result;
-        case ExtensionType.manga:
-          final result = ExtensionMangaWatch.fromJson(data);
-          result.headers ??= await _defaultHeaders;
-          return result;
-        default:
-          return ExtensionFikushonWatch.fromJson(data);
+      // Lo que devuelve la extension se valida ANTES de armar el modelo.
+      //
+      // Cada lector espera una forma distinta: el de video una url, el de
+      // paginas una lista de imagenes, el de texto una lista de parrafos. Si la
+      // extension devuelve otra cosa, el modelo generado hacia el cast a secas
+      // y la app moria con "type 'Null' is not a subtype of type
+      // 'List<dynamic>'" — un error que no le dice nada a nadie y que ademas
+      // parecia un fallo de la app y no de la extension. Paso de verdad con
+      // Ikigai, que devolvia texto para un capitulo de comic.
+      //
+      // No se intenta adivinar ni adaptar la forma a proposito: que una
+      // extension devuelva algo que no corresponde es un error suyo, y taparlo
+      // en silencio significa mostrar contenido equivocado sin que nadie se
+      // entere. Se avisa con el nombre de la extension y que fue lo que pasó.
+      final tipo = typeHint ?? extension.type;
+      try {
+        switch (tipo) {
+          case ExtensionType.bangumi:
+            final result = ExtensionBangumiWatch.fromJson(data);
+            result.headers ??= await _defaultHeaders;
+            return result;
+          case ExtensionType.manga:
+            final result = ExtensionMangaWatch.fromJson(data);
+            result.headers ??= await _defaultHeaders;
+            return result;
+          default:
+            return ExtensionFikushonWatch.fromJson(data);
+        }
+      } catch (e) {
+        throw Exception(_erroDeFormaWatch(extension.name, tipo, data));
       }
     });
+  }
+
+  // Arma el aviso de "la extension devolvio algo que no puedo leer".
+  //
+  // Se mira que trajo de verdad para poder decirlo en criollo. El caso mas
+  // comun, y el mas confuso de todos, es el cruce entre los dos lectores de
+  // lectura: un capitulo de texto abierto con el lector de paginas se veia como
+  // un error de tipos de Dart, sin ninguna pista de que la culpa era del tipo
+  // que la extension le puso a la obra.
+  static String _erroDeFormaWatch(
+    String nombre,
+    ExtensionType tipo,
+    Map<String, dynamic> data,
+  ) {
+    final trajoTexto = data['content'] is List;
+    final trajoPaginas = data['urls'] is List;
+    final trajoVideo = data['url'] is String;
+
+    if (tipo == ExtensionType.manga && trajoTexto) {
+      return '$nombre: este capítulo vino como texto pero la obra figura como '
+          'cómic, así que no se puede abrir con el lector de páginas. '
+          'Es un problema de la extensión.';
+    }
+    if (tipo == ExtensionType.fikushon && trajoPaginas) {
+      return '$nombre: este capítulo vino como imágenes pero la obra figura '
+          'como novela. Es un problema de la extensión.';
+    }
+    if (tipo == ExtensionType.bangumi && !trajoVideo) {
+      return '$nombre: no devolvió el enlace del vídeo de este episodio.';
+    }
+    return '$nombre: el capítulo llegó incompleto o mal formado.';
   }
 
   Future<String> checkUpdate(url) async {
