@@ -116,6 +116,9 @@ class _VideoPlayerMobileControlsState extends State<VideoPlayerMobileControls> {
 
   void _mostrarAviso(String texto) {
     if (!mounted) return;
+    // Transmitiendo no hace falta: el panel del centro ya dice si esta en pausa
+    // o andando, y un cartel encima repitiendolo solo tapa.
+    if (_c.dlnaDevice.value != null) return;
     setState(() => _avisoCentro = texto);
     _avisoTimer?.cancel();
     _avisoTimer = Timer(const Duration(milliseconds: 1100), () {
