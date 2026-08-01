@@ -1,0 +1,111 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Abrir en PrismHub</title>
+<!--
+  Puente entre un enlace compartido y la app.
+
+  Existe porque WhatsApp y la mayoría de los chats convierten en enlace lo que
+  empieza con http(s), pero NO los esquemas propios de una app: un
+  "prismhub://detail?..." pegado en un chat llega como texto plano que nadie
+  puede tocar. Con una dirección https el chat lo hace tocable, y esta página se
+  encarga de saltar a la app.
+
+  A quien no la tenga instalada no le pasa nada raro: el salto no ocurre y queda
+  esta misma página explicando qué es y dónde bajarla.
+
+  Sin dependencias ni build: es un archivo suelto en public/, así que Vite lo
+  copia tal cual a /Prism_Hub/abrir/ sin entrar en el bundle de la web.
+-->
+<style>
+  :root { color-scheme: dark; }
+  body {
+    margin: 0; min-height: 100vh; display: flex; align-items: center;
+    justify-content: center; background: #0d0d12; color: #ececf1;
+    font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+    padding: 24px; box-sizing: border-box;
+  }
+  .caja { max-width: 460px; text-align: center; }
+  h1 { font-size: 1.4rem; margin: 0 0 8px; }
+  p { color: #a8a8b3; line-height: 1.5; margin: 0 0 20px; }
+  .titulo-obra {
+    color: #ececf1; font-weight: 600; word-break: break-word;
+  }
+  a.boton {
+    display: inline-block; padding: 12px 22px; border-radius: 999px;
+    background: #e0409a; color: #fff; text-decoration: none; font-weight: 600;
+  }
+  a.secundario {
+    display: inline-block; margin-top: 14px; color: #a8a8b3; font-size: .9rem;
+  }
+</style>
+</head>
+<body>
+  <div class="caja">
+    <h1>Abrir en PrismHub</h1>
+    <p id="detalle">Abriendo…</p>
+    <a class="boton" id="abrir" href="#">Abrir en la app</a>
+    <br />
+    <a class="secundario"
+       href="https://github.com/Litdemonick/Prism_Hub/releases/latest">
+      No la tengo — descargar PrismHub
+    </a>
+  </div>
+
+<script>
+(function () {
+  var p = new URLSearchParams(location.search);
+  var paquete = p.get('package') || '';
+  var url = p.get('url') || '';
+  var adulto = p.get('adult') === '1';
+  var titulo = p.get('t') || '';
+
+  var detalle = document.getElementById('detalle');
+  var boton = document.getElementById('abrir');
+
+  // Enlace incompleto: no se intenta abrir nada ni se promete lo que no hay.
+  if (!paquete || !url) {
+    detalle.textContent = 'Este enlace está incompleto y no se puede abrir.';
+    boton.style.display = 'none';
+    return;
+  }
+
+  // Se rearma en vez de reenviar la query tal cual: así lo que se le pasa a la
+  // app son exactamente los tres datos esperados y nada más de lo que alguien
+  // pudiera colgar de la dirección.
+  var destino = 'prismhub://detail'
+    + '?package=' + encodeURIComponent(paquete)
+    + '&url=' + encodeURIComponent(url)
+    + (adulto ? '&adult=1' : '');
+
+  boton.setAttribute('href', destino);
+
+  if (titulo) {
+    detalle.innerHTML = 'Abriendo <span class="titulo-obra"></span> en PrismHub…';
+    // textContent y no innerHTML: el título viene de la dirección, o sea de
+    // fuera, y pegarlo como HTML dejaría inyectar marcado.
+    detalle.querySelector('.titulo-obra').textContent = titulo;
+  } else {
+    detalle.textContent = 'Abriendo en PrismHub…';
+  }
+
+  if (adulto) {
+    detalle.insertAdjacentHTML(
+      'beforeend',
+      '<br /><small>Contenido para adultos. La app va a pedir confirmación.</small>'
+    );
+  }
+
+  // Intento automático. Si la app no está, el navegador simplemente no navega
+  // a ningún lado y queda esta página con el botón a mano.
+  location.href = destino;
+
+  setTimeout(function () {
+    detalle.textContent = 'Si no se abrió sola, tocá el botón.';
+  }, 1500);
+})();
+</script>
+</body>
+</html>

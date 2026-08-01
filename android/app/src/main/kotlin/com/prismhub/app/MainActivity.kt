@@ -134,6 +134,13 @@ class MainActivity: FlutterFragmentActivity() {
     private fun enlaceDe(intent: Intent?): String? {
         if (intent?.action != Intent.ACTION_VIEW) return null
         val data = intent.data ?: return null
-        return if (data.scheme == "prismhub") data.toString() else null
+        // Se aceptan las dos formas: el esquema propio y el https de la
+        // pagina puente, que es el que se comparte por chat.
+        val s = data.scheme
+        val esPropio = s == "prismhub"
+        val esPuente = (s == "https" || s == "http") &&
+            data.host == "litdemonick.github.io" &&
+            (data.path ?: "").endsWith("/abrir")
+        return if (esPropio || esPuente) data.toString() else null
     }
 }

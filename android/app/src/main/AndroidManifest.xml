@@ -38,6 +38,20 @@
                 <category android:name="android.intent.category.BROWSABLE" />
                 <data android:scheme="prismhub" android:host="detail" />
             </intent-filter>
+            <!-- El mismo enlace, pero en https: es el que se comparte por chat,
+                 porque WhatsApp no hace tocables los esquemas propios de una
+                 app. autoVerify hace que Android lo abra DIRECTO en PrismHub en
+                 vez de pasar por el navegador, siempre que el sitio publique su
+                 assetlinks.json; sin eso sigue funcionando, solo que preguntando
+                 con que abrirlo. -->
+            <intent-filter android:autoVerify="true">
+                <action android:name="android.intent.action.VIEW" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <category android:name="android.intent.category.BROWSABLE" />
+                <data android:scheme="https"
+                      android:host="litdemonick.github.io"
+                      android:pathPrefix="/Prism_Hub/abrir" />
+            </intent-filter>
         </activity>
         <!-- Don't delete the meta-data below.
              This is used by the Flutter tool to generate GeneratedPluginRegistrant.java -->

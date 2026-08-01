@@ -22,6 +22,16 @@ class Compartir {
   /// AndroidManifest.xml (intent-filter) y el instalador de Windows (registro).
   static const esquema = 'prismhub';
 
+  /// Página puente del sitio del proyecto.
+  ///
+  /// Lo que se COMPARTE es una dirección https, no el `prismhub://` directo.
+  /// WhatsApp y la mayoría de los chats convierten en enlace lo que empieza con
+  /// http(s) pero NO los esquemas propios de una app: el enlace llegaba como
+  /// texto plano que nadie podía tocar, justo lo contrario de para qué está el
+  /// botón. La página salta sola a la app, y a quien no la tenga le queda una
+  /// explicación con el enlace de descarga en vez de un error.
+  static const _puente = 'https://litdemonick.github.io/Prism_Hub/abrir';
+
   /// Arma el enlace de una ficha.
   ///
   /// Los valores van codificados: los identificadores traen barras, signos de
@@ -31,6 +41,7 @@ class Compartir {
     required String package,
     required String url,
     bool adulto = false,
+    String titulo = '',
   }) {
     final partes = <String>[
       'package=${Uri.encodeQueryComponent(package)}',
@@ -38,21 +49,40 @@ class Compartir {
       // Solo cuando corresponde: así un enlace normal no arrastra un
       // parámetro que no significa nada.
       if (adulto) 'adult=1',
+      // Para que la página puente pueda decir QUÉ se está abriendo. La app lo
+      // ignora: el título real lo saca de la extensión.
+      if (titulo.isNotEmpty) 't=${Uri.encodeQueryComponent(titulo)}',
     ];
-    return '$esquema://detail?${partes.join('&')}';
+    return '$_puente?${partes.join('&')}';
   }
 
   /// Lee un enlace recibido. Devuelve null si no es nuestro o si viene
   /// incompleto — un enlace roto no tiene que abrir una ficha vacía.
   static ({String package, String url, bool adulto})? leerEnlace(Uri uri) {
-    if (uri.scheme != esquema) return null;
-    // El "detail" puede llegar como host o como primer tramo de la ruta según
-    // cómo lo normalice cada sistema: prismhub://detail?... y
-    // prismhub:///detail?... son la misma cosa para el usuario.
-    final destino = uri.host.isNotEmpty
-        ? uri.host
-        : (uri.pathSegments.isNotEmpty ? uri.pathSegments.first : '');
-    if (destino != 'detail') return null;
+    // Se aceptan las DOS formas y no solo la propia:
+    //
+    //  - prismhub://detail?…  la que abre la app desde la página puente.
+    //  - https://…/abrir?…    la que se comparte, por si el sistema se la pasa
+    //    directo a la app (en Android, con el enlace verificado, entra así sin
+    //    pasar por el navegador).
+    //
+    // Los parámetros son los mismos en las dos, así que de acá para abajo no
+    // hay que distinguirlas.
+    final esPropio = uri.scheme == esquema;
+    final esPuente = (uri.scheme == 'https' || uri.scheme == 'http') &&
+        uri.pathSegments.isNotEmpty &&
+        uri.pathSegments.last == 'abrir';
+    if (!esPropio && !esPuente) return null;
+
+    if (esPropio) {
+      // El "detail" puede llegar como host o como primer tramo de la ruta
+      // según cómo lo normalice cada sistema: prismhub://detail?... y
+      // prismhub:///detail?... son la misma cosa para el usuario.
+      final destino = uri.host.isNotEmpty
+          ? uri.host
+          : (uri.pathSegments.isNotEmpty ? uri.pathSegments.first : '');
+      if (destino != 'detail') return null;
+    }
 
     final package = uri.queryParameters['package'] ?? '';
     final url = uri.queryParameters['url'] ?? '';
@@ -83,7 +113,10 @@ class Compartir {
   /// Devuelve null si ninguno es un enlace nuestro, que es el caso normal.
   static Uri? enlaceDeArranque(List<String> args) {
     for (final a in args) {
-      if (!a.startsWith('$esquema:')) continue;
+      // Se prueba TODO argumento con pinta de direccion, no solo los del
+      // esquema propio: en escritorio el sistema puede pasar el https del
+      // puente si el navegador lo delega.
+      if (!a.contains('://')) continue;
       final uri = Uri.tryParse(a);
       if (uri != null && leerEnlace(uri) != null) return uri;
     }
@@ -159,7 +192,8 @@ class Compartir {
     bool adulto = false,
     Rect? origen,
   }) async {
-    final enlace = enlaceDetalle(package: package, url: url, adulto: adulto);
+    final enlace = enlaceDetalle(
+        package: package, url: url, adulto: adulto, titulo: titulo);
     final texto = titulo.isEmpty ? enlace : '$titulo\n\n$enlace';
 
     // En escritorio no hay menú de compartir del sistema como en el teléfono:
