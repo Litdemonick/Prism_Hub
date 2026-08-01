@@ -390,6 +390,13 @@ class VideoPlayerController extends GetxController with WidgetsBindingObserver {
   /// el toque no habia hecho efecto. Tambien evita que se dispare dos veces.
   final castConectando = false.obs;
 
+  /// Resolviendo el episodio siguiente para mandarlo al mismo aparato.
+  ///
+  /// Aparte de castConectando porque el aviso tiene que decir otra cosa: no es
+  /// "conectando con el dispositivo" sino "cambiando de episodio", que es lo
+  /// que de verdad esta pasando y puede tardar bastante mas.
+  final castCambiandoEpisodio = false.obs;
+
   // Foto del casteo justo antes de empezar a cerrar, para que el historial
   // pueda guardar por donde iba el TELEVISOR. Ver _beginPlaybackShutdown.
   bool _casteabaAlCerrar = false;
@@ -653,6 +660,7 @@ class VideoPlayerController extends GetxController with WidgetsBindingObserver {
       // connectDLNADevice lo para. En ese hueco sonaba el episodio nuevo por el
       // telefono encima de lo que ya estaba saliendo por el televisor.
       final volumenPrevio = player.state.volume;
+      castCambiandoEpisodio.value = true;
       try {
         await player.setVolume(0);
       } catch (_) {
@@ -666,6 +674,7 @@ class VideoPlayerController extends GetxController with WidgetsBindingObserver {
         if (dlnaDevice.value != aparato) return;
         await connectDLNADevice(aparato);
       } finally {
+        castCambiandoEpisodio.value = false;
         // El volumen vuelve siempre: si el casteo fallo y se sigue viendo aca,
         // dejarlo mudo seria peor que el problema que se estaba evitando.
         if (!_disposed) {

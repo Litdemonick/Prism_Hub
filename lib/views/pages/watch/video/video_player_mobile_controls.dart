@@ -449,7 +449,18 @@ class _VideoPlayerMobileControlsState extends State<VideoPlayerMobileControls> {
                   onDoubleTapDown: (details) {
                     if (!_debounce(const Duration(milliseconds: 400))) return;
                     final dx = details.localPosition.dx;
-                    final width = LayoutUtils.width / 3;
+                    // Un tercio del ancho REAL de esta zona, no del de la
+                    // pantalla.
+                    //
+                    // localPosition viene medido contra esta zona, pero el
+                    // tercio se calculaba con el ancho de la pantalla entera.
+                    // Con la barra lateral abierta la zona es mas angosta, asi
+                    // que los limites quedaban corridos a la derecha: el centro
+                    // visual caia dentro del tercio "izquierdo" y en vez de
+                    // pausar retrocedia, y el tercio derecho no se alcanzaba
+                    // nunca.
+                    final ancho = (context.size?.width ?? LayoutUtils.width);
+                    final width = ancho / 3;
                     // Los 10 segundos estaban fijos en el código, así que el
                     // ajuste "Saltar intervalo" no tenía ningún efecto en
                     // celular. En el teléfono el doble toque es el ÚNICO
@@ -771,10 +782,16 @@ class _VideoPlayerMobileControlsState extends State<VideoPlayerMobileControls> {
             Positioned.fill(
               child: IgnorePointer(
                 child: Align(
-                    // Arriba del centro, no en el centro: ahí está la rueda de
-                    // carga, y al saltar a un tramo sin cargar aparecen las dos
-                    // cosas a la vez y se pisaban. Misma posición que en PC.
-                    alignment: const Alignment(0, -0.55),
+                    // Del LADO que se toco, no en el medio.
+                    //
+                    // En el medio no dice nada de por si: el gesto es a un lado
+                    // y la respuesta aparecia en el otro extremo de la pantalla,
+                    // ademas de pelearse con lo que haya en el centro. Puesto
+                    // donde cayo el dedo, se entiende sin leer.
+                    alignment: Alignment(
+                      (_saltoVisible ?? 0) < 0 ? -0.62 : 0.62,
+                      0,
+                    ),
                     child: AnimatedScale(
                       // Rebote corto: aparece de golpe y se asienta. Con solo la
                       // opacidad a 150ms el cartel se sentia lento justo cuando
@@ -942,7 +959,8 @@ class _PanelCasteandoState extends State<_PanelCasteando>
       // Enganchando: mandarle el video al aparato y que arranque puede tardar
       // varios segundos, y en ese rato no se veia nada — parecia que el toque
       // no habia hecho efecto.
-      final conectando = controller.castConectando.value;
+      final cambiandoEpisodio = controller.castCambiandoEpisodio.value;
+      final conectando = controller.castConectando.value || cambiandoEpisodio;
       final reproduciendo = controller.isPlaying.value;
       return Container(
         margin: const EdgeInsets.symmetric(horizontal: 32),
@@ -985,11 +1003,13 @@ class _PanelCasteandoState extends State<_PanelCasteando>
             ),
             const SizedBox(height: 6),
             Text(
-              conectando
-                  ? 'video.cast-connecting'.i18n
-                  : reproduciendo
-                      ? 'video.cast-on-device'.i18n
-                      : 'video.cast-paused-here'.i18n,
+              cambiandoEpisodio
+                  ? 'video.cast-changing-episode'.i18n
+                  : conectando
+                      ? 'video.cast-connecting'.i18n
+                      : reproduciendo
+                          ? 'video.cast-on-device'.i18n
+                          : 'video.cast-paused-here'.i18n,
               textAlign: TextAlign.center,
               style: TextStyle(
                 fontSize: 13,
@@ -1089,6 +1109,35 @@ class _Header extends StatelessWidget {
   const _Header({required this.controller});
   final VideoPlayerController controller;
 
+  Future<void> _confirmarDesconectar(BuildContext context) async {
+    final aparato = controller.dlnaDevice.value;
+    if (aparato == null) return;
+    final corta = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: Text('video.cast-disconnect-title'.i18n),
+        content: Text(
+          FlutterI18n.translate(
+            context,
+            'video.cast-disconnect-confirm',
+            translationParams: {'device': aparato.info.friendlyName},
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(false),
+            child: Text('common.cancel'.i18n),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.of(context).pop(true),
+            child: Text('common.disconnect'.i18n),
+          ),
+        ],
+      ),
+    );
+    if (corta == true) controller.disconnectDLNADevice();
+  }
+
   @override
   Widget build(BuildContext context) {
     return Container(
@@ -1168,11 +1217,14 @@ class _Header extends StatelessWidget {
                         ? null
                         : () => controller.reintentarCast(),
                   ),
+                  // Pregunta antes de cortar: es un icono chico al lado de
+                  // otros, y tocarlo por error dejaba la pantalla grande sin
+                  // nada en el medio de un episodio.
                   IconButton(
                     tooltip: 'common.disconnect'.i18n,
                     icon: const Icon(Icons.cast_connected,
                         color: HomeTheme.accentPink),
-                    onPressed: () => controller.disconnectDLNADevice(),
+                    onPressed: () => _confirmarDesconectar(context),
                   ),
                 ],
               );

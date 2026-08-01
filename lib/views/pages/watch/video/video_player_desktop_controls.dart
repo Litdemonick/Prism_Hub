@@ -1624,7 +1624,8 @@ class _PanelCasteandoState extends State<_PanelCasteando>
       if (device == null) return const SizedBox.shrink();
       // Enganchando: mandarle el vídeo al aparato y que arranque puede tardar
       // varios segundos, y en ese rato no se veía nada.
-      final conectando = controller.castConectando.value;
+      final cambiandoEpisodio = controller.castCambiandoEpisodio.value;
+      final conectando = controller.castConectando.value || cambiandoEpisodio;
       final reproduciendo = controller.isPlaying.value;
       return Container(
         padding: const EdgeInsets.symmetric(horizontal: 30, vertical: 24),
@@ -1668,11 +1669,13 @@ class _PanelCasteandoState extends State<_PanelCasteando>
             ConstrainedBox(
               constraints: const BoxConstraints(maxWidth: 360),
               child: Text(
-                conectando
-                    ? 'video.cast-connecting'.i18n
-                    : reproduciendo
-                        ? 'video.cast-on-device'.i18n
-                        : 'video.cast-paused-desktop'.i18n,
+                cambiandoEpisodio
+                    ? 'video.cast-changing-episode'.i18n
+                    : conectando
+                        ? 'video.cast-connecting'.i18n
+                        : reproduciendo
+                            ? 'video.cast-on-device'.i18n
+                            : 'video.cast-paused-desktop'.i18n,
                 textAlign: TextAlign.center,
                 style: TextStyle(
                   fontSize: 13,
