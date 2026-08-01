@@ -312,7 +312,7 @@
     "cast-paused-desktop": "En pausa. Apretá espacio para seguir.",
     "cast-paused-here": "En pausa. Tocá el centro de la pantalla para seguir.",
     "cast-searching": "Buscando dispositivos en tu red…",
-    "cast-none-found": "No se encontró ningún dispositivo.",
+    "cast-none-found": "No se encontró ningún dispositivo. Ambos tienen que estar en la MISMA red: si usás un repetidor o una red de invitados, suelen quedar en redes separadas y no se ven entre sí.",
     "cast-search-done": "Búsqueda terminada.",
     "cast-search-again": "Buscar de nuevo",
     "cast-on-device": "Se está viendo en este dispositivo",
