@@ -281,7 +281,8 @@
     "tmdb-key-missing": "Falta la clave de la API de TMDB, por favor, rellenala en los ajustes",
     "tracker": "Siguiendo",
     "finished": "Marcar como finalizada",
-    "finished-marked": "Obra finalizada"
+    "finished-marked": "Obra finalizada",
+    "share": "Compartir"
   },
   "video": {
     "episodes": "Episodios",

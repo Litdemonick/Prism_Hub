@@ -11,6 +11,7 @@ import 'package:prismhub/views/widgets/detail/detail_background_color.dart';
 import 'package:prismhub/views/widgets/detail/detail_episodes.dart';
 import 'package:prismhub/views/widgets/detail/detail_extension_tile.dart';
 import 'package:prismhub/views/widgets/detail/detail_favorite_button.dart';
+import 'package:prismhub/views/widgets/detail/detail_share_button.dart';
 import 'package:prismhub/views/widgets/detail/detail_overview.dart';
 import 'package:prismhub/utils/i18n.dart';
 import 'package:prismhub/utils/layout.dart';
@@ -391,6 +392,8 @@ class _DetailPageState extends State<DetailPage> {
                                 children: [
                                   // 收藏按钮
                                   DetailFavoriteButton(tag: widget.tag),
+                                  const SizedBox(width: 8),
+                                  DetailShareButton(tag: widget.tag),
                                   const SizedBox(width: 8),
                                   // Se oculta solo en películas — ver
                                   // DetailFinishedButton.

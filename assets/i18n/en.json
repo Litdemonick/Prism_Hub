@@ -289,7 +289,8 @@
     "tmdb-key-missing": "TMDB API Key missing, please fill in the settings",
     "tracker": "Tracking",
     "finished": "Mark as finished",
-    "finished-marked": "Series finished"
+    "finished-marked": "Series finished",
+    "share": "Share"
   },
   "video": {
     "episodes": "Episodes",

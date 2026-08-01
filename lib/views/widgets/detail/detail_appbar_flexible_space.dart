@@ -4,6 +4,7 @@ import 'package:prismhub/controllers/detail_controller.dart';
 import 'package:prismhub/views/widgets/detail/detail_continue_play.dart';
 import 'package:prismhub/views/widgets/detail/detail_extension_tile.dart';
 import 'package:prismhub/views/widgets/detail/detail_favorite_button.dart';
+import 'package:prismhub/views/widgets/detail/detail_share_button.dart';
 import 'package:prismhub/views/widgets/cache_network_image.dart';
 import 'package:prismhub/views/widgets/cover.dart';
 import 'package:prismhub/views/widgets/home/home_theme.dart';
@@ -221,6 +222,10 @@ class _DetailAppbarflexibleSpaceState extends State<DetailAppbarflexibleSpace> {
               Expanded(flex: 3, child: DetailContinuePlay(tag: widget.tag)),
               const SizedBox(width: 12),
               Expanded(flex: 2, child: DetailFavoriteButton(tag: widget.tag)),
+              const SizedBox(width: 12),
+              // Compartir la obra. Va acá y no en el menú: es una acción que
+              // se busca a propósito, no algo escondido.
+              DetailShareButton(tag: widget.tag),
             ],
           ),
         ),
