@@ -1561,6 +1561,19 @@ class _CastState extends State<_Cast> {
       controller: _flyoutController,
       child: Obx(() {
         final connected = widget.controller.dlnaDevice.value != null;
+        // Si el reproductor nativo no esta andando, castear tampoco va a andar:
+        // el televisor pide el mismo video y se topa con lo mismo. Se apaga el
+        // boton y el tooltip dice el motivo. Ver puedeCastear en el controlador.
+        final habilitado = widget.controller.puedeCastear;
+        if (!habilitado) {
+          return Tooltip(
+            message: widget.controller.motivoSinCast,
+            child: const IconButton(
+              icon: Icon(FluentIcons.screen_cast),
+              onPressed: null,
+            ),
+          );
+        }
         return IconButton(
           icon: Icon(
             connected

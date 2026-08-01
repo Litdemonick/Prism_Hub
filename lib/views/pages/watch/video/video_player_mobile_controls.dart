@@ -965,33 +965,47 @@ class _Header extends StatelessWidget {
             }),
           ),
           // DLNA
-          IconButton(
-            icon: const Icon(Icons.cast),
-            onPressed: () {
-              showModalBottomSheet(
-                context: context,
-                useSafeArea: true,
-                showDragHandle: true,
-                isScrollControlled: true,
-                builder: (context) {
-                  return DraggableScrollableSheet(
-                    expand: false,
-                    builder: (context, scrollController) {
-                      return SingleChildScrollView(
-                        controller: scrollController,
-                        child: VideoPlayerCast(
-                          onDeviceSelected: (device) {
-                            controller.connectDLNADevice(device);
-                            Get.back();
-                          },
-                        ),
-                      );
-                    },
-                  );
-                },
+          // Apagado mientras el reproductor nativo no este andando: el
+          // televisor pide el mismo video por su cuenta y se topa con lo mismo,
+          // asi que ofrecerlo igual solo termina en pantalla negra alla. Se
+          // avisa el motivo al tocarlo. Ver puedeCastear en el controlador.
+          Obx(() {
+            if (!controller.puedeCastear) {
+              return IconButton(
+                icon: Icon(Icons.cast, color: Colors.white.withAlpha(90)),
+                onPressed: () => controller.sendMessage(
+                  Message(Text(controller.motivoSinCast)),
+                ),
               );
-            },
-          ),
+            }
+            return IconButton(
+              icon: const Icon(Icons.cast),
+              onPressed: () {
+                showModalBottomSheet(
+                  context: context,
+                  useSafeArea: true,
+                  showDragHandle: true,
+                  isScrollControlled: true,
+                  builder: (context) {
+                    return DraggableScrollableSheet(
+                      expand: false,
+                      builder: (context, scrollController) {
+                        return SingleChildScrollView(
+                          controller: scrollController,
+                          child: VideoPlayerCast(
+                            onDeviceSelected: (device) {
+                              controller.connectDLNADevice(device);
+                              Get.back();
+                            },
+                          ),
+                        );
+                      },
+                    );
+                  },
+                );
+              },
+            );
+          }),
           // 设置按钮
           IconButton(
             icon: const Icon(Icons.settings),

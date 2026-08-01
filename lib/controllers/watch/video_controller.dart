@@ -26,6 +26,7 @@ import 'package:prismhub/controllers/home_controller.dart';
 import 'package:prismhub/controllers/main_controller.dart';
 import 'package:prismhub/router/router.dart';
 import 'package:prismhub/utils/bt_server.dart';
+import 'package:prismhub/utils/cast_metadata.dart';
 import 'package:prismhub/utils/cast_relay_server.dart';
 import 'package:prismhub/utils/watch_state.dart';
 import 'package:prismhub/data/services/database_service.dart';
@@ -368,6 +369,43 @@ class VideoPlayerController extends GetxController with WidgetsBindingObserver {
   Timer? _dlnaTimer;
   final List<Worker> _workers = [];
   final List<StreamSubscription> _subscriptions = [];
+
+  // Ultimo fallo del relay ya avisado, para no repetir el mismo aviso una vez
+  // por segundo mientras corre el timer de estado.
+  String? _fallaDeCastAvisada;
+
+  /// Si tiene sentido ofrecer el casteo AHORA.
+  ///
+  /// Regla: si el reproductor nativo no esta reproduciendo bien, castear
+  /// tampoco va a andar — el aparato pide el mismo video por su cuenta y se va
+  /// a topar con lo mismo. Ofrecer el boton igual solo lleva a una pantalla
+  /// negra en el televisor y a un "no se pudo reproducir" sin explicacion, asi
+  /// que se apaga y se dice por que.
+  ///
+  /// Se apoya en observables (duration, isGettingWatchData...) para que un Obx
+  /// que lo lea se entere solo cuando cambia.
+  bool get puedeCastear {
+    // Ya conectado: el boton tiene que seguir vivo para poder cortar.
+    if (dlnaDevice.value != null) return true;
+    // Todavia resolviendo el servidor: no hay nada que mandar.
+    if (isGettingWatchData.value) return false;
+    if (watchData == null) return false;
+    // El respaldo por WebView reproduce DENTRO de una pagina web, no hay una
+    // direccion de video que el televisor pueda pedir.
+    if (isWebViewActive.value || webViewFallback.value != null) return false;
+    // Con duracion conocida es que mpv abrio el medio de verdad. Mientras siga
+    // en cero, o no abrio o esta fallando.
+    return duration.value > Duration.zero;
+  }
+
+  /// Por que no se puede castear, para el aviso del boton apagado.
+  String get motivoSinCast {
+    if (isGettingWatchData.value) return 'video.cast-wait'.i18n;
+    if (isWebViewActive.value || webViewFallback.value != null) {
+      return 'video.cast-webview'.i18n;
+    }
+    return 'video.cast-unavailable'.i18n;
+  }
 
   // URL de relay activa (si el stream necesitó headers) — se limpia del
   // servidor local al desconectar, ver disconnectDLNADevice().
@@ -2707,7 +2745,12 @@ class VideoPlayerController extends GetxController with WidgetsBindingObserver {
       return;
     }
     var url = watchData!.url;
+    // El tipo se saca de la direccion REAL, no de la del relay: la del relay
+    // termina en /relay/<token> y no dice nada del formato.
+    final urlOriginal = url;
     final headers = watchData!.headers;
+    CastRelayServer.ultimoError = null;
+    _fallaDeCastAvisada = null;
     // El renderer DLNA pide la URL con SU propio cliente HTTP — no hay
     // forma de decirle que mande el Referer/User-Agent que la fuente
     // exige. Sin esto, cualquier fuente con headers obligatorios se veía
@@ -2726,7 +2769,15 @@ class VideoPlayerController extends GetxController with WidgetsBindingObserver {
       }
     }
     dlnaDevice.value = device;
-    await device.setUrl(url);
+    // Con ficha DIDL completa: sin protocolInfo, Kodi anota
+    // "invalid protocol info ':::'" y tiene que adivinar el formato.
+    // Ver cast_metadata.dart.
+    await castearConMetadata(
+      device,
+      url,
+      titulo: '$title — ${playList[index.value].name}',
+      mime: mimeDeUrl(urlOriginal),
+    );
     await device.play();
     await player.stop();
     // Cancelar cualquier timer previo antes de crear uno nuevo — si el
@@ -2746,8 +2797,14 @@ class VideoPlayerController extends GetxController with WidgetsBindingObserver {
   /// el aparato todavia estaba ocupado con lo anterior— y hasta ahora la unica
   /// salida era desconectar y volver a elegirlo de la lista.
   ///
-  /// Se rearma la direccion desde cero en vez de reenviar la de antes: si la
-  /// que fallo estaba vencida, mandarla de nuevo falla igual.
+  /// Se vuelve a PEDIR la direccion a la fuente, no se reenvia la de antes.
+  ///
+  /// Las fuentes firman la direccion para una IP y con un vencimiento adentro
+  /// (Eporner, por ejemplo, la arma como `<vence>_<ip>_<n>/archivo.mp4`).
+  /// Cuando vence, la fuente contesta 403 y el aparato solo dice "no se pudo
+  /// reproducir". Reenviar esa misma direccion falla exactamente igual —
+  /// confirmado en el registro de Kodi del usuario, con dos intentos separados
+  /// por tres minutos dando los dos 403 sobre la misma direccion de origen.
   Future<void> reintentarCast() async {
     final device = dlnaDevice.value;
     if (device == null) return;
@@ -2762,6 +2819,16 @@ class VideoPlayerController extends GetxController with WidgetsBindingObserver {
     } catch (_) {
       // Puede estar ya parado o no responder: no es motivo para no reintentar.
     }
+    // Direccion nueva y fresca. Si esto falla se avisa y no se sigue: castear
+    // con la vieja seria repetir el mismo error a proposito.
+    try {
+      await getWatchData();
+    } catch (e) {
+      logger.warning('No se pudo volver a resolver el video para el cast', e);
+      sendMessage(Message(Text(friendlyError(e))));
+      return;
+    }
+    if (_disposed || watchData == null) return;
     await connectDLNADevice(device);
   }
 
@@ -2814,6 +2881,15 @@ class VideoPlayerController extends GetxController with WidgetsBindingObserver {
     // inalcanzable o un formato de posición inesperado (firmware distinto)
     // tira la MISMA excepción sin manejar una vez por segundo para siempre,
     // sin que el usuario vea ningún aviso.
+    // El aparato solo sabe decir "no se pudo reproducir". El motivo de verdad
+    // lo vio el relay cuando la fuente lo rechazo, asi que se lo muestra al
+    // usuario en cuanto aparece — una sola vez, que si no el aviso se repetiria
+    // cada segundo mientras dure el timer.
+    final falla = CastRelayServer.ultimoError;
+    if (falla != null && falla != _fallaDeCastAvisada) {
+      _fallaDeCastAvisada = falla;
+      sendMessage(Message(Text(falla), time: const Duration(seconds: 6)));
+    }
     try {
       final transportInfo = await device.getTransportInfo();
       isPlaying.value = transportInfo.contains("PLAYING");

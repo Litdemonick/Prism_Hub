@@ -328,6 +328,9 @@
     "cast": "Cast to device",
     "cast-device": "playing on {device}",
     "cast-disconnect": "Disconnect",
+    "cast-wait": "Wait for the video to load before casting",
+    "cast-webview": "This server can't be cast: the video plays inside a web page. Try another server.",
+    "cast-unavailable": "You can only cast while the video is playing here",
     "sidebar": {
       "tab": {
         "episodes": "Episodes",

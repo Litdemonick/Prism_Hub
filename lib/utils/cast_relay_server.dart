@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'dart:io';
 
+import 'package:prismhub/utils/log.dart';
 import 'package:shelf/shelf.dart';
 import 'package:shelf/shelf_io.dart' as shelf_io;
 
@@ -55,6 +56,13 @@ class CastRelayServer {
     _port = _server!.port;
   }
 
+  /// Lo último que respondió la fuente cuando rechazó un pedido del relay.
+  ///
+  /// El aparato que castea solo sabe decir "no se pudo reproducir": el motivo
+  /// real (una dirección vencida, un 403 de la fuente) queda del lado nuestro y
+  /// sin esto se perdía. Se guarda para poder mostrarlo en el aviso de error.
+  static String? ultimoError;
+
   static Future<Response> _handleRequest(Request request) async {
     final segments = request.url.pathSegments;
     if (segments.length < 2 || segments[0] != 'relay') {
@@ -63,30 +71,90 @@ class CastRelayServer {
     final target = _targets[segments[1]];
     if (target == null) return Response.notFound('unknown relay token');
 
-    final client = HttpClient();
+    // El receptor pregunta primero con HEAD (el "Stat" de Kodi) para saber
+    // tamaño y tipo antes de bajar nada. Antes se le contestaba SIEMPRE con un
+    // GET: se abría la descarga entera del vídeo solo para tirarla, y la
+    // respuesta no traía lo que había preguntado.
+    final esHead = request.method.toUpperCase() == 'HEAD';
+    final client = HttpClient()
+      // Passthrough fiel: si se descomprime acá pero se reenvía el
+      // content-encoding de la fuente, el receptor intenta descomprimir de
+      // nuevo algo que ya viene descomprimido.
+      ..autoUncompress = false;
     try {
-      final upstreamReq = await client.getUrl(Uri.parse(target.url));
+      final uri = Uri.parse(target.url);
+      final upstreamReq =
+          esHead ? await client.headUrl(uri) : await client.getUrl(uri);
       target.headers.forEach((key, value) => upstreamReq.headers.set(key, value));
       final range = request.headers['range'];
       if (range != null) upstreamReq.headers.set(HttpHeaders.rangeHeader, range);
       final upstreamRes = await upstreamReq.close();
 
+      if (upstreamRes.statusCode >= 400) {
+        // Se lee un pedazo del cuerpo porque ahí es donde la fuente explica el
+        // motivo ("link expired", "forbidden"...). Sin esto el rechazo llegaba
+        // al televisor como un número pelado y no se podía diagnosticar.
+        var detalle = '';
+        try {
+          final trozos = <int>[];
+          await for (final t in upstreamRes.timeout(const Duration(seconds: 5))) {
+            trozos.addAll(t);
+            if (trozos.length >= 400) break;
+          }
+          detalle = String.fromCharCodes(trozos.take(400))
+              .replaceAll(RegExp(r'\s+'), ' ')
+              .trim();
+        } catch (_) {
+          // Sin cuerpo legible el status ya dice bastante.
+        }
+        client.close(force: true);
+        ultimoError = 'La fuente rechazó el vídeo (HTTP '
+            '${upstreamRes.statusCode})${detalle.isEmpty ? '' : ': $detalle'}';
+        logger.warning('Relay de casteo: $ultimoError — ${target.url}');
+        return Response(upstreamRes.statusCode, body: detalle);
+      }
+
       final resHeaders = <String, String>{};
       upstreamRes.headers.forEach((name, values) {
-        // transfer-encoding/content-length quedan mal si el body se
-        // re-transmite chunked — dejar que shelf/HttpServer los recalcule.
         final lower = name.toLowerCase();
-        if (lower == 'transfer-encoding' || lower == 'content-length') return;
+        // transfer-encoding se recalcula solo; reenviar el de arriba deja la
+        // respuesta declarando un troceado que no es el que se está usando.
+        //
+        // content-length en cambio SÍ se conserva: es lo que le dice al
+        // receptor cuánto dura y le permite adelantar. Antes se quitaba, así
+        // que el vídeo llegaba como un flujo de largo desconocido.
+        if (lower == 'transfer-encoding') return;
         resHeaders[name] = values.join(', ');
       });
 
+      if (esHead) {
+        client.close(force: true);
+        return Response(upstreamRes.statusCode, headers: resHeaders);
+      }
+
       return Response(
         upstreamRes.statusCode,
-        body: upstreamRes,
+        // Se cierra el cliente recién cuando el cuerpo terminó de pasar. Antes
+        // solo se cerraba al fallar, así que cada pedido dejaba una conexión
+        // abierta hasta reiniciar la app.
+        body: upstreamRes.transform(
+          StreamTransformer<List<int>, List<int>>.fromHandlers(
+            handleDone: (sink) {
+              sink.close();
+              client.close(force: true);
+            },
+            handleError: (error, stack, sink) {
+              sink.close();
+              client.close(force: true);
+            },
+          ),
+        ),
         headers: resHeaders,
       );
     } catch (e) {
       client.close(force: true);
+      ultimoError = 'No se pudo alcanzar la fuente del vídeo: $e';
+      logger.warning('Relay de casteo: $ultimoError — ${target.url}');
       return Response.internalServerError(body: 'relay error: $e');
     }
   }
