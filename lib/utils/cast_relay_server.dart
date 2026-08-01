@@ -1,7 +1,9 @@
 import 'dart:async';
+import 'dart:convert';
 import 'dart:io';
 
 import 'package:prismhub/utils/log.dart';
+import 'package:prismhub/utils/prismhub_storage.dart';
 import 'package:shelf/shelf.dart';
 import 'package:shelf/shelf_io.dart' as shelf_io;
 
@@ -21,6 +23,30 @@ class CastRelayServer {
   static int? _port;
   static final Map<String, _RelayTarget> _targets = {};
 
+  // Contador para que dos registros del mismo microsegundo no se pisen: al
+  // reescribir una lista HLS se registran cientos de segmentos de un saque.
+  static int _correlativo = 0;
+
+  /// User-Agent con el que sale el relay cuando la extensión no manda uno.
+  ///
+  /// NO es cosmético. Medido contra la fuente del registro del usuario
+  /// (nika.playmudos.com, detrás de Cloudflare): con el User-Agent que pone
+  /// dart:io por defecto responde **403**, y con uno de navegador responde
+  /// **200** — con Referer o sin él, da igual. El puente de red de la app ya
+  /// rellena uno cuando la extensión no lo trae (ver getUASetting), así que el
+  /// relay sin esto pedía de una forma que la app nunca usa.
+  static String get _uaPorDefecto {
+    try {
+      final delAjuste = PrismHubStorage.getUASetting();
+      if (delAjuste is String && delAjuste.isNotEmpty) return delAjuste;
+    } catch (_) {
+      // Si los ajustes todavia no estan listos, vale el de abajo: lo que no
+      // puede pasar es que el relay se caiga por leer una preferencia.
+    }
+    return 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 '
+        '(KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36';
+  }
+
   // Registra una URL+headers y devuelve la URL local (LAN) que hay que
   // pasarle al dispositivo de cast en vez de la real.
   static Future<String> registerAndGetUrl({
@@ -28,8 +54,12 @@ class CastRelayServer {
     Map<String, String>? headers,
   }) async {
     await _ensureRunning();
-    final token = '${DateTime.now().microsecondsSinceEpoch}';
-    _targets[token] = _RelayTarget(targetUrl, headers ?? const {});
+    // El token lleva adelante un identificador de sesion para poder soltar de
+    // una vez el maestro Y todos los segmentos que cuelgan de el (ver
+    // unregister). Sin eso, cada episodio casteado dejaba cientos de entradas.
+    final sesion = '${DateTime.now().microsecondsSinceEpoch}';
+    final token = '$sesion-0';
+    _targets[token] = _RelayTarget(targetUrl, headers ?? const {}, sesion);
     final ip = await _localLanAddress();
     if (ip == null) {
       // Sin una IP de red real no hay relay posible: lo unico que se le podria
@@ -47,8 +77,14 @@ class CastRelayServer {
         'llegar a este equipo',
       );
     }
-    return 'http://$ip:$_port/relay/$token';
+    _base = 'http://$ip:$_port';
+    return '$_base/relay/$token';
   }
+
+  // Direccion base del relay, cacheada: al reescribir una lista HLS hay que
+  // armar cientos de direcciones y consultar las interfaces de red en cada una
+  // seria carisimo.
+  static String? _base;
 
   static Future<void> _ensureRunning() async {
     if (_server != null) return;
@@ -83,35 +119,59 @@ class CastRelayServer {
       ..autoUncompress = false;
     try {
       final uri = Uri.parse(target.url);
+      final esLista = _pareceHls(target.url);
       final upstreamReq =
           esHead ? await client.headUrl(uri) : await client.getUrl(uri);
       target.headers.forEach((key, value) => upstreamReq.headers.set(key, value));
+      // Si la extension no mando User-Agent, el que pone dart:io hace que
+      // Cloudflare conteste 403 (medido). Ver _uaPorDefecto.
+      if (upstreamReq.headers.value(HttpHeaders.userAgentHeader) == null ||
+          !target.headers.keys
+              .any((k) => k.toLowerCase() == 'user-agent')) {
+        upstreamReq.headers.set(HttpHeaders.userAgentHeader, _uaPorDefecto);
+      }
       final range = request.headers['range'];
-      if (range != null) upstreamReq.headers.set(HttpHeaders.rangeHeader, range);
+      // A una lista de reproduccion NO se le reenvia el Range: si la fuente
+      // contesta un trozo, la lista llega cortada y el receptor se queda sin
+      // los ultimos segmentos.
+      if (range != null && !esLista) {
+        upstreamReq.headers.set(HttpHeaders.rangeHeader, range);
+      }
       final upstreamRes = await upstreamReq.close();
 
       if (upstreamRes.statusCode >= 400) {
-        // Se lee un pedazo del cuerpo porque ahí es donde la fuente explica el
-        // motivo ("link expired", "forbidden"...). Sin esto el rechazo llegaba
-        // al televisor como un número pelado y no se podía diagnosticar.
-        var detalle = '';
-        try {
-          final trozos = <int>[];
-          await for (final t in upstreamRes.timeout(const Duration(seconds: 5))) {
-            trozos.addAll(t);
-            if (trozos.length >= 400) break;
-          }
-          detalle = String.fromCharCodes(trozos.take(400))
-              .replaceAll(RegExp(r'\s+'), ' ')
-              .trim();
-        } catch (_) {
-          // Sin cuerpo legible el status ya dice bastante.
-        }
+        // El cuerpo del rechazo casi siempre viene comprimido y en HTML (una
+        // página de bloqueo de Cloudflare, por ejemplo). Antes se mostraba tal
+        // cual y en pantalla salía un chorro de caracteres ilegibles, porque
+        // con autoUncompress apagado esos bytes son gzip crudo.
+        final motivo = await _motivoLegible(upstreamRes);
         client.close(force: true);
         ultimoError = 'La fuente rechazó el vídeo (HTTP '
-            '${upstreamRes.statusCode})${detalle.isEmpty ? '' : ': $detalle'}';
+            '${upstreamRes.statusCode})${motivo.isEmpty ? '' : ': $motivo'}';
         logger.warning('Relay de casteo: $ultimoError — ${target.url}');
-        return Response(upstreamRes.statusCode, body: detalle);
+        return Response(upstreamRes.statusCode, body: motivo);
+      }
+
+      // Listas HLS: hay que reescribirlas.
+      //
+      // Una .m3u8 no trae vídeo, trae las direcciones de los pedacitos — y
+      // suelen estar en OTRO host (medido: la lista de nika.playmudos.com
+      // apunta a cdn6.ducvomes.com). Si se le pasa la lista tal cual, el
+      // receptor pide esos pedacitos POR SU CUENTA, sin pasar por acá y sin las
+      // cabeceras, y se come el mismo 403 que estábamos evitando. Reescribirla
+      // hace que todo el flujo vuelva por el relay.
+      if (esLista || _pareceHlsPorTipo(upstreamRes)) {
+        final crudo = await _leerTodo(upstreamRes, client);
+        final lista = await _reescribirLista(crudo, uri, target);
+        return Response.ok(
+          lista,
+          headers: {
+            'Content-Type': 'application/vnd.apple.mpegurl',
+            // La lista cambió de tamaño, así que el largo de la fuente ya no
+            // vale y el content-encoding tampoco (acá va en texto plano).
+            'Cache-Control': 'no-cache',
+          },
+        );
       }
 
       final resHeaders = <String, String>{};
@@ -159,13 +219,139 @@ class CastRelayServer {
     }
   }
 
+  static bool _pareceHls(String url) =>
+      Uri.tryParse(url)?.path.toLowerCase().endsWith('.m3u8') ?? false;
+
+  static bool _pareceHlsPorTipo(HttpClientResponse res) {
+    final tipo = res.headers.contentType?.mimeType.toLowerCase() ?? '';
+    return tipo.contains('mpegurl');
+  }
+
+  /// Deja el cuerpo de un rechazo en algo que se pueda leer en pantalla.
+  ///
+  /// Descomprime si hace falta, se queda con el texto visible del HTML y lo
+  /// corta. Si no hay nada legible devuelve vacío: mejor mostrar solo el código
+  /// que un chorro de símbolos.
+  static Future<String> _motivoLegible(HttpClientResponse res) async {
+    try {
+      final trozos = <int>[];
+      await for (final t in res.timeout(const Duration(seconds: 5))) {
+        trozos.addAll(t);
+        if (trozos.length >= 64 * 1024) break;
+      }
+      var bytes = trozos;
+      final enc = res.headers.value(HttpHeaders.contentEncodingHeader);
+      if (enc != null && enc.toLowerCase().contains('gzip')) {
+        try {
+          bytes = gzip.decode(bytes);
+        } catch (_) {
+          return '';
+        }
+      }
+      var texto = utf8.decode(bytes, allowMalformed: true);
+      // De una página de bloqueo solo interesa el texto, no el HTML entero.
+      texto = texto
+          .replaceAll(RegExp(r'<(script|style)[\s\S]*?</\1>', caseSensitive: false), ' ')
+          .replaceAll(RegExp(r'<[^>]+>'), ' ')
+          .replaceAll(RegExp(r'\s+'), ' ')
+          .trim();
+      if (texto.length > 200) texto = '${texto.substring(0, 200)}…';
+      // Si quedó ilegible (binario), no se muestra nada.
+      final raros = texto.runes.where((r) => r < 32 || r > 126 && r < 160).length;
+      if (texto.isEmpty || raros > texto.length ~/ 10) return '';
+      return texto;
+    } catch (_) {
+      return '';
+    }
+  }
+
+  static Future<List<int>> _leerTodo(
+      HttpClientResponse res, HttpClient client) async {
+    final bytes = <int>[];
+    await for (final t in res.timeout(const Duration(seconds: 30))) {
+      bytes.addAll(t);
+      // Una lista de reproducción son unos pocos KB; si llega algo enorme es
+      // que no era una lista y se corta antes de comerse la memoria.
+      if (bytes.length > 8 * 1024 * 1024) break;
+    }
+    client.close(force: true);
+    final enc = res.headers.value(HttpHeaders.contentEncodingHeader);
+    if (enc != null && enc.toLowerCase().contains('gzip')) {
+      try {
+        return gzip.decode(bytes);
+      } catch (_) {
+        return bytes;
+      }
+    }
+    return bytes;
+  }
+
+  /// Reapunta cada dirección de la lista al propio relay.
+  ///
+  /// Toca las líneas sueltas (segmentos y listas anidadas por calidad) y los
+  /// atributos `URI="…"` de las etiquetas — ahí viven la clave de cifrado y las
+  /// pistas de audio/subtítulos alternativas, que si no quedarían pidiéndose
+  /// por fuera.
+  static Future<String> _reescribirLista(
+      List<int> crudo, Uri base, _RelayTarget padre) async {
+    final texto = utf8.decode(crudo, allowMalformed: true);
+    final relayBase = _base;
+    if (relayBase == null) return texto;
+    final salida = StringBuffer();
+    for (final linea in const LineSplitter().convert(texto)) {
+      final limpia = linea.trim();
+      if (limpia.isEmpty) {
+        salida.writeln(linea);
+        continue;
+      }
+      if (limpia.startsWith('#')) {
+        salida.writeln(linea.replaceAllMapped(
+          RegExp(r'URI="([^"]+)"'),
+          (m) => 'URI="${_registrarHijo(base, m[1]!, padre, relayBase)}"',
+        ));
+        continue;
+      }
+      salida.writeln(_registrarHijo(base, limpia, padre, relayBase));
+    }
+    return salida.toString();
+  }
+
+  // Direccion ya registrada -> su token, por sesion.
+  //
+  // Una lista puede tener cientos de segmentos (medido: 498 en un episodio) y
+  // el receptor puede volver a pedirla —en directo la repide cada pocos
+  // segundos—. Sin esto cada relectura registraria todo de nuevo y el mapa
+  // creceria sin techo mientras dure la transmision.
+  static final Map<String, String> _tokensPorUrl = {};
+
+  static String _registrarHijo(
+      Uri base, String destino, _RelayTarget padre, String relayBase) {
+    final absoluta = base.resolve(destino).toString();
+    final clave = '${padre.sesion}|$absoluta';
+    final yaEsta = _tokensPorUrl[clave];
+    if (yaEsta != null) return '$relayBase/relay/$yaEsta';
+    final token = '${padre.sesion}-${++_correlativo}';
+    _targets[token] = _RelayTarget(absoluta, padre.headers, padre.sesion);
+    _tokensPorUrl[clave] = token;
+    return '$relayBase/relay/$token';
+  }
+
   // Libera la memoria de un target una vez que ya no hace falta (al
   // desconectar el cast) — sin esto los tokens viejos quedan colgados
   // hasta reiniciar la app.
+  //
+  // Se sueltan el maestro Y todos los segmentos de la misma sesion: una lista
+  // HLS registra cientos, y borrar solo el maestro los dejaba a todos colgados.
   static void unregister(String relayUrl) {
     final uri = Uri.tryParse(relayUrl);
     if (uri == null || uri.pathSegments.length < 2) return;
-    _targets.remove(uri.pathSegments[1]);
+    final sesion = _targets[uri.pathSegments[1]]?.sesion;
+    if (sesion == null) {
+      _targets.remove(uri.pathSegments[1]);
+      return;
+    }
+    _targets.removeWhere((_, t) => t.sesion == sesion);
+    _tokensPorUrl.removeWhere((clave, _) => clave.startsWith('$sesion|'));
   }
 
   // Primera IPv4 no-loopback de una interfaz real — es la que un
@@ -190,7 +376,11 @@ class CastRelayServer {
 }
 
 class _RelayTarget {
-  _RelayTarget(this.url, this.headers);
+  _RelayTarget(this.url, this.headers, this.sesion);
   final String url;
   final Map<String, String> headers;
+
+  /// Agrupa el maestro con los segmentos que salieron de su lista, para poder
+  /// soltarlos todos juntos al desconectar (ver unregister).
+  final String sesion;
 }
