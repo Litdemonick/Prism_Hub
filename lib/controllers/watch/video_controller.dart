@@ -1390,12 +1390,23 @@ class VideoPlayerController extends GetxController with WidgetsBindingObserver {
     // congelada (controles pintados pero nada responde). Preferible perder
     // prolijitud en la liberación nativa a que un cuelgue de la librería
     // tilde la apertura siguiente entera.
-    try {
-      await player.setVolume(0).timeout(const Duration(seconds: 2));
-    } catch (_) {}
-    try {
-      await player.pause().timeout(const Duration(seconds: 2));
-    } catch (_) {}
+    // Callar el audio va PRIMERO, y los dos intentos en paralelo.
+    //
+    // Antes iba encadenado: bajar el volumen y, recién cuando ESO terminaba,
+    // pausar. Con el tope de 2 s de cada paso, si el primero se colgaba —que es
+    // justo lo que hace el bug de hilos de arriba— había que esperarlo entero
+    // antes de siquiera intentar el segundo: hasta cuatro segundos de audio
+    // sonando con el reproductor ya cerrado y la pantalla anterior a la vista.
+    // Reportado en vivo como "tarda 3-5 segundos en callarse".
+    //
+    // En paralelo alcanza con que UNO de los dos llegue para que deje de sonar,
+    // y el que se cuelgue ya no demora al otro. En el caso normal, donde ninguno
+    // se cuelga, el audio se corta al instante igual que antes.
+    await Future.wait<void>([
+      player.setVolume(0).timeout(const Duration(seconds: 2)).catchError((_) {}),
+      player.pause().timeout(const Duration(seconds: 2)).catchError((_) {}),
+    ]);
+
     try {
       await player.stop().timeout(const Duration(seconds: 3));
       await Future<void>.delayed(const Duration(milliseconds: 180));
@@ -1413,6 +1424,17 @@ class VideoPlayerController extends GetxController with WidgetsBindingObserver {
   Future<void> closeRoute([BuildContext? context]) async {
     if (_routeClosing) return;
     _routeClosing = true;
+
+    // El apagado arranca ACÁ, lo primero de todo.
+    //
+    // Estaba más abajo, después de salir de pantalla completa y de restaurar
+    // las barras del sistema — dos operaciones que van al sistema operativo y
+    // vuelven, y que se esperaban una tras otra. Recién después se empezaba a
+    // callar el audio, así que a los segundos que ya costaba el apagado se le
+    // sumaban esos. Lanzarlo primero no cambia nada de lo que hacen las otras
+    // dos, que siguen igual: solo dejan de ir adelante en la fila.
+    final shutdown = shutdownPlayback();
+
     if (isFullScreen.value) {
       await WindowManager.instance.setFullScreen(false);
     }
@@ -1422,7 +1444,6 @@ class VideoPlayerController extends GetxController with WidgetsBindingObserver {
     // llegue a tiempo. Es idempotente, onClose lo vuelve a llamar sin
     // problema.
     await restoreSystemUiOnExit();
-    final shutdown = shutdownPlayback();
     var popped = false;
     // Prioridad 1: el context DEL PROPIO widget de controles (pasado por el
     // llamador). WatchPage/VideoPlayer se empuja con
