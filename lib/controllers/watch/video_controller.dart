@@ -1771,7 +1771,54 @@ class VideoPlayerController extends GetxController with WidgetsBindingObserver {
   //        b) URL de embed conocido → resolveEmbed on-demand vía SDK.
   //        c) URL de episodio → extensión la procesa normalmente.
   //   2. Si la extensión no puede resolver (error/vacío) → fallback WebView sniffer.
-  switchServer(String name) async {
+  /// Cambia de servidor, y si se estaba transmitiendo manda el nuevo al mismo
+  /// aparato en vez de dejar cada uno con una cosa distinta.
+  ///
+  /// El cambio de servidor abre el stream nuevo en el reproductor de ACA y no
+  /// tocaba el casteo para nada: el televisor se quedaba con el stream viejo, el
+  /// telefono arrancaba el nuevo con sonido, y la pantalla seguia diciendo que
+  /// se estaba transmitiendo. Dos videos distintos sonando a la vez.
+  Future<void> switchServer(String name) async {
+    final aparato = dlnaDevice.value;
+    if (aparato == null) return _switchServerLocal(name);
+
+    // Donde iba, para no volver al principio por cambiar de servidor.
+    final donde = position.value;
+    // Se resuelve EN SILENCIO: abrir el servidor nuevo arranca la reproduccion
+    // aca, y sin esto sonaba encima de lo que salia por el televisor.
+    final volumenPrevio = player.state.volume;
+    try {
+      await player.setVolume(0);
+    } catch (_) {}
+    try {
+      await _switchServerLocal(name);
+      if (_disposed || watchData == null) return;
+      // Se desconecto o se cambio de aparato mientras resolvia: no se le pisa.
+      if (dlnaDevice.value != aparato) return;
+      // Este servidor va por WebView: no hay una direccion que el televisor
+      // pueda pedir, asi que se corta la transmision y se avisa, en vez de
+      // dejarla mostrando algo que ya no es lo que se esta viendo.
+      if (webViewFallback.value != null || isWebViewActive.value) {
+        sendMessage(Message(Text('video.cast-webview'.i18n)));
+        await disconnectDLNADevice();
+        return;
+      }
+      // Fallo el cambio: el televisor se queda con lo que ya andaba, que es
+      // mejor que cortarle la reproduccion por un servidor que no sirvio.
+      if (serverFailedMessage.value.isNotEmpty) return;
+      await connectDLNADevice(aparato);
+      if (_disposed || dlnaDevice.value != aparato) return;
+      await _irAEnElAparato(aparato, donde);
+    } finally {
+      if (!_disposed) {
+        try {
+          await player.setVolume(volumenPrevio);
+        } catch (_) {}
+      }
+    }
+  }
+
+  _switchServerLocal(String name) async {
     if (_disposed) return;
     if (!availableServers.containsKey(name)) return;
     final myGen = ++_switchServerGen;
@@ -2104,8 +2151,33 @@ class VideoPlayerController extends GetxController with WidgetsBindingObserver {
 
   // 切换画质
   switchQuality(String qualityUrl) async {
-    final currentSecond = player.state.position.inSeconds;
     final headers = watchData!.headers;
+
+    // Transmitiendo, la calidad nueva va al TELEVISOR.
+    //
+    // Antes esto solo abria la calidad nueva en el reproductor de aca y no
+    // tocaba el casteo: el televisor se quedaba con la calidad vieja y el
+    // telefono empezaba a sonar encima con la nueva.
+    final aparato = dlnaDevice.value;
+    if (aparato != null) {
+      // Donde iba, para no volver al principio por cambiar de calidad.
+      final donde = position.value;
+      // La direccion de la calidad elegida pasa a ser la del contenido, para
+      // que el relay le sirva ESA al televisor.
+      watchData = ExtensionBangumiWatch(
+        type: watchData!.type,
+        url: qualityUrl,
+        subtitles: watchData!.subtitles,
+        headers: headers,
+        audioTrack: watchData!.audioTrack,
+      );
+      await connectDLNADevice(aparato);
+      if (_disposed || dlnaDevice.value != aparato) return;
+      await _irAEnElAparato(aparato, donde);
+      return;
+    }
+
+    final currentSecond = player.state.position.inSeconds;
     await _ensureVideoSurfaceMounted();
     if (_disposed) return;
     await player.open(
@@ -2971,6 +3043,27 @@ class VideoPlayerController extends GetxController with WidgetsBindingObserver {
     _dlnaTimer = Timer.periodic(const Duration(seconds: 1), (timer) {
       _getDLNAStatus();
     });
+  }
+
+  /// Manda el aparato a un punto exacto del video.
+  ///
+  /// No se usa seek() del controlador: ese calcula un salto RELATIVO contra
+  /// position.value, y justo despues de re-enganchar ese valor todavia es el de
+  /// antes del cambio — el salto saldria a cualquier lado.
+  Future<void> _irAEnElAparato(DLNADevice device, Duration donde) async {
+    if (donde <= Duration.zero) return;
+    // Un respiro: recien arrancado, varios aparatos ignoran el salto porque
+    // todavia no terminaron de cargar el video.
+    await Future<void>.delayed(const Duration(milliseconds: 800));
+    if (_disposed || dlnaDevice.value != device) return;
+    final h = donde.inHours.toString().padLeft(2, '0');
+    final m = (donde.inMinutes % 60).toString().padLeft(2, '0');
+    final s = (donde.inSeconds % 60).toString().padLeft(2, '0');
+    try {
+      await device.seek('$h:$m:$s');
+    } catch (e) {
+      logger.warning('No se pudo retomar el punto en el aparato', e);
+    }
   }
 
   /// Vuelve a mandarle el video al MISMO dispositivo.
