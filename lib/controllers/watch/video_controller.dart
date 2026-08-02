@@ -1045,8 +1045,6 @@ class VideoPlayerController extends GetxController with WidgetsBindingObserver {
         // puesta.
         final etiqueta = etiquetaCalidad(width, event);
         currentQuality.value = etiqueta.isEmpty ? "${width}x$event" : etiqueta;
-        // Mismo lugar: es donde se conocen las medidas reales del video.
-        esVideoVr.value = _pareceVr(width, event);
       }
     }));
 
@@ -1054,6 +1052,16 @@ class VideoPlayerController extends GetxController with WidgetsBindingObserver {
     // del centro (ver comentario en hasRenderedFrame).
     _addSubscription(player.stream.videoParams.listen((p) {
       if ((p.w ?? 0) > 0 && (p.h ?? 0) > 0) hasRenderedFrame.value = true;
+      // El VR se decide ACA y no en el aviso de la altura.
+      //
+      // Alla se leia el ancho por separado, y si todavia no habia llegado en
+      // ese instante el video no quedaba marcado como VR — y como la altura no
+      // vuelve a cambiar, no se reintentaba nunca. Eso hacia que el interruptor
+      // no apareciera en videos que si lo eran. Aca las dos medidas vienen
+      // juntas en el mismo aviso, asi que no hay nada que se pueda cruzar.
+      if ((p.w ?? 0) > 0 && (p.h ?? 0) > 0) {
+        esVideoVr.value = _pareceVr(p.w, p.h, _pistasDeVr);
+      }
     }));
 
     // 自动恢复上次播放进度 (solo cuando el diálogo no lo maneja)
@@ -3177,12 +3185,40 @@ class VideoPlayerController extends GetxController with WidgetsBindingObserver {
   /// termina de cargar y recien ahi se conocen sus medidas.
   final esVideoVr = false.obs;
 
-  /// 3:1 y no 2:1 exacto: un side-by-side de 16:9 da 3,55, y hay videos
-  /// panoramicos normales que rondan 2,4 sin ser VR.
-  static bool _pareceVr(int? w, int? h) {
+  /// Si el video parece estar grabado para gafas.
+  ///
+  /// Antes se pedia que fuera 3 veces mas ancho que alto, y eso dejaba afuera
+  /// el formato VR mas comun: un **180 lado a lado** es 2:1 (3840x1920) y uno
+  /// **arriba-abajo** es 1:1. Solo un 360 lado a lado llega a 3:1, asi que el
+  /// interruptor no aparecia justo en los videos donde mas se usa.
+  ///
+  /// Pero 2:1 y 1:1 son tambien proporciones de video normal, asi que ahi sola
+  /// la forma no alcanza y se mira el nombre: estos videos vienen casi siempre
+  /// marcados como VR, 180, 360, SBS o 3D. Con una forma imposible para un
+  /// video normal no hace falta ninguna pista.
+  @visibleForTesting
+  static bool pareceVr(int? w, int? h, String pistas) =>
+      _pareceVr(w, h, pistas);
+
+  static bool _pareceVr(int? w, int? h, String pistas) {
     if (w == null || h == null || w <= 0 || h <= 0) return false;
-    return w >= h * 3;
+    final proporcion = w / h;
+    // Tan ancho que no puede ser otra cosa.
+    if (proporcion >= 2.9) return true;
+    // De 1:1 en adelante, con el nombre diciendolo.
+    if (proporcion < 0.9) return false;
+    return RegExp(r'(^|[^a-z])vr([^a-z]|$)|180|360|sbs|3d|over.?under',
+            caseSensitive: false)
+        .hasMatch(pistas);
   }
+
+  /// El texto donde buscar esas pistas: como se llama el video y de donde sale.
+  String get _pistasDeVr => [
+        title,
+        if (index.value >= 0 && index.value < playList.length)
+          playList[index.value].name,
+        watchData?.url ?? '',
+      ].join(' ');
 
   /// Estirar la imagen para que ocupe toda la pantalla.
   ///
