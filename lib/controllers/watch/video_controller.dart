@@ -1512,6 +1512,21 @@ class VideoPlayerController extends GetxController with WidgetsBindingObserver {
     _arrancarVigilanteDeAtasco();
 
     // Vigía de buffering atascado — ver comentario en _bufferingStallTimer.
+    // Cuánto lleva descargado por delante, para la sombra de la barra.
+    //
+    // El controlador declaraba este dato pero no lo llenaba nadie: la barra lo
+    // leía de mpv por su cuenta. Al unificarla para que funcione también
+    // casteando —donde mpv está parado y sus números son cero— la sombra se
+    // quedó sin quien se la diera. Va acá, que es donde vive el resto del estado
+    // de reproducción, y así hay UN solo lugar del que leerlo.
+    //
+    // Casteando no se toca: ahí el colchón que importa es el del televisor, y el
+    // de mpv sería un cero que borraría la sombra.
+    _addSubscription(player.stream.buffer.listen((event) {
+      if (dlnaDevice.value != null) return;
+      buffer.value = event;
+    }));
+
     _addSubscription(player.stream.buffering.listen((buffering) {
       if (dlnaDevice.value != null) return;
       // Si la posición avanzó hace menos de 800ms, el flag crudo está

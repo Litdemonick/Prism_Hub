@@ -369,22 +369,8 @@ class CastRelayServer {
 
     final client = _cliente;
     try {
-      var uri = Uri.parse(target.url);
+      final uri = Uri.parse(target.url);
       final esLista = _pareceHls(target.url);
-      // Un nodo que ya se sabe lento se saltea de entrada.
-      //
-      // Estas listas reparten los pedacitos entre varios nodos del mismo CDN, y
-      // medido en vivo: unos entregan a 2 MB/s y otros no terminan el archivo en
-      // quince segundos. Si a este pedacito le tocó uno de los malos, se pide el
-      // MISMO archivo a uno sano antes de siquiera intentarlo. Ver
-      // CastHlsATs.nodoLento, que es la misma memoria que usa el casteo.
-      if (!esLista && target.esquivarNodosCaidos) {
-        final mejor = _mejorNodoPara(uri, target);
-        if (mejor != null && mejor.host != uri.host) {
-          CastLog.paso('Se evita ${uri.host} (ya falló): se pide a ${mejor.host}');
-          uri = mejor;
-        }
-      }
       // Un pedacito con PLAZO, y si no llega se lo pide a otro nodo.
       //
       // Antes acá solo se retransmitía lo que fuera llegando: si el nodo
@@ -752,9 +738,17 @@ class CastRelayServer {
   /// El nodo original primero (o el mejor si ese ya falló), y después el resto
   /// de los que la lista usó para este contenido.
   static List<Uri> _nodosParaProbar(Uri original, _RelayTarget target) {
+    // Solo los hosts que sirven PEDACITOS.
+    //
+    // La sesión incluye también la lista maestra, que vive en otro dominio
+    // (medido: la lista en nika.playmudos.com y los pedacitos en
+    // cdnN.ducvomes.com). Sin este filtro se ofrecía el host de la lista como
+    // alternativa para un pedacito: una petición condenada a fallar, que encima
+    // dejaba anotado como "lento" a un host que ni siquiera tiene ese archivo.
     final hosts = <String>{};
     for (final t in _targets.values) {
       if (t.sesion != target.sesion) continue;
+      if (_pareceHls(t.url)) continue;
       final host = Uri.tryParse(t.url)?.host;
       if (host != null && host.isNotEmpty) hosts.add(host);
     }
@@ -803,29 +797,6 @@ class CastRelayServer {
       }
       return bloque;
     });
-  }
-
-  /// Otro nodo del mismo CDN para este pedacito, si el suyo ya falló.
-  ///
-  /// Los candidatos salen de los pedacitos que la propia lista registró en esta
-  /// sesión: son los nodos que el sitio está usando para ESTE contenido, así que
-  /// son los únicos de los que se sabe que lo tienen. Devuelve null si no hay
-  /// ninguno mejor, y ahí se sigue con el original — quedarse sin candidatos
-  /// sería peor que probar uno lento.
-  static Uri? _mejorNodoPara(Uri original, _RelayTarget target) {
-    if (!CastHlsATs.nodoLento(original.host)) return original;
-    final vistos = <String>{};
-    for (final t in _targets.values) {
-      if (t.sesion != target.sesion) continue;
-      final host = Uri.tryParse(t.url)?.host;
-      if (host != null && host.isNotEmpty) vistos.add(host);
-    }
-    for (final host in vistos) {
-      if (host != original.host && !CastHlsATs.nodoLento(host)) {
-        return original.replace(host: host);
-      }
-    }
-    return null;
   }
 
   static String _registrarHijo(
