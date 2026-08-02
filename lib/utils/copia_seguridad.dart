@@ -30,10 +30,50 @@ class CopiaSeguridad {
   /// Van los dos lados juntos —el normal y el +18—, que es lo que hace que al
   /// recuperar quede todo como estaba. Cada registro lleva su marca de si es
   /// +18, así que al volver cada cosa cae donde iba.
+  /// Qué hay guardado en ESTE equipo, contado por extensión.
+  ///
+  /// Es el espejo de [abrir] pero mirando la base propia: sirve para que el
+  /// usuario elija qué quiere guardar en la copia, con la misma pantalla que ya
+  /// usa para elegir qué recuperar. Exportar todo siempre estaba bien para la
+  /// copia de respaldo, pero no para pasarle a alguien solo una parte.
+  static Future<CopiaAbierta> resumenLocal() async {
+    final historial = await DatabaseService.getHistorysByType();
+    final favoritos = await DatabaseService.getFavoritesByType();
+    final porPaquete = <String, ({int historial, int favoritos, int nsfw})>{};
+
+    for (final h in historial) {
+      final ya = porPaquete[h.package] ?? (historial: 0, favoritos: 0, nsfw: 0);
+      porPaquete[h.package] = (
+        historial: ya.historial + 1,
+        favoritos: ya.favoritos,
+        nsfw: ya.nsfw + (h.isNsfw ? 1 : 0),
+      );
+    }
+    for (final f in favoritos) {
+      final ya = porPaquete[f.package] ?? (historial: 0, favoritos: 0, nsfw: 0);
+      porPaquete[f.package] = (
+        historial: ya.historial,
+        favoritos: ya.favoritos + 1,
+        nsfw: ya.nsfw + (f.isNsfw ? 1 : 0),
+      );
+    }
+
+    return CopiaAbierta(
+      // No sale de ningún archivo: es lo que hay acá y ahora.
+      deQuien: const SobreDeCopia(
+          nombre: '', numero: 0, fecha: null, conClave: false),
+      contenido: const {},
+      porPaquete: porPaquete,
+    );
+  }
+
   static Future<String> exportar(
     String clave, {
     required String nombre,
     required int numero,
+
+    /// Solo estas extensiones. Null = todo lo que haya.
+    Set<String>? paquetes,
   }) async {
     if (clave.length < CopiaCifrado.largoMinimo) {
       throw CopiaInvalida(
@@ -41,8 +81,15 @@ class CopiaSeguridad {
         '${CopiaCifrado.largoMinimo} caracteres.',
       );
     }
-    final historial = await DatabaseService.getHistorysByType();
-    final favoritos = await DatabaseService.getFavoritesByType();
+    final todoHistorial = await DatabaseService.getHistorysByType();
+    final todoFavoritos = await DatabaseService.getFavoritesByType();
+    // Solo lo que el usuario eligió guardar.
+    final historial = paquetes == null
+        ? todoHistorial
+        : todoHistorial.where((h) => paquetes.contains(h.package)).toList();
+    final favoritos = paquetes == null
+        ? todoFavoritos
+        : todoFavoritos.where((f) => paquetes.contains(f.package)).toList();
 
     final dentro = jsonEncode({
       // Para poder avisar cuáles faltan al importar en otro equipo: sin la

@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_i18n/flutter_i18n.dart';
+import 'package:prismhub/router/router.dart';
 import 'package:prismhub/utils/copia_seguridad.dart';
 import 'package:prismhub/utils/extension.dart';
 import 'package:prismhub/utils/i18n.dart';
@@ -22,8 +23,21 @@ enum EstadoExt { lista, desactivada, inestable, ausente }
 ///
 /// Devuelve por `pop` el conjunto de paquetes elegidos, o null si se cancela.
 class CopiaElegirExtensiones extends StatefulWidget {
-  const CopiaElegirExtensiones({super.key, required this.copia});
+  const CopiaElegirExtensiones({
+    super.key,
+    required this.copia,
+    this.alExportar = false,
+  });
   final CopiaAbierta copia;
+
+  /// Al EXPORTAR la misma pantalla sirve para elegir qué se guarda.
+  ///
+  /// Cambia dos cosas: el texto de arriba —no viene de ninguna copia, es lo que
+  /// hay en este equipo— y que todas se pueden elegir. Al exportar no importa
+  /// si una está apagada o inestable: sus datos están en la base igual, y
+  /// dejarlos afuera sería perderlos justo en la copia que se hace para no
+  /// perder nada.
+  final bool alExportar;
 
   @override
   State<CopiaElegirExtensiones> createState() => _CopiaElegirExtensionesState();
@@ -31,7 +45,11 @@ class CopiaElegirExtensiones extends StatefulWidget {
 
 class _CopiaElegirExtensionesState extends State<CopiaElegirExtensiones> {
   late final Map<String, EstadoExt> _estados = {
-    for (final p in widget.copia.paquetes) p: _estadoDe(p),
+    for (final p in widget.copia.paquetes)
+      // Al exportar todas están listas: sus datos ya están en la base, y
+      // dejarlos afuera por estar apagada sería perderlos en la copia que se
+      // hace justamente para no perder nada.
+      p: widget.alExportar ? EstadoExt.lista : _estadoDe(p),
   };
 
   /// Arrancan marcadas las que se pueden. Es lo que quiere el que viene a
@@ -54,10 +72,30 @@ class _CopiaElegirExtensionesState extends State<CopiaElegirExtensiones> {
     return EstadoExt.lista;
   }
 
-  /// Cómo se llama, si está puesta. Si no, el identificador, que es lo único
-  /// que se sabe de ella en este equipo.
-  String _nombre(String package) =>
-      ExtensionUtils.runtimes[package]?.extension.name ?? package;
+  /// Cómo se llama, para mostrarlo.
+  ///
+  /// Si está puesta, su nombre. Si no, se arma uno legible a partir del
+  /// identificador: "io.prismhub.tumangaonline" no le dice nada a nadie, y era
+  /// lo que salía en la lista para las que no están instaladas.
+  String _nombre(String package) {
+    final puesto = ExtensionUtils.runtimes[package]?.extension.name;
+    if (puesto != null && puesto.isNotEmpty) return puesto;
+    // Se queda con lo último del identificador, que es el nombre real, y se le
+    // pone mayúscula. "io.prismhub.tumangaonline" -> "Tumangaonline".
+    final ultimo = package.split('.').last;
+    if (ultimo.isEmpty) return package;
+    return ultimo[0].toUpperCase() + ultimo.substring(1);
+  }
+
+  /// Propio y compartido entre la barra y la lista: si cada una tuviera el
+  /// suyo, la barra no seguiría al desplazamiento.
+  final _scroll = ScrollController();
+
+  @override
+  void dispose() {
+    _scroll.dispose();
+    super.dispose();
+  }
 
   int get _cuantasSePueden =>
       _estados.values.where((e) => e == EstadoExt.lista).length;
@@ -72,11 +110,15 @@ class _CopiaElegirExtensionesState extends State<CopiaElegirExtensiones> {
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
         Text(
-          FlutterI18n.translate(context, 'settings.backup-pick-hint',
-              translationParams: {
-                'nombre': widget.copia.deQuien.etiqueta,
-                'n': '${widget.copia.total}',
-              }),
+          widget.alExportar
+              ? FlutterI18n.translate(
+                  context, 'settings.backup-pick-hint-export',
+                  translationParams: {'n': '${widget.copia.total}'})
+              : FlutterI18n.translate(context, 'settings.backup-pick-hint',
+                  translationParams: {
+                      'nombre': widget.copia.deQuien.etiqueta,
+                      'n': '${widget.copia.total}',
+                    }),
           style: TextStyle(fontSize: 12.5, height: 1.4, color: tenue),
         ),
         const SizedBox(height: 8),
@@ -111,11 +153,24 @@ class _CopiaElegirExtensionesState extends State<CopiaElegirExtensiones> {
             maxHeight:
                 (MediaQuery.sizeOf(context).height * 0.45).clamp(150, 380),
           ),
-          child: ListView.separated(
-            shrinkWrap: true,
-            itemCount: paquetes.length,
-            separatorBuilder: (_, __) => const SizedBox(height: 6),
-            itemBuilder: (context, i) => _fila(paquetes[i], tenue),
+          // Con barra de desplazamiento a la vista y siempre.
+          //
+          // Sin ella, con más extensiones de las que entran en pantalla no hay
+          // ninguna señal de que la lista sigue: se ve una lista cortada y
+          // parece que eso es todo lo que hay.
+          child: Scrollbar(
+            controller: _scroll,
+            thumbVisibility: true,
+            child: ListView.separated(
+              controller: _scroll,
+              shrinkWrap: true,
+              // Sitio a la derecha para que la barra no se dibuje encima de los
+              // interruptores.
+              padding: const EdgeInsets.only(right: 10),
+              itemCount: paquetes.length,
+              separatorBuilder: (_, __) => const SizedBox(height: 6),
+              itemBuilder: (context, i) => _fila(paquetes[i], tenue),
+            ),
           ),
         ),
         const SizedBox(height: 14),
@@ -201,6 +256,41 @@ class _CopiaElegirExtensionesState extends State<CopiaElegirExtensiones> {
                         color: Colors.orangeAccent,
                       ),
                     ),
+                    // Y el atajo para ir a resolverlo.
+                    //
+                    // Decirle qué le falta sin decirle dónde se hace lo deja
+                    // buscando por los ajustes. Las que no están puestas llevan
+                    // al repositorio, que es donde se instalan; las que están
+                    // pero apagadas, a la lista de instaladas.
+                    if (estado != EstadoExt.inestable)
+                      Align(
+                        alignment: Alignment.centerLeft,
+                        child: TextButton(
+                          style: TextButton.styleFrom(
+                            padding: const EdgeInsets.symmetric(
+                                horizontal: 6, vertical: 0),
+                            minimumSize: Size.zero,
+                            tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                            foregroundColor: HomeTheme.accentPink,
+                          ),
+                          onPressed: () {
+                            // Se cierra el diálogo antes de navegar: dejarlo
+                            // abierto encima de otra pantalla lo deja tapando
+                            // lo que el usuario fue a hacer.
+                            Navigator.of(context).pop();
+                            router.go(estado == EstadoExt.ausente
+                                ? '/extension_repo'
+                                : '/extension');
+                          },
+                          child: Text(
+                            (estado == EstadoExt.ausente
+                                    ? 'settings.backup-pick-go-install'
+                                    : 'settings.backup-pick-go-enable')
+                                .i18n,
+                            style: const TextStyle(fontSize: 11.5),
+                          ),
+                        ),
+                      ),
                   ],
                 ],
               ),

@@ -273,6 +273,34 @@ class _SettingsPageState extends State<SettingsPage> {
     );
     if (datos == null || !context.mounted) return;
 
+    // Qué se guarda: todo, o solo algunas extensiones.
+    //
+    // Misma pantalla que al importar, para que sea la misma idea en los dos
+    // lados. Vienen todas marcadas, que es el caso normal —una copia de
+    // respaldo se hace entera—, y el que quiere pasarle solo una parte a
+    // alguien puede desmarcar.
+    final resumen = await CopiaSeguridad.resumenLocal();
+    if (!context.mounted) return;
+    if (resumen.paquetes.isEmpty) {
+      showPlatformSnackbar(
+        context: context,
+        title: 'settings.backup-export-failed'.i18n,
+        content: 'settings.backup-nothing'.i18n,
+      );
+      return;
+    }
+    final queExportar = await showPlatformDialog(
+      context: context,
+      title: 'settings.backup-pick-title-export'.i18n,
+      maxWidth: 520,
+      content: CopiaElegirExtensiones(copia: resumen, alExportar: true),
+      actions: null,
+      // El contenido ya trae su propia lista desplazable.
+      scrollable: false,
+    );
+    if (queExportar is! Set<String> || queExportar.isEmpty) return;
+    if (!context.mounted) return;
+
     // La rueda mientras cifra.
     //
     // Cifrar tarda a propósito —150.000 vueltas de PBKDF2— y hasta ahora eso
@@ -315,6 +343,7 @@ class _SettingsPageState extends State<SettingsPage> {
         datos.clave,
         nombre: datos.nombre,
         numero: numero,
+        paquetes: queExportar,
       );
       // Se cierra ANTES del selector de carpeta: dos ventanas encima de la otra
       // dejan la de abajo tapando la del sistema en Windows.
