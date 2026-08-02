@@ -986,6 +986,25 @@ class VideoPlayerController extends GetxController with WidgetsBindingObserver {
       // menos: alcanza para que 4K deje de cortarse sin quedarse con una
       // porción de memoria que el sistema pueda querer de vuelta.
       await np.setProperty('cache', 'yes');
+      // Juntar un colchón ANTES de empezar, en vez de arrancar con lo puesto.
+      //
+      // mpv de fábrica arranca en cuanto puede decodificar el primer cuadro, sin
+      // esperar a tener nada guardado por delante. Con un servidor rápido es lo
+      // ideal. Medido acá con playmudos: el vídeo empezaba con **0,83 segundos**
+      // de colchón — ochocientos milisegundos—, así que el primer bache lo
+      // dejaba sin datos y se paraba enseguida. Una y otra vez, sin importar
+      // cuánto se tocara el reconectar: el problema era arrancar sin nada.
+      //
+      // Con esto se esperan los segundos de cache-pause-wait antes del primer
+      // cuadro. Es un intercambio consciente: se tarda un poco más en ver la
+      // imagen, y a cambio no se corta a los dos segundos. Y solo se nota en los
+      // servidores lentos — donde la descarga va holgada, ese colchón se llena
+      // casi al instante y el arranque se siente igual que antes.
+      await np.setProperty('cache-pause-initial', 'yes');
+      // Cuánto se junta antes de arrancar, y cuánto se vuelve a juntar después
+      // de quedarse sin datos. De fábrica es 1 segundo, que para el caso de
+      // arriba es casi lo mismo que nada: reanudaría para volver a cortarse.
+      await np.setProperty('cache-pause-wait', '3');
       await np.setProperty('cache-secs', '30');
       await np.setProperty(
           'demuxer-max-bytes', Platform.isAndroid ? '96MiB' : '192MiB');
