@@ -104,43 +104,93 @@ class PortadasPerdidas {
   /// Solo para los que no se pudieron arreglar con lo que ya había guardado —
   /// que en la práctica son los que nunca se abrieron desde este equipo, así
   /// que no hay ficha de dónde sacarla.
-  static Future<int> repararConRed(List<History> items) async {
+  /// Las pide TODAS, pero de a tandas chicas.
+  ///
+  /// Se le pregunta a la extensión por cada tarjeta que siga sin portada, hasta
+  /// terminar — no unas pocas por vuelta. Se puede porque es un gasto de UNA
+  /// sola vez: una vez guardada, esa portada no se vuelve a pedir nunca.
+  ///
+  /// Lo que no se puede es hacerlas todas de golpe. Cincuenta títulos serían
+  /// cincuenta peticiones simultáneas a los mismos sitios, que además de tardar
+  /// muchísimo es la forma más rápida de que una fuente empiece a rechazar. Así
+  /// que van de a [_aLaVez], con un respiro entre tanda y tanda.
+  ///
+  /// [alArreglar] se llama después de cada tanda, no al final: así las tarjetas
+  /// se van llenando de a poco en vez de quedarse en gris hasta que termine
+  /// todo.
+  static Future<int> repararConRed(
+    List<History> items, {
+    void Function()? alArreglar,
+  }) async {
+    // Una sola a la vez. El inicio se refresca seguido —al volver a la
+    // pestaña, al importar, al tirar para abajo— y sin esto arrancaría otra
+    // ronda encima de la que ya está corriendo.
+    if (_enCurso) return 0;
+    _enCurso = true;
     var arregladas = 0;
-    var intentos = 0;
-    for (final h in items) {
-      if (intentos >= _porVueltaConRed) break;
-      if (h.cover != null && h.cover!.isNotEmpty) continue;
-      final clave = '${h.package}|${h.url}';
-      if (!_yaPedidos.add(clave)) continue;
-      // Solo extensiones que se pueden usar: una desactivada o caída no va a
-      // contestar, y preguntarle es tiempo perdido.
-      final runtime = ExtensionUtils.enabledRuntimes[h.package];
-      if (runtime == null) continue;
-      intentos++;
-      try {
-        final detalle = await runtime
-            .detail(h.url)
-            .timeout(const Duration(seconds: 8));
-        final c = detalle.cover;
-        if (c == null || c.isEmpty) continue;
-        h.cover = c;
-        await DatabaseService.putHistoryRaw(h);
-        arregladas++;
-      } catch (e) {
-        // Sin red, con la fuente caída o con una dirección que ya no existe:
-        // se deja la tarjeta como está y no se vuelve a intentar en esta
-        // sesión.
-        logger.info('No se pudo pedir la portada de ${h.title}: $e');
+    try {
+      final pendientes = <History>[];
+      for (final h in items) {
+        if (h.cover != null && h.cover!.isNotEmpty) continue;
+        // Solo extensiones que se pueden usar: una desactivada o caída no va a
+        // contestar, y preguntarle es tiempo perdido.
+        if (!ExtensionUtils.enabledRuntimes.containsKey(h.package)) continue;
+        // Se marca ACÁ, antes de pedir nada: si no, dos tandas seguidas
+        // podrían pedir el mismo título.
+        if (!_yaPedidos.add('${h.package}|${h.url}')) continue;
+        pendientes.add(h);
       }
+      if (pendientes.isEmpty) return 0;
+      logger.info('Faltan ${pendientes.length} portadas: se piden por tandas');
+
+      for (var i = 0; i < pendientes.length; i += _aLaVez) {
+        final tanda = pendientes.skip(i).take(_aLaVez);
+        final hechas = await Future.wait(tanda.map(_pedirYGuardar));
+        final enEstaTanda = hechas.where((e) => e).length;
+        arregladas += enEstaTanda;
+        // Se avisa por tanda para que las tarjetas se vayan llenando.
+        if (enEstaTanda > 0) alArreglar?.call();
+        // Un respiro entre tandas: sin esto son ráfagas seguidas contra el
+        // mismo sitio, que es lo que hace que empiecen a rechazar.
+        await Future<void>.delayed(const Duration(milliseconds: 350));
+      }
+    } finally {
+      _enCurso = false;
     }
     if (arregladas > 0) {
-      logger.info('Se pidieron $arregladas portadas a las extensiones');
+      logger.info('Se recuperaron $arregladas portadas preguntando');
     }
     return arregladas;
   }
 
-  /// Mucho más bajo que el de las locales: cada una es una petición de red.
-  static const _porVueltaConRed = 4;
+  /// Le pide la portada a la extensión y la guarda. True si la consiguió.
+  static Future<bool> _pedirYGuardar(History h) async {
+    final runtime = ExtensionUtils.enabledRuntimes[h.package];
+    if (runtime == null) return false;
+    try {
+      final detalle =
+          await runtime.detail(h.url).timeout(const Duration(seconds: 8));
+      final c = detalle.cover;
+      if (c == null || c.isEmpty) return false;
+      h.cover = c;
+      await DatabaseService.putHistoryRaw(h);
+      return true;
+    } catch (e) {
+      // Sin red, con la fuente caída o con una dirección que ya no existe: se
+      // deja la tarjeta como está y no se reintenta en esta sesión.
+      logger.info('No se pudo pedir la portada de ${h.title}: $e');
+      return false;
+    }
+  }
+
+  /// Cuántas se piden a la vez.
+  ///
+  /// Tres es suficiente para que no se sienta lento y bajo como para no
+  /// parecer una ráfaga desde el otro lado.
+  static const _aLaVez = 3;
+
+  /// Si ya hay una ronda de peticiones andando.
+  static bool _enCurso = false;
 
   /// Los que ya se le pidieron a la extensión, aparte de los locales.
   static final Set<String> _yaPedidos = {};

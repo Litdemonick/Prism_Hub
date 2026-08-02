@@ -190,13 +190,16 @@ class HomePageController extends GetxController {
     // mano. Ver PortadasPerdidas.
     unawaited(() async {
       // Primero lo barato: lo que ya está guardado, sin red.
-      var arregladas = await PortadasPerdidas.reparar(historialZona);
+      final arregladas = await PortadasPerdidas.reparar(historialZona);
       if (arregladas > 0) await refreshHistory();
-      // Y después, para las que quedaron, se le pregunta a la extensión. Va
-      // segundo y acotado: cada una es una petición de red, y el inicio ya
-      // está dibujado para cuando esto corre.
-      arregladas = await PortadasPerdidas.repararConRed(allHistory);
-      if (arregladas > 0) await refreshHistory();
+      // Y después, para TODAS las que quedaron, se le pregunta a la extensión.
+      // Va segundo porque cada una es una petición de red, y el inicio ya está
+      // dibujado para cuando esto corre. Las tarjetas se van llenando de a
+      // tandas, sin esperar a que termine todo.
+      await PortadasPerdidas.repararConRed(
+        allHistory,
+        alArreglar: () => unawaited(refreshHistory()),
+      );
     }());
     // En segundo plano y sin await: son peticiones de red por obra, y el Home
     // no puede quedarse esperándolas. Cuando termina, si encontró algo, se
