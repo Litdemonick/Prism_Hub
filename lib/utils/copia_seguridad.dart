@@ -203,15 +203,18 @@ class CopiaSeguridad {
 
     // Cuánto trae cada extensión. Se cuenta leyendo el paquete de cada
     // registro, sin construirlo entero: acá solo hace falta el número.
-    final porPaquete = <String, ({int historial, int favoritos})>{};
+    final porPaquete = <String, ({int historial, int favoritos, int nsfw})>{};
     void sumar(Object? crudo, {required bool esHistorial}) {
       if (crudo is! Map) return;
       final p = crudo['package'];
       if (p is! String || p.isEmpty) return;
-      final ya = porPaquete[p] ?? (historial: 0, favoritos: 0);
+      final ya = porPaquete[p] ?? (historial: 0, favoritos: 0, nsfw: 0);
+      // El +18 se cuenta aparte: hace falta para poder avisar antes de meterlo
+      // cuando el usuario tiene esa zona apagada.
+      final nsfw = ya.nsfw + (crudo['isNsfw'] == true ? 1 : 0);
       porPaquete[p] = esHistorial
-          ? (historial: ya.historial + 1, favoritos: ya.favoritos)
-          : (historial: ya.historial, favoritos: ya.favoritos + 1);
+          ? (historial: ya.historial + 1, favoritos: ya.favoritos, nsfw: nsfw)
+          : (historial: ya.historial, favoritos: ya.favoritos + 1, nsfw: nsfw);
     }
 
     for (final e in _lista(dentro['historial'])) {
@@ -708,7 +711,7 @@ class CopiaAbierta {
   final Map<String, dynamic> contenido;
 
   /// Cuántos registros trae cada extensión.
-  final Map<String, ({int historial, int favoritos})> porPaquete;
+  final Map<String, ({int historial, int favoritos, int nsfw})> porPaquete;
 
   /// Las extensiones que aparecen en la copia, ordenadas por cuánto traen.
   ///
@@ -728,4 +731,12 @@ class CopiaAbierta {
 
   int get total => porPaquete.values
       .fold(0, (a, c) => a + c.historial + c.favoritos);
+
+  /// Cuánto contenido +18 traen estas extensiones.
+  ///
+  /// Hace falta para avisar antes de meterlo: si el usuario tiene esa zona
+  /// apagada, ese contenido entra igual pero no lo va a ver por ningún lado
+  /// hasta que la encienda, y eso hay que decirlo antes y no después.
+  int nsfwDe(Set<String> paquetes) => paquetes.fold(
+      0, (a, p) => a + (porPaquete[p]?.nsfw ?? 0));
 }

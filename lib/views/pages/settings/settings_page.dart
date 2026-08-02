@@ -7,6 +7,7 @@ import 'package:path_provider/path_provider.dart';
 import 'package:prismhub/controllers/home_controller.dart';
 import 'package:prismhub/utils/copia_cifrado.dart';
 import 'package:prismhub/utils/copia_seguridad.dart';
+import 'package:prismhub/views/pages/settings/copia_elegir_extensiones.dart';
 import 'package:fluent_ui/fluent_ui.dart' as fluent;
 import 'package:flutter/material.dart';
 import 'package:flutter_i18n/flutter_i18n.dart';
@@ -423,6 +424,66 @@ class _SettingsPageState extends State<SettingsPage> {
       );
       if (datosClave == null || !context.mounted) return;
 
+      // Se abre y se cuenta qué trae, SIN escribir nada todavía.
+      final copia =
+          await CopiaSeguridad.abrir(contenido, datosClave.clave);
+      if (!context.mounted) return;
+
+      if (copia.paquetes.isEmpty) {
+        showPlatformSnackbar(
+          context: context,
+          title: 'settings.backup-import-failed'.i18n,
+          content: 'settings.backup-pick-empty'.i18n,
+        );
+        return;
+      }
+
+      // Se elige qué extensiones pasar. Lo que no está listo en este equipo no
+      // se puede elegir y se dice por qué (ver CopiaElegirExtensiones).
+      final elegidas = await showPlatformDialog(
+        context: context,
+        title: 'settings.backup-pick-title'.i18n,
+        maxWidth: 520,
+        content: CopiaElegirExtensiones(copia: copia),
+        actions: null,
+        // El contenido ya tiene su propia lista desplazable: dos scrolls
+        // anidados se pelean el gesto y el de afuera no puede pasar de largo.
+        scrollable: false,
+      );
+      if (elegidas is! Set<String> || elegidas.isEmpty) return;
+      if (!context.mounted) return;
+
+      // Contenido +18 con la Zona +18 apagada.
+      //
+      // Entra igual —no se toca lo que el usuario eligió— pero no lo va a ver
+      // por ningún lado hasta que la encienda. Decirlo después de importar
+      // sería dejarlo buscando dónde quedó lo que acaba de recuperar.
+      final cuantoNsfw = copia.nsfwDe(elegidas);
+      if (cuantoNsfw > 0 &&
+          PrismHubStorage.getSetting(SettingKey.enableNSFW) != true) {
+        final sigue = await showPlatformDialog(
+          context: context,
+          title: 'settings.backup-nsfw-title'.i18n,
+          maxWidth: 420,
+          content: Text(
+            FlutterI18n.translate(context, 'settings.backup-nsfw-body',
+                translationParams: {'n': '$cuantoNsfw'}),
+            style: const TextStyle(fontSize: 13, height: 1.45),
+          ),
+          actions: [
+            PlatformTextButton(
+              onPressed: () => RouterUtils.pop(false),
+              child: Text('common.cancel'.i18n),
+            ),
+            PlatformFilledButton(
+              onPressed: () => RouterUtils.pop(true),
+              child: Text('settings.backup-import-action'.i18n),
+            ),
+          ],
+        );
+        if (sigue != true || !context.mounted) return;
+      }
+
       // La barra de progreso, mientras entra. Una copia grande son cientos de
       // registros y cada uno toca la base: sin esto la pantalla se queda quieta
       // y parece colgada.
@@ -445,6 +506,10 @@ class _SettingsPageState extends State<SettingsPage> {
         r = await CopiaSeguridad.importar(
           contenido,
           datosClave.clave,
+          // Ya descifrada: volver a hacerlo serían 150.000 vueltas de PBKDF2
+          // regaladas, o sea un segundo de espera de más.
+          yaAbierta: copia,
+          paquetes: elegidas,
           onProgreso: (p) => progreso.value = p,
         );
       } finally {
@@ -1120,7 +1185,29 @@ class _SettingsPageState extends State<SettingsPage> {
           children: [
             SettingsTile(
               title: 'settings.backup-export'.i18n,
-              buildSubtitle: () => 'settings.backup-export-subtitle'.i18n,
+              // Se recalcula en cada dibujado (buildSubtitle es una función):
+              // así, al volver de exportar, la línea del "último" ya está al
+              // día sin tener que recargar la pantalla.
+              buildSubtitle: () {
+                final base = 'settings.backup-export-subtitle'.i18n;
+                final hechas =
+                    (PrismHubStorage.getSetting(SettingKey.copiasHechas)
+                            as int?) ??
+                        0;
+                if (hechas == 0) return base;
+                final nombre =
+                    PrismHubStorage.getSetting(SettingKey.nombreDeCopia)
+                            as String? ??
+                        '';
+                return '$base\n${FlutterI18n.translate(
+                  context,
+                  'settings.backup-last',
+                  translationParams: {
+                    'nombre': nombre.isEmpty ? '—' : nombre,
+                    'n': '$hechas',
+                  },
+                )}';
+              },
               trailing: PlatformWidget(
                 androidWidget: TextButton(
                   onPressed: () => _exportarCopia(context),
