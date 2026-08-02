@@ -310,21 +310,19 @@ class VideoPlayerController extends GetxController with WidgetsBindingObserver {
   /// viendo). Lo que hace falta es la CURVA: cómo evoluciona el colchón mientras
   /// corre. Si baja de 3 a 0 con el caudal por debajo de lo que pide la
   /// variante, es la conexión; si se mantiene lleno y aun así se para, no lo es.
+  /// SACADO: el muestreo periódico se llevó puesta la app.
+  ///
+  /// Preguntarle propiedades a mpv desde un temporizador propio significa entrar
+  /// a la librería nativa en un momento que no controla nadie. Si justo el
+  /// reproductor se está cerrando, se entra con un manejador que ya no existe:
+  /// la interfaz se cae y el audio sigue sonando de fondo, porque el proceso
+  /// nativo sobrevive. Confirmado en vivo apenas se agregó, y coherente con los
+  /// SIGSEGV al liberar el reproductor que este archivo ya documenta.
+  ///
+  /// La curva que hacía falta ya se obtuvo, así que no se reemplaza por una
+  /// versión "más protegida": la medición que queda se dispara desde los avisos
+  /// del propio reproductor, donde éste está vivo por definición.
   Timer? _muestreo;
-
-  void _arrancarMuestreo() {
-    _muestreo?.cancel();
-    _muestreo = Timer.periodic(const Duration(seconds: 5), (_) {
-      if (_disposed) return;
-      // Casteando manda el aparato: el reproductor de acá está parado y sus
-      // números no dirían nada de lo que está pasando en el televisor.
-      if (dlnaDevice.value != null) return;
-      // En pausa tampoco: no se está consumiendo colchón, así que no hay nada
-      // que diagnosticar y solo ensuciaría el registro.
-      if (!isPlaying.value) return;
-      unawaited(_medir('en marcha'));
-    });
-  }
 
   /// Deja escrito qué configuración quedó REALMENTE puesta en mpv.
   ///
@@ -333,7 +331,8 @@ class VideoPlayerController extends GetxController with WidgetsBindingObserver {
   /// aplica a esta fuente se ignoran en silencio. Sin leerlas de vuelta se
   /// termina discutiendo sobre ajustes que quizá nunca estuvieron activos.
   Future<void> _confirmarAjustes() async {
-    if (_disposed || player.platform is! NativePlayer) return;
+    if (_disposed || _shutdownStarted || _playerDisposed) return;
+    if (player.platform is! NativePlayer) return;
     final np = player.platform as NativePlayer;
     try {
       final ajustes = <String>[];
@@ -357,7 +356,14 @@ class VideoPlayerController extends GetxController with WidgetsBindingObserver {
   }
 
   Future<void> _medir(String motivo) async {
-    if (_disposed || player.platform is! NativePlayer) return;
+    // Tres candados antes de entrar a la librería nativa, no uno.
+    //
+    // Con el reproductor cerrándose, preguntarle una propiedad entra a libmpv
+    // con un manejador que puede estar ya liberado: la app se cae y el audio
+    // sigue sonando de fondo. Por eso además de _disposed se miran las marcas
+    // del apagado, que se ponen ANTES de liberar nada.
+    if (_disposed || _shutdownStarted || _playerDisposed) return;
+    if (player.platform is! NativePlayer) return;
     final np = player.platform as NativePlayer;
     try {
       String d(String v) => v.trim().isEmpty ? '—' : v.trim();
@@ -1504,7 +1510,6 @@ class VideoPlayerController extends GetxController with WidgetsBindingObserver {
 
     // Vigilante de imagen congelada: ver imagenCongelada.
     _arrancarVigilanteDeAtasco();
-    _arrancarMuestreo();
 
     // Vigía de buffering atascado — ver comentario en _bufferingStallTimer.
     _addSubscription(player.stream.buffering.listen((buffering) {
@@ -1523,36 +1528,30 @@ class VideoPlayerController extends GetxController with WidgetsBindingObserver {
         unawaited(_medir('se paró a reproducir'));
       }
       if (buffering) {
-        // Confirmado en vivo (Voe/voe.sx, cloudwindow-route): el buffering
-        // inicial puede tardar más de 20s y aun así terminar arrancando
-        // sano — subido a 35s para darle el mismo margen que
-        // _tryOpenPlayer. Ahora que un fallo pasa automáticamente al
-        // siguiente servidor (ver _setServerFailed), esperar un poco más
-        // acá antes de rendirse sale más barato que antes.
+        // Que tarde en cargar NO es que el servidor esté caído: se espera.
+        //
+        // Antes, a los 35 segundos bufferizando se daba el servidor por muerto y
+        // se volvía a resolver la fuente solo. Eso hacía tres cosas malas de una:
+        // reabría el vídeo desde cero justo cuando estaba por terminar de
+        // cargar, tiraba el colchón que había juntado, y encima empezaba de
+        // nuevo la cuenta — o sea que un servidor lento nunca llegaba a
+        // reproducir por culpa del propio reintento.
+        //
+        // Medido en vivo: la fuente entregaba 0,79 Mbps para un vídeo de 6 Mbps.
+        // Ahí no hay nada roto que reintentar; hay que esperar, o cambiar de
+        // servidor a mano, y eso lo decide el usuario. A los 25 segundos ya se
+        // le avisa que el vídeo no avanza (ver el vigilante de imagen
+        // congelada), así que tiene la información para elegir.
+        //
+        // Solo queda el rastro en el registro, con la medición al lado para
+        // saber si es caudal o es otra cosa.
         _bufferingStallTimer = Timer(const Duration(seconds: 35), () {
-          // Si el usuario pausó (a propósito o justo cuando empezó a
-          // bufferizar) esto NO es un servidor trabado — pausado no
-          // necesita seguir cargando nada, así que no hay "atasco" real
-          // que declarar. Sin este chequeo, dejar el video en pausa un
-          // rato largo terminaba mostrando "servidor no disponible" solo.
+          // Pausado no está cargando nada: no hay atasco que registrar.
           if (!player.state.playing) return;
-          if (serverFailedMessage.value.isEmpty) {
-            logger.severe(
-                'Buffering atascado 35s+ en "${currentServerName.value}" — tratando como servidor caído.');
-            final stuckName = currentServerName.value;
-            if (stuckName.isNotEmpty) {
-              // Si ya se había pintado un cuadro antes de trabarse, es un
-              // corte a mitad de capítulo — recuperar en la misma posición
-              // en vez de reiniciar desde 0 (ver _midStreamResumeAt).
-              if (hasRenderedFrame.value) {
-                _midStreamResumeAt = position.value;
-              }
-              _failOrRetryServer(stuckName);
-            } else {
-              serverFailedMessage.value =
-                  'Se quedó cargando. Elegí otro servidor.';
-            }
-          }
+          logger.warning('Lleva 35 s cargando en "${currentServerName.value}". '
+              'Se sigue esperando: no se da por caído ni se cambia de servidor '
+              'solo.');
+          unawaited(_medir('35 s cargando'));
         });
       }
     }));
