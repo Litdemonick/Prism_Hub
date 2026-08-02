@@ -84,6 +84,8 @@ english.PrismWipeBody=Do you also want to delete your history, favourites, setti
 spanish.PrismWipeBody=¿Querés borrar también tu historial, favoritos, ajustes y extensiones instaladas?%n%nEstán fuera de la carpeta del programa, así que por defecto se CONSERVAN — así, si reinstalás, seguís donde estabas.%n%nElegí Sí solo si no querés que quede ningún rastro. Esto no se puede deshacer.
 english.PrismWipeDone=Your data was deleted.
 spanish.PrismWipeDone=Se borraron tus datos.
+english.PrismFirewall=Allowing PrismHub through the firewall (needed to cast to a TV)...
+spanish.PrismFirewall=Permitiendo PrismHub en el firewall (hace falta para transmitir a un televisor)...
 english.PrismWipeKept=Your data was kept at:%n%1
 spanish.PrismWipeKept=Tus datos se conservaron en:%n%1
 
@@ -122,7 +124,30 @@ Name: "{autoprograms}\{#MyAppName}"; Filename: "{app}\{#MyAppExeName}"
 Name: "{autodesktop}\{#MyAppName}"; Filename: "{app}\{#MyAppExeName}"; Tasks: desktopicon
 
 [Run]
+; Permiso de FIREWALL para transmitir a un televisor.
+;
+; Al castear, el video no lo baja el televisor de internet: lo sirve ESTE
+; equipo, que abre un servidor en la red local y le pasa la direccion. Windows
+; bloquea por defecto las conexiones entrantes de un programa sin regla, asi
+; que el televisor pedia el video y no le contestaba nadie — se quedaba en
+; negro con la barra en 00:00 y desde afuera parecia que el televisor no
+; soportaba el formato. Comprobado en un equipo real: cero reglas para el app y
+; politica de entrada en bloquear.
+;
+; Solo en redes privadas (domesticas): en una red publica no hay nada que
+; transmitir y no corresponde abrir nada.
+;
+; skipifdoesntexist: si el instalador corre sin permisos de administrador la
+; regla no se va a poder crear, y eso no es motivo para que falle la
+; instalacion — el casteo es una funcion mas, no el app entero.
+Filename: "{sys}\netsh.exe"; Parameters: "advfirewall firewall delete rule name=""{#MyAppName}"""; Flags: runhidden waituntilterminated skipifdoesntexist; StatusMsg: "{cm:PrismFirewall}"
+Filename: "{sys}\netsh.exe"; Parameters: "advfirewall firewall add rule name=""{#MyAppName}"" dir=in action=allow program=""{app}\{#MyAppExeName}"" enable=yes profile=private"; Flags: runhidden waituntilterminated skipifdoesntexist; StatusMsg: "{cm:PrismFirewall}"
 Filename: "{app}\{#MyAppExeName}"; Description: "{cm:LaunchProgram,{#StringChange(MyAppName, '&', '&&')}}"; Flags: nowait postinstall skipifsilent
+
+[UninstallRun]
+; Se quita al desinstalar: una regla apuntando a un programa que ya no existe
+; no hace daño, pero tampoco tiene por que quedar.
+Filename: "{sys}\netsh.exe"; Parameters: "advfirewall firewall delete rule name=""{#MyAppName}"""; Flags: runhidden waituntilterminated skipifdoesntexist; RunOnceId: "QuitarReglaFirewall"
 
 [Code]
 // La versión llega desde el workflow como nombre del tag ("v1.0.13"), y lo
