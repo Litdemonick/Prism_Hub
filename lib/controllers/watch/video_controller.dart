@@ -1264,13 +1264,28 @@ class VideoPlayerController extends GetxController with WidgetsBindingObserver {
         return;
       }
       isPlaying.value = event;
-      // Sin el freno de tiempo: pausar y reanudar tiene que verse en la
-      // notificación en el acto, no al segundo siguiente.
-      _ultimoRefrescoNotificacion = null;
-      _refrescarNotificacion();
       if (event) {
         unawaited(_touchHistory());
       }
+    }));
+
+    // La notificación sigue a isPlaying, venga de donde venga.
+    //
+    // Antes el refresco inmediato estaba dentro del aviso de arriba, que se
+    // CORTA cuando se está transmitiendo (ahí quien reproduce es el televisor y
+    // el reproductor de acá está parado). O sea que justo casteando —que es
+    // cuando la notificación es el único mando que queda— el botón tardaba
+    // hasta un segundo en cambiar, y tocarlo dos veces rápido dejaba el icono
+    // diciendo una cosa y el televisor haciendo otra.
+    //
+    // Colgado del observable, se entera igual si el cambio vino del
+    // reproductor de acá, del televisor o de un botón de la propia
+    // notificación.
+    _addWorker(ever(isPlaying, (_) {
+      // Sin el freno de tiempo: pausar y reanudar tiene que verse en el acto,
+      // no en el próximo segundo.
+      _ultimoRefrescoNotificacion = null;
+      _refrescarNotificacion();
     }));
 
     // 监听进度

@@ -555,6 +555,20 @@ class CopiaSeguridad {
   ///
   /// Así que en vez de arreglarlos, se comprueban: si traen algo que no
   /// corresponde, se descarta ese registro y se sigue con el resto.
+  /// Un registro entero, de la base al archivo y de vuelta.
+  ///
+  /// Es la comprobación que de verdad importa: si algo se pierde o se cambia en
+  /// ese viaje, al importar aparecen tarjetas sin imagen, o —peor— con la
+  /// dirección distinta, que ya no reconoce el registro que ya estaba y termina
+  /// creando uno nuevo al lado.
+  @visibleForTesting
+  static History idaYVueltaHistorial(History h) =>
+      _historialDeMapa(jsonDecode(jsonEncode(_historialAMapa(h))));
+
+  @visibleForTesting
+  static Favorite idaYVueltaFavorito(Favorite f) =>
+      _favoritoDeMapa(jsonDecode(jsonEncode(_favoritoAMapa(f))));
+
   @visibleForTesting
   static String direccionDePrueba(Object? valor) => _direccion(valor, 'url');
 
