@@ -365,6 +365,7 @@
     "cast-no-seek": "This device does not support jumping to an exact point",
     "cast-device-error": "The device could not play this video. Try another server from the player.",
     "cast-formato": "The device received the video but cannot play it. Try another server.",
+    "cast-volume-no": "This device does not allow changing its volume from here. Use the TV remote.",
     "cast-resolucion": "Your TV cannot play %s. Switching to %t…",
     "cast-formato-aparato": "This device does not support this video's format. Try another server from the player, or another device.",
     "cast-sin-alcance": "The device never requested the video. Check they are on the same network and that the firewall allows PrismHub.",

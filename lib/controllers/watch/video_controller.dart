@@ -429,6 +429,46 @@ class VideoPlayerController extends GetxController with WidgetsBindingObserver {
   final lastSkipSeconds = Rx<int?>(null);
   Timer? _skipBadgeTimer;
 
+  /// Cuánto volumen tiene el reproductor de acá, para mostrarlo un momento.
+  ///
+  /// En PC no había ninguna señal: se tocaban las flechas o se movía el
+  /// deslizador y el sonido cambiaba sin que nada dijera en cuánto quedó.
+  ///
+  /// Null cuando no hay nada que mostrar. Transmitiendo se queda siempre en
+  /// null: ahí el volumen que importa es el del televisor y ese ya se avisa
+  /// dentro del panel de casteo (ver [ajustarVolumenCast]).
+  final avisoVolumen = RxnString();
+  Timer? _avisoVolumenTimer;
+
+  /// El último volumen visto, para no avisar del valor con el que se abre.
+  double? _ultimoVolumen;
+
+  /// Escucha el volumen del reproductor y lo anuncia cuando cambia.
+  ///
+  /// Se engancha al flujo y no a cada botón a propósito: así queda cubierto
+  /// todo lo que lo mueva —las flechas, el deslizador, o lo que se agregue
+  /// después— sin tener que acordarse de avisar en cada sitio.
+  void _seguirVolumenLocal() {
+    _addSubscription(player.stream.volume.listen((v) {
+      if (_disposed) return;
+      // Transmitiendo manda el volumen del televisor, que se avisa aparte.
+      if (dlnaDevice.value != null) return;
+      final antes = _ultimoVolumen;
+      _ultimoVolumen = v;
+      // El primer valor es con el que se abrió el reproductor, no un cambio.
+      if (antes == null || (antes - v).abs() < 0.5) return;
+      avisoVolumen.value = v > 100
+          // Por encima de 100 es amplificación: sin el signo, 150 y 100 se
+          // leerían igual de "normales".
+          ? '+${(v - 100).round()}%'
+          : '${v.round()}%';
+      _avisoVolumenTimer?.cancel();
+      _avisoVolumenTimer = Timer(const Duration(milliseconds: 1300), () {
+        avisoVolumen.value = null;
+      });
+    }));
+  }
+
   void _anunciarSalto(int segundos) {
     if (segundos == 0) return;
     lastSkipSeconds.value = segundos;
@@ -640,10 +680,26 @@ class VideoPlayerController extends GetxController with WidgetsBindingObserver {
     }
   }
 
+  /// Si este aparato acepta que le cambien el volumen.
+  ///
+  /// Se descubre probando —no hay forma de preguntarlo antes— y una vez que se
+  /// sabe que no, se deja de intentar: seguir mandandole ordenes que rechaza en
+  /// cada movimiento del dedo es inundarlo para nada.
+  bool castVolumenSoportado = true;
+
   /// Sube o baja el volumen del aparato. [delta] va en fraccion (-1 a 1).
   void ajustarVolumenCast(double delta) {
     final aparato = dlnaDevice.value;
     if (aparato == null) return;
+    if (!castVolumenSoportado) {
+      castAviso.value = 'video.cast-volume-no'.i18n;
+      Timer(const Duration(seconds: 3), () {
+        if (castAviso.value == 'video.cast-volume-no'.i18n) {
+          castAviso.value = null;
+        }
+      });
+      return;
+    }
     final nuevo = (castVolumen.value + (delta * 100).round()).clamp(0, 100);
     if (nuevo == castVolumen.value) return;
     castVolumen.value = nuevo;
@@ -655,10 +711,26 @@ class VideoPlayerController extends GetxController with WidgetsBindingObserver {
     // los saltos. Con este respiro se manda solo el ultimo valor.
     _volumenCastTimer?.cancel();
     _volumenCastTimer = Timer(const Duration(milliseconds: 220), () async {
+      var acepto = true;
       try {
         await aparato.ponerVolumen(castVolumen.value);
       } catch (e) {
+        // Hay aparatos que directamente no dejan cambiarles el volumen desde
+        // afuera. Antes el numero se movia igual y el televisor seguia como
+        // estaba, asi que parecia que la app no obedecia.
+        acepto = false;
         logger.warning('El aparato no acepto el volumen', e);
+      }
+      if (_disposed || dlnaDevice.value != aparato) return;
+      if (!acepto) {
+        castVolumenSoportado = false;
+        castAviso.value = 'video.cast-volume-no'.i18n;
+        Timer(const Duration(seconds: 3), () {
+          if (castAviso.value == 'video.cast-volume-no'.i18n) {
+            castAviso.value = null;
+          }
+        });
+        return;
       }
       // El cartel se va solo un rato despues del ultimo movimiento.
       Timer(const Duration(milliseconds: 900), () {
@@ -1095,6 +1167,8 @@ class VideoPlayerController extends GetxController with WidgetsBindingObserver {
         currentQuality.value = etiqueta.isEmpty ? "${width}x$event" : etiqueta;
       }
     }));
+
+    _seguirVolumenLocal();
 
     // Primer cuadro real pintado — recién acá se apaga el spinner de carga
     // del centro (ver comentario en hasRenderedFrame).
@@ -1904,6 +1978,8 @@ class VideoPlayerController extends GetxController with WidgetsBindingObserver {
     // reproductor que ya no existe.
     _juntadorDeSaltos?.cancel();
     _destinoDeSalto = null;
+    _avisoVolumenTimer?.cancel();
+    avisoVolumen.value = null;
     _skipBadgeTimer?.cancel();
     _castBuscandoTimer?.cancel();
     _volumenCastTimer?.cancel();
@@ -3622,6 +3698,9 @@ class VideoPlayerController extends GetxController with WidgetsBindingObserver {
     if (_disposed || dlnaDevice.value == null) return;
     // Se arranca desde el volumen que YA tiene el aparato, para que el primer
     // deslizamiento no le pegue un salto.
+    // Cuenta limpia por aparato: que el anterior no dejara cambiarle el volumen
+    // no dice nada de este.
+    castVolumenSoportado = true;
     unawaited(_leerVolumenDelCast(aparato));
     castVelocidadPedida.value = 1;
     // Sigue "cargando" hasta que el aparato diga que reproduce de verdad.
@@ -4735,6 +4814,15 @@ class VideoPlayerController extends GetxController with WidgetsBindingObserver {
     // la vieja, así que cinco toques seguidos saltaban lo mismo que uno.
     _destinoDeSalto = donde;
     position.value = donde;
+
+    // Transmitiendo, la rueda de "esperá que el televisor llegue" se enciende
+    // YA y no cuando se manda el salto.
+    //
+    // Entre soltar la barra y mandar la orden pasan unas decimas, y en ese rato
+    // no habia ninguna señal: en el telefono se soltaba la barra y no se notaba
+    // si estaba cargando o si se habia colgado. Ahi la imagen la tiene el
+    // televisor, asi que sin aviso no hay nada que mirar.
+    if (dlnaDevice.value != null) _empezoSaltoEnCast(donde);
 
     // Y el salto se manda cuando el usuario deja de tocar, una sola vez.
     _juntadorDeSaltos?.cancel();

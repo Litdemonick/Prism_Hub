@@ -283,6 +283,60 @@ class _VideoPlayerDesktopControlsState
                   }),
                 ),
               ),
+              // En cuánto quedó el volumen. Mismo cartel que el del salto, un
+              // poco más abajo para que los dos puedan convivir sin taparse.
+              //
+              // Antes en PC no había ninguna señal: se tocaban las flechas o se
+              // movía el deslizador y el sonido cambiaba sin que nada dijera en
+              // cuánto quedó. Transmitiendo no sale: ahí el volumen que importa
+              // es el del televisor, y ese se avisa dentro del panel de casteo.
+              Positioned.fill(
+                child: IgnorePointer(
+                  child: Obx(() {
+                    final volumen = _c.avisoVolumen.value;
+                    return AnimatedScale(
+                      duration: const Duration(milliseconds: 120),
+                      curve: Curves.easeOutBack,
+                      scale: volumen == null ? 0.85 : 1,
+                      child: AnimatedOpacity(
+                        duration: const Duration(milliseconds: 90),
+                        opacity: volumen == null ? 0 : 1,
+                        child: Align(
+                          alignment: const Alignment(0, -0.32),
+                          child: Container(
+                            padding: const EdgeInsets.symmetric(
+                                horizontal: 18, vertical: 10),
+                            decoration: BoxDecoration(
+                              color: const Color(0xB3000000),
+                              borderRadius: BorderRadius.circular(999),
+                              border: Border.all(color: HomeTheme.accentPink),
+                            ),
+                            child: Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                const material.Icon(
+                                  material.Icons.volume_up,
+                                  color: HomeTheme.accentPink,
+                                  size: 20,
+                                ),
+                                const SizedBox(width: 8),
+                                Text(
+                                  volumen ?? '',
+                                  style: const TextStyle(
+                                    color: material.Colors.white,
+                                    fontWeight: FontWeight.w700,
+                                    fontSize: 15,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                        ),
+                      ),
+                    );
+                  }),
+                ),
+              ),
               // Rueda de carga mientras el reproductor bufferiza (al
               // adelantar, al cambiar de servidor o si la red se pone lenta).
               // El controller ya calculaba isActuallyBuffering —con la

@@ -344,6 +344,7 @@
     "cast-no-seek": "Este dispositivo no permite saltar a un punto exacto",
     "cast-device-error": "El dispositivo no pudo reproducir este vídeo. Probá con otro servidor desde el reproductor.",
     "cast-formato": "El dispositivo recibió el vídeo pero no puede reproducirlo. Probá otro servidor.",
+    "cast-volume-no": "Este dispositivo no deja cambiarle el volumen desde acá. Usá el control del televisor.",
     "cast-resolucion": "El televisor no puede reproducir en %s. Cambiando a %t…",
     "cast-formato-aparato": "Este dispositivo no soporta el formato de este vídeo. Probá otro servidor desde el reproductor, u otro dispositivo.",
     "cast-sin-alcance": "El dispositivo no llegó a pedir el vídeo. Revisá que estén en la misma red y que el cortafuegos deje pasar PrismHub.",
