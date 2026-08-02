@@ -480,12 +480,19 @@ class VideoPlayerController extends GetxController with WidgetsBindingObserver {
   // por segundo mientras corre el timer de estado.
   String? _fallaDeCastAvisada;
 
-  /// Esta transmisión va reempaquetada a MPEG-TS, así que no se puede adelantar.
+  /// El vídeo de esta transmisión, reempaquetado a MPEG-TS.
   ///
-  /// Es el precio de que un televisor que no entiende HLS pueda reproducir:
-  /// el vídeo se le manda como un flujo que se va armando sobre la marcha, sin
-  /// un largo total con el que calcular a qué byte saltar. Ver cast_hls_ts.dart.
-  bool _castSinSalto = false;
+  /// Null cuando se está mandando el original. Cuando viene, el televisor está
+  /// recibiendo un flujo que se arma sobre la marcha: no tiene un largo con el
+  /// que calcular a qué byte saltar, así que adelantar no es pedirle que salte
+  /// sino **rearmarle el flujo desde otro pedacito**. Ver [_saltarEnCastTs].
+  PlanTs? _planTs;
+
+  /// En qué momento del episodio empieza el flujo que está recibiendo.
+  ///
+  /// El televisor cuenta desde cero porque para él cada salto es un vídeo
+  /// nuevo; esto es lo que hay que sumarle para saber por dónde va de verdad.
+  Duration _desfaseTs = Duration.zero;
 
   /// Enganchando con el aparato: mandarle el video y que arranque puede tardar
   /// varios segundos, y hasta ahora no se veia nada en ese rato — parecia que
@@ -3406,7 +3413,8 @@ class VideoPlayerController extends GetxController with WidgetsBindingObserver {
     // Cuando no puede, se le manda el mismo vídeo reempaquetado como MPEG-TS,
     // que sí está en su lista y no cuesta recodificar nada (cast_hls_ts.dart).
     PlanTs? planTs;
-    _castSinSalto = false;
+    _planTs = null;
+    _desfaseTs = Duration.zero;
     var mime = mimeDeUrl(urlOriginal);
     if (aparato is AparatoDlna && mime.contains('mpegurl')) {
       if (!await FormatosDelAparato.aceptaHls(aparato.device)) {
@@ -3434,11 +3442,11 @@ class VideoPlayerController extends GetxController with WidgetsBindingObserver {
           return;
         }
         mime = 'video/mpeg';
-        // El vídeo reempaquetado se va armando sobre la marcha, así que no
-        // tiene un largo con el que el televisor pueda calcular a qué byte
-        // saltar. Se marca para decirlo en vez de mandar una orden que el
-        // aparato no puede cumplir.
-        _castSinSalto = true;
+        _planTs = planTs;
+        // El largo lo sabemos NOSOTROS por la lista, aunque el televisor no
+        // pueda saberlo del flujo. Sin esto la barra queda vacía y no habría
+        // dónde tocar para adelantar.
+        duration.value = planTs.duracion;
       }
     }
 
@@ -3669,6 +3677,8 @@ class VideoPlayerController extends GetxController with WidgetsBindingObserver {
       }));
     }
     _urlEnviadaAlCast = null;
+    _planTs = null;
+    _desfaseTs = Duration.zero;
     if (_dlnaRelayUrl != null) {
       CastRelayServer.unregister(_dlnaRelayUrl!);
       _dlnaRelayUrl = null;
@@ -3922,8 +3932,23 @@ class VideoPlayerController extends GetxController with WidgetsBindingObserver {
       // Solo si el aparato las informo: null no es cero. Pisar la posicion con
       // cero en una vuelta que no trajo el dato hacia saltar la barra al
       // principio y volver, que ademas disparaba el aviso de "buscando".
-      if (info.posicion != null) position.value = info.posicion!;
-      if (info.duracion != null) duration.value = info.duracion!;
+      // Reempaquetado: el televisor cuenta desde cero en cada salto, porque
+      // para el cada uno es un video nuevo. Lo que va en la barra es eso mas el
+      // punto del episodio donde arranco el flujo que esta recibiendo.
+      //
+      // Y la duracion NO se toca: el largo lo sacamos de la lista, y el
+      // televisor solo puede informar lo que lleva bajado de un flujo que
+      // todavia se esta armando.
+      final plan = _planTs;
+      if (plan != null) {
+        if (info.posicion != null) {
+          position.value = _desfaseTs + info.posicion!;
+        }
+        duration.value = plan.duracion;
+      } else {
+        if (info.posicion != null) position.value = info.posicion!;
+        if (info.duracion != null) duration.value = info.duracion!;
+      }
       // Ya llego a donde se le pidio? Entonces se saca la rueda de "buscando".
       _revisarSaltoEnCast();
 
@@ -4596,7 +4621,14 @@ class VideoPlayerController extends GetxController with WidgetsBindingObserver {
     // Hay aparatos que no saben ir a un punto exacto (el mando de Roku
     // adelanta a saltos y nada mas). Se dice, en vez de mandar la orden y
     // dejar la rueda girando esperando algo que no va a pasar.
-    if (!dlnaDevice.value!.permiteSaltar || _castSinSalto) {
+    // Video reempaquetado: el televisor no puede saltar dentro de un flujo que
+    // se va armando sobre la marcha, asi que se le rearma desde el pedacito que
+    // corresponde. El mando sigue siendo este aparato.
+    if (_planTs != null) {
+      await _saltarEnCastTs(duration);
+      return;
+    }
+    if (!dlnaDevice.value!.permiteSaltar) {
       castAviso.value = 'video.cast-no-seek'.i18n;
       Timer(const Duration(milliseconds: 2000), () {
         if (castAviso.value == 'video.cast-no-seek'.i18n) castAviso.value = null;
@@ -4610,6 +4642,62 @@ class VideoPlayerController extends GetxController with WidgetsBindingObserver {
     // posicion conocida y se mandaba eso, asi que una posicion desactualizada
     // dejaba el salto en cualquier lado.
     await dlnaDevice.value!.irA(duration);
+  }
+
+  /// Adelanta en una transmision reempaquetada a MPEG-TS.
+  ///
+  /// El televisor esta recibiendo un flujo sin largo conocido, asi que pedirle
+  /// que salte no sirve de nada. Lo que se hace es armarle **otro flujo** que
+  /// empieza en el pedacito donde cae ese momento y mandarselo como si fuera un
+  /// video nuevo. Para el usuario es lo mismo: toca la barra y el televisor
+  /// sigue desde ahi.
+  ///
+  /// Se puede porque la lista dice cuanto dura cada pedacito, asi que se sabe
+  /// en cual cae cualquier minuto del episodio (ver PlanTs.indiceDe).
+  Future<void> _saltarEnCastTs(Duration donde) async {
+    final plan = _planTs;
+    final aparato = dlnaDevice.value;
+    if (plan == null || aparato == null) return;
+
+    final indice = plan.indiceDe(donde);
+    final recortado = plan.recortadoDesde(indice);
+    // El salto cae en el principio del pedacito, no en el segundo exacto: es
+    // donde el flujo puede empezar a decodificarse. Se informa ESE, para que la
+    // barra no diga un numero y el televisor este en otro.
+    _empezoSaltoEnCast(recortado.inicio);
+
+    final viejo = _dlnaRelayUrl;
+    try {
+      final url = await CastRelayServer.registerAndGetUrl(
+        targetUrl: plan.pedacitos[indice].toString(),
+        headers: plan.headers,
+        planTs: recortado,
+      );
+      await aparato.cargar(
+        url: url,
+        titulo: '$title — ${playList[index.value].name}',
+        mime: 'video/mpeg',
+      );
+      _dlnaRelayUrl = url;
+      _urlEnviadaAlCast = url;
+      _desfaseTs = recortado.inicio;
+      position.value = recortado.inicio;
+      // El anterior recien aca: si algo de lo de arriba fallara, soltarlo antes
+      // habria dejado la transmision cortada Y sin forma de volver.
+      if (viejo != null && viejo != url) CastRelayServer.unregister(viejo);
+      // La cuenta del vigilante arranca de nuevo: para el es un video distinto
+      // y las lecturas del anterior no valen.
+      _vioReproduciendoEnCast = false;
+      _lecturasParadoSeguidas = 0;
+      _desajustesSeguidos = 0;
+    } catch (e) {
+      logger.warning('No se pudo adelantar en el televisor', e);
+      castBuscando.value = false;
+      castAviso.value = 'video.cast-no-seek'.i18n;
+      Timer(const Duration(milliseconds: 2000), () {
+        if (castAviso.value == 'video.cast-no-seek'.i18n) castAviso.value = null;
+      });
+    }
   }
 
   // Devuelve barras de sistema y rotación al estado normal. Es idempotente a

@@ -120,6 +120,79 @@ void main() {
     await server.close(force: true);
   });
 
+  group('adelantar en un vídeo reempaquetado', () {
+    // Adelantar no es pedirle al televisor que salte —no puede, el flujo se va
+    // armando sobre la marcha— sino rearmarle el flujo desde otro pedacito. Lo
+    // que hace falta para eso es saber en cuál cae cada momento.
+    PlanTs plan(List<double> d) => PlanTs(
+          pedacitos: [
+            for (var i = 0; i < d.length; i++) Uri.parse('http://x/$i.ts')
+          ],
+          duraciones: d,
+          headers: const {},
+          userAgent: _ua,
+        );
+
+    test('el largo total sale de la lista', () {
+      expect(plan([10, 10, 10, 5.5]).duracion,
+          const Duration(milliseconds: 35500));
+    });
+
+    test('cada momento cae en su pedacito', () {
+      final p = plan([10, 10, 10, 10]);
+      expect(p.indiceDe(Duration.zero), 0);
+      expect(p.indiceDe(const Duration(seconds: 9)), 0);
+      expect(p.indiceDe(const Duration(seconds: 10)), 1);
+      expect(p.indiceDe(const Duration(seconds: 25)), 2);
+      expect(p.indiceDe(const Duration(seconds: 39)), 3);
+    });
+
+    test('pasarse del final no se sale de la lista', () {
+      final p = plan([10, 10]);
+      expect(p.indiceDe(const Duration(hours: 3)), 1);
+      expect(p.recortadoDesde(99).desde, 1);
+      expect(p.recortadoDesde(-5).desde, 0);
+    });
+
+    test('el flujo recortado sabe en qué minuto empieza', () {
+      final p = plan([10, 10, 10, 10]);
+      // Es lo que la app le suma a lo que informa el televisor, que cuenta
+      // desde cero porque para él es un vídeo nuevo. Si esto estuviera mal, la
+      // barra diría un número y el televisor estaría en otro.
+      expect(p.recortadoDesde(0).inicio, Duration.zero);
+      expect(p.recortadoDesde(2).inicio, const Duration(seconds: 20));
+      expect(p.recortadoDesde(3).inicio, const Duration(seconds: 30));
+      // Y el largo total no cambia por haber recortado.
+      expect(p.recortadoDesde(3).duracion, const Duration(seconds: 40));
+    });
+
+    test('el flujo recortado empieza a servir desde ahí', () async {
+      // Se sirven pedacitos que dicen cual son, para ver por cual arranca.
+      final server = await HttpServer.bind(InternetAddress.loopbackIPv4, 0);
+      server.listen((req) async {
+        req.response.add('[${req.uri.path}]'.codeUnits);
+        await req.response.close();
+      });
+      final base = 'http://127.0.0.1:${server.port}';
+      final p = PlanTs(
+        pedacitos: [
+          for (var i = 0; i < 4; i++) Uri.parse('$base/$i.ts'),
+        ],
+        duraciones: const [10, 10, 10, 10],
+        headers: const {},
+        userAgent: _ua,
+      ).recortadoDesde(2);
+
+      final salida = <int>[];
+      await for (final b in CastHlsATs.servir(p)) {
+        salida.addAll(b);
+      }
+      expect(String.fromCharCodes(salida), '[/2.ts][/3.ts]',
+          reason: 'tiene que arrancar en el pedacito del salto, no en el 0');
+      await server.close(force: true);
+    });
+  });
+
   test('una lista con pedacitos cifrados no se reempaqueta', () async {
     // Se sirve una lista falsa en local: lo que se prueba acá es la decisión,
     // no la red.

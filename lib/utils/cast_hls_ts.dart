@@ -96,17 +96,22 @@ class CastHlsATs {
       }
 
       final pedacitos = <Uri>[];
-      var duracion = 0.0;
+      final duraciones = <double>[];
+      double? ultimoExtinf;
       for (final linea in const LineSplitter().convert(texto)) {
         final limpia = linea.trim();
         if (limpia.isEmpty) continue;
         if (limpia.startsWith('#EXTINF:')) {
-          duracion +=
-              double.tryParse(limpia.substring(8).split(',').first.trim()) ?? 0;
+          ultimoExtinf =
+              double.tryParse(limpia.substring(8).split(',').first.trim());
           continue;
         }
         if (limpia.startsWith('#')) continue;
         pedacitos.add(uri.resolve(limpia));
+        // Cada pedacito con SU duracion, no una suma: es lo que permite saber
+        // en cual cae un minuto concreto cuando el usuario adelanta.
+        duraciones.add(ultimoExtinf ?? 0);
+        ultimoExtinf = null;
       }
       if (pedacitos.isEmpty) {
         logger.info('Reempaquetado a TS: la lista no tenía pedacitos');
@@ -122,14 +127,15 @@ class CastHlsATs {
         return null;
       }
 
-      logger.info('Reempaquetado a TS: ${pedacitos.length} pedacitos, '
-          '${duracion.round()}s');
-      return PlanTs(
+      final plan = PlanTs(
         pedacitos: pedacitos,
-        duracion: Duration(seconds: duracion.round()),
+        duraciones: duraciones,
         headers: headers,
         userAgent: userAgent,
       );
+      logger.info('Reempaquetado a TS: ${pedacitos.length} pedacitos, '
+          '${plan.duracion.inSeconds}s');
+      return plan;
     } catch (e) {
       logger.info('Reempaquetado a TS: no se pudo analizar la lista — $e');
       return null;
@@ -141,7 +147,9 @@ class CastHlsATs {
   /// Va bajando un pedacito mientras el televisor consume el anterior. No se
   /// junta todo en memoria: son cientos de megas.
   static Stream<List<int>> servir(PlanTs plan) async* {
-    for (var i = 0; i < plan.pedacitos.length; i++) {
+    // Desde donde diga el plan: adelantar es servir el mismo video empezando
+    // por otro pedacito.
+    for (var i = plan.desde; i < plan.pedacitos.length; i++) {
       final trozo = plan.pedacitos[i];
       var entregado = false;
       for (var intento = 0; intento <= _reintentos && !entregado; intento++) {
@@ -246,20 +254,65 @@ class CastHlsATs {
 class PlanTs {
   PlanTs({
     required this.pedacitos,
-    required this.duracion,
+    required this.duraciones,
     required this.headers,
     required this.userAgent,
+    this.desde = 0,
   });
 
   /// Las direcciones de los pedacitos, en orden de reproducción.
   final List<Uri> pedacitos;
 
-  /// Sumada de los `#EXTINF` de la lista.
+  /// Cuánto dura cada pedacito, en segundos, sacado de los `#EXTINF`.
   ///
-  /// Sirve para decirle al televisor cuánto dura en la ficha del vídeo: sin
-  /// esto la barra de progreso queda vacía toda la reproducción.
-  final Duration duracion;
+  /// Es lo que permite adelantar: sabiendo cuánto dura cada uno se sabe en
+  /// cuál cae cualquier minuto del episodio. Ver [indiceDe].
+  final List<double> duraciones;
+
+  /// Desde qué pedacito arranca este flujo.
+  ///
+  /// Adelantar en un vídeo reempaquetado es empezar uno nuevo desde otro
+  /// pedacito, porque el televisor no puede saltar dentro de un flujo que se
+  /// va armando sobre la marcha.
+  final int desde;
 
   final Map<String, String> headers;
   final String userAgent;
+
+  /// Lo que dura el episodio entero.
+  Duration get duracion => Duration(
+      milliseconds:
+          (duraciones.fold<double>(0, (a, b) => a + b) * 1000).round());
+
+  /// En qué momento del episodio empieza este flujo.
+  ///
+  /// La app le suma esto a lo que informa el televisor, que cuenta desde cero
+  /// porque para él es un vídeo nuevo.
+  Duration get inicio => Duration(
+      milliseconds: (duraciones
+                  .take(desde)
+                  .fold<double>(0, (a, b) => a + b) *
+              1000)
+          .round());
+
+  /// Qué pedacito contiene ese momento del episodio.
+  int indiceDe(Duration donde) {
+    var acumulado = 0.0;
+    final objetivo = donde.inMilliseconds / 1000.0;
+    for (var i = 0; i < duraciones.length; i++) {
+      acumulado += duraciones[i];
+      if (acumulado > objetivo) return i;
+    }
+    // Más allá del final: el último, para no quedar fuera de la lista.
+    return duraciones.isEmpty ? 0 : duraciones.length - 1;
+  }
+
+  /// El mismo vídeo, empezando desde otro pedacito.
+  PlanTs recortadoDesde(int indice) => PlanTs(
+        pedacitos: pedacitos,
+        duraciones: duraciones,
+        headers: headers,
+        userAgent: userAgent,
+        desde: indice.clamp(0, pedacitos.length - 1),
+      );
 }
