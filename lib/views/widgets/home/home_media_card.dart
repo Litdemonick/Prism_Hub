@@ -260,15 +260,38 @@ class _HomeMediaCardState extends State<HomeMediaCard> {
           fallback: arteDefault,
           cacheWidth: imgW);
     } else {
-      cover = DecoratedBox(
-        decoration: BoxDecoration(
-          gradient: LinearGradient(
-            begin: Alignment.topLeft,
-            end: Alignment.bottomRight,
-            colors: HomeTheme.gradientFor(
-                widget.gradientSeed ?? widget.title.hashCode),
+      // Sin portada: el arte de PrismHub, no un color liso.
+      //
+      // Antes acá iba solo un degradado, y una tarjeta así se lee como que algo
+      // se rompió — sobre todo cuando al lado hay otras con su imagen. Con el
+      // arte se entiende que la portada todavía no está, que es lo que pasa de
+      // verdad: puede faltar porque el título llegó por una copia y nunca se
+      // abrió, o porque la extensión todavía no la entregó.
+      //
+      // El degradado se conserva DETRÁS: el arte es casi cuadrado y la tarjeta
+      // no, así que llenándola pierde un poco arriba y abajo; el color detrás
+      // evita que se vea un hueco negro si el asset tardara en decodificarse.
+      // Y sigue siendo distinto por título, así que dos tarjetas sin portada no
+      // se ven idénticas.
+      //
+      // En cuanto la portada real aparezca —la reparación de fondo la pide y la
+      // guarda, ver PortadasPerdidas— esta tarjeta pasa sola por la rama de
+      // arriba y muestra la imagen de verdad.
+      cover = Stack(
+        fit: StackFit.expand,
+        children: [
+          DecoratedBox(
+            decoration: BoxDecoration(
+              gradient: LinearGradient(
+                begin: Alignment.topLeft,
+                end: Alignment.bottomRight,
+                colors: HomeTheme.gradientFor(
+                    widget.gradientSeed ?? widget.title.hashCode),
+              ),
+            ),
           ),
-        ),
+          arteDefault,
+        ],
       );
     }
 
