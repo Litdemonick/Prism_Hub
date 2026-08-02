@@ -164,6 +164,12 @@ class CastRelayServer {
   /// (no hay nada roto, hay que esperar).
   static final Map<String, int> bytesPorSesion = {};
 
+  /// Por qué pedacito del reempaquetado iba cada transmisión.
+  ///
+  /// Es lo que permite retomar en vez de reiniciar cuando el aparato vuelve a
+  /// pedir. Ver el uso en el manejador de pedidos.
+  static final Map<String, int> _pedacitoPorSesion = {};
+
   static int bytesServidos(String? relayUrl) {
     final sesion = _sesionDe(relayUrl);
     return sesion == null ? 0 : (bytesPorSesion[sesion] ?? 0);
@@ -315,8 +321,34 @@ class CastRelayServer {
             '${CastLog.cabeceras(cabeceras)}');
       }
       if (esHead) return Response.ok(null, headers: cabeceras);
+      // Si ya se le venía sirviendo, se SIGUE donde iba en vez de empezar de
+      // cero.
+      //
+      // Un aparato puede cortar y volver a pedir por muchos motivos —se le llenó
+      // el buffer, un hipo de red, su propio reproductor decidió reabrir—, y no
+      // los controlamos. Lo que sí controlamos es qué le mandamos cuando vuelve:
+      // hasta ahora era el vídeo entero desde el principio, así que cada
+      // reintento suyo se veía como que el capítulo se reiniciaba solo, una y
+      // otra vez. Medido en vivo: pedidos nuevos tras 8,3 · 16,6 · 33,3 MiB
+      // servidos, con el vídeo volviendo al inicio cada vez.
+      //
+      // Se retoma en el ÚLTIMO pedacito entregado y no en el siguiente: ese
+      // puede haber quedado a medio reproducir del otro lado. Repetir unos
+      // segundos no se nota; saltearlos, sí.
+      final desde = _pedacitoPorSesion[target.sesion];
+      final aServir = desde == null ? plan : plan.recortadoDesde(desde);
+      if (desde != null) {
+        CastLog.paso('Se retoma el reempaquetado en el pedacito ${desde + 1} '
+            'en vez de empezar de nuevo');
+      }
       return Response.ok(
-        _contando(target.sesion, CastHlsATs.servir(plan)),
+        _contando(
+          target.sesion,
+          CastHlsATs.servir(
+            aServir,
+            alEntregar: (indice) => _pedacitoPorSesion[target.sesion] = indice,
+          ),
+        ),
         headers: cabeceras,
       );
     }
@@ -633,6 +665,7 @@ class CastRelayServer {
     _tokensPorUrl.removeWhere((clave, _) => clave.startsWith('$sesion|'));
     pedidosPorSesion.remove(sesion);
     bytesPorSesion.remove(sesion);
+    _pedacitoPorSesion.remove(sesion);
     _cerrarSiSobra();
   }
 

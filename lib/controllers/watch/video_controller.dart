@@ -4259,6 +4259,12 @@ class VideoPlayerController extends GetxController with WidgetsBindingObserver {
         url: url,
         titulo: '$title — ${playList[index.value].name}',
         mime: mime,
+        // Con reempaquetado NO se puede saltar, y hay que decírselo: el flujo se
+        // arma sobre la marcha. Ver el comentario en cast_metadata.dart — creer
+        // que puede reposicionarse por bytes es lo que hacía que el televisor
+        // cerrara y reabriera la conexión, y con eso el capítulo volvía a
+        // empezar de cero en bucle.
+        puedeSaltar: planTs == null,
       );
       CastLog.paso('El aparato aceptó la orden; se le anunció '
           '${CastLog.anuncio(url)}');

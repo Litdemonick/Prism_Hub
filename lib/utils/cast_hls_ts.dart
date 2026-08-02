@@ -162,7 +162,14 @@ class CastHlsATs {
   ///
   /// Se bajan varios pedacitos a la vez pero se entregan SIEMPRE en orden: un
   /// MPEG-TS es un flujo continuo y un pedacito fuera de lugar lo rompe.
-  static Stream<List<int>> servir(PlanTs plan) async* {
+  ///
+  /// [alEntregar] avisa qué pedacito se está entregando. El relay lo usa para
+  /// saber por dónde iba si el aparato corta y vuelve a pedir: sin eso, cada
+  /// reintento del televisor arrancaba el vídeo desde el principio.
+  static Stream<List<int>> servir(
+    PlanTs plan, {
+    void Function(int indice)? alEntregar,
+  }) async* {
     // Desde donde diga el plan: adelantar es servir el mismo video empezando
     // por otro pedacito.
     final enVuelo = <Future<List<int>?>>[];
@@ -194,11 +201,17 @@ class CastHlsATs {
       proximo++;
       // La cola de los que vienen detrás arranca YA, en paralelo con este.
       llenarLaCola();
+      alEntregar?.call(primero);
       yield* _servirPedacitoEnVivo(plan, primero);
     }
 
+    // Cuál de la lista es el que sale ahora. La cola se adelanta, así que
+    // `proximo` ya apunta a varios más allá y no sirve para esto.
+    var entregando = proximo - enVuelo.length;
     while (enVuelo.isNotEmpty) {
       final bytes = await enVuelo.removeAt(0);
+      alEntregar?.call(entregando);
+      entregando++;
       // Se pide el reemplazo apenas se saca uno de la cola, no después de
       // entregarlo: si se esperara a que el televisor lo consuma, volveríamos a
       // tener la descarga y la reproducción una detrás de la otra.
