@@ -171,12 +171,25 @@ class PrismLog {
     final batch = _pending.toString();
     _pending.clear();
 
-    if (!kReleaseMode) {
+    // En depuración, a la consola y nada más: ahí se está mirando la consola.
+    if (kDebugMode) {
       debugPrint(batch);
       return;
     }
 
-    if (PrismHubStorage.getSetting(SettingKey.saveLog) != true) {
+    // En perfilado, a los DOS lados.
+    //
+    // Antes solo iba a la consola, y perfilar es justamente cuando se está
+    // diagnosticando algo: se corría `flutter run --profile`, pasaba el fallo, y
+    // al ir a exportar el registro el archivo no tenía ni una línea de esa
+    // corrida — quedaba solo en una consola que hay que copiar a mano. Ahora
+    // queda escrito, así que se puede exportar y adjuntar como cualquier otra
+    // sesión, sin perder el volcado por consola que sirve para verlo en vivo.
+    if (kProfileMode) {
+      debugPrint(batch);
+    } else if (PrismHubStorage.getSetting(SettingKey.saveLog) != true) {
+      // En release manda el interruptor de Ajustes. En perfilado no se pregunta:
+      // esa compilación no la usa nadie para ver una serie, se usa para medir.
       return;
     }
     try {

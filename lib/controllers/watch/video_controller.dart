@@ -367,6 +367,11 @@ class VideoPlayerController extends GetxController with WidgetsBindingObserver {
         _atascoAvisado = true;
         logger.warning(
             'El video lleva ${quieto.inSeconds}s sin avanzar: se avisa');
+        // Las métricas TAMBIÉN acá, no solo cuando mpv avisa que está
+        // bufferizando. Justamente el caso peor —mpv bloqueado leyendo— no
+        // dispara ningún aviso de buffering, así que el atasco que más importa
+        // era el único que quedaba sin un solo número que lo explicara.
+        unawaited(_diagnosticarBache('imagen congelada'));
         sendMessage(Message(
           Text('video.stalled'.i18n),
           time: const Duration(seconds: 8),
@@ -462,15 +467,23 @@ class VideoPlayerController extends GetxController with WidgetsBindingObserver {
   /// queda descargado por delante, a qué velocidad está entrando, y cuántos
   /// cuadros se tiraron. Con caudal bajo y colchón en cero es la red; con el
   /// colchón lleno y cuadros tirados es el equipo.
-  Future<void> _diagnosticarBache() async {
+  Future<void> _diagnosticarBache([String motivo = 'bache']) async {
     if (_disposed || player.platform is! NativePlayer) return;
+    // Sin vídeo abierto todavía no hay nada que medir, y preguntarlo devolvía
+    // una línea con todos los valores VACÍOS que no dice nada — pasaba en cada
+    // arranque, antes de que mpv llegara a abrir la fuente.
+    if (!hasRenderedFrame.value && position.value == Duration.zero) return;
     final np = player.platform as NativePlayer;
     try {
       final colchon = await np.getProperty('demuxer-cache-duration');
       final caudal = await np.getProperty('cache-speed');
       final tirados = await np.getProperty('frame-drop-count');
-      logger.info('bache · colchón: ${colchon}s · caudal: $caudal B/s · '
-          'cuadros tirados: $tirados · calidad: ${currentQuality.value}');
+      // Vacío = mpv no supo contestar esa propiedad. Se dice, en vez de dejar un
+      // hueco que se lee como un cero.
+      String d(String v) => v.trim().isEmpty ? 'no informado' : v.trim();
+      logger.info('$motivo · colchón: ${d(colchon)} s · caudal: ${d(caudal)} B/s '
+          '· cuadros tirados: ${d(tirados)} · calidad: ${currentQuality.value} '
+          '· posición: ${position.value.inSeconds}s');
     } catch (e) {
       // Meramente informativo: que no se pueda leer una propiedad no puede
       // interferir con la reproducción.
