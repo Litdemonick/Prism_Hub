@@ -26,6 +26,7 @@ import 'package:prismhub/utils/prismhub_storage.dart';
 import 'package:prismhub/utils/application.dart';
 import 'package:prismhub/views/widgets/platform_widget.dart';
 import 'package:prismhub/utils/compartir.dart';
+import 'package:prismhub/utils/notificacion_reproductor.dart';
 import 'package:prismhub/utils/instancia_unica.dart';
 import 'package:window_manager/window_manager.dart';
 import 'package:package_info_plus/package_info_plus.dart';
@@ -468,6 +469,15 @@ class _AppRootState extends State<_AppRoot> {
       MediaKit.ensureInitialized();
     } catch (e) {
       debugPrint('ERROR: MediaKit.ensureInitialized falló: $e');
+    }
+    // La notificación del reproductor, solo en Android.
+    //
+    // Se enciende UNA vez al arrancar y no al abrir cada vídeo: Android no deja
+    // levantar y bajar este servicio a repetición. Después solo se le cambia lo
+    // que muestra. Si falla, se sigue sin ella: no poder dibujar una
+    // notificación no puede impedir ver un vídeo.
+    if (Platform.isAndroid) {
+      await NotificacionReproductor.encender();
     }
     await minDuration;
     if (mounted) setState(() => _ready = true);

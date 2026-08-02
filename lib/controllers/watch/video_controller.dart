@@ -29,6 +29,7 @@ import 'package:prismhub/utils/cast_formatos.dart';
 import 'package:prismhub/utils/cast_hls_ts.dart';
 import 'package:prismhub/utils/connectivity.dart';
 import 'package:prismhub/utils/cast_metadata.dart';
+import 'package:prismhub/utils/notificacion_reproductor.dart';
 import 'package:prismhub/utils/cast_relay_server.dart';
 import 'package:prismhub/utils/watch_state.dart';
 import 'package:prismhub/data/services/database_service.dart';
@@ -1051,6 +1052,10 @@ class VideoPlayerController extends GetxController with WidgetsBindingObserver {
   _initPlayer() {
     // 切换剧集
     _addWorker(ever(index, (callback) async {
+      // Otro episodio: la notificación tiene que decir cuál, no quedarse con el
+      // nombre del anterior. Se rehace en vez de actualizarse porque cambia el
+      // título, y con él la ficha entera.
+      unawaited(_mostrarNotificacion());
       // Casteando, el episodio nuevo tiene que ir tambien al televisor.
       //
       // Antes play() abria el episodio nuevo ACA mientras el televisor seguia
@@ -1248,6 +1253,9 @@ class VideoPlayerController extends GetxController with WidgetsBindingObserver {
         return;
       }
       duration.value = event;
+      // Con el largo ya conocido la notificación puede dibujar su barra. Es
+      // también la primera vez que hay algo real que mostrar.
+      if (event > Duration.zero) unawaited(_mostrarNotificacion());
     }));
 
     // 监听播放状态
@@ -1256,6 +1264,10 @@ class VideoPlayerController extends GetxController with WidgetsBindingObserver {
         return;
       }
       isPlaying.value = event;
+      // Sin el freno de tiempo: pausar y reanudar tiene que verse en la
+      // notificación en el acto, no al segundo siguiente.
+      _ultimoRefrescoNotificacion = null;
+      _refrescarNotificacion();
       if (event) {
         unawaited(_touchHistory());
       }
@@ -1271,6 +1283,7 @@ class VideoPlayerController extends GetxController with WidgetsBindingObserver {
       // que impedia encadenar saltos.
       if (!_aceptarPosicion(event)) return;
       position.value = event;
+      _refrescarNotificacion();
       // Avance real de posición → hay frames nuevos reproduciéndose, así que
       // NO puede estar bufferizando de verdad ahora mismo, sin importar lo
       // que diga el flag crudo (ver isActuallyBuffering).
@@ -1984,6 +1997,9 @@ class VideoPlayerController extends GetxController with WidgetsBindingObserver {
     // despues sobre un aparato que ya se solto.
     _playPedidoTimer?.cancel();
     _playPedido = null;
+    // La notificación se va con el reproductor: dejarla en la barra sin nadie
+    // del otro lado sería un panel de control que no controla nada.
+    if (Platform.isAndroid) NotificacionReproductor.esconder();
     _skipBadgeTimer?.cancel();
     _castBuscandoTimer?.cancel();
     _volumenCastTimer?.cancel();
@@ -2846,6 +2862,77 @@ class VideoPlayerController extends GetxController with WidgetsBindingObserver {
   // puede matar el proceso desde ahí sin volver a avisar: onClose no llega a
   // correr nunca y se pierde el minuto que llevabas viendo. Este es el último
   // momento garantizado para dejarlo escrito.
+  /// La portada del título, para la notificación. Se resuelve una vez.
+  String? _portadaParaNotificacion;
+
+  /// Cuándo se actualizó por última vez lo que muestra la notificación.
+  DateTime? _ultimoRefrescoNotificacion;
+
+  /// Pone al día la notificación con lo que está pasando.
+  ///
+  /// Como máximo una vez por segundo: la posición llega decenas de veces por
+  /// segundo y cada actualización cruza al lado nativo. Sin el freno era trabajo
+  /// constante para mover un número que igual solo se ve al segundo.
+  void _refrescarNotificacion() {
+    if (!Platform.isAndroid || _disposed) return;
+    final ahora = DateTime.now();
+    final ultimo = _ultimoRefrescoNotificacion;
+    if (ultimo != null && ahora.difference(ultimo).inMilliseconds < 1000) {
+      return;
+    }
+    _ultimoRefrescoNotificacion = ahora;
+    NotificacionReproductor.actualizar(
+      reproduciendo: isPlaying.value,
+      posicion: position.value,
+      duracion: duration.value,
+    );
+  }
+
+  /// Enciende (o refresca) la notificación del reproductor en Android.
+  ///
+  /// Es la única forma de controlar lo que se está viendo con la app en segundo
+  /// plano. Transmitiendo a un televisor es donde más falta hace: la imagen está
+  /// en la otra pantalla y el teléfono es el mando, así que salir de la app
+  /// dejaba sin manera de pausar o pasar de episodio.
+  ///
+  /// Cada botón llama a lo que ya existe —los mismos métodos que los botones de
+  /// la pantalla— así que no hay un segundo camino que pueda desincronizarse.
+  Future<void> _mostrarNotificacion() async {
+    if (!Platform.isAndroid || _disposed) return;
+    try {
+      _portadaParaNotificacion ??= await _historyCoverFallback(
+        await DatabaseService.getHistoryByPackageAndUrl(
+            runtime.extension.package, detailUrl),
+      );
+      if (_disposed) return;
+      NotificacionReproductor.mostrar(
+        titulo: title,
+        episodio: index.value >= 0 && index.value < playList.length
+            ? playList[index.value].name
+            : '',
+        portada: _portadaParaNotificacion,
+        duracion: duration.value,
+        reproduciendo: isPlaying.value,
+        enTelevisor: dlnaDevice.value != null,
+        alReproducir: safePlay,
+        alPausar: safePause,
+        alSaltar: (donde) => unawaited(seek(donde)),
+        // Los mismos límites que los botones de la pantalla: sin esto, tocar
+        // "siguiente" en el último episodio se iba fuera de la lista.
+        alSiguiente: () {
+          if (index.value + 1 < playList.length) index.value++;
+        },
+        alAnterior: () {
+          if (index.value > 0) index.value--;
+        },
+        alCerrar: () => unawaited(closeRoute()),
+      );
+    } catch (e) {
+      // Sin notificación se puede ver igual: no se corta nada por esto.
+      logger.info('No se pudo mostrar la notificación del reproductor: $e');
+    }
+  }
+
   /// La app no está en pantalla ahora mismo.
   ///
   /// Importa para el casteo: en segundo plano Android recorta la red (Doze), así
@@ -3797,6 +3884,9 @@ class VideoPlayerController extends GetxController with WidgetsBindingObserver {
     // Cuenta limpia por aparato: que el anterior no dejara cambiarle el volumen
     // no dice nada de este.
     castVolumenSoportado = true;
+    // La notificación pasa a decir que está sonando en el televisor, y sus
+    // botones a hablarle a él.
+    unawaited(_mostrarNotificacion());
     unawaited(_leerVolumenDelCast(aparato));
     castVelocidadPedida.value = 1;
     // Sigue "cargando" hasta que el aparato diga que reproduce de verdad.
@@ -4113,6 +4203,10 @@ class VideoPlayerController extends GetxController with WidgetsBindingObserver {
       if (_aceptarReproduciendo(reproduciendo)) {
         isPlaying.value = reproduciendo;
       }
+      // La notificación también, que transmitiendo es el único mando que queda
+      // con la app en segundo plano: el reproductor de acá está parado y no
+      // emite nada, así que sin esto se quedaba con lo último que vio.
+      _refrescarNotificacion();
       if (reproduciendo) {
         _vioReproduciendoEnCast = true;
         // Empezo de verdad: recien aca se saca el aviso de carga.

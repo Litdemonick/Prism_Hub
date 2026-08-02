@@ -5,15 +5,23 @@ import android.net.Uri
 import android.os.Build
 import android.provider.Settings
 import androidx.core.content.FileProvider
-// FlutterFragmentActivity y no FlutterActivity: local_auth muestra el
-// diálogo de huella con BiometricPrompt, que necesita una FragmentActivity.
-// Con la clase normal el plugin falla en tiempo de ejecución.
-import io.flutter.embedding.android.FlutterFragmentActivity
+// AudioServiceFragmentActivity y no FlutterFragmentActivity a secas.
+//
+// Hacen falta las dos cosas a la vez y esta clase es justo la que las junta:
+//
+//  - Es una FragmentActivity, que es lo que necesita local_auth para mostrar el
+//    diálogo de huella con BiometricPrompt. Con la actividad normal ese plugin
+//    falla en tiempo de ejecución.
+//  - Comparte el motor de Flutter con el servicio de la notificación
+//    (audio_service). Sin esto, tocar la notificación cuando la app ya no está
+//    en memoria levantaría un motor NUEVO: la app arrancaría de cero y los
+//    botones quedarían hablándole a un reproductor que ya no existe.
+import com.ryanheise.audioservice.AudioServiceFragmentActivity
 import io.flutter.embedding.engine.FlutterEngine
 import io.flutter.plugin.common.MethodChannel
 import java.io.File
 
-class MainActivity: FlutterFragmentActivity() {
+class MainActivity: AudioServiceFragmentActivity() {
     private val CHANNEL = "com.example.prismhub/update"
 
     // Enlaces compartidos (prismhub://detail?...). En Android no llegan como
