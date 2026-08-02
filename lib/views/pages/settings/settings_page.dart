@@ -7,6 +7,7 @@ import 'package:path_provider/path_provider.dart';
 import 'package:prismhub/controllers/home_controller.dart';
 import 'package:prismhub/utils/copia_cifrado.dart';
 import 'package:prismhub/utils/copia_seguridad.dart';
+import 'package:prismhub/utils/portadas_perdidas.dart';
 import 'package:prismhub/views/pages/settings/copia_elegir_extensiones.dart';
 import 'package:fluent_ui/fluent_ui.dart' as fluent;
 import 'package:flutter/material.dart';
@@ -431,6 +432,9 @@ class _SettingsPageState extends State<SettingsPage> {
   /// copia trae los dos.
   Future<void> _refrescarTrasImportar() async {
     try {
+      // La copia pudo traer fichas nuevas que sí tienen la portada de un título
+      // al que antes no se le encontraba: se vuelve a permitir el intento.
+      PortadasPerdidas.olvidarLoMirado();
       await HomePageController.refreshAll();
     } catch (e) {
       // Que no se pueda refrescar no invalida la importación: los datos ya

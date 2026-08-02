@@ -9,6 +9,7 @@ import 'package:prismhub/data/services/database_service.dart';
 import 'package:prismhub/utils/novedades.dart';
 import 'package:prismhub/utils/connectivity.dart';
 import 'package:prismhub/utils/extension.dart';
+import 'package:prismhub/utils/portadas_perdidas.dart';
 import 'package:prismhub/utils/resume_history.dart';
 
 class HomePageController extends GetxController {
@@ -182,6 +183,15 @@ class HomePageController extends GetxController {
     resents.value = resentsData;
     favorites.value = favoritesData;
     unawaited(prewarmResumeHistoryTargets(resentsData));
+    // Portadas que quedaron vacías: se recuperan de lo que ya hay guardado.
+    //
+    // Sin red y en segundo plano. Si encuentra alguna, se releen las listas
+    // para que la tarjeta deje de ser un color liso sin tener que refrescar a
+    // mano. Ver PortadasPerdidas.
+    unawaited(() async {
+      final arregladas = await PortadasPerdidas.reparar(historialZona);
+      if (arregladas > 0) await refreshHistory();
+    }());
     // En segundo plano y sin await: son peticiones de red por obra, y el Home
     // no puede quedarse esperándolas. Cuando termina, si encontró algo, se
     // releen las listas para que la tarjeta aparezca sola.
