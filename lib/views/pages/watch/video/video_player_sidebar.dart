@@ -11,7 +11,6 @@ import 'package:prismhub/views/widgets/platform_widget.dart';
 import 'package:prismhub/views/widgets/watch/playlist.dart';
 import 'package:prismhub/views/widgets/home/home_theme.dart';
 import 'package:prismhub/views/widgets/watch/tutorial_reproductor.dart';
-import 'package:prismhub/views/widgets/messenger.dart';
 
 enum SidebarTab {
   episodes,

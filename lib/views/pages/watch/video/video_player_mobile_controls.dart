@@ -15,7 +15,6 @@ import 'package:prismhub/views/pages/watch/video/video_player_cast.dart';
 import 'package:prismhub/views/pages/watch/video/video_player_sidebar.dart';
 import 'package:prismhub/views/widgets/cache_network_image.dart';
 import 'package:prismhub/views/widgets/home/home_theme.dart';
-import 'package:prismhub/views/widgets/progress.dart';
 import 'package:volume_controller/volume_controller.dart';
 
 class VideoPlayerMobileControls extends StatefulWidget {
