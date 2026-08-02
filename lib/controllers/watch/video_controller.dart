@@ -4764,7 +4764,12 @@ class VideoPlayerController extends GetxController with WidgetsBindingObserver {
     // libmpv por defecto envía "Lavf/X.X.X" que los CDNs de streaming bloquean.
     final hdrs = <String, String>{'User-Agent': _browserUA};
     if (headers != null) hdrs.addAll(headers);
-    await player.open(Media(url, httpHeaders: hdrs));
+    // Si la lista reparte los pedacitos entre varios nodos del CDN, se abre a
+    // traves del relay para poder esquivar los que no entreguen. Devuelve null
+    // —y se abre directo, como siempre— cuando no hace falta o no se pudo.
+    final porElRelay = await _porElRelaySiConvieneEsquivarNodos(url, headers);
+    if (_disposed) return false;
+    await player.open(Media(porElRelay ?? url, httpHeaders: hdrs));
     if (_disposed) {
       try {
         unawaited(player.stop());
@@ -4885,6 +4890,81 @@ class VideoPlayerController extends GetxController with WidgetsBindingObserver {
       episodeUrl,
       'webview',
     ));
+  }
+
+  /// Cambia la lista HLS por una que pase por el relay, para poder esquivar
+  /// nodos caídos. Devuelve null si no hace falta o no se pudo.
+  ///
+  /// El problema, medido: estas listas reparten los pedacitos entre varios nodos
+  /// del mismo CDN, y algunos entregan a 2 MB/s mientras otros no terminan el
+  /// archivo en quince segundos. Los pedacitos los pide mpv, no nosotros, así
+  /// que no había forma de decirle "ese nodo no anda, pedíselo a otro" — y el
+  /// vídeo se clavaba siempre en el mismo segundo del episodio, justo donde
+  /// empieza un pedacito servido por un nodo malo. Casteando ya está resuelto
+  /// porque ahí los bajamos nosotros; esto lleva lo mismo al reproductor normal.
+  ///
+  /// **Solo se activa cuando de verdad hace falta**, y esto es a propósito:
+  /// meter el relay en el medio de toda la reproducción es un riesgo que no vale
+  /// la pena correr en las fuentes que ya andan bien. Se pide la lista (medido:
+  /// menos de un segundo), se mira si reparte entre varios nodos, y si es de uno
+  /// solo se devuelve null y se abre directo como siempre.
+  ///
+  /// Ante cualquier problema —no se pudo bajar, no es una lista, el relay no
+  /// levanta— también devuelve null. Nunca puede dejar el vídeo peor que antes:
+  /// en el peor caso se reproduce exactamente como hoy.
+  Future<String?> _porElRelaySiConvieneEsquivarNodos(
+    String url,
+    Map<String, String>? headers,
+  ) async {
+    if (!isDirectStream(url) || !url.split('?').first.toLowerCase().endsWith('.m3u8')) {
+      return null;
+    }
+    try {
+      final reloj = Stopwatch()..start();
+      final hdrs = <String, String>{'User-Agent': _browserUA};
+      if (headers != null) hdrs.addAll(headers);
+      final res = await dio.get<String>(
+        url,
+        options: Options(
+          headers: hdrs,
+          responseType: ResponseType.plain,
+          receiveTimeout: const Duration(seconds: 6),
+        ),
+      );
+      final texto = res.data;
+      if (texto == null || !texto.contains('#EXTM3U')) return null;
+      // Una lista maestra no trae pedacitos sino otras listas: la reparte de
+      // nodos se ve recién en la de abajo, y seguirla acá sería pedir otra vez.
+      if (texto.contains('#EXT-X-STREAM-INF')) return null;
+
+      final base = Uri.parse(url);
+      final nodos = <String>{};
+      for (final linea in const LineSplitter().convert(texto)) {
+        final limpia = linea.trim();
+        if (limpia.isEmpty || limpia.startsWith('#')) continue;
+        final host = base.resolve(limpia).host;
+        if (host.isNotEmpty) nodos.add(host);
+      }
+      logger.info('Se miró la lista en ${reloj.elapsedMilliseconds} ms: '
+          '${nodos.length} nodo(s)');
+      // Un solo nodo: no hay a quién cambiarle, así que el relay no aportaría
+      // nada y solo agregaría un intermediario.
+      if (nodos.length < 2) return null;
+
+      final relay = await CastRelayServer.registerAndGetUrl(
+        targetUrl: url,
+        headers: hdrs,
+        esquivarNodosCaidos: true,
+      );
+      logger.info('La lista reparte entre ${nodos.length} nodos '
+          '(${nodos.join(', ')}): se pasa por el relay para poder esquivar los '
+          'que no entreguen');
+      return relay;
+    } catch (e) {
+      logger.info('No se pudo preparar el relay para esquivar nodos, se abre '
+          'directo como siempre: $e');
+      return null;
+    }
   }
 
   void _markNativePlayback(String name) {

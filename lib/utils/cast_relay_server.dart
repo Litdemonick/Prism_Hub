@@ -56,6 +56,7 @@ class CastRelayServer {
     required String targetUrl,
     Map<String, String>? headers,
     PlanTs? planTs,
+    bool esquivarNodosCaidos = false,
   }) async {
     await _ensureRunning();
     // El token lleva adelante un identificador de sesion para poder soltar de
@@ -63,8 +64,13 @@ class CastRelayServer {
     // unregister). Sin eso, cada episodio casteado dejaba cientos de entradas.
     final sesion = '${DateTime.now().microsecondsSinceEpoch}';
     final token = '$sesion-0';
-    _targets[token] =
-        _RelayTarget(targetUrl, headers ?? const {}, sesion, planTs: planTs);
+    _targets[token] = _RelayTarget(
+      targetUrl,
+      headers ?? const {},
+      sesion,
+      planTs: planTs,
+      esquivarNodosCaidos: esquivarNodosCaidos,
+    );
     final ip = await _localLanAddress();
     if (ip == null) {
       // Sin una IP de red real no hay relay posible: lo unico que se le podria
@@ -362,8 +368,22 @@ class CastRelayServer {
 
     final client = _cliente;
     try {
-      final uri = Uri.parse(target.url);
+      var uri = Uri.parse(target.url);
       final esLista = _pareceHls(target.url);
+      // Un nodo que ya se sabe lento se saltea de entrada.
+      //
+      // Estas listas reparten los pedacitos entre varios nodos del mismo CDN, y
+      // medido en vivo: unos entregan a 2 MB/s y otros no terminan el archivo en
+      // quince segundos. Si a este pedacito le tocó uno de los malos, se pide el
+      // MISMO archivo a uno sano antes de siquiera intentarlo. Ver
+      // CastHlsATs.nodoLento, que es la misma memoria que usa el casteo.
+      if (!esLista && target.esquivarNodosCaidos) {
+        final mejor = _mejorNodoPara(uri, target);
+        if (mejor != null && mejor.host != uri.host) {
+          CastLog.paso('Se evita ${uri.host} (ya falló): se pide a ${mejor.host}');
+          uri = mejor;
+        }
+      }
       final upstreamReq =
           esHead ? await client.headUrl(uri) : await client.getUrl(uri);
       target.headers.forEach((key, value) => upstreamReq.headers.set(key, value));
@@ -461,7 +481,12 @@ class CastRelayServer {
       // el camino, en el punto por el que pasa TODO el video.
       return Response(
         upstreamRes.statusCode,
-        body: _contando(target.sesion, upstreamRes),
+        body: _contando(
+          target.sesion,
+          esLista || !target.esquivarNodosCaidos
+              ? upstreamRes
+              : _vigilandoElNodo(uri.host, upstreamRes),
+        ),
         headers: resHeaders,
       );
     } catch (e) {
@@ -559,7 +584,12 @@ class CastRelayServer {
     // cabeceras, el receptor puede pedirlos el mismo y el relay se saca del
     // camino. Medido contra la fuente del registro del usuario, los pedacitos
     // contestan 200 sin ninguna cabecera, asi que ahi este atajo aplica.
-    final directo = await _pedacitosVanDirecto(texto, base);
+    // El atajo de mandar al receptor directo a la fuente NO aplica cuando lo que
+    // se busca es esquivar nodos caídos: ahí el relay tiene que quedarse en el
+    // camino, que es lo que le permite pedirle el mismo pedacito a otro nodo.
+    final directo = padre.esquivarNodosCaidos
+        ? false
+        : await _pedacitosVanDirecto(texto, base);
     final salida = StringBuffer();
     if (directo) {
       // Igual hay que reescribir: las direcciones relativas de la lista se
@@ -642,6 +672,64 @@ class CastRelayServer {
     }
   }
 
+  /// Mira a qué ritmo entrega un nodo y lo anota si va demasiado lento.
+  ///
+  /// No corta la descarga en curso: cuando se cortó, la mitad de los bytes ya
+  /// viajaron al reproductor y cambiar de nodo a mitad los duplicaría. Lo que
+  /// hace es dejar constancia, para que **el pedacito siguiente** no vuelva a
+  /// caer en el mismo nodo. Con listas de cientos de pedacitos, evitarlo desde
+  /// el segundo en adelante es casi todo el beneficio.
+  ///
+  /// El umbral está puesto donde separa los dos comportamientos medidos: los
+  /// nodos sanos entregaron entre 500 y 3500 KiB/s, y los malos no pasaron de
+  /// 100 KiB/s. Se espera un mínimo de segundos antes de juzgar, porque al
+  /// principio de una descarga cualquier ritmo se ve mal.
+  static const _ritmoMinimo = 200 * 1024;
+  static const _antesDeJuzgar = Duration(seconds: 8);
+
+  static Stream<List<int>> _vigilandoElNodo(
+      String host, Stream<List<int>> origen) {
+    final reloj = Stopwatch()..start();
+    var entregados = 0;
+    var yaAnotado = false;
+    return origen.map((bloque) {
+      entregados += bloque.length;
+      if (!yaAnotado && reloj.elapsed > _antesDeJuzgar) {
+        final ritmo = entregados / reloj.elapsed.inSeconds;
+        if (ritmo < _ritmoMinimo) {
+          yaAnotado = true;
+          CastHlsATs.anotarNodoLento(host);
+          CastLog.paso('$host va a ${(ritmo / 1024).round()} KiB/s: se anota '
+              'como lento y los pedacitos siguientes lo esquivan');
+        }
+      }
+      return bloque;
+    });
+  }
+
+  /// Otro nodo del mismo CDN para este pedacito, si el suyo ya falló.
+  ///
+  /// Los candidatos salen de los pedacitos que la propia lista registró en esta
+  /// sesión: son los nodos que el sitio está usando para ESTE contenido, así que
+  /// son los únicos de los que se sabe que lo tienen. Devuelve null si no hay
+  /// ninguno mejor, y ahí se sigue con el original — quedarse sin candidatos
+  /// sería peor que probar uno lento.
+  static Uri? _mejorNodoPara(Uri original, _RelayTarget target) {
+    if (!CastHlsATs.nodoLento(original.host)) return original;
+    final vistos = <String>{};
+    for (final t in _targets.values) {
+      if (t.sesion != target.sesion) continue;
+      final host = Uri.tryParse(t.url)?.host;
+      if (host != null && host.isNotEmpty) vistos.add(host);
+    }
+    for (final host in vistos) {
+      if (host != original.host && !CastHlsATs.nodoLento(host)) {
+        return original.replace(host: host);
+      }
+    }
+    return null;
+  }
+
   static String _registrarHijo(
       Uri base, String destino, _RelayTarget padre, String relayBase) {
     final absoluta = base.resolve(destino).toString();
@@ -649,7 +737,8 @@ class CastRelayServer {
     final yaEsta = _tokensPorUrl[clave];
     if (yaEsta != null) return '$relayBase/relay/$yaEsta';
     final token = '${padre.sesion}-${++_correlativo}';
-    _targets[token] = _RelayTarget(absoluta, padre.headers, padre.sesion);
+    _targets[token] = _RelayTarget(absoluta, padre.headers, padre.sesion,
+        esquivarNodosCaidos: padre.esquivarNodosCaidos);
     _tokensPorUrl[clave] = token;
     return '$relayBase/relay/$token';
   }
@@ -738,9 +827,21 @@ class CastRelayServer {
 }
 
 class _RelayTarget {
-  _RelayTarget(this.url, this.headers, this.sesion, {this.planTs});
+  _RelayTarget(this.url, this.headers, this.sesion,
+      {this.planTs, this.esquivarNodosCaidos = false});
   final String url;
   final Map<String, String> headers;
+
+  /// Los pedacitos TIENEN que pasar por el relay, aunque se pudieran bajar
+  /// directo.
+  ///
+  /// Normalmente, si un pedacito se puede bajar sin nuestras cabeceras, la lista
+  /// se reescribe apuntando a la fuente y el relay se saca del camino — eso
+  /// ahorra que cada pedacito viaje dos veces. Pero cuando el motivo de pasar
+  /// por acá es **esquivar nodos caídos**, sacarse del camino es justamente
+  /// perder la única forma de hacerlo: el reproductor volvería a pedirle a un
+  /// nodo que no entrega.
+  final bool esquivarNodosCaidos;
 
   /// Cuando viene, a este token no se le sirve la lista HLS sino los pedacitos
   /// pegados en un MPEG-TS continuo, que es lo único que entiende un televisor
