@@ -341,6 +341,7 @@
     "cast-hint-interval": "Salta {back} atrás y {forward} adelante — se cambia en Ajustes",
     "cast-hint-keys": "Las flechas ajustan fino, J e I saltan más — se cambia en Ajustes",
     "stalled": "El vídeo no avanza. Puede ser la conexión: probá otro servidor o salí y volvé a entrar.",
+    "cast-no-seek": "Este dispositivo no permite saltar a un punto exacto",
     "cast-connecting": "Conectando con el dispositivo…",
     "cast-failed": "El dispositivo no aceptó el vídeo. Probá de nuevo o elegí otro.",
     "cast-wait": "Esperá a que cargue el vídeo para poder transmitir",

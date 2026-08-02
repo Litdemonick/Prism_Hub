@@ -204,6 +204,8 @@ class CastDiscovery {
     const objetivos = [
       'urn:schemas-upnp-org:device:MediaRenderer:1',
       'urn:schemas-upnp-org:service:AVTransport:1',
+      // Roku no contesta a los de UPnP: tiene el suyo.
+      'roku:ecp',
       'ssdp:all',
     ];
     for (final socket in _preguntadores) {

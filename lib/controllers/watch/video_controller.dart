@@ -1331,7 +1331,9 @@ class VideoPlayerController extends GetxController with WidgetsBindingObserver {
     _lastPositionAdvanceAt = null;
     _lastPositionSeen = null;
     _lastHistoryTouchAt = null;
-    // Contenido nuevo: el aviso de atasco vuelve a estar disponible.
+    // Contenido nuevo: se vuelve a elegir la calidad de arranque, y el
+    // aviso de atasco vuelve a estar disponible.
+    _calidadInicialElegida = false;
     _atascoAvisado = false;
     imagenCongelada.value = false;
     _historyTouchInFlight = false;
@@ -2446,6 +2448,7 @@ class VideoPlayerController extends GetxController with WidgetsBindingObserver {
         for (final e in ordenadas) {
           qualityMap[e.key] = e.value.url;
         }
+        _elegirCalidadInicial(ordenadas);
       } catch (e) {
         logger.severe(e);
       }
@@ -2465,6 +2468,45 @@ class VideoPlayerController extends GetxController with WidgetsBindingObserver {
   toggleFullscreen() async {
     await WindowManager.instance.setFullScreen(!isFullScreen.value);
     isFullScreen.value = !isFullScreen.value;
+  }
+
+  /// Si ya se eligio la calidad de arranque para ESTE video.
+  ///
+  /// Una sola vez: sin esto, cualquier recarga de la lista de calidades
+  /// volveria a mover la calidad y pisaria lo que el usuario haya elegido.
+  bool _calidadInicialElegida = false;
+
+  /// Deja el video en 1080p si lo tiene, y si no en lo mejor que tenga.
+  ///
+  /// El tope por caudal que se le pone a mpv al abrir evita que arranque en 4K,
+  /// pero no es exacto: el caudal no es la resolucion. Un 1080p grabado a 12
+  /// Mbps queda por ENCIMA de ese tope, asi que mpv elegia el 720p aunque
+  /// hubiera 1080p disponible. Aca ya se conocen las alturas reales de cada
+  /// variante, que es el dato que de verdad importa.
+  ///
+  /// No es un tope: el menu sigue ofreciendo todas, y elegir a mano manda.
+  void _elegirCalidadInicial(
+      List<MapEntry<String, _VarianteCalidad>> deMayorAMenor) {
+    if (_calidadInicialElegida || _disposed) return;
+    _calidadInicialElegida = true;
+    // Con el ajuste encendido no se toca nada: arranca en la mas alta.
+    if (PrismHubStorage.getSetting(SettingKey.empezarEnMaximaCalidad) == true) {
+      return;
+    }
+    if (deMayorAMenor.isEmpty) return;
+    // La altura viaja dentro de "orden" (ver _VarianteCalidad).
+    int altura(_VarianteCalidad v) => v.orden ~/ 100000;
+    // La mejor que no pase de 1080. Si TODAS pasan, la mas chica de todas, que
+    // es lo mas cerca de 1080 que ofrece ese video.
+    final cabe = deMayorAMenor.where((e) => altura(e.value) <= 1080).toList();
+    final elegida = cabe.isNotEmpty ? cabe.first : deMayorAMenor.last;
+    // Ya esta reproduciendo esa misma: no se toca, para no recargar de gusto.
+    if (watchData?.url == elegida.value.url) return;
+    // Casteando tampoco: cambiar la calidad ahi implica volver a mandarselo al
+    // aparato, y no es momento de hacerlo por nuestra cuenta.
+    if (dlnaDevice.value != null) return;
+    logger.info('Calidad de arranque: ${elegida.key}');
+    unawaited(switchQuality(elegida.value.url));
   }
 
   // 切换画质
@@ -4398,6 +4440,16 @@ class VideoPlayerController extends GetxController with WidgetsBindingObserver {
     markSeeking();
     if (dlnaDevice.value == null) {
       player.seek(duration);
+      return;
+    }
+    // Hay aparatos que no saben ir a un punto exacto (el mando de Roku
+    // adelanta a saltos y nada mas). Se dice, en vez de mandar la orden y
+    // dejar la rueda girando esperando algo que no va a pasar.
+    if (!dlnaDevice.value!.permiteSaltar) {
+      castAviso.value = 'video.cast-no-seek'.i18n;
+      Timer(const Duration(milliseconds: 2000), () {
+        if (castAviso.value == 'video.cast-no-seek'.i18n) castAviso.value = null;
+      });
       return;
     }
     // El aparato tarda en llegar y deja la imagen congelada mientras tanto: se

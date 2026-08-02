@@ -2,6 +2,7 @@ import 'package:dlna_dart/dlna.dart';
 import 'package:dlna_dart/xmlParser.dart';
 import 'package:prismhub/utils/cast_chromecast.dart';
 import 'package:prismhub/utils/cast_metadata.dart';
+import 'package:prismhub/utils/cast_roku.dart';
 import 'package:prismhub/utils/log.dart';
 
 /// Lo que el aparato informa sobre lo que está haciendo.
@@ -53,6 +54,13 @@ abstract class AparatoDeCasteo {
   /// Para poder decirle al usuario con qué está hablando.
   bool get esChromecast;
 
+  /// Si se le puede pedir "andá al minuto X".
+  ///
+  /// No todos pueden: el mando de Roku adelanta a saltos pero no sabe ir a un
+  /// punto exacto. Preguntarlo antes evita quedarse esperando una respuesta
+  /// que no va a llegar, y permite decirlo en vez de fingir que se mandó.
+  bool get permiteSaltar => true;
+
   /// Deja el aparato listo. En DLNA no hace falta nada; el Chromecast tiene que
   /// abrir su conexión y lanzar el reproductor primero.
   Future<bool> preparar();
@@ -103,6 +111,9 @@ class AparatoDlna implements AparatoDeCasteo {
 
   @override
   bool get esChromecast => false;
+
+  @override
+  bool get permiteSaltar => true;
 
   @override
   Future<bool> preparar() async => true;
@@ -256,6 +267,9 @@ class AparatoChromecast implements AparatoDeCasteo {
   bool get esChromecast => true;
 
   @override
+  bool get permiteSaltar => true;
+
+  @override
   Future<bool> preparar() async {
     final c = ChromecastCliente(host);
     if (!await c.conectar()) return false;
@@ -342,6 +356,92 @@ class AparatoChromecast implements AparatoDeCasteo {
   }
 }
 
+/// Un Roku.
+///
+/// Habla lo suyo (ECP): HTTP plano, sin cifrado ni emparejamiento. Se le manda
+/// el vídeo lanzando su reproductor de medios y se lo controla con pulsaciones
+/// de mando a distancia.
+class AparatoRoku implements AparatoDeCasteo {
+  AparatoRoku({required this.host, required String nombre}) : _nombre = nombre;
+
+  final String host;
+  final String _nombre;
+  late final RokuCliente _cliente = RokuCliente(host);
+
+  @override
+  String get nombre => _nombre;
+
+  @override
+  String get id => 'roku://$host';
+
+  @override
+  bool get esChromecast => false;
+
+  /// ECP no tiene "ir al minuto X": el mando adelanta a saltos y nada más.
+  @override
+  bool get permiteSaltar => false;
+
+  @override
+  Future<bool> preparar() async => true;
+
+  @override
+  Future<void> cargar({
+    required String url,
+    required String titulo,
+    required String mime,
+    String? portada,
+  }) async {
+    final ok = await _cliente.cargar(url: url, titulo: titulo, mime: mime);
+    if (!ok) throw StateError('El Roku no acepto el video');
+  }
+
+  // Play y Pause son la MISMA tecla del mando: alterna. Quien llama ya sabe en
+  // que estado esta, asi que mandar la tecla hace lo correcto en los dos casos.
+  @override
+  Future<void> reproducir() => _cliente.alternarPausa();
+
+  @override
+  Future<void> pausar() => _cliente.alternarPausa();
+
+  @override
+  Future<void> parar() => _cliente.parar();
+
+  @override
+  Future<void> irA(Duration donde) async {
+    // No se puede. Se deja constancia en vez de fallar en silencio.
+    logger.info('El Roku no admite saltar a un punto exacto');
+  }
+
+  @override
+  Future<void> ponerVolumen(int nivel) async {
+    // ECP solo sube o baja de a un paso: no hay "poner en 40". Lo maneja el
+    // controlador, que sabe si el usuario pidio subir o bajar.
+  }
+
+  @override
+  Future<int?> leerVolumen() async => null;
+
+  @override
+  Future<EstadoAparato?> leerEstado() async {
+    final e = await _cliente.estado();
+    if (e == null) return null;
+    return EstadoAparato(
+      reproduciendo: e.reproduciendo,
+      parado: e.parado,
+      posicion: e.posicion,
+      duracion: e.duracion,
+    );
+  }
+
+  @override
+  Future<bool> ponerVelocidad(int velocidad) async => velocidad == 1;
+
+  @override
+  Future<void> soltar({bool pararAparato = true}) async {
+    if (pararAparato) await _cliente.parar();
+  }
+}
+
 /// Decide qué clase de aparato es, con lo que YA se sabe de él.
 ///
 /// No descarga nada: el paquete ya bajó la descripción del aparato para poder
@@ -365,6 +465,13 @@ AparatoDeCasteo? clasificar(DLNADevice device) {
     final host = Uri.tryParse(device.info.URLBase)?.host;
     if (host == null || host.isEmpty) return null;
     return AparatoChromecast(host: host, nombre: device.info.friendlyName);
+  }
+
+  // Roku se anuncia con su propio tipo. No habla DLNA ni Cast: va por ECP.
+  if (tipo.contains('roku')) {
+    final host = Uri.tryParse(device.info.URLBase)?.host;
+    if (host == null || host.isEmpty) return null;
+    return AparatoRoku(host: host, nombre: device.info.friendlyName);
   }
 
   // Reproduce vídeo si expone AVTransport, que es el servicio con el que se le
