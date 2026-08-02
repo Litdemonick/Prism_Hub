@@ -3548,7 +3548,11 @@ class VideoPlayerController extends GetxController with WidgetsBindingObserver {
       // Sin relay (direccion directa) no hay nada que medir.
       if (_dlnaRelayUrl == null) return;
       if (CastRelayServer.huboPedido(_dlnaRelayUrl)) {
-        // Llego hasta nosotros y bajo datos: el problema es el formato.
+        // Llego hasta nosotros y bajo datos, asi que no es la red: el aparato
+        // no puede con lo que le mandamos. Si eso es 4K o 2K, lo mas probable
+        // es que sea la RESOLUCION y no el formato — los televisores publican
+        // "video/mp4" a secas, sin decir hasta que resolucion llegan.
+        if (_bajarCalidadParaElTelevisor()) return;
         castAviso.value = 'video.cast-formato'.i18n;
       } else {
         // Nunca nos pidio nada: no llega. Es red.
@@ -4642,6 +4646,80 @@ class VideoPlayerController extends GetxController with WidgetsBindingObserver {
     // posicion conocida y se mandaba eso, asi que una posicion desactualizada
     // dejaba el salto en cualquier lado.
     await dlnaDevice.value!.irA(duration);
+  }
+
+  /// Techo de resolucion a partir del cual se sospecha del televisor.
+  ///
+  /// 1080p es lo que reproduce practicamente cualquier aparato con DLNA; de ahi
+  /// para arriba es donde empiezan a quedarse cortos.
+  static const _techoParaTelevisor = 1080;
+
+  /// Cuantos pixeles de alto es una calidad, por su nombre.
+  ///
+  /// Los nombres vienen de dos lados —del playlist maestro de un HLS y de la
+  /// cabecera que manda la extension— y no siempre traen el numero: "4K" y
+  /// "2K" son igual de comunes que "2160p".
+  static int _alturaDeNombre(String nombre) {
+    final n = nombre.toLowerCase();
+    final conNumero = RegExp(r'(\d{3,4})\s*p\b').firstMatch(n);
+    if (conNumero != null) return int.tryParse(conNumero.group(1)!) ?? 0;
+    if (RegExp(r'\b8k\b').hasMatch(n)) return 4320;
+    if (RegExp(r'\b4k\b').hasMatch(n)) return 2160;
+    if (RegExp(r'\b2k\b').hasMatch(n)) return 1440;
+    return 0;
+  }
+
+  /// El televisor bajo el video y no pudo: si esta en 4K o 2K, se baja la
+  /// calidad y se dice por que.
+  ///
+  /// Un televisor publica los FORMATOS que acepta pero no hasta que RESOLUCION
+  /// llega, asi que esto no se puede preguntar antes — solo se puede deducir
+  /// cuando ya fallo. Y el sintoma es inconfundible: bajo los datos (por eso
+  /// llegamos hasta aca) y aun asi no dibuja nada.
+  ///
+  /// Devuelve true si encontro una calidad mas baja y la puso. En ese caso no
+  /// se muestra el aviso generico: se muestra este, que dice lo que pasa de
+  /// verdad y que ya se esta arreglando solo.
+  bool _bajarCalidadParaElTelevisor() {
+    // Las calidades vienen de dos lados segun la extension. Ver hayCalidades.
+    final opciones = <String, String>{
+      if (qualityMap.isNotEmpty) ...qualityMap,
+      if (_servidoresSonCalidades) ...availableServers,
+    };
+    if (opciones.length < 2) return false;
+
+    final actual = _servidoresSonCalidades && currentServerName.value.isNotEmpty
+        ? currentServerName.value
+        : opciones.entries
+            .firstWhere((e) => e.value == watchData?.url,
+                orElse: () => const MapEntry('', ''))
+            .key;
+    final alturaActual = _alturaDeNombre(actual);
+    if (alturaActual <= _techoParaTelevisor) return false;
+
+    // La mejor que el televisor tenga chance de aguantar.
+    final candidatas = opciones.entries
+        .where((e) {
+          final h = _alturaDeNombre(e.key);
+          return h > 0 && h <= _techoParaTelevisor;
+        })
+        .toList()
+      ..sort((a, b) =>
+          _alturaDeNombre(b.key).compareTo(_alturaDeNombre(a.key)));
+    if (candidatas.isEmpty) return false;
+    final elegida = candidatas.first;
+
+    logger.info('El televisor no pudo con $actual: se baja a ${elegida.key}');
+    castAviso.value = 'video.cast-resolucion'
+        .i18n
+        .replaceAll('%s', actual)
+        .replaceAll('%t', elegida.key);
+    // switchQuality ya sabe que casteando la calidad nueva va al TELEVISOR y
+    // no al reproductor de aca.
+    unawaited(_servidoresSonCalidades
+        ? switchServer(elegida.key)
+        : switchQuality(elegida.value));
+    return true;
   }
 
   /// Adelanta en una transmision reempaquetada a MPEG-TS.
