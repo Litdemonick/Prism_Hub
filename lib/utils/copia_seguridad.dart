@@ -656,15 +656,26 @@ class CopiaSeguridad {
   static DateTime? _fecha(Object? valor) =>
       valor is String ? DateTime.tryParse(valor) : null;
 
-  /// Un tipo desconocido no rompe: cae en el primero.
+  /// El tipo decide EN QUÉ SECCIÓN aparece, así que importa acertar.
   ///
-  /// Pasa si el archivo lo hizo una app que ya maneja un tipo de contenido que
-  /// esta todavía no conoce. Perder el tipo exacto es mucho mejor que perder
-  /// el registro entero.
+  /// Inicio y la Zona +18 separan en dos: `bangumi` va a "Favoritos — Vídeo" y
+  /// todo lo demás a "Favoritos — Lectura" (ver home_page). Lo mismo con
+  /// Continuar. Como el nombre del tipo viaja tal cual en el archivo, un
+  /// vídeo vuelve a vídeo y una lectura a lectura sin más.
+  ///
+  /// Un tipo DESCONOCIDO —un archivo hecho por una app que ya maneja algo que
+  /// esta todavía no conoce— cae en lectura a propósito, y no en vídeo: en
+  /// lectura, una tarjeta de proporción rara se ve mal pero se ve; en vídeo la
+  /// fila reserva otra forma y encima el reproductor intentaría abrir algo que
+  /// no es un vídeo. Perder el tipo exacto es mucho mejor que perder el
+  /// registro entero, pero conviene que caiga del lado que menos rompe.
   static ExtensionType _tipo(Object? valor) => ExtensionType.values.firstWhere(
         (e) => e.name == valor,
-        orElse: () => ExtensionType.values.first,
+        orElse: () => ExtensionType.manga,
       );
+
+  @visibleForTesting
+  static ExtensionType tipoDePrueba(Object? valor) => _tipo(valor);
 }
 
 /// El archivo no se puede usar, y por qué.
