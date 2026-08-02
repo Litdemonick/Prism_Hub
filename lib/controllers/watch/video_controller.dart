@@ -2630,19 +2630,22 @@ class VideoPlayerController extends GetxController with WidgetsBindingObserver {
   // 获取画质
   getQuality() async {
     final url = watchData!.url;
-    // Las MISMAS cabeceras con las que reproduce mpv, no solo las que trajo la
-    // extensión.
+    // Las cabeceras tal como las trajo la extensión, SIN agregarle un
+    // User-Agent de navegador.
     //
-    // Medido en vivo con Desu (nika.playmudos.com, detrás de Cloudflare): esta
-    // petición contestaba **403** y el menú de calidades quedaba vacío, mientras
-    // el vídeo se reproducía perfecto — porque mpv sí manda User-Agent de
-    // navegador y acá se pedía sin ninguno. Con el que pone dart:io por defecto,
-    // esa fuente rechaza el pedido.
+    // Se probó agregárselo, porque con Desu (nika.playmudos.com, detrás de
+    // Cloudflare) esta consulta contesta 403 y el menú de calidades queda vacío
+    // aunque el vídeo se reproduzca perfecto. Funcionó… y salió peor: al
+    // conseguir el playlist, se leen las variantes, y eso dispara la elección de
+    // calidad de arranque, que llama a switchQuality y **vuelve a abrir la
+    // fuente desde cero** a los pocos segundos de haber empezado. Confirmado en
+    // vivo: buffering y parones donde antes no había ninguno.
     //
-    // Sin el menú, además, no se puede elegir con qué calidad arrancar: se pierde
-    // en el mismo lugar donde se detectaría.
-    final headers = <String, String>{'User-Agent': _browserUA};
-    if (watchData!.headers != null) headers.addAll(watchData!.headers!);
+    // O sea que el 403 estaba tapando el problema de rebote. Mientras cambiar de
+    // calidad implique reabrir el vídeo entero, conseguir el menú acá sale más
+    // caro que no tenerlo. Si algún día la reapertura arranca en el punto donde
+    // iba (en vez de en 0 y saltar después), esto se puede volver a intentar.
+    final headers = watchData!.headers;
     logger.info(url);
 
     late dynamic response;
