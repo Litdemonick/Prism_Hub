@@ -1804,32 +1804,40 @@ class _AyudaTeclasCast extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final atras = _segundos(SettingKey.arrowLeft, 2.0);
-    final adelante = _segundos(SettingKey.arrowRight, 2.0);
+    // Las flechas ajustan fino; J e I son los saltos grandes. Son cuatro
+    // teclas distintas con dos tiempos distintos, y mostrar solo las flechas
+    // dejaba afuera justo las que se usan para saltar de verdad.
+    final atrasFino = _segundos(SettingKey.arrowLeft, 2.0);
+    final adelanteFino = _segundos(SettingKey.arrowRight, 2.0);
+    final atrasLargo = _segundos(SettingKey.keyJ, 10.0);
+    final adelanteLargo = _segundos(SettingKey.keyI, 10.0);
     return AnimatedBuilder(
       animation: anim,
       builder: (context, _) {
-        final activo = (anim.value * 3).floor().clamp(0, 2);
+        // Cinco pistas, cinco tramos del ciclo.
+        final activo = (anim.value * 5).floor().clamp(0, 4);
         return Column(
           mainAxisSize: MainAxisSize.min,
           children: [
             Row(
               mainAxisSize: MainAxisSize.min,
               children: [
-                _pista('←', 'video.cast-hint-back'.i18n, activo == 0),
-                const SizedBox(width: 14),
-                _pista('Espacio', 'video.cast-hint-pause'.i18n, activo == 1),
-                const SizedBox(width: 14),
-                _pista('→', 'video.cast-hint-forward'.i18n, activo == 2),
+                // En el orden en que se piensan: los saltos grandes por fuera,
+                // los finos pegados al centro, y pausar en el medio.
+                _pista('J', atrasLargo, activo == 0),
+                const SizedBox(width: 10),
+                _pista('←', atrasFino, activo == 1),
+                const SizedBox(width: 10),
+                _pista('Espacio', 'video.cast-hint-pause'.i18n, activo == 2),
+                const SizedBox(width: 10),
+                _pista('→', adelanteFino, activo == 3),
+                const SizedBox(width: 10),
+                _pista('I', adelanteLargo, activo == 4),
               ],
             ),
             const SizedBox(height: 10),
             Text(
-              FlutterI18n.translate(
-                context,
-                'video.cast-hint-interval',
-                translationParams: {'back': atras, 'forward': adelante},
-              ),
+              'video.cast-hint-keys'.i18n,
               textAlign: TextAlign.center,
               style: TextStyle(
                 fontSize: 10.5,

@@ -358,6 +358,7 @@
     "cast-speed-unsupported": "This device does not support changing speed",
     "cast-taken-over": "Another device took over the TV. Carry on watching here from where you were.",
     "cast-hint-interval": "Skips {back} back and {forward} forward — change it in Settings",
+    "cast-hint-keys": "Arrows nudge, J and I jump further — change it in Settings",
     "cast-connecting": "Connecting to the device…",
     "cast-failed": "The device did not accept the video. Try again or pick another one.",
     "cast-wait": "Wait for the video to load before casting",
