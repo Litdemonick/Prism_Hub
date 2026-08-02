@@ -1068,7 +1068,8 @@ class _PanelCasteandoState extends State<_PanelCasteando>
     with SingleTickerProviderStateMixin {
   late final AnimationController _anim = AnimationController(
     vsync: this,
-    duration: const Duration(milliseconds: 1600),
+    // 2,7 s para tres pistas: ~900 ms en cada una, igual que en PC.
+    duration: const Duration(milliseconds: 2700),
   )..repeat();
 
   @override
@@ -1222,31 +1223,44 @@ class _AyudaGestosCast extends StatelessWidget {
       builder: (context, _) {
         // Cada pista se ilumina en su tercio del ciclo, de izquierda a derecha,
         // que es el orden en que estan en la pantalla.
-        final activo = (anim.value * 3).floor().clamp(0, 2);
+        // La luz se DESLIZA, no salta: una sola posicion que avanza de forma
+        // continua, y cada pista se ilumina segun lo cerca que este de ella.
+        final aguja = anim.value * 3;
         return Row(
           mainAxisSize: MainAxisSize.min,
           children: [
             _pista(Icons.replay_10_rounded, 'video.cast-hint-back'.i18n,
-                activo == 0),
+                _cerca(aguja, 0, 3)),
             const SizedBox(width: 14),
             _pista(Icons.touch_app_rounded, 'video.cast-hint-pause'.i18n,
-                activo == 1),
+                _cerca(aguja, 1, 3)),
             const SizedBox(width: 14),
             _pista(Icons.forward_10_rounded, 'video.cast-hint-forward'.i18n,
-                activo == 2),
+                _cerca(aguja, 2, 3)),
           ],
         );
       },
     );
   }
 
-  Widget _pista(IconData icono, String texto, bool encendido) {
-    return AnimatedScale(
-      duration: const Duration(milliseconds: 260),
-      scale: encendido ? 1.0 : 0.9,
-      child: AnimatedOpacity(
-        duration: const Duration(milliseconds: 260),
-        opacity: encendido ? 1 : 0.45,
+  /// Que tan iluminada va una pista, de 0 a 1, segun la distancia a la aguja.
+  ///
+  /// El ciclo da la vuelta, asi que la ultima y la primera tambien son
+  /// vecinas: sin eso, al cerrar la vuelta la luz pegaba un salto de un
+  /// extremo al otro.
+  static double _cerca(double aguja, int indice, int total) {
+    var d = (aguja - indice).abs();
+    if (d > total / 2) d = total - d;
+    return (1 - d).clamp(0.0, 1.0);
+  }
+
+  Widget _pista(IconData icono, String texto, double luz) {
+    // Sin AnimatedScale ni AnimatedOpacity: animan por su cuenta hacia un valor
+    // nuevo, y encima de una animacion continua se pisaban y tironeaban.
+    return Transform.scale(
+      scale: 0.9 + 0.1 * luz,
+      child: Opacity(
+        opacity: 0.45 + 0.55 * luz,
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
@@ -1254,13 +1268,17 @@ class _AyudaGestosCast extends StatelessWidget {
               padding: const EdgeInsets.all(9),
               decoration: BoxDecoration(
                 shape: BoxShape.circle,
-                color: encendido
-                    ? HomeTheme.accentPink.withValues(alpha: 0.22)
-                    : Colors.white.withValues(alpha: 0.06),
+                color: Color.lerp(
+                  Colors.white.withValues(alpha: 0.06),
+                  HomeTheme.accentPink.withValues(alpha: 0.22),
+                  luz,
+                ),
                 border: Border.all(
-                  color: encendido
-                      ? HomeTheme.accentPink
-                      : Colors.white.withValues(alpha: 0.16),
+                  color: Color.lerp(
+                    Colors.white.withValues(alpha: 0.16),
+                    HomeTheme.accentPink,
+                    luz,
+                  )!,
                 ),
               ),
               child: Icon(icono, size: 19, color: Colors.white),

@@ -472,6 +472,10 @@ class VideoPlayerController extends GetxController with WidgetsBindingObserver {
   /// este valor, que si era nuestro.
   Duration _posicionUltimoControl = Duration.zero;
 
+  /// Controles seguidos en los que el aparato dijo estar con otra direccion.
+  /// Ver _comprobarQueSigaSiendoNuestro.
+  int _desajustesSeguidos = 0;
+
   /// Lee el volumen que tiene puesto el aparato, para arrancar desde ahi.
   Future<void> _leerVolumenDelCast(AparatoDeCasteo aparato) async {
     try {
@@ -831,7 +835,9 @@ class VideoPlayerController extends GetxController with WidgetsBindingObserver {
         if (_disposed || watchData == null) return;
         // Sigue siendo el mismo aparato? Si se desconecto o se cambio mientras
         // se resolvia el episodio, mandarselo seria pisarle la eleccion.
-        if (dlnaDevice.value != aparato) return;
+        // Por identificador y no por instancia: comparar objetos daria
+        // siempre distinto y el episodio nuevo nunca llegaria al televisor.
+        if (dlnaDevice.value?.id != aparato.id) return;
         await connectDLNADevice(aparato);
       } finally {
         // Si el aparato acepto, el aviso sigue hasta que se vea de verdad —
@@ -3176,6 +3182,7 @@ class VideoPlayerController extends GetxController with WidgetsBindingObserver {
     dlnaDevice.value = aparato;
     _urlEnviadaAlCast = url;
     _vueltasDesdeElControl = 0;
+    _desajustesSeguidos = 0;
     _posicionUltimoControl = Duration.zero;
     try {
       // preparar() antes de nada: en DLNA no hace falta, pero el Chromecast
@@ -3374,6 +3381,7 @@ class VideoPlayerController extends GetxController with WidgetsBindingObserver {
     castVelocidad.value = null;
     castVelocidadPedida.value = 1;
     castAviso.value = null;
+    _desajustesSeguidos = 0;
     _objetivoDeSalto = null;
     _castBuscandoTimer?.cancel();
     _esperaPlayTimer?.cancel();
@@ -3431,16 +3439,37 @@ class VideoPlayerController extends GetxController with WidgetsBindingObserver {
   void _comprobarQueSigaSiendoNuestro(String? actual) {
     final nuestra = _urlEnviadaAlCast;
     if (nuestra == null) return;
+    // Todavia no empezo lo que le acabamos de mandar: NO se comprueba.
+    //
+    // Al cambiar de episodio se le manda una direccion nueva, pero el aparato
+    // sigue informando la ANTERIOR hasta que termina de cambiar. Comprobando en
+    // ese hueco, las direcciones no coinciden y se concluia que otro
+    // dispositivo se habia quedado con el televisor: cambiar de episodio
+    // casteando cortaba la transmision sola.
+    if (castEsperandoPlay.value || castCambiandoEpisodio.value) {
+      _desajustesSeguidos = 0;
+      return;
+    }
     // Vacio o desconocido: no se concluye nada. Solo se actua cuando el aparato
     // dice con todas las letras que esta con OTRA direccion. Los aparatos que
     // no informan esto (el Chromecast, por ejemplo) caen aca y no pasa nada.
     if (actual == null || actual.isEmpty) return;
     if (actual == nuestra) {
+      _desajustesSeguidos = 0;
       // Confirmado nuestro: se anota por donde iba, para poder volver a este
       // punto si en el proximo control resulta que nos lo tomaron.
       _posicionUltimoControl = position.value;
       return;
     }
+
+    // Tiene que no coincidir DOS controles seguidos.
+    //
+    // Un aparato puede informar la direccion vieja un momento despues de haber
+    // aceptado la nueva; con una sola lectura, ese instante bastaba para cortar
+    // la transmision. Alguien que de verdad tomo el televisor sigue con lo suyo
+    // en el control siguiente.
+    if (++_desajustesSeguidos < 2) return;
+    _desajustesSeguidos = 0;
 
     logger.info('Otro dispositivo tomo el televisor: $actual');
     // La posicion que informa el aparato ya es la del OTRO video. Se vuelve a
