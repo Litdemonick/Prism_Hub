@@ -1381,21 +1381,32 @@ class _SettingsPageState extends State<SettingsPage> {
               title: 'settings.export-log'.i18n,
               buildSubtitle: () => 'settings.export-log-subtitle'.i18n,
               trailing: PlatformWidget(
+                // El flush() va SIEMPRE antes de exportar.
+                //
+                // El registro se junta en memoria y se vuelca cada 2 segundos.
+                // Sin esto, quien acaba de ver algo fallar y exporta enseguida
+                // se lleva un archivo SIN el fallo — que es justo lo que iba a
+                // reportar. Pasó en vivo: se exportó despues de castear y la
+                // ultima linea del archivo era de una semana antes.
                 androidWidget: TextButton(
-                  onPressed: () {
-                    Share.shareXFiles([XFile(PrismLog.logFilePath)]);
+                  onPressed: () async {
+                    await PrismLog.flush();
+                    await Share.shareXFiles([XFile(PrismLog.logFilePath)]);
                   },
                   child: Text('common.export'.i18n),
                 ),
                 desktopWidget: fluent.FilledButton(
                   onPressed: () async {
+                    await PrismLog.flush();
                     final path = await FilePicker.platform.saveFile(
                       type: FileType.custom,
                       allowedExtensions: ['log'],
                       fileName: 'PrismHub.log',
                     );
+                    // Con await: sin el, la copia quedaba corriendo suelta y
+                    // el archivo podia salir a medio escribir.
                     if (path != null) {
-                      File(PrismLog.logFilePath).copy(path);
+                      await File(PrismLog.logFilePath).copy(path);
                     }
                   },
                   child: Text('common.export'.i18n),
