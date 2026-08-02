@@ -6,8 +6,6 @@ import 'dart:io';
 
 import 'package:auto_orientation/auto_orientation.dart';
 import 'package:dio/dio.dart';
-import 'package:dlna_dart/dlna.dart';
-import 'package:dlna_dart/xmlParser.dart';
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -26,6 +24,7 @@ import 'package:prismhub/controllers/home_controller.dart';
 import 'package:prismhub/controllers/main_controller.dart';
 import 'package:prismhub/router/router.dart';
 import 'package:prismhub/utils/bt_server.dart';
+import 'package:prismhub/utils/cast_aparato.dart';
 import 'package:prismhub/utils/cast_metadata.dart';
 import 'package:prismhub/utils/cast_relay_server.dart';
 import 'package:prismhub/utils/watch_state.dart';
@@ -383,7 +382,7 @@ class VideoPlayerController extends GetxController with WidgetsBindingObserver {
   final isPlaying = false.obs;
 
   // dlna 设备
-  final dlnaDevice = Rx<DLNADevice?>(null);
+  final dlnaDevice = Rx<AparatoDeCasteo?>(null);
 
   // 定时器
   Timer? _dlnaTimer;
@@ -474,11 +473,9 @@ class VideoPlayerController extends GetxController with WidgetsBindingObserver {
   Duration _posicionUltimoControl = Duration.zero;
 
   /// Lee el volumen que tiene puesto el aparato, para arrancar desde ahi.
-  Future<void> _leerVolumenDelCast(DLNADevice device) async {
+  Future<void> _leerVolumenDelCast(AparatoDeCasteo aparato) async {
     try {
-      final xml = await device.getVolume().timeout(const Duration(seconds: 4));
-      final m = RegExp(r'<CurrentVolume>(\d+)</CurrentVolume>').firstMatch(xml);
-      final v = int.tryParse(m?.group(1) ?? '');
+      final v = await aparato.leerVolumen();
       if (v != null) castVolumen.value = v.clamp(0, 100);
     } catch (e) {
       // Sin este dato se arranca desde el ultimo conocido: subir y bajar sigue
@@ -489,8 +486,8 @@ class VideoPlayerController extends GetxController with WidgetsBindingObserver {
 
   /// Sube o baja el volumen del aparato. [delta] va en fraccion (-1 a 1).
   void ajustarVolumenCast(double delta) {
-    final device = dlnaDevice.value;
-    if (device == null) return;
+    final aparato = dlnaDevice.value;
+    if (aparato == null) return;
     final nuevo = (castVolumen.value + (delta * 100).round()).clamp(0, 100);
     if (nuevo == castVolumen.value) return;
     castVolumen.value = nuevo;
@@ -503,7 +500,7 @@ class VideoPlayerController extends GetxController with WidgetsBindingObserver {
     _volumenCastTimer?.cancel();
     _volumenCastTimer = Timer(const Duration(milliseconds: 220), () async {
       try {
-        await device.volume(castVolumen.value);
+        await aparato.ponerVolumen(castVolumen.value);
       } catch (e) {
         logger.warning('El aparato no acepto el volumen', e);
       }
@@ -521,9 +518,9 @@ class VideoPlayerController extends GetxController with WidgetsBindingObserver {
   /// Muchos aparatos solo aceptan la velocidad normal y contestan un error; en
   /// ese caso se avisa y se vuelve a 1, en vez de dejar creer que anda.
   Future<void> pedirVelocidadCast(int velocidad) async {
-    final device = dlnaDevice.value;
-    if (device == null) return;
-    final acepto = await reproducirAVelocidad(device, velocidad);
+    final aparato = dlnaDevice.value;
+    if (aparato == null) return;
+    final acepto = await aparato.ponerVelocidad(velocidad);
     if (!acepto) {
       castVelocidadPedida.value = 1;
       castAviso.value = 'video.cast-speed-unsupported'.i18n;
@@ -1328,9 +1325,12 @@ class VideoPlayerController extends GetxController with WidgetsBindingObserver {
         playTorrentFile(torrentMediaFileList.first);
       } else {
         if (dlnaDevice.value != null) {
-          await dlnaDevice.value!.setUrl(watchData!.url);
+          await dlnaDevice.value!.cargar(
+            url: watchData!.url,
+            titulo: '$title — ${playList[index.value].name}',
+            mime: mimeDeUrl(watchData!.url),
+          );
           if (_disposed) return;
-          await dlnaDevice.value!.play();
         } else {
           // Si recordamos un servidor que ya funcionó en este episodio, usarlo
           // como primario para no re-buscar entre todos (carga más rápido).
@@ -1686,9 +1686,8 @@ class VideoPlayerController extends GetxController with WidgetsBindingObserver {
       // unawaited + catchError: device.stop() devuelve un Future, asi que un
       // try/catch alrededor NO atrapa nada — si el aparato esta apagado o fuera
       // de la red, el fallo quedaba como error asincrono sin dueño.
-      unawaited(device.stop().catchError((Object e) {
+      unawaited(device.soltar().catchError((Object e) {
         logger.warning('El aparato no respondio al cerrar el reproductor', e);
-        return '';
       }));
     }
     if (_dlnaRelayUrl != null) {
@@ -3107,7 +3106,7 @@ class VideoPlayerController extends GetxController with WidgetsBindingObserver {
   }
 
   // 连接 DLNA 设备
-  connectDLNADevice(DLNADevice device) async {
+  connectDLNADevice(AparatoDeCasteo aparato) async {
     // Se puede llegar aca despues de un await (cambio de episodio casteando)
     // con el reproductor ya cerrado.
     if (_disposed) return;
@@ -3127,10 +3126,13 @@ class VideoPlayerController extends GetxController with WidgetsBindingObserver {
     // quedaba registrado para siempre, porque _dlnaRelayUrl se pisaba con el
     // nuevo sin soltar el de antes.
     final anterior = dlnaDevice.value;
-    if (anterior != null && anterior != device) {
+    if (anterior != null && anterior.id != aparato.id) {
+      // Por IDENTIFICADOR y no por instancia: cada busqueda crea objetos nuevos
+      // del mismo televisor, asi que comparar los objetos daria siempre "es
+      // otro" y se soltaria el que en realidad se acaba de elegir.
       unawaited(Future(() async {
         try {
-          await anterior.stop();
+          await anterior.soltar();
         } catch (e) {
           logger.warning('El aparato anterior no respondio al soltarlo', e);
         }
@@ -3171,21 +3173,22 @@ class VideoPlayerController extends GetxController with WidgetsBindingObserver {
         logger.warning('CastRelayServer falló, casteando URL directa: $e');
       }
     }
-    dlnaDevice.value = device;
+    dlnaDevice.value = aparato;
     _urlEnviadaAlCast = url;
     _vueltasDesdeElControl = 0;
     _posicionUltimoControl = Duration.zero;
     try {
-      // Con ficha DIDL completa: sin protocolInfo, Kodi anota
-      // "invalid protocol info ':::'" y tiene que adivinar el formato.
-      // Ver cast_metadata.dart.
-      await castearConMetadata(
-        device,
-        url,
+      // preparar() antes de nada: en DLNA no hace falta, pero el Chromecast
+      // tiene que abrir su conexion y lanzar su reproductor primero. Si eso
+      // falla no se sigue, que seria mandarle el video a nadie.
+      if (!await aparato.preparar()) {
+        throw StateError('El aparato no acepto la conexion');
+      }
+      await aparato.cargar(
+        url: url,
         titulo: '$title — ${playList[index.value].name}',
         mime: mimeDeUrl(urlOriginal),
       );
-      await device.play();
     } catch (e) {
       // Un aparato que no contesta dejaba la excepcion suelta y la pantalla en
       // modo casteo sin que nada se estuviera reproduciendo. Se deshace todo y
@@ -3227,7 +3230,7 @@ class VideoPlayerController extends GetxController with WidgetsBindingObserver {
     if (_disposed || dlnaDevice.value == null) return;
     // Se arranca desde el volumen que YA tiene el aparato, para que el primer
     // deslizamiento no le pegue un salto.
-    unawaited(_leerVolumenDelCast(device));
+    unawaited(_leerVolumenDelCast(aparato));
     castVelocidadPedida.value = 1;
     // Sigue "cargando" hasta que el aparato diga que reproduce de verdad.
     castEsperandoPlay.value = true;
@@ -3248,21 +3251,21 @@ class VideoPlayerController extends GetxController with WidgetsBindingObserver {
   /// No se usa seek() del controlador: ese calcula un salto RELATIVO contra
   /// position.value, y justo despues de re-enganchar ese valor todavia es el de
   /// antes del cambio — el salto saldria a cualquier lado.
-  Future<void> _irAEnElAparato(DLNADevice device, Duration donde) async {
+  /// Manda el aparato a un punto exacto del video.
+  ///
+  /// Se espera un poco antes: recien arrancado, varios aparatos ignoran el
+  /// salto porque todavia no terminaron de cargar el video.
+  Future<void> _irAEnElAparato(AparatoDeCasteo aparato, Duration donde) async {
     if (donde <= Duration.zero) return;
-    // Un respiro: recien arrancado, varios aparatos ignoran el salto porque
-    // todavia no terminaron de cargar el video.
     await Future<void>.delayed(const Duration(milliseconds: 800));
-    if (_disposed || dlnaDevice.value != device) return;
-    final h = donde.inHours.toString().padLeft(2, '0');
-    final m = (donde.inMinutes % 60).toString().padLeft(2, '0');
-    final s = (donde.inSeconds % 60).toString().padLeft(2, '0');
+    if (_disposed || dlnaDevice.value?.id != aparato.id) return;
     try {
-      await device.seek('$h:$m:$s');
+      await aparato.irA(donde);
     } catch (e) {
       logger.warning('No se pudo retomar el punto en el aparato', e);
     }
   }
+
 
   /// Vuelve a mandarle el video al MISMO dispositivo.
   ///
@@ -3299,7 +3302,7 @@ class VideoPlayerController extends GetxController with WidgetsBindingObserver {
         _dlnaRelayUrl = null;
       }
       try {
-        await device.stop();
+        await device.soltar();
       } catch (_) {
         // Puede estar ya parado o no responder: no frena el reintento.
       }
@@ -3346,7 +3349,7 @@ class VideoPlayerController extends GetxController with WidgetsBindingObserver {
     if (pararAparato) {
       unawaited(Future(() async {
         try {
-          await device.stop();
+          await device.soltar();
         } catch (e) {
           logger.warning('El aparato no respondio al cortar la transmision', e);
         }
@@ -3425,29 +3428,14 @@ class VideoPlayerController extends GetxController with WidgetsBindingObserver {
   /// Si otro dispositivo le mando otra cosa, se suelta la transmision SIN
   /// pararle el video: ya no es nuestro, y pararlo seria cortarle la
   /// reproduccion a quien la tomo.
-  Future<void> _comprobarQueSigaSiendoNuestro(DLNADevice device) async {
+  void _comprobarQueSigaSiendoNuestro(String? actual) {
     final nuestra = _urlEnviadaAlCast;
     if (nuestra == null) return;
-    String info;
-    try {
-      info = await device.getMediaInfo().timeout(const Duration(seconds: 4));
-    } catch (_) {
-      // Un fallo suelto no prueba nada; el contador de fallos de arriba ya se
-      // ocupa de la perdida real del aparato.
-      return;
-    }
-    final actual = RegExp(r'<CurrentURI>([^<]*)</CurrentURI>')
-        .firstMatch(info)
-        ?.group(1)
-        ?.trim();
-    // Vacio o ilegible: no se concluye nada. Solo se actua cuando el aparato
-    // dice con todas las letras que esta con OTRA direccion.
+    // Vacio o desconocido: no se concluye nada. Solo se actua cuando el aparato
+    // dice con todas las letras que esta con OTRA direccion. Los aparatos que
+    // no informan esto (el Chromecast, por ejemplo) caen aca y no pasa nada.
     if (actual == null || actual.isEmpty) return;
-    final mismaDireccion = actual == nuestra ||
-        // Algunos aparatos devuelven la direccion con las entidades XML
-        // escapadas o con la barra final agregada.
-        actual.replaceAll('&amp;', '&') == nuestra;
-    if (mismaDireccion) {
+    if (actual == nuestra) {
       // Confirmado nuestro: se anota por donde iba, para poder volver a este
       // punto si en el proximo control resulta que nos lo tomaron.
       _posicionUltimoControl = position.value;
@@ -3465,7 +3453,7 @@ class VideoPlayerController extends GetxController with WidgetsBindingObserver {
       Text('video.cast-taken-over'.i18n),
       time: const Duration(seconds: 6),
     ));
-    await disconnectDLNADevice(pararAparato: false);
+    unawaited(disconnectDLNADevice(pararAparato: false));
   }
 
   // 获取 DLNA 播放状态
@@ -3498,12 +3486,11 @@ class VideoPlayerController extends GetxController with WidgetsBindingObserver {
       sendMessage(Message(Text(falla), time: const Duration(seconds: 6)));
     }
     try {
-      final transportInfo = await device
-          .getTransportInfo()
-          .timeout(const Duration(seconds: 4));
+      final info = await device.leerEstado();
+      if (info == null) throw StateError('El aparato no informo su estado');
       // Contesto: lo que hubiera pasado antes fue un bache y ya paso.
       _fallosDeCastSeguidos = 0;
-      final reproduciendo = transportInfo.contains('PLAYING');
+      final reproduciendo = info.reproduciendo;
       isPlaying.value = reproduciendo;
       if (reproduciendo) {
         _vioReproduciendoEnCast = true;
@@ -3519,18 +3506,9 @@ class VideoPlayerController extends GetxController with WidgetsBindingObserver {
         }
       }
 
-      // Velocidad puesta EN el aparato (x2, x4...). Viene en el mismo estado,
-      // como <CurrentSpeed>. Se guarda solo cuando no es la normal: con "1" no
-      // hay nada que decir. Se acepta tambien la forma con fraccion ("1/2") que
-      // usan algunos aparatos para la camara lenta.
-      final speed = RegExp(r'<CurrentSpeed>([^<]+)</CurrentSpeed>')
-          .firstMatch(transportInfo)
-          ?.group(1)
-          ?.trim();
-      castVelocidad.value =
-          (speed == null || speed.isEmpty || speed == '1' || speed == '1.0')
-              ? null
-              : speed;
+      // Velocidad puesta EN el aparato (x2, x4...). Solo cuando no es la
+      // normal: con la normal no hay nada que decir.
+      castVelocidad.value = info.velocidad;
 
       // Lo pararon DESDE el televisor (con su control remoto, o porque
       // termino). Se distingue de una pausa: pausar informa PAUSED_PLAYBACK,
@@ -3539,8 +3517,7 @@ class VideoPlayerController extends GetxController with WidgetsBindingObserver {
       // Antes esto se leia como "no esta reproduciendo" a secas, asi que la
       // pantalla decia "En pausa, toca para seguir" y tocar no hacia nada:
       // se le pedia reanudar a un aparato que ya no tenia el video cargado.
-      final parado = transportInfo.contains('STOPPED') ||
-          transportInfo.contains('NO_MEDIA_PRESENT');
+      final parado = info.parado;
       // Tiene que estar parado DOS vueltas seguidas.
       //
       // Manejando desde el control del televisor, adelantar hace que varios
@@ -3568,8 +3545,8 @@ class VideoPlayerController extends GetxController with WidgetsBindingObserver {
           try {
             // seek() y no seekByCurrent(): el segundo espera el XML crudo que
             // devuelve position(), no una hora suelta.
-            await device.seek('00:00:00');
-            await device.play();
+            await device.irA(Duration.zero);
+            await device.reproducir();
           } catch (e) {
             logger.warning('No se pudo repetir el episodio en el aparato', e);
           }
@@ -3606,18 +3583,11 @@ class VideoPlayerController extends GetxController with WidgetsBindingObserver {
         return;
       }
 
-      final dlnaPosition =
-          await device.position().timeout(const Duration(seconds: 4));
-      final positionParser = PositionParser(dlnaPosition);
-      final absTimeArr = positionParser.AbsTime.split(":");
-      if (absTimeArr.length < 3) return;
-      final absTime = Duration(
-        hours: int.tryParse(absTimeArr[0]) ?? 0,
-        minutes: int.tryParse(absTimeArr[1]) ?? 0,
-        seconds: int.tryParse(absTimeArr[2]) ?? 0,
-      );
-      position.value = absTime;
-      duration.value = Duration(seconds: positionParser.TrackDurationInt);
+      // Solo si el aparato las informo: null no es cero. Pisar la posicion con
+      // cero en una vuelta que no trajo el dato hacia saltar la barra al
+      // principio y volver, que ademas disparaba el aviso de "buscando".
+      if (info.posicion != null) position.value = info.posicion!;
+      if (info.duracion != null) duration.value = info.duracion!;
       // Ya llego a donde se le pidio? Entonces se saca la rueda de "buscando".
       _revisarSaltoEnCast();
 
@@ -3631,7 +3601,7 @@ class VideoPlayerController extends GetxController with WidgetsBindingObserver {
       // propio. Y al desconectar le paraba la reproduccion al otro.
       if (++_vueltasDesdeElControl >= _vueltasEntreControles) {
         _vueltasDesdeElControl = 0;
-        await _comprobarQueSigaSiendoNuestro(device);
+        _comprobarQueSigaSiendoNuestro(info.urlActual);
       }
     } catch (e) {
       // Se apago, se quedo sin red, o se salio de la app del televisor.
@@ -4224,9 +4194,9 @@ class VideoPlayerController extends GetxController with WidgetsBindingObserver {
       return;
     }
     if (isPlaying.value) {
-      await dlnaDevice.value!.pause();
+      await dlnaDevice.value!.pausar();
     } else {
-      await dlnaDevice.value!.play();
+      await dlnaDevice.value!.reproducir();
     }
   }
 
@@ -4273,9 +4243,10 @@ class VideoPlayerController extends GetxController with WidgetsBindingObserver {
     // El aparato tarda en llegar y deja la imagen congelada mientras tanto: se
     // avisa antes de mandarlo, no despues.
     _empezoSaltoEnCast(duration);
-    final curr = await dlnaDevice.value!.position();
-    final diff = duration - position.value;
-    await dlnaDevice.value!.seekByCurrent(curr, diff.inSeconds);
+    // Salto ABSOLUTO y no relativo: antes se calculaba la diferencia contra la
+    // posicion conocida y se mandaba eso, asi que una posicion desactualizada
+    // dejaba el salto en cualquier lado.
+    await dlnaDevice.value!.irA(duration);
   }
 
   // Devuelve barras de sistema y rotación al estado normal. Es idempotente a

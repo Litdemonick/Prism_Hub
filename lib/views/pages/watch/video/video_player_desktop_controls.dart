@@ -1707,7 +1707,7 @@ class _PanelCasteandoState extends State<_PanelCasteando>
             ),
             const SizedBox(height: 14),
             Text(
-              device.info.friendlyName,
+              device.nombre,
               textAlign: TextAlign.center,
               style: const TextStyle(
                 fontSize: 18,
@@ -1945,6 +1945,9 @@ class _CastState extends State<_Cast> {
             color: connected ? HomeTheme.accentPink : null,
           ),
           onPressed: () {
+            // Mismo criterio que en el telefono: elegir aparato lleva unos
+            // segundos y el episodio seguia corriendo detras.
+            widget.controller.safePause();
             _flyoutController.showFlyout(
               barrierDismissible: true,
               dismissOnPointerMoveAway: false,
@@ -1982,7 +1985,7 @@ class _CastState extends State<_Cast> {
                                 ),
                                 const SizedBox(height: 6),
                                 Text(
-                                  device.info.friendlyName,
+                                  device.nombre,
                                   style: const TextStyle(
                                     fontSize: 16,
                                     fontWeight: FontWeight.w600,

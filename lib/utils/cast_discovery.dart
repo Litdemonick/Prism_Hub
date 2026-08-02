@@ -1,7 +1,9 @@
 import 'dart:async';
+import 'dart:convert';
 import 'dart:io';
 
 import 'package:dlna_dart/dlna.dart';
+import 'package:prismhub/utils/cast_aparato.dart';
 import 'package:prismhub/utils/log.dart';
 
 // Busca aparatos DLNA en la red.
@@ -43,6 +45,57 @@ class CastDiscovery {
 
   /// Aparatos encontrados, tal cual los publica el paquete.
   Stream<Map<String, DLNADevice>> get devices => _gestor.devices.stream;
+
+  /// Solo los que de verdad pueden reproducir vídeo, ya clasificados.
+  ///
+  /// La búsqueda encuentra de todo: medido en una red real, de cinco aparatos
+  /// solo dos servían — los otros eran el router y dos Chromecast, que
+  /// aparecen igual pero no hablan DLNA. Elegir uno de esos terminaba en "no
+  /// se pudo enviar la señal", y desde afuera parecía un fallo del app.
+  ///
+  /// Para saber qué es cada uno hay que bajar su descripción, así que se hace
+  /// una sola vez por aparato y se recuerda.
+  Stream<List<AparatoDeCasteo>> get aparatos => _aparatos.stream;
+
+  final _aparatos = StreamController<List<AparatoDeCasteo>>.broadcast();
+  final Map<String, AparatoDeCasteo> _clasificados = {};
+  final Set<String> _yaMirados = {};
+
+  Future<void> _clasificar(Map<String, DLNADevice> encontrados) async {
+    var huboCambio = false;
+    for (final e in encontrados.entries) {
+      if (!_yaMirados.add(e.key)) continue;
+      final a = await clasificarBajando(e.value, _bajarDescripcion);
+      if (a == null) {
+        logger.info('Se descarta ${e.value.info.friendlyName}: no reproduce');
+        continue;
+      }
+      // Por identificador: el mismo televisor aparece una vez por cada placa
+      // de red por la que contestó, y en la lista tiene que salir una sola.
+      if (_clasificados.containsKey(a.id)) continue;
+      _clasificados[a.id] = a;
+      huboCambio = true;
+      logger.info('Aparato util: ${describir(a)}');
+    }
+    if (huboCambio && !_aparatos.isClosed) {
+      _aparatos.add(_clasificados.values.toList());
+    }
+  }
+
+  static Future<String> _bajarDescripcion(Uri base) async {
+    final client = HttpClient()
+      ..connectionTimeout = const Duration(seconds: 4);
+    try {
+      final req = await client.getUrl(base);
+      final res = await req.close().timeout(const Duration(seconds: 6));
+      return await utf8.decoder
+          .bind(res)
+          .join()
+          .timeout(const Duration(seconds: 6));
+    } finally {
+      client.close(force: true);
+    }
+  }
 
   Future<void> start() async {
     _parado = false;
@@ -95,6 +148,12 @@ class CastDiscovery {
     }
     logger.info('Buscando aparatos: ${_preguntadores.length} placa(s), '
         '${_sockets.length} socket(s)');
+
+    // Cada vez que aparece alguien nuevo se averigua QUE es.
+    _gestor.devices.stream.listen(
+      (m) => unawaited(_clasificar(m)),
+      onError: (Object e) => logger.warning('Fallo clasificando', e),
+    );
 
     _preguntar(destino);
     // Se repite: los mensajes multicast se pierden sin aviso, y un aparato que
@@ -190,5 +249,6 @@ class CastDiscovery {
     _sockets.clear();
     _preguntadores.clear();
     if (!_gestor.devices.isClosed) _gestor.devices.close();
+    if (!_aparatos.isClosed) _aparatos.close();
   }
 }

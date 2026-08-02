@@ -1136,7 +1136,7 @@ class _PanelCasteandoState extends State<_PanelCasteando>
               ),
             const SizedBox(height: 14),
             Text(
-              device.info.friendlyName,
+              device.nombre,
               textAlign: TextAlign.center,
               style: const TextStyle(
                 fontSize: 17,
@@ -1295,7 +1295,7 @@ class _Header extends StatelessWidget {
           FlutterI18n.translate(
             context,
             'video.cast-disconnect-confirm',
-            translationParams: {'device': aparato.info.friendlyName},
+            translationParams: {'device': aparato.nombre},
           ),
         ),
         actions: [
@@ -1415,6 +1415,12 @@ class _Header extends StatelessWidget {
             return IconButton(
               icon: const Icon(Icons.cast),
               onPressed: () {
+                // Se pausa al abrir la lista: elegir aparato lleva unos
+                // segundos y el episodio seguia corriendo detras, asi que uno
+                // volvia habiendose perdido un pedazo. Al elegir, el casteo
+                // para el reproductor de aca igual; si se cierra sin elegir,
+                // queda pausado y con un toque sigue.
+                controller.safePause();
                 showModalBottomSheet(
                   context: context,
                   useSafeArea: true,
