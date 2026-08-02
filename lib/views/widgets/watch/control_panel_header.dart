@@ -117,8 +117,21 @@ class _ControlPanelHeaderState<T extends ReaderController>
   }
 
   Widget _buildDesktop(BuildContext context) {
-    return Obx(
-      () => Container(
+    return Obx(() {
+      // Las lecturas van ACÁ, en el cuerpo del Obx.
+      //
+      // Estaban dentro de un Builder anidado, y eso rompía la reactividad: el
+      // builder de un Builder no corre cuando el Obx arma el árbol, corre
+      // después, cuando ese hijo se construye. O sea que el Obx no llegaba a
+      // ver ninguna lectura y GetX lo cortaba con "improper use of a GetX",
+      // que era la pantalla negra con el texto en el medio al abrir un manga.
+      //
+      // El índice se comprueba igual: una ficha sin capítulos abre el lector
+      // con la lista vacía, y sin esto reventaba con un RangeError.
+      final lista = _c.playList;
+      final i = _c.index.value;
+      final episodio = (i >= 0 && i < lista.length) ? lista[i].name : '';
+      return Container(
         width: double.infinity,
         height: 40,
         color: fluent.FluentTheme.of(context).micaBackgroundColor,
@@ -135,19 +148,10 @@ class _ControlPanelHeaderState<T extends ReaderController>
             // so clicking them never accidentally drags the window.
             Expanded(
               child: DragToMoveArea(
-                child: Builder(builder: (_) {
-                  // Mismo motivo que en las cabeceras del reproductor: con la
-                  // lista vacia esto reventaba en vez de mostrar solo el
-                  // titulo.
-                  final lista = _c.playList;
-                  final i = _c.index.value;
-                  final episodio =
-                      (i >= 0 && i < lista.length) ? lista[i].name : '';
-                  return Text(
-                    _c.title + episodio,
-                    overflow: TextOverflow.ellipsis,
-                  );
-                }),
+                child: Text(
+                  _c.title + episodio,
+                  overflow: TextOverflow.ellipsis,
+                ),
               ),
             ),
             if (widget.buildSettings != null) ...[
@@ -217,8 +221,8 @@ class _ControlPanelHeaderState<T extends ReaderController>
             ),
           ],
         ),
-      ).animate().fade(),
-    );
+      ).animate().fade();
+    });
   }
 
   @override
