@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
+import 'dart:typed_data';
 
 import 'package:prismhub/utils/log.dart';
 
@@ -142,39 +143,152 @@ class CastHlsATs {
     }
   }
 
+  /// Cuántos pedacitos se van bajando POR DELANTE del que se está entregando.
+  ///
+  /// Antes no había ninguno: se bajaba uno, se entregaba, y recién cuando el
+  /// televisor terminaba de tragarlo se empezaba a pedir el siguiente. O sea que
+  /// el tiempo de bajar cada pedacito se sumaba entero al de reproducirlo, y el
+  /// televisor se quedaba sin datos entre uno y otro — exactamente el "va lento
+  /// y se para" que se ve al castear. Con dos por delante, mientras el aparato
+  /// consume uno ya hay otros dos descargados esperando, y el bache solo se nota
+  /// si la conexión no llega ni a seguirle el ritmo al vídeo.
+  ///
+  /// Dos y no veinte porque cada uno se guarda entero en memoria mientras
+  /// espera: son unos pocos megas por pedacito, y con este número el techo
+  /// queda en el orden de la decena de megas.
+  static const _porDelante = 2;
+
   /// Los bytes del vídeo, en orden y sin cortes.
   ///
-  /// Va bajando un pedacito mientras el televisor consume el anterior. No se
-  /// junta todo en memoria: son cientos de megas.
-  static Stream<List<int>> servir(PlanTs plan) async* {
+  /// Se bajan varios pedacitos a la vez pero se entregan SIEMPRE en orden: un
+  /// MPEG-TS es un flujo continuo y un pedacito fuera de lugar lo rompe.
+  ///
+  /// [alEntregar] avisa qué pedacito se está entregando. El relay lo usa para
+  /// saber por dónde iba si el aparato corta y vuelve a pedir: sin eso, cada
+  /// reintento del televisor arrancaba el vídeo desde el principio.
+  static Stream<List<int>> servir(
+    PlanTs plan, {
+    void Function(int indice)? alEntregar,
+  }) async* {
     // Desde donde diga el plan: adelantar es servir el mismo video empezando
     // por otro pedacito.
-    for (var i = plan.desde; i < plan.pedacitos.length; i++) {
-      final trozo = plan.pedacitos[i];
-      var entregado = false;
-      for (var intento = 0; intento <= _reintentos && !entregado; intento++) {
-        try {
-          final req = await _cliente.getUrl(trozo);
-          _preparar(req, plan.headers, plan.userAgent);
-          final res = await req.close().timeout(const Duration(seconds: 30));
-          if (res.statusCode >= 400) {
-            await res.drain<void>();
-            throw HttpException('HTTP ${res.statusCode}');
-          }
-          await for (final bloque in res) {
-            yield bloque;
-          }
-          entregado = true;
-        } catch (e) {
-          if (intento == _reintentos) {
-            // Un pedacito perdido se nota como un saltito y el vídeo sigue.
-            // Cortar la transmisión entera por uno sería mucho peor.
-            logger.warning(
-                'Reempaquetado a TS: se saltea el pedacito ${i + 1} — $e');
-          }
+    final enVuelo = <Future<List<int>?>>[];
+    var proximo = plan.desde;
+
+    void llenarLaCola() {
+      while (enVuelo.length <= _porDelante &&
+          proximo < plan.pedacitos.length) {
+        enVuelo.add(_bajarPedacito(plan, proximo));
+        proximo++;
+      }
+    }
+
+    // El PRIMER pedacito se entrega a medida que llega, sin esperar a tenerlo
+    // entero.
+    //
+    // Esperarlo completo dejaba la respuesta HTTP en silencio desde que el
+    // televisor la pedía hasta que terminaba de bajar ese pedacito — varios
+    // segundos con un CDN lento. Muchos televisores dan por muerta una conexión
+    // que no manda un solo byte en ese rato: la cierran, vuelven a pedir la
+    // misma dirección, y como el flujo se arma desde el principio, el vídeo
+    // arranca de cero otra vez. Y otra. Ese es el bucle de reinicios.
+    //
+    // Los siguientes SÍ se bajan enteros por delante (es lo que evita el corte
+    // entre uno y otro), pero para entonces ya hay bytes viajando y el
+    // televisor no tiene motivo para cortar.
+    if (proximo < plan.pedacitos.length) {
+      final primero = proximo;
+      proximo++;
+      // La cola de los que vienen detrás arranca YA, en paralelo con este.
+      llenarLaCola();
+      alEntregar?.call(primero);
+      yield* _servirPedacitoEnVivo(plan, primero);
+    }
+
+    // Cuál de la lista es el que sale ahora. La cola se adelanta, así que
+    // `proximo` ya apunta a varios más allá y no sirve para esto.
+    var entregando = proximo - enVuelo.length;
+    while (enVuelo.isNotEmpty) {
+      final bytes = await enVuelo.removeAt(0);
+      alEntregar?.call(entregando);
+      entregando++;
+      // Se pide el reemplazo apenas se saca uno de la cola, no después de
+      // entregarlo: si se esperara a que el televisor lo consuma, volveríamos a
+      // tener la descarga y la reproducción una detrás de la otra.
+      llenarLaCola();
+      // null es un pedacito que no se pudo bajar ni reintentando: se saltea. Se
+      // nota como un saltito y el vídeo sigue; cortar la transmisión entera por
+      // uno sería mucho peor.
+      if (bytes == null) continue;
+      yield bytes;
+    }
+  }
+
+  /// Un pedacito servido a medida que llega, sin juntarlo antes en memoria.
+  ///
+  /// Solo se reintenta si TODAVÍA no salió nada: una vez que hay bytes en
+  /// camino, volver a empezar el pedacito los duplicaría dentro del flujo, y un
+  /// MPEG-TS con bytes repetidos se rompe. Si se corta a mitad, es preferible el
+  /// saltito.
+  static Stream<List<int>> _servirPedacitoEnVivo(PlanTs plan, int indice) async* {
+    final trozo = plan.pedacitos[indice];
+    for (var intento = 0; intento <= _reintentos; intento++) {
+      var salioAlgo = false;
+      try {
+        final req = await _cliente.getUrl(trozo);
+        _preparar(req, plan.headers, plan.userAgent);
+        final res = await req.close().timeout(const Duration(seconds: 30));
+        if (res.statusCode >= 400) {
+          await res.drain<void>();
+          throw HttpException('HTTP ${res.statusCode}');
+        }
+        await for (final bloque in res) {
+          salioAlgo = true;
+          yield bloque;
+        }
+        return;
+      } catch (e) {
+        if (salioAlgo) {
+          logger.warning('Reempaquetado a TS: el pedacito ${indice + 1} se '
+              'cortó a mitad, se sigue con el siguiente — $e');
+          return;
+        }
+        if (intento == _reintentos) {
+          logger.warning(
+              'Reempaquetado a TS: se saltea el pedacito ${indice + 1} — $e');
         }
       }
     }
+  }
+
+  /// Un pedacito entero en memoria, o null si no se pudo bajar.
+  ///
+  /// Nunca tira: quien lo espera está sirviendo un vídeo en marcha y una
+  /// excepción ahí cortaría la transmisión completa.
+  static Future<List<int>?> _bajarPedacito(PlanTs plan, int indice) async {
+    final trozo = plan.pedacitos[indice];
+    for (var intento = 0; intento <= _reintentos; intento++) {
+      try {
+        final req = await _cliente.getUrl(trozo);
+        _preparar(req, plan.headers, plan.userAgent);
+        final res = await req.close().timeout(const Duration(seconds: 30));
+        if (res.statusCode >= 400) {
+          await res.drain<void>();
+          throw HttpException('HTTP ${res.statusCode}');
+        }
+        final juntado = BytesBuilder(copy: false);
+        await for (final bloque in res) {
+          juntado.add(bloque);
+        }
+        return juntado.takeBytes();
+      } catch (e) {
+        if (intento == _reintentos) {
+          logger.warning(
+              'Reempaquetado a TS: se saltea el pedacito ${indice + 1} — $e');
+        }
+      }
+    }
+    return null;
   }
 
   /// Baja una lista y la devuelve como texto, o null si no se pudo.

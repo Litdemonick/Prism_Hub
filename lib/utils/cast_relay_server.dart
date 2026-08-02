@@ -149,6 +149,44 @@ class CastRelayServer {
     return sesion != null && pedidosPorSesion.containsKey(sesion);
   }
 
+  /// Cuántos bytes de vídeo se le entregaron de verdad a cada transmisión.
+  ///
+  /// [pedidosPorSesion] decía "pidió", y con eso se concluía que "bajó datos".
+  /// No es lo mismo, y la diferencia importa: un televisor DLNA pregunta
+  /// PRIMERO con un HEAD para ver si el formato le sirve, y ese HEAD ya marcaba
+  /// la sesión como pedida aunque no se hubiera entregado un solo byte. Con eso,
+  /// un aparato que negoció y se fue —y otro que está bajando bien pero lento—
+  /// daban el mismo veredicto: "llega pero no puede con el formato". El de la
+  /// conexión lenta lo recibía siendo mentira.
+  ///
+  /// Contar bytes separa los tres casos de verdad: no pidió nada (es red), pidió
+  /// pero no bajó nada (negoció y lo rechazó: es el formato), o está bajando
+  /// (no hay nada roto, hay que esperar).
+  static final Map<String, int> bytesPorSesion = {};
+
+  /// Por qué pedacito del reempaquetado iba cada transmisión.
+  ///
+  /// Es lo que permite retomar en vez de reiniciar cuando el aparato vuelve a
+  /// pedir. Ver el uso en el manejador de pedidos.
+  static final Map<String, int> _pedacitoPorSesion = {};
+
+  static int bytesServidos(String? relayUrl) {
+    final sesion = _sesionDe(relayUrl);
+    return sesion == null ? 0 : (bytesPorSesion[sesion] ?? 0);
+  }
+
+  /// Cuenta lo que pasa sin tocarlo.
+  ///
+  /// Los bloques se reenvían TAL CUAL, sin copiarlos: lo único que se agrega es
+  /// sumar su largo. Importa porque por acá pasa todo el vídeo de la
+  /// transmisión y cualquier copia se pagaría en cada bloque.
+  static Stream<List<int>> _contando(String sesion, Stream<List<int>> origen) {
+    return origen.map((bloque) {
+      bytesPorSesion[sesion] = (bytesPorSesion[sesion] ?? 0) + bloque.length;
+      return bloque;
+    });
+  }
+
   /// Desde que direccion pidio, para poder decirlo en el aviso.
   static String? quienPidio(String? relayUrl) {
     final sesion = _sesionDe(relayUrl);
@@ -242,6 +280,21 @@ class CastRelayServer {
       // verdad o si solo abrio la conexion y se fue.
       CastLog.paso('El aparato pidio desde $quien: ${request.method} '
           '${CastLog.cabeceras(request.headers)}');
+    } else if (request.method.toUpperCase() == 'GET') {
+      // VOLVIÓ a pedir el vídeo entero.
+      //
+      // Antes solo se anotaba el primer pedido, "porque después son cientos por
+      // episodio" — cierto para los pedidos por trozos (Range) de un vídeo que
+      // se manda tal cual, pero NO para el flujo reempaquetado, que se sirve de
+      // una sola vez. Ahí un GET nuevo significa que el aparato cortó y volvió
+      // a empezar, y como el flujo se arma desde el principio, el vídeo arranca
+      // de cero. Sin esta línea, un bucle de reinicios no dejaba ningún rastro
+      // y desde el registro se veía como una transmisión normal.
+      final servidos = bytesPorSesion[target.sesion] ?? 0;
+      CastLog.paso('El aparato VOLVIÓ a pedir el vídeo tras '
+          '${(servidos / 1024 / 1024).toStringAsFixed(1)} MiB servidos '
+          '(${CastLog.cabeceras(request.headers)}) — si esto se repite, el '
+          'vídeo se está reiniciando solo');
     }
 
     // El receptor pregunta primero con HEAD (el "Stat" de Kodi) para saber
@@ -268,7 +321,36 @@ class CastRelayServer {
             '${CastLog.cabeceras(cabeceras)}');
       }
       if (esHead) return Response.ok(null, headers: cabeceras);
-      return Response.ok(CastHlsATs.servir(plan), headers: cabeceras);
+      // Si ya se le venía sirviendo, se SIGUE donde iba en vez de empezar de
+      // cero.
+      //
+      // Un aparato puede cortar y volver a pedir por muchos motivos —se le llenó
+      // el buffer, un hipo de red, su propio reproductor decidió reabrir—, y no
+      // los controlamos. Lo que sí controlamos es qué le mandamos cuando vuelve:
+      // hasta ahora era el vídeo entero desde el principio, así que cada
+      // reintento suyo se veía como que el capítulo se reiniciaba solo, una y
+      // otra vez. Medido en vivo: pedidos nuevos tras 8,3 · 16,6 · 33,3 MiB
+      // servidos, con el vídeo volviendo al inicio cada vez.
+      //
+      // Se retoma en el ÚLTIMO pedacito entregado y no en el siguiente: ese
+      // puede haber quedado a medio reproducir del otro lado. Repetir unos
+      // segundos no se nota; saltearlos, sí.
+      final desde = _pedacitoPorSesion[target.sesion];
+      final aServir = desde == null ? plan : plan.recortadoDesde(desde);
+      if (desde != null) {
+        CastLog.paso('Se retoma el reempaquetado en el pedacito ${desde + 1} '
+            'en vez de empezar de nuevo');
+      }
+      return Response.ok(
+        _contando(
+          target.sesion,
+          CastHlsATs.servir(
+            aServir,
+            alEntregar: (indice) => _pedacitoPorSesion[target.sesion] = indice,
+          ),
+        ),
+        headers: cabeceras,
+      );
     }
 
     final client = _cliente;
@@ -372,7 +454,7 @@ class CastRelayServer {
       // el camino, en el punto por el que pasa TODO el video.
       return Response(
         upstreamRes.statusCode,
-        body: upstreamRes,
+        body: _contando(target.sesion, upstreamRes),
         headers: resHeaders,
       );
     } catch (e) {
@@ -582,6 +664,8 @@ class CastRelayServer {
     _targets.removeWhere((_, t) => t.sesion == sesion);
     _tokensPorUrl.removeWhere((clave, _) => clave.startsWith('$sesion|'));
     pedidosPorSesion.remove(sesion);
+    bytesPorSesion.remove(sesion);
+    _pedacitoPorSesion.remove(sesion);
     _cerrarSiSobra();
   }
 

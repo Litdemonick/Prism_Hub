@@ -2630,7 +2630,19 @@ class VideoPlayerController extends GetxController with WidgetsBindingObserver {
   // 获取画质
   getQuality() async {
     final url = watchData!.url;
-    final headers = watchData!.headers;
+    // Las MISMAS cabeceras con las que reproduce mpv, no solo las que trajo la
+    // extensión.
+    //
+    // Medido en vivo con Desu (nika.playmudos.com, detrás de Cloudflare): esta
+    // petición contestaba **403** y el menú de calidades quedaba vacío, mientras
+    // el vídeo se reproducía perfecto — porque mpv sí manda User-Agent de
+    // navegador y acá se pedía sin ninguno. Con el que pone dart:io por defecto,
+    // esa fuente rechaza el pedido.
+    //
+    // Sin el menú, además, no se puede elegir con qué calidad arrancar: se pierde
+    // en el mismo lugar donde se detectaría.
+    final headers = <String, String>{'User-Agent': _browserUA};
+    if (watchData!.headers != null) headers.addAll(watchData!.headers!);
     logger.info(url);
 
     late dynamic response;
@@ -3923,6 +3935,12 @@ class VideoPlayerController extends GetxController with WidgetsBindingObserver {
         url: url,
         titulo: '$title — ${playList[index.value].name}',
         mime: mime,
+        // Con reempaquetado NO se puede saltar por bytes, y hay que decírselo:
+        // ese flujo se arma sobre la marcha y no tiene largo. Prometerle lo
+        // contrario hace que el aparato cierre la conexión y la reabra creyendo
+        // que puede seguir desde otro punto — y como no puede, le llega desde el
+        // principio. Ver cast_metadata.dart.
+        puedeSaltar: planTs == null,
       );
       CastLog.paso('El aparato aceptó la orden; se le anunció '
           '${CastLog.anuncio(url)}');
@@ -5360,6 +5378,9 @@ class VideoPlayerController extends GetxController with WidgetsBindingObserver {
         url: url,
         titulo: '$title — ${playList[index.value].name}',
         mime: 'video/mpeg',
+        // Acá SIEMPRE es reempaquetado (por eso el mime fijo), así que nunca se
+        // puede saltar por bytes. Ver el mismo comentario en connectDLNADevice.
+        puedeSaltar: false,
       );
       _dlnaRelayUrl = url;
       _urlEnviadaAlCast = url;
