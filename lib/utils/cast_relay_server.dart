@@ -36,6 +36,8 @@ class CastRelayServer {
   /// **200** — con Referer o sin él, da igual. El puente de red de la app ya
   /// rellena uno cuando la extensión no lo trae (ver getUASetting), así que el
   /// relay sin esto pedía de una forma que la app nunca usa.
+  static String get uaPorDefecto => _uaPorDefecto;
+
   static String get _uaPorDefecto {
     try {
       final delAjuste = PrismHubStorage.getUASetting();

@@ -61,6 +61,65 @@ void main() {
     expect(desalineados, 0, reason: 'el MPEG-TS resultante está roto');
   }, timeout: const Timeout(Duration(minutes: 3)));
 
+  test('el User-Agent de navegador llega a la fuente', () async {
+    // Esto no es un detalle: las fuentes detrás de Cloudflare contestan 403 al
+    // User-Agent que pone dart:io por defecto, y 200 a uno de navegador.
+    //
+    // Y el fallo era invisible: dart:io deja SIEMPRE puesto su
+    // "Dart/x.y (dart:io)", así que preguntarle al pedido si ya trae uno daba
+    // que sí siempre y el de navegador no se aplicaba nunca. La lista volvía
+    // 403, no se podía reempaquetar, y en pantalla salía "este dispositivo no
+    // soporta el formato" — que apuntaba al televisor cuando el problema
+    // estaba de este lado.
+    //
+    // Se levanta una fuente que rechaza igual que Cloudflare: sin el
+    // User-Agent correcto, 403.
+    final server = await HttpServer.bind(InternetAddress.loopbackIPv4, 0);
+    final vistos = <String?>[];
+    server.listen((req) async {
+      final ua = req.headers.value(HttpHeaders.userAgentHeader);
+      vistos.add(ua);
+      if (ua == null || !ua.contains('Mozilla')) {
+        req.response.statusCode = 403;
+        await req.response.close();
+        return;
+      }
+      if (req.uri.path.endsWith('.m3u8')) {
+        req.response.write('#EXTM3U\n#EXTINF:10.0,\na.ts\n');
+      } else {
+        // Dos paquetes MPEG-TS validos, para que pase la comprobacion.
+        final ts = List<int>.filled(376, 0)
+          ..[0] = 0x47
+          ..[188] = 0x47;
+        req.response.add(ts);
+      }
+      await req.response.close();
+    });
+
+    final plan = await CastHlsATs.analizar(
+        'http://127.0.0.1:${server.port}/lista.m3u8', const {}, _ua);
+    expect(plan, isNotNull,
+        reason: 'la fuente rechazó el pedido: el User-Agent no llegó');
+    expect(vistos, everyElement(contains('Mozilla')),
+        reason: 'algún pedido salió con el User-Agent de dart:io');
+    await server.close(force: true);
+  });
+
+  test('el User-Agent de la extensión gana sobre el de por defecto', () async {
+    final server = await HttpServer.bind(InternetAddress.loopbackIPv4, 0);
+    String? visto;
+    server.listen((req) async {
+      visto ??= req.headers.value(HttpHeaders.userAgentHeader);
+      req.response.write('#EXTM3U\n');
+      await req.response.close();
+    });
+    await CastHlsATs.analizar('http://127.0.0.1:${server.port}/lista.m3u8',
+        const {'User-Agent': 'ElDeLaExtension/1.0'}, _ua);
+    expect(visto, 'ElDeLaExtension/1.0',
+        reason: 'si la extensión manda uno, ese es el que la fuente espera');
+    await server.close(force: true);
+  });
+
   test('una lista con pedacitos cifrados no se reempaqueta', () async {
     // Se sirve una lista falsa en local: lo que se prueba acá es la decisión,
     // no la red.

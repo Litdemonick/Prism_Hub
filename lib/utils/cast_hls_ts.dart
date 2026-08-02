@@ -35,6 +35,31 @@ class CastHlsATs {
     ..idleTimeout = const Duration(seconds: 30)
     ..connectionTimeout = const Duration(seconds: 15);
 
+  /// Pone las cabeceras de la extensión y se asegura de que salga un
+  /// User-Agent de navegador.
+  ///
+  /// El User-Agent NO es cosmético: medido contra la fuente del usuario
+  /// (nika.playmudos.com, detrás de Cloudflare), con el que pone dart:io por
+  /// defecto la respuesta es **403** y con uno de navegador es **200**.
+  ///
+  /// Y hay que mirar las cabeceras de la extensión, no las del pedido: dart:io
+  /// **siempre** deja puesto su `Dart/x.y (dart:io)`, así que preguntar si el
+  /// pedido ya trae uno da que sí SIEMPRE y el de navegador no se aplicaba
+  /// nunca. Eso hacía que no se pudiera leer ni la lista, y desde afuera se
+  /// veía como "este aparato no soporta el formato".
+  static void _preparar(
+    HttpClientRequest req,
+    Map<String, String> headers,
+    String userAgent,
+  ) {
+    headers.forEach((k, v) => req.headers.set(k, v));
+    final loTraeLaExtension =
+        headers.keys.any((k) => k.toLowerCase() == 'user-agent');
+    if (!loTraeLaExtension && userAgent.isNotEmpty) {
+      req.headers.set(HttpHeaders.userAgentHeader, userAgent);
+    }
+  }
+
   /// Mira la lista y decide si se puede reempaquetar.
   ///
   /// Devuelve null cuando no se puede — el motivo queda en el registro.
@@ -122,10 +147,7 @@ class CastHlsATs {
       for (var intento = 0; intento <= _reintentos && !entregado; intento++) {
         try {
           final req = await _cliente.getUrl(trozo);
-          plan.headers.forEach((k, v) => req.headers.set(k, v));
-          if (req.headers.value(HttpHeaders.userAgentHeader) == null) {
-            req.headers.set(HttpHeaders.userAgentHeader, plan.userAgent);
-          }
+          _preparar(req, plan.headers, plan.userAgent);
           final res = await req.close().timeout(const Duration(seconds: 30));
           if (res.statusCode >= 400) {
             await res.drain<void>();
@@ -154,10 +176,7 @@ class CastHlsATs {
     String userAgent,
   ) async {
     final req = await _cliente.getUrl(uri);
-    headers.forEach((k, v) => req.headers.set(k, v));
-    if (req.headers.value(HttpHeaders.userAgentHeader) == null) {
-      req.headers.set(HttpHeaders.userAgentHeader, userAgent);
-    }
+    _preparar(req, headers, userAgent);
     final res = await req.close().timeout(const Duration(seconds: 15));
     if (res.statusCode >= 400) {
       await res.drain<void>();
@@ -203,10 +222,7 @@ class CastHlsATs {
   ) async {
     try {
       final req = await _cliente.getUrl(trozo);
-      headers.forEach((k, v) => req.headers.set(k, v));
-      if (req.headers.value(HttpHeaders.userAgentHeader) == null) {
-        req.headers.set(HttpHeaders.userAgentHeader, userAgent);
-      }
+      _preparar(req, headers, userAgent);
       req.headers.set(HttpHeaders.rangeHeader, 'bytes=0-375');
       final res = await req.close().timeout(const Duration(seconds: 10));
       if (res.statusCode >= 400) {

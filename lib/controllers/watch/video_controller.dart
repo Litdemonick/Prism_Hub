@@ -3410,13 +3410,17 @@ class VideoPlayerController extends GetxController with WidgetsBindingObserver {
     var mime = mimeDeUrl(urlOriginal);
     if (aparato is AparatoDlna && mime.contains('mpegurl')) {
       if (!await FormatosDelAparato.aceptaHls(aparato.device)) {
-        if (await FormatosDelAparato.aceptaTs(aparato.device)) {
+        final aceptaTs = await FormatosDelAparato.aceptaTs(aparato.device);
+        logger.info('El aparato ${aparato.nombre} no acepta HLS; '
+            'MPEG-TS: ${aceptaTs ? "sí" : "no"}');
+        if (aceptaTs) {
+          // El MISMO User-Agent que usa el relay, no uno leído a mano: si el
+          // ajuste está vacío hay que caer en el de navegador, porque con el
+          // que pone dart:io las fuentes detrás de Cloudflare contestan 403.
           planTs = await CastHlsATs.analizar(
             urlOriginal,
             headers ?? const {},
-            PrismHubStorage.getUASetting() is String
-                ? PrismHubStorage.getUASetting() as String
-                : '',
+            CastRelayServer.uaPorDefecto,
           );
         }
         if (planTs == null) {
