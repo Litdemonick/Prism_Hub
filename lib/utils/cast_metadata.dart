@@ -23,27 +23,12 @@ Future<void> castearConMetadata(
   String url, {
   required String titulo,
   String? mime,
-  bool puedeSaltar = true,
 }) async {
   final tipo = mime ?? mimeDeUrl(url);
-  // DLNA.ORG_OP: si el aparato puede o no adelantar por bytes.
-  //
-  // Iba SIEMPRE en 01 ("sí se puede"), y con el vídeo reempaquetado a MPEG-TS
-  // eso es mentira: ese flujo se arma sobre la marcha, no tiene largo, y por eso
-  // el relay responde OP=00 y Accept-Ranges: none. O sea que le anunciábamos una
-  // cosa y le servíamos la contraria.
-  //
-  // Medido en vivo con un televisor que usa ExoPlayer: creyendo que puede
-  // reposicionarse por bytes, cuando se le llena el buffer cierra la conexión y
-  // la vuelve a abrir para seguir desde donde iba. Como el flujo no admite eso,
-  // le llega otra vez desde el principio y el capítulo se REINICIA. En el
-  // registro se ve como pedidos nuevos cada pocos segundos ("VOLVIÓ a pedir el
-  // vídeo tras 8.3 MiB… 16.6 MiB… 33.3 MiB").
-  //
-  // Diciéndole la verdad desde el anuncio, el receptor sabe que esta fuente se
-  // consume de una sola pasada y no intenta un reposicionamiento que no existe.
-  final salto = puedeSaltar ? '01' : '00';
-  final protocolo = 'http-get:*:$tipo:DLNA.ORG_OP=$salto;DLNA.ORG_CI=0';
+  // DLNA.ORG_OP=01 avisa que se puede adelantar por bytes (el relay ahora
+  // conserva el content-length, así que es cierto); DLNA.ORG_CI=0 que el vídeo
+  // va tal cual, sin reconvertir.
+  final protocolo = 'http-get:*:$tipo:DLNA.ORG_OP=01;DLNA.ORG_CI=0';
   final urlXml = _escapar(url);
 
   final ficha = '<DIDL-Lite '

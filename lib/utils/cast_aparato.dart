@@ -75,16 +75,11 @@ abstract class AparatoDeCasteo {
   /// abrir su conexión y lanzar el reproductor primero.
   Future<bool> preparar();
 
-  /// [puedeSaltar] es false cuando lo que se le manda es un flujo que se arma
-  /// sobre la marcha (el reempaquetado a MPEG-TS): ahí no hay largo ni bytes a
-  /// los que reposicionarse, y decirle lo contrario hace que el aparato intente
-  /// un salto imposible. Ver cast_metadata.dart.
   Future<void> cargar({
     required String url,
     required String titulo,
     required String mime,
     String? portada,
-    bool puedeSaltar = true,
   });
 
   Future<void> reproducir();
@@ -151,12 +146,10 @@ class AparatoDlna implements AparatoDeCasteo {
     required String titulo,
     required String mime,
     String? portada,
-    bool puedeSaltar = true,
   }) async {
     // Con ficha DIDL completa: sin protocolInfo, Kodi anota "invalid protocol
     // info ':::'" y tiene que adivinar el formato. Ver cast_metadata.dart.
-    await castearConMetadata(device, url,
-        titulo: titulo, mime: mime, puedeSaltar: puedeSaltar);
+    await castearConMetadata(device, url, titulo: titulo, mime: mime);
     final respuesta = await device.play();
     CastLog.paso('Play ← ${CastLog.respuestaUpnp(respuesta)}');
   }
@@ -373,9 +366,6 @@ class AparatoChromecast implements AparatoDeCasteo {
     required String titulo,
     required String mime,
     String? portada,
-    // El Chromecast no usa el flag de DLNA: su receptor decide solo. Se acepta
-    // para cumplir la firma comun.
-    bool puedeSaltar = true,
   }) async {
     await _cliente?.cargar(
       url: url,
@@ -488,8 +478,6 @@ class AparatoRoku implements AparatoDeCasteo {
     required String titulo,
     required String mime,
     String? portada,
-    // El Roku tampoco lo usa: su protocolo (ECP) no tiene este concepto.
-    bool puedeSaltar = true,
   }) async {
     final ok = await _cliente.cargar(url: url, titulo: titulo, mime: mime);
     if (!ok) throw StateError('El Roku no acepto el video');

@@ -8,10 +8,8 @@ import 'package:prismhub/controllers/home_controller.dart';
 import 'package:prismhub/utils/copia_cifrado.dart';
 import 'package:prismhub/utils/copia_seguridad.dart';
 import 'package:prismhub/utils/portadas_perdidas.dart';
-import 'package:prismhub/router/router.dart';
 import 'package:prismhub/views/pages/settings/copia_elegir_extensiones.dart';
 import 'package:prismhub/views/pages/settings/copia_resultado.dart';
-import 'package:prismhub/views/pages/settings/registro_en_vivo_page.dart';
 import 'package:fluent_ui/fluent_ui.dart' as fluent;
 import 'package:flutter/material.dart';
 import 'package:flutter_i18n/flutter_i18n.dart';
@@ -818,26 +816,6 @@ class _SettingsPageState extends State<SettingsPage> {
     );
   }
 
-  /// Abre el visor del registro.
-  ///
-  /// Cada plataforma navega distinto y por eso no hay una sola línea acá:
-  ///
-  ///  - En Android, Navigator directo y NO Get.to, por lo mismo que
-  ///    [_openSkipIntervalPage]: esta fila vive dentro de la subpágina de
-  ///    Ajustes que ya se empujó con Get.to, y ahí el segundo Get.to no
-  ///    navegaba (el botón parecía muerto).
-  ///  - En escritorio manda go_router y el navegador de GetX no está activo,
-  ///    así que va por su ruta.
-  void _abrirVisorDeRegistro(BuildContext context) {
-    if (Platform.isAndroid) {
-      Navigator.of(context).push(
-        MaterialPageRoute(builder: (_) => const RegistroEnVivoPage()),
-      );
-      return;
-    }
-    router.push('/settings/log');
-  }
-
   void _mostrarAvisoLegal() {
     showPlatformDialog(
       context: context,
@@ -1398,56 +1376,26 @@ class _SettingsPageState extends State<SettingsPage> {
               },
             ),
             const SizedBox(height: 10),
-            // Ver el registro sin salir de la app. Va ANTES de exportar: mirar
-            // qué está pasando es lo que uno intenta primero; exportar es el
-            // paso siguiente, y solo si hay algo que mandar.
-            SettingsTile(
-              title: 'settings.view-log'.i18n,
-              buildSubtitle: () => 'settings.view-log-subtitle'.i18n,
-              onTap: () => _abrirVisorDeRegistro(context),
-              trailing: PlatformWidget(
-                androidWidget: TextButton(
-                  onPressed: () => _abrirVisorDeRegistro(context),
-                  child: Text('settings.open'.i18n),
-                ),
-                desktopWidget: fluent.FilledButton(
-                  onPressed: () => _abrirVisorDeRegistro(context),
-                  child: Text('settings.open'.i18n),
-                ),
-              ),
-            ),
-            const SizedBox(height: 10),
             // 导出日志
             SettingsTile(
               title: 'settings.export-log'.i18n,
               buildSubtitle: () => 'settings.export-log-subtitle'.i18n,
               trailing: PlatformWidget(
-                // El flush() va SIEMPRE antes de exportar.
-                //
-                // El registro se junta en memoria y se vuelca cada 2 segundos.
-                // Sin esto, quien acaba de ver algo fallar y exporta enseguida
-                // se lleva un archivo SIN el fallo — que es justo lo que iba a
-                // reportar. Pasó en vivo: se exportó despues de castear y la
-                // ultima linea del archivo era de una semana antes.
                 androidWidget: TextButton(
-                  onPressed: () async {
-                    await PrismLog.flush();
-                    await Share.shareXFiles([XFile(PrismLog.logFilePath)]);
+                  onPressed: () {
+                    Share.shareXFiles([XFile(PrismLog.logFilePath)]);
                   },
                   child: Text('common.export'.i18n),
                 ),
                 desktopWidget: fluent.FilledButton(
                   onPressed: () async {
-                    await PrismLog.flush();
                     final path = await FilePicker.platform.saveFile(
                       type: FileType.custom,
                       allowedExtensions: ['log'],
                       fileName: 'PrismHub.log',
                     );
-                    // Con await: sin el, la copia quedaba corriendo suelta y
-                    // el archivo podia salir a medio escribir.
                     if (path != null) {
-                      await File(PrismLog.logFilePath).copy(path);
+                      File(PrismLog.logFilePath).copy(path);
                     }
                   },
                   child: Text('common.export'.i18n),

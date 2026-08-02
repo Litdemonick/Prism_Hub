@@ -58,17 +58,7 @@ class _VideoPlayerDesktopControlsState
     _hideTimer?.cancel();
     if (!_showControls && mounted) setState(() => _showControls = true);
     _hideTimer = Timer(const Duration(seconds: 2), () {
-      if (!mounted) return;
-      // En pausa los controles NO se esconden — ver el mismo criterio en la
-      // versión del teléfono. Una pantalla pausada y sin un solo botón encima
-      // no se distingue de una trabada, y para hacer cualquier cosa había que
-      // mover el mouse a ciegas primero. Se vuelve a armar el temporizador en
-      // vez de cortarlo, así apenas se reanuda se esconden solos como siempre.
-      if (!widget.controller.isPlaying.value) {
-        _resetHideTimer();
-        return;
-      }
-      setState(() => _showControls = false);
+      if (mounted) setState(() => _showControls = false);
     });
   }
 
@@ -2369,23 +2359,9 @@ class _SeekBarState extends State<_SeekBar> {
     super.initState();
     positionSubscription =
         widget.controller.player.stream.position.listen((event) {
-      if (!mounted) return;
-      // Mientras se arrastra manda el dedo, no el reproductor.
-      if (_isDrag) return;
-      // Y con un salto en camino, la barra se queda donde el usuario la dejó.
-      //
-      // Esto escuchaba la posición CRUDA de mpv y se salteaba todo el filtrado
-      // que el controlador ya hace (ver haySaltoPendiente). Entre que se suelta
-      // la barra y el vídeo llega de verdad al punto nuevo siguen entrando
-      // posiciones VIEJAS, así que el indicador se iba de un tirón para atrás y
-      // un instante después saltaba adelante: el parpadeo que se ve al mover la
-      // barra. Lo mismo entre saltos seguidos con las teclas.
-      //
-      // No se puede quedar clavada: si el salto no llega nunca, el vigilante de
-      // 8 s del controlador suelta el destino y la barra vuelve a seguir al
-      // vídeo sola.
-      if (widget.controller.haySaltoPendiente) return;
-      setState(() => position = event);
+      if (!_isDrag && mounted) {
+        setState(() => position = event);
+      }
     });
     durationSubscription =
         widget.controller.player.stream.duration.listen((event) {

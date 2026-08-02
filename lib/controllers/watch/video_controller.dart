@@ -286,55 +286,6 @@ class VideoPlayerController extends GetxController with WidgetsBindingObserver {
   /// para siempre sin decir nada.
   static const _atascoParaRendirse = Duration(seconds: 25);
 
-  // ─── Bajar la calidad sola cuando la conexión no la sostiene ───────────────
-  //
-  // mpv NO cambia de calidad en marcha. De un HLS con varias variantes elige
-  // una al abrir —según el tope de caudal que se le pone más arriba— y se queda
-  // en esa hasta el final, aunque la red no llegue nunca a sostenerla. Un
-  // navegador sí baja solo, y por eso el mismo capítulo puede verse perfecto en
-  // el navegador y cortarse cada diez segundos acá.
-  //
-  // Y el ancho de banda no es un dato fijo del usuario: la misma laptop anda
-  // distinto por ethernet, por 5 GHz o por 2,4 GHz, y cambia con solo irse a
-  // otra habitación. Por eso no se pregunta ni se adivina la conexión: se mira
-  // lo único que importa, que es si en la práctica se está cortando, y recién
-  // ahí se baja un escalón.
-
-  /// Cuándo se quedó sin datos, en la última ventana de tiempo.
-  final List<DateTime> _bachesRecientes = [];
-
-  /// Cuánto tiempo atrás se miran los baches.
-  static const _ventanaDeBaches = Duration(seconds: 60);
-
-  /// Cuántos baches en esa ventana ya no son mala suerte.
-  ///
-  /// Uno solo es un hipo y no justifica bajarle la calidad a nadie. Tres en un
-  /// minuto es una conexión que no da para esta variante.
-  static const _bachesParaBajar = 3;
-
-  /// Cuántas veces se bajó sola en esta reproducción, y el techo.
-  ///
-  /// Con techo para que una red que se cayó del todo no termine arrastrando el
-  /// vídeo hasta la peor calidad disponible: si con dos escalones menos sigue
-  /// cortándose, el problema no es la calidad y bajar más solo empeora lo que
-  /// se ve sin arreglar nada.
-  int _bajadasAutomaticas = 0;
-  static const _maxBajadasAutomaticas = 2;
-
-  /// Cuándo fue la última bajada, para no encadenarlas.
-  ///
-  /// Cambiar de calidad reabre el stream, y reabrir SIEMPRE genera un bache.
-  /// Sin esta pausa, ese bache propio contaría como prueba de que hay que
-  /// bajar otra vez, y el vídeo se caería solo hasta el fondo de un tirón.
-  DateTime? _bajadaDeCalidadEn;
-  static const _calmaTrasBajar = Duration(seconds: 25);
-
-  /// El usuario eligió una calidad a mano: no se le toca más.
-  bool _calidadElegidaAMano = false;
-
-  /// La variante que está sonando, para saber cuál es la de abajo.
-  String? _urlDeCalidadActual;
-
   void _arrancarVigilanteDeAtasco() {
     _vigilanteDeAtasco?.cancel();
     _vigilanteDeAtasco =
@@ -367,128 +318,12 @@ class VideoPlayerController extends GetxController with WidgetsBindingObserver {
         _atascoAvisado = true;
         logger.warning(
             'El video lleva ${quieto.inSeconds}s sin avanzar: se avisa');
-        // Las métricas TAMBIÉN acá, no solo cuando mpv avisa que está
-        // bufferizando. Justamente el caso peor —mpv bloqueado leyendo— no
-        // dispara ningún aviso de buffering, así que el atasco que más importa
-        // era el único que quedaba sin un solo número que lo explicara.
-        unawaited(_diagnosticarBache('imagen congelada'));
         sendMessage(Message(
           Text('video.stalled'.i18n),
           time: const Duration(seconds: 8),
         ));
       }
     });
-  }
-
-  /// Se quedó sin datos otra vez: contarlo y, si ya son muchos, bajar un
-  /// escalón de calidad.
-  ///
-  /// Ver los campos de arriba para el porqué de cada número.
-  void _anotarBache() {
-    if (_disposed) return;
-    // Casteando manda el televisor, y en el navegador esto no lo controlamos.
-    if (dlnaDevice.value != null || isWebViewActive.value) return;
-    // Antes del primer cuadro todavía es el arranque, no un corte: ahí siempre
-    // hay buffering y no significa que la conexión no dé.
-    if (!hasRenderedFrame.value) return;
-    if (_calidadElegidaAMano) return;
-    if (_bajadasAutomaticas >= _maxBajadasAutomaticas) return;
-
-    final ahora = DateTime.now();
-    final ultima = _bajadaDeCalidadEn;
-    if (ultima != null && ahora.difference(ultima) < _calmaTrasBajar) return;
-
-    _bachesRecientes.add(ahora);
-    _bachesRecientes
-        .removeWhere((cuando) => ahora.difference(cuando) > _ventanaDeBaches);
-    if (_bachesRecientes.length < _bachesParaBajar) return;
-
-    final abajo = _calidadDeAbajo();
-    // Sin variante más baja no hay nada que hacer acá: o el vídeo viene en una
-    // sola calidad (muchos servidores entregan un m3u8 pelado, sin lista de
-    // variantes) o ya está en la más baja. En ese caso el colchón de descarga
-    // es toda la defensa que hay, y de eso se ocupa la configuración de mpv.
-    if (abajo == null) return;
-
-    _bajadasAutomaticas++;
-    _bajadaDeCalidadEn = ahora;
-    _bachesRecientes.clear();
-    logger.warning('La conexión no sostiene ${currentQuality.value}: '
-        'se baja a ${abajo.key} (bajada $_bajadasAutomaticas '
-        'de $_maxBajadasAutomaticas)');
-    sendMessage(Message(
-      Text('${'video.auto-quality-down'.i18n} ${abajo.key}'),
-      time: const Duration(seconds: 5),
-    ));
-    unawaited(switchQuality(abajo.value, automatico: true));
-  }
-
-  /// La variante inmediatamente inferior a la que está sonando.
-  ///
-  /// `qualityMap` viene ordenado de mayor a menor (ver getQuality), así que la
-  /// de abajo es la siguiente. Si no se puede saber cuál está sonando devuelve
-  /// null y no se toca nada: cambiar a ciegas podría SUBIR la calidad justo
-  /// cuando la conexión no da abasto, que es lo contrario de lo que se quiere.
-  MapEntry<String, String>? _calidadDeAbajo() {
-    if (qualityMap.length < 2) return null;
-    final entradas = qualityMap.entries.toList();
-    var actual = -1;
-    final url = _urlDeCalidadActual;
-    if (url != null) {
-      actual = entradas.indexWhere((e) => e.value == url);
-    }
-    if (actual < 0) {
-      // Sin URL conocida (la primera variante la eligió mpv solo, del playlist
-      // maestro), se busca por etiqueta: currentQuality se arma con la altura
-      // real del vídeo y las claves del mapa con la misma función, así que
-      // coinciden siempre que la variante declare resolución.
-      actual = entradas.indexWhere((e) => e.key == currentQuality.value);
-    }
-    if (actual < 0 || actual + 1 >= entradas.length) return null;
-    return entradas[actual + 1];
-  }
-
-  /// Cuánto tardó cada tramo de la carga, al registro.
-  ///
-  /// "Tarda mucho en cargar" no se puede arreglar sin saber DÓNDE se van los
-  /// segundos, y los candidatos se ven todos igual desde afuera —una rueda
-  /// girando—: la extensión resolviendo el episodio, el saludo al host, o mpv
-  /// esperando a reconocer el formato. Con esto, quien lo sufre abre el visor
-  /// de registro en su propio equipo y el número está ahí.
-  void _tiempoDeCarga(String tramo, Stopwatch reloj) {
-    logger.info('carga · $tramo: ${reloj.elapsedMilliseconds} ms');
-  }
-
-  /// Deja en el registro POR QUÉ se cortó.
-  ///
-  /// Desde afuera, quedarse sin datos y no dar abasto para decodificar se ven
-  /// exactamente igual —la imagen se queda quieta— y el arreglo de cada uno es
-  /// el opuesto. Estos tres números lo dicen sin lugar a dudas: cuánto vídeo
-  /// queda descargado por delante, a qué velocidad está entrando, y cuántos
-  /// cuadros se tiraron. Con caudal bajo y colchón en cero es la red; con el
-  /// colchón lleno y cuadros tirados es el equipo.
-  Future<void> _diagnosticarBache([String motivo = 'bache']) async {
-    if (_disposed || player.platform is! NativePlayer) return;
-    // Sin vídeo abierto todavía no hay nada que medir, y preguntarlo devolvía
-    // una línea con todos los valores VACÍOS que no dice nada — pasaba en cada
-    // arranque, antes de que mpv llegara a abrir la fuente.
-    if (!hasRenderedFrame.value && position.value == Duration.zero) return;
-    final np = player.platform as NativePlayer;
-    try {
-      final colchon = await np.getProperty('demuxer-cache-duration');
-      final caudal = await np.getProperty('cache-speed');
-      final tirados = await np.getProperty('frame-drop-count');
-      // Vacío = mpv no supo contestar esa propiedad. Se dice, en vez de dejar un
-      // hueco que se lee como un cero.
-      String d(String v) => v.trim().isEmpty ? 'no informado' : v.trim();
-      logger.info('$motivo · colchón: ${d(colchon)} s · caudal: ${d(caudal)} B/s '
-          '· cuadros tirados: ${d(tirados)} · calidad: ${currentQuality.value} '
-          '· posición: ${position.value.inSeconds}s');
-    } catch (e) {
-      // Meramente informativo: que no se pueda leer una propiedad no puede
-      // interferir con la reproducción.
-      logger.info('bache · no se pudieron leer las métricas: $e');
-    }
   }
 
   bool _atascoAvisado = false;
@@ -1041,33 +876,13 @@ class VideoPlayerController extends GetxController with WidgetsBindingObserver {
         // lo soporta, cayendo solo a software si no.
         await np.setProperty('hwdec', 'no');
         await np.setProperty('network-timeout', '5');
-        // multiple_requests: ver el comentario del else, vale igual acá. No
-        // toca reconnect, que en Linux sigue apagado por el SIGSEGV.
-        await np.setProperty('demuxer-lavf-o',
-            'reconnect=0,reconnect_delay_max=0,multiple_requests=1');
+        await np.setProperty(
+            'demuxer-lavf-o', 'reconnect=0,reconnect_delay_max=0');
       } else {
         await np.setProperty('hwdec', 'auto-safe');
         await np.setProperty('network-timeout', '20');
-        // multiple_requests=1: reusar la MISMA conexión HTTP para todos los
-        // segmentos.
-        //
-        // Un HLS no es una descarga: son cientos de descargas chicas, una cada
-        // 5-10 segundos de vídeo. Sin esto, cada segmento abre una conexión
-        // nueva de cero —TCP más el saludo TLS—, y eso se paga en tiempo de ida
-        // y vuelta, no en ancho de banda. En ethernet o wifi de 5 GHz pegado al
-        // router casi no se nota; en 2,4 GHz, lejos, o compartido con otros, ese
-        // saludo puede irse a medio segundo por segmento y el reproductor pasa
-        // más tiempo saludando que descargando. Se ve exactamente como lo que
-        // reportan: tirones y pausas cada pocos segundos aunque el ancho de
-        // banda sobre. Es lo mismo que hace cualquier navegador.
-        //
-        // reconnect_on_network_error: un corte suelto (el wifi que cambia de
-        // canal, un microcorte del ISP) se reintenta solo en vez de dejar el
-        // buffering colgado esperando al watchdog.
-        await np.setProperty(
-            'demuxer-lavf-o',
-            'reconnect=1,reconnect_streamed=1,reconnect_delay_max=5,'
-                'reconnect_on_network_error=1,multiple_requests=1');
+        await np.setProperty('demuxer-lavf-o',
+            'reconnect=1,reconnect_streamed=1,reconnect_delay_max=5');
       }
       // Muchos m3u8 de hosts (voe, netu, etc.) referencian segmentos en otro
       // dominio; mpv los marca "unsafe" y se niega a cargarlos.
@@ -1114,33 +929,10 @@ class VideoPlayerController extends GetxController with WidgetsBindingObserver {
       // menos: alcanza para que 4K deje de cortarse sin quedarse con una
       // porción de memoria que el sistema pueda querer de vuelta.
       await np.setProperty('cache', 'yes');
-      // Cuánto se adelanta la descarga. Es el colchón que decide si un bache de
-      // red se siente o no.
-      //
-      // La conexión no es la misma para todos ni es la misma todo el rato: por
-      // ethernet baja parejo, por 5 GHz también salvo que alguien se aleje, y
-      // por 2,4 GHz —el caso más común en una laptop lejos del router, y
-      // compartido con el microondas, el vecino y todo lo demás— el caudal va a
-      // los saltos. Con 30 segundos guardados, un bajón de unos segundos ni se
-      // nota: se sigue reproduciendo de lo ya descargado. Con poco colchón, ese
-      // mismo bajón es una pausa en la cara.
-      //
-      // En escritorio se sube a 60: hay RAM de sobra (el tope real lo pone
-      // demuxer-max-bytes, acá abajo) y es justo donde más se reportan los
-      // cortes. En el teléfono se dejan 30, para no reservar memoria que el
-      // sistema puede querer de vuelta.
-      await np.setProperty('cache-secs', Platform.isAndroid ? '30' : '60');
+      await np.setProperty('cache-secs', '30');
       await np.setProperty(
           'demuxer-max-bytes', Platform.isAndroid ? '96MiB' : '192MiB');
       await np.setProperty('demuxer-readahead-secs', '10');
-      // Cuánto vuelve a juntar antes de reanudar después de quedarse sin datos.
-      //
-      // El valor de fábrica es 1 segundo, y en una conexión que va a los saltos
-      // eso reanuda para volver a cortarse enseguida: el tironeo continuo que se
-      // reporta en laptop es en buena parte este ciclo. Juntando 3 segundos
-      // antes de seguir, cada corte dura un poco más pero se corta muchísimo
-      // menos seguido — que es lo que se siente como "va fluido".
-      await np.setProperty('cache-pause-wait', '3');
       // Con qué calidad ARRANCA solo. No es un tope.
       //
       // Antes arrancaba siempre en la más alta que ofreciera el stream, o sea
@@ -1584,12 +1376,6 @@ class VideoPlayerController extends GetxController with WidgetsBindingObserver {
       isActuallyBuffering.value = buffering && !advancedRecently;
       _bufferingStallTimer?.cancel();
       _bufferingStallTimer = null;
-      if (buffering && !advancedRecently) {
-        // Un corte real (no el flag desfasado de mpv): se anota para poder
-        // bajar la calidad si se repite, y se deja en el registro por qué fue.
-        _anotarBache();
-        unawaited(_diagnosticarBache());
-      }
       if (buffering) {
         // Confirmado en vivo (Voe/voe.sx, cloudwindow-route): el buffering
         // inicial puede tardar más de 20s y aun así terminar arrancando
@@ -1781,18 +1567,9 @@ class VideoPlayerController extends GetxController with WidgetsBindingObserver {
     _serverRetryCount = 0;
     _triedAndFailedServers.clear();
     _midStreamResumeAt = null;
-    // Contenido nuevo: la conexión se vuelve a evaluar desde cero y la calidad
-    // vuelve a poder ajustarse sola.
-    _bachesRecientes.clear();
-    _bajadasAutomaticas = 0;
-    _bajadaDeCalidadEn = null;
-    _calidadElegidaAMano = false;
-    _urlDeCalidadActual = null;
-    final relojDeCarga = Stopwatch()..start();
     try {
       await getWatchData();
       if (_disposed) return;
-      _tiempoDeCarga('la extensión resolvió el episodio', relojDeCarga);
     } catch (e) {
       if (_disposed) return;
       logger.severe(e);
@@ -1852,7 +1629,7 @@ class VideoPlayerController extends GetxController with WidgetsBindingObserver {
         // No tocar isGettingWatchData acá: switchServer ya lo pone en true
         // apenas arranca — pisarlo a false y volver a true un instante
         // después solo generaba un parpadeo del spinner de carga.
-        unawaited(switchServer(currentServerName.value, porElUsuario: false));
+        unawaited(switchServer(currentServerName.value));
         return;
       }
       awaitingServerChoice.value = true;
@@ -2602,75 +2379,14 @@ class VideoPlayerController extends GetxController with WidgetsBindingObserver {
   //        b) URL de embed conocido → resolveEmbed on-demand vía SDK.
   //        c) URL de episodio → extensión la procesa normalmente.
   //   2. Si la extensión no puede resolver (error/vacío) → fallback WebView sniffer.
-  /// Qué servidor se está resolviendo ahora mismo, si hay alguno.
-  ///
-  /// Cambiar de servidor no es instantáneo: hay que pedirle a la extensión que
-  /// resuelva la fuente, y eso puede tardar segundos (o pasar por el navegador
-  /// oculto). Durante toda esa espera el botón sigue ahí, y volver a tocarlo
-  /// arrancaba otra resolución encima de la anterior.
-  String? _resolviendoServidor;
-
-  /// Si vale la pena hacerle caso a este toque.
-  ///
-  /// Dos casos que hasta ahora reabrían el vídeo para nada, y reabrirlo
-  /// significa **empezar de cero**:
-  ///
-  ///  - Tocar dos veces el mismo servidor mientras todavía se está resolviendo.
-  ///    La segunda no adelanta nada: descarta lo que iba a medio hacer y vuelve
-  ///    a empezar el mismo trabajo.
-  ///  - Elegir de la lista el servidor que YA se está viendo. Pasa seguido: se
-  ///    abre la lista para ver cuál está puesto, se toca el que ya estaba, y el
-  ///    capítulo se reiniciaba desde el principio. La lista de la barra lateral
-  ///    ya lo contemplaba (ver selectServer); la de escritorio llamaba directo
-  ///    acá y no.
-  bool _valeLaPenaCambiarA(String name) {
-    if (_resolviendoServidor == name) {
-      logger.info('Se ignora el toque: "$name" ya se está resolviendo.');
-      return false;
-    }
-    final yaEstaSonando = name == _lastOpenedServerName &&
-        hasRenderedFrame.value &&
-        serverFailedMessage.value.isEmpty &&
-        webViewFallback.value == null &&
-        !isWebViewActive.value &&
-        dlnaDevice.value == null &&
-        player.state.duration > Duration.zero;
-    if (!yaEstaSonando) return true;
-    logger.info('"$name" ya es el que se está viendo: se sigue donde iba en vez '
-        'de reabrirlo.');
-    currentServerName.value = name;
-    awaitingServerChoice.value = false;
-    serverFailedMessage.value = '';
-    safePlay();
-    return false;
-  }
-
   /// Cambia de servidor, y si se estaba transmitiendo manda el nuevo al mismo
   /// aparato en vez de dejar cada uno con una cosa distinta.
   ///
-  /// [porElUsuario] distingue el toque de un botón de los cambios que dispara
-  /// la propia app (el reintento de un servidor caído, el arranque, la bajada
-  /// de calidad para el televisor). Los de la app tienen que pasar siempre:
-  /// reintentar EL MISMO servidor es justamente lo que hacen, y las
-  /// protecciones de arriba los estarían bloqueando.
-  Future<void> switchServer(String name, {bool porElUsuario = true}) async {
-    if (_disposed) return;
-    if (porElUsuario && !_valeLaPenaCambiarA(name)) return;
-    _resolviendoServidor = name;
-    try {
-      await _cambiarDeServidor(name);
-    } finally {
-      // Solo si sigue siendo el nuestro: si mientras tanto se pidió otro, el
-      // que manda es ese y no hay que borrarle la marca.
-      if (_resolviendoServidor == name) _resolviendoServidor = null;
-    }
-  }
-
   /// El cambio de servidor abre el stream nuevo en el reproductor de ACA y no
   /// tocaba el casteo para nada: el televisor se quedaba con el stream viejo, el
   /// telefono arrancaba el nuevo con sonido, y la pantalla seguia diciendo que
   /// se estaba transmitiendo. Dos videos distintos sonando a la vez.
-  Future<void> _cambiarDeServidor(String name) async {
+  Future<void> switchServer(String name) async {
     final aparato = dlnaDevice.value;
     if (aparato == null) return _switchServerLocal(name);
 
@@ -2684,35 +2400,10 @@ class VideoPlayerController extends GetxController with WidgetsBindingObserver {
     // pisarlo a mitad de camino lo deja en negro sin decir nada. Se corta
     // limpio y se avisa, que es lo unico honesto.
     final esCalidad = _servidoresSonCalidades;
-    if (!esCalidad) {
-      // Cambiar de SERVIDOR con una transmisión en curso: se corta el casteo,
-      // se resuelve la fuente nueva acá, y queda EN PAUSA con los controles a
-      // la vista.
-      //
-      // Antes solo se hacía con el Chromecast (su receptor no admite que le
-      // pisen la fuente en caliente) y con un televisor DLNA se intentaba el
-      // cambio en vivo. Eso es pedirle a la parte más frágil de todo el camino
-      // —un aparato que ya venía reproduciendo— que acepte otra fuente, con
-      // otro formato y otras cabeceras, sin cortar. Cuando no salía, quedaba la
-      // tele en negro, el teléfono sonando y la pantalla diciendo que se estaba
-      // transmitiendo.
-      //
-      // El orden importa y es este: primero se corta la transmisión (así el
-      // aparato queda libre y no hay dos cosas sonando), después se resuelve, y
-      // recién al final se deja en pausa. Quedando en pausa el usuario decide:
-      // seguir acá, volver a mandarlo a la tele, o probar otro servidor.
-      //
-      // Una CALIDAD distinta no entra por acá: es el mismo vídeo, se le manda
-      // al aparato y sigue donde iba.
+    if (!esCalidad && aparato.esChromecast) {
       sendMessage(Message(Text('video.cast-server-cambiado'.i18n)));
       await disconnectDLNADevice();
-      if (_disposed) return;
-      await _switchServerLocal(name);
-      if (_disposed) return;
-      // En pausa aunque el cambio haya fallado: si falló, lo que corresponde es
-      // que el usuario vea el aviso y elija, no que empiece a sonar otra cosa.
-      safePause();
-      return;
+      return _switchServerLocal(name);
     }
 
     // Que el usuario sepa que esta pasando: resolver la fuente y volver a
@@ -2780,18 +2471,6 @@ class VideoPlayerController extends GetxController with WidgetsBindingObserver {
     isActuallyBuffering.value = false;
     _clearSeeking();
     _bufferingStallTimer?.cancel();
-    // Las calidades son las del servidor que se está por abrir.
-    //
-    // getQuality() sólo AGREGA al mapa, así que cambiando de servidor se iban
-    // apilando las variantes de todos los que se hubieran probado, apuntando a
-    // streams de otro host. Es el mismo problema que ya estaba documentado
-    // entre episodios (ver play()), pero entre servidores del mismo episodio.
-    // Ahora además importa de verdad: la bajada automática de calidad elige del
-    // mapa, y con entradas viejas podía terminar abriendo la variante de un
-    // servidor que ya no es el que está sonando.
-    qualityMap.clear();
-    _urlDeCalidadActual = null;
-    _bachesRecientes.clear();
 
     final embedUrl = availableServers[name]!;
     logger.info('switchServer: $name → $embedUrl');
@@ -2799,11 +2478,9 @@ class VideoPlayerController extends GetxController with WidgetsBindingObserver {
     isGettingWatchData.value = true;
 
     ExtensionBangumiWatch newWatch;
-    final relojDeResolucion = Stopwatch()..start();
     try {
       newWatch = await runtime.watch(embedUrl, typeHint: ExtensionType.bangumi)
           as ExtensionBangumiWatch;
-      _tiempoDeCarga('la extensión resolvió "$name"', relojDeResolucion);
     } catch (e) {
       if (_isPlaybackClosed(myGen)) return;
       logger.severe('switchServer: runtime.watch falló para $name: $e');
@@ -3149,21 +2826,11 @@ class VideoPlayerController extends GetxController with WidgetsBindingObserver {
     // aparato, y no es momento de hacerlo por nuestra cuenta.
     if (dlnaDevice.value != null) return;
     logger.info('Calidad de arranque: ${elegida.key}');
-    // automatico: la eligió la app, no el usuario — que siga pudiendo bajarla
-    // sola si la conexión no la sostiene.
-    unawaited(switchQuality(elegida.value.url, automatico: true));
+    unawaited(switchQuality(elegida.value.url));
   }
 
   // 切换画质
-  //
-  /// [automatico] distingue quién pidió el cambio. Elegir una calidad a mano es
-  /// una decisión, no una sugerencia: a partir de ahí la app deja de bajarla
-  /// sola (ver _anotarBache), porque nada se siente peor que poner una calidad
-  /// y que el reproductor te la cambie por su cuenta.
-  switchQuality(String qualityUrl, {bool automatico = false}) async {
-    if (!automatico) _calidadElegidaAMano = true;
-    // Cuál está sonando, para saber cuál es la de abajo si hay que bajar.
-    _urlDeCalidadActual = qualityUrl;
+  switchQuality(String qualityUrl) async {
     final headers = watchData!.headers;
 
     // Transmitiendo, la calidad nueva va al TELEVISOR.
@@ -3206,44 +2873,28 @@ class VideoPlayerController extends GetxController with WidgetsBindingObserver {
       return;
     }
 
-    final donde = player.state.position;
+    final currentSecond = player.state.position.inSeconds;
     await _ensureVideoSurfaceMounted();
     if (_disposed) return;
-    // Se abre YA en el punto donde iba, en vez de abrir en 0 y saltar después.
-    //
-    // Antes esto abría la calidad nueva desde el principio y recién un segundo
-    // más tarde empezaba a intentar el salto. Eso es exactamente lo que se ve
-    // como "el vídeo se reinició solo": un tramo del comienzo, y a veces —si el
-    // salto no llegaba a agarrar— quedarse ahí. Y el intento se repetía cada
-    // segundo comparando SEGUNDOS EXACTOS: un salto real cae en el fotograma
-    // clave más cercano, así que esa igualdad casi nunca se daba y se
-    // disparaban los diez saltos completos, uno por segundo, moviendo la imagen
-    // todo ese rato.
-    //
-    // Con `start` mpv arranca la fuente en ese punto, sin pasar por el
-    // principio. Es la misma orden que usa mpv para "reanudar donde ibas".
     await player.open(
-      Media(
-        qualityUrl,
-        httpHeaders: headers,
-        start: donde > Duration.zero ? donde : null,
-      ),
+      Media(qualityUrl, httpHeaders: headers),
     );
-    if (donde <= Duration.zero) return;
-    // Red de seguridad, una sola vez: hay fuentes que ignoran el punto de
-    // arranque (listas HLS que no declaran duración, sobre todo). Se comprueba
-    // una vez y se corrige solo si quedó LEJOS — con margen, porque caer en el
-    // fotograma clave más cercano es lo normal y no es un error que valga la
-    // pena arreglar moviendo la imagen de nuevo.
+    //跳轉到切換之前的時間
+    // Antes este timer no se guardaba en ningún campo ni tenía límite de
+    // intentos — si el seek real cae en el keyframe más cercano y nunca
+    // coincide exactamente con currentSecond (pasa seguido), quedaba
+    // llamando player.seek()/player.state cada segundo para siempre, y si
+    // el usuario cerraba el reproductor antes de que coincidiera, sobre un
+    // Player ya dispuesto. Guardado en un campo (cancelado en onClose) +
+    // límite de 10 intentos como red de seguridad.
     _qualitySwitchTimer?.cancel();
-    _qualitySwitchTimer = Timer(const Duration(seconds: 3), () {
-      if (_disposed) return;
-      final diferencia = (player.state.position - donde).abs();
-      if (diferencia <= const Duration(seconds: 10)) return;
-      logger.info('La fuente nueva no arrancó donde iba '
-          '(${player.state.position.inSeconds}s en vez de ${donde.inSeconds}s): '
-          'se salta a mano');
-      player.seek(donde);
+    var attempts = 0;
+    _qualitySwitchTimer = Timer.periodic(const Duration(seconds: 1), (timer) {
+      attempts++;
+      player.seek(Duration(seconds: currentSecond));
+      if (player.state.position.inSeconds == currentSecond || attempts >= 10) {
+        timer.cancel();
+      }
     });
   }
 
@@ -4272,12 +3923,6 @@ class VideoPlayerController extends GetxController with WidgetsBindingObserver {
         url: url,
         titulo: '$title — ${playList[index.value].name}',
         mime: mime,
-        // Con reempaquetado NO se puede saltar, y hay que decírselo: el flujo se
-        // arma sobre la marcha. Ver el comentario en cast_metadata.dart — creer
-        // que puede reposicionarse por bytes es lo que hacía que el televisor
-        // cerrara y reabriera la conexión, y con eso el capítulo volvía a
-        // empezar de cero en bucle.
-        puedeSaltar: planTs == null,
       );
       CastLog.paso('El aparato aceptó la orden; se le anunció '
           '${CastLog.anuncio(url)}');
@@ -4339,9 +3984,32 @@ class VideoPlayerController extends GetxController with WidgetsBindingObserver {
     // formato. El relay sabe cual de los dos es —si le pidieron algo o no—, y
     // sin decirlo se termina probando a ciegas.
     _pedidoCastTimer?.cancel();
-    _bytesDelCastVistos = 0;
-    _revisionesDelCast = 0;
-    _pedidoCastTimer = Timer(_esperaDeVeredicto, _veredictoDelCast);
+    _pedidoCastTimer = Timer(const Duration(seconds: 8), () {
+      if (_disposed || dlnaDevice.value == null) return;
+      // Con el video ya andando no hay nada que avisar.
+      if (isPlaying.value) return;
+      // Sin relay (direccion directa) no hay nada que medir.
+      if (_dlnaRelayUrl == null) return;
+      // El veredicto de los ocho segundos, escrito en el registro: es la
+      // conclusion que hasta ahora solo se veia como un aviso en pantalla y se
+      // perdia al cerrar el reproductor.
+      CastLog.paso('A los 8 s sin imagen: el aparato '
+          '${CastRelayServer.huboPedido(_dlnaRelayUrl) ? "SÍ pidió el vídeo "
+              "(desde ${CastRelayServer.quienPidio(_dlnaRelayUrl)}) → llega "
+              "pero no puede con lo que le mandamos" : "NO pidió nada → no "
+              "llega hasta nosotros, es red"}');
+      if (CastRelayServer.huboPedido(_dlnaRelayUrl)) {
+        // Llego hasta nosotros y bajo datos, asi que no es la red: el aparato
+        // no puede con lo que le mandamos. Si eso es 4K o 2K, lo mas probable
+        // es que sea la RESOLUCION y no el formato — los televisores publican
+        // "video/mp4" a secas, sin decir hasta que resolucion llegan.
+        if (_bajarCalidadParaElTelevisor()) return;
+        castAviso.value = 'video.cast-formato'.i18n;
+      } else {
+        // Nunca nos pidio nada: no llega. Es red.
+        castAviso.value = 'video.cast-sin-alcance'.i18n;
+      }
+    });
     _esperaPlayTimer?.cancel();
     // Techo por si nunca lo informa (firmware que no actualiza su estado): el
     // aviso se va y quedan los controles, mejor que una rueda eterna.
@@ -4352,88 +4020,6 @@ class VideoPlayerController extends GetxController with WidgetsBindingObserver {
     _dlnaTimer = Timer.periodic(const Duration(seconds: 1), (timer) {
       _getDLNAStatus();
     });
-  }
-
-  /// Cuánto se espera antes de decir nada sobre una transmisión que no arranca.
-  static const _esperaDeVeredicto = Duration(seconds: 8);
-
-  /// Cuántas veces más se vuelve a mirar mientras siga bajando datos.
-  ///
-  /// Con el vídeo reempaquetado a MPEG-TS, un televisor puede tardar bastante
-  /// más de ocho segundos en dar la primera imagen: primero baja unos pedacitos,
-  /// los junta y recién ahí arranca. Por una conexión lenta eso pasa el medio
-  /// minuto sin que nada esté mal. Mientras entren bytes no hay nada que
-  /// declarar.
-  static const _maxRevisionesDelCast = 3;
-
-  int _bytesDelCastVistos = 0;
-  int _revisionesDelCast = 0;
-
-  /// Por qué el aparato todavía no muestra nada.
-  ///
-  /// Son TRES casos y hasta ahora se distinguían dos. El que faltaba es
-  /// justamente el que salía en pantalla siendo mentira:
-  ///
-  ///  - No pidió nada: no llega hasta nosotros. Es red.
-  ///  - Pidió pero no bajó un solo byte: preguntó por el formato (el HEAD con el
-  ///    que un DLNA consulta si le sirve) y lo rechazó. Ese sí es formato.
-  ///  - Está bajando: no hay nada roto, está cargando. Antes esto se reportaba
-  ///    como "recibió el vídeo pero no puede reproducirlo" —porque un HEAD ya
-  ///    contaba como "bajó datos"— e invitaba a cambiar de servidor cuando lo
-  ///    único que hacía falta era esperar unos segundos más.
-  void _veredictoDelCast() {
-    if (_disposed || dlnaDevice.value == null) return;
-    // Con el video ya andando no hay nada que avisar.
-    if (isPlaying.value) return;
-    // Sin relay (direccion directa) no hay nada que medir.
-    if (_dlnaRelayUrl == null) return;
-
-    final pidio = CastRelayServer.huboPedido(_dlnaRelayUrl);
-    final bytes = CastRelayServer.bytesServidos(_dlnaRelayUrl);
-    final segundos =
-        (_revisionesDelCast + 1) * _esperaDeVeredicto.inSeconds;
-
-    if (!pidio) {
-      CastLog.paso('A los $segundos s sin imagen: el aparato NO pidió nada → '
-          'no llega hasta nosotros, es red');
-      castAviso.value = 'video.cast-sin-alcance'.i18n;
-      return;
-    }
-
-    // Sigue entrando vídeo: se le da otra vuelta antes de decir nada.
-    if (bytes > _bytesDelCastVistos &&
-        _revisionesDelCast < _maxRevisionesDelCast) {
-      _revisionesDelCast++;
-      _bytesDelCastVistos = bytes;
-      CastLog.paso('A los $segundos s sin imagen todavía, pero el aparato ya '
-          'bajó ${(bytes / 1024).round()} KiB y sigue bajando → está cargando, '
-          'se espera (revisión $_revisionesDelCast '
-          'de $_maxRevisionesDelCast)');
-      _pedidoCastTimer?.cancel();
-      _pedidoCastTimer = Timer(_esperaDeVeredicto, _veredictoDelCast);
-      return;
-    }
-
-    if (bytes == 0) {
-      // Preguntó y se fue sin bajar nada: el formato no le sirve. Bajar la
-      // calidad no ayudaría —no llegó a mirar el vídeo, solo la ficha—, así que
-      // acá el aviso de formato es el correcto.
-      CastLog.paso('A los $segundos s sin imagen: el aparato pidió desde '
-          '${CastRelayServer.quienPidio(_dlnaRelayUrl)} pero no bajó NI UN '
-          'BYTE → preguntó por el formato y lo rechazó');
-      castAviso.value = 'video.cast-formato'.i18n;
-      return;
-    }
-
-    // Bajó datos y dejó de bajar sin dar imagen: eso ya sí es no poder con lo
-    // que le mandamos. Si es 4K o 2K lo más probable es que sea la RESOLUCIÓN y
-    // no el formato — los televisores publican "video/mp4" a secas, sin decir
-    // hasta qué resolución llegan.
-    CastLog.fallo('A los $segundos s sin imagen: el aparato bajó '
-        '${(bytes / 1024).round()} KiB y se detuvo → no puede con lo que le '
-        'mandamos');
-    if (_bajarCalidadParaElTelevisor()) return;
-    castAviso.value = 'video.cast-formato'.i18n;
   }
 
   /// Manda el aparato a un punto exacto del video.
@@ -4905,15 +4491,6 @@ class VideoPlayerController extends GetxController with WidgetsBindingObserver {
   // Verifica si el host de una URL es alcanzable vía TCP.
   // Dart maneja EHOSTUNREACH (errno 113) limpiamente;
   // libmpv/libavformat tienen un bug que causa SIGSEGV con ese errno.
-  //
-  /// Cuánto se espera el saludo TCP.
-  ///
-  /// Era 1 segundo, y un segundo alcanza sobrado por ethernet o por 5 GHz al
-  /// lado del router — que es donde se probó. Por 2,4 GHz lejos, con la red
-  /// cargada o por datos móviles, un saludo TCP puede pasar el segundo sin que
-  /// pase nada malo. 2,5 s cubre esos casos sin volverse una espera notoria.
-  static const _esperaDeHost = Duration(milliseconds: 2500);
-
   Future<bool> _isHostReachable(String url) async {
     try {
       final uri = Uri.parse(url);
@@ -4921,34 +4498,15 @@ class VideoPlayerController extends GetxController with WidgetsBindingObserver {
       final port = (uri.hasPort && uri.port > 0)
           ? uri.port
           : (uri.scheme == 'https' ? 443 : 80);
-      final reloj = Stopwatch()..start();
       final socket = await Socket.connect(
         uri.host,
         port,
-        timeout: _esperaDeHost,
+        timeout: const Duration(seconds: 1),
       );
       socket.destroy();
-      logger.info(
-          'Host alcanzable: ${uri.host}:$port (${reloj.elapsedMilliseconds} ms)');
+      logger.info('Host alcanzable: ${uri.host}:$port');
       return true;
     } on SocketException catch (e) {
-      // Que se agote la espera NO es lo mismo que un host caído, y hasta ahora
-      // se trataban igual: el servidor quedaba descartado sin haberlo intentado
-      // ni una vez, y desde afuera se veía como "este servidor no anda" en una
-      // conexión donde en realidad andaba. En una red lenta eso podía dejar sin
-      // reproductor nativo a servidores perfectamente sanos.
-      //
-      // El motivo real de este chequeo es el SIGSEGV de libmpv con EHOSTUNREACH,
-      // y ese caso SIEMPRE llega con un error del sistema operativo. Un
-      // vencimiento de plazo no lo trae. Así que solo se veta cuando el sistema
-      // dijo explícitamente que no se puede llegar; si simplemente tardó, se
-      // deja que libmpv lo intente, que para eso tiene sus propios plazos.
-      if (e.osError == null) {
-        logger.warning(
-            'El host tardó más de ${_esperaDeHost.inMilliseconds} ms en contestar; '
-            'se intenta igual: $url');
-        return true;
-      }
       logger.severe('Host inalcanzable: $url — ${e.message}');
       return false;
     } catch (_) {
@@ -4969,7 +4527,6 @@ class VideoPlayerController extends GetxController with WidgetsBindingObserver {
       logger.severe('URL de error recibida: $url');
       return false;
     }
-    final relojDeApertura = Stopwatch()..start();
     if (!await _isHostReachable(url)) {
       return false;
     }
@@ -4988,14 +4545,7 @@ class VideoPlayerController extends GetxController with WidgetsBindingObserver {
     // libmpv por defecto envía "Lavf/X.X.X" que los CDNs de streaming bloquean.
     final hdrs = <String, String>{'User-Agent': _browserUA};
     if (headers != null) hdrs.addAll(headers);
-    // Recuperando un corte a mitad de capítulo, la fuente se abre DIRECTO en el
-    // punto donde se cortó (ver _midStreamResumeAt). Antes se abría en 0 y se
-    // saltaba después de que mpv reconociera el vídeo: se veían unos segundos
-    // del principio antes del salto, que es justo lo que se siente como que el
-    // capítulo se reinició solo.
-    await player.open(
-      Media(url, httpHeaders: hdrs, start: _midStreamResumeAt),
-    );
+    await player.open(Media(url, httpHeaders: hdrs));
     if (_disposed) {
       try {
         unawaited(player.stop());
@@ -5053,25 +4603,14 @@ class VideoPlayerController extends GetxController with WidgetsBindingObserver {
       } catch (_) {}
       return false;
     }
-    _tiempoDeCarga(
-        ok ? 'mpv reconoció el vídeo' : 'mpv se rindió con esta fuente',
-        relojDeApertura);
     if (!ok) {
       logger.info('Fuente no reproducible, se intentará failover: $url');
     } else if (_midStreamResumeAt != null) {
-      // La fuente ya se abrió en ese punto (ver el `start` de arriba). Este
-      // salto queda solo como red de seguridad para las fuentes que ignoran el
-      // punto de arranque, y únicamente si quedó LEJOS: caer en el fotograma
-      // clave más cercano es lo normal, y saltar de nuevo por unos segundos
-      // solo mueve la imagen sin arreglar nada.
-      final donde = _midStreamResumeAt!;
+      // Recuperación de un corte a mitad de capítulo (ver
+      // _midStreamResumeAt) — seguir donde se quedó en vez de arrancar
+      // la fuente nueva desde 0.
+      player.seek(_midStreamResumeAt!);
       _midStreamResumeAt = null;
-      if ((player.state.position - donde).abs() > const Duration(seconds: 10)) {
-        logger.info('La fuente no arrancó donde se cortó '
-            '(${player.state.position.inSeconds}s en vez de ${donde.inSeconds}s): '
-            'se salta a mano');
-        player.seek(donde);
-      }
     }
     return ok;
   }
@@ -5208,7 +4747,7 @@ class VideoPlayerController extends GetxController with WidgetsBindingObserver {
       _serverRetryCount++;
       logger.info(
           'switchServer: $name falló, reintentando ($_serverRetryCount/$_maxServerRetries) con una resolución nueva.');
-      unawaited(switchServer(name, porElUsuario: false));
+      unawaited(switchServer(name));
       return;
     }
     _setServerFailed(name);
@@ -5778,12 +5317,9 @@ class VideoPlayerController extends GetxController with WidgetsBindingObserver {
         .replaceAll('%t', elegida.key);
     // switchQuality ya sabe que casteando la calidad nueva va al TELEVISOR y
     // no al reproductor de aca.
-    // automatico: la bajó la app por el televisor, no el usuario — no tiene por
-    // qué dejar congelada la calidad del reproductor de acá para el resto de la
-    // sesión.
     unawaited(_servidoresSonCalidades
         ? switchServer(elegida.key)
-        : switchQuality(elegida.value, automatico: true));
+        : switchQuality(elegida.value));
     return true;
   }
 
