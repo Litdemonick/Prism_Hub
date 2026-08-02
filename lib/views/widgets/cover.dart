@@ -1,6 +1,19 @@
+import 'dart:math' as math;
+
 import 'package:flutter/material.dart';
 import 'package:prismhub/utils/color.dart';
 import 'package:prismhub/views/widgets/cache_network_image.dart';
+
+/// Redondea hacia arriba a tramos de 128 píxeles.
+///
+/// Sirve para que el tamaño de decodificación —que es parte de la clave con la
+/// que Flutter guarda la imagen en caché— no cambie con cada píxel que cambie
+/// la caja. Ver el uso en Cover.
+int _tramo(double pixeles) {
+  const paso = 128;
+  final n = pixeles.ceil().clamp(1, 4096);
+  return ((n + paso - 1) ~/ paso * paso).clamp(paso, 4096);
+}
 
 class Cover extends StatelessWidget {
   const Cover({
@@ -35,23 +48,33 @@ class Cover extends StatelessWidget {
             height: double.infinity,
             headers: headers,
             alignment: alignment,
-            // Solo el ANCHO decide a qué tamaño se decodifica. El alto NO.
+            // Se decodifica al LADO MÁS GRANDE de la caja, redondeado.
             //
-            // Flutter guarda la imagen en caché con una clave que incluye el
-            // tamaño de decodificación. Pasando el alto de las restricciones
-            // vivas, esa clave cambiaba en CADA fotograma mientras el
-            // encabezado del detalle se colapsa al hacer scroll: la imagen se
-            // volvía a decodificar entera una y otra vez, y en el rato que
-            // tarda cada decodificación no hay nada que pintar. Eso es el
-            // parpadeo en negro al desplazarse.
+            // Antes se usaba solo el ancho. Con BoxFit.cover eso alcanza cuando
+            // la imagen es más ancha que alta y la caja también, pero no
+            // siempre: una miniatura apaisada dentro de una tarjeta vertical se
+            // escala por el ALTO, y ahí decodificar al ancho de la caja deja un
+            // mapa de bits más chico del que hace falta. Después se agranda para
+            // llenar, y eso es exactamente lo que se veía borroso.
             //
-            // El ancho no cambia al desplazarse en vertical, así que como clave
-            // es estable: se decodifica UNA vez y se reusa todo el scroll. La
-            // proporción la mantiene el propio decodificador, y el recorte al
-            // alto disponible lo hace el BoxFit como siempre.
+            // Con el lado más grande, cualquiera de las dos orientaciones queda
+            // con píxeles de sobra. Se decodifica un poco más de lo justo en
+            // algunos casos, que al lado de una imagen borrosa es barato.
+            //
+            // Lo del redondeo NO es un detalle: Flutter guarda la imagen en
+            // caché con una clave que incluye el tamaño de decodificación. En el
+            // encabezado del detalle, el alto cambia en cada fotograma mientras
+            // se colapsa al desplazarse — sin redondear, la clave cambiaría
+            // igual de seguido y la imagen se volvería a decodificar entera una
+            // y otra vez, que es de donde salía el parpadeo en negro. Por
+            // tramos de 128 la clave se queda quieta casi todo el recorrido.
             cacheWidth: bounded
-                ? (constraints.maxWidth * dpr).ceil().clamp(1, 4096).toInt()
+                ? _tramo(math.max(constraints.maxWidth, constraints.maxHeight) *
+                    dpr)
                 : null,
+            // medium y no low: al achicar una portada grande a una tarjeta
+            // chica, low se salta píxeles y deja los bordes dentados.
+            filterQuality: FilterQuality.medium,
           );
         },
       );

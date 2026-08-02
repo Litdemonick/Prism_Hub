@@ -26,6 +26,7 @@ import 'package:prismhub/utils/prismhub_storage.dart';
 import 'package:prismhub/utils/application.dart';
 import 'package:prismhub/views/widgets/platform_widget.dart';
 import 'package:prismhub/utils/compartir.dart';
+import 'package:prismhub/utils/instancia_unica.dart';
 import 'package:window_manager/window_manager.dart';
 import 'package:package_info_plus/package_info_plus.dart';
 
@@ -105,6 +106,43 @@ void main(List<String> args) async {
       };
       runApp(windows[arguments["name"]]);
       return;
+    }
+
+    // UNA sola copia del app, y antes de tocar el almacenamiento.
+    //
+    // Windows resuelve un prismhub://… ejecutando el programa con la dirección
+    // al final de la línea de comandos, así que cada enlace que se toca abría
+    // un proceso NUEVO aunque el app ya estuviera abierto. Y las dos copias
+    // abren la MISMA carpeta de datos: la segunda pisa lo que escribe la
+    // primera, y de ahí salen los ajustes que "se resetean solos".
+    //
+    // Va ANTES de PrismHubDirectory/PrismHubStorage justamente por eso: si esta
+    // copia sobra, tiene que irse sin haber abierto nada.
+    if (!Platform.isAndroid) {
+      final sigo = await InstanciaUnica.tomarElControl(
+        args,
+        alRecibirEnlace: (uri) {
+          // Llega un enlace mientras el app YA está abierto: se anota para que
+          // lo consuma la navegación, y se trae la ventana al frente — si no,
+          // el usuario toca el enlace y no pasa nada visible.
+          Compartir.enlacePendiente = uri;
+          unawaited(() async {
+            try {
+              if (!await windowManager.isVisible()) await windowManager.show();
+              if (await windowManager.isMinimized()) {
+                await windowManager.restore();
+              }
+              await windowManager.focus();
+            } catch (e) {
+              logger.warning('No se pudo traer la ventana al frente', e);
+            }
+          }());
+        },
+      );
+      if (!sigo) {
+        // Ya hay otra copia abierta y se le pasó el enlace. Nada más que hacer.
+        exit(0);
+      }
     }
 
     // 主窗口 — solo lo indispensable para calcular tamaño/posición de la
@@ -459,12 +497,29 @@ class _AppRootState extends State<_AppRoot> {
   }
 
   /// Navega a la ficha de un enlace ya validado.
+  ///
+  /// Se abre por la MISMA puerta que un toque en una tarjeta
+  /// (ExtensionUtils.openExtensionDetail) y no navegando a la ruta a mano.
+  ///
+  /// Antes se iba directo a `/detail?…`, que se saltea todo lo que esa función
+  /// hace: comprobar que la extensión esté instalada, que no esté desactivada,
+  /// que no tenga una actualización pendiente, y la protección contra abrir dos
+  /// fichas encima. El comentario de rutaInterna decía que el enlace pasaba por
+  /// esas comprobaciones, pero no era cierto — nadie las llamaba.
+  ///
+  /// Además usa `push` y no `go`: `go` REEMPLAZA la pila de navegación, así que
+  /// la ficha quedaba sin nada atrás y el botón de volver no tenía a dónde ir.
   void _irAlEnlace(Uri uri) {
-    final ruta = Compartir.rutaInterna(uri);
-    if (ruta == null) return;
-    WidgetsBinding.instance.addPostFrameCallback((_) {
+    final datos = Compartir.leerEnlace(uri);
+    if (datos == null) return;
+    WidgetsBinding.instance.addPostFrameCallback((_) async {
       try {
-        router.go(ruta);
+        await ExtensionUtils.openExtensionDetail(
+          currentContext,
+          package: datos.package,
+          url: datos.url,
+          isAdultOption: datos.adulto,
+        );
       } catch (e, st) {
         logger.warning('No se pudo abrir el enlace compartido', e, st);
       }

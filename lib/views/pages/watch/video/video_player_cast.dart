@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
-import 'package:dlna_dart/dlna.dart';
 import 'dart:async';
+import 'package:prismhub/utils/cast_aparato.dart';
 import 'package:prismhub/utils/cast_discovery.dart';
 import 'package:prismhub/utils/i18n.dart';
 import 'package:prismhub/utils/log.dart';
@@ -11,7 +11,7 @@ class VideoPlayerCast extends StatefulWidget {
     super.key,
     this.onDeviceSelected,
   });
-  final Function(DLNADevice device)? onDeviceSelected;
+  final Function(AparatoDeCasteo aparato)? onDeviceSelected;
 
   @override
   State<VideoPlayerCast> createState() => _VideoPlayerCastState();
@@ -21,7 +21,7 @@ class _VideoPlayerCastState extends State<VideoPlayerCast> {
   CastDiscovery? searcher;
   StreamSubscription? _devicesSub;
   Timer? _finDeBusqueda;
-  Map<String, DLNADevice> deviceList = {};
+  List<AparatoDeCasteo> deviceList = const [];
 
   /// Si sigue buscando. La busqueda NO puede quedar abierta para siempre.
   ///
@@ -55,17 +55,15 @@ class _VideoPlayerCastState extends State<VideoPlayerCast> {
       searcher?.stop();
       return;
     }
-    _devicesSub = searcher!.devices.listen((deviceList) {
-      // Solo cuando CAMBIA la cantidad. Los aparatos se reanuncian solos, asi
-      // que esto llegaba muchas veces por segundo con la lista entera adentro,
-      // llenando el registro de lineas identicas.
-      if (deviceList.length != this.deviceList.length) {
-        logger.info('Aparatos encontrados: ${deviceList.length}');
+    // Se escucha la lista YA CLASIFICADA: solo los que de verdad pueden
+    // reproducir. La cruda trae tambien el router y los Chromecast, que
+    // elegidos terminaban en "no se pudo enviar la señal".
+    _devicesSub = searcher!.aparatos.listen((lista) {
+      if (lista.length != deviceList.length) {
+        logger.info('Aparatos utiles: ${lista.length}');
       }
       if (!mounted) return;
-      setState(() {
-        this.deviceList = deviceList;
-      });
+      setState(() => deviceList = lista);
     });
     _finDeBusqueda?.cancel();
     _finDeBusqueda = Timer(_duracionBusqueda, _pararBusqueda);
@@ -114,12 +112,17 @@ class _VideoPlayerCastState extends State<VideoPlayerCast> {
           ),
         ),
         const SizedBox(height: 10),
-        for (final device in deviceList.entries)
+        for (final aparato in deviceList)
           ListTile(
-            leading: const Icon(Icons.tv_rounded),
-            title: Text(device.value.info.friendlyName),
+            // Un icono por clase: con dos protocolos distintos conviviendo en
+            // la misma lista, saber cuál es cuál ayuda a entender por qué en
+            // uno hay velocidad y en el otro no.
+            leading: Icon(
+              aparato.esChromecast ? Icons.cast_rounded : Icons.tv_rounded,
+            ),
+            title: Text(aparato.nombre),
             subtitle: Text(
-              device.key,
+              aparato.esChromecast ? 'Chromecast' : 'DLNA',
               maxLines: 1,
               overflow: TextOverflow.ellipsis,
             ),
@@ -128,7 +131,7 @@ class _VideoPlayerCastState extends State<VideoPlayerCast> {
                 ? null
                 : () {
                     setState(() => _eligiendo = true);
-                    widget.onDeviceSelected?.call(device.value);
+                    widget.onDeviceSelected?.call(aparato);
                   },
           ),
         Padding(

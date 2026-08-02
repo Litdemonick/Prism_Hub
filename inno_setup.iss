@@ -76,6 +76,16 @@ english.PrismFreshTitle=Installing PrismHub
 spanish.PrismFreshTitle=Instalando PrismHub
 english.PrismFreshBody=PrismHub %1 will be installed on this computer.%n%nAnime, manga and series through extensions that install and update on their own.
 spanish.PrismFreshBody=Se va a instalar PrismHub %1 en este equipo.%n%nAnime, manga y series mediante extensiones que se instalan y actualizan por su cuenta.
+; Al desinstalar. Se PREGUNTA en vez de borrar directo: mucha gente desinstala
+; para reinstalar, y llevarse el historial sin avisar no se puede deshacer.
+english.PrismWipeTitle=Remove your data as well?
+spanish.PrismWipeTitle=¿Borrar también tus datos?
+english.PrismWipeBody=Do you also want to delete your history, favourites, settings and installed extensions?%n%nThey live outside the program folder, so by default they are KEPT — that way reinstalling picks up where you left off.%n%nChoose Yes only if you want to leave nothing behind. This cannot be undone.
+spanish.PrismWipeBody=¿Querés borrar también tu historial, favoritos, ajustes y extensiones instaladas?%n%nEstán fuera de la carpeta del programa, así que por defecto se CONSERVAN — así, si reinstalás, seguís donde estabas.%n%nElegí Sí solo si no querés que quede ningún rastro. Esto no se puede deshacer.
+english.PrismWipeDone=Your data was deleted.
+spanish.PrismWipeDone=Se borraron tus datos.
+english.PrismWipeKept=Your data was kept at:%n%1
+spanish.PrismWipeKept=Tus datos se conservaron en:%n%1
 
 [Tasks]
 Name: "desktopicon"; Description: "{cm:CreateDesktopIcon}"; GroupDescription: "{cm:AdditionalIcons}"; Flags: unchecked
@@ -150,6 +160,70 @@ begin
     Result := Valor
   else if RegQueryStringValue(HKCU64, Clave, 'DisplayVersion', Valor) then
     Result := Valor;
+end;
+
+// Dónde deja el app sus cosas, fuera de la carpeta del programa.
+//
+// {userdocs} y NO una ruta armada a mano: la carpeta Documentos puede estar
+// redirigida a OneDrive y además traducida —comprobado en un equipo real, ahí
+// vive en OneDrive\Documentos\PrismHub—. Esa constante la resuelve Windows, así
+// que sigue la redirección; una ruta fija habría borrado la carpeta equivocada,
+// o peor, ninguna, dejando creer que se limpió.
+function CarpetaDatos(): String;
+begin
+  Result := ExpandConstant('{userdocs}\PrismHub');
+end;
+
+function CarpetaCache(): String;
+begin
+  Result := ExpandConstant('{localappdata}\Temp\PrismHub');
+end;
+
+function CarpetaSoporte(): String;
+begin
+  Result := ExpandConstant('{userappdata}\com.prismhub');
+end;
+
+// Al desinstalar: se pregunta y, si el usuario quiere, se borra todo.
+//
+// usPostUninstall y no usUninstall: recién ahí ya se quitaron los archivos del
+// programa, así que si algo falla al borrar los datos el desinstalado igual
+// quedó hecho.
+procedure CurUninstallStepChanged(CurUninstallStep: TUninstallStep);
+var
+  Datos: String;
+  Borrados: Boolean;
+begin
+  if CurUninstallStep <> usPostUninstall then
+    exit;
+
+  Datos := CarpetaDatos();
+  // Sin datos guardados no se pregunta nada: sería una ventana de más para
+  // decidir sobre algo que no existe.
+  if not DirExists(Datos) and not DirExists(CarpetaCache())
+     and not DirExists(CarpetaSoporte()) then
+    exit;
+
+  if MsgBox(CustomMessage('PrismWipeBody'), mbConfirmation, MB_YESNO or MB_DEFBUTTON2) = IDYES then
+  begin
+    Borrados := True;
+    if DirExists(Datos) then
+      if not DelTree(Datos, True, True, True) then Borrados := False;
+    if DirExists(CarpetaCache()) then
+      if not DelTree(CarpetaCache(), True, True, True) then Borrados := False;
+    if DirExists(CarpetaSoporte()) then
+      if not DelTree(CarpetaSoporte(), True, True, True) then Borrados := False;
+    // Se avisa igual aunque algo no se haya podido borrar: quedarse callado
+    // dejaría creer que no quedó nada cuando sí quedó.
+    if Borrados then
+      MsgBox(CustomMessage('PrismWipeDone'), mbInformation, MB_OK)
+    else
+      MsgBox(FmtMessage(CustomMessage('PrismWipeKept'), [Datos]), mbInformation, MB_OK);
+  end
+  else
+    // Se dice DÓNDE quedaron: si no, el usuario no tiene forma de encontrarlos
+    // para borrarlos a mano más adelante.
+    MsgBox(FmtMessage(CustomMessage('PrismWipeKept'), [Datos]), mbInformation, MB_OK);
 end;
 
 procedure InitializeWizard();

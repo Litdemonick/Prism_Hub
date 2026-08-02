@@ -345,6 +345,9 @@ class _VideoPlayerDesktopControlsState
                                     !_c.isWebViewActive.value) ||
                                 (_c.hasRenderedFrame.value &&
                                     (_c.isSeeking.value ||
+                                        // Ver imagenCongelada: con la red mal
+                                        // mpv deja de avisar que carga.
+                                        _c.imagenCongelada.value ||
                                         (_c.isPlaying.value &&
                                             _c.isActuallyBuffering.value)))))
                             ? 1
@@ -1606,7 +1609,9 @@ class _PanelCasteandoState extends State<_PanelCasteando>
     with SingleTickerProviderStateMixin {
   late final AnimationController _anim = AnimationController(
     vsync: this,
-    duration: const Duration(milliseconds: 1600),
+    // 4,5 s para cinco pistas: ~900 ms en cada una. Con 1,6 s el
+    // recorrido pasaba tan rapido que no se alcanzaba a leer ninguna.
+    duration: const Duration(milliseconds: 4500),
   )..repeat();
 
   @override
@@ -1707,7 +1712,7 @@ class _PanelCasteandoState extends State<_PanelCasteando>
             ),
             const SizedBox(height: 14),
             Text(
-              device.info.friendlyName,
+              device.nombre,
               textAlign: TextAlign.center,
               style: const TextStyle(
                 fontSize: 18,
@@ -1814,8 +1819,14 @@ class _AyudaTeclasCast extends StatelessWidget {
     return AnimatedBuilder(
       animation: anim,
       builder: (context, _) {
-        // Cinco pistas, cinco tramos del ciclo.
-        final activo = (anim.value * 5).floor().clamp(0, 4);
+        // La luz se DESLIZA, no salta.
+        //
+        // Antes cada pista se encendía de golpe en su quinto del ciclo, y
+        // encima cada una animaba por su cuenta con su propia duración: se
+        // veía a tirones y peleándose entre sí. Ahora hay una sola posición
+        // que avanza de forma continua y cada pista se ilumina según lo cerca
+        // que esté de ella.
+        final aguja = anim.value * 5;
         return Column(
           mainAxisSize: MainAxisSize.min,
           children: [
@@ -1824,15 +1835,16 @@ class _AyudaTeclasCast extends StatelessWidget {
               children: [
                 // En el orden en que se piensan: los saltos grandes por fuera,
                 // los finos pegados al centro, y pausar en el medio.
-                _pista('J', atrasLargo, activo == 0),
+                _pista('J', atrasLargo, _cerca(aguja, 0, 5)),
                 const SizedBox(width: 10),
-                _pista('←', atrasFino, activo == 1),
+                _pista('←', atrasFino, _cerca(aguja, 1, 5)),
                 const SizedBox(width: 10),
-                _pista('Espacio', 'video.cast-hint-pause'.i18n, activo == 2),
+                _pista(
+                    'Espacio', 'video.cast-hint-pause'.i18n, _cerca(aguja, 2, 5)),
                 const SizedBox(width: 10),
-                _pista('→', adelanteFino, activo == 3),
+                _pista('→', adelanteFino, _cerca(aguja, 3, 5)),
                 const SizedBox(width: 10),
-                _pista('I', adelanteLargo, activo == 4),
+                _pista('I', adelanteLargo, _cerca(aguja, 4, 5)),
               ],
             ),
             const SizedBox(height: 10),
@@ -1851,13 +1863,25 @@ class _AyudaTeclasCast extends StatelessWidget {
     );
   }
 
-  Widget _pista(String tecla, String texto, bool encendido) {
-    return AnimatedScale(
-      duration: const Duration(milliseconds: 260),
-      scale: encendido ? 1.0 : 0.92,
-      child: AnimatedOpacity(
-        duration: const Duration(milliseconds: 260),
-        opacity: encendido ? 1 : 0.45,
+  /// Qué tan iluminada va una pista, de 0 a 1, según la distancia a la aguja.
+  ///
+  /// El ciclo da la vuelta, así que la última y la primera también se
+  /// consideran vecinas: sin eso, al terminar la vuelta la luz pegaba un salto
+  /// de un extremo al otro.
+  static double _cerca(double aguja, int indice, int total) {
+    var d = (aguja - indice).abs();
+    if (d > total / 2) d = total - d;
+    return (1 - d).clamp(0.0, 1.0);
+  }
+
+  Widget _pista(String tecla, String texto, double luz) {
+    // Sin AnimatedScale ni AnimatedOpacity: esos animan por su cuenta hacia un
+    // valor nuevo, y encima de una animación continua se pisaban y producían
+    // el tironeo. Acá el valor YA viene animado.
+    return Transform.scale(
+      scale: 0.92 + 0.08 * luz,
+      child: Opacity(
+        opacity: 0.45 + 0.55 * luz,
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
@@ -1866,13 +1890,19 @@ class _AyudaTeclasCast extends StatelessWidget {
                   const EdgeInsets.symmetric(horizontal: 12, vertical: 7),
               decoration: BoxDecoration(
                 borderRadius: BorderRadius.circular(8),
-                color: encendido
-                    ? HomeTheme.accentPink.withValues(alpha: 0.22)
-                    : Colors.white.withValues(alpha: 0.06),
+                // Los colores se mezclan segun la luz, en vez de cambiar de
+                // golpe: es lo que hace que el recorrido se vea continuo.
+                color: Color.lerp(
+                  Colors.white.withValues(alpha: 0.06),
+                  HomeTheme.accentPink.withValues(alpha: 0.22),
+                  luz,
+                ),
                 border: Border.all(
-                  color: encendido
-                      ? HomeTheme.accentPink
-                      : Colors.white.withValues(alpha: 0.16),
+                  color: Color.lerp(
+                    Colors.white.withValues(alpha: 0.16),
+                    HomeTheme.accentPink,
+                    luz,
+                  )!,
                 ),
               ),
               child: Text(
@@ -1945,6 +1975,9 @@ class _CastState extends State<_Cast> {
             color: connected ? HomeTheme.accentPink : null,
           ),
           onPressed: () {
+            // Mismo criterio que en el telefono: elegir aparato lleva unos
+            // segundos y el episodio seguia corriendo detras.
+            widget.controller.safePause();
             _flyoutController.showFlyout(
               barrierDismissible: true,
               dismissOnPointerMoveAway: false,
@@ -1982,7 +2015,7 @@ class _CastState extends State<_Cast> {
                                 ),
                                 const SizedBox(height: 6),
                                 Text(
-                                  device.info.friendlyName,
+                                  device.nombre,
                                   style: const TextStyle(
                                     fontSize: 16,
                                     fontWeight: FontWeight.w600,

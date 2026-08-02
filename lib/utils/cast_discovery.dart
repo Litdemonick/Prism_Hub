@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:io';
 
 import 'package:dlna_dart/dlna.dart';
+import 'package:prismhub/utils/cast_aparato.dart';
 import 'package:prismhub/utils/log.dart';
 
 // Busca aparatos DLNA en la red.
@@ -30,12 +31,57 @@ class CastDiscovery {
   static const _puerto = 1900;
 
   final DeviceManager _gestor = DeviceManager();
+
+  /// Todos los sockets abiertos, para poder cerrarlos al terminar.
   final List<RawDatagramSocket> _sockets = [];
+
+  /// Solo los que sirven para PREGUNTAR. Los que escuchan en el puerto 1900 no
+  /// se usan para mandar: ahi el puerto de origen tendria que ser el 1900 y
+  /// varios aparatos contestan mal a eso.
+  final List<RawDatagramSocket> _preguntadores = [];
   Timer? _reenvio;
   bool _parado = false;
 
   /// Aparatos encontrados, tal cual los publica el paquete.
   Stream<Map<String, DLNADevice>> get devices => _gestor.devices.stream;
+
+  /// Solo los que de verdad pueden reproducir vídeo, ya clasificados.
+  ///
+  /// La búsqueda encuentra de todo: medido en una red real, de cinco aparatos
+  /// solo dos servían — los otros eran el router y dos Chromecast, que
+  /// aparecen igual pero no hablan DLNA. Elegir uno de esos terminaba en "no
+  /// se pudo enviar la señal", y desde afuera parecía un fallo del app.
+  ///
+  /// Para saber qué es cada uno hay que bajar su descripción, así que se hace
+  /// una sola vez por aparato y se recuerda.
+  Stream<List<AparatoDeCasteo>> get aparatos => _aparatos.stream;
+
+  final _aparatos = StreamController<List<AparatoDeCasteo>>.broadcast();
+  final Map<String, AparatoDeCasteo> _clasificados = {};
+  final Set<String> _yaMirados = {};
+
+  void _clasificar(Map<String, DLNADevice> encontrados) {
+    var huboCambio = false;
+    for (final e in encontrados.entries) {
+      if (!_yaMirados.add(e.key)) continue;
+      final a = clasificar(e.value);
+      if (a == null) {
+        logger.info('Se descarta ${e.value.info.friendlyName}: no reproduce');
+        continue;
+      }
+      // Por identificador: el mismo televisor aparece una vez por cada placa
+      // de red por la que contestó, y en la lista tiene que salir una sola.
+      if (_clasificados.containsKey(a.id)) continue;
+      _clasificados[a.id] = a;
+      huboCambio = true;
+      logger.info('Aparato util: ${describir(a)}');
+    }
+    if (huboCambio && !_aparatos.isClosed) {
+      _aparatos.add(_clasificados.values.toList());
+    }
+  }
+
+
 
   Future<void> start() async {
     _parado = false;
@@ -57,41 +103,43 @@ class CastDiscovery {
 
     for (final placa in placas) {
       for (final direccion in placa.addresses) {
-        try {
-          // Atado a la direccion CONCRETA de esta placa: asi el sistema no
-          // puede elegir otra por su cuenta, que es el fallo de origen.
-          final socket = await RawDatagramSocket.bind(direccion, 0);
-          socket.multicastHops = 4;
-          try {
-            socket.joinMulticast(destino, placa);
-          } catch (_) {
-            // Algunas placas no admiten unirse al grupo. Igual sirven para
-            // mandar la pregunta y recibir la respuesta directa, que es como
-            // contesta la mayoria de los aparatos.
-          }
-          socket.listen((evento) {
-            if (evento != RawSocketEvent.read) return;
-            final datos = socket.receive();
-            if (datos == null) return;
-            try {
-              _gestor.onMessage(String.fromCharCodes(datos.data).trim());
-            } catch (e) {
-              logger.warning('Respuesta de descubrimiento ilegible', e);
-            }
-          });
-          _sockets.add(socket);
-        } catch (e) {
-          logger.warning(
-              'No se pudo escuchar por ${placa.name} (${direccion.address})', e);
-        }
+        // 1) El socket con el que se PREGUNTA, en un puerto cualquiera.
+        //
+        // Atado a la direccion CONCRETA de esta placa: asi el sistema no puede
+        // elegir otra por su cuenta, que es el fallo de origen. Por aca llegan
+        // las respuestas directas a nuestra pregunta.
+        final preguntador = await _escuchar(direccion, 0, placa, destino);
+        if (preguntador != null) _preguntadores.add(preguntador);
+
+        // 2) El socket que ESCUCHA los anuncios, en el puerto 1900.
+        //
+        // Los aparatos no solo contestan cuando se les pregunta: tambien
+        // anuncian su presencia cada tanto, al grupo y al puerto 1900. Eso no
+        // llegaba: unirse al grupo desde un puerto cualquiera no alcanza,
+        // porque el puerto de destino tiene que coincidir. Faltaba justamente
+        // el camino que sirve cuando la respuesta directa no vuelve — por
+        // ejemplo, con el cortafuegos filtrando lo que entra sin haber sido
+        // pedido, que es lo habitual en Windows.
+        //
+        // Puede fallar si otro programa ya tiene ese puerto tomado (el propio
+        // servicio de descubrimiento de Windows suele tenerlo). No es grave:
+        // queda el camino de arriba.
+        await _escuchar(direccion, _puerto, placa, destino);
       }
     }
 
-    if (_sockets.isEmpty) {
+    if (_preguntadores.isEmpty) {
       logger.warning('Sin ninguna placa de red util para buscar aparatos');
       return;
     }
-    logger.info('Buscando aparatos por ${_sockets.length} placa(s) de red');
+    logger.info('Buscando aparatos: ${_preguntadores.length} placa(s), '
+        '${_sockets.length} socket(s)');
+
+    // Cada vez que aparece alguien nuevo se averigua QUE es.
+    _gestor.devices.stream.listen(
+      _clasificar,
+      onError: (Object e) => logger.warning('Fallo clasificando', e),
+    );
 
     _preguntar(destino);
     // Se repite: los mensajes multicast se pierden sin aviso, y un aparato que
@@ -102,15 +150,65 @@ class CastDiscovery {
     });
   }
 
+  /// Abre un socket en una placa y puerto concretos y se pone a escuchar.
+  ///
+  /// Devuelve null si esa combinación no se pudo usar — una placa que se cayó,
+  /// un puerto ya tomado por otro programa. Que una falle no invalida a las
+  /// demás, así que nunca propaga el error.
+  Future<RawDatagramSocket?> _escuchar(
+    InternetAddress direccion,
+    int puerto,
+    NetworkInterface placa,
+    InternetAddress grupo,
+  ) async {
+    try {
+      final socket = await RawDatagramSocket.bind(
+        direccion,
+        puerto,
+        // Imprescindible en el 1900: ahí casi siempre hay algo más escuchando
+        // (el propio servicio de Windows, otro reproductor), y sin esto el
+        // enlace falla y se pierde el camino de los anuncios.
+        reuseAddress: true,
+      );
+      socket.multicastHops = 4;
+      try {
+        socket.joinMulticast(grupo, placa);
+      } catch (_) {
+        // Algunas placas no admiten unirse al grupo. El socket igual sirve
+        // para preguntar y recibir la respuesta directa.
+      }
+      socket.listen((evento) {
+        if (evento != RawSocketEvent.read) return;
+        final datos = socket.receive();
+        if (datos == null) return;
+        try {
+          _gestor.onMessage(String.fromCharCodes(datos.data).trim());
+        } catch (e) {
+          logger.warning('Mensaje de descubrimiento ilegible', e);
+        }
+      });
+      _sockets.add(socket);
+      return socket;
+    } catch (e) {
+      logger.info(
+        'No se pudo escuchar por ${placa.name} '
+        '(${direccion.address}:$puerto): $e',
+      );
+      return null;
+    }
+  }
+
   void _preguntar(InternetAddress destino) {
     // Se pregunta por los dos tipos que sirven para reproducir video, y por
     // todo. Algunos aparatos solo contestan a uno de los tres.
     const objetivos = [
       'urn:schemas-upnp-org:device:MediaRenderer:1',
       'urn:schemas-upnp-org:service:AVTransport:1',
+      // Roku no contesta a los de UPnP: tiene el suyo.
+      'roku:ecp',
       'ssdp:all',
     ];
-    for (final socket in _sockets) {
+    for (final socket in _preguntadores) {
       for (final objetivo in objetivos) {
         final mensaje = 'M-SEARCH * HTTP/1.1\r\n'
             'HOST: $_ipMulticast:$_puerto\r\n'
@@ -137,6 +235,8 @@ class CastDiscovery {
       } catch (_) {}
     }
     _sockets.clear();
+    _preguntadores.clear();
     if (!_gestor.devices.isClosed) _gestor.devices.close();
+    if (!_aparatos.isClosed) _aparatos.close();
   }
 }
