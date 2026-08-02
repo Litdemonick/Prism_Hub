@@ -335,11 +335,18 @@ class CastRelayServer {
       // Se retoma en el ÚLTIMO pedacito entregado y no en el siguiente: ese
       // puede haber quedado a medio reproducir del otro lado. Repetir unos
       // segundos no se nota; saltearlos, sí.
-      final desde = _pedacitoPorSesion[target.sesion];
+      final ultimo = _pedacitoPorSesion[target.sesion];
+      // Se retrocede un poco: lo que se sirvió por delante y el aparato no llegó
+      // a mostrar se pierde al cortar, y retomar justo donde se dejó de servir
+      // se saltea ese tramo — es el salto hacia adelante que se veía. Ver
+      // PlanTs.retomarDesde.
+      final desde = ultimo == null ? null : plan.retomarDesde(ultimo);
       final aServir = desde == null ? plan : plan.recortadoDesde(desde);
       if (desde != null) {
         CastLog.paso('Se retoma el reempaquetado en el pedacito ${desde + 1} '
-            'en vez de empezar de nuevo');
+            '(lo último servido fue el ${ultimo! + 1}; se retrocede para no '
+            'saltearse lo que el aparato no llegó a mostrar) — quedan '
+            '${plan.pedacitos.length - desde} de ${plan.pedacitos.length}');
       }
       return Response.ok(
         _contando(

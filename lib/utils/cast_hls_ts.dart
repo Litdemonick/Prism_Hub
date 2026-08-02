@@ -307,9 +307,20 @@ class CastHlsATs {
         // de cuarenta segundos y ni siquiera terminó, mientras otro nodo del
         // mismo CDN entregaba el mismo archivo completo en tres.
         final bytes = await _bajarEntero(trozo, plan).timeout(plazo);
+        // Con el tamaño y el tiempo se calcula el caudal real de ese nodo: es lo
+        // que permite ver de un vistazo si el problema es la fuente o la red de
+        // acá, sin tener que medir a mano.
+        final kbs = reloj.elapsedMilliseconds == 0
+            ? 0
+            : (bytes.length / reloj.elapsedMilliseconds).round();
         if (trozo.host != plan.pedacitos[indice].host) {
           logger.info('Reempaquetado a TS: el pedacito ${indice + 1} se '
-              'consiguió en ${trozo.host} (${reloj.elapsedMilliseconds} ms)');
+              'consiguió en ${trozo.host} — ${(bytes.length / 1024).round()} KiB '
+              'en ${reloj.elapsedMilliseconds} ms ($kbs KiB/s)');
+        } else {
+          logger.info('Reempaquetado a TS: pedacito ${indice + 1} de '
+              '${plan.pedacitos.length} · ${(bytes.length / 1024).round()} KiB '
+              'en ${reloj.elapsedMilliseconds} ms ($kbs KiB/s) · ${trozo.host}');
         }
         return bytes;
       } catch (e) {
@@ -507,6 +518,30 @@ class PlanTs {
     final buenos = todos.where((u) => !CastHlsATs.nodoLento(u.host)).toList();
     final malos = todos.where((u) => CastHlsATs.nodoLento(u.host)).toList();
     return [...buenos, ...malos];
+  }
+
+  /// Desde qué pedacito retomar para NO saltearse lo que el aparato no llegó a
+  /// mostrar.
+  ///
+  /// El último pedacito que se entregó va por delante de lo que se está viendo:
+  /// se manda con adelanto a propósito (ver la cola de descarga), y el aparato
+  /// además guarda lo suyo. Cuando corta y vuelve a pedir, todo eso que tenía
+  /// guardado sin mostrar se pierde — así que retomar justo donde se dejó de
+  /// servir **se saltea ese tramo**, y se ve como un salto de un minuto para
+  /// adelante.
+  ///
+  /// Se retrocede el equivalente a unos segundos de vídeo. Si sobra, el aparato
+  /// repite un pedacito que ya mostró: se nota mucho menos que perderse un
+  /// pedazo, porque lo repetido se reconoce y lo perdido desorienta.
+  int retomarDesde(int ultimoEntregado) {
+    const colchonDelAparato = 15.0;
+    var acumulado = 0.0;
+    var i = ultimoEntregado;
+    while (i > 0 && acumulado < colchonDelAparato) {
+      i--;
+      acumulado += i < duraciones.length ? duraciones[i] : 0;
+    }
+    return i;
   }
 
   /// Cuánto se le aguanta a un nodo antes de probar el siguiente.
