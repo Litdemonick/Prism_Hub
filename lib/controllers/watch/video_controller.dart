@@ -791,11 +791,31 @@ class VideoPlayerController extends GetxController with WidgetsBindingObserver {
       await np.setProperty(
           'demuxer-max-bytes', Platform.isAndroid ? '96MiB' : '192MiB');
       await np.setProperty('demuxer-readahead-secs', '10');
-      // La variante de MAYOR calidad de las que ofrece el stream — o sea que
-      // cuando hay 4K, se usa 4K. La lista de calidades del menú sale de las
-      // variantes del propio playlist, sin tope puesto por la app, así que
-      // aparece cualquier resolución que el sitio publique.
-      await np.setProperty('hls-bitrate', 'max');
+      // Con qué calidad ARRANCA solo. No es un tope.
+      //
+      // Antes arrancaba siempre en la más alta que ofreciera el stream, o sea
+      // 4K cuando lo había. En un equipo que no lo aguanta eso se traduce en
+      // fotogramas perdidos y tirones, y quien lo sufre no tiene por qué
+      // saber que la causa es la resolución.
+      //
+      // Arrancando por debajo de ese límite, en la práctica cae en 1080p, que
+      // cualquier equipo de los últimos años mueve sin despeinarse.
+      //
+      // El menú de calidades NO cambia: sigue listando todas las variantes que
+      // publique el sitio, 4K incluido, y elegir una a mano abre esa variante
+      // directamente sin pasar por esta preferencia. Así el que tiene equipo
+      // para 4K lo elige igual, y el que no, deja de arrancar mal por defecto.
+      //
+      // Y si alguien prefiere arrancar siempre en la máxima, lo enciende en
+      // Ajustes una vez y se acabó.
+      final siempreMaxima =
+          PrismHubStorage.getSetting(SettingKey.empezarEnMaximaCalidad) == true;
+      await np.setProperty(
+        'hls-bitrate',
+        // 10 Mbps: por encima de lo que pide un 1080p normal y por debajo de
+        // lo que pide un 4K. mpv elige la mejor variante que no lo supere.
+        siempreMaxima ? 'max' : '10000000',
+      );
       // Proxy de Ajustes → mpv: desbloquea CDNs filtrados por el ISP.
       // Sin esto el proxy solo llega a la resolución del embed, no al stream.
       final proxyType =

@@ -524,6 +524,20 @@ class _SettingsPageState extends State<SettingsPage> {
             ),
             // Apagado por defecto (== true, no != false): que el reproductor
             // siga solo es algo que se pide, no algo que deba pasar sin avisar.
+            // Apagado por defecto: arranca alrededor de 1080p. No es un tope
+            // — el menu de calidades del reproductor sigue ofreciendo todo.
+            SettingsSwitchTile(
+              title: 'settings.max-quality'.i18n,
+              buildSubtitle: () => 'settings.max-quality-subtitle'.i18n,
+              buildValue: () =>
+                  PrismHubStorage.getSetting(
+                          SettingKey.empezarEnMaximaCalidad) ==
+                      true,
+              onChanged: (value) {
+                PrismHubStorage.setSetting(
+                    SettingKey.empezarEnMaximaCalidad, value);
+              },
+            ),
             SettingsSwitchTile(
               title: 'settings.autoplay-next'.i18n,
               buildSubtitle: () => 'settings.autoplay-next-subtitle'.i18n,

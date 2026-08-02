@@ -262,6 +262,8 @@
     "link-extensions": "Extensions repository",
     "link-extensions-subtitle": "prism-plus, the official catalog extensions are downloaded from.",
     "general-subtitle-android": "Language, theme, +18 Zone access and PIN, TMDB key and update checks",
+    "max-quality": "Start at the highest quality",
+    "max-quality-subtitle": "Off, video starts around 1080p, which runs smoothly on any machine. Turn it on if yours handles 4K fine. Either way you can still change quality by hand from the player.",
     "autoplay-next": "Play the next episode automatically",
     "autoplay-next-subtitle": "When an episode ends the next one starts, whether you watch here or are casting. Off, it stops at the end.",
     "check-new-episodes": "Notify about new chapters",

@@ -493,6 +493,14 @@ class SettingKey {
   /// Si ya se mostro el tutorial de gestos del reproductor.
   static const tutorialReproductorVisto = 'TutorialReproductorVisto';
 
+  /// Arrancar siempre en la maxima calidad disponible.
+  ///
+  /// Apagado, el reproductor empieza alrededor de 1080p: es lo que cualquier
+  /// equipo de los ultimos años mueve sin problemas, y arrancar en 4K en uno
+  /// que no lo aguanta se siente como que el reproductor va mal. No es un
+  /// tope: el menu de calidades sigue ofreciendo todo, 4K incluido.
+  static const empezarEnMaximaCalidad = 'EmpezarEnMaximaCalidad';
+
   /// Al terminar un episodio, pasar solo al siguiente.
   ///
   /// Vale igual mirando aca que transmitiendo a un televisor. Apagado deja el

@@ -258,6 +258,8 @@
     "link-extensions": "Repositorio de extensiones",
     "link-extensions-subtitle": "prism-plus, el catálogo oficial desde donde se descargan las extensiones.",
     "general-subtitle-android": "Idioma, tema, acceso a la Zona +18 y su PIN, clave de TMDB y buscar actualizaciones",
+    "max-quality": "Empezar en la máxima calidad",
+    "max-quality-subtitle": "Apagado, el vídeo empieza alrededor de 1080p, que va fluido en cualquier equipo. Encendelo si el tuyo mueve 4K sin problemas. En los dos casos podés cambiar la calidad a mano desde el reproductor.",
     "autoplay-next": "Pasar solo al siguiente episodio",
     "autoplay-next-subtitle": "Al terminar un episodio arranca el que sigue, mires acá o estés transmitiendo. Apagado, se queda quieto al terminar.",
     "check-new-episodes": "Avisar de capítulos nuevos",
