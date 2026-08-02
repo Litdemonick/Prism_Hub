@@ -286,6 +286,40 @@ class VideoPlayerController extends GetxController with WidgetsBindingObserver {
   /// para siempre sin decir nada.
   static const _atascoParaRendirse = Duration(seconds: 25);
 
+  /// Le pregunta a mpv por qué está pasando lo que está pasando.
+  ///
+  /// SOLO lee y escribe en el registro: no cambia una sola opción del
+  /// reproductor. Es a propósito — hasta ahora, cada vez que el vídeo se paraba,
+  /// no había un solo número para saber si faltaba red o sobraba trabajo, y se
+  /// terminaba tocando la configuración a ciegas. Las cuatro cosas que lo
+  /// distinguen:
+  ///
+  ///  - `demuxer-cache-duration`: cuántos segundos de vídeo hay descargados por
+  ///    delante. En cero cuando se para = no llega la red.
+  ///  - `cache-speed`: a qué velocidad está entrando. Comparado con el caudal de
+  ///    la variante dice si el servidor da abasto o no.
+  ///  - `video-bitrate`: qué variante eligió mpv. Clave con `hls-bitrate`: mpv
+  ///    elige UNA al abrir y no la cambia nunca, aunque la red no la sostenga.
+  ///  - `frame-drop-count`: si el equipo no llega a decodificar. Colchón lleno y
+  ///    cuadros tirados = es la máquina, no la conexión.
+  Future<void> _medir(String motivo) async {
+    if (_disposed || player.platform is! NativePlayer) return;
+    final np = player.platform as NativePlayer;
+    try {
+      String d(String v) => v.trim().isEmpty ? '—' : v.trim();
+      final colchon = d(await np.getProperty('demuxer-cache-duration'));
+      final caudal = d(await np.getProperty('cache-speed'));
+      final bitrate = d(await np.getProperty('video-bitrate'));
+      final tirados = d(await np.getProperty('frame-drop-count'));
+      logger.info('medición ($motivo) · colchón: $colchon s · entrando: '
+          '$caudal B/s · variante: $bitrate bps · cuadros tirados: $tirados · '
+          'calidad: ${currentQuality.value} · posición: '
+          '${position.value.inSeconds}s');
+    } catch (e) {
+      logger.info('medición ($motivo): no se pudieron leer las propiedades — $e');
+    }
+  }
+
   void _arrancarVigilanteDeAtasco() {
     _vigilanteDeAtasco?.cancel();
     _vigilanteDeAtasco =
@@ -318,6 +352,7 @@ class VideoPlayerController extends GetxController with WidgetsBindingObserver {
         _atascoAvisado = true;
         logger.warning(
             'El video lleva ${quieto.inSeconds}s sin avanzar: se avisa');
+        unawaited(_medir('imagen congelada'));
         sendMessage(Message(
           Text('video.stalled'.i18n),
           time: const Duration(seconds: 8),
@@ -1179,7 +1214,14 @@ class VideoPlayerController extends GetxController with WidgetsBindingObserver {
     // Primer cuadro real pintado — recién acá se apaga el spinner de carga
     // del centro (ver comentario en hasRenderedFrame).
     _addSubscription(player.stream.videoParams.listen((p) {
+      final primerCuadro = !hasRenderedFrame.value;
       if ((p.w ?? 0) > 0 && (p.h ?? 0) > 0) hasRenderedFrame.value = true;
+      // Al primer cuadro se anota QUÉ variante eligió mpv. Es el dato que falta
+      // para saber si un vídeo que se para eligió una calidad que la conexión no
+      // sostiene — mpv no la cambia nunca por su cuenta.
+      if (primerCuadro && hasRenderedFrame.value) {
+        unawaited(_medir('arrancó'));
+      }
       // El VR se decide ACA y no en el aviso de la altura.
       //
       // Alla se leia el ancho por separado, y si todavia no habia llegado en
@@ -1376,6 +1418,11 @@ class VideoPlayerController extends GetxController with WidgetsBindingObserver {
       isActuallyBuffering.value = buffering && !advancedRecently;
       _bufferingStallTimer?.cancel();
       _bufferingStallTimer = null;
+      // Un parón de verdad (no el flag desfasado de mpv) y ya con el vídeo en
+      // marcha: se mide y queda en el registro. Solo lee, no cambia nada.
+      if (buffering && !advancedRecently && hasRenderedFrame.value) {
+        unawaited(_medir('se paró a reproducir'));
+      }
       if (buffering) {
         // Confirmado en vivo (Voe/voe.sx, cloudwindow-route): el buffering
         // inicial puede tardar más de 20s y aun así terminar arrancando
