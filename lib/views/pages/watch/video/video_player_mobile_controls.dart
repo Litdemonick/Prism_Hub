@@ -146,6 +146,20 @@ class _VideoPlayerMobileControlsState extends State<VideoPlayerMobileControls> {
     _updateTimer();
     VolumeController().showSystemUI = false;
     _currentVolume = await VolumeController().getVolume();
+    // Se sigue el volumen real del telefono mientras el reproductor este
+    // abierto.
+    //
+    // Antes se leia una sola vez aca y nunca mas: si el usuario tocaba los
+    // botones fisicos, el numero que mostraba el gesto quedaba viejo y decia
+    // un volumen que no era el que sonaba.
+    VolumeController().listener((volumen) {
+      if (!mounted) return;
+      if (_currentVolume == volumen) return;
+      _currentVolume = volumen;
+      // Solo se repinta si el cartel esta a la vista; si no, alcanza con
+      // guardarlo para cuando se muestre.
+      if (_isAdjusting) setState(() {});
+    });
   }
 
   @override
@@ -190,6 +204,9 @@ class _VideoPlayerMobileControlsState extends State<VideoPlayerMobileControls> {
     _avisoTimer?.cancel();
     _saltoTimer?.cancel();
     _timer?.cancel();
+    // Sin esto queda escuchando el volumen del sistema despues de cerrar el
+    // reproductor, sobre un State que ya no existe.
+    VolumeController().removeListener();
     super.dispose();
   }
 
@@ -452,7 +469,11 @@ class _VideoPlayerMobileControlsState extends State<VideoPlayerMobileControls> {
                               Text(
                                 _boost > 100
                                     ? '+${(_boost - 100).toStringAsFixed(0)}%'
-                                    : (_currentVolume * 100).toStringAsFixed(0),
+                                    // Con % y redondeado al entero: "47" solo
+                                    // no se lee como un volumen, y sin
+                                    // redondear el numero temblaba en cada
+                                    // pixel de arrastre.
+                                    : '${(_currentVolume * 100).round()}%',
                               ),
                             ],
                           ),
@@ -592,6 +613,21 @@ class _VideoPlayerMobileControlsState extends State<VideoPlayerMobileControls> {
                     final ancho = MediaQuery.of(context).size.width;
                     if (ancho <= 0) return;
                     _c.moverVr(-details.delta.dx / ancho);
+                  },
+                  // El numero sale APENAS se apoya el dedo, con el volumen que
+                  // hay en ese momento.
+                  //
+                  // Antes se prendia en el primer onVerticalDragUpdate, y ese
+                  // no llega hasta que el dedo recorrio el umbral de arrastre
+                  // de Flutter (~18 px): para cuando aparecia el cartel el
+                  // volumen YA se habia movido, asi que nunca se llegaba a ver
+                  // de cuanto se partia ni se entendia cuanto estaba subiendo.
+                  onVerticalDragStart: (details) {
+                    if (_activePointers > 1) return;
+                    // Transmitiendo manda el aviso del aparato, que es otro.
+                    if (_c.dlnaDevice.value != null) return;
+                    _isAdjusting = true;
+                    setState(() {});
                   },
                   onVerticalDragUpdate: (details) {
                     if (_activePointers > 1) return;
