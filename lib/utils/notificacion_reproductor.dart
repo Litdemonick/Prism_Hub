@@ -26,6 +26,14 @@ class NotificacionReproductor extends BaseAudioHandler {
   /// notificación puede sobrevivir un instante al reproductor que la creó.
   static _Mandos? _mandos;
 
+  /// Quién enchufó los mandos que hay puestos ahora.
+  ///
+  /// Al pasar de una obra a otra conviven un momento dos reproductores: el que
+  /// se abre y el que se está cerrando. Sin saber de quién son los mandos, el
+  /// que cierra le borraba los del nuevo y la notificación quedaba dibujada
+  /// pero sin responder a nada.
+  static Object? _dueno;
+
   /// Enciende el servicio. Una sola vez en toda la vida de la app.
   ///
   /// Android no deja levantar y bajar esto a repetición: el servicio se crea al
@@ -41,11 +49,24 @@ class NotificacionReproductor extends BaseAudioHandler {
           // Sin sonido ni vibración: es un panel de control, no un aviso.
           androidNotificationChannelDescription:
               'Controles de lo que estás viendo',
-          // Que la notificación se vaya cuando se para. Sin esto queda una
-          // notificación muerta que no controla nada.
-          androidStopForegroundOnPause: true,
-          // El botón de cerrar de la esquina: cierra de verdad la reproducción,
-          // no solo esconde la notificación.
+          // En pausa NO se suelta el primer plano. Es a propósito y va contra
+          // lo que hace una app de música normal.
+          //
+          // Al pausar, este servicio sale de primer plano Y suelta el wakelock
+          // (ver exitPlayingState en AudioService.java). Ahí Android queda libre
+          // de congelar o matar el proceso, y transmitiendo eso rompe de verdad:
+          // cuando el vídeo va POR el teléfono —las fuentes que exigen cabeceras
+          // y todo lo reempaquetado a MPEG-TS— el televisor le pide cada pedazo
+          // al servidor que corre dentro de la app. Si el proceso muere con el
+          // vídeo en pausa, al volver a darle play el televisor ya no tiene de
+          // dónde bajar.
+          //
+          // No queda colgado para siempre: al cerrar el reproductor se deja el
+          // estado en reposo, y con eso el propio servicio hace stopSelf y suelta
+          // el wakelock (ver esconder()).
+          androidStopForegroundOnPause: false,
+          // No fija: el usuario tiene que poder descartarla, y descartarla es lo
+          // mismo que cerrar (ver onTaskRemoved).
           androidNotificationOngoing: false,
         ),
       );
@@ -60,6 +81,7 @@ class NotificacionReproductor extends BaseAudioHandler {
 
   /// Conecta la notificación a un reproductor y la muestra.
   static void mostrar({
+    required Object dueno,
     required String titulo,
     required String episodio,
     String? portada,
@@ -75,6 +97,7 @@ class NotificacionReproductor extends BaseAudioHandler {
   }) {
     final yo = _instancia;
     if (yo == null) return;
+    _dueno = dueno;
     _mandos = _Mandos(
       alReproducir: alReproducir,
       alPausar: alPausar,
@@ -98,10 +121,14 @@ class NotificacionReproductor extends BaseAudioHandler {
 
   /// Actualiza lo que muestra sin rehacerla.
   static void actualizar({
+    required Object dueno,
     required bool reproduciendo,
     required Duration posicion,
     Duration? duracion,
   }) {
+    // Solo el que la puso. Un reproductor que se está cerrando todavía puede
+    // emitir un último estado, y ese pisaría el del que acaba de empezar.
+    if (!identical(_dueno, dueno)) return;
     final yo = _instancia;
     if (yo == null || _mandos == null) return;
     if (duracion != null && duracion > Duration.zero) {
@@ -114,8 +141,15 @@ class NotificacionReproductor extends BaseAudioHandler {
   }
 
   /// La saca de la barra. Se llama al cerrar el reproductor.
-  static void esconder() {
+  ///
+  /// Solo la esconde el que la puso: al pasar de una obra a otra el reproductor
+  /// viejo se cierra DESPUÉS de que el nuevo ya se anunció, y sin esta
+  /// comprobación el que se va apagaba la notificación del que acababa de
+  /// empezar.
+  static void esconder([Object? dueno]) {
+    if (dueno != null && !identical(_dueno, dueno)) return;
     _mandos = null;
+    _dueno = null;
     final yo = _instancia;
     if (yo == null) return;
     yo.mediaItem.add(null);

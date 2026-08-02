@@ -1999,7 +1999,10 @@ class VideoPlayerController extends GetxController with WidgetsBindingObserver {
     _playPedido = null;
     // La notificación se va con el reproductor: dejarla en la barra sin nadie
     // del otro lado sería un panel de control que no controla nada.
-    if (Platform.isAndroid) NotificacionReproductor.esconder();
+    // Con el dueño: al pasar de una obra a otra este reproductor se cierra
+    // DESPUÉS de que el nuevo ya se anunció, y sin eso le apagaba la
+    // notificación al que acababa de empezar.
+    if (Platform.isAndroid) NotificacionReproductor.esconder(this);
     _skipBadgeTimer?.cancel();
     _castBuscandoTimer?.cancel();
     _volumenCastTimer?.cancel();
@@ -2882,6 +2885,7 @@ class VideoPlayerController extends GetxController with WidgetsBindingObserver {
     }
     _ultimoRefrescoNotificacion = ahora;
     NotificacionReproductor.actualizar(
+      dueno: this,
       reproduciendo: isPlaying.value,
       posicion: position.value,
       duracion: duration.value,
@@ -2906,6 +2910,7 @@ class VideoPlayerController extends GetxController with WidgetsBindingObserver {
       );
       if (_disposed) return;
       NotificacionReproductor.mostrar(
+        dueno: this,
         titulo: title,
         episodio: index.value >= 0 && index.value < playList.length
             ? playList[index.value].name
