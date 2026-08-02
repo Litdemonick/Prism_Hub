@@ -168,6 +168,37 @@ class CastRelayServer {
   ///
   /// No molesta a nadie mas: un televisor DLNA baja el video con su propio
   /// cliente HTTP y estas cabeceras las ignora.
+  // Cabeceras que pide el estándar DLNA y que no estábamos mandando.
+  //
+  // Sin ellas, un LG con webOS acepta la orden, muestra el título y la barra
+  // de carga… y nunca dibuja la imagen: aceptó el transporte pero no sabe
+  // cómo consumir el flujo. Kodi y Samsung son permisivos y andan igual, por
+  // eso el fallo parecía cosa de un televisor roto. Comprobado en vivo que ese
+  // mismo LG (55UT8050PSB, 2025) SÍ recibe por DLNA desde otras apps, así que
+  // el que estaba incompleto era este servidor.
+  //
+  // transferMode: "Streaming" es lo que corresponde a vídeo que se mira
+  // mientras llega, en vez de "Interactive" (imágenes) o "Background"
+  // (descarga).
+  //
+  // DLNA.ORG_OP=00: no se puede saltar, ni por tiempo ni por byte. Es la
+  // verdad —el TS se arma sobre la marcha y por eso va Accept-Ranges: none— y
+  // decirlo evita que el televisor intente un salto que va a fallar.
+  //
+  // DLNA.ORG_FLAGS=0x01700000: streaming + transferencia en segundo plano +
+  // aguantar pausas de conexión + DLNA v1.5. Los ceros de atrás son parte del
+  // formato (son 32 dígitos hexadecimales en total, no un relleno inventado).
+  //
+  // A propósito NO se declara DLNA.ORG_PN: es opcional, y poner un perfil
+  // equivocado es peor que no poner ninguno — el televisor intentaría decodificar
+  // como ese perfil en vez de mirar el flujo.
+  static const _dlna = {
+    'transferMode.dlna.org': 'Streaming',
+    'contentFeatures.dlna.org':
+        'DLNA.ORG_OP=00;DLNA.ORG_CI=0;'
+        'DLNA.ORG_FLAGS=01700000000000000000000000000000',
+  };
+
   static const _permisos = {
     'Access-Control-Allow-Origin': '*',
     'Access-Control-Allow-Methods': 'GET, HEAD, OPTIONS',
@@ -216,6 +247,7 @@ class CastRelayServer {
         // eso tampoco se puede adelantar, y se avisa antes de empezar.
         'Accept-Ranges': 'none',
         'Cache-Control': 'no-cache',
+        ..._dlna,
         ..._permisos,
       };
       if (esHead) return Response.ok(null, headers: cabeceras);
