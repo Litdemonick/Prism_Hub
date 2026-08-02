@@ -319,6 +319,26 @@ class ExtensionUtils {
   /// caché. Sirve para filtrar una lista mientras se construye, donde no se
   /// puede await. Si el índice todavía no se descargó devuelve false, y el
   /// filtro se corrige solo en cuanto llega (la página se reconstruye).
+  /// Por qué esta extensión no se puede usar AHORA, o null si se puede.
+  ///
+  /// Existe porque una extensión puede dejar de estar disponible **en medio de
+  /// una sesión**: el usuario la desactiva o la borra desde otra pantalla, o el
+  /// catálogo la marca inestable mientras está viendo algo. Hasta ahora eso se
+  /// notaba recién al pedir el capítulo siguiente, y salía como un error de red
+  /// cualquiera — el usuario reintentaba una y otra vez contra algo que ya no
+  /// estaba.
+  ///
+  /// Devuelve la clave del texto a mostrar, para que el reproductor y el lector
+  /// digan exactamente lo mismo.
+  static String? motivoNoDisponible(String package) {
+    if (!runtimes.containsKey(package)) {
+      return 'extension.gone-uninstalled';
+    }
+    if (!isEnabled(package)) return 'extension.gone-disabled';
+    if (isRemoteUnstableCached(package)) return 'extension.gone-unstable';
+    return null;
+  }
+
   static bool isRemoteUnstableCached(String package) =>
       _remoteUnstableCache?[package] == true;
 

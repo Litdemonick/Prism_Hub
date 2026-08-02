@@ -134,7 +134,11 @@
     "filter-unstable": "Inestables",
     "unstable-short-site-down": "En mantenimiento",
     "unstable-short-broken": "En corrección",
-    "unstable-short-outdated": "Actualizar"
+    "unstable-short-outdated": "Actualizar",
+    "gone-uninstalled": "Esta extensión ya no está instalada, así que no se puede seguir. Volvé a instalarla desde Extensiones para retomar donde ibas.",
+    "gone-disabled": "Esta extensión quedó desactivada, así que no se puede seguir. Activala en Extensiones instaladas para retomar donde ibas.",
+    "gone-unstable": "Esta extensión se marcó como inestable y dejó de responder. Vas a poder seguir cuando se arregle; tu progreso queda guardado.",
+    "gone-exit": "Salir"
   },
   "extension-repo": {
     "error": "¡Ha ocurrido un error!",

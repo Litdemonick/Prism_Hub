@@ -138,7 +138,11 @@
     "filter-unstable": "Unstable",
     "unstable-short-site-down": "Down for maintenance",
     "unstable-short-broken": "Being fixed",
-    "unstable-short-outdated": "Update needed"
+    "unstable-short-outdated": "Update needed",
+    "gone-uninstalled": "This extension is no longer installed, so playback cannot continue. Reinstall it from Extensions to pick up where you left off.",
+    "gone-disabled": "This extension was disabled, so playback cannot continue. Enable it in Installed extensions to pick up where you left off.",
+    "gone-unstable": "This extension was marked unstable and stopped responding. You will be able to continue once it is fixed; your progress is saved.",
+    "gone-exit": "Exit"
   },
   "extension-repo": {
     "error": "An error occurred!",

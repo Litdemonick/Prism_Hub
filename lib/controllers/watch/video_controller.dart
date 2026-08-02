@@ -1853,7 +1853,58 @@ class VideoPlayerController extends GetxController with WidgetsBindingObserver {
   }
 
   // 获取 watch 数据
+  /// La extensión dejó de estar disponible y no tiene sentido seguir.
+  ///
+  /// Distinto de que falle un servidor: ahí se reintenta con otro. Acá no hay
+  /// con qué reintentar, así que se corta todo y se ofrece salir.
+  final extensionCaida = RxnString();
+
+  /// Corta la reproducción porque la extensión ya no está.
+  ///
+  /// Pasa de verdad y en medio de la sesión: el usuario la desactiva o la borra
+  /// desde otra pantalla, o el catálogo la marca inestable mientras está
+  /// viendo. Antes eso salía como un error de red cualquiera y el reproductor
+  /// seguía reintentando contra algo que ya no existe — la rueda girando para
+  /// siempre y sin forma de entender qué pasaba.
+  ///
+  /// Se para todo lo que sigue latiendo (el reproductor, el vigilante de
+  /// atasco, los reintentos de servidor) y se deja el aviso, que la pantalla
+  /// muestra con un botón de salir.
+  void _cortarPorExtensionCaida(String motivoI18n) {
+    if (_disposed || extensionCaida.value != null) return;
+    extensionCaida.value = motivoI18n;
+    // Que no quede nada reintentando: sin esto los vigilantes seguirían
+    // disparando sobre una extensión que ya no puede contestar.
+    ++_switchServerGen;
+    _vigilanteDeAtasco?.cancel();
+    isGettingWatchData.value = false;
+    isSeeking.value = false;
+    _seekWatchdog?.cancel();
+    try {
+      player.pause();
+    } catch (_) {
+      // Si el reproductor ya no está, no hay nada que pausar.
+    }
+    // Transmitiendo, también se le suelta el televisor: lo que está mostrando
+    // sale de una extensión que ya no puede servir el siguiente episodio.
+    if (dlnaDevice.value != null) unawaited(disconnectDLNADevice());
+  }
+
+  /// Comprueba que la extensión siga estando antes de pedirle nada.
+  ///
+  /// Devuelve true si hay que frenar. Se llama ANTES de cada pedido: el
+  /// catálogo puede tardar en marcarla, así que la app no puede esperar a que
+  /// alguien más se entere.
+  bool _extensionSeCayo() {
+    final motivo =
+        ExtensionUtils.motivoNoDisponible(runtime.extension.package);
+    if (motivo == null) return false;
+    _cortarPorExtensionCaida(motivo);
+    return true;
+  }
+
   getWatchData() async {
+    if (_extensionSeCayo()) return;
     watchData = null;
     subtitles.clear();
     availableServers.clear();
@@ -4647,6 +4698,13 @@ class VideoPlayerController extends GetxController with WidgetsBindingObserver {
   // backend elegido al azar en cada resolución, así que un simple reintento
   // puede caer en uno sano sin que el usuario tenga que hacer nada.
   void _failOrRetryServer(String name) {
+    // Antes de reintentar, ¿la extensión sigue estando?
+    //
+    // Sin esto, una extensión que se cae a mitad de sesión se veía como un
+    // servidor que falla: se reintentaba tres veces contra algo que ya no puede
+    // contestar, y recién al final salía "probá otro servidor" — un consejo
+    // inútil, porque los otros salen de la misma extensión.
+    if (_extensionSeCayo()) return;
     if (_serverRetryCount < _maxServerRetries) {
       _serverRetryCount++;
       logger.info(

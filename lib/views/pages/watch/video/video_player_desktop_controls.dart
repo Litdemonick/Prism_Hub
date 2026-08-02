@@ -15,6 +15,7 @@ import 'package:prismhub/utils/i18n.dart';
 import 'package:prismhub/utils/prismhub_storage.dart';
 import 'package:prismhub/views/widgets/cache_network_image.dart';
 import 'package:prismhub/views/widgets/home/home_theme.dart';
+import 'package:prismhub/views/widgets/watch/aviso_extension_caida.dart';
 import 'package:prismhub/views/widgets/window_caption_buttons.dart';
 import 'package:prismhub/views/widgets/watch/playlist.dart';
 import 'package:window_manager/window_manager.dart';
@@ -688,6 +689,17 @@ class _VideoPlayerDesktopControlsState
                             !_c.hasRenderedFrame.value;
                         final content = Center(
                           child: Obx(() {
+                            // La extensión se cayó: manda sobre todo lo demás.
+                            // El aviso de servidor diría "probá otro", y los
+                            // otros salen de la misma extensión que ya no está.
+                            final caida = _c.extensionCaida.value;
+                            if (caida != null) {
+                              return AvisoExtensionCaida(
+                                motivo: caida.i18n,
+                                onSalir: () =>
+                                    unawaited(_c.closeRoute(context)),
+                              );
+                            }
                             final msg = _c.serverFailedMessage.value;
                             return AnimatedSwitcher(
                               duration: const Duration(milliseconds: 250),

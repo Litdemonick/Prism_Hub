@@ -15,6 +15,7 @@ import 'package:prismhub/views/pages/watch/video/video_player_cast.dart';
 import 'package:prismhub/views/pages/watch/video/video_player_sidebar.dart';
 import 'package:prismhub/views/widgets/cache_network_image.dart';
 import 'package:prismhub/views/widgets/home/home_theme.dart';
+import 'package:prismhub/views/widgets/watch/aviso_extension_caida.dart';
 import 'package:volume_controller/volume_controller.dart';
 
 class VideoPlayerMobileControls extends StatefulWidget {
@@ -760,6 +761,19 @@ class _VideoPlayerMobileControlsState extends State<VideoPlayerMobileControls> {
                           ),
                         ],
                       ),
+                    );
+                  }
+                  // La extensión se cayó: no hay nada que reintentar.
+                  //
+                  // Va ANTES del aviso de servidor y del de carga, porque manda
+                  // sobre los dos: el de servidor diría "probá otro", y los
+                  // otros salen de la misma extensión que ya no está. Lo único
+                  // útil acá es salir.
+                  final caida = _c.extensionCaida.value;
+                  if (caida != null) {
+                    return AvisoExtensionCaida(
+                      motivo: caida.i18n,
+                      onSalir: () => unawaited(_c.closeRoute(context)),
                     );
                   }
                   if (!_c.isGettingWatchData.value) {
