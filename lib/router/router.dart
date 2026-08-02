@@ -17,6 +17,7 @@ import 'package:prismhub/views/pages/nsfw18/nsfw18_search_page.dart';
 import 'package:prismhub/views/pages/nsfw18/nsfw18_zone_page.dart';
 import 'package:prismhub/views/pages/search/extension_searcher_page.dart';
 import 'package:prismhub/views/pages/search/search_page.dart';
+import 'package:prismhub/views/pages/settings/registro_en_vivo_page.dart';
 import 'package:prismhub/views/pages/settings/settings_page.dart';
 import 'package:prismhub/views/pages/tracking/anilist_more_page.dart';
 import 'package:prismhub/views/pages/tracking/anilist_tracking_page.dart';
@@ -115,6 +116,15 @@ final router = GoRouter(
           path: '/settings',
           pageBuilder: (context, state) =>
               _animation(state, const SettingsPage()),
+        ),
+        // El visor del registro. En escritorio tiene que ser una ruta como
+        // cualquier otra pantalla: acá manda go_router y el navegador de GetX
+        // no está activo (ver main.dart). En Android no se usa — ahí se empuja
+        // con Navigator desde la subpágina de Ajustes.
+        GoRoute(
+          path: '/settings/log',
+          pageBuilder: (context, state) =>
+              _animation(state, const RegistroEnVivoPage()),
         ),
         GoRoute(
           path: '/settings/anilist',

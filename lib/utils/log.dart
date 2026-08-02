@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:collection';
 import 'dart:io';
 
 import 'package:flutter/foundation.dart';
@@ -61,8 +62,44 @@ class PrismLog {
   // cuanto más se acumulaban logs. Bufferizado, una racha de 50 errores en
   // un segundo genera un solo volcado (a archivo o consola) en vez de 50.
   static void _queueLog(String log) {
+    _recordar(log);
     _pending.writeln(log);
     _flushTimer ??= Timer(const Duration(seconds: 2), _flush);
+  }
+
+  /// Lo último que pasó, EN MEMORIA, para el visor en vivo.
+  ///
+  /// El visor no lee el archivo, y no por capricho: en depuración el archivo ni
+  /// siquiera existe (todo va a la consola) y en producción solo se escribe si
+  /// el interruptor de guardar está encendido. Mirando el archivo, el visor se
+  /// vería vacío justo en los dos casos en los que más se lo necesita — alguien
+  /// que abre "Ver registro" para entender qué está fallando AHORA no tiene por
+  /// qué haber activado nada de antemano. Acá se guarda siempre, pase lo que
+  /// pase con el archivo.
+  ///
+  /// Empieza vacío en cada arranque: es un visor de lo que está pasando, no el
+  /// historial. Para lo de sesiones anteriores está Exportar.
+  static const _topeEnMemoria = 1500;
+  static final ListQueue<String> _memoria = ListQueue<String>();
+
+  /// Sube con cada línea nueva y con cada limpieza.
+  ///
+  /// El visor compara este número para saber si hay algo nuevo en vez de
+  /// redibujarse cada vez que mira. Con una racha de errores —que es cuando el
+  /// visor se usa— eso es la diferencia entre repintar la lista cuatro veces
+  /// por segundo o cientos.
+  static int _generacion = 0;
+  static int get generacion => _generacion;
+
+  /// Copia de las líneas en memoria, de la más vieja a la más nueva.
+  static List<String> get enMemoria => _memoria.toList(growable: false);
+
+  static void _recordar(String log) {
+    _memoria.addLast(log);
+    while (_memoria.length > _topeEnMemoria) {
+      _memoria.removeFirst();
+    }
+    _generacion++;
   }
 
   /// Vuelca YA lo que haya pendiente, sin esperar los 2 segundos.
@@ -85,11 +122,15 @@ class PrismLog {
   ///
   /// Tira también lo que estaba en memoria: si no, los 2 segundos anteriores
   /// se escribirían encima del archivo recién vaciado y quedaría "limpiado"
-  /// con cosas adentro.
+  /// con cosas adentro. Y vacía lo que muestra el visor, porque limpiar y
+  /// seguir viendo las mismas líneas en pantalla se lee como que el botón no
+  /// hizo nada.
   static Future<void> limpiar() async {
     _flushTimer?.cancel();
     _flushTimer = null;
     _pending.clear();
+    _memoria.clear();
+    _generacion++;
     try {
       final file = File(logFilePath);
       if (await file.exists()) await file.delete();
