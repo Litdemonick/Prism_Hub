@@ -646,12 +646,23 @@ class _VideoPlayerDesktopControlsState
                             // más disparaba un rebuild — se sentía "atrasado"
                             // al cambiar de capítulo. Envuelto en Obx, sigue
                             // a index.value al toque.
-                            Obx(() => _Header(
-                                  title: _c.title,
-                                  episode: _c.playList[_c.index.value].name,
-                                  onClose: () =>
-                                      unawaited(_c.closeRoute(context)),
-                                )),
+                            // Con el indice comprobado: una ficha sin episodios
+                            // —una entrada del historial cuya pagina ya no
+                            // existe— abre el reproductor con la lista vacia, y
+                            // sin esto reventaba con un RangeError encima del
+                            // video, tapando el aviso de que habia pasado.
+                            Obx(() {
+                              final lista = _c.playList;
+                              final i = _c.index.value;
+                              return _Header(
+                                title: _c.title,
+                                episode: (i >= 0 && i < lista.length)
+                                    ? lista[i].name
+                                    : '',
+                                onClose: () =>
+                                    unawaited(_c.closeRoute(context)),
+                              );
+                            }),
                             // selector de servidores — pestañas arriba, no un
                             // botón escondido abajo (a pedido del usuario, y
                             // para que se vea de una cuál es el

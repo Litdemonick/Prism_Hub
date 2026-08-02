@@ -1400,8 +1400,19 @@ class _Header extends StatelessWidget {
           const SizedBox(width: 4),
           Expanded(
             child: Obx(() {
-              final data = controller.playList[controller.index.value];
-              final episode = data.name;
+              // Sin comprobar el índice, esto reventaba con un
+              // "RangeError (length): Valid value range is empty: 0" ENCIMA del
+              // vídeo, tapando el aviso de qué había pasado de verdad.
+              //
+              // Pasa cuando la ficha no tiene episodios: una entrada del
+              // historial cuya página ya no existe abre el reproductor con la
+              // lista vacía. El error real —"no se pudo cargar el episodio"— ya
+              // se muestra abajo; este solo lo tapaba y encima parecía un fallo
+              // del reproductor.
+              final lista = controller.playList;
+              final i = controller.index.value;
+              final episode =
+                  (i >= 0 && i < lista.length) ? lista[i].name : '';
               return Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [

@@ -258,14 +258,29 @@ class DatabaseService {
     return db.writeTxn(() => db.historys.where().deleteAll());
   }
 
-  // 按类型删除历史 (null = 全部)
-  static Future<void> deleteHistoryByType(ExtensionType? type) async {
-    if (type == null) {
+  /// Borra historial por tipo y, si se pide, SOLO de una zona.
+  ///
+  /// [soloNsfw] es lo que separa la Zona +18 del inicio normal. Sin eso,
+  /// "borrar todo" desde el Historial +18 se llevaba puesto también el
+  /// historial normal, y al revés: la pantalla sabía en qué zona estaba pero el
+  /// borrado no miraba la marca de cada registro. Se veía como que el botón
+  /// borraba de más, y no había forma de recuperarlo.
+  ///
+  /// Null en [soloNsfw] sigue borrando las dos, que es lo que corresponde
+  /// cuando se limpia todo a propósito desde otro lado.
+  static Future<void> deleteHistoryByType(
+    ExtensionType? type, {
+    bool? soloNsfw,
+  }) async {
+    if (type == null && soloNsfw == null) {
       return deleteAllHistory();
     }
-    return db.writeTxn(
-      () => db.historys.filter().typeEqualTo(type).deleteAll(),
-    );
+    return db.writeTxn(() {
+      var q = db.historys.filter().idGreaterThan(-1);
+      if (type != null) q = q.and().typeEqualTo(type);
+      if (soloNsfw != null) q = q.and().isNsfwEqualTo(soloNsfw);
+      return q.deleteAll();
+    });
   }
 
   // 删除单个收藏
@@ -280,14 +295,21 @@ class DatabaseService {
     );
   }
 
-  // 按类型删除收藏 (null = 全部)
-  static Future<void> deleteFavoritesByType(ExtensionType? type) async {
-    if (type == null) {
+  /// Igual que [deleteHistoryByType], para favoritos. Ver ahí el porqué de
+  /// [soloNsfw].
+  static Future<void> deleteFavoritesByType(
+    ExtensionType? type, {
+    bool? soloNsfw,
+  }) async {
+    if (type == null && soloNsfw == null) {
       return db.writeTxn(() => db.favorites.where().deleteAll());
     }
-    return db.writeTxn(
-      () => db.favorites.filter().typeEqualTo(type).deleteAll(),
-    );
+    return db.writeTxn(() {
+      var q = db.favorites.filter().idGreaterThan(-1);
+      if (type != null) q = q.and().typeEqualTo(type);
+      if (soloNsfw != null) q = q.and().isNsfwEqualTo(soloNsfw);
+      return q.deleteAll();
+    });
   }
 
   // 扩展设置

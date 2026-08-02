@@ -229,19 +229,25 @@ class _HistoryPageState extends State<HistoryPage> {
       for (final f in _c.favorites) {
         _forgetNsfwDecisionIfOpen(f.package, f.url);
       }
-      await DatabaseService.deleteFavoritesByType(null);
+      // Solo la zona en la que estamos parados.
+      //
+      // Antes se borraba TODO sin mirar: desde el Historial +18, "borrar todo"
+      // se llevaba puesto también lo del inicio normal, y al revés. La pantalla
+      // ya sabía en qué zona estaba (widget.zone), pero el borrado no.
+      await DatabaseService.deleteFavoritesByType(null, soloNsfw: widget.zone);
     } else {
       for (final h in _c.resents) {
         _forgetNsfwDecisionIfOpen(h.package, h.url);
       }
       final types = _typeFilter;
       if (types == null) {
-        await DatabaseService.deleteHistoryByType(null);
+        // Mismo motivo que arriba: solo la zona en la que estamos.
+        await DatabaseService.deleteHistoryByType(null, soloNsfw: widget.zone);
       } else {
         // La pestaña "Lectura" agrupa manga+novela — hay que borrar cada
         // tipo por separado, deleteHistoryByType solo acepta uno a la vez.
         for (final t in types) {
-          await DatabaseService.deleteHistoryByType(t);
+          await DatabaseService.deleteHistoryByType(t, soloNsfw: widget.zone);
         }
       }
     }

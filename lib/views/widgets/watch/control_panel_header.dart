@@ -135,10 +135,19 @@ class _ControlPanelHeaderState<T extends ReaderController>
             // so clicking them never accidentally drags the window.
             Expanded(
               child: DragToMoveArea(
-                child: Text(
-                  _c.title + _c.playList[_c.index.value].name,
-                  overflow: TextOverflow.ellipsis,
-                ),
+                child: Builder(builder: (_) {
+                  // Mismo motivo que en las cabeceras del reproductor: con la
+                  // lista vacia esto reventaba en vez de mostrar solo el
+                  // titulo.
+                  final lista = _c.playList;
+                  final i = _c.index.value;
+                  final episodio =
+                      (i >= 0 && i < lista.length) ? lista[i].name : '';
+                  return Text(
+                    _c.title + episodio,
+                    overflow: TextOverflow.ellipsis,
+                  );
+                }),
               ),
             ),
             if (widget.buildSettings != null) ...[

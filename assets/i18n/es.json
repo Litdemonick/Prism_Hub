@@ -275,6 +275,7 @@
     "backup-pick-missing": "No la tenés instalada. Instalala desde Extensiones para poder recuperar esto.",
     "backup-pick-disabled": "Está desactivada. Activala en Extensiones instaladas para poder recuperar esto.",
     "backup-pick-unstable": "Está marcada como inestable. Vas a poder recuperar esto cuando se arregle.",
+    "backup-import-exts": "Extensiones: {n} de {total}.",
     "backup-nsfw-title": "Esta copia trae contenido +18",
     "backup-nsfw-body": "Hay {n} elementos +18. Se van a recuperar igual, pero como tenés la Zona +18 apagada no vas a verlos hasta que la actives en Ajustes.\n\n¿Seguimos?",
     "backup-pick-empty": "La copia no trae contenido de ninguna extensión.",

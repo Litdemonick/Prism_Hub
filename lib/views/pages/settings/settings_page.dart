@@ -523,6 +523,14 @@ class _SettingsPageState extends State<SettingsPage> {
       // Lo que entró, en números: decir solo "listo" deja al usuario sin saber
       // si de verdad se recuperó algo o el archivo estaba vacío.
       final partes = <String>[
+        // Cuántas extensiones entraron de las que traía la copia: "3 de 5".
+        // Sin esto, el que dejó dos afuera por no tenerlas instaladas no tiene
+        // forma de recordar después que le faltan.
+        FlutterI18n.translate(context, 'settings.backup-import-exts',
+            translationParams: {
+              'n': '${elegidas.length}',
+              'total': '${copia.paquetes.length}',
+            }),
         FlutterI18n.translate(context, 'settings.backup-import-counts',
             translationParams: {
               'historial': '${r.historialNuevo + r.historialActualizado}',
