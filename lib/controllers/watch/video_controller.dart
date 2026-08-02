@@ -911,13 +911,35 @@ class VideoPlayerController extends GetxController with WidgetsBindingObserver {
         // lo soporta, cayendo solo a software si no.
         await np.setProperty('hwdec', 'no');
         await np.setProperty('network-timeout', '5');
-        await np.setProperty(
-            'demuxer-lavf-o', 'reconnect=0,reconnect_delay_max=0');
+        // seg_max_retry: ver el comentario largo en la rama de abajo. Vale
+        // igual acá; no toca reconnect, que en Linux sigue apagado a propósito.
+        await np.setProperty('demuxer-lavf-o',
+            'reconnect=0,reconnect_delay_max=0,seg_max_retry=3');
       } else {
         await np.setProperty('hwdec', 'auto-safe');
         await np.setProperty('network-timeout', '20');
+        // seg_max_retry: cuántas veces se reintenta UN pedacito que falló.
+        //
+        // Viene en 0 de fábrica, y en cero un pedacito que falla **se abandona**
+        // sin un solo reintento. Medido en vivo con playmudos: la reproducción
+        // venía bien y de golpe apareció "tcp: ffurl_read returned ..." — un
+        // error de lectura de red a mitad de un pedacito. Un microcorte, el wifi
+        // que cambia de canal o el CDN que cierra la conexión alcanzan para eso.
+        // Con una conexión buena casi no pasa; con una mala, pasa todo el rato,
+        // y cada vez se perdía vídeo.
+        //
+        // Tres intentos: suficiente para pasar un bache y acotado como para no
+        // quedarse insistiendo contra un servidor de verdad caído.
+        //
+        // Lo que NO hace falta tocar, comprobado en la documentación de ffmpeg:
+        // `http_persistent` (reusar la conexión entre pedacitos) y
+        // `http_multiple` (bajar con varias conexiones a la vez) **ya vienen
+        // encendidos** en el demuxer de HLS. O sea que aprovechar bien la
+        // conexión ya estaba resuelto de fábrica, y agregar opciones del
+        // protocolo HTTP por encima solo puede pisar lo que ya funciona.
         await np.setProperty('demuxer-lavf-o',
-            'reconnect=1,reconnect_streamed=1,reconnect_delay_max=5');
+            'reconnect=1,reconnect_streamed=1,reconnect_delay_max=5,'
+                'seg_max_retry=3');
       }
       // Muchos m3u8 de hosts (voe, netu, etc.) referencian segmentos en otro
       // dominio; mpv los marca "unsafe" y se niega a cargarlos.
