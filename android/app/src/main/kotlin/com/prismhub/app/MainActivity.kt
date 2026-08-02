@@ -45,7 +45,17 @@ class MainActivity: AudioServiceFragmentActivity() {
             setMethodCallHandler { call, result ->
                 when (call.method) {
                     "enlaceInicial" -> {
-                        result.success(enlaceInicial)
+                        // Si todavia no se guardo, se lee del Intent AHORA.
+                        //
+                        // No sobra: el motor de Flutter ahora se comparte con
+                        // el servicio de la notificacion, asi que Dart puede
+                        // arrancar ANTES de que esta actividad se enganche y
+                        // ejecute la linea de abajo que guarda el enlace. Sin
+                        // esto, abrir un enlace con la app cerrada la abria
+                        // pero no llevaba a la ficha: cuando Dart preguntaba,
+                        // enlaceInicial todavia era null.
+                        val hay = enlaceInicial ?: enlaceDe(intent)
+                        result.success(hay)
                         enlaceInicial = null
                     }
                     else -> result.notImplemented()

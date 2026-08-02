@@ -173,11 +173,29 @@ class Compartir {
       return null;
     });
 
-    try {
-      manejar(await _canalAndroid.invokeMethod<String>('enlaceInicial'));
-    } catch (_) {
-      // Versión vieja de la actividad sin el canal: no es motivo para romper
-      // el arranque, simplemente no hay enlace que abrir.
+    // Se pregunta VARIAS veces, no una.
+    //
+    // El canal lo crea la actividad al engancharse al motor de Flutter, y ese
+    // motor ahora se comparte con el servicio de la notificación: puede estar
+    // corriendo Dart antes de que la actividad llegue a registrar nada. En ese
+    // hueco, preguntar una sola vez daba "no hay canal", el error se tragaba, y
+    // abrir un enlace con la app cerrada la abría sin llevar a la ficha.
+    //
+    // Cinco intentos con un cuarto de segundo entre ellos: sobra para el
+    // arranque más lento y se termina rápido cuando no hay ningún enlace, que
+    // es el caso normal.
+    for (var intento = 0; intento < 5; intento++) {
+      try {
+        final crudo = await _canalAndroid.invokeMethod<String>('enlaceInicial');
+        // Contestó: haya enlace o no, ya no hace falta seguir preguntando.
+        manejar(crudo);
+        return;
+      } catch (_) {
+        // Todavía no está el canal. Se reintenta; si nunca aparece —una versión
+        // vieja de la actividad, por ejemplo— simplemente no hay enlace que
+        // abrir, y eso no puede romper el arranque.
+      }
+      await Future<void>.delayed(const Duration(milliseconds: 250));
     }
   }
 
