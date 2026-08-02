@@ -4931,7 +4931,21 @@ class VideoPlayerController extends GetxController with WidgetsBindingObserver {
     String url,
     Map<String, String>? headers,
   ) async {
-    if (!isDirectStream(url) || !url.split('?').first.toLowerCase().endsWith('.m3u8')) {
+    // La ficha del servidor, SIEMPRE, aunque no haya nada que hacer.
+    //
+    // Sirve para revisar extensión por extensión sin cruzar líneas a mano: de un
+    // vistazo se ve qué entregó cada servidor y por qué camino va. Antes, cuando
+    // no era una lista HLS no se registraba nada y desde el registro no había
+    // forma de distinguir "entregó un MP4" de "no se llegó a mirar".
+    final sinParametros = url.split('?').first.toLowerCase();
+    final servidor = currentServerName.value.isEmpty
+        ? 'servidor sin nombre'
+        : currentServerName.value;
+    final donde = Uri.tryParse(url)?.host ?? '?';
+    if (!isDirectStream(url) || !sinParametros.endsWith('.m3u8')) {
+      logger.info('ficha · $servidor · ${sinParametros.endsWith('.mp4') ? 'MP4 '
+          'directo' : 'no es una lista HLS'} · $donde · va directo a mpv, no '
+          'hay pedacitos que repartir');
       return null;
     }
     try {
@@ -4947,10 +4961,23 @@ class VideoPlayerController extends GetxController with WidgetsBindingObserver {
         ),
       );
       final texto = res.data;
-      if (texto == null || !texto.contains('#EXTM3U')) return null;
+      if (texto == null || !texto.contains('#EXTM3U')) {
+        logger.info('ficha · $servidor · dice .m3u8 pero no lo es · $donde · '
+            'va directo a mpv');
+        return null;
+      }
       // Una lista maestra no trae pedacitos sino otras listas: la reparte de
       // nodos se ve recién en la de abajo, y seguirla acá sería pedir otra vez.
-      if (texto.contains('#EXT-X-STREAM-INF')) return null;
+      if (texto.contains('#EXT-X-STREAM-INF')) {
+        // Cuántas calidades ofrece, que es justo lo que interesa al revisar
+        // servidor por servidor: es el dato que el menú de calidades no
+        // consigue cuando la fuente contesta 403.
+        final calidades = RegExp(r'#EXT-X-STREAM-INF').allMatches(texto).length;
+        logger.info('ficha · $servidor · lista MAESTRA con $calidades '
+            'calidad(es) · $donde · va directo a mpv (todavía no se siguen los '
+            'maestros: mpv elige la variante y nosotros no la vemos)');
+        return null;
+      }
 
       final base = Uri.parse(url);
       final nodos = <String>{};
@@ -4960,24 +4987,32 @@ class VideoPlayerController extends GetxController with WidgetsBindingObserver {
         final host = base.resolve(limpia).host;
         if (host.isNotEmpty) nodos.add(host);
       }
-      logger.info('Se miró la lista en ${reloj.elapsedMilliseconds} ms: '
-          '${nodos.length} nodo(s)');
+      final pedacitos = const LineSplitter()
+          .convert(texto)
+          .where((l) => l.trim().isNotEmpty && !l.trim().startsWith('#'))
+          .length;
+      logger.info('ficha · $servidor · lista de $pedacitos pedacitos repartidos '
+          'en ${nodos.length} nodo(s) · $donde · leída en '
+          '${reloj.elapsedMilliseconds} ms');
       // Un solo nodo: no hay a quién cambiarle, así que el relay no aportaría
       // nada y solo agregaría un intermediario.
-      if (nodos.length < 2) return null;
+      if (nodos.length < 2) {
+        logger.info('ficha · $servidor · un solo nodo (${nodos.first}) · va '
+            'directo a mpv: no hay a quién cambiarle si va lento');
+        return null;
+      }
 
       final relay = await CastRelayServer.registerAndGetUrl(
         targetUrl: url,
         headers: hdrs,
         esquivarNodosCaidos: true,
       );
-      logger.info('La lista reparte entre ${nodos.length} nodos '
-          '(${nodos.join(', ')}): se pasa por el relay para poder esquivar los '
-          'que no entreguen');
+      logger.info('ficha · $servidor · PASA POR EL RELAY para esquivar nodos '
+          'caídos · nodos: ${nodos.join(', ')}');
       return relay;
     } catch (e) {
-      logger.info('No se pudo preparar el relay para esquivar nodos, se abre '
-          'directo como siempre: $e');
+      logger.info('ficha · $servidor · no se pudo mirar la lista · va directo '
+          'a mpv como siempre: $e');
       return null;
     }
   }
