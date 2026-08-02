@@ -359,6 +359,7 @@ class CopiaSeguridad {
           await DatabaseService.putHistoryRaw(entra);
           historialNuevo++;
         } else if (!entra.date.isBefore(previo.date)) {
+          _conservarLoQueNoTrae(entra, previo);
           // Gana el más reciente, y con la MISMA fecha gana el que entra.
           //
           // Antes se exigía que fuera estrictamente más nuevo, y eso hacía que
@@ -383,8 +384,12 @@ class CopiaSeguridad {
       }
       try {
         final entra = _favoritoDeMapa(crudo);
-        final yaEsta = await DatabaseService.isFavorite(
+        // Mismo cuidado que con el historial: se reemplaza el registro entero,
+        // así que una copia sin portada dejaría la tarjeta sin imagen.
+        final previo = await DatabaseService.getFavorite(
             package: entra.package, url: entra.url);
+        entra.cover ??= previo?.cover;
+        final yaEsta = previo != null;
         // Se escribe igual si ya estaba: putFavoriteRaw reusa el mismo
         // registro, así que no duplica, y permite reparar uno que hubiera
         // quedado mal. Solo se cuenta como nuevo si de verdad no estaba.
@@ -555,6 +560,40 @@ class CopiaSeguridad {
   ///
   /// Así que en vez de arreglarlos, se comprueban: si traen algo que no
   /// corresponde, se descarta ese registro y se sigue con el resto.
+  /// Importar no puede BORRAR lo que ya había.
+  ///
+  /// `putHistoryRaw` reemplaza el registro entero, así que todo campo que el
+  /// que entra no traiga se pierde. Y eso pasó de verdad: al importar sobre
+  /// registros que ya estaban, los que venían sin portada dejaron las tarjetas
+  /// de los dos inicios y los dos historiales sin imagen — el archivo no traía
+  /// nada malo, simplemente no traía eso, y el reemplazo se llevó puesto lo que
+  /// sí había.
+  ///
+  /// Así que lo que el que entra no trae se conserva del que ya estaba. Una
+  /// copia solo puede AGREGAR o ACTUALIZAR, nunca vaciar.
+  @visibleForTesting
+  static void conservarLoQueNoTraeDePrueba(History entra, History previo) =>
+      _conservarLoQueNoTrae(entra, previo);
+
+  static void _conservarLoQueNoTrae(History entra, History previo) {
+    entra.cover ??= previo.cover;
+    if (entra.episodeTitle.isEmpty) entra.episodeTitle = previo.episodeTitle;
+    if (entra.totalProgress.isEmpty) {
+      entra.totalProgress = previo.totalProgress;
+    }
+    // La cuenta de capítulos conocidos en cero significa "no se contó", no
+    // "hay cero": pisarla perdería la referencia con la que se detectan las
+    // novedades y el título volvería a anunciar como nuevo lo ya visto.
+    if (entra.knownEpisodeCount == 0) {
+      entra.knownEpisodeCount = previo.knownEpisodeCount;
+    }
+    entra.lastCheckedAt ??= previo.lastCheckedAt;
+    entra.newEpisodeLabel ??= previo.newEpisodeLabel;
+    // Que la obra terminó lo marca el usuario a mano: si ya lo hizo acá, una
+    // copia vieja que no lo sabía no puede desmarcarlo.
+    if (previo.seriesFinished) entra.seriesFinished = true;
+  }
+
   /// Un registro entero, de la base al archivo y de vuelta.
   ///
   /// Es la comprobación que de verdad importa: si algo se pierde o se cambia en
