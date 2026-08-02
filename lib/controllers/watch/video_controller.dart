@@ -2304,6 +2304,30 @@ class VideoPlayerController extends GetxController with WidgetsBindingObserver {
     final aparato = dlnaDevice.value;
     if (aparato == null) return _switchServerLocal(name);
 
+    // Cambiar de CALIDAD y cambiar de SERVIDOR no son lo mismo, aunque los dos
+    // pasen por aca (ver _servidoresSonCalidades).
+    //
+    // Una calidad distinta es el MISMO video: se le manda al aparato y sigue
+    // donde iba. Un servidor distinto es otra fuente entera, con otro formato y
+    // otras cabeceras, y con el Chromecast eso no se puede hacer en caliente:
+    // su receptor es una aplicacion web que ya tiene cargado lo anterior, y
+    // pisarlo a mitad de camino lo deja en negro sin decir nada. Se corta
+    // limpio y se avisa, que es lo unico honesto.
+    final esCalidad = _servidoresSonCalidades;
+    if (!esCalidad && aparato.esChromecast) {
+      sendMessage(Message(Text('video.cast-server-cambiado'.i18n)));
+      await disconnectDLNADevice();
+      return _switchServerLocal(name);
+    }
+
+    // Que el usuario sepa que esta pasando: resolver la fuente y volver a
+    // mandarsela al televisor lleva unos segundos, y sin esto la imagen se
+    // quedaba congelada sin ninguna señal.
+    castConectando.value = true;
+    castAviso.value =
+        (esCalidad ? 'video.cast-cambiando-calidad' : 'video.cast-cambiando-servidor')
+            .i18n;
+
     // Donde iba, para no volver al principio por cambiar de servidor.
     final donde = position.value;
     // Se resuelve EN SILENCIO: abrir el servidor nuevo arranca la reproduccion
@@ -2333,6 +2357,14 @@ class VideoPlayerController extends GetxController with WidgetsBindingObserver {
       await _irAEnElAparato(aparato, donde);
     } finally {
       if (!_disposed) {
+        // El aviso se suelta pase lo que pase. Si el cambio fallo, quien lo
+        // detecto ya puso SU mensaje —el de formato, el de resolucion— y este
+        // encima lo taparia; y si salio bien, dejarlo seria mentir.
+        castConectando.value = false;
+        if (castAviso.value == 'video.cast-cambiando-calidad'.i18n ||
+            castAviso.value == 'video.cast-cambiando-servidor'.i18n) {
+          castAviso.value = null;
+        }
         try {
           await player.setVolume(volumenPrevio);
         } catch (_) {}
@@ -2733,9 +2765,25 @@ class VideoPlayerController extends GetxController with WidgetsBindingObserver {
         headers: headers,
         audioTrack: watchData!.audioTrack,
       );
-      await connectDLNADevice(aparato);
-      if (_disposed || dlnaDevice.value != aparato) return;
-      await _irAEnElAparato(aparato, donde);
+      // Que se vea que esta cambiando: volver a mandarle el video al televisor
+      // lleva unos segundos y la imagen se queda quieta mientras tanto.
+      castConectando.value = true;
+      castAviso.value = 'video.cast-cambiando-calidad'.i18n;
+      try {
+        await connectDLNADevice(aparato);
+        if (_disposed || dlnaDevice.value != aparato) return;
+        await _irAEnElAparato(aparato, donde);
+      } finally {
+        if (!_disposed) {
+          castConectando.value = false;
+          // Solo el propio: si el cambio fallo, quien lo detecto ya puso su
+          // mensaje —el de formato, el de resolucion— y taparlo seria perder
+          // justo lo que explica que paso.
+          if (castAviso.value == 'video.cast-cambiando-calidad'.i18n) {
+            castAviso.value = null;
+          }
+        }
+      }
       return;
     }
 
