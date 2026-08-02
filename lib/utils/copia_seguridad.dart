@@ -438,7 +438,10 @@ class CopiaSeguridad {
   static Map<String, dynamic> _historialAMapa(History h) => {
         'package': h.package,
         'url': h.url,
-        'cover': h.cover,
+        // Se filtra tambien al SALIR, no solo al entrar: una captura local no
+        // le sirve a nadie fuera de este equipo, y llevarla dentro del archivo
+        // es ocupar sitio con algo que el otro lado va a tirar igual.
+        'cover': _portada(h.cover),
         'type': h.type.name,
         'episodeGroupId': h.episodeGroupId,
         'episodeId': h.episodeId,
@@ -520,12 +523,43 @@ class CopiaSeguridad {
     final s = valor.trim();
     if (s.length > _techoDeDireccion) return null;
     if (_tieneInvisibles(s)) return null;
+    // Una RUTA DE ARCHIVO no sirve en otro equipo.
+    //
+    // En vídeo, la portada puede ser la captura del fotograma donde quedaste, y
+    // eso se guarda como una ruta del disco (ver PortadaHistorial.de: si no
+    // empieza por http, se trata como archivo local). Esa ruta viaja perfecta
+    // dentro del archivo, llega al otro equipo, y ahí apunta a algo que no
+    // existe: tarjeta oscura.
+    //
+    // Y no se colaba por descuido: se aceptaba lo que no trae esquema para
+    // dejar pasar las direcciones de red escritas como "//cdn/x.jpg", que son
+    // normalísimas. Una ruta de Android tampoco trae esquema, así que entraba
+    // por la misma puerta.
+    //
+    // Devolviendo null, el registro entra SIN portada y el otro equipo se la
+    // consigue solo (ver PortadasPerdidas), que es la imagen buena de verdad y
+    // no una captura de la sesión de otro.
+    if (_pareceRutaLocal(s)) return null;
     final uri = Uri.tryParse(s);
     if (uri == null) return null;
-    // Sin esquema: relativa o "//host/…". Vale.
+    // Sin esquema pero de red: "//host/…". Vale.
     if (!uri.hasScheme) return s;
     if (uri.scheme != 'http' && uri.scheme != 'https') return null;
     return s;
+  }
+
+  /// Si esto es una ruta del disco y no una dirección de red.
+  ///
+  /// Se miran las tres formas que existen: la de Linux y Android (`/carpeta`),
+  /// la de Windows (`C:\carpeta`) y la explícita (`file:`). Ojo con la primera:
+  /// una dirección de red puede empezar con DOS barras (`//cdn/x.jpg`) y esa sí
+  /// hay que dejarla pasar, así que no alcanza con mirar el primer carácter.
+  static bool _pareceRutaLocal(String s) {
+    if (s.startsWith('//')) return false;
+    if (s.startsWith('/')) return true;
+    if (s.toLowerCase().startsWith('file:')) return true;
+    // "C:\…" o "C:/…"
+    return RegExp(r'^[A-Za-z]:[\\/]').hasMatch(s);
   }
 
   /// Techo de una dirección. De sobra para cualquier enlace real.
