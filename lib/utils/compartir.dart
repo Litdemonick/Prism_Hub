@@ -108,6 +108,49 @@ class Compartir {
   /// no se vuelva a abrir la misma ficha si algo reconstruye la pantalla.
   static Uri? enlacePendiente;
 
+  /// Quién abre la ficha cuando llega un enlace. Lo pone la app al estar lista.
+  static void Function(Uri)? _abridor;
+
+  /// Entrega un enlace a quien sepa abrirlo, o lo guarda hasta que haya alguien.
+  ///
+  /// **Un solo camino para los cuatro casos**, que es lo que faltaba. Un enlace
+  /// puede llegar de tres lados distintos —los argumentos del proceso al
+  /// arrancar, otra copia del programa que lo reenvía, o el canal de Android— y
+  /// cada uno terminaba resolviéndolo a su manera:
+  ///
+  ///  - Con la app ABIERTA en escritorio, la copia nueva dejaba el enlace en
+  ///    [enlacePendiente]… y nadie lo leía. Ese campo solo se consume una vez,
+  ///    al arrancar. El resultado era que la ventana se traía al frente y no
+  ///    pasaba nada más.
+  ///  - Con la app CERRADA, quien lo guardaba dependía de una carrera: si el
+  ///    enlace llegaba después de que la app dejara de mirar ese campo, se
+  ///    perdía igual.
+  ///
+  /// Ahora todos pasan por acá: si ya hay quien abra, se abre; si todavía no,
+  /// queda esperando y se entrega en cuanto la app avise que está lista.
+  static void entregar(Uri uri) {
+    final abridor = _abridor;
+    if (abridor == null) {
+      enlacePendiente = uri;
+      return;
+    }
+    abridor(uri);
+  }
+
+  /// La app avisa que ya puede navegar. Si había uno esperando, se abre ahora.
+  static void alEstarLista(void Function(Uri) abridor) {
+    _abridor = abridor;
+    final esperando = enlacePendiente;
+    if (esperando == null) return;
+    // Se limpia ANTES de abrir: si algo reconstruyera la pantalla, el enlace ya
+    // no está y no se vuelve a abrir la misma ficha encima.
+    enlacePendiente = null;
+    abridor(esperando);
+  }
+
+  /// Se suelta al cerrar, para no dejar apuntando a una pantalla que ya no está.
+  static void olvidarAlAbridor() => _abridor = null;
+
   /// El enlace con el que arrancó la app, si arrancó por uno.
   ///
   /// En escritorio el sistema pasa la dirección como un argumento más del
@@ -165,7 +208,9 @@ class Compartir {
     void manejar(String? crudo) {
       if (crudo == null || crudo.isEmpty) return;
       final uri = Uri.tryParse(crudo);
-      if (uri != null && leerEnlace(uri) != null) alRecibir(uri);
+      // Por entregar() y no directo: si el árbol todavía no está listo, el
+      // enlace queda esperando en vez de perderse.
+      if (uri != null && leerEnlace(uri) != null) entregar(uri);
     }
 
     _canalAndroid.setMethodCallHandler((call) async {
