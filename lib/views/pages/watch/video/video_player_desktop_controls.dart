@@ -1901,6 +1901,24 @@ class _AyudaTeclasCast extends StatelessWidget {
                 _pista('I', adelanteLargo, _cerca(aguja, 4, 5)),
               ],
             ),
+            // El volumen del televisor, en su propia fila.
+            //
+            // Estas dos teclas tambien le hablan al aparato y no estaban dichas
+            // en ningun lado: se probaba a ver que pasaba. Van aparte y no
+            // metidas en la fila de arriba porque son otra cosa —esas mueven el
+            // video, estas el sonido— y porque siete pistas en una sola linea
+            // dejaban de leerse.
+            const SizedBox(height: 12),
+            Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                _pista('↑', 'video.cast-hint-volume-up'.i18n,
+                    _cerca(aguja, 0, 5)),
+                const SizedBox(width: 10),
+                _pista('↓', 'video.cast-hint-volume-down'.i18n,
+                    _cerca(aguja, 2, 5)),
+              ],
+            ),
             const SizedBox(height: 10),
             Text(
               'video.cast-hint-keys'.i18n,

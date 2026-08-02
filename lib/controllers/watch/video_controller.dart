@@ -1980,6 +1980,10 @@ class VideoPlayerController extends GetxController with WidgetsBindingObserver {
     _destinoDeSalto = null;
     _avisoVolumenTimer?.cancel();
     avisoVolumen.value = null;
+    // Una orden de pausa/reproduccion pedida justo antes de cerrar saltaba
+    // despues sobre un aparato que ya se solto.
+    _playPedidoTimer?.cancel();
+    _playPedido = null;
     _skipBadgeTimer?.cancel();
     _castBuscandoTimer?.cancel();
     _volumenCastTimer?.cancel();
@@ -4012,7 +4016,11 @@ class VideoPlayerController extends GetxController with WidgetsBindingObserver {
       // Contesto: lo que hubiera pasado antes fue un bache y ya paso.
       _fallosDeCastSeguidos = 0;
       final reproduciendo = info.reproduciendo;
-      isPlaying.value = reproduciendo;
+      // Con una orden nuestra en vuelo, lo que informa es lo de ANTES de esa
+      // orden: pisarlo hacia parpadear el boton entre pausa y reproducir.
+      if (_aceptarReproduciendo(reproduciendo)) {
+        isPlaying.value = reproduciendo;
+      }
       if (reproduciendo) {
         _vioReproduciendoEnCast = true;
         // Empezo de verdad: recien aca se saca el aviso de carga.
@@ -4756,11 +4764,72 @@ class VideoPlayerController extends GetxController with WidgetsBindingObserver {
       player.playOrPause();
       return;
     }
-    if (isPlaying.value) {
-      await dlnaDevice.value!.pausar();
-    } else {
-      await dlnaDevice.value!.reproducir();
-    }
+    await _pedirAlAparato(reproducir: !isPlaying.value);
+  }
+
+  /// Lo ultimo que se le pidio al aparato y todavia no confirmo.
+  ///
+  /// Null cuando no hay nada en vuelo. Ver [_pedirAlAparato].
+  bool? _playPedido;
+  Timer? _playPedidoTimer;
+
+  /// Cuanto se espera antes de mandarle la orden al aparato.
+  static const _esperaPlayPausa = Duration(milliseconds: 250);
+
+  /// Le pide al aparato que reproduzca o que pause, aguantando el toqueteo.
+  ///
+  /// Transmitiendo, si el aparato esta reproduciendo solo se sabe por el sondeo
+  /// de cada segundo. Con eso, dos toques seguidos al boton mandaban PAUSAR las
+  /// dos veces —el segundo se decidia con un estado que todavia era el de antes
+  /// del primero— y el video quedaba al reves de lo que mostraba el boton.
+  ///
+  /// Asi que el boton cambia en el acto y la orden sale una sola vez, con lo
+  /// ultimo que se haya pedido. Mientras tanto no se le hace caso a lo que
+  /// informa el aparato, que sigue contando lo de antes.
+  Future<void> _pedirAlAparato({required bool reproducir}) async {
+    final aparato = dlnaDevice.value;
+    if (aparato == null) return;
+    // El boton responde ya, sin esperar al televisor.
+    isPlaying.value = reproducir;
+    _playPedido = reproducir;
+    _playPedidoTimer?.cancel();
+    _playPedidoTimer = Timer(_esperaPlayPausa, () async {
+      final quiero = _playPedido;
+      if (quiero == null || _disposed || dlnaDevice.value != aparato) return;
+      try {
+        if (quiero) {
+          await aparato.reproducir();
+        } else {
+          await aparato.pausar();
+        }
+      } catch (e) {
+        // El aparato no contesto o no acepto: se deshace el cambio del boton
+        // en vez de dejarlo diciendo algo que no pasa.
+        logger.warning('El aparato no acepto reproducir/pausar', e);
+        if (_disposed || dlnaDevice.value != aparato) return;
+        _playPedido = null;
+        isPlaying.value = !reproducir;
+        castAviso.value = 'video.cast-failed'.i18n;
+        Timer(const Duration(seconds: 3), () {
+          if (castAviso.value == 'video.cast-failed'.i18n) {
+            castAviso.value = null;
+          }
+        });
+      }
+    });
+  }
+
+  /// Si lo que informa el aparato ya coincide con lo ultimo que le pedimos.
+  ///
+  /// Mientras no coincida se ignora: esta contando lo de antes de la orden.
+  bool _aceptarReproduciendo(bool informado) {
+    final pedido = _playPedido;
+    if (pedido == null) return true;
+    // Todavia sin mandar: no puede haber cambiado nada.
+    if (_playPedidoTimer?.isActive ?? false) return false;
+    if (informado != pedido) return false;
+    _playPedido = null;
+    return true;
   }
 
   // Wrappers seguros para los botones de play/pause "crudos" de los
@@ -4777,6 +4846,15 @@ class VideoPlayerController extends GetxController with WidgetsBindingObserver {
     // No frena al propio tutorial: al cerrarse baja esta bandera ANTES de pedir
     // que arranque.
     if (tutorialArriba.value) return;
+    // Transmitiendo, quien reproduce es el televisor.
+    //
+    // Estos dos no lo miraban: tocaban el reproductor de aca, que mientras se
+    // transmite esta parado a proposito. O sea que las teclas de medios y los
+    // botones que pasan por aca no hacian absolutamente nada al castear.
+    if (dlnaDevice.value != null) {
+      unawaited(_pedirAlAparato(reproducir: true));
+      return;
+    }
     try {
       player.play();
     } catch (e) {
@@ -4786,6 +4864,10 @@ class VideoPlayerController extends GetxController with WidgetsBindingObserver {
 
   void safePause() {
     if (_disposed) return;
+    if (dlnaDevice.value != null) {
+      unawaited(_pedirAlAparato(reproducir: false));
+      return;
+    }
     try {
       player.pause();
     } catch (e) {

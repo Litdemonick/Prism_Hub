@@ -344,6 +344,8 @@
     "cast-on-device": "Connected — casting",
     "cast-hint-back": "Left side",
     "cast-hint-pause": "Centre",
+    "cast-hint-volume-up": "Volume +",
+    "cast-hint-volume-down": "Volume −",
     "cast-hint-forward": "Right side",
     "cast-lost": "Lost connection to the device. Carry on watching here from where you were.",
     "cast-stopped-device": "Playback was stopped from the device. Carry on watching here.",

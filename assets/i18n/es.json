@@ -323,6 +323,8 @@
     "cast-on-device": "Conectado — transmitiendo",
     "cast-hint-back": "Lado izq.",
     "cast-hint-pause": "Centro",
+    "cast-hint-volume-up": "Volumen +",
+    "cast-hint-volume-down": "Volumen −",
     "cast-hint-forward": "Lado der.",
     "cast-lost": "Se perdió la conexión con el dispositivo. Seguí viendo acá desde donde ibas.",
     "cast-stopped-device": "Se detuvo la transmisión desde el dispositivo. Seguí viendo acá.",
