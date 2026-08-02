@@ -8,6 +8,8 @@ import 'package:prismhub/controllers/home_controller.dart';
 import 'package:prismhub/data/services/database_service.dart';
 import 'package:prismhub/data/services/extension_service.dart';
 import 'package:prismhub/utils/error.dart';
+import 'package:prismhub/utils/extension.dart';
+import 'package:prismhub/utils/i18n.dart';
 import 'package:prismhub/utils/log.dart';
 import 'package:prismhub/utils/watch_state.dart';
 
@@ -108,13 +110,46 @@ class ReaderController<T> extends GetxController with WidgetsBindingObserver {
     return null;
   }
 
+  /// La extensión dejó de estar disponible y no hay con qué seguir leyendo.
+  ///
+  /// Aparte de [error]: ese es "no se pudo cargar, probá de nuevo", y acá
+  /// reintentar no sirve de nada. La pantalla lo muestra con un botón de salir
+  /// en vez del de reintentar.
+  final extensionCaida = RxnString();
+
   getContent() async {
+    // Se comprueba ANTES de pedir nada.
+    //
+    // Una extensión puede caerse en medio de la lectura: el usuario la
+    // desactiva o la borra desde otra pantalla, o el catálogo la marca
+    // inestable. Y el chequeo del catálogo tarda en enterarse, así que la app
+    // no puede esperar a que alguien más lo detecte. Antes esto salía como un
+    // error de carga cualquiera y el lector ofrecía "reintentar" contra algo
+    // que ya no existe.
+    final motivo =
+        ExtensionUtils.motivoNoDisponible(runtime.extension.package);
+    if (motivo != null) {
+      extensionCaida.value = motivo;
+      error.value = motivo.i18n;
+      watchData.value = null;
+      return;
+    }
     try {
       error.value = '';
+      extensionCaida.value = null;
       watchData.value = null;
       watchData.value =
           await runtime.watch(cuurentPlayUrl, typeHint: _typeHint) as T;
     } catch (e) {
+      // Puede haberse caído JUSTO ahora: se vuelve a mirar antes de echarle la
+      // culpa a la red.
+      final ahora =
+          ExtensionUtils.motivoNoDisponible(runtime.extension.package);
+      if (ahora != null) {
+        extensionCaida.value = ahora;
+        error.value = ahora.i18n;
+        return;
+      }
       error.value = friendlyError(e);
     }
   }

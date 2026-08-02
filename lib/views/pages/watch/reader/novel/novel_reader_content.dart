@@ -4,6 +4,7 @@ import 'package:get/get.dart';
 import 'package:prismhub/controllers/watch/novel_controller.dart';
 import 'package:prismhub/utils/i18n.dart';
 import 'package:prismhub/utils/router.dart';
+import 'package:prismhub/views/widgets/watch/aviso_extension_caida.dart';
 import 'package:prismhub/views/widgets/button.dart';
 import 'package:prismhub/views/widgets/platform_widget.dart';
 import 'package:prismhub/views/widgets/progress.dart';
@@ -29,6 +30,16 @@ class _NovelReaderContentState extends State<NovelReaderContent> {
           final maxWidth = constraints.maxWidth;
           // final width = maxWidth > 800 ? maxWidth / 2 : maxWidth;
           // final height = constraints.maxHeight;
+          // Mismo criterio que en el lector de cómics: si la extensión se cayó
+          // no hay con qué reintentar, así que se ofrece salir y no otra vuelta
+          // contra algo que ya no está.
+          final caida = _c.extensionCaida.value;
+          if (caida != null) {
+            return AvisoExtensionCaida(
+              motivo: caida.i18n,
+              onSalir: () => RouterUtils.closeReader(context),
+            );
+          }
           if (_c.error.value.isNotEmpty) {
             return SizedBox(
               width: double.infinity,

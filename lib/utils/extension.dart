@@ -319,6 +319,59 @@ class ExtensionUtils {
   /// caché. Sirve para filtrar una lista mientras se construye, donde no se
   /// puede await. Si el índice todavía no se descargó devuelve false, y el
   /// filtro se corrige solo en cuanto llega (la página se reconstruye).
+  /// Cómo se llama una extensión, para mostrarlo.
+  ///
+  /// Si está instalada, su nombre. Si no —que es justo cuando hace falta
+  /// nombrarla, para decir que falta— se arma uno legible del identificador:
+  /// "io.prismhub.shademanga" no le dice nada a nadie, y era lo que salía en
+  /// los avisos.
+  static String nombreVisible(String package) {
+    final puesto = runtimes[package]?.extension.name;
+    if (puesto != null && puesto.isNotEmpty) return puesto;
+    final ultimo = package.split('.').last;
+    if (ultimo.isEmpty) return package;
+    return ultimo[0].toUpperCase() + ultimo.substring(1);
+  }
+
+  /// Con qué texto abrir la lista de extensiones la próxima vez.
+  ///
+  /// Sirve para mandar a alguien a UNA extensión concreta: al avisar que falta
+  /// instalarla o activarla, el atajo lleva a la pantalla que corresponde y
+  /// además la deja buscada, en vez de soltar al usuario en una lista de
+  /// decenas para que encuentre a mano la que le nombraron.
+  ///
+  /// Lo consume la pantalla al abrirse y lo borra, así que vale una sola vez:
+  /// entrar después por tu cuenta no tiene por qué venir con un filtro puesto
+  /// que nadie pidió.
+  static String? filtroPendiente;
+
+  /// Devuelve el filtro pedido y lo borra. Null si no había.
+  static String? tomarFiltroPendiente() {
+    final f = filtroPendiente;
+    filtroPendiente = null;
+    return f;
+  }
+
+  /// Por qué esta extensión no se puede usar AHORA, o null si se puede.
+  ///
+  /// Existe porque una extensión puede dejar de estar disponible **en medio de
+  /// una sesión**: el usuario la desactiva o la borra desde otra pantalla, o el
+  /// catálogo la marca inestable mientras está viendo algo. Hasta ahora eso se
+  /// notaba recién al pedir el capítulo siguiente, y salía como un error de red
+  /// cualquiera — el usuario reintentaba una y otra vez contra algo que ya no
+  /// estaba.
+  ///
+  /// Devuelve la clave del texto a mostrar, para que el reproductor y el lector
+  /// digan exactamente lo mismo.
+  static String? motivoNoDisponible(String package) {
+    if (!runtimes.containsKey(package)) {
+      return 'extension.gone-uninstalled';
+    }
+    if (!isEnabled(package)) return 'extension.gone-disabled';
+    if (isRemoteUnstableCached(package)) return 'extension.gone-unstable';
+    return null;
+  }
+
   static bool isRemoteUnstableCached(String package) =>
       _remoteUnstableCache?[package] == true;
 

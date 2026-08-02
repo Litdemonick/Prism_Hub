@@ -1,5 +1,6 @@
 // ignore_for_file: use_build_context_synchronously
 
+import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 
@@ -19,6 +20,7 @@ import 'package:prismhub/router/router.dart';
 import 'package:prismhub/data/services/database_service.dart';
 import 'package:prismhub/utils/error.dart';
 import 'package:prismhub/utils/extension.dart';
+import 'package:prismhub/utils/portadas_perdidas.dart';
 import 'package:prismhub/data/services/extension_service.dart';
 import 'package:prismhub/utils/external_player.dart';
 import 'package:prismhub/utils/i18n.dart';
@@ -305,6 +307,13 @@ class DetailPageController extends GetxController {
     try {
       detail = await runtime.value!.detail(url);
       _putSessionCache(cacheKey, detail!);
+      // La portada que acaba de cargar se aprovecha para la tarjeta del inicio
+      // y del historial, si les faltaba. Ver PortadasPerdidas.desdeLaFicha.
+      unawaited(PortadasPerdidas.desdeLaFicha(
+        package: package,
+        url: url,
+        cover: detail!.cover,
+      ));
       await DatabaseService.putPrismHubDetail(
         package,
         url,
@@ -351,6 +360,14 @@ class DetailPageController extends GetxController {
       final fresh = await runtime.value!.detail(url);
       _putSessionCache(cacheKey, fresh);
       detail = fresh;
+      // También acá: es el camino por el que se entra cuando la ficha ya
+      // estaba en caché, que es justamente el caso de un título que se abrió
+      // antes y quedó sin portada en la tarjeta.
+      unawaited(PortadasPerdidas.desdeLaFicha(
+        package: package,
+        url: url,
+        cover: fresh.cover,
+      ));
       await DatabaseService.putPrismHubDetail(
         package,
         url,

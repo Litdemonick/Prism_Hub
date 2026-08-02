@@ -47,6 +47,14 @@ class ChromecastCliente {
   /// Último estado informado por el aparato.
   final estado = _EstadoCast();
 
+  /// Lo ultimo que el aparato dijo que salio mal, si dijo algo.
+  ///
+  /// El receptor de Google avisa por que no pudo reproducir —formato que no
+  /// entiende, direccion que no pudo bajar—, pero eso se estaba tirando a la
+  /// basura: en la pantalla quedaba el titulo y la barra cargando sobre negro,
+  /// y de este lado no habia forma de saber cual de las dos cosas era.
+  String? ultimoFallo;
+
   final _alCambiar = StreamController<_EstadoCast>.broadcast();
 
   /// Avisa cada vez que llega un estado nuevo del aparato.
@@ -313,11 +321,26 @@ class ChromecastCliente {
     }
 
     if (espacio == _nsMedios) {
+      // Mensajes de fallo que llegan sueltos, fuera del estado.
+      final tipo = json['type']?.toString();
+      if (tipo == 'LOAD_FAILED' ||
+          tipo == 'LOAD_CANCELLED' ||
+          tipo == 'INVALID_REQUEST') {
+        ultimoFallo = '$tipo${json['reason'] != null ? ' ${json['reason']}' : ''}';
+        logger.warning('El Chromecast rechazo la orden: $ultimoFallo');
+      }
       final lista = json['status'];
       if (lista is! List || lista.isEmpty) return;
       final m = lista.first;
       if (m is! Map) return;
       if (m['mediaSessionId'] is int) _sesionMedios = m['mediaSessionId'] as int;
+      // "IDLE" con motivo ERROR: el aparato acepto el video y despues no pudo
+      // con el. Es el caso de pantalla negra con la barra cargando.
+      final motivo = m['idleReason']?.toString();
+      if (motivo != null && motivo != 'FINISHED' && motivo != 'CANCELLED') {
+        ultimoFallo = motivo;
+        logger.warning('El Chromecast no pudo reproducir: $motivo');
+      }
       final p = m['playerState']?.toString();
       if (p != null) {
         estado.reproduciendo = p == 'PLAYING';

@@ -22,6 +22,17 @@ AppSupportURL={#MyAppURL}
 AppUpdatesURL={#MyAppURL}
 DefaultDirName={autopf}\{#MyAppName}
 DisableProgramGroupPage=yes
+; En una ACTUALIZACION no se pregunta por la carpeta.
+;
+; "auto" salta esa pagina cuando el instalador encuentra una instalacion previa
+; —la reconoce por AppId— y usa la carpeta que ya tenia. Sin esto la mostraba
+; siempre, y como la carpeta obviamente existe, salia encima un "La carpeta ya
+; existe, ¿instalar ahi de todas formas?": dos preguntas seguidas que suenan a
+; problema cuando lo unico que se esta haciendo es actualizar.
+;
+; En una instalacion NUEVA se sigue mostrando, que ahi si hace falta poder
+; elegir donde va.
+DisableDirPage=auto
 ; Uncomment the following line to run in non administrative install mode (install for current user only.)
 ;PrivilegesRequired=lowest
 OutputBaseFilename=PrismHub-setup-{#MyAppVersion}

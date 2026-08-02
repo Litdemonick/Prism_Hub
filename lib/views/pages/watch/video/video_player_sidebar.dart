@@ -11,7 +11,6 @@ import 'package:prismhub/views/widgets/platform_widget.dart';
 import 'package:prismhub/views/widgets/watch/playlist.dart';
 import 'package:prismhub/views/widgets/home/home_theme.dart';
 import 'package:prismhub/views/widgets/watch/tutorial_reproductor.dart';
-import 'package:prismhub/views/widgets/messenger.dart';
 
 enum SidebarTab {
   episodes,
@@ -679,31 +678,46 @@ class _SideBarSettingsState extends State<_SideBarSettings> {
           // mostrando la imagen doble. Se veía como que la app no obedecía.
           final casteando = _c.dlnaDevice.value != null;
           final esVr = _c.esVideoVr.value;
-          return SwitchListTile(
-            contentPadding: EdgeInsets.zero,
-            value: esVr ? _c.vrUnaPantalla.value : _c.llenarPantalla.value,
-            onChanged: casteando
-                ? null
-                : (v) {
-                    if (esVr) {
-                      _c.alternarVrUnaPantalla();
-                    } else {
-                      _c.llenarPantalla.value = v;
-                    }
-                  },
-            title: Text(
-              esVr
-                  ? 'video.sidebar.vr-single'.i18n
-                  : 'video.sidebar.fill'.i18n,
-            ),
-            subtitle: Text(
-              casteando
-                  ? 'video.sidebar.not-while-casting'.i18n
-                  : esVr
-                      ? 'video.sidebar.vr-single-hint'.i18n
+          // Los dos, no uno u otro.
+          //
+          // Antes el de VR REEMPLAZABA al de llenar pantalla, asi que acertar
+          // o no con la deteccion decidia cual de los dos tenia el usuario. Y
+          // ahora la deteccion mira tambien el nombre del video para no
+          // perderse los VR de 2:1 y 1:1, con lo que puede dar de mas: si eso
+          // pasara, escondiendo el de llenar pantalla se estaria sacando algo
+          // que si funciona. Mostrando los dos, equivocarse no le cuesta nada
+          // al usuario.
+          return Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              if (esVr)
+                SwitchListTile(
+                  contentPadding: EdgeInsets.zero,
+                  value: _c.vrUnaPantalla.value,
+                  onChanged:
+                      casteando ? null : (_) => _c.alternarVrUnaPantalla(),
+                  title: Text('video.sidebar.vr-single'.i18n),
+                  subtitle: Text(
+                    casteando
+                        ? 'video.sidebar.not-while-casting'.i18n
+                        : 'video.sidebar.vr-single-hint'.i18n,
+                    style: const TextStyle(fontSize: 12),
+                  ),
+                ),
+              SwitchListTile(
+                contentPadding: EdgeInsets.zero,
+                value: _c.llenarPantalla.value,
+                onChanged:
+                    casteando ? null : (v) => _c.llenarPantalla.value = v,
+                title: Text('video.sidebar.fill'.i18n),
+                subtitle: Text(
+                  casteando
+                      ? 'video.sidebar.not-while-casting'.i18n
                       : 'video.sidebar.fill-hint'.i18n,
-              style: const TextStyle(fontSize: 12),
-            ),
+                  style: const TextStyle(fontSize: 12),
+                ),
+              ),
+            ],
           );
         }),
         ListTile(

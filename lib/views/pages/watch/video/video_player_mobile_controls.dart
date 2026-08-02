@@ -15,7 +15,7 @@ import 'package:prismhub/views/pages/watch/video/video_player_cast.dart';
 import 'package:prismhub/views/pages/watch/video/video_player_sidebar.dart';
 import 'package:prismhub/views/widgets/cache_network_image.dart';
 import 'package:prismhub/views/widgets/home/home_theme.dart';
-import 'package:prismhub/views/widgets/progress.dart';
+import 'package:prismhub/views/widgets/watch/aviso_extension_caida.dart';
 import 'package:volume_controller/volume_controller.dart';
 
 class VideoPlayerMobileControls extends StatefulWidget {
@@ -146,6 +146,20 @@ class _VideoPlayerMobileControlsState extends State<VideoPlayerMobileControls> {
     _updateTimer();
     VolumeController().showSystemUI = false;
     _currentVolume = await VolumeController().getVolume();
+    // Se sigue el volumen real del telefono mientras el reproductor este
+    // abierto.
+    //
+    // Antes se leia una sola vez aca y nunca mas: si el usuario tocaba los
+    // botones fisicos, el numero que mostraba el gesto quedaba viejo y decia
+    // un volumen que no era el que sonaba.
+    VolumeController().listener((volumen) {
+      if (!mounted) return;
+      if (_currentVolume == volumen) return;
+      _currentVolume = volumen;
+      // Solo se repinta si el cartel esta a la vista; si no, alcanza con
+      // guardarlo para cuando se muestre.
+      if (_isAdjusting) setState(() {});
+    });
   }
 
   @override
@@ -190,6 +204,9 @@ class _VideoPlayerMobileControlsState extends State<VideoPlayerMobileControls> {
     _avisoTimer?.cancel();
     _saltoTimer?.cancel();
     _timer?.cancel();
+    // Sin esto queda escuchando el volumen del sistema despues de cerrar el
+    // reproductor, sobre un State que ya no existe.
+    VolumeController().removeListener();
     super.dispose();
   }
 
@@ -452,7 +469,11 @@ class _VideoPlayerMobileControlsState extends State<VideoPlayerMobileControls> {
                               Text(
                                 _boost > 100
                                     ? '+${(_boost - 100).toStringAsFixed(0)}%'
-                                    : (_currentVolume * 100).toStringAsFixed(0),
+                                    // Con % y redondeado al entero: "47" solo
+                                    // no se lee como un volumen, y sin
+                                    // redondear el numero temblaba en cada
+                                    // pixel de arrastre.
+                                    : '${(_currentVolume * 100).round()}%',
                               ),
                             ],
                           ),
@@ -593,6 +614,21 @@ class _VideoPlayerMobileControlsState extends State<VideoPlayerMobileControls> {
                     if (ancho <= 0) return;
                     _c.moverVr(-details.delta.dx / ancho);
                   },
+                  // El numero sale APENAS se apoya el dedo, con el volumen que
+                  // hay en ese momento.
+                  //
+                  // Antes se prendia en el primer onVerticalDragUpdate, y ese
+                  // no llega hasta que el dedo recorrio el umbral de arrastre
+                  // de Flutter (~18 px): para cuando aparecia el cartel el
+                  // volumen YA se habia movido, asi que nunca se llegaba a ver
+                  // de cuanto se partia ni se entendia cuanto estaba subiendo.
+                  onVerticalDragStart: (details) {
+                    if (_activePointers > 1) return;
+                    // Transmitiendo manda el aviso del aparato, que es otro.
+                    if (_c.dlnaDevice.value != null) return;
+                    _isAdjusting = true;
+                    setState(() {});
+                  },
                   onVerticalDragUpdate: (details) {
                     if (_activePointers > 1) return;
                     final add = details.delta.dy / 500;
@@ -725,6 +761,19 @@ class _VideoPlayerMobileControlsState extends State<VideoPlayerMobileControls> {
                           ),
                         ],
                       ),
+                    );
+                  }
+                  // La extensión se cayó: no hay nada que reintentar.
+                  //
+                  // Va ANTES del aviso de servidor y del de carga, porque manda
+                  // sobre los dos: el de servidor diría "probá otro", y los
+                  // otros salen de la misma extensión que ya no está. Lo único
+                  // útil acá es salir.
+                  final caida = _c.extensionCaida.value;
+                  if (caida != null) {
+                    return AvisoExtensionCaida(
+                      motivo: caida.i18n,
+                      onSalir: () => unawaited(_c.closeRoute(context)),
                     );
                   }
                   if (!_c.isGettingWatchData.value) {
@@ -1364,8 +1413,19 @@ class _Header extends StatelessWidget {
           const SizedBox(width: 4),
           Expanded(
             child: Obx(() {
-              final data = controller.playList[controller.index.value];
-              final episode = data.name;
+              // Sin comprobar el índice, esto reventaba con un
+              // "RangeError (length): Valid value range is empty: 0" ENCIMA del
+              // vídeo, tapando el aviso de qué había pasado de verdad.
+              //
+              // Pasa cuando la ficha no tiene episodios: una entrada del
+              // historial cuya página ya no existe abre el reproductor con la
+              // lista vacía. El error real —"no se pudo cargar el episodio"— ya
+              // se muestra abajo; este solo lo tapaba y encima parecía un fallo
+              // del reproductor.
+              final lista = controller.playList;
+              final i = controller.index.value;
+              final episode =
+                  (i >= 0 && i < lista.length) ? lista[i].name : '';
               return Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [

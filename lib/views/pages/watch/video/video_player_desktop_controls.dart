@@ -15,6 +15,7 @@ import 'package:prismhub/utils/i18n.dart';
 import 'package:prismhub/utils/prismhub_storage.dart';
 import 'package:prismhub/views/widgets/cache_network_image.dart';
 import 'package:prismhub/views/widgets/home/home_theme.dart';
+import 'package:prismhub/views/widgets/watch/aviso_extension_caida.dart';
 import 'package:prismhub/views/widgets/window_caption_buttons.dart';
 import 'package:prismhub/views/widgets/watch/playlist.dart';
 import 'package:window_manager/window_manager.dart';
@@ -268,6 +269,60 @@ class _VideoPlayerDesktopControlsState
                                 const SizedBox(width: 8),
                                 Text(
                                   '${(salto ?? 0).abs()} s',
+                                  style: const TextStyle(
+                                    color: material.Colors.white,
+                                    fontWeight: FontWeight.w700,
+                                    fontSize: 15,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                        ),
+                      ),
+                    );
+                  }),
+                ),
+              ),
+              // En cuánto quedó el volumen. Mismo cartel que el del salto, un
+              // poco más abajo para que los dos puedan convivir sin taparse.
+              //
+              // Antes en PC no había ninguna señal: se tocaban las flechas o se
+              // movía el deslizador y el sonido cambiaba sin que nada dijera en
+              // cuánto quedó. Transmitiendo no sale: ahí el volumen que importa
+              // es el del televisor, y ese se avisa dentro del panel de casteo.
+              Positioned.fill(
+                child: IgnorePointer(
+                  child: Obx(() {
+                    final volumen = _c.avisoVolumen.value;
+                    return AnimatedScale(
+                      duration: const Duration(milliseconds: 120),
+                      curve: Curves.easeOutBack,
+                      scale: volumen == null ? 0.85 : 1,
+                      child: AnimatedOpacity(
+                        duration: const Duration(milliseconds: 90),
+                        opacity: volumen == null ? 0 : 1,
+                        child: Align(
+                          alignment: const Alignment(0, -0.32),
+                          child: Container(
+                            padding: const EdgeInsets.symmetric(
+                                horizontal: 18, vertical: 10),
+                            decoration: BoxDecoration(
+                              color: const Color(0xB3000000),
+                              borderRadius: BorderRadius.circular(999),
+                              border: Border.all(color: HomeTheme.accentPink),
+                            ),
+                            child: Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                const material.Icon(
+                                  material.Icons.volume_up,
+                                  color: HomeTheme.accentPink,
+                                  size: 20,
+                                ),
+                                const SizedBox(width: 8),
+                                Text(
+                                  volumen ?? '',
                                   style: const TextStyle(
                                     color: material.Colors.white,
                                     fontWeight: FontWeight.w700,
@@ -592,12 +647,23 @@ class _VideoPlayerDesktopControlsState
                             // más disparaba un rebuild — se sentía "atrasado"
                             // al cambiar de capítulo. Envuelto en Obx, sigue
                             // a index.value al toque.
-                            Obx(() => _Header(
-                                  title: _c.title,
-                                  episode: _c.playList[_c.index.value].name,
-                                  onClose: () =>
-                                      unawaited(_c.closeRoute(context)),
-                                )),
+                            // Con el indice comprobado: una ficha sin episodios
+                            // —una entrada del historial cuya pagina ya no
+                            // existe— abre el reproductor con la lista vacia, y
+                            // sin esto reventaba con un RangeError encima del
+                            // video, tapando el aviso de que habia pasado.
+                            Obx(() {
+                              final lista = _c.playList;
+                              final i = _c.index.value;
+                              return _Header(
+                                title: _c.title,
+                                episode: (i >= 0 && i < lista.length)
+                                    ? lista[i].name
+                                    : '',
+                                onClose: () =>
+                                    unawaited(_c.closeRoute(context)),
+                              );
+                            }),
                             // selector de servidores — pestañas arriba, no un
                             // botón escondido abajo (a pedido del usuario, y
                             // para que se vea de una cuál es el
@@ -623,6 +689,17 @@ class _VideoPlayerDesktopControlsState
                             !_c.hasRenderedFrame.value;
                         final content = Center(
                           child: Obx(() {
+                            // La extensión se cayó: manda sobre todo lo demás.
+                            // El aviso de servidor diría "probá otro", y los
+                            // otros salen de la misma extensión que ya no está.
+                            final caida = _c.extensionCaida.value;
+                            if (caida != null) {
+                              return AvisoExtensionCaida(
+                                motivo: caida.i18n,
+                                onSalir: () =>
+                                    unawaited(_c.closeRoute(context)),
+                              );
+                            }
                             final msg = _c.serverFailedMessage.value;
                             return AnimatedSwitcher(
                               duration: const Duration(milliseconds: 250),
@@ -1845,6 +1922,24 @@ class _AyudaTeclasCast extends StatelessWidget {
                 _pista('→', adelanteFino, _cerca(aguja, 3, 5)),
                 const SizedBox(width: 10),
                 _pista('I', adelanteLargo, _cerca(aguja, 4, 5)),
+              ],
+            ),
+            // El volumen del televisor, en su propia fila.
+            //
+            // Estas dos teclas tambien le hablan al aparato y no estaban dichas
+            // en ningun lado: se probaba a ver que pasaba. Van aparte y no
+            // metidas en la fila de arriba porque son otra cosa —esas mueven el
+            // video, estas el sonido— y porque siete pistas en una sola linea
+            // dejaban de leerse.
+            const SizedBox(height: 12),
+            Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                _pista('↑', 'video.cast-hint-volume-up'.i18n,
+                    _cerca(aguja, 0, 5)),
+                const SizedBox(width: 10),
+                _pista('↓', 'video.cast-hint-volume-down'.i18n,
+                    _cerca(aguja, 2, 5)),
               ],
             ),
             const SizedBox(height: 10),

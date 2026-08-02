@@ -124,6 +124,20 @@ class _ExtensionPageState extends State<ExtensionPage> {
     if (c.needRefresh) {
       c.onRefresh();
     }
+    // Si alguien mandó a buscar una extensión concreta, se abre ya filtrada.
+    //
+    // Pasa cuando desde otra pantalla se avisa que falta activarla: llevar acá
+    // y soltar al usuario en una lista de decenas para que la encuentre a mano
+    // es dejarle el trabajo a medias. Se consume una sola vez, así que entrar
+    // por cuenta propia después no viene con un filtro que nadie pidió.
+    final pedido = ExtensionUtils.tomarFiltroPendiente();
+    if (pedido != null && pedido.isNotEmpty) {
+      _search = pedido;
+      // Y el campo de búsqueda del teléfono, que tiene su propio controlador:
+      // sin esto la lista salía filtrada pero el buscador vacío, y no se
+      // entendía por qué faltaban las demás ni cómo volver a verlas.
+      _androidSearchController.text = pedido;
+    }
     super.initState();
   }
 

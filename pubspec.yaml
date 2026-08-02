@@ -1,4 +1,4 @@
-﻿name: prismhub
+name: prismhub
 description: PrismHub - Anime, manga and novels streaming application
 publish_to: "none"
 # El numero despues del "+" es el build, y de el sale el versionCode de Android
@@ -7,7 +7,7 @@ publish_to: "none"
 # tiene que subir en cada release o el instalador puede rechazar el APK.
 # Hasta la 1.0.10 quedo clavado en +1, asi que las tres primeras versiones
 # salieron con el mismo versionCode.
-version: 1.0.19+10
+version: 1.0.20+11
 
 environment:
   sdk: ">=3.0.3 <4.0.0"
@@ -70,6 +70,20 @@ dependencies:
   device_info_plus: ^9.0.3
   android_intent_plus: ^4.0.2
   crypto: ^3.0.3
+  pointycastle: ^3.7.3
+  # No se usa directamente: entra por audio_service -> flutter_cache_manager.
+  #
+  # Se fija por DEBAJO de la 2.4.0 a proposito. De ahi en adelante el paquete
+  # se partio y el codigo de Android quedo en sqflite_android, que usa
+  # constantes de Android 16 (VERSION_CODES.BAKLAVA) y metodos de Java 19
+  # (Locale.of, Thread.threadId). Con eso el APK no compila:
+  #
+  #   error: cannot find symbol  Build.VERSION_CODES.BAKLAVA
+  #   error: cannot find symbol  Locale.of(String,String,String)
+  #
+  # flutter_cache_manager pide ^2.3.3+1, asi que esta version le sirve igual.
+  # Se puede soltar cuando el proyecto suba el Java de los modulos de plugin.
+  sqflite: ">=2.3.3+1 <2.4.0"
   extended_image: ^8.2.0
   flutter_hls_parser: ^2.0.1
   image_gallery_saver_plus: ^5.0.0
@@ -91,6 +105,7 @@ dependencies:
   # dev_dependency (la usaba flutter_launcher_icons en tiempo de build), pero
   # el código de la app en sí también la necesita en runtime.
   image: ^4.8.0
+  audio_service: ^0.18.19
 
 dev_dependencies:
   flutter_test:

@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 
+import 'package:prismhub/utils/cast_hls_ts.dart';
 import 'package:prismhub/utils/log.dart';
 import 'package:prismhub/utils/prismhub_storage.dart';
 import 'package:shelf/shelf.dart';
@@ -35,6 +36,8 @@ class CastRelayServer {
   /// **200** — con Referer o sin él, da igual. El puente de red de la app ya
   /// rellena uno cuando la extensión no lo trae (ver getUASetting), así que el
   /// relay sin esto pedía de una forma que la app nunca usa.
+  static String get uaPorDefecto => _uaPorDefecto;
+
   static String get _uaPorDefecto {
     try {
       final delAjuste = PrismHubStorage.getUASetting();
@@ -52,6 +55,7 @@ class CastRelayServer {
   static Future<String> registerAndGetUrl({
     required String targetUrl,
     Map<String, String>? headers,
+    PlanTs? planTs,
   }) async {
     await _ensureRunning();
     // El token lleva adelante un identificador de sesion para poder soltar de
@@ -59,7 +63,8 @@ class CastRelayServer {
     // unregister). Sin eso, cada episodio casteado dejaba cientos de entradas.
     final sesion = '${DateTime.now().microsecondsSinceEpoch}';
     final token = '$sesion-0';
-    _targets[token] = _RelayTarget(targetUrl, headers ?? const {}, sesion);
+    _targets[token] =
+        _RelayTarget(targetUrl, headers ?? const {}, sesion, planTs: planTs);
     final ip = await _localLanAddress();
     if (ip == null) {
       // Sin una IP de red real no hay relay posible: lo unico que se le podria
@@ -121,7 +126,61 @@ class CastRelayServer {
   /// sin esto se perdía. Se guarda para poder mostrarlo en el aviso de error.
   static String? ultimoError;
 
+  /// Sesiones para las que el aparato YA pidio algo, y desde que direccion.
+  ///
+  /// Distingue los dos motivos por los que un televisor puede quedarse en negro,
+  /// que desde afuera se ven identicos:
+  ///
+  ///  - Nunca pidio nada: no llega hasta aca. Es red — otra subred, o un
+  ///    cortafuegos tapando el puerto.
+  ///  - Pidio y bajo datos: llega perfecto y el problema es que no puede con el
+  ///    formato.
+  ///
+  /// Sin esto no habia forma de saber cual de las dos era, y se terminaba
+  /// probando a ciegas.
+  static final Map<String, String> pedidosPorSesion = {};
+
+  /// Si el aparato pidio algo para esta transmision.
+  static bool huboPedido(String? relayUrl) {
+    final sesion = _sesionDe(relayUrl);
+    return sesion != null && pedidosPorSesion.containsKey(sesion);
+  }
+
+  /// Desde que direccion pidio, para poder decirlo en el aviso.
+  static String? quienPidio(String? relayUrl) {
+    final sesion = _sesionDe(relayUrl);
+    return sesion == null ? null : pedidosPorSesion[sesion];
+  }
+
+  static String? _sesionDe(String? relayUrl) {
+    if (relayUrl == null) return null;
+    final uri = Uri.tryParse(relayUrl);
+    if (uri == null || uri.pathSegments.length < 2) return null;
+    return _targets[uri.pathSegments[1]]?.sesion;
+  }
+
+  /// Cabeceras de permiso para que un receptor web pueda bajar el video.
+  ///
+  /// El receptor del Chromecast es una APLICACION WEB: para HLS baja cada
+  /// pedacito con una peticion de navegador, y sin este permiso el propio
+  /// navegador la bloquea antes de salir. El resultado era que el aparato
+  /// aceptaba el video, mostraba el titulo, y no dibujaba nunca nada.
+  ///
+  /// No molesta a nadie mas: un televisor DLNA baja el video con su propio
+  /// cliente HTTP y estas cabeceras las ignora.
+  static const _permisos = {
+    'Access-Control-Allow-Origin': '*',
+    'Access-Control-Allow-Methods': 'GET, HEAD, OPTIONS',
+    'Access-Control-Allow-Headers': '*',
+    'Access-Control-Expose-Headers': 'Content-Length, Content-Range',
+  };
+
   static Future<Response> _handleRequest(Request request) async {
+    // El navegador PREGUNTA antes de bajar nada de otro origen. Si esa
+    // pregunta no se contesta, no llega a pedir el video.
+    if (request.method.toUpperCase() == 'OPTIONS') {
+      return Response.ok(null, headers: _permisos);
+    }
     final segments = request.url.pathSegments;
     if (segments.length < 2 || segments[0] != 'relay') {
       return Response.notFound('not found');
@@ -129,11 +188,40 @@ class CastRelayServer {
     final target = _targets[segments[1]];
     if (target == null) return Response.notFound('unknown relay token');
 
+    // Se anota que el aparato llego hasta aca. Solo la primera vez de cada
+    // transmision: despues son cientos de pedidos por episodio.
+    if (!pedidosPorSesion.containsKey(target.sesion)) {
+      final quien = (request.context['shelf.io.connection_info']
+                  as HttpConnectionInfo?)
+              ?.remoteAddress
+              .address ??
+          'desconocido';
+      pedidosPorSesion[target.sesion] = quien;
+      logger.info('El aparato pidio el video desde $quien');
+    }
+
     // El receptor pregunta primero con HEAD (el "Stat" de Kodi) para saber
     // tamaño y tipo antes de bajar nada. Antes se le contestaba SIEMPRE con un
     // GET: se abría la descarga entera del vídeo solo para tirarla, y la
     // respuesta no traía lo que había preguntado.
     final esHead = request.method.toUpperCase() == 'HEAD';
+
+    // Televisor que no entiende HLS: se le manda el vídeo ya pegado en un
+    // MPEG-TS continuo en vez de la lista. Ver cast_hls_ts.dart.
+    final plan = target.planTs;
+    if (plan != null) {
+      final cabeceras = {
+        'Content-Type': 'video/mpeg',
+        // De largo desconocido a propósito: se va armando sobre la marcha. Por
+        // eso tampoco se puede adelantar, y se avisa antes de empezar.
+        'Accept-Ranges': 'none',
+        'Cache-Control': 'no-cache',
+        ..._permisos,
+      };
+      if (esHead) return Response.ok(null, headers: cabeceras);
+      return Response.ok(CastHlsATs.servir(plan), headers: cabeceras);
+    }
+
     final client = _cliente;
     try {
       final uri = Uri.parse(target.url);
@@ -187,6 +275,7 @@ class CastRelayServer {
             // La lista cambió de tamaño, así que el largo de la fuente ya no
             // vale y el content-encoding tampoco (acá va en texto plano).
             'Cache-Control': 'no-cache',
+            ..._permisos,
           },
         );
       }
@@ -203,6 +292,8 @@ class CastRelayServer {
         if (lower == 'transfer-encoding') return;
         resHeaders[name] = values.join(', ');
       });
+
+      resHeaders.addAll(_permisos);
 
       if (esHead) {
         return Response(upstreamRes.statusCode, headers: resHeaders);
@@ -426,6 +517,7 @@ class CastRelayServer {
     }
     _targets.removeWhere((_, t) => t.sesion == sesion);
     _tokensPorUrl.removeWhere((clave, _) => clave.startsWith('$sesion|'));
+    pedidosPorSesion.remove(sesion);
     _cerrarSiSobra();
   }
 
@@ -470,9 +562,14 @@ class CastRelayServer {
 }
 
 class _RelayTarget {
-  _RelayTarget(this.url, this.headers, this.sesion);
+  _RelayTarget(this.url, this.headers, this.sesion, {this.planTs});
   final String url;
   final Map<String, String> headers;
+
+  /// Cuando viene, a este token no se le sirve la lista HLS sino los pedacitos
+  /// pegados en un MPEG-TS continuo, que es lo único que entiende un televisor
+  /// viejo. Ver cast_hls_ts.dart.
+  final PlanTs? planTs;
 
   /// Agrupa el maestro con los segmentos que salieron de su lista, para poder
   /// soltarlos todos juntos al desconectar (ver unregister).

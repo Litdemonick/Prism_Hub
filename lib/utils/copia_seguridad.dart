@@ -1,0 +1,895 @@
+import 'dart:convert';
+
+import 'package:flutter/foundation.dart' show visibleForTesting;
+import 'package:prismhub/data/services/database_service.dart';
+import 'package:prismhub/utils/copia_cifrado.dart';
+import 'package:prismhub/models/index.dart';
+import 'package:prismhub/utils/extension.dart';
+import 'package:prismhub/utils/log.dart';
+
+/// Guardar y recuperar lo que el usuario construyó: su historial y su lista.
+///
+/// Todo eso vive en la base de datos del teléfono o de la PC, y hasta ahora no
+/// había forma de sacarlo de ahí: cambiar de equipo, reinstalar o formatear
+/// significaba empezar de cero. Esto lo deja en **un archivo de texto** que se
+/// puede guardar donde sea y volver a meter después.
+///
+/// Es texto plano a propósito y no una copia de la base: así el archivo sirve
+/// igual entre Windows, Linux y Android, que guardan la base de formas
+/// distintas, y sigue sirviendo aunque la base cambie de forma más adelante.
+class CopiaSeguridad {
+  /// Versión del formato del archivo.
+  ///
+  /// Sube solo si un archivo nuevo deja de poder leerse con la app vieja. Se
+  /// comprueba al importar para poder decir "este archivo es de una versión más
+  /// nueva" en vez de leerlo a medias y dejar los datos a mitad de camino.
+  static const formato = 1;
+
+  /// Arma el archivo con todo lo que hay guardado.
+  ///
+  /// Van los dos lados juntos —el normal y el +18—, que es lo que hace que al
+  /// recuperar quede todo como estaba. Cada registro lleva su marca de si es
+  /// +18, así que al volver cada cosa cae donde iba.
+  /// Qué hay guardado en ESTE equipo, contado por extensión.
+  ///
+  /// Es el espejo de [abrir] pero mirando la base propia: sirve para que el
+  /// usuario elija qué quiere guardar en la copia, con la misma pantalla que ya
+  /// usa para elegir qué recuperar. Exportar todo siempre estaba bien para la
+  /// copia de respaldo, pero no para pasarle a alguien solo una parte.
+  static Future<CopiaAbierta> resumenLocal() async {
+    final historial = await DatabaseService.getHistorysByType();
+    final favoritos = await DatabaseService.getFavoritesByType();
+    final porPaquete = <String, ({int historial, int favoritos, int nsfw})>{};
+
+    for (final h in historial) {
+      final ya = porPaquete[h.package] ?? (historial: 0, favoritos: 0, nsfw: 0);
+      porPaquete[h.package] = (
+        historial: ya.historial + 1,
+        favoritos: ya.favoritos,
+        nsfw: ya.nsfw + (h.isNsfw ? 1 : 0),
+      );
+    }
+    for (final f in favoritos) {
+      final ya = porPaquete[f.package] ?? (historial: 0, favoritos: 0, nsfw: 0);
+      porPaquete[f.package] = (
+        historial: ya.historial,
+        favoritos: ya.favoritos + 1,
+        nsfw: ya.nsfw + (f.isNsfw ? 1 : 0),
+      );
+    }
+
+    return CopiaAbierta(
+      // No sale de ningún archivo: es lo que hay acá y ahora.
+      deQuien: const SobreDeCopia(
+          nombre: '', numero: 0, fecha: null, conClave: false),
+      contenido: const {},
+      porPaquete: porPaquete,
+    );
+  }
+
+  static Future<String> exportar(
+    String clave, {
+    required String nombre,
+    required int numero,
+
+    /// Solo estas extensiones. Null = todo lo que haya.
+    Set<String>? paquetes,
+  }) async {
+    if (clave.length < CopiaCifrado.largoMinimo) {
+      throw CopiaInvalida(
+        'La clave tiene que tener al menos '
+        '${CopiaCifrado.largoMinimo} caracteres.',
+      );
+    }
+    final todoHistorial = await DatabaseService.getHistorysByType();
+    final todoFavoritos = await DatabaseService.getFavoritesByType();
+    // Solo lo que el usuario eligió guardar.
+    final historial = paquetes == null
+        ? todoHistorial
+        : todoHistorial.where((h) => paquetes.contains(h.package)).toList();
+    final favoritos = paquetes == null
+        ? todoFavoritos
+        : todoFavoritos.where((f) => paquetes.contains(f.package)).toList();
+
+    final dentro = jsonEncode({
+      // Para poder avisar cuáles faltan al importar en otro equipo: sin la
+      // extensión instalada, su historial se ve pero no se puede abrir.
+      'extensiones': ExtensionUtils.runtimes.keys.toList()..sort(),
+      'historial': historial.map(_historialAMapa).toList(),
+      'favoritos': favoritos.map(_favoritoAMapa).toList(),
+    });
+    // En otro hilo: si no, la ventana se congela mientras cifra y parece que el
+    // botón no hizo nada. Ver cerrarEnOtroHilo.
+    final cerrado =
+        await cerrarEnOtroHilo((texto: dentro, clave: clave));
+
+    // Lo de afuera va en claro a propósito: es lo que permite decir "esto no es
+    // una copia de PrismHub" o "es de una versión más nueva" ANTES de pedir la
+    // clave, en vez de hacer escribirla para después fallar por otra cosa. Nada
+    // de esto dice qué vio el usuario.
+    return const JsonEncoder.withIndent('  ').convert({
+      'formato': formato,
+      'app': 'PrismHub',
+      'fecha': DateTime.now().toIso8601String(),
+      // Con qué equipo se hizo y cuál copia es. Van en claro porque son
+      // justamente lo que hay que poder leer ANTES de pedir la clave: sirven
+      // para reconocer el archivo entre varios guardados en la misma carpeta.
+      // No dicen nada de lo que el usuario vio.
+      'nombre': limpiarNombre(nombre),
+      'numero': numero,
+      'cifrado': true,
+      'sal': cerrado['sal'],
+      'nonce': cerrado['nonce'],
+      'datos': cerrado['datos'],
+    });
+  }
+
+  /// Lee lo de afuera del archivo, sin la clave.
+  ///
+  /// Sirve para mostrar de qué copia se trata antes de pedir nada: de qué
+  /// equipo salió, cuál número es y de cuándo. Y para poder rechazar un archivo
+  /// que no sirve sin hacer escribir una clave para nada.
+  static SobreDeCopia leerSobre(String contenido) {
+    final Map<String, dynamic> sobre;
+    try {
+      final leido = jsonDecode(contenido);
+      if (leido is! Map<String, dynamic>) {
+        throw const FormatException('el archivo no tiene la forma esperada');
+      }
+      sobre = leido;
+    } on FormatException catch (e) {
+      throw CopiaInvalida('No se pudo leer el archivo: ${e.message}');
+    }
+    if (sobre['app'] != 'PrismHub') {
+      throw const CopiaInvalida('Este archivo no es una copia de PrismHub.');
+    }
+    final version = sobre['formato'];
+    if (version is! int) {
+      throw const CopiaInvalida('El archivo no dice de qué versión es.');
+    }
+    if (version > formato) {
+      throw const CopiaInvalida(
+        'Este archivo lo hizo una versión más nueva de PrismHub. '
+        'Actualizá la app para poder importarlo.',
+      );
+    }
+    return SobreDeCopia(
+      // Saneado también al LEER, no solo al escribir: el archivo puede haberlo
+      // tocado cualquiera, y este texto se muestra en pantalla.
+      nombre: limpiarNombre('${sobre['nombre'] ?? ''}'),
+      numero: sobre['numero'] is int ? sobre['numero'] as int : 0,
+      fecha: _fecha(sobre['fecha']),
+      conClave: sobre['cifrado'] == true,
+    );
+  }
+
+  /// Deja un nombre de copia en algo que se pueda mostrar y guardar.
+  ///
+  /// Lo escribe el usuario y después viaja dentro de un archivo que puede ir y
+  /// venir entre equipos, así que al volver **no es texto de confianza**. Se
+  /// quita todo lo que no sea texto visible y se le pone un techo.
+  ///
+  /// No hay riesgo de inyección de SQL —la base es Isar, que no arma consultas
+  /// con texto— pero sí de cosas más tontas y más reales: caracteres de control
+  /// que rompen el dibujo de la pantalla, saltos de línea que descuadran un
+  /// diálogo, marcas de derecha-a-izquierda que dan vuelta lo que se lee, y un
+  /// nombre de mil caracteres que se come la ventana.
+  static String limpiarNombre(String crudo) {
+    // Se filtra por CODIGO y no con una expresion regular a proposito: los
+    // rangos que hay que quitar son caracteres invisibles, y escribirlos
+    // dentro de un patron deja el propio archivo fuente con bytes de control
+    // incrustados que no se ven al editarlo.
+    final salida = StringBuffer();
+    var espacioPendiente = false;
+    for (final c in crudo.runes) {
+      // Control (incluye saltos de linea y tabulador) y el borrado.
+      final esControl = c < 0x20 || (c >= 0x7F && c <= 0x9F);
+      // Invisibles que dan vuelta o esconden lo que se lee.
+      final esInvisible = (c >= 0x200B && c <= 0x200F) ||
+          (c >= 0x202A && c <= 0x202E) ||
+          (c >= 0x2066 && c <= 0x2069) ||
+          c == 0xFEFF;
+      if (esInvisible) continue;
+      if (esControl || c == 0x20) {
+        espacioPendiente = salida.isNotEmpty;
+        continue;
+      }
+      if (espacioPendiente) {
+        salida.write(String.fromCharCode(0x20));
+        espacioPendiente = false;
+      }
+      salida.writeCharCode(c);
+    }
+    var s = salida.toString();
+    if (s.length > _largoDeNombre) {
+      s = '${s.substring(0, _largoDeNombre).trim()}…';
+    }
+    return s;
+  }
+
+  /// Techo del nombre. Entra en una línea en un teléfono en vertical.
+  static const _largoDeNombre = 40;
+
+  /// Abre la copia y cuenta qué trae, SIN escribir nada en la base.
+  ///
+  /// Es el paso que falta entre "elegí el archivo" y "metelo": deja mostrar de
+  /// qué extensión es cada cosa y cuánto trae cada una, para que el usuario
+  /// elija antes de que nada toque sus datos. Descifrar dos veces sería tirar
+  /// trabajo, así que lo abierto queda acá y de acá lo toma [importar].
+  static Future<CopiaAbierta> abrir(String contenido, String clave) async {
+    final quienEs = leerSobre(contenido);
+    final sobre = jsonDecode(contenido) as Map<String, dynamic>;
+
+    // SOLO copias cifradas. Ver el porqué en [importar].
+    if (sobre['cifrado'] != true) {
+      throw const CopiaInvalida(
+        'Este archivo no es una copia protegida de PrismHub. '
+        'Solo se pueden importar copias hechas desde la app.',
+      );
+    }
+    if (clave.isEmpty) {
+      throw const CopiaInvalida('Esta copia tiene clave. Escribila.');
+    }
+    // En otro hilo, igual que al cifrar: descifrar cuesta lo mismo, y con la
+    // ventana congelada no se puede ni mostrar que está trabajando.
+    final abierto = await abrirEnOtroHilo((
+      sal: '${sobre['sal']}',
+      nonce: '${sobre['nonce']}',
+      datos: '${sobre['datos']}',
+      clave: clave,
+    ));
+    if (abierto == null) {
+      throw const CopiaInvalida(
+        'La clave no es la de este archivo, o el archivo está dañado.',
+      );
+    }
+    final Object? dentro;
+    try {
+      dentro = jsonDecode(abierto);
+    } on FormatException {
+      throw const CopiaInvalida('La copia venía dañada por dentro.');
+    }
+    if (dentro is! Map<String, dynamic>) {
+      throw const CopiaInvalida('La copia venía dañada por dentro.');
+    }
+
+    // Cuánto trae cada extensión. Se cuenta leyendo el paquete de cada
+    // registro, sin construirlo entero: acá solo hace falta el número.
+    final porPaquete = <String, ({int historial, int favoritos, int nsfw})>{};
+    void sumar(Object? crudo, {required bool esHistorial}) {
+      if (crudo is! Map) return;
+      final p = crudo['package'];
+      if (p is! String || p.isEmpty) return;
+      final ya = porPaquete[p] ?? (historial: 0, favoritos: 0, nsfw: 0);
+      // El +18 se cuenta aparte: hace falta para poder avisar antes de meterlo
+      // cuando el usuario tiene esa zona apagada.
+      final nsfw = ya.nsfw + (crudo['isNsfw'] == true ? 1 : 0);
+      porPaquete[p] = esHistorial
+          ? (historial: ya.historial + 1, favoritos: ya.favoritos, nsfw: nsfw)
+          : (historial: ya.historial, favoritos: ya.favoritos + 1, nsfw: nsfw);
+    }
+
+    for (final e in _lista(dentro['historial'])) {
+      sumar(e, esHistorial: true);
+    }
+    for (final e in _lista(dentro['favoritos'])) {
+      sumar(e, esHistorial: false);
+    }
+
+    return CopiaAbierta(
+      deQuien: quienEs,
+      contenido: dentro,
+      porPaquete: porPaquete,
+    );
+  }
+
+  /// Mete de vuelta lo que traiga el archivo, SIN borrar lo que ya hay.
+  ///
+  /// Se junta con lo existente en vez de reemplazarlo, que es lo único seguro:
+  /// importar en un equipo que ya se venía usando no puede costarle al usuario
+  /// lo que vio ahí. Cuando un mismo título está en los dos lados gana **el más
+  /// reciente**, comparando la fecha.
+  ///
+  /// Un registro roto no corta la importación: se cuenta como fallido y se
+  /// sigue con el resto. Un archivo a medio leer sería peor que uno incompleto.
+  static Future<ResultadoImportacion> importar(
+    String contenido,
+    String clave, {
+    /// Solo estas extensiones. Null = todas.
+    ///
+    /// Es lo que el usuario eligio en la pantalla de antes: lo de una extension
+    /// que no tiene puesta no le sirve de nada hasta que la instale, asi que
+    /// puede dejarla afuera en vez de llenarse el inicio de tarjetas que no
+    /// abren.
+    Set<String>? paquetes,
+
+    /// La copia ya abierta, para no descifrarla dos veces.
+    ///
+    /// Descifrar cuesta a proposito (150.000 vueltas de PBKDF2): hacerlo de
+    /// nuevo para importar seria un segundo de espera regalado.
+    CopiaAbierta? yaAbierta,
+
+    /// De 0 a 1. Sirve para mover la barra: una copia grande son cientos de
+    /// registros y cada uno toca la base, asi que sin esto el usuario mira una
+    /// pantalla quieta sin saber si avanza.
+    void Function(double)? onProgreso,
+  }) async {
+    // Si no vino abierta se abre aca: importar tiene que poder llamarse solo.
+    // Fiarse de que alguien valido antes es como no validar.
+    final copia = yaAbierta ?? await abrir(contenido, clave);
+    final quienEs = copia.deQuien;
+    final raiz = copia.contenido;
+
+    var historialNuevo = 0;
+    var historialActualizado = 0;
+    var favoritosNuevos = 0;
+    var fallidos = 0;
+
+    // Cuantos hay en total, para poder decir por donde va.
+    final losHistorial = _lista(raiz['historial']);
+    final losFavoritos = _lista(raiz['favoritos']);
+    final cuantos = losHistorial.length + losFavoritos.length;
+    var hechos = 0;
+    void avanzar() {
+      hechos++;
+      if (cuantos > 0) onProgreso?.call(hechos / cuantos);
+    }
+
+    /// Si este registro es de una extensión que el usuario eligió pasar.
+    ///
+    /// Se mira ANTES de construirlo: un registro que no se va a guardar no
+    /// tiene por qué gastar validación, y sobre todo no tiene por qué contarse
+    /// como fallido si viniera roto.
+    bool loQuiere(Object? crudo) {
+      if (paquetes == null) return true;
+      if (crudo is! Map) return false;
+      return paquetes.contains(crudo['package']);
+    }
+
+    for (final crudo in losHistorial) {
+      if (!loQuiere(crudo)) {
+        avanzar();
+        continue;
+      }
+      try {
+        final entra = _historialDeMapa(crudo);
+        final previo = await DatabaseService.getHistoryByPackageAndUrl(
+            entra.package, entra.url);
+        if (previo == null) {
+          await DatabaseService.putHistoryRaw(entra);
+          historialNuevo++;
+        } else if (!entra.date.isBefore(previo.date)) {
+          _conservarLoQueNoTrae(entra, previo);
+          // Gana el más reciente, y con la MISMA fecha gana el que entra.
+          //
+          // Antes se exigía que fuera estrictamente más nuevo, y eso hacía que
+          // volver a importar el mismo archivo no hiciera absolutamente nada:
+          // las fechas coincidían, todo se salteaba y el resultado era "0 del
+          // historial y 0 favoritos". Volver a importar tiene que poder reparar
+          // lo que haya quedado mal, no rendirse por un empate.
+          await DatabaseService.putHistoryRaw(entra);
+          historialActualizado++;
+        }
+      } catch (e) {
+        fallidos++;
+        logger.warning('Copia: no se pudo importar un ítem del historial', e);
+      }
+      avanzar();
+    }
+
+    for (final crudo in losFavoritos) {
+      if (!loQuiere(crudo)) {
+        avanzar();
+        continue;
+      }
+      try {
+        final entra = _favoritoDeMapa(crudo);
+        // Mismo cuidado que con el historial: se reemplaza el registro entero,
+        // así que una copia sin portada dejaría la tarjeta sin imagen.
+        final previo = await DatabaseService.getFavorite(
+            package: entra.package, url: entra.url);
+        entra.cover ??= previo?.cover;
+        final yaEsta = previo != null;
+        // Se escribe igual si ya estaba: putFavoriteRaw reusa el mismo
+        // registro, así que no duplica, y permite reparar uno que hubiera
+        // quedado mal. Solo se cuenta como nuevo si de verdad no estaba.
+        await DatabaseService.putFavoriteRaw(entra);
+        if (!yaEsta) favoritosNuevos++;
+      } catch (e) {
+        fallidos++;
+        logger.warning('Copia: no se pudo importar un favorito', e);
+      }
+      avanzar();
+    }
+
+    // Las que hacen falta y no están puestas en este equipo.
+    final instaladas = ExtensionUtils.runtimes.keys.toSet();
+    final faltantes = <String>{
+      for (final p in _lista(raiz['extensiones']))
+        if (p is String && !instaladas.contains(p)) p,
+    }.toList()
+      ..sort();
+
+    return ResultadoImportacion(
+      deQuien: quienEs,
+      historialNuevo: historialNuevo,
+      historialActualizado: historialActualizado,
+      favoritosNuevos: favoritosNuevos,
+      fallidos: fallidos,
+      extensionesFaltantes: faltantes,
+    );
+  }
+
+  /// Cuántos registros se aceptan de cada lista.
+  ///
+  /// Un historial de verdad no llega ni de cerca. El techo está para que una
+  /// copia con millones de entradas —hecha a mano, o dañada— no deje la app
+  /// escribiendo en la base durante horas sin forma de cancelar.
+  static const _techoDeRegistros = 50000;
+
+  static List<dynamic> _lista(Object? valor) {
+    if (valor is! List) return const [];
+    if (valor.length > _techoDeRegistros) {
+      return valor.sublist(0, _techoDeRegistros);
+    }
+    return valor;
+  }
+
+  static Map<String, dynamic> _historialAMapa(History h) => {
+        'package': h.package,
+        'url': h.url,
+        // Se filtra tambien al SALIR, no solo al entrar: una captura local no
+        // le sirve a nadie fuera de este equipo, y llevarla dentro del archivo
+        // es ocupar sitio con algo que el otro lado va a tirar igual.
+        'cover': _portada(h.cover),
+        'type': h.type.name,
+        'episodeGroupId': h.episodeGroupId,
+        'episodeId': h.episodeId,
+        'title': h.title,
+        'episodeTitle': h.episodeTitle,
+        'progress': h.progress,
+        'totalProgress': h.totalProgress,
+        'date': h.date.toIso8601String(),
+        'isNsfw': h.isNsfw,
+        'watchState': h.watchState.name,
+        'seriesFinished': h.seriesFinished,
+        'knownEpisodeCount': h.knownEpisodeCount,
+        'newEpisodeLabel': h.newEpisodeLabel,
+        'lastCheckedAt': h.lastCheckedAt?.toIso8601String(),
+      };
+
+  static History _historialDeMapa(Object? crudo) {
+    final m = _mapa(crudo);
+    return History()
+      ..package = _identificador(m['package'], 'package')
+      ..url = _direccion(m['url'], 'url')
+      ..cover = _portada(m['cover'])
+      ..type = _tipo(m['type'])
+      ..episodeGroupId = _entero(m['episodeGroupId'])
+      ..episodeId = _entero(m['episodeId'])
+      ..title = _texto(m['title'], 'title')
+      ..episodeTitle = _textoSuelto(m['episodeTitle'])
+      ..progress = _textoSuelto(m['progress'], techo: 20)
+      ..totalProgress = _textoSuelto(m['totalProgress'], techo: 20)
+      ..date = _fecha(m['date']) ?? DateTime.now()
+      ..isNsfw = m['isNsfw'] == true
+      ..watchState = WatchState.values.firstWhere(
+        (e) => e.name == m['watchState'],
+        orElse: () => WatchState.pending,
+      )
+      ..seriesFinished = m['seriesFinished'] == true
+      ..knownEpisodeCount = _entero(m['knownEpisodeCount'])
+      ..newEpisodeLabel = _opcional(_textoSuelto(m['newEpisodeLabel']))
+      ..lastCheckedAt = _fecha(m['lastCheckedAt']);
+  }
+
+  static Map<String, dynamic> _favoritoAMapa(Favorite f) => {
+        'package': f.package,
+        'url': f.url,
+        'type': f.type.name,
+        'title': f.title,
+        'cover': f.cover,
+        'date': f.date.toIso8601String(),
+        'isNsfw': f.isNsfw,
+      };
+
+  static Favorite _favoritoDeMapa(Object? crudo) {
+    final m = _mapa(crudo);
+    return Favorite()
+      ..package = _identificador(m['package'], 'package')
+      ..url = _direccion(m['url'], 'url')
+      ..type = _tipo(m['type'])
+      ..title = _texto(m['title'], 'title')
+      ..cover = _portada(m['cover'])
+      ..date = _fecha(m['date']) ?? DateTime.now()
+      ..isNsfw = m['isNsfw'] == true;
+  }
+
+  /// Una portada.
+  ///
+  /// Se aceptan también las que vienen SIN esquema (`//cdn.sitio/x.jpg`), que
+  /// es una forma normalísima de escribirlas en la web: el navegador les pone
+  /// el mismo esquema de la página. Rechazarlas dejaba tarjetas sin imagen
+  /// después de importar, que fue exactamente lo que pasó.
+  ///
+  /// Lo que sí se rechaza es un esquema que no sea de red —`javascript:`,
+  /// `file:`, `data:`—: eso no es una imagen, es algo que alguien quiere que
+  /// la app cargue.
+  ///
+  /// Una portada rota no vale perder el registro: se devuelve sin ella y la
+  /// tarjeta usa la imagen por defecto, como cuando falta.
+  static String? _portada(Object? valor) {
+    if (valor is! String || valor.isEmpty) return null;
+    final s = valor.trim();
+    if (s.length > _techoDeDireccion) return null;
+    if (_tieneInvisibles(s)) return null;
+    // Una RUTA DE ARCHIVO no sirve en otro equipo.
+    //
+    // En vídeo, la portada puede ser la captura del fotograma donde quedaste, y
+    // eso se guarda como una ruta del disco (ver PortadaHistorial.de: si no
+    // empieza por http, se trata como archivo local). Esa ruta viaja perfecta
+    // dentro del archivo, llega al otro equipo, y ahí apunta a algo que no
+    // existe: tarjeta oscura.
+    //
+    // Y no se colaba por descuido: se aceptaba lo que no trae esquema para
+    // dejar pasar las direcciones de red escritas como "//cdn/x.jpg", que son
+    // normalísimas. Una ruta de Android tampoco trae esquema, así que entraba
+    // por la misma puerta.
+    //
+    // Devolviendo null, el registro entra SIN portada y el otro equipo se la
+    // consigue solo (ver PortadasPerdidas), que es la imagen buena de verdad y
+    // no una captura de la sesión de otro.
+    if (_pareceRutaLocal(s)) return null;
+    final uri = Uri.tryParse(s);
+    if (uri == null) return null;
+    // Sin esquema pero de red: "//host/…". Vale.
+    if (!uri.hasScheme) return s;
+    if (uri.scheme != 'http' && uri.scheme != 'https') return null;
+    return s;
+  }
+
+  /// Si esto es una ruta del disco y no una dirección de red.
+  ///
+  /// Se miran las tres formas que existen: la de Linux y Android (`/carpeta`),
+  /// la de Windows (`C:\carpeta`) y la explícita (`file:`). Ojo con la primera:
+  /// una dirección de red puede empezar con DOS barras (`//cdn/x.jpg`) y esa sí
+  /// hay que dejarla pasar, así que no alcanza con mirar el primer carácter.
+  static bool _pareceRutaLocal(String s) {
+    if (s.startsWith('//')) return false;
+    if (s.startsWith('/')) return true;
+    if (s.toLowerCase().startsWith('file:')) return true;
+    // "C:\…" o "C:/…"
+    return RegExp(r'^[A-Za-z]:[\\/]').hasMatch(s);
+  }
+
+  /// Techo de una dirección. De sobra para cualquier enlace real.
+  static const _techoDeDireccion = 2048;
+
+  /// Si el texto trae caracteres de control o invisibles.
+  ///
+  /// En un identificador no se limpian: se RECHAZA el registro. Limpiarlos
+  /// cambiaría la dirección, y una dirección cambiada no lleva a ningún lado —
+  /// justamente lo que pasaba al pasarles el limpiador de nombres.
+  static bool _tieneInvisibles(String s) {
+    for (final c in s.runes) {
+      if (c < 0x20 || (c >= 0x7F && c <= 0x9F)) return true;
+      if ((c >= 0x200B && c <= 0x200F) ||
+          (c >= 0x202A && c <= 0x202E) ||
+          (c >= 0x2066 && c <= 0x2069) ||
+          c == 0xFEFF) {
+        return true;
+      }
+    }
+    return false;
+  }
+
+  /// Un identificador: se usa tal cual o no se usa.
+  ///
+  /// `package` y `url` son con lo que se reconoce un título. **No se limpian ni
+  /// se recortan**: cualquier cambio los convierte en otro identificador, y ahí
+  /// el registro deja de encontrar su contenido. Pasó de verdad — se les estaba
+  /// aplicando el limpiador de NOMBRES, que corta a 40 caracteres, así que toda
+  /// dirección larga quedaba truncada y la ficha abría en "Página no
+  /// encontrada".
+  ///
+  /// Así que en vez de arreglarlos, se comprueban: si traen algo que no
+  /// corresponde, se descarta ese registro y se sigue con el resto.
+  /// Importar no puede BORRAR lo que ya había.
+  ///
+  /// `putHistoryRaw` reemplaza el registro entero, así que todo campo que el
+  /// que entra no traiga se pierde. Y eso pasó de verdad: al importar sobre
+  /// registros que ya estaban, los que venían sin portada dejaron las tarjetas
+  /// de los dos inicios y los dos historiales sin imagen — el archivo no traía
+  /// nada malo, simplemente no traía eso, y el reemplazo se llevó puesto lo que
+  /// sí había.
+  ///
+  /// Así que lo que el que entra no trae se conserva del que ya estaba. Una
+  /// copia solo puede AGREGAR o ACTUALIZAR, nunca vaciar.
+  @visibleForTesting
+  static void conservarLoQueNoTraeDePrueba(History entra, History previo) =>
+      _conservarLoQueNoTrae(entra, previo);
+
+  static void _conservarLoQueNoTrae(History entra, History previo) {
+    entra.cover ??= previo.cover;
+    if (entra.episodeTitle.isEmpty) entra.episodeTitle = previo.episodeTitle;
+    if (entra.totalProgress.isEmpty) {
+      entra.totalProgress = previo.totalProgress;
+    }
+    // La cuenta de capítulos conocidos en cero significa "no se contó", no
+    // "hay cero": pisarla perdería la referencia con la que se detectan las
+    // novedades y el título volvería a anunciar como nuevo lo ya visto.
+    if (entra.knownEpisodeCount == 0) {
+      entra.knownEpisodeCount = previo.knownEpisodeCount;
+    }
+    entra.lastCheckedAt ??= previo.lastCheckedAt;
+    entra.newEpisodeLabel ??= previo.newEpisodeLabel;
+    // Que la obra terminó lo marca el usuario a mano: si ya lo hizo acá, una
+    // copia vieja que no lo sabía no puede desmarcarlo.
+    if (previo.seriesFinished) entra.seriesFinished = true;
+  }
+
+  /// Un registro entero, de la base al archivo y de vuelta.
+  ///
+  /// Es la comprobación que de verdad importa: si algo se pierde o se cambia en
+  /// ese viaje, al importar aparecen tarjetas sin imagen, o —peor— con la
+  /// dirección distinta, que ya no reconoce el registro que ya estaba y termina
+  /// creando uno nuevo al lado.
+  @visibleForTesting
+  static History idaYVueltaHistorial(History h) =>
+      _historialDeMapa(jsonDecode(jsonEncode(_historialAMapa(h))));
+
+  @visibleForTesting
+  static Favorite idaYVueltaFavorito(Favorite f) =>
+      _favoritoDeMapa(jsonDecode(jsonEncode(_favoritoAMapa(f))));
+
+  @visibleForTesting
+  static String direccionDePrueba(Object? valor) => _direccion(valor, 'url');
+
+  @visibleForTesting
+  static String? portadaDePrueba(Object? valor) => _portada(valor);
+
+  static String _identificador(Object? valor, String campo) {
+    if (valor is! String || valor.trim().isEmpty) {
+      throw FormatException('falta "$campo"');
+    }
+    final s = valor.trim();
+    if (s.length > _techoDeDireccion) {
+      throw FormatException('"$campo" es demasiado largo');
+    }
+    if (_tieneInvisibles(s)) {
+      throw FormatException('"$campo" trae caracteres que no corresponden');
+    }
+    return s;
+  }
+
+  /// Vacío pasa a null, que es lo que la base entiende por "no hay".
+  static String? _opcional(String s) => s.isEmpty ? null : s;
+
+  static Map<String, dynamic> _mapa(Object? crudo) {
+    if (crudo is Map<String, dynamic>) return crudo;
+    throw const FormatException('registro con forma inesperada');
+  }
+
+  /// Un texto que se MUESTRA: título, nombre del episodio.
+  ///
+  /// Acá sí se limpia y se recorta, porque el destino es la pantalla y lo que
+  /// importa es que se vea bien. El techo es amplio: un título de anime largo
+  /// es normal, y cortarlo a lo bruto se ve peor que dejarlo.
+  static String _texto(Object? valor, String campo, {int techo = 300}) {
+    if (valor is! String || valor.isEmpty) {
+      throw FormatException('falta "$campo"');
+    }
+    final limpio = _paraMostrar(valor, techo);
+    if (limpio.isEmpty) throw FormatException('"$campo" venía vacío');
+    return limpio;
+  }
+
+  /// Lo mismo, pero cuando el campo puede faltar sin invalidar el registro.
+  static String _textoSuelto(Object? valor, {int techo = 300}) {
+    if (valor is! String || valor.isEmpty) return '';
+    return _paraMostrar(valor, techo);
+  }
+
+  /// Quita lo invisible y recorta, sin puntos suspensivos.
+  ///
+  /// Aparte de [limpiarNombre], que es SOLO para el nombre de la copia y corta
+  /// a 40 con «…». Confundir las dos fue lo que truncó las direcciones.
+  static String _paraMostrar(String crudo, int techo) {
+    final salida = StringBuffer();
+    var espacioPendiente = false;
+    for (final c in crudo.runes) {
+      final esControl = c < 0x20 || (c >= 0x7F && c <= 0x9F);
+      final esInvisible = (c >= 0x200B && c <= 0x200F) ||
+          (c >= 0x202A && c <= 0x202E) ||
+          (c >= 0x2066 && c <= 0x2069) ||
+          c == 0xFEFF;
+      if (esInvisible) continue;
+      if (esControl || c == 0x20) {
+        espacioPendiente = salida.isNotEmpty;
+        continue;
+      }
+      if (espacioPendiente) {
+        salida.write(' ');
+        espacioPendiente = false;
+      }
+      salida.writeCharCode(c);
+    }
+    final s = salida.toString();
+    return s.length > techo ? s.substring(0, techo) : s;
+  }
+
+  /// Una dirección que después se va a abrir.
+  ///
+  /// Se guarda TAL CUAL (ver [_identificador]) y solo se comprueba el esquema:
+  /// sin esto, un archivo preparado a mano podría dejar en el historial una
+  /// entrada con `javascript:` o `file:`, y esa dirección terminaría abriéndose
+  /// sola al tocar la tarjeta.
+  ///
+  /// Se aceptan las que no traen esquema, que es como muchas extensiones
+  /// guardan sus enlaces.
+  static String _direccion(Object? valor, String campo) {
+    final s = _identificador(valor, campo);
+    final uri = Uri.tryParse(s);
+    if (uri == null) throw FormatException('"$campo" no es una dirección');
+    if (uri.hasScheme && uri.scheme != 'http' && uri.scheme != 'https') {
+      throw FormatException('"$campo" usa un esquema que no se acepta');
+    }
+    return s;
+  }
+
+  static int _entero(Object? valor) =>
+      valor is int ? valor : int.tryParse('$valor') ?? 0;
+
+  static DateTime? _fecha(Object? valor) =>
+      valor is String ? DateTime.tryParse(valor) : null;
+
+  /// El tipo decide EN QUÉ SECCIÓN aparece, así que importa acertar.
+  ///
+  /// Inicio y la Zona +18 separan en dos: `bangumi` va a "Favoritos — Vídeo" y
+  /// todo lo demás a "Favoritos — Lectura" (ver home_page). Lo mismo con
+  /// Continuar. Como el nombre del tipo viaja tal cual en el archivo, un
+  /// vídeo vuelve a vídeo y una lectura a lectura sin más.
+  ///
+  /// Un tipo DESCONOCIDO —un archivo hecho por una app que ya maneja algo que
+  /// esta todavía no conoce— cae en lectura a propósito, y no en vídeo: en
+  /// lectura, una tarjeta de proporción rara se ve mal pero se ve; en vídeo la
+  /// fila reserva otra forma y encima el reproductor intentaría abrir algo que
+  /// no es un vídeo. Perder el tipo exacto es mucho mejor que perder el
+  /// registro entero, pero conviene que caiga del lado que menos rompe.
+  static ExtensionType _tipo(Object? valor) => ExtensionType.values.firstWhere(
+        (e) => e.name == valor,
+        orElse: () => ExtensionType.manga,
+      );
+
+  @visibleForTesting
+  static ExtensionType tipoDePrueba(Object? valor) => _tipo(valor);
+}
+
+/// El archivo no se puede usar, y por qué.
+///
+/// Se distingue de un fallo cualquiera para poder decirle al usuario algo que
+/// signifique algo —"esto no es una copia de PrismHub"— en vez de volcarle una
+/// excepción en pantalla.
+class CopiaInvalida implements Exception {
+  const CopiaInvalida(this.motivo);
+  final String motivo;
+  @override
+  String toString() => motivo;
+}
+
+/// Qué entró de verdad al importar.
+class ResultadoImportacion {
+  ResultadoImportacion({
+    required this.deQuien,
+    required this.historialNuevo,
+    required this.historialActualizado,
+    required this.favoritosNuevos,
+    required this.fallidos,
+    required this.extensionesFaltantes,
+  });
+
+  /// De qué copia salió todo esto, para poder decirlo al terminar.
+  final SobreDeCopia deQuien;
+
+  final int historialNuevo;
+  final int historialActualizado;
+  final int favoritosNuevos;
+
+  /// Registros que venían rotos y se saltearon.
+  final int fallidos;
+
+  /// Extensiones que el archivo usaba y no están puestas en este equipo.
+  ///
+  /// Su historial se importa igual —para no perderlo si después las instala—
+  /// pero hasta entonces no se va a poder abrir, y eso hay que decirlo.
+  final List<String> extensionesFaltantes;
+
+  int get total => historialNuevo + historialActualizado + favoritosNuevos;
+
+  /// De cuántas extensiones entró algo. Lo pone quien importa.
+  int extensionesUsadas = 0;
+}
+
+/// Lo que se puede leer de una copia SIN la clave.
+///
+/// Sirve para reconocer el archivo antes de pedir nada: de qué equipo salió,
+/// cuál número de copia es y de cuándo. Con tres archivos guardados en la misma
+/// carpeta, es la única forma de saber cuál es el último sin abrirlos.
+class SobreDeCopia {
+  const SobreDeCopia({
+    required this.nombre,
+    required this.numero,
+    required this.fecha,
+    required this.conClave,
+  });
+
+  /// El nombre que le puso quien la creó. Ya saneado.
+  final String nombre;
+
+  /// Qué copia es de ese equipo: 1, 2, 3… 0 si el archivo no lo dice.
+  final int numero;
+
+  final DateTime? fecha;
+  final bool conClave;
+
+  /// Cómo se lee de un vistazo: "Mi celular · copia n.º 3".
+  String get etiqueta {
+    final partes = <String>[
+      if (nombre.isNotEmpty) nombre,
+      if (numero > 0) 'copia n.º $numero',
+    ];
+    return partes.isEmpty ? 'Copia de PrismHub' : partes.join(' · ');
+  }
+}
+
+/// Una copia ya descifrada, con la cuenta de qué trae cada extensión.
+///
+/// Existe para poder mostrarle al usuario qué hay adentro **antes** de escribir
+/// nada: de qué extensión es cada cosa y cuánto trae cada una. Sin esto, la
+/// única opción era meter todo a ciegas y ver después qué había entrado.
+///
+/// Descifrar cuesta a propósito (150.000 vueltas de PBKDF2), así que lo abierto
+/// se guarda acá y se reusa al importar en vez de hacerlo dos veces.
+class CopiaAbierta {
+  const CopiaAbierta({
+    required this.deQuien,
+    required this.contenido,
+    required this.porPaquete,
+  });
+
+  /// De qué equipo salió y qué número de copia es.
+  final SobreDeCopia deQuien;
+
+  /// Lo de adentro, ya descifrado. Se pasa tal cual a importar.
+  final Map<String, dynamic> contenido;
+
+  /// Cuántos registros trae cada extensión.
+  final Map<String, ({int historial, int favoritos, int nsfw})> porPaquete;
+
+  /// Las extensiones que aparecen en la copia, ordenadas por cuánto traen.
+  ///
+  /// De mayor a menor: lo que más contenido tiene es lo que el usuario más
+  /// quiere recuperar, así que va arriba y no hay que buscarlo.
+  List<String> get paquetes {
+    final lista = porPaquete.keys.toList();
+    lista.sort((a, b) {
+      final ca = porPaquete[a]!;
+      final cb = porPaquete[b]!;
+      final total = (cb.historial + cb.favoritos)
+          .compareTo(ca.historial + ca.favoritos);
+      return total != 0 ? total : a.compareTo(b);
+    });
+    return lista;
+  }
+
+  int get total => porPaquete.values
+      .fold(0, (a, c) => a + c.historial + c.favoritos);
+
+  /// Cuánto contenido +18 traen estas extensiones.
+  ///
+  /// Hace falta para avisar antes de meterlo: si el usuario tiene esa zona
+  /// apagada, ese contenido entra igual pero no lo va a ver por ningún lado
+  /// hasta que la encienda, y eso hay que decirlo antes y no después.
+  int nsfwDe(Set<String> paquetes) => paquetes.fold(
+      0, (a, p) => a + (porPaquete[p]?.nsfw ?? 0));
+}

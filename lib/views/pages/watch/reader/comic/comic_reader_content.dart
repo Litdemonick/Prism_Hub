@@ -9,6 +9,7 @@ import 'package:prismhub/models/index.dart';
 import 'package:prismhub/controllers/watch/comic_controller.dart';
 import 'package:prismhub/utils/i18n.dart';
 import 'package:prismhub/utils/router.dart';
+import 'package:prismhub/views/widgets/watch/aviso_extension_caida.dart';
 import 'package:prismhub/views/widgets/button.dart';
 import 'package:prismhub/views/widgets/cache_network_image.dart';
 import 'package:prismhub/views/widgets/home/animated_background_glow.dart';
@@ -533,6 +534,19 @@ class _ComicReaderContentState extends State<ComicReaderContent> {
                 final maxWidth = constraints.maxWidth;
                 final maxHeight = constraints.maxHeight;
                 return Obx(() {
+                  // La extensión se cayó: no hay con qué reintentar.
+                  //
+                  // Va antes del error general, que ofrece "reintentar": los
+                  // capítulos salen de la misma extensión que ya no está, así
+                  // que ese botón mandaría al usuario a dar vueltas. Acá lo
+                  // único útil es salir.
+                  final caida = _c.extensionCaida.value;
+                  if (caida != null) {
+                    return AvisoExtensionCaida(
+                      motivo: caida.i18n,
+                      onSalir: () => RouterUtils.closeReader(context),
+                    );
+                  }
                   if (_c.error.value.isNotEmpty) {
                     return Column(
                       mainAxisAlignment: MainAxisAlignment.center,

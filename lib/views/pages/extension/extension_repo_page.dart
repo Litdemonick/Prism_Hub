@@ -68,6 +68,11 @@ class _ExtensionRepoPageState extends State<ExtensionRepoPage> {
     c = Get.isRegistered<ExtensionRepoPageController>()
         ? Get.find<ExtensionRepoPageController>()
         : Get.put(ExtensionRepoPageController());
+    // Igual que en la lista de instaladas: si se vino acá desde un aviso que
+    // nombraba una extensión, se abre ya buscada en vez de dejar al usuario
+    // rastreándola entre decenas.
+    final pedido = ExtensionUtils.tomarFiltroPendiente();
+    if (pedido != null && pedido.isNotEmpty) c.search.value = pedido;
     super.initState();
   }
 

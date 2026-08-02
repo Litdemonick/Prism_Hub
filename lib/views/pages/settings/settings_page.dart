@@ -1,6 +1,15 @@
+import 'dart:async';
+import 'dart:convert';
 import 'dart:io';
 
 import 'package:file_picker/file_picker.dart';
+import 'package:path_provider/path_provider.dart';
+import 'package:prismhub/controllers/home_controller.dart';
+import 'package:prismhub/utils/copia_cifrado.dart';
+import 'package:prismhub/utils/copia_seguridad.dart';
+import 'package:prismhub/utils/portadas_perdidas.dart';
+import 'package:prismhub/views/pages/settings/copia_elegir_extensiones.dart';
+import 'package:prismhub/views/pages/settings/copia_resultado.dart';
 import 'package:fluent_ui/fluent_ui.dart' as fluent;
 import 'package:flutter/material.dart';
 import 'package:flutter_i18n/flutter_i18n.dart';
@@ -202,6 +211,483 @@ class _SettingsPageState extends State<SettingsPage> {
         ],
       ),
     ];
+  }
+
+  /// Pide la clave de la copia. Null si el usuario cancela.
+  ///
+  /// Al exportar se pide dos veces: una clave mal escrita en una copia que se
+  /// guarda hoy y se usa dentro de un año es un archivo perdido para siempre,
+  /// porque no hay forma de recuperarla — el archivo no la guarda, solo permite
+  /// comprobar si la que se escribe es la correcta.
+  Future<_DatosDeCopia?> _pedirClave(
+    BuildContext context, {
+    required bool alExportar,
+    String? nombrePropuesto,
+    int? numero,
+    String? deQuien,
+  }) async {
+    // Se espera el resultado y se comprueba el VALOR, en vez de forzar el tipo
+    // del Future.
+    //
+    // showPlatformDialog no declara qué devuelve, así que devuelve
+    // Future<dynamic>, y `... as Future<_DatosDeCopia?>` revienta en tiempo de
+    // ejecución: Future<dynamic> no es un Future<_DatosDeCopia?>. Como esta
+    // llamada queda fuera del try de quien exporta, el error se perdía y el
+    // botón de exportar parecía no hacer nada.
+    final resultado = await showPlatformDialog(
+      context: context,
+      title: (alExportar
+              ? 'settings.backup-key-title-export'
+              : 'settings.backup-key-title-import')
+          .i18n,
+      maxWidth: 420,
+      content: _DialogoClave(
+        alExportar: alExportar,
+        nombrePropuesto: nombrePropuesto,
+        numero: numero,
+        deQuien: deQuien,
+      ),
+      actions: null,
+    );
+    // Cerrar el diálogo por fuera (tocar afuera, Escape) devuelve null.
+    return resultado is _DatosDeCopia ? resultado : null;
+  }
+
+  /// Deja el historial y la lista en un archivo que el usuario pueda guardar.
+  ///
+  /// Dos caminos porque son dos formas distintas de manejar archivos: en Android
+  /// se comparte —que es como sale cualquier archivo de una app ahí, y deja
+  /// elegir Drive, WhatsApp o la carpeta que sea— y en PC se elige dónde
+  /// guardarlo. El archivo que sale es el MISMO en las tres plataformas, así que
+  /// se puede exportar en el teléfono e importar en la PC o al revés.
+  Future<void> _exportarCopia(BuildContext context) async {
+    // Cuál copia va a ser y con qué nombre se guardó la anterior. La primera
+    // vez no hay nada de esto y el diálogo lo dice de otra forma.
+    final hechas = (PrismHubStorage.getSetting(SettingKey.copiasHechas) as int?) ?? 0;
+    final ultimoNombre =
+        PrismHubStorage.getSetting(SettingKey.nombreDeCopia) as String?;
+
+    final datos = await _pedirClave(
+      context,
+      alExportar: true,
+      nombrePropuesto: ultimoNombre,
+      numero: hechas + 1,
+    );
+    if (datos == null || !context.mounted) return;
+
+    // Qué se guarda: todo, o solo algunas extensiones.
+    //
+    // Misma pantalla que al importar, para que sea la misma idea en los dos
+    // lados. Vienen todas marcadas, que es el caso normal —una copia de
+    // respaldo se hace entera—, y el que quiere pasarle solo una parte a
+    // alguien puede desmarcar.
+    final resumen = await CopiaSeguridad.resumenLocal();
+    if (!context.mounted) return;
+    if (resumen.paquetes.isEmpty) {
+      showPlatformSnackbar(
+        context: context,
+        title: 'settings.backup-export-failed'.i18n,
+        content: 'settings.backup-nothing'.i18n,
+      );
+      return;
+    }
+    final queExportar = await showPlatformDialog(
+      context: context,
+      title: 'settings.backup-pick-title-export'.i18n,
+      maxWidth: 520,
+      content: CopiaElegirExtensiones(copia: resumen, alExportar: true),
+      actions: null,
+      // El contenido ya trae su propia lista desplazable.
+      scrollable: false,
+    );
+    if (queExportar is! Set<String> || queExportar.isEmpty) return;
+    if (!context.mounted) return;
+
+    // La rueda mientras cifra.
+    //
+    // Cifrar tarda a propósito —150.000 vueltas de PBKDF2— y hasta ahora eso
+    // pasaba sin ninguna señal: se tocaba Exportar y no se veía nada hasta que
+    // aparecía el selector de carpeta. Parecía que el botón no había hecho nada
+    // y se tocaba otra vez.
+    var ruedaAbierta = true;
+    unawaited(showPlatformDialog(
+      context: context,
+      title: 'settings.backup-export'.i18n,
+      content: Padding(
+        padding: const EdgeInsets.symmetric(vertical: 12),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const SizedBox(
+              width: 22,
+              height: 22,
+              child: CircularProgressIndicator(
+                strokeWidth: 3,
+                valueColor:
+                    AlwaysStoppedAnimation<Color>(HomeTheme.accentPink),
+              ),
+            ),
+            const SizedBox(width: 16),
+            Flexible(child: Text('settings.backup-export-working'.i18n)),
+          ],
+        ),
+      ),
+      actions: null,
+      maxWidth: 360,
+      barrierDismissible: false,
+    ));
+    // Un respiro para que la rueda llegue a dibujarse antes de arrancar.
+    await Future<void>.delayed(const Duration(milliseconds: 16));
+
+    try {
+      final numero = hechas + 1;
+      final contenido = await CopiaSeguridad.exportar(
+        datos.clave,
+        nombre: datos.nombre,
+        numero: numero,
+        paquetes: queExportar,
+      );
+      // Se cierra ANTES del selector de carpeta: dos ventanas encima de la otra
+      // dejan la de abajo tapando la del sistema en Windows.
+      if (ruedaAbierta) {
+        RouterUtils.pop();
+        ruedaAbierta = false;
+      }
+      if (!context.mounted) return;
+      // El número va en el nombre del archivo además de adentro: es lo que se
+      // ve en la carpeta sin abrir nada.
+      final nombreArchivo = 'PrismHub-${_paraNombreDeArchivo(datos.nombre)}'
+          '-$numero-${DateTime.now().toIso8601String().substring(0, 10)}.json';
+
+      var guardado = false;
+      if (Platform.isAndroid) {
+        // Por un archivo temporal: compartir necesita algo en disco, y la
+        // carpeta de caché es la que el sistema deja compartir sin permisos.
+        final archivo = File(
+            '${(await getTemporaryDirectory()).path}${Platform.pathSeparator}$nombreArchivo');
+        await archivo.writeAsString(contenido);
+        final r = await Share.shareXFiles([XFile(archivo.path)]);
+        // Solo cuenta si de verdad se compartió. Cerrar la hoja de compartir
+        // sin elegir nada no es una copia hecha, y contarla dejaría un hueco
+        // en la numeración.
+        guardado = r.status != ShareResultStatus.dismissed;
+      } else {
+        final destino = await FilePicker.platform.saveFile(
+          type: FileType.custom,
+          allowedExtensions: ['json'],
+          fileName: nombreArchivo,
+        );
+        // Sin destino es que canceló, que no es un error.
+        if (destino == null) return;
+        await File(destino).writeAsString(contenido);
+        guardado = true;
+      }
+
+      if (!guardado) return;
+      // La cuenta sube SOLO si de verdad se guardó: si cancela el selector, la
+      // próxima tiene que volver a ser la misma copia y no un hueco.
+      await PrismHubStorage.setSetting(SettingKey.copiasHechas, numero);
+      await PrismHubStorage.setSetting(
+          SettingKey.nombreDeCopia, datos.nombre);
+      if (!context.mounted) return;
+      showPlatformSnackbar(
+        context: context,
+        title: 'settings.backup-export-done'.i18n,
+        content: FlutterI18n.translate(context, 'settings.backup-export-info',
+            translationParams: {'nombre': datos.nombre, 'n': '$numero'}),
+      );
+    } catch (e) {
+      logger.warning('No se pudo exportar la copia', e);
+      if (!context.mounted) return;
+      showPlatformSnackbar(
+        context: context,
+        title: 'settings.backup-export-failed'.i18n,
+        content: e.toString(),
+      );
+    } finally {
+      // Pase lo que pase. Si algo falla con la rueda abierta, queda una ventana
+      // sin botones y la app trabada sin forma de salir.
+      if (ruedaAbierta) RouterUtils.pop();
+    }
+  }
+
+  /// Deja el nombre en algo que pueda ser parte de un nombre de archivo.
+  ///
+  /// Los tres sistemas prohíben caracteres distintos y Android además no deja
+  /// nada que parezca una ruta. Se queda con letras, números, guiones y puntos,
+  /// que es lo que acepta cualquiera de los tres.
+  String _paraNombreDeArchivo(String nombre) {
+    final s = nombre
+        .replaceAll(RegExp(r'[^A-Za-z0-9._-]'), '-')
+        .replaceAll(RegExp(r'-+'), '-')
+        .replaceAll(RegExp(r'^-|-$'), '');
+    if (s.isEmpty) return 'copia';
+    return s.length > 24 ? s.substring(0, 24) : s;
+  }
+
+  /// Vuelve a leer lo que hay en pantalla después de importar.
+  ///
+  /// El inicio y el historial ya están dibujados con lo de ANTES: sin esto el
+  /// usuario ve "listo" y abajo sus datos viejos, y parece que no pasó nada.
+  /// Se refrescan los dos inicios —el normal y el de la Zona +18— porque la
+  /// copia trae los dos.
+  Future<void> _refrescarTrasImportar() async {
+    try {
+      // La copia pudo traer fichas nuevas que sí tienen la portada de un título
+      // al que antes no se le encontraba: se vuelve a permitir el intento.
+      PortadasPerdidas.olvidarLoMirado();
+      await HomePageController.refreshAll();
+    } catch (e) {
+      // Que no se pueda refrescar no invalida la importación: los datos ya
+      // están guardados y se van a ver igual al volver a entrar.
+      logger.info('No se pudo refrescar el inicio tras importar: $e');
+    }
+  }
+
+  /// Mete de vuelta lo que traiga un archivo, juntándolo con lo que ya hay.
+  Future<void> _importarCopia(BuildContext context) async {
+    try {
+      // En Android NO se filtra por extensión.
+      //
+      // Ahí el selector es el del sistema y filtra por tipo MIME, no por cómo
+      // termina el nombre. Un mismo .json llega como application/json desde una
+      // carpeta, como text/plain desde otra y como application/octet-stream
+      // desde Drive o WhatsApp: con el filtro puesto, el archivo aparece en gris
+      // y no se puede elegir, y desde afuera se ve como que la copia "no está".
+      //
+      // Que se pueda elegir cualquier archivo no abre ningún agujero: lo que
+      // decide si sirve es leerlo (ver leerSobre), que rechaza lo que no sea una
+      // copia de PrismHub antes de tocar nada.
+      final elegido = await FilePicker.platform.pickFiles(
+        type: Platform.isAndroid ? FileType.any : FileType.custom,
+        allowedExtensions: Platform.isAndroid ? null : ['json'],
+        // En Android hace falta el contenido: la ruta que devuelve el selector
+        // puede ser de un proveedor (Drive, Descargas) que no se puede abrir
+        // como archivo normal.
+        withData: Platform.isAndroid,
+      );
+      final archivo = elegido?.files.firstOrNull;
+      if (archivo == null) return;
+
+      // Techo de tamaño ANTES de leerlo.
+      //
+      // En Android el archivo se carga entero en memoria, así que elegir un
+      // vídeo por error tumbaría la app antes de poder decir que no sirve. Una
+      // copia de historial y favoritos son unos pocos megas incluso con miles de
+      // títulos, así que 25 MB deja muchísimo margen.
+      const techo = 25 * 1024 * 1024;
+      if (archivo.size > techo) {
+        if (!context.mounted) return;
+        showPlatformSnackbar(
+          context: context,
+          title: 'settings.backup-import-failed'.i18n,
+          content: 'settings.backup-too-big'.i18n,
+        );
+        return;
+      }
+
+      final datos = archivo.bytes;
+      final contenido = datos != null
+          ? utf8.decode(datos, allowMalformed: true)
+          : await File(archivo.path!).readAsString();
+
+      // Se mira de qué copia es ANTES de pedir nada: así el diálogo de la clave
+      // puede decir de qué equipo salió y cuál número es, y un archivo que no
+      // sirve se rechaza sin hacer escribir una clave para nada.
+      final quienEs = CopiaSeguridad.leerSobre(contenido);
+
+      if (!context.mounted) return;
+      // La clave se pide DESPUÉS de elegir el archivo: al revés se escribiría
+      // una clave para después cancelar el selector.
+      final datosClave = await _pedirClave(
+        context,
+        alExportar: false,
+        deQuien: quienEs.etiqueta,
+      );
+      if (datosClave == null || !context.mounted) return;
+
+      // Se abre y se cuenta qué trae, SIN escribir nada todavía.
+      //
+      // Con su rueda: descifrar tarda lo mismo que cifrar, y sin señal se veía
+      // como que escribir la clave no había hecho nada.
+      var abriendo = true;
+      unawaited(showPlatformDialog(
+        context: context,
+        title: 'settings.backup-import-action'.i18n,
+        content: Padding(
+          padding: const EdgeInsets.symmetric(vertical: 12),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              const SizedBox(
+                width: 22,
+                height: 22,
+                child: CircularProgressIndicator(
+                  strokeWidth: 3,
+                  valueColor:
+                      AlwaysStoppedAnimation<Color>(HomeTheme.accentPink),
+                ),
+              ),
+              const SizedBox(width: 16),
+              Flexible(child: Text('settings.backup-opening'.i18n)),
+            ],
+          ),
+        ),
+        actions: null,
+        maxWidth: 360,
+        barrierDismissible: false,
+      ));
+      await Future<void>.delayed(const Duration(milliseconds: 16));
+
+      final CopiaAbierta copia;
+      try {
+        copia = await CopiaSeguridad.abrir(contenido, datosClave.clave);
+      } finally {
+        // En finally: con la clave equivocada esto lanza, y sin cerrarla la
+        // rueda quedaba girando para siempre sobre un error que nadie ve.
+        if (abriendo) {
+          RouterUtils.pop();
+          abriendo = false;
+        }
+      }
+      if (!context.mounted) return;
+
+      if (copia.paquetes.isEmpty) {
+        showPlatformSnackbar(
+          context: context,
+          title: 'settings.backup-import-failed'.i18n,
+          content: 'settings.backup-pick-empty'.i18n,
+        );
+        return;
+      }
+
+      // Se elige qué extensiones pasar. Lo que no está listo en este equipo no
+      // se puede elegir y se dice por qué (ver CopiaElegirExtensiones).
+      final elegidas = await showPlatformDialog(
+        context: context,
+        title: 'settings.backup-pick-title'.i18n,
+        maxWidth: 520,
+        content: CopiaElegirExtensiones(copia: copia),
+        actions: null,
+        // El contenido ya tiene su propia lista desplazable: dos scrolls
+        // anidados se pelean el gesto y el de afuera no puede pasar de largo.
+        scrollable: false,
+      );
+      if (elegidas is! Set<String> || elegidas.isEmpty) return;
+      if (!context.mounted) return;
+
+      // Contenido +18 con la Zona +18 apagada.
+      //
+      // Entra igual —no se toca lo que el usuario eligió— pero no lo va a ver
+      // por ningún lado hasta que la encienda. Decirlo después de importar
+      // sería dejarlo buscando dónde quedó lo que acaba de recuperar.
+      final cuantoNsfw = copia.nsfwDe(elegidas);
+      if (cuantoNsfw > 0 &&
+          PrismHubStorage.getSetting(SettingKey.enableNSFW) != true) {
+        final sigue = await showPlatformDialog(
+          context: context,
+          title: 'settings.backup-nsfw-title'.i18n,
+          maxWidth: 420,
+          content: Text(
+            FlutterI18n.translate(context, 'settings.backup-nsfw-body',
+                translationParams: {'n': '$cuantoNsfw'}),
+            style: const TextStyle(fontSize: 13, height: 1.45),
+          ),
+          actions: [
+            PlatformTextButton(
+              onPressed: () => RouterUtils.pop(false),
+              child: Text('common.cancel'.i18n),
+            ),
+            PlatformFilledButton(
+              onPressed: () => RouterUtils.pop(true),
+              child: Text('settings.backup-import-action'.i18n),
+            ),
+          ],
+        );
+        if (sigue != true || !context.mounted) return;
+      }
+
+      // La barra de progreso, mientras entra. Una copia grande son cientos de
+      // registros y cada uno toca la base: sin esto la pantalla se queda quieta
+      // y parece colgada.
+      final progreso = ValueNotifier<double>(0);
+      unawaited(showPlatformDialog(
+        context: context,
+        title: 'settings.backup-import-working'.i18n,
+        content: Padding(
+          padding: const EdgeInsets.symmetric(vertical: 12),
+          child: _BarraDeImportacion(progreso: progreso),
+        ),
+        actions: null,
+        maxWidth: 380,
+        barrierDismissible: false,
+      ));
+      await Future<void>.delayed(Duration.zero);
+
+      ResultadoImportacion r;
+      try {
+        r = await CopiaSeguridad.importar(
+          contenido,
+          datosClave.clave,
+          // Ya descifrada: volver a hacerlo serían 150.000 vueltas de PBKDF2
+          // regaladas, o sea un segundo de espera de más.
+          yaAbierta: copia,
+          paquetes: elegidas,
+          onProgreso: (p) => progreso.value = p,
+        );
+      } finally {
+        // El diálogo se cierra pase lo que pase: con un fallo, dejarlo abierto
+        // sin botones deja la app trabada sin forma de salir.
+        RouterUtils.pop();
+        progreso.dispose();
+      }
+      if (!context.mounted) return;
+
+      r.extensionesUsadas = elegidas.length;
+
+      // Lo que entró, en números: decir solo "listo" deja al usuario sin saber
+      // si de verdad se recuperó algo o el archivo estaba vacío.
+
+      // Se recarga lo que está en pantalla y se avisa de dónde vino.
+      //
+      // El inicio y el historial ya están dibujados con lo de antes de importar:
+      // sin refrescarlos, el usuario ve el mensaje de "listo" y abajo sus datos
+      // viejos, y parece que no pasó nada.
+      await _refrescarTrasImportar();
+      if (!context.mounted) return;
+      // Un diálogo y no un aviso de paso: es el resumen de una operación que
+      // toca los datos del usuario, y en un aviso quedaba todo pegado en un
+      // párrafo que se iba solo antes de terminar de leerlo.
+      await showPlatformDialog(
+        context: context,
+        title: 'settings.backup-import-done'.i18n,
+        maxWidth: 440,
+        content: CopiaResultado(resultado: r),
+        actions: [
+          PlatformFilledButton(
+            onPressed: () => RouterUtils.pop(),
+            child: Text('common.understood'.i18n),
+          ),
+        ],
+      );
+    } on CopiaInvalida catch (e) {
+      // El archivo no sirve, y sabemos por qué: se dice tal cual en vez de
+      // volcarle una excepción al usuario.
+      if (!context.mounted) return;
+      showPlatformSnackbar(
+        context: context,
+        title: 'settings.backup-import-failed'.i18n,
+        content: e.motivo,
+      );
+    } catch (e) {
+      logger.warning('No se pudo importar la copia', e);
+      if (!context.mounted) return;
+      showPlatformSnackbar(
+        context: context,
+        title: 'settings.backup-import-failed'.i18n,
+        content: e.toString(),
+      );
+    }
   }
 
   Widget _buildSkipIntervalContent() {
@@ -807,6 +1293,70 @@ class _SettingsPageState extends State<SettingsPage> {
         androidIcon: Icons.network_wifi,
       ),
       const SizedBox(height: 10),
+      // Copia de seguridad. Va antes del bloque de registro porque es de lo
+      // que le importa al usuario y no de diagnóstico.
+      SettingsExpanderTile(
+        title: 'settings.backup'.i18n,
+        subTitle: 'settings.backup-subtitle'.i18n,
+        androidIcon: Icons.save_alt,
+        icon: fluent.FluentIcons.save,
+        content: Column(
+          children: [
+            SettingsTile(
+              title: 'settings.backup-export'.i18n,
+              // Se recalcula en cada dibujado (buildSubtitle es una función):
+              // así, al volver de exportar, la línea del "último" ya está al
+              // día sin tener que recargar la pantalla.
+              buildSubtitle: () {
+                final base = 'settings.backup-export-subtitle'.i18n;
+                final hechas =
+                    (PrismHubStorage.getSetting(SettingKey.copiasHechas)
+                            as int?) ??
+                        0;
+                if (hechas == 0) return base;
+                final nombre =
+                    PrismHubStorage.getSetting(SettingKey.nombreDeCopia)
+                            as String? ??
+                        '';
+                return '$base\n${FlutterI18n.translate(
+                  context,
+                  'settings.backup-last',
+                  translationParams: {
+                    'nombre': nombre.isEmpty ? '—' : nombre,
+                    'n': '$hechas',
+                  },
+                )}';
+              },
+              trailing: PlatformWidget(
+                androidWidget: TextButton(
+                  onPressed: () => _exportarCopia(context),
+                  child: Text('common.export'.i18n),
+                ),
+                desktopWidget: fluent.FilledButton(
+                  onPressed: () => _exportarCopia(context),
+                  child: Text('common.export'.i18n),
+                ),
+              ),
+            ),
+            const SizedBox(height: 10),
+            SettingsTile(
+              title: 'settings.backup-import'.i18n,
+              buildSubtitle: () => 'settings.backup-import-subtitle'.i18n,
+              trailing: PlatformWidget(
+                androidWidget: TextButton(
+                  onPressed: () => _importarCopia(context),
+                  child: Text('settings.backup-import-action'.i18n),
+                ),
+                desktopWidget: fluent.Button(
+                  onPressed: () => _importarCopia(context),
+                  child: Text('settings.backup-import-action'.i18n),
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+      const SizedBox(height: 10),
       // Debug
       SettingsExpanderTile(
         title: "settings.log".i18n,
@@ -1259,6 +1809,332 @@ class _MobileStepperState extends State<_MobileStepper> {
         ),
         _boton(Icons.add, () => _cambiar(1)),
       ],
+    );
+  }
+}
+
+/// Pide la clave de una copia de seguridad.
+///
+/// Al exportar la pide dos veces: una clave mal escrita en una copia que se
+/// guarda hoy y se usa dentro de un año es un archivo perdido para siempre. El
+/// archivo NO guarda la clave —solo permite comprobar si la que se escribe es
+/// la correcta— así que no hay a quién pedírsela después.
+///
+/// Devuelve la clave por `pop`, o null si se cancela.
+/// Lo que el usuario decide sobre una copia: cómo se llama y con qué clave.
+class _DatosDeCopia {
+  const _DatosDeCopia({required this.clave, required this.nombre});
+  final String clave;
+
+  /// Con qué equipo se hizo. Vacío al importar, donde ya viene en el archivo.
+  final String nombre;
+}
+
+class _DialogoClave extends StatefulWidget {
+  const _DialogoClave({
+    required this.alExportar,
+    this.nombrePropuesto,
+    this.numero,
+    this.deQuien,
+  });
+  final bool alExportar;
+
+  /// El nombre con el que se guardó la copia anterior, para no reescribirlo.
+  final String? nombrePropuesto;
+
+  /// Qué número de copia va a ser esta.
+  final int? numero;
+
+  /// De qué copia se trata, al importar: "Mi celular · copia n.º 3".
+  final String? deQuien;
+
+  @override
+  State<_DialogoClave> createState() => _DialogoClaveState();
+}
+
+class _DialogoClaveState extends State<_DialogoClave> {
+  final _clave = TextEditingController();
+  final _repetida = TextEditingController();
+  late final TextEditingController _nombre =
+      TextEditingController(text: widget.nombrePropuesto ?? '');
+  bool _oculta = true;
+  String? _error;
+
+  @override
+  void dispose() {
+    _clave.dispose();
+    _repetida.dispose();
+    _nombre.dispose();
+    super.dispose();
+  }
+
+  void _aceptar() {
+    final clave = _clave.text;
+    if (clave.isEmpty) {
+      setState(() => _error = 'settings.backup-key-empty'.i18n);
+      return;
+    }
+    if (widget.alExportar) {
+      // El mismo mínimo que exige el cifrado. Se comprueba acá además de allá
+      // para poder decirlo en el momento, en vez de dejar escribir todo y
+      // fallar al guardar.
+      if (clave.length < CopiaCifrado.largoMinimo) {
+        setState(() => _error = FlutterI18n.translate(
+              context,
+              'settings.backup-key-short',
+              translationParams: {'n': '${CopiaCifrado.largoMinimo}'},
+            ));
+        return;
+      }
+      if (clave != _repetida.text) {
+        setState(() => _error = 'settings.backup-key-mismatch'.i18n);
+        return;
+      }
+      // Saneado con la MISMA función que usa el archivo, así lo que se ve acá
+      // es exactamente lo que se va a guardar.
+      final nombre = CopiaSeguridad.limpiarNombre(_nombre.text);
+      if (nombre.isEmpty) {
+        setState(() => _error = 'settings.backup-name-empty'.i18n);
+        return;
+      }
+      Navigator.of(context).pop(_DatosDeCopia(clave: clave, nombre: nombre));
+      return;
+    }
+    Navigator.of(context).pop(_DatosDeCopia(clave: clave, nombre: ''));
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final esAndroid = Platform.isAndroid;
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        Text(
+          (widget.alExportar
+                  ? 'settings.backup-key-hint-export'
+                  : 'settings.backup-key-hint-import')
+              .i18n,
+          style: TextStyle(
+            fontSize: 12.5,
+            height: 1.4,
+            color:
+                DefaultTextStyle.of(context).style.color?.withValues(alpha: .7),
+          ),
+        ),
+        // De qué copia se trata, al importar. Se lee del archivo SIN la clave,
+        // así que se puede mostrar antes de pedirla: es lo que permite saber si
+        // se eligió el archivo correcto entre varios de la misma carpeta.
+        if (!widget.alExportar && (widget.deQuien?.isNotEmpty ?? false)) ...[
+          const SizedBox(height: 12),
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+            decoration: BoxDecoration(
+              color: HomeTheme.accentPink.withValues(alpha: 0.10),
+              borderRadius: BorderRadius.circular(10),
+              border: Border.all(
+                  color: HomeTheme.accentPink.withValues(alpha: 0.35)),
+            ),
+            child: Row(
+              children: [
+                const Icon(Icons.folder_zip_outlined,
+                    size: 18, color: HomeTheme.accentPink),
+                const SizedBox(width: 8),
+                // Flexible: un nombre largo en un teléfono angosto se sale de
+                // la caja si no se le deja envolver.
+                Flexible(
+                  child: Text(
+                    widget.deQuien!,
+                    style: const TextStyle(
+                        fontSize: 12.5, fontWeight: FontWeight.w600),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
+        // El nombre del equipo, al exportar. Es lo que después dice de dónde
+        // salieron los datos al recuperarlos.
+        if (widget.alExportar) ...[
+          const SizedBox(height: 14),
+          _campo(_nombre, 'settings.backup-name-label'.i18n, esAndroid),
+          if (widget.numero != null) ...[
+            const SizedBox(height: 6),
+            Text(
+              FlutterI18n.translate(context, 'settings.backup-name-number',
+                  translationParams: {'n': '${widget.numero}'}),
+              style: TextStyle(
+                fontSize: 11.5,
+                color: DefaultTextStyle.of(context)
+                    .style
+                    .color
+                    ?.withValues(alpha: .55),
+              ),
+            ),
+          ],
+        ],
+        const SizedBox(height: 14),
+        _campo(_clave, 'settings.backup-key-label'.i18n, esAndroid,
+            conOjo: true),
+        if (widget.alExportar) ...[
+          const SizedBox(height: 10),
+          _campo(_repetida, 'settings.backup-key-repeat'.i18n, esAndroid),
+        ],
+        // El error ocupa sitio solo cuando lo hay: reservarlo siempre deja un
+        // hueco raro, y meterlo de golpe empuja los botones.
+        AnimatedSize(
+          duration: const Duration(milliseconds: 160),
+          curve: Curves.easeOut,
+          alignment: Alignment.topCenter,
+          child: _error == null
+              ? const SizedBox(width: double.infinity)
+              : Padding(
+                  padding: const EdgeInsets.only(top: 10),
+                  child: Row(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      const Icon(Icons.error_outline,
+                          size: 16, color: Colors.redAccent),
+                      const SizedBox(width: 6),
+                      // Flexible: un mensaje largo en una pantalla angosta se
+                      // sale de la caja si no se le deja envolver.
+                      Flexible(
+                        child: Text(
+                          _error!,
+                          style: const TextStyle(
+                              fontSize: 12, color: Colors.redAccent),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+        ),
+        const SizedBox(height: 18),
+        Row(
+          mainAxisAlignment: MainAxisAlignment.end,
+          children: [
+            PlatformTextButton(
+              onPressed: () => Navigator.of(context).pop(),
+              child: Text('common.cancel'.i18n),
+            ),
+            const SizedBox(width: 8),
+            PlatformFilledButton(
+              onPressed: _aceptar,
+              child: Text(
+                (widget.alExportar ? 'common.export' : 'common.confirm').i18n,
+              ),
+            ),
+          ],
+        ),
+      ],
+    );
+  }
+
+  /// El campo de cada plataforma: en escritorio el de fluent y en el teléfono
+  /// el de material, para que se vea como el resto de la app y no como un
+  /// injerto.
+  Widget _campo(TextEditingController c, String etiqueta, bool esAndroid,
+      {bool conOjo = false}) {
+    final ojo = conOjo
+        ? IconButton(
+            icon: Icon(_oculta ? Icons.visibility_off : Icons.visibility,
+                size: 18),
+            onPressed: () => setState(() => _oculta = !_oculta),
+            tooltip: (_oculta ? 'common.show' : 'common.hide').i18n,
+          )
+        : null;
+    if (esAndroid) {
+      return TextField(
+        controller: c,
+        obscureText: _oculta,
+        autofocus: conOjo,
+        onSubmitted: (_) => _aceptar(),
+        decoration: InputDecoration(
+          labelText: etiqueta,
+          isDense: true,
+          border: const OutlineInputBorder(),
+          suffixIcon: ojo,
+        ),
+      );
+    }
+    return fluent.TextBox(
+      controller: c,
+      obscureText: _oculta,
+      autofocus: conOjo,
+      placeholder: etiqueta,
+      onSubmitted: (_) => _aceptar(),
+      suffix: ojo,
+    );
+  }
+}
+
+/// La barra mientras entra una copia.
+///
+/// Una copia grande son cientos de registros y cada uno toca la base de datos.
+/// Sin esto la pantalla se queda quieta varios segundos y no hay forma de
+/// distinguirlo de que se colgó.
+///
+/// La barra va **animada hacia** cada valor nuevo en vez de saltar: el progreso
+/// llega a tirones —un registro rápido, otro lento— y sin suavizarlo se ve
+/// nerviosa aunque el trabajo avance parejo.
+class _BarraDeImportacion extends StatelessWidget {
+  const _BarraDeImportacion({required this.progreso});
+  final ValueNotifier<double> progreso;
+
+  @override
+  Widget build(BuildContext context) {
+    return ValueListenableBuilder<double>(
+      valueListenable: progreso,
+      builder: (context, valor, _) {
+        return TweenAnimationBuilder<double>(
+          tween: Tween(begin: 0, end: valor.clamp(0.0, 1.0)),
+          duration: const Duration(milliseconds: 320),
+          curve: Curves.easeOutCubic,
+          builder: (context, suave, _) => Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              Text(
+                'settings.backup-import-working-hint'.i18n,
+                style: TextStyle(
+                  fontSize: 12.5,
+                  height: 1.4,
+                  color: DefaultTextStyle.of(context)
+                      .style
+                      .color
+                      ?.withValues(alpha: .7),
+                ),
+              ),
+              const SizedBox(height: 14),
+              ClipRRect(
+                borderRadius: BorderRadius.circular(999),
+                child: LinearProgressIndicator(
+                  // Indeterminada hasta el primer dato: leer y descifrar el
+                  // archivo pasa antes de que haya nada que contar.
+                  value: valor <= 0 ? null : suave,
+                  minHeight: 8,
+                  backgroundColor:
+                      HomeTheme.accentPink.withValues(alpha: 0.18),
+                  valueColor: const AlwaysStoppedAnimation<Color>(
+                      HomeTheme.accentPink),
+                ),
+              ),
+              const SizedBox(height: 8),
+              Align(
+                alignment: Alignment.centerRight,
+                child: Text(
+                  valor <= 0 ? '' : '${(suave * 100).round()}%',
+                  style: const TextStyle(
+                    fontSize: 12,
+                    fontWeight: FontWeight.w700,
+                    color: HomeTheme.accentPink,
+                  ),
+                ),
+              ),
+            ],
+          ),
+        );
+      },
     );
   }
 }

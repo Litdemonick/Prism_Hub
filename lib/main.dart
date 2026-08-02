@@ -26,6 +26,7 @@ import 'package:prismhub/utils/prismhub_storage.dart';
 import 'package:prismhub/utils/application.dart';
 import 'package:prismhub/views/widgets/platform_widget.dart';
 import 'package:prismhub/utils/compartir.dart';
+import 'package:prismhub/utils/notificacion_reproductor.dart';
 import 'package:prismhub/utils/instancia_unica.dart';
 import 'package:window_manager/window_manager.dart';
 import 'package:package_info_plus/package_info_plus.dart';
@@ -299,6 +300,8 @@ void _mostrarVentanaCuandoHayaFotograma(Size esperada) {
     } catch (e, st) {
       logger.warning('No se pudo mostrar la ventana', e, st);
     }
+    // Y si aun así quedó desajustada, se corrige. Ver _corregirSuperficie.
+    unawaited(_corregirSuperficie(esperada));
   }
 
   // Esperar UN fotograma no alcanzaba.
@@ -348,6 +351,54 @@ void _mostrarVentanaCuandoHayaFotograma(Size esperada) {
   // Dos segundos: de sobra para el primer fotograma incluso arrancando en
   // frío, y poco como para que un arranque roto no parezca un cuelgue.
   Timer(const Duration(seconds: 2), mostrar);
+}
+
+/// Si la superficie quedó de otro tamaño que la ventana, la desatasca.
+///
+/// La espera de antes tiene una red de seguridad por tiempo, y esa red se
+/// dispara de verdad: con `flutter run` el arranque puede tardar más que el
+/// plazo, así que la ventana se muestra igual con la superficie vieja. Se ve el
+/// contenido chico arrinconado arriba a la izquierda, con franjas negras a la
+/// derecha y abajo.
+///
+/// Y ahí se queda. Flutter redibuja cuando el sistema le avisa que la ventana
+/// cambió de tamaño (WM_SIZE), pero si la ventana YA está en su tamaño final
+/// ese aviso no vuelve a llegar nunca y nada corrige la superficie: hay que
+/// mover la ventana a mano para que se acomode.
+///
+/// Así que se le da un empujón: un píxel más de ancho y vuelta al tamaño real.
+/// Eso provoca el aviso que faltaba. Es un píxel durante un cuadro, no se ve.
+///
+/// Solo actúa si de verdad hay desajuste, y se rinde a los tres intentos: si el
+/// empujón no alcanzó, insistir tampoco va a alcanzar y sería una ventana
+/// temblando sola.
+Future<void> _corregirSuperficie(Size esperada) async {
+  for (var intento = 0; intento < 3; intento++) {
+    await Future<void>.delayed(const Duration(milliseconds: 300));
+    final vista = WidgetsBinding.instance.platformDispatcher.implicitView;
+    if (vista == null || vista.devicePixelRatio <= 0) return;
+    final actual = vista.physicalSize / vista.devicePixelRatio;
+    // Misma tolerancia que la espera: absorbe el grosor del borde, que no es
+    // parte de lo que Flutter dibuja.
+    if ((actual.width - esperada.width).abs() <= 24 &&
+        (actual.height - esperada.height).abs() <= 24) {
+      return;
+    }
+    try {
+      final real = await windowManager.getSize();
+      if (real.width <= 0 || real.height <= 0) return;
+      logger.info('La superficie quedó en $actual con la ventana en $real: '
+          'se fuerza un reajuste');
+      await windowManager.setSize(Size(real.width + 1, real.height));
+      await Future<void>.delayed(const Duration(milliseconds: 32));
+      await windowManager.setSize(real);
+    } catch (e) {
+      // Que no se pueda empujar no vale colgar el arranque: peor es una ventana
+      // mal dibujada que se arregla al moverla, que ninguna ventana.
+      logger.warning('No se pudo reajustar la ventana: $e');
+      return;
+    }
+  }
 }
 
 /// Deja la ventana en la posición y el tamaño de la sesión anterior, y
@@ -468,6 +519,15 @@ class _AppRootState extends State<_AppRoot> {
       MediaKit.ensureInitialized();
     } catch (e) {
       debugPrint('ERROR: MediaKit.ensureInitialized falló: $e');
+    }
+    // La notificación del reproductor, solo en Android.
+    //
+    // Se enciende UNA vez al arrancar y no al abrir cada vídeo: Android no deja
+    // levantar y bajar este servicio a repetición. Después solo se le cambia lo
+    // que muestra. Si falla, se sigue sin ella: no poder dibujar una
+    // notificación no puede impedir ver un vídeo.
+    if (Platform.isAndroid) {
+      await NotificacionReproductor.encender();
     }
     await minDuration;
     if (mounted) setState(() => _ready = true);

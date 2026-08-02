@@ -1,4 +1,5 @@
-<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+<manifest xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:tools="http://schemas.android.com/tools">
     <!-- Huella/rostro para la Zona +18 (local_auth). -->
     <uses-permission android:name="android.permission.USE_BIOMETRIC" />
     <application
@@ -74,6 +75,30 @@
                 android:name="android.support.FILE_PROVIDER_PATHS"
                 android:resource="@xml/file_paths" />
         </provider>
+        <!-- Notificación del reproductor (audio_service).
+             Deja seguir viendo o transmitiendo con la app en segundo plano, y
+             controlarlo desde la barra sin volver a entrar. Transmitiendo a un
+             televisor es donde más se nota: la imagen está en la otra pantalla
+             y el teléfono es el mando. -->
+        <service
+            android:name="com.ryanheise.audioservice.AudioService"
+            android:foregroundServiceType="mediaPlayback"
+            android:exported="true"
+            tools:ignore="Instantiatable">
+            <intent-filter>
+                <action android:name="android.media.browse.MediaBrowserService" />
+            </intent-filter>
+        </service>
+        <!-- Los botones de la notificación y los de los auriculares llegan
+             por acá. Sin esto la notificación se dibuja pero no responde. -->
+        <receiver
+            android:name="com.ryanheise.audioservice.MediaButtonReceiver"
+            android:exported="true"
+            tools:ignore="Instantiatable">
+            <intent-filter>
+                <action android:name="android.intent.action.MEDIA_BUTTON" />
+            </intent-filter>
+        </receiver>
     </application>
     <uses-permission android:name="android.permission.INTERNET" />
     <uses-permission android:name="android.permission.WAKE_LOCK" />
@@ -87,5 +112,14 @@
     <uses-permission android:name="android.permission.REQUEST_INSTALL_PACKAGES" />
     <!-- Permiso para leer archivos del sistema de archivos para el APK -->
     <uses-permission android:name="android.permission.READ_EXTERNAL_STORAGE" />
+    <!-- La notificación del reproductor. Desde Android 13 el sistema pide
+         permiso para mostrar cualquier notificación; sin el primero, la barra
+         de controles no aparece nunca. El segundo es lo que permite que la
+         reproducción siga con la app en segundo plano en vez de que el sistema
+         la corte a los pocos segundos. -->
+    <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
+    <uses-permission
+        android:name="android.permission.FOREGROUND_SERVICE_MEDIA_PLAYBACK" />
 
 </manifest>
