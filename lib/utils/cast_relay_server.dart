@@ -287,16 +287,18 @@ class CastRelayServer {
       // verdad o si solo abrio la conexion y se fue.
       CastLog.paso('El aparato pidio desde $quien: ${request.method} '
           '${CastLog.cabeceras(request.headers)}');
-    } else if (request.method.toUpperCase() == 'GET') {
-      // VOLVIÓ a pedir el vídeo entero.
+    } else if (request.method.toUpperCase() == 'GET' && target.planTs != null) {
+      // VOLVIÓ a pedir el vídeo entero. SOLO para el flujo reempaquetado.
       //
-      // Antes solo se anotaba el primer pedido, "porque después son cientos por
-      // episodio" — cierto para los pedidos por trozos (Range) de un vídeo que
-      // se manda tal cual, pero NO para el flujo reempaquetado, que se sirve de
-      // una sola vez. Ahí un GET nuevo significa que el aparato cortó y volvió
-      // a empezar, y como el flujo se arma desde el principio, el vídeo arranca
-      // de cero. Sin esta línea, un bucle de reinicios no dejaba ningún rastro
-      // y desde el registro se veía como una transmisión normal.
+      // Ahí un GET nuevo sí significa que el aparato cortó y volvió a empezar,
+      // porque ese flujo se sirve de una sola vez: un pedido nuevo lo arma desde
+      // el principio y el vídeo arranca de cero. Sin esta línea, un bucle de
+      // reinicios no dejaba ningún rastro en el registro.
+      //
+      // Y NO en los demás casos, que es lo que hacía antes: sirviendo una lista
+      // HLS pedacito por pedacito —como hace el reproductor nativo— cada uno es
+      // un GET, así que el aviso saltaba cientos de veces anunciando un reinicio
+      // que no existía. Un aviso que grita siempre no avisa de nada.
       final servidos = bytesPorSesion[target.sesion] ?? 0;
       CastLog.paso('El aparato VOLVIÓ a pedir el vídeo tras '
           '${(servidos / 1024 / 1024).toStringAsFixed(1)} MiB servidos '
