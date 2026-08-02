@@ -749,6 +749,16 @@ class ApplicationUtils {
     String version,
   ) async {
     var progressDialogOpen = false;
+    // Cuánto va descargado, para poder mostrarlo.
+    //
+    // Antes esto se calculaba igual y se mandaba SOLO al registro de depuración
+    // (ver el onReceiveProgress de abajo): en pantalla había una rueda girando
+    // sin principio ni fin. Una actualización de 80 MB con una conexión lenta
+    // son varios minutos mirando algo que no dice si avanza ni cuánto falta, y
+    // no hay forma de distinguirlo de que se haya colgado.
+    final progreso = ValueNotifier<({double? parte, String texto})>(
+      (parte: null, texto: ''),
+    );
     if (context.mounted) {
       progressDialogOpen = true;
       unawaited(showPlatformDialog(
@@ -756,18 +766,7 @@ class ApplicationUtils {
         title: 'upgrade.check-update'.i18n,
         content: Padding(
           padding: const EdgeInsets.symmetric(vertical: 12),
-          child: Row(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              const SizedBox(
-                width: 22,
-                height: 22,
-                child: CircularProgressIndicator(strokeWidth: 3),
-              ),
-              const SizedBox(width: 16),
-              Flexible(child: Text('upgrade.downloading'.i18n)),
-            ],
-          ),
+          child: _BarraDeDescarga(progreso: progreso),
         ),
         // null y no []: con una lista vacia, fluent dibuja igual la barra
         // de acciones y se veia un recuadro oscuro suelto abajo del dialogo.
@@ -793,11 +792,15 @@ class ApplicationUtils {
 
       // Descargar con progreso
       await dio.download(url, downloadPath, onReceiveProgress: (count, total) {
-        if (total > 0) {
-          debugPrint(
-            'Download progress: ${(count / total * 100).toStringAsFixed(2)}%',
-          );
-        }
+        // total llega en -1 cuando el servidor no dice cuanto pesa. Ahi la
+        // barra se queda indeterminada, pero al menos se muestra lo bajado:
+        // que el numero suba ya dice que no se colgo.
+        progreso.value = total > 0
+            ? (
+                parte: count / total,
+                texto: '${_enMegas(count)} / ${_enMegas(total)} MB',
+              )
+            : (parte: null, texto: '${_enMegas(count)} MB');
       });
 
       final assetName = (asset['name'] as String).toLowerCase();
@@ -872,8 +875,16 @@ class ApplicationUtils {
         );
       }
       debugPrint('Download/install error: $e');
+    } finally {
+      // En finally: por el camino bueno esta funcion puede terminar cerrando la
+      // app para instalar, y por el malo sale por el catch. Soltarlo en uno
+      // solo de los dos lo dejaba colgado en el otro.
+      progreso.dispose();
     }
   }
+
+  static String _enMegas(int bytes) =>
+      (bytes / 1024 / 1024).toStringAsFixed(1);
 
   static void _throwIfProcessFailed(String command, ProcessResult result) {
     if (result.exitCode == 0) return;
@@ -2034,6 +2045,75 @@ class _BotonActualizarMovil extends StatelessWidget {
           ),
         ),
       ),
+    );
+  }
+}
+
+/// Lo que se ve mientras se baja una actualización.
+///
+/// Una barra con lo que va descargado y los megas al lado, en vez de una rueda
+/// girando sin principio ni fin. Con una actualización de decenas de megas y
+/// una conexión lenta, esa rueda no decía si avanzaba, cuánto faltaba, ni si se
+/// había colgado — y no había forma de saberlo desde afuera.
+///
+/// Es el mismo diálogo en PC y en Android, así que la barra sale en los dos.
+class _BarraDeDescarga extends StatelessWidget {
+  const _BarraDeDescarga({required this.progreso});
+
+  /// `parte` es de 0 a 1, o null cuando el servidor no dijo cuánto pesa: ahí la
+  /// barra va indeterminada pero los megas siguen subiendo, que ya es señal de
+  /// que la descarga está viva.
+  final ValueNotifier<({double? parte, String texto})> progreso;
+
+  @override
+  Widget build(BuildContext context) {
+    return ValueListenableBuilder<({double? parte, String texto})>(
+      valueListenable: progreso,
+      builder: (context, valor, _) {
+        return Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text('upgrade.downloading'.i18n),
+            const SizedBox(height: 12),
+            ClipRRect(
+              borderRadius: BorderRadius.circular(999),
+              child: LinearProgressIndicator(
+                value: valor.parte,
+                minHeight: 6,
+                backgroundColor: HomeTheme.accentPink.withValues(alpha: 0.18),
+                valueColor:
+                    const AlwaysStoppedAnimation<Color>(HomeTheme.accentPink),
+              ),
+            ),
+            const SizedBox(height: 8),
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                Text(
+                  valor.texto,
+                  style: TextStyle(
+                    fontSize: 12,
+                    color: DefaultTextStyle.of(context)
+                        .style
+                        .color
+                        ?.withValues(alpha: 0.7),
+                  ),
+                ),
+                if (valor.parte != null)
+                  Text(
+                    '${(valor.parte! * 100).round()}%',
+                    style: const TextStyle(
+                      fontSize: 12,
+                      fontWeight: FontWeight.w700,
+                      color: HomeTheme.accentPink,
+                    ),
+                  ),
+              ],
+            ),
+          ],
+        );
+      },
     );
   }
 }
