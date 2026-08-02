@@ -25,6 +25,7 @@ import 'package:prismhub/controllers/main_controller.dart';
 import 'package:prismhub/router/router.dart';
 import 'package:prismhub/utils/bt_server.dart';
 import 'package:prismhub/utils/cast_aparato.dart';
+import 'package:prismhub/utils/connectivity.dart';
 import 'package:prismhub/utils/cast_metadata.dart';
 import 'package:prismhub/utils/cast_relay_server.dart';
 import 'package:prismhub/utils/watch_state.dart';
@@ -1140,6 +1141,43 @@ class VideoPlayerController extends GetxController with WidgetsBindingObserver {
           }
         }
       }
+    }));
+
+    // Vuelve la red, o se pasa de wifi a datos: se recupera solo.
+    //
+    // Al cambiar de red, la conexion que estaba bajando el video se corta y
+    // ademas la direccion deja de servir: muchas fuentes la firman contra la IP
+    // publica que tenias al pedirla, asi que desde la red nueva contestan que
+    // no. Lo que se veia era el cartel de "servidor no disponible" con el audio
+    // todavia sonando desde lo que quedaba en el buffer, y no se recuperaba
+    // nunca: habia que salir del episodio y volver a entrar.
+    //
+    // Se pide una resolucion NUEVA (no se reabre la vieja, que ya no sirve) y
+    // se retoma en el punto donde iba.
+    _addWorker(ever(ConnectivityUtils.isOnline, (online) {
+      if (online != true || _disposed) return;
+      // Casteando no: el televisor baja el video por su cuenta y tiene su
+      // propia conexion; ahi el vigilante del aparato es el que manda.
+      if (dlnaDevice.value != null) return;
+      // Con el respaldo por navegador tampoco: ese no lo manejamos nosotros.
+      if (isWebViewActive.value || isGettingWatchData.value) return;
+      // Solo si de verdad se rompio algo. Un cambio de red mientras todo va
+      // bien no tiene por que interrumpir nada.
+      final roto = imagenCongelada.value || serverFailedMessage.value.isNotEmpty;
+      if (!roto) return;
+      // Se da un respiro: apenas cambia la interfaz, la red nueva todavia no
+      // resuelve nombres y el reintento saldria fallado igual.
+      Timer(const Duration(milliseconds: 1200), () {
+        if (_disposed || dlnaDevice.value != null) return;
+        if (!imagenCongelada.value && serverFailedMessage.value.isEmpty) return;
+        logger.info('Cambio de red: se vuelve a resolver el video');
+        _midStreamResumeAt = position.value;
+        // El contador de reintentos se reinicia: los fallos anteriores fueron
+        // por la red que se cayo, no porque el servidor este mal.
+        _serverRetryCount = 0;
+        serverFailedMessage.value = '';
+        _failOrRetryServer(currentServerName.value);
+      });
     }));
 
     // Vigilante de imagen congelada: ver imagenCongelada.

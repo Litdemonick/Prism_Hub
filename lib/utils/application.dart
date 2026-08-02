@@ -812,7 +812,21 @@ class ApplicationUtils {
       // Windows: instalador .exe
       if (Platform.isWindows && assetName.endsWith('.exe')) {
         if (progressDialogOpen) RouterUtils.pop();
-        await _runWindowsInstaller(downloadPath);
+        // Si no se pudo lanzar, se DICE. Antes se salia del app pasara lo que
+        // pasara, asi que un fallo se veia igual que un exito: la ventana se
+        // cerraba y no aparecia ningun instalador. Ahora la app se queda
+        // abierta y explica que el archivo ya esta bajado y donde.
+        final lanzado = await _runWindowsInstaller(downloadPath);
+        if (!lanzado && context.mounted) {
+          showPlatformSnackbar(
+            context: context,
+            content: FlutterI18n.translate(
+              context,
+              'upgrade.installer-failed',
+              translationParams: {'path': downloadPath},
+            ),
+          );
+        }
         return;
       }
 
@@ -1002,58 +1016,70 @@ class ApplicationUtils {
     }
   }
 
-  static Future<void> _runWindowsInstaller(String installerPath) async {
-    // El instalador arranca DESPUES de que este proceso se haya ido.
+  static Future<bool> _runWindowsInstaller(String installerPath) async {
+    // Se ESPERA a que PowerShell termine de lanzar el instalador, y recien
+    // despues nos vamos.
     //
-    // Antes se lanzaba de inmediato y recien despues se llamaba a exit(0). El
-    // instalador usa el Restart Manager para detectar la app abierta, y ese
-    // escaneo ocurria mientras PrismHub todavia estaba vivo: aparecia la
-    // pantalla de "hay que cerrar estas aplicaciones" y quedaba en manos del
-    // usuario aceptar. Si la cerraba mal, o el proceso quedaba a medio salir,
-    // la actualizacion podia escribir sobre archivos en uso.
+    // Antes se dejaba corriendo un PowerShell que dormia tres segundos y luego
+    // lanzaba el instalador, mientras esta app se cerraba de inmediato. Eso NO
+    // funciona: el hijo pertenece al mismo grupo de procesos de Windows, asi
+    // que al irse el padre se lo lleva puesto. Resultado medido en un equipo
+    // real: el script quedaba en el disco SIN ejecutarse —ni siquiera llegaba a
+    // borrarse solo, que es lo ultimo que hace— y para el usuario el app se
+    // cerraba y no pasaba nada mas.
     //
-    // Con la espera, cuando el instalador mira ya no hay nada corriendo y hace
-    // su trabajo sin preguntar nada.
+    // Sin la espera de tres segundos tampoco hace falta: el instalador ya trae
+    // CloseApplications=force, o sea que el mismo cierra el app si la encuentra
+    // abierta, sin preguntar (ver inno_setup.iss).
     //
-    // El comando va en un archivo .ps1 y no en -Command: encadenar la espera y
-    // el Start-Process en una sola linea obliga a anidar comillas dentro de
-    // comillas, y basta con que la ruta de instalacion tenga un espacio o un
-    // apostrofo para que se rompa de formas dificiles de ver.
+    // El proceso que abre Start-Process SI sobrevive, porque lo crea el propio
+    // Windows por fuera de nuestro grupo. Comprobado con una prueba aparte
+    // antes de escribir esto.
     final script = File(
       '${Directory.systemTemp.path}${Platform.pathSeparator}'
       'prismhub-update-${DateTime.now().millisecondsSinceEpoch}.ps1',
     );
-    await script.writeAsString(
-      // 3 segundos: de sobra para que el proceso muera, y poco como para que
-      // no parezca que el boton no hizo nada.
-      'Start-Sleep -Seconds 3\n'
-      'Start-Process -FilePath ${_psQuote(installerPath)} -Verb RunAs\n'
-      // El script se borra solo: es temporal y no tiene por que quedar.
-      'Remove-Item -LiteralPath ${_psQuote(script.path)} -Force '
-      '-ErrorAction SilentlyContinue\n',
-    );
+    try {
+      await script.writeAsString(
+        // -Verb RunAs: el instalador pide permisos de administrador. Sin esto
+        // Windows lo rechaza antes de arrancar.
+        'Start-Process -FilePath ${_psQuote(installerPath)} -Verb RunAs\n',
+      );
+      final r = await Process.run(
+        'powershell',
+        [
+          '-NoProfile',
+          '-ExecutionPolicy',
+          'Bypass',
+          '-WindowStyle',
+          'Hidden',
+          '-File',
+          script.path,
+        ],
+      ).timeout(const Duration(seconds: 60));
+      // Distinto de cero = no se lanzo. El caso normal es que el usuario haya
+      // dicho que no en el aviso de permisos de Windows.
+      if (r.exitCode != 0) {
+        debugPrint('No se pudo lanzar el instalador '
+            '(codigo ${r.exitCode}): ${r.stderr}');
+        return false;
+      }
+    } catch (e, st) {
+      debugPrint('No se pudo lanzar el instalador: $e / $st');
+      return false;
+    } finally {
+      // El script ya cumplio: se limpia aca y no desde adentro de si mismo.
+      try {
+        if (script.existsSync()) script.deleteSync();
+      } catch (_) {}
+    }
 
-    // Sin await: este powershell tiene que SOBREVIVIR al exit(0) de abajo. Con
-    // Process.run se esperaria a que termine, y lo que hace es justamente
-    // esperar a que nos vayamos.
-    unawaited(Process.start(
-      'powershell',
-      [
-        '-NoProfile',
-        '-ExecutionPolicy',
-        'Bypass',
-        '-WindowStyle',
-        'Hidden',
-        '-File',
-        script.path,
-      ],
-      mode: ProcessStartMode.detached,
-    ));
-
-    // Un respiro para que el proceso hijo quede lanzado antes de irnos.
-    await Future<void>.delayed(const Duration(milliseconds: 300));
+    // Recien AHORA nos vamos, y solo si de verdad se lanzo. Antes se salia
+    // pasara lo que pasara, asi que un fallo se veia igual que un exito: el
+    // app se cerraba y listo.
     exit(0);
   }
+
 
   static Future<void> _replaceAndRestart(
     Directory sourceDir,

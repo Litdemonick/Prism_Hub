@@ -489,6 +489,7 @@
     "downloading": "Downloading update...",
     "install-failed": "Update failed",
     "still-outdated": "The update wasn't detected yet. Finish installing it and try again.",
+    "installer-failed": "Could not open the installer. The file is already downloaded: run it yourself from {path}",
     "assets-not-ready": "The new version is still being published. Once the files for every platform are ready, the update shows up on its own.",
     "needs-install-permission": "The permission to install unknown apps is missing. Enable it for PrismHub and tap update again: the download is already saved, it will not be downloaded again.",
     "too-old-to-update": "This version is too old to update on its own. Download the installer from the releases page and install it by hand once.",
