@@ -319,6 +319,9 @@ class AparatoChromecast implements AparatoDeCasteo {
     return (c.estado.volumen * 100).round().clamp(0, 100);
   }
 
+  /// Lo ultimo que el aparato dijo que salio mal, si dijo algo.
+  String? get fallo => _cliente?.ultimoFallo;
+
   @override
   Future<EstadoAparato?> leerEstado() async {
     final c = _cliente;

@@ -121,13 +121,79 @@ class CastRelayServer {
   /// sin esto se perdía. Se guarda para poder mostrarlo en el aviso de error.
   static String? ultimoError;
 
+  /// Sesiones para las que el aparato YA pidio algo, y desde que direccion.
+  ///
+  /// Distingue los dos motivos por los que un televisor puede quedarse en negro,
+  /// que desde afuera se ven identicos:
+  ///
+  ///  - Nunca pidio nada: no llega hasta aca. Es red — otra subred, o un
+  ///    cortafuegos tapando el puerto.
+  ///  - Pidio y bajo datos: llega perfecto y el problema es que no puede con el
+  ///    formato.
+  ///
+  /// Sin esto no habia forma de saber cual de las dos era, y se terminaba
+  /// probando a ciegas.
+  static final Map<String, String> pedidosPorSesion = {};
+
+  /// Si el aparato pidio algo para esta transmision.
+  static bool huboPedido(String? relayUrl) {
+    final sesion = _sesionDe(relayUrl);
+    return sesion != null && pedidosPorSesion.containsKey(sesion);
+  }
+
+  /// Desde que direccion pidio, para poder decirlo en el aviso.
+  static String? quienPidio(String? relayUrl) {
+    final sesion = _sesionDe(relayUrl);
+    return sesion == null ? null : pedidosPorSesion[sesion];
+  }
+
+  static String? _sesionDe(String? relayUrl) {
+    if (relayUrl == null) return null;
+    final uri = Uri.tryParse(relayUrl);
+    if (uri == null || uri.pathSegments.length < 2) return null;
+    return _targets[uri.pathSegments[1]]?.sesion;
+  }
+
+  /// Cabeceras de permiso para que un receptor web pueda bajar el video.
+  ///
+  /// El receptor del Chromecast es una APLICACION WEB: para HLS baja cada
+  /// pedacito con una peticion de navegador, y sin este permiso el propio
+  /// navegador la bloquea antes de salir. El resultado era que el aparato
+  /// aceptaba el video, mostraba el titulo, y no dibujaba nunca nada.
+  ///
+  /// No molesta a nadie mas: un televisor DLNA baja el video con su propio
+  /// cliente HTTP y estas cabeceras las ignora.
+  static const _permisos = {
+    'Access-Control-Allow-Origin': '*',
+    'Access-Control-Allow-Methods': 'GET, HEAD, OPTIONS',
+    'Access-Control-Allow-Headers': '*',
+    'Access-Control-Expose-Headers': 'Content-Length, Content-Range',
+  };
+
   static Future<Response> _handleRequest(Request request) async {
+    // El navegador PREGUNTA antes de bajar nada de otro origen. Si esa
+    // pregunta no se contesta, no llega a pedir el video.
+    if (request.method.toUpperCase() == 'OPTIONS') {
+      return Response.ok(null, headers: _permisos);
+    }
     final segments = request.url.pathSegments;
     if (segments.length < 2 || segments[0] != 'relay') {
       return Response.notFound('not found');
     }
     final target = _targets[segments[1]];
     if (target == null) return Response.notFound('unknown relay token');
+
+    // Se anota que el aparato llego hasta aca. Solo la primera vez de cada
+    // transmision: despues son cientos de pedidos por episodio.
+    if (!pedidosPorSesion.containsKey(target.sesion)) {
+      final quien = (request.context['shelf.io.connection_info']
+                  as HttpConnectionInfo?)
+              ?.remoteAddress
+              .address ??
+          'desconocido';
+      pedidosPorSesion[target.sesion] = quien;
+      logger.info('El aparato pidio el video desde $quien');
+    }
 
     // El receptor pregunta primero con HEAD (el "Stat" de Kodi) para saber
     // tamaño y tipo antes de bajar nada. Antes se le contestaba SIEMPRE con un
@@ -187,6 +253,7 @@ class CastRelayServer {
             // La lista cambió de tamaño, así que el largo de la fuente ya no
             // vale y el content-encoding tampoco (acá va en texto plano).
             'Cache-Control': 'no-cache',
+            ..._permisos,
           },
         );
       }
@@ -203,6 +270,8 @@ class CastRelayServer {
         if (lower == 'transfer-encoding') return;
         resHeaders[name] = values.join(', ');
       });
+
+      resHeaders.addAll(_permisos);
 
       if (esHead) {
         return Response(upstreamRes.statusCode, headers: resHeaders);
@@ -426,6 +495,7 @@ class CastRelayServer {
     }
     _targets.removeWhere((_, t) => t.sesion == sesion);
     _tokensPorUrl.removeWhere((clave, _) => clave.startsWith('$sesion|'));
+    pedidosPorSesion.remove(sesion);
     _cerrarSiSobra();
   }
 

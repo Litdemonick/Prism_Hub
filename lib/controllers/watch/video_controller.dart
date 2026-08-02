@@ -534,6 +534,9 @@ class VideoPlayerController extends GetxController with WidgetsBindingObserver {
   final castEsperandoPlay = false.obs;
   Timer? _esperaPlayTimer;
 
+  /// Comprueba si el aparato llego a pedirnos el video. Ver connectDLNADevice.
+  Timer? _pedidoCastTimer;
+
   /// La direccion que le mandamos NOSOTROS al aparato.
   ///
   /// DLNA no tiene ningun bloqueo: si otro telefono le manda otro video al
@@ -1825,6 +1828,7 @@ class VideoPlayerController extends GetxController with WidgetsBindingObserver {
     _castBuscandoTimer?.cancel();
     _volumenCastTimer?.cancel();
     _esperaPlayTimer?.cancel();
+    _pedidoCastTimer?.cancel();
     _vigilanteDeAtasco?.cancel();
     imagenCongelada.value = false;
     final device = dlnaDevice.value;
@@ -3452,6 +3456,27 @@ class VideoPlayerController extends GetxController with WidgetsBindingObserver {
     castVelocidadPedida.value = 1;
     // Sigue "cargando" hasta que el aparato diga que reproduce de verdad.
     castEsperandoPlay.value = true;
+    // A los ocho segundos se comprueba si el aparato LLEGO a pedirnos el video.
+    //
+    // Un televisor en negro se ve igual en dos casos muy distintos: cuando no
+    // nos alcanza por la red, y cuando nos alcanza pero no puede con el
+    // formato. El relay sabe cual de los dos es —si le pidieron algo o no—, y
+    // sin decirlo se termina probando a ciegas.
+    _pedidoCastTimer?.cancel();
+    _pedidoCastTimer = Timer(const Duration(seconds: 8), () {
+      if (_disposed || dlnaDevice.value == null) return;
+      // Con el video ya andando no hay nada que avisar.
+      if (isPlaying.value) return;
+      // Sin relay (direccion directa) no hay nada que medir.
+      if (_dlnaRelayUrl == null) return;
+      if (CastRelayServer.huboPedido(_dlnaRelayUrl)) {
+        // Llego hasta nosotros y bajo datos: el problema es el formato.
+        castAviso.value = 'video.cast-formato'.i18n;
+      } else {
+        // Nunca nos pidio nada: no llega. Es red.
+        castAviso.value = 'video.cast-sin-alcance'.i18n;
+      }
+    });
     _esperaPlayTimer?.cancel();
     // Techo por si nunca lo informa (firmware que no actualiza su estado): el
     // aviso se va y quedan los controles, mejor que una rueda eterna.
@@ -3596,6 +3621,7 @@ class VideoPlayerController extends GetxController with WidgetsBindingObserver {
     _objetivoDeSalto = null;
     _castBuscandoTimer?.cancel();
     _esperaPlayTimer?.cancel();
+    _pedidoCastTimer?.cancel();
     _volumenCastTimer?.cancel();
 
     // Y el reproductor local vuelve a andar.
@@ -3830,6 +3856,23 @@ class VideoPlayerController extends GetxController with WidgetsBindingObserver {
       if (info.duracion != null) duration.value = info.duracion!;
       // Ya llego a donde se le pidio? Entonces se saca la rueda de "buscando".
       _revisarSaltoEnCast();
+
+      // Si el aparato dijo por que no pudo, se muestra.
+      //
+      // El receptor avisa el motivo —formato que no entiende, direccion que no
+      // pudo bajar— y eso se estaba descartando: en la pantalla del televisor
+      // quedaba el titulo sobre negro y de este lado no habia forma de saber
+      // cual de las dos cosas era.
+      if (device is AparatoChromecast) {
+        final fallo = device.fallo;
+        if (fallo != null && fallo != _fallaDeCastAvisada) {
+          _fallaDeCastAvisada = fallo;
+          sendMessage(Message(
+            Text('${'video.cast-device-error'.i18n} ($fallo)'),
+            time: const Duration(seconds: 8),
+          ));
+        }
+      }
 
       // Sigue siendo NUESTRO video?
       //
