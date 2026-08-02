@@ -114,14 +114,17 @@ class VideoPlayerController extends GetxController with WidgetsBindingObserver {
       unawaited(closeRoute());
     },
     LogicalKeyboardKey.keyF: () => toggleFullscreen(),
-    LogicalKeyboardKey.mediaPlay: () => player.play(),
-    LogicalKeyboardKey.mediaPause: () => player.pause(),
-    LogicalKeyboardKey.mediaPlayPause: () => player.playOrPause(),
+    // safePlay/safePause/playOrPause y no player.*: son los que saben si
+    // hay un aparato conectado. Con player.* estas teclas movian el
+    // reproductor de aca, que mientras se transmite esta parado.
+    LogicalKeyboardKey.mediaPlay: () => safePlay(),
+    LogicalKeyboardKey.mediaPause: () => safePause(),
+    LogicalKeyboardKey.mediaPlayPause: () => playOrPause(),
     LogicalKeyboardKey.mediaTrackNext: () => player.next(),
     LogicalKeyboardKey.mediaTrackPrevious: () => player.previous(),
-    LogicalKeyboardKey.space: () => player.playOrPause(),
+    LogicalKeyboardKey.space: () => playOrPause(),
     LogicalKeyboardKey.keyJ: () {
-      final rate = player.state.position +
+      final rate = position.value +
           Duration(
             milliseconds:
                 (PrismHubStorage.getSetting(SettingKey.keyJ) * 1000).toInt(),
@@ -129,14 +132,14 @@ class VideoPlayerController extends GetxController with WidgetsBindingObserver {
       _seekFromShortcut(rate);
     },
     LogicalKeyboardKey.keyI: () {
-      final rate = player.state.position +
+      final rate = position.value +
           Duration(
               milliseconds:
                   (PrismHubStorage.getSetting(SettingKey.keyI) * 1000).toInt());
       _seekFromShortcut(rate);
     },
     LogicalKeyboardKey.arrowLeft: () {
-      final rate = player.state.position +
+      final rate = position.value +
           Duration(
               milliseconds:
                   (PrismHubStorage.getSetting(SettingKey.arrowLeft) * 1000)
@@ -144,7 +147,7 @@ class VideoPlayerController extends GetxController with WidgetsBindingObserver {
       _seekFromShortcut(rate);
     },
     LogicalKeyboardKey.arrowRight: () {
-      final rate = player.state.position +
+      final rate = position.value +
           Duration(
               milliseconds:
                   (PrismHubStorage.getSetting(SettingKey.arrowRight) * 1000)
@@ -154,10 +157,20 @@ class VideoPlayerController extends GetxController with WidgetsBindingObserver {
     // El tope era 100, o sea el volumen original: con una pista grabada baja no
     // quedaba nada por hacer. Ahora llega hasta volumenMaximo.
     LogicalKeyboardKey.arrowUp: () {
+      // Transmitiendo, el volumen que importa es el del APARATO: el de aca no
+      // sale por ningun lado porque el sonido lo hace el televisor.
+      if (dlnaDevice.value != null) {
+        ajustarVolumenCast(0.05);
+        return;
+      }
       final volume = player.state.volume + 5.0;
       player.setVolume(volume.clamp(0.0, volumenMaximo));
     },
     LogicalKeyboardKey.arrowDown: () {
+      if (dlnaDevice.value != null) {
+        ajustarVolumenCast(-0.05);
+        return;
+      }
       final volume = player.state.volume - 5.0;
       player.setVolume(volume.clamp(0.0, volumenMaximo));
     },
@@ -280,11 +293,21 @@ class VideoPlayerController extends GetxController with WidgetsBindingObserver {
   // marca de búsqueda que sí hace seek(): con las teclas y las flechas la
   // imagen se congelaba sin ninguna rueda, aunque con la barra de progreso
   // funcionara. Todos pasan por acá.
-  void _seekFromShortcut(Duration to) {
-    final salto = (to - player.state.position).inSeconds;
-    markSeeking();
+  void _seekFromShortcut(Duration objetivo) {
+    // Acotado al video: retroceder al principio daba un tiempo NEGATIVO, y
+    // varios aparatos rechazan eso en vez de ir al inicio.
+    final dur = duration.value;
+    var to = objetivo < Duration.zero ? Duration.zero : objetivo;
+    if (dur > Duration.zero && to > dur) to = dur;
+    final salto = (to - position.value).inSeconds;
     _anunciarSalto(salto);
-    player.seek(to);
+    // seek() del controlador y NO player.seek(): el primero sabe si hay un
+    // aparato conectado y le habla a el. Con player.seek() las teclas movian el
+    // reproductor de aca, que mientras se transmite esta parado — o sea que en
+    // PC adelantar y retroceder no hacian absolutamente nada al castear.
+    //
+    // markSeeking lo hace seek() por dentro, asi que aca ya no va.
+    unawaited(seek(to));
   }
 
   // Cuántos segundos saltó el último atajo, para mostrarlo en pantalla. Vive
