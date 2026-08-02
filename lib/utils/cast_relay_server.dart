@@ -86,6 +86,28 @@ class CastRelayServer {
   // seria carisimo.
   static String? _base;
 
+  /// UN solo cliente HTTP para todo el relay, reusado entre pedidos.
+  ///
+  /// Antes se creaba uno nuevo en cada pedido y se cerraba al terminar, asi que
+  /// no se reusaba ninguna conexion: con HLS, donde el receptor pide un
+  /// pedacito por segundo, eso significaba un saludo TCP + TLS COMPLETO por
+  /// cada pedacito. Cientos de milisegundos de ida y vuelta antes de empezar a
+  /// bajar cada uno — el video se veia a tirones aunque la red estuviera bien.
+  ///
+  /// Compartiendolo, dart:io mantiene las conexiones vivas y el segundo
+  /// pedacito y los que siguen viajan por la que ya estaba abierta.
+  static final HttpClient _cliente = HttpClient()
+    // Passthrough fiel: si se descomprime aca pero se reenvia el
+    // content-encoding de la fuente, el receptor intenta descomprimir de nuevo
+    // algo que ya viene descomprimido.
+    ..autoUncompress = false
+    // Varias en paralelo: el receptor suele pedir el siguiente pedacito
+    // mientras todavia esta bajando el actual.
+    ..maxConnectionsPerHost = 8
+    // Que no las cierre entre pedacito y pedacito.
+    ..idleTimeout = const Duration(seconds: 30)
+    ..connectionTimeout = const Duration(seconds: 15);
+
   static Future<void> _ensureRunning() async {
     if (_server != null) return;
     _server = await shelf_io.serve(_handleRequest, InternetAddress.anyIPv4, 0);
@@ -112,11 +134,7 @@ class CastRelayServer {
     // GET: se abría la descarga entera del vídeo solo para tirarla, y la
     // respuesta no traía lo que había preguntado.
     final esHead = request.method.toUpperCase() == 'HEAD';
-    final client = HttpClient()
-      // Passthrough fiel: si se descomprime acá pero se reenvía el
-      // content-encoding de la fuente, el receptor intenta descomprimir de
-      // nuevo algo que ya viene descomprimido.
-      ..autoUncompress = false;
+    final client = _cliente;
     try {
       final uri = Uri.parse(target.url);
       final esLista = _pareceHls(target.url);
@@ -145,7 +163,6 @@ class CastRelayServer {
         // cual y en pantalla salía un chorro de caracteres ilegibles, porque
         // con autoUncompress apagado esos bytes son gzip crudo.
         final motivo = await _motivoLegible(upstreamRes);
-        client.close(force: true);
         ultimoError = 'La fuente rechazó el vídeo (HTTP '
             '${upstreamRes.statusCode})${motivo.isEmpty ? '' : ': $motivo'}';
         logger.warning('Relay de casteo: $ultimoError — ${target.url}');
@@ -161,7 +178,7 @@ class CastRelayServer {
       // cabeceras, y se come el mismo 403 que estábamos evitando. Reescribirla
       // hace que todo el flujo vuelva por el relay.
       if (esLista || _pareceHlsPorTipo(upstreamRes)) {
-        final crudo = await _leerTodo(upstreamRes, client);
+        final crudo = await _leerTodo(upstreamRes);
         final lista = await _reescribirLista(crudo, uri, target);
         return Response.ok(
           lista,
@@ -188,31 +205,22 @@ class CastRelayServer {
       });
 
       if (esHead) {
-        client.close(force: true);
         return Response(upstreamRes.statusCode, headers: resHeaders);
       }
 
+      // El cuerpo va DIRECTO, sin envolverlo.
+      //
+      // Antes pasaba por un transformador cuyo unico trabajo era cerrar el
+      // cliente al terminar. Ahora el cliente es compartido y no se cierra —
+      // cerrarlo mataria las conexiones de los demas pedacitos en vuelo — asi
+      // que ese envoltorio solo agregaba una copia de cada bloque de bytes en
+      // el camino, en el punto por el que pasa TODO el video.
       return Response(
         upstreamRes.statusCode,
-        // Se cierra el cliente recién cuando el cuerpo terminó de pasar. Antes
-        // solo se cerraba al fallar, así que cada pedido dejaba una conexión
-        // abierta hasta reiniciar la app.
-        body: upstreamRes.transform(
-          StreamTransformer<List<int>, List<int>>.fromHandlers(
-            handleDone: (sink) {
-              sink.close();
-              client.close(force: true);
-            },
-            handleError: (error, stack, sink) {
-              sink.close();
-              client.close(force: true);
-            },
-          ),
-        ),
+        body: upstreamRes,
         headers: resHeaders,
       );
     } catch (e) {
-      client.close(force: true);
       ultimoError = 'No se pudo alcanzar la fuente del vídeo: $e';
       logger.warning('Relay de casteo: $ultimoError — ${target.url}');
       return Response.internalServerError(body: 'relay error: $e');
@@ -265,8 +273,7 @@ class CastRelayServer {
     }
   }
 
-  static Future<List<int>> _leerTodo(
-      HttpClientResponse res, HttpClient client) async {
+  static Future<List<int>> _leerTodo(HttpClientResponse res) async {
     final bytes = <int>[];
     await for (final t in res.timeout(const Duration(seconds: 30))) {
       bytes.addAll(t);
@@ -274,7 +281,6 @@ class CastRelayServer {
       // que no era una lista y se corta antes de comerse la memoria.
       if (bytes.length > 8 * 1024 * 1024) break;
     }
-    client.close(force: true);
     final enc = res.headers.value(HttpHeaders.contentEncodingHeader);
     if (enc != null && enc.toLowerCase().contains('gzip')) {
       try {
@@ -297,7 +303,37 @@ class CastRelayServer {
     final texto = utf8.decode(crudo, allowMalformed: true);
     final relayBase = _base;
     if (relayBase == null) return texto;
+
+    // Los pedacitos, DIRECTOS a la fuente cuando se puede.
+    //
+    // Hacerlos pasar por aca es lo unico que funciona si la fuente exige
+    // Referer, pero cuesta caro: cada pedacito viaja dos veces (baja al
+    // telefono y sube al televisor), y con un pedacito por segundo eso se nota
+    // como tirones aunque la red este bien.
+    //
+    // Asi que primero se prueba: si un pedacito se puede bajar SIN nuestras
+    // cabeceras, el receptor puede pedirlos el mismo y el relay se saca del
+    // camino. Medido contra la fuente del registro del usuario, los pedacitos
+    // contestan 200 sin ninguna cabecera, asi que ahi este atajo aplica.
+    final directo = await _pedacitosVanDirecto(texto, base);
     final salida = StringBuffer();
+    if (directo) {
+      // Igual hay que reescribir: las direcciones relativas de la lista se
+      // resolverian contra la direccion del RELAY, que no es de donde salio.
+      for (final linea in const LineSplitter().convert(texto)) {
+        final limpia = linea.trim();
+        if (limpia.isEmpty || limpia.startsWith('#')) {
+          salida.writeln(linea.replaceAllMapped(
+            RegExp(r'URI="([^"]+)"'),
+            (m) => 'URI="${base.resolve(m[1]!)}"',
+          ));
+          continue;
+        }
+        salida.writeln(base.resolve(limpia).toString());
+      }
+      return salida.toString();
+    }
+
     for (final linea in const LineSplitter().convert(texto)) {
       final limpia = linea.trim();
       if (limpia.isEmpty) {
@@ -323,6 +359,44 @@ class CastRelayServer {
   // segundos—. Sin esto cada relectura registraria todo de nuevo y el mapa
   // creceria sin techo mientras dure la transmision.
   static final Map<String, String> _tokensPorUrl = {};
+
+  /// Prueba si un pedacito de la lista se puede bajar SIN nuestras cabeceras.
+  ///
+  /// Si se puede, el receptor los pide directo a la fuente y el relay deja de
+  /// estar en el camino de todo el video. Ante cualquier duda —no se pudo
+  /// probar, contesto mal— devuelve false y se sigue haciendolos pasar por
+  /// aca, que es lo que siempre funciona aunque cueste mas.
+  static Future<bool> _pedacitosVanDirecto(String lista, Uri base) async {
+    String? primero;
+    for (final linea in const LineSplitter().convert(lista)) {
+      final t = linea.trim();
+      if (t.isEmpty || t.startsWith('#')) continue;
+      primero = t;
+      break;
+    }
+    if (primero == null) return false;
+    // Otra lista anidada (calidades): esa si tiene que pasar por aca, porque a
+    // su vez hay que reescribirla.
+    if (_pareceHls(base.resolve(primero).toString())) return false;
+    try {
+      final req = await _cliente.getUrl(base.resolve(primero));
+      req.headers.set(HttpHeaders.userAgentHeader, _uaPorDefecto);
+      // Solo los primeros bytes: alcanza para saber si deja o no.
+      req.headers.set(HttpHeaders.rangeHeader, 'bytes=0-1');
+      final res = await req.close().timeout(const Duration(seconds: 6));
+      final ok = res.statusCode >= 200 && res.statusCode < 300;
+      // El cuerpo se descarta, pero hay que drenarlo para que la conexion
+      // vuelva al pozo en vez de quedar a medio usar.
+      await res.drain<void>().timeout(const Duration(seconds: 4),
+          onTimeout: () {});
+      if (ok) {
+        logger.info('Los pedacitos van directo: el relay se saca del camino');
+      }
+      return ok;
+    } catch (_) {
+      return false;
+    }
+  }
 
   static String _registrarHijo(
       Uri base, String destino, _RelayTarget padre, String relayBase) {
