@@ -4049,7 +4049,11 @@ class VideoPlayerController extends GetxController with WidgetsBindingObserver {
         if (donde != null && _aceptarPosicion(donde)) {
           position.value = donde;
         }
-        if (info.duracion != null) duration.value = info.duracion!;
+        // Solo si de verdad informo un largo. Un cero es "no lo se", y dejarlo
+        // pasar borraba el que la app ya conocia de haber abierto el video
+        // antes de castear — con la barra quedando sin recorrido.
+        final largo = info.duracion;
+        if (largo != null && largo > Duration.zero) duration.value = largo;
       }
       // Ya llego a donde se le pidio? Entonces se saca la rueda de "buscando".
       _revisarSaltoEnCast();

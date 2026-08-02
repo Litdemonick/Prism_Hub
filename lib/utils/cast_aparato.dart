@@ -1,5 +1,6 @@
 import 'package:dlna_dart/dlna.dart';
 import 'package:dlna_dart/xmlParser.dart';
+import 'package:flutter/foundation.dart';
 import 'package:prismhub/utils/cast_chromecast.dart';
 import 'package:prismhub/utils/cast_metadata.dart';
 import 'package:prismhub/utils/cast_roku.dart';
@@ -160,6 +161,26 @@ class AparatoDlna implements AparatoDeCasteo {
     return v?.clamp(0, 100);
   }
 
+  /// Un "hh:mm:ss" de DLNA, o null si el aparato no contesto un tiempo.
+  ///
+  /// Devuelve null tambien con "NOT_IMPLEMENTED", que es lo que contestan los
+  /// aparatos que no llevan esa cuenta. Tratarlo como cero hacia que la barra
+  /// volviera al principio en cada consulta.
+  @visibleForTesting
+  static Duration? tiempo(String crudo) => _tiempo(crudo);
+
+  static Duration? _tiempo(String crudo) {
+    final partes = crudo.trim().split(':');
+    if (partes.length < 3) return null;
+    final h = int.tryParse(partes[0]);
+    final m = int.tryParse(partes[1]);
+    // Los segundos pueden venir con decimales ("12.500").
+    final s = double.tryParse(partes[2]);
+    if (h == null || m == null || s == null) return null;
+    return Duration(
+        milliseconds: ((h * 3600 + m * 60) * 1000 + (s * 1000).round()));
+  }
+
   @override
   Future<EstadoAparato?> leerEstado() async {
     final transporte =
@@ -188,15 +209,22 @@ class AparatoDlna implements AparatoDeCasteo {
       final crudo =
           await device.position().timeout(const Duration(seconds: 4));
       final p = PositionParser(crudo);
-      final partes = p.AbsTime.split(':');
-      if (partes.length >= 3) {
-        posicion = Duration(
-          hours: int.tryParse(partes[0]) ?? 0,
-          minutes: int.tryParse(partes[1]) ?? 0,
-          seconds: int.tryParse(partes[2]) ?? 0,
-        );
-        duracion = Duration(seconds: p.TrackDurationInt);
-      }
+      // RelTime primero y AbsTime como respaldo.
+      //
+      // Antes se leia SOLO AbsTime, y muchos televisores no lo implementan:
+      // contestan "NOT_IMPLEMENTED" o ceros ahi y ponen el dato bueno en
+      // RelTime. Con esos, la barra se quedaba en 0:00 toda la reproduccion
+      // aunque el video estuviera avanzando en la pantalla grande. RelTime es
+      // el que el estandar da por obligatorio.
+      posicion = _tiempo(p.RelTime) ?? _tiempo(p.AbsTime);
+      // Cero NO es una duracion, es "no lo se".
+      //
+      // Un televisor que no sabe cuanto dura contesta 00:00:00, y eso llegaba
+      // como duracion cero y PISABA el largo real que la app ya conocia de
+      // haber abierto el video antes de castear. Con largo cero la barra queda
+      // sin recorrido: no se puede arrastrar ni ver por donde va.
+      final largo = Duration(seconds: p.TrackDurationInt);
+      if (largo > Duration.zero) duracion = largo;
     } catch (e) {
       // Que no informe la posición no invalida el resto: se devuelve lo que sí
       // se pudo leer en vez de dar la consulta entera por fallida.
