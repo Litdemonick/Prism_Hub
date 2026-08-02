@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:io';
 
 import 'package:flutter/foundation.dart';
+import 'package:flutter/widgets.dart';
 import 'package:logging/logging.dart';
 import 'package:prismhub/utils/prismhub_directory.dart';
 import 'package:prismhub/utils/prismhub_storage.dart';
@@ -22,6 +23,31 @@ class PrismLog {
           '${record.loggerName} ${record.level.name} ${record.time}: ${record.message} ${record.error ?? ''} ${record.stackTrace ?? ''}';
       _queueLog(log);
     });
+    _escucharElCierre();
+  }
+
+  static _VigilaElCierre? _vigilante;
+
+  /// Volcar cuando la app se va a segundo plano o se cierra.
+  ///
+  /// El volcado normal espera 2 segundos, y ese temporizador muere con el
+  /// proceso: lo último que pasó no llegaba nunca al archivo. Es la peor
+  /// pérdida posible, porque cuando lo que se está diagnosticando es un cierre
+  /// inesperado, esas últimas líneas son las únicas que importan.
+  ///
+  /// El observador lo registra ACÁ y no en main.dart a propósito: así el
+  /// registro se ocupa solo de no perder nada y nadie más tiene que acordarse
+  /// de llamarlo.
+  static void _escucharElCierre() {
+    if (_vigilante != null) return;
+    try {
+      final vigilante = _VigilaElCierre();
+      WidgetsBinding.instance.addObserver(vigilante);
+      _vigilante = vigilante;
+    } catch (_) {
+      // Si el binding todavía no está listo se sigue sin esto: perder el
+      // volcado al cerrar es molesto, quedarse sin registro entero es peor.
+    }
   }
 
   // Bufferea en memoria y recién vuelca cada 2s como mucho, de forma
@@ -145,6 +171,23 @@ class PrismLog {
     } catch (_) {
       // Si el recorte falla se deja el archivo como está: tener un registro
       // grande es mucho mejor que no tener ninguno.
+    }
+  }
+}
+
+/// Vuelca el registro cuando la app deja de estar en primer plano.
+///
+/// Se atiende `paused` además de `detached`: en Android, `detached` muchas
+/// veces NO llega —el sistema mata el proceso sin avisar— así que esperarlo
+/// sería quedarse esperando algo que no pasa. `paused` sí llega siempre, y en
+/// ese momento todavía se puede escribir.
+class _VigilaElCierre with WidgetsBindingObserver {
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.paused ||
+        state == AppLifecycleState.detached ||
+        state == AppLifecycleState.hidden) {
+      unawaited(PrismLog.flush());
     }
   }
 }
