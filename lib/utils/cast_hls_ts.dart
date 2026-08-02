@@ -28,8 +28,10 @@ import 'package:prismhub/utils/log.dart';
 ///  - **Pedacitos en formato MP4** (`#EXT-X-MAP`, el HLS moderno): no son
 ///    MPEG-TS, y pegarlos no da nada reproducible.
 class CastHlsATs {
-  /// Cuántas veces se reintenta un pedacito antes de saltearlo.
-  static const _reintentos = 2;
+  // Antes acá había un contador de reintentos: se le pedía el mismo pedacito al
+  // MISMO nodo dos veces más antes de rendirse. Ya no se usa — insistirle a un
+  // nodo que no entrega no sirve de nada, y el mismo archivo está en los otros
+  // nodos de la lista. Ver PlanTs.dondePedir.
 
   static final HttpClient _cliente = HttpClient()
     ..maxConnectionsPerHost = 4
@@ -231,13 +233,14 @@ class CastHlsATs {
   /// MPEG-TS con bytes repetidos se rompe. Si se corta a mitad, es preferible el
   /// saltito.
   static Stream<List<int>> _servirPedacitoEnVivo(PlanTs plan, int indice) async* {
-    final trozo = plan.pedacitos[indice];
-    for (var intento = 0; intento <= _reintentos; intento++) {
+    // Se prueba nodo por nodo, no el mismo tres veces: si el que asignó la lista
+    // no responde, insistirle no ayuda — el mismo archivo está en los otros.
+    for (final trozo in plan.dondePedir(indice)) {
       var salioAlgo = false;
       try {
         final req = await _cliente.getUrl(trozo);
         _preparar(req, plan.headers, plan.userAgent);
-        final res = await req.close().timeout(const Duration(seconds: 30));
+        final res = await req.close().timeout(const Duration(seconds: 15));
         if (res.statusCode >= 400) {
           await res.drain<void>();
           throw HttpException('HTTP ${res.statusCode}');
@@ -248,17 +251,20 @@ class CastHlsATs {
         }
         return;
       } catch (e) {
+        // Con bytes ya en camino no se puede cambiar de nodo: volver a empezar
+        // el pedacito los duplicaría dentro del flujo, y un MPEG-TS con bytes
+        // repetidos se rompe. Ahí es preferible el saltito.
         if (salioAlgo) {
           logger.warning('Reempaquetado a TS: el pedacito ${indice + 1} se '
               'cortó a mitad, se sigue con el siguiente — $e');
           return;
         }
-        if (intento == _reintentos) {
-          logger.warning(
-              'Reempaquetado a TS: se saltea el pedacito ${indice + 1} — $e');
-        }
+        logger.info('Reempaquetado a TS: ${trozo.host} no dio el pedacito '
+            '${indice + 1}, se prueba otro nodo — $e');
       }
     }
+    logger.warning('Reempaquetado a TS: se saltea el pedacito ${indice + 1}, '
+        'ningún nodo lo entregó');
   }
 
   /// Un pedacito entero en memoria, o null si no se pudo bajar.
@@ -266,29 +272,50 @@ class CastHlsATs {
   /// Nunca tira: quien lo espera está sirviendo un vídeo en marcha y una
   /// excepción ahí cortaría la transmisión completa.
   static Future<List<int>?> _bajarPedacito(PlanTs plan, int indice) async {
-    final trozo = plan.pedacitos[indice];
-    for (var intento = 0; intento <= _reintentos; intento++) {
+    final plazo = plan.plazoPara(indice);
+    for (final trozo in plan.dondePedir(indice)) {
+      final reloj = Stopwatch()..start();
       try {
-        final req = await _cliente.getUrl(trozo);
-        _preparar(req, plan.headers, plan.userAgent);
-        final res = await req.close().timeout(const Duration(seconds: 30));
-        if (res.statusCode >= 400) {
-          await res.drain<void>();
-          throw HttpException('HTTP ${res.statusCode}');
+        // El plazo cubre la descarga ENTERA, no solo la respuesta.
+        //
+        // Antes el tiempo límite era solo para las cabeceras, así que un nodo
+        // que contestaba enseguida y después entregaba a cuentagotas se quedaba
+        // el pedacito tanto como quisiera. Medido en vivo: uno de esos tardó más
+        // de cuarenta segundos y ni siquiera terminó, mientras otro nodo del
+        // mismo CDN entregaba el mismo archivo completo en tres.
+        final bytes = await _bajarEntero(trozo, plan).timeout(plazo);
+        if (trozo.host != plan.pedacitos[indice].host) {
+          logger.info('Reempaquetado a TS: el pedacito ${indice + 1} se '
+              'consiguió en ${trozo.host} (${reloj.elapsedMilliseconds} ms)');
         }
-        final juntado = BytesBuilder(copy: false);
-        await for (final bloque in res) {
-          juntado.add(bloque);
-        }
-        return juntado.takeBytes();
+        return bytes;
       } catch (e) {
-        if (intento == _reintentos) {
-          logger.warning(
-              'Reempaquetado a TS: se saltea el pedacito ${indice + 1} — $e');
-        }
+        logger.info('Reempaquetado a TS: ${trozo.host} no dio el pedacito '
+            '${indice + 1} en ${reloj.elapsedMilliseconds} ms, se prueba otro '
+            'nodo — $e');
       }
     }
+    // Ninguno lo entregó: se saltea. Se nota como un saltito y el vídeo sigue;
+    // cortar la transmisión entera por un pedacito sería mucho peor.
+    logger.warning('Reempaquetado a TS: se saltea el pedacito ${indice + 1}, '
+        'ningún nodo lo entregó');
     return null;
+  }
+
+  /// Baja un pedacito completo. Tira si algo sale mal — quien llama decide.
+  static Future<List<int>> _bajarEntero(Uri trozo, PlanTs plan) async {
+    final req = await _cliente.getUrl(trozo);
+    _preparar(req, plan.headers, plan.userAgent);
+    final res = await req.close();
+    if (res.statusCode >= 400) {
+      await res.drain<void>();
+      throw HttpException('HTTP ${res.statusCode}');
+    }
+    final juntado = BytesBuilder(copy: false);
+    await for (final bloque in res) {
+      juntado.add(bloque);
+    }
+    return juntado.takeBytes();
   }
 
   /// Baja una lista y la devuelve como texto, o null si no se pudo.
@@ -408,6 +435,52 @@ class PlanTs {
                   .fold<double>(0, (a, b) => a + b) *
               1000)
           .round());
+
+  /// Los servidores que la propia lista usa para los pedacitos.
+  ///
+  /// Estas listas reparten los pedacitos entre varios nodos del mismo CDN
+  /// (cdn2, cdn4, cdn5… del mismo dominio). Medido en vivo: **todos sirven el
+  /// mismo archivo**, byte por byte — se pidió el mismo pedacito a los cuatro y
+  /// los cuatro devolvieron 6.241.224 bytes.
+  ///
+  /// Y ahí está lo que importa: dos de esos nodos lo entregaron en menos de tres
+  /// segundos y los otros dos no lo terminaron en quince. Como el pedacito que
+  /// le toca a cada momento del vídeo lo decide la lista, basta con que a un
+  /// tramo le toque un nodo caído para que la reproducción se clave ahí — pasó
+  /// exactamente eso, siempre en el mismo segundo del episodio.
+  ///
+  /// Se sacan de la propia lista y no de un listado fijo nuestro: son los nodos
+  /// que el sitio mismo está usando para ESTE contenido, así que son los únicos
+  /// de los que se sabe que lo tienen.
+  late final List<String> servidores = <String>{
+    for (final u in pedacitos) u.host,
+  }.toList();
+
+  /// A quién pedirle un pedacito, por orden de preferencia.
+  ///
+  /// Primero al que dice la lista; si no responde, el mismo archivo en los otros
+  /// nodos. Si alguno rechaza la dirección por no ser el suyo, se sigue con el
+  /// siguiente y en el peor caso se termina como antes.
+  List<Uri> dondePedir(int indice) {
+    final original = pedacitos[indice];
+    return [
+      original,
+      for (final host in servidores)
+        if (host != original.host) original.replace(host: host),
+    ];
+  }
+
+  /// Cuánto se le aguanta a un nodo antes de probar el siguiente.
+  ///
+  /// Atado a lo que DURA el pedacito, no a un número fijo: uno de diez segundos
+  /// de vídeo puede pesar varios megas y merece más tiempo que uno de uno. El
+  /// doble de su duración es margen de sobra para cualquier conexión que llegue
+  /// a seguirle el ritmo al vídeo, y corta rápido con un nodo que no entrega.
+  Duration plazoPara(int indice) {
+    final segundos = indice < duraciones.length ? duraciones[indice] : 10.0;
+    final plazo = (segundos * 2).clamp(8.0, 30.0);
+    return Duration(milliseconds: (plazo * 1000).round());
+  }
 
   /// Qué pedacito contiene ese momento del episodio.
   int indiceDe(Duration donde) {
