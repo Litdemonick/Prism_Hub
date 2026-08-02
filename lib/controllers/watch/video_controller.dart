@@ -342,6 +342,50 @@ class VideoPlayerController extends GetxController with WidgetsBindingObserver {
   // posición distinta: esa ya es reproducción de verdad avanzando.
   Duration? _positionAfterSeek;
 
+  /// Adonde quiere llegar el usuario, mientras siga tocando.
+  ///
+  /// Los saltos seguidos se JUNTAN en uno solo. Tocar cinco veces "+10s" tiene
+  /// que llevar 50 segundos adelante, no disparar cinco busquedas: cada una
+  /// tarda —y casteando encima rearma el flujo entero— asi que mandarlas todas
+  /// dejaba la imagen congelada un rato largo y a veces terminaba en cualquier
+  /// lado, porque cada toque se calculaba sobre una posicion que todavia era la
+  /// vieja.
+  Duration? _destinoDeSalto;
+  Timer? _juntadorDeSaltos;
+
+  /// Cuanto se espera a que el usuario deje de tocar antes de mandar el salto.
+  ///
+  /// Corto a proposito: mas que esto y un solo toque se siente lento.
+  static const _esperaEntreSaltos = Duration(milliseconds: 350);
+
+  /// Si la barra esta mostrando adonde VA en vez de donde esta.
+  ///
+  /// Dura desde el primer toque hasta que el reproductor —o el televisor—
+  /// informa que llego. No alcanza con soltarlo al mandar el salto: entre que
+  /// se manda y el video llega siguen entrando posiciones viejas, y cada una
+  /// haria volver la barra atras de un tiron antes de saltar adelante.
+  bool get haySaltoPendiente => _destinoDeSalto != null;
+
+  /// Cuanto margen se acepta para dar por llegado un salto.
+  ///
+  /// Un salto no cae nunca en el milisegundo exacto: el reproductor va al
+  /// fotograma clave mas cercano, y un televisor informa de a segundos.
+  static const _margenDeSalto = Duration(seconds: 3);
+
+  /// Mira si la posicion que acaba de informar ya es la del salto pedido.
+  ///
+  /// Devuelve true si esa posicion se puede usar para la barra. Mientras el
+  /// salto siga en camino devuelve false y la barra se queda en el destino.
+  bool _aceptarPosicion(Duration informada) {
+    final destino = _destinoDeSalto;
+    if (destino == null) return true;
+    // Todavia juntando toques: no se mando nada, no puede haber llegado.
+    if (_juntadorDeSaltos?.isActive ?? false) return false;
+    if ((informada - destino).abs() > _margenDeSalto) return false;
+    _destinoDeSalto = null;
+    return true;
+  }
+
   void markSeeking() {
     isSeeking.value = true;
     _positionAfterSeek = null;
@@ -350,6 +394,10 @@ class VideoPlayerController extends GetxController with WidgetsBindingObserver {
     // queda girando para siempre.
     _seekWatchdog = Timer(const Duration(seconds: 8), () {
       isSeeking.value = false;
+      // Y que la barra vuelva a seguir al video: si el salto no llego nunca,
+      // dejarla clavada en un destino al que nadie va es peor que mostrar la
+      // verdad.
+      _destinoDeSalto = null;
     });
   }
 
@@ -1144,6 +1192,10 @@ class VideoPlayerController extends GetxController with WidgetsBindingObserver {
       if (dlnaDevice.value != null) {
         return;
       }
+      // Con un salto en camino la barra muestra adonde VA a ir. Pisarla con la
+      // posicion actual la haria volver atras entre toque y toque, que es lo
+      // que impedia encadenar saltos.
+      if (!_aceptarPosicion(event)) return;
       position.value = event;
       // Avance real de posición → hay frames nuevos reproduciéndose, así que
       // NO puede estar bufferizando de verdad ahora mismo, sin importar lo
@@ -1848,6 +1900,10 @@ class VideoPlayerController extends GetxController with WidgetsBindingObserver {
     // pero si el reproductor se cierra en el medio saltan despues y escriben
     // sobre observables de un controlador ya destruido.
     _seekWatchdog?.cancel();
+    // Sin esto, un salto pedido justo antes de cerrar saltaba despues sobre un
+    // reproductor que ya no existe.
+    _juntadorDeSaltos?.cancel();
+    _destinoDeSalto = null;
     _skipBadgeTimer?.cancel();
     _castBuscandoTimer?.cancel();
     _volumenCastTimer?.cancel();
@@ -3981,12 +4037,18 @@ class VideoPlayerController extends GetxController with WidgetsBindingObserver {
       // todavia se esta armando.
       final plan = _planTs;
       if (plan != null) {
-        if (info.posicion != null) {
-          position.value = _desfaseTs + info.posicion!;
+        // Mismo motivo que en el reproductor de aca: con un salto en camino la
+        // barra muestra adonde va y no se pisa.
+        final donde = info.posicion;
+        if (donde != null && _aceptarPosicion(_desfaseTs + donde)) {
+          position.value = _desfaseTs + donde;
         }
         duration.value = plan.duracion;
       } else {
-        if (info.posicion != null) position.value = info.posicion!;
+        final donde = info.posicion;
+        if (donde != null && _aceptarPosicion(donde)) {
+          position.value = donde;
+        }
         if (info.duracion != null) duration.value = info.duracion!;
       }
       // Ya llego a donde se le pidio? Entonces se saca la rueda de "buscando".
@@ -4648,12 +4710,43 @@ class VideoPlayerController extends GetxController with WidgetsBindingObserver {
     }
   }
 
-  seek(Duration duration) async {
+  seek(Duration destino) async {
     if (_disposed) return;
     // Acá y no en cada botón: seek() es el único punto de entrada para la
     // barra de progreso, los atajos de teclado y los saltos, así que marcarlo
     // una vez cubre todos los casos en las tres plataformas.
     markSeeking();
+
+    // Acotado al vídeo: pasarse del final o de cero deja un tiempo que varios
+    // aparatos rechazan en vez de ir al extremo.
+    final largo = duration.value;
+    var donde = destino < Duration.zero ? Duration.zero : destino;
+    if (largo > Duration.zero && donde > largo) donde = largo;
+
+    // La barra se mueve YA, sin esperar a que el vídeo llegue.
+    //
+    // Es lo que hace que tocar el salto varias veces seguidas avance de verdad:
+    // el siguiente toque se calcula sobre esta posición. Antes se calculaba
+    // sobre la que informaba el reproductor —o el televisor—, que todavía era
+    // la vieja, así que cinco toques seguidos saltaban lo mismo que uno.
+    _destinoDeSalto = donde;
+    position.value = donde;
+
+    // Y el salto se manda cuando el usuario deja de tocar, una sola vez.
+    _juntadorDeSaltos?.cancel();
+    // Ojo: NO se suelta _destinoDeSalto al mandarlo. Se suelta cuando el
+    // reproductor informe que llego (ver _aceptarPosicion), o cuando salte la
+    // red de seguridad de markSeeking si no llega nunca.
+    _juntadorDeSaltos = Timer(_esperaEntreSaltos, () {
+      final adonde = _destinoDeSalto;
+      if (adonde == null || _disposed) return;
+      unawaited(_mandarSalto(adonde));
+    });
+  }
+
+  /// Manda el salto ya juntado al que este reproduciendo.
+  Future<void> _mandarSalto(Duration duration) async {
+    if (_disposed) return;
     if (dlnaDevice.value == null) {
       player.seek(duration);
       return;
@@ -4779,6 +4872,10 @@ class VideoPlayerController extends GetxController with WidgetsBindingObserver {
     // donde el flujo puede empezar a decodificarse. Se informa ESE, para que la
     // barra no diga un numero y el televisor este en otro.
     _empezoSaltoEnCast(recortado.inicio);
+    // Y se corrige adonde se espera llegar, que es lo que compara
+    // _aceptarPosicion: si quedara el segundo exacto que se pidio, la posicion
+    // real nunca caeria dentro del margen y la barra se quedaria clavada.
+    _destinoDeSalto = recortado.inicio;
 
     final viejo = _dlnaRelayUrl;
     try {
