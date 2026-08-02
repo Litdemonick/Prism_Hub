@@ -279,6 +279,8 @@
     "backup-pick-missing": "Not installed. Install it from Extensions to restore this.",
     "backup-pick-disabled": "It is disabled. Enable it in Installed extensions to restore this.",
     "backup-pick-unstable": "Marked as unstable. You will be able to restore this once it is fixed.",
+    "backup-export-working": "Protecting your backup with the key…",
+    "backup-opening": "Opening the backup…",
     "backup-import-exts": "Extensions: {n} of {total}.",
     "backup-nsfw-title": "This backup holds +18 content",
     "backup-nsfw-body": "There are {n} +18 items. They will be restored anyway, but since the +18 Zone is off you will not see them until you enable it in Settings.\n\nContinue?",

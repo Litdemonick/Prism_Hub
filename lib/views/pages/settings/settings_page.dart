@@ -272,6 +272,43 @@ class _SettingsPageState extends State<SettingsPage> {
       numero: hechas + 1,
     );
     if (datos == null || !context.mounted) return;
+
+    // La rueda mientras cifra.
+    //
+    // Cifrar tarda a propósito —150.000 vueltas de PBKDF2— y hasta ahora eso
+    // pasaba sin ninguna señal: se tocaba Exportar y no se veía nada hasta que
+    // aparecía el selector de carpeta. Parecía que el botón no había hecho nada
+    // y se tocaba otra vez.
+    var ruedaAbierta = true;
+    unawaited(showPlatformDialog(
+      context: context,
+      title: 'settings.backup-export'.i18n,
+      content: Padding(
+        padding: const EdgeInsets.symmetric(vertical: 12),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const SizedBox(
+              width: 22,
+              height: 22,
+              child: CircularProgressIndicator(
+                strokeWidth: 3,
+                valueColor:
+                    AlwaysStoppedAnimation<Color>(HomeTheme.accentPink),
+              ),
+            ),
+            const SizedBox(width: 16),
+            Flexible(child: Text('settings.backup-export-working'.i18n)),
+          ],
+        ),
+      ),
+      actions: null,
+      maxWidth: 360,
+      barrierDismissible: false,
+    ));
+    // Un respiro para que la rueda llegue a dibujarse antes de arrancar.
+    await Future<void>.delayed(const Duration(milliseconds: 16));
+
     try {
       final numero = hechas + 1;
       final contenido = await CopiaSeguridad.exportar(
@@ -279,6 +316,13 @@ class _SettingsPageState extends State<SettingsPage> {
         nombre: datos.nombre,
         numero: numero,
       );
+      // Se cierra ANTES del selector de carpeta: dos ventanas encima de la otra
+      // dejan la de abajo tapando la del sistema en Windows.
+      if (ruedaAbierta) {
+        RouterUtils.pop();
+        ruedaAbierta = false;
+      }
+      if (!context.mounted) return;
       // El número va en el nombre del archivo además de adentro: es lo que se
       // ve en la carpeta sin abrir nada.
       final nombreArchivo = 'PrismHub-${_paraNombreDeArchivo(datos.nombre)}'
@@ -329,6 +373,10 @@ class _SettingsPageState extends State<SettingsPage> {
         title: 'settings.backup-export-failed'.i18n,
         content: e.toString(),
       );
+    } finally {
+      // Pase lo que pase. Si algo falla con la rueda abierta, queda una ventana
+      // sin botones y la app trabada sin forma de salir.
+      if (ruedaAbierta) RouterUtils.pop();
     }
   }
 
@@ -425,8 +473,49 @@ class _SettingsPageState extends State<SettingsPage> {
       if (datosClave == null || !context.mounted) return;
 
       // Se abre y se cuenta qué trae, SIN escribir nada todavía.
-      final copia =
-          await CopiaSeguridad.abrir(contenido, datosClave.clave);
+      //
+      // Con su rueda: descifrar tarda lo mismo que cifrar, y sin señal se veía
+      // como que escribir la clave no había hecho nada.
+      var abriendo = true;
+      unawaited(showPlatformDialog(
+        context: context,
+        title: 'settings.backup-import-action'.i18n,
+        content: Padding(
+          padding: const EdgeInsets.symmetric(vertical: 12),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              const SizedBox(
+                width: 22,
+                height: 22,
+                child: CircularProgressIndicator(
+                  strokeWidth: 3,
+                  valueColor:
+                      AlwaysStoppedAnimation<Color>(HomeTheme.accentPink),
+                ),
+              ),
+              const SizedBox(width: 16),
+              Flexible(child: Text('settings.backup-opening'.i18n)),
+            ],
+          ),
+        ),
+        actions: null,
+        maxWidth: 360,
+        barrierDismissible: false,
+      ));
+      await Future<void>.delayed(const Duration(milliseconds: 16));
+
+      final CopiaAbierta copia;
+      try {
+        copia = await CopiaSeguridad.abrir(contenido, datosClave.clave);
+      } finally {
+        // En finally: con la clave equivocada esto lanza, y sin cerrarla la
+        // rueda quedaba girando para siempre sobre un error que nadie ve.
+        if (abriendo) {
+          RouterUtils.pop();
+          abriendo = false;
+        }
+      }
       if (!context.mounted) return;
 
       if (copia.paquetes.isEmpty) {

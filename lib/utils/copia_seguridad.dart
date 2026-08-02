@@ -51,7 +51,10 @@ class CopiaSeguridad {
       'historial': historial.map(_historialAMapa).toList(),
       'favoritos': favoritos.map(_favoritoAMapa).toList(),
     });
-    final cerrado = CopiaCifrado.cerrar(dentro, clave);
+    // En otro hilo: si no, la ventana se congela mientras cifra y parece que el
+    // botón no hizo nada. Ver cerrarEnOtroHilo.
+    final cerrado =
+        await cerrarEnOtroHilo((texto: dentro, clave: clave));
 
     // Lo de afuera va en claro a propósito: es lo que permite decir "esto no es
     // una copia de PrismHub" o "es de una versión más nueva" ANTES de pedir la
@@ -68,9 +71,9 @@ class CopiaSeguridad {
       'nombre': limpiarNombre(nombre),
       'numero': numero,
       'cifrado': true,
-      'sal': cerrado.sal,
-      'nonce': cerrado.nonce,
-      'datos': cerrado.datos,
+      'sal': cerrado['sal'],
+      'nonce': cerrado['nonce'],
+      'datos': cerrado['datos'],
     });
   }
 
@@ -180,12 +183,14 @@ class CopiaSeguridad {
     if (clave.isEmpty) {
       throw const CopiaInvalida('Esta copia tiene clave. Escribila.');
     }
-    final abierto = CopiaCifrado.abrir(
+    // En otro hilo, igual que al cifrar: descifrar cuesta lo mismo, y con la
+    // ventana congelada no se puede ni mostrar que está trabajando.
+    final abierto = await abrirEnOtroHilo((
       sal: '${sobre['sal']}',
       nonce: '${sobre['nonce']}',
       datos: '${sobre['datos']}',
       clave: clave,
-    );
+    ));
     if (abierto == null) {
       throw const CopiaInvalida(
         'La clave no es la de este archivo, o el archivo está dañado.',
