@@ -193,7 +193,13 @@ class _CopiaElegirExtensionesState extends State<CopiaElegirExtensiones> {
               onPressed: _elegidas.isEmpty
                   ? null
                   : () => Navigator.of(context).pop(_elegidas),
-              child: Text('settings.backup-import-action'.i18n),
+              // Exportando dice "Exportar". Decía "Importar" en las dos, que
+              // es justo lo contrario de lo que hace el botón cuando se está
+              // guardando una copia.
+              child: Text((widget.alExportar
+                      ? 'common.export'
+                      : 'settings.backup-import-action')
+                  .i18n),
             ),
           ],
         ),
@@ -294,8 +300,48 @@ class _CopiaElegirExtensionesState extends State<CopiaElegirExtensiones> {
               ),
             ),
             const SizedBox(width: 10),
+            // Con los colores puestos a mano.
+            //
+            // Por defecto, al pasar el ratón Material pinta una capa del color
+            // de acento SOBRE el pulsador. Con el carril ya rosa, el pulsador
+            // se teñía del mismo rosa y desaparecía: el interruptor quedaba
+            // como una pastilla lisa y no se veía si estaba puesto o no.
+            //
+            // Blanco sobre rosa cuando está marcado y gris sobre oscuro cuando
+            // no: se distingue de un vistazo y no depende de la capa de encima.
+            // Esa capa se deja apenas insinuada, solo para que se note que el
+            // ratón está encima.
             Switch(
               value: marcada,
+              thumbColor: WidgetStateProperty.resolveWith((estados) {
+                if (estados.contains(WidgetState.disabled)) {
+                  return Colors.white.withValues(alpha: 0.35);
+                }
+                return estados.contains(WidgetState.selected)
+                    ? Colors.white
+                    : Colors.white.withValues(alpha: 0.75);
+              }),
+              trackColor: WidgetStateProperty.resolveWith((estados) {
+                if (estados.contains(WidgetState.disabled)) {
+                  return Colors.white.withValues(alpha: 0.08);
+                }
+                return estados.contains(WidgetState.selected)
+                    ? HomeTheme.accentPink
+                    : Colors.white.withValues(alpha: 0.16);
+              }),
+              trackOutlineColor: WidgetStateProperty.resolveWith((estados) {
+                return estados.contains(WidgetState.selected)
+                    ? Colors.transparent
+                    : Colors.white.withValues(alpha: 0.28);
+              }),
+              overlayColor: WidgetStateProperty.resolveWith((estados) {
+                if (estados.contains(WidgetState.hovered) ||
+                    estados.contains(WidgetState.focused) ||
+                    estados.contains(WidgetState.pressed)) {
+                  return HomeTheme.accentPink.withValues(alpha: 0.12);
+                }
+                return Colors.transparent;
+              }),
               onChanged: sePuede
                   ? (v) => setState(() {
                         if (v) {
