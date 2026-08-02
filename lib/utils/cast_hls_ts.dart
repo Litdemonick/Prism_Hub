@@ -33,6 +33,28 @@ class CastHlsATs {
   // nodo que no entrega no sirve de nada, y el mismo archivo está en los otros
   // nodos de la lista. Ver PlanTs.dondePedir.
 
+  /// Nodos que no entregaron a tiempo, y cuándo fue.
+  ///
+  /// Sirve para no volver a esperar por uno que ya se sabe que no responde. Se
+  /// olvida a los pocos minutos: un nodo puede estar caído un rato y volver, y
+  /// castigarlo para siempre dejaría la lista de candidatos cada vez más corta.
+  static final Map<String, DateTime> _nodosLentos = {};
+  static const _cuantoSeRecuerda = Duration(minutes: 5);
+
+  static void anotarNodoLento(String host) {
+    _nodosLentos[host] = DateTime.now();
+  }
+
+  static bool nodoLento(String host) {
+    final cuando = _nodosLentos[host];
+    if (cuando == null) return false;
+    if (DateTime.now().difference(cuando) > _cuantoSeRecuerda) {
+      _nodosLentos.remove(host);
+      return false;
+    }
+    return true;
+  }
+
   static final HttpClient _cliente = HttpClient()
     ..maxConnectionsPerHost = 4
     ..idleTimeout = const Duration(seconds: 30)
@@ -259,6 +281,7 @@ class CastHlsATs {
               'cortó a mitad, se sigue con el siguiente — $e');
           return;
         }
+        anotarNodoLento(trozo.host);
         logger.info('Reempaquetado a TS: ${trozo.host} no dio el pedacito '
             '${indice + 1}, se prueba otro nodo — $e');
       }
@@ -290,6 +313,8 @@ class CastHlsATs {
         }
         return bytes;
       } catch (e) {
+        // Se anota para que los pedacitos siguientes no vuelvan a esperarlo.
+        anotarNodoLento(trozo.host);
         logger.info('Reempaquetado a TS: ${trozo.host} no dio el pedacito '
             '${indice + 1} en ${reloj.elapsedMilliseconds} ms, se prueba otro '
             'nodo — $e');
@@ -463,11 +488,25 @@ class PlanTs {
   /// siguiente y en el peor caso se termina como antes.
   List<Uri> dondePedir(int indice) {
     final original = pedacitos[indice];
-    return [
+    final todos = [
       original,
       for (final host in servidores)
         if (host != original.host) original.replace(host: host),
     ];
+    // Los que ya fallaron van al FINAL, no se sacan.
+    //
+    // Medido: en una sola reproducción, cdn6 no entregó tres pedacitos
+    // distintos y las tres veces se pagó la espera entera —8, 8 y 17
+    // segundos— antes de ir a buscarlo a otro lado, que lo dio en poco más de
+    // un segundo. Insistirle a un nodo que ya se sabe que no responde es
+    // regalar ese tiempo en cada pedacito que le toque.
+    //
+    // Al final y no descartados porque un nodo puede recuperarse, y porque si
+    // TODOS fallaron alguna vez hay que probar igual: quedarse sin candidatos
+    // sería peor que probar uno lento.
+    final buenos = todos.where((u) => !CastHlsATs.nodoLento(u.host)).toList();
+    final malos = todos.where((u) => CastHlsATs.nodoLento(u.host)).toList();
+    return [...buenos, ...malos];
   }
 
   /// Cuánto se le aguanta a un nodo antes de probar el siguiente.

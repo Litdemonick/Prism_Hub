@@ -118,6 +118,10 @@ class AparatoDlna implements AparatoDeCasteo {
   AparatoDlna(this.device);
   final DLNADevice device;
 
+  /// Si ya se avisó de que este aparato no informa la posición de forma
+  /// legible. Ver el catch de leerEstado: se pregunta una vez por segundo.
+  bool _avisoDePosicionDado = false;
+
   @override
   String get nombre => device.info.friendlyName;
 
@@ -272,18 +276,38 @@ class AparatoDlna implements AparatoDeCasteo {
       // aunque el video estuviera avanzando en la pantalla grande. RelTime es
       // el que el estandar da por obligatorio.
       posicion = _tiempo(p.RelTime) ?? _tiempo(p.AbsTime);
-      // Cero NO es una duracion, es "no lo se".
+      // El largo, aparte y con su propia red.
       //
-      // Un televisor que no sabe cuanto dura contesta 00:00:00, y eso llegaba
-      // como duracion cero y PISABA el largo real que la app ya conocia de
-      // haber abierto el video antes de castear. Con largo cero la barra queda
-      // sin recorrido: no se puede arrastrar ni ver por donde va.
-      final largo = Duration(seconds: p.TrackDurationInt);
-      if (largo > Duration.zero) duracion = largo;
+      // TrackDurationInt REVIENTA con lo que contestan algunos aparatos: uno
+      // medido en vivo devuelve "0-2562047788015" ahí, y al intentar leerlo como
+      // número la excepción se llevaba puesta TAMBIÉN la posición, que ya se
+      // había leído bien tres líneas más arriba. Separándolo, un largo ilegible
+      // deja de costar la posición.
+      //
+      // Y cero NO es una duracion, es "no lo se": un televisor que no sabe
+      // cuanto dura contesta 00:00:00, y eso PISABA el largo real que la app ya
+      // conocia de haber abierto el video antes de castear. Con largo cero la
+      // barra queda sin recorrido: no se puede arrastrar ni ver por donde va.
+      try {
+        final largo = Duration(seconds: p.TrackDurationInt);
+        if (largo > Duration.zero) duracion = largo;
+      } catch (_) {
+        // Sin largo utilizable: se conserva el que la app ya tenía.
+      }
     } catch (e) {
       // Que no informe la posición no invalida el resto: se devuelve lo que sí
       // se pudo leer en vez de dar la consulta entera por fallida.
-      logger.info('El aparato no informó la posición: $e');
+      //
+      // Se avisa UNA sola vez por aparato y no en cada consulta. Se pregunta una
+      // vez por segundo durante toda la reproducción, así que un aparato que
+      // contesta algo raro llenaba el registro con cientos de líneas idénticas y
+      // tapaba todo lo demás — medido: veinte minutos de casteo, más de mil
+      // líneas iguales, y entre medio se perdían las que sí importaban.
+      if (!_avisoDePosicionDado) {
+        _avisoDePosicionDado = true;
+        logger.info('El aparato no informa la posición de forma legible; se '
+            'sigue sin ella y no se vuelve a avisar: $e');
+      }
     }
 
     return EstadoAparato(

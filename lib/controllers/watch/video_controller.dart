@@ -4152,32 +4152,9 @@ class VideoPlayerController extends GetxController with WidgetsBindingObserver {
     // formato. El relay sabe cual de los dos es —si le pidieron algo o no—, y
     // sin decirlo se termina probando a ciegas.
     _pedidoCastTimer?.cancel();
-    _pedidoCastTimer = Timer(const Duration(seconds: 8), () {
-      if (_disposed || dlnaDevice.value == null) return;
-      // Con el video ya andando no hay nada que avisar.
-      if (isPlaying.value) return;
-      // Sin relay (direccion directa) no hay nada que medir.
-      if (_dlnaRelayUrl == null) return;
-      // El veredicto de los ocho segundos, escrito en el registro: es la
-      // conclusion que hasta ahora solo se veia como un aviso en pantalla y se
-      // perdia al cerrar el reproductor.
-      CastLog.paso('A los 8 s sin imagen: el aparato '
-          '${CastRelayServer.huboPedido(_dlnaRelayUrl) ? "SÍ pidió el vídeo "
-              "(desde ${CastRelayServer.quienPidio(_dlnaRelayUrl)}) → llega "
-              "pero no puede con lo que le mandamos" : "NO pidió nada → no "
-              "llega hasta nosotros, es red"}');
-      if (CastRelayServer.huboPedido(_dlnaRelayUrl)) {
-        // Llego hasta nosotros y bajo datos, asi que no es la red: el aparato
-        // no puede con lo que le mandamos. Si eso es 4K o 2K, lo mas probable
-        // es que sea la RESOLUCION y no el formato — los televisores publican
-        // "video/mp4" a secas, sin decir hasta que resolucion llegan.
-        if (_bajarCalidadParaElTelevisor()) return;
-        castAviso.value = 'video.cast-formato'.i18n;
-      } else {
-        // Nunca nos pidio nada: no llega. Es red.
-        castAviso.value = 'video.cast-sin-alcance'.i18n;
-      }
-    });
+    _bytesDelCastVistos = 0;
+    _revisionesDelCast = 0;
+    _pedidoCastTimer = Timer(_esperaDeVeredicto, _veredictoDelCast);
     _esperaPlayTimer?.cancel();
     // Techo por si nunca lo informa (firmware que no actualiza su estado): el
     // aviso se va y quedan los controles, mejor que una rueda eterna.
@@ -4188,6 +4165,80 @@ class VideoPlayerController extends GetxController with WidgetsBindingObserver {
     _dlnaTimer = Timer.periodic(const Duration(seconds: 1), (timer) {
       _getDLNAStatus();
     });
+  }
+
+  /// Cuánto se espera antes de decir nada sobre una transmisión que no arranca.
+  static const _esperaDeVeredicto = Duration(seconds: 8);
+
+  /// Cuántas veces más se vuelve a mirar mientras siga entrando vídeo.
+  static const _maxRevisionesDelCast = 3;
+
+  int _bytesDelCastVistos = 0;
+  int _revisionesDelCast = 0;
+
+  /// Por qué el aparato todavía no muestra nada.
+  ///
+  /// Son TRES casos y antes se distinguían dos, así que el que faltaba salía en
+  /// pantalla siendo mentira. Medido en vivo: el aviso de "recibió el vídeo pero
+  /// no puede reproducirlo" se mostró **139 milisegundos antes** de que el
+  /// televisor informara que estaba REPRODUCIENDO. Estaba cargando, nada más.
+  ///
+  ///  - No pidió nada: no llega hasta nosotros. Es red.
+  ///  - Pidió pero no bajó un solo byte: preguntó por el formato (el HEAD con el
+  ///    que un DLNA consulta si le sirve) y lo rechazó. Eso sí es formato.
+  ///  - Está bajando: no hay nada roto, está cargando. Se espera.
+  ///
+  /// El error de fondo era dar por "bajó datos" lo que solo decía "pidió": un
+  /// HEAD, que es lo primero que manda un televisor, ya marcaba la sesión como
+  /// pedida sin que se hubiera entregado nada. Ahora se cuentan los bytes.
+  void _veredictoDelCast() {
+    if (_disposed || dlnaDevice.value == null) return;
+    if (isPlaying.value) return;
+    if (_dlnaRelayUrl == null) return;
+
+    final pidio = CastRelayServer.huboPedido(_dlnaRelayUrl);
+    final bytes = CastRelayServer.bytesServidos(_dlnaRelayUrl);
+    final segundos = (_revisionesDelCast + 1) * _esperaDeVeredicto.inSeconds;
+
+    if (!pidio) {
+      CastLog.paso('A los $segundos s sin imagen: el aparato NO pidió nada → no '
+          'llega hasta nosotros, es red');
+      castAviso.value = 'video.cast-sin-alcance'.i18n;
+      return;
+    }
+
+    // Sigue entrando vídeo: se le da otra vuelta antes de decir nada.
+    if (bytes > _bytesDelCastVistos &&
+        _revisionesDelCast < _maxRevisionesDelCast) {
+      _revisionesDelCast++;
+      _bytesDelCastVistos = bytes;
+      CastLog.paso('A los $segundos s sin imagen todavía, pero el aparato ya '
+          'bajó ${(bytes / 1024).round()} KiB y sigue bajando → está cargando, '
+          'se espera (revisión $_revisionesDelCast de $_maxRevisionesDelCast)');
+      _pedidoCastTimer?.cancel();
+      _pedidoCastTimer = Timer(_esperaDeVeredicto, _veredictoDelCast);
+      return;
+    }
+
+    if (bytes == 0) {
+      // Preguntó y se fue sin bajar nada: el formato no le sirve. Bajar la
+      // calidad no ayudaría, porque no llegó a mirar el vídeo sino la ficha.
+      CastLog.paso('A los $segundos s sin imagen: el aparato pidió desde '
+          '${CastRelayServer.quienPidio(_dlnaRelayUrl)} pero no bajó NI UN BYTE '
+          '→ preguntó por el formato y lo rechazó');
+      castAviso.value = 'video.cast-formato'.i18n;
+      return;
+    }
+
+    // Bajó datos y dejó de bajar sin dar imagen: eso ya sí es no poder con lo
+    // que le mandamos. Si es 4K o 2K lo más probable es que sea la RESOLUCIÓN y
+    // no el formato — los televisores publican "video/mp4" a secas, sin decir
+    // hasta qué resolución llegan.
+    CastLog.fallo('A los $segundos s sin imagen: el aparato bajó '
+        '${(bytes / 1024).round()} KiB y se detuvo → no puede con lo que le '
+        'mandamos');
+    if (_bajarCalidadParaElTelevisor()) return;
+    castAviso.value = 'video.cast-formato'.i18n;
   }
 
   /// Manda el aparato a un punto exacto del video.
