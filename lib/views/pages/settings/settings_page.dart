@@ -1,8 +1,11 @@
+import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 
 import 'package:file_picker/file_picker.dart';
 import 'package:path_provider/path_provider.dart';
+import 'package:prismhub/controllers/home_controller.dart';
+import 'package:prismhub/utils/copia_cifrado.dart';
 import 'package:prismhub/utils/copia_seguridad.dart';
 import 'package:fluent_ui/fluent_ui.dart' as fluent;
 import 'package:flutter/material.dart';
@@ -213,8 +216,13 @@ class _SettingsPageState extends State<SettingsPage> {
   /// guarda hoy y se usa dentro de un año es un archivo perdido para siempre,
   /// porque no hay forma de recuperarla — el archivo no la guarda, solo permite
   /// comprobar si la que se escribe es la correcta.
-  Future<String?> _pedirClave(BuildContext context,
-      {required bool alExportar}) {
+  Future<_DatosDeCopia?> _pedirClave(
+    BuildContext context, {
+    required bool alExportar,
+    String? nombrePropuesto,
+    int? numero,
+    String? deQuien,
+  }) {
     return showPlatformDialog(
       context: context,
       title: (alExportar
@@ -222,9 +230,14 @@ class _SettingsPageState extends State<SettingsPage> {
               : 'settings.backup-key-title-import')
           .i18n,
       maxWidth: 420,
-      content: _DialogoClave(alExportar: alExportar),
+      content: _DialogoClave(
+        alExportar: alExportar,
+        nombrePropuesto: nombrePropuesto,
+        numero: numero,
+        deQuien: deQuien,
+      ),
       actions: null,
-    ) as Future<String?>;
+    ) as Future<_DatosDeCopia?>;
   }
 
   /// Deja el historial y la lista en un archivo que el usuario pueda guardar.
@@ -235,35 +248,64 @@ class _SettingsPageState extends State<SettingsPage> {
   /// guardarlo. El archivo que sale es el MISMO en las tres plataformas, así que
   /// se puede exportar en el teléfono e importar en la PC o al revés.
   Future<void> _exportarCopia(BuildContext context) async {
-    final clave = await _pedirClave(context, alExportar: true);
-    if (clave == null || !context.mounted) return;
-    try {
-      final contenido = await CopiaSeguridad.exportar(clave);
-      final nombre =
-          'PrismHub-${DateTime.now().toIso8601String().substring(0, 10)}.json';
+    // Cuál copia va a ser y con qué nombre se guardó la anterior. La primera
+    // vez no hay nada de esto y el diálogo lo dice de otra forma.
+    final hechas = (PrismHubStorage.getSetting(SettingKey.copiasHechas) as int?) ?? 0;
+    final ultimoNombre =
+        PrismHubStorage.getSetting(SettingKey.nombreDeCopia) as String?;
 
+    final datos = await _pedirClave(
+      context,
+      alExportar: true,
+      nombrePropuesto: ultimoNombre,
+      numero: hechas + 1,
+    );
+    if (datos == null || !context.mounted) return;
+    try {
+      final numero = hechas + 1;
+      final contenido = await CopiaSeguridad.exportar(
+        datos.clave,
+        nombre: datos.nombre,
+        numero: numero,
+      );
+      // El número va en el nombre del archivo además de adentro: es lo que se
+      // ve en la carpeta sin abrir nada.
+      final nombreArchivo = 'PrismHub-${_paraNombreDeArchivo(datos.nombre)}'
+          '-$numero-${DateTime.now().toIso8601String().substring(0, 10)}.json';
+
+      var guardado = false;
       if (Platform.isAndroid) {
         // Por un archivo temporal: compartir necesita algo en disco, y la
         // carpeta de caché es la que el sistema deja compartir sin permisos.
         final archivo = File(
-            '${(await getTemporaryDirectory()).path}${Platform.pathSeparator}$nombre');
+            '${(await getTemporaryDirectory()).path}${Platform.pathSeparator}$nombreArchivo');
         await archivo.writeAsString(contenido);
         await Share.shareXFiles([XFile(archivo.path)]);
-        return;
+        guardado = true;
+      } else {
+        final destino = await FilePicker.platform.saveFile(
+          type: FileType.custom,
+          allowedExtensions: ['json'],
+          fileName: nombreArchivo,
+        );
+        // Sin destino es que canceló, que no es un error.
+        if (destino == null) return;
+        await File(destino).writeAsString(contenido);
+        guardado = true;
       }
 
-      final destino = await FilePicker.platform.saveFile(
-        type: FileType.custom,
-        allowedExtensions: ['json'],
-        fileName: nombre,
-      );
-      // Sin destino es que canceló, que no es un error.
-      if (destino == null) return;
-      await File(destino).writeAsString(contenido);
+      if (!guardado) return;
+      // La cuenta sube SOLO si de verdad se guardó: si cancela el selector, la
+      // próxima tiene que volver a ser la misma copia y no un hueco.
+      await PrismHubStorage.setSetting(SettingKey.copiasHechas, numero);
+      await PrismHubStorage.setSetting(
+          SettingKey.nombreDeCopia, datos.nombre);
       if (!context.mounted) return;
       showPlatformSnackbar(
         context: context,
-        content: 'settings.backup-export-done'.i18n,
+        title: 'settings.backup-export-done'.i18n,
+        content: FlutterI18n.translate(context, 'settings.backup-export-info',
+            translationParams: {'nombre': datos.nombre, 'n': '$numero'}),
       );
     } catch (e) {
       logger.warning('No se pudo exportar la copia', e);
@@ -273,6 +315,36 @@ class _SettingsPageState extends State<SettingsPage> {
         title: 'settings.backup-export-failed'.i18n,
         content: e.toString(),
       );
+    }
+  }
+
+  /// Deja el nombre en algo que pueda ser parte de un nombre de archivo.
+  ///
+  /// Los tres sistemas prohíben caracteres distintos y Android además no deja
+  /// nada que parezca una ruta. Se queda con letras, números, guiones y puntos,
+  /// que es lo que acepta cualquiera de los tres.
+  String _paraNombreDeArchivo(String nombre) {
+    final s = nombre
+        .replaceAll(RegExp(r'[^A-Za-z0-9._-]'), '-')
+        .replaceAll(RegExp(r'-+'), '-')
+        .replaceAll(RegExp(r'^-|-$'), '');
+    if (s.isEmpty) return 'copia';
+    return s.length > 24 ? s.substring(0, 24) : s;
+  }
+
+  /// Vuelve a leer lo que hay en pantalla después de importar.
+  ///
+  /// El inicio y el historial ya están dibujados con lo de ANTES: sin esto el
+  /// usuario ve "listo" y abajo sus datos viejos, y parece que no pasó nada.
+  /// Se refrescan los dos inicios —el normal y el de la Zona +18— porque la
+  /// copia trae los dos.
+  Future<void> _refrescarTrasImportar() async {
+    try {
+      await HomePageController.refreshAll();
+    } catch (e) {
+      // Que no se pueda refrescar no invalida la importación: los datos ya
+      // están guardados y se van a ver igual al volver a entrar.
+      logger.info('No se pudo refrescar el inicio tras importar: $e');
     }
   }
 
@@ -295,13 +367,51 @@ class _SettingsPageState extends State<SettingsPage> {
           ? utf8.decode(datos, allowMalformed: true)
           : await File(archivo.path!).readAsString();
 
+      // Se mira de qué copia es ANTES de pedir nada: así el diálogo de la clave
+      // puede decir de qué equipo salió y cuál número es, y un archivo que no
+      // sirve se rechaza sin hacer escribir una clave para nada.
+      final quienEs = CopiaSeguridad.leerSobre(contenido);
+
       if (!context.mounted) return;
       // La clave se pide DESPUÉS de elegir el archivo: al revés se escribiría
       // una clave para después cancelar el selector.
-      final clave = await _pedirClave(context, alExportar: false);
-      if (clave == null) return;
+      final datosClave = await _pedirClave(
+        context,
+        alExportar: false,
+        deQuien: quienEs.etiqueta,
+      );
+      if (datosClave == null || !context.mounted) return;
 
-      final r = await CopiaSeguridad.importar(contenido, clave);
+      // La barra de progreso, mientras entra. Una copia grande son cientos de
+      // registros y cada uno toca la base: sin esto la pantalla se queda quieta
+      // y parece colgada.
+      final progreso = ValueNotifier<double>(0);
+      unawaited(showPlatformDialog(
+        context: context,
+        title: 'settings.backup-import-working'.i18n,
+        content: Padding(
+          padding: const EdgeInsets.symmetric(vertical: 12),
+          child: _BarraDeImportacion(progreso: progreso),
+        ),
+        actions: null,
+        maxWidth: 380,
+        barrierDismissible: false,
+      ));
+      await Future<void>.delayed(Duration.zero);
+
+      ResultadoImportacion r;
+      try {
+        r = await CopiaSeguridad.importar(
+          contenido,
+          datosClave.clave,
+          onProgreso: (p) => progreso.value = p,
+        );
+      } finally {
+        // El diálogo se cierra pase lo que pase: con un fallo, dejarlo abierto
+        // sin botones deja la app trabada sin forma de salir.
+        RouterUtils.pop();
+        progreso.dispose();
+      }
       if (!context.mounted) return;
 
       // Lo que entró, en números: decir solo "listo" deja al usuario sin saber
@@ -321,9 +431,18 @@ class _SettingsPageState extends State<SettingsPage> {
                 'extensiones': r.extensionesFaltantes.join(', ')
               }),
       ];
+
+      // Se recarga lo que está en pantalla y se avisa de dónde vino.
+      //
+      // El inicio y el historial ya están dibujados con lo de antes de importar:
+      // sin refrescarlos, el usuario ve el mensaje de "listo" y abajo sus datos
+      // viejos, y parece que no pasó nada.
+      await _refrescarTrasImportar();
+      if (!context.mounted) return;
       showPlatformSnackbar(
         context: context,
-        title: 'settings.backup-import-done'.i18n,
+        title: FlutterI18n.translate(context, 'settings.backup-import-from',
+            translationParams: {'nombre': r.deQuien.etiqueta}),
         content: partes.join('\n'),
       );
     } on CopiaInvalida catch (e) {
@@ -1455,9 +1574,32 @@ class _MobileStepperState extends State<_MobileStepper> {
 /// la correcta— así que no hay a quién pedírsela después.
 ///
 /// Devuelve la clave por `pop`, o null si se cancela.
+/// Lo que el usuario decide sobre una copia: cómo se llama y con qué clave.
+class _DatosDeCopia {
+  const _DatosDeCopia({required this.clave, required this.nombre});
+  final String clave;
+
+  /// Con qué equipo se hizo. Vacío al importar, donde ya viene en el archivo.
+  final String nombre;
+}
+
 class _DialogoClave extends StatefulWidget {
-  const _DialogoClave({required this.alExportar});
+  const _DialogoClave({
+    required this.alExportar,
+    this.nombrePropuesto,
+    this.numero,
+    this.deQuien,
+  });
   final bool alExportar;
+
+  /// El nombre con el que se guardó la copia anterior, para no reescribirlo.
+  final String? nombrePropuesto;
+
+  /// Qué número de copia va a ser esta.
+  final int? numero;
+
+  /// De qué copia se trata, al importar: "Mi celular · copia n.º 3".
+  final String? deQuien;
 
   @override
   State<_DialogoClave> createState() => _DialogoClaveState();
@@ -1466,6 +1608,8 @@ class _DialogoClave extends StatefulWidget {
 class _DialogoClaveState extends State<_DialogoClave> {
   final _clave = TextEditingController();
   final _repetida = TextEditingController();
+  late final TextEditingController _nombre =
+      TextEditingController(text: widget.nombrePropuesto ?? '');
   bool _oculta = true;
   String? _error;
 
@@ -1473,6 +1617,7 @@ class _DialogoClaveState extends State<_DialogoClave> {
   void dispose() {
     _clave.dispose();
     _repetida.dispose();
+    _nombre.dispose();
     super.dispose();
   }
 
@@ -1482,11 +1627,33 @@ class _DialogoClaveState extends State<_DialogoClave> {
       setState(() => _error = 'settings.backup-key-empty'.i18n);
       return;
     }
-    if (widget.alExportar && clave != _repetida.text) {
-      setState(() => _error = 'settings.backup-key-mismatch'.i18n);
+    if (widget.alExportar) {
+      // El mismo mínimo que exige el cifrado. Se comprueba acá además de allá
+      // para poder decirlo en el momento, en vez de dejar escribir todo y
+      // fallar al guardar.
+      if (clave.length < CopiaCifrado.largoMinimo) {
+        setState(() => _error = FlutterI18n.translate(
+              context,
+              'settings.backup-key-short',
+              translationParams: {'n': '${CopiaCifrado.largoMinimo}'},
+            ));
+        return;
+      }
+      if (clave != _repetida.text) {
+        setState(() => _error = 'settings.backup-key-mismatch'.i18n);
+        return;
+      }
+      // Saneado con la MISMA función que usa el archivo, así lo que se ve acá
+      // es exactamente lo que se va a guardar.
+      final nombre = CopiaSeguridad.limpiarNombre(_nombre.text);
+      if (nombre.isEmpty) {
+        setState(() => _error = 'settings.backup-name-empty'.i18n);
+        return;
+      }
+      Navigator.of(context).pop(_DatosDeCopia(clave: clave, nombre: nombre));
       return;
     }
-    Navigator.of(context).pop(clave);
+    Navigator.of(context).pop(_DatosDeCopia(clave: clave, nombre: ''));
   }
 
   @override
@@ -1508,6 +1675,57 @@ class _DialogoClaveState extends State<_DialogoClave> {
                 DefaultTextStyle.of(context).style.color?.withValues(alpha: .7),
           ),
         ),
+        // De qué copia se trata, al importar. Se lee del archivo SIN la clave,
+        // así que se puede mostrar antes de pedirla: es lo que permite saber si
+        // se eligió el archivo correcto entre varios de la misma carpeta.
+        if (!widget.alExportar && (widget.deQuien?.isNotEmpty ?? false)) ...[
+          const SizedBox(height: 12),
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+            decoration: BoxDecoration(
+              color: HomeTheme.accentPink.withValues(alpha: 0.10),
+              borderRadius: BorderRadius.circular(10),
+              border: Border.all(
+                  color: HomeTheme.accentPink.withValues(alpha: 0.35)),
+            ),
+            child: Row(
+              children: [
+                const Icon(Icons.folder_zip_outlined,
+                    size: 18, color: HomeTheme.accentPink),
+                const SizedBox(width: 8),
+                // Flexible: un nombre largo en un teléfono angosto se sale de
+                // la caja si no se le deja envolver.
+                Flexible(
+                  child: Text(
+                    widget.deQuien!,
+                    style: const TextStyle(
+                        fontSize: 12.5, fontWeight: FontWeight.w600),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
+        // El nombre del equipo, al exportar. Es lo que después dice de dónde
+        // salieron los datos al recuperarlos.
+        if (widget.alExportar) ...[
+          const SizedBox(height: 14),
+          _campo(_nombre, 'settings.backup-name-label'.i18n, esAndroid),
+          if (widget.numero != null) ...[
+            const SizedBox(height: 6),
+            Text(
+              FlutterI18n.translate(context, 'settings.backup-name-number',
+                  translationParams: {'n': '${widget.numero}'}),
+              style: TextStyle(
+                fontSize: 11.5,
+                color: DefaultTextStyle.of(context)
+                    .style
+                    .color
+                    ?.withValues(alpha: .55),
+              ),
+            ),
+          ],
+        ],
         const SizedBox(height: 14),
         _campo(_clave, 'settings.backup-key-label'.i18n, esAndroid,
             conOjo: true),
@@ -1599,6 +1817,77 @@ class _DialogoClaveState extends State<_DialogoClave> {
       placeholder: etiqueta,
       onSubmitted: (_) => _aceptar(),
       suffix: ojo,
+    );
+  }
+}
+
+/// La barra mientras entra una copia.
+///
+/// Una copia grande son cientos de registros y cada uno toca la base de datos.
+/// Sin esto la pantalla se queda quieta varios segundos y no hay forma de
+/// distinguirlo de que se colgó.
+///
+/// La barra va **animada hacia** cada valor nuevo en vez de saltar: el progreso
+/// llega a tirones —un registro rápido, otro lento— y sin suavizarlo se ve
+/// nerviosa aunque el trabajo avance parejo.
+class _BarraDeImportacion extends StatelessWidget {
+  const _BarraDeImportacion({required this.progreso});
+  final ValueNotifier<double> progreso;
+
+  @override
+  Widget build(BuildContext context) {
+    return ValueListenableBuilder<double>(
+      valueListenable: progreso,
+      builder: (context, valor, _) {
+        return TweenAnimationBuilder<double>(
+          tween: Tween(begin: 0, end: valor.clamp(0.0, 1.0)),
+          duration: const Duration(milliseconds: 320),
+          curve: Curves.easeOutCubic,
+          builder: (context, suave, _) => Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              Text(
+                'settings.backup-import-working-hint'.i18n,
+                style: TextStyle(
+                  fontSize: 12.5,
+                  height: 1.4,
+                  color: DefaultTextStyle.of(context)
+                      .style
+                      .color
+                      ?.withValues(alpha: .7),
+                ),
+              ),
+              const SizedBox(height: 14),
+              ClipRRect(
+                borderRadius: BorderRadius.circular(999),
+                child: LinearProgressIndicator(
+                  // Indeterminada hasta el primer dato: leer y descifrar el
+                  // archivo pasa antes de que haya nada que contar.
+                  value: valor <= 0 ? null : suave,
+                  minHeight: 8,
+                  backgroundColor:
+                      HomeTheme.accentPink.withValues(alpha: 0.18),
+                  valueColor: const AlwaysStoppedAnimation<Color>(
+                      HomeTheme.accentPink),
+                ),
+              ),
+              const SizedBox(height: 8),
+              Align(
+                alignment: Alignment.centerRight,
+                child: Text(
+                  valor <= 0 ? '' : '${(suave * 100).round()}%',
+                  style: const TextStyle(
+                    fontSize: 12,
+                    fontWeight: FontWeight.w700,
+                    color: HomeTheme.accentPink,
+                  ),
+                ),
+              ),
+            ],
+          ),
+        );
+      },
     );
   }
 }

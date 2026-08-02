@@ -507,6 +507,16 @@ class SettingKey {
   /// episodio terminado y no toca nada, que es lo que quiere quien mira de a
   /// uno o se queda dormido con el reproductor abierto.
   static const autoPlayNext = 'AutoPlayNext';
+
+  /// Cuántas copias de seguridad se hicieron desde este equipo.
+  ///
+  /// Va en el archivo para poder decir cuál es: "copia n.º 3". Sin eso, con
+  /// tres archivos guardados en la misma carpeta no hay forma de saber cuál es
+  /// el último sin abrirlos uno por uno.
+  static const copiasHechas = 'CopiasHechas';
+
+  /// Con qué nombre se guardó la última copia, para proponerlo de nuevo.
+  static const nombreDeCopia = 'NombreDeCopia';
   static const readingMode = 'ReadingMode';
   static const aniListToken = 'AniListToken';
   static const aniListUserId = 'AniListUserId';

@@ -29,9 +29,16 @@ class CopiaSeguridad {
   /// Van los dos lados juntos —el normal y el +18—, que es lo que hace que al
   /// recuperar quede todo como estaba. Cada registro lleva su marca de si es
   /// +18, así que al volver cada cosa cae donde iba.
-  static Future<String> exportar(String clave) async {
-    if (clave.isEmpty) {
-      throw const CopiaInvalida('Poné una clave para proteger la copia.');
+  static Future<String> exportar(
+    String clave, {
+    required String nombre,
+    required int numero,
+  }) async {
+    if (clave.length < CopiaCifrado.largoMinimo) {
+      throw CopiaInvalida(
+        'La clave tiene que tener al menos '
+        '${CopiaCifrado.largoMinimo} caracteres.',
+      );
     }
     final historial = await DatabaseService.getHistorysByType();
     final favoritos = await DatabaseService.getFavoritesByType();
@@ -53,12 +60,104 @@ class CopiaSeguridad {
       'formato': formato,
       'app': 'PrismHub',
       'fecha': DateTime.now().toIso8601String(),
+      // Con qué equipo se hizo y cuál copia es. Van en claro porque son
+      // justamente lo que hay que poder leer ANTES de pedir la clave: sirven
+      // para reconocer el archivo entre varios guardados en la misma carpeta.
+      // No dicen nada de lo que el usuario vio.
+      'nombre': limpiarNombre(nombre),
+      'numero': numero,
       'cifrado': true,
       'sal': cerrado.sal,
       'nonce': cerrado.nonce,
       'datos': cerrado.datos,
     });
   }
+
+  /// Lee lo de afuera del archivo, sin la clave.
+  ///
+  /// Sirve para mostrar de qué copia se trata antes de pedir nada: de qué
+  /// equipo salió, cuál número es y de cuándo. Y para poder rechazar un archivo
+  /// que no sirve sin hacer escribir una clave para nada.
+  static SobreDeCopia leerSobre(String contenido) {
+    final Map<String, dynamic> sobre;
+    try {
+      final leido = jsonDecode(contenido);
+      if (leido is! Map<String, dynamic>) {
+        throw const FormatException('el archivo no tiene la forma esperada');
+      }
+      sobre = leido;
+    } on FormatException catch (e) {
+      throw CopiaInvalida('No se pudo leer el archivo: ${e.message}');
+    }
+    if (sobre['app'] != 'PrismHub') {
+      throw const CopiaInvalida('Este archivo no es una copia de PrismHub.');
+    }
+    final version = sobre['formato'];
+    if (version is! int) {
+      throw const CopiaInvalida('El archivo no dice de qué versión es.');
+    }
+    if (version > formato) {
+      throw const CopiaInvalida(
+        'Este archivo lo hizo una versión más nueva de PrismHub. '
+        'Actualizá la app para poder importarlo.',
+      );
+    }
+    return SobreDeCopia(
+      // Saneado también al LEER, no solo al escribir: el archivo puede haberlo
+      // tocado cualquiera, y este texto se muestra en pantalla.
+      nombre: limpiarNombre('${sobre['nombre'] ?? ''}'),
+      numero: sobre['numero'] is int ? sobre['numero'] as int : 0,
+      fecha: _fecha(sobre['fecha']),
+      conClave: sobre['cifrado'] == true,
+    );
+  }
+
+  /// Deja un nombre de copia en algo que se pueda mostrar y guardar.
+  ///
+  /// Lo escribe el usuario y después viaja dentro de un archivo que puede ir y
+  /// venir entre equipos, así que al volver **no es texto de confianza**. Se
+  /// quita todo lo que no sea texto visible y se le pone un techo.
+  ///
+  /// No hay riesgo de inyección de SQL —la base es Isar, que no arma consultas
+  /// con texto— pero sí de cosas más tontas y más reales: caracteres de control
+  /// que rompen el dibujo de la pantalla, saltos de línea que descuadran un
+  /// diálogo, marcas de derecha-a-izquierda que dan vuelta lo que se lee, y un
+  /// nombre de mil caracteres que se come la ventana.
+  static String limpiarNombre(String crudo) {
+    // Se filtra por CODIGO y no con una expresion regular a proposito: los
+    // rangos que hay que quitar son caracteres invisibles, y escribirlos
+    // dentro de un patron deja el propio archivo fuente con bytes de control
+    // incrustados que no se ven al editarlo.
+    final salida = StringBuffer();
+    var espacioPendiente = false;
+    for (final c in crudo.runes) {
+      // Control (incluye saltos de linea y tabulador) y el borrado.
+      final esControl = c < 0x20 || (c >= 0x7F && c <= 0x9F);
+      // Invisibles que dan vuelta o esconden lo que se lee.
+      final esInvisible = (c >= 0x200B && c <= 0x200F) ||
+          (c >= 0x202A && c <= 0x202E) ||
+          (c >= 0x2066 && c <= 0x2069) ||
+          c == 0xFEFF;
+      if (esInvisible) continue;
+      if (esControl || c == 0x20) {
+        espacioPendiente = salida.isNotEmpty;
+        continue;
+      }
+      if (espacioPendiente) {
+        salida.write(String.fromCharCode(0x20));
+        espacioPendiente = false;
+      }
+      salida.writeCharCode(c);
+    }
+    var s = salida.toString();
+    if (s.length > _largoDeNombre) {
+      s = '${s.substring(0, _largoDeNombre).trim()}…';
+    }
+    return s;
+  }
+
+  /// Techo del nombre. Entra en una línea en un teléfono en vertical.
+  static const _largoDeNombre = 40;
 
   /// Mete de vuelta lo que traiga el archivo, SIN borrar lo que ya hay.
   ///
@@ -70,31 +169,18 @@ class CopiaSeguridad {
   /// Un registro roto no corta la importación: se cuenta como fallido y se
   /// sigue con el resto. Un archivo a medio leer sería peor que uno incompleto.
   static Future<ResultadoImportacion> importar(
-      String contenido, String clave) async {
-    final Map<String, dynamic> sobre;
-    try {
-      final leido = jsonDecode(contenido);
-      if (leido is! Map<String, dynamic>) {
-        throw const FormatException('el archivo no tiene la forma esperada');
-      }
-      sobre = leido;
-    } on FormatException catch (e) {
-      throw CopiaInvalida('No se pudo leer el archivo: ${e.message}');
-    }
-
-    if (sobre['app'] != 'PrismHub') {
-      throw CopiaInvalida('Este archivo no es una copia de PrismHub.');
-    }
-    final version = sobre['formato'];
-    if (version is! int) {
-      throw CopiaInvalida('El archivo no dice de qué versión es.');
-    }
-    if (version > formato) {
-      throw CopiaInvalida(
-        'Este archivo lo hizo una versión más nueva de PrismHub. '
-        'Actualizá la app para poder importarlo.',
-      );
-    }
+    String contenido,
+    String clave, {
+    /// De 0 a 1. Sirve para mover la barra: una copia grande son cientos de
+    /// registros y cada uno toca la base, así que sin esto el usuario mira una
+    /// pantalla quieta sin saber si avanza.
+    void Function(double)? onProgreso,
+  }) async {
+    // Las mismas comprobaciones que ya hizo quien mostró de qué copia se trata.
+    // Se repiten porque importar tiene que poder llamarse solo: fiarse de que
+    // alguien validó antes es como no validar.
+    final quienEs = leerSobre(contenido);
+    final sobre = jsonDecode(contenido) as Map<String, dynamic>;
 
     // Se abre con la clave. Todo lo de arriba se comprobó primero, para no
     // hacer escribir la clave y después fallar por otro motivo.
@@ -132,7 +218,17 @@ class CopiaSeguridad {
     var favoritosNuevos = 0;
     var fallidos = 0;
 
-    for (final crudo in _lista(raiz['historial'])) {
+    // Cuantos hay en total, para poder decir por donde va.
+    final losHistorial = _lista(raiz['historial']);
+    final losFavoritos = _lista(raiz['favoritos']);
+    final cuantos = losHistorial.length + losFavoritos.length;
+    var hechos = 0;
+    void avanzar() {
+      hechos++;
+      if (cuantos > 0) onProgreso?.call(hechos / cuantos);
+    }
+
+    for (final crudo in losHistorial) {
       try {
         final entra = _historialDeMapa(crudo);
         final previo = await DatabaseService.getHistoryByPackageAndUrl(
@@ -150,9 +246,10 @@ class CopiaSeguridad {
         fallidos++;
         logger.warning('Copia: no se pudo importar un ítem del historial', e);
       }
+      avanzar();
     }
 
-    for (final crudo in _lista(raiz['favoritos'])) {
+    for (final crudo in losFavoritos) {
       try {
         final entra = _favoritoDeMapa(crudo);
         final yaEsta = await DatabaseService.isFavorite(
@@ -164,6 +261,7 @@ class CopiaSeguridad {
         fallidos++;
         logger.warning('Copia: no se pudo importar un favorito', e);
       }
+      avanzar();
     }
 
     // Las que hacen falta y no están puestas en este equipo.
@@ -175,6 +273,7 @@ class CopiaSeguridad {
       ..sort();
 
     return ResultadoImportacion(
+      deQuien: quienEs,
       historialNuevo: historialNuevo,
       historialActualizado: historialActualizado,
       favoritosNuevos: favoritosNuevos,
@@ -210,15 +309,15 @@ class CopiaSeguridad {
     final m = _mapa(crudo);
     return History()
       ..package = _texto(m['package'], 'package')
-      ..url = _texto(m['url'], 'url')
-      ..cover = m['cover'] as String?
+      ..url = _direccion(m['url'], 'url')
+      ..cover = _portada(m['cover'])
       ..type = _tipo(m['type'])
       ..episodeGroupId = _entero(m['episodeGroupId'])
       ..episodeId = _entero(m['episodeId'])
       ..title = _texto(m['title'], 'title')
-      ..episodeTitle = '${m['episodeTitle'] ?? ''}'
-      ..progress = '${m['progress'] ?? ''}'
-      ..totalProgress = '${m['totalProgress'] ?? ''}'
+      ..episodeTitle = _textoSuelto(m['episodeTitle'])
+      ..progress = _textoSuelto(m['progress'], techo: 20)
+      ..totalProgress = _textoSuelto(m['totalProgress'], techo: 20)
       ..date = _fecha(m['date']) ?? DateTime.now()
       ..isNsfw = m['isNsfw'] == true
       ..watchState = WatchState.values.firstWhere(
@@ -227,7 +326,7 @@ class CopiaSeguridad {
       )
       ..seriesFinished = m['seriesFinished'] == true
       ..knownEpisodeCount = _entero(m['knownEpisodeCount'])
-      ..newEpisodeLabel = m['newEpisodeLabel'] as String?
+      ..newEpisodeLabel = _opcional(_textoSuelto(m['newEpisodeLabel']))
       ..lastCheckedAt = _fecha(m['lastCheckedAt']);
   }
 
@@ -245,13 +344,28 @@ class CopiaSeguridad {
     final m = _mapa(crudo);
     return Favorite()
       ..package = _texto(m['package'], 'package')
-      ..url = _texto(m['url'], 'url')
+      ..url = _direccion(m['url'], 'url')
       ..type = _tipo(m['type'])
       ..title = _texto(m['title'], 'title')
-      ..cover = m['cover'] as String?
+      ..cover = _portada(m['cover'])
       ..date = _fecha(m['date']) ?? DateTime.now()
       ..isNsfw = m['isNsfw'] == true;
   }
+
+  /// Una portada. Solo http y https, y solo si se puede leer como dirección.
+  ///
+  /// Una portada rota no vale perder el registro: se devuelve sin ella y la
+  /// tarjeta usa la imagen por defecto, que es lo que ya hace cuando falta.
+  static String? _portada(Object? valor) {
+    if (valor is! String || valor.isEmpty) return null;
+    final uri = Uri.tryParse(valor.trim());
+    if (uri == null || !uri.hasScheme) return null;
+    if (uri.scheme != 'http' && uri.scheme != 'https') return null;
+    return valor.trim();
+  }
+
+  /// Vacío pasa a null, que es lo que la base entiende por "no hay".
+  static String? _opcional(String s) => s.isEmpty ? null : s;
 
   static Map<String, dynamic> _mapa(Object? crudo) {
     if (crudo is Map<String, dynamic>) return crudo;
@@ -263,8 +377,38 @@ class CopiaSeguridad {
   /// package y url son con lo que se identifica un título: sin ellos no se
   /// puede ni comparar contra lo que ya hay ni volver a abrirlo.
   static String _texto(Object? valor, String campo) {
-    if (valor is String && valor.isNotEmpty) return valor;
-    throw FormatException('falta "$campo"');
+    if (valor is! String || valor.isEmpty) {
+      throw FormatException('falta "$campo"');
+    }
+    final limpio = limpiarNombre(valor);
+    if (limpio.isEmpty) throw FormatException('"$campo" venía vacío');
+    return limpio;
+  }
+
+  /// Un texto que va a la base y a la pantalla, pero que puede faltar.
+  ///
+  /// Todo lo que sale del archivo pasa por acá: el archivo pudo haberlo tocado
+  /// cualquiera entre que se exportó y se importó, así que **no es texto de
+  /// confianza**. Se le quitan los invisibles y se le pone un techo.
+  static String _textoSuelto(Object? valor, {int techo = 300}) {
+    if (valor is! String || valor.isEmpty) return '';
+    final limpio = limpiarNombre(valor);
+    return limpio.length > techo ? limpio.substring(0, techo) : limpio;
+  }
+
+  /// Una dirección que después se va a abrir.
+  ///
+  /// Solo http y https. Sin esto, un archivo preparado a mano podría meter en
+  /// el historial una entrada con `javascript:` o `file:` y esa dirección
+  /// terminaría abriéndose sola al tocar la tarjeta.
+  static String _direccion(Object? valor, String campo) {
+    final s = _texto(valor, campo);
+    final uri = Uri.tryParse(s);
+    if (uri == null) throw FormatException('"$campo" no es una dirección');
+    if (uri.hasScheme && uri.scheme != 'http' && uri.scheme != 'https') {
+      throw FormatException('"$campo" usa un esquema que no se acepta');
+    }
+    return s;
   }
 
   static int _entero(Object? valor) =>
@@ -299,12 +443,16 @@ class CopiaInvalida implements Exception {
 /// Qué entró de verdad al importar.
 class ResultadoImportacion {
   const ResultadoImportacion({
+    required this.deQuien,
     required this.historialNuevo,
     required this.historialActualizado,
     required this.favoritosNuevos,
     required this.fallidos,
     required this.extensionesFaltantes,
   });
+
+  /// De qué copia salió todo esto, para poder decirlo al terminar.
+  final SobreDeCopia deQuien;
 
   final int historialNuevo;
   final int historialActualizado;
@@ -320,4 +468,36 @@ class ResultadoImportacion {
   final List<String> extensionesFaltantes;
 
   int get total => historialNuevo + historialActualizado + favoritosNuevos;
+}
+
+/// Lo que se puede leer de una copia SIN la clave.
+///
+/// Sirve para reconocer el archivo antes de pedir nada: de qué equipo salió,
+/// cuál número de copia es y de cuándo. Con tres archivos guardados en la misma
+/// carpeta, es la única forma de saber cuál es el último sin abrirlos.
+class SobreDeCopia {
+  const SobreDeCopia({
+    required this.nombre,
+    required this.numero,
+    required this.fecha,
+    required this.conClave,
+  });
+
+  /// El nombre que le puso quien la creó. Ya saneado.
+  final String nombre;
+
+  /// Qué copia es de ese equipo: 1, 2, 3… 0 si el archivo no lo dice.
+  final int numero;
+
+  final DateTime? fecha;
+  final bool conClave;
+
+  /// Cómo se lee de un vistazo: "Mi celular · copia n.º 3".
+  String get etiqueta {
+    final partes = <String>[
+      if (nombre.isNotEmpty) nombre,
+      if (numero > 0) 'copia n.º $numero',
+    ];
+    return partes.isEmpty ? 'Copia de PrismHub' : partes.join(' · ');
+  }
 }
