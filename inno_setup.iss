@@ -51,7 +51,17 @@ RestartApplications=no
 ; Idioma automático según Windows, sin preguntar. Inno 6 detecta solo por el
 ; idioma de la interfaz del sistema (la directiva LanguageDetection de Inno 5
 ; ya no existe: usarla aborta la compilación). Ver [Languages].
-ShowLanguageDialog=no
+;
+; Y se PREGUNTA, con el idioma detectado ya elegido por defecto.
+;
+; Antes estaba en "no" para no agregar una pregunta más, pero eso dejaba al
+; usuario sin forma de cambiarlo: si la detección erraba —o simplemente quería
+; el instalador en el otro idioma— no había manera. Ahora se muestra la lista
+; con el detectado ya seleccionado, así que a quien le sirve ese le alcanza con
+; Aceptar, y el resto puede cambiarlo.
+;
+; Lo elegido acá vale para TODO el instalador: bienvenida, botones y avisos.
+ShowLanguageDialog=yes
 ; Y NO reutilizar el idioma de la instalacion anterior, que es lo que hace Inno
 ; por defecto (UsePreviousLanguage=yes). Al actualizar, Setup lee el valor
 ; "Inno Setup: Language" que dejo la instalacion previa y lo usa tal cual, sin
@@ -79,14 +89,26 @@ Name: "spanish"; MessagesFile: "compiler:Languages\Spanish.isl"
 
 [CustomMessages]
 ; %1 = versión instalada, %2 = versión que se va a instalar.
-english.PrismUpdateTitle=Updating PrismHub
-spanish.PrismUpdateTitle=Actualizando PrismHub
-english.PrismUpdateBody=PrismHub %1 is already installed. It will be updated to version %2.%n%nYour history, favorites and settings are kept: they are stored outside the program folder.
-spanish.PrismUpdateBody=Ya tenés instalado PrismHub %1. Se va a actualizar a la versión %2.%n%nTu historial, favoritos y ajustes se conservan: se guardan fuera de la carpeta del programa.
-english.PrismFreshTitle=Installing PrismHub
-spanish.PrismFreshTitle=Instalando PrismHub
-english.PrismFreshBody=PrismHub %1 will be installed on this computer.%n%nAnime, manga and series through extensions that install and update on their own.
-spanish.PrismFreshBody=Se va a instalar PrismHub %1 en este equipo.%n%nAnime, manga y series mediante extensiones que se instalan y actualizan por su cuenta.
+; ── Actualizar: hay una version ANTERIOR instalada ──────────────────────────
+english.PrismUpdateTitle=⬆️ Updating PrismHub
+spanish.PrismUpdateTitle=⬆️ Actualizando PrismHub
+english.PrismUpdateBody=You already have PrismHub %1. It will be updated to %2.%n%n✅ Your history, favourites, settings and installed extensions are KEPT — they live outside the program folder.%n🧹 The program folder is emptied before copying, so no leftovers from the old version remain.%n🔄 Extensions update on their own, no need to reinstall them.
+spanish.PrismUpdateBody=Ya tenés PrismHub %1. Se va a actualizar a la %2.%n%n✅ Tu historial, favoritos, ajustes y extensiones instaladas se CONSERVAN — viven fuera de la carpeta del programa.%n🧹 La carpeta del programa se vacía antes de copiar, así no quedan restos de la versión vieja.%n🔄 Las extensiones se actualizan solas, no hace falta reinstalarlas.
+; ── Reinstalar: la MISMA version que ya esta instalada ──────────────────────
+english.PrismRepairTitle=🔄 Reinstalling PrismHub
+spanish.PrismRepairTitle=🔄 Reinstalando PrismHub
+english.PrismRepairBody=You already have PrismHub %1 — the same version this installer carries.%n%n♻️ The program files will be replaced with the original ones. Useful if something got corrupted, was deleted, or the app stopped opening.%n✅ Your history, favourites, settings and installed extensions are KEPT.
+spanish.PrismRepairBody=Ya tenés PrismHub %1 — la misma versión que trae este instalador.%n%n♻️ Se van a reemplazar los archivos del programa por los originales. Sirve si algo se corrompió, se borró, o la app dejó de abrir.%n✅ Tu historial, favoritos, ajustes y extensiones instaladas se CONSERVAN.
+; ── Volver atras: el instalador trae una version ANTERIOR a la instalada ────
+english.PrismDowngradeTitle=⬇️ Going back to an earlier version
+spanish.PrismDowngradeTitle=⬇️ Volviendo a una versión anterior
+english.PrismDowngradeBody=You have PrismHub %1, and this installer carries %2 — which is older.%n%n⚠️ You will lose the fixes and features added after %2.%n✅ Your history, favourites, settings and extensions are KEPT, so you can go forward again whenever you want.
+spanish.PrismDowngradeBody=Tenés PrismHub %1 y este instalador trae la %2, que es anterior.%n%n⚠️ Vas a perder los arreglos y las novedades agregadas después de la %2.%n✅ Tu historial, favoritos, ajustes y extensiones se CONSERVAN, así que podés volver a adelantar cuando quieras.
+; ── Instalacion nueva: nunca se instalo en este equipo ──────────────────────
+english.PrismFreshTitle=🎉 Installing PrismHub
+spanish.PrismFreshTitle=🎉 Instalando PrismHub
+english.PrismFreshBody=PrismHub %1 will be installed on this computer.%n%n📺 Anime, manga and series through extensions that install and update on their own.%n📡 Cast to your TV, Chromecast or Roku from the same screen.%n💾 Your history, favourites and settings are saved outside the program folder, so uninstalling never takes them by surprise.%n🔒 Nothing is uploaded anywhere: everything stays on this computer.
+spanish.PrismFreshBody=Se va a instalar PrismHub %1 en este equipo.%n%n📺 Anime, manga y series mediante extensiones que se instalan y actualizan solas.%n📡 Transmití a tu televisor, Chromecast o Roku desde la misma pantalla.%n💾 Tu historial, favoritos y ajustes se guardan fuera de la carpeta del programa, así desinstalar nunca se los lleva de sorpresa.%n🔒 No se sube nada a ningún lado: todo queda en este equipo.
 ; Al desinstalar. Se PREGUNTA en vez de borrar directo: mucha gente desinstala
 ; para reinstalar, y llevarse el historial sin avisar no se puede deshacer.
 english.PrismWipeTitle=Remove your data as well?
@@ -99,6 +121,23 @@ english.PrismFirewall=Allowing PrismHub through the firewall (needed to cast to 
 spanish.PrismFirewall=Permitiendo PrismHub en el firewall (hace falta para transmitir a un televisor)...
 english.PrismWipeKept=Your data was kept at:%n%1
 spanish.PrismWipeKept=Tus datos se conservaron en:%n%1
+; Nota que se agrega SIEMPRE a la pantalla de bienvenida.
+; Texto del boton de la pagina "Listo para instalar", segun el caso.
+english.PrismBtnFresh=&Install
+spanish.PrismBtnFresh=&Instalar
+english.PrismBtnUpdate=&Update
+spanish.PrismBtnUpdate=&Actualizar
+english.PrismBtnRepair=&Reinstall
+spanish.PrismBtnRepair=&Reinstalar
+english.PrismBtnDowngrade=&Go back
+spanish.PrismBtnDowngrade=&Volver atrás
+english.PrismUnsignedNote=%n%n⚠️ Note: PrismHub is not digitally signed, so Windows SmartScreen or your antivirus may warn about it or block it. If that happens, choose "More info" and then "Run anyway", or allow it in your antivirus.
+spanish.PrismUnsignedNote=%n%n⚠️ Nota: PrismHub no está firmado digitalmente, así que Windows SmartScreen o tu antivirus pueden avisarte o bloquearlo. Si pasa, elegí "Más información" y después "Ejecutar de todas formas", o permitilo en tu antivirus.
+; Aviso fuerte, SOLO si se detecta Smart App Control encendido.
+english.PrismSacTitle=Windows may block this installation
+spanish.PrismSacTitle=Windows puede bloquear esta instalación
+english.PrismSacBody=This computer has Smart App Control turned on.%n%nThat Windows 11 feature blocks programs that are not digitally signed, and PrismHub is not. The install may fail, or the program may refuse to open with a "Bad Image" error naming a .dll file.%n%nIf that happens, turn it off in:%nWindows Security > App & browser control > Smart App Control.%n%nIMPORTANT: Windows does NOT let you turn it back on afterwards without reinstalling the system. Think it over before you do it.%n%nYou can continue anyway — if the program opens fine, there is nothing to change.
+spanish.PrismSacBody=Este equipo tiene Smart App Control activado.%n%nEsa función de Windows 11 bloquea los programas que no están firmados digitalmente, y PrismHub no lo está. La instalación puede fallar, o el programa puede negarse a abrir con un error de "Imagen incorrecta" que nombra un archivo .dll.%n%nSi pasa, desactivalo en:%nSeguridad de Windows > Control de aplicaciones y explorador > Smart App Control.%n%nIMPORTANTE: Windows NO deja volver a activarlo después sin reinstalar el sistema. Pensalo antes de hacerlo.%n%nPodés continuar igual — si el programa abre bien, no hay nada que tocar.
 
 [Tasks]
 Name: "desktopicon"; Description: "{cm:CreateDesktopIcon}"; GroupDescription: "{cm:AdditionalIcons}"; Flags: unchecked
@@ -161,6 +200,20 @@ Filename: "{app}\{#MyAppExeName}"; Description: "{cm:LaunchProgram,{#StringChang
 Filename: "{sys}\netsh.exe"; Parameters: "advfirewall firewall delete rule name=""{#MyAppName}"""; Flags: runhidden waituntilterminated skipifdoesntexist; RunOnceId: "QuitarReglaFirewall"
 
 [Code]
+// Los cuatro casos posibles, decididos una sola vez en InitializeWizard y
+// reusados para el texto de bienvenida y para el botón de "Listo para
+// instalar" (ver QueSeEstaHaciendo).
+const
+  casoInstalar = 0;
+  casoActualizar = 1;
+  casoReinstalar = 2;
+  casoVolverAtras = 3;
+
+var
+  // Ya se avisó de Smart App Control en esta corrida (ver CurPageChanged).
+  AvisoSacMostrado: Boolean;
+  CasoDeEstaCorrida: Integer;
+
 // La versión llega desde el workflow como nombre del tag ("v1.0.13"), y lo
 // mismo quedó guardado en el registro. Mostrarla tal cual daba "versión
 // v1.0.13"; se le saca la v para que el texto se lea normal.
@@ -196,6 +249,59 @@ begin
     Result := Valor
   else if RegQueryStringValue(HKCU64, Clave, 'DisplayVersion', Valor) then
     Result := Valor;
+end;
+
+// Al ACTUALIZAR, se vacía la carpeta del programa antes de copiar lo nuevo.
+//
+// Inno por defecto solo SOBRESCRIBE: lo que la versión nueva ya no trae —una
+// dll de un plugin que se sacó, un archivo que cambió de nombre, restos de una
+// versión de hace meses— se queda ahí para siempre. Y no es basura inofensiva:
+// Windows busca las dll al lado del .exe, así que el programa nuevo termina
+// cargando una dll vieja que ya no le corresponde. De ahí salen los "Imagen
+// incorrecta" señalando una dll suelta que en realidad no está rota, es de
+// otra versión.
+//
+// Tus datos NO están acá y por eso vaciar esto no toca nada tuyo: el
+// historial, los favoritos, los ajustes y las extensiones instaladas viven en
+// {userdocs}\PrismHub, {userappdata}\com.prismhub y la caché — las tres fuera
+// de la carpeta del programa (ver CarpetaDatos, CarpetaCache y
+// CarpetaSoporte). Es lo mismo que ya dice la pantalla de bienvenida al
+// actualizar.
+//
+// Se saltan los "unins*": son el desinstalador de la instalación en curso.
+procedure VaciarCarpetaDelPrograma(const Carpeta: String);
+var
+  Busqueda: TFindRec;
+  Nombre: String;
+begin
+  if not DirExists(Carpeta) then
+    exit;
+  if not FindFirst(AddBackslash(Carpeta) + '*', Busqueda) then
+    exit;
+  try
+    repeat
+      Nombre := Busqueda.Name;
+      if (Nombre = '.') or (Nombre = '..') then
+        continue;
+      if Pos('unins', Lowercase(Nombre)) = 1 then
+        continue;
+      if (Busqueda.Attributes and FILE_ATTRIBUTE_DIRECTORY) <> 0 then
+        DelTree(AddBackslash(Carpeta) + Nombre, True, True, True)
+      else
+        DeleteFile(AddBackslash(Carpeta) + Nombre);
+    until not FindNext(Busqueda);
+  finally
+    FindClose(Busqueda);
+  end;
+end;
+
+// ssInstall es justo antes de copiar los archivos, y después de que
+// CloseApplications haya cerrado el programa si estaba corriendo. Vaciar antes
+// de eso dejaría las dll tomadas por el proceso vivo y no se borrarían.
+procedure CurStepChanged(CurStep: TSetupStep);
+begin
+  if CurStep = ssInstall then
+    VaciarCarpetaDelPrograma(ExpandConstant('{app}'));
 end;
 
 // Dónde deja el app sus cosas, fuera de la carpeta del programa.
@@ -262,25 +368,144 @@ begin
     MsgBox(FmtMessage(CustomMessage('PrismWipeKept'), [Datos]), mbInformation, MB_OK);
 end;
 
+// Smart App Control encendido.
+//
+// Es la funcion de Windows 11 que bloquea binarios sin firma ni reputacion.
+// PrismHub no esta firmado, asi que con esto activo la instalacion puede
+// fallar o el .exe negarse a abrir con "Imagen incorrecta" (0xc0e90002)
+// senalando una dll cualquiera — el error no dice ni una palabra de Smart App
+// Control, asi que desde afuera parece un archivo roto. Comprobado en un
+// equipo real: el mismo instalador anda en una maquina y en la otra no, y lo
+// unico distinto era este valor.
+//
+// 0 = apagado, 1 = bloqueando, 2 = en evaluacion. Solo el 1 molesta.
+//
+// Vive bajo HKLM\SYSTEM, que NO tiene redireccion de 32/64 bits (solo la tiene
+// SOFTWARE), asi que se lee igual aunque el instalador corra en 32 bits. En
+// Windows 10 la clave no existe y esto devuelve False, que es lo correcto:
+// ahi la funcion no existe.
+function SmartAppControlBloqueando(): Boolean;
+var
+  Estado: Cardinal;
+begin
+  Result := False;
+  if RegQueryDWordValue(HKLM, 'SYSTEM\CurrentControlSet\Control\CI\Policy',
+                        'VerifiedAndReputablePolicyState', Estado) then
+    Result := (Estado = 1);
+end;
+
+// Qué está pasando realmente en esta corrida. No alcanza con "¿hay algo
+// instalado?": reemplazar la MISMA versión, subir de versión y volver a una
+// anterior son tres cosas distintas, y decirle "actualizando" a alguien que
+// está reinstalando por tercera vez porque la app no le abre es mentirle.
+function QueSeEstaHaciendo(const Anterior: String): Integer;
+var
+  Vieja, Nueva: Int64;
+begin
+  if Anterior = '' then
+  begin
+    Result := casoInstalar;
+    exit;
+  end;
+  // Comparación por texto primero: si son idénticas no hace falta más, y cubre
+  // el caso de una versión con un formato que StrToVersion no sepa leer.
+  if CompareText(SinV(Anterior), SinV('{#MyAppVersion}')) = 0 then
+  begin
+    Result := casoReinstalar;
+    exit;
+  end;
+  // Si alguna no se puede leer como número de versión, se cae a "actualizar",
+  // que es lo que pasa el 99% de las veces y el texto menos arriesgado.
+  if not StrToVersion(SinV(Anterior), Vieja)
+     or not StrToVersion(SinV('{#MyAppVersion}'), Nueva) then
+  begin
+    Result := casoActualizar;
+    exit;
+  end;
+  if ComparePackedVersion(Nueva, Vieja) < 0 then
+    Result := casoVolverAtras
+  else
+    Result := casoActualizar;
+end;
+
 procedure InitializeWizard();
 var
   Anterior: String;
+  Caso: Integer;
 begin
   Anterior := VersionInstalada();
-  if Anterior <> '' then
-  begin
-    WizardForm.WelcomeLabel1.Caption := CustomMessage('PrismUpdateTitle');
-    // OJO: el arreglo de argumentos NO puede quedar al principio de una línea.
-    // Inno lee una línea que empieza con "[" como etiqueta de sección y aborta
-    // con "Invalid section tag", aunque esté dentro de [Code].
-    WizardForm.WelcomeLabel2.Caption := FmtMessage(
-      CustomMessage('PrismUpdateBody'), [SinV(Anterior), SinV('{#MyAppVersion}')]);
-  end
+  Caso := QueSeEstaHaciendo(Anterior);
+  CasoDeEstaCorrida := Caso;
+
+  // OJO: el arreglo de argumentos NO puede quedar al principio de una línea.
+  // Inno lee una línea que empieza con "[" como etiqueta de sección y aborta
+  // con "Invalid section tag", aunque esté dentro de [Code].
+  case Caso of
+    casoActualizar:
+      begin
+        WizardForm.WelcomeLabel1.Caption := CustomMessage('PrismUpdateTitle');
+        WizardForm.WelcomeLabel2.Caption := FmtMessage(
+          CustomMessage('PrismUpdateBody'), [SinV(Anterior), SinV('{#MyAppVersion}')]);
+      end;
+    casoReinstalar:
+      begin
+        WizardForm.WelcomeLabel1.Caption := CustomMessage('PrismRepairTitle');
+        WizardForm.WelcomeLabel2.Caption := FmtMessage(
+          CustomMessage('PrismRepairBody'), [SinV(Anterior)]);
+      end;
+    casoVolverAtras:
+      begin
+        WizardForm.WelcomeLabel1.Caption := CustomMessage('PrismDowngradeTitle');
+        WizardForm.WelcomeLabel2.Caption := FmtMessage(
+          CustomMessage('PrismDowngradeBody'), [SinV(Anterior), SinV('{#MyAppVersion}')]);
+      end;
   else
+    // El begin/end no es decorativo: el "else" de un case en Pascal Script
+    // toma UNA sola sentencia, y sin envolverlo la compilación aborta con
+    // "'END' expected" en la segunda línea.
+    begin
+      WizardForm.WelcomeLabel1.Caption := CustomMessage('PrismFreshTitle');
+      WizardForm.WelcomeLabel2.Caption :=
+        FmtMessage(CustomMessage('PrismFreshBody'), [SinV('{#MyAppVersion}')]);
+    end;
+  end;
+  // Va en los dos casos: actualizar tambien puede quedar bloqueado.
+  WizardForm.WelcomeLabel2.Caption :=
+    WizardForm.WelcomeLabel2.Caption + CustomMessage('PrismUnsignedNote');
+end;
+
+// El aviso de Smart App Control se muestra sobre la bienvenida, no antes de
+// que aparezca el asistente: un cartel suelto sin ventana detras parece un
+// error del propio instalador.
+//
+// AvisoSacMostrado: CurPageChanged vuelve a dispararse si el usuario va para
+// atras, y repetir el mismo cartel es molesto.
+procedure CurPageChanged(CurPageID: Integer);
+var
+  SinBotonesPropios: TArrayOfString;
+begin
+  // El botón de "Listo para instalar" dice siempre "Instalar", aunque se esté
+  // actualizando o reinstalando. Que diga lo que va a pasar de verdad.
+  if CurPageID = wpReady then
   begin
-    WizardForm.WelcomeLabel1.Caption := CustomMessage('PrismFreshTitle');
-    WizardForm.WelcomeLabel2.Caption :=
-      FmtMessage(CustomMessage('PrismFreshBody'), [SinV('{#MyAppVersion}')]);
+    case CasoDeEstaCorrida of
+      casoActualizar: WizardForm.NextButton.Caption := CustomMessage('PrismBtnUpdate');
+      casoReinstalar: WizardForm.NextButton.Caption := CustomMessage('PrismBtnRepair');
+      casoVolverAtras: WizardForm.NextButton.Caption := CustomMessage('PrismBtnDowngrade');
+    else
+      WizardForm.NextButton.Caption := CustomMessage('PrismBtnFresh');
+    end;
+  end;
+
+  if (CurPageID = wpWelcome) and (not AvisoSacMostrado)
+     and SmartAppControlBloqueando() then
+  begin
+    AvisoSacMostrado := True;
+    // TaskDialogMsgBox y no MsgBox: este texto es largo y necesita un titulo
+    // propio arriba. MsgBox no acepta titulo —usa el del instalador— y todo
+    // quedaba como un parrafo suelto.
+    TaskDialogMsgBox(CustomMessage('PrismSacTitle'), CustomMessage('PrismSacBody'),
+                     mbInformation, MB_OK, SinBotonesPropios, 0);
   end;
 end;
 
