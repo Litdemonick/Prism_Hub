@@ -160,39 +160,17 @@ class CopiaSeguridad {
   /// Techo del nombre. Entra en una línea en un teléfono en vertical.
   static const _largoDeNombre = 40;
 
-  /// Mete de vuelta lo que traiga el archivo, SIN borrar lo que ya hay.
+  /// Abre la copia y cuenta qué trae, SIN escribir nada en la base.
   ///
-  /// Se junta con lo existente en vez de reemplazarlo, que es lo único seguro:
-  /// importar en un equipo que ya se venía usando no puede costarle al usuario
-  /// lo que vio ahí. Cuando un mismo título está en los dos lados gana **el más
-  /// reciente**, comparando la fecha.
-  ///
-  /// Un registro roto no corta la importación: se cuenta como fallido y se
-  /// sigue con el resto. Un archivo a medio leer sería peor que uno incompleto.
-  static Future<ResultadoImportacion> importar(
-    String contenido,
-    String clave, {
-    /// De 0 a 1. Sirve para mover la barra: una copia grande son cientos de
-    /// registros y cada uno toca la base, así que sin esto el usuario mira una
-    /// pantalla quieta sin saber si avanza.
-    void Function(double)? onProgreso,
-  }) async {
-    // Las mismas comprobaciones que ya hizo quien mostró de qué copia se trata.
-    // Se repiten porque importar tiene que poder llamarse solo: fiarse de que
-    // alguien validó antes es como no validar.
+  /// Es el paso que falta entre "elegí el archivo" y "metelo": deja mostrar de
+  /// qué extensión es cada cosa y cuánto trae cada una, para que el usuario
+  /// elija antes de que nada toque sus datos. Descifrar dos veces sería tirar
+  /// trabajo, así que lo abierto queda acá y de acá lo toma [importar].
+  static Future<CopiaAbierta> abrir(String contenido, String clave) async {
     final quienEs = leerSobre(contenido);
     final sobre = jsonDecode(contenido) as Map<String, dynamic>;
 
-    // SOLO se aceptan copias cifradas. Sin excepciones.
-    //
-    // Antes había una rama que leía un archivo sin cifrar "por si alguna vez
-    // existiera". Eso era un agujero: cualquiera podía escribir a mano un JSON
-    // con {"app":"PrismHub","formato":1,"historial":[…]} y meterlo entero sin
-    // saber ninguna clave. El cifrado es lo que hace que el contenido de una
-    // copia solo pueda venir de alguien que tiene la clave del usuario; dejar
-    // una puerta al lado lo anulaba.
-    //
-    // Esta versión no genera copias sin cifrar, así que no se rompe nada.
+    // SOLO copias cifradas. Ver el porqué en [importar].
     if (sobre['cifrado'] != true) {
       throw const CopiaInvalida(
         'Este archivo no es una copia protegida de PrismHub. '
@@ -209,12 +187,6 @@ class CopiaSeguridad {
       clave: clave,
     );
     if (abierto == null) {
-      // No se distingue "clave equivocada" de "archivo dañado" a propósito:
-      // no hay forma de saberlo sin arriesgarse a usar datos que no son.
-      //
-      // Y acá está la defensa de fondo: para que lo de adentro llegue siquiera
-      // a leerse, el archivo tuvo que cerrarse con ESTA clave. Un archivo
-      // preparado por otro no pasa de esta línea.
       throw const CopiaInvalida(
         'La clave no es la de este archivo, o el archivo está dañado.',
       );
@@ -228,7 +200,70 @@ class CopiaSeguridad {
     if (dentro is! Map<String, dynamic>) {
       throw const CopiaInvalida('La copia venía dañada por dentro.');
     }
-    final raiz = dentro;
+
+    // Cuánto trae cada extensión. Se cuenta leyendo el paquete de cada
+    // registro, sin construirlo entero: acá solo hace falta el número.
+    final porPaquete = <String, ({int historial, int favoritos})>{};
+    void sumar(Object? crudo, {required bool esHistorial}) {
+      if (crudo is! Map) return;
+      final p = crudo['package'];
+      if (p is! String || p.isEmpty) return;
+      final ya = porPaquete[p] ?? (historial: 0, favoritos: 0);
+      porPaquete[p] = esHistorial
+          ? (historial: ya.historial + 1, favoritos: ya.favoritos)
+          : (historial: ya.historial, favoritos: ya.favoritos + 1);
+    }
+
+    for (final e in _lista(dentro['historial'])) {
+      sumar(e, esHistorial: true);
+    }
+    for (final e in _lista(dentro['favoritos'])) {
+      sumar(e, esHistorial: false);
+    }
+
+    return CopiaAbierta(
+      deQuien: quienEs,
+      contenido: dentro,
+      porPaquete: porPaquete,
+    );
+  }
+
+  /// Mete de vuelta lo que traiga el archivo, SIN borrar lo que ya hay.
+  ///
+  /// Se junta con lo existente en vez de reemplazarlo, que es lo único seguro:
+  /// importar en un equipo que ya se venía usando no puede costarle al usuario
+  /// lo que vio ahí. Cuando un mismo título está en los dos lados gana **el más
+  /// reciente**, comparando la fecha.
+  ///
+  /// Un registro roto no corta la importación: se cuenta como fallido y se
+  /// sigue con el resto. Un archivo a medio leer sería peor que uno incompleto.
+  static Future<ResultadoImportacion> importar(
+    String contenido,
+    String clave, {
+    /// Solo estas extensiones. Null = todas.
+    ///
+    /// Es lo que el usuario eligio en la pantalla de antes: lo de una extension
+    /// que no tiene puesta no le sirve de nada hasta que la instale, asi que
+    /// puede dejarla afuera en vez de llenarse el inicio de tarjetas que no
+    /// abren.
+    Set<String>? paquetes,
+
+    /// La copia ya abierta, para no descifrarla dos veces.
+    ///
+    /// Descifrar cuesta a proposito (150.000 vueltas de PBKDF2): hacerlo de
+    /// nuevo para importar seria un segundo de espera regalado.
+    CopiaAbierta? yaAbierta,
+
+    /// De 0 a 1. Sirve para mover la barra: una copia grande son cientos de
+    /// registros y cada uno toca la base, asi que sin esto el usuario mira una
+    /// pantalla quieta sin saber si avanza.
+    void Function(double)? onProgreso,
+  }) async {
+    // Si no vino abierta se abre aca: importar tiene que poder llamarse solo.
+    // Fiarse de que alguien valido antes es como no validar.
+    final copia = yaAbierta ?? await abrir(contenido, clave);
+    final quienEs = copia.deQuien;
+    final raiz = copia.contenido;
 
     var historialNuevo = 0;
     var historialActualizado = 0;
@@ -245,7 +280,22 @@ class CopiaSeguridad {
       if (cuantos > 0) onProgreso?.call(hechos / cuantos);
     }
 
+    /// Si este registro es de una extensión que el usuario eligió pasar.
+    ///
+    /// Se mira ANTES de construirlo: un registro que no se va a guardar no
+    /// tiene por qué gastar validación, y sobre todo no tiene por qué contarse
+    /// como fallido si viniera roto.
+    bool loQuiere(Object? crudo) {
+      if (paquetes == null) return true;
+      if (crudo is! Map) return false;
+      return paquetes.contains(crudo['package']);
+    }
+
     for (final crudo in losHistorial) {
+      if (!loQuiere(crudo)) {
+        avanzar();
+        continue;
+      }
       try {
         final entra = _historialDeMapa(crudo);
         final previo = await DatabaseService.getHistoryByPackageAndUrl(
@@ -272,6 +322,10 @@ class CopiaSeguridad {
     }
 
     for (final crudo in losFavoritos) {
+      if (!loQuiere(crudo)) {
+        avanzar();
+        continue;
+      }
       try {
         final entra = _favoritoDeMapa(crudo);
         final yaEsta = await DatabaseService.isFavorite(
@@ -630,4 +684,48 @@ class SobreDeCopia {
     ];
     return partes.isEmpty ? 'Copia de PrismHub' : partes.join(' · ');
   }
+}
+
+/// Una copia ya descifrada, con la cuenta de qué trae cada extensión.
+///
+/// Existe para poder mostrarle al usuario qué hay adentro **antes** de escribir
+/// nada: de qué extensión es cada cosa y cuánto trae cada una. Sin esto, la
+/// única opción era meter todo a ciegas y ver después qué había entrado.
+///
+/// Descifrar cuesta a propósito (150.000 vueltas de PBKDF2), así que lo abierto
+/// se guarda acá y se reusa al importar en vez de hacerlo dos veces.
+class CopiaAbierta {
+  const CopiaAbierta({
+    required this.deQuien,
+    required this.contenido,
+    required this.porPaquete,
+  });
+
+  /// De qué equipo salió y qué número de copia es.
+  final SobreDeCopia deQuien;
+
+  /// Lo de adentro, ya descifrado. Se pasa tal cual a importar.
+  final Map<String, dynamic> contenido;
+
+  /// Cuántos registros trae cada extensión.
+  final Map<String, ({int historial, int favoritos})> porPaquete;
+
+  /// Las extensiones que aparecen en la copia, ordenadas por cuánto traen.
+  ///
+  /// De mayor a menor: lo que más contenido tiene es lo que el usuario más
+  /// quiere recuperar, así que va arriba y no hay que buscarlo.
+  List<String> get paquetes {
+    final lista = porPaquete.keys.toList();
+    lista.sort((a, b) {
+      final ca = porPaquete[a]!;
+      final cb = porPaquete[b]!;
+      final total = (cb.historial + cb.favoritos)
+          .compareTo(ca.historial + ca.favoritos);
+      return total != 0 ? total : a.compareTo(b);
+    });
+    return lista;
+  }
+
+  int get total => porPaquete.values
+      .fold(0, (a, c) => a + c.historial + c.favoritos);
 }
