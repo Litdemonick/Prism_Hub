@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
+import 'dart:typed_data';
 
 import 'package:prismhub/utils/log.dart';
 
@@ -142,39 +143,82 @@ class CastHlsATs {
     }
   }
 
+  /// Cuántos pedacitos se van bajando POR DELANTE del que se está entregando.
+  ///
+  /// Antes no había ninguno: se bajaba uno, se entregaba, y recién cuando el
+  /// televisor terminaba de tragarlo se empezaba a pedir el siguiente. O sea que
+  /// el tiempo de bajar cada pedacito se sumaba entero al de reproducirlo, y el
+  /// televisor se quedaba sin datos entre uno y otro — exactamente el "va lento
+  /// y se para" que se ve al castear. Con dos por delante, mientras el aparato
+  /// consume uno ya hay otros dos descargados esperando, y el bache solo se nota
+  /// si la conexión no llega ni a seguirle el ritmo al vídeo.
+  ///
+  /// Dos y no veinte porque cada uno se guarda entero en memoria mientras
+  /// espera: son unos pocos megas por pedacito, y con este número el techo
+  /// queda en el orden de la decena de megas.
+  static const _porDelante = 2;
+
   /// Los bytes del vídeo, en orden y sin cortes.
   ///
-  /// Va bajando un pedacito mientras el televisor consume el anterior. No se
-  /// junta todo en memoria: son cientos de megas.
+  /// Se bajan varios pedacitos a la vez pero se entregan SIEMPRE en orden: un
+  /// MPEG-TS es un flujo continuo y un pedacito fuera de lugar lo rompe.
   static Stream<List<int>> servir(PlanTs plan) async* {
     // Desde donde diga el plan: adelantar es servir el mismo video empezando
     // por otro pedacito.
-    for (var i = plan.desde; i < plan.pedacitos.length; i++) {
-      final trozo = plan.pedacitos[i];
-      var entregado = false;
-      for (var intento = 0; intento <= _reintentos && !entregado; intento++) {
-        try {
-          final req = await _cliente.getUrl(trozo);
-          _preparar(req, plan.headers, plan.userAgent);
-          final res = await req.close().timeout(const Duration(seconds: 30));
-          if (res.statusCode >= 400) {
-            await res.drain<void>();
-            throw HttpException('HTTP ${res.statusCode}');
-          }
-          await for (final bloque in res) {
-            yield bloque;
-          }
-          entregado = true;
-        } catch (e) {
-          if (intento == _reintentos) {
-            // Un pedacito perdido se nota como un saltito y el vídeo sigue.
-            // Cortar la transmisión entera por uno sería mucho peor.
-            logger.warning(
-                'Reempaquetado a TS: se saltea el pedacito ${i + 1} — $e');
-          }
+    final enVuelo = <Future<List<int>?>>[];
+    var proximo = plan.desde;
+
+    void llenarLaCola() {
+      while (enVuelo.length <= _porDelante &&
+          proximo < plan.pedacitos.length) {
+        enVuelo.add(_bajarPedacito(plan, proximo));
+        proximo++;
+      }
+    }
+
+    llenarLaCola();
+    while (enVuelo.isNotEmpty) {
+      final bytes = await enVuelo.removeAt(0);
+      // Se pide el reemplazo apenas se saca uno de la cola, no después de
+      // entregarlo: si se esperara a que el televisor lo consuma, volveríamos a
+      // tener la descarga y la reproducción una detrás de la otra.
+      llenarLaCola();
+      // null es un pedacito que no se pudo bajar ni reintentando: se saltea. Se
+      // nota como un saltito y el vídeo sigue; cortar la transmisión entera por
+      // uno sería mucho peor.
+      if (bytes == null) continue;
+      yield bytes;
+    }
+  }
+
+  /// Un pedacito entero en memoria, o null si no se pudo bajar.
+  ///
+  /// Nunca tira: quien lo espera está sirviendo un vídeo en marcha y una
+  /// excepción ahí cortaría la transmisión completa.
+  static Future<List<int>?> _bajarPedacito(PlanTs plan, int indice) async {
+    final trozo = plan.pedacitos[indice];
+    for (var intento = 0; intento <= _reintentos; intento++) {
+      try {
+        final req = await _cliente.getUrl(trozo);
+        _preparar(req, plan.headers, plan.userAgent);
+        final res = await req.close().timeout(const Duration(seconds: 30));
+        if (res.statusCode >= 400) {
+          await res.drain<void>();
+          throw HttpException('HTTP ${res.statusCode}');
+        }
+        final juntado = BytesBuilder(copy: false);
+        await for (final bloque in res) {
+          juntado.add(bloque);
+        }
+        return juntado.takeBytes();
+      } catch (e) {
+        if (intento == _reintentos) {
+          logger.warning(
+              'Reempaquetado a TS: se saltea el pedacito ${indice + 1} — $e');
         }
       }
     }
+    return null;
   }
 
   /// Baja una lista y la devuelve como texto, o null si no se pudo.

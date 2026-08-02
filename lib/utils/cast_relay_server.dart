@@ -149,6 +149,38 @@ class CastRelayServer {
     return sesion != null && pedidosPorSesion.containsKey(sesion);
   }
 
+  /// Cuántos bytes de vídeo se le entregaron de verdad a cada transmisión.
+  ///
+  /// [pedidosPorSesion] decía "pidió", y con eso se concluía que "bajó datos".
+  /// No es lo mismo, y la diferencia importa: un televisor DLNA pregunta
+  /// PRIMERO con un HEAD para ver si el formato le sirve, y ese HEAD ya marcaba
+  /// la sesión como pedida aunque no se hubiera entregado un solo byte. Con eso,
+  /// un aparato que negoció y se fue —y otro que está bajando bien pero lento—
+  /// daban el mismo veredicto: "llega pero no puede con el formato". El de la
+  /// conexión lenta lo recibía siendo mentira.
+  ///
+  /// Contar bytes separa los tres casos de verdad: no pidió nada (es red), pidió
+  /// pero no bajó nada (negoció y lo rechazó: es el formato), o está bajando
+  /// (no hay nada roto, hay que esperar).
+  static final Map<String, int> bytesPorSesion = {};
+
+  static int bytesServidos(String? relayUrl) {
+    final sesion = _sesionDe(relayUrl);
+    return sesion == null ? 0 : (bytesPorSesion[sesion] ?? 0);
+  }
+
+  /// Cuenta lo que pasa sin tocarlo.
+  ///
+  /// Los bloques se reenvían TAL CUAL, sin copiarlos: lo único que se agrega es
+  /// sumar su largo. Importa porque por acá pasa todo el vídeo de la
+  /// transmisión y cualquier copia se pagaría en cada bloque.
+  static Stream<List<int>> _contando(String sesion, Stream<List<int>> origen) {
+    return origen.map((bloque) {
+      bytesPorSesion[sesion] = (bytesPorSesion[sesion] ?? 0) + bloque.length;
+      return bloque;
+    });
+  }
+
   /// Desde que direccion pidio, para poder decirlo en el aviso.
   static String? quienPidio(String? relayUrl) {
     final sesion = _sesionDe(relayUrl);
@@ -268,7 +300,10 @@ class CastRelayServer {
             '${CastLog.cabeceras(cabeceras)}');
       }
       if (esHead) return Response.ok(null, headers: cabeceras);
-      return Response.ok(CastHlsATs.servir(plan), headers: cabeceras);
+      return Response.ok(
+        _contando(target.sesion, CastHlsATs.servir(plan)),
+        headers: cabeceras,
+      );
     }
 
     final client = _cliente;
@@ -372,7 +407,7 @@ class CastRelayServer {
       // el camino, en el punto por el que pasa TODO el video.
       return Response(
         upstreamRes.statusCode,
-        body: upstreamRes,
+        body: _contando(target.sesion, upstreamRes),
         headers: resHeaders,
       );
     } catch (e) {
@@ -582,6 +617,7 @@ class CastRelayServer {
     _targets.removeWhere((_, t) => t.sesion == sesion);
     _tokensPorUrl.removeWhere((clave, _) => clave.startsWith('$sesion|'));
     pedidosPorSesion.remove(sesion);
+    bytesPorSesion.remove(sesion);
     _cerrarSiSobra();
   }
 
