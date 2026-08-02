@@ -255,9 +255,9 @@
     "backup-import-action": "Import",
     "backup-import-done": "Backup imported",
     "backup-import-failed": "Could not import",
-    "backup-import-counts": "{historial} history entries and {favoritos} favourites.",
+    "backup-import-counts": "{historial} titles went to history and {favoritos} to favourites.",
     "backup-import-failed-items": "{n} entries were damaged and were skipped.",
-    "backup-import-missing": "You are missing these extensions to open everything: {extensiones}",
+    "backup-import-missing": "These extensions are not on this device, so their content cannot be opened until you install them: {extensiones}",
     "backup-key-title-export": "Set a key for the backup",
     "backup-key-title-import": "Backup key",
     "backup-key-hint-export": "You will need it to open the file later. Keep it somewhere safe: it cannot be recovered, and without it the backup is useless.",
@@ -285,7 +285,7 @@
     "backup-pick-unstable": "Marked as unstable. You will be able to restore this once it is fixed.",
     "backup-export-working": "Protecting your backup with the key…",
     "backup-opening": "Opening the backup…",
-    "backup-import-exts": "Extensions: {n} of {total}.",
+    "backup-import-exts": "Restored content from {n} of {total} extensions.",
     "backup-nsfw-title": "This backup holds +18 content",
     "backup-nsfw-body": "There are {n} +18 items. They will be restored anyway, but since the +18 Zone is off you will not see them until you enable it in Settings.\n\nContinue?",
     "backup-pick-title-export": "What do you want to save?",
@@ -327,7 +327,8 @@
     "check-new-episodes-subtitle": "Checks every 12 hours whether anything new came out for what you already finished, and brings it back to Continue showing which one it is. It queries extensions in the background; turn it off to save data.",
     "auto-check-update-off-title": "Turn off automatic updates?",
     "auto-check-update-off-body": "PrismHub will stop telling you when a new version is out.\n\nImportant fixes will not reach you, and extensions may stop working when sites change, with no explanation. You will have to check by hand from here.\n\nYou can turn it back on whenever you want.",
-    "auto-check-update-off-confirm": "Turn it off anyway"
+    "auto-check-update-off-confirm": "Turn it off anyway",
+    "backup-import-nothing-new": "You already had everything this backup held, so nothing changed."
   },
   "external-player-launching": "Launching {player}",
   "detail": {

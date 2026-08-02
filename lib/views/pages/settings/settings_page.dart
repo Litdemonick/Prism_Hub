@@ -653,11 +653,17 @@ class _SettingsPageState extends State<SettingsPage> {
               'n': '${elegidas.length}',
               'total': '${copia.paquetes.length}',
             }),
-        FlutterI18n.translate(context, 'settings.backup-import-counts',
-            translationParams: {
-              'historial': '${r.historialNuevo + r.historialActualizado}',
-              'favoritos': '${r.favoritosNuevos}',
-            }),
+        // Cuando no entró nada se dice así y no con dos ceros: "0 y 0" se lee
+        // como que algo salió mal, cuando en realidad significa que este equipo
+        // ya estaba al día.
+        if (r.total == 0)
+          'settings.backup-import-nothing-new'.i18n
+        else
+          FlutterI18n.translate(context, 'settings.backup-import-counts',
+              translationParams: {
+                'historial': '${r.historialNuevo + r.historialActualizado}',
+                'favoritos': '${r.favoritosNuevos}',
+              }),
         if (r.fallidos > 0)
           FlutterI18n.translate(context, 'settings.backup-import-failed-items',
               translationParams: {'n': '${r.fallidos}'}),

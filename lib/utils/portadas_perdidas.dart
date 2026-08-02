@@ -2,6 +2,7 @@ import 'dart:convert';
 
 import 'package:prismhub/data/services/database_service.dart';
 import 'package:prismhub/models/index.dart';
+import 'package:prismhub/utils/extension.dart';
 import 'package:prismhub/utils/log.dart';
 
 /// Vuelve a poner las portadas que quedaron vacías en el historial.
@@ -12,14 +13,16 @@ import 'package:prismhub/utils/log.dart';
 /// vuelve solo, y quedaban tarjetas en un color liso mientras que al abrir el
 /// título la imagen aparecía perfecta.
 ///
-/// **No usa red.** Se busca en lo que la app ya tiene guardado de antes:
+/// Se busca en tres sitios, del más barato al más caro:
 ///
 ///  1. La ficha del título, que se guarda al abrirla y trae su portada.
 ///  2. El favorito del mismo título, si está en la lista.
+///  3. Preguntándole a la extensión. Esto SÍ usa red, así que va aparte y con
+///     un techo mucho más bajo (ver [repararConRed]).
 ///
-/// Si ninguno de los dos la tiene, se deja como está: bajarla de nuevo serían
-/// decenas de pedidos al abrir el inicio, y una tarjeta sin imagen molesta
-/// mucho menos que un inicio lento.
+/// Los dos primeros son lectura de la base y salen al toque. El tercero existe
+/// porque hay títulos que nunca se abrieron desde este equipo —los que llegaron
+/// por una copia— y de esos no hay ficha de dónde sacar nada.
 class PortadasPerdidas {
   /// Los que ya se miraron en esta sesión, hayan tenido arreglo o no.
   ///
@@ -92,7 +95,60 @@ class PortadasPerdidas {
     return null;
   }
 
+  /// Último recurso: pedírsela a la extensión.
+  ///
+  /// Se separa de [_buscar] porque esto SÍ usa red, y por eso va aparte y con
+  /// un techo mucho más bajo. Sin él, un historial de cincuenta títulos sin
+  /// portada dispararía cincuenta peticiones al abrir el inicio.
+  ///
+  /// Solo para los que no se pudieron arreglar con lo que ya había guardado —
+  /// que en la práctica son los que nunca se abrieron desde este equipo, así
+  /// que no hay ficha de dónde sacarla.
+  static Future<int> repararConRed(List<History> items) async {
+    var arregladas = 0;
+    var intentos = 0;
+    for (final h in items) {
+      if (intentos >= _porVueltaConRed) break;
+      if (h.cover != null && h.cover!.isNotEmpty) continue;
+      final clave = '${h.package}|${h.url}';
+      if (!_yaPedidos.add(clave)) continue;
+      // Solo extensiones que se pueden usar: una desactivada o caída no va a
+      // contestar, y preguntarle es tiempo perdido.
+      final runtime = ExtensionUtils.enabledRuntimes[h.package];
+      if (runtime == null) continue;
+      intentos++;
+      try {
+        final detalle = await runtime
+            .detail(h.url)
+            .timeout(const Duration(seconds: 8));
+        final c = detalle.cover;
+        if (c == null || c.isEmpty) continue;
+        h.cover = c;
+        await DatabaseService.putHistoryRaw(h);
+        arregladas++;
+      } catch (e) {
+        // Sin red, con la fuente caída o con una dirección que ya no existe:
+        // se deja la tarjeta como está y no se vuelve a intentar en esta
+        // sesión.
+        logger.info('No se pudo pedir la portada de ${h.title}: $e');
+      }
+    }
+    if (arregladas > 0) {
+      logger.info('Se pidieron $arregladas portadas a las extensiones');
+    }
+    return arregladas;
+  }
+
+  /// Mucho más bajo que el de las locales: cada una es una petición de red.
+  static const _porVueltaConRed = 4;
+
+  /// Los que ya se le pidieron a la extensión, aparte de los locales.
+  static final Set<String> _yaPedidos = {};
+
   /// Vuelve a permitir el intento. Para después de importar, donde puede haber
   /// aparecido una ficha nueva que sí tenga la portada.
-  static void olvidarLoMirado() => _yaMirados.clear();
+  static void olvidarLoMirado() {
+    _yaMirados.clear();
+    _yaPedidos.clear();
+  }
 }
