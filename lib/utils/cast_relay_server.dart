@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
+import 'dart:typed_data';
 
 import 'package:prismhub/utils/cast_hls_ts.dart';
 import 'package:prismhub/utils/cast_log.dart';
@@ -384,6 +385,31 @@ class CastRelayServer {
           uri = mejor;
         }
       }
+      // Un pedacito con PLAZO, y si no llega se lo pide a otro nodo.
+      //
+      // Antes acá solo se retransmitía lo que fuera llegando: si el nodo
+      // entregaba a cuentagotas, el reproductor esperaba exactamente lo mismo
+      // que si le hubiera pedido directo. Anotar el nodo servía para el pedacito
+      // SIGUIENTE, pero el que ya estaba en curso clavaba la reproducción igual
+      // — que es justo lo que se seguía viendo.
+      //
+      // Ahora se baja entero contra reloj: si no termina a tiempo se abandona y
+      // se pide el MISMO archivo a otro nodo, igual que en el casteo. Cabe en
+      // memoria de sobra (los pedacitos medidos van de 200 KiB a 8 MiB).
+      if (!esLista && !esHead && target.esquivarNodosCaidos) {
+        final bytes = await _pedacitoConFailover(uri, target);
+        if (bytes != null) {
+          bytesPorSesion[target.sesion] =
+              (bytesPorSesion[target.sesion] ?? 0) + bytes.length;
+          return Response.ok(bytes, headers: {
+            'Content-Type': 'video/mp2t',
+            'Content-Length': '${bytes.length}',
+            ..._permisos,
+          });
+        }
+        // Ningún nodo lo entregó: se sigue por el camino normal, que al menos
+        // devuelve lo que la fuente conteste en vez de no devolver nada.
+      }
       final upstreamReq =
           esHead ? await client.headUrl(uri) : await client.getUrl(uri);
       target.headers.forEach((key, value) => upstreamReq.headers.set(key, value));
@@ -670,6 +696,78 @@ class CastRelayServer {
     } catch (_) {
       return false;
     }
+  }
+
+  /// Cuánto se le aguanta a un nodo antes de pedirle el pedacito a otro.
+  ///
+  /// Ocho segundos: los nodos sanos medidos entregaron cualquier pedacito en
+  /// menos de tres, y los malos no terminaban ni en quince. Queda holgado para
+  /// los buenos y corta rápido con los que no entregan.
+  static const _plazoPorPedacito = Duration(seconds: 8);
+
+  /// Baja un pedacito entero, probando otros nodos si el suyo no entrega.
+  ///
+  /// Devuelve null si ninguno pudo — ahí quien llama sigue por el camino normal.
+  static Future<List<int>?> _pedacitoConFailover(
+      Uri original, _RelayTarget target) async {
+    for (final uri in _nodosParaProbar(original, target)) {
+      final reloj = Stopwatch()..start();
+      try {
+        final bytes = await _bajarPedacitoEntero(uri, target)
+            .timeout(_plazoPorPedacito);
+        if (uri.host != original.host) {
+          CastLog.paso('El pedacito se consiguió en ${uri.host} — '
+              '${(bytes.length / 1024).round()} KiB en '
+              '${reloj.elapsedMilliseconds} ms');
+        }
+        return bytes;
+      } catch (e) {
+        CastHlsATs.anotarNodoLento(uri.host);
+        CastLog.paso('${uri.host} no dio el pedacito en '
+            '${reloj.elapsedMilliseconds} ms, se prueba otro nodo — $e');
+      }
+    }
+    return null;
+  }
+
+  static Future<List<int>> _bajarPedacitoEntero(
+      Uri uri, _RelayTarget target) async {
+    final req = await _cliente.getUrl(uri);
+    target.headers.forEach((k, v) => req.headers.set(k, v));
+    if (!target.headers.keys.any((k) => k.toLowerCase() == 'user-agent')) {
+      req.headers.set(HttpHeaders.userAgentHeader, _uaPorDefecto);
+    }
+    final res = await req.close();
+    if (res.statusCode >= 400) {
+      await res.drain<void>();
+      throw HttpException('HTTP ${res.statusCode}');
+    }
+    final juntado = BytesBuilder(copy: false);
+    await for (final bloque in res) {
+      juntado.add(bloque);
+    }
+    return juntado.takeBytes();
+  }
+
+  /// El nodo original primero (o el mejor si ese ya falló), y después el resto
+  /// de los que la lista usó para este contenido.
+  static List<Uri> _nodosParaProbar(Uri original, _RelayTarget target) {
+    final hosts = <String>{};
+    for (final t in _targets.values) {
+      if (t.sesion != target.sesion) continue;
+      final host = Uri.tryParse(t.url)?.host;
+      if (host != null && host.isNotEmpty) hosts.add(host);
+    }
+    final candidatos = [
+      original,
+      for (final host in hosts)
+        if (host != original.host) original.replace(host: host),
+    ];
+    // Los ya conocidos como lentos, al final: no se descartan porque un nodo
+    // puede recuperarse, y quedarse sin candidatos sería peor.
+    final buenos = candidatos.where((u) => !CastHlsATs.nodoLento(u.host));
+    final malos = candidatos.where((u) => CastHlsATs.nodoLento(u.host));
+    return [...buenos, ...malos];
   }
 
   /// Mira a qué ritmo entrega un nodo y lo anota si va demasiado lento.
