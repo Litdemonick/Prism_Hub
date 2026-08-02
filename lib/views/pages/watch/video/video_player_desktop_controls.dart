@@ -345,6 +345,9 @@ class _VideoPlayerDesktopControlsState
                                     !_c.isWebViewActive.value) ||
                                 (_c.hasRenderedFrame.value &&
                                     (_c.isSeeking.value ||
+                                        // Ver imagenCongelada: con la red mal
+                                        // mpv deja de avisar que carga.
+                                        _c.imagenCongelada.value ||
                                         (_c.isPlaying.value &&
                                             _c.isActuallyBuffering.value)))))
                             ? 1

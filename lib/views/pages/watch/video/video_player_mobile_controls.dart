@@ -341,6 +341,13 @@ class _VideoPlayerMobileControlsState extends State<VideoPlayerMobileControls> {
                                   !_c.isWebViewActive.value) ||
                               (_c.hasRenderedFrame.value &&
                                   (_c.isSeeking.value ||
+                                      // imagenCongelada: con la red mal, mpv
+                                      // deja de avisar que esta cargando, asi
+                                      // que la rueda no salia y la pantalla
+                                      // quedaba quieta sin explicacion. Esto
+                                      // mira que la posicion no avance, que es
+                                      // lo unico que siempre se puede saber.
+                                      _c.imagenCongelada.value ||
                                       (_c.isPlaying.value &&
                                           _c.isActuallyBuffering.value)))))
                           ? 1

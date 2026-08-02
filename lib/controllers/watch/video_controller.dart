@@ -262,6 +262,67 @@ class VideoPlayerController extends GetxController with WidgetsBindingObserver {
   // bufferizando de verdad, sin importar lo que diga el flag crudo.
   final isActuallyBuffering = false.obs;
 
+  /// La imagen esta congelada aunque el video deberia estar corriendo.
+  ///
+  /// No se apoya en los avisos de mpv: con la red mal, mpv se queda bloqueado
+  /// LEYENDO y deja de avisar nada — ni siquiera que esta llenando el buffer —,
+  /// asi que la rueda no salia y la pantalla quedaba quieta sin ninguna
+  /// explicacion. Esto mira lo unico que siempre se puede comprobar: que la
+  /// posicion no avanza.
+  final imagenCongelada = false.obs;
+  Timer? _vigilanteDeAtasco;
+
+  /// Cuanto tiene que estar quieta la posicion para darla por atascada. Poco
+  /// para que la señal aparezca rapido, pero mas que un hipo de un fotograma.
+  static const _atascoParaAvisar = Duration(seconds: 2);
+
+  /// Y cuanto para dar el intento por perdido y ofrecer una salida. mpv esta
+  /// puesto para reintentar solo, asi que sin este techo se queda intentando
+  /// para siempre sin decir nada.
+  static const _atascoParaRendirse = Duration(seconds: 25);
+
+  void _arrancarVigilanteDeAtasco() {
+    _vigilanteDeAtasco?.cancel();
+    _vigilanteDeAtasco =
+        Timer.periodic(const Duration(milliseconds: 500), (_) {
+      if (_disposed) return;
+      // Casteando no aplica: el reproductor de aca esta parado a proposito.
+      if (dlnaDevice.value != null) {
+        if (imagenCongelada.value) imagenCongelada.value = false;
+        return;
+      }
+      // Nada que vigilar si todavia no empezo, si esta pausado a proposito, o
+      // si el video corre por el navegador.
+      if (!hasRenderedFrame.value ||
+          !isPlaying.value ||
+          isWebViewActive.value ||
+          isGettingWatchData.value) {
+        if (imagenCongelada.value) imagenCongelada.value = false;
+        return;
+      }
+      final ultimo = _lastPositionAdvanceAt;
+      if (ultimo == null) return;
+      final quieto = DateTime.now().difference(ultimo);
+      final congelada = quieto >= _atascoParaAvisar;
+      if (imagenCongelada.value != congelada) {
+        imagenCongelada.value = congelada;
+      }
+      // Se rindio: se avisa UNA vez y se deja de insistir, para que el usuario
+      // pueda elegir en vez de mirar una rueda eterna.
+      if (quieto >= _atascoParaRendirse && !_atascoAvisado) {
+        _atascoAvisado = true;
+        logger.warning(
+            'El video lleva ${quieto.inSeconds}s sin avanzar: se avisa');
+        sendMessage(Message(
+          Text('video.stalled'.i18n),
+          time: const Duration(seconds: 8),
+        ));
+      }
+    });
+  }
+
+  bool _atascoAvisado = false;
+
   // Búsqueda en curso (arrastrar o tocar la barra de progreso). Hace falta
   // aparte de isActuallyBuffering porque ese flag se APAGA justo en este caso:
   // al buscar, la posición cambia, y el listener de posición interpreta
@@ -1061,6 +1122,9 @@ class VideoPlayerController extends GetxController with WidgetsBindingObserver {
       }
     }));
 
+    // Vigilante de imagen congelada: ver imagenCongelada.
+    _arrancarVigilanteDeAtasco();
+
     // Vigía de buffering atascado — ver comentario en _bufferingStallTimer.
     _addSubscription(player.stream.buffering.listen((buffering) {
       if (dlnaDevice.value != null) return;
@@ -1247,6 +1311,9 @@ class VideoPlayerController extends GetxController with WidgetsBindingObserver {
     _lastPositionAdvanceAt = null;
     _lastPositionSeen = null;
     _lastHistoryTouchAt = null;
+    // Contenido nuevo: el aviso de atasco vuelve a estar disponible.
+    _atascoAvisado = false;
+    imagenCongelada.value = false;
     _historyTouchInFlight = false;
     isActuallyBuffering.value = false;
     _lastErrorEvent = '';
@@ -1698,6 +1765,8 @@ class VideoPlayerController extends GetxController with WidgetsBindingObserver {
     _castBuscandoTimer?.cancel();
     _volumenCastTimer?.cancel();
     _esperaPlayTimer?.cancel();
+    _vigilanteDeAtasco?.cancel();
+    imagenCongelada.value = false;
     final device = dlnaDevice.value;
     // Se anota que se estaba casteando y por donde iba ANTES de soltar nada.
     //
@@ -1859,15 +1928,34 @@ class VideoPlayerController extends GetxController with WidgetsBindingObserver {
     // dejó de moverse.
     unawaited(player.setVolume(0).catchError((_) {}));
 
+    // Con TOPE, y sin dejar que un fallo frene la salida.
+    //
+    // Estos dos pasos se esperaban sin limite. Cuando se cae internet, libmpv
+    // se queda bloqueado leyendo y satura el hilo de plataforma: estas llamadas
+    // —que van por ese mismo hilo— no vuelven nunca, y la pantalla se quedaba
+    // sin cerrar. De ahi que hubiera que matar el app entera para salir.
+    //
+    // Acomodar la ventana es prolijidad; cerrar es lo que el usuario pidio. Si
+    // no se puede acomodar a tiempo, se cierra igual — onClose lo vuelve a
+    // intentar despues.
     if (isFullScreen.value) {
-      await WindowManager.instance.setFullScreen(false);
+      await WindowManager.instance
+          .setFullScreen(false)
+          .timeout(const Duration(seconds: 2))
+          .catchError((Object e) {
+        logger.warning('No se pudo salir de pantalla completa al cerrar', e);
+      });
     }
     // ANTES de popear: así las barras de sistema y la rotación ya están
     // normales cuando la pantalla de destino se dibuja, en vez de depender de
     // que onClose (que corre al destruirse el controller, después del pop)
     // llegue a tiempo. Es idempotente, onClose lo vuelve a llamar sin
     // problema.
-    await restoreSystemUiOnExit();
+    await restoreSystemUiOnExit()
+        .timeout(const Duration(seconds: 2))
+        .catchError((Object e) {
+      logger.warning('No se pudieron restaurar las barras al cerrar', e);
+    });
 
     // Recién ahora el apagado completo. La ventana ya terminó de acomodarse,
     // así que la captura del fotograma no compite con un redimensionado.
