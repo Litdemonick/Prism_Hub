@@ -408,7 +408,7 @@ class _ExtensionCardState extends State<ExtensionCard> {
                   _badge(widget.version),
                   _badge(ExtensionUtils.typeToString(widget.type)),
                   _badge(widget.lang),
-                  if (widget.nsfw) _badge('18+', color: Colors.redAccent),
+                  if (widget.nsfw) _badge('+18', color: Colors.redAccent),
                   if (widget.unstable)
                     _badge(ExtensionUtils.etiquetaCortaInestable(widget.unstableReason),
                         color: Colors.orange),
@@ -615,7 +615,7 @@ class _ExtensionCardState extends State<ExtensionCard> {
                 children: [
                   _badge(ExtensionUtils.typeToString(widget.type)),
                   _badge(widget.lang),
-                  if (widget.nsfw) _badge('18+', color: Colors.redAccent),
+                  if (widget.nsfw) _badge('+18', color: Colors.redAccent),
                   if (widget.unstable)
                     _badge(ExtensionUtils.etiquetaCortaInestable(widget.unstableReason),
                         color: Colors.orange),
