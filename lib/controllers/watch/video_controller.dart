@@ -2846,13 +2846,57 @@ class VideoPlayerController extends GetxController with WidgetsBindingObserver {
   // puede matar el proceso desde ahí sin volver a avisar: onClose no llega a
   // correr nunca y se pierde el minuto que llevabas viendo. Este es el último
   // momento garantizado para dejarlo escrito.
+  /// La app no está en pantalla ahora mismo.
+  ///
+  /// Importa para el casteo: en segundo plano Android recorta la red (Doze), así
+  /// que las consultas al televisor pueden fallar aunque el televisor esté
+  /// reproduciendo perfecto. Sin distinguirlo, dejar la app un rato de lado y
+  /// volver cortaba una transmisión que estaba sana.
+  bool _enSegundoPlano = false;
+
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
+    // El observador se quita en onClose, pero un aviso puede llegar entre que
+    // empieza a destruirse y eso: sin esta guarda se tocaria un reproductor ya
+    // liberado, que en media_kit tumba la app entera.
+    if (_disposed) return;
     if (state == AppLifecycleState.paused ||
         state == AppLifecycleState.hidden) {
+      _enSegundoPlano = true;
       // refreshHome en false: la pantalla de Home no está visible en ese
       // momento, y refrescarla mientras la app se va es trabajo al pedo.
       unawaited(_touchHistory(refreshHome: false, force: true));
+      return;
+    }
+
+    if (state == AppLifecycleState.resumed) {
+      _enSegundoPlano = false;
+      // Cuenta limpia: los fallos de mientras no estuvo en pantalla no valen,
+      // porque pudieron ser del recorte de red y no del televisor.
+      _fallosDeCastSeguidos = 0;
+      // Y se pregunta YA en vez de esperar a la próxima vuelta del reloj: si
+      // mientras tanto el televisor se apagó o alguien le mandó otra cosa, es
+      // ahora cuando el usuario está mirando la pantalla.
+      if (dlnaDevice.value != null) unawaited(_getDLNAStatus());
+      return;
+    }
+
+    if (state == AppLifecycleState.detached) {
+      // La app se está cerrando de verdad: se le suelta el televisor.
+      //
+      // Sin esto quedaba reproduciendo nuestro vídeo para siempre, y encima
+      // pidiéndoselo a un relay que muere con el proceso — o sea que terminaba
+      // en un error o en negro, sin nadie que pudiera pararlo desde la app.
+      //
+      // Sin await a propósito: en `detached` puede no quedar tiempo para
+      // esperar una respuesta por red, y bloquear el cierre sería peor que no
+      // llegar a soltarlo.
+      final aparato = dlnaDevice.value;
+      if (aparato != null) {
+        unawaited(aparato.soltar().catchError((Object e) {
+          logger.info('No se pudo soltar el aparato al cerrar: $e');
+        }));
+      }
     }
   }
 
@@ -4230,6 +4274,17 @@ class VideoPlayerController extends GetxController with WidgetsBindingObserver {
       // una pantalla negra, sin ninguna señal de que ya no habia nadie del otro
       // lado. Se aguantan unos segundos por si es un bache, y si no vuelve se
       // da por perdida y se retoma aca donde iba.
+      // En segundo plano no se cuenta.
+      //
+      // Android recorta la red cuando la app no está en pantalla, asi que estos
+      // fallos no dicen nada del televisor: puede estar reproduciendo perfecto.
+      // Contandolos, dejar la app de lado un rato y volver cortaba una
+      // transmision sana. Al volver a primer plano se pregunta de nuevo y ahi
+      // si vale lo que conteste.
+      if (_enSegundoPlano) {
+        logger.info('_getDLNAStatus fallo en segundo plano (no cuenta): $e');
+        return;
+      }
       _fallosDeCastSeguidos++;
       logger.warning('_getDLNAStatus falló '
           '($_fallosDeCastSeguidos/$_fallosParaDarPorPerdido): $e');
