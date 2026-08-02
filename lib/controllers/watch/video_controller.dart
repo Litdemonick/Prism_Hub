@@ -27,6 +27,7 @@ import 'package:prismhub/utils/bt_server.dart';
 import 'package:prismhub/utils/cast_aparato.dart';
 import 'package:prismhub/utils/cast_formatos.dart';
 import 'package:prismhub/utils/cast_hls_ts.dart';
+import 'package:prismhub/utils/cast_log.dart';
 import 'package:prismhub/utils/connectivity.dart';
 import 'package:prismhub/utils/cast_metadata.dart';
 import 'package:prismhub/utils/notificacion_reproductor.dart';
@@ -3838,10 +3839,19 @@ class VideoPlayerController extends GetxController with WidgetsBindingObserver {
     _planTs = null;
     _desfaseTs = Duration.zero;
     var mime = mimeDeUrl(urlOriginal);
+    // La linea de cabecera de toda la transmision: contra que aparato, por que
+    // protocolo y con que formato se arranca. Todo lo que venga despues en el
+    // registro cuelga de aca.
+    //
+    // De las cabeceras de la fuente van solo los NOMBRES: en Referer y Cookie
+    // viaja la direccion del contenido, y el archivo se comparte.
+    CastLog.paso('Arranca: ${aparato.ficha} — origen '
+        '${CastLog.donde(urlOriginal)} mime=$mime — cabeceras de la fuente: '
+        '${headers == null || headers.isEmpty ? 'ninguna' : headers.keys.join(', ')}');
     if (aparato is AparatoDlna && mime.contains('mpegurl')) {
       if (!await FormatosDelAparato.aceptaHls(aparato.device)) {
         final aceptaTs = await FormatosDelAparato.aceptaTs(aparato.device);
-        logger.info('El aparato ${aparato.nombre} no acepta HLS; '
+        CastLog.paso('${aparato.nombre} no acepta HLS; '
             'MPEG-TS: ${aceptaTs ? "sí" : "no"}');
         if (aceptaTs) {
           // El MISMO User-Agent que usa el relay, no uno leído a mano: si el
@@ -3856,14 +3866,16 @@ class VideoPlayerController extends GetxController with WidgetsBindingObserver {
         if (planTs == null) {
           // Ni HLS ni reempaquetado: mandarlo igual sería dejar la pantalla en
           // negro sin explicación, que es de donde venimos.
-          logger.warning('El aparato ${aparato.nombre} no soporta el formato '
-              'del vídeo y no se pudo reempaquetar');
+          CastLog.fallo('${aparato.nombre} no soporta el formato del vídeo y '
+              'no se pudo reempaquetar: no se le manda nada');
           castConectando.value = false;
           castAviso.value = null;
           sendMessage(Message(Text('video.cast-formato-aparato'.i18n)));
           return;
         }
         mime = 'video/mpeg';
+        CastLog.paso('Se reempaqueta a MPEG-TS: ${planTs.pedacitos.length} '
+            'pedacitos, ${planTs.duracion.inMinutes} min');
         _planTs = planTs;
         // El largo lo sabemos NOSOTROS por la lista, aunque el televisor no
         // pueda saberlo del flujo. Sin esto la barra queda vacía y no habría
@@ -3883,7 +3895,8 @@ class VideoPlayerController extends GetxController with WidgetsBindingObserver {
         );
         _dlnaRelayUrl = url;
       } catch (e) {
-        logger.warning('CastRelayServer falló, casteando URL directa: $e');
+        CastLog.fallo('El relay no se pudo levantar, se castea la dirección '
+            'directa: $e');
         if (planTs != null) {
           // Sin relay no hay reempaquetado posible, y la lista cruda ya sabemos
           // que este aparato no la reproduce.
@@ -3911,11 +3924,13 @@ class VideoPlayerController extends GetxController with WidgetsBindingObserver {
         titulo: '$title — ${playList[index.value].name}',
         mime: mime,
       );
+      CastLog.paso('El aparato aceptó la orden; se le anunció '
+          '${CastLog.anuncio(url)}');
     } catch (e) {
       // Un aparato que no contesta dejaba la excepcion suelta y la pantalla en
       // modo casteo sin que nada se estuviera reproduciendo. Se deshace todo y
       // se avisa, que es lo unico honesto que se puede hacer.
-      logger.warning('El aparato no acepto el video', e);
+      CastLog.fallo('El aparato no aceptó el vídeo', e);
       dlnaDevice.value = null;
       if (_dlnaRelayUrl != null) {
         CastRelayServer.unregister(_dlnaRelayUrl!);
@@ -3975,6 +3990,14 @@ class VideoPlayerController extends GetxController with WidgetsBindingObserver {
       if (isPlaying.value) return;
       // Sin relay (direccion directa) no hay nada que medir.
       if (_dlnaRelayUrl == null) return;
+      // El veredicto de los ocho segundos, escrito en el registro: es la
+      // conclusion que hasta ahora solo se veia como un aviso en pantalla y se
+      // perdia al cerrar el reproductor.
+      CastLog.paso('A los 8 s sin imagen: el aparato '
+          '${CastRelayServer.huboPedido(_dlnaRelayUrl) ? "SÍ pidió el vídeo "
+              "(desde ${CastRelayServer.quienPidio(_dlnaRelayUrl)}) → llega "
+              "pero no puede con lo que le mandamos" : "NO pidió nada → no "
+              "llega hasta nosotros, es red"}');
       if (CastRelayServer.huboPedido(_dlnaRelayUrl)) {
         // Llego hasta nosotros y bajo datos, asi que no es la red: el aparato
         // no puede con lo que le mandamos. Si eso es 4K o 2K, lo mas probable

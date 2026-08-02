@@ -3,7 +3,7 @@ import 'dart:convert';
 import 'dart:io';
 
 import 'package:prismhub/utils/cast_hls_ts.dart';
-import 'package:prismhub/utils/log.dart';
+import 'package:prismhub/utils/cast_log.dart';
 import 'package:prismhub/utils/prismhub_storage.dart';
 import 'package:shelf/shelf.dart';
 import 'package:shelf/shelf_io.dart' as shelf_io;
@@ -83,6 +83,9 @@ class CastRelayServer {
       );
     }
     _base = 'http://$ip:$_port';
+    CastLog.paso('Relay escuchando en 0.0.0.0:$_port; al aparato se le anuncia '
+        '$ip:$_port — origen ${CastLog.donde(targetUrl)}'
+        '${planTs == null ? '' : ', reempaquetando a MPEG-TS'}');
     return '$_base/relay/$token';
   }
 
@@ -220,15 +223,25 @@ class CastRelayServer {
     if (target == null) return Response.notFound('unknown relay token');
 
     // Se anota que el aparato llego hasta aca. Solo la primera vez de cada
-    // transmision: despues son cientos de pedidos por episodio.
-    if (!pedidosPorSesion.containsKey(target.sesion)) {
+    // transmision: despues son cientos de pedidos por episodio, y anotarlos
+    // todos taparia lo unico que interesa, que es el primero.
+    final primerPedido = !pedidosPorSesion.containsKey(target.sesion);
+    if (primerPedido) {
       final quien = (request.context['shelf.io.connection_info']
                   as HttpConnectionInfo?)
               ?.remoteAddress
               .address ??
           'desconocido';
       pedidosPorSesion[target.sesion] = quien;
-      logger.info('El aparato pidio el video desde $quien');
+      // CON QUE cabeceras pidio, no solo que pidio.
+      //
+      // Ahi va lo que el aparato dice de si mismo: su User-Agent, si pide un
+      // trozo (Range), y sobre todo getcontentFeatures.dlna.org, que es como un
+      // televisor DLNA pregunta si el flujo le sirve ANTES de bajar nada. Sin
+      // verlas no habia forma de saber si el televisor estaba negociando de
+      // verdad o si solo abrio la conexion y se fue.
+      CastLog.paso('El aparato pidio desde $quien: ${request.method} '
+          '${CastLog.cabeceras(request.headers)}');
     }
 
     // El receptor pregunta primero con HEAD (el "Stat" de Kodi) para saber
@@ -250,6 +263,10 @@ class CastRelayServer {
         ..._dlna,
         ..._permisos,
       };
+      if (primerPedido) {
+        CastLog.paso('Se le sirve MPEG-TS reempaquetado con '
+            '${CastLog.cabeceras(cabeceras)}');
+      }
       if (esHead) return Response.ok(null, headers: cabeceras);
       return Response.ok(CastHlsATs.servir(plan), headers: cabeceras);
     }
@@ -285,7 +302,7 @@ class CastRelayServer {
         final motivo = await _motivoLegible(upstreamRes);
         ultimoError = 'La fuente rechazó el vídeo (HTTP '
             '${upstreamRes.statusCode})${motivo.isEmpty ? '' : ': $motivo'}';
-        logger.warning('Relay de casteo: $ultimoError — ${target.url}');
+        CastLog.fallo('Relay: $ultimoError — ${CastLog.donde(target.url)}');
         return Response(upstreamRes.statusCode, body: motivo);
       }
 
@@ -300,6 +317,10 @@ class CastRelayServer {
       if (esLista || _pareceHlsPorTipo(upstreamRes)) {
         final crudo = await _leerTodo(upstreamRes);
         final lista = await _reescribirLista(crudo, uri, target);
+        if (primerPedido) {
+          CastLog.paso('Se le sirve la lista HLS reescrita '
+              '(${crudo.length} bytes de origen)');
+        }
         return Response.ok(
           lista,
           headers: {
@@ -327,6 +348,17 @@ class CastRelayServer {
 
       resHeaders.addAll(_permisos);
 
+      if (primerPedido) {
+        // OJO al leer el registro: por este camino NO salen las cabeceras
+        // _dlna. Solo las lleva el reempaquetado a MPEG-TS, porque su
+        // DLNA.ORG_OP=00 ("no se puede saltar") es cierto ahi y seria mentira
+        // aca, donde el content-length de la fuente se conserva y el salto por
+        // bytes funciona. Si el registro muestra un televisor que se queda en
+        // negro por este camino, esa diferencia es lo primero a mirar.
+        CastLog.paso('Se le sirve tal cual (HTTP ${upstreamRes.statusCode}) '
+            'con ${CastLog.cabeceras(resHeaders)}');
+      }
+
       if (esHead) {
         return Response(upstreamRes.statusCode, headers: resHeaders);
       }
@@ -345,7 +377,7 @@ class CastRelayServer {
       );
     } catch (e) {
       ultimoError = 'No se pudo alcanzar la fuente del vídeo: $e';
-      logger.warning('Relay de casteo: $ultimoError — ${target.url}');
+      CastLog.fallo('Relay: $ultimoError — ${CastLog.donde(target.url)}');
       return Response.internalServerError(body: 'relay error: $e');
     }
   }
@@ -513,7 +545,7 @@ class CastRelayServer {
       await res.drain<void>().timeout(const Duration(seconds: 4),
           onTimeout: () {});
       if (ok) {
-        logger.info('Los pedacitos van directo: el relay se saca del camino');
+        CastLog.paso('Los pedacitos van directo: el relay se saca del camino');
       }
       return ok;
     } catch (_) {
@@ -568,7 +600,7 @@ class CastRelayServer {
     // Sin force: si justo hay una respuesta a medio mandar, se la deja
     // terminar en vez de cortarla por la mitad.
     unawaited(server.close().catchError((Object e) {
-      logger.warning('No se pudo cerrar el servidor de casteo', e);
+      CastLog.fallo('No se pudo cerrar el servidor del relay', e);
     }));
   }
 
@@ -582,13 +614,34 @@ class CastRelayServer {
       includeLoopback: false,
       includeLinkLocal: false,
     );
+    // TODAS las candidatas, no solo la elegida.
+    //
+    // Es el dato que hace falta para el caso del LG: desde la laptop anda y
+    // desde el celular no, al mismo televisor. Un equipo con VPN, maquinas
+    // virtuales o varias placas tiene varias IPv4 y aca se toma la PRIMERA sin
+    // mirar si el aparato esta en esa subred — si esa primera es la de un tunel
+    // o una placa virtual, la direccion que le anunciamos al televisor no
+    // resuelve desde su lado y se queda en negro sin pedirnos nada.
+    //
+    // Esto NO elige distinto todavia: solo deja anotado que habia para elegir.
+    final candidatas = [
+      for (final iface in interfaces)
+        for (final addr in iface.addresses)
+          if (!addr.isLoopback) '${iface.name}=${addr.address}',
+    ];
     for (final iface in interfaces) {
       for (final addr in iface.addresses) {
-        if (!addr.isLoopback) return addr.address;
+        if (!addr.isLoopback) {
+          CastLog.paso('Interfaces IPv4: ${candidatas.join(', ')} → se anuncia '
+              '${addr.address} por ${iface.name} (criterio: la primera de la '
+              'lista, sin mirar la subred del aparato)');
+          return addr.address;
+        }
       }
     }
     // Nada alcanzable desde afuera. Devolver loopback seria peor que no
     // devolver nada: parece una direccion valida y no lo es.
+    CastLog.fallo('Sin ninguna IPv4 no-loopback: no hay direccion que anunciar');
     return null;
   }
 }

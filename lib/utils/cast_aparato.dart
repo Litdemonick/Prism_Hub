@@ -2,6 +2,7 @@ import 'package:dlna_dart/dlna.dart';
 import 'package:dlna_dart/xmlParser.dart';
 import 'package:flutter/foundation.dart';
 import 'package:prismhub/utils/cast_chromecast.dart';
+import 'package:prismhub/utils/cast_log.dart';
 import 'package:prismhub/utils/cast_metadata.dart';
 import 'package:prismhub/utils/cast_roku.dart';
 import 'package:prismhub/utils/log.dart';
@@ -54,6 +55,14 @@ abstract class AparatoDeCasteo {
 
   /// Para poder decirle al usuario con qué está hablando.
   bool get esChromecast;
+
+  /// Marca, modelo, protocolo elegido y por dónde se le habla, en una línea.
+  ///
+  /// Para el registro: tres aparatos fallan de tres formas distintas y sin
+  /// saber cuál es cuál y por qué camino se le habló, leer el archivo después
+  /// no sirve de nada. Es lo único de todo el casteo que identifica al aparato:
+  /// del contenido no se registra nada (ver CastLog).
+  String get ficha;
 
   /// Si se le puede pedir "andá al minuto X".
   ///
@@ -114,10 +123,22 @@ class AparatoDlna implements AparatoDeCasteo {
   bool get esChromecast => false;
 
   @override
+  String get ficha => '${device.info.friendlyName} — DLNA — '
+      '${device.info.deviceType} — ${device.info.URLBase}';
+
+  @override
   bool get permiteSaltar => true;
 
   @override
-  Future<bool> preparar() async => true;
+  Future<bool> preparar() async {
+    // Cuenta limpia del registro en cada envío. Al cambiar de episodio se reusa
+    // ESTA misma instancia, así que sin esto el detalle de las primeras
+    // consultas —que es justo lo que cuenta cómo arrancó— solo quedaba escrito
+    // para el primer episodio de la sesión.
+    _consultas = 0;
+    _ultimoTransporte = null;
+    return true;
+  }
 
   @override
   Future<void> cargar({
@@ -129,7 +150,8 @@ class AparatoDlna implements AparatoDeCasteo {
     // Con ficha DIDL completa: sin protocolInfo, Kodi anota "invalid protocol
     // info ':::'" y tiene que adivinar el formato. Ver cast_metadata.dart.
     await castearConMetadata(device, url, titulo: titulo, mime: mime);
-    await device.play();
+    final respuesta = await device.play();
+    CastLog.paso('Play ← ${CastLog.respuestaUpnp(respuesta)}');
   }
 
   @override
@@ -181,10 +203,36 @@ class AparatoDlna implements AparatoDeCasteo {
         milliseconds: ((h * 3600 + m * 60) * 1000 + (s * 1000).round()));
   }
 
+  /// Lo último que informó GetTransportInfo, y cuántas veces se preguntó.
+  ///
+  /// La consulta corre cada segundo: registrarlas todas llenaría el archivo de
+  /// líneas idénticas. Pero las PRIMERAS son justamente las que cuentan la
+  /// historia —TRANSITIONING, NO_MEDIA_PRESENT, PLAYING…— así que se anotan
+  /// enteras al principio y después solo cuando el aparato cambia de estado.
+  String? _ultimoTransporte;
+  int _consultas = 0;
+
+  static const _consultasDetalladas = 15;
+
   @override
   Future<EstadoAparato?> leerEstado() async {
     final transporte =
         await device.getTransportInfo().timeout(const Duration(seconds: 4));
+    final estado = RegExp(r'<CurrentTransportState>([^<]*)</CurrentTransportState>')
+            .firstMatch(transporte)
+            ?.group(1)
+            ?.trim() ??
+        'sin estado';
+    if (++_consultas <= _consultasDetalladas || estado != _ultimoTransporte) {
+      final motivo =
+          RegExp(r'<CurrentTransportStatus>([^<]*)</CurrentTransportStatus>')
+              .firstMatch(transporte)
+              ?.group(1)
+              ?.trim();
+      CastLog.paso('GetTransportInfo #$_consultas: $estado'
+          '${motivo == null || motivo == 'OK' ? '' : ' ($motivo)'}');
+    }
+    _ultimoTransporte = estado;
     final reproduciendo = transporte.contains('PLAYING');
     final parado = transporte.contains('STOPPED') ||
         transporte.contains('NO_MEDIA_PRESENT');
@@ -293,6 +341,9 @@ class AparatoChromecast implements AparatoDeCasteo {
 
   @override
   bool get esChromecast => true;
+
+  @override
+  String get ficha => '$_nombre — Chromecast (CASTv2) — $host:8009';
 
   @override
   bool get permiteSaltar => true;
@@ -408,12 +459,18 @@ class AparatoRoku implements AparatoDeCasteo {
   @override
   bool get esChromecast => false;
 
+  @override
+  String get ficha => '$_nombre — Roku (ECP) — $host:8060';
+
   /// ECP no tiene "ir al minuto X": el mando adelanta a saltos y nada más.
   @override
   bool get permiteSaltar => false;
 
   @override
-  Future<bool> preparar() async => true;
+  Future<bool> preparar() async {
+    _cliente.reiniciarRegistro();
+    return true;
+  }
 
   @override
   Future<void> cargar({
@@ -524,5 +581,4 @@ AparatoDeCasteo? clasificar(DLNADevice device) {
 }
 
 /// Para las pruebas y el registro.
-String describir(AparatoDeCasteo a) =>
-    '${a.nombre} (${a.esChromecast ? "Chromecast" : "DLNA"})';
+String describir(AparatoDeCasteo a) => a.ficha;

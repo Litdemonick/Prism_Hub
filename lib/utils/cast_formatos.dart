@@ -1,7 +1,7 @@
 import 'dart:io';
 
 import 'package:dlna_dart/dlna.dart';
-import 'package:prismhub/utils/log.dart';
+import 'package:prismhub/utils/cast_log.dart';
 
 /// Qué formatos acepta un televisor DLNA, preguntándoselo a él.
 ///
@@ -39,7 +39,11 @@ class FormatosDelAparato {
     if (guardado != null) return guardado;
 
     final control = _controlDeConnectionManager(device);
-    if (control == null) return const {};
+    if (control == null) {
+      CastLog.paso('${device.info.friendlyName}: no publica ConnectionManager, '
+          'no hay a quien preguntarle los formatos');
+      return const {};
+    }
 
     try {
       final req = await _cliente.postUrl(control);
@@ -67,15 +71,24 @@ class FormatosDelAparato {
           tipos.add(partes[2].toLowerCase());
         }
       }
-      if (tipos.isEmpty) return const {};
+      if (tipos.isEmpty) {
+        CastLog.paso('${device.info.friendlyName}: contestó GetProtocolInfo '
+            'pero sin ningún formato legible en <Sink>');
+        return const {};
+      }
       _cache[clave] = tipos;
-      logger.info(
-          'El aparato ${device.info.friendlyName} acepta ${tipos.length} '
-          'formatos (HLS: ${_hayHls(tipos) ? "sí" : "no"})');
+      // La lista ENTERA, no solo cuántos son. Es el dato con el que se decide
+      // qué mandarle, y sin verlo no hay forma de saber si el aparato quedó en
+      // negro porque no acepta el formato o por otra cosa. Kodi publica 94
+      // formatos y un televisor 29: la diferencia es toda la explicación.
+      CastLog.paso('${device.info.friendlyName} acepta ${tipos.length} '
+          'formatos (HLS: ${_hayHls(tipos) ? "sí" : "no"}): '
+          '${(tipos.toList()..sort()).join(', ')}');
       return tipos;
     } catch (e) {
       // No poder preguntar no es motivo para no castear: se sigue como antes.
-      logger.info('No se pudo preguntar los formatos del aparato: $e');
+      CastLog.paso('No se pudo preguntar los formatos de '
+          '${device.info.friendlyName}: $e');
       return const {};
     }
   }

@@ -1,7 +1,7 @@
 import 'dart:async';
 import 'dart:io';
 
-import 'package:prismhub/utils/log.dart';
+import 'package:prismhub/utils/cast_log.dart';
 
 /// Habla con un Roku.
 ///
@@ -31,16 +31,26 @@ class RokuCliente {
 
   Uri _u(String camino) => Uri.parse('http://$host:$puerto$camino');
 
-  Future<bool> _post(String camino) async {
+  /// Manda una orden ECP. Devuelve el código HTTP, o null si no contestó.
+  ///
+  /// El código y no un sí/no: un Roku que rechaza el lanzado contesta cosas
+  /// distintas —404 si no tiene ese canal, 400 si no le gustan los parámetros—
+  /// y con un booleano las tres se veían igual desde el registro.
+  ///
+  /// [comoSeRegistra] existe porque el camino del lanzado lleva la dirección del
+  /// vídeo adentro, y eso no puede aparecer en el archivo (ver CastLog).
+  Future<int?> _post(String camino, {String? comoSeRegistra}) async {
+    final que = comoSeRegistra ?? camino;
     try {
       final req = await _cliente.postUrl(_u(camino));
       req.contentLength = 0;
       final res = await req.close().timeout(const Duration(seconds: 6));
       await res.drain<void>();
-      return res.statusCode >= 200 && res.statusCode < 300;
+      CastLog.paso('Roku $que ← HTTP ${res.statusCode}');
+      return res.statusCode;
     } catch (e) {
-      logger.warning('El Roku no acepto $camino', e);
-      return false;
+      CastLog.fallo('Roku $que no obtuvo respuesta', e);
+      return null;
     }
   }
 
@@ -50,6 +60,7 @@ class RokuCliente {
       final res = await req.close().timeout(const Duration(seconds: 6));
       if (res.statusCode < 200 || res.statusCode >= 300) {
         await res.drain<void>();
+        CastLog.paso('Roku $camino ← HTTP ${res.statusCode}');
         return null;
       }
       return await res
@@ -57,7 +68,7 @@ class RokuCliente {
           .join()
           .timeout(const Duration(seconds: 6));
     } catch (e) {
-      logger.info('El Roku no contesto $camino: $e');
+      CastLog.paso('Roku: no contestó $camino ($e)');
       return null;
     }
   }
@@ -77,7 +88,12 @@ class RokuCliente {
         '&u=${Uri.encodeQueryComponent(url)}'
         '&videoName=${Uri.encodeQueryComponent(titulo)}'
         '&videoFormat=$tipo';
-    return _post(camino);
+    final codigo = await _post(
+      camino,
+      comoSeRegistra: 'launch/$_canalMedios videoFormat=$tipo '
+          '${CastLog.donde(url)}',
+    );
+    return codigo != null && codigo >= 200 && codigo < 300;
   }
 
   /// El formato que espera Roku, que no es el tipo MIME sino un nombre corto.
@@ -97,12 +113,39 @@ class RokuCliente {
   Future<void> subirVolumen() => _post('/keypress/VolumeUp').then((_) {});
   Future<void> bajarVolumen() => _post('/keypress/VolumeDown').then((_) {});
 
+  /// Lo último que informó el reproductor, y cuántas veces se preguntó.
+  ///
+  /// Se pregunta cada segundo: anotarlas todas llenaría el archivo de líneas
+  /// idénticas. Las primeras son las que cuentan la historia —startup, error,
+  /// play— así que van enteras al principio y después solo los cambios.
+  String? _ultimoEstado;
+  int _consultas = 0;
+
+  static const _consultasDetalladas = 15;
+
+  /// Cuenta limpia para el próximo envío. Al cambiar de episodio se reusa este
+  /// mismo cliente, y sin esto el detalle del arranque solo quedaba escrito
+  /// para el primer episodio de la sesión.
+  void reiniciarRegistro() {
+    _consultas = 0;
+    _ultimoEstado = null;
+  }
+
   /// Estado del reproductor, interpretado.
   ///
   /// Devuelve null si no contestó o si no se está reproduciendo nada nuestro.
   Future<EstadoRoku?> estado() async {
     final xml = await _get('/query/media-player');
     if (xml == null) return null;
+    // Los atributos del `<player ...>` tal cual: ahí viven `state` y `error`,
+    // que es lo único que dice si el Roku entró pero no pudo con el vídeo.
+    final crudo =
+        RegExp(r'<player([^>]*)>').firstMatch(xml)?.group(1)?.trim() ??
+            'sin <player>';
+    if (++_consultas <= _consultasDetalladas || crudo != _ultimoEstado) {
+      CastLog.paso('Roku media-player #$_consultas: $crudo');
+    }
+    _ultimoEstado = crudo;
     return EstadoRoku.desdeXml(xml);
   }
 
