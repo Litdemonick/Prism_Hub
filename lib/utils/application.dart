@@ -17,6 +17,8 @@ import 'package:prismhub/utils/router.dart';
 import 'package:prismhub/views/widgets/button.dart';
 import 'package:prismhub/views/widgets/home/home_theme.dart';
 import 'package:prismhub/views/widgets/messenger.dart';
+import 'package:prismhub/controllers/watch/video_controller.dart';
+import 'package:prismhub/views/pages/watch/video/webview_player_page.dart';
 import 'package:url_launcher/url_launcher.dart';
 import 'package:package_info_plus/package_info_plus.dart';
 import 'package:device_info_plus/device_info_plus.dart';
@@ -149,6 +151,73 @@ class ApplicationUtils {
     }
   }
 
+  /// ¿Las notas de la versión ya están escritas?
+  ///
+  /// Mismo razonamiento que _releaseCompleto, pero para el texto en vez de los
+  /// archivos. Un release se puede publicar con el cuerpo vacío y editarse
+  /// después: en esa ventana el aviso llegaba igual y aparecía la pantalla que
+  /// TAPA la app entera, con el título de la versión y debajo un hueco. Y como
+  /// el aviso es bloqueante, lo único que quedaba era actualizar a ciegas o
+  /// posponer, sin ninguna forma de saber qué traía.
+  ///
+  /// Faltando las notas no se avisa a nadie y se vuelve a mirar en la próxima
+  /// comprobación, igual que cuando falta un instalador. La actualización no se
+  /// pierde: llega sola apenas el release está entero.
+  ///
+  /// No alcanza con que el cuerpo no sea nulo. Los marcadores que la propia app
+  /// lee —hoy min-update-from— van como comentarios HTML, así que un cuerpo que
+  /// solo tenga eso se ve vacío en pantalla aunque no lo esté. Se miden los
+  /// caracteres que QUEDAN después de sacarlos.
+  /// Lo que GitHub agrega SOLO al publicar, sin que nadie lo escriba.
+  ///
+  /// Al crear un release, GitHub puede sumar por su cuenta un enlace de
+  /// comparación entre versiones ("Changelog completo: …/compare/v1.0.17...").
+  /// Esa línea aparece antes de que nadie escriba una palabra, y sola pasaba el
+  /// umbral de caracteres: un release publicado con las notas todavía vacías
+  /// contaba como "notas listas" y disparaba el aviso antes de tiempo.
+  ///
+  /// Lo mismo con la lista de descargas y el enlace al historial completo, que
+  /// son plantilla fija de cada release y no dicen nada de ESTA versión.
+  ///
+  /// No se saca del aviso —ahí se sigue viendo todo, changelog incluido—, solo
+  /// se descuenta al DECIDIR si hay notas de verdad.
+  static final _lineasAutomaticas = RegExp(
+    r'^\s*(\*\*)?(Changelog|Full Changelog|Changelog completo)(\*\*)?\s*:?.*$'
+    r'|^\s*https?://\S+/compare/\S+$'
+    r'|^\s*\|.*\|\s*$'
+    r'|^\s*#{1,6}\s*(📦\s*)?Descargas?\s*$'
+    // El encabezado con el nombre y la versión: sale igual en todos los
+    // releases y no cuenta como haber escrito nada. Se descuenta para poder
+    // bajar el umbral sin que un título suelto se haga pasar por notas.
+    r'|^\s*#{0,6}\s*\*{0,2}PrismHub\s*v?\d[\d.]*\*{0,2}\s*(—.*)?$',
+    multiLine: true,
+    caseSensitive: false,
+  );
+
+  static bool _notasPublicadas(dynamic body) {
+    if (body is! String) return false;
+    final visible = body
+        .replaceAll(RegExp(r'<!--[\s\S]*?-->'), '')
+        // Ver _lineasAutomaticas: lo que pone GitHub solo, o la plantilla de
+        // descargas, no cuenta como haber escrito las notas.
+        .replaceAll(_lineasAutomaticas, '')
+        .trim();
+    // Bajo a propósito: lo que llega hasta acá ya es texto escrito a mano,
+    // porque arriba se descontó todo lo que sale solo —el changelog de GitHub,
+    // la tabla de descargas, el encabezado con la versión y los marcadores que
+    // lee la app—.
+    //
+    // Estaba en 40 y eso dejaba afuera notas cortas pero legítimas: un release
+    // que arregla una sola cosa se describe en menos. Ese release no le habría
+    // avisado a nadie, nunca — y sin ningún error, simplemente callado, que es
+    // la peor forma de fallar.
+    //
+    // 15 alcanza para una frase de verdad y sigue descartando lo que queda
+    // cuando alguien publicó sin escribir: un signo suelto, dos palabras a
+    // medio tipear.
+    return visible.length >= 15;
+  }
+
   /// ¿La versión instalada es demasiado vieja para instalarle ESTE release
   /// encima?
   ///
@@ -257,7 +326,13 @@ class ApplicationUtils {
       final res = await dio.get(url);
       final tagName = res.data["tag_name"] as String;
       final remoteVersion = tagName.replaceFirst('v', '');
-      if (!_isRemoteVersionNewer(remoteVersion)) return;
+      if (!_isRemoteVersionNewer(remoteVersion)) {
+        // Nada nuevo: si venia esperando un release a medio publicar, ya no
+        // hay por que seguir mirando seguido.
+        _esperandoReleaseIncompleto = false;
+        _rafagasRapidas = 0;
+        return;
+      }
       if (!context.mounted) return;
 
       // Un release se publica ANTES de que todas las plataformas terminen de
@@ -272,12 +347,50 @@ class ApplicationUtils {
       // silencio y se vuelve a mirar en la próxima comprobación.
       // Release incompleto: todavía se están subiendo archivos, o alguno de
       // los jobs falló. En cualquiera de los dos casos no se avisa.
-      if (!_releaseCompleto(res.data['assets'], tagName)) return;
+      if (!_releaseCompleto(res.data['assets'], tagName)) {
+        // Hay version nueva pero le faltan archivos: se mira seguido hasta que
+        // termine de publicarse (ver _cadaCuantoEsperando).
+        _esperandoReleaseIncompleto = true;
+        return;
+      }
+
+      // Y tampoco se avisa con las notas todavía sin escribir: esta pantalla
+      // tapa la app entera, así que salir sin explicar qué trae la versión deja
+      // al usuario eligiendo a ciegas. Ver _notasPublicadas.
+      if (!_notasPublicadas(res.data['body'])) {
+        // Mismo caso: estan los archivos pero falta el texto.
+        _esperandoReleaseIncompleto = true;
+        return;
+      }
 
       final asset = Platform.isAndroid
           ? _findAndroidAsset(res.data['assets'])
           : _findAsset(res.data['assets'], tagName);
-      if (asset == null) return;
+      if (asset == null) {
+        _esperandoReleaseIncompleto = true;
+        return;
+      }
+      // Release entero y a punto de avisar: se vuelve al ritmo normal.
+      _esperandoReleaseIncompleto = false;
+      _rafagasRapidas = 0;
+
+      // Se calla lo que se esté reproduciendo ANTES de tapar la pantalla.
+      //
+      // El aviso sale encima de cualquier cosa y bloquea, que es a propósito.
+      // Pero sin esto el vídeo seguía sonando detrás: quedaba el audio de algo
+      // que ya no se ve, y había que adivinar de dónde salía.
+      //
+      // Son dos motores distintos y hay que pedírselo a los dos: el
+      // reproductor nativo maneja su audio con media_kit, y el de WebView lo
+      // maneja la propia página. Pausar uno no toca al otro.
+      //
+      // Pausar y no cerrar: se puede posponer la actualización, y en ese caso
+      // el episodio tiene que seguir donde estaba. Las dos llamadas tienen su
+      // propio tope de tiempo, así que un reproductor colgado no puede impedir
+      // que el aviso aparezca.
+      await VideoPlayerController.pausarLoQueSuene();
+      await WebViewPlayerPause.pausarLoQueSuene();
+      if (!context.mounted) return;
 
       _forcedUpdatePageOpen = true;
       try {
@@ -360,14 +473,22 @@ class ApplicationUtils {
                 ? _findAndroidAsset(res.data['assets'])
                 : _findAsset(res.data['assets'], tagName))
             : null;
-        if (asset == null) {
+        // Las notas se tratan igual que los archivos: un release se puede
+        // publicar con el cuerpo vacío y editarse después, y ofrecer la
+        // actualización en esa ventana es pedirle al usuario que decida sin
+        // saber qué trae. Ver _notasPublicadas.
+        final notasListas = _notasPublicadas(res.data['body']);
+        if (asset == null || !notasListas) {
           // Acá SÍ se avisa, a diferencia del arranque: el usuario apretó
           // "Comprobar" y dejarlo sin respuesta parecería que el botón no
-          // hace nada.
+          // hace nada. Y se dice QUÉ falta, que no es lo mismo esperar a que
+          // termine de compilar que esperar a que escriban las notas.
           if (showSnackbar && context.mounted) {
             showPlatformSnackbar(
               context: context,
-              content: 'upgrade.assets-not-ready'.i18n,
+              content: asset == null
+                  ? 'upgrade.assets-not-ready'.i18n
+                  : 'upgrade.notes-not-ready'.i18n,
             );
           }
           // El aviso promete que la actualización "aparece sola" — y hasta
@@ -399,23 +520,18 @@ class ApplicationUtils {
                 },
                 child: Text('upgrade.not-now'.i18n),
               ),
+              // Sin la rama de "abrir GitHub": para llegar hasta acá el archivo
+              // de esta plataforma ya tiene que estar publicado — si falta, se
+              // sale bastante más arriba con el aviso de que todavía se está
+              // publicando. Antes se comprobaba igual, y el resultado era una
+              // rama muerta que hacía parecer que el botón podía terminar
+              // llevando al navegador.
               PlatformFilledButton(
                 onPressed: () {
                   RouterUtils.pop();
-                  if (asset != null) {
-                    _downloadAndInstall(context, asset, remoteVersion);
-                  } else {
-                    launchUrl(
-                      Uri.parse(res.data['html_url']),
-                      mode: LaunchMode.externalApplication,
-                    );
-                  }
+                  _downloadAndInstall(context, asset, remoteVersion);
                 },
-                child: Text(
-                  asset != null
-                      ? 'upgrade.download-install'.i18n
-                      : 'upgrade.download'.i18n,
-                ),
+                child: Text('upgrade.download-install'.i18n),
               )
             ],
           );
@@ -440,23 +556,14 @@ class ApplicationUtils {
               },
               child: Text('upgrade.not-now'.i18n),
             ),
+            // Ver el comentario del botón equivalente en la rama de Android:
+            // acá el archivo ya está publicado sí o sí.
             PlatformFilledButton(
               onPressed: () {
                 RouterUtils.pop();
-                if (asset != null) {
-                  _downloadAndInstall(context, asset, remoteVersion);
-                } else {
-                  launchUrl(
-                    Uri.parse(res.data['html_url']),
-                    mode: LaunchMode.externalApplication,
-                  );
-                }
+                _downloadAndInstall(context, asset, remoteVersion);
               },
-              child: Text(
-                asset != null
-                    ? 'upgrade.download-install'.i18n
-                    : 'upgrade.download'.i18n,
-              ),
+              child: Text('upgrade.download-install'.i18n),
             )
           ],
         );
@@ -499,26 +606,97 @@ class ApplicationUtils {
   // en subir lo suyo— no había forma de enterarse hasta cerrarla y volver a
   // abrirla.
   //
-  // El aviso aparece encima de lo que sea que esté en pantalla: los diálogos se
-  // muestran sobre el navegador raíz, así que salen igual sobre el reproductor
-  // nativo, sobre el de WebView, sobre el lector o sobre cualquier página. Es
-  // descartable con "Ahora no" — no interrumpe de forma definitiva a nadie.
+  // El aviso aparece encima de lo que sea que esté en pantalla —reproductor
+  // nativo, WebView, lector o cualquier página— y BLOQUEA hasta actualizar, la
+  // misma pantalla que sale al arrancar. Es a propósito: una version vieja se
+  // queda sin correcciones y sus extensiones empiezan a fallar cuando los
+  // sitios cambian, sin que se entienda por qué.
+  //
+  // La contra, dicha claramente: puede interrumpir a alguien a mitad de un
+  // episodio. Se acepta a cambio de que nadie se quede atras sin enterarse.
   static Timer? _chequeoPeriodico;
-  static const _cadaCuanto = Duration(minutes: 30);
+
+  // Cada cuánto se pregunta si hay versión nueva.
+  //
+  // Estaba en 30 minutos y era demasiado: un release puede estar listo y el
+  // usuario enterarse media hora después.
+  //
+  // No se baja a "cada un minuto" porque la consulta va a la API de GitHub, que
+  // sin credenciales corta a 60 llamadas por hora y por IP. A un minuto se
+  // consume el cupo entero solo con esto, y una casa con dos dispositivos
+  // empezaría a recibir respuestas de "demasiadas peticiones" — o sea, dejaría
+  // de avisar justo cuando hay algo que avisar.
+  //
+  // Cinco minutos deja el cupo en doce llamadas por hora, con lugar de sobra.
+  static const _cadaCuanto = Duration(minutes: 5);
+
+  // Y cuando ya se sabe que hay algo por salir, se mira seguido.
+  //
+  // Un release se publica por partes: cada plataforma sube su archivo al
+  // terminar de compilar, y las notas pueden escribirse después. En esa ventana
+  // la comprobación ve la versión nueva pero no avisa, porque avisar a medias
+  // manda a una descarga que no existe o deja al usuario eligiendo sin saber
+  // qué trae.
+  //
+  // Ahí es cuando conviene mirar seguido: falta poco y ya se sabe. Se pasa a un
+  // minuto hasta que el release esté entero, y recién ahí sale el aviso — que
+  // es exactamente el momento pedido: "cuando la release completa todo, ahí
+  // sale". Es una ráfaga corta y acotada, no el ritmo permanente.
+  static const _cadaCuantoEsperando = Duration(minutes: 1);
+
+  /// Hay una versión más nueva pero el release todavía no está entero.
+  static bool _esperandoReleaseIncompleto = false;
+
+  /// Cuántas comprobaciones rápidas seguidas se llevan hechas.
+  ///
+  /// La ráfaga tiene techo a propósito. Un release puede quedar publicado y las
+  /// notas no escribirse nunca, o un job del CI fallar y ese archivo no llegar
+  /// jamás: ahí la espera no termina sola. Sin límite, la app se quedaría
+  /// mirando cada minuto para siempre — sesenta llamadas por hora, justo el
+  /// tope de la API de GitHub, así que el mecanismo puesto para avisar ANTES
+  /// terminaría agotando el cupo y dejando de avisar del todo.
+  ///
+  /// Veinte minutos alcanzan de sobra: un release que tarda más que eso en
+  /// completarse no se está completando. Pasado ese punto se vuelve al ritmo
+  /// normal, que igual lo va a encontrar cuando esté listo — solo que sin
+  /// insistir.
+  static int _rafagasRapidas = 0;
+  static const _maxRafagasRapidas = 20;
 
   static void iniciarChequeoPeriodico(BuildContext context) {
     if (kIsWeb) return;
     // Uno solo: en Android el shell se reconstruye al cambiar de pestaña, y sin
     // esto quedaba un temporizador nuevo por cada reconstrucción.
     _chequeoPeriodico?.cancel();
-    _chequeoPeriodico = Timer.periodic(_cadaCuanto, (_) {
+    // El temporizador late al ritmo RÁPIDO siempre, y adentro se decide si toca
+    // preguntar. Así el cambio de ritmo no obliga a destruir y recrear el
+    // temporizador, que es donde se cuelan los duplicados.
+    var pulsos = 0;
+    _chequeoPeriodico = Timer.periodic(_cadaCuantoEsperando, (_) {
+      pulsos++;
+      // Ver _maxRafagasRapidas: la espera acelerada tiene techo.
+      final rapido =
+          _esperandoReleaseIncompleto && _rafagasRapidas < _maxRafagasRapidas;
+      final cadaCuantosPulsos = rapido
+          ? 1
+          : _cadaCuanto.inMinutes ~/ _cadaCuantoEsperando.inMinutes;
+      if (pulsos % cadaCuantosPulsos != 0) return;
+      if (rapido) _rafagasRapidas++;
       // Se relee el ajuste en cada vuelta: si el usuario lo apaga mientras
       // tanto, esto deja de molestar sin necesidad de reiniciar nada.
       if (PrismHubStorage.getSetting(SettingKey.autoCheckUpdate) != true) return;
       if (!context.mounted) return;
-      // showSnackbar en false: nadie pidió esta comprobación, así que si no hay
-      // nada nuevo no aparece ningún mensaje.
-      unawaited(checkUpdate(context));
+      // checkForcedUpdate y no checkUpdate: cuando aparece una version nueva
+      // con la app abierta, el aviso BLOQUEA hasta actualizar, igual que el
+      // que sale al arrancar. Antes esta comprobacion mostraba el dialogo
+      // descartable, asi que se podia seguir usando una version vieja sin
+      // enterarse — que es justo lo que se queria evitar.
+      //
+      // Es seguro llamarlo cada tanto: tiene guardas propias para no apilar la
+      // pantalla si ya esta abierta (_forcedUpdatePageOpen) ni lanzar dos
+      // comprobaciones a la vez (_forcedUpdateCheckInFlight). Y si no hay
+      // version nueva no muestra nada.
+      unawaited(checkForcedUpdate(context));
     });
   }
 
@@ -825,15 +1003,55 @@ class ApplicationUtils {
   }
 
   static Future<void> _runWindowsInstaller(String installerPath) async {
-    final command =
-        'Start-Process -FilePath ${_psQuote(installerPath)} -Verb RunAs';
-    await Process.run('powershell', [
-      '-NoProfile',
-      '-ExecutionPolicy',
-      'Bypass',
-      '-Command',
-      command,
-    ]);
+    // El instalador arranca DESPUES de que este proceso se haya ido.
+    //
+    // Antes se lanzaba de inmediato y recien despues se llamaba a exit(0). El
+    // instalador usa el Restart Manager para detectar la app abierta, y ese
+    // escaneo ocurria mientras PrismHub todavia estaba vivo: aparecia la
+    // pantalla de "hay que cerrar estas aplicaciones" y quedaba en manos del
+    // usuario aceptar. Si la cerraba mal, o el proceso quedaba a medio salir,
+    // la actualizacion podia escribir sobre archivos en uso.
+    //
+    // Con la espera, cuando el instalador mira ya no hay nada corriendo y hace
+    // su trabajo sin preguntar nada.
+    //
+    // El comando va en un archivo .ps1 y no en -Command: encadenar la espera y
+    // el Start-Process en una sola linea obliga a anidar comillas dentro de
+    // comillas, y basta con que la ruta de instalacion tenga un espacio o un
+    // apostrofo para que se rompa de formas dificiles de ver.
+    final script = File(
+      '${Directory.systemTemp.path}${Platform.pathSeparator}'
+      'prismhub-update-${DateTime.now().millisecondsSinceEpoch}.ps1',
+    );
+    await script.writeAsString(
+      // 3 segundos: de sobra para que el proceso muera, y poco como para que
+      // no parezca que el boton no hizo nada.
+      'Start-Sleep -Seconds 3\n'
+      'Start-Process -FilePath ${_psQuote(installerPath)} -Verb RunAs\n'
+      // El script se borra solo: es temporal y no tiene por que quedar.
+      'Remove-Item -LiteralPath ${_psQuote(script.path)} -Force '
+      '-ErrorAction SilentlyContinue\n',
+    );
+
+    // Sin await: este powershell tiene que SOBREVIVIR al exit(0) de abajo. Con
+    // Process.run se esperaria a que termine, y lo que hace es justamente
+    // esperar a que nos vayamos.
+    unawaited(Process.start(
+      'powershell',
+      [
+        '-NoProfile',
+        '-ExecutionPolicy',
+        'Bypass',
+        '-WindowStyle',
+        'Hidden',
+        '-File',
+        script.path,
+      ],
+      mode: ProcessStartMode.detached,
+    ));
+
+    // Un respiro para que el proceso hijo quede lanzado antes de irnos.
+    await Future<void>.delayed(const Duration(milliseconds: 300));
     exit(0);
   }
 
@@ -1237,7 +1455,13 @@ class _ForcedUpdatePageState extends State<_ForcedUpdatePage> {
                                   crossAxisAlignment: CrossAxisAlignment.start,
                                   children: [
                                     Text(
-                                      'upgrade.forced-required'.i18n,
+                                      FlutterI18n.translate(
+                                        context,
+                                        'upgrade.forced-required',
+                                        translationParams: {
+                                          'actual': packageInfo.version
+                                        },
+                                      ),
                                       style: const TextStyle(
                                           color: HomeTheme.textPrimary),
                                     ),
@@ -1354,7 +1578,13 @@ class _ForcedUpdatePageState extends State<_ForcedUpdatePage> {
                               ),
                               const SizedBox(height: 8),
                               Text(
-                                'upgrade.forced-required'.i18n,
+                                FlutterI18n.translate(
+                                        context,
+                                        'upgrade.forced-required',
+                                        translationParams: {
+                                          'actual': packageInfo.version
+                                        },
+                                      ),
                                 style: const TextStyle(
                                     color: HomeTheme.textPrimary),
                               ),

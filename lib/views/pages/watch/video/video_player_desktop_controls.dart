@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:fluent_ui/fluent_ui.dart';
 import 'package:flutter/material.dart' as material;
 import 'package:flutter/services.dart';
+import 'package:flutter_i18n/flutter_i18n.dart';
 import 'package:get/get.dart';
 import 'package:media_kit/media_kit.dart';
 import 'package:media_kit_video/media_kit_video.dart';
@@ -11,8 +12,10 @@ import 'package:prismhub/views/pages/watch/video/video_player_cast.dart';
 import 'package:prismhub/views/pages/watch/video/webview_player_page.dart'
     show isKnownNativeServer, openWebViewPlayer;
 import 'package:prismhub/utils/i18n.dart';
+import 'package:prismhub/utils/prismhub_storage.dart';
 import 'package:prismhub/views/widgets/cache_network_image.dart';
 import 'package:prismhub/views/widgets/home/home_theme.dart';
+import 'package:prismhub/views/widgets/window_caption_buttons.dart';
 import 'package:prismhub/views/widgets/watch/playlist.dart';
 import 'package:window_manager/window_manager.dart';
 
@@ -35,6 +38,7 @@ class _VideoPlayerDesktopControlsState
   final _subtitleViewKey = GlobalKey<SubtitleViewState>();
   Worker? _webViewWorker;
   Worker? _resumeWorker;
+  Worker? _tutorialWorker;
   // Se ocultan rápido si el mouse no se mueve (mismo patrón que ya usa la
   // versión mobile, con su propio timer de 3s de inactividad).
   bool _showControls = true;
@@ -81,7 +85,17 @@ class _VideoPlayerDesktopControlsState
     // Mostrar diálogo de continuación cuando el controlador emite la señal.
     _resumeWorker = ever(_c.resumePrompt, (secs) {
       if (secs == null || !mounted) return;
+      // Con el tutorial puesto NO se muestra: salia encima y aceptarlo mandaba
+      // a reproducir con el tutorial todavia tapando la pantalla. No se
+      // descarta, se espera — el worker de abajo lo saca al cerrarse.
+      if (_c.tutorialArriba.value) return;
       _showResumeDialog(secs);
+    });
+    // Al cerrarse el tutorial, si habia quedado un aviso pendiente, ahora si.
+    _tutorialWorker = ever(_c.tutorialArriba, (arriba) {
+      if (arriba == true || !mounted) return;
+      final secs = _c.resumePrompt.value;
+      if (secs != null) _showResumeDialog(secs);
     });
   }
 
@@ -89,6 +103,7 @@ class _VideoPlayerDesktopControlsState
   void dispose() {
     _webViewWorker?.dispose();
     _resumeWorker?.dispose();
+    _tutorialWorker?.dispose();
     _hideTimer?.cancel();
     _focusNode.dispose();
     super.dispose();
@@ -300,7 +315,12 @@ class _VideoPlayerDesktopControlsState
                         //     con HLS.
                         //  2. Salto en curso (barra, teclas o flechas).
                         //  3. Buffer vacío durante la reproducción.
-                        opacity: ((!_c.isGettingWatchData.value &&
+                        // Casteando no gira NINGUNA rueda: el reproductor de
+                        // aca esta parado a proposito, asi que "cargando" y
+                        // "sin buffer" no describen nada de lo que pasa en el
+                        // televisor. Mismo criterio que en celular.
+                        opacity: (_c.dlnaDevice.value == null &&
+                                ((!_c.isGettingWatchData.value &&
                                     !_c.hasRenderedFrame.value &&
                                     // Si hay un error en pantalla, ahi hay una
                                     // tarjeta con su boton (reintentar / elegir
@@ -308,6 +328,17 @@ class _VideoPlayerDesktopControlsState
                                     // nada: la rueda girando detras hacia
                                     // pensar que algo seguia en curso.
                                     _c.error.value.isEmpty &&
+                                    // Mismo caso que el error de arriba: el
+                                    // aviso de "el servidor fallo, toca para
+                                    // reproducir" espera una accion y no hay
+                                    // nada cargando. El fallo de servidor no
+                                    // se guarda en `error` —tiene su propio
+                                    // campo— asi que la comprobacion anterior
+                                    // no lo cubria.
+                                    _c.serverFailedMessage.value.isEmpty &&
+                                    // Mismo caso: el boton de play espera un
+                                    // clic, no hay nada cargando.
+                                    !_c.awaitingServerChoice.value &&
                                     // Con el reproductor de WebView activo no
                                     // va a pintarse nunca un cuadro nativo, asi
                                     // que esta rueda giraria para siempre.
@@ -315,7 +346,7 @@ class _VideoPlayerDesktopControlsState
                                 (_c.hasRenderedFrame.value &&
                                     (_c.isSeeking.value ||
                                         (_c.isPlaying.value &&
-                                            _c.isActuallyBuffering.value))))
+                                            _c.isActuallyBuffering.value)))))
                             ? 1
                             : 0,
                         child: const Center(
@@ -374,6 +405,13 @@ class _VideoPlayerDesktopControlsState
                 child: SizedBox.expand(
                   child: Center(
                     child: Obx(() {
+                      // Casteando: esto va ANTES que todo lo demas, igual que
+                      // en celular. El reproductor de aca esta parado a
+                      // proposito, asi que ningun aviso de carga o de servidor
+                      // describe lo que se ve en el televisor.
+                      if (_c.dlnaDevice.value != null) {
+                        return _PanelCasteando(controller: _c);
+                      }
                       if (_c.error.value.isNotEmpty) {
                         return Column(
                           mainAxisSize: MainAxisSize.min,
@@ -652,6 +690,27 @@ class _VideoPlayerDesktopControlsState
                         return GestureDetector(
                           behavior: HitTestBehavior.opaque,
                           onTap: () => _c.playOrPause(),
+                          // Arrastrar con el boton apretado mueve la camara del
+                          // VR. Un clic suelto sigue pausando como siempre:
+                          // GestureDetector distingue solo un toque de un
+                          // arrastre, asi que los dos gestos conviven sin
+                          // pisarse.
+                          //
+                          // Solo hace algo con el modo VR puesto; sin el,
+                          // arrastrar sobre el video no hacia nada y sigue sin
+                          // hacerlo.
+                          //
+                          // El desplazamiento va en fraccion del ancho de la
+                          // ventana, asi el recorrido se siente igual en una
+                          // pantalla chica que en uno grande. Negativo porque
+                          // arrastrar hacia la izquierda mueve la vista hacia
+                          // la derecha, como al empujar una foto.
+                          onHorizontalDragUpdate: (d) {
+                            if (!_c.vrUnaPantalla.value) return;
+                            final ancho = MediaQuery.of(context).size.width;
+                            if (ancho <= 0) return;
+                            _c.moverVr(-d.delta.dx / ancho);
+                          },
                           child: content,
                         );
                       }),
@@ -773,62 +832,14 @@ class _VideoWindowCaptionButtons extends StatefulWidget {
       _VideoWindowCaptionButtonsState();
 }
 
-class _VideoWindowCaptionButtonsState extends State<_VideoWindowCaptionButtons>
-    with WindowListener {
-  bool _isMaximized = false;
-
+class _VideoWindowCaptionButtonsState
+    extends State<_VideoWindowCaptionButtons> {
+  // Los tres botones viven ahora en BotonesVentana, compartidos con la ventana
+  // principal. Estaban escritos dos veces —casi igual— y cada arreglo entraba
+  // en uno solo; el de la guarda de pantalla completa es el ultimo ejemplo.
   @override
-  void initState() {
-    super.initState();
-    windowManager.addListener(this);
-    windowManager.isMaximized().then((value) {
-      if (mounted) setState(() => _isMaximized = value);
-    });
-  }
-
-  @override
-  void dispose() {
-    windowManager.removeListener(this);
-    super.dispose();
-  }
-
-  @override
-  void onWindowMaximize() => setState(() => _isMaximized = true);
-
-  @override
-  void onWindowUnmaximize() => setState(() => _isMaximized = false);
-
-  @override
-  Widget build(BuildContext context) {
-    return Row(
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        WindowCaptionButton.minimize(
-          brightness: Brightness.dark,
-          onPressed: () async {
-            if (await windowManager.isMinimized()) {
-              windowManager.restore();
-            } else {
-              windowManager.minimize();
-            }
-          },
-        ),
-        _isMaximized
-            ? WindowCaptionButton.unmaximize(
-                brightness: Brightness.dark,
-                onPressed: () => windowManager.unmaximize(),
-              )
-            : WindowCaptionButton.maximize(
-                brightness: Brightness.dark,
-                onPressed: () => windowManager.maximize(),
-              ),
-        WindowCaptionButton.close(
-          brightness: Brightness.dark,
-          onPressed: () => windowManager.close(),
-        ),
-      ],
-    );
-  }
+  Widget build(BuildContext context) =>
+      const BotonesVentana(brightness: Brightness.dark);
 }
 
 class _Footer extends StatelessWidget {
@@ -970,6 +981,32 @@ class _Footer extends StatelessWidget {
                             return const IconButton(
                               onPressed: null,
                               icon: Icon(FluentIcons.play, size: 30),
+                            );
+                          }
+                          // Casteando, este boton manda al TELEVISOR.
+                          //
+                          // Miraba el reproductor local, que mientras se
+                          // transmite esta parado a proposito: siempre se veia
+                          // "reproducir" y tocarlo arrancaba el video ACA
+                          // encima de lo que ya sonaba en el televisor, con el
+                          // audio duplicado y desfasado. playOrPause() del
+                          // controlador ya sabe a cual de los dos hablarle.
+                          if (controller.dlnaDevice.value != null) {
+                            // Mientras engancha no hay a quien mandarle nada.
+                            if (controller.castConectando.value) {
+                              return const IconButton(
+                                onPressed: null,
+                                icon: Icon(FluentIcons.play, size: 30),
+                              );
+                            }
+                            return IconButton(
+                              onPressed: controller.playOrPause,
+                              icon: Icon(
+                                controller.isPlaying.value
+                                    ? FluentIcons.pause
+                                    : FluentIcons.play,
+                                size: 30,
+                              ),
                             );
                           }
                           return StreamBuilder(
@@ -1180,7 +1217,16 @@ class _VolumeState extends State<_Volume> {
                             height: 30,
                             child: Slider(
                               value: _volume.value,
-                              max: 100,
+                              // Pasa de 100 —el volumen original— para poder
+                              // levantar material grabado bajo. Ver
+                              // VideoPlayerController.volumenMaximo.
+                              max: VideoPlayerController.volumenMaximo,
+                              // El 100 marcado: es el punto donde deja de
+                              // subirse el volumen y empieza a amplificarse,
+                              // asi que conviene verlo.
+                              divisions:
+                                  VideoPlayerController.volumenMaximo ~/ 5,
+                              label: '${_volume.value.round()}%',
                               onChanged: _onVolumeChanged,
                             ),
                           ),
@@ -1313,7 +1359,11 @@ class _QualityState extends State<_Quality> {
       child: Button(
         child: Text(widget.controller.currentQuality.value),
         onPressed: () {
-          if (widget.controller.qualityMap.isEmpty) {
+          // Ver hayCalidades en el controlador: pueden venir del playlist HLS
+          // o de la cabecera X-Servers de la extensión. Mirando solo el
+          // primero, este botón decía "no hay calidades" en vídeos que traen
+          // siete — Eporner entrega las suyas por ese camino.
+          if (!widget.controller.hayCalidades) {
             widget.controller.sendMessage(
               Message(Text("video.no-qualities".i18n)),
             );
@@ -1332,19 +1382,47 @@ class _QualityState extends State<_Quality> {
                     constraints: const BoxConstraints(
                       maxHeight: 300,
                     ),
+                    // Las dos fuentes en la MISMA lista: el usuario abre
+                    // "calidad" y ve calidades, sin tener que saber si el
+                    // sitio las entrega como playlist o como una url por
+                    // resolución. Cada una se cambia con su propio método,
+                    // que es lo único que difiere por detrás.
                     child: ListView(
                       children: [
-                        for (final quality
-                            in widget.controller.qualityMap.entries)
-                          ListTile(
-                            title: Text(quality.key),
-                            onPressed: () {
-                              widget.controller.switchQuality(
-                                quality.value,
-                              );
-                              Flyout.of(context).close();
-                            },
-                          ),
+                        // La que se esta viendo lleva tilde y color: sin eso
+                        // la lista no decia cual estaba puesta.
+                        if (widget.controller.qualityMap.isNotEmpty)
+                          for (final quality
+                              in widget.controller.qualityMap.entries)
+                            ListTile(
+                              title: Text(quality.key),
+                              trailing: quality.key ==
+                                      widget.controller.currentQuality.value
+                                  ? const Icon(FluentIcons.check_mark,
+                                      size: 12, color: HomeTheme.accentPink)
+                                  : null,
+                              onPressed: () {
+                                widget.controller.switchQuality(
+                                  quality.value,
+                                );
+                                Flyout.of(context).close();
+                              },
+                            )
+                        else
+                          for (final servidor
+                              in widget.controller.availableServers.keys)
+                            ListTile(
+                              title: Text(servidor),
+                              trailing: servidor ==
+                                      widget.controller.currentServerName.value
+                                  ? const Icon(FluentIcons.check_mark,
+                                      size: 12, color: HomeTheme.accentPink)
+                                  : null,
+                              onPressed: () {
+                                widget.controller.switchServer(servidor);
+                                Flyout.of(context).close();
+                              },
+                            ),
                       ],
                     ),
                   ),
@@ -1512,6 +1590,315 @@ class _TrackState extends State<_Track> {
 // Material — ese widget usa ListTile de Material, que sin un ancestro
 // Material tira "No Material widget found" en este árbol, que corre sobre
 // fluent_ui (mismo problema ya conocido en este codebase para TextField).
+/// Lo que se ve en el medio mientras el vídeo corre en otro aparato.
+///
+/// Sin botones: reintentar y desconectar viven en el menú del botón de
+/// transmitir, en la barra de abajo, fuera de la imagen.
+class _PanelCasteando extends StatefulWidget {
+  const _PanelCasteando({required this.controller});
+  final VideoPlayerController controller;
+
+  @override
+  State<_PanelCasteando> createState() => _PanelCasteandoState();
+}
+
+class _PanelCasteandoState extends State<_PanelCasteando>
+    with SingleTickerProviderStateMixin {
+  late final AnimationController _anim = AnimationController(
+    vsync: this,
+    duration: const Duration(milliseconds: 1600),
+  )..repeat();
+
+  @override
+  void dispose() {
+    _anim.dispose();
+    super.dispose();
+  }
+
+  VideoPlayerController get controller => widget.controller;
+
+  @override
+  Widget build(BuildContext context) {
+    // IgnorePointer: el panel esta encima del area del video, y su caja se
+    // comia los clics justo en el centro de la pantalla.
+    return IgnorePointer(child: Obx(() {
+      final device = controller.dlnaDevice.value;
+      if (device == null) return const SizedBox.shrink();
+      // Enganchando: mandarle el vídeo al aparato y que arranque puede tardar
+      // varios segundos, y en ese rato no se veía nada.
+      final cambiandoEpisodio = controller.castCambiandoEpisodio.value;
+      final buscando = controller.castBuscando.value;
+      // Buscar un momento del vídeo en el aparato es otra espera: misma rueda.
+      // castEsperandoPlay: el aparato ya aceptó pero todavía no se ve nada.
+      final conectando = controller.castConectando.value ||
+          controller.castEsperandoPlay.value ||
+          cambiandoEpisodio ||
+          buscando;
+      final reproduciendo = controller.isPlaying.value;
+      // El panel entra y cambia con animacion, no de golpe.
+      //
+      // Aparecia y desaparecia seco, y el icono saltaba de rueda a "conectado"
+      // sin transicion: se sentia tosco al lado del resto del reproductor.
+      return TweenAnimationBuilder<double>(
+        tween: Tween(begin: 0.92, end: 1),
+        duration: const Duration(milliseconds: 260),
+        curve: Curves.easeOutBack,
+        builder: (context, escala, hijo) => Transform.scale(
+          scale: escala,
+          child: Opacity(
+            // La opacidad sigue a la escala para que entren juntas.
+            opacity: ((escala - 0.92) / 0.08).clamp(0.0, 1.0),
+            child: hijo,
+          ),
+        ),
+        child: AnimatedContainer(
+          duration: const Duration(milliseconds: 220),
+          curve: Curves.easeOut,
+          padding: const EdgeInsets.symmetric(horizontal: 30, vertical: 24),
+          decoration: BoxDecoration(
+            color: const Color(0xB8000000),
+            borderRadius: BorderRadius.circular(16),
+            border: Border.all(
+              // El borde se tiñe mientras espera: da una señal mas de que hay
+              // algo en curso, sin agregar otro elemento a la caja.
+              color: conectando
+                  ? HomeTheme.accentPink.withValues(alpha: 0.55)
+                  : Colors.white.withValues(alpha: 0.12),
+            ),
+            boxShadow: const [
+              BoxShadow(
+                color: Color(0x77000000),
+                blurRadius: 24,
+                offset: Offset(0, 8),
+              ),
+            ],
+          ),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+            // El icono se funde en vez de saltar. Pasar de la rueda a
+            // "conectado" de golpe se sentia un corte, sobre todo porque es lo
+            // primero que mira el ojo.
+            AnimatedSwitcher(
+              duration: const Duration(milliseconds: 240),
+              transitionBuilder: (hijo, anim) => FadeTransition(
+                opacity: anim,
+                child: ScaleTransition(scale: anim, child: hijo),
+              ),
+              child: conectando
+                  ? const SizedBox(
+                      key: ValueKey('rueda'),
+                      width: 46,
+                      height: 46,
+                      child: material.CircularProgressIndicator(
+                        strokeWidth: 3.5,
+                        valueColor: material.AlwaysStoppedAnimation(
+                            HomeTheme.accentPink),
+                      ),
+                    )
+                  : Icon(
+                      reproduciendo
+                          ? material.Icons.cast_connected
+                          : material.Icons.pause_circle_outline,
+                      key: ValueKey(reproduciendo),
+                      size: 46,
+                      color: HomeTheme.accentPink,
+                    ),
+            ),
+            const SizedBox(height: 14),
+            Text(
+              device.info.friendlyName,
+              textAlign: TextAlign.center,
+              style: const TextStyle(
+                fontSize: 18,
+                fontWeight: FontWeight.bold,
+                color: Colors.white,
+              ),
+            ),
+            const SizedBox(height: 6),
+            ConstrainedBox(
+              constraints: const BoxConstraints(maxWidth: 360),
+              child: Builder(builder: (context) {
+                final aviso = controller.castAviso.value;
+                final texto = aviso ??
+                    (cambiandoEpisodio
+                        ? 'video.cast-changing-episode'.i18n
+                        : buscando
+                            ? 'video.cast-seeking'.i18n
+                            : conectando
+                                ? 'video.cast-connecting'.i18n
+                                : !reproduciendo
+                                    ? 'video.cast-paused-desktop'.i18n
+                                    : controller.castVelocidad.value != null
+                                        ? FlutterI18n.translate(
+                                            context,
+                                            'video.cast-speed',
+                                            translationParams: {
+                                              'speed': controller
+                                                  .castVelocidad.value!
+                                            },
+                                          )
+                                        : 'video.cast-on-device'.i18n);
+                // El texto tambien se funde: cambia seguido (conectando,
+                // buscando, volumen...) y saltar de uno a otro daba tirones.
+                return AnimatedSwitcher(
+                  duration: const Duration(milliseconds: 200),
+                  child: Text(
+                    texto,
+                    key: ValueKey(texto),
+                    textAlign: TextAlign.center,
+                    style: TextStyle(
+                      fontSize: 13,
+                      height: 1.4,
+                      fontWeight:
+                          aviso == null ? FontWeight.normal : FontWeight.w700,
+                      color: aviso == null
+                          ? Colors.white.withValues(alpha: 0.75)
+                          : HomeTheme.accentPink,
+                    ),
+                  ),
+                );
+              }),
+            ),
+            // Ayuda dibujada en vez de explicada en un parrafo, igual que en
+            // celular pero con las teclas que se usan aca. Se pliega sola
+            // mientras hay algo en curso, en vez de desaparecer de golpe.
+            AnimatedSize(
+              duration: const Duration(milliseconds: 240),
+              curve: Curves.easeOut,
+              child: conectando
+                  ? const SizedBox(width: double.infinity)
+                  : Padding(
+                      padding: const EdgeInsets.only(top: 18),
+                      child: _AyudaTeclasCast(anim: _anim),
+                    ),
+            ),
+          ],
+          ),
+        ),
+      );
+    }));
+  }
+}
+
+/// Tres pistas que laten por turno: retroceder, pausar, adelantar — con las
+/// teclas reales del reproductor en vez de gestos.
+class _AyudaTeclasCast extends StatelessWidget {
+  const _AyudaTeclasCast({required this.anim});
+  final AnimationController anim;
+
+  /// Los segundos que tiene puesto ESE salto en Ajustes.
+  ///
+  /// Sin esto la ayuda decía "adelantar" sin decir cuánto, y el número no se
+  /// puede escribir fijo porque cada uno lo configura como quiere. Mismo
+  /// criterio que en el tutorial del reproductor.
+  static String _segundos(String clave, double porDefecto) {
+    final v = PrismHubStorage.getSetting(clave);
+    final n = v is num ? v.toDouble() : porDefecto;
+    final abs = n.abs();
+    // Sin decimales cuando es redondo: "10 s" se lee mejor que "10.0 s".
+    return abs == abs.roundToDouble()
+        ? '${abs.round()} s'
+        : '${abs.toStringAsFixed(1)} s';
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    // Las flechas ajustan fino; J e I son los saltos grandes. Son cuatro
+    // teclas distintas con dos tiempos distintos, y mostrar solo las flechas
+    // dejaba afuera justo las que se usan para saltar de verdad.
+    final atrasFino = _segundos(SettingKey.arrowLeft, 2.0);
+    final adelanteFino = _segundos(SettingKey.arrowRight, 2.0);
+    final atrasLargo = _segundos(SettingKey.keyJ, 10.0);
+    final adelanteLargo = _segundos(SettingKey.keyI, 10.0);
+    return AnimatedBuilder(
+      animation: anim,
+      builder: (context, _) {
+        // Cinco pistas, cinco tramos del ciclo.
+        final activo = (anim.value * 5).floor().clamp(0, 4);
+        return Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                // En el orden en que se piensan: los saltos grandes por fuera,
+                // los finos pegados al centro, y pausar en el medio.
+                _pista('J', atrasLargo, activo == 0),
+                const SizedBox(width: 10),
+                _pista('←', atrasFino, activo == 1),
+                const SizedBox(width: 10),
+                _pista('Espacio', 'video.cast-hint-pause'.i18n, activo == 2),
+                const SizedBox(width: 10),
+                _pista('→', adelanteFino, activo == 3),
+                const SizedBox(width: 10),
+                _pista('I', adelanteLargo, activo == 4),
+              ],
+            ),
+            const SizedBox(height: 10),
+            Text(
+              'video.cast-hint-keys'.i18n,
+              textAlign: TextAlign.center,
+              style: TextStyle(
+                fontSize: 10.5,
+                fontStyle: FontStyle.italic,
+                color: Colors.white.withValues(alpha: 0.5),
+              ),
+            ),
+          ],
+        );
+      },
+    );
+  }
+
+  Widget _pista(String tecla, String texto, bool encendido) {
+    return AnimatedScale(
+      duration: const Duration(milliseconds: 260),
+      scale: encendido ? 1.0 : 0.92,
+      child: AnimatedOpacity(
+        duration: const Duration(milliseconds: 260),
+        opacity: encendido ? 1 : 0.45,
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Container(
+              padding:
+                  const EdgeInsets.symmetric(horizontal: 12, vertical: 7),
+              decoration: BoxDecoration(
+                borderRadius: BorderRadius.circular(8),
+                color: encendido
+                    ? HomeTheme.accentPink.withValues(alpha: 0.22)
+                    : Colors.white.withValues(alpha: 0.06),
+                border: Border.all(
+                  color: encendido
+                      ? HomeTheme.accentPink
+                      : Colors.white.withValues(alpha: 0.16),
+                ),
+              ),
+              child: Text(
+                tecla,
+                style: const TextStyle(
+                  fontSize: 13,
+                  fontWeight: FontWeight.w700,
+                  color: Colors.white,
+                ),
+              ),
+            ),
+            const SizedBox(height: 6),
+            Text(
+              texto,
+              style: TextStyle(
+                fontSize: 10.5,
+                color: Colors.white.withValues(alpha: 0.8),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
 class _Cast extends StatefulWidget {
   const _Cast({required this.controller});
   final VideoPlayerController controller;
@@ -1535,11 +1922,26 @@ class _CastState extends State<_Cast> {
       controller: _flyoutController,
       child: Obx(() {
         final connected = widget.controller.dlnaDevice.value != null;
+        // Si el reproductor nativo no esta andando, castear tampoco va a andar:
+        // el televisor pide el mismo video y se topa con lo mismo. Se apaga el
+        // boton y el tooltip dice el motivo. Ver puedeCastear en el controlador.
+        final habilitado = widget.controller.puedeCastear;
+        if (!habilitado) {
+          return Tooltip(
+            message: widget.controller.motivoSinCast,
+            child: const IconButton(
+              // Los iconos de Material, iguales a los del telefono: los de
+              // Fluent para esto son una pantalla de tubo que no se parece a
+              // nada de lo que la gente reconoce como "transmitir".
+              icon: Icon(material.Icons.cast, size: 22),
+              onPressed: null,
+            ),
+          );
+        }
         return IconButton(
           icon: Icon(
-            connected
-                ? FluentIcons.t_v_monitor_selected
-                : FluentIcons.screen_cast,
+            connected ? material.Icons.cast_connected : material.Icons.cast,
+            size: 22,
             color: connected ? HomeTheme.accentPink : null,
           ),
           onPressed: () {
@@ -1556,8 +1958,12 @@ class _CastState extends State<_Cast> {
                     useAcrylic: true,
                     padding: const EdgeInsets.all(0),
                     child: Container(
-                      width: 280,
-                      constraints: const BoxConstraints(maxHeight: 320),
+                      // 360 y 460 (antes 280 y 320): con 280 el aviso de "no
+                      // se encontro ningun dispositivo" quedaba en una tira de
+                      // cuatro palabras de ancho, y el tope de 320 lo cortaba
+                      // por abajo a mitad de frase.
+                      width: 360,
+                      constraints: const BoxConstraints(maxHeight: 460),
                       child: Obx(() {
                         final device = widget.controller.dlnaDevice.value;
                         if (device != null) {
@@ -1583,12 +1989,37 @@ class _CastState extends State<_Cast> {
                                   ),
                                 ),
                                 const SizedBox(height: 14),
-                                FilledButton(
-                                  child: Text('video.cast-disconnect'.i18n),
-                                  onPressed: () {
-                                    widget.controller.disconnectDLNADevice();
-                                    Flyout.of(context).close();
-                                  },
+                                // Mismo criterio que en el telefono:
+                                // reintentar primero. Si el televisor fallo por
+                                // algo pasajero, lo que uno quiere es volver a
+                                // intentarlo, no elegir el aparato de nuevo.
+                                Row(
+                                  mainAxisSize: MainAxisSize.min,
+                                  children: [
+                                    // Bloqueado mientras reintenta: sin esto no
+                                    // se notaba que ya estaba trabajando y se
+                                    // terminaba tocando de nuevo.
+                                    Button(
+                                      onPressed:
+                                          widget.controller.castConectando.value
+                                              ? null
+                                              : () {
+                                                  widget.controller
+                                                      .reintentarCast();
+                                                  Flyout.of(context).close();
+                                                },
+                                      child: Text('common.retry'.i18n),
+                                    ),
+                                    const SizedBox(width: 10),
+                                    FilledButton(
+                                      child: Text('video.cast-disconnect'.i18n),
+                                      onPressed: () {
+                                        widget.controller
+                                            .disconnectDLNADevice();
+                                        Flyout.of(context).close();
+                                      },
+                                    ),
+                                  ],
                                 ),
                               ],
                             ),
@@ -1912,37 +2343,131 @@ class _SeekBarState extends State<_SeekBar> {
 
 // ─── Selector de Servidores — fila de pestañas arriba del video ─────────────
 
-class _ServerTabBar extends StatelessWidget {
+class _ServerTabBar extends StatefulWidget {
   const _ServerTabBar({required this.controller});
   final VideoPlayerController controller;
 
   @override
+  State<_ServerTabBar> createState() => _ServerTabBarState();
+}
+
+class _ServerTabBarState extends State<_ServerTabBar> {
+  final _scroll = ScrollController();
+  bool _desborda = false;
+
+  @override
+  void dispose() {
+    _scroll.dispose();
+    super.dispose();
+  }
+
+  /// Cuanto se corre con cada flecha. Casi todo el ancho visible, dejando un
+  /// pedacito a la vista para no perder la referencia de donde se estaba.
+  void _correr(double signo) {
+    if (!_scroll.hasClients) return;
+    final salto = _scroll.position.viewportDimension * 0.8;
+    _scroll.animateTo(
+      (_scroll.offset + salto * signo)
+          .clamp(0.0, _scroll.position.maxScrollExtent),
+      duration: const Duration(milliseconds: 240),
+      curve: Curves.easeOut,
+    );
+  }
+
+  /// Anota si hace falta mostrar las flechas.
+  ///
+  /// Se mira DESPUES de que la fila se midio: durante el build todavia no se
+  /// sabe cuanto ocupa, y preguntarlo ahi da siempre cero.
+  void _revisarDesborde() {
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted || !_scroll.hasClients) return;
+      final hay = _scroll.position.maxScrollExtent > 1;
+      if (hay != _desborda) setState(() => _desborda = hay);
+    });
+  }
+
+  @override
   Widget build(BuildContext context) {
     return Obx(() {
-      if (controller.availableServers.isEmpty) return const SizedBox.shrink();
-      final current = controller.currentServerName.value;
+      // Ver servidoresSonAparte: esta tira es para elegir FUENTE. Cuando la
+      // extension entrega un MP4 por resolucion, lo que hay aca no son
+      // servidores sino las mismas calidades que ya ofrece el boton de abajo, y
+      // quedaban las dos cosas en pantalla diciendo lo mismo.
+      if (!widget.controller.servidoresSonAparte)
+        return const SizedBox.shrink();
+      final current = widget.controller.currentServerName.value;
+      _revisarDesborde();
+
+      // Sin titulo.
+      //
+      // Decia "Servidores disponibles" arriba de las pastillas y se veia
+      // pesado: una linea de texto fija encima del video, siempre, para
+      // nombrar algo que las propias pastillas ya dejan claro. El nombre sigue
+      // estando donde hace falta —el panel del telefono, que si es una lista
+      // dentro de un menu— pero aca sobra.
+      //
+      // Las flechas aparecen SOLO cuando los servidores no entran. Con tres o
+      // cuatro no hace falta nada; con diez, antes habia que arrastrar de
+      // costado sobre el video, que ademas peleaba con los gestos del
+      // reproductor.
       return Container(
         width: double.infinity,
         color: Colors.black.withValues(alpha: 0.35),
-        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
-        child: SingleChildScrollView(
-          scrollDirection: Axis.horizontal,
-          child: Row(
-            children: [
-              for (final entry in controller.availableServers.entries) ...[
-                _ServerTab(
-                  label: entry.key,
-                  selected: entry.key == current,
-                  isNative: isKnownNativeServer(entry.key, entry.value),
-                  onTap: () => controller.selectServer(entry.key),
+        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 8),
+        child: Row(
+          children: [
+            if (_desborda)
+              _FlechaTira(
+                icono: FluentIcons.chevron_left,
+                onTap: () => _correr(-1),
+              ),
+            Expanded(
+              child: SingleChildScrollView(
+                controller: _scroll,
+                scrollDirection: Axis.horizontal,
+                child: Row(
+                  children: [
+                    for (final entry
+                        in widget.controller.availableServers.entries) ...[
+                      _ServerTab(
+                        label: entry.key,
+                        selected: entry.key == current,
+                        isNative: isKnownNativeServer(entry.key, entry.value),
+                        onTap: () => widget.controller.selectServer(entry.key),
+                      ),
+                      const SizedBox(width: 8),
+                    ],
+                  ],
                 ),
-                const SizedBox(width: 8),
-              ],
-            ],
-          ),
+              ),
+            ),
+            if (_desborda)
+              _FlechaTira(
+                icono: FluentIcons.chevron_right,
+                onTap: () => _correr(1),
+              ),
+          ],
         ),
       );
     });
+  }
+}
+
+/// Flecha para correr la tira de servidores cuando no entran todos.
+class _FlechaTira extends StatelessWidget {
+  const _FlechaTira({required this.icono, required this.onTap});
+  final IconData icono;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 2),
+      child: IconButton(
+        icon: Icon(icono, size: 12, color: HomeTheme.textPrimary),
+        onPressed: onTap,
+      ),
+    );
   }
 }
 

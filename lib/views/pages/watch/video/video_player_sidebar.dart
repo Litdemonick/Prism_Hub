@@ -1,4 +1,5 @@
-﻿import 'package:flutter/material.dart';
+import 'dart:async';
+import 'package:flutter/material.dart';
 import 'package:fluent_ui/fluent_ui.dart' as fluent;
 import 'package:get/get.dart';
 import 'package:media_kit/media_kit.dart';
@@ -8,6 +9,9 @@ import 'package:prismhub/utils/i18n.dart';
 import 'package:prismhub/views/widgets/list_title.dart';
 import 'package:prismhub/views/widgets/platform_widget.dart';
 import 'package:prismhub/views/widgets/watch/playlist.dart';
+import 'package:prismhub/views/widgets/home/home_theme.dart';
+import 'package:prismhub/views/widgets/watch/tutorial_reproductor.dart';
+import 'package:prismhub/views/widgets/messenger.dart';
 
 enum SidebarTab {
   episodes,
@@ -71,7 +75,14 @@ class _VideoPlayerSidebarState extends State<VideoPlayerSidebar> {
                   child: Padding(
                     padding: const EdgeInsets.only(left: 16),
                     child: Text(
-                      _sidebarTabToString(tab),
+                      // El panel de "servidores" tambien es el que abre el
+                      // boton de calidad cuando la extension entrega una url
+                      // por resolucion (Eporner). Ahi lo que se lista son
+                      // calidades, asi que titularlo "Servidores disponibles"
+                      // era mentir sobre lo que se esta eligiendo.
+                      tab == SidebarTab.servers && !_c.servidoresSonAparte
+                          ? _sidebarTabToString(SidebarTab.qualitys)
+                          : _sidebarTabToString(tab),
                       style: const TextStyle(fontWeight: FontWeight.bold),
                     ),
                   ),
@@ -184,10 +195,101 @@ class _SideBarSettings extends StatefulWidget {
 class _SideBarSettingsState extends State<_SideBarSettings> {
   late final _c = widget.controller;
 
+  /// Deja el tutorial listo para salir la proxima vez que se abra un video.
+  ///
+  /// No se muestra ACA mismo a proposito. Este panel vive DENTRO del
+  /// reproductor: abrirlo encima taparia el video con un tutorial que explica
+  /// gestos sobre una pantalla que en ese momento esta ocupada por el propio
+  /// panel. Ademas el primer paso es "toca el centro para pausar", y con el
+  /// panel abierto ese toque no hace lo que dice.
+  ///
+  /// Marcandolo para la proxima, el tutorial sale sobre un video recien
+  /// abierto, que es donde los gestos se pueden probar de verdad mientras se
+  /// leen. Y sale UNA sola vez, como la primera: al cerrarlo se vuelve a
+  /// marcar como visto.
+  Future<void> _volverAVerTutorial(BuildContext context) async {
+    await TutorialReproductor.reiniciar();
+    if (!context.mounted) return;
+    _c.showSidebar.value = false;
+    // Centrado y no en la barra de abajo: ahi quedaba pegado a un borde,
+    // tapado por los controles y con el video de fondo, o sea ilegible justo
+    // cuando hay que leerlo.
+    unawaited(mostrarAvisoCentrado(context, 'video.tutorial.will-show'.i18n));
+  }
+
   Widget _buildDesktop(BuildContext context) {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
+        // Ver VideoPlayerController.vrUnaPantalla. Mismo interruptor que en el
+        // telefono: un VR sin gafas se ve igual de mal en las dos pantallas.
+        // En escritorio no va el de llenar pantalla: ahi la pantalla completa
+        // ya ocupa todo, asi que seria un interruptor que no cambia nada.
+        Obx(
+          () => !_c.esVideoVr.value
+              ? const SizedBox.shrink()
+              : fluent.Card(
+                  child: Obx(
+                    () => Row(
+                      children: [
+                        Expanded(
+                          child: Column(
+                            mainAxisSize: MainAxisSize.min,
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text('video.sidebar.vr-single'.i18n),
+                              const SizedBox(height: 2),
+                              Text(
+                                // Mismo motivo que en el telefono: el recorte
+                                // lo hace mpv acá y el televisor decodifica por
+                                // su cuenta, así que no le llega.
+                                _c.dlnaDevice.value != null
+                                    ? 'video.sidebar.not-while-casting'.i18n
+                                    : 'video.sidebar.vr-single-hint'.i18n,
+                                style: const TextStyle(fontSize: 12),
+                              ),
+                            ],
+                          ),
+                        ),
+                        const SizedBox(width: 10),
+                        fluent.ToggleSwitch(
+                          checked: _c.vrUnaPantalla.value,
+                          onChanged: _c.dlnaDevice.value != null
+                              ? null
+                              : (_) => _c.alternarVrUnaPantalla(),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+        ),
+        const SizedBox(height: 10),
+        fluent.Card(
+          child: Row(
+            children: [
+              Expanded(
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text('video.tutorial.show-again'.i18n),
+                    const SizedBox(height: 2),
+                    Text(
+                      'video.tutorial.show-again-hint'.i18n,
+                      style: const TextStyle(fontSize: 12),
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(width: 10),
+              fluent.Button(
+                onPressed: () => _volverAVerTutorial(context),
+                child: Text('video.tutorial.show-again-action'.i18n),
+              ),
+            ],
+          ),
+        ),
+        const SizedBox(height: 10),
         fluent.Card(
           child: Column(
             mainAxisSize: MainAxisSize.min,
@@ -558,6 +660,63 @@ class _SideBarSettingsState extends State<_SideBarSettings> {
     return ListView(
       padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 10),
       children: [
+        // Ver VideoPlayerController.vrUnaPantalla. Va primero porque cuando
+        // hace falta, hace falta ANTES de poder mirar nada.
+        // El de VR SOLO en videos VR. En uno normal recortaba media imagen
+        // sin motivo, asi que ahi en su lugar va el de llenar la pantalla.
+        Obx(() {
+          // Transmitiendo, ninguno de los dos puede hacer nada.
+          //
+          // Los dos trabajan sobre el reproductor de ACA: el de VR recorta la
+          // imagen con mpv y el de llenar cambia como se encaja el vídeo en la
+          // pantalla. Mientras se transmite, el televisor pide el vídeo por su
+          // cuenta y lo decodifica él, así que ni el recorte ni el encaje le
+          // llegan — para que llegaran habría que reconvertir el vídeo entero
+          // en el teléfono y mandárselo así.
+          //
+          // Antes quedaban tocables: el interruptor se encendía, el recorte se
+          // aplicaba a un reproductor que estaba parado, y el televisor seguía
+          // mostrando la imagen doble. Se veía como que la app no obedecía.
+          final casteando = _c.dlnaDevice.value != null;
+          final esVr = _c.esVideoVr.value;
+          return SwitchListTile(
+            contentPadding: EdgeInsets.zero,
+            value: esVr ? _c.vrUnaPantalla.value : _c.llenarPantalla.value,
+            onChanged: casteando
+                ? null
+                : (v) {
+                    if (esVr) {
+                      _c.alternarVrUnaPantalla();
+                    } else {
+                      _c.llenarPantalla.value = v;
+                    }
+                  },
+            title: Text(
+              esVr
+                  ? 'video.sidebar.vr-single'.i18n
+                  : 'video.sidebar.fill'.i18n,
+            ),
+            subtitle: Text(
+              casteando
+                  ? 'video.sidebar.not-while-casting'.i18n
+                  : esVr
+                      ? 'video.sidebar.vr-single-hint'.i18n
+                      : 'video.sidebar.fill-hint'.i18n,
+              style: const TextStyle(fontSize: 12),
+            ),
+          );
+        }),
+        ListTile(
+          contentPadding: EdgeInsets.zero,
+          leading: const Icon(Icons.school_outlined),
+          title: Text('video.tutorial.show-again'.i18n),
+          subtitle: Text(
+            'video.tutorial.show-again-hint'.i18n,
+            style: const TextStyle(fontSize: 12),
+          ),
+          onTap: () => _volverAVerTutorial(context),
+        ),
+        const Divider(),
         Text(
           'video.sidebar.subtitle.title'.i18n,
           style: TextStyle(color: Theme.of(context).colorScheme.primary),
@@ -827,6 +986,94 @@ class _SideBarSettingsState extends State<_SideBarSettings> {
   }
 }
 
+/// Una fila de una lista donde se elige algo: calidad o servidor.
+///
+/// Existe para que las dos se marquen IGUAL. Estaban escritas por separado y
+/// cada una marcaba lo elegido a su manera —o no lo marcaba—, así que en el
+/// panel de calidad no se sabía cuál estaba puesta.
+///
+/// El activo lleva tres señales y no una: fondo propio, el texto en el color
+/// del app y una tilde. Sobre el fondo oscuro del reproductor, un solo matiz de
+/// color no se distingue.
+class _FilaSeleccionable extends StatelessWidget {
+  const _FilaSeleccionable({
+    required this.texto,
+    required this.activo,
+    required this.onTap,
+  });
+
+  final String texto;
+  final bool activo;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 4),
+      child: Material(
+        color: activo
+            ? HomeTheme.accentPink.withValues(alpha: 0.18)
+            : Colors.transparent,
+        borderRadius: BorderRadius.circular(10),
+        child: ListTile(
+          dense: true,
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(10),
+            side: BorderSide(
+              color: activo
+                  ? HomeTheme.accentPink
+                  : Colors.white.withValues(alpha: 0.12),
+            ),
+          ),
+          title: Text(
+            texto,
+            style: TextStyle(
+              color: activo ? HomeTheme.accentPink : HomeTheme.textPrimary,
+              fontWeight: activo ? FontWeight.w700 : FontWeight.w400,
+            ),
+          ),
+          trailing: activo
+              ? const Icon(Icons.check_rounded,
+                  size: 18, color: HomeTheme.accentPink)
+              : null,
+          onTap: onTap,
+        ),
+      ),
+    );
+  }
+}
+
+/// Lo que se ve cuando una lista del panel no tiene nada.
+///
+/// Antes quedaba un rectangulo negro sin una palabra, que no distingue "no hay"
+/// de "se rompio algo". Es el mismo caso en calidad y en servidores.
+class _PanelVacio extends StatelessWidget {
+  const _PanelVacio({required this.texto});
+  final String texto;
+
+  @override
+  Widget build(BuildContext context) {
+    return Center(
+      child: Padding(
+        padding: const EdgeInsets.all(28),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(Icons.layers_clear_outlined,
+                size: 34, color: Colors.white.withValues(alpha: 0.35)),
+            const SizedBox(height: 12),
+            Text(
+              texto,
+              textAlign: TextAlign.center,
+              style: const TextStyle(color: HomeTheme.textMuted, fontSize: 13),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
 class _QualitySelector extends StatefulWidget {
   const _QualitySelector({
     required this.controller,
@@ -842,19 +1089,26 @@ class _QualitySelectorState extends State<_QualitySelector> {
 
   @override
   Widget build(BuildContext context) {
-    return ListView(
-      children: [
-        for (final quality in _c.qualityMap.entries)
-          ListTile(
-            onTap: () {
-              _c.switchQuality(quality.value);
-              _c.showSidebar.value = false;
-            },
-            title: Text(
-              quality.key,
+    return Obx(
+      () => _c.qualityMap.isEmpty
+          ? _PanelVacio(texto: 'video.no-qualities'.i18n)
+          : ListView(
+              padding: const EdgeInsets.symmetric(vertical: 6, horizontal: 8),
+              children: [
+                for (final quality in _c.qualityMap.entries)
+                  _FilaSeleccionable(
+                    texto: quality.key,
+                    // currentQuality guarda la resolucion que se esta viendo, con el
+                    // mismo nombre que usa el menu (ver etiquetaCalidad), asi que
+                    // alcanza con compararlas.
+                    activo: quality.key == _c.currentQuality.value,
+                    onTap: () {
+                      _c.switchQuality(quality.value);
+                      _c.showSidebar.value = false;
+                    },
+                  ),
+              ],
             ),
-          ),
-      ],
     );
   }
 }
@@ -870,12 +1124,23 @@ class _ServerSelector extends StatelessWidget {
   Widget build(BuildContext context) {
     return Obx(() {
       final current = controller.currentServerName.value;
+      if (controller.availableServers.isEmpty) {
+        return _PanelVacio(texto: 'video.no-servers'.i18n);
+      }
       return ListView(
+        padding: const EdgeInsets.symmetric(vertical: 6, horizontal: 8),
         children: [
           for (final entry in controller.availableServers.entries)
-            ListTile(
-              selected: entry.key == current,
-              title: Text(entry.key),
+            // El activo se marcaba solo con `selected`, que se apoya en el
+            // color de selección del tema: sobre el fondo oscuro del
+            // reproductor la diferencia era casi invisible y no se sabía cuál
+            // estaba puesto. Ahora lleva su propio fondo, el texto en el color
+            // del app y una tilde a la derecha — tres señales en vez de un
+            // matiz. Este selector es el mismo en el teléfono y en escritorio,
+            // así que se ve igual en los dos.
+            _FilaSeleccionable(
+              texto: entry.key,
+              activo: entry.key == current,
               onTap: () {
                 controller.selectServer(entry.key);
                 controller.showSidebar.value = false;

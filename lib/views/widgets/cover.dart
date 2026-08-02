@@ -35,11 +35,22 @@ class Cover extends StatelessWidget {
             height: double.infinity,
             headers: headers,
             alignment: alignment,
+            // Solo el ANCHO decide a qué tamaño se decodifica. El alto NO.
+            //
+            // Flutter guarda la imagen en caché con una clave que incluye el
+            // tamaño de decodificación. Pasando el alto de las restricciones
+            // vivas, esa clave cambiaba en CADA fotograma mientras el
+            // encabezado del detalle se colapsa al hacer scroll: la imagen se
+            // volvía a decodificar entera una y otra vez, y en el rato que
+            // tarda cada decodificación no hay nada que pintar. Eso es el
+            // parpadeo en negro al desplazarse.
+            //
+            // El ancho no cambia al desplazarse en vertical, así que como clave
+            // es estable: se decodifica UNA vez y se reusa todo el scroll. La
+            // proporción la mantiene el propio decodificador, y el recorte al
+            // alto disponible lo hace el BoxFit como siempre.
             cacheWidth: bounded
                 ? (constraints.maxWidth * dpr).ceil().clamp(1, 4096).toInt()
-                : null,
-            cacheHeight: bounded
-                ? (constraints.maxHeight * dpr).ceil().clamp(1, 4096).toInt()
                 : null,
           );
         },

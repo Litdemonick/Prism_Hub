@@ -11,6 +11,7 @@ import 'package:prismhub/views/widgets/detail/detail_background_color.dart';
 import 'package:prismhub/views/widgets/detail/detail_episodes.dart';
 import 'package:prismhub/views/widgets/detail/detail_extension_tile.dart';
 import 'package:prismhub/views/widgets/detail/detail_favorite_button.dart';
+import 'package:prismhub/views/widgets/detail/detail_share_button.dart';
 import 'package:prismhub/views/widgets/detail/detail_overview.dart';
 import 'package:prismhub/utils/i18n.dart';
 import 'package:prismhub/utils/layout.dart';
@@ -20,6 +21,7 @@ import 'package:prismhub/views/widgets/detail/detail_card_tile.dart';
 import 'package:prismhub/views/widgets/detail/detail_tracking_button.dart';
 import 'package:prismhub/views/widgets/home/home_theme.dart';
 import 'package:prismhub/views/widgets/platform_widget.dart';
+import 'package:prismhub/views/widgets/boton_pulsable.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 class DetailPage extends StatefulWidget {
@@ -64,6 +66,28 @@ class _DetailPageState extends State<DetailPage> {
     super.dispose();
   }
 
+  // Funde entre los tres estados de la pantalla —error, cargando y contenido—
+  // en vez de cambiarlos de golpe.
+  //
+  // Antes el salto era seco: la rueda desaparecía y en el mismo fotograma
+  // aparecía la pantalla entera armada, con la portada, el título y las
+  // pestañas de una. Se notaba como un parpadeo, sobre todo cuando la
+  // extensión responde rápido y la rueda apenas alcanza a verse.
+  //
+  // Todos los caminos tienen que devolver ESTO desde la misma posición del
+  // árbol: así Flutter reutiliza el mismo AnimatedSwitcher entre
+  // reconstrucciones y lo único que le cambia es la clave del hijo, que es lo
+  // que dispara la animación. Devolver un AnimatedSwitcher nuevo por rama no
+  // animaría nada.
+  static Widget _transicion(String estado, Widget hijo) => AnimatedSwitcher(
+        // Corto a propósito: es para suavizar el cambio, no para hacer
+        // esperar.
+        duration: const Duration(milliseconds: 240),
+        switchInCurve: Curves.easeOut,
+        switchOutCurve: Curves.easeIn,
+        child: KeyedSubtree(key: ValueKey(estado), child: hijo),
+      );
+
   Widget _buildAndroidDetail(BuildContext context) {
     return Scaffold(
       body: Obx(() {
@@ -75,9 +99,7 @@ class _DetailPageState extends State<DetailPage> {
         }
 
         if (c.error.value.isNotEmpty) {
-          return Center(
-            child: Text(c.error.value),
-          );
+          return _transicion('error', Center(child: Text(c.error.value)));
         }
 
         // Android no miraba isLoading (escritorio sí, más abajo): armaba la
@@ -86,35 +108,38 @@ class _DetailPageState extends State<DetailPage> {
         // hasta que llegaba la respuesta de la extensión. Ahora espera igual
         // que en PC: rueda girando y recién después la info.
         if (c.isLoading.value) {
-          return ColoredBox(
-            color: HomeTheme.bg,
-            child: Stack(
-              children: [
-                const Center(
-                  child: CircularProgressIndicator(
-                    strokeWidth: 3,
-                    valueColor: AlwaysStoppedAnimation(HomeTheme.accentPink),
-                  ),
-                ),
-                // Botón de volver propio: mientras carga no existe todavía
-                // el SliverAppBar que lo trae, y una extensión lenta dejaba
-                // la pantalla sin salida visible.
-                SafeArea(
-                  child: Align(
-                    alignment: Alignment.topLeft,
-                    child: IconButton(
-                      icon: const Icon(Icons.arrow_back,
-                          color: HomeTheme.textPrimary),
-                      // Navigator directo, no RouterUtils: esta rama es solo
-                      // Android, donde la página se empuja con Get.to sobre
-                      // el navegador de GetMaterialApp.
-                      onPressed: () => Navigator.of(context).maybePop(),
+          return _transicion(
+              'cargando',
+              ColoredBox(
+                color: HomeTheme.bg,
+                child: Stack(
+                  children: [
+                    const Center(
+                      child: CircularProgressIndicator(
+                        strokeWidth: 3,
+                        valueColor:
+                            AlwaysStoppedAnimation(HomeTheme.accentPink),
+                      ),
                     ),
-                  ),
+                    // Botón de volver propio: mientras carga no existe todavía
+                    // el SliverAppBar que lo trae, y una extensión lenta dejaba
+                    // la pantalla sin salida visible.
+                    SafeArea(
+                      child: Align(
+                        alignment: Alignment.topLeft,
+                        child: IconButton(
+                          icon: const Icon(Icons.arrow_back,
+                              color: HomeTheme.textPrimary),
+                          // Navigator directo, no RouterUtils: esta rama es solo
+                          // Android, donde la página se empuja con Get.to sobre
+                          // el navegador de GetMaterialApp.
+                          onPressed: () => Navigator.of(context).maybePop(),
+                        ),
+                      ),
+                    ),
+                  ],
                 ),
-              ],
-            ),
-          );
+              ));
         }
 
         final tabs = [
@@ -133,7 +158,16 @@ class _DetailPageState extends State<DetailPage> {
         // ancho de sobra en vez de pelear por la poca altura.
         final isLandscape =
             MediaQuery.of(context).orientation == Orientation.landscape;
-        final heroHeight = isLandscape ? 200.0 : 400.0;
+        // 440 en vertical (antes 400): los botones pasaron a dos filas para que
+        // las etiquetas entren enteras, y el titulo a cuatro lineas porque los
+        // largos se cortaban. Con 400 ese bloque se desbordaba hacia arriba y
+        // se metia debajo del boton de atras.
+        //
+        // Llego a estar en 470 con los botones de 50 de alto. Bajados a 42 y
+        // con menos aire entre filas, el bloque ocupa 30 menos: dejarlo en 470
+        // seria un encabezado innecesariamente alto que empuja los episodios
+        // fuera de la pantalla.
+        final heroHeight = isLandscape ? 200.0 : 440.0;
 
         final content = DefaultTabController(
           length: tabs.length,
@@ -164,7 +198,22 @@ class _DetailPageState extends State<DetailPage> {
                     preferredSize: const Size.fromHeight(48),
                     child: Container(
                       color: HomeTheme.bg,
-                      child: TabBar(tabs: tabs),
+                      // Sin estilar, TabBar usa los colores por defecto de
+                      // Material: el indicador sale MORADO —el color semilla
+                      // del tema, que no es el del app— y debajo queda una
+                      // línea divisoria GRIS que Material 3 dibuja sola. Las
+                      // dos cruzaban la ficha de lado a lado y no pegaban con
+                      // nada del diseño.
+                      child: TabBar(
+                        tabs: tabs,
+                        indicatorColor: HomeTheme.accentPink,
+                        labelColor: HomeTheme.textPrimary,
+                        unselectedLabelColor: HomeTheme.textMuted,
+                        // La franja de arriba ya la da el Container de acá, así
+                        // que la divisoria solo agregaba una raya suelta.
+                        dividerColor: Colors.transparent,
+                        indicatorSize: TabBarIndicatorSize.label,
+                      ),
                     ),
                   ),
                   actions: [
@@ -266,7 +315,7 @@ class _DetailPageState extends State<DetailPage> {
             ],
           );
         }
-        return content;
+        return _transicion('listo', content);
       }),
     );
   }
@@ -274,26 +323,32 @@ class _DetailPageState extends State<DetailPage> {
   Widget _buildDesktopDetail(BuildContext context) {
     return Obx(() {
       if (c.error.value.isNotEmpty) {
-        return ColoredBox(
-          color: HomeTheme.bg,
-          child: Center(
-            child: Text(
-              c.error.value,
-              style: const TextStyle(color: HomeTheme.textPrimary),
-            ),
-          ),
-        );
+        return _transicion(
+            'error',
+            ColoredBox(
+              color: HomeTheme.bg,
+              child: Center(
+                child: Text(
+                  c.error.value,
+                  style: const TextStyle(color: HomeTheme.textPrimary),
+                ),
+              ),
+            ));
       }
 
       if (c.isLoading.value) {
-        return const ColoredBox(
-          color: HomeTheme.bg,
-          child: Center(
-            child: fluent.ProgressRing(activeColor: HomeTheme.accentPink),
-          ),
-        );
+        return _transicion(
+            'cargando',
+            const ColoredBox(
+              color: HomeTheme.bg,
+              child: Center(
+                child: fluent.ProgressRing(activeColor: HomeTheme.accentPink),
+              ),
+            ));
       }
-      return Stack(
+      // Nombrado y no devuelto directo: envolver el Stack entero en la llamada
+      // reindentaría sus trescientas y pico de líneas por un cambio de dos.
+      final contenido = Stack(
         children: [
           RepaintBoundary(
             child: Cover(
@@ -361,7 +416,15 @@ class _DetailPageState extends State<DetailPage> {
                               Row(
                                 children: [
                                   // 收藏按钮
-                                  DetailFavoriteButton(tag: widget.tag),
+                                  // Ver BotonPulsable: la misma señal al
+                                  // tocar que en el telefono.
+                                  BotonPulsable(
+                                      child: DetailFavoriteButton(
+                                          tag: widget.tag)),
+                                  const SizedBox(width: 8),
+                                  BotonPulsable(
+                                      child:
+                                          DetailShareButton(tag: widget.tag)),
                                   const SizedBox(width: 8),
                                   // Se oculta solo en películas — ver
                                   // DetailFinishedButton.
@@ -624,6 +687,7 @@ class _DetailPageState extends State<DetailPage> {
           ))
         ],
       );
+      return _transicion('listo', contenido);
     });
   }
 

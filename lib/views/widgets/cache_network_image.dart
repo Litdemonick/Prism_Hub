@@ -86,12 +86,22 @@ class _CacheNetWorkImagePicState extends State<CacheNetWorkImagePic> {
   // oportunidad real, no quedar bloqueado por el fallo anterior.
   String get _failureKey => '${widget.url}|${widget.headers ?? ''}';
 
+  // True mientras se reintenta una portada que ya habia fallado. Sirve para no
+  // vaciar la tarjeta durante ese reintento: si no, al cumplirse la ventana
+  // CUALQUIER reconstruccion —pasar el mouse por encima hace setState— pasaba
+  // por el estado "cargando", que devuelve una caja vacia, y la imagen
+  // desaparecia a la vista. Mostrando el arte de respaldo hasta que el
+  // reintento termine, la tarjeta nunca queda en blanco: o sigue igual, o
+  // aparece la portada real.
+  bool _reintentando = false;
+
   bool get _failed {
     final cuando = _fallosRecientes[_failureKey];
     if (cuando == null) return false;
     if (DateTime.now().difference(cuando) < _ventanaDeFallo) return true;
     // Se cumplio la ventana: se olvida y se le da otra oportunidad.
     _fallosRecientes.remove(_failureKey);
+    _reintentando = true;
     return false;
   }
 
@@ -105,6 +115,7 @@ class _CacheNetWorkImagePicState extends State<CacheNetWorkImagePic> {
   // siga contando en contra de una URL que evidentemente ya funciona.
   void _markLoaded() {
     _fallosRecientes.remove(_failureKey);
+    _reintentando = false;
   }
 
   // Branded placeholder for a cover that failed to load — the source site
@@ -179,6 +190,9 @@ class _CacheNetWorkImagePicState extends State<CacheNetWorkImagePic> {
       loadStateChanged: (state) {
         switch (state.extendedImageLoadState) {
           case LoadState.loading:
+            // Reintento de una que ya habia fallado: se mantiene el arte de
+            // respaldo en vez de vaciar la tarjeta (ver _reintentando).
+            if (_reintentando) return _errorBuild();
             return widget.placeholder ?? const SizedBox();
           case LoadState.completed:
             // Cargo bien: se olvida cualquier fallo anterior de esta URL.

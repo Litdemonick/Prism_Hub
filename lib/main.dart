@@ -25,6 +25,7 @@ import 'package:prismhub/utils/i18n.dart';
 import 'package:prismhub/utils/prismhub_storage.dart';
 import 'package:prismhub/utils/application.dart';
 import 'package:prismhub/views/widgets/platform_widget.dart';
+import 'package:prismhub/utils/compartir.dart';
 import 'package:window_manager/window_manager.dart';
 import 'package:package_info_plus/package_info_plus.dart';
 
@@ -184,14 +185,35 @@ void main(List<String> args) async {
           await windowManager.setMinimumSize(minWindowSize);
           await _restaurarGeometria(size, offsetGuardado);
         } catch (e, st) {
-          logger.warning('No se pudo restaurar la geometría de la ventana', e, st);
+          logger.warning(
+              'No se pudo restaurar la geometría de la ventana', e, st);
         } finally {
-          // SIEMPRE, pase lo que pase arriba. El runner nativo ya NO muestra la
-          // ventana por su cuenta (ver windows/runner/flutter_window.cpp): si
-          // este show() no corriera, la app quedaría sin ninguna ventana
-          // visible y solo se la vería en el administrador de tareas.
-          await windowManager.show();
-          await windowManager.focus();
+          // La ventana se muestra recién cuando Flutter YA pintó algo.
+          //
+          // Antes se mostraba acá mismo, y eso deja un hueco: en este punto la
+          // geometría ya está puesta pero runApp todavía no corrió, así que el
+          // motor no tiene ni un fotograma dibujado al tamaño nuevo. Lo que se
+          // ve en ese hueco es la superficie vieja —del tamaño con el que se
+          // creó la ventana— estirada o encogida dentro del marco nuevo: el
+          // contenido chico en una esquina con franjas negras alrededor.
+          //
+          // En release el hueco son milisegundos y casi no se nota. Con
+          // `flutter run` la compilación en caliente lo estira muchísimo, que
+          // es por qué ahí se ve siempre.
+          //
+          // Ver _mostrarVentanaCuandoHayaFotograma: se muestra en el primer
+          // post-frame, con red de seguridad por si ese fotograma nunca llega.
+          // El tamaño REAL que quedó, no el pedido: si Windows lo ajustó (otro
+          // monitor, otra escala), esperar a que la superficie mida el pedido
+          // sería esperar algo que nunca va a pasar.
+          var medida = size;
+          try {
+            final real = await windowManager.getSize();
+            if (real.width > 0 && real.height > 0) medida = real;
+          } catch (_) {
+            // Con el tamaño pedido alcanza; para eso está la tolerancia.
+          }
+          _mostrarVentanaCuandoHayaFotograma(medida);
         }
       });
     }
@@ -204,10 +226,90 @@ void main(List<String> args) async {
       SystemChrome.setSystemUIOverlayStyle(style);
     }
 
+    // Si la app se abrió por un enlace compartido, se anota para navegar
+    // cuando el árbol ya exista. No se usa como ruta inicial a propósito: así
+    // el arranque es el de siempre y la ficha queda ENCIMA de la pantalla
+    // principal, con su botón de volver funcionando como cualquier otra.
+    Compartir.enlacePendiente = Compartir.enlaceDeArranque(args);
+
     runApp(const _AppRoot());
   }, (error, stack) {
     logger.severe("", error, stack);
   });
+}
+
+/// Muestra la ventana en cuanto Flutter haya pintado su primer fotograma.
+///
+/// Mostrarla antes deja ver la superficie vieja dentro del marco nuevo (ver
+/// dónde se llama). Esperando al primer fotograma, lo primero que se ve ya está
+/// dibujado al tamaño correcto.
+///
+/// La red de seguridad NO es opcional: el runner nativo ya no muestra la
+/// ventana por su cuenta (ver windows/runner/flutter_window.cpp), así que si el
+/// primer fotograma no llegara —un fallo al construir el árbol, por ejemplo— la
+/// app quedaría corriendo sin ninguna ventana visible, solo en el administrador
+/// de tareas. Pasado el plazo se muestra igual, aunque se vea mal: es mejor una
+/// ventana fea que ninguna.
+void _mostrarVentanaCuandoHayaFotograma(Size esperada) {
+  var mostrada = false;
+  Future<void> mostrar() async {
+    if (mostrada) return;
+    mostrada = true;
+    try {
+      await windowManager.show();
+      await windowManager.focus();
+    } catch (e, st) {
+      logger.warning('No se pudo mostrar la ventana', e, st);
+    }
+  }
+
+  // Esperar UN fotograma no alcanzaba.
+  //
+  // La ventana la crea el runner nativo con un tamaño, y recién después se le
+  // pide el guardado. Ese cambio de tamaño llega al motor como un WM_SIZE, que
+  // es asincrónico: si Flutter alcanza a pintar su primer cuadro antes de que
+  // llegue, ese cuadro está dibujado al tamaño VIEJO. Mostrando ahí se ve
+  // exactamente lo que se veía — el contenido chico arrinconado dentro de un
+  // marco más grande, con franjas negras arriba y a la derecha.
+  //
+  // Así que además de que haya cuadro, se espera a que la superficie mida lo
+  // que mide el marco y se quede quieta unos cuadros seguidos. La tolerancia
+  // absorbe el grosor del borde de la ventana, que no es parte del área que
+  // Flutter dibuja.
+  Size? anterior;
+  var estables = 0;
+  var cuadros = 0;
+  void comprobar(Duration _) {
+    if (mostrada) return;
+    cuadros++;
+    final vista = WidgetsBinding.instance.platformDispatcher.implicitView;
+    if (vista != null && vista.devicePixelRatio > 0) {
+      final actual = vista.physicalSize / vista.devicePixelRatio;
+      estables = (anterior != null && actual == anterior) ? estables + 1 : 0;
+      anterior = actual;
+      final coincide = (actual.width - esperada.width).abs() <= 24 &&
+          (actual.height - esperada.height).abs() <= 24;
+      if (coincide && estables >= 2) {
+        mostrar();
+        return;
+      }
+    }
+    // ~1,3 s a 60 cuadros: si en ese rato nunca coincidió, mostrarla igual es
+    // mejor que dejar al usuario mirando la nada.
+    if (cuadros > 80) {
+      mostrar();
+      return;
+    }
+    WidgetsBinding.instance.addPostFrameCallback(comprobar);
+    // Sin esto no habría más cuadros que mirar: con la pantalla quieta, Flutter
+    // no dibuja de nuevo y el callback no se volvería a llamar nunca.
+    WidgetsBinding.instance.scheduleFrame();
+  }
+
+  WidgetsBinding.instance.addPostFrameCallback(comprobar);
+  // Dos segundos: de sobra para el primer fotograma incluso arrancando en
+  // frío, y poco como para que un arranque roto no parezca un cuelgue.
+  Timer(const Duration(seconds: 2), mostrar);
 }
 
 /// Deja la ventana en la posición y el tamaño de la sesión anterior, y
@@ -331,6 +433,42 @@ class _AppRootState extends State<_AppRoot> {
     }
     await minDuration;
     if (mounted) setState(() => _ready = true);
+    _abrirEnlacePendiente();
+    // Android entrega los enlaces por su propio canal, no por argumentos: el
+    // que abrio la app y tambien los que llegan con la app ya abierta.
+    unawaited(Compartir.escucharAndroid(_irAlEnlace));
+  }
+
+  /// Abre la ficha del enlace con el que se arrancó, si hubo uno.
+  ///
+  /// Va DESPUÉS de que todo lo de arriba terminó, y no antes: sin las
+  /// extensiones cargadas la ficha no tendría con qué resolverse y se abriría
+  /// directo en "extensión no encontrada" aunque estuviera instalada.
+  ///
+  /// Se navega a la ruta interna de siempre —la misma que usa un toque en una
+  /// tarjeta— así el enlace pasa por las mismas comprobaciones: extensión
+  /// instalada, activada, sin actualización pendiente, y la pregunta de +18. No
+  /// hay una entrada paralela que se saltee nada de eso.
+  void _abrirEnlacePendiente() {
+    final uri = Compartir.enlacePendiente;
+    if (uri == null) return;
+    // Se limpia ANTES de navegar: si algo reconstruye esta pantalla, el enlace
+    // ya no está y no se vuelve a abrir la misma ficha encima.
+    Compartir.enlacePendiente = null;
+    _irAlEnlace(uri);
+  }
+
+  /// Navega a la ficha de un enlace ya validado.
+  void _irAlEnlace(Uri uri) {
+    final ruta = Compartir.rutaInterna(uri);
+    if (ruta == null) return;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      try {
+        router.go(ruta);
+      } catch (e, st) {
+        logger.warning('No se pudo abrir el enlace compartido', e, st);
+      }
+    });
   }
 
   @override

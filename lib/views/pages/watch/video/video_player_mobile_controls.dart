@@ -32,8 +32,30 @@ class _VideoPlayerMobileControlsState extends State<VideoPlayerMobileControls> {
   final _subtitleViewKey = GlobalKey<SubtitleViewState>();
   bool _showControls = true;
   double _currentVolume = 0;
+  // Amplificación por ENCIMA del volumen del sistema, en por ciento.
+  //
+  // Deslizar hacia arriba sube el volumen del teléfono, y ahí se terminaba:
+  // con el sistema al máximo y una pista grabada baja no quedaba nada por
+  // hacer. Pasado ese punto, seguir deslizando amplifica desde el reproductor
+  // —que es lo único que puede dar más de lo que se grabó—, hasta el techo de
+  // VideoPlayerController.volumenMaximo.
+  //
+  // 100 = sin amplificar, o sea el comportamiento de siempre.
+  double _boost = 100;
   bool _isAdjusting = false;
   bool _isLongPress = false;
+  // Velocidad del adelantado con el dedo apoyado.
+  //
+  // Estaba en 3x y se veia a tirones. No era un problema del gesto sino de
+  // trabajo: a 3x el decodificador tiene que sacar el triple de cuadros por
+  // segundo y ademas hay que reajustar el tono del audio sobre la marcha. En
+  // el telefono eso no entra, asi que empieza a saltear cuadros y se ve peor
+  // que el video normal — justo lo contrario de lo que uno espera al adelantar.
+  //
+  // A 2x el trabajo extra es la mitad y es la velocidad que usan los
+  // reproductores conocidos para este mismo gesto. Se deja con nombre para que
+  // cambiarla sea tocar un solo numero.
+  static const double _velocidadSostenida = 2.0;
   // Cuenta de dedos apoyados en la pantalla — sin esto, pellizcar con 2 dedos
   // (que el usuario espera que no haga nada, no hay zoom por pellizco, solo
   // doble tap) igual disparaba onVerticalDragUpdate con el movimiento de uno
@@ -42,6 +64,7 @@ class _VideoPlayerMobileControlsState extends State<VideoPlayerMobileControls> {
   Timer? _timer;
   Worker? _webViewWorker;
   Worker? _resumeWorker;
+  Worker? _tutorialWorker;
   // Debounce: ignores taps within 600 ms to prevent double-trigger on fast touch.
   DateTime? _lastTap;
   bool _debounce([Duration d = const Duration(milliseconds: 600)]) {
@@ -83,6 +106,34 @@ class _VideoPlayerMobileControlsState extends State<VideoPlayerMobileControls> {
   int? _saltoVisible;
   Timer? _saltoTimer;
 
+  /// Aviso corto en el centro-arriba, aparte del cartel de segundos.
+  ///
+  /// Sirve para decir "el video esta pausado": adelantando con doble toque con
+  /// el video en pausa, la barra se movia pero la imagen no, y parecia que el
+  /// salto no habia funcionado.
+  String? _avisoCentro;
+  Timer? _avisoTimer;
+
+  void _mostrarAviso(String texto) {
+    if (!mounted) return;
+    // Transmitiendo, el aviso va DENTRO del panel del centro, en el renglon del
+    // estado. Como caja aparte quedaba una segunda caja oscura encima de la
+    // primera; adentro es una sola cosa que cambia de texto.
+    if (_c.dlnaDevice.value != null) {
+      _c.castAviso.value = texto;
+      _avisoTimer?.cancel();
+      _avisoTimer = Timer(const Duration(milliseconds: 1600), () {
+        _c.castAviso.value = null;
+      });
+      return;
+    }
+    setState(() => _avisoCentro = texto);
+    _avisoTimer?.cancel();
+    _avisoTimer = Timer(const Duration(milliseconds: 1100), () {
+      if (mounted) setState(() => _avisoCentro = null);
+    });
+  }
+
   void _mostrarSalto(int segundos) {
     setState(() => _saltoVisible = segundos);
     _saltoTimer?.cancel();
@@ -117,7 +168,17 @@ class _VideoPlayerMobileControlsState extends State<VideoPlayerMobileControls> {
     // Mostrar diálogo de continuación cuando el controlador emite la señal.
     _resumeWorker = ever(_c.resumePrompt, (secs) {
       if (secs == null || !mounted) return;
+      // Con el tutorial puesto NO se muestra: salia encima y aceptarlo mandaba
+      // a reproducir con el tutorial todavia tapando la pantalla. No se
+      // descarta, se espera — el worker de abajo lo saca al cerrarse.
+      if (_c.tutorialArriba.value) return;
       _showResumeDialog(secs);
+    });
+    // Al cerrarse el tutorial, si habia quedado un aviso pendiente, ahora si.
+    _tutorialWorker = ever(_c.tutorialArriba, (arriba) {
+      if (arriba == true || !mounted) return;
+      final secs = _c.resumePrompt.value;
+      if (secs != null) _showResumeDialog(secs);
     });
   }
 
@@ -125,6 +186,8 @@ class _VideoPlayerMobileControlsState extends State<VideoPlayerMobileControls> {
   void dispose() {
     _webViewWorker?.dispose();
     _resumeWorker?.dispose();
+    _tutorialWorker?.dispose();
+    _avisoTimer?.cancel();
     _saltoTimer?.cancel();
     _timer?.cancel();
     super.dispose();
@@ -249,16 +312,37 @@ class _VideoPlayerMobileControlsState extends State<VideoPlayerMobileControls> {
                       //     con HLS.
                       //  2. Salto en curso (barra, teclas o flechas).
                       //  3. Buffer vacío durante la reproducción.
-                      opacity: ((!_c.isGettingWatchData.value &&
+                      // Casteando no se muestra NINGUNA rueda: el reproductor
+                      // de aca esta parado a proposito, asi que "cargando" y
+                      // "sin buffer" no describen nada de lo que pasa en el
+                      // televisor. Era esto lo que aparecia al adelantar.
+                      opacity: (_c.dlnaDevice.value == null &&
+                              ((!_c.isGettingWatchData.value &&
                                   !_c.hasRenderedFrame.value &&
                                   // Ver el comentario equivalente en los
                                   // controles de escritorio.
                                   _c.error.value.isEmpty &&
+                                  // El aviso de "el servidor falló, tocá para
+                                  // reproducir" espera una acción del usuario:
+                                  // nada está cargando y la rueda no tiene por
+                                  // qué girar. Faltaba esta condición y se veía
+                                  // dando vueltas DETRÁS del aviso, que encima
+                                  // hace parecer que si uno espera se arregla
+                                  // solo. El fallo de servidor no se guarda en
+                                  // `error` —tiene su propio campo— así que la
+                                  // comprobación de arriba no lo cubría.
+                                  _c.serverFailedMessage.value.isEmpty &&
+                                  // Esperando que se elija/confirme servidor:
+                                  // el boton de play esta ahi pidiendo un
+                                  // toque y no hay nada cargando. La rueda
+                                  // girando detras hacia parecer que si uno
+                                  // espera arranca solo.
+                                  !_c.awaitingServerChoice.value &&
                                   !_c.isWebViewActive.value) ||
                               (_c.hasRenderedFrame.value &&
                                   (_c.isSeeking.value ||
                                       (_c.isPlaying.value &&
-                                          _c.isActuallyBuffering.value))))
+                                          _c.isActuallyBuffering.value)))))
                           ? 1
                           : 0,
                       child: const Center(
@@ -328,9 +412,22 @@ class _VideoPlayerMobileControlsState extends State<VideoPlayerMobileControls> {
                     mainAxisSize: MainAxisSize.min,
                     children: [
                       if (_isLongPress)
-                        const Padding(
-                          padding: EdgeInsets.all(8.0),
-                          child: Text('Playing at 3x speed'),
+                        Padding(
+                          padding: const EdgeInsets.all(8.0),
+                          // El texto estaba escrito a mano y en ingles, con el
+                          // "3x" clavado adentro: cambiar la velocidad dejaba
+                          // el cartel mintiendo. Ahora sale la de verdad y en
+                          // el idioma del usuario.
+                          child: Text(
+                            FlutterI18n.translate(
+                              context,
+                              'video.holding-fast-forward',
+                              translationParams: {
+                                'x': _velocidadSostenida.toStringAsFixed(
+                                    _velocidadSostenida % 1 == 0 ? 0 : 1)
+                              },
+                            ),
+                          ),
                         ),
                       if (_isAdjusting)
                         Padding(
@@ -340,8 +437,15 @@ class _VideoPlayerMobileControlsState extends State<VideoPlayerMobileControls> {
                             children: [
                               const Icon(Icons.volume_up),
                               const SizedBox(width: 5),
+                              // Con amplificación se muestra ESA, que es lo
+                              // que está cambiando el gesto en ese tramo. Sin
+                              // el signo, 150 y 100 se leerían igual de
+                              // "normales" y no se entendería que una está
+                              // amplificada.
                               Text(
-                                (_currentVolume * 100).toStringAsFixed(0),
+                                _boost > 100
+                                    ? '+${(_boost - 100).toStringAsFixed(0)}%'
+                                    : (_currentVolume * 100).toStringAsFixed(0),
                               ),
                             ],
                           ),
@@ -351,64 +455,28 @@ class _VideoPlayerMobileControlsState extends State<VideoPlayerMobileControls> {
                 ),
               ),
             ),
-            // Devolución visual del doble toque: cuántos segundos se
-            // saltó y hacia dónde. Va sobre la capa de gestos para que no la
-            // tape, y con IgnorePointer para no robar toques.
-            Positioned.fill(
-              child: IgnorePointer(
-                child: Align(
-                    // Arriba del centro, no en el centro: ahí está la rueda de
-                    // carga, y al saltar a un tramo sin cargar aparecen las dos
-                    // cosas a la vez y se pisaban. Misma posición que en PC.
-                    alignment: const Alignment(0, -0.55),
-                    child: AnimatedScale(
-                      // Rebote corto: aparece de golpe y se asienta. Con solo la
-                      // opacidad a 150ms el cartel se sentia lento justo cuando
-                      // el gesto ya paso.
-                      duration: const Duration(milliseconds: 120),
-                      curve: Curves.easeOutBack,
-                      scale: _saltoVisible == null ? 0.85 : 1,
-                      child: AnimatedOpacity(
-                        duration: const Duration(milliseconds: 90),
-                        opacity: _saltoVisible == null ? 0 : 1,
-                        child: Container(
-                          padding: const EdgeInsets.symmetric(
-                              horizontal: 18, vertical: 10),
-                          decoration: BoxDecoration(
-                            color: const Color(0xB3000000),
-                            borderRadius: BorderRadius.circular(999),
-                            border: Border.all(color: HomeTheme.accentPink),
-                          ),
-                          child: Row(
-                            mainAxisSize: MainAxisSize.min,
-                            children: [
-                              Icon(
-                                (_saltoVisible ?? 0) < 0
-                                    ? Icons.fast_rewind
-                                    : Icons.fast_forward,
-                                color: HomeTheme.accentPink,
-                                size: 20,
-                              ),
-                              const SizedBox(width: 8),
-                              Text(
-                                '${(_saltoVisible ?? 0).abs()} s',
-                                style: const TextStyle(
-                                  color: Colors.white,
-                                  fontWeight: FontWeight.w700,
-                                  fontSize: 15,
-                                ),
-                              ),
-                            ],
-                          ),
-                        ),
-                      ),
-                    )),
-              ),
-            ),
             // 手势层
             Positioned.fill(
               child: Listener(
-                onPointerDown: (_) => _activePointers++,
+                onPointerDown: (_) {
+                  _activePointers++;
+                  // Un dedo mas apoyado MIENTRAS se mantiene apretado sube la
+                  // velocidad: x2, x4, x8, x16. Es el gesto que ya se usa en
+                  // otras apps para adelantar rapido sin soltar.
+                  //
+                  // Solo transmitiendo: aca el sostenido usa la velocidad fija
+                  // que el usuario configuro, y cambiarla a mitad de gesto seria
+                  // otra cosa distinta de la que ya conoce.
+                  if (_isLongPress &&
+                      _activePointers > 1 &&
+                      _c.dlnaDevice.value != null) {
+                    final actual = _c.castVelocidadPedida.value;
+                    // Techo en 16: mas rapido que eso ningun aparato lo hace
+                    // util, y varios directamente lo rechazan.
+                    final siguiente = actual >= 16 ? 2 : actual * 2;
+                    unawaited(_c.pedirVelocidadCast(siguiente));
+                  }
+                },
                 onPointerUp: (_) {
                   if (_activePointers > 0) _activePointers--;
                 },
@@ -428,7 +496,18 @@ class _VideoPlayerMobileControlsState extends State<VideoPlayerMobileControls> {
                   onDoubleTapDown: (details) {
                     if (!_debounce(const Duration(milliseconds: 400))) return;
                     final dx = details.localPosition.dx;
-                    final width = LayoutUtils.width / 3;
+                    // Un tercio del ancho REAL de esta zona, no del de la
+                    // pantalla.
+                    //
+                    // localPosition viene medido contra esta zona, pero el
+                    // tercio se calculaba con el ancho de la pantalla entera.
+                    // Con la barra lateral abierta la zona es mas angosta, asi
+                    // que los limites quedaban corridos a la derecha: el centro
+                    // visual caia dentro del tercio "izquierdo" y en vez de
+                    // pausar retrocedia, y el tercio derecho no se alcanzaba
+                    // nunca.
+                    final ancho = (context.size?.width ?? LayoutUtils.width);
+                    final width = ancho / 3;
                     // Los 10 segundos estaban fijos en el código, así que el
                     // ajuste "Saltar intervalo" no tenía ningún efecto en
                     // celular. En el teléfono el doble toque es el ÚNICO
@@ -445,14 +524,40 @@ class _VideoPlayerMobileControlsState extends State<VideoPlayerMobileControls> {
                         milliseconds:
                             (_saltoConfigurado(SettingKey.arrowRight) * 1000)
                                 .round());
+                    final enPausa = !_c.isPlaying.value;
+                    final casteando = _c.dlnaDevice.value != null;
+                    // Transmitiendo y en pausa, saltar no va a ningun lado: el
+                    // televisor no se mueve hasta que se reanude. Se dice corto
+                    // y no se intenta el salto, en vez de mandar una orden que
+                    // el aparato va a ignorar.
+                    final noSePuedeSaltar = casteando && enPausa;
+                    if (noSePuedeSaltar && dx < width * 2 && dx >= width) {
+                      // El centro sigue pausando/reanudando aunque este pausado.
+                      _c.playOrPause();
+                      return;
+                    }
+                    if (noSePuedeSaltar) {
+                      _mostrarAviso('video.paused-cant-skip'.i18n);
+                      return;
+                    }
                     if (dx < width) {
                       _c.seek(_c.position.value - atras);
                       _mostrarSalto(-atras.inSeconds);
+                      // En pausa (mirando aca) la barra se mueve pero la imagen
+                      // no, y sin decir nada parece que el salto no hizo efecto.
+                      if (enPausa) _mostrarAviso('video.paused'.i18n);
                     } else if (dx > width * 2) {
                       _c.seek(_c.position.value + adelante);
                       _mostrarSalto(adelante.inSeconds);
+                      if (enPausa) _mostrarAviso('video.paused'.i18n);
                     } else {
                       _c.playOrPause();
+                      // Casteando no hace falta: el panel del centro ya dice si
+                      // esta andando o en pausa, y repetirlo encima solo tapa.
+                      // Estaba andando, asi que este toque lo pausa.
+                      if (!enPausa && !casteando) {
+                        _mostrarAviso('video.paused'.i18n);
+                      }
                     }
                   },
                   // Deslizar vertical = volumen, en cualquier parte de la
@@ -462,11 +567,55 @@ class _VideoPlayerMobileControlsState extends State<VideoPlayerMobileControls> {
                   // esto, un pellizco (que no debe hacer nada, no hay zoom por
                   // pellizco) igual subía/bajaba el volumen con el movimiento
                   // de uno de los 2 dedos.
+                  // Arrastrar de lado mueve la camara del VR.
+                  //
+                  // No pisa nada de lo que ya habia: el vertical es el volumen
+                  // y el toque suelto pausa. Este gesto solo existe con el modo
+                  // VR puesto; sin el, arrastrar de lado no hacia nada y sigue
+                  // sin hacerlo.
+                  //
+                  // El desplazamiento va en fraccion del ancho de la pantalla,
+                  // asi el recorrido se siente igual en un telefono chico que
+                  // en una tablet. Negativo porque arrastrar hacia la izquierda
+                  // tiene que mover la vista hacia la derecha, como al empujar
+                  // una foto.
+                  onHorizontalDragUpdate: (details) {
+                    if (_activePointers > 1) return;
+                    if (!_c.vrUnaPantalla.value) return;
+                    final ancho = MediaQuery.of(context).size.width;
+                    if (ancho <= 0) return;
+                    _c.moverVr(-details.delta.dx / ancho);
+                  },
                   onVerticalDragUpdate: (details) {
                     if (_activePointers > 1) return;
                     final add = details.delta.dy / 500;
-                    _currentVolume = (_currentVolume - add).clamp(0, 1);
-                    VolumeController().setVolume(_currentVolume);
+                    // Transmitiendo, el volumen que importa es el del APARATO.
+                    // El del telefono no sale por ningun lado, porque el sonido
+                    // lo esta haciendo el televisor.
+                    if (_c.dlnaDevice.value != null) {
+                      _c.ajustarVolumenCast(-add);
+                      return;
+                    }
+                    // Dos tramos con un solo gesto: primero el volumen del
+                    // teléfono y, una vez al tope, la amplificación del
+                    // reproductor. Al bajar se recorren al revés — se baja
+                    // primero la amplificación y recién después el sistema,
+                    // porque si no bajar el volumen no haría nada audible
+                    // hasta soltar todo el aumento.
+                    if (add < 0 && _currentVolume >= 1) {
+                      // Subiendo con el sistema ya al máximo: amplificar.
+                      _boost = (_boost - add * 200)
+                          .clamp(100.0, VideoPlayerController.volumenMaximo);
+                      _c.player.setVolume(_boost);
+                    } else if (add > 0 && _boost > 100) {
+                      // Bajando y todavía amplificado: soltar el aumento.
+                      _boost = (_boost - add * 200)
+                          .clamp(100.0, VideoPlayerController.volumenMaximo);
+                      _c.player.setVolume(_boost);
+                    } else {
+                      _currentVolume = (_currentVolume - add).clamp(0, 1);
+                      VolumeController().setVolume(_currentVolume);
+                    }
                     _isAdjusting = true;
                     setState(() {});
                   },
@@ -476,12 +625,26 @@ class _VideoPlayerMobileControlsState extends State<VideoPlayerMobileControls> {
                   },
                   onLongPressStart: (details) {
                     _isLongPress = true;
-                    _c.player.setRate(3.0);
+                    // Transmitiendo se le pide al APARATO, que es quien esta
+                    // reproduciendo. Arranca en x2 y sube tocando con otro dedo
+                    // sin soltar (ver onPointerDown del Listener de arriba).
+                    if (_c.dlnaDevice.value != null) {
+                      unawaited(_c.pedirVelocidadCast(2));
+                      setState(() {});
+                      return;
+                    }
+                    _c.player.setRate(_velocidadSostenida);
                     setState(() {});
                   },
                   onLongPressEnd: (details) {
-                    _c.player.setRate(_c.currentSpeed.value);
                     _isLongPress = false;
+                    if (_c.dlnaDevice.value != null) {
+                      // Al soltar vuelve a la normal, como el sostenido de aca.
+                      unawaited(_c.pedirVelocidadCast(1));
+                      setState(() {});
+                      return;
+                    }
+                    _c.player.setRate(_c.currentSpeed.value);
                     setState(() {});
                   },
                   child: const SizedBox.expand(),
@@ -492,6 +655,17 @@ class _VideoPlayerMobileControlsState extends State<VideoPlayerMobileControls> {
             Positioned.fill(
               child: Center(
                 child: Obx(() {
+                  // Casteando: esto va ANTES que todo lo demas.
+                  //
+                  // Mientras el video corre en el televisor, el reproductor de
+                  // aca esta parado a proposito, asi que los avisos de carga y
+                  // de buffer no describen nada real — y era justo eso lo que
+                  // hacia aparecer la rueda girando al adelantar. En su lugar
+                  // se muestra donde se esta viendo, y nada mas: los botones de
+                  // reintentar y desconectar viven arriba, fuera del video.
+                  if (_c.dlnaDevice.value != null) {
+                    return _PanelCasteando(controller: _c);
+                  }
                   if (_c.error.value.isNotEmpty) {
                     return Column(
                       mainAxisSize: MainAxisSize.min,
@@ -624,36 +798,6 @@ class _VideoPlayerMobileControlsState extends State<VideoPlayerMobileControls> {
                             _c.isPlaying.value) {
                           return const SizedBox.shrink();
                         }
-                        if (_c.dlnaDevice.value != null) {
-                          return Column(
-                            mainAxisSize: MainAxisSize.min,
-                            children: [
-                              Text(
-                                FlutterI18n.translate(
-                                  context,
-                                  'video.cast-device',
-                                  translationParams: {
-                                    'device':
-                                        _c.dlnaDevice.value!.info.friendlyName,
-                                  },
-                                ),
-                                style: const TextStyle(
-                                  fontSize: 16,
-                                  fontWeight: FontWeight.bold,
-                                ),
-                              ),
-                              const SizedBox(height: 10),
-                              FilledButton(
-                                onPressed: () {
-                                  _c.disconnectDLNADevice();
-                                },
-                                child: Text(
-                                  'common.disconnect'.i18n,
-                                ),
-                              ),
-                            ],
-                          );
-                        }
                         return const SizedBox.shrink();
                       },
                     );
@@ -717,6 +861,114 @@ class _VideoPlayerMobileControlsState extends State<VideoPlayerMobileControls> {
                     ),
                   );
                 }),
+              ),
+            ),
+            // Devolución visual del doble toque: cuántos segundos se saltó y
+            // hacia dónde.
+            //
+            // Va DESPUÉS del bloque del centro a propósito. Estaba antes, así
+            // que al transmitir el panel de casteo —que ocupa el centro— se
+            // dibujaba encima y el cartel quedaba tapado justo cuando más hacía
+            // falta: al hacer doble toque mientras se castea, no se veía nada y
+            // parecía que el gesto no había hecho efecto.
+            //
+            // IgnorePointer para no robar toques a la capa de gestos.
+            Positioned.fill(
+              child: IgnorePointer(
+                child: Align(
+                    // Del LADO que se toco, no en el medio.
+                    //
+                    // En el medio no dice nada de por si: el gesto es a un lado
+                    // y la respuesta aparecia en el otro extremo de la pantalla,
+                    // ademas de pelearse con lo que haya en el centro. Puesto
+                    // donde cayo el dedo, se entiende sin leer.
+                    alignment: Alignment(
+                      (_saltoVisible ?? 0) < 0 ? -0.62 : 0.62,
+                      0,
+                    ),
+                    child: AnimatedScale(
+                      // Rebote corto: aparece de golpe y se asienta. Con solo la
+                      // opacidad a 150ms el cartel se sentia lento justo cuando
+                      // el gesto ya paso.
+                      duration: const Duration(milliseconds: 120),
+                      curve: Curves.easeOutBack,
+                      scale: _saltoVisible == null ? 0.85 : 1,
+                      child: AnimatedOpacity(
+                        duration: const Duration(milliseconds: 90),
+                        opacity: _saltoVisible == null ? 0 : 1,
+                        child: Container(
+                          padding: const EdgeInsets.symmetric(
+                              horizontal: 18, vertical: 10),
+                          decoration: BoxDecoration(
+                            color: const Color(0xB3000000),
+                            borderRadius: BorderRadius.circular(999),
+                            border: Border.all(color: HomeTheme.accentPink),
+                          ),
+                          child: Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              Icon(
+                                (_saltoVisible ?? 0) < 0
+                                    ? Icons.fast_rewind
+                                    : Icons.fast_forward,
+                                color: HomeTheme.accentPink,
+                                size: 20,
+                              ),
+                              const SizedBox(width: 8),
+                              Text(
+                                '${(_saltoVisible ?? 0).abs()} s',
+                                style: const TextStyle(
+                                  color: Colors.white,
+                                  fontWeight: FontWeight.w700,
+                                  fontSize: 15,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ),
+                    )),
+              ),
+            ),
+            // Aviso corto arriba del centro ("Vídeo pausado"). Va aparte del
+            // cartel de segundos porque los dos pueden salir a la vez: se
+            // adelanta con el vídeo pausado y hacen falta las dos cosas.
+            Positioned.fill(
+              child: IgnorePointer(
+                child: Align(
+                  alignment: const Alignment(0, -0.62),
+                  child: AnimatedOpacity(
+                    duration: const Duration(milliseconds: 120),
+                    opacity: _avisoCentro == null ? 0 : 1,
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 16, vertical: 8),
+                      decoration: BoxDecoration(
+                        color: const Color(0xCC000000),
+                        borderRadius: BorderRadius.circular(999),
+                        border: Border.all(
+                          color: Colors.white.withValues(alpha: 0.18),
+                        ),
+                      ),
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          const Icon(Icons.pause_rounded,
+                              size: 17, color: Colors.white),
+                          const SizedBox(width: 7),
+                          Text(
+                            _avisoCentro ?? '',
+                            style: const TextStyle(
+                              color: Colors.white,
+                              fontSize: 13,
+                              fontWeight: FontWeight.w600,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                ),
               ),
             ),
             // Header y footer — se ocultan al tocar la pantalla y vuelven a
@@ -799,9 +1051,267 @@ class _VideoPlayerMobileControlsState extends State<VideoPlayerMobileControls> {
   }
 }
 
+/// Lo que se ve en el medio mientras el video corre en otro aparato.
+///
+/// No lleva botones a proposito: reintentar y desconectar viven en la barra de
+/// arriba. Antes estaban aca en el medio, tapando el centro de la pantalla, que
+/// es justo donde uno toca para pausar.
+class _PanelCasteando extends StatefulWidget {
+  const _PanelCasteando({required this.controller});
+  final VideoPlayerController controller;
+
+  @override
+  State<_PanelCasteando> createState() => _PanelCasteandoState();
+}
+
+class _PanelCasteandoState extends State<_PanelCasteando>
+    with SingleTickerProviderStateMixin {
+  late final AnimationController _anim = AnimationController(
+    vsync: this,
+    duration: const Duration(milliseconds: 1600),
+  )..repeat();
+
+  @override
+  void dispose() {
+    _anim.dispose();
+    super.dispose();
+  }
+
+  VideoPlayerController get controller => widget.controller;
+
+  @override
+  Widget build(BuildContext context) {
+    // IgnorePointer: el panel esta ENCIMA del detector de gestos, asi que su
+    // caja se comia los toques justo en el centro de la pantalla — que es donde
+    // el propio panel dice que hay que tocar para pausar.
+    return IgnorePointer(child: _contenido());
+  }
+
+  Widget _contenido() {
+    return Obx(() {
+      final device = controller.dlnaDevice.value;
+      if (device == null) return const SizedBox.shrink();
+      // Enganchando: mandarle el video al aparato y que arranque puede tardar
+      // varios segundos, y en ese rato no se veia nada — parecia que el toque
+      // no habia hecho efecto.
+      final cambiandoEpisodio = controller.castCambiandoEpisodio.value;
+      final buscando = controller.castBuscando.value;
+      // "conectando" tambien enciende la rueda: buscar un momento del video en
+      // el aparato es otra espera, y se muestra igual.
+      // castEsperandoPlay: el aparato ya acepto pero todavia no se ve nada.
+      // Aceptar y empezar a reproducir son dos cosas distintas.
+      final conectando = controller.castConectando.value ||
+          controller.castEsperandoPlay.value ||
+          cambiandoEpisodio ||
+          buscando;
+      final reproduciendo = controller.isPlaying.value;
+      return Container(
+        margin: const EdgeInsets.symmetric(horizontal: 32),
+        padding: const EdgeInsets.symmetric(horizontal: 26, vertical: 22),
+        decoration: BoxDecoration(
+          color: Colors.black.withValues(alpha: 0.72),
+          borderRadius: BorderRadius.circular(16),
+          border: Border.all(color: Colors.white.withValues(alpha: 0.12)),
+        ),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            if (conectando)
+              const SizedBox(
+                width: 44,
+                height: 44,
+                child: CircularProgressIndicator(
+                  strokeWidth: 3.5,
+                  valueColor:
+                      AlwaysStoppedAnimation<Color>(HomeTheme.accentPink),
+                ),
+              )
+            else
+              Icon(
+                reproduciendo
+                    ? Icons.cast_connected
+                    : Icons.pause_circle_outline,
+                size: 44,
+                color: HomeTheme.accentPink,
+              ),
+            const SizedBox(height: 14),
+            Text(
+              device.info.friendlyName,
+              textAlign: TextAlign.center,
+              style: const TextStyle(
+                fontSize: 17,
+                fontWeight: FontWeight.bold,
+                color: Colors.white,
+              ),
+            ),
+            const SizedBox(height: 6),
+            // Un aviso puntual (por ejemplo, que no se puede saltar porque
+            // esta pausado) reemplaza al estado por un momento, resaltado. Asi
+            // todo lo que el usuario necesita leer esta en el mismo lugar.
+            Builder(builder: (context) {
+              final aviso = controller.castAviso.value;
+              // Acelerado DESDE el aparato: la barra corre distinto y sin
+              // decirlo no se entiende por que.
+              final velocidad = controller.castVelocidad.value;
+              final estado = cambiandoEpisodio
+                  ? 'video.cast-changing-episode'.i18n
+                  : buscando
+                      ? 'video.cast-seeking'.i18n
+                      : conectando
+                          ? 'video.cast-connecting'.i18n
+                      : !reproduciendo
+                          ? 'video.cast-paused-here'.i18n
+                          : velocidad != null
+                              ? FlutterI18n.translate(
+                                  context,
+                                  'video.cast-speed',
+                                  translationParams: {'speed': velocidad},
+                                )
+                              : 'video.cast-on-device'.i18n;
+              return Text(
+                aviso ?? estado,
+                textAlign: TextAlign.center,
+                style: TextStyle(
+                  fontSize: 13,
+                  height: 1.4,
+                  fontWeight: aviso == null ? FontWeight.normal : FontWeight.w700,
+                  color: aviso == null
+                      ? Colors.white.withValues(alpha: 0.75)
+                      : HomeTheme.accentPink,
+                ),
+              );
+            }),
+            // La ayuda de gestos, dibujada y animada en vez de explicada en un
+            // parrafo. Un renglon largo diciendo "toca el centro para pausar y
+            // los costados para adelantar" se lee una vez y estorba siempre;
+            // tres iconos que laten se entienden de un vistazo.
+            //
+            // Solo cuando ya esta transmitiendo: mientras engancha no hay nada
+            // que controlar todavia.
+            if (!conectando) ...[
+              const SizedBox(height: 18),
+              _AyudaGestosCast(anim: _anim),
+              const SizedBox(height: 8),
+              // Sin esto los tres iconos no dicen COMO se activan, y un toque
+              // solo no hace nada de eso: muestra los controles.
+              Text(
+                'video.cast-hint-doubletap'.i18n,
+                style: TextStyle(
+                  fontSize: 10.5,
+                  fontStyle: FontStyle.italic,
+                  color: Colors.white.withValues(alpha: 0.55),
+                ),
+              ),
+            ],
+          ],
+        ),
+      );
+    });
+  }
+}
+
+/// Tres pistas que laten por turno: retroceder, pausar, adelantar.
+class _AyudaGestosCast extends StatelessWidget {
+  const _AyudaGestosCast({required this.anim});
+  final AnimationController anim;
+
+  @override
+  Widget build(BuildContext context) {
+    return AnimatedBuilder(
+      animation: anim,
+      builder: (context, _) {
+        // Cada pista se ilumina en su tercio del ciclo, de izquierda a derecha,
+        // que es el orden en que estan en la pantalla.
+        final activo = (anim.value * 3).floor().clamp(0, 2);
+        return Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            _pista(Icons.replay_10_rounded, 'video.cast-hint-back'.i18n,
+                activo == 0),
+            const SizedBox(width: 14),
+            _pista(Icons.touch_app_rounded, 'video.cast-hint-pause'.i18n,
+                activo == 1),
+            const SizedBox(width: 14),
+            _pista(Icons.forward_10_rounded, 'video.cast-hint-forward'.i18n,
+                activo == 2),
+          ],
+        );
+      },
+    );
+  }
+
+  Widget _pista(IconData icono, String texto, bool encendido) {
+    return AnimatedScale(
+      duration: const Duration(milliseconds: 260),
+      scale: encendido ? 1.0 : 0.9,
+      child: AnimatedOpacity(
+        duration: const Duration(milliseconds: 260),
+        opacity: encendido ? 1 : 0.45,
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Container(
+              padding: const EdgeInsets.all(9),
+              decoration: BoxDecoration(
+                shape: BoxShape.circle,
+                color: encendido
+                    ? HomeTheme.accentPink.withValues(alpha: 0.22)
+                    : Colors.white.withValues(alpha: 0.06),
+                border: Border.all(
+                  color: encendido
+                      ? HomeTheme.accentPink
+                      : Colors.white.withValues(alpha: 0.16),
+                ),
+              ),
+              child: Icon(icono, size: 19, color: Colors.white),
+            ),
+            const SizedBox(height: 6),
+            Text(
+              texto,
+              style: TextStyle(
+                fontSize: 10.5,
+                color: Colors.white.withValues(alpha: 0.8),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
 class _Header extends StatelessWidget {
   const _Header({required this.controller});
   final VideoPlayerController controller;
+
+  Future<void> _confirmarDesconectar(BuildContext context) async {
+    final aparato = controller.dlnaDevice.value;
+    if (aparato == null) return;
+    final corta = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: Text('video.cast-disconnect-title'.i18n),
+        content: Text(
+          FlutterI18n.translate(
+            context,
+            'video.cast-disconnect-confirm',
+            translationParams: {'device': aparato.info.friendlyName},
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(false),
+            child: Text('common.cancel'.i18n),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.of(context).pop(true),
+            child: Text('common.disconnect'.i18n),
+          ),
+        ],
+      ),
+    );
+    if (corta == true) controller.disconnectDLNADevice();
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -855,33 +1365,81 @@ class _Header extends StatelessWidget {
             }),
           ),
           // DLNA
-          IconButton(
-            icon: const Icon(Icons.cast),
-            onPressed: () {
-              showModalBottomSheet(
-                context: context,
-                useSafeArea: true,
-                showDragHandle: true,
-                isScrollControlled: true,
-                builder: (context) {
-                  return DraggableScrollableSheet(
-                    expand: false,
-                    builder: (context, scrollController) {
-                      return SingleChildScrollView(
-                        controller: scrollController,
-                        child: VideoPlayerCast(
-                          onDeviceSelected: (device) {
-                            controller.connectDLNADevice(device);
-                            Get.back();
-                          },
-                        ),
-                      );
-                    },
-                  );
-                },
+          // Apagado mientras el reproductor nativo no este andando: el
+          // televisor pide el mismo video por su cuenta y se topa con lo mismo,
+          // asi que ofrecerlo igual solo termina en pantalla negra alla. Se
+          // avisa el motivo al tocarlo. Ver puedeCastear en el controlador.
+          Obx(() {
+            // Casteando: reintentar y desconectar, arriba y fuera del video.
+            // Antes estaban en el medio de la pantalla, encima de la imagen y
+            // justo donde se toca para pausar.
+            if (controller.dlnaDevice.value != null) {
+              return Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  // Bloqueado mientras reintenta: tocarlo de nuevo no encola
+                  // otro intento, y sin apagarlo no se notaba que ya estaba
+                  // trabajando.
+                  IconButton(
+                    tooltip: 'common.retry'.i18n,
+                    icon: Icon(
+                      Icons.refresh,
+                      color: controller.castConectando.value
+                          ? Colors.white.withAlpha(90)
+                          : Colors.white,
+                    ),
+                    onPressed: controller.castConectando.value
+                        ? null
+                        : () => controller.reintentarCast(),
+                  ),
+                  // Pregunta antes de cortar: es un icono chico al lado de
+                  // otros, y tocarlo por error dejaba la pantalla grande sin
+                  // nada en el medio de un episodio.
+                  IconButton(
+                    tooltip: 'common.disconnect'.i18n,
+                    icon: const Icon(Icons.cast_connected,
+                        color: HomeTheme.accentPink),
+                    onPressed: () => _confirmarDesconectar(context),
+                  ),
+                ],
               );
-            },
-          ),
+            }
+            if (!controller.puedeCastear) {
+              return IconButton(
+                icon: Icon(Icons.cast, color: Colors.white.withAlpha(90)),
+                onPressed: () => controller.sendMessage(
+                  Message(Text(controller.motivoSinCast)),
+                ),
+              );
+            }
+            return IconButton(
+              icon: const Icon(Icons.cast),
+              onPressed: () {
+                showModalBottomSheet(
+                  context: context,
+                  useSafeArea: true,
+                  showDragHandle: true,
+                  isScrollControlled: true,
+                  builder: (context) {
+                    return DraggableScrollableSheet(
+                      expand: false,
+                      builder: (context, scrollController) {
+                        return SingleChildScrollView(
+                          controller: scrollController,
+                          child: VideoPlayerCast(
+                            onDeviceSelected: (device) {
+                              controller.connectDLNADevice(device);
+                              Get.back();
+                            },
+                          ),
+                        );
+                      },
+                    );
+                  },
+                );
+              },
+            );
+          }),
           // 设置按钮
           IconButton(
             icon: const Icon(Icons.settings),
@@ -979,6 +1537,14 @@ class _Footer extends StatelessWidget {
                       icon: Icon(Icons.play_arrow, size: 30),
                     );
                   }
+                  // Mientras engancha con el aparato no hay a quien mandarle
+                  // nada todavia.
+                  if (controller.castConectando.value) {
+                    return const IconButton(
+                      onPressed: null,
+                      icon: Icon(Icons.play_arrow, size: 30),
+                    );
+                  }
                   if (controller.isPlaying.value) {
                     return IconButton(
                       onPressed: controller.playOrPause,
@@ -1041,7 +1607,12 @@ class _Footer extends StatelessWidget {
                   }
                   return FilledButton.tonal(
                     onPressed: () {
-                      if (controller.qualityMap.isEmpty) {
+                      // Ver hayCalidades: las calidades pueden venir del
+                      // playlist HLS o de la cabecera X-Servers de la
+                      // extensión. Mirando solo el primero, este botón decía
+                      // "no hay calidades" en vídeos que traen siete, y en el
+                      // teléfono es la única forma de cambiarla.
+                      if (!controller.hayCalidades) {
                         controller.sendMessage(
                           Message(
                             Text(
@@ -1051,7 +1622,7 @@ class _Footer extends StatelessWidget {
                         );
                         return;
                       }
-                      controller.toggleSideBar(SidebarTab.qualitys);
+                      controller.toggleSideBar(controller.pestanaDeCalidad);
                     },
                     style: ButtonStyle(
                       padding: WidgetStateProperty.all(
@@ -1117,7 +1688,11 @@ class _Footer extends StatelessWidget {
                 // visible tapando el video; a pedido explícito ahora se
                 // esconde detrás de este botón, igual que calidad/pistas.
                 Obx(() {
-                  if (controller.availableServers.isEmpty) {
+                  // Ver servidoresSonAparte: con las extensiones que entregan
+                  // un MP4 por resolución, este botón y el de calidad abrían la
+                  // MISMA lista. Quedaban dos botones pegados haciendo lo
+                  // mismo, uno de ellos sin decir de qué era.
+                  if (!controller.servidoresSonAparte) {
                     return const SizedBox.shrink();
                   }
                   return IconButton(

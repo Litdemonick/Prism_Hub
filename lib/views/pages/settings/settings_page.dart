@@ -522,6 +522,17 @@ class _SettingsPageState extends State<SettingsPage> {
                 PrismHubStorage.setSetting(SettingKey.checkNewEpisodes, value);
               },
             ),
+            // Apagado por defecto (== true, no != false): que el reproductor
+            // siga solo es algo que se pide, no algo que deba pasar sin avisar.
+            SettingsSwitchTile(
+              title: 'settings.autoplay-next'.i18n,
+              buildSubtitle: () => 'settings.autoplay-next-subtitle'.i18n,
+              buildValue: () =>
+                  PrismHubStorage.getSetting(SettingKey.autoPlayNext) == true,
+              onChanged: (value) {
+                PrismHubStorage.setSetting(SettingKey.autoPlayNext, value);
+              },
+            ),
             // NSFW
             SettingsSwitchTile(
               title: 'settings.nsfw'.i18n,
@@ -534,6 +545,11 @@ class _SettingsPageState extends State<SettingsPage> {
                 // de nacimiento, una sola vez por instalación. Si cancela o no
                 // llega a la edad, el interruptor no se mueve.
                 if (value && !await Nsfw18AgeDialog.confirmar(context)) {
+                  // mounted: el dialogo de edad espera al usuario, y en ese
+                  // rato la pantalla de ajustes puede irse (atras, cambio de
+                  // pestaña). setState sobre un widget ya desmontado tira
+                  // "setState() called after dispose()".
+                  if (!mounted) return;
                   setState(() {});
                   return;
                 }

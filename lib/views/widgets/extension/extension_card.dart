@@ -497,6 +497,12 @@ class _ExtensionCardState extends State<ExtensionCard> {
                             ),
                             onPressed: () async {
                               await _install();
+                              // mounted: instalar y desinstalar tardan (red + escritura en disco) y
+                              // la tarjeta puede irse mientras tanto —cambiando de pestaña, tocando
+                              // atras, o simplemente porque la lista se refresco—. setState sobre un
+                              // widget ya desmontado tira "setState() called after dispose()" y se
+                              // lleva la pantalla puesta.
+                              if (!mounted) return;
                               setState(() {});
                             },
                             child: Text('extension-repo.upgrade'.i18n),
@@ -512,6 +518,8 @@ class _ExtensionCardState extends State<ExtensionCard> {
                           ),
                           onPressed: () async {
                             await ExtensionUtils.uninstall(widget.package);
+                            // Ver la nota de mounted mas arriba.
+                            if (!mounted) return;
                             setState(() {
                               isInstall = false;
                             });
@@ -685,6 +693,8 @@ class _ExtensionCardState extends State<ExtensionCard> {
                                           ),
                                           onPressed: () async {
                                             await _install();
+                                            // Ver la nota de mounted arriba.
+                                            if (!mounted) return;
                                             setState(() {});
                                           },
                                         ),
@@ -712,6 +722,8 @@ class _ExtensionCardState extends State<ExtensionCard> {
                                         onPressed: () async {
                                           await ExtensionUtils.uninstall(
                                               widget.package);
+                                          // Ver la nota de mounted arriba.
+                                          if (!mounted) return;
                                           setState(() {
                                             isInstall = false;
                                           });

@@ -160,6 +160,18 @@ class WebViewPlayerPage extends StatefulWidget {
   State<WebViewPlayerPage> createState() => _WebViewPlayerPageState();
 }
 
+/// Puerta publica para pausar el reproductor por WebView desde afuera.
+///
+/// El estado de la pantalla es privado —como corresponde— pero el aviso de
+/// actualizacion necesita poder callarlo antes de taparla. Esto expone SOLO esa
+/// accion, sin abrir el resto.
+class WebViewPlayerPause {
+  WebViewPlayerPause._();
+
+  static Future<void> pausarLoQueSuene() =>
+      _WebViewPlayerPageState.pausarLoQueSuene();
+}
+
 class _WebViewPlayerPageState extends State<WebViewPlayerPage>
     with WidgetsBindingObserver {
   bool _loading = true;
@@ -185,6 +197,42 @@ class _WebViewPlayerPageState extends State<WebViewPlayerPage>
   // antes).
   WebViewEnvironment? _environment;
   InAppWebViewController? _webViewController;
+
+  /// El reproductor por WebView que esta abierto ahora, si hay alguno.
+  ///
+  /// Mismo motivo que el registro del reproductor nativo: el aviso de
+  /// actualizacion sale encima de cualquier pantalla y bloquea, pero sin esto
+  /// el video del WebView seguia sonando detras. Aca el audio no lo maneja
+  /// media_kit sino la pagina, asi que hay que pedirselo a ella aparte.
+  static _WebViewPlayerPageState? _enUso;
+
+  /// Pausa lo que se este reproduciendo dentro del WebView.
+  ///
+  /// Se le pide a la propia pagina que pause sus <video> y <audio>. No hay una
+  /// forma de "pausar el WebView" que sirva en las tres plataformas: pausar los
+  /// temporizadores existe solo en Android, y cerrar la vista seria demasiado
+  /// —el usuario podria posponer la actualizacion y querer seguir mirando—.
+  ///
+  /// Se recorren TODOS los elementos y no solo el primero: muchas paginas de
+  /// estos sitios tienen ademas un anuncio en video suelto, que es justamente
+  /// el que sigue sonando cuando uno cree que ya pauso.
+  static Future<void> pausarLoQueSuene() async {
+    final controller = _enUso?._webViewController;
+    if (controller == null) return;
+    try {
+      await controller.evaluateJavascript(source: '''
+        (function () {
+          var m = document.querySelectorAll('video, audio');
+          for (var i = 0; i < m.length; i++) {
+            try { m[i].pause(); } catch (e) {}
+          }
+        })();
+      ''').timeout(const Duration(seconds: 2));
+    } catch (_) {
+      // Pagina cerrandose, sin JavaScript, o el puente caido: no es motivo
+      // para no mostrar el aviso.
+    }
+  }
   Timer? _progressTimer;
   Timer? _loadTimeoutTimer;
   Timer? _heartbeatTimer;
@@ -587,6 +635,9 @@ class _WebViewPlayerPageState extends State<WebViewPlayerPage>
 
   @override
   void dispose() {
+    // Solo si sigo siendo yo: al encadenar episodios puede haberse registrado
+    // ya la vista siguiente, y borrarla dejaria el aviso sin a quien pausar.
+    if (identical(_enUso, this)) _enUso = null;
     if (!_returningToNativePlayer) {
       _shutdownWebView();
     }
@@ -703,6 +754,7 @@ class _WebViewPlayerPageState extends State<WebViewPlayerPage>
                     ),
                     onWebViewCreated: (controller) {
                       _webViewController = controller;
+                      _enUso = this;
                     },
                     // Puentea el fullscreen HTML5 del propio sitio (el botón que se ve
                     // dentro de su reproductor) con el fullscreen real de la ventana

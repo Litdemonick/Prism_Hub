@@ -848,13 +848,44 @@ async function stringify(callback) {
   // multi-página además de eso multiplicaba los pedidos (hasta ~50 por
   // búsqueda con esa extensión) y era la causa principal de que la barra
   // de carga quedara colgada un buen rato — confirmado en vivo.
+  //
+  // Segunda red de seguridad, esta sobre los FILTROS: si con los filtros
+  // puestos no aparece nada, se vuelve a buscar sin ellos.
+  //
+  // El motivo es que los filtros del panel se quedan puestos de una búsqueda a
+  // la otra. Alguien deja "Género: Romance" de un rato antes, después escribe
+  // el nombre de una obra que existe pero está catalogada en otro género, y la
+  // pantalla dice "no se encontraron resultados" — que es falso: la obra está,
+  // solo que no en ese género. Y no hay ninguna pista de que la culpa la tiene
+  // un filtro que quedó de antes.
+  //
+  // Cuando el reintento sí encuentra, se avisa por [onFiltrosIgnorados] para
+  // poder decirlo en pantalla: mostrar resultados que no cumplen los filtros
+  // sin explicar por qué sería igual de confuso que no mostrar nada.
+  //
+  // No cuesta pedidos de más en el caso normal: solo corre cuando ya se agotó
+  // todo lo anterior sin un solo resultado.
   Future<List<ExtensionListItem>> searchFirstPageWithBroadening(
     String kw, {
     Map<String, List<String>>? filter,
+    void Function()? onFiltrosIgnorados,
   }) async {
-    for (final query in SearchText.broadenedRemoteQueries(kw)) {
+    final queries = SearchText.broadenedRemoteQueries(kw);
+    for (final query in queries) {
       final result = await search(query, 1, filter: filter);
       if (result.isNotEmpty) return result;
+    }
+
+    final hayFiltros =
+        filter != null && filter.values.any((v) => v.isNotEmpty);
+    if (!hayFiltros) return const [];
+
+    for (final query in queries) {
+      final result = await search(query, 1);
+      if (result.isNotEmpty) {
+        onFiltrosIgnorados?.call();
+        return result;
+      }
     }
     return const [];
   }
@@ -957,19 +988,69 @@ async function stringify(callback) {
       );
       final data = await _decodeJsonResult(jsResult.stringResult);
 
-      switch (typeHint ?? extension.type) {
-        case ExtensionType.bangumi:
-          final result = ExtensionBangumiWatch.fromJson(data);
-          result.headers ??= await _defaultHeaders;
-          return result;
-        case ExtensionType.manga:
-          final result = ExtensionMangaWatch.fromJson(data);
-          result.headers ??= await _defaultHeaders;
-          return result;
-        default:
-          return ExtensionFikushonWatch.fromJson(data);
+      // Lo que devuelve la extension se valida ANTES de armar el modelo.
+      //
+      // Cada lector espera una forma distinta: el de video una url, el de
+      // paginas una lista de imagenes, el de texto una lista de parrafos. Si la
+      // extension devuelve otra cosa, el modelo generado hacia el cast a secas
+      // y la app moria con "type 'Null' is not a subtype of type
+      // 'List<dynamic>'" — un error que no le dice nada a nadie y que ademas
+      // parecia un fallo de la app y no de la extension. Paso de verdad con
+      // Ikigai, que devolvia texto para un capitulo de comic.
+      //
+      // No se intenta adivinar ni adaptar la forma a proposito: que una
+      // extension devuelva algo que no corresponde es un error suyo, y taparlo
+      // en silencio significa mostrar contenido equivocado sin que nadie se
+      // entere. Se avisa con el nombre de la extension y que fue lo que pasó.
+      final tipo = typeHint ?? extension.type;
+      try {
+        switch (tipo) {
+          case ExtensionType.bangumi:
+            final result = ExtensionBangumiWatch.fromJson(data);
+            result.headers ??= await _defaultHeaders;
+            return result;
+          case ExtensionType.manga:
+            final result = ExtensionMangaWatch.fromJson(data);
+            result.headers ??= await _defaultHeaders;
+            return result;
+          default:
+            return ExtensionFikushonWatch.fromJson(data);
+        }
+      } catch (e) {
+        throw Exception(_erroDeFormaWatch(extension.name, tipo, data));
       }
     });
+  }
+
+  // Arma el aviso de "la extension devolvio algo que no puedo leer".
+  //
+  // Se mira que trajo de verdad para poder decirlo en criollo. El caso mas
+  // comun, y el mas confuso de todos, es el cruce entre los dos lectores de
+  // lectura: un capitulo de texto abierto con el lector de paginas se veia como
+  // un error de tipos de Dart, sin ninguna pista de que la culpa era del tipo
+  // que la extension le puso a la obra.
+  static String _erroDeFormaWatch(
+    String nombre,
+    ExtensionType tipo,
+    Map<String, dynamic> data,
+  ) {
+    final trajoTexto = data['content'] is List;
+    final trajoPaginas = data['urls'] is List;
+    final trajoVideo = data['url'] is String;
+
+    if (tipo == ExtensionType.manga && trajoTexto) {
+      return '$nombre: este capítulo vino como texto pero la obra figura como '
+          'cómic, así que no se puede abrir con el lector de páginas. '
+          'Es un problema de la extensión.';
+    }
+    if (tipo == ExtensionType.fikushon && trajoPaginas) {
+      return '$nombre: este capítulo vino como imágenes pero la obra figura '
+          'como novela. Es un problema de la extensión.';
+    }
+    if (tipo == ExtensionType.bangumi && !trajoVideo) {
+      return '$nombre: no devolvió el enlace del vídeo de este episodio.';
+    }
+    return '$nombre: el capítulo llegó incompleto o mal formado.';
   }
 
   Future<String> checkUpdate(url) async {
