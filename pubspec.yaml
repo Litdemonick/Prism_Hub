@@ -71,6 +71,19 @@ dependencies:
   android_intent_plus: ^4.0.2
   crypto: ^3.0.3
   pointycastle: ^3.7.3
+  # No se usa directamente: entra por audio_service -> flutter_cache_manager.
+  #
+  # Se fija por DEBAJO de la 2.4.0 a proposito. De ahi en adelante el paquete
+  # se partio y el codigo de Android quedo en sqflite_android, que usa
+  # constantes de Android 16 (VERSION_CODES.BAKLAVA) y metodos de Java 19
+  # (Locale.of, Thread.threadId). Con eso el APK no compila:
+  #
+  #   error: cannot find symbol  Build.VERSION_CODES.BAKLAVA
+  #   error: cannot find symbol  Locale.of(String,String,String)
+  #
+  # flutter_cache_manager pide ^2.3.3+1, asi que esta version le sirve igual.
+  # Se puede soltar cuando el proyecto suba el Java de los modulos de plugin.
+  sqflite: ">=2.3.3+1 <2.4.0"
   extended_image: ^8.2.0
   flutter_hls_parser: ^2.0.1
   image_gallery_saver_plus: ^5.0.0

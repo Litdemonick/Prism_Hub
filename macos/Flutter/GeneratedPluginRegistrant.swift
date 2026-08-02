@@ -21,7 +21,7 @@ import package_info_plus
 import screen_brightness_macos
 import screen_retriever_macos
 import share_plus
-import sqflite_darwin
+import sqflite
 import url_launcher_macos
 import wakelock_plus
 import window_manager
