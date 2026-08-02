@@ -302,6 +302,60 @@ class VideoPlayerController extends GetxController with WidgetsBindingObserver {
   ///    elige UNA al abrir y no la cambia nunca, aunque la red no la sostenga.
   ///  - `frame-drop-count`: si el equipo no llega a decodificar. Colchón lleno y
   ///    cuadros tirados = es la máquina, no la conexión.
+  /// Muestreo periódico mientras se reproduce.
+  ///
+  /// Medir SOLO en el momento del parón no sirvió: al primer cuadro mpv todavía
+  /// no calculó nada y devolvía siempre los mismos valores fijos (0.833078 s de
+  /// colchón y un caudal de dos cifras, imposible para vídeo que se está
+  /// viendo). Lo que hace falta es la CURVA: cómo evoluciona el colchón mientras
+  /// corre. Si baja de 3 a 0 con el caudal por debajo de lo que pide la
+  /// variante, es la conexión; si se mantiene lleno y aun así se para, no lo es.
+  Timer? _muestreo;
+
+  void _arrancarMuestreo() {
+    _muestreo?.cancel();
+    _muestreo = Timer.periodic(const Duration(seconds: 5), (_) {
+      if (_disposed) return;
+      // Casteando manda el aparato: el reproductor de acá está parado y sus
+      // números no dirían nada de lo que está pasando en el televisor.
+      if (dlnaDevice.value != null) return;
+      // En pausa tampoco: no se está consumiendo colchón, así que no hay nada
+      // que diagnosticar y solo ensuciaría el registro.
+      if (!isPlaying.value) return;
+      unawaited(_medir('en marcha'));
+    });
+  }
+
+  /// Deja escrito qué configuración quedó REALMENTE puesta en mpv.
+  ///
+  /// Se llama una vez al abrir. Ponerle una opción a mpv y que la acepte no es
+  /// lo mismo: un nombre viejo, un valor que no entiende o una opción que no
+  /// aplica a esta fuente se ignoran en silencio. Sin leerlas de vuelta se
+  /// termina discutiendo sobre ajustes que quizá nunca estuvieron activos.
+  Future<void> _confirmarAjustes() async {
+    if (_disposed || player.platform is! NativePlayer) return;
+    final np = player.platform as NativePlayer;
+    try {
+      final ajustes = <String>[];
+      for (final nombre in const [
+        'cache',
+        'cache-secs',
+        'cache-pause-initial',
+        'cache-pause-wait',
+        'demuxer-readahead-secs',
+        'demuxer-max-bytes',
+        'hls-bitrate',
+        'demuxer-lavf-o',
+      ]) {
+        final valor = (await np.getProperty(nombre)).trim();
+        ajustes.add('$nombre=${valor.isEmpty ? '—' : valor}');
+      }
+      logger.info('mpv quedó con: ${ajustes.join(' · ')}');
+    } catch (e) {
+      logger.info('no se pudo releer la configuración de mpv: $e');
+    }
+  }
+
   Future<void> _medir(String motivo) async {
     if (_disposed || player.platform is! NativePlayer) return;
     final np = player.platform as NativePlayer;
@@ -322,6 +376,7 @@ class VideoPlayerController extends GetxController with WidgetsBindingObserver {
 
   void _arrancarVigilanteDeAtasco() {
     _vigilanteDeAtasco?.cancel();
+    _muestreo?.cancel();
     _vigilanteDeAtasco =
         Timer.periodic(const Duration(milliseconds: 500), (_) {
       if (_disposed) return;
@@ -1055,6 +1110,8 @@ class VideoPlayerController extends GetxController with WidgetsBindingObserver {
       if (scheme != null && proxyAddr.isNotEmpty) {
         await np.setProperty('http-proxy', '$scheme://$proxyAddr');
       }
+      // Y se relee lo que quedó puesto de verdad. Ver _confirmarAjustes.
+      unawaited(_confirmarAjustes());
     }
     play();
 
@@ -1447,6 +1504,7 @@ class VideoPlayerController extends GetxController with WidgetsBindingObserver {
 
     // Vigilante de imagen congelada: ver imagenCongelada.
     _arrancarVigilanteDeAtasco();
+    _arrancarMuestreo();
 
     // Vigía de buffering atascado — ver comentario en _bufferingStallTimer.
     _addSubscription(player.stream.buffering.listen((buffering) {
@@ -1981,6 +2039,7 @@ class VideoPlayerController extends GetxController with WidgetsBindingObserver {
     // disparando sobre una extensión que ya no puede contestar.
     ++_switchServerGen;
     _vigilanteDeAtasco?.cancel();
+    _muestreo?.cancel();
     isGettingWatchData.value = false;
     isSeeking.value = false;
     _seekWatchdog?.cancel();
@@ -2164,6 +2223,7 @@ class VideoPlayerController extends GetxController with WidgetsBindingObserver {
     _esperaPlayTimer?.cancel();
     _pedidoCastTimer?.cancel();
     _vigilanteDeAtasco?.cancel();
+    _muestreo?.cancel();
     imagenCongelada.value = false;
     final device = dlnaDevice.value;
     // Se anota que se estaba casteando y por donde iba ANTES de soltar nada.
