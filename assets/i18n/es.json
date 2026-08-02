@@ -266,6 +266,7 @@
     "backup-import-working": "Cargando la copia",
     "backup-import-working-hint": "Metiendo tu historial y tus favoritos. No cierres la app.",
     "backup-import-from": "Cargado desde «{nombre}»",
+    "backup-too-big": "Ese archivo es demasiado grande para ser una copia de PrismHub. Fijate que sea el archivo correcto.",
     "export-log": "Exportar registros",
     "export-log-subtitle": "Exportar archivo de registros",
     "advanced": "Avanzado",

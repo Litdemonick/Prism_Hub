@@ -182,36 +182,52 @@ class CopiaSeguridad {
     final quienEs = leerSobre(contenido);
     final sobre = jsonDecode(contenido) as Map<String, dynamic>;
 
-    // Se abre con la clave. Todo lo de arriba se comprobó primero, para no
-    // hacer escribir la clave y después fallar por otro motivo.
-    final Map<String, dynamic> raiz;
-    if (sobre['cifrado'] == true) {
-      if (clave.isEmpty) {
-        throw const CopiaInvalida('Esta copia tiene clave. Escribila.');
-      }
-      final abierto = CopiaCifrado.abrir(
-        sal: '${sobre['sal']}',
-        nonce: '${sobre['nonce']}',
-        datos: '${sobre['datos']}',
-        clave: clave,
+    // SOLO se aceptan copias cifradas. Sin excepciones.
+    //
+    // Antes había una rama que leía un archivo sin cifrar "por si alguna vez
+    // existiera". Eso era un agujero: cualquiera podía escribir a mano un JSON
+    // con {"app":"PrismHub","formato":1,"historial":[…]} y meterlo entero sin
+    // saber ninguna clave. El cifrado es lo que hace que el contenido de una
+    // copia solo pueda venir de alguien que tiene la clave del usuario; dejar
+    // una puerta al lado lo anulaba.
+    //
+    // Esta versión no genera copias sin cifrar, así que no se rompe nada.
+    if (sobre['cifrado'] != true) {
+      throw const CopiaInvalida(
+        'Este archivo no es una copia protegida de PrismHub. '
+        'Solo se pueden importar copias hechas desde la app.',
       );
-      if (abierto == null) {
-        // No se distingue "clave equivocada" de "archivo dañado" a propósito:
-        // no hay forma de saberlo sin arriesgarse a usar datos que no son.
-        throw const CopiaInvalida(
-          'La clave no es la de este archivo, o el archivo está dañado.',
-        );
-      }
-      final dentro = jsonDecode(abierto);
-      if (dentro is! Map<String, dynamic>) {
-        throw const CopiaInvalida('La copia venía dañada por dentro.');
-      }
-      raiz = dentro;
-    } else {
-      // Copias sin clave: no las genera esta versión, pero si alguna vez
-      // existieran, leerlas igual es mejor que rechazarlas.
-      raiz = sobre;
     }
+    if (clave.isEmpty) {
+      throw const CopiaInvalida('Esta copia tiene clave. Escribila.');
+    }
+    final abierto = CopiaCifrado.abrir(
+      sal: '${sobre['sal']}',
+      nonce: '${sobre['nonce']}',
+      datos: '${sobre['datos']}',
+      clave: clave,
+    );
+    if (abierto == null) {
+      // No se distingue "clave equivocada" de "archivo dañado" a propósito:
+      // no hay forma de saberlo sin arriesgarse a usar datos que no son.
+      //
+      // Y acá está la defensa de fondo: para que lo de adentro llegue siquiera
+      // a leerse, el archivo tuvo que cerrarse con ESTA clave. Un archivo
+      // preparado por otro no pasa de esta línea.
+      throw const CopiaInvalida(
+        'La clave no es la de este archivo, o el archivo está dañado.',
+      );
+    }
+    final Object? dentro;
+    try {
+      dentro = jsonDecode(abierto);
+    } on FormatException {
+      throw const CopiaInvalida('La copia venía dañada por dentro.');
+    }
+    if (dentro is! Map<String, dynamic>) {
+      throw const CopiaInvalida('La copia venía dañada por dentro.');
+    }
+    final raiz = dentro;
 
     var historialNuevo = 0;
     var historialActualizado = 0;
@@ -282,8 +298,20 @@ class CopiaSeguridad {
     );
   }
 
-  static List<dynamic> _lista(Object? valor) =>
-      valor is List ? valor : const [];
+  /// Cuántos registros se aceptan de cada lista.
+  ///
+  /// Un historial de verdad no llega ni de cerca. El techo está para que una
+  /// copia con millones de entradas —hecha a mano, o dañada— no deje la app
+  /// escribiendo en la base durante horas sin forma de cancelar.
+  static const _techoDeRegistros = 50000;
+
+  static List<dynamic> _lista(Object? valor) {
+    if (valor is! List) return const [];
+    if (valor.length > _techoDeRegistros) {
+      return valor.sublist(0, _techoDeRegistros);
+    }
+    return valor;
+  }
 
   static Map<String, dynamic> _historialAMapa(History h) => {
         'package': h.package,

@@ -270,6 +270,7 @@
     "backup-import-working": "Loading the backup",
     "backup-import-working-hint": "Restoring your history and favourites. Do not close the app.",
     "backup-import-from": "Loaded from \"{nombre}\"",
+    "backup-too-big": "That file is too large to be a PrismHub backup. Check that it is the right file.",
     "export-log": "Export Log",
     "export-log-subtitle": "Export log file",
     "advanced": "Advanced",

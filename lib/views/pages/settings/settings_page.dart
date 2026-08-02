@@ -222,8 +222,16 @@ class _SettingsPageState extends State<SettingsPage> {
     String? nombrePropuesto,
     int? numero,
     String? deQuien,
-  }) {
-    return showPlatformDialog(
+  }) async {
+    // Se espera el resultado y se comprueba el VALOR, en vez de forzar el tipo
+    // del Future.
+    //
+    // showPlatformDialog no declara qué devuelve, así que devuelve
+    // Future<dynamic>, y `... as Future<_DatosDeCopia?>` revienta en tiempo de
+    // ejecución: Future<dynamic> no es un Future<_DatosDeCopia?>. Como esta
+    // llamada queda fuera del try de quien exporta, el error se perdía y el
+    // botón de exportar parecía no hacer nada.
+    final resultado = await showPlatformDialog(
       context: context,
       title: (alExportar
               ? 'settings.backup-key-title-export'
@@ -237,7 +245,9 @@ class _SettingsPageState extends State<SettingsPage> {
         deQuien: deQuien,
       ),
       actions: null,
-    ) as Future<_DatosDeCopia?>;
+    );
+    // Cerrar el diálogo por fuera (tocar afuera, Escape) devuelve null.
+    return resultado is _DatosDeCopia ? resultado : null;
   }
 
   /// Deja el historial y la lista en un archivo que el usuario pueda guardar.
@@ -280,8 +290,11 @@ class _SettingsPageState extends State<SettingsPage> {
         final archivo = File(
             '${(await getTemporaryDirectory()).path}${Platform.pathSeparator}$nombreArchivo');
         await archivo.writeAsString(contenido);
-        await Share.shareXFiles([XFile(archivo.path)]);
-        guardado = true;
+        final r = await Share.shareXFiles([XFile(archivo.path)]);
+        // Solo cuenta si de verdad se compartió. Cerrar la hoja de compartir
+        // sin elegir nada no es una copia hecha, y contarla dejaría un hueco
+        // en la numeración.
+        guardado = r.status != ShareResultStatus.dismissed;
       } else {
         final destino = await FilePicker.platform.saveFile(
           type: FileType.custom,
@@ -351,9 +364,20 @@ class _SettingsPageState extends State<SettingsPage> {
   /// Mete de vuelta lo que traiga un archivo, juntándolo con lo que ya hay.
   Future<void> _importarCopia(BuildContext context) async {
     try {
+      // En Android NO se filtra por extensión.
+      //
+      // Ahí el selector es el del sistema y filtra por tipo MIME, no por cómo
+      // termina el nombre. Un mismo .json llega como application/json desde una
+      // carpeta, como text/plain desde otra y como application/octet-stream
+      // desde Drive o WhatsApp: con el filtro puesto, el archivo aparece en gris
+      // y no se puede elegir, y desde afuera se ve como que la copia "no está".
+      //
+      // Que se pueda elegir cualquier archivo no abre ningún agujero: lo que
+      // decide si sirve es leerlo (ver leerSobre), que rechaza lo que no sea una
+      // copia de PrismHub antes de tocar nada.
       final elegido = await FilePicker.platform.pickFiles(
-        type: FileType.custom,
-        allowedExtensions: ['json'],
+        type: Platform.isAndroid ? FileType.any : FileType.custom,
+        allowedExtensions: Platform.isAndroid ? null : ['json'],
         // En Android hace falta el contenido: la ruta que devuelve el selector
         // puede ser de un proveedor (Drive, Descargas) que no se puede abrir
         // como archivo normal.
@@ -361,6 +385,23 @@ class _SettingsPageState extends State<SettingsPage> {
       );
       final archivo = elegido?.files.firstOrNull;
       if (archivo == null) return;
+
+      // Techo de tamaño ANTES de leerlo.
+      //
+      // En Android el archivo se carga entero en memoria, así que elegir un
+      // vídeo por error tumbaría la app antes de poder decir que no sirve. Una
+      // copia de historial y favoritos son unos pocos megas incluso con miles de
+      // títulos, así que 25 MB deja muchísimo margen.
+      const techo = 25 * 1024 * 1024;
+      if (archivo.size > techo) {
+        if (!context.mounted) return;
+        showPlatformSnackbar(
+          context: context,
+          title: 'settings.backup-import-failed'.i18n,
+          content: 'settings.backup-too-big'.i18n,
+        );
+        return;
+      }
 
       final datos = archivo.bytes;
       final contenido = datos != null
