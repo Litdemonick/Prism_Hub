@@ -25,6 +25,8 @@ import 'package:prismhub/controllers/main_controller.dart';
 import 'package:prismhub/router/router.dart';
 import 'package:prismhub/utils/bt_server.dart';
 import 'package:prismhub/utils/cast_aparato.dart';
+import 'package:prismhub/utils/cast_formatos.dart';
+import 'package:prismhub/utils/cast_hls_ts.dart';
 import 'package:prismhub/utils/connectivity.dart';
 import 'package:prismhub/utils/cast_metadata.dart';
 import 'package:prismhub/utils/cast_relay_server.dart';
@@ -477,6 +479,13 @@ class VideoPlayerController extends GetxController with WidgetsBindingObserver {
   // Ultimo fallo del relay ya avisado, para no repetir el mismo aviso una vez
   // por segundo mientras corre el timer de estado.
   String? _fallaDeCastAvisada;
+
+  /// Esta transmisión va reempaquetada a MPEG-TS, así que no se puede adelantar.
+  ///
+  /// Es el precio de que un televisor que no entiende HLS pueda reproducir:
+  /// el vídeo se le manda como un flujo que se va armando sobre la marcha, sin
+  /// un largo total con el que calcular a qué byte saltar. Ver cast_hls_ts.dart.
+  bool _castSinSalto = false;
 
   /// Enganchando con el aparato: mandarle el video y que arranque puede tardar
   /// varios segundos, y hasta ahora no se veia nada en ese rato — parecia que
@@ -3383,15 +3392,72 @@ class VideoPlayerController extends GetxController with WidgetsBindingObserver {
     // sana localmente pero fallaba en silencio en el TV. Con headers, se
     // pasa por el relay local en vez de la URL directa (ver
     // cast_relay_server.dart).
-    if (headers != null && headers.isNotEmpty) {
+    // ¿Este aparato puede con lo que le vamos a mandar?
+    //
+    // Se le pregunta ANTES en vez de mandarle y ver qué pasa, porque un
+    // televisor que no puede con el formato **acepta igual la orden**: contesta
+    // que sí, muestra el título que le mandamos en la ficha y no dibuja nunca
+    // nada. Desde afuera eso se ve idéntico a que esté funcionando, y era
+    // exactamente lo que pasaba: HLS —que es lo que sirven casi todas las
+    // extensiones— no lo reproduce ningún televisor DLNA. Medido: Kodi publica
+    // 94 formatos con HLS entre ellos y reproduce; el televisor publica 29 sin
+    // ninguno de HLS y se queda en negro.
+    //
+    // Cuando no puede, se le manda el mismo vídeo reempaquetado como MPEG-TS,
+    // que sí está en su lista y no cuesta recodificar nada (cast_hls_ts.dart).
+    PlanTs? planTs;
+    _castSinSalto = false;
+    var mime = mimeDeUrl(urlOriginal);
+    if (aparato is AparatoDlna && mime.contains('mpegurl')) {
+      if (!await FormatosDelAparato.aceptaHls(aparato.device)) {
+        if (await FormatosDelAparato.aceptaTs(aparato.device)) {
+          planTs = await CastHlsATs.analizar(
+            urlOriginal,
+            headers ?? const {},
+            PrismHubStorage.getUASetting() is String
+                ? PrismHubStorage.getUASetting() as String
+                : '',
+          );
+        }
+        if (planTs == null) {
+          // Ni HLS ni reempaquetado: mandarlo igual sería dejar la pantalla en
+          // negro sin explicación, que es de donde venimos.
+          logger.warning('El aparato ${aparato.nombre} no soporta el formato '
+              'del vídeo y no se pudo reempaquetar');
+          castConectando.value = false;
+          castAviso.value = null;
+          sendMessage(Message(Text('video.cast-formato-aparato'.i18n)));
+          return;
+        }
+        mime = 'video/mpeg';
+        // El vídeo reempaquetado se va armando sobre la marcha, así que no
+        // tiene un largo con el que el televisor pueda calcular a qué byte
+        // saltar. Se marca para decirlo en vez de mandar una orden que el
+        // aparato no puede cumplir.
+        _castSinSalto = true;
+      }
+    }
+
+    // Con reempaquetado el relay es obligatorio aunque no haya cabeceras: es el
+    // relay el que va pegando los pedacitos.
+    if (planTs != null || (headers != null && headers.isNotEmpty)) {
       try {
         url = await CastRelayServer.registerAndGetUrl(
           targetUrl: url,
           headers: headers,
+          planTs: planTs,
         );
         _dlnaRelayUrl = url;
       } catch (e) {
         logger.warning('CastRelayServer falló, casteando URL directa: $e');
+        if (planTs != null) {
+          // Sin relay no hay reempaquetado posible, y la lista cruda ya sabemos
+          // que este aparato no la reproduce.
+          castConectando.value = false;
+          castAviso.value = null;
+          sendMessage(Message(Text('video.cast-sin-alcance'.i18n)));
+          return;
+        }
       }
     }
     dlnaDevice.value = aparato;
@@ -3409,7 +3475,7 @@ class VideoPlayerController extends GetxController with WidgetsBindingObserver {
       await aparato.cargar(
         url: url,
         titulo: '$title — ${playList[index.value].name}',
-        mime: mimeDeUrl(urlOriginal),
+        mime: mime,
       );
     } catch (e) {
       // Un aparato que no contesta dejaba la excepcion suelta y la pantalla en
@@ -4526,7 +4592,7 @@ class VideoPlayerController extends GetxController with WidgetsBindingObserver {
     // Hay aparatos que no saben ir a un punto exacto (el mando de Roku
     // adelanta a saltos y nada mas). Se dice, en vez de mandar la orden y
     // dejar la rueda girando esperando algo que no va a pasar.
-    if (!dlnaDevice.value!.permiteSaltar) {
+    if (!dlnaDevice.value!.permiteSaltar || _castSinSalto) {
       castAviso.value = 'video.cast-no-seek'.i18n;
       Timer(const Duration(milliseconds: 2000), () {
         if (castAviso.value == 'video.cast-no-seek'.i18n) castAviso.value = null;

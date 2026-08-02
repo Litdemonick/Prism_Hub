@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 
+import 'package:prismhub/utils/cast_hls_ts.dart';
 import 'package:prismhub/utils/log.dart';
 import 'package:prismhub/utils/prismhub_storage.dart';
 import 'package:shelf/shelf.dart';
@@ -52,6 +53,7 @@ class CastRelayServer {
   static Future<String> registerAndGetUrl({
     required String targetUrl,
     Map<String, String>? headers,
+    PlanTs? planTs,
   }) async {
     await _ensureRunning();
     // El token lleva adelante un identificador de sesion para poder soltar de
@@ -59,7 +61,8 @@ class CastRelayServer {
     // unregister). Sin eso, cada episodio casteado dejaba cientos de entradas.
     final sesion = '${DateTime.now().microsecondsSinceEpoch}';
     final token = '$sesion-0';
-    _targets[token] = _RelayTarget(targetUrl, headers ?? const {}, sesion);
+    _targets[token] =
+        _RelayTarget(targetUrl, headers ?? const {}, sesion, planTs: planTs);
     final ip = await _localLanAddress();
     if (ip == null) {
       // Sin una IP de red real no hay relay posible: lo unico que se le podria
@@ -200,6 +203,23 @@ class CastRelayServer {
     // GET: se abría la descarga entera del vídeo solo para tirarla, y la
     // respuesta no traía lo que había preguntado.
     final esHead = request.method.toUpperCase() == 'HEAD';
+
+    // Televisor que no entiende HLS: se le manda el vídeo ya pegado en un
+    // MPEG-TS continuo en vez de la lista. Ver cast_hls_ts.dart.
+    final plan = target.planTs;
+    if (plan != null) {
+      final cabeceras = {
+        'Content-Type': 'video/mpeg',
+        // De largo desconocido a propósito: se va armando sobre la marcha. Por
+        // eso tampoco se puede adelantar, y se avisa antes de empezar.
+        'Accept-Ranges': 'none',
+        'Cache-Control': 'no-cache',
+        ..._permisos,
+      };
+      if (esHead) return Response.ok(null, headers: cabeceras);
+      return Response.ok(CastHlsATs.servir(plan), headers: cabeceras);
+    }
+
     final client = _cliente;
     try {
       final uri = Uri.parse(target.url);
@@ -540,9 +560,14 @@ class CastRelayServer {
 }
 
 class _RelayTarget {
-  _RelayTarget(this.url, this.headers, this.sesion);
+  _RelayTarget(this.url, this.headers, this.sesion, {this.planTs});
   final String url;
   final Map<String, String> headers;
+
+  /// Cuando viene, a este token no se le sirve la lista HLS sino los pedacitos
+  /// pegados en un MPEG-TS continuo, que es lo único que entiende un televisor
+  /// viejo. Ver cast_hls_ts.dart.
+  final PlanTs? planTs;
 
   /// Agrupa el maestro con los segmentos que salieron de su lista, para poder
   /// soltarlos todos juntos al desconectar (ver unregister).
