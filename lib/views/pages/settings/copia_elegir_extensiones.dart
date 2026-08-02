@@ -1,6 +1,11 @@
+import 'dart:io';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_i18n/flutter_i18n.dart';
+import 'package:get/get.dart';
+import 'package:prismhub/controllers/main_controller.dart';
 import 'package:prismhub/router/router.dart';
+import 'package:prismhub/views/pages/extension/extension_repo_page.dart';
 import 'package:prismhub/utils/copia_seguridad.dart';
 import 'package:prismhub/utils/extension.dart';
 import 'package:prismhub/utils/i18n.dart';
@@ -273,30 +278,8 @@ class _CopiaElegirExtensionesState extends State<CopiaElegirExtensiones> {
                             tapTargetSize: MaterialTapTargetSize.shrinkWrap,
                             foregroundColor: HomeTheme.accentPink,
                           ),
-                          onPressed: () {
-                            // La lista se abre ya buscando ESTA extensión: sin
-                            // esto se llegaba a una lista de decenas y había
-                            // que encontrar a mano la que el aviso nombró.
-                            ExtensionUtils.filtroPendiente = _nombre(package);
-                            final destino = estado == EstadoExt.ausente
-                                ? '/extension_repo'
-                                : '/extension';
-                            // Se cierra el diálogo antes de navegar: dejarlo
-                            // abierto encima de la otra pantalla lo deja
-                            // tapando justo lo que el usuario fue a hacer.
-                            Navigator.of(context).pop();
-                            // Y la navegación va en el cuadro SIGUIENTE.
-                            //
-                            // En el mismo, el cierre del diálogo y el cambio de
-                            // ruta se pisan: go_router procesa la ruta nueva
-                            // mientras el Navigator todavía está desmontando el
-                            // diálogo, y el resultado era que no se movía de
-                            // Ajustes. Por eso "ir a instalarla" no llevaba a
-                            // ningún lado.
-                            WidgetsBinding.instance.addPostFrameCallback((_) {
-                              router.go(destino);
-                            });
-                          },
+                          onPressed: () =>
+                              _irAResolver(package, estado == EstadoExt.ausente),
                           child: Text(
                             (estado == EstadoExt.ausente
                                     ? 'settings.backup-pick-go-install'
@@ -328,6 +311,47 @@ class _CopiaElegirExtensionesState extends State<CopiaElegirExtensiones> {
       ),
     );
   }
+
+  /// Lleva a donde se resuelve lo que le falta a esta extensión.
+  ///
+  /// Los dos sistemas navegan de formas COMPLETAMENTE distintas y por eso el
+  /// botón no llevaba a ningún lado en el teléfono:
+  ///
+  ///  - En escritorio, la pantalla de extensiones y el repositorio son rutas
+  ///    (`/extension`, `/extension_repo`) dentro del armazón de go_router.
+  ///  - En Android no son rutas: la de extensiones es la **pestaña 2** de un
+  ///    IndexedStack, y el repositorio se abre empujando la página encima. Esas
+  ///    rutas de go_router construyen la pantalla de ESCRITORIO, así que usarlas
+  ///    ahí mandaba a cualquier lado.
+  void _irAResolver(String package, bool alRepositorio) {
+    // La lista se abre ya buscando ESTA: sin esto se llega a una de decenas y
+    // hay que encontrar a mano la que el aviso nombró.
+    ExtensionUtils.filtroPendiente = _nombre(package);
+
+    // El diálogo se cierra primero: dejarlo abierto encima taparía justo lo que
+    // el usuario fue a hacer.
+    Navigator.of(context).pop();
+
+    // Y se navega en el cuadro SIGUIENTE. En el mismo, el cierre del diálogo y
+    // el cambio de pantalla se pisan y no se movía de Ajustes.
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (Platform.isAndroid) {
+        if (Get.isRegistered<MainController>()) {
+          Get.find<MainController>().changeTab(_pestanaDeExtensiones);
+        }
+        // El repositorio va ENCIMA de esa pestaña, como cuando se toca el botón
+        // de descargar desde la propia lista de extensiones.
+        if (alRepositorio) Get.to(() => const ExtensionRepoPage());
+        return;
+      }
+      router.go(alRepositorio ? '/extension_repo' : '/extension');
+    });
+  }
+
+  /// Dónde está Extensiones en la barra de abajo del teléfono.
+  ///
+  /// Inicio, Buscar, Extensiones, Ajustes (ver la lista `pages` de MainPage).
+  static const _pestanaDeExtensiones = 2;
 
   String _queFalta(EstadoExt estado) {
     switch (estado) {
