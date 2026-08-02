@@ -176,7 +176,27 @@ class CastHlsATs {
       }
     }
 
-    llenarLaCola();
+    // El PRIMER pedacito se entrega a medida que llega, sin esperar a tenerlo
+    // entero.
+    //
+    // Esperarlo completo dejaba la respuesta HTTP en silencio desde que el
+    // televisor la pedía hasta que terminaba de bajar ese pedacito — varios
+    // segundos con un CDN lento. Muchos televisores dan por muerta una conexión
+    // que no manda un solo byte en ese rato: la cierran, vuelven a pedir la
+    // misma dirección, y como el flujo se arma desde el principio, el vídeo
+    // arranca de cero otra vez. Y otra. Ese es el bucle de reinicios.
+    //
+    // Los siguientes SÍ se bajan enteros por delante (es lo que evita el corte
+    // entre uno y otro), pero para entonces ya hay bytes viajando y el
+    // televisor no tiene motivo para cortar.
+    if (proximo < plan.pedacitos.length) {
+      final primero = proximo;
+      proximo++;
+      // La cola de los que vienen detrás arranca YA, en paralelo con este.
+      llenarLaCola();
+      yield* _servirPedacitoEnVivo(plan, primero);
+    }
+
     while (enVuelo.isNotEmpty) {
       final bytes = await enVuelo.removeAt(0);
       // Se pide el reemplazo apenas se saca uno de la cola, no después de
@@ -188,6 +208,43 @@ class CastHlsATs {
       // uno sería mucho peor.
       if (bytes == null) continue;
       yield bytes;
+    }
+  }
+
+  /// Un pedacito servido a medida que llega, sin juntarlo antes en memoria.
+  ///
+  /// Solo se reintenta si TODAVÍA no salió nada: una vez que hay bytes en
+  /// camino, volver a empezar el pedacito los duplicaría dentro del flujo, y un
+  /// MPEG-TS con bytes repetidos se rompe. Si se corta a mitad, es preferible el
+  /// saltito.
+  static Stream<List<int>> _servirPedacitoEnVivo(PlanTs plan, int indice) async* {
+    final trozo = plan.pedacitos[indice];
+    for (var intento = 0; intento <= _reintentos; intento++) {
+      var salioAlgo = false;
+      try {
+        final req = await _cliente.getUrl(trozo);
+        _preparar(req, plan.headers, plan.userAgent);
+        final res = await req.close().timeout(const Duration(seconds: 30));
+        if (res.statusCode >= 400) {
+          await res.drain<void>();
+          throw HttpException('HTTP ${res.statusCode}');
+        }
+        await for (final bloque in res) {
+          salioAlgo = true;
+          yield bloque;
+        }
+        return;
+      } catch (e) {
+        if (salioAlgo) {
+          logger.warning('Reempaquetado a TS: el pedacito ${indice + 1} se '
+              'cortó a mitad, se sigue con el siguiente — $e');
+          return;
+        }
+        if (intento == _reintentos) {
+          logger.warning(
+              'Reempaquetado a TS: se saltea el pedacito ${indice + 1} — $e');
+        }
+      }
     }
   }
 

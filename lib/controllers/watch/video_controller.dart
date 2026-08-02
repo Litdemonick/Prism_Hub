@@ -1839,7 +1839,7 @@ class VideoPlayerController extends GetxController with WidgetsBindingObserver {
         // No tocar isGettingWatchData acá: switchServer ya lo pone en true
         // apenas arranca — pisarlo a false y volver a true un instante
         // después solo generaba un parpadeo del spinner de carga.
-        unawaited(switchServer(currentServerName.value));
+        unawaited(switchServer(currentServerName.value, porElUsuario: false));
         return;
       }
       awaitingServerChoice.value = true;
@@ -2589,14 +2589,75 @@ class VideoPlayerController extends GetxController with WidgetsBindingObserver {
   //        b) URL de embed conocido → resolveEmbed on-demand vía SDK.
   //        c) URL de episodio → extensión la procesa normalmente.
   //   2. Si la extensión no puede resolver (error/vacío) → fallback WebView sniffer.
+  /// Qué servidor se está resolviendo ahora mismo, si hay alguno.
+  ///
+  /// Cambiar de servidor no es instantáneo: hay que pedirle a la extensión que
+  /// resuelva la fuente, y eso puede tardar segundos (o pasar por el navegador
+  /// oculto). Durante toda esa espera el botón sigue ahí, y volver a tocarlo
+  /// arrancaba otra resolución encima de la anterior.
+  String? _resolviendoServidor;
+
+  /// Si vale la pena hacerle caso a este toque.
+  ///
+  /// Dos casos que hasta ahora reabrían el vídeo para nada, y reabrirlo
+  /// significa **empezar de cero**:
+  ///
+  ///  - Tocar dos veces el mismo servidor mientras todavía se está resolviendo.
+  ///    La segunda no adelanta nada: descarta lo que iba a medio hacer y vuelve
+  ///    a empezar el mismo trabajo.
+  ///  - Elegir de la lista el servidor que YA se está viendo. Pasa seguido: se
+  ///    abre la lista para ver cuál está puesto, se toca el que ya estaba, y el
+  ///    capítulo se reiniciaba desde el principio. La lista de la barra lateral
+  ///    ya lo contemplaba (ver selectServer); la de escritorio llamaba directo
+  ///    acá y no.
+  bool _valeLaPenaCambiarA(String name) {
+    if (_resolviendoServidor == name) {
+      logger.info('Se ignora el toque: "$name" ya se está resolviendo.');
+      return false;
+    }
+    final yaEstaSonando = name == _lastOpenedServerName &&
+        hasRenderedFrame.value &&
+        serverFailedMessage.value.isEmpty &&
+        webViewFallback.value == null &&
+        !isWebViewActive.value &&
+        dlnaDevice.value == null &&
+        player.state.duration > Duration.zero;
+    if (!yaEstaSonando) return true;
+    logger.info('"$name" ya es el que se está viendo: se sigue donde iba en vez '
+        'de reabrirlo.');
+    currentServerName.value = name;
+    awaitingServerChoice.value = false;
+    serverFailedMessage.value = '';
+    safePlay();
+    return false;
+  }
+
   /// Cambia de servidor, y si se estaba transmitiendo manda el nuevo al mismo
   /// aparato en vez de dejar cada uno con una cosa distinta.
   ///
+  /// [porElUsuario] distingue el toque de un botón de los cambios que dispara
+  /// la propia app (el reintento de un servidor caído, el arranque, la bajada
+  /// de calidad para el televisor). Los de la app tienen que pasar siempre:
+  /// reintentar EL MISMO servidor es justamente lo que hacen, y las
+  /// protecciones de arriba los estarían bloqueando.
+  Future<void> switchServer(String name, {bool porElUsuario = true}) async {
+    if (_disposed) return;
+    if (porElUsuario && !_valeLaPenaCambiarA(name)) return;
+    _resolviendoServidor = name;
+    try {
+      await _cambiarDeServidor(name);
+    } finally {
+      // Solo si sigue siendo el nuestro: si mientras tanto se pidió otro, el
+      // que manda es ese y no hay que borrarle la marca.
+      if (_resolviendoServidor == name) _resolviendoServidor = null;
+    }
+  }
+
   /// El cambio de servidor abre el stream nuevo en el reproductor de ACA y no
   /// tocaba el casteo para nada: el televisor se quedaba con el stream viejo, el
   /// telefono arrancaba el nuevo con sonido, y la pantalla seguia diciendo que
   /// se estaba transmitiendo. Dos videos distintos sonando a la vez.
-  Future<void> switchServer(String name) async {
+  Future<void> _cambiarDeServidor(String name) async {
     final aparato = dlnaDevice.value;
     if (aparato == null) return _switchServerLocal(name);
 
@@ -2610,10 +2671,35 @@ class VideoPlayerController extends GetxController with WidgetsBindingObserver {
     // pisarlo a mitad de camino lo deja en negro sin decir nada. Se corta
     // limpio y se avisa, que es lo unico honesto.
     final esCalidad = _servidoresSonCalidades;
-    if (!esCalidad && aparato.esChromecast) {
+    if (!esCalidad) {
+      // Cambiar de SERVIDOR con una transmisión en curso: se corta el casteo,
+      // se resuelve la fuente nueva acá, y queda EN PAUSA con los controles a
+      // la vista.
+      //
+      // Antes solo se hacía con el Chromecast (su receptor no admite que le
+      // pisen la fuente en caliente) y con un televisor DLNA se intentaba el
+      // cambio en vivo. Eso es pedirle a la parte más frágil de todo el camino
+      // —un aparato que ya venía reproduciendo— que acepte otra fuente, con
+      // otro formato y otras cabeceras, sin cortar. Cuando no salía, quedaba la
+      // tele en negro, el teléfono sonando y la pantalla diciendo que se estaba
+      // transmitiendo.
+      //
+      // El orden importa y es este: primero se corta la transmisión (así el
+      // aparato queda libre y no hay dos cosas sonando), después se resuelve, y
+      // recién al final se deja en pausa. Quedando en pausa el usuario decide:
+      // seguir acá, volver a mandarlo a la tele, o probar otro servidor.
+      //
+      // Una CALIDAD distinta no entra por acá: es el mismo vídeo, se le manda
+      // al aparato y sigue donde iba.
       sendMessage(Message(Text('video.cast-server-cambiado'.i18n)));
       await disconnectDLNADevice();
-      return _switchServerLocal(name);
+      if (_disposed) return;
+      await _switchServerLocal(name);
+      if (_disposed) return;
+      // En pausa aunque el cambio haya fallado: si falló, lo que corresponde es
+      // que el usuario vea el aviso y elija, no que empiece a sonar otra cosa.
+      safePause();
+      return;
     }
 
     // Que el usuario sepa que esta pasando: resolver la fuente y volver a
@@ -5103,7 +5189,7 @@ class VideoPlayerController extends GetxController with WidgetsBindingObserver {
       _serverRetryCount++;
       logger.info(
           'switchServer: $name falló, reintentando ($_serverRetryCount/$_maxServerRetries) con una resolución nueva.');
-      unawaited(switchServer(name));
+      unawaited(switchServer(name, porElUsuario: false));
       return;
     }
     _setServerFailed(name);

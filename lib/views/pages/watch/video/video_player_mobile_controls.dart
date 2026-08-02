@@ -83,11 +83,22 @@ class _VideoPlayerMobileControlsState extends State<VideoPlayerMobileControls> {
     _timer = Timer.periodic(
       const Duration(seconds: 3),
       (_) {
-        if (mounted) {
-          setState(() {
-            _showControls = false;
-          });
+        if (!mounted) return;
+        // En pausa los controles NO se esconden.
+        //
+        // Se escondían igual, y una pantalla pausada sin un solo botón encima
+        // no se distingue de una trabada: para hacer cualquier cosa —seguir,
+        // cambiar de servidor, salir— había que tocar primero a ciegas para
+        // traerlos de vuelta. Pausado es justamente cuando se quiere el mando a
+        // la vista. El temporizador sigue vivo, así que apenas vuelve a
+        // reproducirse se esconden solos como siempre.
+        if (!_c.isPlaying.value) {
+          if (!_showControls) setState(() => _showControls = true);
+          return;
         }
+        setState(() {
+          _showControls = false;
+        });
       },
     );
   }

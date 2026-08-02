@@ -58,7 +58,17 @@ class _VideoPlayerDesktopControlsState
     _hideTimer?.cancel();
     if (!_showControls && mounted) setState(() => _showControls = true);
     _hideTimer = Timer(const Duration(seconds: 2), () {
-      if (mounted) setState(() => _showControls = false);
+      if (!mounted) return;
+      // En pausa los controles NO se esconden — ver el mismo criterio en la
+      // versión del teléfono. Una pantalla pausada y sin un solo botón encima
+      // no se distingue de una trabada, y para hacer cualquier cosa había que
+      // mover el mouse a ciegas primero. Se vuelve a armar el temporizador en
+      // vez de cortarlo, así apenas se reanuda se esconden solos como siempre.
+      if (!widget.controller.isPlaying.value) {
+        _resetHideTimer();
+        return;
+      }
+      setState(() => _showControls = false);
     });
   }
 

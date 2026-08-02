@@ -274,6 +274,21 @@ class CastRelayServer {
       // verdad o si solo abrio la conexion y se fue.
       CastLog.paso('El aparato pidio desde $quien: ${request.method} '
           '${CastLog.cabeceras(request.headers)}');
+    } else if (request.method.toUpperCase() == 'GET') {
+      // VOLVIÓ a pedir el vídeo entero.
+      //
+      // Antes solo se anotaba el primer pedido, "porque después son cientos por
+      // episodio" — cierto para los pedidos por trozos (Range) de un vídeo que
+      // se manda tal cual, pero NO para el flujo reempaquetado, que se sirve de
+      // una sola vez. Ahí un GET nuevo significa que el aparato cortó y volvió
+      // a empezar, y como el flujo se arma desde el principio, el vídeo arranca
+      // de cero. Sin esta línea, un bucle de reinicios no dejaba ningún rastro
+      // y desde el registro se veía como una transmisión normal.
+      final servidos = bytesPorSesion[target.sesion] ?? 0;
+      CastLog.paso('El aparato VOLVIÓ a pedir el vídeo tras '
+          '${(servidos / 1024 / 1024).toStringAsFixed(1)} MiB servidos '
+          '(${CastLog.cabeceras(request.headers)}) — si esto se repite, el '
+          'vídeo se está reiniciando solo');
     }
 
     // El receptor pregunta primero con HEAD (el "Stat" de Kodi) para saber
