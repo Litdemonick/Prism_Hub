@@ -2350,37 +2350,54 @@ class _SeekBarState extends State<_SeekBar> {
   // Android (que ya lo tenía vía Slider.secondaryTrackValue nativo).
   Duration buffer = const Duration();
   bool _isDrag = false;
-  StreamSubscription<Duration>? positionSubscription;
-  StreamSubscription<Duration>? durationSubscription;
-  StreamSubscription<Duration>? bufferSubscription;
+  final _vigias = <Worker>[];
 
+  // La barra lee del CONTROLADOR, no del reproductor de mpv.
+  //
+  // Dos motivos, los dos vistos en vivo:
+  //
+  //  - **Casteando, mpv está parado.** Su posición y su duración son cero, así
+  //    que la barra mostraba "0:00 / 0:00" y no se podía tocar, aunque el
+  //    episodio estuviera corriendo en el televisor. El controlador sí sabe por
+  //    dónde va: el largo lo saca de la lista de pedacitos y la posición del
+  //    propio aparato.
+  //  - **Saltando, mpv informa posiciones viejas.** Entre que se suelta la barra
+  //    y el vídeo llega de verdad al punto nuevo siguen llegando las de antes:
+  //    el indicador se va de un tirón para atrás y un instante después salta
+  //    adelante. El controlador ya filtra eso (ver haySaltoPendiente), y acá se
+  //    estaba leyendo en crudo, salteándose ese filtrado.
   @override
   void initState() {
     super.initState();
-    positionSubscription =
-        widget.controller.player.stream.position.listen((event) {
-      if (!_isDrag && mounted) {
-        setState(() => position = event);
-      }
-    });
-    durationSubscription =
-        widget.controller.player.stream.duration.listen((event) {
-      if (mounted) {
-        setState(() => duration = event);
-      }
-    });
-    bufferSubscription = widget.controller.player.stream.buffer.listen((event) {
-      if (mounted) {
-        setState(() => buffer = event);
-      }
-    });
+    // Lo que el controlador YA tenía antes de montarse esta barra: sin esto se
+    // queda en cero hasta que algo cambie, y casteando el largo se calcula una
+    // sola vez al empezar — o sea que no cambiaría nunca más.
+    position = widget.controller.position.value;
+    duration = widget.controller.duration.value;
+    buffer = widget.controller.buffer.value;
+    _vigias.add(ever(widget.controller.position, (Duration valor) {
+      if (!mounted) return;
+      // Mientras se arrastra manda el dedo, no el reproductor.
+      if (_isDrag) return;
+      // Con un salto en camino la barra se queda donde el usuario la dejó. No
+      // puede quedarse clavada: si el salto no llega nunca, el vigilante de 8 s
+      // del controlador suelta el destino y la barra vuelve a seguirlo sola.
+      if (widget.controller.haySaltoPendiente) return;
+      setState(() => position = valor);
+    }));
+    _vigias.add(ever(widget.controller.duration, (Duration valor) {
+      if (mounted) setState(() => duration = valor);
+    }));
+    _vigias.add(ever(widget.controller.buffer, (Duration valor) {
+      if (mounted) setState(() => buffer = valor);
+    }));
   }
 
   @override
   void dispose() {
-    positionSubscription?.cancel();
-    durationSubscription?.cancel();
-    bufferSubscription?.cancel();
+    for (final vigia in _vigias) {
+      vigia.dispose();
+    }
     super.dispose();
   }
 
