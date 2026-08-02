@@ -3,7 +3,7 @@ import 'dart:convert';
 import 'dart:io';
 import 'dart:typed_data';
 
-import 'package:prismhub/utils/log.dart';
+import 'package:prismhub/utils/cast_log.dart';
 
 /// Habla con un Chromecast / Google TV.
 ///
@@ -55,6 +55,9 @@ class ChromecastCliente {
   /// y de este lado no habia forma de saber cual de las dos cosas era.
   String? ultimoFallo;
 
+  /// Lo último que informó el reproductor, para anotar solo los cambios.
+  String? _ultimoPlayerState;
+
   final _alCambiar = StreamController<_EstadoCast>.broadcast();
 
   /// Avisa cada vez que llega un estado nuevo del aparato.
@@ -75,14 +78,15 @@ class ChromecastCliente {
         onBadCertificate: (_) => true,
       ).timeout(const Duration(seconds: 8));
     } catch (e) {
-      logger.warning('No se pudo conectar con el Chromecast $host', e);
+      CastLog.fallo('Chromecast $host:$puerto — no se pudo abrir el socket', e);
       return false;
     }
+    CastLog.paso('Chromecast $host:$puerto — socket TLS abierto');
 
     _socket!.listen(
       _recibir,
       onError: (Object e) {
-        logger.warning('Se cortó la conexión con el Chromecast', e);
+        CastLog.fallo('Chromecast: se cortó la conexión', e);
         _cerrarSocket();
       },
       onDone: _cerrarSocket,
@@ -112,9 +116,12 @@ class ChromecastCliente {
     });
     // Se espera a que el aparato diga por dónde se le habla al reproductor.
     // Tarda: tiene que cambiar de aplicación en la pantalla.
+    CastLog.paso('Chromecast → LAUNCH $_appMedios (receptor de medios)');
     final hasta = DateTime.now().add(const Duration(seconds: 15));
     while (DateTime.now().isBefore(hasta)) {
       if (_transporte != null) {
+        CastLog.paso('Chromecast: el receptor abrió, se le habla por '
+            '$_transporte');
         // Hay que presentarse TAMBIÉN ante el reproductor, no alcanza con
         // haberlo hecho ante el aparato: son dos destinatarios distintos.
         _mandar(_nsConexion, {'type': 'CONNECT'}, destino: _transporte);
@@ -122,7 +129,7 @@ class ChromecastCliente {
       }
       await Future<void>.delayed(const Duration(milliseconds: 250));
     }
-    logger.warning('El Chromecast no abrió el reproductor de medios');
+    CastLog.fallo('Chromecast: pasaron 15 s y el receptor de medios no abrió');
     return false;
   }
 
@@ -136,7 +143,12 @@ class ChromecastCliente {
     String? portada,
     Duration desde = Duration.zero,
   }) async {
-    if (_transporte == null) return;
+    if (_transporte == null) {
+      CastLog.fallo('Chromecast: se pidió cargar sin receptor abierto');
+      return;
+    }
+    CastLog.paso('Chromecast → LOAD contentType=$mime '
+        'streamType=BUFFERED ${CastLog.donde(url)}');
     _mandar(
       _nsMedios,
       {
@@ -254,7 +266,7 @@ class ChromecastCliente {
         carga: jsonEncode(carga),
       ));
     } catch (e) {
-      logger.warning('No se pudo hablarle al Chromecast', e);
+      CastLog.fallo('Chromecast: no se pudo mandar el mensaje', e);
     }
   }
 
@@ -276,7 +288,7 @@ class ChromecastCliente {
       try {
         _interpretar(mensaje.espacio, mensaje.carga);
       } catch (e) {
-        logger.warning('Mensaje del Chromecast con forma inesperada', e);
+        CastLog.fallo('Chromecast: mensaje con forma inesperada', e);
       }
     }
     _pendiente.clear();
@@ -302,7 +314,15 @@ class ChromecastCliente {
       // con status como TEXTO. Convertirlo a mapa a ciegas revienta ahí — pasó
       // en la prueba contra el aparato real, justo en el paso de abrirlo.
       final estadoRecep = json['status'];
-      if (estadoRecep is! Map) return;
+      if (estadoRecep is! Map) {
+        // LAUNCH_STATUS / LAUNCH_ERROR: acá es donde el aparato dice que NO va
+        // a abrir el receptor —porque alguien lo está usando, o porque no tiene
+        // esa app— y hasta ahora se descartaba en silencio. Sin esto, un
+        // Chromecast que rechaza el lanzado se veía igual que uno lento.
+        CastLog.paso('Chromecast ← ${json['type'] ?? 'mensaje del receptor'}'
+            '${estadoRecep == null ? '' : ' status=$estadoRecep'}');
+        return;
+      }
       final apps = estadoRecep['applications'];
       if (apps is List) {
         for (final a in apps) {
@@ -311,6 +331,17 @@ class ChromecastCliente {
             break;
           }
         }
+        // Qué aplicación quedó en pantalla. Un Chromecast con OTRA cosa abierta
+        // (Netflix, el salvapantallas) nunca nos devuelve transportId.
+        //
+        // Va displayName y no statusText a propósito: el segundo es el renglón
+        // que se ve en el televisor, y ahí el receptor de Google escribe el
+        // TÍTULO de lo que está pasando.
+        final abiertas = apps
+            .map((a) => a is Map ? '${a['appId']} ${a['displayName']}' : '$a')
+            .join(', ');
+        CastLog.paso('Chromecast ← receptor con '
+            '${apps.isEmpty ? 'ninguna aplicación abierta' : abiertas}');
       }
       final vol = estadoRecep['volume'];
       if (vol is Map && vol['level'] is num) {
@@ -327,7 +358,7 @@ class ChromecastCliente {
           tipo == 'LOAD_CANCELLED' ||
           tipo == 'INVALID_REQUEST') {
         ultimoFallo = '$tipo${json['reason'] != null ? ' ${json['reason']}' : ''}';
-        logger.warning('El Chromecast rechazo la orden: $ultimoFallo');
+        CastLog.fallo('Chromecast ← rechazó la orden: $ultimoFallo');
       }
       final lista = json['status'];
       if (lista is! List || lista.isEmpty) return;
@@ -339,9 +370,17 @@ class ChromecastCliente {
       final motivo = m['idleReason']?.toString();
       if (motivo != null && motivo != 'FINISHED' && motivo != 'CANCELLED') {
         ultimoFallo = motivo;
-        logger.warning('El Chromecast no pudo reproducir: $motivo');
+        CastLog.fallo('Chromecast ← no pudo reproducir: $motivo');
       }
       final p = m['playerState']?.toString();
+      // Solo los cambios: el estado se pide una vez por segundo y anotarlos
+      // todos serían cientos de líneas iguales. La secuencia que interesa es
+      // IDLE → BUFFERING → PLAYING, y dónde se queda cuando no llega.
+      if (p != null && p != _ultimoPlayerState) {
+        _ultimoPlayerState = p;
+        CastLog.paso('Chromecast ← playerState=$p'
+            '${motivo == null ? '' : ' idleReason=$motivo'}');
+      }
       if (p != null) {
         estado.reproduciendo = p == 'PLAYING';
         // BUFFERING es "todavía cargando", no "en pausa": mostrarlo como pausa

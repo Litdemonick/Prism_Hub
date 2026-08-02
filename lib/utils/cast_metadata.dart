@@ -1,6 +1,7 @@
 import 'dart:convert';
 
 import 'package:dlna_dart/dlna.dart';
+import 'package:prismhub/utils/cast_log.dart';
 
 // Le pasa el vídeo al aparato con una ficha DIDL-Lite COMPLETA.
 //
@@ -22,7 +23,7 @@ Future<void> castearConMetadata(
   String url, {
   required String titulo,
   String? mime,
-}) {
+}) async {
   final tipo = mime ?? mimeDeUrl(url);
   // DLNA.ORG_OP=01 avisa que se puede adelantar por bytes (el relay ahora
   // conserva el content-length, así que es cierto); DLNA.ORG_CI=0 que el vídeo
@@ -56,7 +57,15 @@ Future<void> castearConMetadata(
       '</s:Body>'
       '</s:Envelope>';
 
-  return device.request('SetAVTransportURI', utf8.encode(sobre));
+  // El protocolInfo tal cual va en la ficha: es lo que el aparato usa para
+  // decidir si puede con el vídeo, y declararlo mal es peor que no declararlo.
+  // El título NO se registra a propósito (ver CastLog).
+  CastLog.paso('SetAVTransportURI → protocolInfo="$protocolo", '
+      '${CastLog.donde(url)}');
+  final respuesta = await device.request('SetAVTransportURI', utf8.encode(sobre));
+  // Un aparato que rechaza la orden contesta un cuerpo SOAP de fallo con código
+  // 500, así que sin mirarlo todos los rechazos se veían igual que un éxito.
+  CastLog.paso('SetAVTransportURI ← ${CastLog.respuestaUpnp(respuesta)}');
 }
 
 /// Pone a reproducir a una velocidad distinta de la normal.
@@ -80,9 +89,12 @@ Future<bool> reproducirAVelocidad(DLNADevice device, int velocidad) async {
       '</s:Envelope>';
   try {
     final respuesta = await device.request('Play', utf8.encode(sobre));
+    CastLog.paso(
+        'Play (x$velocidad) ← ${CastLog.respuestaUpnp(respuesta)}');
     // Un aparato que no la soporta contesta con un cuerpo de fallo SOAP.
     return !respuesta.contains('Fault') && !respuesta.contains('errorCode');
-  } catch (_) {
+  } catch (e) {
+    CastLog.fallo('Play (x$velocidad) no obtuvo respuesta', e);
     return false;
   }
 }

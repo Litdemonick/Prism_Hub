@@ -123,10 +123,13 @@ void main(List<String> args) async {
       final sigo = await InstanciaUnica.tomarElControl(
         args,
         alRecibirEnlace: (uri) {
-          // Llega un enlace mientras el app YA está abierto: se anota para que
-          // lo consuma la navegación, y se trae la ventana al frente — si no,
-          // el usuario toca el enlace y no pasa nada visible.
-          Compartir.enlacePendiente = uri;
+          // Llega un enlace mientras el app YA está abierto.
+          //
+          // Antes acá solo se anotaba en enlacePendiente, y ese campo se
+          // consume UNA vez al arrancar: con la app ya abierta nadie lo volvía
+          // a leer, así que la ventana se traía al frente y no pasaba nada más.
+          // entregar() se lo pasa a quien esté navegando en ese momento.
+          Compartir.entregar(uri);
           unawaited(() async {
             try {
               if (!await windowManager.isVisible()) await windowManager.show();
@@ -269,7 +272,8 @@ void main(List<String> args) async {
     // cuando el árbol ya exista. No se usa como ruta inicial a propósito: así
     // el arranque es el de siempre y la ficha queda ENCIMA de la pantalla
     // principal, con su botón de volver funcionando como cualquier otra.
-    Compartir.enlacePendiente = Compartir.enlaceDeArranque(args);
+    final deArranque = Compartir.enlaceDeArranque(args);
+    if (deArranque != null) Compartir.entregar(deArranque);
 
     runApp(const _AppRoot());
   }, (error, stack) {
@@ -547,13 +551,14 @@ class _AppRootState extends State<_AppRoot> {
   /// tarjeta— así el enlace pasa por las mismas comprobaciones: extensión
   /// instalada, activada, sin actualización pendiente, y la pregunta de +18. No
   /// hay una entrada paralela que se saltee nada de eso.
+  /// Avisa que ya se puede navegar, y abre lo que hubiera quedado esperando.
+  ///
+  /// Queda registrado, no es una consulta de una sola vez: así los enlaces que
+  /// lleguen DESPUÉS —otra copia del programa reenviando uno, o el canal de
+  /// Android— también encuentran a alguien que los abra. Antes eso solo
+  /// funcionaba en Android, porque su canal navegaba por su cuenta.
   void _abrirEnlacePendiente() {
-    final uri = Compartir.enlacePendiente;
-    if (uri == null) return;
-    // Se limpia ANTES de navegar: si algo reconstruye esta pantalla, el enlace
-    // ya no está y no se vuelve a abrir la misma ficha encima.
-    Compartir.enlacePendiente = null;
-    _irAlEnlace(uri);
+    Compartir.alEstarLista(_irAlEnlace);
   }
 
   /// Navega a la ficha de un enlace ya validado.
@@ -572,18 +577,47 @@ class _AppRootState extends State<_AppRoot> {
   void _irAlEnlace(Uri uri) {
     final datos = Compartir.leerEnlace(uri);
     if (datos == null) return;
-    WidgetsBinding.instance.addPostFrameCallback((_) async {
+    unawaited(_abrirCuandoSePueda(datos));
+  }
+
+  /// Abre la ficha, esperando a que haya dónde navegar.
+  ///
+  /// Con la app RECIÉN abierta por un enlace, el árbol de widgets puede no estar
+  /// todavía: `currentContext` sale de un GlobalKey que se llena cuando la
+  /// pantalla se construye. Antes se intentaba una sola vez, un cuadro después;
+  /// si en ese momento no había contexto, la excepción se anotaba en el registro
+  /// y ahí terminaba todo — la app quedaba abierta en el inicio, que es
+  /// exactamente el síntoma que se veía.
+  ///
+  /// Diez intentos de 200 ms: dos segundos de margen, de sobra para un arranque
+  /// en frío, y no se nota cuando el contexto ya estaba —el primer intento
+  /// acierta—.
+  Future<void> _abrirCuandoSePueda(
+      ({String package, String url, bool adulto}) datos) async {
+    for (var intento = 0; intento < 10; intento++) {
+      // Al primero se le deja pasar un cuadro: si esto se llamó desde el mismo
+      // setState que muestra la app, el árbol se está construyendo ahora.
+      await Future<void>.delayed(
+          intento == 0 ? Duration.zero : const Duration(milliseconds: 200));
+      if (!mounted) return;
       try {
+        final ctx = currentContext;
+        if (!ctx.mounted) continue;
         await ExtensionUtils.openExtensionDetail(
-          currentContext,
+          ctx,
           package: datos.package,
           url: datos.url,
           isAdultOption: datos.adulto,
         );
-      } catch (e, st) {
-        logger.warning('No se pudo abrir el enlace compartido', e, st);
+        return;
+      } catch (e) {
+        // Todavía no hay a dónde navegar. Se reintenta; solo se registra el
+        // último, para no llenar el archivo con diez líneas de lo mismo.
+        if (intento == 9) {
+          logger.warning('No se pudo abrir el enlace compartido: $e');
+        }
       }
-    });
+    }
   }
 
   @override
