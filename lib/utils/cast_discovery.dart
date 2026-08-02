@@ -1,5 +1,4 @@
 import 'dart:async';
-import 'dart:convert';
 import 'dart:io';
 
 import 'package:dlna_dart/dlna.dart';
@@ -61,11 +60,11 @@ class CastDiscovery {
   final Map<String, AparatoDeCasteo> _clasificados = {};
   final Set<String> _yaMirados = {};
 
-  Future<void> _clasificar(Map<String, DLNADevice> encontrados) async {
+  void _clasificar(Map<String, DLNADevice> encontrados) {
     var huboCambio = false;
     for (final e in encontrados.entries) {
       if (!_yaMirados.add(e.key)) continue;
-      final a = await clasificarBajando(e.value, _bajarDescripcion);
+      final a = clasificar(e.value);
       if (a == null) {
         logger.info('Se descarta ${e.value.info.friendlyName}: no reproduce');
         continue;
@@ -82,20 +81,7 @@ class CastDiscovery {
     }
   }
 
-  static Future<String> _bajarDescripcion(Uri base) async {
-    final client = HttpClient()
-      ..connectionTimeout = const Duration(seconds: 4);
-    try {
-      final req = await client.getUrl(base);
-      final res = await req.close().timeout(const Duration(seconds: 6));
-      return await utf8.decoder
-          .bind(res)
-          .join()
-          .timeout(const Duration(seconds: 6));
-    } finally {
-      client.close(force: true);
-    }
-  }
+
 
   Future<void> start() async {
     _parado = false;
@@ -151,7 +137,7 @@ class CastDiscovery {
 
     // Cada vez que aparece alguien nuevo se averigua QUE es.
     _gestor.devices.stream.listen(
-      (m) => unawaited(_clasificar(m)),
+      _clasificar,
       onError: (Object e) => logger.warning('Fallo clasificando', e),
     );
 

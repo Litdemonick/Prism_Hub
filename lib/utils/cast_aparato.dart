@@ -342,40 +342,47 @@ class AparatoChromecast implements AparatoDeCasteo {
   }
 }
 
-/// Decide qué clase de aparato es, mirando su descripción.
+/// Decide qué clase de aparato es, con lo que YA se sabe de él.
 ///
-/// Un Chromecast se anuncia en la red igual que cualquier otro aparato, pero su
-/// descripción dice `dial-multiscreen`. Y el router, que también aparece, no
-/// sirve para nada de esto: no expone AVTransport ni es un Chromecast.
+/// No descarga nada: el paquete ya bajó la descripción del aparato para poder
+/// darnos su nombre, y de paso dejó ahí su tipo y su lista de servicios. Eso
+/// alcanza para saber si sirve.
+///
+/// Antes esto SÍ descargaba, y desde `URLBase` — que no es la dirección de la
+/// descripción sino solo el origen (`http://ip:puerto`). Esa petición devolvía
+/// otra cosa o directamente fallaba, así que se descartaban aparatos que
+/// funcionaban perfectamente: dejaron de aparecer televisores que antes sí
+/// salían en la lista.
 ///
 /// Devuelve null cuando el aparato no puede reproducir vídeo — así no llega a
 /// la lista y nadie lo elige para que después "no se pueda enviar la señal".
-AparatoDeCasteo? clasificar(DLNADevice device, String descripcionXml) {
-  final xml = descripcionXml;
-  final esDial = xml.contains('dial-multiscreen-org') ||
-      xml.contains('urn:dial-multiscreen-org:device:dial');
-  if (esDial) {
+AparatoDeCasteo? clasificar(DLNADevice device) {
+  final tipo = device.info.deviceType.toLowerCase();
+
+  // Un Chromecast, Google TV o Android TV se anuncia como "dial". No habla
+  // DLNA, así que va por el otro camino.
+  if (tipo.contains('dial-multiscreen')) {
     final host = Uri.tryParse(device.info.URLBase)?.host;
     if (host == null || host.isEmpty) return null;
     return AparatoChromecast(host: host, nombre: device.info.friendlyName);
   }
-  if (xml.contains('AVTransport')) return AparatoDlna(device);
-  return null;
-}
 
-/// Igual que [clasificar] pero bajando la descripción del aparato.
-Future<AparatoDeCasteo?> clasificarBajando(
-  DLNADevice device,
-  Future<String> Function(Uri) bajar,
-) async {
-  final base = Uri.tryParse(device.info.URLBase);
-  if (base == null) return null;
-  try {
-    return clasificar(device, await bajar(base));
-  } catch (e) {
-    logger.info('No se pudo leer la descripción de ${device.info.URLBase}: $e');
-    return null;
+  // Reproduce vídeo si expone AVTransport, que es el servicio con el que se le
+  // manda y se le controla. El router, por ejemplo, aparece en la búsqueda pero
+  // no lo tiene.
+  final sirve = device.info.serviceList.any((s) {
+    final servicio = '${s['serviceType'] ?? ''} ${s['serviceId'] ?? ''}';
+    return servicio.toLowerCase().contains('avtransport');
+  });
+  if (sirve) return AparatoDlna(device);
+
+  // Sin lista de servicios legible no se puede afirmar que NO sirva. Si dice
+  // ser un reproductor, se deja pasar: es preferible ofrecer uno de más que
+  // esconder el televisor de alguien.
+  if (device.info.serviceList.isEmpty && tipo.contains('mediarenderer')) {
+    return AparatoDlna(device);
   }
+  return null;
 }
 
 /// Para las pruebas y el registro.
