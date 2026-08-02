@@ -274,13 +274,28 @@ class _CopiaElegirExtensionesState extends State<CopiaElegirExtensiones> {
                             foregroundColor: HomeTheme.accentPink,
                           ),
                           onPressed: () {
-                            // Se cierra el diálogo antes de navegar: dejarlo
-                            // abierto encima de otra pantalla lo deja tapando
-                            // lo que el usuario fue a hacer.
-                            Navigator.of(context).pop();
-                            router.go(estado == EstadoExt.ausente
+                            // La lista se abre ya buscando ESTA extensión: sin
+                            // esto se llegaba a una lista de decenas y había
+                            // que encontrar a mano la que el aviso nombró.
+                            ExtensionUtils.filtroPendiente = _nombre(package);
+                            final destino = estado == EstadoExt.ausente
                                 ? '/extension_repo'
-                                : '/extension');
+                                : '/extension';
+                            // Se cierra el diálogo antes de navegar: dejarlo
+                            // abierto encima de la otra pantalla lo deja
+                            // tapando justo lo que el usuario fue a hacer.
+                            Navigator.of(context).pop();
+                            // Y la navegación va en el cuadro SIGUIENTE.
+                            //
+                            // En el mismo, el cierre del diálogo y el cambio de
+                            // ruta se pisan: go_router procesa la ruta nueva
+                            // mientras el Navigator todavía está desmontando el
+                            // diálogo, y el resultado era que no se movía de
+                            // Ajustes. Por eso "ir a instalarla" no llevaba a
+                            // ningún lado.
+                            WidgetsBinding.instance.addPostFrameCallback((_) {
+                              router.go(destino);
+                            });
                           },
                           child: Text(
                             (estado == EstadoExt.ausente
