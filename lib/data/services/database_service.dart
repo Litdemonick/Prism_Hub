@@ -47,6 +47,21 @@ class DatabaseService {
     });
   }
 
+  /// Guarda un favorito TAL CUAL, sin pasar por la extensión.
+  ///
+  /// [toggleFavorite] exige que la extensión esté instalada, porque saca de ahí
+  /// el paquete y el tipo. Al importar una copia eso no sirve: justamente puede
+  /// venir de un equipo con extensiones que acá todavía no están, y perder esos
+  /// favoritos sería perder media lista. Los datos ya vienen en el archivo.
+  static Future<void> putFavoriteRaw(Favorite favorite) async {
+    final actual = await getFavorite(
+      package: favorite.package,
+      url: favorite.url,
+    );
+    if (actual != null) favorite.id = actual.id;
+    await db.writeTxn(() => db.favorites.put(favorite));
+  }
+
   static Future<bool> isFavorite({
     required String package,
     required String url,

@@ -1,6 +1,9 @@
+import 'dart:convert';
 import 'dart:io';
 
 import 'package:file_picker/file_picker.dart';
+import 'package:path_provider/path_provider.dart';
+import 'package:prismhub/utils/copia_seguridad.dart';
 import 'package:fluent_ui/fluent_ui.dart' as fluent;
 import 'package:flutter/material.dart';
 import 'package:flutter_i18n/flutter_i18n.dart';
@@ -202,6 +205,145 @@ class _SettingsPageState extends State<SettingsPage> {
         ],
       ),
     ];
+  }
+
+  /// Pide la clave de la copia. Null si el usuario cancela.
+  ///
+  /// Al exportar se pide dos veces: una clave mal escrita en una copia que se
+  /// guarda hoy y se usa dentro de un año es un archivo perdido para siempre,
+  /// porque no hay forma de recuperarla — el archivo no la guarda, solo permite
+  /// comprobar si la que se escribe es la correcta.
+  Future<String?> _pedirClave(BuildContext context,
+      {required bool alExportar}) {
+    return showPlatformDialog(
+      context: context,
+      title: (alExportar
+              ? 'settings.backup-key-title-export'
+              : 'settings.backup-key-title-import')
+          .i18n,
+      maxWidth: 420,
+      content: _DialogoClave(alExportar: alExportar),
+      actions: null,
+    ) as Future<String?>;
+  }
+
+  /// Deja el historial y la lista en un archivo que el usuario pueda guardar.
+  ///
+  /// Dos caminos porque son dos formas distintas de manejar archivos: en Android
+  /// se comparte —que es como sale cualquier archivo de una app ahí, y deja
+  /// elegir Drive, WhatsApp o la carpeta que sea— y en PC se elige dónde
+  /// guardarlo. El archivo que sale es el MISMO en las tres plataformas, así que
+  /// se puede exportar en el teléfono e importar en la PC o al revés.
+  Future<void> _exportarCopia(BuildContext context) async {
+    final clave = await _pedirClave(context, alExportar: true);
+    if (clave == null || !context.mounted) return;
+    try {
+      final contenido = await CopiaSeguridad.exportar(clave);
+      final nombre =
+          'PrismHub-${DateTime.now().toIso8601String().substring(0, 10)}.json';
+
+      if (Platform.isAndroid) {
+        // Por un archivo temporal: compartir necesita algo en disco, y la
+        // carpeta de caché es la que el sistema deja compartir sin permisos.
+        final archivo = File(
+            '${(await getTemporaryDirectory()).path}${Platform.pathSeparator}$nombre');
+        await archivo.writeAsString(contenido);
+        await Share.shareXFiles([XFile(archivo.path)]);
+        return;
+      }
+
+      final destino = await FilePicker.platform.saveFile(
+        type: FileType.custom,
+        allowedExtensions: ['json'],
+        fileName: nombre,
+      );
+      // Sin destino es que canceló, que no es un error.
+      if (destino == null) return;
+      await File(destino).writeAsString(contenido);
+      if (!context.mounted) return;
+      showPlatformSnackbar(
+        context: context,
+        content: 'settings.backup-export-done'.i18n,
+      );
+    } catch (e) {
+      logger.warning('No se pudo exportar la copia', e);
+      if (!context.mounted) return;
+      showPlatformSnackbar(
+        context: context,
+        title: 'settings.backup-export-failed'.i18n,
+        content: e.toString(),
+      );
+    }
+  }
+
+  /// Mete de vuelta lo que traiga un archivo, juntándolo con lo que ya hay.
+  Future<void> _importarCopia(BuildContext context) async {
+    try {
+      final elegido = await FilePicker.platform.pickFiles(
+        type: FileType.custom,
+        allowedExtensions: ['json'],
+        // En Android hace falta el contenido: la ruta que devuelve el selector
+        // puede ser de un proveedor (Drive, Descargas) que no se puede abrir
+        // como archivo normal.
+        withData: Platform.isAndroid,
+      );
+      final archivo = elegido?.files.firstOrNull;
+      if (archivo == null) return;
+
+      final datos = archivo.bytes;
+      final contenido = datos != null
+          ? utf8.decode(datos, allowMalformed: true)
+          : await File(archivo.path!).readAsString();
+
+      if (!context.mounted) return;
+      // La clave se pide DESPUÉS de elegir el archivo: al revés se escribiría
+      // una clave para después cancelar el selector.
+      final clave = await _pedirClave(context, alExportar: false);
+      if (clave == null) return;
+
+      final r = await CopiaSeguridad.importar(contenido, clave);
+      if (!context.mounted) return;
+
+      // Lo que entró, en números: decir solo "listo" deja al usuario sin saber
+      // si de verdad se recuperó algo o el archivo estaba vacío.
+      final partes = <String>[
+        FlutterI18n.translate(context, 'settings.backup-import-counts',
+            translationParams: {
+              'historial': '${r.historialNuevo + r.historialActualizado}',
+              'favoritos': '${r.favoritosNuevos}',
+            }),
+        if (r.fallidos > 0)
+          FlutterI18n.translate(context, 'settings.backup-import-failed-items',
+              translationParams: {'n': '${r.fallidos}'}),
+        if (r.extensionesFaltantes.isNotEmpty)
+          FlutterI18n.translate(context, 'settings.backup-import-missing',
+              translationParams: {
+                'extensiones': r.extensionesFaltantes.join(', ')
+              }),
+      ];
+      showPlatformSnackbar(
+        context: context,
+        title: 'settings.backup-import-done'.i18n,
+        content: partes.join('\n'),
+      );
+    } on CopiaInvalida catch (e) {
+      // El archivo no sirve, y sabemos por qué: se dice tal cual en vez de
+      // volcarle una excepción al usuario.
+      if (!context.mounted) return;
+      showPlatformSnackbar(
+        context: context,
+        title: 'settings.backup-import-failed'.i18n,
+        content: e.motivo,
+      );
+    } catch (e) {
+      logger.warning('No se pudo importar la copia', e);
+      if (!context.mounted) return;
+      showPlatformSnackbar(
+        context: context,
+        title: 'settings.backup-import-failed'.i18n,
+        content: e.toString(),
+      );
+    }
   }
 
   Widget _buildSkipIntervalContent() {
@@ -807,6 +949,48 @@ class _SettingsPageState extends State<SettingsPage> {
         androidIcon: Icons.network_wifi,
       ),
       const SizedBox(height: 10),
+      // Copia de seguridad. Va antes del bloque de registro porque es de lo
+      // que le importa al usuario y no de diagnóstico.
+      SettingsExpanderTile(
+        title: 'settings.backup'.i18n,
+        subTitle: 'settings.backup-subtitle'.i18n,
+        androidIcon: Icons.save_alt,
+        icon: fluent.FluentIcons.save,
+        content: Column(
+          children: [
+            SettingsTile(
+              title: 'settings.backup-export'.i18n,
+              buildSubtitle: () => 'settings.backup-export-subtitle'.i18n,
+              trailing: PlatformWidget(
+                androidWidget: TextButton(
+                  onPressed: () => _exportarCopia(context),
+                  child: Text('common.export'.i18n),
+                ),
+                desktopWidget: fluent.FilledButton(
+                  onPressed: () => _exportarCopia(context),
+                  child: Text('common.export'.i18n),
+                ),
+              ),
+            ),
+            const SizedBox(height: 10),
+            SettingsTile(
+              title: 'settings.backup-import'.i18n,
+              buildSubtitle: () => 'settings.backup-import-subtitle'.i18n,
+              trailing: PlatformWidget(
+                androidWidget: TextButton(
+                  onPressed: () => _importarCopia(context),
+                  child: Text('settings.backup-import-action'.i18n),
+                ),
+                desktopWidget: fluent.Button(
+                  onPressed: () => _importarCopia(context),
+                  child: Text('settings.backup-import-action'.i18n),
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+      const SizedBox(height: 10),
       // Debug
       SettingsExpanderTile(
         title: "settings.log".i18n,
@@ -1259,6 +1443,162 @@ class _MobileStepperState extends State<_MobileStepper> {
         ),
         _boton(Icons.add, () => _cambiar(1)),
       ],
+    );
+  }
+}
+
+/// Pide la clave de una copia de seguridad.
+///
+/// Al exportar la pide dos veces: una clave mal escrita en una copia que se
+/// guarda hoy y se usa dentro de un año es un archivo perdido para siempre. El
+/// archivo NO guarda la clave —solo permite comprobar si la que se escribe es
+/// la correcta— así que no hay a quién pedírsela después.
+///
+/// Devuelve la clave por `pop`, o null si se cancela.
+class _DialogoClave extends StatefulWidget {
+  const _DialogoClave({required this.alExportar});
+  final bool alExportar;
+
+  @override
+  State<_DialogoClave> createState() => _DialogoClaveState();
+}
+
+class _DialogoClaveState extends State<_DialogoClave> {
+  final _clave = TextEditingController();
+  final _repetida = TextEditingController();
+  bool _oculta = true;
+  String? _error;
+
+  @override
+  void dispose() {
+    _clave.dispose();
+    _repetida.dispose();
+    super.dispose();
+  }
+
+  void _aceptar() {
+    final clave = _clave.text;
+    if (clave.isEmpty) {
+      setState(() => _error = 'settings.backup-key-empty'.i18n);
+      return;
+    }
+    if (widget.alExportar && clave != _repetida.text) {
+      setState(() => _error = 'settings.backup-key-mismatch'.i18n);
+      return;
+    }
+    Navigator.of(context).pop(clave);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final esAndroid = Platform.isAndroid;
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        Text(
+          (widget.alExportar
+                  ? 'settings.backup-key-hint-export'
+                  : 'settings.backup-key-hint-import')
+              .i18n,
+          style: TextStyle(
+            fontSize: 12.5,
+            height: 1.4,
+            color:
+                DefaultTextStyle.of(context).style.color?.withValues(alpha: .7),
+          ),
+        ),
+        const SizedBox(height: 14),
+        _campo(_clave, 'settings.backup-key-label'.i18n, esAndroid,
+            conOjo: true),
+        if (widget.alExportar) ...[
+          const SizedBox(height: 10),
+          _campo(_repetida, 'settings.backup-key-repeat'.i18n, esAndroid),
+        ],
+        // El error ocupa sitio solo cuando lo hay: reservarlo siempre deja un
+        // hueco raro, y meterlo de golpe empuja los botones.
+        AnimatedSize(
+          duration: const Duration(milliseconds: 160),
+          curve: Curves.easeOut,
+          alignment: Alignment.topCenter,
+          child: _error == null
+              ? const SizedBox(width: double.infinity)
+              : Padding(
+                  padding: const EdgeInsets.only(top: 10),
+                  child: Row(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      const Icon(Icons.error_outline,
+                          size: 16, color: Colors.redAccent),
+                      const SizedBox(width: 6),
+                      // Flexible: un mensaje largo en una pantalla angosta se
+                      // sale de la caja si no se le deja envolver.
+                      Flexible(
+                        child: Text(
+                          _error!,
+                          style: const TextStyle(
+                              fontSize: 12, color: Colors.redAccent),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+        ),
+        const SizedBox(height: 18),
+        Row(
+          mainAxisAlignment: MainAxisAlignment.end,
+          children: [
+            PlatformTextButton(
+              onPressed: () => Navigator.of(context).pop(),
+              child: Text('common.cancel'.i18n),
+            ),
+            const SizedBox(width: 8),
+            PlatformFilledButton(
+              onPressed: _aceptar,
+              child: Text(
+                (widget.alExportar ? 'common.export' : 'common.confirm').i18n,
+              ),
+            ),
+          ],
+        ),
+      ],
+    );
+  }
+
+  /// El campo de cada plataforma: en escritorio el de fluent y en el teléfono
+  /// el de material, para que se vea como el resto de la app y no como un
+  /// injerto.
+  Widget _campo(TextEditingController c, String etiqueta, bool esAndroid,
+      {bool conOjo = false}) {
+    final ojo = conOjo
+        ? IconButton(
+            icon: Icon(_oculta ? Icons.visibility_off : Icons.visibility,
+                size: 18),
+            onPressed: () => setState(() => _oculta = !_oculta),
+            tooltip: (_oculta ? 'common.show' : 'common.hide').i18n,
+          )
+        : null;
+    if (esAndroid) {
+      return TextField(
+        controller: c,
+        obscureText: _oculta,
+        autofocus: conOjo,
+        onSubmitted: (_) => _aceptar(),
+        decoration: InputDecoration(
+          labelText: etiqueta,
+          isDense: true,
+          border: const OutlineInputBorder(),
+          suffixIcon: ojo,
+        ),
+      );
+    }
+    return fluent.TextBox(
+      controller: c,
+      obscureText: _oculta,
+      autofocus: conOjo,
+      placeholder: etiqueta,
+      onSubmitted: (_) => _aceptar(),
+      suffix: ojo,
     );
   }
 }
