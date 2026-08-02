@@ -1,5 +1,6 @@
 import 'dart:convert';
 
+import 'package:flutter/foundation.dart' show visibleForTesting;
 import 'package:prismhub/data/services/database_service.dart';
 import 'package:prismhub/utils/copia_cifrado.dart';
 import 'package:prismhub/models/index.dart';
@@ -252,9 +253,14 @@ class CopiaSeguridad {
         if (previo == null) {
           await DatabaseService.putHistoryRaw(entra);
           historialNuevo++;
-        } else if (entra.date.isAfter(previo.date)) {
-          // Gana el más reciente: el equipo donde se vio después es el que
-          // tiene el progreso bueno.
+        } else if (!entra.date.isBefore(previo.date)) {
+          // Gana el más reciente, y con la MISMA fecha gana el que entra.
+          //
+          // Antes se exigía que fuera estrictamente más nuevo, y eso hacía que
+          // volver a importar el mismo archivo no hiciera absolutamente nada:
+          // las fechas coincidían, todo se salteaba y el resultado era "0 del
+          // historial y 0 favoritos". Volver a importar tiene que poder reparar
+          // lo que haya quedado mal, no rendirse por un empate.
           await DatabaseService.putHistoryRaw(entra);
           historialActualizado++;
         }
@@ -270,9 +276,11 @@ class CopiaSeguridad {
         final entra = _favoritoDeMapa(crudo);
         final yaEsta = await DatabaseService.isFavorite(
             package: entra.package, url: entra.url);
-        if (yaEsta) continue;
+        // Se escribe igual si ya estaba: putFavoriteRaw reusa el mismo
+        // registro, así que no duplica, y permite reparar uno que hubiera
+        // quedado mal. Solo se cuenta como nuevo si de verdad no estaba.
         await DatabaseService.putFavoriteRaw(entra);
-        favoritosNuevos++;
+        if (!yaEsta) favoritosNuevos++;
       } catch (e) {
         fallidos++;
         logger.warning('Copia: no se pudo importar un favorito', e);
@@ -336,7 +344,7 @@ class CopiaSeguridad {
   static History _historialDeMapa(Object? crudo) {
     final m = _mapa(crudo);
     return History()
-      ..package = _texto(m['package'], 'package')
+      ..package = _identificador(m['package'], 'package')
       ..url = _direccion(m['url'], 'url')
       ..cover = _portada(m['cover'])
       ..type = _tipo(m['type'])
@@ -371,7 +379,7 @@ class CopiaSeguridad {
   static Favorite _favoritoDeMapa(Object? crudo) {
     final m = _mapa(crudo);
     return Favorite()
-      ..package = _texto(m['package'], 'package')
+      ..package = _identificador(m['package'], 'package')
       ..url = _direccion(m['url'], 'url')
       ..type = _tipo(m['type'])
       ..title = _texto(m['title'], 'title')
@@ -380,16 +388,82 @@ class CopiaSeguridad {
       ..isNsfw = m['isNsfw'] == true;
   }
 
-  /// Una portada. Solo http y https, y solo si se puede leer como dirección.
+  /// Una portada.
+  ///
+  /// Se aceptan también las que vienen SIN esquema (`//cdn.sitio/x.jpg`), que
+  /// es una forma normalísima de escribirlas en la web: el navegador les pone
+  /// el mismo esquema de la página. Rechazarlas dejaba tarjetas sin imagen
+  /// después de importar, que fue exactamente lo que pasó.
+  ///
+  /// Lo que sí se rechaza es un esquema que no sea de red —`javascript:`,
+  /// `file:`, `data:`—: eso no es una imagen, es algo que alguien quiere que
+  /// la app cargue.
   ///
   /// Una portada rota no vale perder el registro: se devuelve sin ella y la
-  /// tarjeta usa la imagen por defecto, que es lo que ya hace cuando falta.
+  /// tarjeta usa la imagen por defecto, como cuando falta.
   static String? _portada(Object? valor) {
     if (valor is! String || valor.isEmpty) return null;
-    final uri = Uri.tryParse(valor.trim());
-    if (uri == null || !uri.hasScheme) return null;
+    final s = valor.trim();
+    if (s.length > _techoDeDireccion) return null;
+    if (_tieneInvisibles(s)) return null;
+    final uri = Uri.tryParse(s);
+    if (uri == null) return null;
+    // Sin esquema: relativa o "//host/…". Vale.
+    if (!uri.hasScheme) return s;
     if (uri.scheme != 'http' && uri.scheme != 'https') return null;
-    return valor.trim();
+    return s;
+  }
+
+  /// Techo de una dirección. De sobra para cualquier enlace real.
+  static const _techoDeDireccion = 2048;
+
+  /// Si el texto trae caracteres de control o invisibles.
+  ///
+  /// En un identificador no se limpian: se RECHAZA el registro. Limpiarlos
+  /// cambiaría la dirección, y una dirección cambiada no lleva a ningún lado —
+  /// justamente lo que pasaba al pasarles el limpiador de nombres.
+  static bool _tieneInvisibles(String s) {
+    for (final c in s.runes) {
+      if (c < 0x20 || (c >= 0x7F && c <= 0x9F)) return true;
+      if ((c >= 0x200B && c <= 0x200F) ||
+          (c >= 0x202A && c <= 0x202E) ||
+          (c >= 0x2066 && c <= 0x2069) ||
+          c == 0xFEFF) {
+        return true;
+      }
+    }
+    return false;
+  }
+
+  /// Un identificador: se usa tal cual o no se usa.
+  ///
+  /// `package` y `url` son con lo que se reconoce un título. **No se limpian ni
+  /// se recortan**: cualquier cambio los convierte en otro identificador, y ahí
+  /// el registro deja de encontrar su contenido. Pasó de verdad — se les estaba
+  /// aplicando el limpiador de NOMBRES, que corta a 40 caracteres, así que toda
+  /// dirección larga quedaba truncada y la ficha abría en "Página no
+  /// encontrada".
+  ///
+  /// Así que en vez de arreglarlos, se comprueban: si traen algo que no
+  /// corresponde, se descarta ese registro y se sigue con el resto.
+  @visibleForTesting
+  static String direccionDePrueba(Object? valor) => _direccion(valor, 'url');
+
+  @visibleForTesting
+  static String? portadaDePrueba(Object? valor) => _portada(valor);
+
+  static String _identificador(Object? valor, String campo) {
+    if (valor is! String || valor.trim().isEmpty) {
+      throw FormatException('falta "$campo"');
+    }
+    final s = valor.trim();
+    if (s.length > _techoDeDireccion) {
+      throw FormatException('"$campo" es demasiado largo');
+    }
+    if (_tieneInvisibles(s)) {
+      throw FormatException('"$campo" trae caracteres que no corresponden');
+    }
+    return s;
   }
 
   /// Vacío pasa a null, que es lo que la base entiende por "no hay".
@@ -400,37 +474,65 @@ class CopiaSeguridad {
     throw const FormatException('registro con forma inesperada');
   }
 
-  /// Los campos sin los que el registro no sirve para nada.
+  /// Un texto que se MUESTRA: título, nombre del episodio.
   ///
-  /// package y url son con lo que se identifica un título: sin ellos no se
-  /// puede ni comparar contra lo que ya hay ni volver a abrirlo.
-  static String _texto(Object? valor, String campo) {
+  /// Acá sí se limpia y se recorta, porque el destino es la pantalla y lo que
+  /// importa es que se vea bien. El techo es amplio: un título de anime largo
+  /// es normal, y cortarlo a lo bruto se ve peor que dejarlo.
+  static String _texto(Object? valor, String campo, {int techo = 300}) {
     if (valor is! String || valor.isEmpty) {
       throw FormatException('falta "$campo"');
     }
-    final limpio = limpiarNombre(valor);
+    final limpio = _paraMostrar(valor, techo);
     if (limpio.isEmpty) throw FormatException('"$campo" venía vacío');
     return limpio;
   }
 
-  /// Un texto que va a la base y a la pantalla, pero que puede faltar.
-  ///
-  /// Todo lo que sale del archivo pasa por acá: el archivo pudo haberlo tocado
-  /// cualquiera entre que se exportó y se importó, así que **no es texto de
-  /// confianza**. Se le quitan los invisibles y se le pone un techo.
+  /// Lo mismo, pero cuando el campo puede faltar sin invalidar el registro.
   static String _textoSuelto(Object? valor, {int techo = 300}) {
     if (valor is! String || valor.isEmpty) return '';
-    final limpio = limpiarNombre(valor);
-    return limpio.length > techo ? limpio.substring(0, techo) : limpio;
+    return _paraMostrar(valor, techo);
+  }
+
+  /// Quita lo invisible y recorta, sin puntos suspensivos.
+  ///
+  /// Aparte de [limpiarNombre], que es SOLO para el nombre de la copia y corta
+  /// a 40 con «…». Confundir las dos fue lo que truncó las direcciones.
+  static String _paraMostrar(String crudo, int techo) {
+    final salida = StringBuffer();
+    var espacioPendiente = false;
+    for (final c in crudo.runes) {
+      final esControl = c < 0x20 || (c >= 0x7F && c <= 0x9F);
+      final esInvisible = (c >= 0x200B && c <= 0x200F) ||
+          (c >= 0x202A && c <= 0x202E) ||
+          (c >= 0x2066 && c <= 0x2069) ||
+          c == 0xFEFF;
+      if (esInvisible) continue;
+      if (esControl || c == 0x20) {
+        espacioPendiente = salida.isNotEmpty;
+        continue;
+      }
+      if (espacioPendiente) {
+        salida.write(' ');
+        espacioPendiente = false;
+      }
+      salida.writeCharCode(c);
+    }
+    final s = salida.toString();
+    return s.length > techo ? s.substring(0, techo) : s;
   }
 
   /// Una dirección que después se va a abrir.
   ///
-  /// Solo http y https. Sin esto, un archivo preparado a mano podría meter en
-  /// el historial una entrada con `javascript:` o `file:` y esa dirección
-  /// terminaría abriéndose sola al tocar la tarjeta.
+  /// Se guarda TAL CUAL (ver [_identificador]) y solo se comprueba el esquema:
+  /// sin esto, un archivo preparado a mano podría dejar en el historial una
+  /// entrada con `javascript:` o `file:`, y esa dirección terminaría abriéndose
+  /// sola al tocar la tarjeta.
+  ///
+  /// Se aceptan las que no traen esquema, que es como muchas extensiones
+  /// guardan sus enlaces.
   static String _direccion(Object? valor, String campo) {
-    final s = _texto(valor, campo);
+    final s = _identificador(valor, campo);
     final uri = Uri.tryParse(s);
     if (uri == null) throw FormatException('"$campo" no es una dirección');
     if (uri.hasScheme && uri.scheme != 'http' && uri.scheme != 'https') {
