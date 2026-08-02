@@ -281,7 +281,7 @@
     "backup-pick-unstable": "Está marcada como inestable. Vas a poder recuperar esto cuando se arregle.",
     "backup-export-working": "Protegiendo tu copia con la clave…",
     "backup-opening": "Abriendo la copia…",
-    "backup-import-exts": "Se recuperó el contenido de {n} de {total} extensiones.",
+    "backup-import-exts": "Se recuperó el contenido de {n} extensiones.",
     "backup-nsfw-title": "Esta copia trae contenido +18",
     "backup-nsfw-body": "Hay {n} elementos +18. Se van a recuperar igual, pero como tenés la Zona +18 apagada no vas a verlos hasta que la actives en Ajustes.\n\n¿Seguimos?",
     "backup-pick-title-export": "¿Qué querés guardar?",
@@ -324,7 +324,10 @@
     "auto-check-update-off-title": "¿Desactivar las actualizaciones automáticas?",
     "auto-check-update-off-body": "PrismHub va a dejar de avisarte cuando salga una versión nueva.\n\nLas correcciones importantes no te van a llegar, y las extensiones pueden dejar de funcionar cuando los sitios cambien, sin que sepas por qué. Vas a tener que comprobarlo a mano desde acá.\n\nPodés volver a activarlo cuando quieras.",
     "auto-check-update-off-confirm": "Desactivar igual",
-    "backup-import-nothing-new": "Ya tenías todo lo que traía esta copia, así que no cambió nada."
+    "backup-import-nothing-new": "Ya tenías todo lo que traía esta copia, así que no cambió nada.",
+    "backup-import-hist": "{n} títulos entraron al historial.",
+    "backup-import-favs": "{n} se agregaron a favoritos.",
+    "backup-import-missing-title": "Te faltan estas extensiones"
   },
   "external-player-launching": "Lanzando {player}",
   "detail": {

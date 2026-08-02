@@ -9,6 +9,7 @@ import 'package:prismhub/utils/copia_cifrado.dart';
 import 'package:prismhub/utils/copia_seguridad.dart';
 import 'package:prismhub/utils/portadas_perdidas.dart';
 import 'package:prismhub/views/pages/settings/copia_elegir_extensiones.dart';
+import 'package:prismhub/views/pages/settings/copia_resultado.dart';
 import 'package:fluent_ui/fluent_ui.dart' as fluent;
 import 'package:flutter/material.dart';
 import 'package:flutter_i18n/flutter_i18n.dart';
@@ -642,37 +643,10 @@ class _SettingsPageState extends State<SettingsPage> {
       }
       if (!context.mounted) return;
 
+      r.extensionesUsadas = elegidas.length;
+
       // Lo que entró, en números: decir solo "listo" deja al usuario sin saber
       // si de verdad se recuperó algo o el archivo estaba vacío.
-      final partes = <String>[
-        // Cuántas extensiones entraron de las que traía la copia: "3 de 5".
-        // Sin esto, el que dejó dos afuera por no tenerlas instaladas no tiene
-        // forma de recordar después que le faltan.
-        FlutterI18n.translate(context, 'settings.backup-import-exts',
-            translationParams: {
-              'n': '${elegidas.length}',
-              'total': '${copia.paquetes.length}',
-            }),
-        // Cuando no entró nada se dice así y no con dos ceros: "0 y 0" se lee
-        // como que algo salió mal, cuando en realidad significa que este equipo
-        // ya estaba al día.
-        if (r.total == 0)
-          'settings.backup-import-nothing-new'.i18n
-        else
-          FlutterI18n.translate(context, 'settings.backup-import-counts',
-              translationParams: {
-                'historial': '${r.historialNuevo + r.historialActualizado}',
-                'favoritos': '${r.favoritosNuevos}',
-              }),
-        if (r.fallidos > 0)
-          FlutterI18n.translate(context, 'settings.backup-import-failed-items',
-              translationParams: {'n': '${r.fallidos}'}),
-        if (r.extensionesFaltantes.isNotEmpty)
-          FlutterI18n.translate(context, 'settings.backup-import-missing',
-              translationParams: {
-                'extensiones': r.extensionesFaltantes.join(', ')
-              }),
-      ];
 
       // Se recarga lo que está en pantalla y se avisa de dónde vino.
       //
@@ -681,11 +655,20 @@ class _SettingsPageState extends State<SettingsPage> {
       // viejos, y parece que no pasó nada.
       await _refrescarTrasImportar();
       if (!context.mounted) return;
-      showPlatformSnackbar(
+      // Un diálogo y no un aviso de paso: es el resumen de una operación que
+      // toca los datos del usuario, y en un aviso quedaba todo pegado en un
+      // párrafo que se iba solo antes de terminar de leerlo.
+      await showPlatformDialog(
         context: context,
-        title: FlutterI18n.translate(context, 'settings.backup-import-from',
-            translationParams: {'nombre': r.deQuien.etiqueta}),
-        content: partes.join('\n'),
+        title: 'settings.backup-import-done'.i18n,
+        maxWidth: 440,
+        content: CopiaResultado(resultado: r),
+        actions: [
+          PlatformFilledButton(
+            onPressed: () => RouterUtils.pop(),
+            child: Text('common.understood'.i18n),
+          ),
+        ],
       );
     } on CopiaInvalida catch (e) {
       // El archivo no sirve, y sabemos por qué: se dice tal cual en vez de

@@ -195,6 +195,48 @@ class PortadasPerdidas {
   /// Los que ya se le pidieron a la extensión, aparte de los locales.
   static final Set<String> _yaPedidos = {};
 
+  /// Aprovecha la portada que ya cargó la ficha del título.
+  ///
+  /// Al abrir un detalle, la portada está ahí sí o sí —es lo primero que se ve—
+  /// aunque la tarjeta del inicio siga en gris. Sería absurdo tenerla en
+  /// pantalla y no guardarla: se copia al historial y al favorito de ese mismo
+  /// título, y al volver atrás la tarjeta ya está.
+  ///
+  /// Es además lo que arregla el caso de una extensión que se cayó y volvió:
+  /// mientras estaba caída no se le podía pedir nada, pero en cuanto vuelve y
+  /// el usuario entra al título, la portada queda guardada sola.
+  ///
+  /// Solo rellena lo que FALTA: si el registro ya tenía portada no se toca, que
+  /// podría ser una mejor o una que el usuario ya vio.
+  static Future<void> desdeLaFicha({
+    required String package,
+    required String url,
+    String? cover,
+  }) async {
+    if (cover == null || cover.isEmpty) return;
+    try {
+      final h = await DatabaseService.getHistoryByPackageAndUrl(package, url);
+      if (h != null && (h.cover == null || h.cover!.isEmpty)) {
+        h.cover = cover;
+        // Raw: sin mover la fecha. Abrir una ficha no es haber visto algo.
+        await DatabaseService.putHistoryRaw(h);
+      }
+      final f = await DatabaseService.getFavorite(package: package, url: url);
+      if (f != null && (f.cover == null || f.cover!.isEmpty)) {
+        f.cover = cover;
+        await DatabaseService.putFavoriteRaw(f);
+      }
+      // Y se olvida el intento fallido: si antes no se pudo conseguir, ahora sí
+      // se pudo, así que no tiene sentido seguir dándolo por perdido.
+      final clave = '$package|$url';
+      _yaMirados.remove(clave);
+      _yaPedidos.remove(clave);
+    } catch (e) {
+      // Guardar una portada nunca vale romper la apertura de una ficha.
+      logger.info('No se pudo guardar la portada de la ficha: $e');
+    }
+  }
+
   /// Vuelve a permitir el intento. Para después de importar, donde puede haber
   /// aparecido una ficha nueva que sí tenga la portada.
   static void olvidarLoMirado() {

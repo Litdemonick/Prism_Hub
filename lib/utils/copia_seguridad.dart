@@ -745,7 +745,7 @@ class CopiaInvalida implements Exception {
 
 /// Qué entró de verdad al importar.
 class ResultadoImportacion {
-  const ResultadoImportacion({
+  ResultadoImportacion({
     required this.deQuien,
     required this.historialNuevo,
     required this.historialActualizado,
@@ -771,6 +771,9 @@ class ResultadoImportacion {
   final List<String> extensionesFaltantes;
 
   int get total => historialNuevo + historialActualizado + favoritosNuevos;
+
+  /// De cuántas extensiones entró algo. Lo pone quien importa.
+  int extensionesUsadas = 0;
 }
 
 /// Lo que se puede leer de una copia SIN la clave.

@@ -285,7 +285,7 @@
     "backup-pick-unstable": "Marked as unstable. You will be able to restore this once it is fixed.",
     "backup-export-working": "Protecting your backup with the key…",
     "backup-opening": "Opening the backup…",
-    "backup-import-exts": "Restored content from {n} of {total} extensions.",
+    "backup-import-exts": "Restored content from {n} extensions.",
     "backup-nsfw-title": "This backup holds +18 content",
     "backup-nsfw-body": "There are {n} +18 items. They will be restored anyway, but since the +18 Zone is off you will not see them until you enable it in Settings.\n\nContinue?",
     "backup-pick-title-export": "What do you want to save?",
@@ -328,7 +328,10 @@
     "auto-check-update-off-title": "Turn off automatic updates?",
     "auto-check-update-off-body": "PrismHub will stop telling you when a new version is out.\n\nImportant fixes will not reach you, and extensions may stop working when sites change, with no explanation. You will have to check by hand from here.\n\nYou can turn it back on whenever you want.",
     "auto-check-update-off-confirm": "Turn it off anyway",
-    "backup-import-nothing-new": "You already had everything this backup held, so nothing changed."
+    "backup-import-nothing-new": "You already had everything this backup held, so nothing changed.",
+    "backup-import-hist": "{n} titles went to your history.",
+    "backup-import-favs": "{n} were added to favourites.",
+    "backup-import-missing-title": "You are missing these extensions"
   },
   "external-player-launching": "Launching {player}",
   "detail": {

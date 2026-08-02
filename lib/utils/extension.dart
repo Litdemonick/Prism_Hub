@@ -319,6 +319,20 @@ class ExtensionUtils {
   /// caché. Sirve para filtrar una lista mientras se construye, donde no se
   /// puede await. Si el índice todavía no se descargó devuelve false, y el
   /// filtro se corrige solo en cuanto llega (la página se reconstruye).
+  /// Cómo se llama una extensión, para mostrarlo.
+  ///
+  /// Si está instalada, su nombre. Si no —que es justo cuando hace falta
+  /// nombrarla, para decir que falta— se arma uno legible del identificador:
+  /// "io.prismhub.shademanga" no le dice nada a nadie, y era lo que salía en
+  /// los avisos.
+  static String nombreVisible(String package) {
+    final puesto = runtimes[package]?.extension.name;
+    if (puesto != null && puesto.isNotEmpty) return puesto;
+    final ultimo = package.split('.').last;
+    if (ultimo.isEmpty) return package;
+    return ultimo[0].toUpperCase() + ultimo.substring(1);
+  }
+
   /// Con qué texto abrir la lista de extensiones la próxima vez.
   ///
   /// Sirve para mandar a alguien a UNA extensión concreta: al avisar que falta
