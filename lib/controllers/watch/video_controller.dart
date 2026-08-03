@@ -4839,13 +4839,6 @@ class VideoPlayerController extends GetxController with WidgetsBindingObserver {
     // nodos caídos, o directamente no intentarlo. Ver _comoAbrir.
     final plan = await _comoAbrir(url, headers);
     if (_disposed) return false;
-    if (plan.muerta) {
-      // Se comprobó que la fuente no sirve. Devolver false acá dispara el mismo
-      // camino de siempre (reintento y, si no, otro servidor) pero al instante,
-      // en vez de esperar los 35 segundos que tarda mpv en rendirse.
-      logger.info('Fuente descartada sin esperar a mpv: $url');
-      return false;
-    }
     await player.open(Media(plan.url ?? url, httpHeaders: hdrs));
     if (_disposed) {
       try {
@@ -5047,13 +5040,22 @@ class VideoPlayerController extends GetxController with WidgetsBindingObserver {
             'calidad(es) · $donde · se sigue hasta la variante '
             '(${variante.host}) en ${reloj.elapsedMilliseconds} ms');
       } catch (e) {
-        // El maestro SÍ se pudo leer y su variante NO, con las mismas cabeceras
-        // y contra el mismo host: no es un problema de acceso nuestro, esa
-        // fuente no sirve. Decirlo ahora ahorra los 35 segundos que mpv tarda en
-        // llegar a la misma conclusión, y el servidor siguiente arranca antes.
-        logger.warning('ficha · $servidor · el maestro se leyó pero su variante '
-            'NO responde ($e) · se descarta la fuente sin esperar a mpv');
-        return const _ComoAbrir.muerta();
+        // La variante no contestó. ESTO NO ALCANZA PARA DAR LA FUENTE POR
+        // MUERTA, aunque al principio se hizo así para ahorrar los 35 segundos
+        // que tarda mpv en rendirse.
+        //
+        // Costó un vídeo entero: en Pornhub cada calidad es un maestro con una
+        // sola variante firmada, y un fallo pasajero en ESE segundo pedido
+        // descartaba la fuente completa. El usuario veía "no se encontró ningún
+        // embed", salía, volvía a entrar y andaba — el síntoma clásico de algo
+        // que se descarta por un tropiezo y no porque esté roto.
+        //
+        // Además nosotros pedimos con dio y mpv pide con lo suyo: que a dio le
+        // vaya mal no prueba que a mpv le vaya a ir mal. Así que se abre igual
+        // y se deja que decida el reproductor, que es el que sabe.
+        logger.warning('ficha · $servidor · la variante no respondió ($e) · se '
+            'abre igual y decide mpv');
+        return const _ComoAbrir.talCual();
       }
     }
 
@@ -5974,20 +5976,14 @@ String etiquetaCalidad(int? width, int? height) {
 
 /// Cómo abrir una fuente, decidido antes de tocar el reproductor.
 ///
-/// Tres resultados y no dos: además de "tal cual" y "por acá", hace falta poder
-/// decir "ni lo intentes". Ver VideoPlayerController._comoAbrir.
+/// Dos resultados: tal cual, o por esta otra dirección. Hubo un tercero —"ni lo
+/// intentes"— para descartar rápido lo que no iba a andar, y se sacó: descartar
+/// por nuestra cuenta le quitaba al usuario vídeos que sí funcionaban. Quien
+/// dice si una fuente sirve es el reproductor. Ver _comoAbrir.
 class _ComoAbrir {
-  const _ComoAbrir.talCual()
-      : url = null,
-        muerta = false;
-  const _ComoAbrir.con(this.url) : muerta = false;
-  const _ComoAbrir.muerta()
-      : url = null,
-        muerta = true;
+  const _ComoAbrir.talCual() : url = null;
+  const _ComoAbrir.con(this.url);
 
   /// Dirección a abrir. Null = la original.
   final String? url;
-
-  /// La fuente se comprobó y no sirve: no vale la pena ni intentarlo.
-  final bool muerta;
 }
