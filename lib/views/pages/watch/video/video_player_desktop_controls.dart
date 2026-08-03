@@ -2670,16 +2670,22 @@ class _ServerTab extends StatelessWidget {
                   color: Colors.white,
                 ),
               ),
-              if (isNative) ...[
-                const SizedBox(width: 6),
-                Icon(
-                  FluentIcons.lightning_bolt,
-                  size: 12,
-                  color: selected
-                      ? Colors.white
-                      : const Color(0xFF69F0AE).withValues(alpha: 0.85),
-                ),
-              ],
+              // Siempre hay una marca, nunca "nada": el rayo dice que el
+              // servidor reproduce en el reproductor de la app, y el mundo que
+              // se va a abrir en el navegador interno. Antes los de WebView
+              // salían pelados, que se leía como "este está peor" en vez de
+              // "este se abre distinto" — y son igual de válidos para ver.
+              const SizedBox(width: 6),
+              Icon(
+                isNative ? FluentIcons.lightning_bolt : FluentIcons.globe,
+                size: 12,
+                color: selected
+                    ? Colors.white
+                    : (isNative
+                            ? const Color(0xFF69F0AE)
+                            : const Color(0xFF7FB2FF))
+                        .withValues(alpha: 0.85),
+              ),
             ],
           ),
         ),

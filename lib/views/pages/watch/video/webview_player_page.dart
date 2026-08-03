@@ -86,7 +86,37 @@ bool isDirectStream(String url) {
 // la real), estos no tienen otra forma de mostrarlo sin resolver los 5-6
 // servidores de una — el problema que esta sesión resolvió justamente para
 // no repetir.
-const _knownReliableServerNames = {'voe', 'doodstream'};
+// La lista tenía SOLO voe y doodstream y se quedó vieja: mientras tanto el SDK
+// aprendió a resolver muchos más, así que servidores que reproducen perfecto en
+// nativo aparecían sin rayito, como si fueran los peores de la lista.
+//
+// Cada nombre de acá se comprobó pidiendo un rango real y mirando que llegara
+// vídeo (content-type y bytes), no por si el resolver devolvía una URL.
+//
+// Aplica a TODAS las extensiones porque se compara por nombre de servidor, no
+// por sitio. Se usa `contains` en minúsculas a propósito: cada extensión
+// etiqueta distinto ("Streamtape LAT", "byse", "Voex"), y el nombre corto del
+// host es lo único estable entre todas.
+const _knownReliableServerNames = {
+  'voe',
+  'doodstream',
+  'dsvplay',
+  'playmogo',
+  'streamtape',
+  'stape',
+  'streamwish',
+  'sfastwish',
+  'wishfast',
+  'vidhide',
+  'mixdrop',
+  'mediafire',
+  'mp4upload',
+  'hexload',
+  'savefiles',
+  'byse',
+  'desu',
+  'magi',
+};
 
 /// True si el rayito de "nativo confiable" debería mostrarse para esta
 /// pestaña — por URL (isDirectStream) o por nombre de servidor verificado.
