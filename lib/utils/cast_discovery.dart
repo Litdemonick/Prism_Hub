@@ -60,13 +60,41 @@ class CastDiscovery {
   final Map<String, AparatoDeCasteo> _clasificados = {};
   final Set<String> _yaMirados = {};
 
+  /// Los que aparecieron pero NO se pueden usar, con el motivo.
+  ///
+  /// Antes se descartaban en silencio y la lista simplemente no los mostraba.
+  /// Desde afuera eso es idéntico a que el aparato no exista, y ahí empieza el
+  /// problema: el usuario ve su televisor encendido, la app no lo lista, y no
+  /// hay forma de saber si falta buscar más, si hay que acercarse al router o si
+  /// hay que abrir algo en la tele.
+  ///
+  /// La app SÍ sabe por qué no sirve —lo comprobó para descartarlo— y esa
+  /// información se estaba tirando. Mostrarlo apagado con el motivo al lado
+  /// convierte un silencio en una instrucción.
+  Stream<List<AparatoDescartado>> get descartados => _descartados.stream;
+
+  final _descartados = StreamController<List<AparatoDescartado>>.broadcast();
+  final Map<String, AparatoDescartado> _noSirven = {};
+
   void _clasificar(Map<String, DLNADevice> encontrados) {
     var huboCambio = false;
     for (final e in encontrados.entries) {
       if (!_yaMirados.add(e.key)) continue;
       final a = clasificar(e.value);
       if (a == null) {
-        logger.info('Se descarta ${e.value.info.friendlyName}: no reproduce');
+        final nombre = e.value.info.friendlyName;
+        logger.info('No sirve para reproducir: $nombre '
+            '(${e.value.info.deviceType})');
+        // Se guarda igual, para poder mostrarlo apagado con el motivo.
+        if (!_noSirven.containsKey(nombre)) {
+          _noSirven[nombre] = AparatoDescartado(
+            nombre: nombre,
+            motivo: 'No reproduce vídeo',
+          );
+          if (!_descartados.isClosed) {
+            _descartados.add(_noSirven.values.toList());
+          }
+        }
         continue;
       }
       // Por identificador: el mismo televisor aparece una vez por cada placa
@@ -238,5 +266,17 @@ class CastDiscovery {
     _preguntadores.clear();
     if (!_gestor.devices.isClosed) _gestor.devices.close();
     if (!_aparatos.isClosed) _aparatos.close();
+    if (!_descartados.isClosed) _descartados.close();
   }
+}
+
+/// Un aparato que apareció en la búsqueda pero no se puede usar.
+///
+/// Se muestra en la lista apagado, con el motivo: el router de casa y los
+/// aparatos cuyo receptor está cerrado se anuncian igual que uno bueno, y
+/// esconderlos deja al usuario sin saber si buscar más o revisar el aparato.
+class AparatoDescartado {
+  const AparatoDescartado({required this.nombre, required this.motivo});
+  final String nombre;
+  final String motivo;
 }
