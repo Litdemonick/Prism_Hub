@@ -11,6 +11,7 @@ import 'package:get/get.dart';
 import 'package:media_kit/media_kit.dart';
 import 'package:prismhub/controllers/application_controller.dart';
 import 'package:prismhub/utils/connectivity.dart';
+import 'package:prismhub/utils/bloqueador_anuncios.dart';
 import 'package:prismhub/utils/log.dart';
 import 'package:prismhub/utils/prismhub_directory.dart';
 import 'package:prismhub/utils/request.dart';
@@ -178,6 +179,15 @@ void main(List<String> args) async {
       logger.severe("PrismHubStorage.ensureInitialized falló", e, st);
       runApp(_StartupErrorApp(message: '$e'));
       return;
+    }
+
+    // Las listas de bloqueo, ya juntas y listas para cuando se abra el
+    // navegador interno. Va con su propio try: quedarse sin bloqueador es
+    // molesto, pero no arrancar la app por eso sería peor.
+    try {
+      await BloqueadorAnuncios.cargar();
+    } catch (e) {
+      logger.warning('No se pudieron cargar las listas de bloqueo: $e');
     }
 
     // Crea el entorno de WebView2 ya al arrancar, mientras COM del proceso

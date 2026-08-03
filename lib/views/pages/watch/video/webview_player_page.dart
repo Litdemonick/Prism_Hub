@@ -7,6 +7,7 @@ import 'package:flutter/services.dart';
 import 'package:flutter_inappwebview/flutter_inappwebview.dart';
 import 'package:path/path.dart' as p;
 import 'package:prismhub/utils/layout.dart';
+import 'package:prismhub/utils/bloqueador_anuncios.dart';
 import 'package:prismhub/utils/log.dart';
 import 'package:prismhub/utils/prismhub_directory.dart';
 import 'package:prismhub/utils/prismhub_storage.dart';
@@ -781,10 +782,29 @@ class _WebViewPlayerPageState extends State<WebViewPlayerPage>
                       // Bloquea ventanas/popups de anuncios de los hosts.
                       javaScriptCanOpenWindowsAutomatically: false,
                       supportMultipleWindows: false,
+                      // Las listas del usuario, en la vía nativa: el pedido ni
+                      // se hace. Soportado en Android (y iOS/macOS); en Windows
+                      // llega vacío y el bloqueo lo hacen shouldOverrideUrlLoading
+                      // y el guion que se inyecta más abajo.
+                      contentBlockers: BloqueadorAnuncios.reglasNativas(),
                     ),
                     onWebViewCreated: (controller) {
                       _webViewController = controller;
                       _enUso = this;
+                      // El guion se agrega como UserScript y NO en onLoadStop:
+                      // tiene que correr ANTES que el JS del sitio para poder
+                      // tapar window.open, que es como se abren las ventanas
+                      // emergentes. Puesto al final ya sería tarde.
+                      final guion = BloqueadorAnuncios.guionParaInyectar();
+                      if (guion.isNotEmpty) {
+                        controller.addUserScript(
+                          userScript: UserScript(
+                            source: guion,
+                            injectionTime:
+                                UserScriptInjectionTime.AT_DOCUMENT_START,
+                          ),
+                        );
+                      }
                     },
                     // Puentea el fullscreen HTML5 del propio sitio (el botón que se ve
                     // dentro de su reproductor) con el fullscreen real de la ventana
@@ -836,6 +856,14 @@ class _WebViewPlayerPageState extends State<WebViewPlayerPage>
                     shouldOverrideUrlLoading: (controller, action) async {
                       final u = action.request.url;
                       if (u == null) return NavigationActionPolicy.ALLOW;
+                      // Listas del usuario. En Android esto casi no se usa
+                      // porque el bloqueo nativo ya atajó el pedido antes; en
+                      // Windows y Linux, donde ese bloqueo no existe, es la
+                      // primera barrera contra las páginas de anuncios.
+                      if (BloqueadorAnuncios.bloquea(u.toString())) {
+                        logger.info('[bloqueador] navegación cortada: ${u.host}');
+                        return NavigationActionPolicy.CANCEL;
+                      }
                       final host = Uri.tryParse(widget.url)?.host;
                       if (action.isForMainFrame &&
                           host != null &&
