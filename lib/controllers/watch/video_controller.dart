@@ -4742,6 +4742,14 @@ class VideoPlayerController extends GetxController with WidgetsBindingObserver {
   // Verifica si el host de una URL es alcanzable vía TCP.
   // Dart maneja EHOSTUNREACH (errno 113) limpiamente;
   // libmpv/libavformat tienen un bug que causa SIGSEGV con ese errno.
+  /// Cuánto se espera el saludo TCP antes de dar el host por lento.
+  ///
+  /// Era 1 segundo. Alcanza por ethernet contra un servidor cercano, que es
+  /// donde se probó; no alcanza contra un CDN lejano, por wifi de 2,4 GHz, ni
+  /// cuando la resolución del nombre se hace esperar. 2,5 s cubre esos casos sin
+  /// volverse una espera notoria.
+  static const _esperaDeHost = Duration(milliseconds: 2500);
+
   Future<bool> _isHostReachable(String url) async {
     try {
       final uri = Uri.parse(url);
@@ -4749,15 +4757,39 @@ class VideoPlayerController extends GetxController with WidgetsBindingObserver {
       final port = (uri.hasPort && uri.port > 0)
           ? uri.port
           : (uri.scheme == 'https' ? 443 : 80);
+      final reloj = Stopwatch()..start();
       final socket = await Socket.connect(
         uri.host,
         port,
-        timeout: const Duration(seconds: 1),
+        timeout: _esperaDeHost,
       );
       socket.destroy();
-      logger.info('Host alcanzable: ${uri.host}:$port');
+      logger.info(
+          'Host alcanzable: ${uri.host}:$port (${reloj.elapsedMilliseconds} ms)');
       return true;
     } on SocketException catch (e) {
+      // Que se agote la espera NO es un host caído, y tratarlos igual costaba
+      // servidores perfectamente sanos.
+      //
+      // Medido en vivo con Streamwish: la app declaró "inalcanzable" a
+      // okqtss1gbbnca8e.premilkyway.com, dio el servidor por caído y abrió el
+      // navegador — y ese mismo host, probado a mano en ese momento, aceptaba la
+      // conexión en **190 milisegundos** y contestaba 200. Un segundo de espera
+      // no alcanza para distinguir "muerto" de "tardó", y hay motivos sobrados
+      // para tardar: una respuesta IPv6 que no lleva a ningún lado, una
+      // resolución de nombre lenta, un saludo TLS con un CDN lejano.
+      //
+      // El único motivo real de este chequeo es el SIGSEGV de libmpv con
+      // EHOSTUNREACH, y ESE caso siempre llega con un error del sistema
+      // operativo; un vencimiento de plazo no lo trae. Así que solo se veta
+      // cuando el sistema dijo explícitamente que no se puede llegar. Si
+      // simplemente tardó, se deja que libmpv lo intente, que para eso tiene sus
+      // propios plazos (network-timeout=20).
+      if (e.osError == null) {
+        logger.warning('El host tardó más de ${_esperaDeHost.inMilliseconds} ms '
+            'en aceptar la conexión; se intenta igual: $url');
+        return true;
+      }
       logger.severe('Host inalcanzable: $url — ${e.message}');
       return false;
     } catch (_) {
