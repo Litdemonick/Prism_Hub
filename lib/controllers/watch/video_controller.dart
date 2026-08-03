@@ -4828,12 +4828,18 @@ class VideoPlayerController extends GetxController with WidgetsBindingObserver {
     // libmpv por defecto envía "Lavf/X.X.X" que los CDNs de streaming bloquean.
     final hdrs = <String, String>{'User-Agent': _browserUA};
     if (headers != null) hdrs.addAll(headers);
-    // Si la lista reparte los pedacitos entre varios nodos del CDN, se abre a
-    // traves del relay para poder esquivar los que no entreguen. Devuelve null
-    // —y se abre directo, como siempre— cuando no hace falta o no se pudo.
-    final porElRelay = await _porElRelaySiConvieneEsquivarNodos(url, headers);
+    // Cómo conviene abrir esta fuente: tal cual, por el relay para esquivar
+    // nodos caídos, o directamente no intentarlo. Ver _comoAbrir.
+    final plan = await _comoAbrir(url, headers);
     if (_disposed) return false;
-    await player.open(Media(porElRelay ?? url, httpHeaders: hdrs));
+    if (plan.muerta) {
+      // Se comprobó que la fuente no sirve. Devolver false acá dispara el mismo
+      // camino de siempre (reintento y, si no, otro servidor) pero al instante,
+      // en vez de esperar los 35 segundos que tarda mpv en rendirse.
+      logger.info('Fuente descartada sin esperar a mpv: $url');
+      return false;
+    }
+    await player.open(Media(plan.url ?? url, httpHeaders: hdrs));
     if (_disposed) {
       try {
         unawaited(player.stop());
@@ -4956,36 +4962,31 @@ class VideoPlayerController extends GetxController with WidgetsBindingObserver {
     ));
   }
 
-  /// Cambia la lista HLS por una que pase por el relay, para poder esquivar
-  /// nodos caídos. Devuelve null si no hace falta o no se pudo.
+  /// Decide CÓMO abrir una fuente HLS: tal cual, por el relay, o ni intentarlo.
   ///
-  /// El problema, medido: estas listas reparten los pedacitos entre varios nodos
-  /// del mismo CDN, y algunos entregan a 2 MB/s mientras otros no terminan el
-  /// archivo en quince segundos. Los pedacitos los pide mpv, no nosotros, así
-  /// que no había forma de decirle "ese nodo no anda, pedíselo a otro" — y el
-  /// vídeo se clavaba siempre en el mismo segundo del episodio, justo donde
-  /// empieza un pedacito servido por un nodo malo. Casteando ya está resuelto
-  /// porque ahí los bajamos nosotros; esto lleva lo mismo al reproductor normal.
+  /// Hace tres cosas que antes no se podían, y las tres salieron de mediciones:
   ///
-  /// **Solo se activa cuando de verdad hace falta**, y esto es a propósito:
-  /// meter el relay en el medio de toda la reproducción es un riesgo que no vale
-  /// la pena correr en las fuentes que ya andan bien. Se pide la lista (medido:
-  /// menos de un segundo), se mira si reparte entre varios nodos, y si es de uno
-  /// solo se devuelve null y se abre directo como siempre.
+  /// 1. **Esquivar nodos caídos.** Estas listas reparten los pedacitos entre
+  ///    varios nodos del mismo CDN y algunos entregan a 2 MB/s mientras otros no
+  ///    terminan el archivo en quince segundos. Los pedacitos los pide mpv, así
+  ///    que la única forma de elegir el nodo es ponerse en el medio.
+  /// 2. **Seguir las listas maestras.** Un maestro no trae pedacitos sino otras
+  ///    listas, así que antes se abría directo y nos perdíamos todo lo de
+  ///    arriba. Ahora se sigue hasta la lista de la variante.
+  /// 3. **Descartar rápido una fuente que no va a andar.** Medido con
+  ///    Streamwish: el maestro se bajó bien, se le pasó a mpv, y **treinta y
+  ///    cinco segundos después** se dio por no reproducible. Si el maestro se
+  ///    puede leer pero su variante no, la fuente está muerta y eso se sabe en
+  ///    un segundo — no hay motivo para esperar los treinta y cinco.
   ///
-  /// Ante cualquier problema —no se pudo bajar, no es una lista, el relay no
-  /// levanta— también devuelve null. Nunca puede dejar el vídeo peor que antes:
-  /// en el peor caso se reproduce exactamente como hoy.
-  Future<String?> _porElRelaySiConvieneEsquivarNodos(
+  /// Ante cualquier duda se abre tal cual, como siempre: nunca puede dejar el
+  /// vídeo peor que antes.
+  Future<_ComoAbrir> _comoAbrir(
     String url,
     Map<String, String>? headers,
   ) async {
-    // La ficha del servidor, SIEMPRE, aunque no haya nada que hacer.
-    //
-    // Sirve para revisar extensión por extensión sin cruzar líneas a mano: de un
-    // vistazo se ve qué entregó cada servidor y por qué camino va. Antes, cuando
-    // no era una lista HLS no se registraba nada y desde el registro no había
-    // forma de distinguir "entregó un MP4" de "no se llegó a mirar".
+    // La ficha del servidor, SIEMPRE, aunque no haya nada que hacer. Sirve para
+    // revisar extensión por extensión sin cruzar líneas a mano.
     final sinParametros = url.split('?').first.toLowerCase();
     final servidor = currentServerName.value.isEmpty
         ? 'servidor sin nombre'
@@ -4995,75 +4996,154 @@ class VideoPlayerController extends GetxController with WidgetsBindingObserver {
       logger.info('ficha · $servidor · ${sinParametros.endsWith('.mp4') ? 'MP4 '
           'directo' : 'no es una lista HLS'} · $donde · va directo a mpv, no '
           'hay pedacitos que repartir');
-      return null;
+      return const _ComoAbrir.talCual();
     }
+
+    final hdrs = <String, String>{'User-Agent': _browserUA};
+    if (headers != null) hdrs.addAll(headers);
+    final reloj = Stopwatch()..start();
+
+    String? maestro;
     try {
-      final reloj = Stopwatch()..start();
-      final hdrs = <String, String>{'User-Agent': _browserUA};
-      if (headers != null) hdrs.addAll(headers);
-      final res = await dio.get<String>(
-        url,
-        options: Options(
-          headers: hdrs,
-          responseType: ResponseType.plain,
-          receiveTimeout: const Duration(seconds: 6),
-        ),
-      );
-      final texto = res.data;
-      if (texto == null || !texto.contains('#EXTM3U')) {
-        logger.info('ficha · $servidor · dice .m3u8 pero no lo es · $donde · '
-            'va directo a mpv');
-        return null;
-      }
-      // Una lista maestra no trae pedacitos sino otras listas: la reparte de
-      // nodos se ve recién en la de abajo, y seguirla acá sería pedir otra vez.
-      if (texto.contains('#EXT-X-STREAM-INF')) {
-        // Cuántas calidades ofrece, que es justo lo que interesa al revisar
-        // servidor por servidor: es el dato que el menú de calidades no
-        // consigue cuando la fuente contesta 403.
-        final calidades = RegExp(r'#EXT-X-STREAM-INF').allMatches(texto).length;
+      maestro = await _bajarLista(url, hdrs);
+    } catch (e) {
+      logger.info('ficha · $servidor · no se pudo leer la lista · va directo a '
+          'mpv como siempre: $e');
+      return const _ComoAbrir.talCual();
+    }
+    if (maestro == null || !maestro.contains('#EXTM3U')) {
+      logger.info('ficha · $servidor · dice .m3u8 pero no lo es · $donde · va '
+          'directo a mpv');
+      return const _ComoAbrir.talCual();
+    }
+
+    var lista = maestro;
+    var direccion = url;
+
+    // Lista maestra: se elige una variante y se sigue.
+    if (maestro.contains('#EXT-X-STREAM-INF')) {
+      final variante = _mejorVarianteDe(maestro, Uri.parse(url));
+      final calidades = RegExp(r'#EXT-X-STREAM-INF').allMatches(maestro).length;
+      if (variante == null) {
         logger.info('ficha · $servidor · lista MAESTRA con $calidades '
-            'calidad(es) · $donde · va directo a mpv (todavía no se siguen los '
-            'maestros: mpv elige la variante y nosotros no la vemos)');
-        return null;
+            'calidad(es) pero ninguna utilizable · va directo a mpv');
+        return const _ComoAbrir.talCual();
       }
+      try {
+        final deLaVariante = await _bajarLista(variante.toString(), hdrs);
+        if (deLaVariante == null || !deLaVariante.contains('#EXTM3U')) {
+          throw StateError('la variante no devolvió una lista');
+        }
+        lista = deLaVariante;
+        direccion = variante.toString();
+        logger.info('ficha · $servidor · lista MAESTRA con $calidades '
+            'calidad(es) · $donde · se sigue hasta la variante '
+            '(${variante.host}) en ${reloj.elapsedMilliseconds} ms');
+      } catch (e) {
+        // El maestro SÍ se pudo leer y su variante NO, con las mismas cabeceras
+        // y contra el mismo host: no es un problema de acceso nuestro, esa
+        // fuente no sirve. Decirlo ahora ahorra los 35 segundos que mpv tarda en
+        // llegar a la misma conclusión, y el servidor siguiente arranca antes.
+        logger.warning('ficha · $servidor · el maestro se leyó pero su variante '
+            'NO responde ($e) · se descarta la fuente sin esperar a mpv');
+        return const _ComoAbrir.muerta();
+      }
+    }
 
-      final base = Uri.parse(url);
-      final nodos = <String>{};
-      for (final linea in const LineSplitter().convert(texto)) {
-        final limpia = linea.trim();
-        if (limpia.isEmpty || limpia.startsWith('#')) continue;
-        final host = base.resolve(limpia).host;
-        if (host.isNotEmpty) nodos.add(host);
-      }
-      final pedacitos = const LineSplitter()
-          .convert(texto)
-          .where((l) => l.trim().isNotEmpty && !l.trim().startsWith('#'))
-          .length;
-      logger.info('ficha · $servidor · lista de $pedacitos pedacitos repartidos '
-          'en ${nodos.length} nodo(s) · $donde · leída en '
-          '${reloj.elapsedMilliseconds} ms');
-      // Un solo nodo: no hay a quién cambiarle, así que el relay no aportaría
-      // nada y solo agregaría un intermediario.
-      if (nodos.length < 2) {
-        logger.info('ficha · $servidor · un solo nodo (${nodos.first}) · va '
-            'directo a mpv: no hay a quién cambiarle si va lento');
-        return null;
-      }
+    final base = Uri.parse(direccion);
+    final nodos = <String>{};
+    var pedacitos = 0;
+    for (final linea in const LineSplitter().convert(lista)) {
+      final limpia = linea.trim();
+      if (limpia.isEmpty || limpia.startsWith('#')) continue;
+      pedacitos++;
+      final host = base.resolve(limpia).host;
+      if (host.isNotEmpty) nodos.add(host);
+    }
+    if (nodos.isEmpty) {
+      logger.info('ficha · $servidor · la lista no traía pedacitos · va directo');
+      return const _ComoAbrir.talCual();
+    }
+    logger.info('ficha · $servidor · lista de $pedacitos pedacitos repartidos en '
+        '${nodos.length} nodo(s) · leída en ${reloj.elapsedMilliseconds} ms');
 
+    // Un solo nodo: no hay a quién cambiarle, así que el relay no aportaría nada
+    // y solo agregaría un intermediario. Pero si veníamos de un maestro, se le
+    // pasa a mpv la variante YA resuelta: es un viaje menos al CDN, y en estos
+    // servidores cada viaje se paga en segundos.
+    if (nodos.length < 2) {
+      final conVariante = direccion != url;
+      logger.info('ficha · $servidor · un solo nodo (${nodos.first}) · va '
+          'directo a mpv${conVariante ? ', con la variante ya resuelta (un '
+              'viaje menos al CDN)' : ''}');
+      return conVariante ? _ComoAbrir.con(direccion) : const _ComoAbrir.talCual();
+    }
+
+    try {
       final relay = await CastRelayServer.registerAndGetUrl(
-        targetUrl: url,
+        targetUrl: direccion,
         headers: hdrs,
         esquivarNodosCaidos: true,
       );
       logger.info('ficha · $servidor · PASA POR EL RELAY para esquivar nodos '
           'caídos · nodos: ${nodos.join(', ')}');
-      return relay;
+      return _ComoAbrir.con(relay);
     } catch (e) {
-      logger.info('ficha · $servidor · no se pudo mirar la lista · va directo '
-          'a mpv como siempre: $e');
-      return null;
+      logger.info('ficha · $servidor · el relay no se pudo levantar · va '
+          'directo a mpv: $e');
+      return direccion == url
+          ? const _ComoAbrir.talCual()
+          : _ComoAbrir.con(direccion);
     }
+  }
+
+  /// Baja una lista HLS como texto. Tira si no se pudo.
+  Future<String?> _bajarLista(String url, Map<String, String> hdrs) async {
+    final res = await dio.get<String>(
+      url,
+      options: Options(
+        headers: hdrs,
+        responseType: ResponseType.plain,
+        receiveTimeout: const Duration(seconds: 6),
+      ),
+    );
+    return res.data;
+  }
+
+  /// La variante que abriría mpv: la mejor que no pase del tope de caudal.
+  ///
+  /// Se usa el MISMO criterio que `hls-bitrate` para no cambiar qué calidad se
+  /// ve: si mpv elegiría la de 6 Mbps, se sigue esa. Si todas superan el tope se
+  /// toma la más chica, que es lo más cerca que hay de lo pedido.
+  Uri? _mejorVarianteDe(String maestro, Uri base) {
+    const tope = 10000000;
+    final lineas = const LineSplitter().convert(maestro);
+    Uri? mejor;
+    var mejorCaudal = -1;
+    Uri? masChica;
+    var caudalMasChico = -1;
+    for (var i = 0; i < lineas.length; i++) {
+      if (!lineas[i].startsWith('#EXT-X-STREAM-INF')) continue;
+      final caudal = int.tryParse(
+              RegExp(r'BANDWIDTH=(\d+)').firstMatch(lineas[i])?.group(1) ??
+                  '') ??
+          0;
+      for (var j = i + 1; j < lineas.length; j++) {
+        final destino = lineas[j].trim();
+        if (destino.isEmpty || destino.startsWith('#')) continue;
+        final uri = base.resolve(destino);
+        if (caudal <= tope && caudal > mejorCaudal) {
+          mejorCaudal = caudal;
+          mejor = uri;
+        }
+        if (caudalMasChico < 0 || caudal < caudalMasChico) {
+          caudalMasChico = caudal;
+          masChica = uri;
+        }
+        break;
+      }
+    }
+    return mejor ?? masChica;
   }
 
   void _markNativePlayback(String name) {
@@ -5883,4 +5963,24 @@ String etiquetaCalidad(int? width, int? height) {
   if (height >= 480) return '480p';
   if (height >= 360) return '360p';
   return '${height}p';
+}
+
+/// Cómo abrir una fuente, decidido antes de tocar el reproductor.
+///
+/// Tres resultados y no dos: además de "tal cual" y "por acá", hace falta poder
+/// decir "ni lo intentes". Ver VideoPlayerController._comoAbrir.
+class _ComoAbrir {
+  const _ComoAbrir.talCual()
+      : url = null,
+        muerta = false;
+  const _ComoAbrir.con(this.url) : muerta = false;
+  const _ComoAbrir.muerta()
+      : url = null,
+        muerta = true;
+
+  /// Dirección a abrir. Null = la original.
+  final String? url;
+
+  /// La fuente se comprobó y no sirve: no vale la pena ni intentarlo.
+  final bool muerta;
 }
