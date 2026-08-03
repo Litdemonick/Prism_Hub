@@ -3703,7 +3703,14 @@ class VideoPlayerController extends GetxController with WidgetsBindingObserver {
   static bool _pareceCalidad(String nombre) {
     final n = nombre.toLowerCase();
     // "1080p", "2160p(4k) hd", "720 p"… y las formas cortas 4K/2K/8K.
-    return RegExp(r'\d{3,4}\s*p\b').hasMatch(n) ||
+    //
+    // El `\d*` después de la "p" es para los sitios que pegan los cuadros por
+    // segundo al final: "720p60", "1080p60". Sin eso ahí no hay separación de
+    // palabra entre la "p" y el "6", así que esa etiqueta NO parecía una
+    // calidad — y como se exige que TODAS lo parezcan, una sola con fps hacía
+    // que la lista entera se tomara por servidores y subiera a la tira de
+    // arriba, duplicando lo que ya ofrece el botón de calidad.
+    return RegExp(r'\d{3,4}\s*p\d*\b').hasMatch(n) ||
         RegExp(r'\b[248]k\b').hasMatch(n);
   }
 
