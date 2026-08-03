@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
+import 'dart:typed_data';
 
 import 'package:prismhub/utils/cast_hls_ts.dart';
 import 'package:prismhub/utils/cast_log.dart';
@@ -56,6 +57,7 @@ class CastRelayServer {
     required String targetUrl,
     Map<String, String>? headers,
     PlanTs? planTs,
+    bool esquivarNodosCaidos = false,
   }) async {
     await _ensureRunning();
     // El token lleva adelante un identificador de sesion para poder soltar de
@@ -63,8 +65,13 @@ class CastRelayServer {
     // unregister). Sin eso, cada episodio casteado dejaba cientos de entradas.
     final sesion = '${DateTime.now().microsecondsSinceEpoch}';
     final token = '$sesion-0';
-    _targets[token] =
-        _RelayTarget(targetUrl, headers ?? const {}, sesion, planTs: planTs);
+    _targets[token] = _RelayTarget(
+      targetUrl,
+      headers ?? const {},
+      sesion,
+      planTs: planTs,
+      esquivarNodosCaidos: esquivarNodosCaidos,
+    );
     final ip = await _localLanAddress();
     if (ip == null) {
       // Sin una IP de red real no hay relay posible: lo unico que se le podria
@@ -163,6 +170,12 @@ class CastRelayServer {
   /// pero no bajó nada (negoció y lo rechazó: es el formato), o está bajando
   /// (no hay nada roto, hay que esperar).
   static final Map<String, int> bytesPorSesion = {};
+
+  /// Por qué pedacito del reempaquetado iba cada transmisión.
+  ///
+  /// Es lo que permite retomar en vez de reiniciar cuando el aparato vuelve a
+  /// pedir. Ver el uso en el manejador de pedidos.
+  static final Map<String, int> _pedacitoPorSesion = {};
 
   static int bytesServidos(String? relayUrl) {
     final sesion = _sesionDe(relayUrl);
@@ -274,6 +287,23 @@ class CastRelayServer {
       // verdad o si solo abrio la conexion y se fue.
       CastLog.paso('El aparato pidio desde $quien: ${request.method} '
           '${CastLog.cabeceras(request.headers)}');
+    } else if (request.method.toUpperCase() == 'GET' && target.planTs != null) {
+      // VOLVIÓ a pedir el vídeo entero. SOLO para el flujo reempaquetado.
+      //
+      // Ahí un GET nuevo sí significa que el aparato cortó y volvió a empezar,
+      // porque ese flujo se sirve de una sola vez: un pedido nuevo lo arma desde
+      // el principio y el vídeo arranca de cero. Sin esta línea, un bucle de
+      // reinicios no dejaba ningún rastro en el registro.
+      //
+      // Y NO en los demás casos, que es lo que hacía antes: sirviendo una lista
+      // HLS pedacito por pedacito —como hace el reproductor nativo— cada uno es
+      // un GET, así que el aviso saltaba cientos de veces anunciando un reinicio
+      // que no existía. Un aviso que grita siempre no avisa de nada.
+      final servidos = bytesPorSesion[target.sesion] ?? 0;
+      CastLog.paso('El aparato VOLVIÓ a pedir el vídeo tras '
+          '${(servidos / 1024 / 1024).toStringAsFixed(1)} MiB servidos '
+          '(${CastLog.cabeceras(request.headers)}) — si esto se repite, el '
+          'vídeo se está reiniciando solo');
     }
 
     // El receptor pregunta primero con HEAD (el "Stat" de Kodi) para saber
@@ -300,8 +330,41 @@ class CastRelayServer {
             '${CastLog.cabeceras(cabeceras)}');
       }
       if (esHead) return Response.ok(null, headers: cabeceras);
+      // Si ya se le venía sirviendo, se SIGUE donde iba en vez de empezar de
+      // cero.
+      //
+      // Un aparato puede cortar y volver a pedir por muchos motivos —se le llenó
+      // el buffer, un hipo de red, su propio reproductor decidió reabrir—, y no
+      // los controlamos. Lo que sí controlamos es qué le mandamos cuando vuelve:
+      // hasta ahora era el vídeo entero desde el principio, así que cada
+      // reintento suyo se veía como que el capítulo se reiniciaba solo, una y
+      // otra vez. Medido en vivo: pedidos nuevos tras 8,3 · 16,6 · 33,3 MiB
+      // servidos, con el vídeo volviendo al inicio cada vez.
+      //
+      // Se retoma en el ÚLTIMO pedacito entregado y no en el siguiente: ese
+      // puede haber quedado a medio reproducir del otro lado. Repetir unos
+      // segundos no se nota; saltearlos, sí.
+      final ultimo = _pedacitoPorSesion[target.sesion];
+      // Se retrocede un poco: lo que se sirvió por delante y el aparato no llegó
+      // a mostrar se pierde al cortar, y retomar justo donde se dejó de servir
+      // se saltea ese tramo — es el salto hacia adelante que se veía. Ver
+      // PlanTs.retomarDesde.
+      final desde = ultimo == null ? null : plan.retomarDesde(ultimo);
+      final aServir = desde == null ? plan : plan.recortadoDesde(desde);
+      if (desde != null) {
+        CastLog.paso('Se retoma el reempaquetado en el pedacito ${desde + 1} '
+            '(lo último servido fue el ${ultimo! + 1}; se retrocede para no '
+            'saltearse lo que el aparato no llegó a mostrar) — quedan '
+            '${plan.pedacitos.length - desde} de ${plan.pedacitos.length}');
+      }
       return Response.ok(
-        _contando(target.sesion, CastHlsATs.servir(plan)),
+        _contando(
+          target.sesion,
+          CastHlsATs.servir(
+            aServir,
+            alEntregar: (indice) => _pedacitoPorSesion[target.sesion] = indice,
+          ),
+        ),
         headers: cabeceras,
       );
     }
@@ -310,6 +373,31 @@ class CastRelayServer {
     try {
       final uri = Uri.parse(target.url);
       final esLista = _pareceHls(target.url);
+      // Un pedacito con PLAZO, y si no llega se lo pide a otro nodo.
+      //
+      // Antes acá solo se retransmitía lo que fuera llegando: si el nodo
+      // entregaba a cuentagotas, el reproductor esperaba exactamente lo mismo
+      // que si le hubiera pedido directo. Anotar el nodo servía para el pedacito
+      // SIGUIENTE, pero el que ya estaba en curso clavaba la reproducción igual
+      // — que es justo lo que se seguía viendo.
+      //
+      // Ahora se baja entero contra reloj: si no termina a tiempo se abandona y
+      // se pide el MISMO archivo a otro nodo, igual que en el casteo. Cabe en
+      // memoria de sobra (los pedacitos medidos van de 200 KiB a 8 MiB).
+      if (!esLista && !esHead && target.esquivarNodosCaidos) {
+        final bytes = await _pedacitoConFailover(uri, target);
+        if (bytes != null) {
+          bytesPorSesion[target.sesion] =
+              (bytesPorSesion[target.sesion] ?? 0) + bytes.length;
+          return Response.ok(bytes, headers: {
+            'Content-Type': 'video/mp2t',
+            'Content-Length': '${bytes.length}',
+            ..._permisos,
+          });
+        }
+        // Ningún nodo lo entregó: se sigue por el camino normal, que al menos
+        // devuelve lo que la fuente conteste en vez de no devolver nada.
+      }
       final upstreamReq =
           esHead ? await client.headUrl(uri) : await client.getUrl(uri);
       target.headers.forEach((key, value) => upstreamReq.headers.set(key, value));
@@ -407,7 +495,12 @@ class CastRelayServer {
       // el camino, en el punto por el que pasa TODO el video.
       return Response(
         upstreamRes.statusCode,
-        body: _contando(target.sesion, upstreamRes),
+        body: _contando(
+          target.sesion,
+          esLista || !target.esquivarNodosCaidos
+              ? upstreamRes
+              : _vigilandoElNodo(uri.host, upstreamRes),
+        ),
         headers: resHeaders,
       );
     } catch (e) {
@@ -505,7 +598,12 @@ class CastRelayServer {
     // cabeceras, el receptor puede pedirlos el mismo y el relay se saca del
     // camino. Medido contra la fuente del registro del usuario, los pedacitos
     // contestan 200 sin ninguna cabecera, asi que ahi este atajo aplica.
-    final directo = await _pedacitosVanDirecto(texto, base);
+    // El atajo de mandar al receptor directo a la fuente NO aplica cuando lo que
+    // se busca es esquivar nodos caídos: ahí el relay tiene que quedarse en el
+    // camino, que es lo que le permite pedirle el mismo pedacito a otro nodo.
+    final directo = padre.esquivarNodosCaidos
+        ? false
+        : await _pedacitosVanDirecto(texto, base);
     final salida = StringBuffer();
     if (directo) {
       // Igual hay que reescribir: las direcciones relativas de la lista se
@@ -588,6 +686,121 @@ class CastRelayServer {
     }
   }
 
+  /// Cuánto se le aguanta a un nodo antes de pedirle el pedacito a otro.
+  ///
+  /// Ocho segundos: los nodos sanos medidos entregaron cualquier pedacito en
+  /// menos de tres, y los malos no terminaban ni en quince. Queda holgado para
+  /// los buenos y corta rápido con los que no entregan.
+  static const _plazoPorPedacito = Duration(seconds: 8);
+
+  /// Baja un pedacito entero, probando otros nodos si el suyo no entrega.
+  ///
+  /// Devuelve null si ninguno pudo — ahí quien llama sigue por el camino normal.
+  static Future<List<int>?> _pedacitoConFailover(
+      Uri original, _RelayTarget target) async {
+    for (final uri in _nodosParaProbar(original, target)) {
+      final reloj = Stopwatch()..start();
+      try {
+        final bytes = await _bajarPedacitoEntero(uri, target)
+            .timeout(_plazoPorPedacito);
+        if (uri.host != original.host) {
+          CastLog.paso('El pedacito se consiguió en ${uri.host} — '
+              '${(bytes.length / 1024).round()} KiB en '
+              '${reloj.elapsedMilliseconds} ms');
+        }
+        return bytes;
+      } catch (e) {
+        CastHlsATs.anotarNodoLento(uri.host);
+        CastLog.paso('${uri.host} no dio el pedacito en '
+            '${reloj.elapsedMilliseconds} ms, se prueba otro nodo — $e');
+      }
+    }
+    return null;
+  }
+
+  static Future<List<int>> _bajarPedacitoEntero(
+      Uri uri, _RelayTarget target) async {
+    final req = await _cliente.getUrl(uri);
+    target.headers.forEach((k, v) => req.headers.set(k, v));
+    if (!target.headers.keys.any((k) => k.toLowerCase() == 'user-agent')) {
+      req.headers.set(HttpHeaders.userAgentHeader, _uaPorDefecto);
+    }
+    final res = await req.close();
+    if (res.statusCode >= 400) {
+      await res.drain<void>();
+      throw HttpException('HTTP ${res.statusCode}');
+    }
+    final juntado = BytesBuilder(copy: false);
+    await for (final bloque in res) {
+      juntado.add(bloque);
+    }
+    return juntado.takeBytes();
+  }
+
+  /// El nodo original primero (o el mejor si ese ya falló), y después el resto
+  /// de los que la lista usó para este contenido.
+  static List<Uri> _nodosParaProbar(Uri original, _RelayTarget target) {
+    // Solo los hosts que sirven PEDACITOS.
+    //
+    // La sesión incluye también la lista maestra, que vive en otro dominio
+    // (medido: la lista en nika.playmudos.com y los pedacitos en
+    // cdnN.ducvomes.com). Sin este filtro se ofrecía el host de la lista como
+    // alternativa para un pedacito: una petición condenada a fallar, que encima
+    // dejaba anotado como "lento" a un host que ni siquiera tiene ese archivo.
+    final hosts = <String>{};
+    for (final t in _targets.values) {
+      if (t.sesion != target.sesion) continue;
+      if (_pareceHls(t.url)) continue;
+      final host = Uri.tryParse(t.url)?.host;
+      if (host != null && host.isNotEmpty) hosts.add(host);
+    }
+    final candidatos = [
+      original,
+      for (final host in hosts)
+        if (host != original.host) original.replace(host: host),
+    ];
+    // Los ya conocidos como lentos, al final: no se descartan porque un nodo
+    // puede recuperarse, y quedarse sin candidatos sería peor.
+    final buenos = candidatos.where((u) => !CastHlsATs.nodoLento(u.host));
+    final malos = candidatos.where((u) => CastHlsATs.nodoLento(u.host));
+    return [...buenos, ...malos];
+  }
+
+  /// Mira a qué ritmo entrega un nodo y lo anota si va demasiado lento.
+  ///
+  /// No corta la descarga en curso: cuando se cortó, la mitad de los bytes ya
+  /// viajaron al reproductor y cambiar de nodo a mitad los duplicaría. Lo que
+  /// hace es dejar constancia, para que **el pedacito siguiente** no vuelva a
+  /// caer en el mismo nodo. Con listas de cientos de pedacitos, evitarlo desde
+  /// el segundo en adelante es casi todo el beneficio.
+  ///
+  /// El umbral está puesto donde separa los dos comportamientos medidos: los
+  /// nodos sanos entregaron entre 500 y 3500 KiB/s, y los malos no pasaron de
+  /// 100 KiB/s. Se espera un mínimo de segundos antes de juzgar, porque al
+  /// principio de una descarga cualquier ritmo se ve mal.
+  static const _ritmoMinimo = 200 * 1024;
+  static const _antesDeJuzgar = Duration(seconds: 8);
+
+  static Stream<List<int>> _vigilandoElNodo(
+      String host, Stream<List<int>> origen) {
+    final reloj = Stopwatch()..start();
+    var entregados = 0;
+    var yaAnotado = false;
+    return origen.map((bloque) {
+      entregados += bloque.length;
+      if (!yaAnotado && reloj.elapsed > _antesDeJuzgar) {
+        final ritmo = entregados / reloj.elapsed.inSeconds;
+        if (ritmo < _ritmoMinimo) {
+          yaAnotado = true;
+          CastHlsATs.anotarNodoLento(host);
+          CastLog.paso('$host va a ${(ritmo / 1024).round()} KiB/s: se anota '
+              'como lento y los pedacitos siguientes lo esquivan');
+        }
+      }
+      return bloque;
+    });
+  }
+
   static String _registrarHijo(
       Uri base, String destino, _RelayTarget padre, String relayBase) {
     final absoluta = base.resolve(destino).toString();
@@ -595,7 +808,8 @@ class CastRelayServer {
     final yaEsta = _tokensPorUrl[clave];
     if (yaEsta != null) return '$relayBase/relay/$yaEsta';
     final token = '${padre.sesion}-${++_correlativo}';
-    _targets[token] = _RelayTarget(absoluta, padre.headers, padre.sesion);
+    _targets[token] = _RelayTarget(absoluta, padre.headers, padre.sesion,
+        esquivarNodosCaidos: padre.esquivarNodosCaidos);
     _tokensPorUrl[clave] = token;
     return '$relayBase/relay/$token';
   }
@@ -618,6 +832,7 @@ class CastRelayServer {
     _tokensPorUrl.removeWhere((clave, _) => clave.startsWith('$sesion|'));
     pedidosPorSesion.remove(sesion);
     bytesPorSesion.remove(sesion);
+    _pedacitoPorSesion.remove(sesion);
     _cerrarSiSobra();
   }
 
@@ -683,9 +898,21 @@ class CastRelayServer {
 }
 
 class _RelayTarget {
-  _RelayTarget(this.url, this.headers, this.sesion, {this.planTs});
+  _RelayTarget(this.url, this.headers, this.sesion,
+      {this.planTs, this.esquivarNodosCaidos = false});
   final String url;
   final Map<String, String> headers;
+
+  /// Los pedacitos TIENEN que pasar por el relay, aunque se pudieran bajar
+  /// directo.
+  ///
+  /// Normalmente, si un pedacito se puede bajar sin nuestras cabeceras, la lista
+  /// se reescribe apuntando a la fuente y el relay se saca del camino — eso
+  /// ahorra que cada pedacito viaje dos veces. Pero cuando el motivo de pasar
+  /// por acá es **esquivar nodos caídos**, sacarse del camino es justamente
+  /// perder la única forma de hacerlo: el reproductor volvería a pedirle a un
+  /// nodo que no entrega.
+  final bool esquivarNodosCaidos;
 
   /// Cuando viene, a este token no se le sirve la lista HLS sino los pedacitos
   /// pegados en un MPEG-TS continuo, que es lo único que entiende un televisor

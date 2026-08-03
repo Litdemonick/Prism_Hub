@@ -9,6 +9,8 @@ import 'package:prismhub/utils/copia_cifrado.dart';
 import 'package:prismhub/utils/copia_seguridad.dart';
 import 'package:prismhub/utils/portadas_perdidas.dart';
 import 'package:prismhub/router/router.dart';
+import 'package:prismhub/utils/bloqueador_anuncios.dart';
+import 'package:prismhub/views/pages/settings/bloqueador_page.dart';
 import 'package:prismhub/views/pages/settings/copia_elegir_extensiones.dart';
 import 'package:prismhub/views/pages/settings/copia_resultado.dart';
 import 'package:prismhub/views/pages/settings/registro_en_vivo_page.dart';
@@ -838,6 +840,19 @@ class _SettingsPageState extends State<SettingsPage> {
     router.push('/settings/log');
   }
 
+  /// Mismo motivo que _abrirVisorDeRegistro: en Android manda Navigator
+  /// (estamos dentro de una subpágina ya empujada con Get.to) y en escritorio,
+  /// go_router.
+  void _abrirBloqueador(BuildContext context) {
+    if (Platform.isAndroid) {
+      Navigator.of(context).push(
+        MaterialPageRoute(builder: (_) => const BloqueadorPage()),
+      );
+      return;
+    }
+    router.push('/settings/bloqueador');
+  }
+
   void _mostrarAvisoLegal() {
     showPlatformDialog(
       context: context,
@@ -1412,6 +1427,29 @@ class _SettingsPageState extends State<SettingsPage> {
                 ),
                 desktopWidget: fluent.FilledButton(
                   onPressed: () => _abrirVisorDeRegistro(context),
+                  child: Text('settings.open'.i18n),
+                ),
+              ),
+            ),
+            const SizedBox(height: 10),
+            // El bloqueador vive acá, con las herramientas, y no en la sección
+            // del reproductor: no toca la reproducción, solo el navegador
+            // interno.
+            SettingsTile(
+              title: 'Bloqueador de anuncios',
+              buildSubtitle: () => BloqueadorAnuncios.activo
+                  ? '${BloqueadorAnuncios.cuantosDominios} dominios bloqueados '
+                      'en el navegador interno'
+                  : 'Apagado. Instalá una lista para bloquear anuncios en el '
+                      'navegador interno',
+              onTap: () => _abrirBloqueador(context),
+              trailing: PlatformWidget(
+                androidWidget: TextButton(
+                  onPressed: () => _abrirBloqueador(context),
+                  child: Text('settings.open'.i18n),
+                ),
+                desktopWidget: fluent.FilledButton(
+                  onPressed: () => _abrirBloqueador(context),
                   child: Text('settings.open'.i18n),
                 ),
               ),

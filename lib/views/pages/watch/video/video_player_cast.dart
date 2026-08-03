@@ -4,6 +4,7 @@ import 'package:prismhub/utils/cast_aparato.dart';
 import 'package:prismhub/utils/cast_discovery.dart';
 import 'package:prismhub/utils/i18n.dart';
 import 'package:prismhub/utils/log.dart';
+import 'package:prismhub/views/widgets/home/home_theme.dart';
 import 'package:prismhub/views/widgets/progress.dart';
 
 class VideoPlayerCast extends StatefulWidget {
@@ -22,6 +23,15 @@ class _VideoPlayerCastState extends State<VideoPlayerCast> {
   StreamSubscription? _devicesSub;
   Timer? _finDeBusqueda;
   List<AparatoDeCasteo> deviceList = const [];
+
+  /// Los que aparecieron pero no se pueden usar, con su motivo.
+  ///
+  /// Se muestran apagados en vez de esconderlos: un televisor encendido que la
+  /// app no lista deja al usuario sin saber si tiene que seguir buscando, si es
+  /// la red, o si hay que abrir algo en el aparato. La app ya sabe por qué no
+  /// sirve —lo comprobó para descartarlo— y esconderlo tira esa información.
+  List<AparatoDescartado> _noSirven = const [];
+  StreamSubscription? _descartadosSub;
 
   /// Si sigue buscando. La busqueda NO puede quedar abierta para siempre.
   ///
@@ -65,6 +75,10 @@ class _VideoPlayerCastState extends State<VideoPlayerCast> {
       if (!mounted) return;
       setState(() => deviceList = lista);
     });
+    _descartadosSub = searcher!.descartados.listen((lista) {
+      if (!mounted) return;
+      setState(() => _noSirven = lista);
+    });
     _finDeBusqueda?.cancel();
     _finDeBusqueda = Timer(_duracionBusqueda, _pararBusqueda);
   }
@@ -76,6 +90,8 @@ class _VideoPlayerCastState extends State<VideoPlayerCast> {
     searcher = null;
     _devicesSub?.cancel();
     _devicesSub = null;
+    _descartadosSub?.cancel();
+    _descartadosSub = null;
     if (mounted) setState(() => _buscando = false);
   }
 
@@ -133,6 +149,26 @@ class _VideoPlayerCastState extends State<VideoPlayerCast> {
                     setState(() => _eligiendo = true);
                     widget.onDeviceSelected?.call(aparato);
                   },
+          ),
+        // Los que no sirven, apagados y al final: se ven, se entiende por qué no
+        // se pueden elegir, y no estorban a los que sí sirven.
+        for (final descartado in _noSirven)
+          ListTile(
+            enabled: false,
+            leading: Icon(
+              Icons.tv_off_rounded,
+              color: HomeTheme.textMuted.withValues(alpha: 0.6),
+            ),
+            title: Text(
+              descartado.nombre,
+              style: const TextStyle(color: HomeTheme.textMuted),
+            ),
+            subtitle: Text(
+              descartado.motivo,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: const TextStyle(color: HomeTheme.textMuted),
+            ),
           ),
         Padding(
           padding: const EdgeInsets.fromLTRB(16, 8, 16, 20),

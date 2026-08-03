@@ -17,6 +17,7 @@ import 'package:prismhub/views/pages/nsfw18/nsfw18_search_page.dart';
 import 'package:prismhub/views/pages/nsfw18/nsfw18_zone_page.dart';
 import 'package:prismhub/views/pages/search/extension_searcher_page.dart';
 import 'package:prismhub/views/pages/search/search_page.dart';
+import 'package:prismhub/views/pages/settings/bloqueador_page.dart';
 import 'package:prismhub/views/pages/settings/registro_en_vivo_page.dart';
 import 'package:prismhub/views/pages/settings/settings_page.dart';
 import 'package:prismhub/views/pages/tracking/anilist_more_page.dart';
@@ -125,6 +126,11 @@ final router = GoRouter(
           path: '/settings/log',
           pageBuilder: (context, state) =>
               _animation(state, const RegistroEnVivoPage()),
+        ),
+        GoRoute(
+          path: '/settings/bloqueador',
+          pageBuilder: (context, state) =>
+              _animation(state, const BloqueadorPage()),
         ),
         GoRoute(
           path: '/settings/anilist',

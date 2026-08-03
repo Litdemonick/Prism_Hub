@@ -28,8 +28,32 @@ import 'package:prismhub/utils/log.dart';
 ///  - **Pedacitos en formato MP4** (`#EXT-X-MAP`, el HLS moderno): no son
 ///    MPEG-TS, y pegarlos no da nada reproducible.
 class CastHlsATs {
-  /// Cuántas veces se reintenta un pedacito antes de saltearlo.
-  static const _reintentos = 2;
+  // Antes acá había un contador de reintentos: se le pedía el mismo pedacito al
+  // MISMO nodo dos veces más antes de rendirse. Ya no se usa — insistirle a un
+  // nodo que no entrega no sirve de nada, y el mismo archivo está en los otros
+  // nodos de la lista. Ver PlanTs.dondePedir.
+
+  /// Nodos que no entregaron a tiempo, y cuándo fue.
+  ///
+  /// Sirve para no volver a esperar por uno que ya se sabe que no responde. Se
+  /// olvida a los pocos minutos: un nodo puede estar caído un rato y volver, y
+  /// castigarlo para siempre dejaría la lista de candidatos cada vez más corta.
+  static final Map<String, DateTime> _nodosLentos = {};
+  static const _cuantoSeRecuerda = Duration(minutes: 5);
+
+  static void anotarNodoLento(String host) {
+    _nodosLentos[host] = DateTime.now();
+  }
+
+  static bool nodoLento(String host) {
+    final cuando = _nodosLentos[host];
+    if (cuando == null) return false;
+    if (DateTime.now().difference(cuando) > _cuantoSeRecuerda) {
+      _nodosLentos.remove(host);
+      return false;
+    }
+    return true;
+  }
 
   static final HttpClient _cliente = HttpClient()
     ..maxConnectionsPerHost = 4
@@ -162,7 +186,14 @@ class CastHlsATs {
   ///
   /// Se bajan varios pedacitos a la vez pero se entregan SIEMPRE en orden: un
   /// MPEG-TS es un flujo continuo y un pedacito fuera de lugar lo rompe.
-  static Stream<List<int>> servir(PlanTs plan) async* {
+  ///
+  /// [alEntregar] avisa qué pedacito se está entregando. El relay lo usa para
+  /// saber por dónde iba si el aparato corta y vuelve a pedir: sin eso, cada
+  /// reintento del televisor arrancaba el vídeo desde el principio.
+  static Stream<List<int>> servir(
+    PlanTs plan, {
+    void Function(int indice)? alEntregar,
+  }) async* {
     // Desde donde diga el plan: adelantar es servir el mismo video empezando
     // por otro pedacito.
     final enVuelo = <Future<List<int>?>>[];
@@ -176,9 +207,35 @@ class CastHlsATs {
       }
     }
 
-    llenarLaCola();
+    // El PRIMER pedacito se entrega a medida que llega, sin esperar a tenerlo
+    // entero.
+    //
+    // Esperarlo completo dejaba la respuesta HTTP en silencio desde que el
+    // televisor la pedía hasta que terminaba de bajar ese pedacito — varios
+    // segundos con un CDN lento. Muchos televisores dan por muerta una conexión
+    // que no manda un solo byte en ese rato: la cierran, vuelven a pedir la
+    // misma dirección, y como el flujo se arma desde el principio, el vídeo
+    // arranca de cero otra vez. Y otra. Ese es el bucle de reinicios.
+    //
+    // Los siguientes SÍ se bajan enteros por delante (es lo que evita el corte
+    // entre uno y otro), pero para entonces ya hay bytes viajando y el
+    // televisor no tiene motivo para cortar.
+    if (proximo < plan.pedacitos.length) {
+      final primero = proximo;
+      proximo++;
+      // La cola de los que vienen detrás arranca YA, en paralelo con este.
+      llenarLaCola();
+      alEntregar?.call(primero);
+      yield* _servirPedacitoEnVivo(plan, primero);
+    }
+
+    // Cuál de la lista es el que sale ahora. La cola se adelanta, así que
+    // `proximo` ya apunta a varios más allá y no sirve para esto.
+    var entregando = proximo - enVuelo.length;
     while (enVuelo.isNotEmpty) {
       final bytes = await enVuelo.removeAt(0);
+      alEntregar?.call(entregando);
+      entregando++;
       // Se pide el reemplazo apenas se saca uno de la cola, no después de
       // entregarlo: si se esperara a que el televisor lo consuma, volveríamos a
       // tener la descarga y la reproducción una detrás de la otra.
@@ -191,34 +248,110 @@ class CastHlsATs {
     }
   }
 
+  /// Un pedacito servido a medida que llega, sin juntarlo antes en memoria.
+  ///
+  /// Solo se reintenta si TODAVÍA no salió nada: una vez que hay bytes en
+  /// camino, volver a empezar el pedacito los duplicaría dentro del flujo, y un
+  /// MPEG-TS con bytes repetidos se rompe. Si se corta a mitad, es preferible el
+  /// saltito.
+  static Stream<List<int>> _servirPedacitoEnVivo(PlanTs plan, int indice) async* {
+    // Se prueba nodo por nodo, no el mismo tres veces: si el que asignó la lista
+    // no responde, insistirle no ayuda — el mismo archivo está en los otros.
+    for (final trozo in plan.dondePedir(indice)) {
+      var salioAlgo = false;
+      try {
+        final req = await _cliente.getUrl(trozo);
+        _preparar(req, plan.headers, plan.userAgent);
+        final res = await req.close().timeout(const Duration(seconds: 15));
+        if (res.statusCode >= 400) {
+          await res.drain<void>();
+          throw HttpException('HTTP ${res.statusCode}');
+        }
+        await for (final bloque in res) {
+          salioAlgo = true;
+          yield bloque;
+        }
+        return;
+      } catch (e) {
+        // Con bytes ya en camino no se puede cambiar de nodo: volver a empezar
+        // el pedacito los duplicaría dentro del flujo, y un MPEG-TS con bytes
+        // repetidos se rompe. Ahí es preferible el saltito.
+        if (salioAlgo) {
+          logger.warning('Reempaquetado a TS: el pedacito ${indice + 1} se '
+              'cortó a mitad, se sigue con el siguiente — $e');
+          return;
+        }
+        anotarNodoLento(trozo.host);
+        logger.info('Reempaquetado a TS: ${trozo.host} no dio el pedacito '
+            '${indice + 1}, se prueba otro nodo — $e');
+      }
+    }
+    logger.warning('Reempaquetado a TS: se saltea el pedacito ${indice + 1}, '
+        'ningún nodo lo entregó');
+  }
+
   /// Un pedacito entero en memoria, o null si no se pudo bajar.
   ///
   /// Nunca tira: quien lo espera está sirviendo un vídeo en marcha y una
   /// excepción ahí cortaría la transmisión completa.
   static Future<List<int>?> _bajarPedacito(PlanTs plan, int indice) async {
-    final trozo = plan.pedacitos[indice];
-    for (var intento = 0; intento <= _reintentos; intento++) {
+    final plazo = plan.plazoPara(indice);
+    for (final trozo in plan.dondePedir(indice)) {
+      final reloj = Stopwatch()..start();
       try {
-        final req = await _cliente.getUrl(trozo);
-        _preparar(req, plan.headers, plan.userAgent);
-        final res = await req.close().timeout(const Duration(seconds: 30));
-        if (res.statusCode >= 400) {
-          await res.drain<void>();
-          throw HttpException('HTTP ${res.statusCode}');
+        // El plazo cubre la descarga ENTERA, no solo la respuesta.
+        //
+        // Antes el tiempo límite era solo para las cabeceras, así que un nodo
+        // que contestaba enseguida y después entregaba a cuentagotas se quedaba
+        // el pedacito tanto como quisiera. Medido en vivo: uno de esos tardó más
+        // de cuarenta segundos y ni siquiera terminó, mientras otro nodo del
+        // mismo CDN entregaba el mismo archivo completo en tres.
+        final bytes = await _bajarEntero(trozo, plan).timeout(plazo);
+        // Con el tamaño y el tiempo se calcula el caudal real de ese nodo: es lo
+        // que permite ver de un vistazo si el problema es la fuente o la red de
+        // acá, sin tener que medir a mano.
+        final kbs = reloj.elapsedMilliseconds == 0
+            ? 0
+            : (bytes.length / reloj.elapsedMilliseconds).round();
+        if (trozo.host != plan.pedacitos[indice].host) {
+          logger.info('Reempaquetado a TS: el pedacito ${indice + 1} se '
+              'consiguió en ${trozo.host} — ${(bytes.length / 1024).round()} KiB '
+              'en ${reloj.elapsedMilliseconds} ms ($kbs KiB/s)');
+        } else {
+          logger.info('Reempaquetado a TS: pedacito ${indice + 1} de '
+              '${plan.pedacitos.length} · ${(bytes.length / 1024).round()} KiB '
+              'en ${reloj.elapsedMilliseconds} ms ($kbs KiB/s) · ${trozo.host}');
         }
-        final juntado = BytesBuilder(copy: false);
-        await for (final bloque in res) {
-          juntado.add(bloque);
-        }
-        return juntado.takeBytes();
+        return bytes;
       } catch (e) {
-        if (intento == _reintentos) {
-          logger.warning(
-              'Reempaquetado a TS: se saltea el pedacito ${indice + 1} — $e');
-        }
+        // Se anota para que los pedacitos siguientes no vuelvan a esperarlo.
+        anotarNodoLento(trozo.host);
+        logger.info('Reempaquetado a TS: ${trozo.host} no dio el pedacito '
+            '${indice + 1} en ${reloj.elapsedMilliseconds} ms, se prueba otro '
+            'nodo — $e');
       }
     }
+    // Ninguno lo entregó: se saltea. Se nota como un saltito y el vídeo sigue;
+    // cortar la transmisión entera por un pedacito sería mucho peor.
+    logger.warning('Reempaquetado a TS: se saltea el pedacito ${indice + 1}, '
+        'ningún nodo lo entregó');
     return null;
+  }
+
+  /// Baja un pedacito completo. Tira si algo sale mal — quien llama decide.
+  static Future<List<int>> _bajarEntero(Uri trozo, PlanTs plan) async {
+    final req = await _cliente.getUrl(trozo);
+    _preparar(req, plan.headers, plan.userAgent);
+    final res = await req.close();
+    if (res.statusCode >= 400) {
+      await res.drain<void>();
+      throw HttpException('HTTP ${res.statusCode}');
+    }
+    final juntado = BytesBuilder(copy: false);
+    await for (final bloque in res) {
+      juntado.add(bloque);
+    }
+    return juntado.takeBytes();
   }
 
   /// Baja una lista y la devuelve como texto, o null si no se pudo.
@@ -338,6 +471,90 @@ class PlanTs {
                   .fold<double>(0, (a, b) => a + b) *
               1000)
           .round());
+
+  /// Los servidores que la propia lista usa para los pedacitos.
+  ///
+  /// Estas listas reparten los pedacitos entre varios nodos del mismo CDN
+  /// (cdn2, cdn4, cdn5… del mismo dominio). Medido en vivo: **todos sirven el
+  /// mismo archivo**, byte por byte — se pidió el mismo pedacito a los cuatro y
+  /// los cuatro devolvieron 6.241.224 bytes.
+  ///
+  /// Y ahí está lo que importa: dos de esos nodos lo entregaron en menos de tres
+  /// segundos y los otros dos no lo terminaron en quince. Como el pedacito que
+  /// le toca a cada momento del vídeo lo decide la lista, basta con que a un
+  /// tramo le toque un nodo caído para que la reproducción se clave ahí — pasó
+  /// exactamente eso, siempre en el mismo segundo del episodio.
+  ///
+  /// Se sacan de la propia lista y no de un listado fijo nuestro: son los nodos
+  /// que el sitio mismo está usando para ESTE contenido, así que son los únicos
+  /// de los que se sabe que lo tienen.
+  late final List<String> servidores = <String>{
+    for (final u in pedacitos) u.host,
+  }.toList();
+
+  /// A quién pedirle un pedacito, por orden de preferencia.
+  ///
+  /// Primero al que dice la lista; si no responde, el mismo archivo en los otros
+  /// nodos. Si alguno rechaza la dirección por no ser el suyo, se sigue con el
+  /// siguiente y en el peor caso se termina como antes.
+  List<Uri> dondePedir(int indice) {
+    final original = pedacitos[indice];
+    final todos = [
+      original,
+      for (final host in servidores)
+        if (host != original.host) original.replace(host: host),
+    ];
+    // Los que ya fallaron van al FINAL, no se sacan.
+    //
+    // Medido: en una sola reproducción, cdn6 no entregó tres pedacitos
+    // distintos y las tres veces se pagó la espera entera —8, 8 y 17
+    // segundos— antes de ir a buscarlo a otro lado, que lo dio en poco más de
+    // un segundo. Insistirle a un nodo que ya se sabe que no responde es
+    // regalar ese tiempo en cada pedacito que le toque.
+    //
+    // Al final y no descartados porque un nodo puede recuperarse, y porque si
+    // TODOS fallaron alguna vez hay que probar igual: quedarse sin candidatos
+    // sería peor que probar uno lento.
+    final buenos = todos.where((u) => !CastHlsATs.nodoLento(u.host)).toList();
+    final malos = todos.where((u) => CastHlsATs.nodoLento(u.host)).toList();
+    return [...buenos, ...malos];
+  }
+
+  /// Desde qué pedacito retomar para NO saltearse lo que el aparato no llegó a
+  /// mostrar.
+  ///
+  /// El último pedacito que se entregó va por delante de lo que se está viendo:
+  /// se manda con adelanto a propósito (ver la cola de descarga), y el aparato
+  /// además guarda lo suyo. Cuando corta y vuelve a pedir, todo eso que tenía
+  /// guardado sin mostrar se pierde — así que retomar justo donde se dejó de
+  /// servir **se saltea ese tramo**, y se ve como un salto de un minuto para
+  /// adelante.
+  ///
+  /// Se retrocede el equivalente a unos segundos de vídeo. Si sobra, el aparato
+  /// repite un pedacito que ya mostró: se nota mucho menos que perderse un
+  /// pedazo, porque lo repetido se reconoce y lo perdido desorienta.
+  int retomarDesde(int ultimoEntregado) {
+    const colchonDelAparato = 15.0;
+    var acumulado = 0.0;
+    var i = ultimoEntregado;
+    while (i > 0 && acumulado < colchonDelAparato) {
+      i--;
+      acumulado += i < duraciones.length ? duraciones[i] : 0;
+    }
+    return i;
+  }
+
+  /// Cuánto se le aguanta a un nodo antes de probar el siguiente.
+  ///
+  /// Atado a lo que DURA el pedacito, no a un número fijo: uno de diez segundos
+  /// de vídeo puede pesar varios megas y merece más tiempo que uno de uno. El
+  /// doble de su duración es margen de sobra para cualquier conexión que llegue
+  /// a seguirle el ritmo al vídeo, y corta rápido con un nodo que no entrega.
+  Duration plazoPara(int indice) {
+    final segundos = indice < duraciones.length ? duraciones[indice] : 10.0;
+    final plazo = (segundos * 2).clamp(8.0, 30.0);
+    return Duration(milliseconds: (plazo * 1000).round());
+  }
 
   /// Qué pedacito contiene ese momento del episodio.
   int indiceDe(Duration donde) {

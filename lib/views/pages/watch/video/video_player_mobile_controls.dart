@@ -1832,25 +1832,27 @@ class _SeekBarState extends State<_SeekBar> {
   Duration _position = Duration.zero;
   Duration _buffer = Duration.zero;
 
-  StreamSubscription? _bufferSubscription;
+  Worker? _vigiaDelBuffer;
 
   @override
   void initState() {
     super.initState();
-    _buffer = widget.controller.player.state.buffer;
-
-    _bufferSubscription =
-        widget.controller.player.stream.buffer.listen((event) {
+    // Del CONTROLADOR y no de mpv directo: casteando, el reproductor de acá está
+    // parado y su buffer es cero, así que la sombra de descarga desaparecía de
+    // la barra aunque el televisor estuviera cargando. Mismo criterio que en la
+    // barra de escritorio.
+    _buffer = widget.controller.buffer.value;
+    _vigiaDelBuffer = ever(widget.controller.buffer, (Duration valor) {
       if (!mounted) return;
       setState(() {
-        _buffer = event;
+        _buffer = valor;
       });
     });
   }
 
   @override
   dispose() {
-    _bufferSubscription?.cancel();
+    _vigiaDelBuffer?.dispose();
     super.dispose();
   }
 

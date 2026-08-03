@@ -11,6 +11,8 @@ import 'package:prismhub/views/widgets/platform_widget.dart';
 import 'package:prismhub/views/widgets/watch/playlist.dart';
 import 'package:prismhub/views/widgets/home/home_theme.dart';
 import 'package:prismhub/views/widgets/watch/tutorial_reproductor.dart';
+import 'package:prismhub/views/pages/watch/video/webview_player_page.dart'
+    show isKnownNativeServer;
 
 enum SidebarTab {
   episodes,
@@ -1014,11 +1016,19 @@ class _FilaSeleccionable extends StatelessWidget {
     required this.texto,
     required this.activo,
     required this.onTap,
+    this.icono,
+    this.colorIcono,
   });
 
   final String texto;
   final bool activo;
   final VoidCallback onTap;
+
+  /// Marca opcional a la izquierda. Solo la usa la lista de SERVIDORES (rayo
+  /// = reproduce en la app, mundo = se abre en el navegador interno); calidad
+  /// y pistas comparten esta fila y no llevan ninguna.
+  final IconData? icono;
+  final Color? colorIcono;
 
   @override
   Widget build(BuildContext context) {
@@ -1039,6 +1049,18 @@ class _FilaSeleccionable extends StatelessWidget {
                   : Colors.white.withValues(alpha: 0.12),
             ),
           ),
+          leading: icono == null
+              ? null
+              : Icon(
+                  icono,
+                  size: 18,
+                  color: activo ? HomeTheme.accentPink : colorIcono,
+                ),
+          // Sin el leading, el ListTile deja un hueco a la izquierda igual;
+          // con horizontalTitleGap chico el icono queda pegado al texto y la
+          // fila no crece de alto.
+          horizontalTitleGap: icono == null ? null : 8,
+          minLeadingWidth: icono == null ? null : 0,
           title: Text(
             texto,
             style: TextStyle(
@@ -1152,9 +1174,19 @@ class _ServerSelector extends StatelessWidget {
             // del app y una tilde a la derecha — tres señales en vez de un
             // matiz. Este selector es el mismo en el teléfono y en escritorio,
             // así que se ve igual en los dos.
+            // El rayo dice que reproduce en el reproductor de la app; el mundo,
+            // que se abre en el navegador interno. Siempre va una de las dos y
+            // nunca ninguna: un servidor sin marca se leía como "este está
+            // peor", cuando en realidad solo se abre distinto.
             _FilaSeleccionable(
               texto: entry.key,
               activo: entry.key == current,
+              icono: isKnownNativeServer(entry.key, entry.value)
+                  ? Icons.bolt_rounded
+                  : Icons.public_rounded,
+              colorIcono: isKnownNativeServer(entry.key, entry.value)
+                  ? const Color(0xFF69F0AE)
+                  : const Color(0xFF7FB2FF),
               onTap: () {
                 controller.selectServer(entry.key);
                 controller.showSidebar.value = false;
