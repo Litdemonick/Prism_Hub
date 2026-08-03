@@ -2991,6 +2991,23 @@ class VideoPlayerController extends GetxController with WidgetsBindingObserver {
       return;
     }
     if (deMayorAMenor.isEmpty) return;
+    // Una sola calidad: no hay nada que elegir, y "cambiar" a la que ya está
+    // sonando cuesta una reapertura entera del vídeo.
+    //
+    // Medido en vivo con Streamwish, que publica un maestro con UNA variante:
+    // el vídeo tardaba veintiún segundos en arrancar y, un segundo después de
+    // aparecer la imagen, se registraba "Calidad de arranque: 720p" y volvía a
+    // cargar de cero. Desde afuera: carga, muestra, y se cuelga otra vez.
+    //
+    // La comprobación de abajo —que evita cambiar a la que ya se está viendo—
+    // no lo atrapaba porque compara DIRECCIONES: la del maestro y la de su
+    // única variante son distintas aunque el contenido sea exactamente el
+    // mismo.
+    if (deMayorAMenor.length < 2) {
+      logger.info('Una sola calidad (${deMayorAMenor.first.key}): no se cambia '
+          'nada, ya es la que se está viendo');
+      return;
+    }
     // La altura viaja dentro de "orden" (ver _VarianteCalidad).
     int altura(_VarianteCalidad v) => v.orden ~/ 100000;
     // La mejor que no pase de 1080. Si TODAS pasan, la mas chica de todas, que
