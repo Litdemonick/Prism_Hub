@@ -3,6 +3,7 @@ import 'dart:convert';
 import 'dart:io';
 
 import 'package:prismhub/utils/log.dart';
+import 'package:prismhub/utils/modo_app.dart';
 
 /// Impide que se abra una SEGUNDA copia del app en escritorio.
 ///
@@ -23,7 +24,12 @@ import 'package:prismhub/utils/log.dart';
 class InstanciaUnica {
   /// Puerto fijo en el equipo. Alto y poco común a propósito, para no chocar
   /// con nada de uso habitual.
-  static const _puerto = 47814;
+  ///
+  /// **Uno distinto para las compilaciones de pruebas.** Con el mismo puerto,
+  /// arrancar una prueba con la versión instalada abierta no abría nada: la
+  /// prueba veía "ya hay una copia" y le cedía el control a la instalada, que
+  /// es exactamente lo que hacía parecer que una reemplazaba a la otra.
+  static int get _puerto => ModoApp.esRelease ? 47814 : 47815;
 
   /// Saludo con el que las dos copias se reconocen.
   ///
@@ -31,7 +37,10 @@ class InstanciaUnica {
   /// creer al app que ya hay una copia abierta, y no arrancaría nunca. Con el
   /// saludo, si del otro lado no contesta lo que corresponde, se sigue de
   /// largo y se abre normal.
-  static const _saludo = 'PRISMHUB-1';
+  ///
+  /// Cambia con el modo, por si los puertos se cruzaran: así una prueba nunca
+  /// se reconoce con la instalada aunque terminen en el mismo puerto.
+  static String get _saludo => 'PRISMHUB-1${ModoApp.sufijo}';
   static const _ok = 'OK';
 
   static ServerSocket? _servidor;

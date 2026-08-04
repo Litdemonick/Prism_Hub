@@ -10,6 +10,7 @@ import 'package:prismhub/utils/copia_seguridad.dart';
 import 'package:prismhub/utils/portadas_perdidas.dart';
 import 'package:prismhub/router/router.dart';
 import 'package:prismhub/utils/bloqueador_anuncios.dart';
+import 'package:prismhub/utils/modo_app.dart';
 import 'package:prismhub/views/pages/settings/bloqueador_page.dart';
 import 'package:prismhub/views/pages/settings/copia_elegir_extensiones.dart';
 import 'package:prismhub/views/pages/settings/copia_resultado.dart';
@@ -1596,7 +1597,11 @@ class _SettingsPageState extends State<SettingsPage> {
           context,
           'settings.upgrade-subtitle',
           translationParams: {
-            'version': packageInfo.version,
+            // Con el modo al lado cuando no es una versión publicable: sirve
+            // para saber de un vistazo si lo que se está mirando es la app
+            // instalada o una compilación de pruebas, que ahora conviven. En
+            // release queda la versión sola, sin ningún distintivo.
+            'version': ModoApp.versionConModo(packageInfo.version),
           },
         ),
         trailing: PlatformWidget(

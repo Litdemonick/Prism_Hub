@@ -63,6 +63,9 @@ android {
         targetSdk 28
         versionCode flutterVersionCode.toInteger()
         versionName flutterVersionName
+        // Nombre visible por defecto. El release lo usa tal cual; debug y
+        // profile lo pisan mas abajo para poder distinguirlos en el telefono.
+        manifestPlaceholders = [appLabel: "PrismHub"]
     }
 
     signingConfigs {
@@ -84,8 +87,28 @@ android {
             // keystore so local `flutter build apk --release` still works.
             signingConfig hasReleaseKeystore ? signingConfigs.release : signingConfigs.debug
         }
+        // Las compilaciones de prueba se instalan APARTE, con otro identificador
+        // y otro nombre visible.
+        //
+        // Con el mismo applicationId para todo, probar un cambio en el telefono
+        // REEMPLAZABA la version instalada: se perdia la app que estaba en uso
+        // y, con ella, sus datos. Ahora conviven las dos y en el cajon de
+        // aplicaciones se distinguen por el nombre.
+        //
+        // El sufijo solo existe en debug y profile: al compilar el release el
+        // identificador vuelve a ser com.prismhub.app, asi que la actualizacion
+        // desde el boton de la app y la firma no cambian en nada.
+        // El nombre visible va por manifestPlaceholders y no por resValue: el
+        // manifiesto trae el texto escrito directo, y crear un recurso app_name
+        // ademas del literal choca al compilar.
         debug {
             // Default debug signing (~/.android/debug.keystore).
+            applicationIdSuffix ".dev"
+            manifestPlaceholders = [appLabel: "PrismHub dev"]
+        }
+        profile {
+            applicationIdSuffix ".dev"
+            manifestPlaceholders = [appLabel: "PrismHub perfil"]
         }
     }
 }
