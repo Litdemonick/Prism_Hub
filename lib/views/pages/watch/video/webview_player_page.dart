@@ -119,10 +119,38 @@ const _knownReliableServerNames = {
   'magi',
 };
 
+/// Servidores que se reconocen por el HOST de su dirección y no por el nombre.
+///
+/// Hace falta porque varias extensiones etiquetan sus servidores con siglas
+/// —FuegoCine usa "FS", "UA", "FC", "GS(ads)"— y con eso no se puede decidir
+/// nada: son demasiado cortas para buscarlas dentro de un nombre sin acertarle
+/// a cualquier cosa. La dirección, en cambio, sí dice de qué sitio se trata.
+///
+/// Cada uno de estos se comprobó resolviendo de verdad y mirando que llegara
+/// vídeo, no por si el resolver devolvía algo.
+const _hostsNativosConfirmados = {
+  'firestream', // vale de un solo uso -> m3u8 firmado
+  'unlimplay', // trae la direccion en texto plano
+  'gscdn', // wrapper -> goodstream
+  'goodstream',
+  'rumble.cloud', // mp4 directo
+  'nupload', // pendiente: todavia no resuelve
+};
+
+/// True si el rayito de "nativo confiable" corresponde a esta pestaña.
+bool _esHostNativo(String url) {
+  final u = url.toLowerCase();
+  // nupload esta en la lista de arriba solo como recordatorio; hoy NO resuelve,
+  // asi que no puede llevar rayito.
+  if (u.contains('nupload')) return false;
+  return _hostsNativosConfirmados.any(u.contains);
+}
+
 /// True si el rayito de "nativo confiable" debería mostrarse para esta
 /// pestaña — por URL (isDirectStream) o por nombre de servidor verificado.
 bool isKnownNativeServer(String serverName, String url) {
   if (isDirectStream(url)) return true;
+  if (_esHostNativo(url)) return true;
   final n = serverName.toLowerCase();
   return _knownReliableServerNames.any((known) => n.contains(known));
 }
@@ -264,6 +292,7 @@ class _WebViewPlayerPageState extends State<WebViewPlayerPage>
       // para no mostrar el aviso.
     }
   }
+
   Timer? _progressTimer;
   Timer? _loadTimeoutTimer;
   Timer? _heartbeatTimer;
@@ -283,6 +312,27 @@ class _WebViewPlayerPageState extends State<WebViewPlayerPage>
   // nota, así que ahí se mantiene el comportamiento de antes — portada del
   // momento exacto en que se salió, sin capturas de más durante la sesión.
   static bool get _cachesCoverShot => Platform.isAndroid;
+
+  /// Le pregunta a la página si el bloqueador llegó a ponerse y qué cortó.
+  Future<void> _comprobarBloqueador(InAppWebViewController controller) async {
+    if (!BloqueadorAnuncios.activo) return;
+    try {
+      final puesto = await controller.evaluateJavascript(
+        source: 'window.__prismBloqueador === true',
+      );
+      final cortados = await controller.evaluateJavascript(
+        source: 'Object.keys(window.__prismCortados||{}).join(",")',
+      );
+      final queCorto = (cortados is String && cortados.isNotEmpty)
+          ? 'cortados: $cortados'
+          : 'no cortó nada';
+      logger.info('[bloqueador] en la página: '
+          '${puesto == true ? 'SÍ' : 'NO ($puesto)'} · $queCorto');
+    } catch (e) {
+      logger.info('[bloqueador] no se pudo comprobar: $e');
+    }
+  }
+
   Uint8List? _lastShot;
   bool _shotInFlight = false;
   Timer? _firstShotTimer;
@@ -793,8 +843,8 @@ class _WebViewPlayerPageState extends State<WebViewPlayerPage>
                       _enUso = this;
                       // El guion se agrega como UserScript y NO en onLoadStop:
                       // tiene que correr ANTES que el JS del sitio para poder
-                      // tapar window.open, que es como se abren las ventanas
-                      // emergentes. Puesto al final ya sería tarde.
+                      // tapar los pedidos de anuncios. Puesto al final ya sería
+                      // tarde: la página ya los habría hecho.
                       final guion = BloqueadorAnuncios.guionParaInyectar();
                       if (guion.isNotEmpty) {
                         controller.addUserScript(
@@ -804,8 +854,44 @@ class _WebViewPlayerPageState extends State<WebViewPlayerPage>
                                 UserScriptInjectionTime.AT_DOCUMENT_START,
                           ),
                         );
+                        logger.info('[bloqueador] guion registrado '
+                            '(${BloqueadorAnuncios.cuantosDominios} dominios)');
+                      } else {
+                        logger.info('[bloqueador] apagado: no se inyecta nada');
                       }
                     },
+                    // Segunda vía, a propósito repetida.
+                    //
+                    // El guion de arriba se registra con addUserScript, que en
+                    // Windows no está confirmado que llegue a correr. Éste va
+                    // por evaluateJavascript, que sí. El guion se protege solo
+                    // contra ejecutarse dos veces (mira window.__prismBloqueador),
+                    // así que si los dos funcionan, el segundo no hace nada.
+                    onLoadStart: (controller, url) async {
+                      final guion = BloqueadorAnuncios.guionParaInyectar();
+                      if (guion.isEmpty) return;
+                      try {
+                        await controller.evaluateJavascript(source: guion);
+                      } catch (e) {
+                        logger.info('[bloqueador] no se pudo inyectar: $e');
+                      }
+                    },
+                    // Los avisos del propio guion, para poder ver en el
+                    // registro si está bloqueando algo de verdad en vez de
+                    // suponerlo.
+                    onConsoleMessage: (controller, mensaje) {
+                      final texto = mensaje.message;
+                      if (texto.startsWith('[bloqueador]')) {
+                        logger.info(texto);
+                      }
+                    },
+                    // Se le PREGUNTA a la página si el guion quedó puesto.
+                    //
+                    // Con los mensajes de consola no alcanza: que no aparezcan
+                    // puede significar que el guion no corrió, o que este motor
+                    // no reporta la consola. Son cosas distintas y llevan a
+                    // arreglos distintos. Esto lo responde sin ambigüedad,
+                    // porque usa el mismo camino que ya sabemos que funciona.
                     // Puentea el fullscreen HTML5 del propio sitio (el botón que se ve
                     // dentro de su reproductor) con el fullscreen real de la ventana
                     // de Windows — sin esto, el sitio entraba en "fullscreen" a nivel
@@ -826,6 +912,15 @@ class _WebViewPlayerPageState extends State<WebViewPlayerPage>
                     onLoadStop: (controller, url) {
                       _loadTimeoutTimer?.cancel();
                       if (mounted) setState(() => _loading = false);
+                      // Se le PREGUNTA a la página si el guion quedó puesto.
+                      //
+                      // Con los mensajes de consola no alcanza: que no
+                      // aparezcan puede significar que el guion no corrió, o
+                      // que este motor no reporta la consola. Son dos cosas
+                      // distintas y llevan a arreglos distintos. Esto lo
+                      // responde sin ambigüedad, por el mismo camino que ya
+                      // sabemos que funciona.
+                      _comprobarBloqueador(controller);
                       // El aviso de por qué se llegó acá va DESPUÉS de que
                       // el navegador interno ya cargó y se ve — mostrarlo
                       // antes (en la pantalla del reproductor nativo, previo
@@ -861,7 +956,8 @@ class _WebViewPlayerPageState extends State<WebViewPlayerPage>
                       // Windows y Linux, donde ese bloqueo no existe, es la
                       // primera barrera contra las páginas de anuncios.
                       if (BloqueadorAnuncios.bloquea(u.toString())) {
-                        logger.info('[bloqueador] navegación cortada: ${u.host}');
+                        logger
+                            .info('[bloqueador] navegación cortada: ${u.host}');
                         return NavigationActionPolicy.CANCEL;
                       }
                       final host = Uri.tryParse(widget.url)?.host;
