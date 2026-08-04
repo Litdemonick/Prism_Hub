@@ -70,13 +70,29 @@ Future<WebViewEnvironment?> _createWebViewEnvironment() async {
 /// directly playable.
 bool isDirectStream(String url) {
   final u = url.toLowerCase();
-  return u.contains('.m3u8') ||
-      u.contains('.mp4') ||
-      u.contains('.mkv') ||
-      u.contains('.webm') ||
-      u.contains('.ts') ||
-      u.contains('mime=video') ||
-      u.contains('/api/file/'); // pixeldrain direct
+  // Estos dos SÍ se buscan en la dirección entera: viven en la query a
+  // propósito, no en la ruta.
+  if (u.contains('mime=video') || u.contains('/api/file/')) return true;
+
+  // El resto se busca SOLO EN LA RUTA, sin lo que venga después de ? o #.
+  //
+  // Mirando la dirección entera, una página normal que lleva el vídeo dentro
+  // de un parámetro se daba por reproducible. Pasó de verdad con el servidor
+  // FC de FuegoCine:
+  //   https://un-blog.blogspot.com/?player=fluidplayer&link=https%3A%2F%2F...%2Fpeli.mp4
+  // termina en ".mp4", así que la app se la mandaba a mpv sin resolverla y
+  // mpv contestaba "Failed to recognize file format" — el "Error de
+  // reproducción" que se veía en pantalla.
+  //
+  // Es el mismo fallo que tenía el envoltorio de las extensiones, en una
+  // segunda copia de este lado. Al arreglar solo aquel, este seguía haciendo
+  // lo suyo antes de que la extensión llegara a resolver nada.
+  final ruta = u.split('#').first.split('?').first;
+  return ruta.endsWith('.m3u8') ||
+      ruta.endsWith('.mp4') ||
+      ruta.endsWith('.mkv') ||
+      ruta.endsWith('.webm') ||
+      ruta.endsWith('.ts');
 }
 
 // Servidores que se resuelven perezosamente (recién al elegirlos, no al
