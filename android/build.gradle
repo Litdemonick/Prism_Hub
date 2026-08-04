@@ -1,4 +1,6 @@
-ext.kotlin_version = '2.2.20'
+// Sin ext.kotlin_version: la version de Kotlin la decide Flutter (Kotlin
+// integrado) y fijarla aca solo servia para que dejara de coincidir con su
+// compilador. Ver la nota en app/build.gradle, en dependencies.
 
 allprojects {
     repositories {
