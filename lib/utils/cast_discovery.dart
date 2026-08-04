@@ -76,6 +76,29 @@ class CastDiscovery {
   final _descartados = StreamController<List<AparatoDescartado>>.broadcast();
   final Map<String, AparatoDescartado> _noSirven = {};
 
+  /// Descripciones ya pedidas, por su dirección (la cabecera LOCATION).
+  ///
+  /// El paquete baja la descripción del aparato CADA VEZ que le llega un
+  /// mensaje suyo, sin guardarla en ningún lado. Y por acá le llegan muchos:
+  /// se repregunta cada dos segundos, por cuatro tipos y por cada placa de
+  /// red, y encima con `ssdp:all` un aparato contesta una vez por CADA
+  /// servicio que expone. Todas esas respuestas traen la misma dirección y
+  /// cada una disparaba una descarga entera.
+  ///
+  /// Medido en una red real: la descripción del router se pidió siete veces
+  /// en media búsqueda —fallando las siete, y tardando lo suyo cada una—
+  /// mientras la búsqueda entera dura diez segundos. Con esto se pide una
+  /// vez por aparato y se termina.
+  final Set<String> _ubicacionesPedidas = {};
+
+  /// Cuántas veces falló la descripción de cada dirección.
+  final Map<String, int> _fallos = {};
+
+  /// Un fallo suelto puede ser el aparato ocupado justo en ese instante, así
+  /// que se le da una segunda oportunidad. Dos seguidos ya es un aparato que
+  /// no va a contestar, e insistir solo gasta el rato de búsqueda.
+  static const _intentosPorAparato = 2;
+
   void _clasificar(Map<String, DLNADevice> encontrados) {
     var huboCambio = false;
     for (final e in encontrados.entries) {
@@ -209,11 +232,7 @@ class CastDiscovery {
         if (evento != RawSocketEvent.read) return;
         final datos = socket.receive();
         if (datos == null) return;
-        try {
-          _gestor.onMessage(String.fromCharCodes(datos.data).trim());
-        } catch (e) {
-          logger.warning('Mensaje de descubrimiento ilegible', e);
-        }
+        _procesar(String.fromCharCodes(datos.data).trim());
       });
       _sockets.add(socket);
       return socket;
@@ -224,6 +243,59 @@ class CastDiscovery {
       );
       return null;
     }
+  }
+
+  /// Atiende un mensaje de descubrimiento, sin repetir descargas.
+  ///
+  /// Se espera el resultado a propósito. Antes se llamaba sin esperarlo dentro
+  /// de un try, y eso NO atrapa nada: el trabajo de verdad (bajar la
+  /// descripción del aparato) pasa después, ya fuera del try. Un aparato que
+  /// contestaba mal terminaba en el registro como error grave con su traza
+  /// entera, una vez cada dos segundos — en una búsqueda de diez segundos
+  /// llenaba el archivo y tapaba lo que sí importaba.
+  Future<void> _procesar(String mensaje) async {
+    if (_parado) return;
+    final ubicacion = _ubicacionDe(mensaje);
+    // Sin dirección no hay descripción que bajar; se pasa igual porque el
+    // paquete puede sacar algo del mensaje.
+    if (ubicacion != null && !_ubicacionesPedidas.add(ubicacion)) return;
+    try {
+      await _gestor.onMessage(mensaje);
+    } catch (e) {
+      if (ubicacion == null) {
+        logger.info('Mensaje de descubrimiento ilegible: $e');
+        return;
+      }
+      final fallos = (_fallos[ubicacion] ?? 0) + 1;
+      _fallos[ubicacion] = fallos;
+      if (fallos < _intentosPorAparato) {
+        // Se lo saca de los pedidos para que el próximo anuncio lo reintente.
+        _ubicacionesPedidas.remove(ubicacion);
+        return;
+      }
+      // A nivel informativo y una sola vez: que un aparato de la red no sepa
+      // describirse no es un fallo del app, y no hay nada que hacer con él.
+      logger.info(
+        'No dice qué es, se deja de insistir: $ubicacion ($e)',
+      );
+    }
+  }
+
+  /// La cabecera LOCATION del mensaje: dónde está la descripción del aparato.
+  ///
+  /// Se parte por el PRIMER dos puntos y nada más: el valor es una dirección
+  /// web y trae los suyos propios ("http://…", y el del puerto).
+  static String? _ubicacionDe(String mensaje) {
+    for (final linea in mensaje.split('\n')) {
+      final corte = linea.indexOf(':');
+      if (corte < 0) continue;
+      if (linea.substring(0, corte).trim().toUpperCase() != 'LOCATION') {
+        continue;
+      }
+      final valor = linea.substring(corte + 1).trim();
+      if (valor.isNotEmpty) return valor;
+    }
+    return null;
   }
 
   void _preguntar(InternetAddress destino) {
