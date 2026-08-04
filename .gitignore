@@ -72,3 +72,8 @@ FLUJO.md
 PROGRESO.md
 SESSION.md
 .continue/
+
+# Repositorio del sitio, clonado adentro de esta carpeta. Es un repo APARTE con
+# su propio historial: si se agrega desde aca queda como un submodulo a medias
+# que nadie puede clonar. Se colo tres veces al indice antes de ignorarlo.
+litdemonick.github.io/
