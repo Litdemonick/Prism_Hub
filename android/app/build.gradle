@@ -65,7 +65,14 @@ android {
         versionName flutterVersionName
         // Nombre visible por defecto. El release lo usa tal cual; debug y
         // profile lo pisan mas abajo para poder distinguirlos en el telefono.
-        manifestPlaceholders = [appLabel: "PrismHub"]
+        //
+        // OJO con el "+=": asignando con "=" se reemplaza el mapa ENTERO y se
+        // pierde applicationName, que lo inyecta Flutter y lo usa el manifiesto
+        // en android:name. Con "=" la compilacion de Android falla con
+        // "requires a placeholder substitution but no value for
+        // <applicationName> is provided" — pasó, y no se ve en Windows porque
+        // esto solo lo toca Android.
+        manifestPlaceholders += [appLabel: "PrismHub"]
     }
 
     signingConfigs {
@@ -104,11 +111,11 @@ android {
         debug {
             // Default debug signing (~/.android/debug.keystore).
             applicationIdSuffix ".dev"
-            manifestPlaceholders = [appLabel: "PrismHub dev"]
+            manifestPlaceholders += [appLabel: "PrismHub dev"]
         }
         profile {
             applicationIdSuffix ".dev"
-            manifestPlaceholders = [appLabel: "PrismHub perfil"]
+            manifestPlaceholders += [appLabel: "PrismHub dev"]
         }
     }
 }

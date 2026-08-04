@@ -27,10 +27,14 @@ class ModoApp {
   ///
   /// Devuelve null en release: ahí no hay nada que aclarar y no debe aparecer
   /// ningún distintivo.
+  /// Se usan las palabras de Flutter —`dev` para perfil y `debug` para
+  /// depuración— y no traducciones: lo que hace falta saber de un vistazo es
+  /// que NO es la versión instalada, y esos son los nombres que uno tiene en la
+  /// cabeza al correr `flutter run --profile`.
   static String? get etiqueta {
     if (kReleaseMode) return null;
-    if (kProfileMode) return 'perfil';
-    return 'depuración';
+    if (kProfileMode) return 'dev';
+    return 'debug';
   }
 
   /// La versión con el modo al lado, para las pantallas que la muestran.
