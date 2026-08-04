@@ -1025,6 +1025,21 @@ class VideoPlayerController extends GetxController with WidgetsBindingObserver {
       // alguien lo suba a mano.
       await np.setProperty('volume-max', '$volumenMaximo');
       await np.setProperty('replaygain-clip', 'no');
+      // Que la app aparezca en el mezclador de volumen de Windows.
+      //
+      // Windows solo lista ahí a los programas con una SESIÓN DE AUDIO abierta,
+      // y mpv cierra el dispositivo apenas deja de sonar algo: al pausar o al
+      // terminar un vídeo, PrismHub desaparecía del mezclador y no había forma
+      // de dejarle su propio volumen puesto. Con esto el dispositivo queda
+      // abierto emitiendo silencio, así que la entrada se mantiene y el volumen
+      // que le pongas ahí se respeta entre vídeos.
+      //
+      // SOLO Windows a propósito: en Android mantener la salida abierta retiene
+      // el foco de audio y deja a la app sonando "en silencio" para el sistema,
+      // que es justo lo que hace que otras apps no puedan reproducir bien.
+      if (Platform.isWindows) {
+        await np.setProperty('audio-stream-silence', 'yes');
+      }
       // UA de navegador: CDNs de anime (luluvdo, streamwish, etc.) bloquean
       // el UA por defecto de mpv ("Lavf/xx.xx"). Usar el mismo UA que el app.
       final ua = PrismHubStorage.getUASetting();
