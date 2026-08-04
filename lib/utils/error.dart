@@ -39,6 +39,18 @@ bool isConnectionError(Object? error) {
     'xmlhttprequest error',
     // Timeouts propios de Dio (connectTimeout/receiveTimeout/sendTimeout) —
     // el mensaje de Dio no incluye ninguna de las frases de arriba.
+    //
+    // Van las dos redacciones porque Dio le cambió el texto entre versiones y
+    // eso rompió la detección sin que nadie tocara nada: las de abajo son las
+    // que escribía Dio 4, y las de arriba las que escribe Dio 5 (comprobado en
+    // dio_exception.dart de la versión instalada). Con solo las viejas, un
+    // corte de internet al abrir una ficha mostraba el texto crudo en inglés
+    // —"DioException [connection timeout]: The request connection took longer
+    // than 0:00:15…"— en vez del aviso de siempre.
+    'dioexception [connection timeout]',
+    'dioexception [connection error]',
+    'dioexception [receive timeout]',
+    'dioexception [send timeout]',
     'connecting timeout',
     'receiving timeout',
     'sending timeout',

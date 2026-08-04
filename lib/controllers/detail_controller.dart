@@ -145,6 +145,15 @@ class DetailPageController extends GetxController {
   final Rx<History?> history = Rx(null);
   final Rx<Favorite?> favorite = Rx(null);
   final RxString error = ''.obs;
+
+  /// Si lo que falló fue la conexión y no la extensión.
+  ///
+  /// El texto ya sale traducido de friendlyError, pero para la pantalla hace
+  /// falta saber TAMBIÉN de qué tipo de fallo se trata: un corte de internet
+  /// se arregla solo con reintentar y merece decirlo así, mientras que un
+  /// error propio de la fuente probablemente siga igual por más que insistas.
+  final RxBool errorEsDeConexion = false.obs;
+
   final RxBool isLoading = true.obs;
   final RxInt selectEpGroup = 0.obs;
   final RxString aniListID = ''.obs;
@@ -238,7 +247,25 @@ class DetailPageController extends GetxController {
       isLoading.value = false;
     } catch (e) {
       error.value = friendlyError(e);
+      errorEsDeConexion.value = isConnectionError(e);
       rethrow;
+    }
+  }
+
+  /// Vuelve a pedir la ficha después de un fallo.
+  ///
+  /// Limpia el mensaje y vuelve a mostrar el indicador ANTES de pedir: sin
+  /// eso, la pantalla se queda con el error viejo puesto todo el rato que dure
+  /// el intento nuevo y no se ve que esté pasando algo — se siente como que el
+  /// botón no hizo nada.
+  Future<void> reintentar() async {
+    error.value = '';
+    isLoading.value = true;
+    try {
+      await onRefresh();
+    } catch (_) {
+      // onRefresh ya dejó el mensaje puesto; acá solo hace falta no propagar,
+      // porque nadie más lo va a atender y quedaría como un error suelto.
     }
   }
 

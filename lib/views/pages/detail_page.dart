@@ -1,6 +1,9 @@
+import 'dart:io';
+
 import 'package:fluent_ui/fluent_ui.dart' as fluent;
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
+import 'package:prismhub/views/widgets/button.dart';
 import 'package:prismhub/views/widgets/detail/detail_finished_button.dart';
 import 'package:prismhub/data/providers/tmdb_provider.dart';
 import 'package:prismhub/models/extension.dart';
@@ -88,6 +91,74 @@ class _DetailPageState extends State<DetailPage> {
         child: KeyedSubtree(key: ValueKey(estado), child: hijo),
       );
 
+  /// La ficha no se pudo cargar.
+  ///
+  /// Antes era el texto del error, solo, centrado y sin nada más. Con un corte
+  /// de internet eso dejaba en pantalla el mensaje crudo de la librería de red,
+  /// en inglés y hablando de RequestOptions.connectTimeout — que además de no
+  /// decirle nada a nadie, parece que se rompió la app. Y no había forma de
+  /// volver a intentar: había que salir de la ficha y entrar de nuevo.
+  ///
+  /// Es la misma en Windows, Linux y Android: los tres llegan acá por el mismo
+  /// camino y el problema es el mismo en los tres.
+  Widget _pantallaDeError(BuildContext context) {
+    return ColoredBox(
+      color: HomeTheme.bg,
+      child: Stack(
+        children: [
+          Center(
+            child: Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 32),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Obx(() => Icon(
+                        // Sin internet y "la fuente falló" no son lo mismo y no
+                        // se arreglan igual, así que tampoco se dibujan igual.
+                        c.errorEsDeConexion.value
+                            ? Icons.wifi_off_rounded
+                            : Icons.error_outline_rounded,
+                        size: 48,
+                        color: HomeTheme.textMuted,
+                      )),
+                  const SizedBox(height: 16),
+                  Obx(() => Text(
+                        c.error.value,
+                        textAlign: TextAlign.center,
+                        style: const TextStyle(
+                          color: HomeTheme.textPrimary,
+                          fontSize: 15,
+                          height: 1.4,
+                        ),
+                      )),
+                  const SizedBox(height: 20),
+                  PlatformFilledButton(
+                    onPressed: c.reintentar,
+                    child: Text('common.retry'.i18n),
+                  ),
+                ],
+              ),
+            ),
+          ),
+          // Botón de volver propio, igual que en el estado "cargando": en este
+          // estado tampoco existe todavía el SliverAppBar que lo trae, así que
+          // la pantalla quedaba sin salida a la vista.
+          if (Platform.isAndroid)
+            SafeArea(
+              child: Align(
+                alignment: Alignment.topLeft,
+                child: IconButton(
+                  icon: const Icon(Icons.arrow_back,
+                      color: HomeTheme.textPrimary),
+                  onPressed: () => Navigator.of(context).maybePop(),
+                ),
+              ),
+            ),
+        ],
+      ),
+    );
+  }
+
   Widget _buildAndroidDetail(BuildContext context) {
     return Scaffold(
       body: Obx(() {
@@ -99,7 +170,7 @@ class _DetailPageState extends State<DetailPage> {
         }
 
         if (c.error.value.isNotEmpty) {
-          return _transicion('error', Center(child: Text(c.error.value)));
+          return _transicion('error', _pantallaDeError(context));
         }
 
         // Android no miraba isLoading (escritorio sí, más abajo): armaba la
@@ -323,17 +394,7 @@ class _DetailPageState extends State<DetailPage> {
   Widget _buildDesktopDetail(BuildContext context) {
     return Obx(() {
       if (c.error.value.isNotEmpty) {
-        return _transicion(
-            'error',
-            ColoredBox(
-              color: HomeTheme.bg,
-              child: Center(
-                child: Text(
-                  c.error.value,
-                  style: const TextStyle(color: HomeTheme.textPrimary),
-                ),
-              ),
-            ));
+        return _transicion('error', _pantallaDeError(context));
       }
 
       if (c.isLoading.value) {
