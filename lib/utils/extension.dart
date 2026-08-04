@@ -724,6 +724,34 @@ class ExtensionUtils {
     return '$base$path';
   }
 
+  /// Las que quedaron apagadas POR el ajuste de +18, no por decisión del
+  /// usuario.
+  ///
+  /// La diferencia importa: al volver a encender el +18 solo se devuelven
+  /// estas. Las que el usuario apagó a mano se quedan como las dejó.
+  static List<String> get apagadasPorNsfw {
+    final crudo = PrismHubStorage.getSetting(SettingKey.nsfw18AutoDisabled);
+    if (crudo is! String || crudo.isEmpty) return <String>[];
+    return crudo.split(',').where((p) => p.isNotEmpty).toList();
+  }
+
+  static Future<void> setApagadasPorNsfw(List<String> paquetes) =>
+      PrismHubStorage.setSetting(
+          SettingKey.nsfw18AutoDisabled, paquetes.join(','));
+
+  /// Anota UNA como apagada por el ajuste de +18.
+  ///
+  /// Hace falta al instalar una extensión +18 con el ajuste apagado: antes se
+  /// la desactivaba pero no se la anotaba, así que al encender el +18 no
+  /// volvía sola y había que buscarla a mano en Extensiones instaladas, sin
+  /// ninguna pista de por qué estaba apagada.
+  static Future<void> anotarApagadaPorNsfw(String package) async {
+    final lista = apagadasPorNsfw;
+    if (lista.contains(package)) return;
+    lista.add(package);
+    await setApagadasPorNsfw(lista);
+  }
+
   static Future<void> setExtensionEnabled(String package, bool enabled) async {
     final list = disabledExtensions;
     if (enabled) {
