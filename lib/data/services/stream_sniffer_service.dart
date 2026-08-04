@@ -5,7 +5,8 @@ import 'dart:convert';
 import 'package:flutter_inappwebview/flutter_inappwebview.dart';
 import 'package:prismhub/utils/log.dart';
 import 'package:prismhub/utils/prismhub_storage.dart';
-import 'package:prismhub/views/pages/watch/video/webview_player_page.dart' show ensureWebViewEnvironment;
+import 'package:prismhub/views/pages/watch/video/webview_player_page.dart'
+    show ensureWebViewEnvironment;
 
 /// Stream de video capturado por el sniffer: URL directa + Referer necesario.
 class SniffedStream {
@@ -213,12 +214,16 @@ class StreamSnifferService {
   /// True si la URL aparenta ser un stream reproducible nativamente.
   static bool _looksLikeStream(String u) {
     final s = u.toLowerCase();
-    return s.contains('.m3u8') ||
-        s.contains('.mp4') ||
-        s.contains('.mkv') ||
-        s.contains('.webm') ||
-        s.contains('mime=video') ||
-        s.contains('/manifest');
+    // Estos dos viven en la query a propósito.
+    if (s.contains('mime=video') || s.contains('/manifest')) return true;
+    // El resto, solo en la RUTA: una página que lleva el vídeo dentro de un
+    // parámetro (…?link=…%2Fpeli.mp4) no es un vídeo, es una página. Mismo
+    // motivo que en isDirectStream (webview_player_page.dart).
+    final ruta = s.split('#').first.split('?').first;
+    return ruta.endsWith('.m3u8') ||
+        ruta.endsWith('.mp4') ||
+        ruta.endsWith('.mkv') ||
+        ruta.endsWith('.webm');
   }
 
   /// Referer por defecto: el origen del propio embed.
@@ -320,8 +325,7 @@ class StreamSnifferService {
             handlerName: 'prismStream',
             callback: (args) {
               if (args.isNotEmpty && args.first != null) {
-                final frameHref =
-                    args.length > 1 ? args[1]?.toString() : null;
+                final frameHref = args.length > 1 ? args[1]?.toString() : null;
                 onCandidate(args.first.toString(), frameHref);
               }
             },
@@ -330,7 +334,8 @@ class StreamSnifferService {
           controller.addJavaScriptHandler(
             handlerName: 'prismDebug',
             callback: (args) {
-              if (args.isNotEmpty) logger.info('[sniffer/loader] ${args.first}');
+              if (args.isNotEmpty)
+                logger.info('[sniffer/loader] ${args.first}');
               return null;
             },
           );
@@ -358,7 +363,9 @@ class StreamSnifferService {
     // de ejecutarse antes de destruir el WebView — evita crash en WebView2
     // cuando dispose() se llama mientras el call stack nativo aún está activo.
     await Future.delayed(const Duration(milliseconds: 150));
-    try { await webView?.dispose(); } catch (_) {}
+    try {
+      await webView?.dispose();
+    } catch (_) {}
     return result;
   }
 
@@ -411,9 +418,9 @@ class StreamSnifferService {
                 if (args.isNotEmpty && args.first != null) {
                   final List<dynamic> parsed =
                       jsonDecode(args.first.toString());
-                  final urls =
-                      parsed.map((e) => e.toString()).toList();
-                  logger.info('[sniffer/embeds] ${urls.length} embed(s) en $pageUrl');
+                  final urls = parsed.map((e) => e.toString()).toList();
+                  logger.info(
+                      '[sniffer/embeds] ${urls.length} embed(s) en $pageUrl');
                   finish(urls);
                 } else {
                   finish([]);
@@ -440,7 +447,9 @@ class StreamSnifferService {
 
     final result = await completer.future;
     await Future.delayed(const Duration(milliseconds: 150));
-    try { await webView?.dispose(); } catch (_) {}
+    try {
+      await webView?.dispose();
+    } catch (_) {}
     return result;
   }
 }

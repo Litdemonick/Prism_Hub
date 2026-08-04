@@ -23,6 +23,7 @@ class Cover extends StatelessWidget {
     this.noText = false,
     required this.headers,
     this.alignment = Alignment.center,
+    this.onTamanoReal,
   });
   final String? url;
   final String alt;
@@ -33,6 +34,9 @@ class Cover extends StatelessWidget {
   // estirada como banner ancho) se ve mejor mostrando más de la parte de
   // abajo en vez del centro exacto.
   final Alignment alignment;
+
+  /// El tamaño en píxeles de la portada, para saber qué forma tiene.
+  final void Function(int ancho, int alto)? onTamanoReal;
 
   @override
   Widget build(BuildContext context) {
@@ -48,6 +52,7 @@ class Cover extends StatelessWidget {
             height: double.infinity,
             headers: headers,
             alignment: alignment,
+            onTamanoReal: onTamanoReal,
             // Se decodifica al LADO MÁS GRANDE de la caja, redondeado.
             //
             // Antes se usaba solo el ancho. Con BoxFit.cover eso alcanza cuando
@@ -69,8 +74,8 @@ class Cover extends StatelessWidget {
             // y otra vez, que es de donde salía el parpadeo en negro. Por
             // tramos de 128 la clave se queda quieta casi todo el recorrido.
             cacheWidth: bounded
-                ? _tramo(math.max(constraints.maxWidth, constraints.maxHeight) *
-                    dpr)
+                ? _tramo(
+                    math.max(constraints.maxWidth, constraints.maxHeight) * dpr)
                 : null,
             // medium y no low: al achicar una portada grande a una tarjeta
             // chica, low se salta píxeles y deja los bordes dentados.

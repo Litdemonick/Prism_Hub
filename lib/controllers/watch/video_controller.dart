@@ -376,15 +376,15 @@ class VideoPlayerController extends GetxController with WidgetsBindingObserver {
           'calidad: ${currentQuality.value} · posición: '
           '${position.value.inSeconds}s');
     } catch (e) {
-      logger.info('medición ($motivo): no se pudieron leer las propiedades — $e');
+      logger
+          .info('medición ($motivo): no se pudieron leer las propiedades — $e');
     }
   }
 
   void _arrancarVigilanteDeAtasco() {
     _vigilanteDeAtasco?.cancel();
     _muestreo?.cancel();
-    _vigilanteDeAtasco =
-        Timer.periodic(const Duration(milliseconds: 500), (_) {
+    _vigilanteDeAtasco = Timer.periodic(const Duration(milliseconds: 500), (_) {
       if (_disposed) return;
       // Casteando no aplica: el reproductor de aca esta parado a proposito.
       if (dlnaDevice.value != null) {
@@ -998,7 +998,8 @@ class VideoPlayerController extends GetxController with WidgetsBindingObserver {
         // encendidos** en el demuxer de HLS. O sea que aprovechar bien la
         // conexión ya estaba resuelto de fábrica, y agregar opciones del
         // protocolo HTTP por encima solo puede pisar lo que ya funciona.
-        await np.setProperty('demuxer-lavf-o',
+        await np.setProperty(
+            'demuxer-lavf-o',
             'reconnect=1,reconnect_streamed=1,reconnect_delay_max=5,'
                 'seg_max_retry=3');
       }
@@ -1025,6 +1026,21 @@ class VideoPlayerController extends GetxController with WidgetsBindingObserver {
       // alguien lo suba a mano.
       await np.setProperty('volume-max', '$volumenMaximo');
       await np.setProperty('replaygain-clip', 'no');
+      // Que la app aparezca en el mezclador de volumen de Windows.
+      //
+      // Windows solo lista ahí a los programas con una SESIÓN DE AUDIO abierta,
+      // y mpv cierra el dispositivo apenas deja de sonar algo: al pausar o al
+      // terminar un vídeo, PrismHub desaparecía del mezclador y no había forma
+      // de dejarle su propio volumen puesto. Con esto el dispositivo queda
+      // abierto emitiendo silencio, así que la entrada se mantiene y el volumen
+      // que le pongas ahí se respeta entre vídeos.
+      //
+      // SOLO Windows a propósito: en Android mantener la salida abierta retiene
+      // el foco de audio y deja a la app sonando "en silencio" para el sistema,
+      // que es justo lo que hace que otras apps no puedan reproducir bien.
+      if (Platform.isWindows) {
+        await np.setProperty('audio-stream-silence', 'yes');
+      }
       // UA de navegador: CDNs de anime (luluvdo, streamwish, etc.) bloquean
       // el UA por defecto de mpv ("Lavf/xx.xx"). Usar el mismo UA que el app.
       final ua = PrismHubStorage.getUASetting();
@@ -1491,7 +1507,8 @@ class VideoPlayerController extends GetxController with WidgetsBindingObserver {
       if (isWebViewActive.value || isGettingWatchData.value) return;
       // Solo si de verdad se rompio algo. Un cambio de red mientras todo va
       // bien no tiene por que interrumpir nada.
-      final roto = imagenCongelada.value || serverFailedMessage.value.isNotEmpty;
+      final roto =
+          imagenCongelada.value || serverFailedMessage.value.isNotEmpty;
       if (!roto) return;
       // Se da un respiro: apenas cambia la interfaz, la red nueva todavia no
       // resuelve nombres y el reintento saldria fallado igual.
@@ -2073,8 +2090,7 @@ class VideoPlayerController extends GetxController with WidgetsBindingObserver {
   /// catálogo puede tardar en marcarla, así que la app no puede esperar a que
   /// alguien más se entere.
   bool _extensionSeCayo() {
-    final motivo =
-        ExtensionUtils.motivoNoDisponible(runtime.extension.package);
+    final motivo = ExtensionUtils.motivoNoDisponible(runtime.extension.package);
     if (motivo == null) return false;
     _cortarPorExtensionCaida(motivo);
     return true;
@@ -2338,9 +2354,10 @@ class VideoPlayerController extends GetxController with WidgetsBindingObserver {
     // empezo la transmision, asi que saldria un cuadro negro que ademas pisaria
     // la miniatura buena que ya estaba guardada. En ese caso _saveHistory
     // conserva la anterior.
-    final frame = (saveHistory && dlnaDevice.value == null && !_casteabaAlCerrar)
-        ? await _capturarFrameActual()
-        : null;
+    final frame =
+        (saveHistory && dlnaDevice.value == null && !_casteabaAlCerrar)
+            ? await _capturarFrameActual()
+            : null;
 
     // Recien aca se pausa: el fotograma ya esta tomado.
     await player.pause().timeout(const Duration(seconds: 2)).catchError((_) {});
@@ -2572,9 +2589,10 @@ class VideoPlayerController extends GetxController with WidgetsBindingObserver {
     // mandarsela al televisor lleva unos segundos, y sin esto la imagen se
     // quedaba congelada sin ninguna señal.
     castConectando.value = true;
-    castAviso.value =
-        (esCalidad ? 'video.cast-cambiando-calidad' : 'video.cast-cambiando-servidor')
-            .i18n;
+    castAviso.value = (esCalidad
+            ? 'video.cast-cambiando-calidad'
+            : 'video.cast-cambiando-servidor')
+        .i18n;
 
     // Donde iba, para no volver al principio por cambiar de servidor.
     final donde = position.value;
@@ -4240,7 +4258,8 @@ class VideoPlayerController extends GetxController with WidgetsBindingObserver {
     final segundos = (_revisionesDelCast + 1) * _esperaDeVeredicto.inSeconds;
 
     if (!pidio) {
-      CastLog.paso('A los $segundos s sin imagen: el aparato NO pidió nada → no '
+      CastLog.paso(
+          'A los $segundos s sin imagen: el aparato NO pidió nada → no '
           'llega hasta nosotros, es red');
       castAviso.value = 'video.cast-sin-alcance'.i18n;
       return;
@@ -4299,7 +4318,6 @@ class VideoPlayerController extends GetxController with WidgetsBindingObserver {
       logger.warning('No se pudo retomar el punto en el aparato', e);
     }
   }
-
 
   /// Vuelve a mandarle el video al MISMO dispositivo.
   ///
@@ -4793,8 +4811,9 @@ class VideoPlayerController extends GetxController with WidgetsBindingObserver {
       // simplemente tardó, se deja que libmpv lo intente, que para eso tiene sus
       // propios plazos (network-timeout=20).
       if (e.osError == null) {
-        logger.warning('El host tardó más de ${_esperaDeHost.inMilliseconds} ms '
-            'en aceptar la conexión; se intenta igual: $url');
+        logger
+            .warning('El host tardó más de ${_esperaDeHost.inMilliseconds} ms '
+                'en aceptar la conexión; se intenta igual: $url');
         return true;
       }
       logger.severe('Host inalcanzable: $url — ${e.message}');
@@ -4981,6 +5000,51 @@ class VideoPlayerController extends GetxController with WidgetsBindingObserver {
   ///
   /// Ante cualquier duda se abre tal cual, como siempre: nunca puede dejar el
   /// vídeo peor que antes.
+  /// Deja o no que mpv salte dentro del archivo, según lo que se vaya a abrir.
+  ///
+  /// `reconnect_streamed` le dice a ffmpeg que trate la fuente como un flujo
+  /// que NO se puede recorrer: ante un corte, reconecta y sigue leyendo de
+  /// corrido en vez de volver a pedir desde donde estaba. Para HLS es lo que
+  /// se quiere, porque son pedacitos independientes.
+  ///
+  /// Para un archivo entero es un desastre. Un MP4 puede tener su índice al
+  /// FINAL, y sin poder saltar hay que leer todo el archivo para llegar a él.
+  /// Medido en vivo con un servidor de FuegoCine: 638 MB con el índice al
+  /// fondo, entrando a 20 KB/s y la posición clavada en cero, mientras el
+  /// mismo archivo pedido aparte llegaba a 3,4 MB/s. Se veía como que el vídeo
+  /// carga, arranca y se para todo el rato.
+  ///
+  /// Se descartó que fueran las cabeceras: medido con y sin Referer y con y
+  /// sin User-Agent de navegador, la velocidad del servidor no cambia.
+  ///
+  /// `reconnect` (a secas) se deja puesto en los dos casos: reconectar cuando
+  /// se corta la conexión sigue siendo bueno. Lo que estorba es lo otro.
+  Future<void> _dejarSaltarDentroDelArchivo(bool archivoEntero) async {
+    final np = player.platform;
+    if (np is! NativePlayer) return;
+    // En Linux reconnect va apagado a propósito (ver dónde se ponen estas
+    // opciones al arrancar) — no se toca desde acá.
+    if (Platform.isLinux) return;
+    final opciones = archivoEntero
+        ? 'reconnect=1,reconnect_delay_max=5,seg_max_retry=3'
+        : 'reconnect=1,reconnect_streamed=1,reconnect_delay_max=5,'
+            'seg_max_retry=3';
+    try {
+      await np.setProperty('demuxer-lavf-o', opciones);
+      // Se relee lo que quedó puesto de verdad, no lo que se pidió: si mpv
+      // ignora el cambio, en el registro se ve la diferencia en vez de tener
+      // que suponerlo.
+      final quedo = await np.getProperty('demuxer-lavf-o');
+      logger.info('saltar dentro del archivo: '
+          '${archivoEntero ? 'SÍ (archivo entero)' : 'no (lista de pedacitos)'}'
+          ' · quedó: $quedo');
+    } catch (e) {
+      // Que no se pueda ajustar no puede impedir reproducir: se sigue con lo
+      // que haya quedado puesto al arrancar.
+      logger.info('no se pudo ajustar el salto dentro del archivo: $e');
+    }
+  }
+
   Future<_ComoAbrir> _comoAbrir(
     String url,
     Map<String, String>? headers,
@@ -4994,10 +5058,12 @@ class VideoPlayerController extends GetxController with WidgetsBindingObserver {
     final donde = Uri.tryParse(url)?.host ?? '?';
     if (!isDirectStream(url) || !sinParametros.endsWith('.m3u8')) {
       logger.info('ficha · $servidor · ${sinParametros.endsWith('.mp4') ? 'MP4 '
-          'directo' : 'no es una lista HLS'} · $donde · va directo a mpv, no '
+              'directo' : 'no es una lista HLS'} · $donde · va directo a mpv, no '
           'hay pedacitos que repartir');
+      await _dejarSaltarDentroDelArchivo(!sinParametros.endsWith('.m3u8'));
       return const _ComoAbrir.talCual();
     }
+    await _dejarSaltarDentroDelArchivo(false);
 
     final hdrs = <String, String>{'User-Agent': _browserUA};
     if (headers != null) hdrs.addAll(headers);
@@ -5070,10 +5136,12 @@ class VideoPlayerController extends GetxController with WidgetsBindingObserver {
       if (host.isNotEmpty) nodos.add(host);
     }
     if (nodos.isEmpty) {
-      logger.info('ficha · $servidor · la lista no traía pedacitos · va directo');
+      logger
+          .info('ficha · $servidor · la lista no traía pedacitos · va directo');
       return const _ComoAbrir.talCual();
     }
-    logger.info('ficha · $servidor · lista de $pedacitos pedacitos repartidos en '
+    logger.info(
+        'ficha · $servidor · lista de $pedacitos pedacitos repartidos en '
         '${nodos.length} nodo(s) · leída en ${reloj.elapsedMilliseconds} ms');
 
     // Un solo nodo: no hay a quién cambiarle, así que el relay no aportaría nada
@@ -5085,7 +5153,9 @@ class VideoPlayerController extends GetxController with WidgetsBindingObserver {
       logger.info('ficha · $servidor · un solo nodo (${nodos.first}) · va '
           'directo a mpv${conVariante ? ', con la variante ya resuelta (un '
               'viaje menos al CDN)' : ''}');
-      return conVariante ? _ComoAbrir.con(direccion) : const _ComoAbrir.talCual();
+      return conVariante
+          ? _ComoAbrir.con(direccion)
+          : const _ComoAbrir.talCual();
     }
 
     try {
@@ -5723,7 +5793,8 @@ class VideoPlayerController extends GetxController with WidgetsBindingObserver {
     if (!dlnaDevice.value!.permiteSaltar) {
       castAviso.value = 'video.cast-no-seek'.i18n;
       Timer(const Duration(milliseconds: 2000), () {
-        if (castAviso.value == 'video.cast-no-seek'.i18n) castAviso.value = null;
+        if (castAviso.value == 'video.cast-no-seek'.i18n)
+          castAviso.value = null;
       });
       return;
     }
@@ -5786,14 +5857,12 @@ class VideoPlayerController extends GetxController with WidgetsBindingObserver {
     if (alturaActual <= _techoParaTelevisor) return false;
 
     // La mejor que el televisor tenga chance de aguantar.
-    final candidatas = opciones.entries
-        .where((e) {
-          final h = _alturaDeNombre(e.key);
-          return h > 0 && h <= _techoParaTelevisor;
-        })
-        .toList()
-      ..sort((a, b) =>
-          _alturaDeNombre(b.key).compareTo(_alturaDeNombre(a.key)));
+    final candidatas = opciones.entries.where((e) {
+      final h = _alturaDeNombre(e.key);
+      return h > 0 && h <= _techoParaTelevisor;
+    }).toList()
+      ..sort(
+          (a, b) => _alturaDeNombre(b.key).compareTo(_alturaDeNombre(a.key)));
     if (candidatas.isEmpty) return false;
     final elegida = candidatas.first;
 
@@ -5868,7 +5937,8 @@ class VideoPlayerController extends GetxController with WidgetsBindingObserver {
       castBuscando.value = false;
       castAviso.value = 'video.cast-no-seek'.i18n;
       Timer(const Duration(milliseconds: 2000), () {
-        if (castAviso.value == 'video.cast-no-seek'.i18n) castAviso.value = null;
+        if (castAviso.value == 'video.cast-no-seek'.i18n)
+          castAviso.value = null;
       });
     }
   }

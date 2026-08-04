@@ -197,6 +197,13 @@ class _ExtensionCardState extends State<ExtensionCard> {
           officialVerified: officialVerified);
       if (installDisabled) {
         await ExtensionUtils.setExtensionEnabled(widget.package, false);
+        // Se ANOTA como apagada por el ajuste de +18, no solo se apaga.
+        //
+        // Sin esto quedaba apagada y sin registrar, así que al encender el +18
+        // no volvía sola: el interruptor solo devuelve las anotadas. Había que
+        // ir a buscarla a Extensiones instaladas y activarla a mano, sin
+        // ninguna pista de por qué estaba apagada.
+        await ExtensionUtils.anotarApagadaPorNsfw(widget.package);
       }
       // Confirmación visible: antes el éxito no avisaba nada y parecía que
       // "no pasó nada" al instalar.

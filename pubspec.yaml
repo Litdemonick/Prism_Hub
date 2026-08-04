@@ -7,7 +7,7 @@ publish_to: "none"
 # tiene que subir en cada release o el instalador puede rechazar el APK.
 # Hasta la 1.0.10 quedo clavado en +1, asi que las tres primeras versiones
 # salieron con el mismo versionCode.
-version: 1.0.23+13
+version: 1.0.24+14
 
 environment:
   sdk: ">=3.0.3 <4.0.0"

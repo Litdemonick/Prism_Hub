@@ -10,6 +10,7 @@ import 'package:prismhub/utils/copia_seguridad.dart';
 import 'package:prismhub/utils/portadas_perdidas.dart';
 import 'package:prismhub/router/router.dart';
 import 'package:prismhub/utils/bloqueador_anuncios.dart';
+import 'package:prismhub/utils/modo_app.dart';
 import 'package:prismhub/views/pages/settings/bloqueador_page.dart';
 import 'package:prismhub/views/pages/settings/copia_elegir_extensiones.dart';
 import 'package:prismhub/views/pages/settings/copia_resultado.dart';
@@ -1105,26 +1106,28 @@ class _SettingsPageState extends State<SettingsPage> {
                       apagadas.add(entry.key);
                     }
                   }
-                  await PrismHubStorage.setSetting(
-                      SettingKey.nsfw18AutoDisabled, apagadas.join(','));
+                  // Se SUMAN a las que ya estaban anotadas —por ejemplo, una
+                  // instalada mientras el +18 estaba apagado— en vez de
+                  // reemplazar la lista: si no, esas se perdían y no volvían
+                  // nunca.
+                  final yaAnotadas = ExtensionUtils.apagadasPorNsfw;
+                  for (final p in apagadas) {
+                    if (!yaAnotadas.contains(p)) yaAnotadas.add(p);
+                  }
+                  await ExtensionUtils.setApagadasPorNsfw(yaAnotadas);
                   return;
                 }
                 // Al ENCENDER: se devuelven a como estaban. Antes esto no se
                 // hacía y había que volver a activarlas una por una desde
                 // Extensiones instaladas, sin ninguna pista de por qué habían
                 // quedado apagadas.
-                final guardadas =
-                    PrismHubStorage.getSetting(SettingKey.nsfw18AutoDisabled);
-                if (guardadas is! String || guardadas.isEmpty) return;
-                for (final pkg in guardadas.split(',')) {
-                  if (pkg.isEmpty) continue;
+                for (final pkg in ExtensionUtils.apagadasPorNsfw) {
                   // Solo las que siguen instaladas: una desinstalada de por
                   // medio no debe reaparecer ni dar error.
                   if (!ExtensionUtils.runtimes.containsKey(pkg)) continue;
                   ExtensionUtils.setExtensionEnabled(pkg, true);
                 }
-                await PrismHubStorage.setSetting(
-                    SettingKey.nsfw18AutoDisabled, '');
+                await ExtensionUtils.setApagadasPorNsfw(const []);
               },
             ),
             // Desktop ya tiene su propia entrada discreta en el panel de
@@ -1596,7 +1599,11 @@ class _SettingsPageState extends State<SettingsPage> {
           context,
           'settings.upgrade-subtitle',
           translationParams: {
-            'version': packageInfo.version,
+            // Con el modo al lado cuando no es una versión publicable: sirve
+            // para saber de un vistazo si lo que se está mirando es la app
+            // instalada o una compilación de pruebas, que ahora conviven. En
+            // release queda la versión sola, sin ningún distintivo.
+            'version': ModoApp.versionConModo(packageInfo.version),
           },
         ),
         trailing: PlatformWidget(

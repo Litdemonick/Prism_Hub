@@ -35,6 +35,17 @@ jobs:
       - uses: subosito/flutter-action@v2
         with:
           channel: stable
+          # Version FIJA a proposito, no "la ultima stable".
+          #
+          # Sin fijarla, cada release se compilaba con lo que hubiera ese dia:
+          # dos releases seguidas podian salir con Flutter distinto sin que
+          # nadie lo decidiera, y lo que se probaba en la maquina no era lo que
+          # se publicaba. Para una app cuyo boton de actualizar no puede fallar,
+          # eso es demasiado suelto.
+          #
+          # Al subirla, actualizar tambien el Flutter local para que las dos
+          # sigan iguales.
+          flutter-version: '3.44.8'
       - name: Setup Android SDK 36
         run: echo "y" | $ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager "platforms;android-36"
       # Sin llave de firma NO se publica. Antes este paso escribía un archivo
@@ -113,6 +124,17 @@ jobs:
       - uses: subosito/flutter-action@v2
         with:
           channel: stable
+          # Version FIJA a proposito, no "la ultima stable".
+          #
+          # Sin fijarla, cada release se compilaba con lo que hubiera ese dia:
+          # dos releases seguidas podian salir con Flutter distinto sin que
+          # nadie lo decidiera, y lo que se probaba en la maquina no era lo que
+          # se publicaba. Para una app cuyo boton de actualizar no puede fallar,
+          # eso es demasiado suelto.
+          #
+          # Al subirla, actualizar tambien el Flutter local para que las dos
+          # sigan iguales.
+          flutter-version: '3.44.8'
       - name: Install dependencies
         run: |
           sudo apt-get update
@@ -429,6 +451,17 @@ jobs:
       - uses: subosito/flutter-action@v2
         with:
           channel: stable
+          # Version FIJA a proposito, no "la ultima stable".
+          #
+          # Sin fijarla, cada release se compilaba con lo que hubiera ese dia:
+          # dos releases seguidas podian salir con Flutter distinto sin que
+          # nadie lo decidiera, y lo que se probaba en la maquina no era lo que
+          # se publicaba. Para una app cuyo boton de actualizar no puede fallar,
+          # eso es demasiado suelto.
+          #
+          # Al subirla, actualizar tambien el Flutter local para que las dos
+          # sigan iguales.
+          flutter-version: '3.44.8'
       - run: flutter pub get
       - name: Build Windows
         run: flutter build windows --release

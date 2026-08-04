@@ -1,4 +1,5 @@
 import 'dart:convert';
+import 'dart:io';
 
 import 'package:dio/dio.dart';
 import 'package:flutter_inappwebview/flutter_inappwebview.dart';
@@ -25,12 +26,21 @@ import 'package:prismhub/utils/request.dart' show dio;
 /// en Windows y Linux, hay dos caminos que salen de las MISMAS reglas:
 ///
 ///   Android  → bloqueo nativo: el pedido no se hace, ni siquiera sale a la red
-///   Windows  → se corta la navegación a dominios bloqueados y se limpia la
-///   y Linux    página desde adentro (marcos y scripts de anuncios, y las
-///              ventanas emergentes)
+///   Windows  → se corta la navegación a dominios bloqueados y, desde adentro
+///   y Linux    de la página, se niegan los pedidos ANTES de que salgan (ver
+///              guionParaInyectar)
 ///
-/// El de Android es mejor —ataja el pedido antes de salir— pero el otro es real
-/// y es lo que se puede hacer donde el motor no ofrece la otra vía.
+/// El de Android sigue siendo mejor porque lo ataja el motor, pero en el otro
+/// el pedido tampoco llega a hacerse.
+///
+/// ── Los anuncios de vídeo ───────────────────────────────────────────────────
+///
+/// Aparte de las listas del usuario se bloquean siempre unos pocos dominios: los
+/// cargadores de anuncios de VÍDEO (ver _cargadoresDeAnuncios). Son los que
+/// meten el anuncio antes de la película, adentro del propio reproductor, y las
+/// listas corrientes no suelen traerlos porque también los usan reproductores
+/// legítimos. Sin ellos, el bloqueador quitaba banners y ventanas emergentes
+/// pero el anuncio que de verdad molesta pasaba entero.
 class BloqueadorAnuncios {
   BloqueadorAnuncios._();
 
@@ -52,7 +62,13 @@ class BloqueadorAnuncios {
   }
 
   /// Cuántos dominios se están bloqueando ahora mismo.
-  static int get cuantosDominios => _dominios.length;
+  ///
+  /// Incluye los cargadores de anuncios de vídeo, que van siempre. Antes
+  /// contaba solo las listas del usuario, así que sin ninguna instalada la
+  /// pantalla decía "0 dominios bloqueados" mientras el bloqueador sí estaba
+  /// cortando cosas — parecía que no hacía nada.
+  static int get cuantosDominios =>
+      activo ? <String>{..._dominios, ..._cargadoresDeAnuncios}.length : 0;
 
   // ─── Listas ───────────────────────────────────────────────────────────────
 
@@ -102,7 +118,8 @@ class BloqueadorAnuncios {
       actualizada: DateTime.now(),
     ));
     await _guardar(actuales);
-    logger.info('[bloqueador] instalada "$nombre" con ${dominios.length} dominios');
+    logger.info(
+        '[bloqueador] instalada "$nombre" con ${dominios.length} dominios');
     return dominios.length;
   }
 
@@ -148,7 +165,8 @@ class BloqueadorAnuncios {
     }
     _dominios = juntos;
     _cargado = true;
-    logger.info('[bloqueador] ${_dominios.length} dominios en ${listas().where((l) => l.activa).length} lista(s) activa(s)');
+    logger.info(
+        '[bloqueador] ${_dominios.length} dominios en ${listas().where((l) => l.activa).length} lista(s) activa(s)');
   }
 
   // ─── Descarga y análisis ──────────────────────────────────────────────────
@@ -180,7 +198,9 @@ class BloqueadorAnuncios {
     for (final lineaCruda in const LineSplitter().convert(texto)) {
       var linea = lineaCruda.trim();
       if (linea.isEmpty) continue;
-      if (linea.startsWith('#') || linea.startsWith('!') || linea.startsWith(';')) {
+      if (linea.startsWith('#') ||
+          linea.startsWith('!') ||
+          linea.startsWith(';')) {
         continue;
       }
       // Comentario al final de la línea.
@@ -234,10 +254,28 @@ class BloqueadorAnuncios {
   /// por dominio: con listas de miles de entradas, una regla cada una hace que
   /// el WebView tarde una eternidad en arrancar.
   static List<ContentBlocker> reglasNativas() {
-    if (!activo || _dominios.isEmpty) return const [];
-    final alternativas = _dominios
-        .map((d) => RegExp.escape(d))
-        .join('|');
+    // Fuera de Android/iOS/macOS ni siquiera se CONSTRUYEN.
+    //
+    // No es por prolijidad: en Windows, el valor nativo de la acción "bloquear"
+    // resuelve a null y el paquete lo guarda en un campo que no admite null, así
+    // que crear una sola regla tumba la pantalla entera con "type 'Null' is not
+    // a subtype of type 'String'". Comprobado en el código del paquete
+    // (content_blocker_action_type.g.dart: solo android, iOS y macOS devuelven
+    // valor; el resto cae en null).
+    //
+    // Antes esto no se notaba de pura casualidad: sin ninguna lista instalada la
+    // función salía por el atajo de "no hay dominios" y nunca llegaba a
+    // construir nada.
+    if (!(Platform.isAndroid || Platform.isIOS || Platform.isMacOS)) {
+      return const [];
+    }
+    if (!activo) return const [];
+    // Los cargadores de anuncios de vídeo van SIEMPRE, junto con las listas del
+    // usuario: son los que meten el anuncio adentro del reproductor y las
+    // listas corrientes no suelen traerlos (ver _cargadoresDeAnuncios).
+    final todos = <String>{..._dominios, ..._cargadoresDeAnuncios};
+    if (todos.isEmpty) return const [];
+    final alternativas = todos.map((d) => RegExp.escape(d)).join('|');
     return [
       ContentBlocker(
         trigger: ContentBlockerTrigger(
@@ -248,36 +286,156 @@ class BloqueadorAnuncios {
     ];
   }
 
+  /// Cargadores de anuncios de VÍDEO, bloqueados siempre que el bloqueador
+  /// esté encendido.
+  ///
+  /// Van aparte de las listas del usuario a propósito. Las listas corrientes
+  /// apuntan a redes de banners y muchas NO incluyen estos, porque son piezas
+  /// que también usan reproductores legítimos. Pero son justo los que meten el
+  /// anuncio ANTES de la película, adentro del propio reproductor, que es el
+  /// que no se puede saltear ni tapar.
+  ///
+  /// Medido en vivo: un anuncio de apuestas de 25 segundos antes de reproducir,
+  /// servido por el SDK de anuncios de Google (`imasdk.googleapis.com`), con
+  /// las listas activadas y sin que ninguna lo frenara.
+  static const _cargadoresDeAnuncios = <String>[
+    'imasdk.googleapis.com',
+    'googleads.g.doubleclick.net',
+    'pagead2.googlesyndication.com',
+    'securepubads.g.doubleclick.net',
+    'static.doubleclick.net',
+    'ad.doubleclick.net',
+  ];
+
   /// Lo que se inyecta en Windows y Linux, donde no hay bloqueo nativo.
   ///
-  /// Hace tres cosas, todas del lado de la página:
-  ///   1. tapa `window.open`, que es como se abren las ventanas emergentes
-  ///   2. saca los marcos y scripts que apunten a dominios bloqueados
-  ///   3. vigila la página, porque los anuncios se insertan después de cargar
+  /// Ataja el pedido ANTES de que salga, en vez de borrar el elemento después.
+  /// Antes hacía lo segundo y no servía para lo que importa: cuando un `script`
+  /// ya está puesto en la página, el navegador YA lo bajó y lo ejecutó, así que
+  /// sacarlo del documento no cancela nada. Con eso, un anuncio de vídeo antes
+  /// de la película pasaba entero.
   ///
-  /// No es tan bueno como atajar el pedido —algo llega a pedirse antes de que
-  /// se lo saque— pero evita que se vea y que se pueda hacer clic, que es lo
-  /// que importa para no terminar en una página que no se buscó.
+  /// Ahora se tapan los cuatro caminos por los que un anuncio entra:
+  ///   1. `window.open` — las ventanas emergentes
+  ///   2. la dirección de `script`, `iframe` y `embed`, al asignarse
+  ///   3. `fetch` y `XMLHttpRequest` — por donde se piden los anuncios de vídeo
+  ///   4. lo que aparezca después igual, que se saca al vuelo
+  ///
+  /// Sigue sin ser tan bueno como el bloqueo nativo de Android, que ni deja
+  /// salir el pedido a la red; pero acá el pedido tampoco llega a hacerse.
   static String guionParaInyectar() {
-    if (!activo || _dominios.isEmpty) return '';
-    final lista = jsonEncode(_dominios.toList());
+    if (!activo) return '';
+    final todos = <String>{..._dominios, ..._cargadoresDeAnuncios};
+    if (todos.isEmpty) return '';
+    final lista = jsonEncode(todos.toList());
     return '''
 (function () {
   if (window.__prismBloqueador) return;
   window.__prismBloqueador = true;
   var dominios = $lista;
+  // Se avisa lo que se corta para poder verlo en el registro de la app, en vez
+  // de tener que adivinar si el bloqueador esta haciendo algo. Una vez por
+  // dominio: si no, un sitio que insiste llena el archivo.
+  // Queda a la vista de quien pregunte desde afuera: la app lo consulta al
+  // terminar de cargar para saber si el guion llego a correr y que corto. Con
+  // los mensajes de consola no alcanza, porque no todos los motores los
+  // reportan y entonces "no aparece nada" no distingue entre las dos cosas.
+  var avisados = window.__prismCortados = {};
+  console.log('[bloqueador] activo con ' + dominios.length + ' dominios');
   function bloqueado(u) {
     if (!u) return false;
     try {
+      if (typeof u !== 'string') u = String(u);
+      if (u.indexOf('data:') === 0 || u.indexOf('blob:') === 0) return false;
       var h = new URL(u, location.href).hostname.toLowerCase().replace(/^www\\./, '');
       for (var i = 0; i < dominios.length; i++) {
-        if (h === dominios[i] || h.endsWith('.' + dominios[i])) return true;
+        if (h === dominios[i] || h.endsWith('.' + dominios[i])) {
+          if (!avisados[h]) { avisados[h] = 1; console.log('[bloqueador] cortado ' + h); }
+          return true;
+        }
       }
     } catch (e) {}
     return false;
   }
-  // Las ventanas emergentes son el estorbo mas comun de estos sitios.
+
+  // 1. Ventanas emergentes.
   window.open = function () { return null; };
+
+  // 2. La direccion de los elementos que cargan cosas, tapada AL ASIGNARSE.
+  //
+  // Este es el punto: hay que negarla antes, no borrar el elemento despues.
+  // Se deja el elemento en su lugar con la direccion vacia, asi la pagina no
+  // se rompe si despues la consulta.
+  function taparSrc(clase) {
+    try {
+      var d = Object.getOwnPropertyDescriptor(clase.prototype, 'src');
+      if (!d || !d.set) return;
+      Object.defineProperty(clase.prototype, 'src', {
+        configurable: true,
+        enumerable: d.enumerable,
+        get: function () { return d.get ? d.get.call(this) : ''; },
+        set: function (v) { if (!bloqueado(v)) d.set.call(this, v); }
+      });
+    } catch (e) {}
+  }
+  taparSrc(HTMLScriptElement);
+  taparSrc(HTMLIFrameElement);
+  if (window.HTMLEmbedElement) taparSrc(HTMLEmbedElement);
+
+  // Algunas paginas usan setAttribute en vez de la propiedad.
+  var ponerAtributo = Element.prototype.setAttribute;
+  Element.prototype.setAttribute = function (nombre, valor) {
+    var n = ('' + nombre).toLowerCase();
+    if ((n === 'src' || n === 'data-src') && bloqueado(valor)) return;
+    return ponerAtributo.apply(this, arguments);
+  };
+
+  // 3. Los pedidos sueltos: por aca es por donde se piden los anuncios de
+  //    video (el reproductor pregunta que anuncio poner y lo recibe).
+  //
+  //    Se contesta vacio en vez de fallar: un error suelto hace que algunos
+  //    reproductores se queden esperando para siempre en vez de arrancar la
+  //    pelicula. Una respuesta vacia los deja seguir de largo.
+  if (window.fetch) {
+    var pedirOriginal = window.fetch;
+    window.fetch = function (entrada, opciones) {
+      var u = typeof entrada === 'string' ? entrada : (entrada && entrada.url);
+      if (bloqueado(u)) {
+        return Promise.resolve(new Response('', { status: 204, statusText: 'No Content' }));
+      }
+      return pedirOriginal.apply(this, arguments);
+    };
+  }
+  if (window.XMLHttpRequest) {
+    var abrir = XMLHttpRequest.prototype.open;
+    XMLHttpRequest.prototype.open = function (metodo, u) {
+      this.__prismCortado = bloqueado(u);
+      return abrir.apply(this, arguments);
+    };
+    var enviar = XMLHttpRequest.prototype.send;
+    XMLHttpRequest.prototype.send = function () {
+      // Nunca sale. Se avisa "termino sin nada" para que quien escuche no se
+      // quede colgado esperando.
+      if (this.__prismCortado) {
+        var self = this;
+        setTimeout(function () {
+          try { self.dispatchEvent(new Event('error')); } catch (e) {}
+        }, 0);
+        return;
+      }
+      return enviar.apply(this, arguments);
+    };
+  }
+  if (navigator.sendBeacon) {
+    var baliza = navigator.sendBeacon.bind(navigator);
+    navigator.sendBeacon = function (u) {
+      // Se dice que si sin mandar nada: es solo telemetria y nadie la mira.
+      return bloqueado(u) ? true : baliza.apply(this, arguments);
+    };
+  }
+
+  // 4. Red de seguridad para lo que igual haya entrado (por ejemplo, marcado
+  //    ya escrito en el HTML antes de que esto corriera).
   function limpiar(raiz) {
     var nodos = (raiz || document).querySelectorAll('iframe[src],script[src],embed[src]');
     for (var i = 0; i < nodos.length; i++) {
@@ -285,8 +443,6 @@ class BloqueadorAnuncios {
     }
   }
   limpiar(document);
-  // Los anuncios se agregan despues de que la pagina cargo, asi que hay que
-  // seguir mirando y no limpiar una sola vez.
   new MutationObserver(function (cambios) {
     for (var i = 0; i < cambios.length; i++) {
       var agregados = cambios[i].addedNodes;
@@ -352,7 +508,7 @@ class ListaDeBloqueo {
         dominios: ((m['dominios'] as List<dynamic>?) ?? const [])
             .map((e) => '$e')
             .toSet(),
-        actualizada:
-            DateTime.tryParse('${m['actualizada']}') ?? DateTime.fromMillisecondsSinceEpoch(0),
+        actualizada: DateTime.tryParse('${m['actualizada']}') ??
+            DateTime.fromMillisecondsSinceEpoch(0),
       );
 }

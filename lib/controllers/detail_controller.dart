@@ -20,6 +20,8 @@ import 'package:prismhub/router/router.dart';
 import 'package:prismhub/data/services/database_service.dart';
 import 'package:prismhub/utils/error.dart';
 import 'package:prismhub/utils/extension.dart';
+import 'package:prismhub/utils/forma_portada.dart';
+import 'package:prismhub/utils/portada_adelantada.dart';
 import 'package:prismhub/utils/portadas_perdidas.dart';
 import 'package:prismhub/data/services/extension_service.dart';
 import 'package:prismhub/utils/external_player.dart';
@@ -145,6 +147,15 @@ class DetailPageController extends GetxController {
   final Rx<History?> history = Rx(null);
   final Rx<Favorite?> favorite = Rx(null);
   final RxString error = ''.obs;
+
+  /// Si lo que falló fue la conexión y no la extensión.
+  ///
+  /// El texto ya sale traducido de friendlyError, pero para la pantalla hace
+  /// falta saber TAMBIÉN de qué tipo de fallo se trata: un corte de internet
+  /// se arregla solo con reintentar y merece decirlo así, mientras que un
+  /// error propio de la fuente probablemente siga igual por más que insistas.
+  final RxBool errorEsDeConexion = false.obs;
+
   final RxBool isLoading = true.obs;
   final RxInt selectEpGroup = 0.obs;
   final RxString aniListID = ''.obs;
@@ -164,12 +175,77 @@ class DetailPageController extends GetxController {
   TMDBDetail? get tmdbDetail => tmdb.value;
   set tmdbDetail(TMDBDetail? value) => tmdb.value = value;
 
+  /// La portada que la tarjeta tocada ya estaba mostrando, si la hay.
+  ///
+  /// Se lee una sola vez, al construirse: es un dato de la apertura y no tiene
+  /// por qué cambiar mientras la ficha está abierta.
+  late final _adelantada = PortadaAdelantada.de(package, url);
+
+  /// Si esta extensión publica fotogramas apaisados en vez de pósters.
+  ///
+  /// El hueco del póster de la ficha es vertical de toda la vida, y para un
+  /// manga o un sitio de anime está bien. Pero los sitios de vídeo publican
+  /// fotogramas 16:9, y metidos en una caja vertical hay que recortarles los
+  /// costados — justo donde suele estar lo que se quiere ver. Sabiendo qué
+  /// publica cada uno, la caja toma la forma que corresponde.
+  ///
+  /// Lectura siempre en falso: un libro lleva tapa vertical aunque alguna
+  /// portada suelta venga apaisada. Es el mismo criterio que usa la grilla de
+  /// las extensiones (ver FormaPortada).
+  /// Ancho ÷ alto que tiene que tener el hueco de la portada.
+  ///
+  /// La proporción EXACTA de las portadas de este sitio, no una de dos formas
+  /// fijas: una portada un poco más angosta que la caja dejaba franjas a los
+  /// costados, y ahí no hay relleno que quede bien. Midiendo la de verdad, la
+  /// imagen llena el hueco y no sobra nada.
+  double get portadaProporcion {
+    final ext = extension;
+    if (ext == null) return FormaPortada.proporcionVertical;
+    return FormaPortada.paraDibujar(
+      package,
+      esDeLectura: !ExtensionUtils.videoTypes.contains(ext.type),
+    );
+  }
+
+  bool get portadaApaisada => portadaProporcion > 1;
+
+  /// La portada que traía la tarjeta, tal cual. Null si se llegó sin pasar por
+  /// una (el historial, un enlace compartido, "Ver detalle" desde el
+  /// reproductor).
+  String? get portadaPrevia => _adelantada?.url;
+  Map<String, String>? get portadaPreviaHeaders => _adelantada?.cabeceras;
+
+  /// La portada a dibujar AHORA.
+  ///
+  /// La de la extensión cuando ya llegó; mientras tanto, la que traía la
+  /// tarjeta. Así la ficha nunca abre con un hueco: en las extensiones que
+  /// devuelven la misma imagen no cambia nada, y en las que devuelven otra se
+  /// ve la de la tarjeta y se reemplaza sola cuando llega la buena.
+  String? get portada {
+    final deLaExtension = detail?.cover;
+    if (deLaExtension != null && deLaExtension.isNotEmpty) return deLaExtension;
+    return _adelantada?.url;
+  }
+
+  /// Las cabeceras que le corresponden a [portada].
+  ///
+  /// Van atadas a la imagen y no sueltas: varios sitios devuelven 403 sin el
+  /// Referer correcto (medido en HQPorner), y la portada de la tarjeta puede
+  /// venir de un servidor distinto al de la ficha.
+  Map<String, String>? get portadaHeaders {
+    final deLaExtension = detail?.cover;
+    if (deLaExtension != null && deLaExtension.isNotEmpty) {
+      return detail?.headers;
+    }
+    return _adelantada?.cabeceras;
+  }
+
   String? get backgorund {
     String? bg;
     if (tmdbDetail != null && tmdbDetail!.backdrop != null) {
       bg = TmdbApi.getImageUrl(tmdbDetail!.backdrop!) ?? '';
     } else {
-      bg = detail?.cover;
+      bg = portada;
     }
     return bg;
   }
@@ -238,7 +314,25 @@ class DetailPageController extends GetxController {
       isLoading.value = false;
     } catch (e) {
       error.value = friendlyError(e);
+      errorEsDeConexion.value = isConnectionError(e);
       rethrow;
+    }
+  }
+
+  /// Vuelve a pedir la ficha después de un fallo.
+  ///
+  /// Limpia el mensaje y vuelve a mostrar el indicador ANTES de pedir: sin
+  /// eso, la pantalla se queda con el error viejo puesto todo el rato que dure
+  /// el intento nuevo y no se ve que esté pasando algo — se siente como que el
+  /// botón no hizo nada.
+  Future<void> reintentar() async {
+    error.value = '';
+    isLoading.value = true;
+    try {
+      await onRefresh();
+    } catch (_) {
+      // onRefresh ya dejó el mensaje puesto; acá solo hace falta no propagar,
+      // porque nadie más lo va a atender y quedaría como un error suelto.
     }
   }
 

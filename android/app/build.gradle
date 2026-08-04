@@ -1,6 +1,7 @@
 plugins {
     id "com.android.application"
-    id "kotlin-android"
+    // "kotlin-android" ya no va: lo aplica el propio plugin de Flutter
+    // (Kotlin integrado). Ver la nota en settings.gradle.
     id "dev.flutter.flutter-gradle-plugin"
 }
 
@@ -43,13 +44,20 @@ android {
     compileSdk 36
     ndkVersion flutter.ndkVersion
 
+    // Java 17, igual que TODOS los plugins.
+    //
+    // El build.gradle de la raiz ya obliga a cada plugin a compilar en 17
+    // ("Plugins declare mismatched targets which fails on JDK 21"), pero la app
+    // se habia quedado en 8. O sea que el proyecto no coincidia consigo mismo, y
+    // Java avisaba en cada compilacion: "source/target value 8 is obsolete and
+    // will be removed in a future release".
     compileOptions {
-        sourceCompatibility JavaVersion.VERSION_1_8
-        targetCompatibility JavaVersion.VERSION_1_8
+        sourceCompatibility JavaVersion.VERSION_17
+        targetCompatibility JavaVersion.VERSION_17
     }
 
     kotlinOptions {
-        jvmTarget = '1.8'
+        jvmTarget = '17'
     }
 
     sourceSets {
@@ -63,6 +71,16 @@ android {
         targetSdk 28
         versionCode flutterVersionCode.toInteger()
         versionName flutterVersionName
+        // Nombre visible por defecto. El release lo usa tal cual; debug y
+        // profile lo pisan mas abajo para poder distinguirlos en el telefono.
+        //
+        // OJO con el "+=": asignando con "=" se reemplaza el mapa ENTERO y se
+        // pierde applicationName, que lo inyecta Flutter y lo usa el manifiesto
+        // en android:name. Con "=" la compilacion de Android falla con
+        // "requires a placeholder substitution but no value for
+        // <applicationName> is provided" — pasó, y no se ve en Windows porque
+        // esto solo lo toca Android.
+        manifestPlaceholders += [appLabel: "PrismHub"]
     }
 
     signingConfigs {
@@ -84,8 +102,28 @@ android {
             // keystore so local `flutter build apk --release` still works.
             signingConfig hasReleaseKeystore ? signingConfigs.release : signingConfigs.debug
         }
+        // Las compilaciones de prueba se instalan APARTE, con otro identificador
+        // y otro nombre visible.
+        //
+        // Con el mismo applicationId para todo, probar un cambio en el telefono
+        // REEMPLAZABA la version instalada: se perdia la app que estaba en uso
+        // y, con ella, sus datos. Ahora conviven las dos y en el cajon de
+        // aplicaciones se distinguen por el nombre.
+        //
+        // El sufijo solo existe en debug y profile: al compilar el release el
+        // identificador vuelve a ser com.prismhub.app, asi que la actualizacion
+        // desde el boton de la app y la firma no cambian en nada.
+        // El nombre visible va por manifestPlaceholders y no por resValue: el
+        // manifiesto trae el texto escrito directo, y crear un recurso app_name
+        // ademas del literal choca al compilar.
         debug {
             // Default debug signing (~/.android/debug.keystore).
+            applicationIdSuffix ".dev"
+            manifestPlaceholders += [appLabel: "PrismHub dev"]
+        }
+        profile {
+            applicationIdSuffix ".dev"
+            manifestPlaceholders += [appLabel: "PrismHub dev"]
         }
     }
 }
@@ -95,7 +133,14 @@ flutter {
 }
 
 dependencies {
-    implementation "org.jetbrains.kotlin:kotlin-stdlib-jdk7:$kotlin_version"
+    // La biblioteca de Kotlin ya NO se declara aca. Con Kotlin integrado la
+    // pone Flutter, en la version que corresponde a SU compilador.
+    //
+    // Clavarla a mano fue lo que rompio la compilacion al migrar: Flutter
+    // compila con Kotlin 2.0.0 y aca se pedia la biblioteca 2.2.20, asi que el
+    // compilador no podia leerla ("metadata 2.2.0, expected 2.0.0") y fallaba
+    // hasta en MainActivity.kt, con errores que parecian del codigo nuestro
+    // cuando en realidad era el desajuste de versiones.
 }
 
 ext.abiCodes = ["x86_64": 1, "armeabi-v7a": 2, "arm64-v8a": 3]

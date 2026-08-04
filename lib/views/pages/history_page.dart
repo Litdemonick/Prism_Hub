@@ -170,8 +170,17 @@ class _HistoryPageState extends State<HistoryPage> {
     if (mounted) setState(() {});
   }
 
-  void _openDetail(String url, String package) {
-    ExtensionUtils.openExtensionDetail(context, package: package, url: url);
+  // cover/headers: la portada que la tarjeta ya está mostrando, para que la
+  // ficha abra con imagen. Ver PortadaAdelantada.
+  void _openDetail(String url, String package,
+      {String? cover, Map<String, String>? headers}) {
+    ExtensionUtils.openExtensionDetail(
+      context,
+      package: package,
+      url: url,
+      cover: cover,
+      coverHeaders: headers,
+    );
   }
 
   // Si hay un DetailPageController vivo para este título (la página de
@@ -346,9 +355,11 @@ class _HistoryPageState extends State<HistoryPage> {
           type: f.type,
           cover: f.cover,
           headers: _c.headersForPackage(f.package),
-          onTap: () => _openDetail(f.url, f.package),
+          onTap: () => _openDetail(f.url, f.package,
+              cover: f.cover, headers: _c.headersForPackage(f.package)),
           onDelete: () => _deleteFavorite(f),
-          onVerDetalle: () => _openDetail(f.url, f.package),
+          onVerDetalle: () => _openDetail(f.url, f.package,
+              cover: f.cover, headers: _c.headersForPackage(f.package)),
           hidden: HiddenCards.isHidden(f.package, f.url),
           onToggleHide: () => HiddenCards.toggle(f.package, f.url),
           accent: _accent,
@@ -380,10 +391,15 @@ class _HistoryPageState extends State<HistoryPage> {
           type: h.type,
           cover: portada.url,
           coverFile: portada.archivo,
-          headers: portada.necesitaHeaders
-              ? _c.headersForPackage(h.package)
-              : null,
-          onTap: () => _openDetail(h.url, h.package),
+          headers:
+              portada.necesitaHeaders ? _c.headersForPackage(h.package) : null,
+          // Solo si la portada es de red: el historial de vídeo guarda una
+          // captura en disco, y eso no se puede pedir por URL.
+          onTap: () => _openDetail(h.url, h.package,
+              cover: portada.archivo == null ? portada.url : null,
+              headers: portada.necesitaHeaders
+                  ? _c.headersForPackage(h.package)
+                  : null),
           onDelete: () => _deleteHistory(h),
           // Mover entre "en curso" y "visto" sin abrir el título. Hasta ahora
           // la única forma de devolver algo a Continuar era abrirlo y leer un
@@ -395,7 +411,11 @@ class _HistoryPageState extends State<HistoryPage> {
               ? Icons.replay_rounded
               : Icons.check_rounded,
           onExtraAction: () => _cambiarEstado(h),
-          onVerDetalle: () => _openDetail(h.url, h.package),
+          onVerDetalle: () => _openDetail(h.url, h.package,
+              cover: portada.archivo == null ? portada.url : null,
+              headers: portada.necesitaHeaders
+                  ? _c.headersForPackage(h.package)
+                  : null),
           hidden: HiddenCards.isHidden(h.package, h.url),
           onToggleHide: () => HiddenCards.toggle(h.package, h.url),
           accent: _accent,

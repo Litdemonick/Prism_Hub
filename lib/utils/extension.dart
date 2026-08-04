@@ -23,6 +23,7 @@ import 'package:prismhub/utils/error.dart';
 import 'package:prismhub/utils/extension_signature.dart';
 import 'package:prismhub/utils/i18n.dart';
 import 'package:prismhub/utils/prismhub_directory.dart';
+import 'package:prismhub/utils/portada_adelantada.dart';
 import 'package:prismhub/utils/prismhub_storage.dart';
 import 'package:prismhub/utils/request.dart';
 import 'package:prismhub/utils/router.dart';
@@ -612,6 +613,12 @@ class ExtensionUtils {
     required String package,
     required String url,
     bool isAdultOption = false,
+    // La portada que la tarjeta tocada ya estaba mostrando, para que la ficha
+    // abra con imagen en vez de con un hueco. Opcional: quien no la tenga a
+    // mano (una entrada del historial, un enlace compartido) simplemente no la
+    // pasa y todo funciona como antes. Ver PortadaAdelantada.
+    String? cover,
+    Map<String, String>? coverHeaders,
   }) async {
     // Anti doble toque. blockedByPendingUpdate puede tardar (consulta el
     // catalogo), asi que entre el toque y la navegacion hay una ventana en la
@@ -631,6 +638,10 @@ class ExtensionUtils {
 
     if (await blockedByPendingUpdate(context, package)) return;
     if (!context.mounted) return;
+    // Se anota DESPUÉS de las comprobaciones y antes de navegar: si la
+    // apertura se corta por una actualización pendiente, no queda nada suelto.
+    PortadaAdelantada.anotar(package, url,
+        portada: cover, cabeceras: coverHeaders);
     if (Platform.isAndroid) {
       Get.to(DetailPage(
         key: ValueKey('$package|$url'),
@@ -722,6 +733,34 @@ class ExtensionUtils {
         : webSite;
     final path = url.startsWith('/') ? url : '/$url';
     return '$base$path';
+  }
+
+  /// Las que quedaron apagadas POR el ajuste de +18, no por decisión del
+  /// usuario.
+  ///
+  /// La diferencia importa: al volver a encender el +18 solo se devuelven
+  /// estas. Las que el usuario apagó a mano se quedan como las dejó.
+  static List<String> get apagadasPorNsfw {
+    final crudo = PrismHubStorage.getSetting(SettingKey.nsfw18AutoDisabled);
+    if (crudo is! String || crudo.isEmpty) return <String>[];
+    return crudo.split(',').where((p) => p.isNotEmpty).toList();
+  }
+
+  static Future<void> setApagadasPorNsfw(List<String> paquetes) =>
+      PrismHubStorage.setSetting(
+          SettingKey.nsfw18AutoDisabled, paquetes.join(','));
+
+  /// Anota UNA como apagada por el ajuste de +18.
+  ///
+  /// Hace falta al instalar una extensión +18 con el ajuste apagado: antes se
+  /// la desactivaba pero no se la anotaba, así que al encender el +18 no
+  /// volvía sola y había que buscarla a mano en Extensiones instaladas, sin
+  /// ninguna pista de por qué estaba apagada.
+  static Future<void> anotarApagadaPorNsfw(String package) async {
+    final lista = apagadasPorNsfw;
+    if (lista.contains(package)) return;
+    lista.add(package);
+    await setApagadasPorNsfw(lista);
   }
 
   static Future<void> setExtensionEnabled(String package, bool enabled) async {

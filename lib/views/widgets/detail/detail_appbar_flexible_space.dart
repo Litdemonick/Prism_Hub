@@ -7,6 +7,7 @@ import 'package:prismhub/views/widgets/detail/detail_favorite_button.dart';
 import 'package:prismhub/views/widgets/detail/detail_share_button.dart';
 import 'package:prismhub/views/widgets/cache_network_image.dart';
 import 'package:prismhub/views/widgets/cover.dart';
+import 'package:prismhub/views/widgets/detail/portada_con_relevo.dart';
 import 'package:prismhub/views/widgets/home/home_theme.dart';
 import 'package:prismhub/views/widgets/boton_pulsable.dart';
 
@@ -85,9 +86,13 @@ class _DetailAppbarflexibleSpaceState extends State<DetailAppbarflexibleSpace> {
     }
   }
 
+  /// Ancho por cada unidad de alto de la miniatura: la proporción real de las
+  /// portadas de esta extensión. Ver DetailPageController.portadaProporcion.
+  double get _proporcionPortada => c.portadaProporcion;
+
   bool _needShowCover() {
     if (c.isLoading.value) return true;
-    if (c.data.value?.cover != null) return true;
+    if (c.portada != null) return true;
     return false;
   }
 
@@ -97,18 +102,21 @@ class _DetailAppbarflexibleSpaceState extends State<DetailAppbarflexibleSpace> {
         SizedBox(
           height: widget.height,
           width: double.infinity,
-          child: c.isLoading.value
-              ? const SizedBox.shrink()
-              : Cover(
-                  alt: c.data.value?.title ?? '',
-                  url: c.backgorund,
-                  noText: true,
-                  headers: c.detail?.headers,
-                  // 0.35 (hacia abajo) recortaba de más la parte de arriba
-                  // de la imagen de fondo — subido a 0 para mostrar más
-                  // esa zona en vez de sesgar hacia el centro/abajo.
-                  alignment: const Alignment(0, 0),
-                ),
+          // Ya no se esconde mientras carga: con la portada que traía la
+          // tarjeta hay algo que mostrar desde el primer fotograma, y el
+          // relevo se encarga de que el cambio a la definitiva no se note.
+          child: PortadaConRelevo(
+            alt: c.data.value?.title ?? '',
+            urlPrevia: c.portadaPrevia,
+            cabecerasPrevias: c.portadaPreviaHeaders,
+            urlFinal: c.portada,
+            cabecerasFinales: c.portadaHeaders,
+            noText: true,
+            // 0.35 (hacia abajo) recortaba de más la parte de arriba
+            // de la imagen de fondo — subido a 0 para mostrar más
+            // esa zona en vez de sesgar hacia el centro/abajo.
+            alignment: const Alignment(0, 0),
+          ),
         ),
         const Positioned.fill(
           child: DecoratedBox(
@@ -142,24 +150,41 @@ class _DetailAppbarflexibleSpaceState extends State<DetailAppbarflexibleSpace> {
         child: SizedBox(
           height: height,
           width: width,
-          child: c.isLoading.value
-              ? const Center(
-                  child: CircularProgressIndicator(
-                    color: HomeTheme.accentPink,
-                  ),
-                )
-              : CacheNetWorkImagePic(
-                  c.data.value?.cover ?? '',
-                  fit: BoxFit.cover,
-                  // topCenter: en la miniatura chica, BoxFit.cover con el
-                  // alignment por defecto (center) recortaba parejo arriba
-                  // y abajo — cortando la parte de arriba de la portada
-                  // (cara/cabeza, lo más reconocible). Sesgado hacia arriba
-                  // se ve más completa esa zona.
-                  alignment: Alignment.topCenter,
-                  headers: c.detail?.headers,
-                  canFullScreen: true,
+          child: Stack(
+            fit: StackFit.expand,
+            children: [
+              // Antes acá había una rueda ocupando toda la miniatura hasta que
+              // la extensión contestara. Ahora se dibuja de una la portada que
+              // traía la tarjeta, y la rueda pasa a ser una señal chica en la
+              // esquina: sigue diciendo que falta algo, pero sin tapar lo que
+              // ya se puede ver.
+              PortadaConRelevo(
+                alt: c.data.value?.title ?? '',
+                urlPrevia: c.portadaPrevia,
+                cabecerasPrevias: c.portadaPreviaHeaders,
+                urlFinal: c.portada,
+                cabecerasFinales: c.portadaHeaders,
+                // topCenter: en la miniatura chica, BoxFit.cover con el
+                // alignment por defecto (center) recortaba parejo arriba
+                // y abajo — cortando la parte de arriba de la portada
+                // (cara/cabeza, lo más reconocible). Sesgado hacia arriba
+                // se ve más completa esa zona.
+                alignment: Alignment.topCenter,
+                canFullScreen: true,
+                // Red de seguridad: la caja ya toma la forma que publica la
+                // extensión, pero un título suelto puede traer una portada de
+                // otra forma. Así se ve entera igual, con el resto de la caja
+                // rellenado con la misma imagen desenfocada.
+                entera: true,
+              ),
+              if (c.isLoading.value)
+                const Positioned(
+                  right: 6,
+                  bottom: 6,
+                  child: _RuedaChica(),
                 ),
+            ],
+          ),
         ),
       ),
     );
@@ -180,7 +205,7 @@ class _DetailAppbarflexibleSpaceState extends State<DetailAppbarflexibleSpace> {
     // entre ellas es el mismo en cualquier pantalla. El titulo ahora entra en
     // tres lineas: es lo primero que uno quiere leer y venia cortado.
     final coverThumbHeight = (150 * (widget.height / 400)).clamp(0.0, 150.0);
-    final coverThumbWidth = coverThumbHeight * (100 / 150);
+    final coverThumbWidth = coverThumbHeight * _proporcionPortada;
 
     return Stack(
       children: [
@@ -249,8 +274,8 @@ class _DetailAppbarflexibleSpaceState extends State<DetailAppbarflexibleSpace> {
               // en el telefono eso lleva a tocar dos veces.
               SizedBox(
                 width: double.infinity,
-                child: BotonPulsable(
-                    child: DetailContinuePlay(tag: widget.tag)),
+                child:
+                    BotonPulsable(child: DetailContinuePlay(tag: widget.tag)),
               ),
               const SizedBox(height: 8),
               Row(
@@ -296,7 +321,7 @@ class _DetailAppbarflexibleSpaceState extends State<DetailAppbarflexibleSpace> {
         (widget.height - toolbarHeight - tabBarHeight - topGap - bottomGap)
             .clamp(36.0, 100.0);
     final thumbHeight = contentHeight.clamp(36.0, 80.0);
-    final thumbWidth = thumbHeight * (100 / 150);
+    final thumbWidth = thumbHeight * _proporcionPortada;
 
     return Stack(
       children: [
@@ -373,6 +398,35 @@ class _DetailAppbarflexibleSpaceState extends State<DetailAppbarflexibleSpace> {
       () => Opacity(
         opacity: _opacity,
         child: widget.landscape ? _buildLandscape() : _buildPortrait(),
+      ),
+    );
+  }
+}
+
+/// La señal de "todavía falta algo", en la esquina de la portada.
+///
+/// Chica y con un fondo oscuro detrás a propósito: va encima de una imagen que
+/// ya se ve, así que tiene que leerse sobre cualquier portada sin taparla.
+/// Antes, mientras cargaba, una rueda grande ocupaba la miniatura entera y no
+/// se veía nada más.
+class _RuedaChica extends StatelessWidget {
+  const _RuedaChica();
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.all(5),
+      decoration: BoxDecoration(
+        color: Colors.black.withValues(alpha: 0.55),
+        borderRadius: BorderRadius.circular(999),
+      ),
+      child: const SizedBox(
+        width: 14,
+        height: 14,
+        child: CircularProgressIndicator(
+          strokeWidth: 2,
+          color: HomeTheme.accentPink,
+        ),
       ),
     );
   }
