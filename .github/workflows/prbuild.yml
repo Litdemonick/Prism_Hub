@@ -69,6 +69,17 @@ jobs:
       - uses: subosito/flutter-action@v2
         with:
           channel: stable
+          # Version FIJA a proposito, no "la ultima stable".
+          #
+          # Sin fijarla, cada release se compilaba con lo que hubiera ese dia:
+          # dos releases seguidas podian salir con Flutter distinto sin que
+          # nadie lo decidiera, y lo que se probaba en la maquina no era lo que
+          # se publicaba. Para una app cuyo boton de actualizar no puede fallar,
+          # eso es demasiado suelto.
+          #
+          # Al subirla, actualizar tambien el Flutter local para que las dos
+          # sigan iguales.
+          flutter-version: '3.44.8'
       - name: Install project dependencies
         run: flutter pub get
       - name: Build artifacts
@@ -101,6 +112,17 @@ jobs:
       - uses: subosito/flutter-action@v2
         with:
           channel: stable
+          # Version FIJA a proposito, no "la ultima stable".
+          #
+          # Sin fijarla, cada release se compilaba con lo que hubiera ese dia:
+          # dos releases seguidas podian salir con Flutter distinto sin que
+          # nadie lo decidiera, y lo que se probaba en la maquina no era lo que
+          # se publicaba. Para una app cuyo boton de actualizar no puede fallar,
+          # eso es demasiado suelto.
+          #
+          # Al subirla, actualizar tambien el Flutter local para que las dos
+          # sigan iguales.
+          flutter-version: '3.44.8'
       - name: Install project dependencies
         run: flutter pub get
       - name: Build artifacts
