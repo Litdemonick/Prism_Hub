@@ -7,7 +7,6 @@ import 'package:prismhub/utils/error.dart';
 import 'package:prismhub/views/widgets/extension_item_card.dart';
 import 'package:prismhub/views/widgets/home/home_theme.dart';
 import 'package:prismhub/views/widgets/horizontal_list.dart';
-import 'package:prismhub/views/widgets/card_default_placeholder.dart';
 
 class SearchAllTile extends StatefulWidget {
   const SearchAllTile({
@@ -26,6 +25,35 @@ class SearchAllTile extends StatefulWidget {
 }
 
 class _SearchAllTileState extends State<SearchAllTile> {
+  // Fila cargando: el indicador solo, centrado, sin nada debajo.
+  //
+  // Antes se dibujaban cuatro tarjetas de relleno y el indicador iba encima
+  // en un Stack centrado. El centro de la fila cae justo sobre una de esas
+  // tarjetas, así que el aro se veía asomando POR DETRÁS de ella, como si
+  // estuviera mal dibujado; y como el centro depende del ancho, al agrandar
+  // o achicar la ventana el aro se corría solo. Sin tarjetas debajo no hay
+  // con qué superponerse, sea cual sea el tamaño de la ventana.
+  //
+  // Mantiene el mismo alto que la fila con contenido, así que al llegar los
+  // datos nada salta de lugar.
+  Widget _cargando() {
+    return SizedBox(
+      height: Platform.isAndroid ? 170 : 280,
+      child: Center(
+        child: SizedBox(
+          width: 26,
+          height: 26,
+          child: CircularProgressIndicator(
+            strokeWidth: 2.4,
+            valueColor: AlwaysStoppedAnimation(
+              HomeTheme.accentPink.withValues(alpha: 0.85),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final list = HorizontalList(
@@ -33,6 +61,20 @@ class _SearchAllTileState extends State<SearchAllTile> {
       title: widget.searchResult.runitme.extension.name,
       contentBuilder: (controller) {
         final data = widget.searchResult.result;
+
+        // Cargando: solo el indicador girando, nada más en la fila.
+        //
+        // Va ANTES que todo lo demás a propósito. Al buscar o al cambiar de
+        // filtro, el controlador marca la extensión como no terminada pero
+        // deja el resultado anterior intacto (a propósito, ver getResult:
+        // así un refresh que falla no borra lo que ya estaba en pantalla).
+        // El efecto era que la fila seguía mostrando las tarjetas de la
+        // búsqueda VIEJA, quietas, sin ninguna señal de que se estaba
+        // buscando otra cosa: parecía que el filtro no había hecho nada
+        // hasta que de golpe cambiaba todo. Ahora la fila muestra el
+        // indicador desde que arranca la búsqueda hasta que llega el
+        // resultado nuevo.
+        if (!widget.searchResult.completed) return _cargando();
 
         // Un error con resultado previo válido (result no nulo/vacío) se
         // ignora acá — se prioriza seguir mostrando ese contenido viejo en
@@ -56,52 +98,10 @@ class _SearchAllTileState extends State<SearchAllTile> {
             ),
           );
         }
-        // Todavía no resolvió — antes esto se ocultaba entero (para evitar
-        // el parpadeo de "aparece y desaparece" al refrescar), pero para
-        // una extensión que JAMÁS tuvo contenido eso dejaba un hueco vacío
-        // raro mientras carga. Ahora se muestran tarjetas con la imagen por
-        // defecto (carddefaultoffline.png) del mismo tamaño exacto que las
-        // reales: el contenedor nunca cambia de tamaño ni se mueve, solo se
-        // reemplaza la imagen cuando llegan los datos.
-        if (data == null) {
-          return SizedBox(
-            height: Platform.isAndroid ? 170 : 280,
-            child: Stack(
-              alignment: Alignment.center,
-              children: [
-                ListView.builder(
-                  scrollDirection: Axis.horizontal,
-                  // physics fijo: mientras carga no hay nada real que
-                  // scrollear y dejarlo scrolleable hacía que la fila se
-                  // moviera sola bajo el dedo justo antes de que llegara
-                  // el contenido.
-                  physics: const NeverScrollableScrollPhysics(),
-                  itemCount: 4,
-                  itemBuilder: (context, index) => Container(
-                    width: Platform.isAndroid ? 110 : 170,
-                    margin: const EdgeInsets.only(right: 16),
-                    child: const CardDefaultPlaceholder(),
-                  ),
-                ),
-                // Spinner real encima de las placeholder — antes solo se
-                // veía la imagen estática sin ningún indicio de que algo
-                // seguía cargando (se sentía "plantado" en vez de
-                // "cargando"). No se toca CardDefaultPlaceholder (su
-                // diseño estático fue un pedido explícito anterior).
-                SizedBox(
-                  width: 26,
-                  height: 26,
-                  child: CircularProgressIndicator(
-                    strokeWidth: 2.4,
-                    valueColor: AlwaysStoppedAnimation(
-                      HomeTheme.accentPink.withValues(alpha: 0.85),
-                    ),
-                  ),
-                ),
-              ],
-            ),
-          );
-        }
+        // Terminó pero no dejó ni resultado ni error. No debería pasar; si
+        // pasa, es preferible seguir mostrando el indicador antes que un
+        // hueco vacío sin explicación.
+        if (data == null) return _cargando();
 
         // Mismo alto que las demás filas (antes un Text suelto sin SizedBox
         // hacía que la fila se "achicara" al no encontrar nada, en vez de
