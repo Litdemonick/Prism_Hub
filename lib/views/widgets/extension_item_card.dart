@@ -1,6 +1,7 @@
 ﻿import 'package:flutter/material.dart';
 import 'package:prismhub/models/extension.dart';
 import 'package:prismhub/utils/extension.dart';
+import 'package:prismhub/utils/forma_portada.dart';
 import 'package:prismhub/views/widgets/grid_item_tile.dart';
 import 'package:prismhub/views/widgets/platform_widget.dart';
 
@@ -48,6 +49,11 @@ class _ExtensionItemCardState extends State<ExtensionItemCard> {
       subtitle: widget.update,
       headers: widget.headers,
       type: widget.type,
+      // Se aprovecha la portada que ya se descargó para saber si esta
+      // extensión publica pósters verticales o fotogramas apaisados, y armar
+      // la grilla con la forma que le corresponde. Ver FormaPortada.
+      onTamanoReal: (ancho, alto) =>
+          FormaPortada.anotar(widget.package, ancho, alto),
       onTap: () => ExtensionUtils.openExtensionDetail(
         context,
         package: widget.package,
@@ -64,6 +70,11 @@ class _ExtensionItemCardState extends State<ExtensionItemCard> {
       subtitle: widget.update,
       headers: widget.headers,
       type: widget.type,
+      // Se aprovecha la portada que ya se descargó para saber si esta
+      // extensión publica pósters verticales o fotogramas apaisados, y armar
+      // la grilla con la forma que le corresponde. Ver FormaPortada.
+      onTamanoReal: (ancho, alto) =>
+          FormaPortada.anotar(widget.package, ancho, alto),
       onTap: () => ExtensionUtils.openExtensionDetail(
         context,
         package: widget.package,

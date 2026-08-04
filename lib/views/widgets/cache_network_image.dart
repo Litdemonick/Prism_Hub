@@ -29,6 +29,7 @@ class CacheNetWorkImagePic extends StatefulWidget {
     this.filterQuality = FilterQuality.low,
     this.cacheWidth,
     this.cacheHeight,
+    this.onTamanoReal,
   });
   final String url;
   final BoxFit fit;
@@ -44,6 +45,14 @@ class CacheNetWorkImagePic extends StatefulWidget {
   final FilterQuality filterQuality;
   final int? cacheWidth;
   final int? cacheHeight;
+
+  /// El tamaño en píxeles de la imagen que llegó, apenas se sabe.
+  ///
+  /// Sirve para averiguar la FORMA de la imagen sin pedir nada de más: la
+  /// proporción entre ancho y alto se conserva aunque se decodifique a menor
+  /// tamaño (ver cacheWidth), así que alcanza para distinguir un póster
+  /// vertical de un fotograma apaisado.
+  final void Function(int ancho, int alto)? onTamanoReal;
 
   @override
   State<CacheNetWorkImagePic> createState() => _CacheNetWorkImagePicState();
@@ -94,6 +103,9 @@ class _CacheNetWorkImagePicState extends State<CacheNetWorkImagePic> {
   // reintento termine, la tarjeta nunca queda en blanco: o sigue igual, o
   // aparece la portada real.
   bool _reintentando = false;
+
+  /// Si ya se avisó del tamaño de esta imagen. Ver el uso en loadStateChanged.
+  bool _tamanoAvisado = false;
 
   bool get _failed {
     final cuando = _fallosRecientes[_failureKey];
@@ -205,6 +217,13 @@ class _CacheNetWorkImagePicState extends State<CacheNetWorkImagePic> {
             // Si la imagen real es más chica que el espacio que ocupa, se
             // muestra completa y centrada en vez de recortada.
             final uiImage = state.extendedImageInfo?.image;
+            // Una sola vez por tarjeta: esto se dispara en cada dibujado
+            // mientras la imagen esté puesta (pasar el mouse por encima ya
+            // provoca uno), y no hace falta contar la misma portada cien veces.
+            if (uiImage != null && !_tamanoAvisado) {
+              _tamanoAvisado = true;
+              widget.onTamanoReal?.call(uiImage.width, uiImage.height);
+            }
             // widget.width/height suelen ser double.infinity a propósito
             // (rellenar lo que el padre disponga, ej. el fondo del detalle)
             // — comparar contra infinito siempre da "más chica", así que

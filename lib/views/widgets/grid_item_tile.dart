@@ -13,6 +13,7 @@ class GridItemTile extends StatefulWidget {
     this.onTap,
     this.headers,
     this.type,
+    this.onTamanoReal,
   });
   final String title;
   final String? cover;
@@ -22,6 +23,9 @@ class GridItemTile extends StatefulWidget {
   // Solo se pasa desde Home (Continuar/Favoritos) — en el resto de la app
   // queda null y no se dibuja nada.
   final ExtensionType? type;
+
+  /// El tamaño en píxeles de la portada, para saber qué forma tiene.
+  final void Function(int ancho, int alto)? onTamanoReal;
 
   @override
   State<GridItemTile> createState() => _GridItemTileState();
@@ -42,6 +46,7 @@ class _GridItemTileState extends State<GridItemTile> {
             alt: widget.title,
             url: widget.cover,
             headers: widget.headers,
+            onTamanoReal: widget.onTamanoReal,
           ),
         ),
         if (widget.type != null)
@@ -151,6 +156,7 @@ class _GridItemTileState extends State<GridItemTile> {
                         alt: widget.title,
                         url: widget.cover,
                         headers: widget.headers,
+                        onTamanoReal: widget.onTamanoReal,
                       ),
                     ),
                     if (widget.type != null)

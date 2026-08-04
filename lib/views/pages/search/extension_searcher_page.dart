@@ -12,6 +12,7 @@ import 'package:prismhub/data/providers/anilist_provider.dart';
 import 'package:prismhub/models/index.dart';
 import 'package:prismhub/router/router.dart';
 import 'package:prismhub/utils/extension.dart';
+import 'package:prismhub/utils/forma_portada.dart';
 import 'package:prismhub/utils/prismhub_storage.dart';
 import 'package:prismhub/utils/search_text.dart';
 import 'package:prismhub/views/widgets/button.dart';
@@ -992,31 +993,50 @@ class _ExtensionSearcherPageState extends fluent.State<ExtensionSearcherPage> {
                 child: _nsfwBlocked
                     ? _buildNsfwBlockedMessage()
                     : LayoutBuilder(
-                        builder: (context, constraints) => ExcludeSemantics(
-                          child: GridView.builder(
-                            padding: const EdgeInsets.symmetric(horizontal: 16),
-                            gridDelegate:
-                                SliverGridDelegateWithFixedCrossAxisCount(
-                              crossAxisCount: constraints.maxWidth ~/ 120,
-                              childAspectRatio: 0.7,
-                              crossAxisSpacing: 16,
-                              mainAxisSpacing: 16,
-                            ),
-                            itemCount: _data.length,
-                            itemBuilder: (context, index) {
-                              final item = _data[index];
-                              return ExtensionItemCard(
-                                title: item.title,
-                                url: item.url,
-                                package: widget.package,
-                                cover: item.cover,
-                                update: item.update,
-                                headers: item.headers,
-                                isAdultOption: _adultOptionSelected,
+                        builder: (context, constraints) {
+                          // El aviso llega cuando se descubre qué forma tienen
+                          // las portadas de esta extensión, para rearmar la
+                          // grilla con la que corresponde.
+                          return ValueListenableBuilder<int>(
+                            valueListenable: FormaPortada.revision,
+                            builder: (context, _, __) {
+                              final rejilla = _rejilla(
+                                constraints.maxWidth,
+                                relleno: 32,
+                                separacion: 16,
+                                // En el teléfono el título va encima de la
+                                // imagen, así que no ocupa alto propio.
+                                altoDelTexto: 0,
+                              );
+                              return ExcludeSemantics(
+                                child: GridView.builder(
+                                  padding: const EdgeInsets.symmetric(
+                                      horizontal: 16),
+                                  gridDelegate:
+                                      SliverGridDelegateWithFixedCrossAxisCount(
+                                    crossAxisCount: rejilla.columnas,
+                                    childAspectRatio: rejilla.proporcion,
+                                    crossAxisSpacing: 16,
+                                    mainAxisSpacing: 16,
+                                  ),
+                                  itemCount: _data.length,
+                                  itemBuilder: (context, index) {
+                                    final item = _data[index];
+                                    return ExtensionItemCard(
+                                      title: item.title,
+                                      url: item.url,
+                                      package: widget.package,
+                                      cover: item.cover,
+                                      update: item.update,
+                                      headers: item.headers,
+                                      isAdultOption: _adultOptionSelected,
+                                    );
+                                  },
+                                ),
                               );
                             },
-                          ),
-                        ),
+                          );
+                        },
                       ),
               ),
               if (!_isLoading && !_nsfwBlocked && _data.isEmpty)
@@ -1025,6 +1045,118 @@ class _ExtensionSearcherPageState extends fluent.State<ExtensionSearcherPage> {
           ],
         ),
       ),
+    );
+  }
+
+  /// La grilla de tarjetas del escritorio.
+  ///
+  /// Aparte y no en medio del árbol de widgets: ahí vive a doce niveles de
+  /// sangrado y cualquier cambio queda ilegible.
+  Widget _grillaEscritorio() {
+    const separacion = 12.0;
+    const relleno = 8.0;
+    return LayoutBuilder(
+      builder: (ctx, constraints) {
+        // El aviso llega cuando se descubre qué forma tienen las portadas de
+        // esta extensión, para rearmar la grilla con la que corresponde.
+        return ValueListenableBuilder<int>(
+          valueListenable: FormaPortada.revision,
+          builder: (ctx, _, __) {
+            final rejilla = _rejilla(
+              constraints.maxWidth,
+              relleno: relleno * 2,
+              separacion: separacion,
+              // Debajo de la portada van el título y, si lo hay, el subtítulo
+              // (ver GridItemTile): 8 de separación + 20 + 16.
+              altoDelTexto: 44,
+            );
+            return ExcludeSemantics(
+              child: GridView.builder(
+                padding: const EdgeInsets.all(relleno),
+                gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
+                  crossAxisCount: rejilla.columnas,
+                  childAspectRatio: rejilla.proporcion,
+                  crossAxisSpacing: separacion,
+                  mainAxisSpacing: separacion,
+                ),
+                itemCount: _browseData.length,
+                itemBuilder: (ctx, i) {
+                  final item = _browseData[i];
+                  return ExtensionItemCard(
+                    title: item.title,
+                    url: item.url,
+                    package: widget.package,
+                    cover: item.cover,
+                    update: item.update,
+                    headers: item.headers,
+                    isAdultOption: _adultOptionSelected,
+                  );
+                },
+              ),
+            );
+          },
+        );
+      },
+    );
+  }
+
+  /// Si esta extensión es de vídeo.
+  bool get _esDeVideo =>
+      ExtensionUtils.videoTypes.contains(_runtime.extension.type);
+
+  /// Cuántas columnas entran y qué proporción tiene cada tarjeta.
+  ///
+  /// Todas las tarjetas van más grandes que antes: en una pantalla ancha se
+  /// veían muchas y diminutas. La forma depende de lo que publique el sitio.
+  ///
+  /// Un manga o una novela llevan tapa de libro, así que las de lectura son
+  /// verticales siempre, sin mirar nada. Las de vídeo, en cambio, dependen del
+  /// sitio: unas publican pósters verticales y otras fotogramas apaisados, y
+  /// un fotograma 16:9 metido en una tarjeta vertical pierde los costados, que
+  /// es justo donde suele estar lo que se quiere ver. Cuál es cuál se averigua
+  /// mirando sus propias portadas, sin listas escritas a mano (ver
+  /// FormaPortada).
+  ///
+  /// [altoDelTexto] es lo que ocupa el título debajo de la portada: en el
+  /// escritorio va debajo, y en el teléfono va ENCIMA de la imagen, así que
+  /// ahí no resta nada.
+  ({int columnas, double proporcion}) _rejilla(
+    double anchoTotal, {
+    required double relleno,
+    required double separacion,
+    required double altoDelTexto,
+  }) {
+    final enTelefono = Platform.isAndroid;
+    // Se descuenta el relleno: hace falta el ancho REAL de una tarjeta para
+    // poder calcular su alto.
+    final anchoDisponible = anchoTotal - relleno;
+
+    // Apaisada solo si es de vídeo Y el sitio publica fotogramas. Una portada
+    // suelta apaisada en un sitio de manga no cambia que la forma correcta
+    // para un libro sea la vertical.
+    final apaisada =
+        _esDeVideo && FormaPortada.esApaisada(widget.package) == true;
+    // Mientras no se sepa qué publica, se usa la vertical: es la de siempre, y
+    // si al llegar la primera portada resulta ser apaisada, se rearma sola.
+    //
+    // El del teléfono apaisado es 160 y no 180 por un motivo concreto: con 180
+    // quedaba UNA tarjeta por fila en un móvil de 392dp y dos en uno de 412,
+    // así que la pantalla se veía distinta según el aparato. Con 160 son dos
+    // en los dos casos.
+    final anchoMinimo =
+        apaisada ? (enTelefono ? 160.0 : 300.0) : (enTelefono ? 150.0 : 200.0);
+
+    final columnas =
+        ((anchoDisponible + separacion) / (anchoMinimo + separacion))
+            .floor()
+            .clamp(1, 20);
+    final anchoTarjeta =
+        (anchoDisponible - separacion * (columnas - 1)) / columnas;
+    // El fotograma va 16:9, que es como lo publican los sitios; el póster, 2:3.
+    final altoPortada = apaisada ? anchoTarjeta * 9 / 16 : anchoTarjeta * 3 / 2;
+    return (
+      columnas: columnas,
+      proporcion: anchoTarjeta / (altoPortada + altoDelTexto),
     );
   }
 
@@ -1251,43 +1383,7 @@ class _ExtensionSearcherPageState extends fluent.State<ExtensionSearcherPage> {
                                           )
                                         : (!_isLoading && _browseData.isEmpty)
                                             ? _buildNoResultsMessage()
-                                            : LayoutBuilder(
-                                                builder: (ctx, constraints) =>
-                                                    ExcludeSemantics(
-                                                  child: GridView.builder(
-                                                    padding: const EdgeInsets
-                                                        .symmetric(
-                                                        horizontal: 8,
-                                                        vertical: 8),
-                                                    gridDelegate:
-                                                        SliverGridDelegateWithFixedCrossAxisCount(
-                                                      crossAxisCount:
-                                                          (constraints.maxWidth ~/
-                                                                  160)
-                                                              .clamp(1, 20),
-                                                      childAspectRatio: 0.6,
-                                                      crossAxisSpacing: 12,
-                                                      mainAxisSpacing: 12,
-                                                    ),
-                                                    itemCount:
-                                                        _browseData.length,
-                                                    itemBuilder: (ctx, i) {
-                                                      final item =
-                                                          _browseData[i];
-                                                      return ExtensionItemCard(
-                                                        title: item.title,
-                                                        url: item.url,
-                                                        package: widget.package,
-                                                        cover: item.cover,
-                                                        update: item.update,
-                                                        headers: item.headers,
-                                                        isAdultOption:
-                                                            _adultOptionSelected,
-                                                      );
-                                                    },
-                                                  ),
-                                                ),
-                                              ),
+                                            : _grillaEscritorio(),
                               ),
                               SizedBox(
                                 width: 44,
