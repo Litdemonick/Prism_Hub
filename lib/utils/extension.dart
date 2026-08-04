@@ -23,6 +23,7 @@ import 'package:prismhub/utils/error.dart';
 import 'package:prismhub/utils/extension_signature.dart';
 import 'package:prismhub/utils/i18n.dart';
 import 'package:prismhub/utils/prismhub_directory.dart';
+import 'package:prismhub/utils/portada_adelantada.dart';
 import 'package:prismhub/utils/prismhub_storage.dart';
 import 'package:prismhub/utils/request.dart';
 import 'package:prismhub/utils/router.dart';
@@ -612,6 +613,12 @@ class ExtensionUtils {
     required String package,
     required String url,
     bool isAdultOption = false,
+    // La portada que la tarjeta tocada ya estaba mostrando, para que la ficha
+    // abra con imagen en vez de con un hueco. Opcional: quien no la tenga a
+    // mano (una entrada del historial, un enlace compartido) simplemente no la
+    // pasa y todo funciona como antes. Ver PortadaAdelantada.
+    String? cover,
+    Map<String, String>? coverHeaders,
   }) async {
     // Anti doble toque. blockedByPendingUpdate puede tardar (consulta el
     // catalogo), asi que entre el toque y la navegacion hay una ventana en la
@@ -631,6 +638,10 @@ class ExtensionUtils {
 
     if (await blockedByPendingUpdate(context, package)) return;
     if (!context.mounted) return;
+    // Se anota DESPUÉS de las comprobaciones y antes de navegar: si la
+    // apertura se corta por una actualización pendiente, no queda nada suelto.
+    PortadaAdelantada.anotar(package, url,
+        portada: cover, cabeceras: coverHeaders);
     if (Platform.isAndroid) {
       Get.to(DetailPage(
         key: ValueKey('$package|$url'),

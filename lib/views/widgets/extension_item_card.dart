@@ -59,6 +59,11 @@ class _ExtensionItemCardState extends State<ExtensionItemCard> {
         package: widget.package,
         url: widget.url,
         isAdultOption: widget.isAdultOption,
+        // La portada de esta tarjeta ya está descargada y a la vista. Se la
+        // pasa para que la ficha abra con imagen en vez de esperar a que la
+        // extensión conteste y recién ahí empezar a bajar otra.
+        cover: widget.cover,
+        coverHeaders: widget.headers,
       ),
     );
   }
@@ -80,6 +85,11 @@ class _ExtensionItemCardState extends State<ExtensionItemCard> {
         package: widget.package,
         url: widget.url,
         isAdultOption: widget.isAdultOption,
+        // La portada de esta tarjeta ya está descargada y a la vista. Se la
+        // pasa para que la ficha abra con imagen en vez de esperar a que la
+        // extensión conteste y recién ahí empezar a bajar otra.
+        cover: widget.cover,
+        coverHeaders: widget.headers,
       ),
     );
   }

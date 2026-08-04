@@ -67,8 +67,18 @@ class _HomePageState extends State<HomePage> {
     super.initState();
   }
 
-  void _openDetail(String url, String package) {
-    ExtensionUtils.openExtensionDetail(context, package: package, url: url);
+  // cover/headers: la portada que la tarjeta ya está mostrando. Se pasa para
+  // que la ficha abra con imagen en vez de con un hueco mientras la extensión
+  // contesta. Ver PortadaAdelantada.
+  void _openDetail(String url, String package,
+      {String? cover, Map<String, String>? headers}) {
+    ExtensionUtils.openExtensionDetail(
+      context,
+      package: package,
+      url: url,
+      cover: cover,
+      coverHeaders: headers,
+    );
   }
 
   void _openHistoryTab(int tab) {
@@ -129,9 +139,11 @@ class _HomePageState extends State<HomePage> {
                     ExtensionUtils.runtimes[f.package]?.extension.name,
                 cover: f.cover,
                 headers: c.headersForPackage(f.package),
-                onTap: () => _openDetail(f.url, f.package),
+                onTap: () => _openDetail(f.url, f.package,
+                    cover: f.cover, headers: c.headersForPackage(f.package)),
                 onDelete: () => c.deleteFavorite(f),
-                onVerDetalle: () => _openDetail(f.url, f.package),
+                onVerDetalle: () => _openDetail(f.url, f.package,
+                    cover: f.cover, headers: c.headersForPackage(f.package)),
                 hidden: HiddenCards.isHidden(f.package, f.url),
                 onToggleHide: () => HiddenCards.toggle(f.package, f.url),
                 accent: HomeTheme.accentPink,
@@ -228,7 +240,14 @@ class _HomePageState extends State<HomePage> {
                 // administra el archivo.
                 onDelete: () => c.quitarDeContinuar(h),
                 deleteLabel: 'home.remove-from-continue'.i18n,
-                onVerDetalle: () => _openDetail(h.url, h.package),
+                // Solo si la portada es de red: el historial de vídeo guarda
+                // una captura en disco, y eso no se puede volver a pedir por
+                // URL desde la ficha.
+                onVerDetalle: () => _openDetail(h.url, h.package,
+                    cover: portada.archivo == null ? portada.url : null,
+                    headers: portada.necesitaHeaders
+                        ? c.headersForPackage(h.package)
+                        : null),
                 hidden: HiddenCards.isHidden(h.package, h.url),
                 onToggleHide: () => HiddenCards.toggle(h.package, h.url),
                 accent: HomeTheme.accentPink,

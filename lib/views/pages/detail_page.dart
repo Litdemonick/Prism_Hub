@@ -16,6 +16,7 @@ import 'package:prismhub/views/widgets/detail/detail_extension_tile.dart';
 import 'package:prismhub/views/widgets/detail/detail_favorite_button.dart';
 import 'package:prismhub/views/widgets/detail/detail_share_button.dart';
 import 'package:prismhub/views/widgets/detail/detail_overview.dart';
+import 'package:prismhub/views/widgets/detail/portada_con_relevo.dart';
 import 'package:prismhub/utils/i18n.dart';
 import 'package:prismhub/utils/layout.dart';
 import 'package:prismhub/views/widgets/cache_network_image.dart';
@@ -90,6 +91,70 @@ class _DetailPageState extends State<DetailPage> {
         switchOutCurve: Curves.easeIn,
         child: KeyedSubtree(key: ValueKey(estado), child: hijo),
       );
+
+  /// La ficha todavía está cargando.
+  ///
+  /// Antes era una rueda sola sobre el fondo, y con una extensión lenta eso son
+  /// segundos de pantalla vacía después de haber tocado una tarjeta que SÍ
+  /// tenía imagen — medido en HQPorner: casi un segundo solo en que conteste la
+  /// extensión. Se veía como que la app se colgó.
+  ///
+  /// Ahora se dibuja de entrada la portada de esa tarjeta, oscurecida para que
+  /// la rueda se lea encima. Cuando la ficha real aparece, la misma imagen ya
+  /// está ahí y el cambio no salta.
+  Widget _pantallaCargando(BuildContext context) {
+    final previa = c.portadaPrevia;
+    return ColoredBox(
+      color: HomeTheme.bg,
+      child: Stack(
+        fit: StackFit.expand,
+        children: [
+          if (previa != null) ...[
+            CacheNetWorkImagePic(
+              previa,
+              fit: BoxFit.cover,
+              width: double.infinity,
+              height: double.infinity,
+              headers: c.portadaPreviaHeaders,
+            ),
+            // Velo oscuro: la portada es solo un acompañamiento mientras se
+            // espera, no el contenido. Sin esto, sobre una imagen clara la
+            // rueda no se distingue.
+            const Positioned.fill(
+              child: ColoredBox(color: Color(0xCC08090D)),
+            ),
+          ],
+          const Center(
+            child: SizedBox(
+              width: 38,
+              height: 38,
+              child: CircularProgressIndicator(
+                strokeWidth: 3,
+                valueColor: AlwaysStoppedAnimation(HomeTheme.accentPink),
+              ),
+            ),
+          ),
+          // Botón de volver propio: mientras carga no existe todavía el
+          // SliverAppBar que lo trae, y una extensión lenta dejaba la pantalla
+          // sin salida visible.
+          if (Platform.isAndroid)
+            SafeArea(
+              child: Align(
+                alignment: Alignment.topLeft,
+                child: IconButton(
+                  icon: const Icon(Icons.arrow_back,
+                      color: HomeTheme.textPrimary),
+                  // Navigator directo, no RouterUtils: esta rama es solo
+                  // Android, donde la página se empuja con Get.to sobre el
+                  // navegador de GetMaterialApp.
+                  onPressed: () => Navigator.of(context).maybePop(),
+                ),
+              ),
+            ),
+        ],
+      ),
+    );
+  }
 
   /// La ficha no se pudo cargar.
   ///
@@ -179,38 +244,7 @@ class _DetailPageState extends State<DetailPage> {
         // hasta que llegaba la respuesta de la extensión. Ahora espera igual
         // que en PC: rueda girando y recién después la info.
         if (c.isLoading.value) {
-          return _transicion(
-              'cargando',
-              ColoredBox(
-                color: HomeTheme.bg,
-                child: Stack(
-                  children: [
-                    const Center(
-                      child: CircularProgressIndicator(
-                        strokeWidth: 3,
-                        valueColor:
-                            AlwaysStoppedAnimation(HomeTheme.accentPink),
-                      ),
-                    ),
-                    // Botón de volver propio: mientras carga no existe todavía
-                    // el SliverAppBar que lo trae, y una extensión lenta dejaba
-                    // la pantalla sin salida visible.
-                    SafeArea(
-                      child: Align(
-                        alignment: Alignment.topLeft,
-                        child: IconButton(
-                          icon: const Icon(Icons.arrow_back,
-                              color: HomeTheme.textPrimary),
-                          // Navigator directo, no RouterUtils: esta rama es solo
-                          // Android, donde la página se empuja con Get.to sobre
-                          // el navegador de GetMaterialApp.
-                          onPressed: () => Navigator.of(context).maybePop(),
-                        ),
-                      ),
-                    ),
-                  ],
-                ),
-              ));
+          return _transicion('cargando', _pantallaCargando(context));
         }
 
         final tabs = [
@@ -398,25 +432,20 @@ class _DetailPageState extends State<DetailPage> {
       }
 
       if (c.isLoading.value) {
-        return _transicion(
-            'cargando',
-            const ColoredBox(
-              color: HomeTheme.bg,
-              child: Center(
-                child: fluent.ProgressRing(activeColor: HomeTheme.accentPink),
-              ),
-            ));
+        return _transicion('cargando', _pantallaCargando(context));
       }
       // Nombrado y no devuelto directo: envolver el Stack entero en la llamada
       // reindentaría sus trescientas y pico de líneas por un cambio de dos.
       final contenido = Stack(
         children: [
           RepaintBoundary(
-            child: Cover(
+            child: PortadaConRelevo(
               alt: c.detail?.title ?? '',
-              url: c.backgorund,
+              urlPrevia: c.portadaPrevia,
+              cabecerasPrevias: c.portadaPreviaHeaders,
+              urlFinal: c.backgorund,
+              cabecerasFinales: c.portadaHeaders,
               noText: true,
-              headers: c.detail?.headers,
               alignment: const Alignment(0, 0.35),
             ),
           ),
@@ -438,22 +467,56 @@ class _DetailPageState extends State<DetailPage> {
                       height: 330,
                       child: Row(
                         children: [
-                          if (c.detail!.cover != null)
+                          // c.portada y no c.detail!.cover: si la extensión no
+                          // devolvió portada pero la tarjeta que se tocó sí
+                          // tenía una, se usa esa. Antes esta condición dejaba
+                          // la ficha SIN póster —el hueco quedaba de color
+                          // liso— y pasa de verdad: la de HQPorner se rinde a
+                          // los 1200 ms y devuelve la ficha sin imagen.
+                          if (c.portada != null)
                             if (constraints.maxWidth > 600) ...[
-                              Container(
-                                width: 230,
-                                height: double.infinity,
-                                clipBehavior: Clip.antiAlias,
-                                decoration: BoxDecoration(
-                                  color: HomeTheme.cardSurface,
-                                  borderRadius: BorderRadius.circular(10),
-                                  border: Border.all(color: HomeTheme.border),
-                                ),
-                                child: CacheNetWorkImagePic(
-                                  c.detail?.cover ?? '',
-                                  headers: c.detail?.headers,
-                                  canFullScreen: true,
-                                ),
+                              // Anclada abajo, como el texto de al lado: la
+                              // apaisada es más baja que la caja y centrada
+                              // quedaría flotando a media altura.
+                              Column(
+                                mainAxisAlignment: MainAxisAlignment.end,
+                                children: [
+                                  Container(
+                                    // Con la proporción real de las portadas
+                                    // de esta extensión, así la imagen llena
+                                    // el hueco sin franjas ni recortes. Ver
+                                    // DetailPageController.portadaProporcion.
+                                    //
+                                    // Las verticales se miden desde el alto y
+                                    // las apaisadas desde el ancho: al revés,
+                                    // una apaisada saldría enorme y una
+                                    // vertical, minúscula.
+                                    width: c.portadaApaisada
+                                        ? 320
+                                        : 330 * c.portadaProporcion,
+                                    height: c.portadaApaisada
+                                        ? 320 / c.portadaProporcion
+                                        : 330,
+                                    clipBehavior: Clip.antiAlias,
+                                    decoration: BoxDecoration(
+                                      color: HomeTheme.cardSurface,
+                                      borderRadius: BorderRadius.circular(10),
+                                      border:
+                                          Border.all(color: HomeTheme.border),
+                                    ),
+                                    child: PortadaConRelevo(
+                                      alt: c.detail?.title ?? '',
+                                      urlPrevia: c.portadaPrevia,
+                                      cabecerasPrevias: c.portadaPreviaHeaders,
+                                      urlFinal: c.portada,
+                                      cabecerasFinales: c.portadaHeaders,
+                                      canFullScreen: true,
+                                      // Red de seguridad por si un título
+                                      // suelto trae otra forma.
+                                      entera: true,
+                                    ),
+                                  ),
+                                ],
                               ),
                               const SizedBox(width: 30),
                             ],

@@ -1131,13 +1131,17 @@ class _ExtensionSearcherPageState extends fluent.State<ExtensionSearcherPage> {
     // poder calcular su alto.
     final anchoDisponible = anchoTotal - relleno;
 
-    // Apaisada solo si es de vídeo Y el sitio publica fotogramas. Una portada
-    // suelta apaisada en un sitio de manga no cambia que la forma correcta
-    // para un libro sea la vertical.
-    final apaisada =
-        _esDeVideo && FormaPortada.esApaisada(widget.package) == true;
+    // La proporción EXACTA de las portadas de este sitio, no una de dos formas
+    // fijas. Con dos formas fijas, una portada un poco más angosta que la caja
+    // dejaba franjas a los costados, y ahí no hay relleno que quede bien.
+    // Midiendo la de verdad, la imagen llena la tarjeta y no sobra nada.
+    final proporcionPortada = FormaPortada.paraDibujar(
+      widget.package,
+      esDeLectura: !_esDeVideo,
+    );
+    final apaisada = proporcionPortada > 1;
     // Mientras no se sepa qué publica, se usa la vertical: es la de siempre, y
-    // si al llegar la primera portada resulta ser apaisada, se rearma sola.
+    // si al llegar la primera portada resulta ser otra, se rearma sola.
     //
     // El del teléfono apaisado es 160 y no 180 por un motivo concreto: con 180
     // quedaba UNA tarjeta por fila en un móvil de 392dp y dos en uno de 412,
@@ -1152,8 +1156,7 @@ class _ExtensionSearcherPageState extends fluent.State<ExtensionSearcherPage> {
             .clamp(1, 20);
     final anchoTarjeta =
         (anchoDisponible - separacion * (columnas - 1)) / columnas;
-    // El fotograma va 16:9, que es como lo publican los sitios; el póster, 2:3.
-    final altoPortada = apaisada ? anchoTarjeta * 9 / 16 : anchoTarjeta * 3 / 2;
+    final altoPortada = anchoTarjeta / proporcionPortada;
     return (
       columnas: columnas,
       proporcion: anchoTarjeta / (altoPortada + altoDelTexto),
