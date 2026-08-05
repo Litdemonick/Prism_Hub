@@ -11,6 +11,7 @@ import 'package:flutter_i18n/flutter_i18n.dart';
 import 'package:flutter_markdown/flutter_markdown.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:prismhub/utils/i18n.dart';
+import 'package:prismhub/utils/modo_app.dart';
 import 'package:prismhub/utils/request.dart';
 import 'package:prismhub/utils/prismhub_storage.dart';
 import 'package:prismhub/utils/router.dart';
@@ -307,6 +308,17 @@ class ApplicationUtils {
   // versión desplegada, no hay un "instalable" que forzar.
   static Future<void> checkForcedUpdate(BuildContext context) async {
     if (kIsWeb) return;
+    // En una compilación de prueba no se avisa de actualizaciones.
+    //
+    // Esa compilación se rehace todo el tiempo mientras se trabaja, así que
+    // comparar su versión contra la publicada da "hay una nueva" casi siempre
+    // — y este aviso es el que BLOQUEA la app hasta actualizar. Quedaba
+    // tapando la pantalla justo cuando se está probando un cambio.
+    //
+    // Solo se calla el aviso: la comprobación manual desde Ajustes sigue
+    // estando, para poder verificar que el flujo de actualización anda (ver
+    // checkUpdate, que avisa en qué modo está).
+    if (!ModoApp.esRelease) return;
     if (_forcedUpdatePageOpen) return;
     final activeCheck = _forcedUpdateCheckInFlight;
     if (activeCheck != null) return activeCheck;
@@ -421,6 +433,22 @@ class ApplicationUtils {
   }
 
   static checkUpdate(BuildContext context, {bool showSnackbar = false}) async {
+    // En una compilación de prueba se dice y no se comprueba nada.
+    //
+    // Comparar la versión de una compilación de trabajo contra la publicada no
+    // significa nada: se rehace en cada cambio. Pero tampoco conviene que el
+    // botón se quede mudo, porque desde afuera no se distingue de que esté
+    // roto — así que se explica por qué no hizo nada.
+    if (!ModoApp.esRelease) {
+      if (context.mounted) {
+        showPlatformSnackbar(
+          context: context,
+          content: 'Estás en una compilación de prueba (${ModoApp.etiqueta}): '
+              'las actualizaciones solo se comprueban en la versión publicada.',
+        );
+      }
+      return;
+    }
     try {
       const url =
           "https://api.github.com/repos/Litdemonick/Prism_Hub/releases/latest";
