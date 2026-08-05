@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:convert';
 import 'dart:io';
 
 import 'package:auto_orientation/auto_orientation.dart';
@@ -150,8 +151,47 @@ const _hostsNativosConfirmados = {
   'gscdn', // wrapper -> goodstream
   'goodstream',
   'rumble.cloud', // mp4 directo
+  // Medidos uno por uno contra el resolver de verdad, pidiendo la direccion y
+  // mirando que volviera un m3u8 servible. Los tres reproducen en la app desde
+  // hace rato; lo unico que faltaba era decirlo en el icono.
+  'dropload', // empaquetado -> m3u8 en dropcdn.io
+  'dr0pstream', // el mismo, a donde redirige dropload
+  'vimeos', // empaquetado -> m3u8 en vimeos.zip
+  'ok.ru', // el resolver del SDK saca el m3u8 de vkuser.net
+  'okru',
   'nupload', // pendiente: todavia no resuelve
 };
+
+/// Los envoltorios que solo llevan la direccion de otro sitio adentro.
+///
+/// FuegoCine sirve casi todo a traves de una pagina de blogspot que no
+/// reproduce nada: el video real va en `?link=<direccion>` o en `r=<base64>`.
+/// Mirando solo el envoltorio no se puede saber nada —todos parecen iguales—,
+/// asi que sus 195 botones de archivo directo aparecian con el mundo aunque
+/// son un mp4 que la app abre sin ayuda de nadie.
+///
+/// Devuelve null si no es un envoltorio o si no se le puede leer el destino, y
+/// entonces todo sigue como antes.
+String? _destinoDelEnvoltorio(String url) {
+  if (!url.contains('blogspot.com')) return null;
+  final link = RegExp(r'[?&]link=([^&]+)').firstMatch(url);
+  if (link != null) {
+    try {
+      return Uri.decodeComponent(link.group(1)!);
+    } catch (_) {
+      return null;
+    }
+  }
+  final r = RegExp(r'[?&]r=([A-Za-z0-9+/=]+)$').firstMatch(url);
+  if (r != null) {
+    try {
+      return utf8.decode(base64Decode(r.group(1)!));
+    } catch (_) {
+      return null;
+    }
+  }
+  return null;
+}
 
 /// True si el rayito de "nativo confiable" corresponde a esta pestaña.
 bool _esHostNativo(String url) {
@@ -167,6 +207,14 @@ bool _esHostNativo(String url) {
 bool isKnownNativeServer(String serverName, String url) {
   if (isDirectStream(url)) return true;
   if (_esHostNativo(url)) return true;
+  // Si es un envoltorio, lo que vale es a donde apunta. Se mira una sola vez y
+  // no en cadena: un envoltorio dentro de otro no existe en ningun sitio de
+  // los que hay, y encadenar solo abre la puerta a un bucle.
+  final destino = _destinoDelEnvoltorio(url);
+  if (destino != null &&
+      (isDirectStream(destino) || _esHostNativo(destino))) {
+    return true;
+  }
   final n = serverName.toLowerCase();
   return _knownReliableServerNames.any((known) => n.contains(known));
 }
