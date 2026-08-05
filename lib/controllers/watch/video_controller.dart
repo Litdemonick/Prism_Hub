@@ -5019,7 +5019,11 @@ class VideoPlayerController extends GetxController with WidgetsBindingObserver {
   ///
   /// `reconnect` (a secas) se deja puesto en los dos casos: reconectar cuando
   /// se corta la conexión sigue siendo bueno. Lo que estorba es lo otro.
-  Future<void> _dejarSaltarDentroDelArchivo(bool archivoEntero) async {
+  Future<void> _dejarSaltarDentroDelArchivo(
+    bool archivoEntero,
+    String url,
+    Map<String, String>? headers,
+  ) async {
     final np = player.platform;
     if (np is! NativePlayer) return;
     // En Linux reconnect va apagado a propósito (ver dónde se ponen estas
@@ -5038,10 +5042,80 @@ class VideoPlayerController extends GetxController with WidgetsBindingObserver {
       logger.info('saltar dentro del archivo: '
           '${archivoEntero ? 'SÍ (archivo entero)' : 'no (lista de pedacitos)'}'
           ' · quedó: $quedo');
+      _anotarDondeEstaElIndice(url, headers);
     } catch (e) {
       // Que no se pueda ajustar no puede impedir reproducir: se sigue con lo
       // que haya quedado puesto al arrancar.
       logger.info('no se pudo ajustar el salto dentro del archivo: $e');
+    }
+  }
+
+  /// Anota en el registro dónde tiene el índice el archivo que se va a abrir.
+  ///
+  /// Es SOLO para el registro: no cambia ni un ajuste del reproductor. Está
+  /// puesto con tres candados para que no pueda estropear nada de lo que hoy
+  /// funciona en las demás extensiones:
+  ///
+  /// 1. **No se espera.** Sale sin bloquear, así que no le agrega ni un
+  ///    milisegundo a la apertura del vídeo, ande rápido o lento el servidor.
+  /// 2. **Va después de mpv.** Los pocos servidores que dan enlaces de un solo
+  ///    uso lo gastarían con el primer pedido: se deja que ese sea el de mpv y
+  ///    no el nuestro. Si para cuando miramos el enlace ya no sirve, se anota
+  ///    que no se pudo ver y listo — el vídeo ya está andando.
+  /// 3. **Solo archivos de vídeo.** Con una lista cerrada de extensiones, así
+  ///    una dirección rara no se lleva un pedido que no le toca.
+  void _anotarDondeEstaElIndice(String url, Map<String, String>? headers) {
+    const enteros = ['.mp4', '.mkv', '.webm', '.mov', '.avi', '.m4v'];
+    final ruta = url.split('?').first.toLowerCase();
+    if (!enteros.any(ruta.endsWith)) return;
+    unawaited(Future.delayed(const Duration(seconds: 5), () async {
+      final alFinal = await _indiceAlFinal(url, headers);
+      logger.info('índice del archivo: '
+          '${alFinal ? 'AL FINAL — de los que se cortan' : 'al principio, o no se pudo ver'}');
+    }));
+  }
+
+  /// Si el índice de un MP4 está al FINAL del archivo.
+  ///
+  /// El índice (`moov`) es la tabla que dice en qué byte está cada segundo de
+  /// vídeo y de audio. Puede ir al principio o al final, según con qué programa
+  /// se armó el archivo, y la diferencia es enorme al reproducir por internet:
+  ///
+  ///  - al principio → se lee de entrada y después el archivo va de corrido
+  ///  - al final     → para armar cada segundo hay que ir al fondo y volver
+  ///
+  /// Medido con dos títulos del MISMO servidor y el MISMO host: el de 4,6 GB
+  /// con el índice al principio reproduce perfecto, y el de 638 MB con el
+  /// índice al final se corta todo el rato — 114 saltos de posición para bajar
+  /// menos de 1 MB, mientras el servidor entrega 8-9 MB/s. No es el servidor ni
+  /// el tamaño: es cómo quedó armado ese archivo.
+  ///
+  /// Cuesta UN pedido de 2 KB. Ante cualquier duda devuelve false: así un
+  /// archivo que no se pudo mirar se comporta exactamente como hasta ahora.
+  Future<bool> _indiceAlFinal(String url, Map<String, String>? headers) async {
+    try {
+      final res = await dio.get<List<int>>(
+        url,
+        options: Options(
+          responseType: ResponseType.bytes,
+          headers: {...?headers, 'Range': 'bytes=0-2047'},
+          receiveTimeout: const Duration(seconds: 6),
+          // 206 es lo esperado; 200 significa que ignoró el rango y mandó el
+          // archivo entero, y eso tampoco es un error para lo que hace falta.
+          validateStatus: (c) => c != null && c < 400,
+        ),
+      );
+      final datos = res.data;
+      if (datos == null || datos.length < 16) return false;
+      final texto = String.fromCharCodes(datos);
+      final moov = texto.indexOf('moov');
+      final mdat = texto.indexOf('mdat');
+      // Si el índice no aparece en los primeros 2 KB y los datos sí, está al
+      // final. Si no aparece ninguno de los dos, no se sabe: se deja como está.
+      if (mdat < 0) return false;
+      return moov < 0 || moov > mdat;
+    } catch (_) {
+      return false;
     }
   }
 
@@ -5060,10 +5134,11 @@ class VideoPlayerController extends GetxController with WidgetsBindingObserver {
       logger.info('ficha · $servidor · ${sinParametros.endsWith('.mp4') ? 'MP4 '
               'directo' : 'no es una lista HLS'} · $donde · va directo a mpv, no '
           'hay pedacitos que repartir');
-      await _dejarSaltarDentroDelArchivo(!sinParametros.endsWith('.m3u8'));
+      await _dejarSaltarDentroDelArchivo(
+          !sinParametros.endsWith('.m3u8'), url, headers);
       return const _ComoAbrir.talCual();
     }
-    await _dejarSaltarDentroDelArchivo(false);
+    await _dejarSaltarDentroDelArchivo(false, url, headers);
 
     final hdrs = <String, String>{'User-Agent': _browserUA};
     if (headers != null) hdrs.addAll(headers);
