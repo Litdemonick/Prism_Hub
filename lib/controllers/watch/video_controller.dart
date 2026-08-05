@@ -5069,13 +5069,11 @@ class VideoPlayerController extends GetxController with WidgetsBindingObserver {
     final ruta = url.split('?').first.toLowerCase();
     if (!enteros.any(ruta.endsWith)) return;
     unawaited(Future.delayed(const Duration(seconds: 5), () async {
-      final alFinal = await _indiceAlFinal(url, headers);
-      logger.info('índice del archivo: '
-          '${alFinal ? 'AL FINAL — de los que se cortan' : 'al principio, o no se pudo ver'}');
+      logger.info('índice del archivo: ${await _comoEstaElIndice(url, headers)}');
     }));
   }
 
-  /// Si el índice de un MP4 está al FINAL del archivo.
+  /// Dónde tiene el índice un MP4: al principio, al final, o no se pudo ver.
   ///
   /// El índice (`moov`) es la tabla que dice en qué byte está cada segundo de
   /// vídeo y de audio. Puede ir al principio o al final, según con qué programa
@@ -5090,9 +5088,11 @@ class VideoPlayerController extends GetxController with WidgetsBindingObserver {
   /// menos de 1 MB, mientras el servidor entrega 8-9 MB/s. No es el servidor ni
   /// el tamaño: es cómo quedó armado ese archivo.
   ///
-  /// Cuesta UN pedido de 2 KB. Ante cualquier duda devuelve false: así un
-  /// archivo que no se pudo mirar se comporta exactamente como hasta ahora.
-  Future<bool> _indiceAlFinal(String url, Map<String, String>? headers) async {
+  /// Cuesta UN pedido de 2 KB. Devuelve las TRES respuestas por separado —al
+  /// final, al principio, no se pudo ver— y no un sí/no: juntar "está sano" con
+  /// "no se pudo mirar" deja el registro diciendo lo mismo en dos situaciones
+  /// que no tienen nada que ver, y ahí no se sabe cuál de las dos pasó.
+  Future<String> _comoEstaElIndice(String url, Map<String, String>? headers) async {
     try {
       final res = await dio.get<List<int>>(
         url,
@@ -5106,16 +5106,19 @@ class VideoPlayerController extends GetxController with WidgetsBindingObserver {
         ),
       );
       final datos = res.data;
-      if (datos == null || datos.length < 16) return false;
+      if (datos == null || datos.length < 16) return 'no se pudo ver (llegó vacío)';
       final texto = String.fromCharCodes(datos);
       final moov = texto.indexOf('moov');
       final mdat = texto.indexOf('mdat');
       // Si el índice no aparece en los primeros 2 KB y los datos sí, está al
-      // final. Si no aparece ninguno de los dos, no se sabe: se deja como está.
-      if (mdat < 0) return false;
-      return moov < 0 || moov > mdat;
-    } catch (_) {
-      return false;
+      // final. Si no aparece ninguno de los dos, no es un MP4 de los que se
+      // pueden mirar así — y decirlo es distinto de decir que está sano.
+      if (mdat < 0) return 'no se pudo ver (no parece un MP4)';
+      return moov < 0 || moov > mdat
+          ? 'AL FINAL — de los que se cortan'
+          : 'al principio — de los que van de corrido';
+    } catch (e) {
+      return 'no se pudo ver ($e)';
     }
   }
 
