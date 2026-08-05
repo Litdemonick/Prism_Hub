@@ -41,7 +41,7 @@ import 'package:prismhub/utils/layout.dart';
 import 'package:prismhub/utils/prismhub_directory.dart';
 import 'package:prismhub/views/pages/watch/video/video_player_sidebar.dart';
 import 'package:prismhub/views/pages/watch/video/webview_player_page.dart'
-    show isDirectStream;
+    show isDirectStream, isKnownNativeServer;
 import 'package:window_manager/window_manager.dart';
 import 'package:path/path.dart' as path;
 import 'package:fluent_ui/fluent_ui.dart' as fluent;
@@ -249,6 +249,24 @@ class VideoPlayerController extends GetxController with WidgetsBindingObserver {
   // Selector de servidores (llenado desde X-Servers header de la extensión)
   final availableServers = <String, String>{}.obs; // nombre → embed URL
   final serverReferers = <String, String>{}; // nombre → referer (no observable)
+  // nombre → si reproduce acá dentro (rayo) o abre el navegador (mundo), según
+  // lo que diga la extensión. Solo están los que ella declara; del resto no hay
+  // entrada y se sigue adivinando por nombre y host (ver isKnownNativeServer).
+  //
+  // Lo dice la extensión porque es la única que puede saberlo: el mismo nombre
+  // de servidor reproduce nativo en un sitio y no en otro. "StreamWish" es el
+  // caso de manual — en JKAnime anda y en HentaiLA y AnimeFenix termina en
+  // premilkyway.com, que está bloqueado. Por nombre no hay forma de acertarle
+  // a los dos.
+  final serverNative = <String, bool>{}; // no observable, igual que serverReferers
+
+  /// Si a este servidor le corresponde el rayo (reproduce acá dentro) o el
+  /// mundo (abre el navegador interno).
+  ///
+  /// Manda lo que diga la extensión, que es la que midió ESE servidor en ESE
+  /// sitio. Si no dice nada, se adivina por nombre y host como siempre.
+  bool esServidorNativo(String name, String url) =>
+      serverNative[name] ?? isKnownNativeServer(name, url);
   final currentServerName = ''.obs;
   final serverFailedMessage = ''.obs;
   // false entre "el servidor abrió" y "ya se ve el primer frame real" — media
@@ -2127,6 +2145,19 @@ class VideoPlayerController extends GetxController with WidgetsBindingObserver {
               .addAll(parsed.map((k, v) => MapEntry(k, v.toString())));
         } catch (_) {}
       }
+      // Rayo/mundo dicho por la extensión, cuando lo dice. Solo vienen los
+      // servidores que ella declara: los que no, quedan afuera del mapa y los
+      // sigue decidiendo isKnownNativeServer por su cuenta.
+      serverNative.clear();
+      if (headers.containsKey('X-Server-Native')) {
+        try {
+          final Map<String, dynamic> parsed =
+              jsonDecode(headers['X-Server-Native']!);
+          parsed.forEach((k, v) {
+            if (v is bool) serverNative[k] = v;
+          });
+        } catch (_) {}
+      }
       // Servidor actual
       currentServerName.value = headers['X-Primary-Server'] ??
           (availableServers.isNotEmpty ? availableServers.keys.first : '');
@@ -2136,6 +2167,7 @@ class VideoPlayerController extends GetxController with WidgetsBindingObserver {
       watchData!.headers = Map.from(headers)
         ..remove('X-Servers')
         ..remove('X-Server-Referers')
+        ..remove('X-Server-Native')
         ..remove('X-Primary-Server')
         ..remove('X-Page-Url');
     }

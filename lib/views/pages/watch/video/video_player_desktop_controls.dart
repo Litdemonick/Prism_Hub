@@ -10,7 +10,7 @@ import 'package:media_kit_video/media_kit_video.dart';
 import 'package:prismhub/controllers/watch/video_controller.dart';
 import 'package:prismhub/views/pages/watch/video/video_player_cast.dart';
 import 'package:prismhub/views/pages/watch/video/webview_player_page.dart'
-    show isKnownNativeServer, openWebViewPlayer;
+    show openWebViewPlayer;
 import 'package:prismhub/utils/i18n.dart';
 import 'package:prismhub/utils/prismhub_storage.dart';
 import 'package:prismhub/views/widgets/cache_network_image.dart';
@@ -2577,7 +2577,8 @@ class _ServerTabBarState extends State<_ServerTabBar> {
                       _ServerTab(
                         label: entry.key,
                         selected: entry.key == current,
-                        isNative: isKnownNativeServer(entry.key, entry.value),
+                        isNative: widget.controller
+                            .esServidorNativo(entry.key, entry.value),
                         onTap: () => widget.controller.selectServer(entry.key),
                       ),
                       const SizedBox(width: 8),

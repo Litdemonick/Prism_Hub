@@ -11,8 +11,6 @@ import 'package:prismhub/views/widgets/platform_widget.dart';
 import 'package:prismhub/views/widgets/watch/playlist.dart';
 import 'package:prismhub/views/widgets/home/home_theme.dart';
 import 'package:prismhub/views/widgets/watch/tutorial_reproductor.dart';
-import 'package:prismhub/views/pages/watch/video/webview_player_page.dart'
-    show isKnownNativeServer;
 
 enum SidebarTab {
   episodes,
@@ -1181,10 +1179,10 @@ class _ServerSelector extends StatelessWidget {
             _FilaSeleccionable(
               texto: entry.key,
               activo: entry.key == current,
-              icono: isKnownNativeServer(entry.key, entry.value)
+              icono: controller.esServidorNativo(entry.key, entry.value)
                   ? Icons.bolt_rounded
                   : Icons.public_rounded,
-              colorIcono: isKnownNativeServer(entry.key, entry.value)
+              colorIcono: controller.esServidorNativo(entry.key, entry.value)
                   ? const Color(0xFF69F0AE)
                   : const Color(0xFF7FB2FF),
               onTap: () {

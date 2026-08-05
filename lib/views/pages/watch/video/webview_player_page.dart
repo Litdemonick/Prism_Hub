@@ -115,6 +115,17 @@ bool isDirectStream(String url) {
 // por sitio. Se usa `contains` en minúsculas a propósito: cada extensión
 // etiqueta distinto ("Streamtape LAT", "byse", "Voex"), y el nombre corto del
 // host es lo único estable entre todas.
+//
+// **Esto es el respaldo, no la fuente.** Una extensión puede decir servidor por
+// servidor si lleva rayo o mundo, y eso manda (ver `esServidorNativo` en
+// video_controller.dart). Acá se cae solo cuando la extensión no dice nada.
+//
+// Y es respaldo por un motivo: adivinar por nombre no alcanza. El mismo
+// servidor reproduce nativo en un sitio y no en otro — "StreamWish" anda en
+// JKAnime y en HentaiLA y AnimeFenix termina en premilkyway.com, que está
+// bloqueado. Este nombre está en la lista de abajo, así que a esos dos les
+// promete rayo y los abre en el navegador. No se puede arreglar acá sin
+// romperle el rayo a JKAnime: lo arregla cada extensión diciendo lo suyo.
 const _knownReliableServerNames = {
   'voe',
   'doodstream',
@@ -129,6 +140,11 @@ const _knownReliableServerNames = {
   'mixdrop',
   'mediafire',
   'mp4upload',
+  // Faltaba desde el arreglo anterior de los iconos: reproduce nativo desde
+  // hace rato y salía con el mundo. Medido pidiendo un rango real — la página
+  // del embed trae el mp4 en texto plano y devuelve 206 video/mp4 desde
+  // vidcache.net.
+  'yourupload',
   'hexload',
   'savefiles',
   'byse',
