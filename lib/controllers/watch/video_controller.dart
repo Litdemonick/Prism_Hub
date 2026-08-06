@@ -468,6 +468,28 @@ class VideoPlayerController extends GetxController with WidgetsBindingObserver {
     _redDeLaRueda = null;
     hasRenderedFrame.value = true;
     logger.info('rueda apagada: $porQue');
+    unawaited(_colchonParaResumir());
+  }
+
+  /// Ya arrancó: a partir de acá se le pide más colchón para volver.
+  ///
+  /// `cache-pause-wait` hace dos trabajos con un solo número —cuánto esperar
+  /// antes del primer cuadro y cuánto para volver de un parón—, y a cada uno le
+  /// conviene lo contrario. Arranca en uno para no quedarse esperando un
+  /// segundo pedacito que no hace falta, y acá pasa a tres para que un parón a
+  /// mitad no reanude para cortarse a los dos segundos. Ver dónde se pone al
+  /// abrir, con la medición al lado.
+  Future<void> _colchonParaResumir() async {
+    if (_disposed || _shutdownStarted || _playerDisposed) return;
+    if (player.platform is! NativePlayer) return;
+    try {
+      await (player.platform as NativePlayer)
+          .setProperty('cache-pause-wait', '3');
+    } catch (e) {
+      // Que no se pueda subir no rompe nada: se sigue con uno, que es el que
+      // ya dejó arrancar el vídeo.
+      logger.info('no se pudo subir el colchón para resumir: $e');
+    }
   }
 
   // Flag de buffering YA corregido con la posición real — ver
@@ -1297,18 +1319,29 @@ class VideoPlayerController extends GetxController with WidgetsBindingObserver {
       // Cuánto se junta antes de arrancar, y cuánto se vuelve a juntar después
       // de quedarse sin datos. De fábrica es 1 segundo, que para el caso de
       // arriba es casi lo mismo que nada: reanudaría para volver a cortarse.
-      // **Tres. Se probó subirlo a ocho el 2026-08-06 y fue peor.**
+      // **Uno para arrancar, tres para resumir.** Ver _colchonParaResumir.
       //
-      // La idea era que arrancara con más colchón para que no se parara a los
-      // pocos segundos. Medido en LaMovie/Vimeos, lo que hizo fue alargar la
-      // espera: `colchón: 6.984467 s · posición: 0s`, o sea el vídeo quieto en
-      // cero esperando llegar a ocho. Este ajuste funciona —mpv espera de
-      // verdad— pero esperar más no arregla nada cuando lo que falla es que
-      // entran 77 B/s: solo estira el rato en que no pasa nada.
+      // Este ajuste hace dos trabajos con un solo número: cuánto colchón se
+      // espera antes del PRIMER cuadro, y cuánto se espera para volver después
+      // de un parón. Y lo que le conviene a cada uno es lo contrario.
       //
-      // Lo que sí había que arreglar era la rueda, que se apagaba durante esa
-      // espera y dejaba la imagen quieta sin explicación. Ver hasRenderedFrame.
-      await np.setProperty('cache-pause-wait', '3');
+      // Con tres pasaba esto, medido en LaMovie/Vimeos el 2026-08-06:
+      //
+      //     colchón: 2.916667 s   ·   cache-pause-wait = 3
+      //
+      // Los pedacitos de ese servidor duran 2,916667 s —el número es idéntico
+      // en todas las corridas—, así que pidiendo tres segundos mpv necesita DOS
+      // pedacitos para arrancar y se queda esperando por ocho centésimas. Ése
+      // era el primer parón. Después arrancaba, se comía los 2,9 segundos y se
+      // paraba otra vez esperando el siguiente: el segundo parón.
+      //
+      // Se probó al revés —subirlo a ocho— y fue peor todavía: `colchón:
+      // 6.984467 s · posición: 0s`, el vídeo quieto esperando llegar a ocho.
+      //
+      // Con uno arranca en cuanto tiene el primer pedacito. Y en cuanto el
+      // vídeo avanza de verdad se sube a tres, que es lo que hace falta para
+      // que un parón a mitad no reanude para cortarse enseguida.
+      await np.setProperty('cache-pause-wait', '1');
       await np.setProperty('cache-secs', '30');
       await np.setProperty(
           'demuxer-max-bytes', Platform.isAndroid ? '96MiB' : '192MiB');
