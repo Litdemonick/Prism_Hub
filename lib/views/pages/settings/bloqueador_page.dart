@@ -690,9 +690,19 @@ class _PanelCatalogoState extends State<_PanelCatalogo> {
   ///
   /// Se busca en el nombre Y en la descripción: quien escribe "virus" no sabe
   /// que la lista se llama Prigent-Malware, y es justo la que necesita.
+  /// El rotulo del apartado de las que ya estan puestas.
+  static const _yaEstan = 'Ya instaladas';
+
   Map<String, List<ListaConocida>> get _porGrupo {
     final q = _busca.text.trim().toLowerCase();
-    final fuera = <String, List<ListaConocida>>{};
+    // Las instaladas van TODAS JUNTAS Y ARRIBA, en su propio apartado.
+    //
+    // Antes quedaban cada una en el grupo que le tocaba por tema, repartidas
+    // entre las demas: para actualizar una habia que acordarse de en cual
+    // estaba e ir a buscarla. Y las cuatro que vienen puestas aparecian con el
+    // boton de instalar como si faltaran.
+    final puestas = <ListaConocida>[];
+    final resto = <String, List<ListaConocida>>{};
     for (final c in BloqueadorAnuncios.catalogo) {
       if (q.isNotEmpty &&
           !c.nombre.toLowerCase().contains(q) &&
@@ -700,9 +710,34 @@ class _PanelCatalogoState extends State<_PanelCatalogo> {
           !c.grupo.toLowerCase().contains(q)) {
         continue;
       }
-      (fuera[c.grupo] ??= <ListaConocida>[]).add(c);
+      if (_puestas.contains(c.url)) {
+        puestas.add(c);
+      } else {
+        (resto[c.grupo] ??= <ListaConocida>[]).add(c);
+      }
     }
-    return fuera;
+    return {
+      if (puestas.isNotEmpty) _yaEstan: puestas,
+      ...resto,
+    };
+  }
+
+  Future<void> _actualizar(String nombre, String url) async {
+    if (_bajando != null) return;
+    setState(() => _bajando = url);
+    try {
+      final n = await BloqueadorAnuncios.actualizar(url);
+      _avisar('$nombre al día: $n dominios');
+    } catch (e) {
+      _avisar('$e'.replaceFirst('Exception: ', ''), malo: true);
+    } finally {
+      if (mounted) {
+        setState(() {
+          _bajando = null;
+          _releer();
+        });
+      }
+    }
   }
 
   @override
@@ -793,6 +828,7 @@ class _PanelCatalogoState extends State<_PanelCatalogo> {
                               bajando: _bajando == c.url,
                               trabada: _bajando != null && _bajando != c.url,
                               onInstalar: () => _instalar(c.nombre, c.url),
+                              onActualizar: () => _actualizar(c.nombre, c.url),
                               onQuitar: () => _quitar(c.url),
                             ),
                         ],
@@ -803,12 +839,32 @@ class _PanelCatalogoState extends State<_PanelCatalogo> {
             // El camino a mano queda plegado: es para quien ya sabe lo que
             // hace, y desplegado le robaba la atención al catálogo.
             if (!_aMano)
-              Align(
-                alignment: Alignment.centerLeft,
-                child: TextButton.icon(
-                  onPressed: () => setState(() => _aMano = true),
-                  icon: const Icon(Icons.link, size: 17),
-                  label: const Text('Poner otra dirección'),
+              // Discreto a proposito: es la salida para quien ya sabe lo que
+              // hace. Antes usaba el color de acento del tema y quedaba como lo
+              // mas llamativo de la pantalla, compitiendo con el catalogo, que
+              // es lo que casi todo el mundo va a usar.
+              Padding(
+                padding: const EdgeInsets.fromLTRB(12, 8, 12, 10),
+                child: Align(
+                  alignment: Alignment.centerLeft,
+                  child: TextButton.icon(
+                    onPressed: () => setState(() => _aMano = true),
+                    icon: const Icon(Icons.link, size: 16),
+                    label: const Text('Poner otra dirección'),
+                    style: ButtonStyle(
+                      foregroundColor:
+                          WidgetStatePropertyAll(HomeTheme.textMuted),
+                      overlayColor: WidgetStatePropertyAll(
+                          Colors.white.withValues(alpha: 0.05)),
+                      textStyle: const WidgetStatePropertyAll(
+                        TextStyle(fontSize: 12.5, fontWeight: FontWeight.w600),
+                      ),
+                      shape: WidgetStatePropertyAll(
+                        RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(9)),
+                      ),
+                    ),
+                  ),
                 ),
               )
             else
@@ -904,6 +960,51 @@ class _PanelCatalogoState extends State<_PanelCatalogo> {
   }
 }
 
+/// Un botón de icono chico, con el resaltado redondeado y legible.
+///
+/// El `IconButton` pelado se resalta con un círculo del color de acento del
+/// tema, que acá quedaba rosa sobre la tarjeta y tapaba el icono.
+class _BotonChico extends StatelessWidget {
+  const _BotonChico({
+    required this.icono,
+    required this.tooltip,
+    required this.onPressed,
+    this.color,
+  });
+
+  final IconData icono;
+  final String tooltip;
+  final VoidCallback? onPressed;
+  final Color? color;
+
+  @override
+  Widget build(BuildContext context) {
+    final c = color ?? HomeTheme.textMuted;
+    return Tooltip(
+      message: tooltip,
+      child: SizedBox(
+        width: 36,
+        height: 36,
+        child: Material(
+          color: Colors.transparent,
+          borderRadius: BorderRadius.circular(9),
+          clipBehavior: Clip.antiAlias,
+          child: InkWell(
+            onTap: onPressed,
+            hoverColor: c.withValues(alpha: 0.13),
+            splashColor: c.withValues(alpha: 0.18),
+            child: Icon(
+              icono,
+              size: 18,
+              color: onPressed == null ? c.withValues(alpha: 0.35) : c,
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
 /// Una lista del catálogo, con su estado.
 class _TarjetaDeLista extends StatelessWidget {
   const _TarjetaDeLista({
@@ -912,6 +1013,7 @@ class _TarjetaDeLista extends StatelessWidget {
     required this.bajando,
     required this.trabada,
     required this.onInstalar,
+    required this.onActualizar,
     required this.onQuitar,
   });
 
@@ -920,6 +1022,7 @@ class _TarjetaDeLista extends StatelessWidget {
   final bool bajando;
   final bool trabada;
   final VoidCallback onInstalar;
+  final VoidCallback onActualizar;
   final VoidCallback onQuitar;
 
   @override
@@ -991,28 +1094,44 @@ class _TarjetaDeLista extends StatelessWidget {
               ],
             ),
           ),
-          const SizedBox(width: 8),
-          SizedBox(
-            width: 40,
-            height: 40,
-            child: bajando
-                ? const Padding(
-                    padding: EdgeInsets.all(11),
-                    child: CircularProgressIndicator(strokeWidth: 2),
-                  )
-                : IconButton(
-                    onPressed:
-                        trabada ? null : (instalada ? onQuitar : onInstalar),
-                    tooltip: instalada ? 'Quitar' : 'Instalar',
-                    icon: Icon(
-                      instalada ? Icons.check_circle : Icons.download_rounded,
-                      size: 20,
-                      color: instalada
-                          ? const Color(0xFF69F0AE)
-                          : HomeTheme.textMuted,
-                    ),
-                  ),
-          ),
+          const SizedBox(width: 6),
+          // Los botones de la derecha.
+          //
+          // Cuando la lista esta puesta hacen falta DOS —volver a bajarla y
+          // sacarla— y antes habia uno solo que hacia de tilde y de quitar a la
+          // vez: el tilde verde parecia decir "listo" y en realidad borraba.
+          if (bajando)
+            const SizedBox(
+              width: 38,
+              height: 38,
+              child: Padding(
+                padding: EdgeInsets.all(10),
+                child: CircularProgressIndicator(strokeWidth: 2),
+              ),
+            )
+          else if (instalada)
+            Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                _BotonChico(
+                  icono: Icons.refresh,
+                  tooltip: 'Volver a bajarla',
+                  onPressed: trabada ? null : onActualizar,
+                ),
+                _BotonChico(
+                  icono: Icons.delete_outline,
+                  tooltip: 'Quitar',
+                  color: const Color(0xFFFF8A80),
+                  onPressed: trabada ? null : onQuitar,
+                ),
+              ],
+            )
+          else
+            _BotonChico(
+              icono: Icons.download_rounded,
+              tooltip: 'Instalar',
+              onPressed: trabada ? null : onInstalar,
+            ),
         ],
       ),
     );
