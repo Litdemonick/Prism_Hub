@@ -76,88 +76,68 @@ class _BloqueadorPageState extends State<BloqueadorPage> {
           '·  Pestañas que se abren solas al tocar reproducir\n'
           '·  Anuncios de veinte segundos antes de la película\n'
           '·  Rastreo de las redes de publicidad\n\n'
-          'Podés volver a encenderlo cuando quieras.',
+          'No se recomienda apagarlo: es lo único que separa al navegador '
+          'interno de las redes de anuncios de estos sitios.',
           style: TextStyle(fontSize: 13, height: 1.5),
         ),
         actions: [
-          TextButton(
+          _BotonDeAviso(
+            texto: 'Dejarlo encendido',
             onPressed: () => Navigator.pop(ctx, false),
-            child: const Text('Dejarlo encendido'),
+            recomendado: true,
           ),
-          TextButton(
+          _BotonDeAviso(
+            texto: 'Apagar igual',
             onPressed: () => Navigator.pop(ctx, true),
-            style: TextButton.styleFrom(foregroundColor: Colors.red.shade300),
-            child: const Text('Apagar igual'),
           ),
         ],
       ),
     );
-    return r ?? false;
+    if (r != true) return false;
+    return _confirmarDeVerdad();
   }
 
-  /// Un ejemplo de lista, con su dirección lista para copiar.
+  /// La segunda pregunta, corta y al hueso.
   ///
-  /// Tocarlo abre el diálogo de instalar con el nombre y la dirección ya
-  /// puestos: la idea es que no haya que ir a buscar nada a ningún lado.
-  Widget _ejemploDeLista(String nombre, String para, String url,
-      {bool ultimo = false}) {
-    return Padding(
-      padding: EdgeInsets.only(bottom: ultimo ? 0 : 10),
-      child: Material(
-        color: HomeTheme.bg,
-        borderRadius: BorderRadius.circular(11),
-        clipBehavior: Clip.antiAlias,
-        child: InkWell(
-          onTap: _trabajando
-              ? null
-              : () => _conEspera(() async {
-                    final n = await BloqueadorAnuncios.instalar(nombre, url);
-                    _aviso('$nombre instalada con $n dominios');
-                  }),
-          child: Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 11),
-            child: Row(
-              children: [
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(nombre,
-                          style: const TextStyle(
-                              fontSize: 13, fontWeight: FontWeight.w600)),
-                      const SizedBox(height: 3),
-                      Text(
-                        para,
-                        style: TextStyle(
-                            fontSize: 11.5,
-                            height: 1.35,
-                            color: HomeTheme.textMuted),
-                      ),
-                    ],
-                  ),
-                ),
-                const SizedBox(width: 10),
-                Icon(Icons.download_rounded,
-                    size: 19, color: HomeTheme.textMuted),
-              ],
-            ),
-          ),
+  /// No es por insistir: el primer aviso explica y se lee en diagonal, y tocar
+  /// "Apagar igual" sin haberlo leído es lo más fácil del mundo. Esta segunda no
+  /// explica nada — solo obliga a decidir otra vez, ya sabiendo qué se apaga.
+  Future<bool> _confirmarDeVerdad() async {
+    final r = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        backgroundColor: HomeTheme.cardSurface,
+        title: const Text('¿Seguro?'),
+        content: const Text(
+          'Quedás sin protección contra anuncios, estafas y páginas que '
+          'reparten virus mientras uses el navegador interno.',
+          style: TextStyle(fontSize: 13, height: 1.5),
         ),
+        actions: [
+          _BotonDeAviso(
+            texto: 'Mejor no',
+            onPressed: () => Navigator.pop(ctx, false),
+            recomendado: true,
+          ),
+          _BotonDeAviso(
+            texto: 'Sí, apagar',
+            onPressed: () => Navigator.pop(ctx, true),
+          ),
+        ],
       ),
     );
+    return r == true;
   }
 
   Future<void> _instalar() async {
-    final resultado = await showDialog<List<String>>(
+    // El panel se encarga solo de instalar y de mostrarlo: acá alcanza con
+    // refrescar cuando se cierra, porque adentro se pueden haber puesto o
+    // sacado varias.
+    await showDialog<void>(
       context: context,
-      builder: (_) => const _DialogoInstalar(),
+      builder: (_) => const _PanelCatalogo(),
     );
-    if (resultado == null) return;
-    await _conEspera(() async {
-      final cuantos =
-          await BloqueadorAnuncios.instalar(resultado[0], resultado[1]);
-      _aviso('Lista instalada con $cuantos dominios');
-    });
+    if (mounted) _refrescar();
   }
 
   /// Una fila de "esto se corta": icono, qué es y por qué molesta.
@@ -223,269 +203,317 @@ class _BloqueadorPageState extends State<BloqueadorPage> {
       // En el celular ocupa el ancho completo y se ve como siempre; en una
       // ventana de escritorio, sin esto, las filas se estiraban de punta a
       // punta y el interruptor quedaba a medio metro de su texto.
-      body: Center(
-        child: ConstrainedBox(
-          constraints: const BoxConstraints(maxWidth: 560),
-          child: ListView(
-            padding: const EdgeInsets.fromLTRB(16, 8, 16, 90),
-            children: [
-              // Cabecera: qué es esto, de un vistazo.
-              //
-              // Antes era un párrafo plano de cuatro renglones. Nadie lee eso en
-              // una pantalla de ajustes — y lo que hay que entender son dos cosas
-              // sueltas: qué corta, y dónde. Así que va un escudo grande, el
-              // alcance en una línea, y debajo los tres caminos que ataja.
-              Container(
-                padding:
-                    const EdgeInsets.symmetric(horizontal: 18, vertical: 22),
-                decoration: BoxDecoration(
-                  color: HomeTheme.cardSurface,
-                  borderRadius: BorderRadius.circular(16),
-                  border: Border.all(color: HomeTheme.border),
-                ),
+      // La lista ocupa TODO el ancho y lo que se centra es el contenido.
+      //
+      // Antes se centraba la lista entera con un ConstrainedBox, y con eso la
+      // barra de desplazamiento quedaba pegada al borde de la columna —o sea, en
+      // medio de la pantalla, contra las tarjetas—. Ahora la barra queda donde
+      // corresponde, contra el borde derecho de la ventana, y el contenido se
+      // sigue centrando igual.
+      body: ListView(
+        padding: const EdgeInsets.only(top: 8, bottom: 90),
+        children: [
+          Center(
+            child: ConstrainedBox(
+              constraints: const BoxConstraints(maxWidth: 560),
+              child: Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 16),
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.stretch,
                   children: [
-                    Icon(
-                      activo ? Icons.shield : Icons.shield_outlined,
-                      size: 40,
-                      color: activo
-                          ? const Color(0xFF69F0AE)
-                          : HomeTheme.textMuted,
+                    // Cabecera: qué es esto, de un vistazo.
+                    //
+                    // Antes era un párrafo plano de cuatro renglones. Nadie lee eso en
+                    // una pantalla de ajustes — y lo que hay que entender son dos cosas
+                    // sueltas: qué corta, y dónde. Así que va un escudo grande, el
+                    // alcance en una línea, y debajo los tres caminos que ataja.
+                    Container(
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 18, vertical: 22),
+                      decoration: BoxDecoration(
+                        color: HomeTheme.cardSurface,
+                        borderRadius: BorderRadius.circular(16),
+                        border: Border.all(color: HomeTheme.border),
+                      ),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.stretch,
+                        children: [
+                          Icon(
+                            activo ? Icons.shield : Icons.shield_outlined,
+                            size: 40,
+                            color: activo
+                                ? const Color(0xFF69F0AE)
+                                : HomeTheme.textMuted,
+                          ),
+                          const SizedBox(height: 12),
+                          Text(
+                            activo ? 'Protegido' : 'Sin protección',
+                            textAlign: TextAlign.center,
+                            style: const TextStyle(
+                              fontSize: 19,
+                              fontWeight: FontWeight.w700,
+                              height: 1.2,
+                            ),
+                          ),
+                          const SizedBox(height: 6),
+                          Text(
+                            'Solo en el navegador interno, que es donde se abren los '
+                            'servidores que no reproducen en la app.',
+                            textAlign: TextAlign.center,
+                            style: TextStyle(
+                              fontSize: 12.5,
+                              height: 1.45,
+                              color: HomeTheme.textMuted,
+                            ),
+                          ),
+                          const SizedBox(height: 18),
+                          const Divider(height: 1),
+                          const SizedBox(height: 18),
+                          _queSeCorta(
+                            Icons.block,
+                            'Ventanas emergentes',
+                            'Las pestañas que se abren solas al tocar reproducir.',
+                          ),
+                          _queSeCorta(
+                            Icons.ondemand_video,
+                            'Anuncios antes del vídeo',
+                            'Los de veinte segundos, dentro del reproductor.',
+                          ),
+                          _queSeCorta(
+                            Icons.travel_explore,
+                            'Rastreo',
+                            'Medición y perfilado, que viaja pegado a los '
+                                'anuncios y sabe desde qué dirección de red mirás.',
+                          ),
+                          _queSeCorta(
+                            Icons.coronavirus_outlined,
+                            'Virus y programas dañinos',
+                            'Servidores que reparten archivos infectados, y los '
+                                'que los sitios cargan sin que se vean.',
+                          ),
+                          _queSeCorta(
+                            Icons.gpp_maybe_outlined,
+                            'Estafas y suplantación',
+                            'Páginas que se hacen pasar por otras para quedarse '
+                                'con tu cuenta o los datos de la tarjeta.',
+                          ),
+                          _queSeCorta(
+                            Icons.memory,
+                            'Minado escondido',
+                            'Sitios que usan tu equipo para minar criptomonedas. '
+                                'Se nota en que todo empieza a ir lento.',
+                            ultimo: true,
+                          ),
+                        ],
+                      ),
                     ),
                     const SizedBox(height: 12),
-                    Text(
-                      activo ? 'Protegido' : 'Sin protección',
-                      textAlign: TextAlign.center,
-                      style: const TextStyle(
-                        fontSize: 19,
-                        fontWeight: FontWeight.w700,
-                        height: 1.2,
+                    // El interruptor, con su propia tarjeta.
+                    //
+                    // Antes era un SwitchListTile pelado sobre el fondo: al pasar el
+                    // puntero se pintaba de rosa y el texto encima dejaba de leerse.
+                    // Ahora tiene fondo propio y el resaltado es apenas un aclarado.
+                    Material(
+                      color: HomeTheme.cardSurface,
+                      borderRadius: BorderRadius.circular(14),
+                      clipBehavior: Clip.antiAlias,
+                      child: SwitchListTile(
+                        value: activo,
+                        hoverColor: Colors.white.withValues(alpha: 0.04),
+                        contentPadding: const EdgeInsets.symmetric(
+                            horizontal: 16, vertical: 6),
+                        title: const Text(
+                          'Bloquear anuncios',
+                          style: TextStyle(fontWeight: FontWeight.w600),
+                        ),
+                        subtitle: Padding(
+                          padding: const EdgeInsets.only(top: 3),
+                          child: Text(
+                            activo
+                                ? '${BloqueadorAnuncios.cuantosDominios} dominios · '
+                                    '${BloqueadorAnuncios.cuantosDeFabrica} vienen puestos'
+                                    '${BloqueadorAnuncios.cuantosDeListas > 0 ? ' + ${BloqueadorAnuncios.cuantosDeListas} de tus listas' : ''}'
+                                : 'Apagado. Las listas quedan guardadas.',
+                            style: TextStyle(
+                                fontSize: 12, color: HomeTheme.textMuted),
+                          ),
+                        ),
+                        onChanged: (v) async {
+                          // Apagarlo se pregunta; encenderlo no. Apagar es lo que puede
+                          // arruinarle la tarde a alguien, y conviene que sepa qué le
+                          // espera ANTES, no después con la pestaña de casino ya abierta.
+                          if (!v && !await _confirmarApagado()) return;
+                          await BloqueadorAnuncios.setActivo(v);
+                          await BloqueadorAnuncios.cargar();
+                          _refrescar();
+                        },
                       ),
                     ),
-                    const SizedBox(height: 6),
-                    Text(
-                      'Solo en el navegador interno, que es donde se abren los '
-                      'servidores que no reproducen en la app.',
-                      textAlign: TextAlign.center,
-                      style: TextStyle(
-                        fontSize: 12.5,
-                        height: 1.45,
-                        color: HomeTheme.textMuted,
-                      ),
-                    ),
-                    const SizedBox(height: 18),
-                    const Divider(height: 1),
-                    const SizedBox(height: 18),
-                    _queSeCorta(
-                      Icons.block,
-                      'Ventanas emergentes',
-                      'Las pestañas que se abren solas al tocar reproducir.',
-                    ),
-                    _queSeCorta(
-                      Icons.ondemand_video,
-                      'Anuncios antes del vídeo',
-                      'Los de veinte segundos, dentro del reproductor.',
-                    ),
-                    _queSeCorta(
-                      Icons.travel_explore,
-                      'Rastreo',
-                      'Medición y perfilado, que viaja pegado a los anuncios.',
-                      ultimo: true,
-                    ),
-                  ],
-                ),
-              ),
-              const SizedBox(height: 12),
-              // El interruptor, con su propia tarjeta.
-              //
-              // Antes era un SwitchListTile pelado sobre el fondo: al pasar el
-              // puntero se pintaba de rosa y el texto encima dejaba de leerse.
-              // Ahora tiene fondo propio y el resaltado es apenas un aclarado.
-              Material(
-                color: HomeTheme.cardSurface,
-                borderRadius: BorderRadius.circular(14),
-                clipBehavior: Clip.antiAlias,
-                child: SwitchListTile(
-                  value: activo,
-                  hoverColor: Colors.white.withValues(alpha: 0.04),
-                  contentPadding:
-                      const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
-                  title: const Text(
-                    'Bloquear anuncios',
-                    style: TextStyle(fontWeight: FontWeight.w600),
-                  ),
-                  subtitle: Padding(
-                    padding: const EdgeInsets.only(top: 3),
-                    child: Text(
-                      activo
-                          ? '${BloqueadorAnuncios.cuantosDominios} dominios · '
-                              '${BloqueadorAnuncios.cuantosDeFabrica} vienen puestos'
-                              '${BloqueadorAnuncios.cuantosDeListas > 0 ? ' + ${BloqueadorAnuncios.cuantosDeListas} de tus listas' : ''}'
-                          : 'Apagado. Las listas quedan guardadas.',
-                      style:
-                          TextStyle(fontSize: 12, color: HomeTheme.textMuted),
-                    ),
-                  ),
-                  onChanged: (v) async {
-                    // Apagarlo se pregunta; encenderlo no. Apagar es lo que puede
-                    // arruinarle la tarde a alguien, y conviene que sepa qué le
-                    // espera ANTES, no después con la pestaña de casino ya abierta.
-                    if (!v && !await _confirmarApagado()) return;
-                    await BloqueadorAnuncios.setActivo(v);
-                    await BloqueadorAnuncios.cargar();
-                    _refrescar();
-                  },
-                ),
-              ),
-              if (!Platform.isAndroid) ...[
-                const SizedBox(height: 4),
-                // Se dice la verdad sobre lo que hace en cada sistema en vez de
-                // dar a entender que protege igual en todos.
-                Text(
-                  'En esta plataforma el motor del navegador no permite frenar el '
-                  'pedido antes de que salga, así que se corta la navegación a los '
-                  'dominios de las listas y se limpia la página por dentro. '
-                  'Funciona, pero en Android el bloqueo es más profundo.',
-                  style: TextStyle(
-                    fontSize: 11.5,
-                    height: 1.35,
-                    color: HomeTheme.textMuted,
-                  ),
-                ),
-              ],
-              const SizedBox(height: 18),
-              Row(
-                children: [
-                  const Text('Listas instaladas',
-                      style: TextStyle(fontWeight: FontWeight.w600)),
-                  const Spacer(),
-                  if (_trabajando)
-                    const SizedBox(
-                      width: 16,
-                      height: 16,
-                      child: CircularProgressIndicator(strokeWidth: 2),
-                    ),
-                ],
-              ),
-              const SizedBox(height: 8),
-              // Cuando no hay ninguna, se explica QUÉ es una lista.
-              //
-              // Antes decía "todavía no hay ninguna, tocá instalar y pegá la
-              // dirección" — que da por sabido lo único que hay que explicar.
-              // El usuario no tiene por qué saber qué es una lista de bloqueo
-              // ni de dónde saca una dirección, y el texto suelto sobre el
-              // fondo tampoco se leía como algo con lo que se pueda hacer algo.
-              if (_listas.isEmpty)
-                Container(
-                  width: double.infinity,
-                  padding:
-                      const EdgeInsets.symmetric(horizontal: 18, vertical: 22),
-                  decoration: BoxDecoration(
-                    color: HomeTheme.cardSurface,
-                    borderRadius: BorderRadius.circular(14),
-                    border: Border.all(color: HomeTheme.border),
-                  ),
-                  child: Column(
-                    children: [
-                      Icon(Icons.playlist_add,
-                          size: 30, color: HomeTheme.textMuted),
-                      const SizedBox(height: 12),
-                      const Text(
-                        'Ninguna lista instalada',
-                        textAlign: TextAlign.center,
-                        style: TextStyle(
-                            fontSize: 14.5, fontWeight: FontWeight.w600),
-                      ),
-                      const SizedBox(height: 8),
+                    if (!Platform.isAndroid) ...[
+                      const SizedBox(height: 4),
+                      // Se dice la verdad sobre lo que hace en cada sistema en vez de
+                      // dar a entender que protege igual en todos.
                       Text(
-                        'Una lista es un archivo público de dominios de anuncios '
-                        'que mantiene gente dedicada a eso. Al instalarla, sus '
-                        'dominios se suman a los que la app ya bloquea.',
-                        textAlign: TextAlign.center,
+                        'En esta plataforma el motor del navegador no permite frenar el '
+                        'pedido antes de que salga, así que se corta la navegación a los '
+                        'dominios de las listas y se limpia la página por dentro. '
+                        'Funciona, pero en Android el bloqueo es más profundo.',
                         style: TextStyle(
-                          fontSize: 12.5,
-                          height: 1.45,
+                          fontSize: 11.5,
+                          height: 1.35,
                           color: HomeTheme.textMuted,
                         ),
                       ),
-                      const SizedBox(height: 10),
-                      Text(
-                        'No hace falta ninguna: la protección de fábrica ya '
-                        'funciona. Una lista suma decenas de miles de dominios '
-                        'y se actualiza sola.',
-                        textAlign: TextAlign.center,
-                        style: TextStyle(
-                          fontSize: 12,
-                          height: 1.45,
-                          color: HomeTheme.textMuted.withValues(alpha: 0.75),
-                        ),
-                      ),
-                      const SizedBox(height: 18),
-                      const Divider(height: 1),
-                      const SizedBox(height: 16),
-                      Align(
-                        alignment: Alignment.centerLeft,
-                        child: Text(
-                          'Algunas conocidas',
-                          style: TextStyle(
-                            fontSize: 11.5,
-                            fontWeight: FontWeight.w700,
-                            letterSpacing: 0.4,
-                            color: HomeTheme.textMuted,
-                          ),
-                        ),
-                      ),
-                      const SizedBox(height: 12),
-                      // Ejemplos de verdad, con la dirección que hay que pegar.
-                      // Sin esto, "pegá la dirección de la que quieras usar" no
-                      // le sirve a nadie: hay que saber ANTES que existen y
-                      // dónde se consiguen.
-                      _ejemploDeLista(
-                        'StevenBlack',
-                        'La más completa para empezar. Anuncios, rastreo y '
-                            'sitios de malware, todo junto.',
-                        'https://raw.githubusercontent.com/StevenBlack/hosts/master/hosts',
-                      ),
-                      _ejemploDeLista(
-                        'EasyList',
-                        'La de toda la vida contra publicidad. Es la que usan '
-                            'de base casi todos los bloqueadores.',
-                        'https://easylist.to/easylist/easylist.txt',
-                      ),
-                      _ejemploDeLista(
-                        'Phishing Army',
-                        'Sitios que se hacen pasar por otros para robar datos.',
-                        'https://phishing.army/download/phishing_army_blocklist_extended.txt',
-                      ),
-                      _ejemploDeLista(
-                        'URLhaus',
-                        'Direcciones que están repartiendo malware ahora mismo.',
-                        'https://urlhaus.abuse.ch/downloads/hostfile/',
-                        ultimo: true,
-                      ),
                     ],
-                  ),
+                    const SizedBox(height: 18),
+                    Row(
+                      children: [
+                        const Text('Listas instaladas',
+                            style: TextStyle(fontWeight: FontWeight.w600)),
+                        const Spacer(),
+                        if (_trabajando)
+                          const SizedBox(
+                            width: 16,
+                            height: 16,
+                            child: CircularProgressIndicator(strokeWidth: 2),
+                          ),
+                      ],
+                    ),
+                    const SizedBox(height: 8),
+                    // Cuando no hay ninguna, se explica QUÉ es una lista.
+                    //
+                    // Antes decía "todavía no hay ninguna, tocá instalar y pegá la
+                    // dirección" — que da por sabido lo único que hay que explicar.
+                    // El usuario no tiene por qué saber qué es una lista de bloqueo
+                    // ni de dónde saca una dirección, y el texto suelto sobre el
+                    // fondo tampoco se leía como algo con lo que se pueda hacer algo.
+                    if (_listas.isEmpty)
+                      Container(
+                        width: double.infinity,
+                        padding: const EdgeInsets.symmetric(
+                            horizontal: 18, vertical: 22),
+                        decoration: BoxDecoration(
+                          color: HomeTheme.cardSurface,
+                          borderRadius: BorderRadius.circular(14),
+                          border: Border.all(color: HomeTheme.border),
+                        ),
+                        child: Column(
+                          children: [
+                            Icon(Icons.playlist_add,
+                                size: 30, color: HomeTheme.textMuted),
+                            const SizedBox(height: 12),
+                            const Text(
+                              'Ninguna lista instalada',
+                              textAlign: TextAlign.center,
+                              style: TextStyle(
+                                  fontSize: 14.5, fontWeight: FontWeight.w600),
+                            ),
+                            const SizedBox(height: 8),
+                            Text(
+                              'Una lista es un archivo público de dominios de anuncios '
+                              'que mantiene gente dedicada a eso. Al instalarla, sus '
+                              'dominios se suman a los que la app ya bloquea.',
+                              textAlign: TextAlign.center,
+                              style: TextStyle(
+                                fontSize: 12.5,
+                                height: 1.45,
+                                color: HomeTheme.textMuted,
+                              ),
+                            ),
+                            const SizedBox(height: 10),
+                            Text(
+                              'No hace falta ninguna: la protección de fábrica ya '
+                              'funciona. Una lista suma decenas de miles de dominios '
+                              'y se actualiza sola.',
+                              textAlign: TextAlign.center,
+                              style: TextStyle(
+                                fontSize: 12,
+                                height: 1.45,
+                                color:
+                                    HomeTheme.textMuted.withValues(alpha: 0.75),
+                              ),
+                            ),
+                            const SizedBox(height: 16),
+                            // Se manda al catálogo en vez de repetir acá cuatro
+                            // ejemplos sueltos: el catálogo las tiene todas,
+                            // agrupadas y con buscador.
+                            FilledButton.icon(
+                              onPressed: _trabajando ? null : _instalar,
+                              icon: const Icon(Icons.playlist_add, size: 18),
+                              label: const Text('Ver las listas disponibles'),
+                            ),
+                          ],
+                        ),
+                      ),
+                    for (final l in _listas)
+                      _FilaLista(
+                        lista: l,
+                        trabajando: _trabajando,
+                        onActivar: (v) async {
+                          await BloqueadorAnuncios.activarLista(l.url, v);
+                          _refrescar();
+                        },
+                        onActualizar: () => _conEspera(() async {
+                          final n = await BloqueadorAnuncios.actualizar(l.url);
+                          _aviso('Actualizada: $n dominios');
+                        }),
+                        onQuitar: () => _conEspera(() async {
+                          await BloqueadorAnuncios.quitar(l.url);
+                          _aviso('Lista quitada');
+                        }),
+                      ),
+                  ],
                 ),
-              for (final l in _listas)
-                _FilaLista(
-                  lista: l,
-                  trabajando: _trabajando,
-                  onActivar: (v) async {
-                    await BloqueadorAnuncios.activarLista(l.url, v);
-                    _refrescar();
-                  },
-                  onActualizar: () => _conEspera(() async {
-                    final n = await BloqueadorAnuncios.actualizar(l.url);
-                    _aviso('Actualizada: $n dominios');
-                  }),
-                  onQuitar: () => _conEspera(() async {
-                    await BloqueadorAnuncios.quitar(l.url);
-                    _aviso('Lista quitada');
-                  }),
-                ),
-            ],
+              ),
+            ),
           ),
+        ],
+      ),
+    );
+  }
+}
+
+/// Un botón de los avisos, con un resaltado que se lee.
+///
+/// Los `TextButton` sueltos usaban el color de acento del tema al pasar el
+/// puntero: fondo rosa con el texto encima, que en el aviso de apagar quedaba
+/// ilegible justo en el momento en que hay que leerlo. Acá el fondo del
+/// resaltado sale del mismo color del texto, apenas insinuado, así que siempre
+/// contrasta.
+class _BotonDeAviso extends StatelessWidget {
+  const _BotonDeAviso({
+    required this.texto,
+    required this.onPressed,
+    this.recomendado = false,
+  });
+
+  final String texto;
+  final VoidCallback onPressed;
+
+  /// La opción segura. Va marcada para que se distinga de un vistazo cuál es
+  /// la que no deja al usuario a la intemperie.
+  final bool recomendado;
+
+  @override
+  Widget build(BuildContext context) {
+    final color =
+        recomendado ? const Color(0xFF69F0AE) : const Color(0xFFFF8A80);
+    return TextButton(
+      onPressed: onPressed,
+      style: ButtonStyle(
+        foregroundColor: WidgetStatePropertyAll(color),
+        overlayColor: WidgetStatePropertyAll(color.withValues(alpha: 0.14)),
+        padding: const WidgetStatePropertyAll(
+          EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+        ),
+        shape: WidgetStatePropertyAll(
+          RoundedRectangleBorder(borderRadius: BorderRadius.circular(9)),
+        ),
+      ),
+      child: Text(
+        texto,
+        style: TextStyle(
+          fontWeight: recomendado ? FontWeight.w700 : FontWeight.w500,
         ),
       ),
     );
@@ -525,7 +553,7 @@ class _FilaLista extends StatelessWidget {
             title: Text(lista.nombre,
                 maxLines: 1, overflow: TextOverflow.ellipsis),
             subtitle: Text(
-              '${lista.dominios.length} dominios · '
+              '${lista.cuantos} dominios · '
               '${_cuando(lista.actualizada)}',
               maxLines: 1,
               overflow: TextOverflow.ellipsis,
@@ -572,71 +600,432 @@ class _FilaLista extends StatelessWidget {
   }
 }
 
-class _DialogoInstalar extends StatefulWidget {
-  const _DialogoInstalar();
+/// El catálogo: se elige de una lista y se instala sin salir.
+///
+/// Antes esto era un diálogo con dos campos vacíos —nombre y dirección— y un
+/// texto que decía "pegá la dirección de la que quieras usar". Eso da por
+/// sabido justo lo único que hay que explicar: nadie que no sepa del tema tiene
+/// de dónde sacar una dirección. Y encima se cerraba al instalar una, así que
+/// poner tres eran tres viajes.
+///
+/// Ahora se abre el catálogo entero, con buscador, y se queda abierto: se tocan
+/// las que se quieran y cada una pasa a "instalada" en el momento. Para lo raro
+/// sigue estando el campo de dirección a mano, abajo.
+class _PanelCatalogo extends StatefulWidget {
+  const _PanelCatalogo();
 
   @override
-  State<_DialogoInstalar> createState() => _DialogoInstalarState();
+  State<_PanelCatalogo> createState() => _PanelCatalogoState();
 }
 
-class _DialogoInstalarState extends State<_DialogoInstalar> {
-  final _nombre = TextEditingController();
+class _PanelCatalogoState extends State<_PanelCatalogo> {
+  final _busca = TextEditingController();
   final _url = TextEditingController();
+  final _nombre = TextEditingController();
+
+  /// Qué direcciones están instaladas. Se relee después de cada cambio para que
+  /// las tarjetas muestren el estado de verdad y no una foto vieja.
+  Set<String> _puestas = <String>{};
+
+  /// La dirección que se está bajando ahora, si hay alguna.
+  String? _bajando;
+
+  /// El error del campo de dirección a mano, si lo escrito no sirve.
+  String? _errorUrl;
+
+  /// Si está desplegado el campo para poner una dirección cualquiera.
+  bool _aMano = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _releer();
+    _busca.addListener(() => setState(() {}));
+  }
 
   @override
   void dispose() {
-    _nombre.dispose();
+    _busca.dispose();
     _url.dispose();
+    _nombre.dispose();
     super.dispose();
+  }
+
+  void _releer() {
+    _puestas = BloqueadorAnuncios.listas().map((l) => l.url).toSet();
+  }
+
+  void _avisar(String texto, {bool malo = false}) {
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+      content: Text(texto),
+      backgroundColor: malo ? Colors.red.shade900 : null,
+    ));
+  }
+
+  Future<void> _instalar(String nombre, String url) async {
+    if (_bajando != null) return;
+    setState(() => _bajando = url);
+    try {
+      final n = await BloqueadorAnuncios.instalar(nombre, url);
+      _avisar('$nombre: $n dominios');
+    } catch (e) {
+      _avisar('$e'.replaceFirst('Exception: ', ''), malo: true);
+    } finally {
+      if (mounted) {
+        setState(() {
+          _bajando = null;
+          _releer();
+        });
+      }
+    }
+  }
+
+  Future<void> _quitar(String url) async {
+    await BloqueadorAnuncios.quitar(url);
+    if (mounted) setState(_releer);
+  }
+
+  /// Las del catálogo que coinciden con lo buscado, agrupadas.
+  ///
+  /// Se busca en el nombre Y en la descripción: quien escribe "virus" no sabe
+  /// que la lista se llama Prigent-Malware, y es justo la que necesita.
+  Map<String, List<ListaConocida>> get _porGrupo {
+    final q = _busca.text.trim().toLowerCase();
+    final fuera = <String, List<ListaConocida>>{};
+    for (final c in BloqueadorAnuncios.catalogo) {
+      if (q.isNotEmpty &&
+          !c.nombre.toLowerCase().contains(q) &&
+          !c.para.toLowerCase().contains(q) &&
+          !c.grupo.toLowerCase().contains(q)) {
+        continue;
+      }
+      (fuera[c.grupo] ??= <ListaConocida>[]).add(c);
+    }
+    return fuera;
   }
 
   @override
   Widget build(BuildContext context) {
-    return AlertDialog(
+    final grupos = _porGrupo;
+    final alto = MediaQuery.of(context).size.height;
+    return Dialog(
       backgroundColor: HomeTheme.cardSurface,
-      title: const Text('Instalar lista'),
-      content: Column(
-        mainAxisSize: MainAxisSize.min,
+      insetPadding: const EdgeInsets.symmetric(horizontal: 20, vertical: 32),
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(18)),
+      child: ConstrainedBox(
+        constraints: BoxConstraints(maxWidth: 520, maxHeight: alto * 0.85),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Padding(
+              padding: const EdgeInsets.fromLTRB(20, 18, 12, 0),
+              child: Row(
+                children: [
+                  const Expanded(
+                    child: Text(
+                      'Instalar lista',
+                      style:
+                          TextStyle(fontSize: 17, fontWeight: FontWeight.w700),
+                    ),
+                  ),
+                  IconButton(
+                    onPressed: () => Navigator.pop(context),
+                    icon: const Icon(Icons.close, size: 20),
+                    tooltip: 'Cerrar',
+                  ),
+                ],
+              ),
+            ),
+            Padding(
+              padding: const EdgeInsets.fromLTRB(20, 6, 20, 12),
+              child: TextField(
+                controller: _busca,
+                decoration: InputDecoration(
+                  isDense: true,
+                  filled: true,
+                  fillColor: HomeTheme.bg,
+                  hintText: 'Buscar: virus, anuncios, rastreo…',
+                  prefixIcon: const Icon(Icons.search, size: 19),
+                  suffixIcon: _busca.text.isEmpty
+                      ? null
+                      : IconButton(
+                          onPressed: () => _busca.clear(),
+                          icon: const Icon(Icons.clear, size: 17),
+                        ),
+                  border: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(11),
+                    borderSide: BorderSide.none,
+                  ),
+                ),
+              ),
+            ),
+            Flexible(
+              child: grupos.isEmpty
+                  ? Padding(
+                      padding: const EdgeInsets.symmetric(vertical: 40),
+                      child: Text(
+                        'Ninguna coincide con eso.',
+                        style: TextStyle(color: HomeTheme.textMuted),
+                      ),
+                    )
+                  : ListView(
+                      padding: const EdgeInsets.fromLTRB(20, 0, 20, 8),
+                      shrinkWrap: true,
+                      children: [
+                        for (final g in grupos.entries) ...[
+                          Padding(
+                            padding: const EdgeInsets.only(top: 6, bottom: 8),
+                            child: Text(
+                              g.key.toUpperCase(),
+                              style: TextStyle(
+                                fontSize: 11,
+                                fontWeight: FontWeight.w700,
+                                letterSpacing: 0.6,
+                                color: HomeTheme.textMuted,
+                              ),
+                            ),
+                          ),
+                          for (final c in g.value)
+                            _TarjetaDeLista(
+                              lista: c,
+                              instalada: _puestas.contains(c.url),
+                              bajando: _bajando == c.url,
+                              trabada: _bajando != null && _bajando != c.url,
+                              onInstalar: () => _instalar(c.nombre, c.url),
+                              onQuitar: () => _quitar(c.url),
+                            ),
+                        ],
+                      ],
+                    ),
+            ),
+            const Divider(height: 1),
+            // El camino a mano queda plegado: es para quien ya sabe lo que
+            // hace, y desplegado le robaba la atención al catálogo.
+            if (!_aMano)
+              Align(
+                alignment: Alignment.centerLeft,
+                child: TextButton.icon(
+                  onPressed: () => setState(() => _aMano = true),
+                  icon: const Icon(Icons.link, size: 17),
+                  label: const Text('Poner otra dirección'),
+                ),
+              )
+            else
+              Padding(
+                padding: const EdgeInsets.fromLTRB(20, 14, 20, 16),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    TextField(
+                      controller: _url,
+                      autofocus: true,
+                      maxLength: 2048,
+                      decoration: InputDecoration(
+                        isDense: true,
+                        labelText: 'Dirección de la lista',
+                        hintText: 'https://…',
+                        counterText: '',
+                        errorText: _errorUrl,
+                      ),
+                      onChanged: (_) {
+                        if (_errorUrl != null) {
+                          setState(() => _errorUrl = null);
+                        }
+                      },
+                    ),
+                    const SizedBox(height: 10),
+                    TextField(
+                      controller: _nombre,
+                      maxLength: 60,
+                      decoration: const InputDecoration(
+                        isDense: true,
+                        labelText: 'Nombre (opcional)',
+                        counterText: '',
+                        hintText: 'Se toma del sitio si lo dejás vacío',
+                      ),
+                    ),
+                    const SizedBox(height: 10),
+                    Text(
+                      'Se aceptan listas de dominios, archivos de hosts y '
+                      'reglas del tipo ||dominio^. Todo lo que no tenga forma '
+                      'de dominio se descarta.',
+                      style: TextStyle(
+                        fontSize: 11.5,
+                        height: 1.35,
+                        color: HomeTheme.textMuted,
+                      ),
+                    ),
+                    const SizedBox(height: 12),
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.end,
+                      children: [
+                        TextButton(
+                          onPressed: () => setState(() => _aMano = false),
+                          child: const Text('Cancelar'),
+                        ),
+                        const SizedBox(width: 6),
+                        FilledButton(
+                          onPressed: _bajando != null
+                              ? null
+                              : () async {
+                                  final u = _url.text.trim();
+                                  // Se revisa ACÁ y en el bloqueador: acá para
+                                  // decirlo al momento, y allá porque es la
+                                  // puerta de verdad.
+                                  final mal =
+                                      BloqueadorAnuncios.direccionValida(u);
+                                  if (mal != null) {
+                                    setState(() => _errorUrl = mal);
+                                    return;
+                                  }
+                                  await _instalar(
+                                    BloqueadorAnuncios.nombreSaneado(
+                                        _nombre.text),
+                                    u,
+                                  );
+                                  if (mounted) {
+                                    _url.clear();
+                                    _nombre.clear();
+                                    setState(() => _aMano = false);
+                                  }
+                                },
+                          child: const Text('Instalar'),
+                        ),
+                      ],
+                    ),
+                  ],
+                ),
+              ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+/// Una lista del catálogo, con su estado.
+class _TarjetaDeLista extends StatelessWidget {
+  const _TarjetaDeLista({
+    required this.lista,
+    required this.instalada,
+    required this.bajando,
+    required this.trabada,
+    required this.onInstalar,
+    required this.onQuitar,
+  });
+
+  final ListaConocida lista;
+  final bool instalada;
+  final bool bajando;
+  final bool trabada;
+  final VoidCallback onInstalar;
+  final VoidCallback onQuitar;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      margin: const EdgeInsets.only(bottom: 8),
+      padding: const EdgeInsets.fromLTRB(13, 12, 8, 12),
+      decoration: BoxDecoration(
+        color: HomeTheme.bg,
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(
+          color: instalada ? const Color(0x5569F0AE) : Colors.transparent,
+        ),
+      ),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          TextField(
-            controller: _nombre,
-            decoration: const InputDecoration(
-              labelText: 'Nombre (opcional)',
-              hintText: 'Se toma del sitio si lo dejás vacío',
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  children: [
+                    Flexible(
+                      child: Text(
+                        lista.nombre,
+                        style: const TextStyle(
+                            fontSize: 13.5, fontWeight: FontWeight.w600),
+                      ),
+                    ),
+                    if (lista.deFabrica) ...[
+                      const SizedBox(width: 7),
+                      Container(
+                        padding: const EdgeInsets.symmetric(
+                            horizontal: 6, vertical: 2),
+                        decoration: BoxDecoration(
+                          color: const Color(0x2269F0AE),
+                          borderRadius: BorderRadius.circular(5),
+                        ),
+                        child: const Text(
+                          'viene puesta',
+                          style: TextStyle(
+                            fontSize: 9.5,
+                            fontWeight: FontWeight.w700,
+                            color: Color(0xFF69F0AE),
+                          ),
+                        ),
+                      ),
+                    ],
+                  ],
+                ),
+                const SizedBox(height: 4),
+                Text(
+                  lista.para,
+                  style: TextStyle(
+                    fontSize: 11.5,
+                    height: 1.35,
+                    color: HomeTheme.textMuted,
+                  ),
+                ),
+                const SizedBox(height: 5),
+                Text(
+                  '${_conPuntos(lista.cuantos)} dominios',
+                  style: TextStyle(
+                    fontSize: 10.5,
+                    color: HomeTheme.textMuted.withValues(alpha: 0.7),
+                  ),
+                ),
+              ],
             ),
           ),
-          const SizedBox(height: 12),
-          TextField(
-            controller: _url,
-            autofocus: true,
-            decoration: const InputDecoration(
-              labelText: 'Dirección de la lista',
-              hintText: 'https://…',
-            ),
-          ),
-          const SizedBox(height: 12),
-          Text(
-            'Se aceptan listas de dominios, archivos de hosts y reglas del '
-            'tipo ||dominio^. Las reglas que no sean un dominio entero se '
-            'ignoran.',
-            style: TextStyle(fontSize: 11.5, color: HomeTheme.textMuted),
+          const SizedBox(width: 8),
+          SizedBox(
+            width: 40,
+            height: 40,
+            child: bajando
+                ? const Padding(
+                    padding: EdgeInsets.all(11),
+                    child: CircularProgressIndicator(strokeWidth: 2),
+                  )
+                : IconButton(
+                    onPressed:
+                        trabada ? null : (instalada ? onQuitar : onInstalar),
+                    tooltip: instalada ? 'Quitar' : 'Instalar',
+                    icon: Icon(
+                      instalada ? Icons.check_circle : Icons.download_rounded,
+                      size: 20,
+                      color: instalada
+                          ? const Color(0xFF69F0AE)
+                          : HomeTheme.textMuted,
+                    ),
+                  ),
           ),
         ],
       ),
-      actions: [
-        TextButton(
-          onPressed: () => Navigator.pop(context),
-          child: const Text('Cancelar'),
-        ),
-        FilledButton(
-          onPressed: () {
-            final u = _url.text.trim();
-            if (u.isEmpty || !u.startsWith('http')) return;
-            Navigator.pop(context, [_nombre.text, u]);
-          },
-          child: const Text('Instalar'),
-        ),
-      ],
     );
+  }
+
+  /// 434121 → 434.121. Un número así, pelado, no se lee de un vistazo.
+  static String _conPuntos(int n) {
+    final t = '$n';
+    final f = StringBuffer();
+    for (var i = 0; i < t.length; i++) {
+      if (i > 0 && (t.length - i) % 3 == 0) f.write('.');
+      f.write(t[i]);
+    }
+    return f.toString();
   }
 }

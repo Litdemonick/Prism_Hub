@@ -186,6 +186,13 @@ void main(List<String> args) async {
     // molesto, pero no arrancar la app por eso sería peor.
     try {
       await BloqueadorAnuncios.cargar();
+      // Las listas que vienen puestas se bajan DETRÁS, sin esperarlas: son
+      // varios megas y la app tiene que estar usable ya. Mientras tanto la base
+      // de fábrica del código ya está protegiendo, así que no hay un rato sin
+      // protección — hay un rato con menos.
+      unawaited(BloqueadorAnuncios.asegurarDeFabrica().catchError((Object e) {
+        logger.warning('No se pudieron poner las listas de fábrica: $e');
+      }));
     } catch (e) {
       logger.warning('No se pudieron cargar las listas de bloqueo: $e');
     }

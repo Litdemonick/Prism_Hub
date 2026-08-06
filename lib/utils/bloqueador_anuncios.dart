@@ -4,6 +4,7 @@ import 'dart:io';
 import 'package:dio/dio.dart';
 import 'package:flutter_inappwebview/flutter_inappwebview.dart';
 import 'package:prismhub/utils/log.dart';
+import 'package:prismhub/utils/prismhub_directory.dart';
 import 'package:prismhub/utils/prismhub_storage.dart';
 import 'package:prismhub/utils/request.dart' show dio;
 
@@ -46,6 +47,139 @@ class BloqueadorAnuncios {
 
   static const _claveListas = 'bloqueador_listas';
   static const _claveActivo = 'bloqueador_activo';
+
+  /// Qué listas de fábrica ya se intentaron instalar, para no reintentarlas
+  /// eternamente ni volver a ponerlas si el usuario las quitó a propósito.
+  static const _claveFabricaHechas = 'bloqueador_fabrica_hechas';
+
+  // ─── Catálogo ─────────────────────────────────────────────────────────────
+
+  /// Las listas que la app ofrece instalar de un toque.
+  ///
+  /// **Todas medidas el 2026-08-06**, con el mismo analizador que usa la app:
+  /// se bajaron, se contaron los dominios que sobreviven y se anotó el número.
+  /// Las que no se pudieron bajar quedaron afuera en vez de figurar rotas —
+  /// HaGeZi (Pro y TIF) devuelve 404 en las rutas conocidas y el servidor de
+  /// DigitalSide no resuelve.
+  ///
+  /// Las cuatro marcadas `deFabrica` se instalan solas la primera vez: cubren
+  /// anuncios, rastreo, malware y suplantación, que es el mínimo para que el
+  /// navegador interno no sea un problema de seguridad. Se eligieron mirando
+  /// también el peso —entre las cuatro son ~470.000 dominios— porque cada una
+  /// se queda en memoria mientras la app corre.
+  static const catalogo = <ListaConocida>[
+    // ── Lo que viene puesto ──
+    ListaConocida(
+      nombre: 'StevenBlack',
+      para: 'Anuncios, rastreo y sitios de malware, todo junto. La más '
+          'usada para empezar.',
+      url: 'https://raw.githubusercontent.com/StevenBlack/hosts/master/hosts',
+      grupo: 'Todo en uno',
+      cuantos: 67118,
+      deFabrica: true,
+    ),
+    ListaConocida(
+      nombre: 'Prigent-Malware',
+      para: 'Servidores que reparten virus y programas dañinos.',
+      url: 'https://v.firebog.net/hosts/Prigent-Malware.txt',
+      grupo: 'Virus y estafas',
+      cuantos: 249936,
+      deFabrica: true,
+    ),
+    ListaConocida(
+      nombre: 'Phishing Army',
+      para: 'Páginas que se hacen pasar por otras para robarte la cuenta o '
+          'los datos de la tarjeta.',
+      url: 'https://phishing.army/download/phishing_army_blocklist_extended.txt',
+      grupo: 'Virus y estafas',
+      cuantos: 152115,
+      deFabrica: true,
+    ),
+    ListaConocida(
+      nombre: 'URLhaus',
+      para: 'Direcciones que están repartiendo malware ahora mismo. Se '
+          'renueva a diario.',
+      url: 'https://urlhaus.abuse.ch/downloads/hostfile/',
+      grupo: 'Virus y estafas',
+      cuantos: 381,
+      deFabrica: true,
+    ),
+
+    // ── Virus y estafas ──
+    ListaConocida(
+      nombre: 'Spam404',
+      para: 'Sitios de estafa y fraude denunciados.',
+      url: 'https://raw.githubusercontent.com/Spam404/lists/master/main-blacklist.txt',
+      grupo: 'Virus y estafas',
+      cuantos: 8140,
+    ),
+    ListaConocida(
+      nombre: 'NoCoin',
+      para: 'Páginas que usan tu equipo para minar criptomonedas sin '
+          'avisarte. Se nota en que todo va lento.',
+      url: 'https://raw.githubusercontent.com/hoshsadiq/adblock-nocoin-list/master/hosts.txt',
+      grupo: 'Virus y estafas',
+      cuantos: 307,
+    ),
+    ListaConocida(
+      nombre: 'Prigent-Crypto',
+      para: 'La versión grande de lo anterior: minado y secuestro de equipos.',
+      url: 'https://v.firebog.net/hosts/Prigent-Crypto.txt',
+      grupo: 'Virus y estafas',
+      cuantos: 11491,
+    ),
+
+    // ── Anuncios y rastreo ──
+    ListaConocida(
+      nombre: 'EasyList',
+      para: 'La de toda la vida contra publicidad. Es la base de casi todos '
+          'los bloqueadores.',
+      url: 'https://easylist.to/easylist/easylist.txt',
+      grupo: 'Anuncios y rastreo',
+      cuantos: 61110,
+    ),
+    ListaConocida(
+      nombre: 'EasyPrivacy',
+      para: 'La hermana de la anterior, pero contra el rastreo: quién sos, '
+          'qué mirás y desde dónde.',
+      url: 'https://easylist.to/easylist/easyprivacy.txt',
+      grupo: 'Anuncios y rastreo',
+      cuantos: 50183,
+    ),
+    ListaConocida(
+      nombre: 'AdGuard DNS',
+      para: 'La lista de AdGuard. Grande y muy al día.',
+      url: 'https://adguardteam.github.io/HostlistsRegistry/assets/filter_1.txt',
+      grupo: 'Anuncios y rastreo',
+      cuantos: 162398,
+    ),
+    ListaConocida(
+      nombre: "Peter Lowe's",
+      para: 'Chiquita y muy afilada: solo servidores de anuncios y rastreo, '
+          'sin romper nada.',
+      url: 'https://pgl.yoyo.org/adservers/serverlist.php'
+          '?hostformat=hosts&showintro=0&mimetype=plaintext',
+      grupo: 'Anuncios y rastreo',
+      cuantos: 3517,
+    ),
+    ListaConocida(
+      nombre: 'Dan Pollock',
+      para: 'Otra clásica de anuncios, mantenida a mano desde hace años.',
+      url: 'https://someonewhocares.org/hosts/zero/hosts',
+      grupo: 'Anuncios y rastreo',
+      cuantos: 12376,
+    ),
+
+    // ── Todo en uno ──
+    ListaConocida(
+      nombre: 'OISD Big',
+      para: 'La más completa que hay: anuncios, rastreo, estafas y malware. '
+          'Son 434.000 dominios, así que pesa.',
+      url: 'https://big.oisd.nl/',
+      grupo: 'Todo en uno',
+      cuantos: 434121,
+    ),
+  ];
 
   /// Dominios de todas las listas ACTIVAS, ya unidos y sin repetir.
   static Set<String> _dominios = <String>{};
@@ -116,23 +250,188 @@ class BloqueadorAnuncios {
     await cargar();
   }
 
+  // ─── Dónde se guardan los dominios ────────────────────────────────────────
+  //
+  // En archivos, uno por lista, y NO en los ajustes. Ver el comentario de
+  // `ListaDeBloqueo`: los ajustes son una caja de Hive y meterle medio millón
+  // de dominios que se reescriben a cada cambio la termina rompiendo.
+
+  /// El salto de linea con el que se separan los dominios en el archivo.
+  static final String _salto = String.fromCharCode(10);
+
+  static Directory get _carpeta {
+    final d = Directory(
+        '${PrismHubDirectory.getDirectory}${Platform.pathSeparator}bloqueador');
+    if (!d.existsSync()) d.createSync(recursive: true);
+    return d;
+  }
+
+  /// El archivo de una lista. El nombre sale de la dirección, no del nombre que
+  /// puso el usuario: el nombre se puede repetir o traer caracteres que el
+  /// sistema de archivos no acepta, y la dirección ya es la clave de la lista.
+  static File _archivoDe(String url) {
+    var clave = 0;
+    for (final c in url.codeUnits) {
+      clave = (clave * 31 + c) & 0x7fffffff;
+    }
+    return File('${_carpeta.path}${Platform.pathSeparator}$clave.txt');
+  }
+
+  static Future<void> _escribirDominios(String url, Set<String> d) async {
+    try {
+      await _archivoDe(url).writeAsString(d.join('\n'), flush: true);
+    } catch (e) {
+      logger.warning('[bloqueador] no se pudo guardar la lista: $e');
+    }
+  }
+
+  static Set<String> _leerDominios(String url) {
+    try {
+      final f = _archivoDe(url);
+      if (!f.existsSync()) return <String>{};
+      return f
+          .readAsStringSync()
+          .split('\n')
+          .where((l) => l.isNotEmpty)
+          .toSet();
+    } catch (e) {
+      logger.warning('[bloqueador] no se pudo leer la lista: $e');
+      return <String>{};
+    }
+  }
+
+  /// Pasa las listas viejas —las que guardaban los dominios adentro de la
+  /// ficha— a archivos, y las saca de los ajustes.
+  ///
+  /// Corre una sola vez: después de esto las fichas ya no traen `dominios` y no
+  /// hay nada que mover. Sin esto, quien ya tenía listas instaladas las perdía
+  /// al actualizar.
+  static Future<void> _migrarAArchivos() async {
+    final crudo = PrismHubStorage.getSetting(_claveListas);
+    if (crudo is! String || crudo.isEmpty) return;
+    if (!crudo.contains('"dominios"')) return;
+    try {
+      final datos = jsonDecode(crudo) as List<dynamic>;
+      final salida = <ListaDeBloqueo>[];
+      for (final e in datos) {
+        final m = e as Map<String, dynamic>;
+        final ficha = ListaDeBloqueo.desdeMapa(m);
+        final viejos = ((m['dominios'] as List<dynamic>?) ?? const [])
+            .map((x) => '$x')
+            .toSet();
+        if (viejos.isNotEmpty) await _escribirDominios(ficha.url, viejos);
+        salida.add(ficha);
+      }
+      await PrismHubStorage.setSetting(
+        _claveListas,
+        jsonEncode(salida.map((l) => l.aMapa()).toList()),
+      );
+      logger.info('[bloqueador] ${salida.length} lista(s) pasadas a archivo');
+    } catch (e) {
+      logger.warning('[bloqueador] no se pudieron migrar las listas: $e');
+    }
+  }
+
+  // ─── Sanear lo que escribe el usuario ─────────────────────────────────────
+
+  /// Deja pasar solo direcciones que se puedan bajar sin peligro.
+  ///
+  /// El campo de "instalar lista" acepta texto libre, y con texto libre se
+  /// pueden pedir cosas que no son una lista: `file:///` para leer archivos del
+  /// equipo, `data:` para meter contenido inventado, `javascript:` por si algo
+  /// termina en un WebView. Se exige http o https y un host con forma de
+  /// dominio, y se corta el largo para que una dirección enorme no quede
+  /// guardada en los ajustes.
+  ///
+  /// El contenido en sí ya estaba a salvo: `analizar` solo acepta líneas que
+  /// tengan forma de dominio y descarta todo lo demás, así que una lista que
+  /// venga con código adentro no aporta ni una entrada.
+  static String? direccionValida(String texto) {
+    final t = texto.trim();
+    if (t.isEmpty) return 'Falta la dirección';
+    if (t.length > 2048) return 'La dirección es demasiado larga';
+    final u = Uri.tryParse(t);
+    if (u == null) return 'Esa dirección no se entiende';
+    if (u.scheme != 'http' && u.scheme != 'https') {
+      return 'Tiene que empezar con http:// o https://';
+    }
+    if (!RegExp(r'^[a-z0-9.-]+\.[a-z]{2,}$', caseSensitive: false)
+        .hasMatch(u.host)) {
+      return 'El sitio de esa dirección no es válido';
+    }
+    return null;
+  }
+
+  /// Limpia el nombre que escribió el usuario.
+  ///
+  /// Se quitan los caracteres de control y se corta el largo: el nombre se
+  /// muestra en pantalla y se guarda en los ajustes, y no hay motivo para que
+  /// tenga saltos de línea ni doscientos caracteres.
+  static String nombreSaneado(String texto) {
+    final limpio =
+        texto.replaceAll(RegExp(r'[\x00-\x1f\x7f]'), ' ').trim();
+    return limpio.length > 60 ? limpio.substring(0, 60) : limpio;
+  }
+
+  // ─── Las que vienen puestas ───────────────────────────────────────────────
+
+  /// Instala las listas de fábrica la primera vez.
+  ///
+  /// Se intenta una sola vez por lista, y se anota el intento aunque falle: si
+  /// el usuario la quita después, no vuelve a aparecer sola. Y si no hay red,
+  /// se anota igual el resto y se sigue — esto no puede demorar el arranque.
+  ///
+  /// Va en segundo plano a propósito: son varios megas y la app tiene que estar
+  /// usable mientras tanto. Mientras no terminen, la base de fábrica del código
+  /// ya está protegiendo.
+  static Future<void> asegurarDeFabrica() async {
+    final hechasCrudo = PrismHubStorage.getSetting(_claveFabricaHechas);
+    final hechas = <String>{
+      if (hechasCrudo is String && hechasCrudo.isNotEmpty)
+        ...hechasCrudo.split(''),
+    };
+    final yaInstaladas = listas().map((l) => l.url).toSet();
+
+    for (final c in catalogo) {
+      if (!c.deFabrica) continue;
+      if (hechas.contains(c.url) || yaInstaladas.contains(c.url)) continue;
+      try {
+        final n = await instalar(c.nombre, c.url);
+        logger.info('[bloqueador] de fábrica: ${c.nombre} ($n dominios)');
+      } catch (e) {
+        logger.warning('[bloqueador] no se pudo poner ${c.nombre}: $e');
+      }
+      // Se anota igual haya salido bien o mal: reintentar en cada arranque
+      // sería castigar a quien no tiene red con una demora en cada apertura.
+      hechas.add(c.url);
+      await PrismHubStorage.setSetting(
+          _claveFabricaHechas, hechas.join(''));
+    }
+  }
+
   /// Instala una lista desde una dirección. Devuelve cuántos dominios trajo.
   ///
   /// Se descarga y se analiza ANTES de guardarla: una lista que no se puede
   /// leer o que viene vacía no se instala, así no queda en los ajustes algo
   /// que aparenta proteger y no protege.
   static Future<int> instalar(String nombre, String url) async {
+    // Se valida ANTES de salir a la red: una direccion con `file://` o `data:`
+    // no tiene que llegar siquiera a pedirse.
+    final mal = direccionValida(url);
+    if (mal != null) throw Exception(mal);
     final dominios = await _bajarYAnalizar(url);
     if (dominios.isEmpty) {
       throw Exception('La lista no trajo ningún dominio utilizable');
     }
+    await _escribirDominios(url, dominios);
+    final limpio = nombreSaneado(nombre);
     final actuales = listas().toList();
     actuales.removeWhere((l) => l.url == url);
     actuales.add(ListaDeBloqueo(
-      nombre: nombre.trim().isEmpty ? _nombreDesdeUrl(url) : nombre.trim(),
+      nombre: limpio.isEmpty ? _nombreDesdeUrl(url) : limpio,
       url: url,
       activa: true,
-      dominios: dominios,
+      cuantos: dominios.length,
       actualizada: DateTime.now(),
     ));
     await _guardar(actuales);
@@ -152,8 +451,9 @@ class BloqueadorAnuncios {
       // usuario con menos protección que antes de tocar "actualizar".
       throw Exception('La lista no trajo ningún dominio utilizable');
     }
+    await _escribirDominios(url, dominios);
     actuales[i] = actuales[i].copiaCon(
-      dominios: dominios,
+      cuantos: dominios.length,
       actualizada: DateTime.now(),
     );
     await _guardar(actuales);
@@ -171,15 +471,24 @@ class BloqueadorAnuncios {
   static Future<void> quitar(String url) async {
     final actuales = listas().toList()..removeWhere((l) => l.url == url);
     await _guardar(actuales);
+    // El archivo se borra tambien: si no, quitar una lista grande dejaba diez
+    // megas ocupados para siempre.
+    try {
+      final f = _archivoDe(url);
+      if (f.existsSync()) await f.delete();
+    } catch (e) {
+      logger.warning('[bloqueador] no se pudo borrar el archivo: $e');
+    }
   }
 
   /// Junta los dominios de las listas activas. Se llama al arrancar y cada vez
   /// que algo cambia.
   static Future<void> cargar() async {
     if (_cargado) return;
+    await _migrarAArchivos();
     final juntos = <String>{};
     for (final l in listas()) {
-      if (l.activa) juntos.addAll(l.dominios);
+      if (l.activa) juntos.addAll(_leerDominios(l.url));
     }
     _dominios = juntos;
     _olvidarLoArmado();
@@ -267,11 +576,25 @@ class BloqueadorAnuncios {
     if (!activo) return false;
     final host = Uri.tryParse(url)?.host.toLowerCase();
     if (host == null || host.isEmpty) return false;
-    final limpio = host.replaceFirst(RegExp(r'^www\.'), '');
-    for (final d in dominiosEnUso) {
-      if (limpio == d || limpio.endsWith('.$d')) return true;
+    // **Se pregunta por el host y por sus dominios padre, uno por uno.**
+    //
+    // Antes se recorria el conjunto entero comparando con `endsWith`, y por aca
+    // pasa CADA pedido de CADA pagina. Con las listas de fabrica puestas eso son
+    // cerca de 470.000 comparaciones de texto por pedido: la navegacion se
+    // arrastraba. Un host tiene tres o cuatro niveles, asi que preguntarle al
+    // conjunto por cada uno son tres o cuatro consultas instantaneas y da
+    // exactamente el mismo resultado.
+    var actual = host.replaceFirst(RegExp(r'^www\.'), '');
+    final enUso = dominiosEnUso;
+    while (true) {
+      if (enUso.contains(actual)) return true;
+      final punto = actual.indexOf('.');
+      if (punto < 0) return false;
+      actual = actual.substring(punto + 1);
+      // Un dominio suelto sin punto ya es la terminacion (.com, .net): ahi no
+      // hay nada mas que preguntar.
+      if (!actual.contains('.')) return false;
     }
-    return false;
   }
 
   /// Todo lo que se bloquea: la base de fábrica más las listas del usuario.
@@ -567,32 +890,43 @@ class BloqueadorAnuncios {
   }
 }
 
-/// Una lista instalada.
+/// Una lista instalada. **Es la ficha, no el contenido.**
+///
+/// Los dominios NO viajan acá: viven en un archivo aparte y se leen cuando hace
+/// falta. Antes iban adentro de la ficha y la ficha se guardaba en los ajustes,
+/// que son una caja de Hive — un archivo que crece por agregado. Con listas de
+/// verdad eso no aguanta: OISD trae 434.000 dominios y Prigent-Malware 250.000,
+/// y cada vez que se prende o apaga una lista se reescribe TODO. La caja de
+/// ajustes se iba a hinchar hasta hacerse inservible, y ya hay antecedente de
+/// que un archivo de Hive dañado deja la app sin arrancar.
 class ListaDeBloqueo {
   const ListaDeBloqueo({
     required this.nombre,
     required this.url,
     required this.activa,
-    required this.dominios,
+    required this.cuantos,
     required this.actualizada,
   });
 
   final String nombre;
   final String url;
   final bool activa;
-  final Set<String> dominios;
+
+  /// Cuántos dominios tiene. Se guarda en la ficha para poder mostrarlo sin
+  /// abrir el archivo.
+  final int cuantos;
   final DateTime actualizada;
 
   ListaDeBloqueo copiaCon({
     bool? activa,
-    Set<String>? dominios,
+    int? cuantos,
     DateTime? actualizada,
   }) =>
       ListaDeBloqueo(
         nombre: nombre,
         url: url,
         activa: activa ?? this.activa,
-        dominios: dominios ?? this.dominios,
+        cuantos: cuantos ?? this.cuantos,
         actualizada: actualizada ?? this.actualizada,
       );
 
@@ -600,7 +934,7 @@ class ListaDeBloqueo {
         'nombre': nombre,
         'url': url,
         'activa': activa,
-        'dominios': dominios.toList(),
+        'cuantos': cuantos,
         'actualizada': actualizada.toIso8601String(),
       };
 
@@ -608,10 +942,45 @@ class ListaDeBloqueo {
         nombre: '${m['nombre'] ?? 'Lista'}',
         url: '${m['url'] ?? ''}',
         activa: m['activa'] == true,
-        dominios: ((m['dominios'] as List<dynamic>?) ?? const [])
-            .map((e) => '$e')
-            .toSet(),
+        // `dominios` es de las fichas viejas, cuando el contenido venía adentro.
+        // Se lee para no perder la cuenta mientras se migra al archivo.
+        cuantos: m['cuantos'] is int
+            ? m['cuantos'] as int
+            : ((m['dominios'] as List<dynamic>?) ?? const []).length,
         actualizada: DateTime.tryParse('${m['actualizada']}') ??
             DateTime.fromMillisecondsSinceEpoch(0),
       );
+}
+
+/// Una lista del catálogo: de las que se ofrecen para instalar de un toque.
+///
+/// Están acá con la dirección exacta porque "pegá la dirección de la que
+/// quieras usar" no le sirve a nadie que no sepa de antemano que estas cosas
+/// existen. Todas se midieron el 2026-08-06 antes de entrar: bajan, se analizan
+/// y traen la cantidad de dominios que dice cada una.
+class ListaConocida {
+  const ListaConocida({
+    required this.nombre,
+    required this.para,
+    required this.url,
+    required this.grupo,
+    required this.cuantos,
+    this.deFabrica = false,
+  });
+
+  final String nombre;
+
+  /// Para qué sirve, en una línea que se entienda sin saber del tema.
+  final String para;
+  final String url;
+
+  /// En qué apartado del catálogo aparece.
+  final String grupo;
+
+  /// Cuántos dominios trajo cuando se midió. Sirve para que el usuario sepa
+  /// qué está por bajar antes de tocar.
+  final int cuantos;
+
+  /// Si se instala sola la primera vez que arranca la app.
+  final bool deFabrica;
 }
