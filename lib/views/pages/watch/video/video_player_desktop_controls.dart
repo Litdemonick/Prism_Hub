@@ -1656,10 +1656,8 @@ class _TrackState extends State<_Track> {
                           ListTile.selectable(
                             selected:
                                 widget.controller.audioHlsElegido.value == i,
-                            title: Text(audio.title ?? audio.language ?? ''),
-                            subtitle: audio.language != null
-                                ? Text(audio.language!)
-                                : null,
+                            title: Text(audio.nombre),
+                            subtitle: audio.idioma != null ? Text(audio.idioma!) : null,
                             onPressed: () {
                               widget.controller.elegirAudioHls(i);
                               Flyout.of(context).close();

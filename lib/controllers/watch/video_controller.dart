@@ -184,93 +184,97 @@ class VideoPlayerController extends GetxController with WidgetsBindingObserver {
   // 字幕
   final subtitles = <SubtitleTrack>[].obs;
 
-  /// Las pistas de audio que declara la lista MAESTRA de HLS.
+  /// Los idiomas que ofrece la lista maestra de HLS.
   ///
-  /// **Por qué hacen falta si mpv ya sabe leer HLS.**
+  /// **Cómo están armados estos servidores, que es lo que explica todo.**
+  /// Medido en vimeos el 2026-08-06, pidiendo cada lista que menciona el
+  /// maestro y mirando qué pedacitos trae:
   ///
-  /// Estos servidores arman el maestro de una forma que deja a mpv con un solo
-  /// audio. Medido en vimeos el 2026-08-06:
+  ///   #EXT-X-MEDIA:TYPE=AUDIO,NAME="Español",…,URI=".../index-a1.m3u8"
+  ///   #EXT-X-MEDIA:TYPE=AUDIO,NAME="English",…,URI=".../index-a2.m3u8"
+  ///   #EXT-X-STREAM-INF:RESOLUTION=1280x720,…,AUDIO="audio0"
+  ///   .../vtp8u5tj06i8_h/index-v1-a2.m3u8      → seg-1-v1-a2.ts
   ///
-  ///   #EXT-X-MEDIA:TYPE=AUDIO,GROUP-ID="audio0",NAME="Español",LANGUAGE="es",…
-  ///   #EXT-X-MEDIA:TYPE=AUDIO,GROUP-ID="audio0",NAME="English",LANGUAGE="en",…
-  ///   #EXT-X-STREAM-INF:…,CODECS="avc1.64001f,mp4a.40.2",AUDIO="audio0"
+  /// El nombre del archivo lleva el audio adentro: `v1-a2` es **vídeo 1 con el
+  /// audio 2 pegado**, y el audio 2 es el inglés. O sea que la variante que se
+  /// reproduce ya viene doblada al inglés, y las pistas sueltas de arriba son
+  /// la alternativa.
   ///
-  /// Fijarse en el `CODECS` de la variante: **ya trae audio adentro** (el
-  /// `mp4a`). O sea que cada variante es autosuficiente y las pistas sueltas de
-  /// arriba son una alternativa. Con eso, ffmpeg se queda con el audio que
-  /// viene pegado al vídeo y ni abre las otras — por eso el menú mostraba una
-  /// sola pista y ningún idioma, aunque el maestro declare dos.
+  /// Dos cosas se siguen de ahí:
   ///
-  /// Así que se leen acá y se le ofrecen al reproductor como pistas externas,
-  /// que es el mismo camino que ya se usa para el audio que manda una extensión
-  /// y para los subtítulos. Cada una es un `.m3u8` propio y mpv lo abre sin
-  /// problema.
-  final audiosHls = <AudioTrack>[].obs;
+  /// **Por qué mpv veía un solo audio.** La variante es autosuficiente, así que
+  /// ffmpeg usa el audio que trae pegado y ni abre las otras.
+  ///
+  /// **Por qué decía «Español» y sonaba en inglés.** El maestro marca el
+  /// español con `DEFAULT=YES` —porque para el reproductor de la web lo es— y
+  /// nosotros dejábamos sonar el audio del vídeo, que es el a2. La etiqueta
+  /// decía una cosa y el altavoz otra.
+  ///
+  /// Y de ahí sale el arreglo: cambiar de idioma es pedir la MISMA variante con
+  /// otro número. Comprobado que `index-v1-a1.m3u8` existe, responde con el
+  /// mismo vale y baja vídeo de verdad.
+  final audiosHls = <PistaDeAudio>[].obs;
 
-  /// Cuál de `audiosHls` está sonando. -1 es "no hay pistas que elegir".
+  /// Cuál está sonando. -1 es "no hay idiomas que elegir".
   ///
-  /// Arranca en la que el maestro marca `DEFAULT=YES`, que es la que viene
-  /// pegada al vídeo y la que se escucha sin tocar nada. Sin eso, el menú no
-  /// señalaba ninguna hasta que el usuario tocaba una, y lo primero que uno
-  /// quiere saber al abrirlo es en qué idioma está escuchando.
-  ///
-  /// Se lleva acá y no se deduce de `player.state.track.audio` porque al cargar
-  /// una pista externa mpv la agrega a su lista con OTRA identidad, así que la
-  /// comparación nunca acertaba.
+  /// Sale de mirar qué `-aN` traen las variantes del maestro, no de creerle al
+  /// `DEFAULT=YES`: el que suena es el que está pegado al vídeo.
   final audioHlsElegido = (-1).obs;
 
-  /// Cuál viene pegada al vídeo. Esa no hay que cargarla aparte.
-  int _audioDelVideo = 0;
-
-  /// Si se está cambiando el idioma ahora mismo, para que se vea en pantalla.
+  /// Si se está cambiando el idioma, para que se vea en pantalla.
   final cambiandoAudio = false.obs;
 
-  /// Exactamente lo que se le pasó a mpv la última vez, para poder repetirlo.
-  ({String url, Map<String, String> headers})? _fuenteAbierta;
+  /// Lo que se le pasó a mpv la última vez, para poder repetirlo con otro
+  /// idioma sin volver a resolver el servidor.
+  String? _fuenteUrl;
+  Map<String, String>? _fuenteHeaders;
+  String? _fuenteMaestro;
 
   /// Cambia el idioma del audio.
   ///
-  /// **Se vuelve a abrir la fuente entera en vez de enganchar la pista en
-  /// marcha.** Enganchar es más rápido y no sirve: la pista es otro `.m3u8` que
-  /// mpv abre por su cuenta, con su propio demuxer y su propio reloj, y al
-  /// pegarlo a mitad de camino arranca donde él cree que va y no donde va la
-  /// imagen. Se probó saltando a la posición actual justo después de cambiarla
-  /// y seguía sonando corrido.
+  /// **Se rehace la lista maestra apuntando al audio elegido.** El vídeo y el
+  /// audio quedan en el mismo archivo, como venían, así que van sincronizados
+  /// por construcción: no hay dos relojes que juntar.
   ///
-  /// Abriendo de nuevo con el audio ya elegido, mpv alinea los dos desde el
-  /// primer cuadro — que es lo mismo que pasa al salir del episodio y volver a
-  /// entrar, la única forma en que se veía bien. Cuesta un par de segundos y la
-  /// posición se recupera, así que no se pierde nada más que la espera.
+  /// Antes se cargaba la pista suelta como audio externo. Eso son dos demuxers
+  /// distintos, cada uno con su reloj, y al engancharlos en marcha el audio
+  /// arrancaba donde él creía que iba: se escuchaba corrido, y encima el
+  /// reproductor se trababa. Saltar a la posición justo después tampoco alcanzó.
+  ///
+  /// El maestro rehecho se guarda en un archivo y se abre desde ahí. Sus
+  /// direcciones son absolutas, así que a mpv le da igual de dónde salga la
+  /// lista: los pedacitos los sigue pidiendo al servidor con las mismas
+  /// cabeceras.
+  ///
+  /// **No es instantáneo**, y no puede serlo: mpv tiene que volver a abrir. En
+  /// la web sí lo es porque hls.js cambia la pista dentro de la misma sesión y
+  /// conserva el reloj — mpv no tiene forma de hacer eso. A cambio, queda bien
+  /// sincronizado y en el idioma que dice.
   Future<void> elegirAudioHls(int indice) async {
     if (indice < 0 || indice >= audiosHls.length) return;
     if (indice == audioHlsElegido.value) return;
     // Dos cambios encimados dejaban a mpv abriendo dos fuentes a la vez, y de
     // ahí salía que se trabara y no respondiera al play.
     if (cambiandoAudio.value) return;
-    final fuente = _fuenteAbierta;
-    if (fuente == null || player.platform is! NativePlayer) return;
+    final maestro = _fuenteMaestro;
+    final headers = _fuenteHeaders;
+    if (maestro == null || headers == null) return;
 
     cambiandoAudio.value = true;
     final donde = position.value;
-    final np = player.platform as NativePlayer;
+    final quiere = audiosHls[indice];
     try {
-      // La rueda de carga se apoya en esto, igual que al volver de castear: sin
-      // ponerlo en false quedaba en true de antes y la pantalla se veía trabada
-      // en negro, sin ninguna señal de que algo estaba pasando.
       hasRenderedFrame.value = false;
-      // `audio-files` es la lista de audios externos que mpv carga AL ABRIR.
-      // Vacía para el que viene pegado al vídeo: ahí no hay nada que sumar.
-      await np.setProperty(
-        'audio-files',
-        indice == _audioDelVideo ? '' : audiosHls[indice].id,
+      final rehecho = _maestroConAudio(maestro, quiere.numero);
+      final archivo = File(
+        '${PrismHubDirectory.getCacheDirectory}${Platform.pathSeparator}'
+        'audio_${quiere.numero}.m3u8',
       );
-      await player.open(Media(fuente.url, httpHeaders: fuente.headers));
-      // Mismo cuidado que en "continuar viendo": pedirle el salto a mpv
-      // apenas vuelve open() se pierde si todavia no conoce la duracion.
-      if (donde > Duration.zero) await _saltarCuandoSePueda(donde);
+      await archivo.writeAsString(rehecho, flush: true);
+      await player.open(Media(archivo.path, httpHeaders: headers));
       audioHlsElegido.value = indice;
-      logger.info('audio cambiado a '
-          '${audiosHls[indice].title ?? audiosHls[indice].language}');
+      if (donde > Duration.zero) await _saltarCuandoSePueda(donde);
+      logger.info('audio cambiado a ${quiere.nombre} (a${quiere.numero})');
     } catch (e) {
       logger.warning('no se pudo cambiar el audio', e);
     } finally {
@@ -278,53 +282,73 @@ class VideoPlayerController extends GetxController with WidgetsBindingObserver {
     }
   }
 
-  /// Saca las pistas de audio de una lista maestra de HLS.
+  /// La lista maestra con las variantes apuntando al audio [numero].
   ///
-  /// Se devuelve vacío cuando hay una sola o ninguna: ofrecer "elegir" entre un
-  /// único idioma es ruido, y la que venga pegada al vídeo ya está sonando.
-  static ({List<AudioTrack> pistas, int porOmision}) _audiosDelMaestro(
+  /// Se tocan SOLO las líneas de las variantes —las que no empiezan con `#`— y
+  /// se quitan las `#EXT-X-MEDIA` de audio: ya no hacen falta, porque el audio
+  /// viene pegado, y dejarlas haría que ffmpeg buscara pistas que no va a usar.
+  /// Los `#EXT-X-I-FRAME-STREAM-INF` también se van: son para las miniaturas de
+  /// la barra y traen el mismo sufijo, que si queda viejo apunta a otra cosa.
+  static String _maestroConAudio(String maestro, int numero) {
+    final fuera = StringBuffer();
+    for (final linea in const LineSplitter().convert(maestro)) {
+      if (linea.startsWith('#EXT-X-MEDIA:') && linea.contains('TYPE=AUDIO')) {
+        continue;
+      }
+      if (linea.startsWith('#EXT-X-I-FRAME-STREAM-INF')) continue;
+      if (linea.startsWith('#')) {
+        // El grupo de audio ya no existe: nombrarlo dejaría a la variante
+        // apuntando al vacío.
+        fuera.writeln(linea.replaceAll(RegExp(r',AUDIO="[^"]*"'), ''));
+        continue;
+      }
+      fuera.writeln(
+        linea.replaceAll(RegExp(r'-a\d+(?=[./?])'), '-a$numero'),
+      );
+    }
+    return fuera.toString();
+  }
+
+  /// Lee los idiomas del maestro y cuál está sonando.
+  ///
+  /// [enElVideo] es el número que traen las variantes: ese es el que se escucha
+  /// sin tocar nada, por más que el maestro marque otro como `DEFAULT`.
+  static ({List<PistaDeAudio> pistas, int sonando}) _audiosDelMaestro(
     String maestro,
-    Uri base,
   ) {
-    final fuera = <AudioTrack>[];
-    var omision = 0;
-    var espanolPuesto = false;
+    final pistas = <PistaDeAudio>[];
     for (final linea in const LineSplitter().convert(maestro)) {
       if (!linea.startsWith('#EXT-X-MEDIA:')) continue;
       if (!linea.contains('TYPE=AUDIO')) continue;
       final uri = RegExp(r'URI="([^"]+)"').firstMatch(linea)?.group(1);
-      if (uri == null || uri.isEmpty) continue;
+      if (uri == null) continue;
+      final num = RegExp(r'-a(\d+)\.m3u8').firstMatch(uri)?.group(1);
+      if (num == null) continue;
       final nombre = RegExp(r'NAME="([^"]*)"').firstMatch(linea)?.group(1);
       final idioma = RegExp(r'LANGUAGE="([^"]*)"').firstMatch(linea)?.group(1);
-      // Cuál suena sin que nadie toque nada.
-      //
-      // Manda el español, siempre que esté. Estos sitios son de contenido en
-      // español y quien los usa quiere el latino: que arranque en inglés porque
-      // el servidor se olvidó de marcarlo sería empezar mal.
-      //
-      // Si no hay español, se respeta el `DEFAULT=YES` del maestro; y si
-      // tampoco, queda la primera.
-      final esEspanol = (idioma ?? '').toLowerCase().startsWith('es') ||
-          RegExp(r'espa|latin|castell|spanish', caseSensitive: false)
-              .hasMatch(nombre ?? '');
-      if (esEspanol && !espanolPuesto) {
-        omision = fuera.length;
-        espanolPuesto = true;
-      } else if (!espanolPuesto && linea.contains('DEFAULT=YES')) {
-        omision = fuera.length;
-      }
-      fuera.add(AudioTrack.uri(
-        base.resolve(uri).toString(),
-        // El nombre que puso el servidor —«Español», «English»— es el que el
-        // usuario entiende. Si no hay, queda el idioma; y si tampoco, el menú
-        // les pone un número.
-        title: (nombre != null && nombre.trim().isNotEmpty) ? nombre : idioma,
-        language: idioma,
+      pistas.add(PistaDeAudio(
+        int.parse(num),
+        (nombre != null && nombre.trim().isNotEmpty)
+            ? nombre
+            : (idioma ?? 'Pista $num'),
+        idioma,
       ));
     }
-    return fuera.length > 1
-        ? (pistas: fuera, porOmision: omision)
-        : (pistas: const <AudioTrack>[], porOmision: -1);
+    if (pistas.length < 2) {
+      return (pistas: const <PistaDeAudio>[], sonando: -1);
+    }
+    // Cuál viene pegado al vídeo. Se mira la primera variante de verdad.
+    var enElVideo = -1;
+    for (final linea in const LineSplitter().convert(maestro)) {
+      if (linea.startsWith('#') || linea.trim().isEmpty) continue;
+      final m = RegExp(r'-a(\d+)\.m3u8').firstMatch(linea);
+      if (m != null) {
+        enElVideo = int.parse(m.group(1)!);
+        break;
+      }
+    }
+    final i = pistas.indexWhere((p) => p.numero == enElVideo);
+    return (pistas: pistas, sonando: i >= 0 ? i : 0);
   }
 
   // 画质
@@ -5073,11 +5097,12 @@ class VideoPlayerController extends GetxController with WidgetsBindingObserver {
     // antes de mirarla. `_comoAbrir` las vuelve a llenar si esta trae.
     audiosHls.clear();
     audioHlsElegido.value = -1;
-    _audioDelVideo = 0;
+    _fuenteMaestro = null;
     final plan = await _comoAbrir(url, headers);
     if (_disposed) return false;
     await _pistasEnAutomatico();
-    _fuenteAbierta = (url: plan.url ?? url, headers: hdrs);
+    _fuenteUrl = plan.url ?? url;
+    _fuenteHeaders = hdrs;
     await player.open(Media(plan.url ?? url, httpHeaders: hdrs));
 
     if (_disposed) {
@@ -5444,14 +5469,17 @@ class VideoPlayerController extends GetxController with WidgetsBindingObserver {
 
     // Las pistas de audio del maestro, para poder ofrecerlas en el menú.
     // Se rehace en cada fuente: son de ESTE vídeo y no del anterior.
-    final delMaestro = _audiosDelMaestro(maestro, Uri.parse(url));
+    final delMaestro = _audiosDelMaestro(maestro);
     audiosHls.value = delMaestro.pistas;
-    audioHlsElegido.value = delMaestro.porOmision;
-    _audioDelVideo = delMaestro.porOmision;
+    audioHlsElegido.value = delMaestro.sonando;
+    // Se guarda el texto para poder rehacerlo con otro idioma sin volver a
+    // pedirlo ni a resolver el servidor.
+    _fuenteMaestro = delMaestro.pistas.isEmpty ? null : maestro;
     if (audiosHls.isNotEmpty) {
       logger.info('ficha · $servidor · el maestro declara '
           '${audiosHls.length} pistas de audio: '
-          '${audiosHls.map((a) => a.title ?? a.language ?? '?').join(', ')}');
+          '${audiosHls.map((a) => '${a.nombre} (a${a.numero})').join(', ')}'
+          ' · suena ${audiosHls[audioHlsElegido.value].nombre}');
     }
 
     // Lista maestra: se elige una variante y se sigue.
@@ -6501,4 +6529,17 @@ class _ComoAbrir {
 
   /// Dirección a abrir. Null = la original.
   final String? url;
+}
+
+
+/// Un idioma de audio de los que ofrece una lista maestra de HLS.
+class PistaDeAudio {
+  const PistaDeAudio(this.numero, this.nombre, this.idioma);
+
+  /// El número con el que el servidor lo nombra en los archivos: la variante
+  /// `index-v1-a2.m3u8` es el vídeo 1 con ESTE audio pegado. Cambiar de idioma
+  /// es pedir la misma variante con otro número.
+  final int numero;
+  final String nombre;
+  final String? idioma;
 }

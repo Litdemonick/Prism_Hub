@@ -1271,8 +1271,8 @@ class _TrackSelector extends StatelessWidget {
         for (final (i, audio) in controller.audiosHls.indexed)
           ListTile(
             selected: controller.audioHlsElegido.value == i,
-            title: Text(audio.title ?? audio.language ?? ''),
-            subtitle: audio.language != null ? Text(audio.language!) : null,
+            title: Text(audio.nombre),
+            subtitle: audio.idioma != null ? Text(audio.idioma!) : null,
             onTap: () {
               controller.elegirAudioHls(i);
               controller.showSidebar.value = false;
