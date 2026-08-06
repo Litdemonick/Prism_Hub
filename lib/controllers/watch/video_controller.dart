@@ -408,19 +408,27 @@ class VideoPlayerController extends GetxController with WidgetsBindingObserver {
     _redDeLaRueda = Timer(const Duration(seconds: 6), () {
       _redDeLaRueda = null;
       if (_disposed || hasRenderedFrame.value) return;
-      logger.info('el vídeo mostró el cuadro pero no avanzó en 6 s: se apaga '
-          'la rueda igual');
+      logger.info('rueda apagada: RED DE SEGURIDAD — el cuadro apareció y el '
+          'vídeo no avanzó en 6 s');
       hasRenderedFrame.value = true;
     });
   }
 
   /// El vídeo ya se está viendo de verdad: se apaga la rueda.
-  void _marcarQueYaSeVe() {
+  ///
+  /// Se dice POR QUÉ se apagó. Sin esto no había forma de saber, mirando un
+  /// registro, si una compilación llevaba este cambio o el de antes — y eso ya
+  /// costó una vuelta entera de pruebas.
+  void _marcarQueYaSeVe([String porQue = 'el vídeo avanzó']) {
     if (hasRenderedFrame.value) return;
-    if (!_hayCuadro) return;
+    if (!_hayCuadro) {
+      logger.info('rueda: todavía no hay cuadro ($porQue), se sigue esperando');
+      return;
+    }
     _redDeLaRueda?.cancel();
     _redDeLaRueda = null;
     hasRenderedFrame.value = true;
+    logger.info('rueda apagada: $porQue');
   }
 
   // Flag de buffering YA corregido con la posición real — ver
@@ -1526,7 +1534,12 @@ class VideoPlayerController extends GetxController with WidgetsBindingObserver {
     _addSubscription(player.stream.videoParams.listen((p) {
       final primerCuadro = !_hayCuadro;
       if ((p.w ?? 0) > 0 && (p.h ?? 0) > 0) {
+        final antes = _hayCuadro;
         _hayCuadro = true;
+        if (!antes) {
+          logger.info('rueda: primer cuadro listo, se espera a que el vídeo '
+              'avance para apagarla');
+        }
         _ponerRedDeSeguridadDeLaRueda();
       }
       // Al primer cuadro se anota QUÉ variante eligió mpv. Es el dato que falta
@@ -2185,7 +2198,7 @@ class VideoPlayerController extends GetxController with WidgetsBindingObserver {
           if (_pendingResumeSeconds != null) {
             // Pausado a proposito para preguntar: la rueda no puede quedar
             // girando detras del dialogo. Ver hasRenderedFrame.
-            _marcarQueYaSeVe();
+            _marcarQueYaSeVe('pausado a propósito para preguntar');
             resumePrompt.value = _pendingResumeSeconds;
             _pendingResumeSeconds = null;
           }
@@ -2908,7 +2921,7 @@ class VideoPlayerController extends GetxController with WidgetsBindingObserver {
             await player.pause();
             // Pausado a proposito para preguntar: la rueda no puede quedar
             // girando detras del dialogo. Ver hasRenderedFrame.
-            _marcarQueYaSeVe();
+            _marcarQueYaSeVe('pausado a propósito para preguntar');
             resumePrompt.value = _pendingResumeSeconds;
             _pendingResumeSeconds = null;
           }
@@ -2941,7 +2954,7 @@ class VideoPlayerController extends GetxController with WidgetsBindingObserver {
             await player.pause();
             // Pausado a proposito para preguntar: la rueda no puede quedar
             // girando detras del dialogo. Ver hasRenderedFrame.
-            _marcarQueYaSeVe();
+            _marcarQueYaSeVe('pausado a propósito para preguntar');
             resumePrompt.value = _pendingResumeSeconds;
             _pendingResumeSeconds = null;
           }
@@ -3006,7 +3019,7 @@ class VideoPlayerController extends GetxController with WidgetsBindingObserver {
         await player.pause();
         // Pausado a proposito para preguntar: la rueda no puede quedar
         // girando detras del dialogo. Ver hasRenderedFrame.
-        _marcarQueYaSeVe();
+        _marcarQueYaSeVe('pausado a propósito para preguntar');
         resumePrompt.value = _pendingResumeSeconds;
         _pendingResumeSeconds = null;
       }
@@ -6027,7 +6040,7 @@ class VideoPlayerController extends GetxController with WidgetsBindingObserver {
         await player.pause();
         // Pausado a proposito para preguntar: la rueda no puede quedar
         // girando detras del dialogo. Ver hasRenderedFrame.
-        _marcarQueYaSeVe();
+        _marcarQueYaSeVe('pausado a propósito para preguntar');
         resumePrompt.value = _pendingResumeSeconds;
         _pendingResumeSeconds = null;
       }
