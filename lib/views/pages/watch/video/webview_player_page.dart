@@ -570,6 +570,20 @@ class _WebViewPlayerPageState extends State<WebViewPlayerPage>
       var s = (m[i].src || '') + '';
       if (s && s.indexOf('about:blank') !== 0) return true;
     }
+    // Hay páginas donde el reproductor aparece DESPUÉS de que el usuario elija
+    // algo: UA multi de FuegoCine es un elegí-tu-servidor con su propio botón
+    // de reproducir, y a los 8 segundos todavía no existe ningún <video>.
+    // Cerrarla ahí era sacar al usuario de una pantalla perfectamente usable
+    // antes de que llegara a tocarla — reportado en vivo.
+    //
+    // Con que haya ALGO para tocar alcanza. Esto no afloja el control: lo que
+    // se busca cazar es una página muerta, y una página muerta no tiene con
+    // qué interactuar. Los muros que sí hay que cerrar —SmartScreen y
+    // compañía— ni siquiera dejan correr este guion, y se manejan aparte por
+    // el aviso de fallo de navegación.
+    if (document.querySelector(
+      'button, [onclick], a[href], input, select, [role="button"]'
+    )) return true;
     return false;
   } catch (e) {
     // Ante la duda, que siga: cerrar por un error nuestro sería peor.
@@ -588,6 +602,18 @@ class _WebViewPlayerPageState extends State<WebViewPlayerPage>
       logger.info('no se pudo comprobar si hay reproductor: \$e');
     }
   }
+
+  /// Si alguna vez llegó a cargar bien.
+  ///
+  /// A partir de ahí, un fallo de navegación **no cierra nada**. En una página
+  /// que ya está andando siguen pasando navegaciones que fallan y son normales:
+  /// el usuario elige otro servidor y ese no responde, un anuncio que el
+  /// bloqueador corta, una redirección que muere. Cerrarle la pantalla por eso
+  /// es sacarlo de algo que estaba usando.
+  ///
+  /// Lo que sí interesa es el fallo de la PRIMERA carga: ahí no hay nada que
+  /// perder porque nunca hubo nada.
+  bool _yaCargoAlgunaVez = false;
 
   /// Cierra el navegador interno avisando de que acá no hay nada que ver.
   ///
@@ -1340,6 +1366,7 @@ class _WebViewPlayerPageState extends State<WebViewPlayerPage>
                     // (ver BloqueadorAnuncios.motivoParaNoSeguir). El cable
                     // tiene que estar acá porque es donde llegan; la regla, no.
                     onReceivedError: (controller, request, error) {
+                      if (_yaCargoAlgunaVez) return;
                       final motivo = BloqueadorAnuncios.motivoParaNoSeguir(
                         esMarcoPrincipal: request.isForMainFrame == true,
                         errorDeCarga: error.description,
@@ -1347,6 +1374,7 @@ class _WebViewPlayerPageState extends State<WebViewPlayerPage>
                       if (motivo != null) _cerrarPorqueNoHayReproductor(motivo);
                     },
                     onReceivedHttpError: (controller, request, response) {
+                      if (_yaCargoAlgunaVez) return;
                       final motivo = BloqueadorAnuncios.motivoParaNoSeguir(
                         esMarcoPrincipal: request.isForMainFrame == true,
                         httpStatus: response.statusCode,
@@ -1355,6 +1383,7 @@ class _WebViewPlayerPageState extends State<WebViewPlayerPage>
                     },
                     onLoadStop: (controller, url) {
                       _loadTimeoutTimer?.cancel();
+                      _yaCargoAlgunaVez = true;
                       if (mounted) setState(() => _loading = false);
                       // Para cuando la rotación a horizontal se llevó puesto el
                       // modo inmersivo — ver _ocultarBarrasDelSistema.
