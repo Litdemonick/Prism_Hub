@@ -266,6 +266,11 @@ class VideoPlayerController extends GetxController with WidgetsBindingObserver {
     final quiere = audiosHls[indice];
     try {
       hasRenderedFrame.value = false;
+      // Fuente nueva: se olvida el cuadro anterior y la red se rearma
+      // sola con el primer cuadro de esta. Ver hasRenderedFrame.
+      _hayCuadro = false;
+      _redDeLaRueda?.cancel();
+      _redDeLaRueda = null;
       final conIdioma = AudioHls.conAudio(actual, quiere.numero);
       await player.open(Media(conIdioma, httpHeaders: headers));
       _fuenteUrl = conIdioma;
@@ -353,7 +358,8 @@ class VideoPlayerController extends GetxController with WidgetsBindingObserver {
   // caso de manual — en JKAnime anda y en HentaiLA y AnimeFenix termina en
   // premilkyway.com, que está bloqueado. Por nombre no hay forma de acertarle
   // a los dos.
-  final serverNative = <String, bool>{}; // no observable, igual que serverReferers
+  final serverNative =
+      <String, bool>{}; // no observable, igual que serverReferers
 
   /// Si a este servidor le corresponde el rayo (reproduce acá dentro) o el
   /// mundo (abre el navegador interno).
@@ -369,7 +375,54 @@ class VideoPlayerController extends GetxController with WidgetsBindingObserver {
   // videoParams ya hayan llegado (streaming HLS: el buffering inicial pasa
   // SIN el flag de buffering en true, así que sin esto la pantalla quedaba
   // en negro sin ningún spinner, como si estuviera trabada de verdad).
+  /// Ahora se apaga cuando el vídeo AVANZA, no cuando aparece el cuadro.
+  ///
+  /// mpv decodifica el primer cuadro y **se queda en pausa** llenando el
+  /// colchón (`cache-pause-initial`, con `cache-pause-wait` en 3 s). Apagando la
+  /// rueda ahí, lo que se veía era: rueda, imagen congelada unos segundos, y
+  /// recién después el vídeo. Parecía que se colgaba justo al empezar.
+  ///
+  /// El colchón NO se toca: está en 3 s porque con menos el vídeo se cortaba al
+  /// primer bache en los servidores lentos. Lo que cambia es solo cuándo se
+  /// apaga la rueda, para que tape la espera en vez de mostrar un cuadro que no
+  /// se mueve.
   final hasRenderedFrame = false.obs;
+
+  /// mpv ya decodificó el primer cuadro. No alcanza para apagar la rueda.
+  bool _hayCuadro = false;
+
+  /// Red de seguridad: la rueda no puede quedarse girando para siempre.
+  ///
+  /// Se apaga sola al avanzar el vídeo, y también cuando la app pausa a
+  /// propósito (el diálogo de "¿continuar donde te quedaste?"). Pero si
+  /// apareciera un caso que no previmos —una fuente que muestra el cuadro y
+  /// nunca avanza, o un pausado que llega por un camino distinto—, esto la
+  /// apaga igual y se vuelve al comportamiento de antes en vez de dejar al
+  /// usuario mirando una rueda eterna.
+  ///
+  /// Seis segundos: el doble de lo que puede tardar el colchón.
+  Timer? _redDeLaRueda;
+
+  void _ponerRedDeSeguridadDeLaRueda() {
+    if (hasRenderedFrame.value || _redDeLaRueda != null) return;
+    _redDeLaRueda = Timer(const Duration(seconds: 6), () {
+      _redDeLaRueda = null;
+      if (_disposed || hasRenderedFrame.value) return;
+      logger.info('el vídeo mostró el cuadro pero no avanzó en 6 s: se apaga '
+          'la rueda igual');
+      hasRenderedFrame.value = true;
+    });
+  }
+
+  /// El vídeo ya se está viendo de verdad: se apaga la rueda.
+  void _marcarQueYaSeVe() {
+    if (hasRenderedFrame.value) return;
+    if (!_hayCuadro) return;
+    _redDeLaRueda?.cancel();
+    _redDeLaRueda = null;
+    hasRenderedFrame.value = true;
+  }
+
   // Flag de buffering YA corregido con la posición real — ver
   // player.stream.buffering.listen más abajo. El flag crudo de mpv
   // (paused-for-cache) confirmado en vivo que a veces queda pegado en true
@@ -1464,15 +1517,22 @@ class VideoPlayerController extends GetxController with WidgetsBindingObserver {
 
     _seguirVolumenLocal();
 
-    // Primer cuadro real pintado — recién acá se apaga el spinner de carga
-    // del centro (ver comentario en hasRenderedFrame).
+    // Primer cuadro real pintado.
+    //
+    // **Pero acá NO se apaga la rueda.** Ver `_hayCuadro`: mpv decodifica el
+    // primer cuadro y se queda en pausa llenando el colchón, así que apagarla
+    // en este momento mostraba la imagen congelada unos segundos antes de que
+    // arrancara. Se apaga cuando el vídeo AVANZA.
     _addSubscription(player.stream.videoParams.listen((p) {
-      final primerCuadro = !hasRenderedFrame.value;
-      if ((p.w ?? 0) > 0 && (p.h ?? 0) > 0) hasRenderedFrame.value = true;
+      final primerCuadro = !_hayCuadro;
+      if ((p.w ?? 0) > 0 && (p.h ?? 0) > 0) {
+        _hayCuadro = true;
+        _ponerRedDeSeguridadDeLaRueda();
+      }
       // Al primer cuadro se anota QUÉ variante eligió mpv. Es el dato que falta
       // para saber si un vídeo que se para eligió una calidad que la conexión no
       // sostiene — mpv no la cambia nunca por su cuenta.
-      if (primerCuadro && hasRenderedFrame.value) {
+      if (primerCuadro && _hayCuadro) {
         unawaited(_medir('arrancó'));
       }
       // El VR se decide ACA y no en el aviso de la altura.
@@ -1593,6 +1653,8 @@ class VideoPlayerController extends GetxController with WidgetsBindingObserver {
       // posicion actual la haria volver atras entre toque y toque, que es lo
       // que impedia encadenar saltos.
       if (!_aceptarPosicion(event)) return;
+      // El vídeo AVANZÓ: recién ahora se apaga la rueda. Ver hasRenderedFrame.
+      if (event > Duration.zero) _marcarQueYaSeVe();
       position.value = event;
       _refrescarNotificacion();
       // Avance real de posición → hay frames nuevos reproduciéndose, así que
@@ -1840,6 +1902,11 @@ class VideoPlayerController extends GetxController with WidgetsBindingObserver {
     isGettingWatchData.value = true;
     awaitingServerChoice.value = false;
     hasRenderedFrame.value = false;
+    // Fuente nueva: se olvida el cuadro anterior y la red se rearma
+    // sola con el primer cuadro de esta. Ver hasRenderedFrame.
+    _hayCuadro = false;
+    _redDeLaRueda?.cancel();
+    _redDeLaRueda = null;
     // Las calidades son de ESTE video, no de los anteriores.
     //
     // Se llenaba con qualityMap[...] = ... y no se limpiaba nunca, asi que
@@ -2116,6 +2183,9 @@ class VideoPlayerController extends GetxController with WidgetsBindingObserver {
           }
           // Si hay progreso guardado, emitir señal al UI para mostrar el diálogo.
           if (_pendingResumeSeconds != null) {
+            // Pausado a proposito para preguntar: la rueda no puede quedar
+            // girando detras del dialogo. Ver hasRenderedFrame.
+            _marcarQueYaSeVe();
             resumePrompt.value = _pendingResumeSeconds;
             _pendingResumeSeconds = null;
           }
@@ -2374,6 +2444,8 @@ class VideoPlayerController extends GetxController with WidgetsBindingObserver {
     _dlnaTimer?.cancel();
     _bufferingStallTimer?.cancel();
     _qualitySwitchTimer?.cancel();
+    _redDeLaRueda?.cancel();
+    _redDeLaRueda = null;
     // Cada lectura abierta es un socket contra el servidor: al cerrar el
     // reproductor hay que soltarlas o quedan colgadas hasta reiniciar la app.
     _soltarLaBomba();
@@ -2796,6 +2868,11 @@ class VideoPlayerController extends GetxController with WidgetsBindingObserver {
     webViewFallback.value = null;
     awaitingServerChoice.value = false;
     hasRenderedFrame.value = false;
+    // Fuente nueva: se olvida el cuadro anterior y la red se rearma
+    // sola con el primer cuadro de esta. Ver hasRenderedFrame.
+    _hayCuadro = false;
+    _redDeLaRueda?.cancel();
+    _redDeLaRueda = null;
     _lastPositionAdvanceAt = null;
     _lastPositionSeen = null;
     isActuallyBuffering.value = false;
@@ -2829,6 +2906,9 @@ class VideoPlayerController extends GetxController with WidgetsBindingObserver {
           _markNativePlayback(name);
           if (_pendingResumeSeconds != null) {
             await player.pause();
+            // Pausado a proposito para preguntar: la rueda no puede quedar
+            // girando detras del dialogo. Ver hasRenderedFrame.
+            _marcarQueYaSeVe();
             resumePrompt.value = _pendingResumeSeconds;
             _pendingResumeSeconds = null;
           }
@@ -2859,6 +2939,9 @@ class VideoPlayerController extends GetxController with WidgetsBindingObserver {
           _markNativePlayback(name);
           if (_pendingResumeSeconds != null) {
             await player.pause();
+            // Pausado a proposito para preguntar: la rueda no puede quedar
+            // girando detras del dialogo. Ver hasRenderedFrame.
+            _marcarQueYaSeVe();
             resumePrompt.value = _pendingResumeSeconds;
             _pendingResumeSeconds = null;
           }
@@ -2921,6 +3004,9 @@ class VideoPlayerController extends GetxController with WidgetsBindingObserver {
       // mostraba el diálogo y arrancaba de cero en silencio.
       if (_pendingResumeSeconds != null) {
         await player.pause();
+        // Pausado a proposito para preguntar: la rueda no puede quedar
+        // girando detras del dialogo. Ver hasRenderedFrame.
+        _marcarQueYaSeVe();
         resumePrompt.value = _pendingResumeSeconds;
         _pendingResumeSeconds = null;
       }
@@ -4613,6 +4699,11 @@ class VideoPlayerController extends GetxController with WidgetsBindingObserver {
     // aparecia, asi que el rato hasta el primer cuadro se veia como una
     // pantalla negra trabada.
     hasRenderedFrame.value = false;
+    // Fuente nueva: se olvida el cuadro anterior y la red se rearma
+    // sola con el primer cuadro de esta. Ver hasRenderedFrame.
+    _hayCuadro = false;
+    _redDeLaRueda?.cancel();
+    _redDeLaRueda = null;
     try {
       await player.open(Media(actual.url, httpHeaders: actual.headers));
       // El salto va DESPUES de que open() termino, que es cuando mpv ya conoce
@@ -5360,7 +5451,8 @@ class VideoPlayerController extends GetxController with WidgetsBindingObserver {
     final ruta = url.split('?').first.toLowerCase();
     if (!enteros.any(ruta.endsWith)) return;
     unawaited(Future.delayed(const Duration(seconds: 5), () async {
-      logger.info('índice del archivo: ${await _comoEstaElIndice(url, headers)}');
+      logger
+          .info('índice del archivo: ${await _comoEstaElIndice(url, headers)}');
     }));
   }
 
@@ -5383,7 +5475,8 @@ class VideoPlayerController extends GetxController with WidgetsBindingObserver {
   /// final, al principio, no se pudo ver— y no un sí/no: juntar "está sano" con
   /// "no se pudo mirar" deja el registro diciendo lo mismo en dos situaciones
   /// que no tienen nada que ver, y ahí no se sabe cuál de las dos pasó.
-  Future<String> _comoEstaElIndice(String url, Map<String, String>? headers) async {
+  Future<String> _comoEstaElIndice(
+      String url, Map<String, String>? headers) async {
     try {
       final res = await dio.get<List<int>>(
         url,
@@ -5397,7 +5490,9 @@ class VideoPlayerController extends GetxController with WidgetsBindingObserver {
         ),
       );
       final datos = res.data;
-      if (datos == null || datos.length < 16) return 'no se pudo ver (llegó vacío)';
+      if (datos == null || datos.length < 16) {
+        return 'no se pudo ver (llegó vacío)';
+      }
       final texto = String.fromCharCodes(datos);
       final moov = texto.indexOf('moov');
       final mdat = texto.indexOf('mdat');
@@ -5533,9 +5628,8 @@ class VideoPlayerController extends GetxController with WidgetsBindingObserver {
         // menú mintiendo es peor que el idioma equivocado: quien lo ve piensa
         // que ya lo tiene puesto y ni prueba a cambiarlo.
         final seCambio = conIdioma != antes;
-        audioHlsElegido.value = seCambio
-            ? delMaestro.pistas.indexOf(quiere)
-            : delMaestro.sonando;
+        audioHlsElegido.value =
+            seCambio ? delMaestro.pistas.indexOf(quiere) : delMaestro.sonando;
         logger.info('ficha · $servidor · idiomas: '
             '${audiosHls.map((a) => '${a.nombre} (a${a.numero})').join(', ')}'
             ' · el vídeo trae a${delMaestro.pistas[delMaestro.sonando].numero}'
@@ -5931,6 +6025,9 @@ class VideoPlayerController extends GetxController with WidgetsBindingObserver {
       _markNativePlayback(name);
       if (_pendingResumeSeconds != null) {
         await player.pause();
+        // Pausado a proposito para preguntar: la rueda no puede quedar
+        // girando detras del dialogo. Ver hasRenderedFrame.
+        _marcarQueYaSeVe();
         resumePrompt.value = _pendingResumeSeconds;
         _pendingResumeSeconds = null;
       }
@@ -6596,6 +6693,5 @@ class _ComoAbrir {
   /// Dirección a abrir. Null = la original.
   final String? url;
 }
-
 
 /// Un idioma de audio de los que ofrece una lista maestra de HLS.
