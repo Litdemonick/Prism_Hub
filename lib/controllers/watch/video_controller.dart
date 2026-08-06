@@ -5290,29 +5290,23 @@ class VideoPlayerController extends GetxController with WidgetsBindingObserver {
     //
     // Va SOLO en el archivo entero. En una lista de pedacitos cada uno es una
     // dirección distinta y no hay nada que reusar.
-    // ── `multiple_requests=1`: hace falta, y se comprobó sacándolo ──────────
+    // ── Nada de `multiple_requests`. Vuelve a como estaba ──────────────────
     //
-    // Se sacó una vez y **mp4upload dejó de dar imagen**: pantalla negra y sin
-    // sonido, cuando con la opción puesta reproducía. Confirmado en vivo el
-    // 2026-08-06 por el usuario, comparando dos compilaciones seguidas.
+    // Se agregó hoy para el caso de FuegoCine y se sacó, se volvió a poner y se
+    // volvió a sacar, porque se lo estaba juzgando junto a OTRO cambio del
+    // mismo día —poner las pistas de vídeo en automático antes de cada
+    // apertura— que era el que en realidad dejaba a mp4upload en negro.
     //
-    // El motivo: en estos archivos el índice está AL FINAL. Para arrancar, mpv
-    // tiene que leer el final y volver al principio, y sin reusar la conexión
-    // cada uno de esos saltos abre una conexión nueva contra un servidor que
-    // tarda casi un segundo en saludar.
+    // Con las dos cosas encima, cada prueba mezclaba los dos efectos y ninguna
+    // conclusión servía. Sacando primero el de las pistas, la imagen volvió; y
+    // sin `multiple_requests` esta línea queda exactamente igual a la de antes
+    // de tocar nada, que es el estado en el que el usuario dice que mp4upload
+    // andaba.
     //
-    // **Y por qué se llegó a sacar:** por leer mal el registro. Decía
-    // `entrando: 29 KB/s` mientras el archivo medido a mano daba 1 MB/s, y se
-    // tomó como que la opción estrangulaba la descarga. No: ese número es el
-    // ritmo al que mpv llena su colchón en ese instante, y con 30 segundos
-    // configurados afloja apenas tiene bastante. Un número bajo ahí, con el
-    // vídeo andando, es lo normal — no una medición de la conexión.
-    //
-    // Va SOLO en el archivo entero. En una lista de pedacitos cada uno es una
-    // dirección distinta y no hay nada que reusar.
+    // La lección, para la próxima: un cambio por vez en el camino por el que
+    // pasan todos los servidores. Dos a la vez no se pueden medir.
     final opciones = archivoEntero
-        ? 'reconnect=1,reconnect_delay_max=5,seg_max_retry=3,'
-            'multiple_requests=1'
+        ? 'reconnect=1,reconnect_delay_max=5,seg_max_retry=3'
         : 'reconnect=1,reconnect_streamed=1,reconnect_delay_max=5,'
             'seg_max_retry=3';
     try {
