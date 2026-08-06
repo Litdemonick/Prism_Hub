@@ -51,10 +51,18 @@ class BloqueadorAnuncios {
   static Set<String> _dominios = <String>{};
   static bool _cargado = false;
 
-  /// ¿El bloqueador está encendido? Es un interruptor general, aparte del
-  /// de cada lista: sirve para apagarlo entero un momento —por ejemplo si un
-  /// sitio no carga— sin perder la configuración.
-  static bool get activo => PrismHubStorage.getSetting(_claveActivo) == true;
+  /// Si el bloqueador está encendido. **Viene encendido de fábrica.**
+  ///
+  /// Es un interruptor general, aparte del de cada lista: sirve para apagarlo
+  /// entero un momento —por ejemplo si un sitio no carga— sin perder la
+  /// configuración.
+  ///
+  /// Se compara contra `false` y no contra `true` a propósito: así, mientras el
+  /// usuario no lo haya apagado a mano —o sea, cuando el ajuste ni existe—
+  /// queda encendido. Antes era al revés y venía apagado, así que la protección
+  /// no existía hasta que alguien fuera a buscarla a Ajustes. Nadie hace eso, y
+  /// menos antes de que le salte la primera ventana de casino.
+  static bool get activo => PrismHubStorage.getSetting(_claveActivo) != false;
 
   static Future<void> setActivo(bool v) async {
     await PrismHubStorage.setSetting(_claveActivo, v);

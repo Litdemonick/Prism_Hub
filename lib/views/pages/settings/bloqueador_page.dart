@@ -58,6 +58,95 @@ class _BloqueadorPageState extends State<BloqueadorPage> {
     }
   }
 
+  /// Pregunta antes de apagar, diciendo qué se pierde.
+  ///
+  /// No es un trámite: apagarlo no se nota hasta que se nota, y para entonces
+  /// ya hay una pestaña de casino encima de la película. Que lo apague quien
+  /// quiera, pero sabiendo qué le espera.
+  Future<bool> _confirmarApagado() async {
+    final r = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        backgroundColor: HomeTheme.cardSurface,
+        icon: const Icon(Icons.warning_amber_rounded,
+            color: Color(0xFFFFB74D), size: 32),
+        title: const Text('¿Apagar el bloqueador?'),
+        content: const Text(
+          'En el navegador interno van a volver a aparecer:\n\n'
+          '·  Pestañas que se abren solas al tocar reproducir\n'
+          '·  Anuncios de veinte segundos antes de la película\n'
+          '·  Rastreo de las redes de publicidad\n\n'
+          'Podés volver a encenderlo cuando quieras.',
+          style: TextStyle(fontSize: 13, height: 1.5),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: const Text('Dejarlo encendido'),
+          ),
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, true),
+            style: TextButton.styleFrom(foregroundColor: Colors.red.shade300),
+            child: const Text('Apagar igual'),
+          ),
+        ],
+      ),
+    );
+    return r ?? false;
+  }
+
+  /// Un ejemplo de lista, con su dirección lista para copiar.
+  ///
+  /// Tocarlo abre el diálogo de instalar con el nombre y la dirección ya
+  /// puestos: la idea es que no haya que ir a buscar nada a ningún lado.
+  Widget _ejemploDeLista(String nombre, String para, String url,
+      {bool ultimo = false}) {
+    return Padding(
+      padding: EdgeInsets.only(bottom: ultimo ? 0 : 10),
+      child: Material(
+        color: HomeTheme.bg,
+        borderRadius: BorderRadius.circular(11),
+        clipBehavior: Clip.antiAlias,
+        child: InkWell(
+          onTap: _trabajando
+              ? null
+              : () => _conEspera(() async {
+                    final n = await BloqueadorAnuncios.instalar(nombre, url);
+                    _aviso('$nombre instalada con $n dominios');
+                  }),
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 11),
+            child: Row(
+              children: [
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(nombre,
+                          style: const TextStyle(
+                              fontSize: 13, fontWeight: FontWeight.w600)),
+                      const SizedBox(height: 3),
+                      Text(
+                        para,
+                        style: TextStyle(
+                            fontSize: 11.5,
+                            height: 1.35,
+                            color: HomeTheme.textMuted),
+                      ),
+                    ],
+                  ),
+                ),
+                const SizedBox(width: 10),
+                Icon(Icons.download_rounded,
+                    size: 19, color: HomeTheme.textMuted),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
   Future<void> _instalar() async {
     final resultado = await showDialog<List<String>>(
       context: context,
@@ -208,24 +297,46 @@ class _BloqueadorPageState extends State<BloqueadorPage> {
                 ),
               ),
               const SizedBox(height: 12),
-              SwitchListTile(
-                value: activo,
-                title: const Text('Bloquear anuncios'),
-                // Se dice de dónde sale cada cosa: sin esto, "N dominios" no
-                // distingue entre lo que viene puesto y lo que agregó el usuario, y
-                // no queda claro que funciona sin configurar nada.
-                subtitle: Text(
-                  activo
-                      ? '${BloqueadorAnuncios.cuantosDominios} dominios · '
-                          '${BloqueadorAnuncios.cuantosDeFabrica} vienen puestos'
-                          '${BloqueadorAnuncios.cuantosDeListas > 0 ? ' + ${BloqueadorAnuncios.cuantosDeListas} de tus listas' : ''}'
-                      : 'Apagado: las listas quedan guardadas',
+              // El interruptor, con su propia tarjeta.
+              //
+              // Antes era un SwitchListTile pelado sobre el fondo: al pasar el
+              // puntero se pintaba de rosa y el texto encima dejaba de leerse.
+              // Ahora tiene fondo propio y el resaltado es apenas un aclarado.
+              Material(
+                color: HomeTheme.cardSurface,
+                borderRadius: BorderRadius.circular(14),
+                clipBehavior: Clip.antiAlias,
+                child: SwitchListTile(
+                  value: activo,
+                  hoverColor: Colors.white.withValues(alpha: 0.04),
+                  contentPadding:
+                      const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
+                  title: const Text(
+                    'Bloquear anuncios',
+                    style: TextStyle(fontWeight: FontWeight.w600),
+                  ),
+                  subtitle: Padding(
+                    padding: const EdgeInsets.only(top: 3),
+                    child: Text(
+                      activo
+                          ? '${BloqueadorAnuncios.cuantosDominios} dominios · '
+                              '${BloqueadorAnuncios.cuantosDeFabrica} vienen puestos'
+                              '${BloqueadorAnuncios.cuantosDeListas > 0 ? ' + ${BloqueadorAnuncios.cuantosDeListas} de tus listas' : ''}'
+                          : 'Apagado. Las listas quedan guardadas.',
+                      style:
+                          TextStyle(fontSize: 12, color: HomeTheme.textMuted),
+                    ),
+                  ),
+                  onChanged: (v) async {
+                    // Apagarlo se pregunta; encenderlo no. Apagar es lo que puede
+                    // arruinarle la tarde a alguien, y conviene que sepa qué le
+                    // espera ANTES, no después con la pestaña de casino ya abierta.
+                    if (!v && !await _confirmarApagado()) return;
+                    await BloqueadorAnuncios.setActivo(v);
+                    await BloqueadorAnuncios.cargar();
+                    _refrescar();
+                  },
                 ),
-                onChanged: (v) async {
-                  await BloqueadorAnuncios.setActivo(v);
-                  await BloqueadorAnuncios.cargar();
-                  _refrescar();
-                },
               ),
               if (!Platform.isAndroid) ...[
                 const SizedBox(height: 4),
@@ -258,13 +369,102 @@ class _BloqueadorPageState extends State<BloqueadorPage> {
                 ],
               ),
               const SizedBox(height: 8),
+              // Cuando no hay ninguna, se explica QUÉ es una lista.
+              //
+              // Antes decía "todavía no hay ninguna, tocá instalar y pegá la
+              // dirección" — que da por sabido lo único que hay que explicar.
+              // El usuario no tiene por qué saber qué es una lista de bloqueo
+              // ni de dónde saca una dirección, y el texto suelto sobre el
+              // fondo tampoco se leía como algo con lo que se pueda hacer algo.
               if (_listas.isEmpty)
-                Padding(
-                  padding: const EdgeInsets.symmetric(vertical: 24),
-                  child: Text(
-                    'Todavía no hay ninguna lista. Tocá "Instalar lista" y pegá la '
-                    'dirección de la que quieras usar.',
-                    style: TextStyle(color: HomeTheme.textMuted, height: 1.4),
+                Container(
+                  width: double.infinity,
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 18, vertical: 22),
+                  decoration: BoxDecoration(
+                    color: HomeTheme.cardSurface,
+                    borderRadius: BorderRadius.circular(14),
+                    border: Border.all(color: HomeTheme.border),
+                  ),
+                  child: Column(
+                    children: [
+                      Icon(Icons.playlist_add,
+                          size: 30, color: HomeTheme.textMuted),
+                      const SizedBox(height: 12),
+                      const Text(
+                        'Ninguna lista instalada',
+                        textAlign: TextAlign.center,
+                        style: TextStyle(
+                            fontSize: 14.5, fontWeight: FontWeight.w600),
+                      ),
+                      const SizedBox(height: 8),
+                      Text(
+                        'Una lista es un archivo público de dominios de anuncios '
+                        'que mantiene gente dedicada a eso. Al instalarla, sus '
+                        'dominios se suman a los que la app ya bloquea.',
+                        textAlign: TextAlign.center,
+                        style: TextStyle(
+                          fontSize: 12.5,
+                          height: 1.45,
+                          color: HomeTheme.textMuted,
+                        ),
+                      ),
+                      const SizedBox(height: 10),
+                      Text(
+                        'No hace falta ninguna: la protección de fábrica ya '
+                        'funciona. Una lista suma decenas de miles de dominios '
+                        'y se actualiza sola.',
+                        textAlign: TextAlign.center,
+                        style: TextStyle(
+                          fontSize: 12,
+                          height: 1.45,
+                          color: HomeTheme.textMuted.withValues(alpha: 0.75),
+                        ),
+                      ),
+                      const SizedBox(height: 18),
+                      const Divider(height: 1),
+                      const SizedBox(height: 16),
+                      Align(
+                        alignment: Alignment.centerLeft,
+                        child: Text(
+                          'Algunas conocidas',
+                          style: TextStyle(
+                            fontSize: 11.5,
+                            fontWeight: FontWeight.w700,
+                            letterSpacing: 0.4,
+                            color: HomeTheme.textMuted,
+                          ),
+                        ),
+                      ),
+                      const SizedBox(height: 12),
+                      // Ejemplos de verdad, con la dirección que hay que pegar.
+                      // Sin esto, "pegá la dirección de la que quieras usar" no
+                      // le sirve a nadie: hay que saber ANTES que existen y
+                      // dónde se consiguen.
+                      _ejemploDeLista(
+                        'StevenBlack',
+                        'La más completa para empezar. Anuncios, rastreo y '
+                            'sitios de malware, todo junto.',
+                        'https://raw.githubusercontent.com/StevenBlack/hosts/master/hosts',
+                      ),
+                      _ejemploDeLista(
+                        'EasyList',
+                        'La de toda la vida contra publicidad. Es la que usan '
+                            'de base casi todos los bloqueadores.',
+                        'https://easylist.to/easylist/easylist.txt',
+                      ),
+                      _ejemploDeLista(
+                        'Phishing Army',
+                        'Sitios que se hacen pasar por otros para robar datos.',
+                        'https://phishing.army/download/phishing_army_blocklist_extended.txt',
+                      ),
+                      _ejemploDeLista(
+                        'URLhaus',
+                        'Direcciones que están repartiendo malware ahora mismo.',
+                        'https://urlhaus.abuse.ch/downloads/hostfile/',
+                        ultimo: true,
+                      ),
+                    ],
                   ),
                 ),
               for (final l in _listas)
