@@ -265,7 +265,9 @@ class VideoPlayerController extends GetxController with WidgetsBindingObserver {
         indice == _audioDelVideo ? '' : audiosHls[indice].id,
       );
       await player.open(Media(fuente.url, httpHeaders: fuente.headers));
-      if (donde > Duration.zero) await player.seek(donde);
+      // Mismo cuidado que en "continuar viendo": pedirle el salto a mpv
+      // apenas vuelve open() se pierde si todavia no conoce la duracion.
+      if (donde > Duration.zero) await _saltarCuandoSePueda(donde);
       audioHlsElegido.value = indice;
       logger.info('audio cambiado a '
           '${audiosHls[indice].title ?? audiosHls[indice].language}');
@@ -4061,7 +4063,9 @@ class VideoPlayerController extends GetxController with WidgetsBindingObserver {
       final actual = watchData;
       if (actual == null) return;
       await player.open(Media(actual.url, httpHeaders: actual.headers));
-      if (donde > Duration.zero) await player.seek(donde);
+      // Mismo cuidado que en "continuar viendo": pedirle el salto a mpv
+      // apenas vuelve open() se pierde si todavia no conoce la duracion.
+      if (donde > Duration.zero) await _saltarCuandoSePueda(donde);
     } catch (e) {
       logger.warning('El reintento por software tambien fallo', e);
     }
@@ -4664,7 +4668,9 @@ class VideoPlayerController extends GetxController with WidgetsBindingObserver {
       await player.open(Media(actual.url, httpHeaders: actual.headers));
       // El salto va DESPUES de que open() termino, que es cuando mpv ya conoce
       // la duracion; pedirlo antes se pierde y el episodio arrancaba de cero.
-      if (donde > Duration.zero) await player.seek(donde);
+      // Mismo cuidado que en "continuar viendo": pedirle el salto a mpv
+      // apenas vuelve open() se pierde si todavia no conoce la duracion.
+      if (donde > Duration.zero) await _saltarCuandoSePueda(donde);
     } catch (e) {
       logger.warning(
           'No se pudo retomar la reproduccion local tras el cast', e);
@@ -5661,11 +5667,62 @@ class VideoPlayerController extends GetxController with WidgetsBindingObserver {
   }
 
   // Responde al diálogo "¿Continuar donde te quedaste?" — usuario aceptó.
-  void confirmResume(int seconds) {
+  //
+  // **El salto se pedía y se perdía.** Se llamaba a `seek` en el mismo instante
+  // en que el usuario tocaba el botón, y en ese momento mpv puede no conocer
+  // todavía la duración del vídeo: sin duración no sabe adónde ir y descarta el
+  // pedido sin decir nada. El aviso decía "te quedaste en el minuto tal", uno
+  // aceptaba, y el episodio arrancaba de cero.
+  //
+  // No es nuevo en este archivo: al volver de castear ya estaba anotado que el
+  // salto tiene que ir DESPUÉS de que `open()` terminó, que es cuando mpv ya
+  // conoce la duración. Faltaba acá.
+  //
+  // Así que se espera a que la conozca, se salta, y se COMPRUEBA que haya
+  // llegado. Si no llegó se reintenta: con HLS el primer salto a veces cae en
+  // un pedacito que todavía no se bajó y mpv vuelve solo al principio.
+  Future<void> confirmResume(int seconds) async {
     _isAutoSeekPosition = true;
     resumePrompt.value = null;
-    player.seek(Duration(seconds: seconds));
-    player.play();
+    final destino = Duration(seconds: seconds);
+    await player.play();
+    await _saltarCuandoSePueda(destino);
+  }
+
+  /// Salta a [destino] en cuanto el reproductor esté en condiciones, y se
+  /// asegura de que haya quedado ahí.
+  Future<void> _saltarCuandoSePueda(Duration destino) async {
+    // Hasta doce segundos esperando la duración. Es de sobra para lo que tarda
+    // un HLS en abrir, y si no llegó en ese rato es que algo más está mal: se
+    // intenta igual, porque quedarse sin saltar es peor que un salto fallido.
+    final reloj = Stopwatch()..start();
+    while (!_disposed && reloj.elapsed < const Duration(seconds: 12)) {
+      final total = duration.value;
+      if (total > Duration.zero && total > destino) break;
+      await Future<void>.delayed(const Duration(milliseconds: 150));
+    }
+    if (_disposed) return;
+
+    for (var intento = 1; intento <= 3; intento++) {
+      try {
+        await player.seek(destino);
+      } catch (e) {
+        logger.warning('no se pudo saltar a $destino', e);
+        return;
+      }
+      await Future<void>.delayed(const Duration(milliseconds: 700));
+      if (_disposed) return;
+      final donde = position.value;
+      // Diez segundos de margen: mpv salta al punto de corte más cercano, que
+      // en HLS es el principio de un pedacito y casi nunca el segundo exacto.
+      if ((donde - destino).abs() < const Duration(seconds: 10)) {
+        logger.info('continuar viendo: quedó en '
+            '${donde.inMinutes}:${(donde.inSeconds % 60).toString().padLeft(2, '0')}');
+        return;
+      }
+      logger.info('continuar viendo: el salto a $destino no agarró '
+          '(quedó en $donde), intento $intento de 3');
+    }
   }
 
   // Responde al diálogo "¿Continuar donde te quedaste?" — usuario canceló.
