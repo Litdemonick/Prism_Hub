@@ -803,51 +803,100 @@ class BloqueadorAnuncios {
     return fuera;
   }
 
-  /// El bloqueo nativo del WebView. **Hoy está apagado, y a propósito.**
+  /// Servidores que se abren SIN bloqueo nativo.
   ///
-  /// ── Por qué se apagó ────────────────────────────────────────────────────
+  /// **Lista corta y solo con lo medido.** Cada host que entre acá se queda sin
+  /// el corte a nivel del motor, así que va únicamente el que se comprobó que
+  /// no puede convivir con él.
   ///
-  /// Era la ÚNICA pieza del bloqueador que existía solo en Android: en Windows
-  /// y Linux ni se construye, porque ahí el valor nativo de la acción
-  /// "bloquear" resuelve a null y crear una sola regla tumba la pantalla entera
-  /// (ver content_blocker_action_type.g.dart en el paquete: solo android, iOS y
-  /// macOS devuelven valor).
-  ///
-  /// Y esa asimetría era exactamente la que rompía Mega en el teléfono. Aislado
-  /// por el usuario el 2026-08-06, con el mismo episodio y la misma red:
+  /// mega.nz, medido por el usuario el 2026-08-06 con el mismo episodio y la
+  /// misma red:
   ///
   ///     Android · bloqueador apagado, con las listas puestas → Mega ANDA
   ///     Android · bloqueador encendido                       → Mega NO carga
   ///     Windows · todo encendido                             → Mega ANDA
   ///
-  /// No es que la regex coincidiera con algo de Mega: se comprobó dominio por
-  /// dominio y ninguna de sus direcciones cae (ni `mega.nz`, ni la API, ni
-  /// `userstorage`, ni los `blob:`). Es que **estar puesta** obliga al motor a
-  /// pasar cada pedido por el interceptor del plugin, y ahí Mega se rompe.
+  /// No es que las reglas coincidan con algo suyo: se comprobó dirección por
+  /// dirección y ninguna cae —ni `mega.nz`, ni su API, ni `userstorage`, ni los
+  /// `blob:`—. Es que **estar puestas** obliga al motor a pasar cada pedido por
+  /// el interceptor del plugin, y ahí su reproductor se rompe. En Windows nunca
+  /// se vio porque ahí el bloqueo nativo no existe.
+  static const _sinBloqueoNativo = ['mega.nz', 'mega.co.nz'];
+
+  /// Si a este servidor hay que abrirle el navegador sin bloqueo nativo.
+  static bool sinBloqueoNativo(String url) {
+    final host = Uri.tryParse(url)?.host.toLowerCase() ?? '';
+    if (host.isEmpty) return false;
+    return _sinBloqueoNativo.any((h) => host == h || host.endsWith('.$h'));
+  }
+
+  /// El bloqueo nativo del WebView, para la dirección que se va a abrir.
   ///
-  /// Antes de esto ya se le había sacado el peso: llegó a armar una expresión
-  /// regular de 6,9 MB con los 326.685 dominios del usuario, que el plugin
-  /// corre contra CADA pedido con un motor de retroceso — 574 ms por pedido,
-  /// medido en la computadora, que es varias veces más rápida que el teléfono.
-  /// Reducirla a la base de fábrica arregló la lentitud, pero no lo de Mega.
+  /// ── Para qué hace falta, si ya está el guion ────────────────────────────
   ///
-  /// ── Qué se pierde, dicho de frente ──────────────────────────────────────
+  /// Porque hay un anuncio que el guion NO puede parar. El guion tapa
+  /// `window.open`, `fetch`, `XHR` y el `src` que se pone por JavaScript, pero
+  /// una etiqueta `<script src="…ads…">` que ya viene escrita en el HTML la pide
+  /// el navegador antes de que nada nuestro pueda correr.
   ///
-  /// El bloqueo nativo ataja el pedido en el motor, antes de que salga. El
-  /// guion lo ataja dentro de la página. Los dos cortan los MISMOS dominios,
-  /// pero el guion no llega a `<img>`, a `url()` de CSS ni a `<link>`.
+  /// Justo así entran los anuncios de vídeo. Visto en vivo el 2026-08-06 en
+  /// unlimplay.com: el registro decía «el guion está en la página · no cortó
+  /// nada» y aun así salió el anuncio de Google IMA, con su «Anuncio 1 de 2».
+  /// `imasdk.googleapis.com` está en la lista base desde siempre — el nativo lo
+  /// cortaba, el guion no llega.
   ///
-  /// A cambio, las dos plataformas hacen ahora exactamente lo mismo, que es lo
-  /// que se buscaba: lo que anda en la computadora anda en el teléfono. Y en la
-  /// computadora esto viene siendo así desde siempre, cortando los anuncios que
-  /// de verdad molestan — los que se meten adentro del reproductor — sin dejar
-  /// servidores sanos afuera.
+  /// ── Solo la base de fábrica, NUNCA las listas del usuario ───────────────
   ///
-  /// Si algún día se quiere volver a bloquear a nivel del motor, el camino NO
-  /// es reactivar esto: es `shouldInterceptRequest`, donde se puede consultar
-  /// [bloquea] —una búsqueda en un conjunto— en vez de una expresión regular
-  /// gigante, y devolver null sin tocar nada cuando no hay que cortar.
-  static List<ContentBlocker> reglasNativas() => const [];
+  /// El plugin compila el filtro en un `Pattern` de Java y lo corre contra la
+  /// dirección de CADA pedido, con un motor de retroceso y sin distinguir
+  /// mayúsculas. Con los 326.685 dominios de las listas eso era **una sola
+  /// expresión regular de 6,9 MB**: medido, 574 ms por pedido en la
+  /// computadora, que es varias veces más rápida que un teléfono. Las páginas
+  /// no terminaban de cargar nunca.
+  ///
+  /// La base son unas decenas de dominios y la regex queda en 886 caracteres.
+  /// Y son justo los que conviene atajar en el motor: los que meten el anuncio
+  /// adentro del reproductor. Las listas del usuario las sigue cortando el
+  /// guion, que para eso mira un conjunto y no una expresión regular.
+  ///
+  /// ── Y hay servidores que no lo toleran ──────────────────────────────────
+  ///
+  /// Estar puesto obliga al motor a pasar cada pedido por el interceptor del
+  /// plugin, y algún reproductor se rompe con eso aunque las reglas no lo
+  /// mencionen. Le pasa a Mega: ver [_sinBloqueoNativo], donde está la medición
+  /// y por qué se abre sin esto. Por eso hace falta la dirección acá — no se
+  /// puede decidir sin saber a quién se va a abrir.
+  ///
+  /// Fuera de Android/iOS/macOS no se construye NADA: en Windows el valor
+  /// nativo de la acción "bloquear" resuelve a null y crear una sola regla
+  /// tumba la pantalla entera (ver content_blocker_action_type.g.dart en el
+  /// paquete). Allá el bloqueo lo hacen el guion y el corte de navegación.
+  static List<ContentBlocker> reglasNativas(String url) {
+    if (!(Platform.isAndroid || Platform.isIOS || Platform.isMacOS)) {
+      return const [];
+    }
+    if (!activo) return const [];
+    if (sinBloqueoNativo(url)) return const [];
+    final patron = patronPara(_baseEnConjunto);
+    if (patron == null) return const [];
+    return [
+      ContentBlocker(
+        trigger: ContentBlockerTrigger(urlFilter: patron),
+        action: ContentBlockerAction(type: ContentBlockerActionType.BLOCK),
+      ),
+    ];
+  }
+
+  /// La expresión regular que reconoce a estos dominios y a sus subdominios.
+  ///
+  /// Aparte de [reglasNativas] para poder probarla: ahí adentro no se puede,
+  /// porque construir un `ContentBlocker` fuera de Android tumba la pantalla.
+  /// Devuelve null si no hay nada que bloquear.
+  static String? patronPara(Iterable<String> dominios) {
+    final alternativas = dominios.map(RegExp.escape).join('|');
+    if (alternativas.isEmpty) return null;
+    return '.*://([^/]*\\.)?($alternativas)([/:?].*)?\$';
+  }
 
   /// La base de fábrica: lo que se bloquea SIEMPRE, sin instalar ninguna lista.
   ///

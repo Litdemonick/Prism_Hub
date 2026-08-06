@@ -1200,7 +1200,11 @@ class _WebViewPlayerPageState extends State<WebViewPlayerPage>
                       // se hace. Soportado en Android (y iOS/macOS); en Windows
                       // llega vacío y el bloqueo lo hacen shouldOverrideUrlLoading
                       // y el guion que se inyecta más abajo.
-                      contentBlockers: BloqueadorAnuncios.reglasNativas(),
+                      // Con la dirección: hay servidores que se abren sin
+                      // bloqueo nativo porque su reproductor no lo tolera. Ver
+                      // reglasNativas y _sinBloqueoNativo.
+                      contentBlockers:
+                          BloqueadorAnuncios.reglasNativas(widget.url),
                     ),
                     onWebViewCreated: (controller) {
                       _webViewController = controller;

@@ -12,17 +12,53 @@ import 'package:prismhub/utils/bloqueador_anuncios.dart';
 /// máquina cargada—, sino **que no vuelva a aparecer la forma que era lenta**.
 
 void main() {
-  group('el bloqueo nativo del WebView tiene que quedar apagado', () {
-    test('no se construye ninguna regla, en ninguna plataforma', () {
-      // Era la única pieza que existía solo en Android, y esa asimetría rompía
-      // Mega en el teléfono: aislado por el usuario el 2026-08-06, con el
-      // bloqueador apagado Mega anda y con él encendido no, mientras en Windows
-      // —donde esto nunca se construyó— anda con todo puesto.
-      //
-      // Si alguien lo reactiva, esta prueba lo agarra. El camino para volver a
-      // bloquear en el motor es shouldInterceptRequest consultando bloquea(),
-      // no esto. Ver reglasNativas en bloqueador_anuncios.dart.
-      expect(BloqueadorAnuncios.reglasNativas(), isEmpty);
+  group('el bloqueo nativo del WebView', () {
+    test('fuera de Android no se construye ninguna regla', () {
+      // En Windows el valor nativo de la acción "bloquear" resuelve a null y
+      // construir una sola regla tumba la pantalla entera. Esta prueba corre en
+      // el escritorio, así que comprueba justo eso.
+      expect(BloqueadorAnuncios.reglasNativas('https://unlimplay.com/f/1'),
+          isEmpty);
+    });
+
+    test('Mega queda marcado para abrirse SIN bloqueo nativo', () {
+      // Medido por el usuario el 2026-08-06: con el bloqueador encendido Mega
+      // no carga en Android, y apagado sí. No es que las reglas coincidan con
+      // algo suyo —se comprobó dirección por dirección— sino que estar puestas
+      // obliga al motor a interceptar cada pedido.
+      expect(BloqueadorAnuncios.sinBloqueoNativo('https://mega.nz/embed/abc'),
+          isTrue);
+      expect(
+          BloqueadorAnuncios.sinBloqueoNativo('https://g.api.mega.co.nz/cs'),
+          isTrue);
+    });
+
+    test('los demás servidores SÍ llevan bloqueo nativo', () {
+      // El anuncio de vídeo entra por un `<script src>` ya escrito en el HTML,
+      // y ahí el guion no llega: solo lo corta el motor. Visto en vivo en
+      // unlimplay.com — «el guion está en la página · no cortó nada» y salió el
+      // anuncio igual.
+      for (final u in [
+        'https://unlimplay.com/f/embed/tv/82452/1/1',
+        'https://mixdrop.top/e/abc',
+        'https://vimeos.net/embed-abc.html',
+      ]) {
+        expect(BloqueadorAnuncios.sinBloqueoNativo(u), isFalse, reason: u);
+      }
+    });
+
+    test('el patrón nativo es chico y reconoce subdominios sin pasarse', () {
+      // Con las listas del usuario adentro llegó a medir 6,9 MB y el motor
+      // tardaba 574 ms por pedido. Solo va la base de fábrica.
+      final patron = BloqueadorAnuncios.patronPara(['anuncios.com']);
+      expect(patron, isNotNull);
+      expect(patron!.length, lessThan(10 * 1024));
+      final re = RegExp(patron, caseSensitive: false);
+      expect(re.hasMatch('https://cdn.anuncios.com/x.js'), isTrue);
+      expect(re.hasMatch('https://noanuncios.com/x.js'), isFalse,
+          reason: 'no es subdominio: no puede caer');
+      expect(re.hasMatch('https://anuncios.com.ar/x.js'), isFalse,
+          reason: 'es otro dominio');
     });
   });
 
