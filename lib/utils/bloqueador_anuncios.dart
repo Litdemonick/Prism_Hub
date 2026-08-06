@@ -48,8 +48,9 @@ class BloqueadorAnuncios {
   static const _claveListas = 'bloqueador_listas';
   static const _claveActivo = 'bloqueador_activo';
 
-  /// Los servidores que se abrieron y no tenían ningún reproductor adentro.
-  static const _claveSinReproductor = 'bloqueador_sin_reproductor';
+  // La clave 'bloqueador_sin_reproductor' se dejó de usar el 2026-08-06 (ver
+  // más abajo). Lo que haya quedado guardado de antes se ignora, así que un
+  // servidor marcado en su momento vuelve a abrir solo.
 
   /// Qué listas de fábrica ya se intentaron instalar, para no reintentarlas
   /// eternamente ni volver a ponerlas si el usuario las quitó a propósito.
@@ -64,67 +65,25 @@ class BloqueadorAnuncios {
 
   // ─── Servidores que no muestran un reproductor ────────────────────────────
   //
-  // Hay servidores que abren, cargan una página entera y adentro no hay ningún
-  // vídeo: un cartel de "no disponible", una pantalla de anuncios, o
-  // directamente otra cosa. El usuario termina mirando algo que no pidió, y
-  // encima tiene que darse cuenta solo de que ahí no va a pasar nada.
+  // **Acá había una lista de servidores marcados, y se sacó el 2026-08-06.**
   //
-  // Se anota el servidor la primera vez que ocurre y a partir de ahí no se le
-  // deja abrir el navegador: se cierra solo y hay que elegir otro. Si el
-  // usuario insiste con reproducir, se vuelve a cerrar — que es justo la señal
-  // de que ese servidor está caído de verdad.
+  // Funcionaba así: un servidor que abría sin traer reproductor quedaba anotado
+  // por host, y a partir de ahí no se le dejaba abrir el navegador nunca más.
+  // La idea era ahorrarle al usuario una pantalla inútil. Salió mucho más caro:
   //
-  // **Se anota por servidor, no por título, y no se borra.** Es a propósito:
-  // así, mientras se prueba, un servidor que se cierra solo es un servidor que
-  // no anda, sin tener que acordarse de cuál era. El precio es que un solo
-  // título roto puede dejar marcado a ese servidor en todas las extensiones —
-  // por eso se puede ver y limpiar desde la pantalla del bloqueador.
-
-  static Set<String>? _sinReproductor;
-
-  static Set<String> get sinReproductor {
-    final guardado = _sinReproductor;
-    if (guardado != null) return guardado;
-    final crudo = PrismHubStorage.getSetting(_claveSinReproductor);
-    if (crudo is! String || crudo.isEmpty) return _sinReproductor = <String>{};
-    try {
-      return _sinReproductor = (jsonDecode(crudo) as List<dynamic>)
-          .map((e) => '$e')
-          .toSet();
-    } catch (_) {
-      return _sinReproductor = <String>{};
-    }
-  }
-
-  /// ¿Este servidor ya se abrió una vez sin traer reproductor?
-  static bool sinReproductorConocido(String url) {
-    final marcados = sinReproductor;
-    if (marcados.isEmpty) return false;
-    final host = Uri.tryParse(url)?.host.toLowerCase();
-    if (host == null || host.isEmpty) return false;
-    return marcados.contains(host.replaceFirst(RegExp(r'^www\.'), ''));
-  }
-
-  /// Anota que este servidor abrió sin reproductor.
-  static Future<void> anotarSinReproductor(String url) async {
-    final host = Uri.tryParse(url)?.host.toLowerCase();
-    if (host == null || host.isEmpty) return;
-    final limpio = host.replaceFirst(RegExp(r'^www\.'), '');
-    final marcados = <String>{...sinReproductor, limpio};
-    _sinReproductor = marcados;
-    await PrismHubStorage.setSetting(
-        _claveSinReproductor, jsonEncode(marcados.toList()));
-    logger.info('[bloqueador] "$limpio" no traía reproductor: no se vuelve a '
-        'abrir hasta que se lo quite de la lista');
-  }
-
-  /// Vuelve a darle una oportunidad a un servidor marcado.
-  static Future<void> olvidarSinReproductor(String host) async {
-    final marcados = <String>{...sinReproductor}..remove(host);
-    _sinReproductor = marcados;
-    await PrismHubStorage.setSetting(
-        _claveSinReproductor, jsonEncode(marcados.toList()));
-  }
+  //  - Se anotaba para siempre y en todas las extensiones. Un título roto
+  //    suelto, o un servidor caído un rato, lo dejaba muerto.
+  //  - No había forma de deshacerlo. El comentario decía que se limpiaba desde
+  //    la pantalla del bloqueador, y esa pantalla nunca existió.
+  //  - Y se marcaba por motivos que no eran del servidor: en Android, con la
+  //    regex gigante que este mismo archivo le pasaba al WebView, las páginas
+  //    iban tan lentas que Mega no alcanzaba a mostrar su reproductor dentro
+  //    del plazo. Quedó marcado y muerto, abriendo perfecto en la computadora.
+  //
+  // Ahora se comprueba SIEMPRE y no se recuerda nada: si no hay reproductor se
+  // cierra con un aviso, y la próxima vez se vuelve a intentar. Un servidor que
+  // se recupera vuelve a andar solo. Ver `_vigilarQueHayaReproductor` y
+  // `openWebViewPlayer` en webview_player_page.dart.
 
   // ─── Catálogo ─────────────────────────────────────────────────────────────
 
@@ -844,43 +803,51 @@ class BloqueadorAnuncios {
     return fuera;
   }
 
-  /// Reglas para el bloqueo nativo (Android, iOS y macOS).
+  /// El bloqueo nativo del WebView. **Hoy está apagado, y a propósito.**
   ///
-  /// Va TODO en una sola regla con los dominios alternados en vez de una regla
-  /// por dominio: con listas de miles de entradas, una regla cada una hace que
-  /// el WebView tarde una eternidad en arrancar.
-  static List<ContentBlocker> reglasNativas() {
-    // Fuera de Android/iOS/macOS ni siquiera se CONSTRUYEN.
-    //
-    // No es por prolijidad: en Windows, el valor nativo de la acción "bloquear"
-    // resuelve a null y el paquete lo guarda en un campo que no admite null, así
-    // que crear una sola regla tumba la pantalla entera con "type 'Null' is not
-    // a subtype of type 'String'". Comprobado en el código del paquete
-    // (content_blocker_action_type.g.dart: solo android, iOS y macOS devuelven
-    // valor; el resto cae en null).
-    //
-    // Antes esto no se notaba de pura casualidad: sin ninguna lista instalada la
-    // función salía por el atajo de "no hay dominios" y nunca llegaba a
-    // construir nada.
-    if (!(Platform.isAndroid || Platform.isIOS || Platform.isMacOS)) {
-      return const [];
-    }
-    if (!activo) return const [];
-    // Los cargadores de anuncios de vídeo van SIEMPRE, junto con las listas del
-    // usuario: son los que meten el anuncio adentro del reproductor y las
-    // listas corrientes no suelen traerlos (ver _listaBase).
-    final todos = dominiosEnUso;
-    if (todos.isEmpty) return const [];
-    final alternativas = todos.map((d) => RegExp.escape(d)).join('|');
-    return [
-      ContentBlocker(
-        trigger: ContentBlockerTrigger(
-          urlFilter: '.*://([^/]*\\.)?($alternativas)([/:?].*)?\$',
-        ),
-        action: ContentBlockerAction(type: ContentBlockerActionType.BLOCK),
-      ),
-    ];
-  }
+  /// ── Por qué se apagó ────────────────────────────────────────────────────
+  ///
+  /// Era la ÚNICA pieza del bloqueador que existía solo en Android: en Windows
+  /// y Linux ni se construye, porque ahí el valor nativo de la acción
+  /// "bloquear" resuelve a null y crear una sola regla tumba la pantalla entera
+  /// (ver content_blocker_action_type.g.dart en el paquete: solo android, iOS y
+  /// macOS devuelven valor).
+  ///
+  /// Y esa asimetría era exactamente la que rompía Mega en el teléfono. Aislado
+  /// por el usuario el 2026-08-06, con el mismo episodio y la misma red:
+  ///
+  ///     Android · bloqueador apagado, con las listas puestas → Mega ANDA
+  ///     Android · bloqueador encendido                       → Mega NO carga
+  ///     Windows · todo encendido                             → Mega ANDA
+  ///
+  /// No es que la regex coincidiera con algo de Mega: se comprobó dominio por
+  /// dominio y ninguna de sus direcciones cae (ni `mega.nz`, ni la API, ni
+  /// `userstorage`, ni los `blob:`). Es que **estar puesta** obliga al motor a
+  /// pasar cada pedido por el interceptor del plugin, y ahí Mega se rompe.
+  ///
+  /// Antes de esto ya se le había sacado el peso: llegó a armar una expresión
+  /// regular de 6,9 MB con los 326.685 dominios del usuario, que el plugin
+  /// corre contra CADA pedido con un motor de retroceso — 574 ms por pedido,
+  /// medido en la computadora, que es varias veces más rápida que el teléfono.
+  /// Reducirla a la base de fábrica arregló la lentitud, pero no lo de Mega.
+  ///
+  /// ── Qué se pierde, dicho de frente ──────────────────────────────────────
+  ///
+  /// El bloqueo nativo ataja el pedido en el motor, antes de que salga. El
+  /// guion lo ataja dentro de la página. Los dos cortan los MISMOS dominios,
+  /// pero el guion no llega a `<img>`, a `url()` de CSS ni a `<link>`.
+  ///
+  /// A cambio, las dos plataformas hacen ahora exactamente lo mismo, que es lo
+  /// que se buscaba: lo que anda en la computadora anda en el teléfono. Y en la
+  /// computadora esto viene siendo así desde siempre, cortando los anuncios que
+  /// de verdad molestan — los que se meten adentro del reproductor — sin dejar
+  /// servidores sanos afuera.
+  ///
+  /// Si algún día se quiere volver a bloquear a nivel del motor, el camino NO
+  /// es reactivar esto: es `shouldInterceptRequest`, donde se puede consultar
+  /// [bloquea] —una búsqueda en un conjunto— en vez de una expresión regular
+  /// gigante, y devolver null sin tocar nada cuando no hay que cortar.
+  static List<ContentBlocker> reglasNativas() => const [];
 
   /// La base de fábrica: lo que se bloquea SIEMPRE, sin instalar ninguna lista.
   ///
@@ -969,7 +936,8 @@ class BloqueadorAnuncios {
     'hotjar.com',
   ];
 
-  /// Lo que se inyecta en Windows y Linux, donde no hay bloqueo nativo.
+  /// Lo que se inyecta en la página. En Android es, además, lo que corta las
+  /// listas grandes del usuario (ver [reglasNativas]).
   ///
   /// Ataja el pedido ANTES de que salga, en vez de borrar el elemento después.
   /// Antes hacía lo segundo y no servía para lo que importa: cuando un `script`
@@ -983,18 +951,48 @@ class BloqueadorAnuncios {
   ///   3. `fetch` y `XMLHttpRequest` — por donde se piden los anuncios de vídeo
   ///   4. lo que aparezca después igual, que se saca al vuelo
   ///
-  /// Sigue sin ser tan bueno como el bloqueo nativo de Android, que ni deja
-  /// salir el pedido a la red; pero acá el pedido tampoco llega a hacerse.
+  /// El pedido no llega a hacerse, así que corta igual que el bloqueo nativo.
+  ///
+  /// ── Los dominios van en un CONJUNTO, y no es un detalle ────────────────────
+  ///
+  /// Antes se recorría la lista entera comparando con `endsWith`, y por acá pasa
+  /// CADA pedido de CADA página. Con las listas de fábrica puestas son 326.685
+  /// comparaciones —con una concatenación de texto en cada vuelta— por pedido.
+  ///
+  /// Medido el 2026-08-06 con un corpus real de 164.407 dominios, o sea la
+  /// MITAD de los que tenía el usuario:
+  ///
+  ///     recorriendo la lista    6,79 ms por pedido
+  ///     preguntándole al conjunto  0,000 ms
+  ///     armar el conjunto, una vez por página: 18 ms
+  ///
+  /// En la computadora eso se disimulaba; en el teléfono dejaba las páginas
+  /// muertas — Mega no terminaba de cargar nunca. Es el MISMO arreglo que ya
+  /// tenía [bloquea] del lado Dart y que a este guion no se le había hecho.
+  ///
+  /// Se comprobó que corta exactamente lo mismo: 23.516 host comparados uno por
+  /// uno entre las dos versiones, incluidos los casos raros que una lista puede
+  /// traer (un TLD suelto como `com` o `zip`, `co.uk`, punycode) y las
+  /// casi-coincidencias tipo `dominiox`. Cero diferencias.
   static String guionParaInyectar() {
     if (!activo) return '';
-    final todos = dominiosEnUso;
+    return guionPara(dominiosEnUso);
+  }
+
+  /// El guion para un conjunto de dominios dado.
+  ///
+  /// Aparte de [guionParaInyectar] para poder probarlo sin depender de los
+  /// ajustes ni de las listas que tenga instaladas quien lo corra.
+  static String guionPara(Iterable<String> dominios) {
+    final todos = dominios.toList();
     if (todos.isEmpty) return '';
-    final lista = jsonEncode(todos.toList());
+    final lista = jsonEncode(todos);
     return '''
 (function () {
   if (window.__prismBloqueador) return;
   window.__prismBloqueador = true;
-  var dominios = $lista;
+  // Un CONJUNTO, no una lista. Ver el porqué arriba, en guionParaInyectar.
+  var dominios = new Set($lista);
   // Se avisa lo que se corta para poder verlo en el registro de la app, en vez
   // de tener que adivinar si el bloqueador esta haciendo algo. Una vez por
   // dominio: si no, un sitio que insiste llena el archivo.
@@ -1003,18 +1001,26 @@ class BloqueadorAnuncios {
   // los mensajes de consola no alcanza, porque no todos los motores los
   // reportan y entonces "no aparece nada" no distingue entre las dos cosas.
   var avisados = window.__prismCortados = {};
-  console.log('[bloqueador] activo con ' + dominios.length + ' dominios');
+  console.log('[bloqueador] activo con ' + dominios.size + ' dominios');
   function bloqueado(u) {
     if (!u) return false;
     try {
       if (typeof u !== 'string') u = String(u);
       if (u.indexOf('data:') === 0 || u.indexOf('blob:') === 0) return false;
       var h = new URL(u, location.href).hostname.toLowerCase().replace(/^www\\./, '');
-      for (var i = 0; i < dominios.length; i++) {
-        if (h === dominios[i] || h.endsWith('.' + dominios[i])) {
+      // Se pregunta por el host y por sus dominios padre, uno por uno, igual que
+      // hace bloquea() del lado Dart. Preguntarle a un conjunto por los tres o
+      // cuatro niveles de un host da EXACTAMENTE lo mismo que recorrer la lista
+      // entera con endsWith, y no depende de cuantos dominios haya.
+      var actual = h;
+      while (actual) {
+        if (dominios.has(actual)) {
           if (!avisados[h]) { avisados[h] = 1; console.log('[bloqueador] cortado ' + h); }
           return true;
         }
+        var punto = actual.indexOf('.');
+        if (punto < 0) return false;
+        actual = actual.substring(punto + 1);
       }
     } catch (e) {}
     return false;
