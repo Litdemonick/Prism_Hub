@@ -327,7 +327,14 @@ class VideoPlayerController extends GetxController with WidgetsBindingObserver {
       ));
     }
     if (pistas.length < 2) {
-      return (pistas: const <PistaDeAudio>[], sonando: -1);
+      // Lista NUEVA y modificable, nunca `const []`.
+      //
+      // `audiosHls` es un RxList y asignarle una lista constante deja el
+      // contenido de adentro inmodificable: el `clear()` del siguiente servidor
+      // reventaba con "Cannot change the length of an unmodifiable list" y se
+      // llevaba puesta la reproducción entera. Le pasó a JKAnime, que hasta ese
+      // momento andaba en casi todos sus servidores.
+      return (pistas: <PistaDeAudio>[], sonando: -1);
     }
     // Cuál viene pegado al vídeo. Se mira la primera variante de verdad.
     var enElVideo = -1;
@@ -5087,7 +5094,9 @@ class VideoPlayerController extends GetxController with WidgetsBindingObserver {
     // nodos caídos, o directamente no intentarlo. Ver _comoAbrir.
     // Las pistas del maestro anterior no valen para esta fuente: se olvidan
     // antes de mirarla. `_comoAbrir` las vuelve a llenar si esta trae.
-    audiosHls.clear();
+    // Se reemplaza en vez de vaciar: si lo que hay adentro vino inmodificable,
+    // `clear()` tira una excepción y corta la reproducción antes de empezar.
+    audiosHls.value = <PistaDeAudio>[];
     audioHlsElegido.value = -1;
     final plan = await _comoAbrir(url, headers);
     if (_disposed) return false;
@@ -5461,7 +5470,9 @@ class VideoPlayerController extends GetxController with WidgetsBindingObserver {
     // Las pistas de audio del maestro, para poder ofrecerlas en el menú.
     // Se rehace en cada fuente: son de ESTE vídeo y no del anterior.
     final delMaestro = _audiosDelMaestro(maestro);
-    audiosHls.value = delMaestro.pistas;
+    // Copia propia por el mismo motivo: lo que se le asigna al RxList tiene
+    // que ser una lista que se pueda tocar después.
+    audiosHls.value = List<PistaDeAudio>.of(delMaestro.pistas);
     audioHlsElegido.value = delMaestro.sonando;
 
     // ── Con varios idiomas: se abre la variante del idioma que corresponde ──
