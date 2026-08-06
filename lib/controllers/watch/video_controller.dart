@@ -449,6 +449,9 @@ class VideoPlayerController extends GetxController with WidgetsBindingObserver {
       if (_disposed || hasRenderedFrame.value) return;
       logger.info('rueda apagada: RED DE SEGURIDAD — el cuadro apareció y el '
           'vídeo no avanzó en 6 s');
+      // Y se mide EN ESE INSTANTE, que es el que interesa: acá se sabe si
+      // estaba en pausa, esperando datos, o parado por otra cosa.
+      unawaited(_medir('no avanzó en 6 s'));
       hasRenderedFrame.value = true;
     });
   }
@@ -468,28 +471,6 @@ class VideoPlayerController extends GetxController with WidgetsBindingObserver {
     _redDeLaRueda = null;
     hasRenderedFrame.value = true;
     logger.info('rueda apagada: $porQue');
-    unawaited(_colchonParaResumir());
-  }
-
-  /// Ya arrancó: a partir de acá se le pide más colchón para volver.
-  ///
-  /// `cache-pause-wait` hace dos trabajos con un solo número —cuánto esperar
-  /// antes del primer cuadro y cuánto para volver de un parón—, y a cada uno le
-  /// conviene lo contrario. Arranca en uno para no quedarse esperando un
-  /// segundo pedacito que no hace falta, y acá pasa a tres para que un parón a
-  /// mitad no reanude para cortarse a los dos segundos. Ver dónde se pone al
-  /// abrir, con la medición al lado.
-  Future<void> _colchonParaResumir() async {
-    if (_disposed || _shutdownStarted || _playerDisposed) return;
-    if (player.platform is! NativePlayer) return;
-    try {
-      await (player.platform as NativePlayer)
-          .setProperty('cache-pause-wait', '3');
-    } catch (e) {
-      // Que no se pueda subir no rompe nada: se sigue con uno, que es el que
-      // ya dejó arrancar el vídeo.
-      logger.info('no se pudo subir el colchón para resumir: $e');
-    }
   }
 
   // Flag de buffering YA corregido con la posición real — ver
@@ -609,10 +590,26 @@ class VideoPlayerController extends GetxController with WidgetsBindingObserver {
       final caudal = d(await np.getProperty('cache-speed'));
       final bitrate = d(await np.getProperty('video-bitrate'));
       final tirados = d(await np.getProperty('frame-drop-count'));
+      // **El ESTADO del reproductor, no solo cuánto lleva descargado.**
+      //
+      // Sin esto se discutió tres veces sobre por qué el vídeo no arrancaba
+      // mirando únicamente el colchón, y las tres se cambió el ajuste
+      // equivocado. Estas cuatro dicen sin ambigüedad si está en pausa, si está
+      // esperando datos, o si está esperando otra cosa:
+      //
+      //   pause             lo pausó alguien (la app o quien mira)
+      //   paused-for-cache  mpv esperando datos
+      //   core-idle         no está decodificando nada
+      //   time-pos          el segundo exacto, con decimales
+      final pausa = d(await np.getProperty('pause'));
+      final porCache = d(await np.getProperty('paused-for-cache'));
+      final quieto = d(await np.getProperty('core-idle'));
+      final donde = d(await np.getProperty('time-pos'));
       logger.info('medición ($motivo) · colchón: $colchon s · entrando: '
           '$caudal B/s · variante: $bitrate bps · cuadros tirados: $tirados · '
           'calidad: ${currentQuality.value} · posición: '
-          '${position.value.inSeconds}s');
+          '${position.value.inSeconds}s · time-pos: $donde · pause: $pausa · '
+          'paused-for-cache: $porCache · core-idle: $quieto');
     } catch (e) {
       logger
           .info('medición ($motivo): no se pudieron leer las propiedades — $e');
@@ -1319,29 +1316,20 @@ class VideoPlayerController extends GetxController with WidgetsBindingObserver {
       // Cuánto se junta antes de arrancar, y cuánto se vuelve a juntar después
       // de quedarse sin datos. De fábrica es 1 segundo, que para el caso de
       // arriba es casi lo mismo que nada: reanudaría para volver a cortarse.
-      // **Uno para arrancar, tres para resumir.** Ver _colchonParaResumir.
+      // **Tres, y NO es lo que hace que el vídeo tarde en arrancar.**
       //
-      // Este ajuste hace dos trabajos con un solo número: cuánto colchón se
-      // espera antes del PRIMER cuadro, y cuánto se espera para volver después
-      // de un parón. Y lo que le conviene a cada uno es lo contrario.
+      // Se probó con ocho y con uno el 2026-08-06 buscando el parón del
+      // arranque, y ninguno cambió nada:
       //
-      // Con tres pasaba esto, medido en LaMovie/Vimeos el 2026-08-06:
+      //     con 8 → colchón 6,98 s, el vídeo quieto (esperaba llegar a 8)
+      //     con 3 → colchón 2,92 s, el vídeo quieto
+      //     con 1 → colchón 2,92 s, el vídeo quieto IGUAL
       //
-      //     colchón: 2.916667 s   ·   cache-pause-wait = 3
-      //
-      // Los pedacitos de ese servidor duran 2,916667 s —el número es idéntico
-      // en todas las corridas—, así que pidiendo tres segundos mpv necesita DOS
-      // pedacitos para arrancar y se queda esperando por ocho centésimas. Ése
-      // era el primer parón. Después arrancaba, se comía los 2,9 segundos y se
-      // paraba otra vez esperando el siguiente: el segundo parón.
-      //
-      // Se probó al revés —subirlo a ocho— y fue peor todavía: `colchón:
-      // 6.984467 s · posición: 0s`, el vídeo quieto esperando llegar a ocho.
-      //
-      // Con uno arranca en cuanto tiene el primer pedacito. Y en cuanto el
-      // vídeo avanza de verdad se sube a tres, que es lo que hace falta para
-      // que un parón a mitad no reanude para cortarse enseguida.
-      await np.setProperty('cache-pause-wait', '1');
+      // Con el umbral en uno y casi tres segundos de colchón ya no hay nada que
+      // esperar, así que lo que tiene parado el vídeo es otra cosa. Queda en
+      // tres, que es el valor con el que se venía y el que evita que un parón a
+      // mitad reanude para cortarse enseguida.
+      await np.setProperty('cache-pause-wait', '3');
       await np.setProperty('cache-secs', '30');
       await np.setProperty(
           'demuxer-max-bytes', Platform.isAndroid ? '96MiB' : '192MiB');
