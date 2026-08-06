@@ -377,36 +377,93 @@ class BloqueadorAnuncios {
 
   /// Instala las listas de fábrica la primera vez.
   ///
-  /// Se intenta una sola vez por lista, y se anota el intento aunque falle: si
-  /// el usuario la quita después, no vuelve a aparecer sola. Y si no hay red,
-  /// se anota igual el resto y se sigue — esto no puede demorar el arranque.
+  /// Se intenta hasta tres arranques por lista: si el usuario no tenía red la
+  /// primera vez, se vuelve a probar. Pasados los tres se deja de insistir, y
+  /// si la quitó a propósito no vuelve a aparecer sola.
   ///
   /// Va en segundo plano a propósito: son varios megas y la app tiene que estar
   /// usable mientras tanto. Mientras no terminen, la base de fábrica del código
   /// ya está protegiendo.
   static Future<void> asegurarDeFabrica() async {
-    final hechasCrudo = PrismHubStorage.getSetting(_claveFabricaHechas);
-    final hechas = <String>{
-      if (hechasCrudo is String && hechasCrudo.isNotEmpty)
-        ...hechasCrudo.split(''),
-    };
+    // Cuántas veces se intentó cada una.
+    //
+    // **Antes esto estaba roto de dos maneras.** Se guardaba pegando todas las
+    // direcciones en un solo texto y se leía partiéndolo CARÁCTER POR CARÁCTER:
+    // el conjunto quedaba lleno de letras sueltas y la comprobación no acertaba
+    // nunca. Y la idea de fondo tampoco servía: se anotaba "ya intentada"
+    // aunque hubiera fallado, así que a quien abría la app sin red la lista le
+    // quedaba fuera para siempre mientras la pantalla decía "viene puesta".
+    final crudo = PrismHubStorage.getSetting(_claveFabricaHechas);
+    final intentos = <String, int>{};
+    if (crudo is String && crudo.isNotEmpty) {
+      try {
+        final d = jsonDecode(crudo);
+        if (d is Map) {
+          d.forEach((k, v) => intentos['$k'] = v is int ? v : 0);
+        } else if (d is List) {
+          for (final e in d) {
+            intentos['$e'] = 1;
+          }
+        }
+      } catch (_) {
+        // Un ajuste ilegible no puede frenar el arranque: se toma como que no
+        // se instaló ninguna y se vuelve a intentar.
+      }
+    }
+
     final yaInstaladas = listas().map((l) => l.url).toSet();
+    var cambio = false;
 
     for (final c in catalogo) {
       if (!c.deFabrica) continue;
-      if (hechas.contains(c.url) || yaInstaladas.contains(c.url)) continue;
+      if (yaInstaladas.contains(c.url)) continue;
+      // Tres arranques de margen. Con menos, un rato sin red deja al usuario
+      // sin las listas; con más, quien la quitó a propósito la ve volver
+      // eternamente.
+      final hechos = intentos[c.url] ?? 0;
+      if (hechos >= 3) continue;
+      intentos[c.url] = hechos + 1;
+      cambio = true;
       try {
         final n = await instalar(c.nombre, c.url);
         logger.info('[bloqueador] de fábrica: ${c.nombre} ($n dominios)');
+        intentos[c.url] = 99;
       } catch (e) {
-        logger.warning('[bloqueador] no se pudo poner ${c.nombre}: $e');
+        logger.warning('[bloqueador] no se pudo poner ${c.nombre} '
+            '(intento ${hechos + 1} de 3): $e');
       }
-      // Se anota igual haya salido bien o mal: reintentar en cada arranque
-      // sería castigar a quien no tiene red con una demora en cada apertura.
-      hechas.add(c.url);
       await PrismHubStorage.setSetting(
-          _claveFabricaHechas, hechas.join(''));
+          _claveFabricaHechas, jsonEncode(intentos));
     }
+    if (cambio) await cargar();
+  }
+
+  /// Las de fábrica que deberían estar puestas y no están.
+  ///
+  /// Se muestra en la pantalla: si una protección que la app promete no llegó a
+  /// bajarse, el usuario tiene que poder verlo y ponerla, no darse cuenta solo.
+  static List<ListaConocida> deFabricaQueFaltan() {
+    final puestas = listas().map((l) => l.url).toSet();
+    return catalogo
+        .where((c) => c.deFabrica && !puestas.contains(c.url))
+        .toList();
+  }
+
+  /// Vuelve a bajar TODAS las listas instaladas, una por una.
+  ///
+  /// Devuelve cuántas se pudieron poner al día. Las que fallen no cortan al
+  /// resto: una lista caída no puede impedir que las otras se actualicen.
+  static Future<int> actualizarTodas() async {
+    var bien = 0;
+    for (final l in listas()) {
+      try {
+        await actualizar(l.url);
+        bien++;
+      } catch (e) {
+        logger.warning('[bloqueador] no se pudo actualizar ${l.nombre}: $e');
+      }
+    }
+    return bien;
   }
 
   /// Instala una lista desde una dirección. Devuelve cuántos dominios trajo.

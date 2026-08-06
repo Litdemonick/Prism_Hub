@@ -23,6 +23,7 @@ class BloqueadorPage extends StatefulWidget {
 
 class _BloqueadorPageState extends State<BloqueadorPage> {
   List<ListaDeBloqueo> _listas = const [];
+  List<ListaConocida> _faltan = const [];
   bool _trabajando = false;
 
   @override
@@ -32,7 +33,10 @@ class _BloqueadorPageState extends State<BloqueadorPage> {
   }
 
   void _refrescar() {
-    setState(() => _listas = BloqueadorAnuncios.listas());
+    setState(() {
+      _listas = BloqueadorAnuncios.listas();
+      _faltan = BloqueadorAnuncios.deFabricaQueFaltan();
+    });
   }
 
   void _aviso(String texto, {bool malo = false}) {
@@ -319,6 +323,7 @@ class _BloqueadorPageState extends State<BloqueadorPage> {
                       clipBehavior: Clip.antiAlias,
                       child: SwitchListTile(
                         value: activo,
+                        activeTrackColor: const Color(0xFF69F0AE),
                         hoverColor: Colors.white.withValues(alpha: 0.04),
                         contentPadding: const EdgeInsets.symmetric(
                             horizontal: 16, vertical: 6),
@@ -376,10 +381,98 @@ class _BloqueadorPageState extends State<BloqueadorPage> {
                             width: 16,
                             height: 16,
                             child: CircularProgressIndicator(strokeWidth: 2),
+                          )
+                        else if (_listas.length > 1)
+                          // Cada lista se actualiza sola desde su fila; esto es
+                          // para no tener que tocarlas de a una cuando son
+                          // varias.
+                          TextButton.icon(
+                            onPressed: () => _conEspera(() async {
+                              final n =
+                                  await BloqueadorAnuncios.actualizarTodas();
+                              _aviso('$n de ${_listas.length} listas al día');
+                            }),
+                            icon: const Icon(Icons.refresh, size: 16),
+                            label: const Text('Actualizar todas'),
+                            style: ButtonStyle(
+                              foregroundColor:
+                                  WidgetStatePropertyAll(HomeTheme.textMuted),
+                              overlayColor: WidgetStatePropertyAll(
+                                  Colors.white.withValues(alpha: 0.05)),
+                              textStyle: const WidgetStatePropertyAll(
+                                TextStyle(
+                                    fontSize: 12, fontWeight: FontWeight.w600),
+                              ),
+                              shape: WidgetStatePropertyAll(
+                                RoundedRectangleBorder(
+                                    borderRadius: BorderRadius.circular(9)),
+                              ),
+                            ),
                           ),
                       ],
                     ),
                     const SizedBox(height: 8),
+                    // Si alguna de las que vienen puestas no llegó a bajarse, se
+                    // dice.
+                    //
+                    // La app promete cuatro protecciones de fábrica; si una no
+                    // está —porque no había red al instalar, por ejemplo— el
+                    // usuario tiene que poder verlo y ponerla, no darse cuenta
+                    // solo.
+                    if (_faltan.isNotEmpty)
+                      Container(
+                        margin: const EdgeInsets.only(bottom: 10),
+                        padding: const EdgeInsets.fromLTRB(14, 10, 10, 10),
+                        decoration: BoxDecoration(
+                          color: const Color(0x18FFB74D),
+                          borderRadius: BorderRadius.circular(12),
+                          border: Border.all(color: const Color(0x44FFB74D)),
+                        ),
+                        child: Row(
+                          children: [
+                            const Icon(Icons.info_outline,
+                                size: 19, color: Color(0xFFFFB74D)),
+                            const SizedBox(width: 11),
+                            Expanded(
+                              child: Text(
+                                _faltan.length == 1
+                                    ? 'Falta una protección recomendada: '
+                                        '${_faltan.first.nombre}.'
+                                    : 'Faltan ${_faltan.length} protecciones '
+                                        'recomendadas.',
+                                style: const TextStyle(
+                                    fontSize: 12.5, height: 1.35),
+                              ),
+                            ),
+                            const SizedBox(width: 6),
+                            TextButton(
+                              onPressed: _trabajando
+                                  ? null
+                                  : () => _conEspera(() async {
+                                        for (final c in _faltan) {
+                                          await BloqueadorAnuncios.instalar(
+                                              c.nombre, c.url);
+                                        }
+                                        _aviso('Protecciones al día');
+                                      }),
+                              style: ButtonStyle(
+                                foregroundColor: const WidgetStatePropertyAll(
+                                    Color(0xFFFFB74D)),
+                                overlayColor: WidgetStatePropertyAll(
+                                    const Color(0xFFFFB74D)
+                                        .withValues(alpha: 0.15)),
+                                shape: WidgetStatePropertyAll(
+                                  RoundedRectangleBorder(
+                                      borderRadius: BorderRadius.circular(9)),
+                                ),
+                              ),
+                              child: const Text('Poner',
+                                  style:
+                                      TextStyle(fontWeight: FontWeight.w700)),
+                            ),
+                          ],
+                        ),
+                      ),
                     // Cuando no hay ninguna, se explica QUÉ es una lista.
                     //
                     // Antes decía "todavía no hay ninguna, tocá instalar y pegá la
@@ -541,15 +634,24 @@ class _FilaLista extends StatelessWidget {
       margin: const EdgeInsets.only(bottom: 8),
       decoration: BoxDecoration(
         color: HomeTheme.cardSurface,
-        borderRadius: BorderRadius.circular(10),
+        borderRadius: BorderRadius.circular(12),
+        // Verde cuando protege, gris cuando no.
+        //
+        // Antes el borde de "activa" era el rosa de acento del tema, que en
+        // esta pantalla no quiere decir nada: acá el color tiene que contestar
+        // "¿esto me está protegiendo?", y para eso el verde es inequívoco. El
+        // rosa, además, es el mismo que usaba el resaltado del interruptor al
+        // pasar el puntero, así que activa o no, todo se veía igual de rosa.
         border: Border.all(
-          color: lista.activa ? HomeTheme.accentPink : HomeTheme.border,
+          color: lista.activa ? const Color(0x5569F0AE) : HomeTheme.border,
         ),
       ),
       child: Column(
         children: [
           SwitchListTile(
             value: lista.activa,
+            activeTrackColor: const Color(0xFF69F0AE),
+            hoverColor: Colors.white.withValues(alpha: 0.04),
             title: Text(lista.nombre,
                 maxLines: 1, overflow: TextOverflow.ellipsis),
             subtitle: Text(
@@ -573,15 +675,16 @@ class _FilaLista extends StatelessWidget {
                     style: TextStyle(color: HomeTheme.textMuted, fontSize: 11),
                   ),
                 ),
-                TextButton.icon(
+                _BotonChico(
+                  icono: Icons.refresh,
+                  tooltip: 'Actualizar esta lista',
                   onPressed: trabajando ? null : onActualizar,
-                  icon: const Icon(Icons.refresh, size: 16),
-                  label: const Text('Actualizar'),
                 ),
-                IconButton(
-                  onPressed: trabajando ? null : onQuitar,
-                  icon: const Icon(Icons.delete_outline, size: 18),
+                _BotonChico(
+                  icono: Icons.delete_outline,
                   tooltip: 'Quitar',
+                  color: const Color(0xFFFF8A80),
+                  onPressed: trabajando ? null : onQuitar,
                 ),
               ],
             ),
@@ -1053,7 +1156,12 @@ class _TarjetaDeLista extends StatelessWidget {
                             fontSize: 13.5, fontWeight: FontWeight.w600),
                       ),
                     ),
-                    if (lista.deFabrica) ...[
+                    // "Recomendada", y solo si NO está puesta.
+                    //
+                    // Antes decía "viene puesta" al lado del botón de instalar,
+                    // en la misma tarjeta: o venía puesta o había que
+                    // instalarla, las dos cosas a la vez no.
+                    if (lista.deFabrica && !instalada) ...[
                       const SizedBox(width: 7),
                       Container(
                         padding: const EdgeInsets.symmetric(
@@ -1063,7 +1171,7 @@ class _TarjetaDeLista extends StatelessWidget {
                           borderRadius: BorderRadius.circular(5),
                         ),
                         child: const Text(
-                          'viene puesta',
+                          'recomendada',
                           style: TextStyle(
                             fontSize: 9.5,
                             fontWeight: FontWeight.w700,
