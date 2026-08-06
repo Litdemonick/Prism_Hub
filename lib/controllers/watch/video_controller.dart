@@ -31,6 +31,7 @@ import 'package:prismhub/utils/cast_log.dart';
 import 'package:prismhub/utils/connectivity.dart';
 import 'package:prismhub/utils/cast_metadata.dart';
 import 'package:prismhub/utils/notificacion_reproductor.dart';
+import 'package:prismhub/utils/audio_hls.dart';
 import 'package:prismhub/utils/bomba_de_datos.dart';
 import 'package:prismhub/utils/cast_relay_server.dart';
 import 'package:prismhub/utils/watch_state.dart';
@@ -265,7 +266,7 @@ class VideoPlayerController extends GetxController with WidgetsBindingObserver {
     final quiere = audiosHls[indice];
     try {
       hasRenderedFrame.value = false;
-      final conIdioma = _conAudio(actual, quiere.numero);
+      final conIdioma = AudioHls.conAudio(actual, quiere.numero);
       await player.open(Media(conIdioma, httpHeaders: headers));
       _fuenteUrl = conIdioma;
       audioHlsElegido.value = indice;
@@ -276,79 +277,6 @@ class VideoPlayerController extends GetxController with WidgetsBindingObserver {
     } finally {
       cambiandoAudio.value = false;
     }
-  }
-
-  /// Con qué idioma conviene arrancar.
-  ///
-  /// **El español, si está.** Estos sitios son de contenido en español y quien
-  /// los usa quiere el latino; que empiece en inglés porque el servidor pegó
-  /// ese al vídeo sería empezar mal. Si no hay español se respeta el que venga
-  /// pegado, que es lo que sonaba antes de todo esto.
-  static PistaDeAudio _idiomaPreferido(List<PistaDeAudio> pistas, int pegado) {
-    for (final p in pistas) {
-      final esEspanol = (p.idioma ?? '').toLowerCase().startsWith('es') ||
-          RegExp(r'espa|latin|castell|spanish', caseSensitive: false)
-              .hasMatch(p.nombre);
-      if (esEspanol) return p;
-    }
-    return pistas[pegado.clamp(0, pistas.length - 1)];
-  }
-
-  /// La misma dirección, con otro número de audio.
-  ///
-  /// `…/index-v1-a2.m3u8?t=…` → `…/index-v1-a1.m3u8?t=…`. El vale sirve igual
-  /// para las dos: comprobado pidiendo la variante en español con el token de
-  /// la inglesa, responde 200 y baja vídeo.
-  static String _conAudio(String url, int numero) =>
-      url.replaceAll(RegExp(r'-a\d+(?=\.m3u8)'), '-a$numero');
-
-  /// Lee los idiomas del maestro y cuál está sonando.
-  ///
-  /// [enElVideo] es el número que traen las variantes: ese es el que se escucha
-  /// sin tocar nada, por más que el maestro marque otro como `DEFAULT`.
-  static ({List<PistaDeAudio> pistas, int sonando}) _audiosDelMaestro(
-    String maestro,
-  ) {
-    final pistas = <PistaDeAudio>[];
-    for (final linea in const LineSplitter().convert(maestro)) {
-      if (!linea.startsWith('#EXT-X-MEDIA:')) continue;
-      if (!linea.contains('TYPE=AUDIO')) continue;
-      final uri = RegExp(r'URI="([^"]+)"').firstMatch(linea)?.group(1);
-      if (uri == null) continue;
-      final num = RegExp(r'-a(\d+)\.m3u8').firstMatch(uri)?.group(1);
-      if (num == null) continue;
-      final nombre = RegExp(r'NAME="([^"]*)"').firstMatch(linea)?.group(1);
-      final idioma = RegExp(r'LANGUAGE="([^"]*)"').firstMatch(linea)?.group(1);
-      pistas.add(PistaDeAudio(
-        int.parse(num),
-        (nombre != null && nombre.trim().isNotEmpty)
-            ? nombre
-            : (idioma ?? 'Pista $num'),
-        idioma,
-      ));
-    }
-    if (pistas.length < 2) {
-      // Lista NUEVA y modificable, nunca `const []`.
-      //
-      // `audiosHls` es un RxList y asignarle una lista constante deja el
-      // contenido de adentro inmodificable: el `clear()` del siguiente servidor
-      // reventaba con "Cannot change the length of an unmodifiable list" y se
-      // llevaba puesta la reproducción entera. Le pasó a JKAnime, que hasta ese
-      // momento andaba en casi todos sus servidores.
-      return (pistas: <PistaDeAudio>[], sonando: -1);
-    }
-    // Cuál viene pegado al vídeo. Se mira la primera variante de verdad.
-    var enElVideo = -1;
-    for (final linea in const LineSplitter().convert(maestro)) {
-      if (linea.startsWith('#') || linea.trim().isEmpty) continue;
-      final m = RegExp(r'-a(\d+)\.m3u8').firstMatch(linea);
-      if (m != null) {
-        enElVideo = int.parse(m.group(1)!);
-        break;
-      }
-    }
-    final i = pistas.indexWhere((p) => p.numero == enElVideo);
-    return (pistas: pistas, sonando: i >= 0 ? i : 0);
   }
 
   // 画质
@@ -530,6 +458,9 @@ class VideoPlayerController extends GetxController with WidgetsBindingObserver {
         'demuxer-max-bytes',
         'hls-bitrate',
         'demuxer-lavf-o',
+        // Para poder ver si la preferencia de idioma quedó puesta de verdad, en
+        // vez de suponerlo cuando algo suena en inglés.
+        'alang',
       ]) {
         final valor = (await np.getProperty(nombre)).trim();
         ajustes.add('$nombre=${valor.isEmpty ? '—' : valor}');
@@ -1271,6 +1202,23 @@ class VideoPlayerController extends GetxController with WidgetsBindingObserver {
       await np.setProperty(
           'demuxer-max-bytes', Platform.isAndroid ? '96MiB' : '192MiB');
       await np.setProperty('demuxer-readahead-secs', '10');
+      // **El español primero, cuando la fuente trae varios idiomas.**
+      //
+      // Estos sitios son de contenido en español y quien los usa quiere el
+      // latino, pero muchos servidores pegan el inglés como pista por omisión y
+      // así arrancaba. Con esto mpv elige él mismo la pista en español si la
+      // hay, y si no hay se queda con la que traiga — que es justo lo que se
+      // busca: nunca queda mudo ni en un idioma que no está.
+      //
+      // Va además de la elección por dirección que hace `_comoAbrir` para los
+      // maestros con `-aN`, y no en su lugar: aquélla solo sirve donde la
+      // dirección lleva el número de pista, y ésta funciona en cualquier fuente
+      // con varias pistas de verdad —un MP4 con dos audios, un maestro con
+      // renditions separadas— y en las dos plataformas por igual.
+      //
+      // Se listan varias formas del mismo idioma porque los sitios las escriben
+      // como se les ocurre: `es`, `spa`, `es-419`, `Latino`.
+      await np.setProperty('alang', 'spa,es,es-419,es-LA,es-MX,esp,lat');
       // Con qué calidad ARRANCA solo. No es un tope.
       //
       // Antes arrancaba siempre en la más alta que ofreciera el stream, o sea
@@ -5545,7 +5493,7 @@ class VideoPlayerController extends GetxController with WidgetsBindingObserver {
 
     // Las pistas de audio del maestro, para poder ofrecerlas en el menú.
     // Se rehace en cada fuente: son de ESTE vídeo y no del anterior.
-    final delMaestro = _audiosDelMaestro(maestro);
+    final delMaestro = AudioHls.delMaestro(maestro);
     // Copia propia por el mismo motivo: lo que se le asigna al RxList tiene
     // que ser una lista que se pueda tocar después.
     audiosHls.value = List<PistaDeAudio>.of(delMaestro.pistas);
@@ -5571,15 +5519,30 @@ class VideoPlayerController extends GetxController with WidgetsBindingObserver {
     // con `load-unsafe-playlists` arrancó — medido en vivo, entró siempre por
     // el camino de respaldo.
     if (delMaestro.pistas.isNotEmpty) {
-      final quiere = _idiomaPreferido(delMaestro.pistas, delMaestro.sonando);
+      final quiere = AudioHls.preferido(delMaestro.pistas, delMaestro.sonando);
       final variante = _mejorVarianteDe(maestro, Uri.parse(url));
       if (variante != null) {
-        final conIdioma = _conAudio(variante.toString(), quiere.numero);
-        audioHlsElegido.value = delMaestro.pistas.indexOf(quiere);
+        final antes = variante.toString();
+        final conIdioma = AudioHls.conAudio(antes, quiere.numero);
+        // **Solo se dice "español" si de verdad se cambió.**
+        //
+        // `_conAudio` reescribe el `-aN` de la dirección, y si esa dirección no
+        // tiene esa forma devuelve la MISMA sin avisar. Antes se marcaba el
+        // idioma preferido igual, así que el selector decía «Español» y se
+        // escuchaba inglés — reportado en vivo con Goodstream el 2026-08-06. El
+        // menú mintiendo es peor que el idioma equivocado: quien lo ve piensa
+        // que ya lo tiene puesto y ni prueba a cambiarlo.
+        final seCambio = conIdioma != antes;
+        audioHlsElegido.value = seCambio
+            ? delMaestro.pistas.indexOf(quiere)
+            : delMaestro.sonando;
         logger.info('ficha · $servidor · idiomas: '
             '${audiosHls.map((a) => '${a.nombre} (a${a.numero})').join(', ')}'
             ' · el vídeo trae a${delMaestro.pistas[delMaestro.sonando].numero}'
-            ' · se abre en ${quiere.nombre}');
+            '${seCambio ? ' · se abre en ${quiere.nombre}' : ' · NO se pudo '
+                'cambiar de idioma por la dirección (no lleva -aN), se abre en '
+                '${delMaestro.pistas[delMaestro.sonando].nombre} y el selector '
+                'lo dice'}');
         await _dejarSaltarDentroDelArchivo(false, url, headers);
         return _ComoAbrir.con(conIdioma);
       }
@@ -6636,13 +6599,3 @@ class _ComoAbrir {
 
 
 /// Un idioma de audio de los que ofrece una lista maestra de HLS.
-class PistaDeAudio {
-  const PistaDeAudio(this.numero, this.nombre, this.idioma);
-
-  /// El número con el que el servidor lo nombra en los archivos: la variante
-  /// `index-v1-a2.m3u8` es el vídeo 1 con ESTE audio pegado. Cambiar de idioma
-  /// es pedir la misma variante con otro número.
-  final int numero;
-  final String nombre;
-  final String? idioma;
-}
