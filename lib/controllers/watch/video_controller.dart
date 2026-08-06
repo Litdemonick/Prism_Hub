@@ -31,6 +31,7 @@ import 'package:prismhub/utils/cast_log.dart';
 import 'package:prismhub/utils/connectivity.dart';
 import 'package:prismhub/utils/cast_metadata.dart';
 import 'package:prismhub/utils/notificacion_reproductor.dart';
+import 'package:prismhub/utils/bomba_de_datos.dart';
 import 'package:prismhub/utils/cast_relay_server.dart';
 import 'package:prismhub/utils/watch_state.dart';
 import 'package:prismhub/data/services/database_service.dart';
@@ -2425,6 +2426,9 @@ class VideoPlayerController extends GetxController with WidgetsBindingObserver {
     _dlnaTimer?.cancel();
     _bufferingStallTimer?.cancel();
     _qualitySwitchTimer?.cancel();
+    // Cada lectura abierta es un socket contra el servidor: al cerrar el
+    // reproductor hay que soltarlas o quedan colgadas hasta reiniciar la app.
+    _soltarLaBomba();
     // Estos dos son de un solo disparo, asi que no dejan nada dando vueltas,
     // pero si el reproductor se cierra en el medio saltan despues y escriben
     // sobre observables de un controlador ya destruido.
@@ -2923,9 +2927,17 @@ class VideoPlayerController extends GetxController with WidgetsBindingObserver {
     final referer = newWatch.headers?['Referer'] ?? serverReferers[name];
     if (referer != null) headers['Referer'] = referer;
     // Copiar headers útiles (excluir X-* que solo aplican al listado de episodio)
+    //
+    // Menos las que son una DECLARACIÓN del servidor sobre cómo hay que leerlo:
+    // esas nacen en la carpeta de ese servidor dentro de la extensión y tienen
+    // que llegar hasta acá. Se sacan más adelante, antes de abrir nada, para que
+    // no salgan a la red como si fueran cabeceras de verdad (ver
+    // _tryOpenPlayer).
     if (newWatch.headers != null) {
       for (final e in newWatch.headers!.entries) {
-        if (!e.key.startsWith('X-')) headers[e.key] = e.value;
+        if (!e.key.startsWith('X-') || e.key == _lecturaContinua) {
+          headers[e.key] = e.value;
+        }
       }
     }
 
@@ -5032,6 +5044,29 @@ class VideoPlayerController extends GetxController with WidgetsBindingObserver {
       'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 '
       '(KHTML, like Gecko) Chrome/125.0.0.0 Safari/537.36';
 
+  /// Con esto una extensión declara que a ESE servidor hay que leerle el archivo
+  /// de una sola vez en vez de pedirle tramos sueltos.
+  ///
+  /// **No es una cabecera HTTP**: es una declaración que viaja por el mismo
+  /// canal que las demás `X-` y se saca antes de pedirle nada a la fuente.
+  ///
+  /// La app no sabe qué servidores la necesitan ni tiene por qué saberlo: el que
+  /// tiene la medición es el resolver del servidor, en su carpeta dentro de la
+  /// extensión (hoy, `jkanime/servidores/mp4upload/`). Así arreglar un servidor
+  /// no le cambia el camino a ningún otro. Ver BombaDeDatos.
+  static const _lecturaContinua = 'X-Lectura-Continua';
+
+  /// La dirección local que está sirviendo la bomba, si hay alguna andando.
+  String? _bombaUrl;
+
+  /// Suelta la bomba anterior y sus lecturas abiertas contra la fuente.
+  void _soltarLaBomba() {
+    final vieja = _bombaUrl;
+    if (vieja == null) return;
+    _bombaUrl = null;
+    BombaDeDatos.soltar(vieja);
+  }
+
   Future<bool> _tryOpenPlayer(String url, Map<String, String>? headers) async {
     if (_disposed) return false;
     if (url.startsWith('error://')) {
@@ -5056,6 +5091,19 @@ class VideoPlayerController extends GetxController with WidgetsBindingObserver {
     // libmpv por defecto envía "Lavf/X.X.X" que los CDNs de streaming bloquean.
     final hdrs = <String, String>{'User-Agent': _browserUA};
     if (headers != null) hdrs.addAll(headers);
+    // La declaración de la extensión se lee y se SACA: de acá para abajo todo lo
+    // que quede en el mapa sale a la red, y esto no es una cabecera de verdad.
+    //
+    // Se saca de las DOS: de `hdrs`, que es lo que se le pasa a mpv, y de una
+    // copia de las de la extensión, que es lo que sigue viaje. Copia y no el
+    // mapa original: ese es de `watchData` y lo comparten otros.
+    final lecturaContinua = hdrs.remove(_lecturaContinua) == '1';
+    final headersLimpias = headers == null
+        ? null
+        : (Map<String, String>.of(headers)..remove(_lecturaContinua));
+    // La bomba anterior se suelta ANTES de abrir otra fuente: cada una deja
+    // lecturas abiertas contra el servidor y nadie más las va a cerrar.
+    _soltarLaBomba();
     // Cómo conviene abrir esta fuente: tal cual, por el relay para esquivar
     // nodos caídos, o directamente no intentarlo. Ver _comoAbrir.
     // Las pistas del maestro anterior no valen para esta fuente: se olvidan
@@ -5064,7 +5112,7 @@ class VideoPlayerController extends GetxController with WidgetsBindingObserver {
     // `clear()` tira una excepción y corta la reproducción antes de empezar.
     audiosHls.value = <PistaDeAudio>[];
     audioHlsElegido.value = -1;
-    final plan = await _comoAbrir(url, headers);
+    final plan = await _comoAbrir(url, headersLimpias, lecturaContinua);
     if (_disposed) return false;
     _fuenteUrl = plan.url ?? url;
     _fuenteHeaders = hdrs;
@@ -5432,6 +5480,7 @@ class VideoPlayerController extends GetxController with WidgetsBindingObserver {
   Future<_ComoAbrir> _comoAbrir(
     String url,
     Map<String, String>? headers,
+    bool lecturaContinua,
   ) async {
     // La ficha del servidor, SIEMPRE, aunque no haya nada que hacer. Sirve para
     // revisar extensión por extensión sin cruzar líneas a mano.
@@ -5444,8 +5493,31 @@ class VideoPlayerController extends GetxController with WidgetsBindingObserver {
       logger.info('ficha · $servidor · ${sinParametros.endsWith('.mp4') ? 'MP4 '
               'directo' : 'no es una lista HLS'} · $donde · va directo a mpv, no '
           'hay pedacitos que repartir');
-      await _dejarSaltarDentroDelArchivo(
-          !sinParametros.endsWith('.m3u8'), url, headers);
+      final entero = !sinParametros.endsWith('.m3u8');
+      await _dejarSaltarDentroDelArchivo(entero, url, headers);
+      // Este servidor cobra carísimo cada pedido nuevo y la extensión lo
+      // declaró: se le lee el archivo de una sola vez. Solo para archivo entero
+      // — en una lista de pedacitos cada uno es una dirección distinta y no hay
+      // ninguna lectura que sostener.
+      if (entero && lecturaContinua) {
+        // Con las MISMAS cabeceras con las que habría salido mpv: de acá en
+        // adelante la que le pide a la fuente es la bomba, y la fuente no tiene
+        // por qué notar el cambio. Sin el User-Agent de navegador, varios CDNs
+        // contestan 403.
+        final porLaBomba = await BombaDeDatos.registrar(
+          url: url,
+          cabeceras: {'User-Agent': _browserUA, ...?headers},
+        );
+        if (porLaBomba != null) {
+          _bombaUrl = porLaBomba;
+          logger.info('ficha · $servidor · SE LE LEE DE UNA SOLA VEZ · $donde '
+              'cobra ~1,5 s por cada pedido nuevo, así que la app le mantiene '
+              'la lectura abierta y le sirve al reproductor desde ahí');
+          return _ComoAbrir.con(porLaBomba);
+        }
+        logger.info('ficha · $servidor · no se pudo leer de una sola vez · va '
+            'directo a mpv como siempre');
+      }
       return const _ComoAbrir.talCual();
     }
     await _dejarSaltarDentroDelArchivo(false, url, headers);
