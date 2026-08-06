@@ -1651,16 +1651,17 @@ class _TrackState extends State<_Track> {
                         // idioma —«Español», «English»— y son las que el
                         // usuario está buscando. Ver audiosHls en
                         // video_controller.dart: mpv no las ve solo.
-                        for (final audio in widget.controller.audiosHls)
+                        for (final (i, audio)
+                            in widget.controller.audiosHls.indexed)
                           ListTile.selectable(
-                            selected: audio ==
-                                widget.controller.player.state.track.audio,
+                            selected:
+                                widget.controller.audioHlsElegido.value == i,
                             title: Text(audio.title ?? audio.language ?? ''),
                             subtitle: audio.language != null
                                 ? Text(audio.language!)
                                 : null,
                             onPressed: () {
-                              widget.controller.player.setAudioTrack(audio);
+                              widget.controller.elegirAudioHls(i);
                               Flyout.of(context).close();
                             },
                           ),
@@ -1676,22 +1677,32 @@ class _TrackState extends State<_Track> {
                               ),
                             ),
                           ),
-                        for (final (i, audio)
-                            in _audiosDe(widget.controller).indexed)
-                          ListTile.selectable(
-                            selected: audio ==
-                                widget.controller.player.state.track.audio,
-                            title: Text(
-                                _nombreDePista(audio.title, audio.language, i)),
-                            subtitle:
-                                audio.title != null && audio.language != null
-                                    ? Text(audio.language!)
-                                    : null,
-                            onPressed: () {
-                              widget.controller.player.setAudioTrack(audio);
-                              Flyout.of(context).close();
-                            },
-                          ),
+                        // Las que mpv lista por su cuenta se muestran SOLO si
+                        // el maestro no trajo idiomas.
+                        //
+                        // Con las dos listas juntas salía «Español, English,
+                        // Pista 1, Español, Español»: la sin nombre es la que
+                        // viene pegada al vídeo —o sea, la misma que
+                        // «Español»— y las repetidas son las externas, que mpv
+                        // agrega a su lista apenas se cargan. Todo eso es el
+                        // mismo puñado de audios contado tres veces.
+                        if (widget.controller.audiosHls.isEmpty)
+                          for (final (i, audio)
+                              in _audiosDe(widget.controller).indexed)
+                            ListTile.selectable(
+                              selected: audio ==
+                                  widget.controller.player.state.track.audio,
+                              title: Text(_nombreDePista(
+                                  audio.title, audio.language, i)),
+                              subtitle:
+                                  audio.title != null && audio.language != null
+                                      ? Text(audio.language!)
+                                      : null,
+                              onPressed: () {
+                                widget.controller.player.setAudioTrack(audio);
+                                Flyout.of(context).close();
+                              },
+                            ),
                       ],
                     ),
                   ),

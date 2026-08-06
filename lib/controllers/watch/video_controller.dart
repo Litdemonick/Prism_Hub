@@ -207,6 +207,32 @@ class VideoPlayerController extends GetxController with WidgetsBindingObserver {
   /// problema.
   final audiosHls = <AudioTrack>[].obs;
 
+  /// Cuál de `audiosHls` está elegida. -1 es "ninguna, suena la del vídeo".
+  ///
+  /// Se lleva acá y no se deduce de `player.state.track.audio` porque al cargar
+  /// una pista externa mpv la agrega a su lista con OTRA identidad, así que la
+  /// comparación nunca acertaba y el menú no marcaba ninguna.
+  final audioHlsElegido = (-1).obs;
+
+  /// Cambia el idioma del audio y vuelve a sincronizarlo con la imagen.
+  ///
+  /// **El salto al final no es un adorno.** La pista externa es otro `.m3u8`
+  /// que mpv abre por su cuenta, con su propio demuxer y su propio reloj: al
+  /// engancharla en marcha arranca desde donde ella cree que va, no desde donde
+  /// va la imagen, y se escucha corrido. Volviendo a pedir la posición actual
+  /// los dos se colocan en el mismo punto.
+  Future<void> elegirAudioHls(int indice) async {
+    if (indice < 0 || indice >= audiosHls.length) return;
+    final donde = position.value;
+    try {
+      await player.setAudioTrack(audiosHls[indice]);
+      audioHlsElegido.value = indice;
+      if (donde > Duration.zero) await player.seek(donde);
+    } catch (e) {
+      logger.warning('no se pudo cambiar el audio', e);
+    }
+  }
+
   /// Saca las pistas de audio de una lista maestra de HLS.
   ///
   /// Se devuelve vacío cuando hay una sola o ninguna: ofrecer "elegir" entre un
@@ -4973,6 +4999,7 @@ class VideoPlayerController extends GetxController with WidgetsBindingObserver {
     // Las pistas del maestro anterior no valen para esta fuente: se olvidan
     // antes de mirarla. `_comoAbrir` las vuelve a llenar si esta trae.
     audiosHls.clear();
+    audioHlsElegido.value = -1;
     final plan = await _comoAbrir(url, headers);
     if (_disposed) return false;
     await _pistasEnAutomatico();

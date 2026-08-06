@@ -186,13 +186,6 @@ void main(List<String> args) async {
     // molesto, pero no arrancar la app por eso sería peor.
     try {
       await BloqueadorAnuncios.cargar();
-      // Las listas que vienen puestas se bajan DETRÁS, sin esperarlas: son
-      // varios megas y la app tiene que estar usable ya. Mientras tanto la base
-      // de fábrica del código ya está protegiendo, así que no hay un rato sin
-      // protección — hay un rato con menos.
-      unawaited(BloqueadorAnuncios.asegurarDeFabrica().catchError((Object e) {
-        logger.warning('No se pudieron poner las listas de fábrica: $e');
-      }));
     } catch (e) {
       logger.warning('No se pudieron cargar las listas de bloqueo: $e');
     }
@@ -531,6 +524,20 @@ class _AppRootState extends State<_AppRoot> {
     } catch (e) {
       debugPrint('ERROR: PrismRequest.ensureInitialized falló: $e');
     }
+    // Las listas que vienen puestas se bajan ACÁ, y no más arriba junto con
+    // `cargar()`.
+    //
+    // Bajar necesita `dio`, y `dio` lo crea PrismRequest justo en la línea de
+    // arriba. Lanzado antes, cada intento moría con "Field 'dio' has not been
+    // initialized" y se gastaban los tres que tiene cada lista: la app decía
+    // que traía cuatro protecciones y no bajaba ninguna.
+    //
+    // Va sin esperarlo: son varios megas y la app tiene que estar usable ya.
+    // Mientras tanto la base de fábrica del código ya está protegiendo, así que
+    // no hay un rato sin protección — hay un rato con menos.
+    unawaited(BloqueadorAnuncios.asegurarDeFabrica().catchError((Object e) {
+      logger.warning('No se pudieron poner las listas de fábrica: $e');
+    }));
     try {
       await ExtensionUtils.ensureInitialized();
     } catch (e) {

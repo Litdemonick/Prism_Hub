@@ -50,7 +50,14 @@ class BloqueadorAnuncios {
 
   /// Qué listas de fábrica ya se intentaron instalar, para no reintentarlas
   /// eternamente ni volver a ponerlas si el usuario las quitó a propósito.
-  static const _claveFabricaHechas = 'bloqueador_fabrica_hechas';
+  ///
+  /// **La clave cambió de nombre a propósito.** La versión anterior lanzaba la
+  /// descarga antes de que existiera el cliente de red, así que los tres
+  /// intentos de cada lista se gastaban con "Field 'dio' has not been
+  /// initialized" sin haber salido a la red ni una vez. Con el nombre viejo,
+  /// esos usuarios se quedaban sin las listas para siempre; con uno nuevo, el
+  /// contador arranca de cero y se bajan como corresponde.
+  static const _claveFabricaHechas = 'bloqueador_fabrica_hechas_v2';
 
   // ─── Catálogo ─────────────────────────────────────────────────────────────
 
