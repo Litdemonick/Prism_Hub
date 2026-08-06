@@ -864,6 +864,32 @@ class _WebViewPlayerPageState extends State<WebViewPlayerPage>
     }
   }
 
+  /// Un botón redondo con fondo sólido, para que se vea sobre cualquier vídeo.
+  ///
+  /// Van sueltos y no en una barra: la franja de arriba es del SITIO. unlimplay,
+  /// por ejemplo, pone ahí su idioma y su propio selector de servidores —Direct,
+  /// Goodstream, Streamhg, Filemoon, Voe, Streamwish, Vidhide, Netu—, o sea ocho
+  /// opciones más que el usuario perdía si se la tapábamos.
+  Widget _botonSolido({
+    required IconData icono,
+    required VoidCallback alTocar,
+    required double tamano,
+  }) {
+    return Material(
+      color: Colors.black.withValues(alpha: 0.72),
+      shape: const CircleBorder(),
+      clipBehavior: Clip.antiAlias,
+      child: InkWell(
+        onTap: alTocar,
+        child: SizedBox(
+          width: tamano,
+          height: tamano,
+          child: Icon(icono, color: Colors.white, size: tamano * 0.5),
+        ),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     return PopScope(
@@ -911,7 +937,14 @@ class _WebViewPlayerPageState extends State<WebViewPlayerPage>
                       transparentBackground: true,
                       // Bloquea ventanas/popups de anuncios de los hosts.
                       javaScriptCanOpenWindowsAutomatically: false,
-                      supportMultipleWindows: false,
+                      // En true a propósito, aunque suene al revés.
+                      //
+                      // Con false, el motor mete la ventana emergente en la
+                      // MISMA pestaña: la página del vídeo se reemplaza por el
+                      // anuncio y `onCreateWindow` no llega a dispararse. Con
+                      // true, cada intento pasa por ese callback y ahí se
+                      // corta sin abrir nada — el vídeo se queda donde estaba.
+                      supportMultipleWindows: true,
                       // Las listas del usuario, en la vía nativa: el pedido ni
                       // se hace. Soportado en Android (y iOS/macOS); en Windows
                       // llega vacío y el bloqueo lo hacen shouldOverrideUrlLoading
@@ -1028,6 +1061,26 @@ class _WebViewPlayerPageState extends State<WebViewPlayerPage>
                     // nunca debe abrir el navegador externo, solo el WebView interno.
                     // Se cancela la navegación sin más — el usuario sigue viendo el
                     // video/embed original sin interrupciones.
+                    // La ventana emergente que ni el guion ni la navegación
+                    // llegan a ver.
+                    //
+                    // El guion tapa `window.open`, y `shouldOverrideUrlLoading`
+                    // ataja las navegaciones. Pero un `<a target="_blank">` no
+                    // es ninguna de las dos: el motor pide una VENTANA NUEVA, y
+                    // eso solo llega acá. Sin este callback, en Android quedaba
+                    // en manos del motor y en escritorio se abría el navegador
+                    // del sistema — el usuario tocaba "reproducir" y le
+                    // aparecía una pestaña de casino fuera de la app.
+                    //
+                    // Devolver false es "no, no abras nada". Se avisa al
+                    // registro para que quede medido cuántas se cortan, en vez
+                    // de suponer que el bloqueador está haciendo algo.
+                    onCreateWindow: (controller, accion) async {
+                      final u = accion.request.url;
+                      logger.info(
+                          '[bloqueador] ventana emergente cortada: ${u?.host ?? 'sin dirección'}');
+                      return false;
+                    },
                     shouldOverrideUrlLoading: (controller, action) async {
                       final u = action.request.url;
                       if (u == null) return NavigationActionPolicy.ALLOW;
@@ -1144,47 +1197,64 @@ class _WebViewPlayerPageState extends State<WebViewPlayerPage>
                 // planos sueltos — esos se veían fuera de lugar/inconsistentes
                 // con el resto de la app (reportado en vivo: "el contorno se ve
                 // mal").
+                // Los controles de la app, corridos para no taparle los suyos
+                // al sitio.
+                //
+                // Antes esto era UNA barra a todo el ancho, con degradado,
+                // pegada arriba de todo. El problema: varios servidores ponen
+                // ahí SUS propios controles —unlimplay tiene el idioma
+                // ("LATINO") y el servidor ("Direct") justo en esa franja— y la
+                // barra se los comía. No es solo que no se vieran: al ser una
+                // capa por encima, tampoco se podían tocar.
+                //
+                // Ahora son dos botones sueltos y en las esquinas que el sitio
+                // no usa: volver abajo del borde de arriba, y pantalla completa
+                // abajo a la derecha. Sin degradado, así que la franja de
+                // arriba queda libre para el sitio.
+                //
+                // Y con fondo SÓLIDO: sobre un vídeo claro, un icono blanco sin
+                // nada detrás se pierde.
+                //
+                // OJO: esto vale para TODOS los sitios, y se decidió mirando
+                // uno solo (unlimplay). Otros pueden tener sus controles en
+                // otro lado y estas posiciones taparles algo distinto. Queda
+                // pendiente ir probándolos: si aparece un choque, lo que
+                // corresponde es ajustar por sitio y no volver a la barra de
+                // antes, que tapaba una franja entera.
                 IgnorePointer(
                   ignoring: !_showControls,
                   child: AnimatedOpacity(
                     opacity: _showControls ? 1 : 0,
                     duration: const Duration(milliseconds: 200),
-                    child: Container(
-                      decoration: BoxDecoration(
-                        gradient: LinearGradient(
-                          begin: Alignment.topCenter,
-                          end: Alignment.bottomCenter,
-                          colors: [
-                            Colors.black.withValues(alpha: 0.85),
-                            Colors.transparent,
-                          ],
-                        ),
-                      ),
-                      child: SafeArea(
-                        child: Padding(
-                          padding: const EdgeInsets.symmetric(
-                              horizontal: 12, vertical: 4),
-                          child: Row(
-                            children: [
-                              IconButton(
-                                icon: const Icon(Icons.arrow_back,
-                                    color: Colors.white),
-                                onPressed: _exitAndCaptureProgress,
-                              ),
-                              const Spacer(),
-                              if (Platform.isWindows)
-                                IconButton(
-                                  icon: Icon(
-                                    _isFullScreen
-                                        ? Icons.fullscreen_exit
-                                        : Icons.fullscreen,
-                                    color: Colors.white,
-                                  ),
-                                  onPressed: _toggleFullScreen,
-                                ),
-                            ],
+                    child: SafeArea(
+                      child: Stack(
+                        children: [
+                          // Volver: bajado para dejar libre la franja de arriba.
+                          Positioned(
+                            top: 56,
+                            left: 12,
+                            child: _botonSolido(
+                              icono: Icons.arrow_back,
+                              alTocar: _exitAndCaptureProgress,
+                              tamano: 44,
+                            ),
                           ),
-                        ),
+                          // Pantalla completa: abajo a la derecha y más grande,
+                          // que es donde la mano ya está y donde el sitio suele
+                          // tener el suyo.
+                          if (Platform.isWindows)
+                            Positioned(
+                              bottom: 16,
+                              right: 16,
+                              child: _botonSolido(
+                                icono: _isFullScreen
+                                    ? Icons.fullscreen_exit
+                                    : Icons.fullscreen,
+                                alTocar: _toggleFullScreen,
+                                tamano: 56,
+                              ),
+                            ),
+                        ],
                       ),
                     ),
                   ),

@@ -36,7 +36,7 @@ import 'package:prismhub/utils/request.dart' show dio;
 /// ── Los anuncios de vídeo ───────────────────────────────────────────────────
 ///
 /// Aparte de las listas del usuario se bloquean siempre unos pocos dominios: los
-/// cargadores de anuncios de VÍDEO (ver _cargadoresDeAnuncios). Son los que
+/// base de fábrica que va siempre (ver _listaBase). Son los que
 /// meten el anuncio antes de la película, adentro del propio reproductor, y las
 /// listas corrientes no suelen traerlos porque también los usan reproductores
 /// legítimos. Sin ellos, el bloqueador quitaba banners y ventanas emergentes
@@ -68,7 +68,17 @@ class BloqueadorAnuncios {
   /// pantalla decía "0 dominios bloqueados" mientras el bloqueador sí estaba
   /// cortando cosas — parecía que no hacía nada.
   static int get cuantosDominios =>
-      activo ? <String>{..._dominios, ..._cargadoresDeAnuncios}.length : 0;
+      activo ? <String>{...dominiosEnUso}.length : 0;
+
+  /// Cuántos trae la base de fábrica. Se muestra para que quede claro que el
+  /// bloqueador protege sin instalar nada — antes parecía que sin listas no
+  /// hacía nada, y de hecho ASÍ ERA (ver `bloquea`).
+  static int get cuantosDeFabrica => _listaBase.length;
+
+  /// Cuántos suman las listas que instaló el usuario, sin contar los que ya
+  /// están en la base.
+  static int get cuantosDeListas =>
+      _dominios.difference(<String>{..._listaBase}).length;
 
   // ─── Listas ───────────────────────────────────────────────────────────────
 
@@ -164,6 +174,7 @@ class BloqueadorAnuncios {
       if (l.activa) juntos.addAll(l.dominios);
     }
     _dominios = juntos;
+    _olvidarLoArmado();
     _cargado = true;
     logger.info(
         '[bloqueador] ${_dominios.length} dominios en ${listas().where((l) => l.activa).length} lista(s) activa(s)');
@@ -237,16 +248,34 @@ class BloqueadorAnuncios {
   /// también cae `cdn.anuncios.com`. Sin eso, cualquier lista se esquivaría
   /// publicando desde un subdominio nuevo.
   static bool bloquea(String url) {
-    if (!activo || _dominios.isEmpty) return false;
+    // **Ojo con lo que este atajo dejaba pasar.** Antes salía por
+    // `_dominios.isEmpty`, y `_dominios` son SOLO las listas que instaló el
+    // usuario. Como casi nadie instala una, `bloquea()` devolvía false siempre
+    // — y con eso quedaba muerto el corte de navegación de
+    // `shouldOverrideUrlLoading`, que es justo el que ataja las ventanas
+    // emergentes. El bloqueador figuraba encendido y no cortaba una sola.
+    //
+    // Ahora la base de fábrica va siempre, haya o no listas instaladas.
+    if (!activo) return false;
     final host = Uri.tryParse(url)?.host.toLowerCase();
     if (host == null || host.isEmpty) return false;
     final limpio = host.replaceFirst(RegExp(r'^www\.'), '');
-    if (_dominios.contains(limpio)) return true;
-    for (final d in _dominios) {
-      if (limpio.endsWith('.$d')) return true;
+    for (final d in dominiosEnUso) {
+      if (limpio == d || limpio.endsWith('.$d')) return true;
     }
     return false;
   }
+
+  /// Todo lo que se bloquea: la base de fábrica más las listas del usuario.
+  ///
+  /// Se arma una sola vez y se guarda: por acá pasa CADA pedido de CADA página,
+  /// así que rehacer el conjunto cada vez se paga caro.
+  static Set<String>? _enUso;
+  static Set<String> get dominiosEnUso =>
+      _enUso ??= <String>{..._listaBase, ..._dominios};
+
+  /// Se olvida lo armado. Va cada vez que cambian las listas.
+  static void _olvidarLoArmado() => _enUso = null;
 
   /// Reglas para el bloqueo nativo (Android, iOS y macOS).
   ///
@@ -272,8 +301,8 @@ class BloqueadorAnuncios {
     if (!activo) return const [];
     // Los cargadores de anuncios de vídeo van SIEMPRE, junto con las listas del
     // usuario: son los que meten el anuncio adentro del reproductor y las
-    // listas corrientes no suelen traerlos (ver _cargadoresDeAnuncios).
-    final todos = <String>{..._dominios, ..._cargadoresDeAnuncios};
+    // listas corrientes no suelen traerlos (ver _listaBase).
+    final todos = dominiosEnUso;
     if (todos.isEmpty) return const [];
     final alternativas = todos.map((d) => RegExp.escape(d)).join('|');
     return [
@@ -286,25 +315,91 @@ class BloqueadorAnuncios {
     ];
   }
 
-  /// Cargadores de anuncios de VÍDEO, bloqueados siempre que el bloqueador
-  /// esté encendido.
+  /// La base de fábrica: lo que se bloquea SIEMPRE, sin instalar ninguna lista.
   ///
-  /// Van aparte de las listas del usuario a propósito. Las listas corrientes
-  /// apuntan a redes de banners y muchas NO incluyen estos, porque son piezas
-  /// que también usan reproductores legítimos. Pero son justo los que meten el
-  /// anuncio ANTES de la película, adentro del propio reproductor, que es el
-  /// que no se puede saltear ni tapar.
+  /// Antes acá solo estaban los cargadores de anuncios de vídeo, y todo lo
+  /// demás dependía de que el usuario fuera a buscar una lista e instalarla.
+  /// Casi nadie lo hace, así que el bloqueador venía encendido y sin nada que
+  /// bloquear — y encima `bloquea()` salía por "no hay dominios" antes de
+  /// mirar siquiera estos.
   ///
-  /// Medido en vivo: un anuncio de apuestas de 25 segundos antes de reproducir,
-  /// servido por el SDK de anuncios de Google (`imasdk.googleapis.com`), con
-  /// las listas activadas y sin que ninguna lo frenara.
-  static const _cargadoresDeAnuncios = <String>[
+  /// Son tres grupos, y cada uno tapa un camino distinto:
+  ///
+  /// **1. Los que meten el anuncio ADENTRO del reproductor.** El vídeo de
+  /// veinticinco segundos antes de la película. Las listas corrientes muchas
+  /// veces NO los traen, porque son piezas que también usan reproductores
+  /// legítimos. Medido en vivo: un anuncio de apuestas servido por el SDK de
+  /// Google (`imasdk.googleapis.com`) pasaba entero con las listas activadas.
+  ///
+  /// **2. Las redes de ventanas emergentes.** Son las que hacen que tocar
+  /// "reproducir" abra una pestaña de casino. Es lo que más molesta y lo que el
+  /// usuario reporta.
+  ///
+  /// **3. Lo que se vio en los propios sitios que usa la app.** `a.adtng.com`
+  /// está confirmado: aparece tanto en las páginas de unlimplay como en el
+  /// servidor VIP de hentaila, en las dos como la dirección del VAST.
+  ///
+  /// **Esto no pretende reemplazar a una lista de verdad.** Una lista tipo
+  /// EasyList trae decenas de miles de dominios y se actualiza sola; esto son
+  /// las que aparecen en sitios de streaming, para que funcione sin que el
+  /// usuario tenga que configurar nada. Instalar una lista sigue sumando: las
+  /// dos se juntan en `dominiosEnUso`.
+  static const _listaBase = <String>[
+    // 1. Anuncios adentro del reproductor (VAST/VPAID).
     'imasdk.googleapis.com',
     'googleads.g.doubleclick.net',
     'pagead2.googlesyndication.com',
     'securepubads.g.doubleclick.net',
     'static.doubleclick.net',
     'ad.doubleclick.net',
+    'doubleclick.net',
+    'googlesyndication.com',
+    'adservice.google.com',
+    'video-ad-stats.googlesyndication.com',
+
+    // 2. Redes de ventanas emergentes y de anuncios de streaming.
+    'exoclick.com',
+    'exosrv.com',
+    'realsrv.com',
+    'juicyads.com',
+    'poweredby.jads.co',
+    'propellerads.com',
+    'propellerclick.com',
+    'popads.net',
+    'popcash.net',
+    'popmyads.com',
+    'hilltopads.net',
+    'adsterra.com',
+    'adskeeper.com',
+    'mgid.com',
+    'trafficjunky.com',
+    'trafficjunky.net',
+    'clickadu.com',
+    'adcash.com',
+    'adnxs.com',
+    'zeusadvertisement.com',
+    'onclickalgo.com',
+    'onclicksuper.com',
+    'onclickperformance.com',
+    'monetizemore.com',
+    'revcontent.com',
+    'taboola.com',
+    'outbrain.com',
+    'bidgear.com',
+    'admaven.com',
+    'adprovider.net',
+
+    // 3. Vistos en los propios sitios de la app.
+    'a.adtng.com',
+    'adtng.com',
+
+    // Medición y rastreo. No molestan al usuario, pero son pedidos de más en
+    // cada página y algunos son la puerta por la que entra lo de arriba.
+    'google-analytics.com',
+    'googletagmanager.com',
+    'googletagservices.com',
+    'scorecardresearch.com',
+    'hotjar.com',
   ];
 
   /// Lo que se inyecta en Windows y Linux, donde no hay bloqueo nativo.
@@ -325,7 +420,7 @@ class BloqueadorAnuncios {
   /// salir el pedido a la red; pero acá el pedido tampoco llega a hacerse.
   static String guionParaInyectar() {
     if (!activo) return '';
-    final todos = <String>{..._dominios, ..._cargadoresDeAnuncios};
+    final todos = dominiosEnUso;
     if (todos.isEmpty) return '';
     final lista = jsonEncode(todos.toList());
     return '''

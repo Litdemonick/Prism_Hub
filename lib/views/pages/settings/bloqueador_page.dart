@@ -6,9 +6,14 @@ import 'package:prismhub/views/widgets/home/home_theme.dart';
 
 /// Administra las listas de bloqueo del navegador interno.
 ///
-/// La idea es que el usuario arme su propia protección: instala las listas que
-/// quiera desde una dirección, las prende y apaga sueltas, y las quita cuando
-/// no le sirven. No viene ninguna metida a la fuerza — se elige qué usar.
+/// Trae una base de fábrica que protege sin configurar nada —las redes de
+/// ventanas emergentes, los cargadores de anuncios de vídeo y el rastreo— y
+/// encima de eso el usuario puede sumar las listas que quiera: las instala
+/// desde una dirección, las prende y apaga sueltas, y las quita cuando no le
+/// sirven.
+///
+/// Antes NO había base: si el usuario no instalaba una lista, el bloqueador
+/// figuraba encendido y no cortaba absolutamente nada.
 class BloqueadorPage extends StatefulWidget {
   const BloqueadorPage({super.key});
 
@@ -66,6 +71,40 @@ class _BloqueadorPageState extends State<BloqueadorPage> {
     });
   }
 
+  /// Una fila de "esto se corta": icono, qué es y por qué molesta.
+  ///
+  /// Se listan los tres caminos por separado en vez de mostrar solo el número
+  /// de dominios. El número no le dice nada a nadie; lo que el usuario quiere
+  /// saber es si se le van a dejar de abrir pestañas solas.
+  Widget _queSeCorta(IconData icono, String que, String detalle) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 10),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Icon(icono, size: 17, color: HomeTheme.textMuted),
+          const SizedBox(width: 10),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(que,
+                    style: const TextStyle(
+                        fontSize: 12.5, fontWeight: FontWeight.w600)),
+                const SizedBox(height: 2),
+                Text(
+                  detalle,
+                  style: TextStyle(
+                      fontSize: 11.5, height: 1.3, color: HomeTheme.textMuted),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final activo = BloqueadorAnuncios.activo;
@@ -92,21 +131,52 @@ class _BloqueadorPageState extends State<BloqueadorPage> {
               borderRadius: BorderRadius.circular(10),
               border: Border.all(color: HomeTheme.border),
             ),
-            child: const Text(
-              'Esto solo aplica al navegador interno, que es donde se abren '
-              'los servidores que no se pueden reproducir en la app. El '
-              'reproductor normal no carga páginas, así que ahí no hay '
-              'anuncios que bloquear.',
-              style: TextStyle(fontSize: 12.5, height: 1.4),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const Text(
+                  'Esto solo aplica al navegador interno, que es donde se abren '
+                  'los servidores que no se pueden reproducir en la app. El '
+                  'reproductor normal no carga páginas, así que ahí no hay '
+                  'anuncios que bloquear.',
+                  style: TextStyle(fontSize: 12.5, height: 1.4),
+                ),
+                const SizedBox(height: 12),
+                const Divider(height: 1),
+                const SizedBox(height: 12),
+                // Qué se corta, en vez de un número suelto que no dice nada.
+                // Son tres caminos distintos y el usuario los sufre distinto,
+                // así que vale nombrarlos uno por uno.
+                _queSeCorta(
+                  Icons.block,
+                  'Ventanas emergentes',
+                  'Las pestañas que se abren solas al tocar reproducir.',
+                ),
+                _queSeCorta(
+                  Icons.ondemand_video,
+                  'Anuncios antes del vídeo',
+                  'Los de veinte segundos que salen dentro del reproductor.',
+                ),
+                _queSeCorta(
+                  Icons.travel_explore,
+                  'Rastreo',
+                  'Medición y perfilado, que viaja pegado a los anuncios.',
+                ),
+              ],
             ),
           ),
           const SizedBox(height: 12),
           SwitchListTile(
             value: activo,
             title: const Text('Bloquear anuncios'),
+            // Se dice de dónde sale cada cosa: sin esto, "N dominios" no
+            // distingue entre lo que viene puesto y lo que agregó el usuario, y
+            // no queda claro que funciona sin configurar nada.
             subtitle: Text(
               activo
-                  ? '${BloqueadorAnuncios.cuantosDominios} dominios bloqueados'
+                  ? '${BloqueadorAnuncios.cuantosDominios} dominios · '
+                      '${BloqueadorAnuncios.cuantosDeFabrica} vienen puestos'
+                      '${BloqueadorAnuncios.cuantosDeListas > 0 ? ' + ${BloqueadorAnuncios.cuantosDeListas} de tus listas' : ''}'
                   : 'Apagado: las listas quedan guardadas',
             ),
             onChanged: (v) async {
