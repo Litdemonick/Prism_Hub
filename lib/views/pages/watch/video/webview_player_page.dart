@@ -969,7 +969,23 @@ class _WebViewPlayerPageState extends State<WebViewPlayerPage>
       // había nada visible y parecía que el reproductor se había colgado.
       if (mounted) setState(() => _showControls = true);
       _resetHideTimer();
+      _ocultarBarrasDelSistema();
     }
+  }
+
+  /// Vuelve a esconder la hora y la batería (Android).
+  ///
+  /// El modo inmersivo se pedía UNA sola vez, en initState, y Android lo suelta
+  /// solo en dos momentos que acá pasan siempre: al **rotar** —y justo después
+  /// de initState se fuerza el horizontal— y al **volver de segundo plano**,
+  /// que en un teléfono es tan simple como apagar y encender la pantalla.
+  /// Cuando lo suelta, la barra de estado se queda puesta arriba del vídeo y no
+  /// hay forma de sacarla sin salir y volver a entrar (reportado en vivo).
+  ///
+  /// Volver a pedirlo no puede romper nada: si ya está puesto, no cambia nada.
+  void _ocultarBarrasDelSistema() {
+    if (!Platform.isAndroid) return;
+    SystemChrome.setEnabledSystemUIMode(SystemUiMode.immersiveSticky);
   }
 
   // Pausa el vídeo/audio del sitio sin tocar nada más: no descarga la fuente, no
@@ -1340,6 +1356,9 @@ class _WebViewPlayerPageState extends State<WebViewPlayerPage>
                     onLoadStop: (controller, url) {
                       _loadTimeoutTimer?.cancel();
                       if (mounted) setState(() => _loading = false);
+                      // Para cuando la rotación a horizontal se llevó puesto el
+                      // modo inmersivo — ver _ocultarBarrasDelSistema.
+                      _ocultarBarrasDelSistema();
                       // Se le PREGUNTA a la página si el guion quedó puesto.
                       //
                       // Con los mensajes de consola no alcanza: que no

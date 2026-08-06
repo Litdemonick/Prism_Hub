@@ -3580,6 +3580,18 @@ class VideoPlayerController extends GetxController with WidgetsBindingObserver {
 
     if (state == AppLifecycleState.resumed) {
       _enSegundoPlano = false;
+      // La hora y la batería se vuelven a esconder.
+      //
+      // El modo inmersivo se pide UNA sola vez, en onInit, y Android lo suelta
+      // al volver de segundo plano — que en un teléfono es tan simple como
+      // apagar y encender la pantalla. Cuando lo suelta, la barra de estado se
+      // queda puesta arriba del vídeo hasta salir y volver a entrar.
+      //
+      // Volver a pedirlo no puede romper nada: si ya está puesto, no cambia
+      // nada. Mismo arreglo que en la pantalla del navegador interno.
+      if (Platform.isAndroid) {
+        SystemChrome.setEnabledSystemUIMode(SystemUiMode.immersiveSticky);
+      }
       // Cuenta limpia: los fallos de mientras no estuvo en pantalla no valen,
       // porque pudieron ser del recorte de red y no del televisor.
       _fallosDeCastSeguidos = 0;
