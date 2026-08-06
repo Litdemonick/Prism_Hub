@@ -278,9 +278,6 @@ class BloqueadorAnuncios {
   // `ListaDeBloqueo`: los ajustes son una caja de Hive y meterle medio millón
   // de dominios que se reescriben a cada cambio la termina rompiendo.
 
-  /// El salto de linea con el que se separan los dominios en el archivo.
-  static final String _salto = String.fromCharCode(10);
-
   static Directory get _carpeta {
     final d = Directory(
         '${PrismHubDirectory.getDirectory}${Platform.pathSeparator}bloqueador');
