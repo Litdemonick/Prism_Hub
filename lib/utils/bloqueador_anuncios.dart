@@ -1018,6 +1018,30 @@ class BloqueadorAnuncios {
     'adservice.google.com',
     'video-ad-stats.googlesyndication.com',
 
+    // 1b. Los VAST del anuncio de VÍDEO, medidos en vivo.
+    //
+    // Bloquear `imasdk.googleapis.com` no alcanzaba: el reproductor de
+    // unlimplay no depende del SDK de Google para el pre-roll, se trae el
+    // manifiesto él mismo. La página lo publica en texto plano, así que no hay
+    // nada que adivinar (2026-08-06, unlimplay/f/embed/movie/1228710):
+    //
+    //     const PREROLL_CONFIG = { vastTags: [
+    //       "https://cvt-s2.agl003.com/v/….xml?cp.host=…",
+    //       "https://latgw.fun/assets/vendor/….xml?v=3.0&external_subid=(host)",
+    //       "https://servetraff.com/ztcuDBsE3-…",
+    //     ] };
+    //
+    // Cortando el manifiesto no hay anuncio: sin VAST no hay qué reproducir.
+    //
+    // **Lo que NO se toca**, y estaba en la misma página: `hglink.to` es
+    // streamwish y `minochinos.com` es vidhide. Son SERVIDORES. `flagcdn.com`
+    // y `image.tmdb.org` son banderas y carátulas. Meter cualquiera de esos
+    // acá dejaría al usuario sin poder ver nada, que es justo lo contrario de
+    // para qué está el bloqueador.
+    'agl003.com',
+    'latgw.fun',
+    'servetraff.com',
+
     // 2. Redes de ventanas emergentes y de anuncios de streaming.
     'exoclick.com',
     'exosrv.com',
@@ -1154,7 +1178,50 @@ class BloqueadorAnuncios {
   }
 
   // 1. Ventanas emergentes.
-  window.open = function () { return null; };
+  //
+  // Se devuelve un objeto de MENTIRA, nunca null. Esa es toda la diferencia
+  // entre bloquear el anuncio y romper la pagina.
+  //
+  // Quien abre una ventana casi siempre encadena algo: window.open(...).focus(),
+  // .close(), .document.write(...). Con null eso tira TypeError, y el error se
+  // lleva puesto TODO el resto del manejador del clic — incluido el del propio
+  // reproductor, que suele colgar de la misma escucha. Desde afuera se ve como
+  // que los botones dejaron de responder aunque el video ande: reportado en
+  // vivo con el servidor Drive de FuegoCine, donde no se podia cambiar ni la
+  // calidad ni el idioma.
+  //
+  // La ventana falsa se traga todo sin hacer nada y se devuelve a si misma en
+  // los encadenados, asi ninguna secuencia razonable puede tirar. El anuncio
+  // sigue sin abrirse: es el unico objetivo, y se cumple igual.
+  var nada = function () { return undefined; };
+  var ventanaFalsa = {
+    closed: true,
+    name: '',
+    opener: null,
+    focus: nada, blur: nada, close: nada, print: nada,
+    postMessage: nada, moveTo: nada, resizeTo: nada, scrollTo: nada,
+    alert: nada, confirm: nada, prompt: nada,
+    addEventListener: nada, removeEventListener: nada,
+    document: {
+      write: nada, writeln: nada, open: nada, close: nada,
+      body: null, documentElement: null,
+      getElementById: function () { return null; },
+      querySelector: function () { return null; },
+      querySelectorAll: function () { return []; },
+      createElement: function () { return {
+        style: {}, setAttribute: nada, appendChild: nada
+      }; }
+    },
+    location: {
+      href: '', assign: nada, replace: nada, reload: nada, toString: function () { return ''; }
+    }
+  };
+  // Encadenados del tipo w.open(...).open(...): siempre cae en lo mismo.
+  ventanaFalsa.open = function () { return ventanaFalsa; };
+  ventanaFalsa.self = ventanaFalsa;
+  ventanaFalsa.window = ventanaFalsa;
+  ventanaFalsa.top = ventanaFalsa;
+  window.open = function () { return ventanaFalsa; };
 
   // 2. La direccion de los elementos que cargan cosas, tapada AL ASIGNARSE.
   //

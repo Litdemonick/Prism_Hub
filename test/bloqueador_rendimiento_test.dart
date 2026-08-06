@@ -88,6 +88,48 @@ void main() {
           reason: 'las dos vías tienen que mirar la misma lista');
     });
 
+    test('los VAST del anuncio de vídeo caen, y los servidores NO', () {
+      // Medido en la página de unlimplay, que publica su PREROLL_CONFIG en
+      // texto plano. Bloquear solo imasdk no alcanzaba: el reproductor se trae
+      // el manifiesto por su cuenta.
+      for (final u in [
+        'https://cvt-s2.agl003.com/v/abc.xml?cp.host=x',
+        'https://latgw.fun/assets/vendor/abc.xml?v=3.0',
+        'https://servetraff.com/ztcuDBsE3-abc',
+      ]) {
+        final host = Uri.parse(u).host.replaceFirst(RegExp(r'^www\.'), '');
+        var cae = false;
+        var actual = host;
+        while (actual.contains('.')) {
+          if (BloqueadorAnuncios.dominiosEnUso.contains(actual)) {
+            cae = true;
+            break;
+          }
+          actual = actual.substring(actual.indexOf('.') + 1);
+        }
+        expect(cae, isTrue, reason: 'el anuncio de vídeo entra por $u');
+      }
+
+      // La otra mitad, y la que importa más: estos estaban en la MISMA página
+      // y son servidores o recursos legítimos. Bloquearlos deja al usuario sin
+      // poder ver nada.
+      for (final h in [
+        'hglink.to', // streamwish
+        'minochinos.com', // vidhide
+        'voe.sx',
+        'vidhidepro.com',
+        'goodstream.one',
+        'streamwish.to',
+        'vimeos.net',
+        'unlimplay.com',
+        'flagcdn.com',
+        'image.tmdb.org',
+      ]) {
+        expect(BloqueadorAnuncios.dominiosEnUso, isNot(contains(h)),
+            reason: '$h no es un anuncio');
+      }
+    });
+
     test('no tiene lista propia: usa la misma que el resto', () {
       // Una segunda lista se desincronizaría de la del guion y la del corte de
       // navegación. El interceptor pregunta por `bloquea`, que mira este mismo
@@ -173,6 +215,24 @@ void main() {
       expect(guion.contains('dominios.length'), isFalse,
           reason: 'un conjunto no tiene length: si esto aparece, volvió a ser '
               'una lista');
+    });
+
+    test('la ventana emergente se corta SIN devolver null', () {
+      // Devolver null rompia la pagina entera: quien abre una ventana encadena
+      // window.open(...).focus(), eso tira TypeError, y el error se lleva
+      // puesto todo el resto del manejador del clic — incluido el del propio
+      // reproductor. Se veia como botones que no responden (calidad e idioma
+      // en el servidor Drive de FuegoCine, reportado en vivo).
+      final guion = BloqueadorAnuncios.guionPara(['anuncios.com']);
+      expect(guion.contains('window.open = function () { return null; }'), isFalse,
+          reason: 'esa era la forma que rompia los botones del reproductor');
+      expect(guion, contains('ventanaFalsa'),
+          reason: 'se devuelve un objeto que se traga los encadenados');
+      // Lo mínimo que se encadena en la práctica tiene que estar contemplado.
+      for (final miembro in ['focus', 'close', 'document', 'location', 'postMessage']) {
+        expect(guion, contains(miembro),
+            reason: 'la ventana falsa tiene que aguantar .$miembro');
+      }
     });
 
     test('sin dominios no se inyecta nada', () {
