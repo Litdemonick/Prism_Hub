@@ -378,7 +378,7 @@ class VideoPlayerController extends GetxController with WidgetsBindingObserver {
   /// Ahora se apaga cuando el vídeo AVANZA, no cuando aparece el cuadro.
   ///
   /// mpv decodifica el primer cuadro y **se queda en pausa** llenando el
-  /// colchón (`cache-pause-initial`, con `cache-pause-wait` en 3 s). Apagando la
+  /// colchón (`cache-pause-initial`, con `cache-pause-wait`). Apagando la
   /// rueda ahí, lo que se veía era: rueda, imagen congelada unos segundos, y
   /// recién después el vídeo. Parecía que se colgaba justo al empezar.
   ///
@@ -1258,7 +1258,28 @@ class VideoPlayerController extends GetxController with WidgetsBindingObserver {
       // Cuánto se junta antes de arrancar, y cuánto se vuelve a juntar después
       // de quedarse sin datos. De fábrica es 1 segundo, que para el caso de
       // arriba es casi lo mismo que nada: reanudaría para volver a cortarse.
-      await np.setProperty('cache-pause-wait', '3');
+      // **Ocho segundos, no tres.**
+      //
+      // Con tres, el vídeo arrancaba con 2,9 s de colchón y se los comía
+      // enseguida: reproducía un momento, se quedaba sin nada y se paraba a
+      // rellenar. Desde afuera se veía «Obteniendo enlace» → imagen → SE PARA →
+      // cargando → recién ahí anda. Medido en LaMovie/Vimeos el 2026-08-06:
+      // `medición (arrancó) · colchón: 2.916667 s`, y el parón justo después.
+      //
+      // Ese parón estaba tapado mientras la rueda se apagaba tarde: parecía
+      // todo un mismo bloque de carga. Al arreglar la rueda quedó a la vista, y
+      // se vio que el problema no era la rueda sino que arranca demasiado
+      // pronto.
+      //
+      // Con ocho se espera más antes del primer cuadro, pero es espera CON la
+      // rueda puesta —que es lo que uno entiende— y después el vídeo corre sin
+      // el tirón de los primeros segundos. Es el mismo intercambio que ya se
+      // había aceptado al poner tres en vez de uno, un paso más allá.
+      //
+      // No cuesta nada donde la conexión va bien: ahí ocho segundos de colchón
+      // se juntan en un instante y el arranque se siente igual que antes. Lo
+      // paga solo el servidor lento, que es justo el que se cortaba.
+      await np.setProperty('cache-pause-wait', '8');
       await np.setProperty('cache-secs', '30');
       await np.setProperty(
           'demuxer-max-bytes', Platform.isAndroid ? '96MiB' : '192MiB');
