@@ -414,6 +414,7 @@
     "cast-hint-keys": "Las flechas ajustan fino, J e I saltan más — se cambia en Ajustes",
     "stalled": "El vídeo no avanza. Puede ser la conexión: probá otro servidor o salí y volvé a entrar.",
     "auto-quality-down": "La conexión no daba abasto. Se bajó a",
+    "webview-sin-reproductor": "%s abrió, pero no trajo ningún reproductor. Puede ser algo pasajero: probá de nuevo o elegí otro servidor.",
     "cast-no-seek": "Este dispositivo no permite saltar a un punto exacto",
     "cast-device-error": "El dispositivo no pudo reproducir este vídeo. Probá con otro servidor desde el reproductor.",
     "cast-formato": "El dispositivo recibió el vídeo pero no puede reproducirlo. Probá otro servidor.",

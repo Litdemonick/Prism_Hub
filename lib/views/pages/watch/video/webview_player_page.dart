@@ -3,7 +3,9 @@ import 'dart:convert';
 import 'dart:io';
 
 import 'package:auto_orientation/auto_orientation.dart';
+import 'package:fluent_ui/fluent_ui.dart' show InfoBarSeverity;
 import 'package:flutter/material.dart';
+import 'package:flutter_i18n/flutter_i18n.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_inappwebview/flutter_inappwebview.dart';
 import 'package:path/path.dart' as p;
@@ -12,6 +14,7 @@ import 'package:prismhub/utils/bloqueador_anuncios.dart';
 import 'package:prismhub/utils/log.dart';
 import 'package:prismhub/utils/prismhub_directory.dart';
 import 'package:prismhub/utils/prismhub_storage.dart';
+import 'package:prismhub/views/widgets/messenger.dart';
 import 'package:url_launcher/url_launcher.dart';
 import 'package:window_manager/window_manager.dart';
 
@@ -349,22 +352,30 @@ Future<void> openWebViewPlayer(
   String title = '',
   void Function(Uint8List? screenshot, {bool isFinal})? onProgress,
 }) async {
-  // **Un servidor que ya se abrió sin traer reproductor no se vuelve a abrir.**
+  // **Se comprueba SIEMPRE, y no se recuerda nunca.**
   //
-  // Se cierra antes de mostrar nada, así el usuario no ve la pantalla que no
-  // pidió. Si insiste con reproducir vuelve a pasar lo mismo, que es la señal
-  // de que ese servidor no anda y hay que elegir otro. Ver `sinReproductor` en
-  // bloqueador_anuncios.dart.
-  if (BloqueadorAnuncios.sinReproductorConocido(url)) {
-    logger.info('no se abre "${Uri.tryParse(url)?.host}": la última vez cargó '
-        'sin ningún reproductor adentro');
-    return;
-  }
-  // Se pregunta ANTES de abrir, no despues: una vez cargada la pagina, lo que
-  // sea que traiga ya se ejecuto.
+  // Antes, un servidor que una vez había cargado sin reproductor quedaba
+  // marcado por host y no se volvía a abrir jamás. La idea era ahorrarle al
+  // usuario una pantalla inútil, pero salía mucho más caro de lo que ahorraba:
+  //
+  //  - Un servidor que no anda un rato —o un título roto suelto— dejaba
+  //    marcado a ese servidor en TODAS las extensiones, para siempre.
+  //  - No había forma de deshacerlo. El comentario decía que se podía limpiar
+  //    desde la pantalla del bloqueador, y esa pantalla nunca existió:
+  //    `olvidarSinReproductor` estaba escrita y no la llamaba nadie.
+  //  - Y se marcaba por cosas que no eran del servidor. Medido en Android el
+  //    2026-08-06: con el bloqueador armando una expresión regular de 6,9 MB,
+  //    cada recurso de la página tardaba medio segundo, así que Mega no llegaba
+  //    a mostrar su reproductor en los ocho segundos de la comprobación.
+  //    Resultado: mega.nz marcado y muerto para siempre, cuando en la
+  //    computadora abría perfecto.
+  //
+  // Ahora se abre siempre, se comprueba siempre, y si no hay reproductor se
+  // cierra avisando por qué. La próxima vez se vuelve a intentar: si el
+  // servidor se recuperó, funciona solo y nadie tiene que ir a destildar nada.
   if (!await _confirmarServidorFichado(context, url)) return;
   if (!context.mounted) return;
-  await Navigator.of(context).push<void>(
+  final hubo = await Navigator.of(context).push<bool>(
     MaterialPageRoute(
       builder: (_) => WebViewPlayerPage(
         url: url,
@@ -374,6 +385,19 @@ Future<void> openWebViewPlayer(
       ),
     ),
   );
+  // Se cerró solo porque adentro no había nada que reproducir.
+  if (hubo == false && context.mounted) {
+    final donde = Uri.tryParse(url)?.host ?? '';
+    showPlatformSnackbar(
+      context: context,
+      content: FlutterI18n.translate(
+        context,
+        'video.webview-sin-reproductor',
+        translationParams: {'s': donde},
+      ),
+      severity: InfoBarSeverity.warning,
+    );
+  }
 }
 
 /// Fullscreen WebView player. Loads an embed/player page (mega, voe, mixdrop,
@@ -518,12 +542,21 @@ class _WebViewPlayerPageState extends State<WebViewPlayerPage>
   /// un `<audio>` o un marco adentro —que es donde estos sitios meten el
   /// reproductor de verdad— y también si algo empezó a sonar.
   ///
-  /// Si no hay nada, se anota el servidor y se cierra. La próxima vez ni se
-  /// abre: ver `sinReproductor` en bloqueador_anuncios.dart.
+  /// Si no hay nada, se cierra avisando — y **no se recuerda**. La próxima vez
+  /// se vuelve a intentar de cero: ver el porqué en [openWebViewPlayer].
+  ///
+  /// Cuánto se espera, por plataforma:
+  ///
+  ///   WINDOWS y LINUX   8 s — el reproductor aparece enseguida.
+  ///   ANDROID          20 s — el mismo reproductor puede tardar bastante más
+  ///                    en un teléfono, y cerrar antes de tiempo es acusar al
+  ///                    servidor de algo que no hizo. Fue justo lo que le pasó
+  ///                    a Mega: quedó marcado por no llegar a los 8 s.
   Future<void> _vigilarQueHayaReproductor(
       InAppWebViewController controller) async {
     if (_yaSeCerroSinReproductor) return;
-    await Future<void>.delayed(const Duration(seconds: 8));
+    await Future<void>.delayed(
+        Platform.isAndroid ? const Duration(seconds: 20) : const Duration(seconds: 8));
     if (!mounted || _yaSeCerroSinReproductor) return;
     try {
       final r = await controller.evaluateJavascript(source: '''
@@ -548,9 +581,12 @@ class _WebViewPlayerPageState extends State<WebViewPlayerPage>
       if (hay || !mounted) return;
 
       _yaSeCerroSinReproductor = true;
-      await BloqueadorAnuncios.anotarSinReproductor(widget.url);
+      logger.info('"${Uri.tryParse(widget.url)?.host}" cargó sin ningún '
+          'reproductor adentro: se cierra y se avisa (la próxima vez se vuelve '
+          'a intentar)');
       if (!mounted) return;
-      Navigator.of(context).pop();
+      // El `false` es lo que le dice a quien abrió que muestre el aviso.
+      Navigator.of(context).pop(false);
     } catch (e) {
       // Si no se pudo preguntar, se deja abierto. Cerrar la pantalla del
       // usuario porque una comprobación nuestra falló sería lo peor de los dos
@@ -1188,13 +1224,26 @@ class _WebViewPlayerPageState extends State<WebViewPlayerPage>
                         logger.info('[bloqueador] apagado: no se inyecta nada');
                       }
                     },
-                    // Segunda vía, a propósito repetida.
+                    // Segunda vía, a propósito repetida. **Va en las dos
+                    // plataformas, y hay que dejarla.**
                     //
-                    // El guion de arriba se registra con addUserScript, que en
-                    // Windows no está confirmado que llegue a correr. Éste va
-                    // por evaluateJavascript, que sí. El guion se protege solo
-                    // contra ejecutarse dos veces (mira window.__prismBloqueador),
-                    // así que si los dos funcionan, el segundo no hace nada.
+                    // `addUserScript` se registra en `onWebViewCreated`, que
+                    // ocurre DESPUÉS de que la página empezó a cargar, así que
+                    // puede no alcanzar a la primera. Ésta va por
+                    // `evaluateJavascript` en `onLoadStart` y tapa ese hueco. El
+                    // guion se protege solo contra ejecutarse dos veces (mira
+                    // `window.__prismBloqueador`), así que si corren las dos, la
+                    // segunda no hace nada.
+                    //
+                    // **Se intentó sacarla en Android el 2026-08-06 y fue peor.**
+                    // La idea era ahorrarse la segunda pasada, que con las listas
+                    // de fábrica son unos 7 MB de texto por el puente. Pero al
+                    // sacarla dejaron de aparecer las líneas que manda la propia
+                    // página (`[bloqueador] activo con N dominios`), o sea que el
+                    // guion no estaba corriendo: el bloqueador quedó apagado en
+                    // el teléfono sin que nada lo dijera. Si algún día hay que
+                    // optimizar esto, el camino es achicar el guion, no sacar la
+                    // pasada que lo hace llegar.
                     onLoadStart: (controller, url) async {
                       final guion = BloqueadorAnuncios.guionParaInyectar();
                       if (guion.isEmpty) return;
@@ -1207,10 +1256,30 @@ class _WebViewPlayerPageState extends State<WebViewPlayerPage>
                     // Los avisos del propio guion, para poder ver en el
                     // registro si está bloqueando algo de verdad en vez de
                     // suponerlo.
+                    //
+                    // Y los ERRORES de la página, que antes se tiraban.
+                    //
+                    // Cuando un servidor abre y adentro no aparece el
+                    // reproductor, lo único que se veía desde afuera era eso:
+                    // que no aparecía. Si su JavaScript reventó —solo, o porque
+                    // algo que inyectamos le cambió el piso— el motivo estaba en
+                    // la consola y se perdía. Puesto en vivo con Mega en Android
+                    // el 2026-08-06, que abre bien en la computadora con el
+                    // mismo bloqueador puesto.
+                    //
+                    // Se recortan a 300 caracteres: algunos sitios tiran errores
+                    // enormes y no vale la pena llenar el archivo.
                     onConsoleMessage: (controller, mensaje) {
                       final texto = mensaje.message;
                       if (texto.startsWith('[bloqueador]')) {
                         logger.info(texto);
+                        return;
+                      }
+                      if (mensaje.messageLevel == ConsoleMessageLevel.ERROR) {
+                        final corto = texto.length > 300
+                            ? '${texto.substring(0, 300)}…'
+                            : texto;
+                        logger.info('[navegador] error en la página: $corto');
                       }
                     },
                     // Se le PREGUNTA a la página si el guion quedó puesto.
