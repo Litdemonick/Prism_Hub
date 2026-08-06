@@ -5290,23 +5290,38 @@ class VideoPlayerController extends GetxController with WidgetsBindingObserver {
     //
     // Va SOLO en el archivo entero. En una lista de pedacitos cada uno es una
     // dirección distinta y no hay nada que reusar.
-    // ── Nada de `multiple_requests`. Vuelve a como estaba ──────────────────
+    // ── `multiple_requests=1`: por qué está, con la medición al lado ───────
     //
-    // Se agregó hoy para el caso de FuegoCine y se sacó, se volvió a poner y se
-    // volvió a sacar, porque se lo estaba juzgando junto a OTRO cambio del
-    // mismo día —poner las pistas de vídeo en automático antes de cada
-    // apertura— que era el que en realidad dejaba a mp4upload en negro.
+    // **Este servidor cobra caro cada pedido nuevo.** Medido en mp4upload el
+    // 2026-08-06, sobre el mismo archivo y la misma red:
     //
-    // Con las dos cosas encima, cada prueba mezclaba los dos efectos y ninguna
-    // conclusión servía. Sacando primero el de las pistas, la imagen volvió; y
-    // sin `multiple_requests` esta línea queda exactamente igual a la de antes
-    // de tocar nada, que es el estado en el que el usuario dice que mp4upload
-    // andaba.
+    //   pedido abierto (`bytes=0-`), leyendo de corrido   1812 KB/s
+    //   lo mismo desde el medio, tras un salto            1789 KB/s
+    //   un trozo cerrado de 1 MB                           514 KB/s
+    //   un trozo cerrado de 256 KB                         171 KB/s
     //
-    // La lección, para la próxima: un cambio por vez en el camino por el que
-    // pasan todos los servidores. Dos a la vez no se pueden medir.
+    // Tarda cerca de un segundo y medio en empezar a contestar, y recién ahí
+    // agarra velocidad. O sea que lo que importa no es el ancho de banda sino
+    // CUÁNTOS pedidos se hacen: pidiendo de a poco y reconectando cada vez, el
+    // caudal se derrumba a unos 6 KB/s y el vídeo se congela con el colchón en
+    // cero.
+    //
+    // Y el servidor contesta `connection: close`, así que sin esta opción cada
+    // lectura después de un salto abre una conexión nueva y paga ese segundo y
+    // medio otra vez. `multiple_requests` le pide a ffmpeg que mande los
+    // pedidos siguientes por la conexión que ya tiene.
+    //
+    // Va SOLO en el archivo entero: en una lista de pedacitos cada uno es una
+    // dirección distinta y no hay nada que reusar.
+    //
+    // **Ojo con volver a sacarla.** Ya se sacó dos veces hoy por conclusiones
+    // equivocadas: se la estaba midiendo junto a otro cambio del mismo día
+    // —poner las pistas de vídeo en automático antes de cada apertura— que era
+    // el que dejaba la pantalla en negro. Con los dos encima ninguna prueba
+    // decía nada. Si hay que volver a evaluarla, que sea sola.
     final opciones = archivoEntero
-        ? 'reconnect=1,reconnect_delay_max=5,seg_max_retry=3'
+        ? 'reconnect=1,reconnect_delay_max=5,seg_max_retry=3,'
+            'multiple_requests=1'
         : 'reconnect=1,reconnect_streamed=1,reconnect_delay_max=5,'
             'seg_max_retry=3';
     try {
