@@ -580,19 +580,28 @@ class _WebViewPlayerPageState extends State<WebViewPlayerPage>
       final hay = r == true || r == 'true' || r == 1;
       if (hay || !mounted) return;
 
-      _yaSeCerroSinReproductor = true;
-      logger.info('"${Uri.tryParse(widget.url)?.host}" cargó sin ningún '
-          'reproductor adentro: se cierra y se avisa (la próxima vez se vuelve '
-          'a intentar)');
-      if (!mounted) return;
-      // El `false` es lo que le dice a quien abrió que muestre el aviso.
-      Navigator.of(context).pop(false);
+      _cerrarPorqueNoHayReproductor('cargó sin ningún reproductor adentro');
     } catch (e) {
       // Si no se pudo preguntar, se deja abierto. Cerrar la pantalla del
       // usuario porque una comprobación nuestra falló sería lo peor de los dos
       // mundos.
       logger.info('no se pudo comprobar si hay reproductor: \$e');
     }
+  }
+
+  /// Cierra el navegador interno avisando de que acá no hay nada que ver.
+  ///
+  /// Un solo camino de salida para los dos motivos —la página no cargó, o cargó
+  /// y no tiene reproductor adentro— así los dos avisan igual, cierran igual y
+  /// **no se recuerdan**: la próxima vez se vuelve a intentar de cero (ver el
+  /// porqué en [openWebViewPlayer]).
+  void _cerrarPorqueNoHayReproductor(String motivo) {
+    if (_yaSeCerroSinReproductor || !mounted) return;
+    _yaSeCerroSinReproductor = true;
+    logger.info('"${Uri.tryParse(widget.url)?.host}" $motivo: se cierra y se '
+        'avisa (la próxima vez se vuelve a intentar)');
+    // El `false` es lo que le dice a quien abrió que muestre el aviso.
+    Navigator.of(context).pop(false);
   }
 
   Future<void> _comprobarBloqueador(InAppWebViewController controller) async {
@@ -1309,6 +1318,24 @@ class _WebViewPlayerPageState extends State<WebViewPlayerPage>
                       if (Platform.isWindows) {
                         WindowManager.instance.setFullScreen(false);
                       }
+                    },
+                    // Los avisos de fallo del motor. Acá solo se pasan al
+                    // bloqueador, que es quien decide si vale la pena seguir
+                    // (ver BloqueadorAnuncios.motivoParaNoSeguir). El cable
+                    // tiene que estar acá porque es donde llegan; la regla, no.
+                    onReceivedError: (controller, request, error) {
+                      final motivo = BloqueadorAnuncios.motivoParaNoSeguir(
+                        esMarcoPrincipal: request.isForMainFrame == true,
+                        errorDeCarga: error.description,
+                      );
+                      if (motivo != null) _cerrarPorqueNoHayReproductor(motivo);
+                    },
+                    onReceivedHttpError: (controller, request, response) {
+                      final motivo = BloqueadorAnuncios.motivoParaNoSeguir(
+                        esMarcoPrincipal: request.isForMainFrame == true,
+                        httpStatus: response.statusCode,
+                      );
+                      if (motivo != null) _cerrarPorqueNoHayReproductor(motivo);
                     },
                     onLoadStop: (controller, url) {
                       _loadTimeoutTimer?.cancel();

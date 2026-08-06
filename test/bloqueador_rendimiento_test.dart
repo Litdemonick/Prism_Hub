@@ -62,6 +62,63 @@ void main() {
     });
   });
 
+  group('qué páginas no vale la pena dejar abiertas', () {
+    test('un sub-recurso que falla NO cierra nada', () {
+      // Con el bloqueador puesto esto pasa todo el tiempo: es un anuncio que
+      // no cargó. Si cerrara la pantalla, el bloqueador rompería justo los
+      // servidores que sí andan.
+      expect(
+        BloqueadorAnuncios.motivoParaNoSeguir(
+          esMarcoPrincipal: false,
+          errorDeCarga: 'ERR_BLOCKED_BY_CLIENT',
+        ),
+        isNull,
+      );
+      expect(
+        BloqueadorAnuncios.motivoParaNoSeguir(
+          esMarcoPrincipal: false,
+          httpStatus: 404,
+        ),
+        isNull,
+      );
+    });
+
+    test('el marco principal caído sí, y dice por qué', () {
+      // El caso de SmartScreen con Doodstream en Windows: el guion no puede
+      // ver ese muro y el bloqueo nativo tampoco, porque el pedido ni se hace.
+      final porError = BloqueadorAnuncios.motivoParaNoSeguir(
+        esMarcoPrincipal: true,
+        errorDeCarga: 'ERR_BLOCKED_BY_ADMINISTRATOR',
+      );
+      expect(porError, isNotNull);
+      expect(porError, contains('ERR_BLOCKED_BY_ADMINISTRATOR'));
+
+      final porHttp = BloqueadorAnuncios.motivoParaNoSeguir(
+        esMarcoPrincipal: true,
+        httpStatus: 403,
+      );
+      expect(porHttp, isNotNull);
+      expect(porHttp, contains('403'));
+    });
+
+    test('una página sana no se toca', () {
+      expect(
+        BloqueadorAnuncios.motivoParaNoSeguir(
+          esMarcoPrincipal: true,
+          httpStatus: 200,
+        ),
+        isNull,
+      );
+      expect(
+        BloqueadorAnuncios.motivoParaNoSeguir(
+          esMarcoPrincipal: true,
+          errorDeCarga: '',
+        ),
+        isNull,
+      );
+    });
+  });
+
   group('el guion inyectado no puede recorrer la lista entera', () {
     test('usa un conjunto y pregunta por los dominios padre', () {
       final guion = BloqueadorAnuncios.guionPara(['anuncios.com', 'rastreo.net']);

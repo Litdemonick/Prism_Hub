@@ -830,6 +830,44 @@ class BloqueadorAnuncios {
     return _sinBloqueoNativo.any((h) => host == h || host.endsWith('.$h'));
   }
 
+  /// Por qué NO vale la pena dejar abierta esta página, o null si sí vale.
+  ///
+  /// ── Por qué la regla vive acá y no en la pantalla del reproductor ────────
+  ///
+  /// Porque decidir qué no se abre es trabajo del bloqueador. El reproductor
+  /// solo pregunta: el cable a los avisos del motor tiene que estar allá —es
+  /// donde llegan los callbacks—, pero la decisión es una sola y está acá.
+  ///
+  /// ── Qué se cubre ─────────────────────────────────────────────────────────
+  ///
+  /// Visto en vivo el 2026-08-06 con Doodstream en Windows: **SmartScreen de
+  /// Microsoft** corta `dsvplay.com` por sitio engañoso y deja su pantalla roja
+  /// puesta. Eso NO lo puede ver el guion —es un muro del propio motor, ahí no
+  /// corre nada nuestro— y tampoco lo ve el bloqueo nativo, porque el pedido ni
+  /// llega a hacerse. Lo único que queda es el aviso de fallo de navegación.
+  ///
+  /// Antes no se miraba ninguno, así que la rueda giraba encima de esa pantalla
+  /// hasta que saltaba la vigilancia de reproductor: 8 segundos en escritorio,
+  /// 20 en Android.
+  ///
+  /// [esMarcoPrincipal] es la clave para no romper nada: un sub-recurso que
+  /// falla es lo NORMAL con el bloqueador puesto —justamente, es un anuncio que
+  /// no cargó— y no tiene por qué cerrar la pantalla de nadie.
+  static String? motivoParaNoSeguir({
+    required bool esMarcoPrincipal,
+    int? httpStatus,
+    String? errorDeCarga,
+  }) {
+    if (!esMarcoPrincipal) return null;
+    if (httpStatus != null && httpStatus >= 400) {
+      return 'la página respondió HTTP $httpStatus';
+    }
+    if (errorDeCarga != null && errorDeCarga.isNotEmpty) {
+      return 'la página no cargó: $errorDeCarga';
+    }
+    return null;
+  }
+
   /// El bloqueo nativo del WebView, para la dirección que se va a abrir.
   ///
   /// ── Para qué hace falta, si ya está el guion ────────────────────────────
