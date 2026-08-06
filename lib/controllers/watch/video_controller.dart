@@ -3873,6 +3873,40 @@ class VideoPlayerController extends GetxController with WidgetsBindingObserver {
   /// Se limpia al cargar contenido nuevo (ver donde se reinicia el estado).
   bool _reintentoPorSoftware = false;
 
+  /// Deja la elección de pistas en automático ANTES de abrir otra fuente.
+  ///
+  /// **El bug que ataja: se escucha, el reloj avanza y no hay imagen.**
+  ///
+  /// mpv guarda qué pista de vídeo y de audio está usando en `vid` y `aid`, y
+  /// esos valores son NÚMEROS DE PISTA, no algo atado al archivo. El
+  /// reproductor se reusa entre servidores y entre episodios, así que al abrir
+  /// la fuente siguiente esos números siguen ahí — y si la nueva no tiene una
+  /// pista con ese número, mpv se queda sin vídeo. El audio sale igual, la
+  /// posición corre igual, y la pantalla queda en negro.
+  ///
+  /// Aparece justo al cambiar de servidor y se arregla saliendo del episodio y
+  /// volviendo a entrar, que es lo que se esperaría: ahí nace un reproductor
+  /// nuevo, sin nada guardado. Y no es de una extensión — pasa con varias, que
+  /// es la señal de que el problema está de este lado.
+  ///
+  /// Se pone en `auto` y decide mpv, que es lo que corresponde con una fuente
+  /// que todavía no abrió. El audio solo se toca si la extensión no pidió una
+  /// pista concreta: cuando la pide, mandarla a automático sería pisarla.
+  Future<void> _pistasEnAutomatico() async {
+    if (player.platform is! NativePlayer) return;
+    final np = player.platform as NativePlayer;
+    try {
+      await np.setProperty('vid', 'auto');
+      if (watchData?.audioTrack == null) {
+        await np.setProperty('aid', 'auto');
+      }
+    } catch (e) {
+      // Si no se pudo, se abre igual: como mucho vuelve el síntoma, y frenar la
+      // reproducción por esto sería peor.
+      logger.info('no se pudieron poner las pistas en automático: $e');
+    }
+  }
+
   /// Vuelve a abrir lo mismo, pero decodificando por software.
   ///
   /// Se conserva la posicion: si el fallo aparecio a mitad de reproduccion, no
@@ -4890,6 +4924,7 @@ class VideoPlayerController extends GetxController with WidgetsBindingObserver {
     // nodos caídos, o directamente no intentarlo. Ver _comoAbrir.
     final plan = await _comoAbrir(url, headers);
     if (_disposed) return false;
+    await _pistasEnAutomatico();
     await player.open(Media(plan.url ?? url, httpHeaders: hdrs));
     if (_disposed) {
       try {
@@ -4967,7 +5002,32 @@ class VideoPlayerController extends GetxController with WidgetsBindingObserver {
         playList[index.value].url,
       );
 
+  /// Si al retomar conviene ir derecho al navegador en vez de intentar nativo.
+  ///
+  /// **Ojo con la clave de ese recuerdo: es el EPISODIO, no el servidor.** O sea
+  /// que apenas UNO de los servidores del episodio cae al navegador, queda
+  /// marcado el episodio entero — y a partir de ahí CUALQUIER servidor que se
+  /// retome abre el navegador sin siquiera intentar el reproductor de la app.
+  ///
+  /// Eso hacía que un servidor que reproduce perfecto, como UA Directo o UA
+  /// Goodstream en FuegoCine, se abriera en el navegador para siempre solo
+  /// porque otro de la lista había fallado antes. Y no se recuperaba solo: el
+  /// recuerdo solo se pisa cuando algo vuelve a reproducir nativo, que es
+  /// justamente lo que este atajo impedía.
+  ///
+  /// Por eso ahora manda lo que diga la extensión: si declara que ese servidor
+  /// reproduce en la app, se intenta nativo aunque el recuerdo diga otra cosa.
+  /// Si falla de verdad, la app cae al navegador sola como siempre — se pierde
+  /// un intento, no la reproducción.
+  ///
+  /// El atajo se conserva para los que la extensión marca como de navegador:
+  /// ahí sí ahorra el intento inútil y abre más rápido.
   bool _shouldResumeInWebView() {
+    final nombre = currentServerName.value;
+    final url = availableServers[nombre];
+    if (url != null && url.isNotEmpty && esServidorNativo(nombre, url)) {
+      return false;
+    }
     return PrismHubStorage.getLastPlaybackMode(
           runtime.extension.package,
           playList[index.value].url,
@@ -5061,8 +5121,34 @@ class VideoPlayerController extends GetxController with WidgetsBindingObserver {
     // En Linux reconnect va apagado a propósito (ver dónde se ponen estas
     // opciones al arrancar) — no se toca desde acá.
     if (Platform.isLinux) return;
+    // `multiple_requests=1` solo en el archivo entero: que ffmpeg REUSE la misma
+    // conexión para pedir otro tramo, en vez de abrir una nueva cada vez.
+    //
+    // Es lo que faltaba para los MP4 mal entrelazados, y recién ahora se sabe
+    // por qué. Medido el 2026-08-05 con dos títulos de FuegoCine, los dos con el
+    // índice al final, uno se corta y el otro va perfecto:
+    //
+    //   el que falla   vídeo del MB 0 al 568 · audio del MB 568 al 608
+    //   el que anda    vídeo y audio mezclados cada ~1 KB de punta a punta
+    //
+    // O sea que el que falla NO está entrelazado: el audio está entero al final.
+    // Para armar cada segundo hay que leer vídeo al principio y audio a 568 MB
+    // de distancia — dos saltos de medio giga por segundo. Y cada salto, sin
+    // esto, es cerrar la conexión y abrir otra: TCP más TLS, unos 250 ms que se
+    // van en apretón de manos. A dos por segundo se va medio segundo de cada
+    // segundo en saludar, y por eso entran 40 KB/s con el servidor dando 7 MB/s.
+    //
+    // **Por qué antes se creyó que esto no servía:** figuraba descartado porque
+    // "demuxer-lavf-o va al lector de MP4, no al protocolo". Es falso, y lo
+    // prueba la propia línea de al lado: `reconnect` es una opción del protocolo
+    // HTTP de ffmpeg y se pasa por acá desde siempre, y funciona. libavformat
+    // baja al protocolo las opciones que el demuxer no reconoce.
+    //
+    // Va SOLO en el archivo entero. En una lista de pedacitos cada uno es una
+    // dirección distinta y no hay nada que reusar.
     final opciones = archivoEntero
-        ? 'reconnect=1,reconnect_delay_max=5,seg_max_retry=3'
+        ? 'reconnect=1,reconnect_delay_max=5,seg_max_retry=3,'
+            'multiple_requests=1'
         : 'reconnect=1,reconnect_streamed=1,reconnect_delay_max=5,'
             'seg_max_retry=3';
     try {
@@ -5071,8 +5157,14 @@ class VideoPlayerController extends GetxController with WidgetsBindingObserver {
       // ignora el cambio, en el registro se ve la diferencia en vez de tener
       // que suponerlo.
       final quedo = await np.getProperty('demuxer-lavf-o');
+      // Se dice aparte si la reutilización de conexión ENTRÓ, y se lee de lo
+      // que quedó puesto de verdad, no de lo que se pidió. Es el dato que hay
+      // que mirar cuando un archivo mal entrelazado sigue cortándose: si acá
+      // dice "no", el problema es que la opción no llegó, no el archivo.
+      final reusa = quedo.contains('multiple_requests=1');
       logger.info('saltar dentro del archivo: '
           '${archivoEntero ? 'SÍ (archivo entero)' : 'no (lista de pedacitos)'}'
+          ' · reusa la conexión: ${reusa ? 'SÍ' : 'no'}'
           ' · quedó: $quedo');
       _anotarDondeEstaElIndice(url, headers);
     } catch (e) {
@@ -5258,8 +5350,34 @@ class VideoPlayerController extends GetxController with WidgetsBindingObserver {
     // y solo agregaría un intermediario. Pero si veníamos de un maestro, se le
     // pasa a mpv la variante YA resuelta: es un viaje menos al CDN, y en estos
     // servidores cada viaje se paga en segundos.
+    //
+    // **Salvo que ese atajo le esconda algo a mpv.** El maestro es el único que
+    // declara las pistas alternativas —los `#EXT-X-MEDIA` con los audios y los
+    // subtítulos— y la lista de calidades. La variante sola no las trae: es un
+    // único flujo, con su audio pegado y nada más.
+    //
+    // Medido en LaMovie el 2026-08-06: el maestro de vimeos declara DOS audios,
+    // «Español» por omisión e «English», y al entregarle la variante el
+    // reproductor quedaba con uno solo y sin selector de idioma. Lo mismo con la
+    // calidad: dos variantes en el maestro, una sola elegible después.
+    //
+    // Así que cuando hay algo que elegir se le da el maestro y lo resuelve mpv,
+    // que para eso está. El viaje de más se paga una vez; perder el audio en
+    // inglés se paga toda la película.
     if (nodos.length < 2) {
       final conVariante = direccion != url;
+      final hayPistas = maestro.contains('#EXT-X-MEDIA');
+      final variasCalidades =
+          RegExp(r'#EXT-X-STREAM-INF').allMatches(maestro).length > 1;
+      if (conVariante && (hayPistas || variasCalidades)) {
+        final que = <String>[
+          if (hayPistas) 'pistas de audio o subtítulos',
+          if (variasCalidades) 'varias calidades',
+        ].join(' y ');
+        logger.info('ficha · $servidor · un solo nodo (${nodos.first}) · se le '
+            'pasa el MAESTRO a mpv: trae $que y la variante sola las perdería');
+        return const _ComoAbrir.talCual();
+      }
       logger.info('ficha · $servidor · un solo nodo (${nodos.first}) · va '
           'directo a mpv${conVariante ? ', con la variante ya resuelta (un '
               'viaje menos al CDN)' : ''}');

@@ -1261,19 +1261,33 @@ class _TrackSelector extends StatelessWidget {
           title: 'video.audio'.i18n,
         ),
         const SizedBox(height: 5),
-        for (final audio in controller.player.state.tracks.audio)
-          if (audio.language != null || audio.title != null)
-            ListTile(
-              selected: audio == controller.player.state.track.audio,
-              title: Text(audio.title ?? ''),
-              subtitle: Text(audio.language ?? ''),
-              onTap: () {
-                controller.player.setAudioTrack(
-                  audio,
-                );
-                controller.showSidebar.value = false;
-              },
+        // Las pistas de audio del propio vídeo. **Se muestran TODAS**: antes
+        // se salteaban las que no traían ni título ni idioma y quedaban
+        // invisibles aunque se pudieran elegir. Ver la misma nota en
+        // video_player_desktop_controls.dart.
+        if (_audiosDelVideo(controller).isEmpty)
+          Padding(
+            padding: const EdgeInsets.fromLTRB(16, 2, 16, 6),
+            child: Text(
+              'Este vídeo trae un solo audio',
+              style:
+                  TextStyle(fontSize: 12, color: Colors.white.withAlpha(120)),
             ),
+          ),
+        for (final (i, audio) in _audiosDelVideo(controller).indexed)
+          ListTile(
+            selected: audio == controller.player.state.track.audio,
+            title: Text(_nombreDeLaPista(audio.title, audio.language, i)),
+            subtitle: audio.title != null && audio.language != null
+                ? Text(audio.language!)
+                : null,
+            onTap: () {
+              controller.player.setAudioTrack(
+                audio,
+              );
+              controller.showSidebar.value = false;
+            },
+          ),
       ],
     );
   }
@@ -1304,4 +1318,18 @@ class _TorrentFiles extends StatelessWidget {
       ],
     );
   }
+}
+
+/// Las pistas de audio de verdad, sin las entradas `no` y `auto` que media_kit
+/// agrega y que no son pistas sino órdenes para el reproductor.
+List<AudioTrack> _audiosDelVideo(VideoPlayerController c) =>
+    c.player.state.tracks.audio
+        .where((a) => a != AudioTrack.no() && a != AudioTrack.auto())
+        .toList();
+
+/// El nombre que se muestra: el suyo, el idioma, o el número.
+String _nombreDeLaPista(String? titulo, String? idioma, int indice) {
+  if (titulo != null && titulo.trim().isNotEmpty) return titulo;
+  if (idioma != null && idioma.trim().isNotEmpty) return idioma;
+  return 'Pista ${indice + 1}';
 }
