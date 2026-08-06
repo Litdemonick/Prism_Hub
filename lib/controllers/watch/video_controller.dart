@@ -4039,40 +4039,6 @@ class VideoPlayerController extends GetxController with WidgetsBindingObserver {
   /// Se limpia al cargar contenido nuevo (ver donde se reinicia el estado).
   bool _reintentoPorSoftware = false;
 
-  /// Deja la elección de pistas en automático ANTES de abrir otra fuente.
-  ///
-  /// **El bug que ataja: se escucha, el reloj avanza y no hay imagen.**
-  ///
-  /// mpv guarda qué pista de vídeo y de audio está usando en `vid` y `aid`, y
-  /// esos valores son NÚMEROS DE PISTA, no algo atado al archivo. El
-  /// reproductor se reusa entre servidores y entre episodios, así que al abrir
-  /// la fuente siguiente esos números siguen ahí — y si la nueva no tiene una
-  /// pista con ese número, mpv se queda sin vídeo. El audio sale igual, la
-  /// posición corre igual, y la pantalla queda en negro.
-  ///
-  /// Aparece justo al cambiar de servidor y se arregla saliendo del episodio y
-  /// volviendo a entrar, que es lo que se esperaría: ahí nace un reproductor
-  /// nuevo, sin nada guardado. Y no es de una extensión — pasa con varias, que
-  /// es la señal de que el problema está de este lado.
-  ///
-  /// Se pone en `auto` y decide mpv, que es lo que corresponde con una fuente
-  /// que todavía no abrió. El audio solo se toca si la extensión no pidió una
-  /// pista concreta: cuando la pide, mandarla a automático sería pisarla.
-  Future<void> _pistasEnAutomatico() async {
-    if (player.platform is! NativePlayer) return;
-    final np = player.platform as NativePlayer;
-    try {
-      await np.setProperty('vid', 'auto');
-      if (watchData?.audioTrack == null) {
-        await np.setProperty('aid', 'auto');
-      }
-    } catch (e) {
-      // Si no se pudo, se abre igual: como mucho vuelve el síntoma, y frenar la
-      // reproducción por esto sería peor.
-      logger.info('no se pudieron poner las pistas en automático: $e');
-    }
-  }
-
   /// Vuelve a abrir lo mismo, pero decodificando por software.
   ///
   /// Se conserva la posicion: si el fallo aparecio a mitad de reproduccion, no
@@ -5100,7 +5066,6 @@ class VideoPlayerController extends GetxController with WidgetsBindingObserver {
     audioHlsElegido.value = -1;
     final plan = await _comoAbrir(url, headers);
     if (_disposed) return false;
-    await _pistasEnAutomatico();
     _fuenteUrl = plan.url ?? url;
     _fuenteHeaders = hdrs;
     await player.open(Media(plan.url ?? url, httpHeaders: hdrs));
