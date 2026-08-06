@@ -408,6 +408,28 @@ class VideoPlayerController extends GetxController with WidgetsBindingObserver {
   /// rueda se quedaría puesta encima de un vídeo que ya se ve andando.
   static const _avanceParaCreerle = Duration(milliseconds: 700);
 
+  /// El vídeo todavía no arrancó: se está esperando el primer cuadro.
+  ///
+  /// **Mientras esto sea cierto no se le hace caso a play, pausa ni saltos.**
+  /// Ahí el reproductor está a medio abrir, y tocarlo es la forma más rápida de
+  /// dejarlo en un estado del que no vuelve — pedirle pausa a mpv antes de que
+  /// termine de colocarse, o un salto a una posición que todavía no existe.
+  /// Quien lo toca no está haciendo nada raro: ve una rueda y prueba.
+  ///
+  /// Se corta con las mismas condiciones con las que los controles deciden
+  /// mostrar la rueda: si hay un error en pantalla, un aviso de servidor caído
+  /// o falta elegir servidor, NO se está cargando nada y el botón tiene que
+  /// responder. Y casteando tampoco: ahí el reproductor de acá está parado a
+  /// propósito y el que manda es el aparato.
+  bool get esperandoElPrimerCuadro =>
+      dlnaDevice.value == null &&
+      !isGettingWatchData.value &&
+      !hasRenderedFrame.value &&
+      error.value.isEmpty &&
+      serverFailedMessage.value.isEmpty &&
+      !awaitingServerChoice.value &&
+      !isWebViewActive.value;
+
   /// Red de seguridad: la rueda no puede quedarse girando para siempre.
   ///
   /// Se apaga sola al avanzar el vídeo, y también cuando la app pausa a
@@ -6303,6 +6325,11 @@ class VideoPlayerController extends GetxController with WidgetsBindingObserver {
     // Mismo motivo que en safePlay: con el tutorial arriba nada arranca el
     // video, ni siquiera un atajo de teclado que se cuele.
     if (tutorialArriba.value) return;
+    // Cargando no se toca. Ver esperandoElPrimerCuadro.
+    if (esperandoElPrimerCuadro) {
+      logger.info('play/pausa ignorado: el vídeo todavía está cargando');
+      return;
+    }
     if (dlnaDevice.value == null) {
       player.playOrPause();
       return;
@@ -6420,6 +6447,21 @@ class VideoPlayerController extends GetxController with WidgetsBindingObserver {
 
   seek(Duration destino) async {
     if (_disposed) return;
+    // **La barra de progreso, bloqueada mientras carga.**
+    //
+    // Acá y no en la barra: seek() es el único punto de entrada de la barra, de
+    // los atajos de teclado y de los botones de salto, así que cortarlo una vez
+    // los cubre todos en las tres plataformas y no hay forma de esquivarlo.
+    //
+    // Solo mientras se espera el PRIMER cuadro. Un salto durante un parón a
+    // mitad de reproducción sí se atiende: ahí el vídeo ya está abierto, y
+    // encadenar saltos es justamente lo que se quiere poder hacer cuando algo
+    // se traba.
+    if (esperandoElPrimerCuadro) {
+      logger.info('salto a ${destino.inSeconds}s ignorado: el vídeo todavía '
+          'está cargando');
+      return;
+    }
     // Acá y no en cada botón: seek() es el único punto de entrada para la
     // barra de progreso, los atajos de teclado y los saltos, así que marcarlo
     // una vez cubre todos los casos en las tres plataformas.
