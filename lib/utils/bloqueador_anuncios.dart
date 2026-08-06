@@ -48,6 +48,9 @@ class BloqueadorAnuncios {
   static const _claveListas = 'bloqueador_listas';
   static const _claveActivo = 'bloqueador_activo';
 
+  /// Los servidores que se abrieron y no tenían ningún reproductor adentro.
+  static const _claveSinReproductor = 'bloqueador_sin_reproductor';
+
   /// Qué listas de fábrica ya se intentaron instalar, para no reintentarlas
   /// eternamente ni volver a ponerlas si el usuario las quitó a propósito.
   ///
@@ -58,6 +61,70 @@ class BloqueadorAnuncios {
   /// esos usuarios se quedaban sin las listas para siempre; con uno nuevo, el
   /// contador arranca de cero y se bajan como corresponde.
   static const _claveFabricaHechas = 'bloqueador_fabrica_hechas_v2';
+
+  // ─── Servidores que no muestran un reproductor ────────────────────────────
+  //
+  // Hay servidores que abren, cargan una página entera y adentro no hay ningún
+  // vídeo: un cartel de "no disponible", una pantalla de anuncios, o
+  // directamente otra cosa. El usuario termina mirando algo que no pidió, y
+  // encima tiene que darse cuenta solo de que ahí no va a pasar nada.
+  //
+  // Se anota el servidor la primera vez que ocurre y a partir de ahí no se le
+  // deja abrir el navegador: se cierra solo y hay que elegir otro. Si el
+  // usuario insiste con reproducir, se vuelve a cerrar — que es justo la señal
+  // de que ese servidor está caído de verdad.
+  //
+  // **Se anota por servidor, no por título, y no se borra.** Es a propósito:
+  // así, mientras se prueba, un servidor que se cierra solo es un servidor que
+  // no anda, sin tener que acordarse de cuál era. El precio es que un solo
+  // título roto puede dejar marcado a ese servidor en todas las extensiones —
+  // por eso se puede ver y limpiar desde la pantalla del bloqueador.
+
+  static Set<String>? _sinReproductor;
+
+  static Set<String> get sinReproductor {
+    final guardado = _sinReproductor;
+    if (guardado != null) return guardado;
+    final crudo = PrismHubStorage.getSetting(_claveSinReproductor);
+    if (crudo is! String || crudo.isEmpty) return _sinReproductor = <String>{};
+    try {
+      return _sinReproductor = (jsonDecode(crudo) as List<dynamic>)
+          .map((e) => '$e')
+          .toSet();
+    } catch (_) {
+      return _sinReproductor = <String>{};
+    }
+  }
+
+  /// ¿Este servidor ya se abrió una vez sin traer reproductor?
+  static bool sinReproductorConocido(String url) {
+    final marcados = sinReproductor;
+    if (marcados.isEmpty) return false;
+    final host = Uri.tryParse(url)?.host.toLowerCase();
+    if (host == null || host.isEmpty) return false;
+    return marcados.contains(host.replaceFirst(RegExp(r'^www\.'), ''));
+  }
+
+  /// Anota que este servidor abrió sin reproductor.
+  static Future<void> anotarSinReproductor(String url) async {
+    final host = Uri.tryParse(url)?.host.toLowerCase();
+    if (host == null || host.isEmpty) return;
+    final limpio = host.replaceFirst(RegExp(r'^www\.'), '');
+    final marcados = <String>{...sinReproductor, limpio};
+    _sinReproductor = marcados;
+    await PrismHubStorage.setSetting(
+        _claveSinReproductor, jsonEncode(marcados.toList()));
+    logger.info('[bloqueador] "$limpio" no traía reproductor: no se vuelve a '
+        'abrir hasta que se lo quite de la lista');
+  }
+
+  /// Vuelve a darle una oportunidad a un servidor marcado.
+  static Future<void> olvidarSinReproductor(String host) async {
+    final marcados = <String>{...sinReproductor}..remove(host);
+    _sinReproductor = marcados;
+    await PrismHubStorage.setSetting(
+        _claveSinReproductor, jsonEncode(marcados.toList()));
+  }
 
   // ─── Catálogo ─────────────────────────────────────────────────────────────
 

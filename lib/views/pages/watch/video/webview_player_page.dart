@@ -349,6 +349,17 @@ Future<void> openWebViewPlayer(
   String title = '',
   void Function(Uint8List? screenshot, {bool isFinal})? onProgress,
 }) async {
+  // **Un servidor que ya se abrió sin traer reproductor no se vuelve a abrir.**
+  //
+  // Se cierra antes de mostrar nada, así el usuario no ve la pantalla que no
+  // pidió. Si insiste con reproducir vuelve a pasar lo mismo, que es la señal
+  // de que ese servidor no anda y hay que elegir otro. Ver `sinReproductor` en
+  // bloqueador_anuncios.dart.
+  if (BloqueadorAnuncios.sinReproductorConocido(url)) {
+    logger.info('no se abre "${Uri.tryParse(url)?.host}": la última vez cargó '
+        'sin ningún reproductor adentro');
+    return;
+  }
   // Se pregunta ANTES de abrir, no despues: una vez cargada la pagina, lo que
   // sea que traiga ya se ejecuto.
   if (!await _confirmarServidorFichado(context, url)) return;
@@ -492,6 +503,62 @@ class _WebViewPlayerPageState extends State<WebViewPlayerPage>
   static bool get _cachesCoverShot => Platform.isAndroid;
 
   /// Le pregunta a la página si el bloqueador llegó a ponerse y qué cortó.
+  /// Si ya se cerró solo por no haber reproductor, para no repetir el aviso.
+  bool _yaSeCerroSinReproductor = false;
+
+  /// Comprueba que la página tenga de verdad un reproductor, y si no, cierra.
+  ///
+  /// Hay servidores que abren, cargan una página entera y adentro no hay ningún
+  /// vídeo: un cartel de "no disponible", una pantalla de anuncios, o
+  /// directamente otra cosa. El usuario terminaba mirando algo que no pidió y
+  /// tenía que darse cuenta solo de que ahí no iba a pasar nada.
+  ///
+  /// Se le dan ocho segundos: muchos reproductores se arman con JS y no existen
+  /// en el instante en que la página termina de cargar. Se busca un `<video>`,
+  /// un `<audio>` o un marco adentro —que es donde estos sitios meten el
+  /// reproductor de verdad— y también si algo empezó a sonar.
+  ///
+  /// Si no hay nada, se anota el servidor y se cierra. La próxima vez ni se
+  /// abre: ver `sinReproductor` en bloqueador_anuncios.dart.
+  Future<void> _vigilarQueHayaReproductor(
+      InAppWebViewController controller) async {
+    if (_yaSeCerroSinReproductor) return;
+    await Future<void>.delayed(const Duration(seconds: 8));
+    if (!mounted || _yaSeCerroSinReproductor) return;
+    try {
+      final r = await controller.evaluateJavascript(source: '''
+(function () {
+  try {
+    if (document.querySelector('video, audio')) return true;
+    // Los marcos cuentan: casi todos estos sitios meten el reproductor
+    // adentro de uno, y desde afuera no se puede mirar qué tienen.
+    var m = document.querySelectorAll('iframe, embed, object');
+    for (var i = 0; i < m.length; i++) {
+      var s = (m[i].src || '') + '';
+      if (s && s.indexOf('about:blank') !== 0) return true;
+    }
+    return false;
+  } catch (e) {
+    // Ante la duda, que siga: cerrar por un error nuestro sería peor.
+    return true;
+  }
+})()
+''');
+      final hay = r == true || r == 'true' || r == 1;
+      if (hay || !mounted) return;
+
+      _yaSeCerroSinReproductor = true;
+      await BloqueadorAnuncios.anotarSinReproductor(widget.url);
+      if (!mounted) return;
+      Navigator.of(context).pop();
+    } catch (e) {
+      // Si no se pudo preguntar, se deja abierto. Cerrar la pantalla del
+      // usuario porque una comprobación nuestra falló sería lo peor de los dos
+      // mundos.
+      logger.info('no se pudo comprobar si hay reproductor: \$e');
+    }
+  }
+
   Future<void> _comprobarBloqueador(InAppWebViewController controller) async {
     if (!BloqueadorAnuncios.activo) return;
     try {
@@ -1182,6 +1249,7 @@ class _WebViewPlayerPageState extends State<WebViewPlayerPage>
                       // responde sin ambigüedad, por el mismo camino que ya
                       // sabemos que funciona.
                       _comprobarBloqueador(controller);
+                      _vigilarQueHayaReproductor(controller);
                       // El aviso de por qué se llegó acá va DESPUÉS de que
                       // el navegador interno ya cargó y se ve — mostrarlo
                       // antes (en la pantalla del reproductor nativo, previo
