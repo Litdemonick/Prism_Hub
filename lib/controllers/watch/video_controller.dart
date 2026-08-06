@@ -5325,29 +5325,29 @@ class VideoPlayerController extends GetxController with WidgetsBindingObserver {
     //
     // Va SOLO en el archivo entero. En una lista de pedacitos cada uno es una
     // dirección distinta y no hay nada que reusar.
-    // ── `multiple_requests` SE SACÓ. Medido el 2026-08-06 ──────────────────
+    // ── `multiple_requests=1`: hace falta, y se comprobó sacándolo ──────────
     //
-    // Rompió mp4upload en JKAnime, que andaba. El servidor contesta
-    // `connection: close` —o sea, cierra después de cada pedido— y con
-    // `multiple_requests=1` ffmpeg intenta reusar esa conexión igual: se pasa
-    // reconectando y el caudal se desploma.
+    // Se sacó una vez y **mp4upload dejó de dar imagen**: pantalla negra y sin
+    // sonido, cuando con la opción puesta reproducía. Confirmado en vivo el
+    // 2026-08-06 por el usuario, comparando dos compilaciones seguidas.
     //
-    //   medido a mano, con Referer:   1305 KB/s
-    //   lo que le entraba a mpv:        29 KB/s
+    // El motivo: en estos archivos el índice está AL FINAL. Para arrancar, mpv
+    // tiene que leer el final y volver al principio, y sin reusar la conexión
+    // cada uno de esos saltos abre una conexión nueva contra un servidor que
+    // tarda casi un segundo en saludar.
     //
-    // Cuarenta y cinco veces menos. El vídeo arrancaba y se paraba en seguida
-    // con un colchón de 0,4 s.
+    // **Y por qué se llegó a sacar:** por leer mal el registro. Decía
+    // `entrando: 29 KB/s` mientras el archivo medido a mano daba 1 MB/s, y se
+    // tomó como que la opción estrangulaba la descarga. No: ese número es el
+    // ritmo al que mpv llena su colchón en ese instante, y con 30 segundos
+    // configurados afloja apenas tiene bastante. Un número bajo ahí, con el
+    // vídeo andando, es lo normal — no una medición de la conexión.
     //
-    // Se había puesto para el caso de FuegoCine, donde el audio está a 568 MB
-    // del vídeo y saltar entre los dos abre una conexión nueva cada vez. Nunca
-    // se confirmó que ahí sirviera, y acá está comprobado que estorba: entre
-    // una mejora sin confirmar y una rotura medida, se saca.
-    //
-    // Si algún día se retoma, tiene que ir por servidor y solo cuando el
-    // servidor diga que mantiene la conexión abierta — no para todos los
-    // archivos enteros, como estaba.
+    // Va SOLO en el archivo entero. En una lista de pedacitos cada uno es una
+    // dirección distinta y no hay nada que reusar.
     final opciones = archivoEntero
-        ? 'reconnect=1,reconnect_delay_max=5,seg_max_retry=3'
+        ? 'reconnect=1,reconnect_delay_max=5,seg_max_retry=3,'
+            'multiple_requests=1'
         : 'reconnect=1,reconnect_streamed=1,reconnect_delay_max=5,'
             'seg_max_retry=3';
     try {
