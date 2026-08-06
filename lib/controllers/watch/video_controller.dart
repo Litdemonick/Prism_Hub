@@ -5431,10 +5431,22 @@ class VideoPlayerController extends GetxController with WidgetsBindingObserver {
       final texto = String.fromCharCodes(datos);
       final moov = texto.indexOf('moov');
       final mdat = texto.indexOf('mdat');
-      // Si el índice no aparece en los primeros 2 KB y los datos sí, está al
-      // final. Si no aparece ninguno de los dos, no es un MP4 de los que se
-      // pueden mirar así — y decirlo es distinto de decir que está sano.
-      if (mdat < 0) return 'no se pudo ver (no parece un MP4)';
+      // **No confundir "no lo veo desde acá" con "está roto".**
+      //
+      // Esta sonda mira solo los primeros 2 KB. Si ahí no aparece `mdat`, antes
+      // decía "no parece un MP4" — y eso hizo perder un rato largo con
+      // mp4upload, cuyo archivo es un MP4 impecable: empieza con `ftyp`, mide
+      // 295 MB y baja a 1 MB/s. Lo único que pasaba es que su `mdat` cae más
+      // allá de los 2 KB que se leen.
+      //
+      // Así que primero se comprueba si es un MP4 —el `ftyp` de los primeros
+      // bytes lo dice— y recién después se opina sobre dónde está el índice.
+      final esMp4 = texto.indexOf('ftyp') >= 0 && texto.indexOf('ftyp') < 16;
+      if (mdat < 0) {
+        return esMp4
+            ? 'es un MP4, pero el índice no entra en los primeros 2 KB'
+            : 'no se pudo ver (no parece un MP4)';
+      }
       return moov < 0 || moov > mdat
           ? 'AL FINAL — de los que se cortan'
           : 'al principio — de los que van de corrido';
