@@ -267,7 +267,7 @@ Future<bool> _confirmarServidorFichado(
 ) async {
   if (!BloqueadorAnuncios.esPeligroso(url)) return true;
 
-  final quienes = BloqueadorAnuncios.quienLoMarca(url);
+  final quienes = await BloqueadorAnuncios.quienLoMarca(url);
   final host = Uri.tryParse(url)?.host ?? url;
   if (!context.mounted) return true;
 

@@ -212,12 +212,18 @@ class BloqueadorAnuncios {
 
   /// Cuántos dominios se están bloqueando ahora mismo.
   ///
-  /// Incluye los cargadores de anuncios de vídeo, que van siempre. Antes
-  /// contaba solo las listas del usuario, así que sin ninguna instalada la
-  /// pantalla decía "0 dominios bloqueados" mientras el bloqueador sí estaba
-  /// cortando cosas — parecía que no hacía nada.
-  static int get cuantosDominios =>
-      activo ? <String>{...dominiosEnUso}.length : 0;
+  /// **Los tres contadores están guardados, no se calculan al pedirlos.**
+  ///
+  /// Se leen desde el `build` de la pantalla de ajustes, o sea muchas veces por
+  /// segundo mientras se mueve algo. Antes cada lectura armaba un conjunto
+  /// nuevo con TODOS los dominios —`{...dominiosEnUso}.length` copiaba 326.000
+  /// entradas, y `cuantosDeListas` armaba otro más para restarle la base— así
+  /// que abrir la pantalla o tocar un interruptor trababa la app un rato largo.
+  /// Ahora se calculan una sola vez, cuando cambian las listas.
+  static int _cuantosTotal = 0;
+  static int _cuantosSoloDeListas = 0;
+
+  static int get cuantosDominios => activo ? _cuantosTotal : 0;
 
   /// Cuántos trae la base de fábrica. Se muestra para que quede claro que el
   /// bloqueador protege sin instalar nada — antes parecía que sin listas no
@@ -226,29 +232,38 @@ class BloqueadorAnuncios {
 
   /// Cuántos suman las listas que instaló el usuario, sin contar los que ya
   /// están en la base.
-  static int get cuantosDeListas =>
-      _dominios.difference(<String>{..._listaBase}).length;
+  static int get cuantosDeListas => _cuantosSoloDeListas;
 
   // ─── Listas ───────────────────────────────────────────────────────────────
 
   /// Las listas instaladas, en el orden en que se agregaron.
+  /// Las fichas ya leídas. Se rehacen solo cuando algo cambia.
+  ///
+  /// `listas()` se llama desde el `build` de la pantalla y desde cada contador,
+  /// y cada llamada volvía a pedirle el texto a Hive y a interpretarlo entero.
+  /// Es barato una vez y caro sesenta veces por segundo.
+  static List<ListaDeBloqueo>? _fichas;
+
   static List<ListaDeBloqueo> listas() {
+    final guardadas = _fichas;
+    if (guardadas != null) return guardadas;
     final crudo = PrismHubStorage.getSetting(_claveListas);
-    if (crudo is! String || crudo.isEmpty) return const [];
+    if (crudo is! String || crudo.isEmpty) return _fichas = const [];
     try {
       final datos = jsonDecode(crudo) as List<dynamic>;
-      return datos
+      return _fichas = datos
           .map((e) => ListaDeBloqueo.desdeMapa(e as Map<String, dynamic>))
           .toList();
     } catch (e) {
       // Un ajuste corrupto no puede dejar sin navegador al usuario: se degrada
       // a "ninguna lista" y se sigue.
       logger.warning('[bloqueador] no se pudieron leer las listas: $e');
-      return const [];
+      return _fichas = const [];
     }
   }
 
   static Future<void> _guardar(List<ListaDeBloqueo> listas) async {
+    _fichas = null;
     await PrismHubStorage.setSetting(
       _claveListas,
       jsonEncode(listas.map((l) => l.aMapa()).toList()),
@@ -329,6 +344,7 @@ class BloqueadorAnuncios {
         if (viejos.isNotEmpty) await _escribirDominios(ficha.url, viejos);
         salida.add(ficha);
       }
+      _fichas = null;
       await PrismHubStorage.setSetting(
         _claveListas,
         jsonEncode(salida.map((l) => l.aMapa()).toList()),
@@ -554,7 +570,7 @@ class BloqueadorAnuncios {
     final malos = <String>{};
     for (final l in listas()) {
       if (!l.activa) continue;
-      final suyos = _leerDominios(l.url);
+      final suyos = await _leerDominios(l.url);
       juntos.addAll(suyos);
       // Aparte se junta lo que es PELIGROSO, no solo molesto: un dominio de
       // EasyList es un servidor de anuncios y no hay nada que avisar, pero uno
@@ -564,6 +580,14 @@ class BloqueadorAnuncios {
     _peligrosos = malos;
     _dominios = juntos;
     _olvidarLoArmado();
+    // Las cuentas se hacen ACÁ, una vez, y no cada vez que la pantalla las
+    // pide. Ver el comentario de `cuantosDominios`.
+    _cuantosTotal = dominiosEnUso.length;
+    var propios = 0;
+    for (final d in _dominios) {
+      if (!_baseEnConjunto.contains(d)) propios++;
+    }
+    _cuantosSoloDeListas = propios;
     _cargado = true;
     logger.info(
         '[bloqueador] ${_dominios.length} dominios en ${listas().where((l) => l.activa).length} lista(s) activa(s)');
@@ -675,7 +699,14 @@ class BloqueadorAnuncios {
   /// así que rehacer el conjunto cada vez se paga caro.
   static Set<String>? _enUso;
   static Set<String> get dominiosEnUso =>
-      _enUso ??= <String>{..._listaBase, ..._dominios};
+      _enUso ??= <String>{..._baseEnConjunto, ..._dominios};
+
+  /// La base de fábrica como conjunto, armada una vez.
+  ///
+  /// `_listaBase` es una lista, y preguntarle `contains` es recorrerla entera.
+  /// Se hacía por cada dominio de cada lista del usuario al contar, que son
+  /// cientos de miles de recorridos de 47 elementos cada uno.
+  static final Set<String> _baseEnConjunto = <String>{..._listaBase};
 
   /// Se olvida lo armado. Va cada vez que cambian las listas.
   static void _olvidarLoArmado() => _enUso = null;
@@ -725,7 +756,7 @@ class BloqueadorAnuncios {
   /// Vuelve a abrir los archivos, que es caro, y por eso se llama SOLO cuando
   /// `esPeligroso` ya dijo que sí — o sea, casi nunca. Decir "está en una lista"
   /// sin decir en cuál no le sirve a nadie para decidir.
-  static List<String> quienLoMarca(String url) {
+  static Future<List<String>> quienLoMarca(String url) async {
     final host = Uri.tryParse(url)?.host.toLowerCase();
     if (host == null || host.isEmpty) return const [];
     final base = host.replaceFirst(RegExp(r'^www\.'), '');
@@ -743,7 +774,7 @@ class BloqueadorAnuncios {
     final fuera = <String>[];
     for (final l in listas()) {
       if (!l.activa || !_esDeSeguridad(l.url)) continue;
-      final suyos = _leerDominios(l.url);
+      final suyos = await _leerDominios(l.url);
       if (niveles.any(suyos.contains)) fuera.add(l.nombre);
     }
     return fuera;
