@@ -1455,6 +1455,13 @@ class _Header extends StatelessWidget {
           // asi que ofrecerlo igual solo termina en pantalla negra alla. Se
           // avisa el motivo al tocarlo. Ver puedeCastear en el controlador.
           Obx(() {
+            // Todavia abriendo el video: el boton NO se dibuja. Antes se
+            // dibujaba apagado y cada toque escupia un aviso, asi que tocarlo
+            // tres veces mientras cargaba dejaba tres encimados. Ver
+            // mostrarBotonDeCast en el controlador.
+            if (!controller.mostrarBotonDeCast) {
+              return const SizedBox.shrink();
+            }
             // Casteando: reintentar y desconectar, arriba y fuera del video.
             // Antes estaban en el medio de la pantalla, encima de la imagen y
             // justo donde se toca para pausar.

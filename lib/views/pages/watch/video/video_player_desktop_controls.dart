@@ -2099,6 +2099,12 @@ class _CastState extends State<_Cast> {
         // Si el reproductor nativo no esta andando, castear tampoco va a andar:
         // el televisor pide el mismo video y se topa con lo mismo. Se apaga el
         // boton y el tooltip dice el motivo. Ver puedeCastear en el controlador.
+        // Mientras el vídeo se está abriendo el botón no se dibuja, igual que
+        // en el teléfono: es un estado de unos segundos que se resuelve solo, y
+        // un botón apagado ahí no le dice nada a nadie. Ver mostrarBotonDeCast.
+        if (!widget.controller.mostrarBotonDeCast) {
+          return const SizedBox.shrink();
+        }
         final habilitado = widget.controller.puedeCastear;
         if (!habilitado) {
           return Tooltip(

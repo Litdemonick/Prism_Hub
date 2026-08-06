@@ -1149,6 +1149,24 @@ class VideoPlayerController extends GetxController with WidgetsBindingObserver {
   }
 
   /// Por que no se puede castear, para el aviso del boton apagado.
+  /// Si el botón de castear tiene que estar en pantalla.
+  ///
+  /// Mientras el vídeo todavía se está abriendo, **no**. Antes se dibujaba
+  /// igual, apagado, y en el teléfono cada toque escupía un aviso: tocarlo tres
+  /// veces mientras cargaba dejaba tres avisos encimados. Y no aportaba nada,
+  /// porque es un estado que dura unos segundos y se resuelve solo.
+  ///
+  /// Cuando el motivo es PERMANENTE el botón sí se queda: en el respaldo por
+  /// navegador no hay una dirección que mandarle al televisor, y ahí el aviso
+  /// explica algo que no va a cambiar por esperar. Esconderlo dejaría al
+  /// usuario buscando un botón que estaba hace un momento.
+  bool get mostrarBotonDeCast {
+    // Ya conectado: tiene que seguir para poder cortar.
+    if (dlnaDevice.value != null) return true;
+    if (isWebViewActive.value || webViewFallback.value != null) return true;
+    return puedeCastear;
+  }
+
   String get motivoSinCast {
     if (isGettingWatchData.value) return 'video.cast-wait'.i18n;
     if (isWebViewActive.value || webViewFallback.value != null) {
