@@ -5325,9 +5325,29 @@ class VideoPlayerController extends GetxController with WidgetsBindingObserver {
     //
     // Va SOLO en el archivo entero. En una lista de pedacitos cada uno es una
     // dirección distinta y no hay nada que reusar.
+    // ── `multiple_requests` SE SACÓ. Medido el 2026-08-06 ──────────────────
+    //
+    // Rompió mp4upload en JKAnime, que andaba. El servidor contesta
+    // `connection: close` —o sea, cierra después de cada pedido— y con
+    // `multiple_requests=1` ffmpeg intenta reusar esa conexión igual: se pasa
+    // reconectando y el caudal se desploma.
+    //
+    //   medido a mano, con Referer:   1305 KB/s
+    //   lo que le entraba a mpv:        29 KB/s
+    //
+    // Cuarenta y cinco veces menos. El vídeo arrancaba y se paraba en seguida
+    // con un colchón de 0,4 s.
+    //
+    // Se había puesto para el caso de FuegoCine, donde el audio está a 568 MB
+    // del vídeo y saltar entre los dos abre una conexión nueva cada vez. Nunca
+    // se confirmó que ahí sirviera, y acá está comprobado que estorba: entre
+    // una mejora sin confirmar y una rotura medida, se saca.
+    //
+    // Si algún día se retoma, tiene que ir por servidor y solo cuando el
+    // servidor diga que mantiene la conexión abierta — no para todos los
+    // archivos enteros, como estaba.
     final opciones = archivoEntero
-        ? 'reconnect=1,reconnect_delay_max=5,seg_max_retry=3,'
-            'multiple_requests=1'
+        ? 'reconnect=1,reconnect_delay_max=5,seg_max_retry=3'
         : 'reconnect=1,reconnect_streamed=1,reconnect_delay_max=5,'
             'seg_max_retry=3';
     try {
@@ -5340,10 +5360,8 @@ class VideoPlayerController extends GetxController with WidgetsBindingObserver {
       // que quedó puesto de verdad, no de lo que se pidió. Es el dato que hay
       // que mirar cuando un archivo mal entrelazado sigue cortándose: si acá
       // dice "no", el problema es que la opción no llegó, no el archivo.
-      final reusa = quedo.contains('multiple_requests=1');
       logger.info('saltar dentro del archivo: '
           '${archivoEntero ? 'SÍ (archivo entero)' : 'no (lista de pedacitos)'}'
-          ' · reusa la conexión: ${reusa ? 'SÍ' : 'no'}'
           ' · quedó: $quedo');
       _anotarDondeEstaElIndice(url, headers);
     } catch (e) {
