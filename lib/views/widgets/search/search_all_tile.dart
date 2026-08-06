@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:io';
 
 import 'package:flutter/material.dart';
@@ -25,6 +26,55 @@ class SearchAllTile extends StatefulWidget {
 }
 
 class _SearchAllTileState extends State<SearchAllTile> {
+  /// Cuánto se deja girar la rueda antes de avisar que algo va mal.
+  ///
+  /// Con un sitio caído la fila se quedaba girando para siempre, sin decir
+  /// nada. Y desde afuera eso se lee como que la app se colgó, cuando en
+  /// realidad está esperando a un servidor que no contesta. Medido en LaMovie
+  /// el 2026-08-06: su propia portada tardaba entre 21 y 27 segundos, y abierta
+  /// en un navegador directamente no cargaba.
+  ///
+  /// Doce segundos: por encima de lo que tarda cualquier extensión sana —las
+  /// demás contestan en dos o tres— y por debajo del límite del puente de red,
+  /// que corta a los veinte. Así el aviso llega ANTES de que el pedido muera,
+  /// que es cuando quien mira ya se está preguntando qué pasa.
+  static const _tardaDemasiado = Duration(seconds: 12);
+
+  Timer? _reloj;
+  bool _avisar = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _mirarSiTarda();
+  }
+
+  @override
+  void didUpdateWidget(SearchAllTile viejo) {
+    super.didUpdateWidget(viejo);
+    // Búsqueda nueva o refresco: la cuenta empieza de cero.
+    if (viejo.kw != widget.kw ||
+        viejo.searchResult.completed != widget.searchResult.completed) {
+      _mirarSiTarda();
+    }
+  }
+
+  @override
+  void dispose() {
+    _reloj?.cancel();
+    super.dispose();
+  }
+
+  void _mirarSiTarda() {
+    _reloj?.cancel();
+    if (_avisar) setState(() => _avisar = false);
+    if (widget.searchResult.completed) return;
+    _reloj = Timer(_tardaDemasiado, () {
+      if (!mounted || widget.searchResult.completed) return;
+      setState(() => _avisar = true);
+    });
+  }
+
   // Fila cargando: el indicador solo, centrado, sin nada debajo.
   //
   // Antes se dibujaban cuatro tarjetas de relleno y el indicador iba encima
@@ -40,15 +90,43 @@ class _SearchAllTileState extends State<SearchAllTile> {
     return SizedBox(
       height: Platform.isAndroid ? 170 : 280,
       child: Center(
-        child: SizedBox(
-          width: 26,
-          height: 26,
-          child: CircularProgressIndicator(
-            strokeWidth: 2.4,
-            valueColor: AlwaysStoppedAnimation(
-              HomeTheme.accentPink.withValues(alpha: 0.85),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            SizedBox(
+              width: 26,
+              height: 26,
+              child: CircularProgressIndicator(
+                strokeWidth: 2.4,
+                valueColor: AlwaysStoppedAnimation(
+                  HomeTheme.accentPink.withValues(alpha: 0.85),
+                ),
+              ),
             ),
-          ),
+            // Y si tarda de más, se dice. Ver _tardaDemasiado: una rueda que no
+            // para y no explica nada se lee como que la app se colgó.
+            if (_avisar) ...[
+              const SizedBox(height: 14),
+              Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 24),
+                child: Text(
+                  FlutterI18n.translate(
+                    context,
+                    'common.extension-lenta',
+                    translationParams: {
+                      's': widget.searchResult.runitme.extension.name,
+                    },
+                  ),
+                  textAlign: TextAlign.center,
+                  style: const TextStyle(
+                    color: HomeTheme.textMuted,
+                    fontSize: 13,
+                    height: 1.35,
+                  ),
+                ),
+              ),
+            ],
+          ],
         ),
       ),
     );

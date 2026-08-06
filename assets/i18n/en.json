@@ -46,6 +46,7 @@
     "off": "Off",
     "error-message": "Error message",
     "disconnect": "Disconnect",
+    "extension-lenta": "{s} is taking longer than usual. Its site may be down or very slow — try again later.",
     "no-internet": "Connect to the internet to load content",
     "no-internet-multiple": "No internet connection: couldn't load content from {count} extensions",
     "see-more": "See more",
