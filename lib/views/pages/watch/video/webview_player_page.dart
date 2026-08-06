@@ -375,14 +375,32 @@ Future<void> openWebViewPlayer(
   // servidor se recuperó, funciona solo y nadie tiene que ir a destildar nada.
   if (!await _confirmarServidorFichado(context, url)) return;
   if (!context.mounted) return;
+  // ── La transición: un cruce, no un deslizamiento ──────────────────────────
+  //
+  // MaterialPageRoute trae la animación de la plataforma —desliza en Android,
+  // zoom en escritorio— y acá eso es justo lo que se veía como un parpadeo: la
+  // pantalla nueva entra en NEGRO por arriba del vídeo que todavía se está
+  // viendo, se desplaza, y recién después aparece el navegador.
+  //
+  // Las dos pantallas son negras de fondo, así que un cruce simple entre ellas
+  // es imperceptible: no hay nada que se desplace ni que salte. Y corto, porque
+  // acá no se está navegando a otra sección — es el mismo vídeo cambiando de
+  // reproductor, y la animación solo tiene que tapar el cambio.
+  //
+  // Va en las dos direcciones: entrar y volver se sienten igual.
+  const cruce = Duration(milliseconds: 180);
   final hubo = await Navigator.of(context).push<bool>(
-    MaterialPageRoute(
-      builder: (_) => WebViewPlayerPage(
+    PageRouteBuilder<bool>(
+      transitionDuration: cruce,
+      reverseTransitionDuration: cruce,
+      pageBuilder: (_, __, ___) => WebViewPlayerPage(
         url: url,
         referer: referer,
         title: title,
         onProgress: onProgress,
       ),
+      transitionsBuilder: (_, animation, __, child) =>
+          FadeTransition(opacity: animation, child: child),
     ),
   );
   // Se cerró solo porque adentro no había nada que reproducir.
@@ -829,8 +847,20 @@ class _WebViewPlayerPageState extends State<WebViewPlayerPage>
   // que se abre (el caso más común del fallback automático) no tenía nada
   // que lo protegiera.
   Future<void> _prepareMount() async {
+    // La espera es SOLO para la primera vez.
+    //
+    // Los 700 ms están para darle aire a WebView2 recién creado: montar la
+    // vista encima del entorno a medio asentar es lo que sale como «Cannot
+    // create the InAppWebView instance!». Pero el entorno se crea UNA vez y
+    // queda guardado (ver ensureWebViewEnvironment), así que a partir de la
+    // segunda apertura no había nada que esperar y se esperaba igual.
+    //
+    // Eran 700 ms de pantalla negra regalados en cada entrada, y se notaban
+    // justo en lo que más se hace: entrar al navegador, volver, entrar de
+    // nuevo. Ahora la primera vez espera y las demás entran de una.
+    final entornoYaEstaba = _sharedEnvironment != null;
     final env = await ensureWebViewEnvironment();
-    if (Platform.isWindows) {
+    if (Platform.isWindows && !entornoYaEstaba) {
       await Future.delayed(const Duration(milliseconds: 700));
     }
     if (!mounted || _webViewShuttingDown) return;
