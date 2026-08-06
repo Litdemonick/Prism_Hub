@@ -271,8 +271,43 @@ class VideoPlayerController extends GetxController with WidgetsBindingObserver {
         'audio_${quiere.numero}.m3u8',
       );
       await archivo.writeAsString(rehecho, flush: true);
+      // **Sin esto mpv abre el archivo y no hace nada.**
+      //
+      // Una lista guardada en disco que adentro apunta a direcciones de
+      // internet es, para mpv, una "lista insegura": la abre, no se queja, y se
+      // queda sin cargar un solo pedacito. Medido: 35 segundos en 0:00 sin un
+      // mensaje de error.
+      //
+      // La precaución es razonable —un archivo ajeno no debería poder mandar a
+      // pedir cosas a la red— pero esta lista la escribimos nosotros dos
+      // renglones más arriba, a partir de la que el servidor ya nos dio.
+      if (player.platform is NativePlayer) {
+        await (player.platform as NativePlayer)
+            .setProperty('load-unsafe-playlists', 'yes');
+      }
       await player.open(Media(archivo.path, httpHeaders: headers));
       audioHlsElegido.value = indice;
+
+      // Si en seis segundos no aprendió cuánto dura, es que la lista no le
+      // sirvió. Antes de dejar al usuario mirando una rueda, se le da la
+      // variante sola: es una dirección de internet corriente, sin archivo de
+      // por medio ni permisos raros. Se pierde poder cambiar la calidad hasta
+      // el próximo servidor, que es mucho menos que no poder ver nada.
+      final espera = Stopwatch()..start();
+      while (!_disposed &&
+          duration.value <= Duration.zero &&
+          espera.elapsed < const Duration(seconds: 6)) {
+        await Future<void>.delayed(const Duration(milliseconds: 200));
+      }
+      if (!_disposed && duration.value <= Duration.zero) {
+        final sola = _mejorVarianteDe(rehecho, Uri.parse(_fuenteUrl ?? ''));
+        if (sola != null) {
+          logger.warning('el cambio de idioma no arrancó con la lista '
+              'completa · se abre la variante sola: $sola');
+          await player.open(Media(sola.toString(), httpHeaders: headers));
+        }
+      }
+
       if (donde > Duration.zero) await _saltarCuandoSePueda(donde);
       logger.info('audio cambiado a ${quiere.nombre} (a${quiere.numero})');
     } catch (e) {
