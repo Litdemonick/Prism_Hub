@@ -39,6 +39,7 @@
     "export": "Exportar",
     "show": "Mostrar",
     "hide": "Ocultar",
+    "detalle-desde-cache": "No se pudo actualizar la ficha: esto es lo guardado de la última vez y puede faltar contenido nuevo.",
     "extension-lenta": "{s} está tardando más de lo normal. Puede que su sitio esté caído o muy lento — probá de nuevo más tarde.",
     "no-internet": "Conéctate a internet para cargar el contenido",
     "no-internet-multiple": "Sin conexión a internet: no se pudo cargar contenido de {count} extensiones",

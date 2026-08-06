@@ -2,6 +2,7 @@ import 'dart:io';
 
 import 'package:fluent_ui/fluent_ui.dart' as fluent;
 import 'package:flutter/material.dart';
+import 'package:flutter_i18n/flutter_i18n.dart';
 import 'package:get/get.dart';
 import 'package:prismhub/views/widgets/button.dart';
 import 'package:prismhub/views/widgets/detail/detail_finished_button.dart';
@@ -124,14 +125,44 @@ class _DetailPageState extends State<DetailPage> {
               child: ColoredBox(color: Color(0xCC08090D)),
             ),
           ],
-          const Center(
-            child: SizedBox(
-              width: 38,
-              height: 38,
-              child: CircularProgressIndicator(
-                strokeWidth: 3,
-                valueColor: AlwaysStoppedAnimation(HomeTheme.accentPink),
-              ),
+          Center(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                const SizedBox(
+                  width: 38,
+                  height: 38,
+                  child: CircularProgressIndicator(
+                    strokeWidth: 3,
+                    valueColor: AlwaysStoppedAnimation(HomeTheme.accentPink),
+                  ),
+                ),
+                // Y si tarda de más, se dice en vez de girar sin fin. Ver
+                // tardaDemasiado en el controlador: es la misma idea que en la
+                // fila de la búsqueda, y va igual en celular y en escritorio
+                // porque quien decide es el controlador, no cada pantalla.
+                Obx(() => c.tardaDemasiado.value
+                    ? Padding(
+                        padding: const EdgeInsets.only(top: 18, left: 32, right: 32),
+                        child: Text(
+                          FlutterI18n.translate(
+                            context,
+                            'common.extension-lenta',
+                            translationParams: {
+                              's': c.runtime.value?.extension.name ??
+                                  'La extensión',
+                            },
+                          ),
+                          textAlign: TextAlign.center,
+                          style: const TextStyle(
+                            color: HomeTheme.textMuted,
+                            fontSize: 13,
+                            height: 1.35,
+                          ),
+                        ),
+                      )
+                    : const SizedBox.shrink()),
+              ],
             ),
           ),
           // Botón de volver propio: mientras carga no existe todavía el

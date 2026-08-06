@@ -157,6 +157,44 @@ class DetailPageController extends GetxController {
   final RxBool errorEsDeConexion = false.obs;
 
   final RxBool isLoading = true.obs;
+
+  /// La ficha está tardando más de lo normal.
+  ///
+  /// Con el sitio de una extensión caído, la pantalla se quedaba con la rueda
+  /// girando para siempre y sin decir nada — desde afuera eso se lee como que
+  /// la app se colgó. Medido en LaMovie el 2026-08-06: su propio sitio tardaba
+  /// entre 21 y 27 segundos, y abierto en un navegador directamente no cargaba.
+  ///
+  /// Doce segundos, el mismo criterio que en la fila de la búsqueda: por encima
+  /// de lo que tarda una extensión sana y por debajo del límite del puente de
+  /// red, así el aviso llega ANTES de que el pedido muera.
+  ///
+  /// Es SOLO un aviso: no cancela nada. Si la ficha llega después, entra igual.
+  final RxBool tardaDemasiado = false.obs;
+
+  /// Lo que se ve es lo guardado de antes: no se pudo traer nada nuevo.
+  ///
+  /// Al entrar a una ficha ya vista se muestra lo de la caché y se refresca por
+  /// detrás. Ese refresco fallaba en silencio, así que con el sitio caído se
+  /// veía una ficha que podía estar vieja —capítulos de menos— sin ninguna
+  /// señal. Ahora se dice.
+  final RxBool mostrandoCache = false.obs;
+
+  Timer? _relojDeLaFicha;
+
+  void _mirarSiTarda() {
+    _relojDeLaFicha?.cancel();
+    tardaDemasiado.value = false;
+    _relojDeLaFicha = Timer(const Duration(seconds: 12), () {
+      if (isLoading.value) tardaDemasiado.value = true;
+    });
+  }
+
+  void _dejarDeMirar() {
+    _relojDeLaFicha?.cancel();
+    _relojDeLaFicha = null;
+    tardaDemasiado.value = false;
+  }
   final RxInt selectEpGroup = 0.obs;
   final RxString aniListID = ''.obs;
   final Rx<TMDBDetail?> tmdb = Rx(null);
@@ -312,6 +350,7 @@ class DetailPageController extends GetxController {
       await getTMDBDetail();
       await getHistory();
       isLoading.value = false;
+      _dejarDeMirar();
     } catch (e) {
       error.value = friendlyError(e);
       errorEsDeConexion.value = isConnectionError(e);
@@ -328,6 +367,7 @@ class DetailPageController extends GetxController {
   Future<void> reintentar() async {
     error.value = '';
     isLoading.value = true;
+    _mirarSiTarda();
     try {
       await onRefresh();
     } catch (_) {
@@ -387,6 +427,9 @@ class DetailPageController extends GetxController {
   }
 
   getRemoteDeatil() async {
+    // Se pide de nuevo: si esta vez sí llega, el aviso de "esto es lo guardado"
+    // no tiene que quedar puesto.
+    mostrandoCache.value = false;
     final cacheKey = '$package:$url';
     // Si ya tenemos el dato en memoria (misma sesión) lo usamos directo y
     // actualizamos en background sin bloquear la UI — pero NO si la
@@ -470,7 +513,21 @@ class DetailPageController extends GetxController {
         anilistID: aniListID.value,
       );
     } catch (_) {
-      // Fallo silencioso: seguimos con lo que tenemos en caché.
+      // Se sigue con lo de la caché, que es lo correcto: mejor la ficha de
+      // antes que una pantalla vacía. Pero YA NO en silencio — antes no había
+      // forma de saber que lo que se estaba viendo podía estar viejo (con
+      // capítulos de menos, por ejemplo) porque el sitio no contestó.
+      if (mostrandoCache.value) return;
+      mostrandoCache.value = true;
+      // Con el aviso de siempre y no un cartel propio: así sale igual en
+      // celular y en escritorio sin tocar los dos diseños de la ficha, que es
+      // justo donde se rompen las cosas.
+      if (!currentContext.mounted) return;
+      showPlatformSnackbar(
+        context: currentContext,
+        content: 'common.detalle-desde-cache'.i18n,
+        severity: fluent.InfoBarSeverity.warning,
+      );
     }
   }
 
@@ -741,6 +798,7 @@ class DetailPageController extends GetxController {
 
   @override
   void onClose() {
+    _relojDeLaFicha?.cancel();
     scrollController.dispose();
     Get.find<MainController>().setAcitons([]);
     super.onClose();
