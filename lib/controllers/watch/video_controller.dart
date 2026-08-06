@@ -269,6 +269,7 @@ class VideoPlayerController extends GetxController with WidgetsBindingObserver {
       // Fuente nueva: se olvida el cuadro anterior y la red se rearma
       // sola con el primer cuadro de esta. Ver hasRenderedFrame.
       _hayCuadro = false;
+      _posicionAlPrimerCuadro = null;
       _redDeLaRueda?.cancel();
       _redDeLaRueda = null;
       final conIdioma = AudioHls.conAudio(actual, quiere.numero);
@@ -390,6 +391,22 @@ class VideoPlayerController extends GetxController with WidgetsBindingObserver {
 
   /// mpv ya decodificó el primer cuadro. No alcanza para apagar la rueda.
   bool _hayCuadro = false;
+
+  /// Dónde estaba la posición cuando apareció el cuadro.
+  ///
+  /// Sirve para medir si el vídeo avanzó **de verdad**. Al principio alcanzaba
+  /// con que la posición pasara de cero, y eso se cumple con cuarenta
+  /// milisegundos: la rueda se apagaba al primer parpadeo y quedaba la imagen
+  /// quieta los segundos que mpv tardaba en llenar el colchón. Medido el
+  /// 2026-08-06 con Vimeos — «rueda apagada» a las 19.107 y el vídeo todavía en
+  /// `posición: 0s` a las 25.469, seis segundos de imagen congelada sin rueda.
+  Duration? _posicionAlPrimerCuadro;
+
+  /// Cuánto tiene que avanzar para dar por hecho que está reproduciendo.
+  ///
+  /// Con menos entra el parpadeo de mpv al posicionarse; con mucho más, la
+  /// rueda se quedaría puesta encima de un vídeo que ya se ve andando.
+  static const _avanceParaCreerle = Duration(milliseconds: 700);
 
   /// Red de seguridad: la rueda no puede quedarse girando para siempre.
   ///
@@ -1258,28 +1275,18 @@ class VideoPlayerController extends GetxController with WidgetsBindingObserver {
       // Cuánto se junta antes de arrancar, y cuánto se vuelve a juntar después
       // de quedarse sin datos. De fábrica es 1 segundo, que para el caso de
       // arriba es casi lo mismo que nada: reanudaría para volver a cortarse.
-      // **Ocho segundos, no tres.**
+      // **Tres. Se probó subirlo a ocho el 2026-08-06 y fue peor.**
       //
-      // Con tres, el vídeo arrancaba con 2,9 s de colchón y se los comía
-      // enseguida: reproducía un momento, se quedaba sin nada y se paraba a
-      // rellenar. Desde afuera se veía «Obteniendo enlace» → imagen → SE PARA →
-      // cargando → recién ahí anda. Medido en LaMovie/Vimeos el 2026-08-06:
-      // `medición (arrancó) · colchón: 2.916667 s`, y el parón justo después.
+      // La idea era que arrancara con más colchón para que no se parara a los
+      // pocos segundos. Medido en LaMovie/Vimeos, lo que hizo fue alargar la
+      // espera: `colchón: 6.984467 s · posición: 0s`, o sea el vídeo quieto en
+      // cero esperando llegar a ocho. Este ajuste funciona —mpv espera de
+      // verdad— pero esperar más no arregla nada cuando lo que falla es que
+      // entran 77 B/s: solo estira el rato en que no pasa nada.
       //
-      // Ese parón estaba tapado mientras la rueda se apagaba tarde: parecía
-      // todo un mismo bloque de carga. Al arreglar la rueda quedó a la vista, y
-      // se vio que el problema no era la rueda sino que arranca demasiado
-      // pronto.
-      //
-      // Con ocho se espera más antes del primer cuadro, pero es espera CON la
-      // rueda puesta —que es lo que uno entiende— y después el vídeo corre sin
-      // el tirón de los primeros segundos. Es el mismo intercambio que ya se
-      // había aceptado al poner tres en vez de uno, un paso más allá.
-      //
-      // No cuesta nada donde la conexión va bien: ahí ocho segundos de colchón
-      // se juntan en un instante y el arranque se siente igual que antes. Lo
-      // paga solo el servidor lento, que es justo el que se cortaba.
-      await np.setProperty('cache-pause-wait', '8');
+      // Lo que sí había que arreglar era la rueda, que se apagaba durante esa
+      // espera y dejaba la imagen quieta sin explicación. Ver hasRenderedFrame.
+      await np.setProperty('cache-pause-wait', '3');
       await np.setProperty('cache-secs', '30');
       await np.setProperty(
           'demuxer-max-bytes', Platform.isAndroid ? '96MiB' : '192MiB');
@@ -1687,8 +1694,16 @@ class VideoPlayerController extends GetxController with WidgetsBindingObserver {
       // posicion actual la haria volver atras entre toque y toque, que es lo
       // que impedia encadenar saltos.
       if (!_aceptarPosicion(event)) return;
-      // El vídeo AVANZÓ: recién ahora se apaga la rueda. Ver hasRenderedFrame.
-      if (event > Duration.zero) _marcarQueYaSeVe();
+      // ¿Avanzó DE VERDAD? Ver _posicionAlPrimerCuadro: que la posición pase de
+      // cero no alcanza, eso pasa apenas mpv se coloca. Se mide contra dónde
+      // estaba cuando apareció el cuadro, así también vale cuando se retoma un
+      // episodio por la mitad.
+      if (_hayCuadro && !hasRenderedFrame.value) {
+        final desde = _posicionAlPrimerCuadro ??= event;
+        if (event - desde >= _avanceParaCreerle) {
+          _marcarQueYaSeVe('el vídeo avanzó ${(event - desde).inMilliseconds} ms');
+        }
+      }
       position.value = event;
       _refrescarNotificacion();
       // Avance real de posición → hay frames nuevos reproduciéndose, así que
@@ -1939,6 +1954,7 @@ class VideoPlayerController extends GetxController with WidgetsBindingObserver {
     // Fuente nueva: se olvida el cuadro anterior y la red se rearma
     // sola con el primer cuadro de esta. Ver hasRenderedFrame.
     _hayCuadro = false;
+    _posicionAlPrimerCuadro = null;
     _redDeLaRueda?.cancel();
     _redDeLaRueda = null;
     // Las calidades son de ESTE video, no de los anteriores.
@@ -2905,6 +2921,7 @@ class VideoPlayerController extends GetxController with WidgetsBindingObserver {
     // Fuente nueva: se olvida el cuadro anterior y la red se rearma
     // sola con el primer cuadro de esta. Ver hasRenderedFrame.
     _hayCuadro = false;
+    _posicionAlPrimerCuadro = null;
     _redDeLaRueda?.cancel();
     _redDeLaRueda = null;
     _lastPositionAdvanceAt = null;
@@ -4736,6 +4753,7 @@ class VideoPlayerController extends GetxController with WidgetsBindingObserver {
     // Fuente nueva: se olvida el cuadro anterior y la red se rearma
     // sola con el primer cuadro de esta. Ver hasRenderedFrame.
     _hayCuadro = false;
+    _posicionAlPrimerCuadro = null;
     _redDeLaRueda?.cancel();
     _redDeLaRueda = null;
     try {
