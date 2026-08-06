@@ -487,9 +487,17 @@ class BloqueadorAnuncios {
     if (_cargado) return;
     await _migrarAArchivos();
     final juntos = <String>{};
+    final malos = <String>{};
     for (final l in listas()) {
-      if (l.activa) juntos.addAll(_leerDominios(l.url));
+      if (!l.activa) continue;
+      final suyos = _leerDominios(l.url);
+      juntos.addAll(suyos);
+      // Aparte se junta lo que es PELIGROSO, no solo molesto: un dominio de
+      // EasyList es un servidor de anuncios y no hay nada que avisar, pero uno
+      // de Prigent-Malware o Phishing Army sí.
+      if (_esDeSeguridad(l.url)) malos.addAll(suyos);
     }
+    _peligrosos = malos;
     _dominios = juntos;
     _olvidarLoArmado();
     _cargado = true;
@@ -607,6 +615,75 @@ class BloqueadorAnuncios {
 
   /// Se olvida lo armado. Va cada vez que cambian las listas.
   static void _olvidarLoArmado() => _enUso = null;
+
+  // ─── Avisar de un servidor peligroso ──────────────────────────────────────
+
+  /// Los dominios de las listas de SEGURIDAD, aparte de los demás.
+  ///
+  /// Se guardan por separado porque sirven para otra cosa: no para cortar el
+  /// pedido —eso ya lo hace `bloquea`— sino para avisarle al usuario, antes de
+  /// abrir el navegador interno, que el servidor al que va está fichado.
+  static Set<String> _peligrosos = <String>{};
+
+  /// Si una lista instalada es de las que ficha virus y estafas.
+  ///
+  /// Se mira contra el catálogo: una lista puesta a mano no cuenta, porque no
+  /// hay forma de saber qué contiene y marcar de peligroso lo que quizá sean
+  /// anuncios sería avisar en falso todo el tiempo.
+  static bool _esDeSeguridad(String url) {
+    for (final c in catalogo) {
+      if (c.url == url) return c.grupo == 'Virus y estafas';
+    }
+    return false;
+  }
+
+  /// ¿Este servidor está fichado como peligroso?
+  ///
+  /// Cuesta lo mismo que `bloquea`: tres o cuatro consultas a un conjunto. No
+  /// sale a la red ni consulta a nadie, así que se puede preguntar justo antes
+  /// de abrir sin que se note.
+  static bool esPeligroso(String url) {
+    if (_peligrosos.isEmpty) return false;
+    final host = Uri.tryParse(url)?.host.toLowerCase();
+    if (host == null || host.isEmpty) return false;
+    var actual = host.replaceFirst(RegExp(r'^www\.'), '');
+    while (true) {
+      if (_peligrosos.contains(actual)) return true;
+      final punto = actual.indexOf('.');
+      if (punto < 0) return false;
+      actual = actual.substring(punto + 1);
+      if (!actual.contains('.')) return false;
+    }
+  }
+
+  /// Qué listas lo marcaron, por nombre.
+  ///
+  /// Vuelve a abrir los archivos, que es caro, y por eso se llama SOLO cuando
+  /// `esPeligroso` ya dijo que sí — o sea, casi nunca. Decir "está en una lista"
+  /// sin decir en cuál no le sirve a nadie para decidir.
+  static List<String> quienLoMarca(String url) {
+    final host = Uri.tryParse(url)?.host.toLowerCase();
+    if (host == null || host.isEmpty) return const [];
+    final base = host.replaceFirst(RegExp(r'^www\.'), '');
+    final niveles = <String>[];
+    var actual = base;
+    while (true) {
+      niveles.add(actual);
+      final punto = actual.indexOf('.');
+      if (punto < 0) break;
+      final resto = actual.substring(punto + 1);
+      if (!resto.contains('.')) break;
+      actual = resto;
+    }
+
+    final fuera = <String>[];
+    for (final l in listas()) {
+      if (!l.activa || !_esDeSeguridad(l.url)) continue;
+      final suyos = _leerDominios(l.url);
+      if (niveles.any(suyos.contains)) fuera.add(l.nombre);
+    }
+    return fuera;
+  }
 
   /// Reglas para el bloqueo nativo (Android, iOS y macOS).
   ///

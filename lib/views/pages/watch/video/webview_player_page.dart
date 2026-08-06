@@ -227,8 +227,7 @@ bool isKnownNativeServer(String serverName, String url) {
   // no en cadena: un envoltorio dentro de otro no existe en ningun sitio de
   // los que hay, y encadenar solo abre la puerta a un bucle.
   final destino = _destinoDelEnvoltorio(url);
-  if (destino != null &&
-      (isDirectStream(destino) || _esHostNativo(destino))) {
+  if (destino != null && (isDirectStream(destino) || _esHostNativo(destino))) {
     return true;
   }
   final n = serverName.toLowerCase();
@@ -248,14 +247,113 @@ bool isKnownNativeServer(String serverName, String url) {
 // caller pueda saber cuándo esta pantalla se cerró — VideoPlayerConten lo usa
 // para reponer el widget Video recién ahí (ver isWebViewActive en
 // video_controller.dart).
+/// Pregunta antes de abrir un servidor que está fichado como peligroso.
+///
+/// **No bloquea nada**: avisa y deja seguir. La app no puede saber si un
+/// servidor de vídeo está infectado de verdad o si la lista lo fichó por algo
+/// que pasó hace meses, y cortarle el acceso al usuario a un servidor que
+/// quizás sea el único que le anda sería peor que el riesgo.
+///
+/// Se apoya en las listas que ya están cargadas —no sale a la red, no consulta
+/// a nadie, no hay clave de nadie de por medio— así que preguntar cuesta lo
+/// mismo que un par de consultas a un conjunto y no demora la reproducción.
+///
+/// Solo cuentan las listas de seguridad del catálogo. Un dominio que está en
+/// EasyList es un servidor de anuncios: eso ya lo corta el bloqueador y no hay
+/// nada que avisar.
+Future<bool> _confirmarServidorFichado(
+  BuildContext context,
+  String url,
+) async {
+  if (!BloqueadorAnuncios.esPeligroso(url)) return true;
+
+  final quienes = BloqueadorAnuncios.quienLoMarca(url);
+  final host = Uri.tryParse(url)?.host ?? url;
+  if (!context.mounted) return true;
+
+  final r = await showDialog<bool>(
+    context: context,
+    builder: (ctx) => AlertDialog(
+      backgroundColor: const Color(0xFF1B1F24),
+      icon: const Icon(Icons.gpp_bad_outlined,
+          color: Color(0xFFFF8A80), size: 34),
+      title: const Text('Este servidor no es seguro'),
+      content: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            host,
+            style: const TextStyle(
+                fontSize: 13.5, fontWeight: FontWeight.w700, height: 1.4),
+          ),
+          const SizedBox(height: 12),
+          Text(
+            quienes.isEmpty
+                ? 'Está fichado en las listas de seguridad que tenés '
+                    'instaladas.'
+                : 'Está fichado en:',
+            style: const TextStyle(fontSize: 13, height: 1.45),
+          ),
+          for (final q in quienes)
+            Padding(
+              padding: const EdgeInsets.only(top: 5, left: 2),
+              child: Text('·  $q',
+                  style: const TextStyle(fontSize: 13, height: 1.35)),
+            ),
+          const SizedBox(height: 14),
+          const Text(
+            'Puede intentar instalarte algo o pedirte datos haciéndose pasar '
+            'por otro sitio. Si tenés otro servidor en la lista, conviene '
+            'probar ese.',
+            style: TextStyle(fontSize: 12.5, height: 1.45),
+          ),
+        ],
+      ),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.pop(ctx, false),
+          style: ButtonStyle(
+            foregroundColor: const WidgetStatePropertyAll(Color(0xFF69F0AE)),
+            overlayColor: WidgetStatePropertyAll(
+                const Color(0xFF69F0AE).withValues(alpha: 0.14)),
+            shape: WidgetStatePropertyAll(
+              RoundedRectangleBorder(borderRadius: BorderRadius.circular(9)),
+            ),
+          ),
+          child: const Text('Volver',
+              style: TextStyle(fontWeight: FontWeight.w700)),
+        ),
+        TextButton(
+          onPressed: () => Navigator.pop(ctx, true),
+          style: ButtonStyle(
+            foregroundColor: const WidgetStatePropertyAll(Color(0xFFFF8A80)),
+            overlayColor: WidgetStatePropertyAll(
+                const Color(0xFFFF8A80).withValues(alpha: 0.14)),
+            shape: WidgetStatePropertyAll(
+              RoundedRectangleBorder(borderRadius: BorderRadius.circular(9)),
+            ),
+          ),
+          child: const Text('Abrir igual'),
+        ),
+      ],
+    ),
+  );
+  return r == true;
+}
+
 Future<void> openWebViewPlayer(
   BuildContext context,
   String url, {
   String? referer,
   String title = '',
   void Function(Uint8List? screenshot, {bool isFinal})? onProgress,
-}) {
-  return Navigator.of(context).push(
+}) async {
+  // Se pregunta ANTES de abrir, no despues: una vez cargada la pagina, lo que
+  // sea que traiga ya se ejecuto.
+  if (!await _confirmarServidorFichado(context, url)) return;
+  if (!context.mounted) return;
+  await Navigator.of(context).push<void>(
     MaterialPageRoute(
       builder: (_) => WebViewPlayerPage(
         url: url,
@@ -791,7 +889,57 @@ class _WebViewPlayerPageState extends State<WebViewPlayerPage>
     if (!Platform.isWindows) return;
     _isFullScreen = !_isFullScreen;
     await WindowManager.instance.setFullScreen(_isFullScreen);
+    // La ventana sola no alcanza: el vídeo sigue del tamaño que la página le
+    // dio, así que quedaba una ventana enorme con el reproductor chiquito en el
+    // medio. Se le pide TAMBIÉN a la página que ponga su vídeo en pantalla
+    // completa, que es lo que uno espera al tocar ese botón.
+    await _pantallaCompletaEnLaPagina(_isFullScreen);
     if (mounted) setState(() {});
+  }
+
+  /// Le pide a la página que ponga (o saque) su vídeo en pantalla completa.
+  ///
+  /// Se intenta en tres pasos, del más limpio al más bruto:
+  ///
+  ///   1. El `<video>`, que es lo que corresponde
+  ///   2. Su contenedor, para los reproductores que dibujan controles encima y
+  ///      se romperían si solo se agranda el vídeo
+  ///   3. El botón de pantalla completa del propio sitio, tocándolo — es el
+  ///      camino para los que no exponen el vídeo (JW Player, fluidplayer)
+  ///
+  /// Si el vídeo vive en un iframe de OTRO dominio no hay nada que hacer: el
+  /// navegador no deja tocarlo desde afuera. Ahí queda la ventana en pantalla
+  /// completa, que ya es mejor que nada, y el usuario usa el botón del sitio.
+  Future<void> _pantallaCompletaEnLaPagina(bool entrar) async {
+    final c = _webViewController;
+    if (c == null) return;
+    try {
+      await c.evaluateJavascript(source: """
+(function () {
+  try {
+    if (!$entrar) {
+      if (document.fullscreenElement && document.exitFullscreen) document.exitFullscreen();
+      return 'salio';
+    }
+    var v = document.querySelector('video');
+    if (v) {
+      var destino = v.closest('.jw-wrapper, .plyr, .video-js, .fluid_video_wrapper') || v;
+      if (destino.requestFullscreen) { destino.requestFullscreen(); return 'video'; }
+      if (destino.webkitRequestFullscreen) { destino.webkitRequestFullscreen(); return 'video'; }
+    }
+    // Sin video a la vista: se toca el boton del propio sitio.
+    var b = document.querySelector(
+      '.jw-icon-fullscreen, .vjs-fullscreen-control, .plyr__control[data-plyr="fullscreen"],' +
+      '[class*="fullscreen"], [aria-label*="ull screen"], [title*="antalla completa"]');
+    if (b && b.click) { b.click(); return 'boton del sitio'; }
+    return 'no se encontro nada';
+  } catch (e) { return 'error: ' + e; }
+})();
+""");
+    } catch (e) {
+      // Que la página no colabore no puede impedir agrandar la ventana.
+      logger.info('pantalla completa en la página: no se pudo · $e');
+    }
   }
 
   @override
@@ -1239,19 +1387,28 @@ class _WebViewPlayerPageState extends State<WebViewPlayerPage>
                               tamano: 44,
                             ),
                           ),
-                          // Pantalla completa: abajo a la derecha y más grande,
-                          // que es donde la mano ya está y donde el sitio suele
-                          // tener el suyo.
+                          // Pantalla completa: JUSTO DEBAJO del de volver, en
+                          // la misma columna.
+                          //
+                          // Estaba abajo a la derecha y ahí es donde el sitio
+                          // pone el suyo —jwplayer, fluidplayer y video.js, los
+                          // tres—, así que quedaba un botón tapando al otro.
+                          //
+                          // El borde izquierdo, en cambio, no lo usa ninguno:
+                          // sus barras van arriba y abajo, a lo ancho. Los dos
+                          // nuestros apilados ahí no chocan con nada y quedan
+                          // juntos, que además es más fácil de encontrar que
+                          // uno en cada esquina.
                           if (Platform.isWindows)
                             Positioned(
-                              bottom: 16,
-                              right: 16,
+                              top: 108,
+                              left: 12,
                               child: _botonSolido(
                                 icono: _isFullScreen
                                     ? Icons.fullscreen_exit
                                     : Icons.fullscreen,
                                 alTocar: _toggleFullScreen,
-                                tamano: 56,
+                                tamano: 44,
                               ),
                             ),
                         ],
