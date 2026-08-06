@@ -62,6 +62,43 @@ void main() {
     });
   });
 
+  group('el corte nativo de Windows', () {
+    // Estas pruebas corren en el escritorio (Windows), que es justo donde este
+    // camino tiene que estar encendido.
+    test('se enciende para un servidor normal', () {
+      // Es el agujero por el que entraba el anuncio de vídeo de Google IMA: en
+      // Windows los contentBlockers llegan vacíos y el guion no puede parar un
+      // <script src> que ya venía escrito en el HTML.
+      expect(
+        BloqueadorAnuncios.interceptableEnWindows(
+            'https://unlimplay.com/f/embed/tv/82452/1/1'),
+        isTrue,
+      );
+    });
+
+    test('respeta la MISMA excepción que el bloqueo nativo de Android', () {
+      // Interceptar cada pedido es exactamente lo que dejó a Mega sin cargar en
+      // Android. No se puede repetir el error en Windows.
+      expect(
+        BloqueadorAnuncios.interceptableEnWindows('https://mega.nz/embed/abc'),
+        isFalse,
+      );
+      expect(BloqueadorAnuncios.sinBloqueoNativo('https://mega.nz/embed/abc'),
+          isTrue,
+          reason: 'las dos vías tienen que mirar la misma lista');
+    });
+
+    test('no tiene lista propia: usa la misma que el resto', () {
+      // Una segunda lista se desincronizaría de la del guion y la del corte de
+      // navegación. El interceptor pregunta por `bloquea`, que mira este mismo
+      // conjunto.
+      expect(BloqueadorAnuncios.dominiosEnUso, contains('imasdk.googleapis.com'),
+          reason: 'el anuncio de vídeo entra por acá');
+      expect(BloqueadorAnuncios.dominiosEnUso, isNot(contains('unlimplay.com')),
+          reason: 'el propio servidor no se puede cortar');
+    });
+  });
+
   group('qué páginas no vale la pena dejar abiertas', () {
     test('un sub-recurso que falla NO cierra nada', () {
       // Con el bloqueador puesto esto pasa todo el tiempo: es un anuncio que

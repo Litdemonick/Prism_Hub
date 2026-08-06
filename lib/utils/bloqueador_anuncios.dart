@@ -830,6 +830,46 @@ class BloqueadorAnuncios {
     return _sinBloqueoNativo.any((h) => host == h || host.endsWith('.$h'));
   }
 
+  /// Si en Windows hay que interceptar los pedidos del navegador interno.
+  ///
+  /// ── El agujero que tapa ─────────────────────────────────────────────────
+  ///
+  /// En Windows `contentBlockers` llega vacío: el valor nativo de la acción
+  /// "bloquear" resuelve a null y construir una sola regla tumba la pantalla
+  /// entera (ver reglasNativas). Así que el único bloqueo era el guion
+  /// inyectado — y el guion **no puede** parar un `<script src="…ads…">` que ya
+  /// venía escrito en el HTML: el navegador lo pide antes de que nada nuestro
+  /// llegue a correr.
+  ///
+  /// Por ahí entra el anuncio de VÍDEO. Visto en vivo el 2026-08-06 en
+  /// unlimplay: «el guion está en la página · no cortó nada» y aun así salió el
+  /// anuncio de Google IMA con su «Anuncio 1 de 2». En Android eso ya lo tapa
+  /// el bloqueo nativo; en Windows no lo tapaba nada.
+  ///
+  /// WebView2 sí deja cortarlos, por `WebResourceRequested`, que el plugin
+  /// expone como `shouldInterceptRequest` (soportado oficialmente en Windows).
+  ///
+  /// ── Por qué acotado ─────────────────────────────────────────────────────
+  ///
+  /// Interceptar CADA pedido es exactamente lo que dejó a Mega sin cargar en
+  /// Android: no era que las reglas coincidieran con algo suyo, era que estar
+  /// puestas obliga al motor a pasar cada pedido por el interceptor y su
+  /// reproductor se rompe. Por eso acá se respeta la MISMA excepción (ver
+  /// [sinBloqueoNativo]) y solo se enciende con el bloqueador activo.
+  ///
+  /// La consulta en sí es barata: [bloquea] pregunta a un conjunto por el host
+  /// y sus tres o cuatro dominios padre, no recorre ninguna lista.
+  static bool interceptarEnWindows(String url) =>
+      activo && interceptableEnWindows(url);
+
+  /// La parte de la decisión que NO depende del interruptor.
+  ///
+  /// Separada para poder probarla: `activo` lee los ajustes, y en una prueba
+  /// unitaria no hay almacenamiento que leer. Lo que importa fijar es la
+  /// plataforma y la excepción, no que el interruptor apague.
+  static bool interceptableEnWindows(String url) =>
+      Platform.isWindows && !sinBloqueoNativo(url);
+
   /// Por qué NO vale la pena dejar abierta esta página, o null si sí vale.
   ///
   /// ── Por qué la regla vive acá y no en la pantalla del reproductor ────────

@@ -630,6 +630,13 @@ class _WebViewPlayerPageState extends State<WebViewPlayerPage>
     Navigator.of(context).pop(false);
   }
 
+  /// Cuántos pedidos cortó el interceptor nativo de Windows.
+  ///
+  /// Se registra junto con lo que dice el guion. Sin esto no había forma de
+  /// saber si el corte nativo estaba haciendo algo: el guion puede decir «no
+  /// cortó nada» y estar todo bien, porque el que cortó fue el otro.
+  int _cortadosPorElBloqueador = 0;
+
   Future<void> _comprobarBloqueador(InAppWebViewController controller) async {
     if (!BloqueadorAnuncios.activo) return;
     try {
@@ -642,8 +649,17 @@ class _WebViewPlayerPageState extends State<WebViewPlayerPage>
       final queCorto = (cortados is String && cortados.isNotEmpty)
           ? 'cortados: $cortados'
           : 'no cortó nada';
+      // Las DOS vías, en la misma línea: el guion y el corte del motor. Cada
+      // una ataja cosas distintas —el guion no llega a un <script src> que ya
+      // venía en el HTML, y el del motor no ve lo que el JS arma después— así
+      // que mirarlas por separado es lo único que dice cuál faltó.
+      final nativo = Platform.isAndroid
+          ? 'nativo: ${BloqueadorAnuncios.reglasNativas(widget.url).length} reglas'
+          : BloqueadorAnuncios.interceptarEnWindows(widget.url)
+              ? 'nativo: cortó $_cortadosPorElBloqueador'
+              : 'nativo: apagado acá';
       logger.info('[bloqueador] en la página: '
-          '${puesto == true ? 'SÍ' : 'NO ($puesto)'} · $queCorto');
+          '${puesto == true ? 'SÍ' : 'NO ($puesto)'} · $queCorto · $nativo');
     } catch (e) {
       logger.info('[bloqueador] no se pudo comprobar: $e');
     }
@@ -1256,6 +1272,15 @@ class _WebViewPlayerPageState extends State<WebViewPlayerPage>
                       // reglasNativas y _sinBloqueoNativo.
                       contentBlockers:
                           BloqueadorAnuncios.reglasNativas(widget.url),
+                      // Windows: el equivalente al bloqueo nativo de Android.
+                      // Allá lo hacen los contentBlockers de arriba, que acá
+                      // llegan vacíos; acá lo hace shouldInterceptRequest, más
+                      // abajo. Ver interceptarEnWindows — se enciende solo en
+                      // Windows, solo con el bloqueador activo y respetando la
+                      // misma excepción de servidores que no toleran que se les
+                      // intercepte cada pedido.
+                      useShouldInterceptRequest:
+                          BloqueadorAnuncios.interceptarEnWindows(widget.url),
                     ),
                     onWebViewCreated: (controller) {
                       _webViewController = controller;
@@ -1360,6 +1385,27 @@ class _WebViewPlayerPageState extends State<WebViewPlayerPage>
                       if (Platform.isWindows) {
                         WindowManager.instance.setFullScreen(false);
                       }
+                    },
+                    // El corte de verdad en Windows: el pedido no llega a
+                    // salir. Solo se llama si useShouldInterceptRequest quedó
+                    // en true (ver arriba), así que en Android ni existe — allá
+                    // el trabajo lo hacen los contentBlockers, que ya andan y
+                    // no se tocan.
+                    //
+                    // Devolver null es "seguí normal". Para lo bloqueado se
+                    // devuelve una respuesta vacía: cortar de esta forma es lo
+                    // que el motor entiende como "no hay nada acá", y el sitio
+                    // sigue funcionando igual que cuando el bloqueo nativo de
+                    // Android corta ese mismo pedido.
+                    shouldInterceptRequest: (controller, request) async {
+                      final url = request.url.toString();
+                      if (!BloqueadorAnuncios.bloquea(url)) return null;
+                      _cortadosPorElBloqueador++;
+                      return WebResourceResponse(
+                        contentType: 'text/plain',
+                        contentEncoding: 'utf-8',
+                        data: Uint8List(0),
+                      );
                     },
                     // Los avisos de fallo del motor. Acá solo se pasan al
                     // bloqueador, que es quien decide si vale la pena seguir
