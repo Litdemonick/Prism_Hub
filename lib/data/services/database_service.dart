@@ -123,6 +123,26 @@ class DatabaseService {
         .findFirst();
   }
 
+  /// Avisa cada vez que cambia el historial de ESTE título.
+  ///
+  /// Para que la ficha se entere sola de dónde quedó el usuario: antes había
+  /// que salir de la ficha y volver a entrar para que el botón de "continuar"
+  /// dijera el episodio o capítulo correcto, porque el historial se leía una
+  /// sola vez al abrirla y el reproductor/lector lo escribe DESPUÉS.
+  ///
+  /// Es `watchLazy`: no trae el registro, solo avisa que cambió. Quien escucha
+  /// lo vuelve a leer si le interesa. Y está acotado a este package+url, así
+  /// que ver otra cosa en otra pestaña no lo despierta.
+  static Stream<void> watchHistoryByPackageAndUrl(String package, String url) {
+    return db.historys
+        .filter()
+        .packageEqualTo(package)
+        .and()
+        .urlEqualTo(url)
+        .build()
+        .watchLazy();
+  }
+
   // Migración retroactiva (una sola vez, ver ExtensionUtils.ensureInitialized):
   // marca isNsfw=true en el History/Favorite YA guardado de extensiones que
   // son 100% nsfw. Los registros de ANTES de que existiera este campo se

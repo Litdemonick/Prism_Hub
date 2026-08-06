@@ -148,6 +148,17 @@ class DetailPageController extends GetxController {
   final Rx<Favorite?> favorite = Rx(null);
   final RxString error = ''.obs;
 
+  /// Mira el historial de este título mientras la ficha está abierta.
+  ///
+  /// El reproductor y el lector guardan el progreso al cerrarse, o sea DESPUÉS
+  /// de que la ficha ya leyó el historial una única vez al abrirse. Por eso
+  /// había que salir de la ficha y volver a entrar para que el botón de
+  /// "continuar" dijera dónde habías quedado. Con esto la ficha se entera sola.
+  ///
+  /// Solo dispara una relectura: no toca nada más y no reemplaza a getHistory()
+  /// —lo llama—, así que el camino de siempre queda igual.
+  StreamSubscription<void>? _miradaAlHistorial;
+
   /// Si lo que falló fue la conexión y no la extensión.
   ///
   /// El texto ya sale traducido de friendlyError, pero para la pantalla hace
@@ -328,6 +339,18 @@ class DetailPageController extends GetxController {
         ),
       )
     ]);
+
+    // Se engancha ANTES de la primera carga: así también cubre el caso de
+    // volver del reproductor mientras la ficha todavía se estaba armando.
+    _miradaAlHistorial =
+        DatabaseService.watchHistoryByPackageAndUrl(package, url).listen((_) {
+      // Sin la ficha cargada no hay con qué comparar el episodio guardado
+      // (getHistory usa detail!.episodes) — cuando termine de cargar, la lee
+      // igual por el camino de siempre.
+      if (detail == null) return;
+      getHistory();
+    });
+
     super.onInit();
   }
 
@@ -799,6 +822,7 @@ class DetailPageController extends GetxController {
   @override
   void onClose() {
     _relojDeLaFicha?.cancel();
+    _miradaAlHistorial?.cancel();
     scrollController.dispose();
     Get.find<MainController>().setAcitons([]);
     super.onClose();
