@@ -25,9 +25,16 @@ int _valor(int i) => (i * 7 + 13) % 251;
 /// Un servidor que se porta como la fuente: entrega desde donde le pidan y
 /// cuenta cuántas veces le pidieron.
 class _Origen {
-  _Origen(this.total);
+  _Origen(this.total, {this.demora = Duration.zero});
 
   final int total;
+
+  /// Cuánto tarda en entregar cada trozo.
+  ///
+  /// Con cero, la fuente contesta al instante y NUNCA hay una lectura en vuelo
+  /// cuando llega el pedido siguiente — que es justo la ventana donde estaba el
+  /// fallo de Android. Poniéndole demora, la prueba puede meterse ahí.
+  final Duration demora;
   late final HttpServer _servidor;
 
   /// Cuántos pedidos recibió. Es la cuenta que dice si la bomba sirve.
@@ -51,11 +58,26 @@ class _Origen {
             HttpHeaders.contentRangeHeader, 'bytes $desde-${total - 1}/$total');
       }
       res.headers.contentLength = total - desde;
-      res.add(Uint8List.fromList([
-        for (var i = desde; i < total; i++) _valor(i),
-      ]));
+      // Se entrega por trozos y NO de un saque, a propósito.
+      //
+      // Escribiendo los megas enteros de una vez, la bomba se los lleva al
+      // instante —no hay red que la frene— y queda corriendo muy por delante de
+      // lo que el reproductor pidió. Eso no se parece en nada a un servidor de
+      // verdad, donde el búfer del socket la sujeta, y hacía que la prueba
+      // fallara o pasara según cómo viniera el día.
+      await res.addStream(_porTrozos(desde));
       await res.close();
     });
+  }
+
+  /// El archivo desde [desde], en trozos de 64 KiB.
+  Stream<List<int>> _porTrozos(int desde) async* {
+    const trozo = 64 * 1024;
+    for (var i = desde; i < total; i += trozo) {
+      if (demora > Duration.zero) await Future<void>.delayed(demora);
+      final hasta = (i + trozo > total) ? total : i + trozo;
+      yield Uint8List.fromList([for (var j = i; j < hasta; j++) _valor(j)]);
+    }
   }
 
   String get url => 'http://127.0.0.1:${_servidor.port}/pelicula.mp4';
@@ -256,6 +278,58 @@ void main() {
     final res = await _pedir(local, 'bytes=$atras-${atras + largo - 1}');
     esperarTramo(res.cuerpo, atras, largo);
     expect(origen.pedidos, 1, reason: '${origen.rangos}');
+  });
+
+  test('cortar y volver a pedir EN EL ACTO sigue reusando la lectura', () async {
+    // **Esta prueba NO reproduce el fallo de Android del 2026-08-06** («Bad
+    // state: Already waiting for next», 29 veces en un episodio). Se intentó y
+    // no se consiguió: por loopback, el corte del cliente no deja una lectura de
+    // la fuente en vuelo en el instante justo, que es donde estaba la carrera.
+    // Queda escrito para no volver a intentarlo creyendo que sirve.
+    //
+    // Lo que sí cubre, y por eso se deja: que cortar y volver a pedir enseguida
+    // —con la fuente tardando de verdad— siga saliendo de la MISMA lectura en
+    // vez de reabrir. Es el camino que el reproductor recorre todo el tiempo.
+    BombaDeDatos.soltar(local);
+    await origen.parar();
+    origen = _Origen(total, demora: const Duration(milliseconds: 40));
+    await origen.arrancar();
+    local = (await BombaDeDatos.registrar(url: origen.url))!;
+
+    for (var vuelta = 0; vuelta < 6; vuelta++) {
+      // Se corta a mitad de un bloque que la fuente todavía está mandando...
+      await _pedirYCortar(local, 'bytes=${vuelta * 4096}-', 96 * 1024);
+      // ...y se vuelve a pedir en el acto, sin dejar respirar.
+      //
+      // El tramo tiene que ser lo bastante largo como para que HAYA QUE LEER de
+      // la fuente. Pidiendo poquito se contesta entero de lo guardado, no se
+      // toca la lectura, y la prueba pasaría aunque el fallo estuviera puesto
+      // (comprobado: así pasaba).
+      const largo = 256 * 1024;
+      final desde = vuelta * 4096 + 32 * 1024;
+      final res = await _pedir(local, 'bytes=$desde-${desde + largo - 1}');
+      expect(res.codigo, HttpStatus.partialContent);
+      esperarTramo(res.cuerpo, desde, largo);
+    }
+
+    // Con el fallo, cada colisión mataba una lectura y había que reabrir: se
+    // veían muchos más pedidos que vueltas.
+    expect(origen.pedidos, lessThanOrEqualTo(3),
+        reason: 'seis cortes seguidos no tendrían que costar una lectura nueva '
+            'cada vez; la fuente recibió ${origen.pedidos}: ${origen.rangos}');
+  });
+
+  test('un pedido abierto se sirve ENTERO, no cortado en tramos', () async {
+    // Se probó cortarlo en tramos de 4 MiB el 2026-08-06 y hubo que sacarlo:
+    // empeoró la reproducción en las dos plataformas. El reproductor necesita
+    // poder tirar de una sola respuesta larga a su ritmo; cortándosela vuelve a
+    // pedir de a pedacitos, que es el problema que la bomba viene a resolver.
+    // Ver el bloque "Cortar la respuesta en tramos" en bomba_de_datos.dart.
+    final abierto = await _pedir(local, 'bytes=0-');
+    expect(abierto.codigo, HttpStatus.partialContent);
+    expect(abierto.cuerpo.length, total,
+        reason: 'tiene que venir el archivo entero desde el byte 0');
+    expect(abierto.cabeceras['content-range'], 'bytes 0-${total - 1}/$total');
   });
 
   test('dice bien cuánto mide y qué tramo entrega', () async {

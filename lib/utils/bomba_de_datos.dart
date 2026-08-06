@@ -66,6 +66,24 @@ class BombaDeDatos {
   /// adelantar la lectura descartando bytes que pagar el arranque otra vez.
   static const _saltoTolerable = 2 * 1024 * 1024;
 
+  // ── Cortar la respuesta en tramos: SE PROBÓ Y SE SACÓ ─────────────────────
+  //
+  // El 2026-08-06 se hizo que la bomba nunca entregara más de 4 MiB de una vez,
+  // aunque el reproductor pidiera abierto. La idea era buena sobre el papel: la
+  // lectura no se escapaba hacia adelante y el pedido siguiente caía siempre
+  // dentro de lo guardado.
+  //
+  // **Empeoró la reproducción, y en las dos plataformas.** Medido en la
+  // computadora, que hasta entonces iba bien: del MB 2,0 al 4,8 en diez
+  // segundos, unos 280 KB/s. Cortando la respuesta, el reproductor pierde la
+  // única forma que tenía de tirar de corrido —una sola respuesta larga que él
+  // consume a su ritmo— y pasa a pedir de a pedacitos otra vez, que es
+  // exactamente el problema que la bomba venía a resolver.
+  //
+  // Queda anotado para no volver a intentarlo. Lo de que la lectura se escapa
+  // hacia adelante es cierto y sigue sin resolverse, pero el remedio no es
+  // éste: cuesta más de lo que arregla.
+
   /// Cuánto se espera a una lectura que está terminando de soltarse.
   ///
   /// Menos de lo que cuesta abrir otra (~950 ms medidos), así que esperar
@@ -84,9 +102,17 @@ class BombaDeDatos {
   /// quedó igual de mal que sin bomba — 115 KB/s.
   ///
   /// Guardando lo último servido, ese pedido "de atrás" se contesta de memoria
-  /// y se sigue con la MISMA lectura. Dos megas cubren de sobra el desfase y son
-  /// baratos al lado de pagar 950 ms de arranque en cada tramo.
-  static const _retenido = 2 * 1024 * 1024;
+  /// y se sigue con la MISMA lectura.
+  ///
+  /// **Cuatro megas y no dos.** Con dos alcanzaba en la computadora, pero el
+  /// registro de Android del 2026-08-06 mostró pedidos que caían hasta 1,15 MB
+  /// POR DETRÁS de la ventana — o sea, la lectura iba más de tres megas
+  /// adelantada. Los avisos «faltan 1157747 bytes más atrás», «faltan 299065»,
+  /// «faltan 40657» son todos de esos. Con cuatro entran.
+  ///
+  /// Son hasta 12 MiB con las tres lecturas abiertas. Al lado de los 96 MiB que
+  /// ya usa el reproductor en el teléfono, es barato para lo que evita.
+  static const _retenido = 4 * 1024 * 1024;
 
   /// Cuántas lecturas abiertas se mantienen a la vez para un mismo archivo.
   ///
@@ -249,6 +275,20 @@ class BombaDeDatos {
     // Se reserva ANTES de cualquier espera: si entra otro pedido mientras este
     // se prepara, no puede llevarse la misma lectura por delante.
     bomba.ocupada = true;
+    // **Quién suelta la reserva, y por qué importa tanto.**
+    //
+    // Si la entrega llegó a arrancar, la suelta ELLA al terminar del todo, no
+    // este `finally`. Medido en Android el 2026-08-06: soltándola acá, la
+    // lectura quedaba libre mientras su generador todavía estaba esperando un
+    // bloque de la fuente. El pedido siguiente la agarraba, pedía otro bloque, y
+    // se juntaban dos lecturas sobre el mismo sitio — «Bad state: Already
+    // waiting for next», 29 veces en un episodio. Cada una mataba la lectura y
+    // obligaba a reabrir, que es justo lo que la bomba existe para evitar.
+    //
+    // Pasa en el teléfono y no en la computadora porque allá los bloques tardan
+    // más en llegar, así que la ventana entre «terminó de entregar» y «terminó
+    // de leer» es mucho más ancha.
+    var laSueltaLaEntrega = false;
     try {
       // Venía un poco atrasada: se la adelanta tirando lo que sobra, que cuesta
       // menos que volver a abrir (ver _saltoTolerable).
@@ -263,7 +303,7 @@ class BombaDeDatos {
       }
 
       final total = bomba.total;
-      final ultimo =
+      var ultimo =
           (rango.fin == null || rango.fin! >= total) ? total - 1 : rango.fin!;
       if (rango.inicio > ultimo) return false;
       final cuantos = ultimo - rango.inicio + 1;
@@ -276,12 +316,15 @@ class BombaDeDatos {
             'bytes ${rango.inicio}-$ultimo/$total');
       }
       res.headers.contentLength = cuantos;
+      // Desde acá la reserva es de la entrega: la suelta su propio `finally`,
+      // que corre recién cuando el generador terminó de verdad — incluida la
+      // espera del bloque que estuviera en vuelo.
+      laSueltaLaEntrega = true;
       await res.addStream(bomba.entregar(rango.inicio, cuantos));
       await res.close();
       return true;
     } finally {
-      bomba.ocupada = false;
-      bomba.usadaEn = DateTime.now().microsecondsSinceEpoch;
+      if (!laSueltaLaEntrega) bomba.soltar();
     }
   }
 
@@ -573,11 +616,40 @@ class _Bomba {
     }
   }
 
+  /// Suelta la reserva. Ver quién la suelta y cuándo en _servirConLaBomba.
+  void soltar() {
+    ocupada = false;
+    usadaEn = DateTime.now().microsecondsSinceEpoch;
+  }
+
+  /// Hay una lectura de la fuente en vuelo ahora mismo.
+  bool _leyendo = false;
+
   /// El próximo trozo, de como mucho [tope] bytes. Null cuando no queda nada.
   ///
   /// NO mueve [posicion] a propósito: eso lo hace quien entrega, para que la
   /// cuenta refleje lo que salió de verdad y no lo que se leyó.
   Future<Uint8List?> _proximo(int tope) async {
+    // Red de seguridad. No tendría que poder pasar —la reserva dura hasta que
+    // la entrega termina del todo—, pero si pasa es preferible dar esta lectura
+    // por perdida a corromperla: dos `moveNext()` encimados rompen el
+    // StreamIterator con «Already waiting for next» y el error sale por un lado
+    // que no dice nada del motivo.
+    if (_leyendo) {
+      logger.info('bomba · dos entregas a la vez sobre la misma lectura en '
+          '$posicion: se descarta en vez de corromperla');
+      viva = false;
+      return null;
+    }
+    _leyendo = true;
+    try {
+      return await _proximoDeVerdad(tope);
+    } finally {
+      _leyendo = false;
+    }
+  }
+
+  Future<Uint8List?> _proximoDeVerdad(int tope) async {
     while (_resto == null) {
       if (!await _lector.moveNext().timeout(BombaDeDatos._plazo)) return null;
       final bloque = _lector.current;
@@ -617,30 +689,41 @@ class _Bomba {
   /// de terminar —lo hace todo el tiempo—, la lectura queda donde estaba y sirve
   /// para el pedido siguiente: eso es todo el punto de esto.
   Stream<List<int>> entregar(int desde, int cuantos) async* {
-    var quedan = cuantos;
-    if (desde < posicion) {
-      for (final trozo in _deLoGuardado(desde, quedan)) {
+    // La reserva se suelta ACÁ y no en quien llama.
+    //
+    // Si el reproductor corta la respuesta, este generador se cancela — pero la
+    // cancelación no interrumpe el bloque que ya estaba pidiéndose a la fuente:
+    // primero termina esa espera y RECIÉN AHÍ corre este `finally`. Soltando la
+    // reserva antes, el pedido siguiente agarraba esta misma lectura mientras
+    // seguía leyendo, y se juntaban dos. Ver el detalle en _servirConLaBomba.
+    try {
+      var quedan = cuantos;
+      if (desde < posicion) {
+        for (final trozo in _deLoGuardado(desde, quedan)) {
+          quedan -= trozo.length;
+          yield trozo;
+        }
+      }
+      while (quedan > 0) {
+        Uint8List? trozo;
+        try {
+          trozo = await _proximo(quedan);
+        } catch (e) {
+          viva = false;
+          logger.info('bomba · se cortó la lectura río arriba en $posicion: $e');
+          return;
+        }
+        if (trozo == null) {
+          viva = false;
+          return;
+        }
+        posicion += trozo.length;
         quedan -= trozo.length;
+        _guardar(trozo);
         yield trozo;
       }
-    }
-    while (quedan > 0) {
-      Uint8List? trozo;
-      try {
-        trozo = await _proximo(quedan);
-      } catch (e) {
-        viva = false;
-        logger.info('bomba · se cortó la lectura río arriba en $posicion: $e');
-        return;
-      }
-      if (trozo == null) {
-        viva = false;
-        return;
-      }
-      posicion += trozo.length;
-      quedan -= trozo.length;
-      _guardar(trozo);
-      yield trozo;
+    } finally {
+      soltar();
     }
   }
 
