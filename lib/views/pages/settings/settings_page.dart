@@ -1398,6 +1398,43 @@ class _SettingsPageState extends State<SettingsPage> {
       ),
       const SizedBox(height: 10),
       // Debug
+      // El bloqueador tiene sección propia.
+      //
+      // Estaba metido entre "ver registro" y "exportar registro", con las
+      // herramientas de diagnóstico, y ahí nadie lo encuentra: no tiene nada
+      // que ver con los registros — es lo que decide si al usuario le saltan
+      // ventanas de casino mirando una película.
+      SettingsExpanderTile(
+        title: 'Bloqueador de anuncios',
+        subTitle: 'Corta anuncios y ventanas emergentes en el navegador interno',
+        androidIcon: Icons.shield_outlined,
+        icon: fluent.FluentIcons.shield,
+        content: Column(
+          children: [
+            SettingsTile(
+              title: 'Abrir el bloqueador',
+              buildSubtitle: () => BloqueadorAnuncios.activo
+                  ? '${BloqueadorAnuncios.cuantosDominios} dominios bloqueados · '
+                      '${BloqueadorAnuncios.cuantosDeFabrica} vienen puestos'
+                  : 'Apagado. Encendelo para cortar anuncios y emergentes',
+              onTap: () => _abrirBloqueador(context),
+              trailing: PlatformWidget(
+                androidWidget: TextButton(
+                  onPressed: () => _abrirBloqueador(context),
+                  child: Text('settings.open'.i18n),
+                ),
+                desktopWidget: fluent.FilledButton(
+                  onPressed: () => _abrirBloqueador(context),
+                  child: Text('settings.open'.i18n),
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+      // La separación va DESPUÉS de cada sección, igual que las demás. Sin
+      // esto, el bloqueador quedaba pegado al de Registros.
+      const SizedBox(height: 10),
       SettingsExpanderTile(
         title: "settings.log".i18n,
         subTitle: 'settings.log-subtitle'.i18n,
@@ -1430,29 +1467,6 @@ class _SettingsPageState extends State<SettingsPage> {
                 ),
                 desktopWidget: fluent.FilledButton(
                   onPressed: () => _abrirVisorDeRegistro(context),
-                  child: Text('settings.open'.i18n),
-                ),
-              ),
-            ),
-            const SizedBox(height: 10),
-            // El bloqueador vive acá, con las herramientas, y no en la sección
-            // del reproductor: no toca la reproducción, solo el navegador
-            // interno.
-            SettingsTile(
-              title: 'Bloqueador de anuncios',
-              buildSubtitle: () => BloqueadorAnuncios.activo
-                  ? '${BloqueadorAnuncios.cuantosDominios} dominios bloqueados '
-                      'en el navegador interno'
-                  : 'Apagado. Instalá una lista para bloquear anuncios en el '
-                      'navegador interno',
-              onTap: () => _abrirBloqueador(context),
-              trailing: PlatformWidget(
-                androidWidget: TextButton(
-                  onPressed: () => _abrirBloqueador(context),
-                  child: Text('settings.open'.i18n),
-                ),
-                desktopWidget: fluent.FilledButton(
-                  onPressed: () => _abrirBloqueador(context),
                   child: Text('settings.open'.i18n),
                 ),
               ),
