@@ -109,8 +109,118 @@ class ComicReaderSettings extends StatelessWidget {
             ],
           ),
         ),
+        const Divider(height: 24, color: HomeTheme.border),
+        Padding(
+          padding: const EdgeInsets.fromLTRB(20, 4, 20, 12),
+          child: Text(
+            'reader.strip-align'.i18n,
+            style: const TextStyle(
+              fontSize: 17,
+              fontWeight: FontWeight.bold,
+              color: HomeTheme.textPrimary,
+            ),
+          ),
+        ),
+        // No cierra el panel al elegir, a diferencia del modo de lectura: acá
+        // se quiere ver el efecto y probar las tres sin tener que reabrirlo.
+        Obx(
+          () => Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              _AlignTile(
+                value: ComicController.alineacionIzquierda,
+                icon: Icons.align_horizontal_left,
+                title: 'reader.strip-align-left'.i18n,
+                current: c.stripAlign.value,
+                onSelect: c.setStripAlign,
+              ),
+              _AlignTile(
+                value: ComicController.alineacionCentro,
+                icon: Icons.align_horizontal_center,
+                title: 'reader.strip-align-center'.i18n,
+                current: c.stripAlign.value,
+                onSelect: c.setStripAlign,
+              ),
+              _AlignTile(
+                value: ComicController.alineacionDerecha,
+                icon: Icons.align_horizontal_right,
+                title: 'reader.strip-align-right'.i18n,
+                current: c.stripAlign.value,
+                onSelect: c.setStripAlign,
+              ),
+            ],
+          ),
+        ),
         const SizedBox(height: 8),
       ],
+    );
+  }
+}
+
+/// Fila de alineación de la franja. Igual que _ModeTile pero de una sola
+/// línea (no hace falta subtítulo: los iconos ya lo dicen) y sin cerrar el
+/// panel al elegir.
+class _AlignTile extends StatelessWidget {
+  const _AlignTile({
+    required this.value,
+    required this.icon,
+    required this.title,
+    required this.current,
+    required this.onSelect,
+  });
+
+  final String value;
+  final IconData icon;
+  final String title;
+  final String current;
+  final void Function(String) onSelect;
+
+  @override
+  Widget build(BuildContext context) {
+    final selected = value == current;
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 3),
+      child: Material(
+        color: selected
+            ? HomeTheme.accentPink.withValues(alpha: 0.14)
+            : Colors.transparent,
+        borderRadius: BorderRadius.circular(12),
+        child: InkWell(
+          borderRadius: BorderRadius.circular(12),
+          onTap: () => onSelect(value),
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
+            child: Row(
+              children: [
+                Icon(
+                  icon,
+                  size: 22,
+                  color: selected ? HomeTheme.accentPink : HomeTheme.textMuted,
+                ),
+                const SizedBox(width: 14),
+                Expanded(
+                  child: Text(
+                    title,
+                    style: TextStyle(
+                      fontSize: 14,
+                      color: selected
+                          ? HomeTheme.accentPink
+                          : HomeTheme.textPrimary,
+                      fontWeight: selected ? FontWeight.w700 : FontWeight.w500,
+                    ),
+                  ),
+                ),
+                if (selected)
+                  const Icon(
+                    Icons.check_circle,
+                    size: 20,
+                    color: HomeTheme.accentPink,
+                  ),
+              ],
+            ),
+          ),
+        ),
+      ),
     );
   }
 }

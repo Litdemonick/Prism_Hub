@@ -1,3 +1,4 @@
+import 'package:flutter/scheduler.dart';
 import 'package:get/get.dart';
 import 'package:prismhub/models/index.dart';
 import 'package:prismhub/controllers/watch/reader_controller.dart';
@@ -25,17 +26,37 @@ class NovelController extends ReaderController<ExtensionFikushonWatch> {
   final isRecover = false.obs;
   final positions = 0.obs;
 
+  // Capítulo nuevo: no se hace caso a las posiciones hasta que la lista del
+  // capítulo nuevo esté montada (ver ComicController._ignorarPosiciones).
+  bool _ignorarPosiciones = false;
+
   @override
   void onInit() {
     super.onInit();
     fontSize.value = PrismHubStorage.getSetting(SettingKey.novelFontSize);
 
+    // Mismo blindaje que en ComicController — ver el comentario largo de allá.
+    // Acá no se llegó a reportar, pero el patrón es idéntico (mismo paquete,
+    // mismo listener compartido entre capítulos) así que se cubre igual.
     itemPositionsListener.itemPositions.addListener(() {
-      if (itemPositionsListener.itemPositions.value.isEmpty) {
+      if (_ignorarPosiciones) return;
+      final posiciones = itemPositionsListener.itemPositions.value;
+      if (posiciones.isEmpty) {
         return;
       }
-      final pos = itemPositionsListener.itemPositions.value.first;
-      positions.value = pos.index;
+      // `itemPositions` no viene ordenado: `.first` daba cualquiera de los
+      // párrafos visibles, no el de arriba.
+      var arriba = -1;
+      for (final p in posiciones) {
+        if (p.itemTrailingEdge <= 0) continue;
+        if (arriba == -1 || p.index < arriba) arriba = p.index;
+      }
+      if (arriba < 0) return;
+      // Los dos de más son el título y el subtítulo (ver el itemCount de
+      // novel_reader_content).
+      final total = (watchData.value?.content.length ?? 0) + 2;
+      if (total > 2 && arriba > total - 1) return;
+      positions.value = arriba;
     });
     addWorker(ever(
       fontSize,
@@ -44,7 +65,18 @@ class NovelController extends ReaderController<ExtensionFikushonWatch> {
     ));
 
     // 切换章节时重置页码
-    addWorker(ever(index, (callback) => positions.value = 0));
+    addWorker(ever(index, (callback) {
+      _ignorarPosiciones = true;
+      positions.value = 0;
+    }));
+
+    // Se vuelve a escuchar un frame después de que llegó el capítulo nuevo.
+    addWorker(ever(super.watchData, (data) {
+      if (data == null) return;
+      SchedulerBinding.instance.addPostFrameCallback((_) {
+        _ignorarPosiciones = false;
+      });
+    }));
 
     addWorker(ever(super.watchData, (callback) async {
       if (isRecover.value || callback == null) {
