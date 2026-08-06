@@ -1265,7 +1265,20 @@ class _TrackSelector extends StatelessWidget {
         // se salteaban las que no traían ni título ni idioma y quedaban
         // invisibles aunque se pudieran elegir. Ver la misma nota en
         // video_player_desktop_controls.dart.
-        if (_audiosDelVideo(controller).isEmpty)
+        // Las que declara la lista maestra de HLS: son las que traen nombre
+        // de idioma y las que mpv no ve solo. Ver audiosHls en
+        // video_controller.dart.
+        for (final audio in controller.audiosHls)
+          ListTile(
+            selected: audio == controller.player.state.track.audio,
+            title: Text(audio.title ?? audio.language ?? ''),
+            subtitle: audio.language != null ? Text(audio.language!) : null,
+            onTap: () {
+              controller.player.setAudioTrack(audio);
+              controller.showSidebar.value = false;
+            },
+          ),
+        if (_audiosDelVideo(controller).isEmpty && controller.audiosHls.isEmpty)
           Padding(
             padding: const EdgeInsets.fromLTRB(16, 2, 16, 6),
             child: Text(

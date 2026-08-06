@@ -184,6 +184,54 @@ class VideoPlayerController extends GetxController with WidgetsBindingObserver {
   // 字幕
   final subtitles = <SubtitleTrack>[].obs;
 
+  /// Las pistas de audio que declara la lista MAESTRA de HLS.
+  ///
+  /// **Por qué hacen falta si mpv ya sabe leer HLS.**
+  ///
+  /// Estos servidores arman el maestro de una forma que deja a mpv con un solo
+  /// audio. Medido en vimeos el 2026-08-06:
+  ///
+  ///   #EXT-X-MEDIA:TYPE=AUDIO,GROUP-ID="audio0",NAME="Español",LANGUAGE="es",…
+  ///   #EXT-X-MEDIA:TYPE=AUDIO,GROUP-ID="audio0",NAME="English",LANGUAGE="en",…
+  ///   #EXT-X-STREAM-INF:…,CODECS="avc1.64001f,mp4a.40.2",AUDIO="audio0"
+  ///
+  /// Fijarse en el `CODECS` de la variante: **ya trae audio adentro** (el
+  /// `mp4a`). O sea que cada variante es autosuficiente y las pistas sueltas de
+  /// arriba son una alternativa. Con eso, ffmpeg se queda con el audio que
+  /// viene pegado al vídeo y ni abre las otras — por eso el menú mostraba una
+  /// sola pista y ningún idioma, aunque el maestro declare dos.
+  ///
+  /// Así que se leen acá y se le ofrecen al reproductor como pistas externas,
+  /// que es el mismo camino que ya se usa para el audio que manda una extensión
+  /// y para los subtítulos. Cada una es un `.m3u8` propio y mpv lo abre sin
+  /// problema.
+  final audiosHls = <AudioTrack>[].obs;
+
+  /// Saca las pistas de audio de una lista maestra de HLS.
+  ///
+  /// Se devuelve vacío cuando hay una sola o ninguna: ofrecer "elegir" entre un
+  /// único idioma es ruido, y la que venga pegada al vídeo ya está sonando.
+  static List<AudioTrack> _audiosDelMaestro(String maestro, Uri base) {
+    final fuera = <AudioTrack>[];
+    for (final linea in const LineSplitter().convert(maestro)) {
+      if (!linea.startsWith('#EXT-X-MEDIA:')) continue;
+      if (!linea.contains('TYPE=AUDIO')) continue;
+      final uri = RegExp(r'URI="([^"]+)"').firstMatch(linea)?.group(1);
+      if (uri == null || uri.isEmpty) continue;
+      final nombre = RegExp(r'NAME="([^"]*)"').firstMatch(linea)?.group(1);
+      final idioma = RegExp(r'LANGUAGE="([^"]*)"').firstMatch(linea)?.group(1);
+      fuera.add(AudioTrack.uri(
+        base.resolve(uri).toString(),
+        // El nombre que puso el servidor —«Español», «English»— es el que el
+        // usuario entiende. Si no hay, queda el idioma; y si tampoco, el menú
+        // les pone un número.
+        title: (nombre != null && nombre.trim().isNotEmpty) ? nombre : idioma,
+        language: idioma,
+      ));
+    }
+    return fuera.length > 1 ? fuera : const [];
+  }
+
   // 画质
   final currentQuality = "".obs;
   final qualityMap = <String, String>{};
@@ -4922,10 +4970,14 @@ class VideoPlayerController extends GetxController with WidgetsBindingObserver {
     if (headers != null) hdrs.addAll(headers);
     // Cómo conviene abrir esta fuente: tal cual, por el relay para esquivar
     // nodos caídos, o directamente no intentarlo. Ver _comoAbrir.
+    // Las pistas del maestro anterior no valen para esta fuente: se olvidan
+    // antes de mirarla. `_comoAbrir` las vuelve a llenar si esta trae.
+    audiosHls.clear();
     final plan = await _comoAbrir(url, headers);
     if (_disposed) return false;
     await _pistasEnAutomatico();
     await player.open(Media(plan.url ?? url, httpHeaders: hdrs));
+
     if (_disposed) {
       try {
         unawaited(player.stop());
@@ -5287,6 +5339,15 @@ class VideoPlayerController extends GetxController with WidgetsBindingObserver {
 
     var lista = maestro;
     var direccion = url;
+
+    // Las pistas de audio del maestro, para poder ofrecerlas en el menú.
+    // Se rehace en cada fuente: son de ESTE vídeo y no del anterior.
+    audiosHls.value = _audiosDelMaestro(maestro, Uri.parse(url));
+    if (audiosHls.isNotEmpty) {
+      logger.info('ficha · $servidor · el maestro declara '
+          '${audiosHls.length} pistas de audio: '
+          '${audiosHls.map((a) => a.title ?? a.language ?? '?').join(', ')}');
+    }
 
     // Lista maestra: se elige una variante y se sigue.
     if (maestro.contains('#EXT-X-STREAM-INF')) {

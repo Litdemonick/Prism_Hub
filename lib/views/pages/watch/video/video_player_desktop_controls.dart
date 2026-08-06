@@ -1645,7 +1645,27 @@ class _TrackState extends State<_Track> {
                         // vídeo tenía un solo audio. Si no tiene nombre se la
                         // llama por su número, que es peor que un nombre pero
                         // mucho mejor que no estar.
-                        if (_audiosDe(widget.controller).isEmpty)
+                        // Las que declara la lista maestra de HLS.
+                        //
+                        // Van primero porque son las que traen nombre de
+                        // idioma —«Español», «English»— y son las que el
+                        // usuario está buscando. Ver audiosHls en
+                        // video_controller.dart: mpv no las ve solo.
+                        for (final audio in widget.controller.audiosHls)
+                          ListTile.selectable(
+                            selected: audio ==
+                                widget.controller.player.state.track.audio,
+                            title: Text(audio.title ?? audio.language ?? ''),
+                            subtitle: audio.language != null
+                                ? Text(audio.language!)
+                                : null,
+                            onPressed: () {
+                              widget.controller.player.setAudioTrack(audio);
+                              Flyout.of(context).close();
+                            },
+                          ),
+                        if (_audiosDe(widget.controller).isEmpty &&
+                            widget.controller.audiosHls.isEmpty)
                           Padding(
                             padding: const EdgeInsets.fromLTRB(10, 4, 10, 4),
                             child: Text(
