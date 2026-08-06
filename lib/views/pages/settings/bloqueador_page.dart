@@ -78,7 +78,7 @@ class _BloqueadorPageState extends State<BloqueadorPage> {
         content: const Text(
           'En el navegador interno van a volver a aparecer:\n\n'
           '·  Pestañas que se abren solas al tocar reproducir\n'
-          '·  Anuncios de veinte segundos antes de la película\n'
+          '·  Anuncios antes de la película, y pueden ser varios seguidos\n'
           '·  Rastreo de las redes de publicidad\n\n'
           'No se recomienda apagarlo: es lo único que separa al navegador '
           'interno de las redes de anuncios de estos sitios.',
@@ -281,7 +281,9 @@ class _BloqueadorPageState extends State<BloqueadorPage> {
                           _queSeCorta(
                             Icons.ondemand_video,
                             'Anuncios antes del vídeo',
-                            'Los de veinte segundos, dentro del reproductor.',
+                            'Los que salen antes de que arranque, dentro del '
+                                'reproductor. No solo los de veinte segundos: '
+                                'pueden venir varios seguidos.',
                           ),
                           _queSeCorta(
                             Icons.travel_explore,
