@@ -96,6 +96,12 @@ class TarjetaDeCatalogo extends StatefulWidget {
 class _TarjetaDeCatalogoState extends State<TarjetaDeCatalogo> {
   bool _encima = false;
 
+  /// En pantalla táctil no hay «pasar por encima», así que el primer toque
+  /// muestra el panel y el segundo abre. Es la forma de que el usuario de
+  /// celular vea la fecha y la descripción sin tener que entrar a la ficha —
+  /// justo lo que el mouse resuelve solo en escritorio.
+  bool _abierto = false;
+
   bool get _hayPanel =>
       widget.fecha != null ||
       widget.descripcion != null ||
@@ -108,10 +114,10 @@ class _TarjetaDeCatalogoState extends State<TarjetaDeCatalogo> {
     final altoPortada = TarjetaDeCatalogo.altoPortadaPara(a);
     final radio = BorderRadius.circular(8);
 
-    // El panel solo donde hay mouse. En pantalla táctil no hay «pasar por
-    // encima», y taparle la portada al usuario que apoyó el dedo sería peor
-    // que no mostrarlo.
     final conMouse = a.alMenosAmplio;
+    // Se muestra por mouse en escritorio y por toque en celular.
+    final panelVisible = _hayPanel && (conMouse ? _encima : _abierto);
+    final resaltada = _encima || _abierto;
 
     return SizedBox(
       width: ancho,
@@ -120,7 +126,19 @@ class _TarjetaDeCatalogoState extends State<TarjetaDeCatalogo> {
         onEnter: (_) => setState(() => _encima = true),
         onExit: (_) => setState(() => _encima = false),
         child: GestureDetector(
-          onTap: widget.onTap,
+          // Con mouse, tocar abre directo. Sin mouse, el primer toque muestra
+          // el panel y el segundo abre: así se puede leer antes de entrar.
+          onTap: () {
+            if (conMouse || _abierto) {
+              widget.onTap?.call();
+              return;
+            }
+            if (_hayPanel) {
+              setState(() => _abierto = true);
+              return;
+            }
+            widget.onTap?.call();
+          },
           behavior: HitTestBehavior.opaque,
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
@@ -129,31 +147,57 @@ class _TarjetaDeCatalogoState extends State<TarjetaDeCatalogo> {
               // Crece un poco, y nada más: ni sombras ni bordes que aparecen,
               // que es lo que ensucia la fila cuando el mouse la recorre.
               AnimatedScale(
-                scale: _encima ? 1.04 : 1.0,
+                scale: resaltada ? 1.04 : 1.0,
                 duration: const Duration(milliseconds: 140),
                 curve: Curves.easeOut,
-                child: ClipRRect(
-                  borderRadius: radio,
-                  child: SizedBox(
-                    width: ancho,
-                    height: altoPortada,
-                    child: Stack(
-                      fit: StackFit.expand,
-                      children: [
-                        _portada(ancho, altoPortada),
-                        if (widget.duracion != null) _insigniaDeDuracion(),
-                        if (conMouse && _hayPanel)
-                          AnimatedOpacity(
-                            opacity: _encima ? 1 : 0,
-                            duration: const Duration(milliseconds: 160),
-                            // Sin esto, el panel invisible se sigue comiendo
-                            // los clics del póster.
-                            child: IgnorePointer(
-                              ignoring: !_encima,
-                              child: _panel(ancho),
+                // La sombra va AFUERA del recorte: adentro, el ClipRRect la
+                // corta contra el borde del póster y no se ve nada.
+                child: AnimatedContainer(
+                  duration: const Duration(milliseconds: 160),
+                  decoration: BoxDecoration(
+                    borderRadius: radio,
+                    boxShadow: resaltada
+                        ? [
+                            // Dos sombras: una oscura que despega la tarjeta
+                            // del fondo, y un halo del color de acento que le
+                            // da la vida. Con una sola, o queda plana o queda
+                            // de neón.
+                            const BoxShadow(
+                              color: Color(0x99000000),
+                              blurRadius: 18,
+                              offset: Offset(0, 8),
                             ),
-                          ),
-                      ],
+                            BoxShadow(
+                              color: widget.acento.withValues(alpha: 0.34),
+                              blurRadius: 22,
+                              spreadRadius: -2,
+                            ),
+                          ]
+                        : const [],
+                  ),
+                  child: ClipRRect(
+                    borderRadius: radio,
+                    child: SizedBox(
+                      width: ancho,
+                      height: altoPortada,
+                      child: Stack(
+                        fit: StackFit.expand,
+                        children: [
+                          _portada(ancho, altoPortada),
+                          if (widget.duracion != null) _insigniaDeDuracion(),
+                          if (_hayPanel)
+                            AnimatedOpacity(
+                              opacity: panelVisible ? 1 : 0,
+                              duration: const Duration(milliseconds: 160),
+                              // Sin esto, el panel invisible se sigue comiendo
+                              // los toques del póster.
+                              child: IgnorePointer(
+                                ignoring: !panelVisible,
+                                child: _panel(ancho),
+                              ),
+                            ),
+                        ],
+                      ),
                     ),
                   ),
                 ),
@@ -170,7 +214,7 @@ class _TarjetaDeCatalogoState extends State<TarjetaDeCatalogo> {
                     fontSize: 13,
                     height: 1.32,
                     fontWeight: FontWeight.w600,
-                    color: _encima ? widget.acento : HomeTheme.textPrimary,
+                    color: resaltada ? widget.acento : HomeTheme.textPrimary,
                   ),
                 ),
               ),

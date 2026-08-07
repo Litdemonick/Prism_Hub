@@ -128,6 +128,13 @@ class _CarruselDestacados extends StatefulWidget {
 
 class _CarruselDestacadosState extends State<_CarruselDestacados> {
   Timer? _reloj;
+
+  /// Qué extensión se está mostrando y en cuál de SUS portadas va.
+  ///
+  /// Dos índices y no uno: el carrusel pasa las cinco de una extensión y recién
+  /// ahí salta a la siguiente. Con una sola lista mezclada saltaba de sitio en
+  /// sitio en cada cambio y no se entendía de dónde venía cada portada.
+  int _ext = 0;
   int _i = 0;
 
   @override
@@ -135,10 +142,21 @@ class _CarruselDestacadosState extends State<_CarruselDestacados> {
     super.initState();
     // Ocho segundos: menos alcanza a cortar la lectura del título, y más se
     // siente una imagen fija.
-    _reloj = Timer.periodic(const Duration(seconds: 8), (_) {
-      final total = widget.c.destacados.length;
-      if (total < 2 || !mounted) return;
-      setState(() => _i = (_i + 1) % total);
+    _reloj = Timer.periodic(const Duration(seconds: 8), (_) => _siguiente());
+  }
+
+  void _siguiente() {
+    final grupos = widget.c.destacados;
+    if (grupos.isEmpty || !mounted) return;
+    setState(() {
+      final actual = grupos[_ext % grupos.length].$2;
+      if (_i + 1 < actual.length) {
+        _i++;
+      } else {
+        // Se acabó la tanda: a la siguiente extensión, desde su primera.
+        _i = 0;
+        _ext = (_ext + 1) % grupos.length;
+      }
     });
   }
 
@@ -151,9 +169,11 @@ class _CarruselDestacadosState extends State<_CarruselDestacados> {
   @override
   Widget build(BuildContext context) {
     return Obx(() {
-      final lista = widget.c.destacados;
-      if (lista.isEmpty) return const SizedBox(height: 12);
-      final (item, package) = lista[_i % lista.length];
+      final grupos = widget.c.destacados;
+      if (grupos.isEmpty) return const SizedBox(height: 12);
+      final (package, items) = grupos[_ext % grupos.length];
+      if (items.isEmpty) return const SizedBox(height: 12);
+      final item = items[_i % items.length];
       final a = Ancho.de(context);
       // El alto sale del ANCHO disponible, no de la altura: en una ventana
       // ancha y baja —una laptop, o el escritorio a media pantalla— reservar
@@ -284,6 +304,26 @@ class _FilaDeExtensionVista extends StatefulWidget {
 }
 
 class _FilaDeExtensionVistaState extends State<_FilaDeExtensionVista> {
+  final _scroll = ScrollController();
+
+  @override
+  void dispose() {
+    _scroll.dispose();
+    super.dispose();
+  }
+
+  /// Desplaza la fila una pantalla, sin pasarse de los extremos.
+  void _correr(int signo) {
+    if (!_scroll.hasClients) return;
+    final salto = _scroll.position.viewportDimension * 0.8;
+    _scroll.animateTo(
+      (_scroll.offset + salto * signo)
+          .clamp(0.0, _scroll.position.maxScrollExtent),
+      duration: const Duration(milliseconds: 320),
+      curve: Curves.easeOutCubic,
+    );
+  }
+
   @override
   void initState() {
     super.initState();
@@ -317,6 +357,7 @@ class _FilaDeExtensionVistaState extends State<_FilaDeExtensionVista> {
               child: (items.isEmpty && estado == EstadoDeFila.cargando)
                   ? const Center(child: ProgressRing())
                   : ListView.separated(
+                      controller: _scroll,
                       scrollDirection: Axis.horizontal,
                       padding:
                           EdgeInsets.symmetric(horizontal: _margen(context)),
@@ -366,15 +407,22 @@ class _FilaDeExtensionVistaState extends State<_FilaDeExtensionVista> {
               ),
             ),
           ),
-          // Refrescar solo esta fila, sin tocar las demás.
-          IconButton(
-            tooltip: 'common.refresh'.i18n,
-            iconSize: 18,
-            color: HomeTheme.textMuted,
-            onPressed: () =>
-                widget.c.pedirSiHaceFalta(widget.fila, forzar: true),
-            icon: const Icon(Icons.refresh_rounded),
-          ),
+          // Flechas para recorrer la fila. Solo donde hay mouse: en una
+          // pantalla táctil se arrastra con el dedo y las flechas solo taparían
+          // portadas.
+          //
+          // El botón de actualizar se sacó: la fila ya se refresca sola cuando
+          // vence el caché y tirando de la pantalla hacia abajo. Un ícono más
+          // en cada encabezado era ruido repetido diecisiete veces.
+          if (Ancho.de(context).alMenosAmplio) ...[
+            _FlechaDeFila(
+                icono: Icons.chevron_left_rounded,
+                onTap: () => _correr(-1)),
+            const SizedBox(width: 4),
+            _FlechaDeFila(
+                icono: Icons.chevron_right_rounded,
+                onTap: () => _correr(1)),
+          ],
         ],
       ),
     );
@@ -413,6 +461,53 @@ class _FilaDeExtensionVistaState extends State<_FilaDeExtensionVista> {
 }
 
 // ─── Piezas compartidas ──────────────────────────────────────────────────────
+
+/// Una flecha para recorrer una fila.
+///
+/// Discreta hasta que se la toca: sobre un fondo de portadas, un botón con
+/// relleno propio compite con las tarjetas. Se enciende al pasar el mouse, que
+/// es cuando el usuario la está buscando.
+class _FlechaDeFila extends StatefulWidget {
+  const _FlechaDeFila({required this.icono, required this.onTap});
+
+  final IconData icono;
+  final VoidCallback onTap;
+
+  @override
+  State<_FlechaDeFila> createState() => _FlechaDeFilaState();
+}
+
+class _FlechaDeFilaState extends State<_FlechaDeFila> {
+  bool _encima = false;
+
+  @override
+  Widget build(BuildContext context) {
+    return MouseRegion(
+      cursor: SystemMouseCursors.click,
+      onEnter: (_) => setState(() => _encima = true),
+      onExit: (_) => setState(() => _encima = false),
+      child: GestureDetector(
+        onTap: widget.onTap,
+        child: AnimatedContainer(
+          duration: const Duration(milliseconds: 130),
+          width: 30,
+          height: 30,
+          decoration: BoxDecoration(
+            shape: BoxShape.circle,
+            color: _encima
+                ? Colors.white.withValues(alpha: 0.12)
+                : Colors.transparent,
+          ),
+          child: Icon(
+            widget.icono,
+            size: 20,
+            color: _encima ? Colors.white : HomeTheme.textMuted,
+          ),
+        ),
+      ),
+    );
+  }
+}
 
 /// El margen lateral, por ancho de pantalla.
 ///

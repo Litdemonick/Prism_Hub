@@ -65,8 +65,15 @@ class CatalogoExtensionesController extends GetxController {
 
   final filas = <FilaDeExtension>[].obs;
 
-  /// Portadas para el carrusel de arriba, sacadas de lo que va llegando.
-  final destacados = <(ExtensionListItem, String)>[].obs;
+  /// Lo del carrusel, **agrupado por extensión**.
+  ///
+  /// No es una bolsa mezclada: son tandas. El carrusel pasa las cinco de una
+  /// extensión y recién ahí salta a la siguiente. Mezcladas, saltaba de sitio
+  /// en sitio en cada cambio y no se entendía de dónde venía cada portada.
+  final destacados = <(String, List<ExtensionListItem>)>[].obs;
+
+  /// Cuántas se toman de cada extensión para el carrusel.
+  static const porExtension = 5;
 
   var _enVuelo = 0;
   final _cola = <FilaDeExtension>[];
@@ -202,18 +209,21 @@ class CatalogoExtensionesController extends GetxController {
     }
   }
 
-  /// Alimenta el carrusel de arriba con lo que va llegando.
+  /// Alimenta el carrusel con la tanda de esta extensión.
   ///
-  /// Se toman pocas de cada extensión para que el carrusel no quede dominado
-  /// por la primera que contestó.
+  /// Se toman [porExtension] con portada. Sin portada no sirven: el carrusel
+  /// es una imagen grande y un hueco ahí se ve peor que no mostrar nada.
   void _sumarADestacados(FilaDeExtension fila, List<ExtensionListItem> items) {
     final conPortada = items
         .where((i) => (i.cover ?? '').isNotEmpty)
-        .take(3)
-        .map((i) => (i, fila.package));
-    for (final d in conPortada) {
-      if (destacados.any((x) => x.$1.url == d.$1.url)) continue;
-      destacados.add(d);
+        .take(porExtension)
+        .toList();
+    if (conPortada.isEmpty) return;
+    final i = destacados.indexWhere((d) => d.$1 == fila.package);
+    if (i >= 0) {
+      destacados[i] = (fila.package, conPortada);
+    } else {
+      destacados.add((fila.package, conPortada));
     }
   }
 
