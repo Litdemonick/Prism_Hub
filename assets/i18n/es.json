@@ -149,7 +149,10 @@
     "gone-uninstalled": "Esta extensión ya no está instalada, así que no se puede seguir. Volvé a instalarla desde Extensiones para retomar donde ibas.",
     "gone-disabled": "Esta extensión quedó desactivada, así que no se puede seguir. Activala en Extensiones instaladas para retomar donde ibas.",
     "gone-unstable": "Esta extensión se marcó como inestable y dejó de responder. Vas a poder seguir cuando se arregle; tu progreso queda guardado.",
-    "gone-exit": "Salir"
+    "gone-exit": "Salir",
+    "activar-todas": "Activar todas",
+    "desactivar-todas": "Desactivar todas",
+    "masivo-salteadas": "algunas +18 quedaron sin activar (el interruptor de +18 está apagado en Ajustes)"
   },
   "extension-repo": {
     "error": "¡Ha ocurrido un error!",

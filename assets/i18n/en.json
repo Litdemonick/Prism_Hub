@@ -153,7 +153,10 @@
     "gone-uninstalled": "This extension is no longer installed, so playback cannot continue. Reinstall it from Extensions to pick up where you left off.",
     "gone-disabled": "This extension was disabled, so playback cannot continue. Enable it in Installed extensions to pick up where you left off.",
     "gone-unstable": "This extension was marked unstable and stopped responding. You will be able to continue once it is fixed; your progress is saved.",
-    "gone-exit": "Exit"
+    "gone-exit": "Exit",
+    "activar-todas": "Enable all",
+    "desactivar-todas": "Disable all",
+    "masivo-salteadas": "some 18+ were left off (the 18+ switch is off in Settings)"
   },
   "extension-repo": {
     "error": "An error occurred!",

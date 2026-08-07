@@ -87,6 +87,60 @@ class _ExtensionPageState extends State<ExtensionPage> {
     }).toList();
   }
 
+  /// Prende o apaga TODAS las que se están viendo ahora.
+  ///
+  /// Sobre la lista FILTRADA y no sobre todas las instaladas, a propósito: si
+  /// el usuario está viendo «Lectura» y toca desactivar, espera que se apaguen
+  /// las de lectura — no las diecisiete. El botón hace lo que la pantalla
+  /// muestra.
+  Future<void> _cambiarTodas(bool activar) async {
+    final visibles = _applyFilters(c.runtimes.values.toList(growable: false));
+    if (visibles.isEmpty) return;
+
+    // Las +18 no se prenden en masa si el interruptor general está apagado.
+    // Activarlas igual dejaría contenido adulto disponible sin que nadie lo
+    // haya pedido, que es justo lo que ese interruptor existe para evitar.
+    var salteadas = 0;
+    for (final r in visibles) {
+      final ext = r.extension;
+      if (activar && !ExtensionUtils.isNsfwVisibleOutsideZone(ext.nsfw)) {
+        salteadas++;
+        continue;
+      }
+      await ExtensionUtils.setExtensionEnabled(ext.package, activar);
+    }
+    if (!mounted) return;
+    final hechas = visibles.length - salteadas;
+    showPlatformSnackbar(
+      context: context,
+      content: salteadas == 0
+          ? '$hechas'
+          : '$hechas · ${'extension.masivo-salteadas'.i18n}',
+      title: activar
+          ? 'extension.activar-todas'.i18n
+          : 'extension.desactivar-todas'.i18n,
+    );
+  }
+
+  /// Los dos botones de acción masiva, encima de los filtros.
+  Widget _buildAccionesMasivas() {
+    return Row(
+      children: [
+        _BotonMasivo(
+          icono: Icons.toggle_on_outlined,
+          label: 'extension.activar-todas'.i18n,
+          onTap: () => _cambiarTodas(true),
+        ),
+        const SizedBox(width: 8),
+        _BotonMasivo(
+          icono: Icons.toggle_off_outlined,
+          label: 'extension.desactivar-todas'.i18n,
+          onTap: () => _cambiarTodas(false),
+        ),
+      ],
+    );
+  }
+
   Widget _buildFilterChips() {
     return SingleChildScrollView(
       scrollDirection: Axis.horizontal,
@@ -301,7 +355,16 @@ class _ExtensionPageState extends State<ExtensionPage> {
                 // que el repositorio de extensiones.
                 Padding(
                   padding: const EdgeInsets.fromLTRB(16, 0, 16, 10),
-                  child: _buildFilterChips(),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      _buildAccionesMasivas(),
+                      const SizedBox(height: 10),
+                      _buildAccionesMasivas(),
+              const SizedBox(height: 10),
+              _buildFilterChips(),
+                    ],
+                  ),
                 ),
                 if (totalPages > 1)
                   Padding(
@@ -642,6 +705,57 @@ extension _ExtFilterLabel on _ExtFilter {
       case _ExtFilter.inestables:
         return 'extension.filter-unstable'.i18n;
     }
+  }
+}
+
+/// Botón de acción masiva (activar o desactivar todas las visibles).
+///
+/// Se distingue a propósito de los chips de filtro que tiene al lado: los
+/// chips SELECCIONAN y estos HACEN algo. Por eso llevan icono y borde propio,
+/// en vez de parecer un filtro más que se puede marcar.
+class _BotonMasivo extends StatelessWidget {
+  const _BotonMasivo({
+    required this.icono,
+    required this.label,
+    required this.onTap,
+  });
+
+  final IconData icono;
+  final String label;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return Material(
+      color: Colors.transparent,
+      borderRadius: BorderRadius.circular(20),
+      child: InkWell(
+        borderRadius: BorderRadius.circular(20),
+        onTap: onTap,
+        child: Container(
+          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(20),
+            border: Border.all(color: HomeTheme.border),
+          ),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Icon(icono, size: 17, color: HomeTheme.textMuted),
+              const SizedBox(width: 7),
+              Text(
+                label,
+                style: const TextStyle(
+                  fontSize: 12.5,
+                  fontWeight: FontWeight.w600,
+                  color: HomeTheme.textPrimary,
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
   }
 }
 
