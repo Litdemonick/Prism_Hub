@@ -55,7 +55,22 @@ class _HomePageState extends State<HomePage> {
       child: Stack(
         children: [
           const Positioned.fill(child: AnimatedBackgroundGlow()),
+          // ── El carrusel llega hasta arriba de todo ──────────────────────
+          //
+          // `top: false` a propósito: sin eso, el SafeArea empujaba TODO hacia
+          // abajo y quedaba una franja negra entre la barra de estado y la
+          // imagen. Ahora el carrusel sube hasta el borde de la pantalla y
+          // pasa por detrás de la hora y la batería, que es como se ve en
+          // cualquier app de streaming.
+          //
+          // El texto del carrusel no corre peligro: va anclado ABAJO, lejos de
+          // la barra. Igual se le pasa su altura como relleno superior, por si
+          // alguna vez sube.
+          //
+          // Los costados y el borde de abajo sí se respetan — ahí viven los
+          // gestos del sistema y la barra de navegación.
           SafeArea(
+            top: false,
             child: Obx(() {
               if (c.filas.isEmpty) return _sinExtensiones();
               return RefreshIndicator(
@@ -164,9 +179,20 @@ class _CarruselDestacadosState extends State<_CarruselDestacados> {
       // ancha y baja —una laptop, o el escritorio a media pantalla— reservar
       // un porcentaje del alto dejaba el carrusel aplastado. Y se acota al
       // alto real para que en horizontal de teléfono no se coma la pantalla.
+      // Lo que ocupa la barra de estado. En escritorio es cero.
+      final barra = MediaQuery.paddingOf(context).top;
+      // El alto sale del ANCHO disponible, no de la altura: en una ventana
+      // ancha y baja —una laptop, o el escritorio a media pantalla— reservar
+      // un porcentaje del alto dejaba el carrusel aplastado. Y se acota al
+      // alto real para que en horizontal de teléfono no se coma la pantalla.
+      //
+      // Se le SUMA la barra: la imagen crece para pasar por detrás de ella en
+      // vez de perder esa franja, así el carrusel se sigue viendo del mismo
+      // tamaño que si la barra no existiera.
       final alto = (MediaQuery.sizeOf(context).width *
-              a.elegir(compacto: 0.62, medio: 0.42, amplio: 0.30, enorme: 0.24))
-          .clamp(200.0, MediaQuery.sizeOf(context).height * 0.62);
+                  a.elegir(compacto: 0.62, medio: 0.42, amplio: 0.30, enorme: 0.24))
+              .clamp(200.0, MediaQuery.sizeOf(context).height * 0.62) +
+          barra;
 
       return SizedBox(
         height: alto,
@@ -242,7 +268,7 @@ class _CarruselDestacadosState extends State<_CarruselDestacados> {
               alignment: Alignment.bottomLeft,
               child: Padding(
                 padding: EdgeInsets.fromLTRB(
-                    _margen(context), 0, _margen(context), 26),
+                    _margen(context), barra, _margen(context), 26),
                 child: ConstrainedBox(
                   constraints: const BoxConstraints(maxWidth: 560),
                   child: Column(
