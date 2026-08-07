@@ -362,7 +362,11 @@ class _LibraryPageState extends State<LibraryPage> {
       appBar: AppBar(
         backgroundColor: HomeTheme.bg,
         title: Text(
-          "common.home".i18n,
+          // Decía «Inicio», que era verdad cuando esta pantalla ERA el Home.
+          // Al partirse en dos quedó el título viejo pegado a la pantalla
+          // nueva, y en la barra de abajo el usuario tocaba «Biblioteca» y
+          // arriba le contestaba «Inicio».
+          "common.library".i18n,
           style: const TextStyle(color: HomeTheme.textPrimary),
         ),
       ),

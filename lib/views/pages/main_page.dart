@@ -95,16 +95,58 @@ class _DesktopMainPageState extends State<DesktopMainPage> with WindowListener {
     super.dispose();
   }
 
+  /// En qué zona está parado el usuario, según la dirección actual.
+  ///
+  /// Sale del router y no de `selectedTab` a propósito: en escritorio se llega
+  /// a una zona por el panel lateral **y también** por el botón de atrás, y en
+  /// ese segundo caso la pestaña seleccionada se puede quedar atrasada. La
+  /// dirección nunca miente.
+  String _zona() {
+    final ruta = widget.state.uri.path;
+    if (ruta == '/') return 'common.home'.i18n;
+    if (ruta.startsWith('/biblioteca')) return 'common.library'.i18n;
+    if (ruta.startsWith('/search')) return 'common.search'.i18n;
+    if (ruta.startsWith('/extension')) return 'common.extension'.i18n;
+    if (ruta.startsWith('/settings')) return 'common.settings'.i18n;
+    // Las demás —una ficha, el reproductor, el repositorio— no son zonas del
+    // panel: ahí no se pone nada y queda solo el nombre de la app.
+    return '';
+  }
+
   Widget _title() {
-    return const DragToMoveArea(
+    final zona = _zona();
+    return DragToMoveArea(
       child: Align(
         alignment: AlignmentDirectional.centerStart,
-        child: Text(
-          'PrismHub',
-          style: TextStyle(
-            fontSize: 20.0,
-            fontWeight: FontWeight.bold,
-          ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const Text(
+              'PrismHub',
+              style: TextStyle(fontSize: 20.0, fontWeight: FontWeight.bold),
+            ),
+            // El nombre de la app se queda: es lo que identifica la ventana en
+            // la barra de tareas y en la captura. La zona va al lado, más
+            // liviana, para que se lea como «dónde estoy» y no como otro
+            // título compitiendo con el primero.
+            if (zona.isNotEmpty) ...[
+              const SizedBox(width: 10),
+              Container(
+                width: 1,
+                height: 16,
+                color: Colors.white.withValues(alpha: 0.22),
+              ),
+              const SizedBox(width: 10),
+              Text(
+                zona,
+                style: TextStyle(
+                  fontSize: 15.5,
+                  fontWeight: FontWeight.w500,
+                  color: Colors.white.withValues(alpha: 0.72),
+                ),
+              ),
+            ],
+          ],
         ),
       ),
     );
