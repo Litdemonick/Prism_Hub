@@ -1540,6 +1540,30 @@ class _WebViewPlayerPageState extends State<WebViewPlayerPage>
                           u.host != host) {
                         return NavigationActionPolicy.CANCEL;
                       }
+                      // ── El secuestro del sub-marco ────────────────────────
+                      //
+                      // La regla de arriba solo mira el marco PRINCIPAL, y hay
+                      // un anuncio que no lo toca: se mete en el iframe del
+                      // reproductor y lo reemplaza. Desde afuera la página
+                      // sigue siendo la misma, pero el reproductor ya no está
+                      // — reportado en vivo con UA Multi: al tocar dos veces un
+                      // servidor la pantalla se iba a un sitio que no tiene
+                      // nada que ver y el menú dejaba de funcionar.
+                      //
+                      // Acá NO se puede pinchar el host como arriba: los
+                      // sub-marcos legítimos son justamente de otros dominios
+                      // (voe.sx, streamwish, filemoon…). Así que lo único
+                      // honesto es dejar anotado a dónde se fue cada uno, para
+                      // que la próxima vez que pase el registro diga QUIÉN lo
+                      // hizo y se pueda cortar esa red por su dominio.
+                      //
+                      // Bloquear el destino sería equivocarse de culpable: el
+                      // sitio al que te manda suele ser inocente — lo eligió la
+                      // red de anuncios justamente para parecer legítimo.
+                      if (!action.isForMainFrame && u.host.isNotEmpty) {
+                        logger.info('[bloqueador] sub-marco navega a ${u.host}'
+                            '${action.hasGesture == false ? ' (sin toque del usuario)' : ''}');
+                      }
                       return NavigationActionPolicy.ALLOW;
                     },
                   ),

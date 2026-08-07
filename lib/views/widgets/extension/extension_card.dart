@@ -5,6 +5,7 @@ import 'package:prismhub/models/extension.dart';
 import 'package:prismhub/utils/extension.dart';
 import 'package:prismhub/utils/extension_signature.dart';
 import 'package:prismhub/utils/i18n.dart';
+import 'package:prismhub/utils/log.dart';
 import 'package:prismhub/utils/prismhub_storage.dart';
 import 'package:prismhub/utils/request.dart';
 import 'package:prismhub/utils/router.dart';
@@ -111,6 +112,49 @@ class _ExtensionCardState extends State<ExtensionCard> {
     return result == true;
   }
 
+  /// Segundo intento con el catálogo recién bajado.
+  ///
+  /// Devuelve el script si esta vez la firma valida, o null si sigue sin
+  /// validar — ahí sí hay que rechazar. Ver el porqué en quien lo llama.
+  Future<String?> _reintentarConCatalogoFresco() async {
+    try {
+      final lista = await ExtensionUtils.fetchRepoIndex(
+        forceRefresh: true,
+        cacheBust: true,
+      );
+      final entrada = lista.firstWhere(
+        (e) => e is Map && e['package']?.toString() == widget.package,
+        orElse: () => null,
+      );
+      if (entrada is! Map) return null;
+      final firma = entrada['signature']?.toString();
+      final direccion = (entrada['script'] ?? entrada['url'])?.toString();
+      if (firma == null || firma.isEmpty || direccion == null) return null;
+
+      final sep = direccion.contains('?') ? '&' : '?';
+      final bust = DateTime.now().millisecondsSinceEpoch;
+      final res = await dio.get<String>(
+        '$direccion${sep}t=$bust',
+        options: Options(receiveTimeout: const Duration(seconds: 20)),
+      );
+      final script = res.data;
+      if (script == null || script.isEmpty) return null;
+      if (!ExtensionSignature.isOfficial(script, firma)) {
+        logger.warning('[extensiones] ${widget.package}: la firma sigue sin '
+            'validar con el catálogo fresco — se rechaza');
+        return null;
+      }
+      logger.info('[extensiones] ${widget.package}: la firma no validaba con '
+          'el catálogo que teníamos y sí con el recién bajado — era caché, no '
+          'manipulación');
+      return script;
+    } catch (e) {
+      logger.warning('[extensiones] no se pudo reintentar con el catálogo '
+          'fresco para ${widget.package}: $e');
+      return null;
+    }
+  }
+
   _install() async {
     // Guarda de reentrada. `isLoading` solo se usaba para pintar la rueda, y
     // ninguno de los cuatro botones que llaman aca lo miraba: tocar dos veces
@@ -167,7 +211,30 @@ class _ExtensionCardState extends State<ExtensionCard> {
       bool officialVerified = false;
       if (widget.signature != null && widget.signature!.isNotEmpty) {
         if (!ExtensionSignature.isOfficial(script, widget.signature)) {
-          throw Exception('extension.invalid-signature'.i18n);
+          // ── No es manipulación todavía: puede ser el caché de GitHub ──────
+          //
+          // El JS se pide con `?t=` para esquivar el caché, pero la firma NO
+          // sale de ahí: sale del `index.json` del catálogo, que tiene su
+          // propio caché. Si el catálogo que tenemos en mano quedó una versión
+          // atrás y el JS ya es el nuevo, los dos archivos son legítimos y aun
+          // así la firma no valida.
+          //
+          // Reportado en vivo el 2026-08-06 justo después de publicar tres
+          // versiones seguidas de FuegoCine: salía «esta extensión fue
+          // alterada», y unos minutos más tarde la misma actualización entraba
+          // sola sin que nadie tocara nada. Se comprobó del otro lado que el
+          // JS y su firma coincidían perfecto en el repositorio.
+          //
+          // Acusar de manipulación por un caché ajeno es lo peor de los dos
+          // mundos: asusta y encima bloquea una actualización sana. Así que se
+          // baja el catálogo DE NUEVO —forzado— y se reintenta una vez con la
+          // firma fresca. Si con eso tampoco valida, ahí sí es un problema de
+          // verdad y se rechaza como siempre.
+          final frescos = await _reintentarConCatalogoFresco();
+          if (frescos == null) {
+            throw Exception('extension.invalid-signature'.i18n);
+          }
+          script = frescos;
         }
         // Firma oficial válida → puede instalarse aunque sea una nativa.
         officialVerified = true;
