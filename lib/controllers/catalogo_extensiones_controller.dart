@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
+import 'dart:math';
 
 import 'package:get/get.dart';
 import 'package:prismhub/data/services/database_service.dart';
@@ -74,6 +75,34 @@ class CatalogoExtensionesController extends GetxController {
 
   /// Cuántas se toman de cada extensión para el carrusel.
   static const porExtension = 5;
+
+  // ── Dónde va el carrusel ──────────────────────────────────────────────────
+  //
+  // La posición vive ACÁ y no en el widget del carrusel, y es a propósito: ese
+  // widget se reconstruye cada vez que se vuelve a la pestaña —en Android
+  // cambiar de pestaña reconstruye la página entera— así que su estado se
+  // perdía y el carrusel volvía a arrancar en la primera extensión, siempre la
+  // misma. Este controlador sobrevive, así que la posición también.
+  //
+  // Y la primera vez arranca en una extensión AL AZAR: si empezara siempre por
+  // la primera, esa se llevaría toda la atención y las últimas no las vería
+  // nadie.
+  int carruselExt = 0;
+  int carruselPos = 0;
+  bool _carruselSembrado = false;
+
+  /// Avanza una posición. Al terminar la tanda de una extensión salta a la
+  /// siguiente, desde su primera.
+  void avanzarCarrusel() {
+    if (destacados.isEmpty) return;
+    final actual = destacados[carruselExt % destacados.length].$2;
+    if (carruselPos + 1 < actual.length) {
+      carruselPos++;
+    } else {
+      carruselPos = 0;
+      carruselExt = (carruselExt + 1) % destacados.length;
+    }
+  }
 
   var _enVuelo = 0;
   final _cola = <FilaDeExtension>[];
@@ -224,6 +253,14 @@ class CatalogoExtensionesController extends GetxController {
       destacados[i] = (fila.package, conPortada);
     } else {
       destacados.add((fila.package, conPortada));
+    }
+    // La primera tanda que llega decide por dónde se empieza. Una sola vez por
+    // sesión: re-sortear en cada extensión que contesta haría saltar el
+    // carrusel mientras el usuario lo está mirando.
+    if (!_carruselSembrado && destacados.isNotEmpty) {
+      _carruselSembrado = true;
+      carruselExt = Random().nextInt(destacados.length);
+      carruselPos = 0;
     }
   }
 

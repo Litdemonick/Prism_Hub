@@ -129,34 +129,19 @@ class _CarruselDestacados extends StatefulWidget {
 class _CarruselDestacadosState extends State<_CarruselDestacados> {
   Timer? _reloj;
 
-  /// Qué extensión se está mostrando y en cuál de SUS portadas va.
-  ///
-  /// Dos índices y no uno: el carrusel pasa las cinco de una extensión y recién
-  /// ahí salta a la siguiente. Con una sola lista mezclada saltaba de sitio en
-  /// sitio en cada cambio y no se entendía de dónde venía cada portada.
-  int _ext = 0;
-  int _i = 0;
+  // La posición NO se guarda acá: vive en el controlador. Este widget se
+  // reconstruye al volver a la pestaña, así que un índice propio se perdía y el
+  // carrusel volvía a empezar siempre por la misma extensión. Ver
+  // CatalogoExtensionesController.carruselExt.
 
   @override
   void initState() {
     super.initState();
     // Ocho segundos: menos alcanza a cortar la lectura del título, y más se
     // siente una imagen fija.
-    _reloj = Timer.periodic(const Duration(seconds: 8), (_) => _siguiente());
-  }
-
-  void _siguiente() {
-    final grupos = widget.c.destacados;
-    if (grupos.isEmpty || !mounted) return;
-    setState(() {
-      final actual = grupos[_ext % grupos.length].$2;
-      if (_i + 1 < actual.length) {
-        _i++;
-      } else {
-        // Se acabó la tanda: a la siguiente extensión, desde su primera.
-        _i = 0;
-        _ext = (_ext + 1) % grupos.length;
-      }
+    _reloj = Timer.periodic(const Duration(seconds: 8), (_) {
+      if (!mounted) return;
+      setState(widget.c.avanzarCarrusel);
     });
   }
 
@@ -171,9 +156,9 @@ class _CarruselDestacadosState extends State<_CarruselDestacados> {
     return Obx(() {
       final grupos = widget.c.destacados;
       if (grupos.isEmpty) return const SizedBox(height: 12);
-      final (package, items) = grupos[_ext % grupos.length];
+      final (package, items) = grupos[widget.c.carruselExt % grupos.length];
       if (items.isEmpty) return const SizedBox(height: 12);
-      final item = items[_i % items.length];
+      final item = items[widget.c.carruselPos % items.length];
       final a = Ancho.de(context);
       // El alto sale del ANCHO disponible, no de la altura: en una ventana
       // ancha y baja —una laptop, o el escritorio a media pantalla— reservar
@@ -289,8 +274,9 @@ class _CarruselDestacadosState extends State<_CarruselDestacados> {
                       const SizedBox(height: 16),
                       _Indicadores(
                         cantidad: items.length,
-                        actual: _i % items.length,
-                        onTocar: (i) => setState(() => _i = i),
+                        actual: widget.c.carruselPos % items.length,
+                        onTocar: (i) =>
+                            setState(() => widget.c.carruselPos = i),
                       ),
                       const SizedBox(height: 14),
                       FilledButton.icon(
