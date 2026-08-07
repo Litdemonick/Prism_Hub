@@ -188,6 +188,29 @@ class _CarruselDestacadosState extends State<_CarruselDestacados> {
         child: Stack(
           fit: StackFit.expand,
           children: [
+            // ── La imagen se DESVANECE, no se tapa ────────────────────────
+            //
+            // Antes el borde de abajo se cubría con un degradado que terminaba
+            // en el color de fondo, opaco. Eso dejaba una línea horizontal
+            // visible cruzando toda la pantalla: arriba de esa línea el
+            // degradado tapaba el fondo animado y abajo no, así que el brillo
+            // aparecía de golpe.
+            //
+            // Con una máscara, lo que se apaga es la propia imagen: su
+            // transparencia baja a cero hacia abajo y lo que hay detrás —el
+            // fondo animado— se ve igual a los dos lados del borde. No hay
+            // línea porque no hay borde.
+            ShaderMask(
+              blendMode: BlendMode.dstIn,
+              shaderCallback: (rect) => const LinearGradient(
+                begin: Alignment.topCenter,
+                end: Alignment.bottomCenter,
+                colors: [Colors.white, Colors.white, Colors.transparent],
+                stops: [0.0, 0.55, 1.0],
+              ).createShader(rect),
+              child: Stack(
+                fit: StackFit.expand,
+                children: [
             // El cruce entre imágenes va por la clave: al cambiar el índice,
             // AnimatedSwitcher entiende que es otro hijo y hace el fundido.
             AnimatedSwitcher(
@@ -203,27 +226,31 @@ class _CarruselDestacadosState extends State<_CarruselDestacados> {
                 ),
               ),
             ),
-            // Dos velos, no uno: el de abajo funde con el fondo de la app para
-            // que la imagen no termine en un corte recto, y el de la izquierda
-            // asegura que el texto se lea sobre cualquier portada.
-            const DecoratedBox(
-              decoration: BoxDecoration(
-                gradient: LinearGradient(
-                  begin: Alignment.bottomCenter,
-                  end: Alignment.topCenter,
-                  colors: [HomeTheme.bg, Color(0x00000000)],
-                  stops: [0.0, 0.75],
-                ),
-              ),
-            ),
-            const DecoratedBox(
-              decoration: BoxDecoration(
-                gradient: LinearGradient(
-                  begin: Alignment.centerLeft,
-                  end: Alignment.centerRight,
-                  colors: [Color(0xE60A0A12), Color(0x000A0A12)],
-                  stops: [0.0, 0.7],
-                ),
+                  // Oscurece hacia abajo y hacia la izquierda para que el
+                  // texto se lea sobre cualquier portada. Los dos son
+                  // TRANSLÚCIDOS: si alguno terminara en un color opaco,
+                  // volvería la línea que este bloque vino a sacar.
+                  const DecoratedBox(
+                    decoration: BoxDecoration(
+                      gradient: LinearGradient(
+                        begin: Alignment.bottomCenter,
+                        end: Alignment.topCenter,
+                        colors: [Color(0xD90A0A12), Color(0x000A0A12)],
+                        stops: [0.0, 0.72],
+                      ),
+                    ),
+                  ),
+                  const DecoratedBox(
+                    decoration: BoxDecoration(
+                      gradient: LinearGradient(
+                        begin: Alignment.centerLeft,
+                        end: Alignment.centerRight,
+                        colors: [Color(0xE60A0A12), Color(0x000A0A12)],
+                        stops: [0.0, 0.7],
+                      ),
+                    ),
+                  ),
+                ],
               ),
             ),
             Align(

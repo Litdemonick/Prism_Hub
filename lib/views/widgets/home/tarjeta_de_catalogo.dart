@@ -158,21 +158,36 @@ class _TarjetaDeCatalogoState extends State<TarjetaDeCatalogo> {
                   duration: const Duration(milliseconds: 160),
                   decoration: BoxDecoration(
                     borderRadius: radio,
+                    // ── La sombra: difusa, nunca un contorno ──────────────
+                    //
+                    // Antes el halo iba con poco desenfoque y una expansión
+                    // NEGATIVA, y eso lo pegaba al borde: se leía como una
+                    // línea de color alrededor de la tarjeta en vez de como
+                    // luz. Ahora el desenfoque es grande y la expansión
+                    // positiva, así el color se va apagando hacia afuera y no
+                    // deja ningún filo.
+                    //
+                    // Y son tres capas, no una: la profunda despega la tarjeta
+                    // del fondo, la cercana le da peso justo debajo, y el halo
+                    // de color la enciende. Con una sola sombra la tarjeta o
+                    // queda plana o queda de neón.
                     boxShadow: resaltada
                         ? [
-                            // Dos sombras: una oscura que despega la tarjeta
-                            // del fondo, y un halo del color de acento que le
-                            // da la vida. Con una sola, o queda plana o queda
-                            // de neón.
                             const BoxShadow(
-                              color: Color(0x99000000),
-                              blurRadius: 18,
-                              offset: Offset(0, 8),
+                              color: Color(0x8A000000),
+                              blurRadius: 34,
+                              spreadRadius: 2,
+                              offset: Offset(0, 14),
+                            ),
+                            const BoxShadow(
+                              color: Color(0x66000000),
+                              blurRadius: 12,
+                              offset: Offset(0, 4),
                             ),
                             BoxShadow(
-                              color: widget.acento.withValues(alpha: 0.34),
-                              blurRadius: 22,
-                              spreadRadius: -2,
+                              color: widget.acento.withValues(alpha: 0.22),
+                              blurRadius: 40,
+                              spreadRadius: 6,
                             ),
                           ]
                         : const [],
@@ -270,9 +285,21 @@ class _TarjetaDeCatalogoState extends State<TarjetaDeCatalogo> {
   }
 
   /// El panel que aparece al pasar el mouse, DENTRO del póster.
+  ///
+  /// Es un DEGRADADO y no un color plano: arriba deja ver un poco la portada y
+  /// hacia abajo se cierra para que el texto se lea. Un rectángulo opaco tapaba
+  /// la imagen por completo y se veía como un bloque pegado encima — justo lo
+  /// que se quiere evitar. Así el panel se siente parte de la tarjeta.
   Widget _panel(double ancho) {
     return DecoratedBox(
-      decoration: const BoxDecoration(color: Color(0xF00E0E16)),
+      decoration: const BoxDecoration(
+        gradient: LinearGradient(
+          begin: Alignment.topCenter,
+          end: Alignment.bottomCenter,
+          colors: [Color(0xA6101019), Color(0xE0101019), Color(0xF2101019)],
+          stops: [0.0, 0.45, 1.0],
+        ),
+      ),
       child: Padding(
         padding: const EdgeInsets.all(11),
         child: Column(
@@ -384,43 +411,27 @@ class _TarjetaDeCatalogoState extends State<TarjetaDeCatalogo> {
     );
   }
 
-  /// La portada, **entera y sin recortar**.
+  /// La portada, llenando la tarjeta.
   ///
-  /// ── Por qué algunas se veían cortadas ─────────────────────────────────────
+  /// `cover` a secas: la imagen ocupa el marco entero y lo que sobra se
+  /// recorta. Se probó dibujarla dos veces —una apagada de fondo y otra
+  /// entera adelante— para que las portadas de forma rara no perdieran nada, y
+  /// se volvió atrás **a pedido explícito**: dejaba una franja de fondo visible
+  /// dentro de la tarjeta y se veía peor que el recorte.
   ///
-  /// Con `cover` la imagen llena el marco y lo que sobra se tira. Eso está
-  /// perfecto para una portada 2:3, que entra justa — y esas se veían bien.
-  /// Pero cada extensión entrega la forma que quiere: cuadradas, anchas,
-  /// capturas de vídeo. A esas `cover` les comía media imagen, y por eso unas
-  /// se veían completas y otras no.
-  ///
-  /// La solución es la misma que ya usa la ficha: **la imagen dos veces**. Atrás
-  /// con `cover` y apagada, para rellenar; adelante con `contain`, entera. Una
-  /// portada 2:3 sigue viéndose exactamente igual que antes —tapa el relleno
-  /// por completo— y las otras dejan de perder la mitad.
-  ///
-  /// Sin desenfoque a propósito. La ficha sí lo usa, pero ahí hay UNA imagen; en
-  /// una fila hay treinta, y treinta desenfoques es de las formas más caras de
-  /// arruinar el desplazamiento. Dibujar dos veces algo que ya está decodificado
-  /// no cuesta prácticamente nada.
+  /// La contra queda dicha: una portada que no venga en 2:3 pierde los bordes.
+  /// La gran mayoría vienen en 2:3 y entran justas.
   Widget _portada(double ancho, double alto) {
     final url = widget.portada;
     if (url == null || url.isEmpty) return _sinPortada(ancho);
-    Widget pic(BoxFit fit) => CacheNetWorkImagePic(
-          url,
-          width: ancho,
-          height: alto,
-          fit: fit,
-          headers: widget.cabeceras,
-          placeholder: _mientrasCarga(),
-          fallback: _sinPortada(ancho),
-        );
-    return Stack(
-      fit: StackFit.expand,
-      children: [
-        Opacity(opacity: 0.45, child: pic(BoxFit.cover)),
-        pic(BoxFit.contain),
-      ],
+    return CacheNetWorkImagePic(
+      url,
+      width: ancho,
+      height: alto,
+      fit: BoxFit.cover,
+      headers: widget.cabeceras,
+      placeholder: _mientrasCarga(),
+      fallback: _sinPortada(ancho),
     );
   }
 
