@@ -765,5 +765,24 @@
     "sort": "Ordenar",
     "back-to-continue": "Devolver a Continuar",
     "mark-seen": "Marcar como visto"
+  },
+  "catalogo": {
+    "descubre": "Descubre",
+    "populares": "Populares",
+    "mejores": "Mejor puntuados",
+    "esta-temporada": "Esta temporada",
+    "en-emision": "En emisión",
+    "proxima-temporada": "Próxima temporada",
+    "en-publicacion": "En publicación",
+    "manhwas": "Manhwas",
+    "novelas": "Novelas ligeras",
+    "esta-semana": "Esta semana",
+    "al-aire": "Al aire ahora",
+    "en-cartel": "En cartelera",
+    "proximamente": "Próximamente",
+    "saliendo": "Saliendo",
+    "falta-clave": "falta la clave de TMDB. Se pone en Ajustes › Red.",
+    "zona-caida": "la fuente no respondió. Deslizá hacia abajo para reintentar.",
+    "sin-catalogo": "No se pudo cargar el catálogo. Revisá tu conexión, o esperá un momento: a veces es la fuente y vuelve sola."
   }
 }

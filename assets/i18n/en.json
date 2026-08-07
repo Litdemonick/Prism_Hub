@@ -765,5 +765,24 @@
     "sort": "Sort",
     "back-to-continue": "Back to Continue",
     "mark-seen": "Mark as seen"
+  },
+  "catalogo": {
+    "descubre": "Discover",
+    "populares": "Popular",
+    "mejores": "Top rated",
+    "esta-temporada": "This season",
+    "en-emision": "Airing",
+    "proxima-temporada": "Next season",
+    "en-publicacion": "Publishing",
+    "manhwas": "Manhwa",
+    "novelas": "Light novels",
+    "esta-semana": "This week",
+    "al-aire": "On the air",
+    "en-cartel": "In theaters",
+    "proximamente": "Coming soon",
+    "saliendo": "Airing",
+    "falta-clave": "the TMDB key is missing. Set it in Settings › Network.",
+    "zona-caida": "the source did not respond. Pull down to retry.",
+    "sin-catalogo": "Could not load the catalog. Check your connection, or wait a moment: sometimes it is the source and it comes back on its own."
   }
 }
