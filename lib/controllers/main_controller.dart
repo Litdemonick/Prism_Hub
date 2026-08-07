@@ -21,7 +21,16 @@ class MainController extends GetxController {
 
   final selectedTab = 0.obs;
 
+  /// De qué pestaña se venía.
+  ///
+  /// Hace falta para Ajustes: es la única zona que NO tiene su botón en la
+  /// barra de abajo —entra por los tres puntos— así que una vez adentro no hay
+  /// nada marcado y no se sabe con qué volver. Con esto, la barra puede
+  /// ofrecer una flecha que devuelve exactamente a donde estabas.
+  int tabAnterior = tabHome;
+
   void changeTab(int i) {
+    if (i != selectedTab.value) tabAnterior = selectedTab.value;
     selectedTab.value = i;
   }
 

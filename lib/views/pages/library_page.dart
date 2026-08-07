@@ -359,24 +359,47 @@ class _LibraryPageState extends State<LibraryPage> {
   Widget _buildAndroidHome(BuildContext context) {
     return Scaffold(
       backgroundColor: HomeTheme.bg,
-      appBar: AppBar(
-        backgroundColor: HomeTheme.bg,
-        title: Text(
-          // Decía «Inicio», que era verdad cuando esta pantalla ERA el Home.
-          // Al partirse en dos quedó el título viejo pegado a la pantalla
-          // nueva, y en la barra de abajo el usuario tocaba «Biblioteca» y
-          // arriba le contestaba «Inicio».
-          "common.library".i18n,
-          style: const TextStyle(color: HomeTheme.textPrimary),
-        ),
-      ),
-      // Además del refresco automático (ver HomePageController), deslizar
-      // para abajo lo fuerza al toque — sin esperar el timer.
-      body: RefreshIndicator(
-        onRefresh: () => c.onRefresh(),
-        color: HomeTheme.accentPink,
-        backgroundColor: HomeTheme.cardSurface,
-        child: _buildContent(),
+      // ── Sin AppBar ───────────────────────────────────────────────────────
+      //
+      // Una AppBar dibuja su propia superficie con elevación, y sobre el fondo
+      // animado eso quedaba como una franja gris cruzando la pantalla — una
+      // costura que no está en ninguna otra zona.
+      //
+      // El título no se pierde: pasa a ser texto suelto, igual que el
+      // «PrismHub» del Home, y se desplaza con el contenido en vez de comerse
+      // una franja fija para siempre.
+      body: Column(
+        children: [
+          Padding(
+            padding: const EdgeInsets.fromLTRB(16, 6, 16, 6),
+            child: Align(
+              alignment: AlignmentDirectional.centerStart,
+              child: Text(
+                // Decía «Inicio», que era verdad cuando esta pantalla ERA el
+                // Home. Al partirse en dos quedó el título viejo pegado a la
+                // pantalla nueva, y en la barra de abajo el usuario tocaba
+                // «Biblioteca» y arriba le contestaba «Inicio».
+                "common.library".i18n,
+                style: const TextStyle(
+                  fontSize: 25,
+                  fontWeight: FontWeight.w800,
+                  letterSpacing: -0.6,
+                  color: HomeTheme.textPrimary,
+                ),
+              ),
+            ),
+          ),
+          // Además del refresco automático (ver HomePageController), deslizar
+          // para abajo lo fuerza al toque — sin esperar el timer.
+          Expanded(
+            child: RefreshIndicator(
+              onRefresh: () => c.onRefresh(),
+              color: HomeTheme.accentPink,
+              backgroundColor: HomeTheme.cardSurface,
+              child: _buildContent(),
+            ),
+          ),
+        ],
       ),
     );
   }

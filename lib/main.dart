@@ -775,6 +775,32 @@ class _MainAppState extends State<MainApp> {
     return base.copyWith(
       colorScheme: scheme,
       textTheme: _buildTextTheme(brightness, fallback),
+      // ── La franja gris que aparecía al desplazarse ────────────────────
+      //
+      // Es de Material 3: cuando el contenido pasa POR DEBAJO de una AppBar,
+      // Flutter le pinta encima un tinte del color primario y le sube la
+      // elevación, para despegarla. Sobre nuestro fondo —negro con un brillo
+      // animado— eso se ve como una barra clara y sucia cruzando la pantalla,
+      // que aparece y desaparece según cuánto se desplazó.
+      //
+      // Se apaga acá y no zona por zona: son cinco pantallas más las que se
+      // abren encima, y cualquiera que se agregue después heredaría el mismo
+      // problema.
+      appBarTheme: const AppBarTheme(
+        backgroundColor: Colors.transparent,
+        surfaceTintColor: Colors.transparent,
+        scrolledUnderElevation: 0,
+        elevation: 0,
+      ),
+      // Mismo motivo, para las hojas y tarjetas que también se tiñen solas.
+      bottomSheetTheme: const BottomSheetThemeData(
+        surfaceTintColor: Colors.transparent,
+      ),
+      // El fondo de todas las zonas, uno solo. Cada Scaffold que no diga otra
+      // cosa arranca del mismo negro que usa el Home, así que al cambiar de
+      // zona no hay un salto de tono.
+      scaffoldBackgroundColor:
+          brightness == Brightness.dark ? HomeTheme.bg : null,
     );
   }
 

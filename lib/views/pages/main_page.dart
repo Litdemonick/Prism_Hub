@@ -389,6 +389,9 @@ class AndroidMainPage extends fluent.StatefulWidget {
 class _AndroidMainPageState extends fluent.State<AndroidMainPage> {
   late MainController c;
 
+  /// Si los tres puntos están desplegados.
+  bool _masAbierto = false;
+
   final pages = const [
     HomePage(),
     LibraryPage(),
@@ -445,7 +448,12 @@ class _AndroidMainPageState extends fluent.State<AndroidMainPage> {
         // controllers GetX de cada una ya se reusaban entre pestañas (ver
         // comentario en library_page.dart), así que esto no agrega trabajo de
         // fondo nuevo, solo evita el remount constante.
-        body: Column(
+        // La capa de «más» va DENTRO del cuerpo y no en la barra: la barra
+        // mide lo que mide, y hacerla crecer para meter los botones ahí le
+        // cambiaría el relleno al cuerpo cada vez que se abre — o sea, todo
+        // el contenido pegando un salto al desplegar.
+        body: Stack(children: [
+        Column(
           children: [
             SafeArea(bottom: false, child: _noConnectionBanner()),
             Expanded(
@@ -501,6 +509,8 @@ class _AndroidMainPageState extends fluent.State<AndroidMainPage> {
             ),
           ],
         ),
+        if (_masAbierto) _capaDeMas(),
+        ]),
         // El contenido pasa POR DEBAJO de la barra.
         //
         // Con `extendBody`, Flutter le suma el alto de la barra al relleno de
@@ -557,8 +567,10 @@ class _AndroidMainPageState extends fluent.State<AndroidMainPage> {
     // gestos el deslizar de atrás se come el toque.
     final abajo = MediaQuery.viewPaddingOf(context).bottom;
     return Padding(
+      // Más despegada del borde. Pegada abajo se leía como un zócalo aunque
+      // no tuviera fondo; separada, se ve que flota sobre el contenido.
       padding:
-          EdgeInsets.fromLTRB(18, 0, 18, abajo > 0 ? abajo * 0.35 + 8 : 12),
+          EdgeInsets.fromLTRB(18, 0, 18, abajo > 0 ? abajo * 0.55 + 14 : 20),
       child: SizedBox(
         height: 58,
         // Centrada, no repartida a lo ancho. Con los botones estirados a los
@@ -578,9 +590,106 @@ class _AndroidMainPageState extends fluent.State<AndroidMainPage> {
                 ),
               ),
             const SizedBox(width: 8),
-            _BotonDeMas(onTap: _abrirMasOpciones),
+            _botonDelExtremo(),
           ],
         ),
+      ),
+    );
+  }
+
+  /// El botón que cierra la barra por la derecha (o por abajo, acostado).
+  ///
+  /// Cambia de trabajo según dónde estés:
+  ///
+  ///   · En una de las cuatro zonas de la barra → los tres puntos, que abren
+  ///     lo que no entró.
+  ///   · En Ajustes → una flecha de volver. Ajustes es la única zona SIN botón
+  ///     propio en la barra, así que una vez adentro no hay nada marcado y no
+  ///     se sabe con qué salir. La flecha devuelve exactamente a la zona de la
+  ///     que se vino.
+  Widget _botonDelExtremo({double tamano = 52}) {
+    final afuera = c.selectedTab.value >= _enLaBarra;
+    return _BotonRedondo(
+      icono: afuera ? Icons.arrow_back_rounded : Icons.more_horiz_rounded,
+      tamano: tamano,
+      onTap: afuera
+          ? () => c.changeTab(c.tabAnterior)
+          : () => setState(() => _masAbierto = !_masAbierto),
+    );
+  }
+
+  /// Los botones que salen de los tres puntos.
+  ///
+  /// Flotando sobre el contenido y no en una hoja que sube desde abajo: la
+  /// hoja tapa media pantalla y se lee como «entré a otro lado», cuando lo
+  /// único que pasó es que la barra mostró lo que tenía guardado. Saliendo
+  /// desde el propio botón, se ve de dónde vienen y a qué vuelven.
+  Widget _capaDeMas() {
+    final apaisado = _apaisado(context) && !LayoutUtils.isTablet;
+    final bordes = MediaQuery.viewPaddingOf(context);
+
+    final opciones = <(IconData, String, VoidCallback)>[
+      (
+        Icons.settings_outlined,
+        'common.settings'.i18n,
+        () => c.changeTab(MainController.tabAjustes),
+      ),
+      (
+        Icons.history_rounded,
+        'common.history'.i18n,
+        () => Get.to(() => const HistoryPage()),
+      ),
+      (
+        Icons.favorite_border_rounded,
+        'common.favorite'.i18n,
+        // La pestaña de favoritos de Historial. Mismo índice que usa
+        // Biblioteca — si cambia allá, cambia acá.
+        () => Get.to(() => const HistoryPage(initialTab: 3)),
+      ),
+    ];
+
+    return Positioned.fill(
+      child: Stack(
+        children: [
+          // Tocar afuera cierra. Y el velo no es decorativo: sin él, los
+          // botones flotantes se pierden encima de una grilla de portadas.
+          GestureDetector(
+            behavior: HitTestBehavior.opaque,
+            onTap: () => setState(() => _masAbierto = false),
+            child: const ColoredBox(color: Color(0xB3000000)),
+          ),
+          Positioned(
+            left: apaisado ? bordes.left + 10 : null,
+            right: apaisado ? null : 18,
+            // Justo encima del botón del que salieron.
+            bottom: apaisado
+                ? 84
+                : (bordes.bottom > 0 ? bordes.bottom * 0.55 + 14 : 20) + 66,
+            child: Column(
+              crossAxisAlignment:
+                  apaisado ? CrossAxisAlignment.start : CrossAxisAlignment.end,
+              children: [
+                for (var i = 0; i < opciones.length; i++)
+                  Padding(
+                    padding: const EdgeInsets.only(bottom: 12),
+                    child: _OpcionFlotante(
+                      icono: opciones[i].$1,
+                      texto: opciones[i].$2,
+                      // Escalonadas: salen una atrás de otra, de arriba hacia
+                      // el botón, así se lee el recorrido en vez de aparecer
+                      // las tres de golpe.
+                      demora: Duration(milliseconds: 60 * (opciones.length - i)),
+                      iconoPrimero: apaisado,
+                      onTap: () {
+                        setState(() => _masAbierto = false);
+                        opciones[i].$3();
+                      },
+                    ),
+                  ),
+              ],
+            ),
+          ),
+        ],
       ),
     );
   }
@@ -605,55 +714,8 @@ class _AndroidMainPageState extends fluent.State<AndroidMainPage> {
               ),
             ),
           const SizedBox(height: 10),
-          _BotonDeMas(onTap: _abrirMasOpciones, tamano: 46),
+          _botonDelExtremo(tamano: 46),
         ],
-      ),
-    );
-  }
-
-  /// Lo que no entró en la barra, en una hoja que sube desde abajo.
-  void _abrirMasOpciones() {
-    showModalBottomSheet<void>(
-      context: context,
-      backgroundColor: const Color(0xFF14141C),
-      showDragHandle: true,
-      shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(22)),
-      ),
-      builder: (hoja) => SafeArea(
-        top: false,
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            _OpcionDeHoja(
-              icono: Icons.settings_outlined,
-              texto: 'common.settings'.i18n,
-              onTap: () {
-                Navigator.pop(hoja);
-                c.changeTab(MainController.tabAjustes);
-              },
-            ),
-            _OpcionDeHoja(
-              icono: Icons.history_rounded,
-              texto: 'common.history'.i18n,
-              onTap: () {
-                Navigator.pop(hoja);
-                Get.to(() => const HistoryPage());
-              },
-            ),
-            _OpcionDeHoja(
-              icono: Icons.favorite_border_rounded,
-              texto: 'common.favorite'.i18n,
-              onTap: () {
-                Navigator.pop(hoja);
-                // La pestaña de favoritos de Historial. Mismo índice que usa
-                // Biblioteca — si cambia allá, cambia acá.
-                Get.to(() => const HistoryPage(initialTab: 3));
-              },
-            ),
-            const SizedBox(height: 8),
-          ],
-        ),
       ),
     );
   }
@@ -786,13 +848,18 @@ class _IconoDeBarra extends StatelessWidget {
   }
 }
 
-/// Los tres puntos, con su círculo propio.
+/// El botón redondo del extremo de la barra.
 ///
-/// Sólido siempre, elegido o no: lo que hace no es cambiar de pestaña, y sin
-/// una forma que lo distinga se leería como un quinto destino.
-class _BotonDeMas extends StatelessWidget {
-  const _BotonDeMas({required this.onTap, this.tamano = 52});
+/// Sólido siempre, esté o no en la zona activa: lo que hace no es cambiar de
+/// pestaña, y sin una forma que lo distinga se leería como un quinto destino.
+class _BotonRedondo extends StatelessWidget {
+  const _BotonRedondo({
+    required this.icono,
+    required this.onTap,
+    this.tamano = 52,
+  });
 
+  final IconData icono;
   final VoidCallback onTap;
   final double tamano;
 
@@ -809,31 +876,82 @@ class _BotonDeMas extends StatelessWidget {
         child: SizedBox(
           width: tamano,
           height: tamano,
-          child: const Icon(Icons.more_horiz_rounded,
-              size: 25, color: Colors.white),
+          child: Icon(icono, size: 25, color: Colors.white),
         ),
       ),
     );
   }
 }
 
-class _OpcionDeHoja extends StatelessWidget {
-  const _OpcionDeHoja({
+/// Una de las opciones que salen de los tres puntos: su etiqueta y su botón.
+class _OpcionFlotante extends StatelessWidget {
+  const _OpcionFlotante({
     required this.icono,
     required this.texto,
     required this.onTap,
+    required this.demora,
+    required this.iconoPrimero,
   });
 
   final IconData icono;
   final String texto;
   final VoidCallback onTap;
+  final Duration demora;
+
+  /// Acostado la barra está a la izquierda, así que el botón va primero y la
+  /// etiqueta sale hacia adentro de la pantalla. Al revés, la etiqueta se
+  /// saldría por el borde.
+  final bool iconoPrimero;
 
   @override
   Widget build(BuildContext context) {
-    return ListTile(
-      leading: Icon(icono, color: Colors.white70),
-      title: Text(texto, style: const TextStyle(color: Colors.white)),
+    final etiqueta = Container(
+      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 9),
+      decoration: BoxDecoration(
+        color: const Color(0xF01A1A24),
+        borderRadius: BorderRadius.circular(12),
+        boxShadow: const [
+          BoxShadow(color: Color(0x99000000), blurRadius: 12),
+        ],
+      ),
+      child: Text(
+        texto,
+        style: const TextStyle(
+          color: Colors.white,
+          fontSize: 14.5,
+          fontWeight: FontWeight.w600,
+        ),
+      ),
+    );
+
+    final boton = _BotonRedondo(icono: icono, onTap: onTap, tamano: 48);
+
+    final fila = Row(
+      mainAxisSize: MainAxisSize.min,
+      children: iconoPrimero
+          ? [boton, const SizedBox(width: 12), etiqueta]
+          : [etiqueta, const SizedBox(width: 12), boton],
+    );
+
+    // TweenAnimationBuilder y no un controlador: esto se monta cuando se abre
+    // y se desmonta cuando se cierra, así que alcanza con una animación que
+    // corre una sola vez al aparecer. La demora distinta por opción es la que
+    // las hace salir en fila.
+    return GestureDetector(
       onTap: onTap,
+      child: TweenAnimationBuilder<double>(
+        tween: Tween(begin: 0, end: 1),
+        duration: const Duration(milliseconds: 200) + demora,
+        curve: Curves.easeOutBack,
+        builder: (context, t, hijo) => Opacity(
+          opacity: t.clamp(0.0, 1.0),
+          child: Transform.translate(
+            offset: Offset(0, 20 * (1 - t)),
+            child: hijo,
+          ),
+        ),
+        child: fila,
+      ),
     );
   }
 }
