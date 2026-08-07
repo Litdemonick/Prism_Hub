@@ -288,6 +288,55 @@ class _DesktopMainPageState extends State<DesktopMainPage> with WindowListener {
   }
 }
 
+/// Si hay alguna pantalla apilada encima del Home.
+///
+/// ── Para qué ──────────────────────────────────────────────────────────────
+///
+/// Para que la barra flotante se vaya y vuelva **deslizándose**, en vez de
+/// desaparecer de un cuadro al otro.
+///
+/// Cuando se abre una ficha o el reproductor, la pantalla nueva entra
+/// corriéndose desde el costado y durante esa transición se sigue viendo la de
+/// abajo. Si la barra simplemente deja de dibujarse, se ve parpadear. Bajándola
+/// al mismo tiempo, la salida se lee como un movimiento solo.
+///
+/// ── Por qué solo las PageRoute ────────────────────────────────────────────
+///
+/// Porque un diálogo o una hoja de abajo también son rutas, y ahí la barra NO
+/// se tiene que ir: el usuario sigue en la misma pantalla, solo que con algo
+/// encima. Contarlas hacía que abrir los tres puntos escondiera la barra que
+/// los acababa de mostrar.
+class ObservadorDePila extends NavigatorObserver {
+  /// Estático porque lo lee la barra, que vive en otra parte del árbol y no
+  /// tiene forma de llegar hasta el observador que instaló GetMaterialApp.
+  static final hayPantallaEncima = false.obs;
+
+  int _profundidad = 0;
+
+  void _contar(int delta) {
+    _profundidad += delta;
+    if (_profundidad < 0) _profundidad = 0;
+    hayPantallaEncima.value = _profundidad > 0;
+  }
+
+  @override
+  void didPush(Route<dynamic> route, Route<dynamic>? previousRoute) {
+    // Sin `previousRoute` es la primera pantalla de todas: no hay nada debajo
+    // que esconder.
+    if (route is PageRoute && previousRoute != null) _contar(1);
+  }
+
+  @override
+  void didPop(Route<dynamic> route, Route<dynamic>? previousRoute) {
+    if (route is PageRoute && previousRoute != null) _contar(-1);
+  }
+
+  @override
+  void didRemove(Route<dynamic> route, Route<dynamic>? previousRoute) {
+    if (route is PageRoute && previousRoute != null) _contar(-1);
+  }
+}
+
 class AndroidMainPage extends fluent.StatefulWidget {
   const AndroidMainPage({super.key});
 
@@ -358,7 +407,34 @@ class _AndroidMainPageState extends fluent.State<AndroidMainPage> {
           children: [
             SafeArea(bottom: false, child: _noConnectionBanner()),
             Expanded(
-              child: LayoutUtils.isTablet
+              child: _apaisado(context) && !LayoutUtils.isTablet
+                  // ── Teléfono acostado: la barra se va al costado ──────
+                  //
+                  // Abajo no puede quedarse. En horizontal el alto es lo
+                  // único que escasea —360 píxeles contra 800— y una barra
+                  // abajo se lleva la franja donde justamente se ven las
+                  // portadas. Al costado se come ancho, que es lo que sobra.
+                  //
+                  // Y va en un Row, no flotando encima: en horizontal el
+                  // contenido llega hasta el borde, así que una barra
+                  // superpuesta taparía la primera columna de tarjetas en vez
+                  // de dejar ver algo por detrás.
+                  ? Row(
+                      children: [
+                        AnimatedSlide(
+                          // Acostado la barra está al costado, así que se va
+                          // por donde entró: hacia afuera de la pantalla.
+                          offset: ObservadorDePila.hayPantallaEncima.value
+                              ? const Offset(-1.6, 0)
+                              : Offset.zero,
+                          duration: const Duration(milliseconds: 260),
+                          curve: Curves.easeOutCubic,
+                          child: _barraVertical(destinations),
+                        ),
+                        Expanded(child: _buildPages()),
+                      ],
+                    )
+                  : LayoutUtils.isTablet
                   ? Row(
                       children: [
                         NavigationRail(
@@ -391,68 +467,103 @@ class _AndroidMainPageState extends fluent.State<AndroidMainPage> {
         // ven correr por atrás, que es lo que hace que la barra se lea como
         // algo que flota y no como un zócalo pegado.
         extendBody: true,
-        bottomNavigationBar:
-            LayoutUtils.isTablet ? null : _barraFlotante(destinations),
+        // AnimatedSlide y no un `if`: correrla no cambia cuánto mide, así
+        // que el relleno que el Scaffold le pasa al cuerpo se queda igual y
+        // el contenido no pega un salto cuando la barra se va.
+        bottomNavigationBar: LayoutUtils.isTablet || _apaisado(context)
+            ? null
+            : AnimatedSlide(
+                offset: ObservadorDePila.hayPantallaEncima.value
+                    ? const Offset(0, 1.6)
+                    : Offset.zero,
+                duration: const Duration(milliseconds: 260),
+                curve: Curves.easeOutCubic,
+                child: _barraFlotante(destinations),
+              ),
       ),
     );
   }
 
   /// ── Cuántos íconos entran en la barra ────────────────────────────────
   ///
-  /// Cuatro. Con los cinco destinos metidos a la fuerza en una barra flotante
-  /// —que es más angosta que el ancho de pantalla— los íconos quedan pegados y
-  /// se le erra al tocar. El quinto, Ajustes, se va a los tres puntos junto
-  /// con los atajos que antes no estaban en ningún lado.
+  /// Cuatro. El quinto, Ajustes, se va a los tres puntos junto con los atajos
+  /// que antes no estaban en ningún lado.
   ///
   /// Ajustes es el que sale y no otro a propósito: es al que menos se entra de
   /// los cinco, y encima ya tiene su atajo arriba en el Home.
   static const _enLaBarra = 4;
 
+  /// Teléfono acostado. No vale para tablets: una tablet horizontal tiene alto
+  /// de sobra y ya usa su propia barra lateral.
+  static bool _apaisado(BuildContext context) =>
+      MediaQuery.sizeOf(context).height < 500;
+
+  /// ── Por qué la barra NO tiene fondo ──────────────────────────────────────
+  ///
+  /// Porque una pastilla opaca cruzando la pantalla es un zócalo, no algo que
+  /// flota: corta la lista en seco y esconde una franja entera de portadas.
+  /// Sin fondo, lo que se ve entre un botón y el otro es el contenido, y la
+  /// barra se lee como lo que es — botones apoyados encima.
+  ///
+  /// Lo que reemplaza al fondo es el CONTRASTE DE CADA BOTÓN: el elegido va en
+  /// un círculo sólido y los demás llevan una sombra pegada al ícono. Sobre
+  /// una portada clara, un ícono blanco pelado desaparece; con la sombra se
+  /// sigue leyendo sin tener que tapar nada.
   Widget _barraFlotante(List<_Destination> destinos) {
     // Lo que ocupa la barra del sistema —los tres botones, o la rayita de
-    // gestos—. Sin esto la barra flotante se apoya justo encima y en un
-    // teléfono con gestos el deslizar de atrás se come el toque.
+    // gestos—. Sin esto la barra se apoya justo encima y en un teléfono con
+    // gestos el deslizar de atrás se come el toque.
     final abajo = MediaQuery.viewPaddingOf(context).bottom;
     return Padding(
-      padding: EdgeInsets.fromLTRB(14, 0, 14, abajo > 0 ? abajo * 0.35 + 8 : 12),
-      child: Row(
-        children: [
-          Expanded(
-            child: DecoratedBox(
-              decoration: BoxDecoration(
-                // Casi opaca a propósito. Un desenfoque de fondo se vería
-                // mejor, pero hay que recalcularlo en CADA cuadro mientras el
-                // usuario se desplaza, y encima de una lista de portadas eso
-                // es justo donde no sobran milisegundos.
-                color: const Color(0xF014141C),
-                borderRadius: BorderRadius.circular(34),
-                border: Border.all(color: Colors.white.withValues(alpha: 0.07)),
-                boxShadow: const [
-                  BoxShadow(
-                    color: Color(0x80000000),
-                    blurRadius: 18,
-                    offset: Offset(0, 6),
-                  ),
-                ],
-              ),
-              child: SizedBox(
-                height: 60,
-                child: Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-                  children: [
-                    for (var i = 0; i < _enLaBarra; i++)
-                      _IconoDeBarra(
-                        destino: destinos[i],
-                        elegido: c.selectedTab.value == i,
-                        onTap: () => c.changeTab(i),
-                      ),
-                  ],
+      padding:
+          EdgeInsets.fromLTRB(18, 0, 18, abajo > 0 ? abajo * 0.35 + 8 : 12),
+      child: SizedBox(
+        height: 58,
+        // Centrada, no repartida a lo ancho. Con los botones estirados a los
+        // bordes, los de las puntas quedaban pegados al filo de la pantalla y
+        // el conjunto se leía como cinco cosas sueltas en vez de como un
+        // mando. Juntos y al medio se lee como una sola pieza.
+        child: Row(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            for (var i = 0; i < _enLaBarra; i++)
+              Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 5),
+                child: _IconoDeBarra(
+                  destino: destinos[i],
+                  elegido: c.selectedTab.value == i,
+                  onTap: () => c.changeTab(i),
                 ),
               ),
+            const SizedBox(width: 8),
+            _BotonDeMas(onTap: _abrirMasOpciones),
+          ],
+        ),
+      ),
+    );
+  }
+
+  /// La misma barra, de pie, para el teléfono acostado.
+  Widget _barraVertical(List<_Destination> destinos) {
+    // En horizontal la barra del sistema se mete por un costado, y de qué lado
+    // depende de hacia dónde giró el teléfono. Se pregunta por los dos.
+    final costados = MediaQuery.viewPaddingOf(context);
+    return Padding(
+      padding: EdgeInsets.only(left: costados.left + 8, right: 6),
+      child: Column(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          for (var i = 0; i < _enLaBarra; i++)
+            Padding(
+              padding: const EdgeInsets.symmetric(vertical: 7),
+              child: _IconoDeBarra(
+                destino: destinos[i],
+                elegido: c.selectedTab.value == i,
+                onTap: () => c.changeTab(i),
+              ),
             ),
-          ),
-          const SizedBox(width: 10),
-          _BotonDeMas(onTap: _abrirMasOpciones),
+          const SizedBox(height: 10),
+          _BotonDeMas(onTap: _abrirMasOpciones, tamano: 46),
         ],
       ),
     );
@@ -518,6 +629,13 @@ class _AndroidMainPageState extends fluent.State<AndroidMainPage> {
   // TickerMode(enabled: false) en las no-activas pausa sus tickers sin
   // desmontarlas — se retoma solo la animación de la pestaña visible.
   Widget _buildPages() {
+    return _TransicionDeZona(
+      indice: c.selectedTab.value,
+      child: _pilaDePaginas(),
+    );
+  }
+
+  Widget _pilaDePaginas() {
     return IndexedStack(
       index: c.selectedTab.value,
       children: [
@@ -557,11 +675,14 @@ class _Destination {
   final String label;
 }
 
-/// Un ícono de la barra flotante.
+/// Un botón de la barra flotante.
 ///
-/// El elegido se marca con un círculo relleno y no solo con color: sobre un
-/// fondo oscuro, dos tonos de gris no se distinguen de un vistazo, y menos con
-/// portadas de colores corriendo por detrás.
+/// El elegido se marca con un círculo SÓLIDO, no con un cambio de color: sin
+/// fondo detrás, dos tonos de gris no se distinguen de un vistazo, y menos con
+/// portadas de colores corriendo por atrás.
+///
+/// Los que no están elegidos van sin círculo, para que se siga viendo lo que
+/// hay detrás. Lo que los mantiene legibles es la sombra pegada al ícono.
 class _IconoDeBarra extends StatelessWidget {
   const _IconoDeBarra({
     required this.destino,
@@ -582,50 +703,40 @@ class _IconoDeBarra extends StatelessWidget {
       label: destino.label,
       child: InkResponse(
         onTap: onTap,
-        radius: 26,
+        radius: 28,
         child: AnimatedContainer(
           duration: const Duration(milliseconds: 220),
           curve: Curves.easeOutBack,
-          width: 44,
-          height: 44,
+          width: 46,
+          height: 46,
           decoration: BoxDecoration(
-            // Círculo entero, no una pastilla: al lado del botón redondo de
-            // los tres puntos, una marca ovalada se veía como otra cosa.
             shape: BoxShape.circle,
-            gradient: elegido
-                ? LinearGradient(
-                    begin: Alignment.topLeft,
-                    end: Alignment.bottomRight,
-                    colors: [
-                      acento.withValues(alpha: 0.42),
-                      acento.withValues(alpha: 0.18),
-                    ],
-                  )
-                : null,
-            // El aro es lo que la despega del fondo de la barra. Sin él, sobre
-            // un relleno translúcido, la marca se veía como una mancha.
-            border: elegido
-                ? Border.all(color: acento.withValues(alpha: 0.55), width: 1.2)
-                : null,
+            // Sólido, no translúcido: encima de una portada, un relleno a
+            // medias toma el color de lo que hay detrás y la marca deja de
+            // significar lo mismo en cada tarjeta.
+            color: elegido ? acento : Colors.transparent,
             boxShadow: elegido
                 ? [
                     BoxShadow(
-                      color: acento.withValues(alpha: 0.35),
-                      blurRadius: 14,
+                      color: acento.withValues(alpha: 0.45),
+                      blurRadius: 16,
                       spreadRadius: -2,
                     ),
                   ]
                 : null,
           ),
-          child: AnimatedScale(
-            duration: const Duration(milliseconds: 220),
-            curve: Curves.easeOutBack,
-            scale: elegido ? 1.08 : 1.0,
-            child: Icon(
-              elegido ? destino.selectedIcon : destino.icon,
-              size: 23,
-              color: elegido ? Colors.white : Colors.white.withValues(alpha: 0.55),
-            ),
+          child: Icon(
+            elegido ? destino.selectedIcon : destino.icon,
+            size: 24,
+            color: elegido ? Colors.white : Colors.white.withValues(alpha: 0.9),
+            // Lo que hace legible al que NO está elegido. Sin fondo detrás, un
+            // ícono blanco sobre una portada clara se pierde entero.
+            shadows: elegido
+                ? null
+                : const [
+                    Shadow(color: Color(0xCC000000), blurRadius: 8),
+                    Shadow(color: Color(0x99000000), blurRadius: 3),
+                  ],
           ),
         ),
       ),
@@ -633,28 +744,31 @@ class _IconoDeBarra extends StatelessWidget {
   }
 }
 
-/// Los tres puntos, afuera de la barra.
+/// Los tres puntos, con su círculo propio.
 ///
-/// Aparte y no como un ícono más: lo que hace no es cambiar de pestaña, y
-/// mezclarlo con los otros cuatro haría que se lea como una quinta pestaña.
+/// Sólido siempre, elegido o no: lo que hace no es cambiar de pestaña, y sin
+/// una forma que lo distinga se leería como un quinto destino.
 class _BotonDeMas extends StatelessWidget {
-  const _BotonDeMas({required this.onTap});
+  const _BotonDeMas({required this.onTap, this.tamano = 52});
 
   final VoidCallback onTap;
+  final double tamano;
 
   @override
   Widget build(BuildContext context) {
-    final acento = Theme.of(context).colorScheme.primary;
     return Material(
-      color: acento.withValues(alpha: 0.22),
+      color: const Color(0xFF272733),
       shape: const CircleBorder(),
       clipBehavior: Clip.antiAlias,
+      elevation: 6,
+      shadowColor: const Color(0xCC000000),
       child: InkWell(
         onTap: onTap,
         child: SizedBox(
-          width: 60,
-          height: 60,
-          child: Icon(Icons.more_horiz_rounded, size: 26, color: acento),
+          width: tamano,
+          height: tamano,
+          child: const Icon(Icons.more_horiz_rounded,
+              size: 25, color: Colors.white),
         ),
       ),
     );
@@ -678,6 +792,89 @@ class _OpcionDeHoja extends StatelessWidget {
       leading: Icon(icono, color: Colors.white70),
       title: Text(texto, style: const TextStyle(color: Colors.white)),
       onTap: onTap,
+    );
+  }
+}
+
+/// El cambio de zona, con movimiento.
+///
+/// ── Por qué así y no con un PageView ─────────────────────────────────────
+///
+/// Porque las cinco pestañas viven en un IndexedStack para no montarse de cero
+/// cada vez —ver el comentario largo en `_buildPages`— y un PageView tira lo
+/// que no se ve. Cambiar a PageView por la animación habría devuelto el
+/// remount que ese IndexedStack vino a sacar: scroll perdido, listas
+/// recargando, todo de nuevo en cada toque.
+///
+/// Entonces la animación va POR AFUERA de la pila: cuando cambia la pestaña, lo
+/// que ya está montado entra corriéndose y apareciendo. Cuesta un Transform y
+/// un Opacity durante 220 ms, y no toca el estado de ninguna página.
+///
+/// ── Por qué el lado importa ──────────────────────────────────────────────
+///
+/// Porque la barra de abajo es una fila: si voy de Buscar a Extensiones —de
+/// izquierda a derecha— y la pantalla entra desde la izquierda, el movimiento
+/// contradice al dedo. Entrando desde el lado correcto, la app se siente como
+/// una tira que se corre, que es lo que la barra ya está sugiriendo.
+class _TransicionDeZona extends StatefulWidget {
+  const _TransicionDeZona({required this.indice, required this.child});
+
+  final int indice;
+  final Widget child;
+
+  @override
+  State<_TransicionDeZona> createState() => _TransicionDeZonaState();
+}
+
+class _TransicionDeZonaState extends State<_TransicionDeZona>
+    with SingleTickerProviderStateMixin {
+  late final AnimationController _c = AnimationController(
+    vsync: this,
+    duration: const Duration(milliseconds: 220),
+    // Arranca terminada: al abrir la app la primera pestaña ya tiene que estar
+    // puesta, sin una animación de entrada que nadie pidió.
+    value: 1,
+  );
+
+  /// Hacia dónde entra: 1 si se fue a una pestaña de más a la derecha.
+  double _lado = 1;
+
+  @override
+  void didUpdateWidget(_TransicionDeZona viejo) {
+    super.didUpdateWidget(viejo);
+    if (viejo.indice == widget.indice) return;
+    _lado = widget.indice > viejo.indice ? 1 : -1;
+    _c.forward(from: 0);
+  }
+
+  @override
+  void dispose() {
+    _c.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return AnimatedBuilder(
+      animation: _c,
+      // El hijo se pasa aparte para que la pila NO se reconstruya en cada
+      // cuadro de la animación: solo se recalculan el corrimiento y la
+      // opacidad, que es barato.
+      child: widget.child,
+      builder: (context, hijo) {
+        final t = Curves.easeOutCubic.transform(_c.value);
+        return Opacity(
+          // Nunca del todo transparente: un parpadeo a negro se nota más que
+          // el movimiento.
+          opacity: 0.35 + 0.65 * t,
+          child: Transform.translate(
+            // Corto a propósito. Un desplazamiento largo se siente lento
+            // aunque dure lo mismo, y acá se cambia de pestaña todo el tiempo.
+            offset: Offset(_lado * 34 * (1 - t), 0),
+            child: hijo,
+          ),
+        );
+      },
     );
   }
 }

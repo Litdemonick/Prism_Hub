@@ -730,6 +730,10 @@ class _MainAppState extends State<MainApp> {
     ];
     return GetMaterialApp(
       title: "PrismHub",
+      // Le avisa a la barra flotante cuándo hay una pantalla encima, para que
+      // se esconda deslizándose en vez de desaparecer de golpe. Ver
+      // ObservadorDePila en main_page.dart.
+      navigatorObservers: [ObservadorDePila()],
       debugShowCheckedModeBanner: false,
       themeMode: c.theme,
       theme: _buildTheme(Brightness.light, cjkFontFallback),

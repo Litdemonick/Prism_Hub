@@ -11,7 +11,6 @@ import 'package:prismhub/utils/breakpoints.dart';
 import 'package:prismhub/utils/extension.dart';
 import 'package:prismhub/utils/i18n.dart';
 import 'package:prismhub/views/pages/history_page.dart';
-import 'package:prismhub/views/pages/search/extension_searcher_page.dart';
 import 'package:prismhub/views/widgets/cache_network_image.dart';
 import 'package:prismhub/views/widgets/home/animated_background_glow.dart';
 import 'package:prismhub/views/widgets/home/home_theme.dart';
@@ -323,20 +322,4 @@ void _abrir(BuildContext context, ExtensionListItem item, String package) {
     cover: item.cover,
     coverHeaders: _cabeceras(package),
   );
-}
-
-/// Abre la extensión completa, con su propia búsqueda y sus filtros.
-///
-/// Android va por GetX y escritorio por go_router: es la misma división que ya
-/// usa el resto de la app —el shell de escritorio vive dentro del GoRouter y
-/// Android no.
-void _verTodo(String package) {
-  if (Platform.isAndroid) {
-    Get.to(() => ExtensionSearcherPage(package: package));
-    return;
-  }
-  router.push(Uri(
-    path: '/search_extension',
-    queryParameters: {'package': package},
-  ).toString());
 }

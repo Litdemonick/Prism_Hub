@@ -32,8 +32,10 @@ class HomeAndroid extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return SafeArea(
-      // Arriba no: la cabecera se encarga sola de la barra de estado, y así
-      // puede llevar su propio aire en vez de heredar una franja pelada.
+      // Arriba no, y no hace falta: el aviso de «sin conexión» de main_page
+      // ya va envuelto en su propio SafeArea, y ese reserva la franja de la
+      // barra de estado ESTÉ O NO el aviso. O sea que acá adentro ya se
+      // empieza por debajo del reloj.
       top: false,
       // Abajo tampoco: la barra flotante tiene que dejar ver las portadas
       // corriendo por atrás. El lugar no se pierde, se pasa al relleno de la
@@ -105,13 +107,15 @@ class _Cabecera extends StatelessWidget {
     return Padding(
       padding: EdgeInsets.fromLTRB(
         margen,
-        // La barra de estado. Acá se respeta entera: es lo primero que se
-        // dibuja y no hay ninguna imagen que gane con pasar por detrás.
-        MediaQuery.paddingOf(context).top + (bajo ? 2 : 8),
+        // Aire y nada más. **Acá NO se suma la barra de estado**: main_page ya
+        // dejó esa franja arriba de todo (ver el SafeArea de HomeAndroid), y
+        // sumarla otra vez era lo que dejaba el nombre de la app flotando al
+        // doble de distancia del reloj.
+        bajo ? 2 : 6,
         // Menos a la derecha: los botones ya traen su propia zona de toque y
         // con el margen completo el ícono quedaba despegado del borde.
         margen - 8,
-        bajo ? 0 : 4,
+        bajo ? 0 : 2,
       ),
       child: Row(
         children: [
@@ -356,7 +360,7 @@ class _CarruselAndroidState extends State<_CarruselAndroid> {
                 },
               ),
             ),
-            const SizedBox(height: 10),
+            const SizedBox(height: 8),
             _Indicadores(
               cantidad: tanda.length,
               actual: widget.c.carruselPos.clamp(0, tanda.length - 1),
@@ -404,7 +408,10 @@ class _CarruselAndroidState extends State<_CarruselAndroid> {
             ? (ctrl.page ?? i.toDouble())
             : ctrl.initialPage.toDouble();
         final lejos = (pagina - i).abs().clamp(0.0, 2.0);
-        return Transform.scale(scaleY: 1 - 0.05 * lejos, child: quieto);
+        // Se encoge de a poco con la distancia: la de al lado un pelo, la de
+        // más allá otro pelo. Eso es lo que hace que al deslizar la vecina se
+        // vea CRECER hasta ocupar el centro, en vez de aparecer de golpe.
+        return Transform.scale(scaleY: 1 - 0.07 * lejos, child: quieto);
       },
       child: hijo,
     );
@@ -417,21 +424,23 @@ class _CarruselAndroidState extends State<_CarruselAndroid> {
   /// el ancho vuelve atrás con él**. Sin ese último paso, en horizontal
   /// quedaban tarjetas chatas nadando en casilleros enormes.
   _MedidasCarrusel _medir(BuildContext context, double anchoUtil) {
-    const aire = 14.0; // lo que separa una tarjeta de la otra
-    const relacion = 1.18; // alto respecto del ancho
+    // Poco, pero no cero: pegadas se leen como una sola imagen partida; con
+    // demasiado, la de al lado deja de parecer «la que sigue».
+    const aire = 9.0;
+    const relacion = 1.1; // alto respecto del ancho
     final altoPantalla = MediaQuery.sizeOf(context).height;
     final a = Ancho.de(context);
 
     // Cuanto más ancha la pantalla, más chica la fracción: en una tablet, dos
     // tercios del ancho serían una sola tarjeta enorme.
     final fraccionIdeal =
-        a.elegir(compacto: 0.66, medio: 0.44, amplio: 0.34, enorme: 0.26);
+        a.elegir(compacto: 0.62, medio: 0.42, amplio: 0.32, enorme: 0.25);
 
     var ancho = anchoUtil * fraccionIdeal - aire;
     var alto = ancho * relacion;
 
     // En horizontal el alto es lo escaso; en vertical, lo que sobra.
-    final tope = altoPantalla * (altoPantalla < 500 ? 0.62 : 0.46);
+    final tope = altoPantalla * (altoPantalla < 500 ? 0.66 : 0.4);
     if (alto > tope) {
       alto = tope;
       ancho = alto / relacion;
@@ -629,7 +638,7 @@ class _FilaAndroidState extends State<_FilaAndroid> {
   Widget _encabezado() {
     final margen = _margen(context);
     return Padding(
-      padding: EdgeInsets.fromLTRB(margen, 0, margen - 6, 0),
+      padding: EdgeInsets.symmetric(horizontal: margen),
       child: Row(
         children: [
           Expanded(
@@ -645,17 +654,9 @@ class _FilaAndroidState extends State<_FilaAndroid> {
               ),
             ),
           ),
-          // La grilla ya se pasa con el dedo, así que la flecha no sirve para
-          // recorrer: sirve para SALIR de las pocas que caben y abrir la
-          // extensión entera, con su búsqueda y sus filtros.
-          IconButton(
-            onPressed: () => _verTodo(widget.fila.package),
-            tooltip: widget.fila.nombre,
-            icon: const Icon(Icons.arrow_forward_rounded,
-                size: 21, color: HomeTheme.accentPink),
-            constraints: const BoxConstraints(minWidth: 40, minHeight: 40),
-            splashRadius: 20,
-          ),
+          // Sin flecha. Los puntitos de abajo ya dicen que hay más y cómo
+          // llegar —deslizando—, y un ícono repetido en cada extensión era la
+          // misma línea diecisiete veces peleándole espacio al título.
         ],
       ),
     );
@@ -801,8 +802,11 @@ class _GrillaPaginadaState extends State<_GrillaPaginada> {
               },
             ),
           ),
+          // Los puntitos son lo único que avisa que hay más portadas. Sin
+          // ellos, una grilla llena se lee como «esto es todo» y nadie prueba
+          // deslizar.
           if (paginas > 1) ...[
-            const SizedBox(height: 4),
+            const SizedBox(height: 6),
             _Indicadores(
               cantidad: paginas,
               actual: _actual,
