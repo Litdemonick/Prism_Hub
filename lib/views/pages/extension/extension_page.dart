@@ -131,18 +131,19 @@ class _ExtensionPageState extends State<ExtensionPage> {
 
   /// Los dos botones de acción masiva, encima de los filtros.
   ///
-  /// Centrados como los chips que tienen debajo: pegados a la izquierda
-  /// quedaban desalineados con ellos y la franja se veía torcida.
+  /// Uno en cada punta, no juntos: hacen cosas OPUESTAS, y separados es más
+  /// difícil tocar el que no era. Juntos y centrados quedaban a un par de
+  /// píxeles uno del otro — apagar las diecisiete cuando se quería prenderlas
+  /// es un error caro de deshacer.
   Widget _buildAccionesMasivas() {
     return Row(
-      mainAxisAlignment: MainAxisAlignment.center,
+      mainAxisAlignment: MainAxisAlignment.spaceBetween,
       children: [
         _BotonMasivo(
           icono: Icons.toggle_on_outlined,
           label: 'extension.activar-todas'.i18n,
           onTap: () => _cambiarTodas(true),
         ),
-        const SizedBox(width: 8),
         _BotonMasivo(
           icono: Icons.toggle_off_outlined,
           label: 'extension.desactivar-todas'.i18n,
