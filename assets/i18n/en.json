@@ -58,7 +58,8 @@
     "understood": "Got it",
     "search-filters-ignored": "No results with the current filters, so the search ran without them. What you see may not match the filters you picked.",
     "source-timeout": "This source took too long to respond. You can retry; the other extensions keep searching anyway.",
-    "no-connection": "No internet connection"
+    "no-connection": "No internet connection",
+    "library": "Library"
   },
   "home": {
     "continue-watching": "Continue",
@@ -80,7 +81,12 @@
     "favorite-reading": "Favorites — Reading",
     "remove-from-continue": "Remove from Continue",
     "see-history": "View history",
-    "view-detail": "View details"
+    "view-detail": "View details",
+    "zona-anime": "Anime",
+    "zona-series": "Series",
+    "zona-peliculas": "Movies",
+    "zona-mangas": "Manga",
+    "zona-en-camino": "Nothing here yet: this zone gets its sections with the metadata layer."
   },
   "search": {
     "hint-text": "Please use search wisely!~",

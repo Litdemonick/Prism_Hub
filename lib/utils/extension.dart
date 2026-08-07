@@ -593,7 +593,7 @@ class ExtensionUtils {
     );
     if (go != true) return;
     if (Platform.isAndroid) {
-      Get.find<MainController>().changeTab(2);
+      Get.find<MainController>().changeTab(MainController.tabExtensiones);
       return;
     }
     router.go('/extension');
@@ -604,7 +604,7 @@ class ExtensionUtils {
   static const _esperaEntreAperturas = Duration(milliseconds: 700);
 
   // Navegación compartida a DetailPage — antes duplicada (con pequeñas
-  // variaciones de copy/paste) en ExtensionItemCard, home_page.dart,
+  // variaciones de copy/paste) en ExtensionItemCard, library_page.dart,
   // nsfw18_zone_page.dart y history_page.dart, ninguna con chequeo de
   // actualización. Ahora todas pasan por acá: si hace falta actualizar,
   // corta con el aviso de blockedByPendingUpdate en vez de entrar.

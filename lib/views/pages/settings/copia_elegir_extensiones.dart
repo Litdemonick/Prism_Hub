@@ -396,8 +396,11 @@ class _CopiaElegirExtensionesState extends State<CopiaElegirExtensiones> {
 
   /// Dónde está Extensiones en la barra de abajo del teléfono.
   ///
-  /// Inicio, Buscar, Extensiones, Ajustes (ver la lista `pages` de MainPage).
-  static const _pestanaDeExtensiones = 2;
+  /// Ya no se lleva acá: el índice vive con las demás pestañas, en
+  /// MainController. Tenerlo repetido fue lo que se rompió al sumar Biblioteca
+  /// —el número quedó viejo en cinco archivos a la vez— y una copia con nombre
+  /// se desactualiza igual que una sin nombre.
+  static const _pestanaDeExtensiones = MainController.tabExtensiones;
 
   String _queFalta(EstadoExt estado) {
     switch (estado) {

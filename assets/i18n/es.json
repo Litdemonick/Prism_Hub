@@ -54,7 +54,8 @@
     "disconnect": "Desconectar",
     "error-message": "Mensaje de error",
     "off": "Desactivado",
-    "no-connection": "Sin conexión a internet"
+    "no-connection": "Sin conexión a internet",
+    "library": "Biblioteca"
   },
   "home": {
     "continue-watching": "Continuar",
@@ -76,7 +77,12 @@
     "favorite-reading": "Favoritos — Lectura",
     "remove-from-continue": "Quitar de Continuar",
     "see-history": "Ver historial",
-    "view-detail": "Ver detalles"
+    "view-detail": "Ver detalles",
+    "zona-anime": "Anime",
+    "zona-series": "Series",
+    "zona-peliculas": "Películas",
+    "zona-mangas": "Mangas",
+    "zona-en-camino": "Todavía no hay nada acá: las secciones de esta zona llegan con la capa de metadatos."
   },
   "search": {
     "hint-text": "¡Por favor, busca ampliamente!~",

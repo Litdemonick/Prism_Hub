@@ -5,26 +5,19 @@ import 'package:flutter_i18n/flutter_i18n.dart';
 import 'package:get/get.dart';
 import 'package:prismhub/models/favorite.dart';
 import 'package:prismhub/controllers/home_controller.dart';
-import 'package:prismhub/controllers/main_controller.dart';
 import 'package:prismhub/models/index.dart';
 import 'package:prismhub/router/router.dart';
 import 'package:prismhub/utils/extension.dart';
 import 'package:prismhub/utils/hidden_cards.dart';
 import 'package:prismhub/utils/history_cover.dart';
 import 'package:prismhub/utils/i18n.dart';
-import 'package:prismhub/utils/prismhub_storage.dart';
 import 'package:prismhub/utils/resume_history.dart';
-import 'package:prismhub/utils/router.dart';
 import 'package:prismhub/views/pages/history_page.dart';
-import 'package:prismhub/views/pages/nsfw18/nsfw18_lock_page.dart';
-import 'package:prismhub/views/pages/nsfw18/nsfw18_search_page.dart';
-import 'package:prismhub/views/widgets/button.dart';
 import 'package:prismhub/views/widgets/home/animated_background_glow.dart';
 import 'package:prismhub/views/widgets/home/home_hero_banner.dart';
 import 'package:prismhub/views/widgets/home/home_media_card.dart';
 import 'package:prismhub/views/widgets/home/home_section.dart';
 import 'package:prismhub/views/widgets/home/home_theme.dart';
-import 'package:prismhub/views/widgets/messenger.dart';
 import 'package:prismhub/views/widgets/platform_widget.dart';
 
 // Card ancha estilo Crunchyroll: solo en escritorio (Windows/Linux). En
@@ -38,200 +31,19 @@ bool _tightTop(BuildContext context) =>
     Platform.isAndroid &&
     MediaQuery.of(context).orientation == Orientation.landscape;
 
-void _goBackFromZone(String? from) {
-  if (Platform.isAndroid) {
-    // Android llega acá con Get.to (push encima del shell principal) — un
-    // pop simple ya vuelve exactamente a donde estaba, sin necesitar "from".
-    Get.back();
-  } else {
-    // Desktop: router.go() REEMPLAZA todo el stack de rutas (no hay un
-    // "anterior" que hacer pop) — sin esto, cancelar/decir "no entrar"
-    // siempre mandaba a Home sin importar desde dónde se entró a la Zona
-    // +18 (ej. desde Ajustes). "from" viaja como query param desde el
-    // único lugar que navega acá (main_page.dart), con la ruta que estaba
-    // activa justo antes de tocar "Zona +18" en el panel.
-    router.go((from != null && from.isNotEmpty) ? from : '/');
-  }
-}
-
-// Punto de entrada real de la Zona +18:
-// 1. El switch de NSFW en Ajustes tiene que estar prendido — si no, ni
-//    siquiera llega a pedir el PIN (ver _Nsfw18DisabledPage).
-// 2. Confirmación "¿estás seguro?" — SIEMPRE, cada vez que se entra (no
-//    solo la primera), independiente del PIN.
-// 3. PIN (o configurarlo la primera vez) — SIEMPRE también, cada vez que se
-//    entra. Antes se recordaba el desbloqueo mientras la app siguiera abierta;
-//    se quitó a propósito (ver Nsfw18Zone), porque dejaba la zona accesible sin
-//    PIN a quien agarrara el dispositivo después.
-class Nsfw18ZoneGate extends StatefulWidget {
-  const Nsfw18ZoneGate({super.key, this.from});
-  // Desktop: ruta que estaba activa antes de entrar a la Zona +18 (ver
-  // main_page.dart) — a dónde volver si se cancela/dice "no entrar".
-  final String? from;
+class LibraryPage extends StatefulWidget {
+  const LibraryPage({super.key});
 
   @override
-  State<Nsfw18ZoneGate> createState() => _Nsfw18ZoneGateState();
+  State<LibraryPage> createState() => _LibraryPageState();
 }
 
-class _Nsfw18ZoneGateState extends State<Nsfw18ZoneGate> {
-  // Arranca SIEMPRE bloqueado — el PIN se pide en cada entrada (ver el
-  // comentario de la clase y Nsfw18Zone).
-  bool _unlocked = false;
-  bool _confirmed = false;
-  bool _askedConfirm = false;
+class _LibraryPageState extends State<LibraryPage> {
+  late HomePageController c;
 
-  bool get _nsfwEnabled =>
-      PrismHubStorage.getSetting(SettingKey.enableNSFW) == true;
+  // Índice de la pestaña "Favoritos" en HistoryPage — bajó de 4 a 3 al
+  // fusionar las pestañas Manga+Novela en una sola ("Lectura").
 
-  @override
-  void initState() {
-    super.initState();
-    if (_nsfwEnabled) {
-      WidgetsBinding.instance.addPostFrameCallback((_) => _confirmEnter());
-    }
-  }
-
-  Future<void> _confirmEnter() async {
-    if (_askedConfirm || !mounted) return;
-    _askedConfirm = true;
-    final result = await showPlatformDialog(
-      context: context,
-      title: 'nsfw18.confirm-enter-title'.i18n,
-      content: Text('nsfw18.confirm-enter-content'.i18n),
-      actions: [
-        PlatformTextButton(
-          onPressed: () => RouterUtils.pop(false),
-          child: Text('common.cancel'.i18n),
-        ),
-        PlatformFilledButton(
-          onPressed: () => RouterUtils.pop(true),
-          child: Text('nsfw18.confirm-enter-yes'.i18n),
-        ),
-      ],
-    );
-    if (!mounted) return;
-    if (result == true) {
-      setState(() => _confirmed = true);
-    } else {
-      _goBackFromZone(widget.from);
-    }
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    if (!_nsfwEnabled) {
-      return const _Nsfw18DisabledPage();
-    }
-    if (!_confirmed) {
-      return const Scaffold(
-          backgroundColor: HomeTheme.bg, body: SizedBox.shrink());
-    }
-    if (!_unlocked) {
-      return Nsfw18LockPage(
-        onUnlocked: () => setState(() => _unlocked = true),
-      );
-    }
-    return const Nsfw18ZonePage();
-  }
-}
-
-// El switch de NSFW en Ajustes está apagado — no se deja ni pedir el PIN.
-// Mismo criterio que activar una extensión nsfw (ExtensionTile): sin el
-// switch prendido, no hay forma de entrar.
-class _Nsfw18DisabledPage extends StatelessWidget {
-  const _Nsfw18DisabledPage();
-
-  @override
-  Widget build(BuildContext context) {
-    return Scaffold(
-      backgroundColor: HomeTheme.bg,
-      appBar: AppBar(
-        backgroundColor: HomeTheme.bg,
-        iconTheme: const IconThemeData(color: HomeTheme.textPrimary),
-        title: Text(
-          'nsfw18.title'.i18n,
-          style: const TextStyle(color: HomeTheme.textPrimary),
-        ),
-      ),
-      body: Center(
-        child: ConstrainedBox(
-          constraints: const BoxConstraints(maxWidth: 360),
-          child: Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 24),
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                const Icon(Icons.lock_outline,
-                    color: HomeTheme.textMuted, size: 40),
-                const SizedBox(height: 16),
-                Text(
-                  'nsfw18.disabled-title'.i18n,
-                  textAlign: TextAlign.center,
-                  style: const TextStyle(
-                    color: HomeTheme.textPrimary,
-                    fontSize: 16,
-                    fontWeight: FontWeight.w700,
-                  ),
-                ),
-                const SizedBox(height: 8),
-                Text(
-                  'nsfw18.disabled-subtitle'.i18n,
-                  textAlign: TextAlign.center,
-                  style:
-                      const TextStyle(color: HomeTheme.textMuted, fontSize: 13),
-                ),
-                const SizedBox(height: 20),
-                SizedBox(
-                  width: double.infinity,
-                  child: FilledButton(
-                    onPressed: () {
-                      if (Platform.isAndroid) {
-                        // Antes solo hacía Get.back(): el botón dice "Ir a
-                        // Ajustes" pero en Android dejaba al usuario donde
-                        // estaba, sin llevarlo a ningún lado (reportado en
-                        // vivo). La Zona +18 se llega empujada ENCIMA del
-                        // shell principal (Get.to), así que hay que cambiar la
-                        // pestaña Y cerrar esta pantalla.
-                        //
-                        // La pestaña PRIMERO y el pop después: al revés hay una
-                        // carrera con la animación del pop y el cambio no se
-                        // llega a aplicar (mismo caso que "Explorar catálogo",
-                        // confirmado en vivo). El isRegistered es para que el
-                        // pop pase igual si el controller no estuviera.
-                        if (Get.isRegistered<MainController>()) {
-                          Get.find<MainController>().changeTab(MainController.tabAjustes);
-                        }
-                        // Mismo criterio que "Explorar catálogo": hasta el
-                        // shell, no una sola capa (ver el comentario ahí).
-                        Get.until((route) => route.isFirst);
-                      } else {
-                        router.go('/settings');
-                      }
-                    },
-                    child: Text('nsfw18.disabled-cta'.i18n),
-                  ),
-                ),
-              ],
-            ),
-          ),
-        ),
-      ),
-    );
-  }
-}
-
-// Mismo layout que HomePage (hero + Continuar + Favoritos), con tema rojo
-// en vez de rosa/violeta, y mostrando SOLO lo marcado +18 (ver
-// HomePageController.nsfwOnly). Reusa los mismos widgets de Home en vez de
-// duplicar el layout entero.
-class Nsfw18ZonePage extends StatefulWidget {
-  const Nsfw18ZonePage({super.key});
-
-  @override
-  State<Nsfw18ZonePage> createState() => _Nsfw18ZonePageState();
-}
-
-class _Nsfw18ZonePageState extends State<Nsfw18ZonePage> {
   // Destino del "Ver todo" de cada seccion, en el orden de pestanas de
   // HistoryPage: Todo, Video, Lectura, Fav. Video, Fav. Lectura. Antes todas
   // las secciones abrian la misma pestana, asi que tocar "Continuar leyendo"
@@ -241,16 +53,23 @@ class _Nsfw18ZonePageState extends State<Nsfw18ZonePage> {
   static const _tabFavVideo = 3;
   static const _tabFavLectura = 4;
 
-  late final HomePageController c =
-      Get.isRegistered<HomePageController>(tag: HomePageController.zoneTag)
-          ? Get.find<HomePageController>(tag: HomePageController.zoneTag)
-          : Get.put(
-              HomePageController(nsfwOnly: true),
-              tag: HomePageController.zoneTag,
-            );
+  @override
+  void initState() {
+    // Reusa el controller si ya existe — en Android, cambiar de pestaña de
+    // la barra inferior destruye y reconstruye HomePage entero (pages[i],
+    // no un IndexedStack), así que Get.put() de nuevo creaba un controller
+    // NUEVO cada vez que volvías a Home, tirando a la basura el hero ya
+    // cargado y obligando a esperar de nuevo el fetch de red (por eso
+    // parecía que hacía falta refrescar a mano para que apareciera algo).
+    c = Get.isRegistered<HomePageController>()
+        ? Get.find<HomePageController>()
+        : Get.put(HomePageController());
+    super.initState();
+  }
 
-  // cover/headers: la portada que la tarjeta ya está mostrando, para que la
-  // ficha abra con imagen. Ver PortadaAdelantada.
+  // cover/headers: la portada que la tarjeta ya está mostrando. Se pasa para
+  // que la ficha abra con imagen en vez de con un hueco mientras la extensión
+  // contesta. Ver PortadaAdelantada.
   void _openDetail(String url, String package,
       {String? cover, Map<String, String>? headers}) {
     ExtensionUtils.openExtensionDetail(
@@ -264,14 +83,12 @@ class _Nsfw18ZonePageState extends State<Nsfw18ZonePage> {
 
   void _openHistoryTab(int tab) {
     if (Platform.isAndroid) {
-      Get.to(HistoryPage(initialTab: tab, zone: true));
+      Get.to(HistoryPage(initialTab: tab));
       return;
     }
     router.push(
-      Uri(
-        path: '/history',
-        queryParameters: {'tab': tab.toString(), 'zone': '1'},
-      ).toString(),
+      Uri(path: '/history', queryParameters: {'tab': tab.toString()})
+          .toString(),
     );
   }
 
@@ -304,7 +121,7 @@ class _Nsfw18ZonePageState extends State<Nsfw18ZonePage> {
         itemHeight: ancha ? HomeMediaCard.wideTotalHeight : null,
         itemCoverHeight: ancha ? HomeMediaCard.wideImageHeight : null,
         boxed: true,
-        accent: HomeTheme.accentRed,
+        accent: HomeTheme.accentPink,
         title: titulo,
         onClickMore: () => _openHistoryTab(tab),
         itemCount: items.length,
@@ -329,7 +146,7 @@ class _Nsfw18ZonePageState extends State<Nsfw18ZonePage> {
                     cover: f.cover, headers: c.headersForPackage(f.package)),
                 hidden: HiddenCards.isHidden(f.package, f.url),
                 onToggleHide: () => HiddenCards.toggle(f.package, f.url),
-                accent: HomeTheme.accentRed,
+                accent: HomeTheme.accentPink,
               ));
         },
       );
@@ -378,7 +195,7 @@ class _Nsfw18ZonePageState extends State<Nsfw18ZonePage> {
         itemHeight: ancha ? HomeMediaCard.wideTotalHeight : null,
         itemCoverHeight: ancha ? HomeMediaCard.wideImageHeight : null,
         boxed: true,
-        accent: HomeTheme.accentRed,
+        accent: HomeTheme.accentPink,
         title: titulo,
         onClickMore: () => _openHistoryTab(tab),
         itemCount: items.length,
@@ -424,7 +241,8 @@ class _Nsfw18ZonePageState extends State<Nsfw18ZonePage> {
                 onDelete: () => c.quitarDeContinuar(h),
                 deleteLabel: 'home.remove-from-continue'.i18n,
                 // Solo si la portada es de red: el historial de vídeo guarda
-                // una captura en disco, y eso no se puede pedir por URL.
+                // una captura en disco, y eso no se puede volver a pedir por
+                // URL desde la ficha.
                 onVerDetalle: () => _openDetail(h.url, h.package,
                     cover: portada.archivo == null ? portada.url : null,
                     headers: portada.necesitaHeaders
@@ -432,7 +250,7 @@ class _Nsfw18ZonePageState extends State<Nsfw18ZonePage> {
                         : null),
                 hidden: HiddenCards.isHidden(h.package, h.url),
                 onToggleHide: () => HiddenCards.toggle(h.package, h.url),
-                accent: HomeTheme.accentRed,
+                accent: HomeTheme.accentPink,
               ));
         },
       );
@@ -466,18 +284,36 @@ class _Nsfw18ZonePageState extends State<Nsfw18ZonePage> {
     return Obx(
       () {
         final isEmpty = c.resents.isEmpty && c.favorites.isEmpty;
+        // OJO: heroBackground NO se lee acá a propósito. Antes sí, y como
+        // este Obx envuelve TODO Home, la rotación del banner (cada 20s)
+        // reconstruía el árbol entero — todas las secciones y tarjetas —
+        // solo para cambiar una imagen de fondo. Ahora el banner tiene su
+        // propio Obx (más abajo), así que la rotación solo lo reconstruye a
+        // él. Este Obx queda atado únicamente a resents/favorites, que
+        // cambian cuando el usuario hace algo, no en bucle.
+
         return Container(
           color: HomeTheme.bg,
           child: Stack(
             children: [
-              const Positioned.fill(
-                child: AnimatedBackgroundGlow(accent: HomeTheme.accentRed),
-              ),
+              const Positioned.fill(child: AnimatedBackgroundGlow()),
               LayoutBuilder(
                 builder: (context, outerConstraints) {
                   return SingleChildScrollView(
+                    // Sin esto, RefreshIndicator (deslizar para actualizar en
+                    // Android) no dispara cuando el contenido entra entero en la
+                    // pantalla (ej. recién instalado, poco contenido) — el scroll
+                    // "corto" no deja hacer overscroll para activarlo.
                     physics: const AlwaysScrollableScrollPhysics(),
                     child: ConstrainedBox(
+                      // Fuerza que el contenido ocupe AL MENOS toda la pantalla
+                      // visible — así el estado vacío (altura calculada abajo)
+                      // puede llegar hasta el fondo real sin dejar un hueco.
+                      // OJO: nada de IntrinsicHeight acá — HomeHeroBanner usa
+                      // LayoutBuilder, y ese widget NO soporta que le pidan
+                      // dimensiones intrínsecas (tira una excepción de layout
+                      // que puede cerrar el proceso entero en vez de solo
+                      // mostrar el error en pantalla).
                       constraints:
                           BoxConstraints(minHeight: outerConstraints.maxHeight),
                       child: Padding(
@@ -485,33 +321,10 @@ class _Nsfw18ZonePageState extends State<Nsfw18ZonePage> {
                         child: Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
+                            // Obx propio: aísla la rotación del banner (cada
+                            // 20s) del resto de Home — ver comentario arriba.
                             Obx(() => HomeHeroBanner(
-                                  background: c.heroBackground.value,
-                                  gradient: HomeTheme.heroGradientRed,
-                                  // Estando DENTRO de la Zona +18, el
-                                  // catálogo que corresponde es el +18, no el
-                                  // normal. Antes esto mandaba al buscador
-                                  // general: en Android cambiaba a la pestaña
-                                  // Buscar y cerraba la zona entera, y en
-                                  // escritorio el default iba a /search.
-                                  //
-                                  // yaAutorizado: la confirmación y el PIN ya
-                                  // se pasaron para entrar acá; volver a
-                                  // pedirlos para moverse dentro de la misma
-                                  // zona no protege nada y encima dispara la
-                                  // biometría de nuevo.
-                                  //
-                                  // Se apila ENCIMA de esta pantalla, así que
-                                  // volver atrás cae siempre en el home +18,
-                                  // sin importar desde dónde se haya entrado.
-                                  // Sin ramificar por plataforma: openNsfw18Search
-                                  // usa Navigator, que funciona igual en las
-                                  // tres.
-                                  onExploreCatalog: () => openNsfw18Search(
-                                    context,
-                                    yaAutorizado: true,
-                                  ),
-                                )),
+                                background: c.heroBackground.value)),
                             // El aire entre el hero y la primera fila se
                             // achica en horizontal de celular: ahí el alto
                             // total es ~300-390 y 32px de hueco eran una
@@ -519,10 +332,13 @@ class _Nsfw18ZonePageState extends State<Nsfw18ZonePage> {
                             SizedBox(height: _tightTop(context) ? 14 : 32),
                             if (isEmpty)
                               SizedBox(
+                                // 32 (padding vertical del Column) + 32 (gap
+                                // arriba) + ~220 (alto mínimo del hero) — el
+                                // resto de la pantalla, con un piso razonable.
                                 height:
                                     (outerConstraints.maxHeight - 32 - 32 - 220)
                                         .clamp(220.0, double.infinity),
-                                child: const _Nsfw18EmptyState(),
+                                child: const _BibliotecaVacia(),
                               ),
                             ..._continuarSecciones(context),
                             ..._favoritosSecciones(context),
@@ -540,55 +356,54 @@ class _Nsfw18ZonePageState extends State<Nsfw18ZonePage> {
     );
   }
 
-  Widget _buildAndroid(BuildContext context) {
+  Widget _buildAndroidHome(BuildContext context) {
     return Scaffold(
       backgroundColor: HomeTheme.bg,
       appBar: AppBar(
         backgroundColor: HomeTheme.bg,
         title: Text(
-          'nsfw18.title'.i18n,
+          "common.home".i18n,
           style: const TextStyle(color: HomeTheme.textPrimary),
         ),
       ),
+      // Además del refresco automático (ver HomePageController), deslizar
+      // para abajo lo fuerza al toque — sin esperar el timer.
       body: RefreshIndicator(
         onRefresh: () => c.onRefresh(),
-        color: HomeTheme.accentRed,
+        color: HomeTheme.accentPink,
         backgroundColor: HomeTheme.cardSurface,
         child: _buildContent(),
       ),
     );
   }
 
-  Widget _buildDesktop(BuildContext context) {
+  Widget _buildDesktopHome(BuildContext context) {
     return _buildContent();
   }
 
   @override
   Widget build(BuildContext context) {
     return PlatformBuildWidget(
-      androidBuilder: _buildAndroid,
-      desktopBuilder: _buildDesktop,
+      androidBuilder: _buildAndroidHome,
+      desktopBuilder: _buildDesktopHome,
     );
   }
 }
 
-void _abrirHistorialZona(BuildContext context) {
-  // zone: true — el Historial de la Zona +18, no el general.
+// Estado vacío cuando no hay ni Continuar viendo ni Favoritos — un área
+// marcada (borde suave) con un ícono que pulsa despacio, en vez de dejar el
+// home con un hueco sin nada debajo del banner.
+// Navega al Historial desde el estado vacío. Ramificado por plataforma como
+// el resto: en Android es una pestaña del shell, en escritorio una ruta.
+void _abrirHistorial(BuildContext context) {
   if (Platform.isAndroid) {
-    Get.to(() => const HistoryPage(zone: true));
+    Get.to(() => const HistoryPage());
     return;
   }
-  // La ruta es '/history' con zone=1, la MISMA que usa _openHistoryTab: no
-  // existe ninguna '/nsfw18/...' declarada en el router. Escrita así, go_router
-  // no encontraba la ruta y mostraba "Page Not Found" en vez del Historial.
-  router.push(
-    Uri(path: '/history', queryParameters: {'zone': '1'}).toString(),
-  );
+  router.push('/history');
 }
 
-/// Botón al Historial cuando la zona está vacía. Ver el mismo widget en
-/// library_page.dart: se repite acá porque los dos son privados de su archivo y
-/// compartirlo obligaría a exponerlo solo por esto.
+/// Botón discreto para llegar al Historial cuando el Inicio está vacío.
 class _VerHistorialBoton extends StatelessWidget {
   const _VerHistorialBoton({required this.accent, required this.onTap});
   final Color accent;
@@ -628,14 +443,14 @@ class _VerHistorialBoton extends StatelessWidget {
   }
 }
 
-class _Nsfw18EmptyState extends StatefulWidget {
-  const _Nsfw18EmptyState();
+class _BibliotecaVacia extends StatefulWidget {
+  const _BibliotecaVacia();
 
   @override
-  State<_Nsfw18EmptyState> createState() => _Nsfw18EmptyStateState();
+  State<_BibliotecaVacia> createState() => _BibliotecaVaciaState();
 }
 
-class _Nsfw18EmptyStateState extends State<_Nsfw18EmptyState>
+class _BibliotecaVaciaState extends State<_BibliotecaVacia>
     with SingleTickerProviderStateMixin {
   late final AnimationController _pulseController = AnimationController(
     vsync: this,
@@ -685,31 +500,31 @@ class _Nsfw18EmptyStateState extends State<_Nsfw18EmptyState>
                   decoration: BoxDecoration(
                     shape: BoxShape.circle,
                     border: Border.all(
-                      color: HomeTheme.accentRed.withValues(alpha: 0.5),
+                      color: HomeTheme.accentPink.withValues(alpha: 0.5),
                       width: 1.5,
                     ),
                   ),
                   child: const Icon(
-                    Icons.lock_outline,
-                    color: HomeTheme.accentRed,
+                    Icons.movie_filter_outlined,
+                    color: HomeTheme.accentPink,
                     size: 26,
                   ),
                 ),
               ),
               const SizedBox(height: 16),
               Text(
-                'nsfw18.no-record'.i18n,
+                'home.no-record'.i18n,
                 textAlign: TextAlign.center,
                 style:
                     const TextStyle(color: HomeTheme.textMuted, fontSize: 13.5),
               ),
               const SizedBox(height: 18),
-              // Mismo botón que el Home normal, con el acento de esta zona y
-              // llevando al Historial +18, no al general.
+              // Botón al Historial: con los estados de seguimiento, terminar
+              // todo deja el Home vacío aunque el Historial tenga contenido —
+              // sin este acceso parecería que se perdió todo.
               _VerHistorialBoton(
-                accent: HomeTheme.accentRed,
-                onTap: () => _abrirHistorialZona(context),
-              ),
+                  accent: HomeTheme.accentPink,
+                  onTap: () => _abrirHistorial(context)),
             ],
           ),
         ),

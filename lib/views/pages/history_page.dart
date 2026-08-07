@@ -343,7 +343,7 @@ class _HistoryPageState extends State<HistoryPage> {
   }
 
   Widget _buildFavoriteCard(Favorite f, {bool ancha = false}) {
-    // Obx: igual que en home_page.dart — sin esto, togglear "ocultar" no
+    // Obx: igual que en library_page.dart — sin esto, togglear "ocultar" no
     // refrescaba la tarjeta acá (el RxSet de HiddenCards cambia, pero nada
     // en esta pantalla estaba suscripto a él) hasta reconstruir toda la
     // página (cambiar de pestaña y volver).
@@ -646,7 +646,7 @@ class _HistoryPageState extends State<HistoryPage> {
         // lee _buildGrid() ahí quedan FUERA de lo que Obx rastrea. Sin esta
         // lectura previa, Obx no encontraba ninguna variable observable en
         // su alcance y tiraba "improper use of a GetX has been detected"
-        // (confirmado en vivo). Mismo motivo documentado en home_page.dart.
+        // (confirmado en vivo). Mismo motivo documentado en library_page.dart.
         // ignore: unused_local_variable
         final _ = _c.resents.length + _c.favorites.length;
 

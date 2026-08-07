@@ -47,7 +47,7 @@ class HomeHeroBanner extends StatelessWidget {
       return;
     }
     if (Platform.isAndroid) {
-      Get.find<MainController>().changeTab(1);
+      Get.find<MainController>().changeTab(MainController.tabBuscar);
       return;
     }
     router.go('/search');

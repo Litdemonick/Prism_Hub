@@ -5,6 +5,7 @@ import 'package:go_router/go_router.dart';
 import 'package:prismhub/views/widgets/beta_notice.dart';
 import 'package:prismhub/views/pages/extension/extension_page.dart';
 import 'package:prismhub/views/pages/home_page.dart';
+import 'package:prismhub/views/pages/library_page.dart';
 import 'package:prismhub/views/pages/nsfw18/nsfw18_zone_page.dart';
 import 'package:prismhub/controllers/main_controller.dart';
 import 'package:prismhub/views/pages/search/search_page.dart';
@@ -206,6 +207,17 @@ class _DesktopMainPageState extends State<DesktopMainPage> with WindowListener {
               router.go('/');
             },
           ),
+          // Biblioteca: lo que el usuario YA tiene (Continuar viendo,
+          // Favoritos). Es el Home de antes, movido tal cual sin rediseñar —
+          // ver library_page.dart.
+          fluent.PaneItem(
+            icon: const Icon(fluent.FluentIcons.library),
+            title: Text('common.library'.i18n),
+            body: const LibraryPage(),
+            onTap: () {
+              router.go('/biblioteca');
+            },
+          ),
           fluent.PaneItem(
             icon: const Icon(fluent.FluentIcons.search),
             title: Text('common.search'.i18n),
@@ -271,6 +283,7 @@ class _AndroidMainPageState extends fluent.State<AndroidMainPage> {
 
   final pages = const [
     HomePage(),
+    LibraryPage(),
     SearchPage(),
     ExtensionPage(),
     SettingsPage(),
@@ -297,6 +310,10 @@ class _AndroidMainPageState extends fluent.State<AndroidMainPage> {
   Widget build(BuildContext context) {
     List<_Destination> destinations = <_Destination>[
       _Destination(Icons.home_outlined, Icons.home, 'common.home'.i18n),
+      // Biblioteca: lo que el usuario YA tiene (Continuar viendo, Favoritos).
+      // Es el Home de antes, movido tal cual — ver library_page.dart.
+      _Destination(Icons.video_library_outlined, Icons.video_library,
+          'common.library'.i18n),
       _Destination(Icons.search_outlined, Icons.search, 'common.search'.i18n),
       _Destination(
           Icons.extension_outlined, Icons.extension, 'common.extension'.i18n),
@@ -318,7 +335,7 @@ class _AndroidMainPageState extends fluent.State<AndroidMainPage> {
         // en cada toque — se sentía pesado/trabado. IndexedStack monta las
         // 4 páginas una sola vez y solo oculta las que no están activas; los
         // controllers GetX de cada una ya se reusaban entre pestañas (ver
-        // comentario en home_page.dart), así que esto no agrega trabajo de
+        // comentario en library_page.dart), así que esto no agrega trabajo de
         // fondo nuevo, solo evita el remount constante.
         body: Column(
           children: [

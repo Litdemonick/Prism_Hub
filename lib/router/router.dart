@@ -12,6 +12,7 @@ import 'package:prismhub/views/pages/extension/extension_settings_page.dart';
 import 'package:prismhub/views/pages/favorites_page.dart';
 import 'package:prismhub/views/pages/history_page.dart';
 import 'package:prismhub/views/pages/home_page.dart';
+import 'package:prismhub/views/pages/library_page.dart';
 import 'package:prismhub/views/pages/main_page.dart';
 import 'package:prismhub/views/pages/nsfw18/nsfw18_search_page.dart';
 import 'package:prismhub/views/pages/nsfw18/nsfw18_zone_page.dart';
@@ -49,6 +50,13 @@ final router = GoRouter(
         GoRoute(
           path: '/',
           pageBuilder: (context, state) => _animation(state, const HomePage()),
+        ),
+        // Biblioteca: lo que el usuario ya tiene. Es el Home de antes, movido
+        // tal cual — ver library_page.dart.
+        GoRoute(
+          path: '/biblioteca',
+          pageBuilder: (context, state) =>
+              _animation(state, const LibraryPage()),
         ),
         GoRoute(
           path: '/history',

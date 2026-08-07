@@ -42,7 +42,7 @@ class _SearchAllExtSearchState extends State<SearchAllExtSearch> {
               child: Text("common.extension-repo".i18n),
               onPressed: () {
                 if (Platform.isAndroid) {
-                  Get.find<MainController>().selectedTab.value = 2;
+                  Get.find<MainController>().selectedTab.value = MainController.tabExtensiones;
                   return;
                 }
                 router.push('/extension_repo');
