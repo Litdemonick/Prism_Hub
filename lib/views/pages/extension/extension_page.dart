@@ -9,6 +9,7 @@ import 'package:prismhub/views/pages/extension/extension_repo_page.dart';
 import 'package:prismhub/views/widgets/home/animated_background_glow.dart';
 import 'package:prismhub/views/widgets/home/home_theme.dart';
 import 'package:prismhub/utils/extension.dart';
+import 'package:prismhub/utils/breakpoints.dart';
 import 'package:prismhub/utils/search_text.dart';
 import 'package:prismhub/router/router.dart';
 import 'package:prismhub/utils/i18n.dart';
@@ -129,26 +130,57 @@ class _ExtensionPageState extends State<ExtensionPage> {
     );
   }
 
-  /// Los dos botones de acción masiva, encima de los filtros.
+  /// La barra de filtros: los chips con un botón a cada lado.
   ///
-  /// Uno en cada punta, no juntos: hacen cosas OPUESTAS, y separados es más
-  /// difícil tocar el que no era. Juntos y centrados quedaban a un par de
-  /// píxeles uno del otro — apagar las diecisiete cuando se quería prenderlas
-  /// es un error caro de deshacer.
-  Widget _buildAccionesMasivas() {
+  /// ── Por qué así y no de las otras dos formas que se probaron ────────────
+  ///
+  /// Juntos y centrados quedaban a un par de píxeles uno del otro, y hacen
+  /// cosas OPUESTAS: apagar las diecisiete cuando se querían prender es un
+  /// error caro de deshacer. Después se separaron a las puntas de la pantalla
+  /// y quedaron sueltos, lejos de todo, como si no fueran parte de la barra.
+  ///
+  /// Flanqueando los chips quedan separados entre sí —que es lo que importa—
+  /// pero agrupados con lo demás.
+  ///
+  /// En pantalla angosta no entran los tres en una línea: ahí los botones van
+  /// arriba y los chips debajo. Forzarlos igual dejaría los chips en una
+  /// rendija de cien píxeles.
+  Widget _buildBarraDeFiltros() {
+    final activar = _BotonMasivo(
+      icono: Icons.toggle_on_outlined,
+      label: 'extension.activar-todas'.i18n,
+      onTap: () => _cambiarTodas(true),
+    );
+    final desactivar = _BotonMasivo(
+      icono: Icons.toggle_off_outlined,
+      label: 'extension.desactivar-todas'.i18n,
+      onTap: () => _cambiarTodas(false),
+    );
+
+    if (!Ancho.de(context).alMenosAmplio) {
+      return Column(
+        children: [
+          Row(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [activar, const SizedBox(width: 10), desactivar],
+          ),
+          const SizedBox(height: 10),
+          _buildFilterChips(),
+        ],
+      );
+    }
+
     return Row(
-      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+      mainAxisAlignment: MainAxisAlignment.center,
       children: [
-        _BotonMasivo(
-          icono: Icons.toggle_on_outlined,
-          label: 'extension.activar-todas'.i18n,
-          onTap: () => _cambiarTodas(true),
-        ),
-        _BotonMasivo(
-          icono: Icons.toggle_off_outlined,
-          label: 'extension.desactivar-todas'.i18n,
-          onTap: () => _cambiarTodas(false),
-        ),
+        activar,
+        const SizedBox(width: 14),
+        // Flexible y no Expanded: así los chips ocupan lo que necesitan y el
+        // conjunto queda centrado. Con Expanded se estirarían hasta el borde y
+        // los botones volverían a quedar en las puntas.
+        Flexible(child: _buildFilterChips()),
+        const SizedBox(width: 14),
+        desactivar,
       ],
     );
   }
@@ -378,9 +410,7 @@ class _ExtensionPageState extends State<ExtensionPage> {
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      _buildAccionesMasivas(),
-                      const SizedBox(height: 10),
-                      _buildFilterChips(),
+                      _buildBarraDeFiltros(),
                     ],
                   ),
                 ),
@@ -591,9 +621,7 @@ class _ExtensionPageState extends State<ExtensionPage> {
                 ),
               ),
               const SizedBox(height: 16),
-              _buildAccionesMasivas(),
-              const SizedBox(height: 10),
-              _buildFilterChips(),
+              _buildBarraDeFiltros(),
               const SizedBox(height: 16),
               Expanded(
                 child: Obx(() {
