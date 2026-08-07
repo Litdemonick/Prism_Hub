@@ -31,14 +31,28 @@ showPlatformSnackbar({
       ),
     );
   }
-  return fluent.displayInfoBar(context, builder: (context, close) {
-    return fluent.InfoBar(
-      title: Text(title),
-      content: Text(content),
-      action: action,
-      severity: severity,
-    );
-  });
+  // ── El aviso va ARRIBA, no abajo ────────────────────────────────────────
+  //
+  // `displayInfoBar` sale abajo al centro por defecto, y ahí es justo donde
+  // viven los controles: en Extensiones instaladas tapaba la paginación
+  // —«1/4 ‹ ›»— y no se podía cambiar de página mientras el aviso estuviera en
+  // pantalla (reportado en vivo). Y como cada instalación dispara uno, se
+  // encadenaban y el problema duraba.
+  //
+  // Arriba no tapa nada: esa franja es del título de la pantalla, que no se
+  // toca.
+  return fluent.displayInfoBar(
+    context,
+    alignment: fluent.Alignment.topCenter,
+    builder: (context, close) {
+      return fluent.InfoBar(
+        title: Text(title),
+        content: Text(content),
+        action: action,
+        severity: severity,
+      );
+    },
+  );
 }
 
 showPlatformDialog({
