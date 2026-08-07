@@ -43,6 +43,7 @@ class TarjetaDeCatalogo extends StatefulWidget {
     this.fecha,
     this.descripcion,
     this.duracion,
+    this.ancho,
   });
 
   final String titulo;
@@ -67,6 +68,14 @@ class TarjetaDeCatalogo extends StatefulWidget {
   /// es de las cosas que más pesan para decidir si lo abrís ahora o después.
   final int? duracion;
 
+  /// Ancho a la fuerza, para cuando la tarjeta va en una **grilla**.
+  ///
+  /// En una fila horizontal cada tarjeta elige su ancho por breakpoint y punto.
+  /// En una grilla no puede: el ancho lo manda la celda —cuántas columnas
+  /// entran y cuánto margen hay— y si la tarjeta usara el suyo quedaría
+  /// desalineada de la cuadrícula o se saldría de la celda.
+  final double? ancho;
+
   /// El ancho del póster, según cuánto lugar hay.
   ///
   /// Va por ANCHO DE PANTALLA y no por sistema operativo: una tablet y un
@@ -87,7 +96,10 @@ class TarjetaDeCatalogo extends StatefulWidget {
   ///
   /// Se calcula acá y no en la fila para que las dos no puedan discrepar: si
   /// la fila reservara menos de lo que la tarjeta mide, se recorta el texto.
-  static double altoTotalPara(Ancho a) => altoPortadaPara(a) + 8 + 36 + 16;
+  static double altoTotalPara(Ancho a) => altoTotalDeAncho(anchoPara(a));
+
+  /// Lo mismo, pero partiendo de un ancho ya decidido — el de una celda.
+  static double altoTotalDeAncho(double ancho) => ancho * 3 / 2 + 8 + 36 + 16;
 
   @override
   State<TarjetaDeCatalogo> createState() => _TarjetaDeCatalogoState();
@@ -110,8 +122,8 @@ class _TarjetaDeCatalogoState extends State<TarjetaDeCatalogo> {
   @override
   Widget build(BuildContext context) {
     final a = Ancho.de(context);
-    final ancho = TarjetaDeCatalogo.anchoPara(a);
-    final altoPortada = TarjetaDeCatalogo.altoPortadaPara(a);
+    final ancho = widget.ancho ?? TarjetaDeCatalogo.anchoPara(a);
+    final altoPortada = ancho * 3 / 2;
     final radio = BorderRadius.circular(8);
 
     final conMouse = a.alMenosAmplio;

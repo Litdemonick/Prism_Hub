@@ -13,6 +13,7 @@ import 'package:prismhub/utils/i18n.dart';
 import 'package:prismhub/views/widgets/cache_network_image.dart';
 import 'package:prismhub/views/widgets/home/animated_background_glow.dart';
 import 'package:prismhub/views/widgets/home/home_theme.dart';
+import 'package:prismhub/views/pages/search/extension_searcher_page.dart';
 import 'package:prismhub/views/widgets/home/tarjeta_de_catalogo.dart';
 import 'package:prismhub/views/widgets/progress.dart';
 
@@ -147,6 +148,15 @@ class _CarruselDestacados extends StatefulWidget {
 class _CarruselDestacadosState extends State<_CarruselDestacados> {
   Timer? _reloj;
 
+  /// Solo para la variante de celular, que es un PageView.
+  ///
+  /// `viewportFraction` por debajo de 1 es lo que hace que las tarjetas vecinas
+  /// ASOMEN a los costados. Eso no es adorno: es lo que le dice al usuario que
+  /// hay más y que se desliza — sin eso, una tarjeta sola a pantalla completa
+  /// parece una imagen fija.
+  PageController? _paginas;
+  double? _fraccion;
+
   // La posición NO se guarda acá: vive en el controlador. Este widget se
   // reconstruye al volver a la pestaña, así que un índice propio se perdía y el
   // carrusel volvía a empezar siempre por la misma extensión. Ver
@@ -157,16 +167,126 @@ class _CarruselDestacadosState extends State<_CarruselDestacados> {
     super.initState();
     // Ocho segundos: menos alcanza a cortar la lectura del título, y más se
     // siente una imagen fija.
-    _reloj = Timer.periodic(const Duration(seconds: 8), (_) {
-      if (!mounted) return;
-      setState(widget.c.avanzarCarrusel);
-    });
+    _reloj = Timer.periodic(const Duration(seconds: 8), (_) => _avanzar());
   }
 
   @override
   void dispose() {
     _reloj?.cancel();
+    _paginas?.dispose();
     super.dispose();
+  }
+
+  /// Avanza, y en celular además acompaña la animación del deslizamiento.
+  void _avanzar() {
+    if (!mounted) return;
+    final antes = widget.c.carruselExt;
+    setState(widget.c.avanzarCarrusel);
+    final p = _paginas;
+    if (p == null || !p.hasClients) return;
+    // Si cambió de extensión, la lista de páginas es OTRA: saltar animando
+    // hacia un índice de la lista vieja no significa nada.
+    if (antes != widget.c.carruselExt) {
+      p.jumpToPage(0);
+      return;
+    }
+    p.animateToPage(
+      widget.c.carruselPos,
+      duration: const Duration(milliseconds: 450),
+      curve: Curves.easeOutCubic,
+    );
+  }
+
+  /// El controlador del PageView, atado a la fracción de pantalla que ocupa
+  /// cada tarjeta.
+  ///
+  /// Se rehace si esa fracción cambia —girar el teléfono, arrastrar el borde
+  /// de la ventana— porque `viewportFraction` es de solo lectura una vez
+  /// creado. El viejo se tira DESPUÉS del cuadro: soltarlo acá mismo lo
+  /// destruiría mientras su PageView todavía está montado.
+  PageController _controlador(double fraccion, int cantidad) {
+    if (_paginas == null || _fraccion != fraccion) {
+      final viejo = _paginas;
+      if (viejo != null) {
+        WidgetsBinding.instance.addPostFrameCallback((_) => viejo.dispose());
+      }
+      _fraccion = fraccion;
+      _paginas = PageController(
+        viewportFraction: fraccion,
+        initialPage: cantidad == 0 ? 0 : widget.c.carruselPos % cantidad,
+      );
+    }
+    return _paginas!;
+  }
+
+  Widget _deslizables(
+    BuildContext context,
+    String package,
+    List<ExtensionListItem> items,
+    Ancho a,
+  ) {
+    final pantalla = MediaQuery.sizeOf(context);
+    // Lo que ocupa la barra de estado. Acá SÍ se respeta —no se pasa por
+    // detrás— porque las tarjetas tienen bordes redondeados y esquinas: una
+    // esquina cortada por la hora se ve como un error, no como un diseño.
+    final barra = MediaQuery.paddingOf(context).top;
+
+    // Menos de 1 es lo que hace asomar las vecinas. Cuanto más ancha la
+    // pantalla, más chica la fracción: en una tablet, tres cuartos del ancho
+    // serían una tarjeta enorme y una sola.
+    final fraccion = a.elegir(compacto: 0.78, medio: 0.52);
+    final anchoTarjeta = pantalla.width * fraccion - 16;
+    // Un poco más alta que ancha, como una portada recortada. Se acota al alto
+    // real para que en horizontal de teléfono no se coma la pantalla entera.
+    final alto =
+        (anchoTarjeta * 1.16).clamp(180.0, pantalla.height * 0.56);
+
+    final ctrl = _controlador(fraccion, items.length);
+
+    return Padding(
+      padding: EdgeInsets.only(top: barra + 10, bottom: 6),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          SizedBox(
+            height: alto,
+            child: PageView.builder(
+              controller: ctrl,
+              itemCount: items.length,
+              // Sin esto la sombra de la tarjeta se corta contra el borde del
+              // PageView.
+              clipBehavior: Clip.none,
+              onPageChanged: (i) {
+                if (!mounted) return;
+                setState(() => widget.c.carruselPos = i);
+              },
+              itemBuilder: (context, i) => _TarjetaGrande(
+                item: items[i],
+                fuente:
+                    ExtensionUtils.runtimes[package]?.extension.name ?? '',
+                cabeceras: _cabeceras(package),
+                onTap: () => _abrir(context, items[i], package),
+              ),
+            ),
+          ),
+          const SizedBox(height: 12),
+          Center(
+            child: _Indicadores(
+              cantidad: items.length,
+              actual: widget.c.carruselPos % items.length,
+              onTocar: (i) {
+                setState(() => widget.c.carruselPos = i);
+                _paginas?.animateToPage(
+                  i,
+                  duration: const Duration(milliseconds: 350),
+                  curve: Curves.easeOutCubic,
+                );
+              },
+            ),
+          ),
+        ],
+      ),
+    );
   }
 
   @override
@@ -178,6 +298,21 @@ class _CarruselDestacadosState extends State<_CarruselDestacados> {
       if (items.isEmpty) return const SizedBox(height: 12);
       final item = items[widget.c.carruselPos % items.length];
       final a = Ancho.de(context);
+
+      // ── Celular y tablet: tarjetas que se deslizan ────────────────────
+      //
+      // No es el carrusel de escritorio achicado. A sangre completa, en un
+      // teléfono, una portada sola ocupa media pantalla y **no se lee como
+      // algo que se pueda mover**: parece una imagen de cabecera y el usuario
+      // nunca la desliza. Con las vecinas asomando a los costados queda claro
+      // de un vistazo que hay más y que se pasa con el dedo.
+      //
+      // En escritorio se queda el fondo a sangre: ahí sobra ancho, hay mouse
+      // para las flechas, y una tarjeta suelta en medio de una pantalla de
+      // 1920 se ve perdida.
+      if (!a.alMenosAmplio) {
+        return _deslizables(context, package, items, a);
+      }
       // El alto sale del ANCHO disponible, no de la altura: en una ventana
       // ancha y baja —una laptop, o el escritorio a media pantalla— reservar
       // un porcentaje del alto dejaba el carrusel aplastado. Y se acota al
@@ -336,6 +471,113 @@ class _CarruselDestacadosState extends State<_CarruselDestacados> {
   }
 }
 
+/// Una tarjeta grande del carrusel de celular.
+///
+/// Portada entera, sin marco de relleno detrás: la imagen se recorta para
+/// llenar la tarjeta y no queda ninguna franja de fondo. El texto va ENCIMA,
+/// abajo a la izquierda, sobre un degradado translúcido — acá sí, porque la
+/// tarjeta es grande y el título tiene que viajar con la imagen al deslizar.
+class _TarjetaGrande extends StatelessWidget {
+  const _TarjetaGrande({
+    required this.item,
+    required this.fuente,
+    required this.cabeceras,
+    required this.onTap,
+  });
+
+  final ExtensionListItem item;
+  final String fuente;
+  final Map<String, String>? cabeceras;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final radio = BorderRadius.circular(20);
+    return Padding(
+      // La mitad del aire entre tarjetas de cada lado: así lo que asoma a
+      // izquierda y derecha queda parejo.
+      padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2),
+      child: GestureDetector(
+        onTap: onTap,
+        child: DecoratedBox(
+          decoration: BoxDecoration(
+            borderRadius: radio,
+            color: HomeTheme.cardSurface,
+            boxShadow: const [
+              BoxShadow(
+                color: Color(0x73000000),
+                blurRadius: 20,
+                offset: Offset(0, 8),
+              ),
+            ],
+          ),
+          child: ClipRRect(
+            borderRadius: radio,
+            child: Stack(
+              fit: StackFit.expand,
+              children: [
+                CacheNetWorkImagePic(
+                  item.cover ?? '',
+                  fit: BoxFit.cover,
+                  headers: cabeceras,
+                  placeholder: const ColoredBox(color: HomeTheme.cardSurface),
+                  fallback: const ColoredBox(color: HomeTheme.cardSurface),
+                ),
+                // Translúcido de punta a punta: si terminara en un color
+                // opaco cortaría la portada con una línea recta.
+                const DecoratedBox(
+                  decoration: BoxDecoration(
+                    gradient: LinearGradient(
+                      begin: Alignment.bottomCenter,
+                      end: Alignment.topCenter,
+                      colors: [Color(0xE6000000), Color(0x00000000)],
+                      stops: [0.0, 0.6],
+                    ),
+                  ),
+                ),
+                Align(
+                  alignment: Alignment.bottomLeft,
+                  child: Padding(
+                    padding: const EdgeInsets.fromLTRB(16, 0, 16, 15),
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          item.title,
+                          maxLines: 2,
+                          overflow: TextOverflow.ellipsis,
+                          style: const TextStyle(
+                            fontSize: 17,
+                            height: 1.2,
+                            fontWeight: FontWeight.w800,
+                            color: Colors.white,
+                          ),
+                        ),
+                        const SizedBox(height: 3),
+                        Text(
+                          fuente,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: const TextStyle(
+                            fontSize: 13,
+                            fontWeight: FontWeight.w500,
+                            color: HomeTheme.textMuted,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
 /// Una fila: el nombre de la extensión y lo último que tiene.
 class _FilaDeExtensionVista extends StatefulWidget {
   const _FilaDeExtensionVista({
@@ -405,6 +647,25 @@ class _FilaDeExtensionVistaState extends State<_FilaDeExtensionVista> {
           children: [
             _encabezado(),
             const SizedBox(height: 14),
+            // ── Celular y tablet: grilla que se pasa de página ────────
+            //
+            // En una pantalla angosta una fila horizontal muestra dos tarjetas
+            // y media y esconde el resto detrás de un gesto que no se ve. La
+            // grilla usa el ancho completo, entra el TRIPLE de portadas de un
+            // vistazo, y los puntitos de abajo dicen cuánto más hay — que es
+            // justo lo que la fila no podía decir.
+            //
+            // En escritorio se queda la fila: ahí el ancho sobra, hay flechas
+            // con mouse, y una grilla de seis columnas por extensión
+            // convertiría el Home en una pared sin jerarquía.
+            if (!Ancho.de(context).alMenosAmplio)
+              _GrillaPaginada(
+                items: items,
+                cargando: items.isEmpty && estado == EstadoDeFila.cargando,
+                package: widget.fila.package,
+                nombre: widget.fila.nombre,
+              )
+            else
             SizedBox(
               // Aire de más para la sombra.
               //
@@ -457,6 +718,22 @@ class _FilaDeExtensionVistaState extends State<_FilaDeExtensionVista> {
     });
   }
 
+  /// Abre la extensión completa, con su propia búsqueda y sus filtros.
+  ///
+  /// Android va por GetX y escritorio por go_router: es la misma división que
+  /// ya usa el resto de la app —el shell de escritorio vive dentro del
+  /// GoRouter y Android no.
+  void _verTodo(String package) {
+    if (Platform.isAndroid) {
+      Get.to(() => ExtensionSearcherPage(package: package));
+      return;
+    }
+    router.push(Uri(
+      path: '/search_extension',
+      queryParameters: {'package': package},
+    ).toString());
+  }
+
   Widget _encabezado() {
     return Padding(
       padding: EdgeInsets.symmetric(horizontal: _margen(context)),
@@ -491,7 +768,15 @@ class _FilaDeExtensionVistaState extends State<_FilaDeExtensionVista> {
             _FlechaDeFila(
                 icono: Icons.chevron_right_rounded,
                 onTap: () => _correr(1)),
-          ],
+          ]
+          // En celular la grilla ya se pasa con el dedo, así que la flecha no
+          // sirve para recorrer: sirve para SALIR de las pocas que caben y
+          // abrir la extensión entera.
+          else
+            _FlechaDeFila(
+              icono: Icons.arrow_forward_rounded,
+              onTap: () => _verTodo(widget.fila.package),
+            ),
         ],
       ),
     );
@@ -612,6 +897,139 @@ class _FilaInactiva extends StatelessWidget {
 ///
 /// Se pueden tocar para saltar directo. Es un objetivo chiquito, así que cada
 /// una lleva un área de toque más grande que la raya que se ve.
+/// Las portadas de una extensión, en grilla que se pasa de página.
+///
+/// ── Por qué páginas y no scroll vertical ──────────────────────────────────
+///
+/// El Home ya se desplaza hacia abajo para pasar de una extensión a otra. Si
+/// cada extensión además creciera hacia abajo con todas sus portadas, llegar a
+/// la segunda extensión costaría media docena de gestos y las de más abajo no
+/// las vería nadie. Paginando de a seis, **cada extensión ocupa siempre lo
+/// mismo** y el orden vertical del Home se mantiene legible.
+///
+/// El tope de páginas es a propósito: esto es una vidriera, no un catálogo.
+/// Para ver todo está la flecha del encabezado.
+class _GrillaPaginada extends StatefulWidget {
+  const _GrillaPaginada({
+    required this.items,
+    required this.cargando,
+    required this.package,
+    required this.nombre,
+  });
+
+  final List<ExtensionListItem> items;
+  final bool cargando;
+  final String package;
+  final String nombre;
+
+  @override
+  State<_GrillaPaginada> createState() => _GrillaPaginadaState();
+}
+
+class _GrillaPaginadaState extends State<_GrillaPaginada> {
+  static const _maxPaginas = 3;
+  static const _hueco = 12.0;
+
+  final _paginas = PageController();
+  int _actual = 0;
+
+  @override
+  void dispose() {
+    _paginas.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final a = Ancho.de(context);
+    final margen = _margen(context);
+    final columnas = a.elegir(compacto: 3, medio: 4);
+    const filas = 2;
+    final porPagina = columnas * filas;
+
+    final anchoCelda =
+        (MediaQuery.sizeOf(context).width - margen * 2 - _hueco * (columnas - 1)) /
+            columnas;
+    final altoCelda = TarjetaDeCatalogo.altoTotalDeAncho(anchoCelda);
+    final alto = altoCelda * filas + _hueco;
+
+    if (widget.cargando) {
+      return SizedBox(height: alto, child: const Center(child: ProgressRing()));
+    }
+
+    var paginas = (widget.items.length + porPagina - 1) ~/ porPagina;
+    if (paginas < 1) paginas = 1;
+    if (paginas > _maxPaginas) paginas = _maxPaginas;
+    // Nada de páginas a medio llenar más allá del tope: se corta la lista.
+    final visibles = widget.items.length < paginas * porPagina
+        ? widget.items.length
+        : paginas * porPagina;
+
+    return Column(
+      children: [
+        SizedBox(
+          height: alto,
+          child: PageView.builder(
+            controller: _paginas,
+            itemCount: paginas,
+            onPageChanged: (i) => setState(() => _actual = i),
+            itemBuilder: (context, pagina) {
+              final desde = pagina * porPagina;
+              final hasta = desde + porPagina < visibles ? desde + porPagina : visibles;
+              return Padding(
+                padding: EdgeInsets.symmetric(horizontal: margen),
+                child: GridView.builder(
+                  // La página no se desplaza sola: el gesto es del PageView.
+                  physics: const NeverScrollableScrollPhysics(),
+                  padding: EdgeInsets.zero,
+                  gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
+                    crossAxisCount: columnas,
+                    mainAxisSpacing: _hueco,
+                    crossAxisSpacing: _hueco,
+                    // La celda mide EXACTO lo que mide la tarjeta: si no
+                    // coincidieran, o sobra un hueco o el título se recorta.
+                    childAspectRatio: anchoCelda / altoCelda,
+                  ),
+                  itemCount: hasta - desde,
+                  itemBuilder: (context, i) {
+                    final item = widget.items[desde + i];
+                    return TarjetaDeCatalogo(
+                      ancho: anchoCelda,
+                      titulo: item.title,
+                      portada: item.cover,
+                      cabeceras: _cabeceras(widget.package),
+                      // Sin panel a propósito. En una celda de tres columnas
+                      // el panel de detalle tapa la portada entera y el texto
+                      // no entra; y con panel el primer toque lo abre en vez
+                      // de abrir la ficha, o sea dos toques para lo mismo.
+                      // Acá tocar abre la ficha, que muestra todo completo.
+                      onTap: () => _abrir(context, item, widget.package),
+                    );
+                  },
+                ),
+              );
+            },
+          ),
+        ),
+        if (paginas > 1) ...[
+          const SizedBox(height: 6),
+          Center(
+            child: _Indicadores(
+              cantidad: paginas,
+              actual: _actual,
+              onTocar: (i) => _paginas.animateToPage(
+                i,
+                duration: const Duration(milliseconds: 320),
+                curve: Curves.easeOutCubic,
+              ),
+            ),
+          ),
+        ],
+      ],
+    );
+  }
+}
+
 class _Indicadores extends StatelessWidget {
   const _Indicadores({
     required this.cantidad,
