@@ -130,6 +130,10 @@ class _ExtensionPageState extends State<ExtensionPage> {
     );
   }
 
+  /// Pantalla baja: horizontal de teléfono, donde el alto es el recurso caro.
+  static bool _pantallaBaja(BuildContext context) =>
+      MediaQuery.sizeOf(context).height < 520;
+
   /// La barra de filtros: los chips con un botón a cada lado.
   ///
   /// ── Por qué así y no de las otras dos formas que se probaron ────────────
@@ -157,7 +161,20 @@ class _ExtensionPageState extends State<ExtensionPage> {
       onTap: () => _cambiarTodas(false),
     );
 
-    if (!Ancho.de(context).alMenosAmplio) {
+    // ── Una línea o dos, y no lo decide solo el ancho ─────────────────────
+    //
+    // En horizontal, un teléfono tiene ancho DE SOBRA y poca altura. Mirando
+    // solo el ancho, esto apilaba los botones sobre los chips y se comía el
+    // espacio vertical que es justamente el que falta: quedaba una franja de
+    // lista tan baja que no se veían bien las tarjetas (reportado en vivo).
+    //
+    // Así que también cuenta el alto: con pantalla baja se usa UNA línea
+    // aunque el ancho no dé para «amplio». Es donde más se nota y donde hay
+    // ancho para hacerlo.
+    final alto = MediaQuery.sizeOf(context).height;
+    final unaSolaLinea = Ancho.de(context).alMenosAmplio || alto < 520;
+
+    if (!unaSolaLinea) {
       return Column(
         children: [
           Row(
@@ -402,17 +419,17 @@ class _ExtensionPageState extends State<ExtensionPage> {
             const Positioned.fill(child: AnimatedBackgroundGlow()),
             Column(
               children: [
-                const SizedBox(height: 8),
+                // El aire de arriba y el de abajo de la barra se recortan en
+                // pantalla baja: en horizontal, cada bloque vertical se le
+                // resta directamente a la lista, que es lo único que importa
+                // ver ahí.
+                SizedBox(height: _pantallaBaja(context) ? 2 : 8),
                 // Paginación arriba de la lista (no abajo) — mismo criterio
                 // que el repositorio de extensiones.
                 Padding(
-                  padding: const EdgeInsets.fromLTRB(16, 0, 16, 10),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      _buildBarraDeFiltros(),
-                    ],
-                  ),
+                  padding: EdgeInsets.fromLTRB(
+                      16, 0, 16, _pantallaBaja(context) ? 4 : 10),
+                  child: _buildBarraDeFiltros(),
                 ),
                 if (totalPages > 1)
                   Padding(
