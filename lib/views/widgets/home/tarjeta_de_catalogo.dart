@@ -126,18 +126,20 @@ class _TarjetaDeCatalogoState extends State<TarjetaDeCatalogo> {
         onEnter: (_) => setState(() => _encima = true),
         onExit: (_) => setState(() => _encima = false),
         child: GestureDetector(
-          // Con mouse, tocar abre directo. Sin mouse, el primer toque muestra
-          // el panel y el segundo abre: así se puede leer antes de entrar.
+          // Con mouse, tocar abre directo: el panel ya se ve solo con pasar
+          // por encima.
+          //
+          // Sin mouse el toque ALTERNA el panel — lo abre y lo cierra. Antes el
+          // segundo toque abría la ficha, así que una vez abierto el panel no
+          // había forma de sacárselo de encima sin entrar a algún lado. Ahora
+          // lo único que abre la ficha es el botón «Ver detalles», que para eso
+          // está.
           onTap: () {
-            if (conMouse || _abierto) {
+            if (conMouse || !_hayPanel) {
               widget.onTap?.call();
               return;
             }
-            if (_hayPanel) {
-              setState(() => _abierto = true);
-              return;
-            }
-            widget.onTap?.call();
+            setState(() => _abierto = !_abierto);
           },
           behavior: HitTestBehavior.opaque,
           child: Column(
@@ -341,27 +343,40 @@ class _TarjetaDeCatalogoState extends State<TarjetaDeCatalogo> {
             ] else
               const Spacer(),
             const SizedBox(height: 6),
-            // El botón repite lo que hace tocar la tarjeta, y está bien: en el
-            // panel el usuario ya está leyendo, y darle un destino explícito
-            // evita la duda de si tocar la descripción hace algo.
-            Row(
-              children: [
-                Icon(Icons.play_arrow_rounded, size: 17, color: widget.acento),
-                const SizedBox(width: 4),
-                Expanded(
-                  child: Text(
-                    'home.view-detail'.i18n.toUpperCase(),
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: TextStyle(
-                      fontSize: 10.5,
-                      letterSpacing: 0.6,
-                      fontWeight: FontWeight.w800,
-                      color: widget.acento,
+            // El ÚNICO que abre la ficha cuando el panel está abierto. Tocar
+            // en cualquier otro lado lo cierra, así el panel no es una trampa.
+            //
+            // GestureDetector propio y opaco: sin esto el toque se lo llevaba
+            // la tarjeta de atrás y el botón no hacía nada.
+            GestureDetector(
+              behavior: HitTestBehavior.opaque,
+              onTap: () => widget.onTap?.call(),
+              child: Padding(
+                // Aire de sobra alrededor del texto: es el objetivo más chico
+                // del panel y en un teléfono tiene que poder tocarse sin
+                // apuntar.
+                padding: const EdgeInsets.symmetric(vertical: 6),
+                child: Row(
+                  children: [
+                    Icon(Icons.play_arrow_rounded,
+                        size: 17, color: widget.acento),
+                    const SizedBox(width: 4),
+                    Expanded(
+                      child: Text(
+                        'home.view-detail'.i18n.toUpperCase(),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: TextStyle(
+                          fontSize: 10.5,
+                          letterSpacing: 0.6,
+                          fontWeight: FontWeight.w800,
+                          color: widget.acento,
+                        ),
+                      ),
                     ),
-                  ),
+                  ],
                 ),
-              ],
+              ),
             ),
           ],
         ),
@@ -369,19 +384,65 @@ class _TarjetaDeCatalogoState extends State<TarjetaDeCatalogo> {
     );
   }
 
+  /// La portada, **entera y sin recortar**.
+  ///
+  /// ── Por qué algunas se veían cortadas ─────────────────────────────────────
+  ///
+  /// Con `cover` la imagen llena el marco y lo que sobra se tira. Eso está
+  /// perfecto para una portada 2:3, que entra justa — y esas se veían bien.
+  /// Pero cada extensión entrega la forma que quiere: cuadradas, anchas,
+  /// capturas de vídeo. A esas `cover` les comía media imagen, y por eso unas
+  /// se veían completas y otras no.
+  ///
+  /// La solución es la misma que ya usa la ficha: **la imagen dos veces**. Atrás
+  /// con `cover` y apagada, para rellenar; adelante con `contain`, entera. Una
+  /// portada 2:3 sigue viéndose exactamente igual que antes —tapa el relleno
+  /// por completo— y las otras dejan de perder la mitad.
+  ///
+  /// Sin desenfoque a propósito. La ficha sí lo usa, pero ahí hay UNA imagen; en
+  /// una fila hay treinta, y treinta desenfoques es de las formas más caras de
+  /// arruinar el desplazamiento. Dibujar dos veces algo que ya está decodificado
+  /// no cuesta prácticamente nada.
   Widget _portada(double ancho, double alto) {
     final url = widget.portada;
     if (url == null || url.isEmpty) return _sinPortada(ancho);
-    return CacheNetWorkImagePic(
-      url,
-      width: ancho,
-      height: alto,
-      fit: BoxFit.cover,
-      headers: widget.cabeceras,
-      placeholder: _sinPortada(ancho),
-      fallback: _sinPortada(ancho),
+    Widget pic(BoxFit fit) => CacheNetWorkImagePic(
+          url,
+          width: ancho,
+          height: alto,
+          fit: fit,
+          headers: widget.cabeceras,
+          placeholder: _mientrasCarga(),
+          fallback: _sinPortada(ancho),
+        );
+    return Stack(
+      fit: StackFit.expand,
+      children: [
+        Opacity(opacity: 0.45, child: pic(BoxFit.cover)),
+        pic(BoxFit.contain),
+      ],
     );
   }
+
+  /// Lo que se ve mientras la portada baja.
+  ///
+  /// La carta de respaldo de la app en vez de un rectángulo vacío: una fila de
+  /// huecos negros mientras cargan treinta imágenes se lee como que algo se
+  /// rompió, y esto se lee como «todavía no llegó».
+  ///
+  /// `cover` a propósito: la carta tiene su propia forma y acá tiene que llenar
+  /// el marco sin dejar franjas — es un relleno, no contenido que haya que ver
+  /// entero.
+  Widget _mientrasCarga() => const DecoratedBox(
+        decoration: BoxDecoration(color: HomeTheme.cardSurface),
+        child: Opacity(
+          opacity: 0.55,
+          child: Image(
+            image: AssetImage('assets/carddefaultoffline.png'),
+            fit: BoxFit.cover,
+          ),
+        ),
+      );
 
   /// Sin portada NO se deja un hueco negro: se dibuja un degradado con la
   /// inicial. Un hueco en medio de una fila de pósters parece un error de
