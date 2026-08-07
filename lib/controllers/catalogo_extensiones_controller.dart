@@ -14,12 +14,25 @@ import 'package:path/path.dart' as p;
 /// En qué anda la fila de una extensión.
 enum EstadoDeFila { pendiente, cargando, lista, fallo }
 
+/// Si el usuario la tiene, y en qué estado.
+///
+/// El Home muestra TODAS, no solo las que andan: una que está instalada pero
+/// apagada, o una del catálogo que ni se instaló, igual ocupan su fila. Así el
+/// usuario ve todo lo que podría estar viendo, y de paso se entera de que
+/// existe — escondidas, nadie descubre que están.
+enum EstadoExtension { activa, desactivada, noInstalada }
+
 /// Una fila del Home: una extensión y lo último que tiene.
 class FilaDeExtension {
-  FilaDeExtension({required this.package, required this.nombre});
+  FilaDeExtension({
+    required this.package,
+    required this.nombre,
+    this.estadoExt = EstadoExtension.activa,
+  });
 
   final String package;
   final String nombre;
+  final EstadoExtension estadoExt;
 
   final estado = EstadoDeFila.pendiente.obs;
   final items = <ExtensionListItem>[].obs;
@@ -125,14 +138,12 @@ class CatalogoExtensionesController extends GetxController {
     // home_controller.
     //
     // Su lugar es la Zona +18, detrás de su puerta. Acá no.
-    final activas = Map.fromEntries(
-      ExtensionUtils.enabledRuntimes.entries
-          .where((e) => !e.value.extension.nsfw),
+    //
+    // Se miran TODAS las instaladas, no solo las encendidas: una apagada
+    // igual tiene su fila, con un botón para prenderla.
+    final instaladas = Map.fromEntries(
+      ExtensionUtils.runtimes.entries.where((e) => !e.value.extension.nsfw),
     );
-    if (activas.isEmpty) {
-      filas.clear();
-      return;
-    }
 
     // ── El orden: primero lo que de verdad usás ─────────────────────────────
     //
@@ -148,13 +159,22 @@ class CatalogoExtensionesController extends GetxController {
       logger.info('[home] no se pudo leer el historial para ordenar: $e');
     }
 
-    final nuevas = activas.entries
+    final nuevas = instaladas.entries
         .map((e) => FilaDeExtension(
               package: e.key,
               nombre: e.value.extension.name,
+              estadoExt: ExtensionUtils.isEnabled(e.key)
+                  ? EstadoExtension.activa
+                  : EstadoExtension.desactivada,
             ))
         .toList()
       ..sort((a, b) {
+        // Las encendidas arriba: son las únicas que traen contenido, y son a
+        // las que el usuario vino. Las apagadas y las que ni tiene van al
+        // final, donde no le estorban pero se ven si baja.
+        final ea = a.estadoExt == EstadoExtension.activa ? 0 : 1;
+        final eb = b.estadoExt == EstadoExtension.activa ? 0 : 1;
+        if (ea != eb) return ea - eb;
         final ua = usos[a.package] ?? 0;
         final ub = usos[b.package] ?? 0;
         // Más usada primero; a igualdad, alfabético para que el orden no
@@ -162,6 +182,41 @@ class CatalogoExtensionesController extends GetxController {
         if (ua != ub) return ub - ua;
         return a.nombre.toLowerCase().compareTo(b.nombre.toLowerCase());
       });
+
+    // Y al final, las del catálogo que el usuario todavía no tiene.
+    //
+    // El catálogo se lee de lo YA GUARDADO, sin forzar red: esto corre al abrir
+    // el Home y no puede quedarse esperando una petición para dibujar la
+    // pantalla. Si nunca se bajó, simplemente no salen y aparecen la próxima.
+    try {
+      final catalogo = await ExtensionUtils.fetchRepoIndex();
+      final porInstalar = <FilaDeExtension>[];
+      for (final e in catalogo) {
+        if (e is! Map) continue;
+        final pkg = e['package']?.toString();
+        final nombre = e['name']?.toString();
+        if (pkg == null || nombre == null) continue;
+        if (instaladas.containsKey(pkg)) continue;
+        // El catálogo solo trae `nsfw` cuando es true, y como texto.
+        final esNsfw = e['nsfw'] == true || e['nsfw']?.toString() == 'true';
+        if (esNsfw) continue;
+        porInstalar.add(FilaDeExtension(
+          package: pkg,
+          nombre: nombre,
+          estadoExt: EstadoExtension.noInstalada,
+        ));
+      }
+      porInstalar
+          .sort((a, b) => a.nombre.toLowerCase().compareTo(b.nombre.toLowerCase()));
+      nuevas.addAll(porInstalar);
+    } catch (e) {
+      logger.info('[home] no se pudo leer el catálogo: $e');
+    }
+
+    if (nuevas.isEmpty) {
+      filas.clear();
+      return;
+    }
 
     // Lo guardado se muestra YA, sin esperar la red.
     for (final fila in nuevas) {
@@ -183,6 +238,8 @@ class CatalogoExtensionesController extends GetxController {
   /// Con [forzar] va aunque lo guardado esté vigente — es el "reintentar" y el
   /// tirar-para-refrescar.
   void pedirSiHaceFalta(FilaDeExtension fila, {bool forzar = false}) {
+    // Una apagada o sin instalar no tiene a quién preguntarle.
+    if (fila.estadoExt != EstadoExtension.activa) return;
     if (fila.estado.value == EstadoDeFila.cargando) return;
     if (!forzar && fila.estado.value == EstadoDeFila.lista) {
       final traido = fila.traidoEl;
@@ -262,6 +319,16 @@ class CatalogoExtensionesController extends GetxController {
       carruselExt = Random().nextInt(destacados.length);
       carruselPos = 0;
     }
+  }
+
+  /// Vuelve a armar la lista entera.
+  ///
+  /// Hace falta cuando cambia el ESTADO de una extensión —se prendió, se
+  /// instaló— y no solo su contenido: ahí una fila tiene que pasar de
+  /// «apagada» a activa, y eso no se arregla refrescando lo que ya está.
+  Future<void> recargar() async {
+    destacados.clear();
+    await _armar();
   }
 
   Future<void> refrescarTodo() async {

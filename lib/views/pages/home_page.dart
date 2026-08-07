@@ -1,6 +1,9 @@
 import 'dart:async';
+import 'dart:io';
 
 import 'package:flutter/material.dart';
+import 'package:prismhub/controllers/main_controller.dart';
+import 'package:prismhub/router/router.dart';
 import 'package:prismhub/utils/breakpoints.dart';
 import 'package:get/get.dart';
 import 'package:prismhub/controllers/catalogo_extensiones_controller.dart';
@@ -380,6 +383,11 @@ class _FilaDeExtensionVistaState extends State<_FilaDeExtensionVista> {
 
   @override
   Widget build(BuildContext context) {
+    // Apagada o sin instalar: no hay contenido que traer, así que en vez de una
+    // fila vacía va una línea con lo que hay que hacer para que traiga algo.
+    if (widget.fila.estadoExt != EstadoExtension.activa) {
+      return _FilaInactiva(fila: widget.fila, c: widget.c);
+    }
     return Obx(() {
       final estado = widget.fila.estado.value;
       final items = widget.fila.items;
@@ -522,6 +530,79 @@ class _FilaDeExtensionVistaState extends State<_FilaDeExtensionVista> {
 }
 
 // ─── Piezas compartidas ──────────────────────────────────────────────────────
+
+/// Una extensión que el usuario tiene apagada, o que ni instaló.
+///
+/// Sale en el Home igual que las demás, y es a propósito: escondidas, nadie se
+/// entera de que existen. Lo que cambia es que en lugar de portadas lleva una
+/// línea con lo único que falta para que traigan contenido — prenderla o
+/// instalarla.
+///
+/// Ocupa poco: van al final de la lista y no tienen que competir con las que sí
+/// están andando.
+class _FilaInactiva extends StatelessWidget {
+  const _FilaInactiva({required this.fila, required this.c});
+
+  final FilaDeExtension fila;
+  final CatalogoExtensionesController c;
+
+  bool get _sinInstalar => fila.estadoExt == EstadoExtension.noInstalada;
+
+  Future<void> _accion(BuildContext context) async {
+    if (_sinInstalar) {
+      // No se instala desde acá: instalar pide bajar el guion y verificar su
+      // firma, y eso ya vive —bien hecho— en el repositorio. Se lleva al
+      // usuario ahí, con la extensión ya buscada para que no tenga que
+      // encontrarla entre decenas.
+      ExtensionUtils.filtroPendiente = fila.nombre;
+      if (Platform.isAndroid) {
+        Get.find<MainController>().changeTab(MainController.tabExtensiones);
+      } else {
+        router.go('/extension_repo');
+      }
+      return;
+    }
+    // Prender sí se puede desde acá: es un interruptor, no una descarga.
+    await ExtensionUtils.setExtensionEnabled(fila.package, true);
+    await c.recargar();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final margen = _margen(context);
+    return Padding(
+      padding: EdgeInsets.fromLTRB(margen, 10, margen, 0),
+      child: Row(
+        children: [
+          Icon(
+            _sinInstalar ? Icons.download_outlined : Icons.toggle_off_outlined,
+            size: 18,
+            color: HomeTheme.textMuted,
+          ),
+          const SizedBox(width: 10),
+          Expanded(
+            child: Text(
+              fila.nombre,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: const TextStyle(
+                fontSize: 14,
+                fontWeight: FontWeight.w600,
+                color: HomeTheme.textMuted,
+              ),
+            ),
+          ),
+          TextButton(
+            onPressed: () => _accion(context),
+            child: Text(
+              _sinInstalar ? 'common.install'.i18n : 'home.activar'.i18n,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
 
 /// Las rayitas que dicen en cuál de la tanda vas.
 ///
