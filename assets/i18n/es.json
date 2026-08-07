@@ -152,7 +152,9 @@
     "gone-exit": "Salir",
     "activar-todas": "Activar todas",
     "desactivar-todas": "Desactivar todas",
-    "masivo-salteadas": "algunas +18 quedaron sin activar (el interruptor de +18 está apagado en Ajustes)"
+    "masivo-salteadas": "Algunas +18 quedaron sin activar: el interruptor de +18 está apagado en Ajustes.",
+    "masivo-activadas": "Se activaron {n}.",
+    "masivo-desactivadas": "Se desactivaron {n}."
   },
   "extension-repo": {
     "error": "¡Ha ocurrido un error!",

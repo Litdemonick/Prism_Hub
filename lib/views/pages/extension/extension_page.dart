@@ -111,20 +111,31 @@ class _ExtensionPageState extends State<ExtensionPage> {
     }
     if (!mounted) return;
     final hechas = visibles.length - salteadas;
+    // Frase entera, no un número suelto: «17» a secas no dice si son las que
+    // se cambiaron, las que quedaron o cuántas hay en total.
+    final base = FlutterI18n.translate(
+      context,
+      activar ? 'extension.masivo-activadas' : 'extension.masivo-desactivadas',
+      translationParams: {'n': '$hechas'},
+    );
     showPlatformSnackbar(
       context: context,
-      content: salteadas == 0
-          ? '$hechas'
-          : '$hechas · ${'extension.masivo-salteadas'.i18n}',
       title: activar
           ? 'extension.activar-todas'.i18n
           : 'extension.desactivar-todas'.i18n,
+      content: salteadas == 0
+          ? base
+          : '$base ${'extension.masivo-salteadas'.i18n}',
     );
   }
 
   /// Los dos botones de acción masiva, encima de los filtros.
+  ///
+  /// Centrados como los chips que tienen debajo: pegados a la izquierda
+  /// quedaban desalineados con ellos y la franja se veía torcida.
   Widget _buildAccionesMasivas() {
     return Row(
+      mainAxisAlignment: MainAxisAlignment.center,
       children: [
         _BotonMasivo(
           icono: Icons.toggle_on_outlined,
@@ -144,7 +155,15 @@ class _ExtensionPageState extends State<ExtensionPage> {
   Widget _buildFilterChips() {
     return SingleChildScrollView(
       scrollDirection: Axis.horizontal,
+      // Centrados cuando entran todos, y desplazables cuando no.
+      //
+      // `Center` a secas no alcanza dentro de un desplazamiento horizontal: si
+      // la fila es más ancha que la pantalla, centrarla recorta el primer chip
+      // y no se puede llegar a él. Con esto, el contenido se centra solo
+      // mientras sobre lugar y se comporta como una lista normal cuando no.
+      padding: EdgeInsets.zero,
       child: Row(
+        mainAxisAlignment: MainAxisAlignment.center,
         children: [
           for (final f in _ExtFilter.values) ...[
             if (f != _ExtFilter.todas) const SizedBox(width: 8),
