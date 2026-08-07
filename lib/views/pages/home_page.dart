@@ -1,45 +1,38 @@
-import 'dart:io';
+import 'dart:async';
 
 import 'package:flutter/material.dart';
+import 'package:prismhub/utils/breakpoints.dart';
 import 'package:get/get.dart';
-import 'package:prismhub/controllers/catalogo_controller.dart';
-import 'package:prismhub/data/metadata/metadata_item.dart';
-import 'package:prismhub/data/metadata/metadata_source.dart';
+import 'package:prismhub/controllers/catalogo_extensiones_controller.dart';
+import 'package:prismhub/models/index.dart';
+import 'package:prismhub/utils/extension.dart';
 import 'package:prismhub/utils/i18n.dart';
+import 'package:prismhub/views/widgets/cache_network_image.dart';
 import 'package:prismhub/views/widgets/home/animated_background_glow.dart';
-import 'package:prismhub/views/widgets/home/home_media_card.dart';
-import 'package:prismhub/views/widgets/home/home_section.dart';
 import 'package:prismhub/views/widgets/home/home_theme.dart';
+import 'package:prismhub/views/widgets/home/tarjeta_de_catalogo.dart';
 import 'package:prismhub/views/widgets/progress.dart';
 
-/// El Home: **descubrir**.
+/// El Home: **descubrir, con lo que traen tus extensiones**.
 ///
 /// ── Por qué está partido de la Biblioteca ─────────────────────────────────
 ///
 /// Antes Home era «lo mío»: Continuar viendo y Favoritos. Eso pasó tal cual a
-/// `library_page.dart`, sin rediseñar nada. Lo que cambió es que ahora cada
-/// pantalla tiene una regla clara sobre estar vacía:
+/// `library_page.dart`. Lo que cambió es que ahora cada pantalla tiene una
+/// regla clara sobre estar vacía:
 ///
 ///   Biblioteca vacía  →  está bien. Todavía no viste nada.
 ///   Home vacío        →  está mal. Es la pantalla de descubrir.
 ///
-/// Antes eso no se podía distinguir: había una sola pantalla, y vacía parecía
-/// una app rota.
+/// Acá NO va «Seguir viendo»: eso ya vive en Biblioteca y repetirlo sería
+/// gastar la mejor franja de la pantalla en algo que el usuario ya tiene a un
+/// toque.
 ///
-/// ── De dónde sale el contenido ────────────────────────────────────────────
+/// ── Cómo aguanta muchas extensiones ───────────────────────────────────────
 ///
-/// De metadatos, **no de las extensiones**. Por eso hay algo que ver desde el
-/// primer arranque aunque no haya una sola extensión instalada, y por eso una
-/// fila no se cae cuando un sitio se cae.
-///
-/// Las extensiones siguen intactas y siguen siendo las que reproducen: acá
-/// solo se elige QUÉ ver. Las dos cosas se juntan recién en la ficha.
-///
-/// ── Un solo desplazamiento, sin botones de zona ───────────────────────────
-///
-/// A pedido explícito: nada de pestañas arriba para cambiar entre anime,
-/// series, películas y mangas. Va todo junto y las filas se intercalan, así lo
-/// primero que se ve ya tiene de cada cosa. Ver [CatalogoController].
+/// Todo el trabajo pesado está en [CatalogoExtensionesController]: nada se
+/// pide hasta que se ve, ninguna fila espera a otra, tope de tres a la vez,
+/// caché en disco y una fila caída no rompe el resto. Acá solo se dibuja.
 class HomePage extends StatefulWidget {
   const HomePage({super.key});
 
@@ -48,14 +41,12 @@ class HomePage extends StatefulWidget {
 }
 
 class _HomePageState extends State<HomePage> {
-  // Se reusa el controller si ya existe: en Android, cambiar de pestaña
-  // reconstruye la página entera, y volver a crearlo tiraría el catálogo ya
-  // cargado y lo pediría de nuevo. Mismo criterio que la Biblioteca.
-  late final CatalogoController c = Get.isRegistered<CatalogoController>()
-      ? Get.find<CatalogoController>()
-      : Get.put(CatalogoController());
-
-  static final bool _esAndroid = Platform.isAndroid;
+  // Se reusa si ya existe: en Android, cambiar de pestaña reconstruye la
+  // página entera, y crear otro tiraría el catálogo ya cargado.
+  late final CatalogoExtensionesController c =
+      Get.isRegistered<CatalogoExtensionesController>()
+          ? Get.find<CatalogoExtensionesController>()
+          : Get.put(CatalogoExtensionesController());
 
   @override
   Widget build(BuildContext context) {
@@ -66,21 +57,25 @@ class _HomePageState extends State<HomePage> {
           const Positioned.fill(child: AnimatedBackgroundGlow()),
           SafeArea(
             child: Obx(() {
-              if (c.cargando.value && c.filas.isEmpty) {
-                return const Center(child: ProgressRing());
-              }
-              if (c.vacioDelTodo) return _nadaQueMostrar();
+              if (c.filas.isEmpty) return _sinExtensiones();
               return RefreshIndicator(
-                onRefresh: () => c.cargar(forzar: true),
+                onRefresh: c.refrescarTodo,
                 child: ListView.builder(
-                  // AlwaysScrollable para poder tirar a refrescar aunque el
-                  // contenido no llene la pantalla.
                   physics: const AlwaysScrollableScrollPhysics(),
-                  padding: EdgeInsets.only(top: _esAndroid ? 8 : 16, bottom: 32),
-                  // +1 por el aviso de arriba, cuando hay algo que avisar.
+                  padding: const EdgeInsets.only(bottom: 36),
+                  // +1 por el carrusel de arriba.
                   itemCount: c.filas.length + 1,
-                  itemBuilder: (context, i) =>
-                      i == 0 ? _avisoDeZonas() : _fila(c.filas[i - 1]),
+                  // **Acá está la carga perezosa.** ListView.builder solo
+                  // construye lo que está cerca de la pantalla, y cada fila
+                  // pide en su initState — así, con 30 extensiones se piden
+                  // las 2 o 3 que se ven, no las 30.
+                  itemBuilder: (context, i) => i == 0
+                      ? _CarruselDestacados(c: c)
+                      : _FilaDeExtensionVista(
+                          key: ValueKey(c.filas[i - 1].package),
+                          c: c,
+                          fila: c.filas[i - 1],
+                        ),
                 ),
               );
             }),
@@ -90,124 +85,18 @@ class _HomePageState extends State<HomePage> {
     );
   }
 
-  Widget _fila(FilaDelHome fila) {
-    final color = _colorDeZona(fila.tipo);
-    return Padding(
-      padding: const EdgeInsets.only(bottom: 24),
-      child: HomeSection(
-        // El nombre de la zona va PEGADO al de la fila porque acá está todo
-        // mezclado en un solo desplazamiento: «Populares» a secas no dice si
-        // son series o mangas.
-        title: '${fila.titulo.i18n}  ·  ${_nombreDeZona(fila.tipo)}',
-        accent: color,
-        // Todavía no hay pantalla de «ver todo» del catálogo. El botón queda
-        // sin acción antes que mandar a un lugar que no existe.
-        onClickMore: () {},
-        showNavButtons: !_esAndroid,
-        itemCount: fila.obras.length,
-        itemBuilder: (context, i) {
-          final obra = fila.obras[i];
-          return HomeMediaCard(
-            key: ValueKey(obra.clave),
-            title: obra.titulo,
-            subtitle: _subtitulo(obra),
-            cover: obra.portada,
-            accent: color,
-            // Semilla estable para el degradado de respaldo: sin portada, dos
-            // tarjetas distintas no pueden quedar del mismo color.
-            gradientSeed: obra.clave.hashCode,
-            onTap: () => _abrirFicha(obra),
-          );
-        },
-      ),
-    );
-  }
-
-  /// Año, puntaje y si está saliendo — lo que ayuda a decidir de un vistazo.
-  String? _subtitulo(ObraDelCatalogo obra) {
-    final partes = <String>[
-      if (obra.anio != null) '${obra.anio}',
-      // El puntaje se guarda de 0 a 100 venga de donde venga; se muestra sobre
-      // 10, que es como la gente lo lee.
-      if (obra.puntaje != null) '★ ${(obra.puntaje! / 10).toStringAsFixed(1)}',
-      if (obra.enEmision) 'catalogo.saliendo'.i18n,
-    ];
-    return partes.isEmpty ? null : partes.join('  ·  ');
-  }
-
-  void _abrirFicha(ObraDelCatalogo obra) {
-    // La ficha del catálogo es lo próximo que se hace.
-    //
-    // Hasta que exista NO se navega a ningún lado: mandar a la ficha de las
-    // extensiones sería mentir, porque esta obra todavía no está asociada a
-    // ninguna. Ese puente —buscar el título en las extensiones instaladas y
-    // mostrar en cuáles está— es justamente lo que va a hacer la ficha nueva.
-  }
-
-  /// Avisa qué zona no pudo cargar y por qué.
-  ///
-  /// Sobre todo por TMDB: sin su clave, series y películas no salen, y eso se
-  /// arregla en Ajustes. Un hueco silencioso deja al usuario creyendo que la
-  /// app está rota cuando en realidad le falta un dato.
-  Widget _avisoDeZonas() {
-    if (c.problemas.isEmpty) return const SizedBox.shrink();
-
-    String zonas(MotivoSinCatalogo m) => c.problemas.entries
-        .where((e) => e.value == m)
-        .map((e) => _nombreDeZona(e.key))
-        .join(', ');
-
-    final sinClave = zonas(MotivoSinCatalogo.faltaLaClave);
-    final caidas = zonas(MotivoSinCatalogo.fuenteCaida);
-    final mensajes = <String>[
-      if (sinClave.isNotEmpty) '$sinClave: ${'catalogo.falta-clave'.i18n}',
-      if (caidas.isNotEmpty) '$caidas: ${'catalogo.zona-caida'.i18n}',
-    ];
-    if (mensajes.isEmpty) return const SizedBox.shrink();
-
-    return Padding(
-      padding: const EdgeInsets.fromLTRB(16, 4, 16, 18),
-      child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
-        decoration: BoxDecoration(
-          color: HomeTheme.cardSurface,
-          borderRadius: BorderRadius.circular(12),
-          border: Border.all(color: HomeTheme.border),
-        ),
-        child: Row(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            const Icon(Icons.info_outline,
-                size: 18, color: HomeTheme.textMuted),
-            const SizedBox(width: 10),
-            Expanded(
-              child: Text(
-                mensajes.join('\n'),
-                style: const TextStyle(
-                  fontSize: 12.5,
-                  height: 1.4,
-                  color: HomeTheme.textMuted,
-                ),
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-
-  Widget _nadaQueMostrar() {
+  Widget _sinExtensiones() {
     return Center(
       child: Padding(
         padding: const EdgeInsets.symmetric(horizontal: 32),
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            const Icon(Icons.explore_off_outlined,
-                size: 42, color: HomeTheme.textMuted),
+            const Icon(Icons.extension_outlined,
+                size: 44, color: HomeTheme.textMuted),
             const SizedBox(height: 14),
             Text(
-              'catalogo.sin-catalogo'.i18n,
+              'home.sin-extensiones'.i18n,
               textAlign: TextAlign.center,
               style: const TextStyle(
                 fontSize: 14,
@@ -215,32 +104,338 @@ class _HomePageState extends State<HomePage> {
                 color: HomeTheme.textMuted,
               ),
             ),
-            const SizedBox(height: 18),
-            FilledButton.tonal(
-              onPressed: () => c.cargar(forzar: true),
-              child: Text('common.retry'.i18n),
-            ),
           ],
         ),
       ),
     );
   }
+}
 
-  static String _nombreDeZona(TipoDeObra t) => switch (t) {
-        TipoDeObra.anime => 'home.zona-anime'.i18n,
-        TipoDeObra.serie => 'home.zona-series'.i18n,
-        TipoDeObra.pelicula => 'home.zona-peliculas'.i18n,
-        TipoDeObra.manga => 'home.zona-mangas'.i18n,
-      };
+/// El carrusel grande de arriba, que va cambiando solo.
+///
+/// Se alimenta de lo que van trayendo las extensiones, así que empieza vacío y
+/// se llena al toque. **No se reserva su alto cuando no hay nada**: un hueco
+/// negro de media pantalla al abrir se ve peor que empezar directo por las
+/// filas.
+class _CarruselDestacados extends StatefulWidget {
+  const _CarruselDestacados({required this.c});
 
-  /// Un color por zona.
+  final CatalogoExtensionesController c;
+
+  @override
+  State<_CarruselDestacados> createState() => _CarruselDestacadosState();
+}
+
+class _CarruselDestacadosState extends State<_CarruselDestacados> {
+  Timer? _reloj;
+  int _i = 0;
+
+  @override
+  void initState() {
+    super.initState();
+    // Ocho segundos: menos alcanza a cortar la lectura del título, y más se
+    // siente una imagen fija.
+    _reloj = Timer.periodic(const Duration(seconds: 8), (_) {
+      final total = widget.c.destacados.length;
+      if (total < 2 || !mounted) return;
+      setState(() => _i = (_i + 1) % total);
+    });
+  }
+
+  @override
+  void dispose() {
+    _reloj?.cancel();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Obx(() {
+      final lista = widget.c.destacados;
+      if (lista.isEmpty) return const SizedBox(height: 12);
+      final (item, package) = lista[_i % lista.length];
+      final a = Ancho.de(context);
+      // El alto sale del ANCHO disponible, no de la altura: en una ventana
+      // ancha y baja —una laptop, o el escritorio a media pantalla— reservar
+      // un porcentaje del alto dejaba el carrusel aplastado. Y se acota al
+      // alto real para que en horizontal de teléfono no se coma la pantalla.
+      final alto = (MediaQuery.sizeOf(context).width *
+              a.elegir(compacto: 0.62, medio: 0.42, amplio: 0.30, enorme: 0.24))
+          .clamp(200.0, MediaQuery.sizeOf(context).height * 0.62);
+
+      return SizedBox(
+        height: alto,
+        child: Stack(
+          fit: StackFit.expand,
+          children: [
+            // El cruce entre imágenes va por la clave: al cambiar el índice,
+            // AnimatedSwitcher entiende que es otro hijo y hace el fundido.
+            AnimatedSwitcher(
+              duration: const Duration(milliseconds: 600),
+              child: SizedBox.expand(
+                key: ValueKey(item.url),
+                child: CacheNetWorkImagePic(
+                  item.cover ?? '',
+                  fit: BoxFit.cover,
+                  headers: _cabeceras(package),
+                  placeholder: const ColoredBox(color: HomeTheme.cardSurface),
+                  fallback: const ColoredBox(color: HomeTheme.cardSurface),
+                ),
+              ),
+            ),
+            // Dos velos, no uno: el de abajo funde con el fondo de la app para
+            // que la imagen no termine en un corte recto, y el de la izquierda
+            // asegura que el texto se lea sobre cualquier portada.
+            const DecoratedBox(
+              decoration: BoxDecoration(
+                gradient: LinearGradient(
+                  begin: Alignment.bottomCenter,
+                  end: Alignment.topCenter,
+                  colors: [HomeTheme.bg, Color(0x00000000)],
+                  stops: [0.0, 0.75],
+                ),
+              ),
+            ),
+            const DecoratedBox(
+              decoration: BoxDecoration(
+                gradient: LinearGradient(
+                  begin: Alignment.centerLeft,
+                  end: Alignment.centerRight,
+                  colors: [Color(0xE60A0A12), Color(0x000A0A12)],
+                  stops: [0.0, 0.7],
+                ),
+              ),
+            ),
+            Align(
+              alignment: Alignment.bottomLeft,
+              child: Padding(
+                padding: EdgeInsets.fromLTRB(
+                    _margen(context), 0, _margen(context), 26),
+                child: ConstrainedBox(
+                  constraints: const BoxConstraints(maxWidth: 560),
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        ExtensionUtils.runtimes[package]?.extension.name ?? '',
+                        style: const TextStyle(
+                          fontSize: 11.5,
+                          letterSpacing: 1.2,
+                          fontWeight: FontWeight.w700,
+                          color: HomeTheme.accentPink,
+                        ),
+                      ),
+                      const SizedBox(height: 8),
+                      Text(
+                        item.title,
+                        maxLines: 2,
+                        overflow: TextOverflow.ellipsis,
+                        style: TextStyle(
+                          fontSize:
+                              a.elegir(compacto: 21, medio: 26, amplio: 34),
+                          height: 1.15,
+                          fontWeight: FontWeight.w800,
+                          color: Colors.white,
+                        ),
+                      ),
+                      const SizedBox(height: 16),
+                      FilledButton.icon(
+                        onPressed: () => _abrir(context, item, package),
+                        icon: const Icon(Icons.play_arrow_rounded, size: 22),
+                        label: Text('home.view-detail'.i18n),
+                        style: FilledButton.styleFrom(
+                          backgroundColor: HomeTheme.accentPink,
+                          foregroundColor: Colors.white,
+                          padding: EdgeInsets.symmetric(
+                            horizontal: a.elegir(compacto: 18, amplio: 22),
+                            vertical: a.elegir(compacto: 12, amplio: 14),
+                          ),
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(8),
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ),
+          ],
+        ),
+      );
+    });
+  }
+}
+
+/// Una fila: el nombre de la extensión y lo último que tiene.
+class _FilaDeExtensionVista extends StatefulWidget {
+  const _FilaDeExtensionVista({
+    super.key,
+    required this.c,
+    required this.fila,
+  });
+
+  final CatalogoExtensionesController c;
+  final FilaDeExtension fila;
+
+  @override
+  State<_FilaDeExtensionVista> createState() => _FilaDeExtensionVistaState();
+}
+
+class _FilaDeExtensionVistaState extends State<_FilaDeExtensionVista> {
+  @override
+  void initState() {
+    super.initState();
+    // **Acá se dispara la carga perezosa.** Este initState corre recién cuando
+    // ListView.builder construye la fila, o sea cuando está por entrar en
+    // pantalla. Lo que nunca se ve, nunca se pide.
+    widget.c.pedirSiHaceFalta(widget.fila);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Obx(() {
+      final estado = widget.fila.estado.value;
+      final items = widget.fila.items;
+
+      // Ni cargando ni con contenido: no se dibuja NADA, ni siquiera el
+      // título. Una fila con nombre y vacía debajo se lee como un error.
+      if (estado == EstadoDeFila.fallo && items.isEmpty) {
+        return _sinRespuesta();
+      }
+
+      return Padding(
+        padding: const EdgeInsets.only(top: 26),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            _encabezado(),
+            const SizedBox(height: 14),
+            SizedBox(
+              height: TarjetaDeCatalogo.altoTotalPara(Ancho.de(context)),
+              child: (items.isEmpty && estado == EstadoDeFila.cargando)
+                  ? const Center(child: ProgressRing())
+                  : ListView.separated(
+                      scrollDirection: Axis.horizontal,
+                      padding:
+                          EdgeInsets.symmetric(horizontal: _margen(context)),
+                      itemCount: items.length,
+                      separatorBuilder: (_, __) => const SizedBox(width: 14),
+                      itemBuilder: (context, i) {
+                        final item = items[i];
+                        return TarjetaDeCatalogo(
+                          titulo: item.title,
+                          portada: item.cover,
+                          cabeceras: _cabeceras(widget.fila.package),
+                          encabezado: widget.fila.nombre,
+                          // `update` es lo único con forma de fecha que
+                          // devuelve `latest()`. Cada extensión lo escribe a su
+                          // manera —«hace 2 días», «Ep 12», una fecha— así que
+                          // se muestra TAL CUAL: normalizarlo acá sería
+                          // inventar una precisión que el dato no tiene.
+                          fecha: item.update,
+                          onTap: () =>
+                              _abrir(context, item, widget.fila.package),
+                        );
+                      },
+                    ),
+            ),
+          ],
+        ),
+      );
+    });
+  }
+
+  Widget _encabezado() {
+    return Padding(
+      padding: EdgeInsets.symmetric(horizontal: _margen(context)),
+      child: Row(
+        children: [
+          Expanded(
+            child: Text(
+              widget.fila.nombre,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: TextStyle(
+                fontSize: Ancho.de(context)
+                    .elegir(compacto: 17, medio: 19, amplio: 22),
+                fontWeight: FontWeight.w800,
+                color: HomeTheme.textPrimary,
+                letterSpacing: -0.2,
+              ),
+            ),
+          ),
+          // Refrescar solo esta fila, sin tocar las demás.
+          IconButton(
+            tooltip: 'common.refresh'.i18n,
+            iconSize: 18,
+            color: HomeTheme.textMuted,
+            onPressed: () =>
+                widget.c.pedirSiHaceFalta(widget.fila, forzar: true),
+            icon: const Icon(Icons.refresh_rounded),
+          ),
+        ],
+      ),
+    );
+  }
+
+  /// La extensión no respondió y no hay nada guardado que mostrar.
   ///
-  /// Con todo mezclado en un solo desplazamiento, el color es lo que deja
-  /// ubicarse sin leer: se reconoce «esto es anime» antes de llegar al título.
-  static Color _colorDeZona(TipoDeObra t) => switch (t) {
-        TipoDeObra.anime => HomeTheme.accentPink,
-        TipoDeObra.serie => const Color(0xFF5AA9E6),
-        TipoDeObra.pelicula => const Color(0xFFE6A85A),
-        TipoDeObra.manga => const Color(0xFF7BD88F),
-      };
+  /// Se deja una línea discreta con su botón: esconderla del todo haría que el
+  /// usuario no entienda por qué falta una extensión que sabe que instaló.
+  Widget _sinRespuesta() {
+    return Padding(
+      padding: EdgeInsets.fromLTRB(_margen(context), 22, _margen(context), 0),
+      child: Row(
+        children: [
+          const Icon(Icons.cloud_off_rounded,
+              size: 16, color: HomeTheme.textMuted),
+          const SizedBox(width: 8),
+          Expanded(
+            child: Text(
+              '${widget.fila.nombre} · ${'home.fila-sin-respuesta'.i18n}',
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: const TextStyle(
+                  fontSize: 12.5, color: HomeTheme.textMuted),
+            ),
+          ),
+          TextButton(
+            onPressed: () =>
+                widget.c.pedirSiHaceFalta(widget.fila, forzar: true),
+            child: Text('common.retry'.i18n),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+// ─── Piezas compartidas ──────────────────────────────────────────────────────
+
+/// El margen lateral, por ancho de pantalla.
+///
+/// En una ventana ancha el contenido pegado al borde se ve barato; en un
+/// teléfono cada píxel cuenta. Va por ancho y no por sistema operativo para
+/// que también acompañe al achicar la ventana en escritorio.
+double _margen(BuildContext context) => Ancho.de(context)
+    .elegir(compacto: 14, medio: 20, amplio: 32, enorme: 48);
+
+Map<String, String>? _cabeceras(String package) {
+  final sitio = ExtensionUtils.runtimes[package]?.extension.webSite;
+  if (sitio == null || sitio.isEmpty) return null;
+  return {'Referer': sitio};
+}
+
+void _abrir(BuildContext context, ExtensionListItem item, String package) {
+  ExtensionUtils.openExtensionDetail(
+    context,
+    package: package,
+    url: item.url,
+    // La portada que la tarjeta YA está mostrando: así la ficha abre con
+    // imagen en vez de con un hueco mientras la extensión contesta.
+    cover: item.cover,
+    coverHeaders: _cabeceras(package),
+  );
 }

@@ -82,7 +82,9 @@
     "zona-series": "Series",
     "zona-peliculas": "Películas",
     "zona-mangas": "Mangas",
-    "zona-en-camino": "Todavía no hay nada acá: las secciones de esta zona llegan con la capa de metadatos."
+    "zona-en-camino": "Todavía no hay nada acá: las secciones de esta zona llegan con la capa de metadatos.",
+    "sin-extensiones": "No tenés extensiones activas. Instalá alguna desde Extensiones y su contenido va a aparecer acá.",
+    "fila-sin-respuesta": "no respondió"
   },
   "search": {
     "hint-text": "¡Por favor, busca ampliamente!~",

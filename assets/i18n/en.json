@@ -86,7 +86,9 @@
     "zona-series": "Series",
     "zona-peliculas": "Movies",
     "zona-mangas": "Manga",
-    "zona-en-camino": "Nothing here yet: this zone gets its sections with the metadata layer."
+    "zona-en-camino": "Nothing here yet: this zone gets its sections with the metadata layer.",
+    "sin-extensiones": "No extensions enabled. Install one from Extensions and its content will show up here.",
+    "fila-sin-respuesta": "did not respond"
   },
   "search": {
     "hint-text": "Please use search wisely!~",
