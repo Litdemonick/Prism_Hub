@@ -360,9 +360,7 @@ class _ExtensionPageState extends State<ExtensionPage> {
                     children: [
                       _buildAccionesMasivas(),
                       const SizedBox(height: 10),
-                      _buildAccionesMasivas(),
-              const SizedBox(height: 10),
-              _buildFilterChips(),
+                      _buildFilterChips(),
                     ],
                   ),
                 ),
@@ -573,6 +571,8 @@ class _ExtensionPageState extends State<ExtensionPage> {
                 ),
               ),
               const SizedBox(height: 16),
+              _buildAccionesMasivas(),
+              const SizedBox(height: 10),
               _buildFilterChips(),
               const SizedBox(height: 16),
               Expanded(
