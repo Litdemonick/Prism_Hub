@@ -1042,6 +1042,37 @@ class BloqueadorAnuncios {
     'latgw.fun',
     'servetraff.com',
 
+    // 1c. La red de palabras al azar, cazada con el registro del propio app.
+    //
+    // Son todos de la misma red: dominios inventados juntando palabras
+    // (`gigglemagnetismunaired`, `brigadedelegatesandbox`…). Rotan seguido, así
+    // que no hay una lista pública que los tenga al día — se sacaron de dos
+    // fuentes propias, las dos del 2026-08-06:
+    //
+    //   · **Los carteles «Are You 18+?»** que salen ENCIMA del reproductor de
+    //     voe. Se pidió su página y de todo lo externo que carga solo dos no
+    //     eran legítimos: `anthemoutbackwrought.com` y
+    //     `darnobedienceupscale.com`. El resto era cdnjs, fonts de Google y el
+    //     propio voe.sx.
+    //   · **Las ventanas emergentes que el app ya venía cortando** y quedaron
+    //     anotadas en el registro. Cortarlas cuando ya se abrieron es el último
+    //     escalón; con el dominio en la lista, el guion ni se descarga y no
+    //     llega a intentarlo.
+    //
+    // Cada uno acá está porque se lo vio hacer algo, no por parecerse a un
+    // anuncio. Si alguno resultara ser un servidor, se saca y listo.
+    'anthemoutbackwrought.com',
+    'darnobedienceupscale.com',
+    'luugy.com',
+    'gigglemagnetismunaired.com',
+    'effectivecpmnetwork.com',
+    'prahmnatured.com',
+    'brigadedelegatesandbox.com',
+    'aphacicfable.com',
+    'cacklegrievingtank.com',
+    'hypnagogicsoundsuddenly.com',
+    'nwirirni.in',
+
     // 2. Redes de ventanas emergentes y de anuncios de streaming.
     'exoclick.com',
     'exosrv.com',

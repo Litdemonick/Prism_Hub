@@ -130,6 +130,32 @@ void main() {
       }
     });
 
+    test('la red de los carteles «18+» sobre el reproductor cae', () {
+      // Medido pidiendo la página de voe: de todo lo externo que carga, solo
+      // estos dos no eran legítimos. Los demás eran cdnjs, fonts de Google y
+      // el propio voe.sx.
+      for (final h in [
+        'anthemoutbackwrought.com',
+        'darnobedienceupscale.com',
+      ]) {
+        expect(BloqueadorAnuncios.dominiosEnUso, contains(h), reason: h);
+      }
+      // Y los que el propio registro del app dejó anotados como ventanas
+      // emergentes: con el dominio en la lista, el guion ni se descarga.
+      for (final h in [
+        'luugy.com',
+        'gigglemagnetismunaired.com',
+        'effectivecpmnetwork.com',
+        'nwirirni.in',
+      ]) {
+        expect(BloqueadorAnuncios.dominiosEnUso, contains(h), reason: h);
+      }
+      // Lo que la MISMA página de voe cargaba y no se puede tocar.
+      for (final h in ['voe.sx', 'cdnjs.cloudflare.com', 'fonts.gstatic.com']) {
+        expect(BloqueadorAnuncios.dominiosEnUso, isNot(contains(h)), reason: h);
+      }
+    });
+
     test('no tiene lista propia: usa la misma que el resto', () {
       // Una segunda lista se desincronizaría de la del guion y la del corte de
       // navegación. El interceptor pregunta por `bloquea`, que mira este mismo
