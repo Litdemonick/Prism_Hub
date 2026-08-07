@@ -58,6 +58,11 @@ dependencies:
   url_launcher: ^6.1.5
   url_launcher_linux: 3.0.6
   window_manager: ^0.5.1
+  # Ya venía instalada como dependencia de window_manager; se declara para
+  # poder consultar el tamaño de la pantalla y acotar el mínimo de la ventana a
+  # lo que de verdad entra (ver _minimoQueEntraEnLaPantalla en main.dart).
+  # Se fija la MISMA versión que ya estaba bloqueada, para no mover nada más.
+  screen_retriever: 0.2.2
   cookie_jar: ^4.0.8
   flutter_inappwebview: ^6.1.5
   flutter_windows_webview:
@@ -142,6 +147,8 @@ flutter:
     - assets/i18n/
     - assets/icon/logo.png
     - assets/icon/logo_mark.png
+    # El logo de la app tal cual, el que se ve en la pantalla de arranque.
+    - assets/iconoapp2.png
     - assets/icon/anilist.jpg
     - assets/carddefaultoffline.png
     - assets/js/

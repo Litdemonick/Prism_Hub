@@ -29,6 +29,7 @@ import 'package:prismhub/views/widgets/platform_widget.dart';
 import 'package:prismhub/utils/compartir.dart';
 import 'package:prismhub/utils/notificacion_reproductor.dart';
 import 'package:prismhub/utils/instancia_unica.dart';
+import 'package:screen_retriever/screen_retriever.dart';
 import 'package:window_manager/window_manager.dart';
 import 'package:package_info_plus/package_info_plus.dart';
 
@@ -202,7 +203,19 @@ void main(List<String> args) async {
 
     if (!Platform.isAndroid) {
       await windowManager.ensureInitialized();
-      const minWindowSize = Size(900, 600);
+      // ── Hasta dónde se puede achicar la ventana ─────────────────────────
+      //
+      // 900×600 es lo mínimo con lo que la app se sigue leyendo bien. Pero era
+      // un número FIJO, y ahí está el problema: en una pantalla chica —una
+      // laptop de 1366×768 con el escalado de Windows al 125%, que deja menos
+      // de 600 de alto útil— ese mínimo es MÁS GRANDE que el escritorio. La
+      // ventana no entra y el usuario no la puede achicar hasta que entre.
+      //
+      // Con laptops y televisores en la lista de destinos eso deja de ser un
+      // caso raro. Así que el mínimo se acota a lo que la pantalla de verdad
+      // permite: se toma el área visible (sin la barra de tareas) y se deja un
+      // respiro. Si la pantalla es grande, no cambia nada.
+      final minWindowSize = await _minimoQueEntraEnLaPantalla();
       const defaultWindowSize = Size(1280, 720);
       var size = defaultWindowSize;
       final windowSize = PrismHubStorage.getSetting(SettingKey.windowSize);
@@ -466,6 +479,39 @@ Future<void> _restaurarGeometria(Size size, Offset? posicion) async {
 /// existe, y restaurarla abre la ventana fuera de la pantalla. El límite de
 /// ±32000 es el rango de coordenadas que maneja Windows; cualquier cosa afuera
 /// de eso es basura, no una pantalla.
+/// El tamaño mínimo al que se puede achicar la ventana, acotado a la pantalla.
+///
+/// Devuelve 900×600 —lo mínimo con lo que la app se lee bien— salvo que la
+/// pantalla no dé para tanto. En ese caso baja hasta lo que entre, dejando un
+/// respiro para el marco y la barra de tareas: más vale una ventana chica y
+/// apretada que una que el usuario no puede achicar.
+///
+/// Nunca baja de 480×360: por debajo de eso no hay diseño que aguante, y una
+/// pantalla así de chica no existe en las plataformas de escritorio.
+///
+/// Si no se puede averiguar el tamaño de la pantalla —el complemento falla, o
+/// es un entorno raro— se devuelve el de siempre. Es exactamente lo que había
+/// antes, así que el peor caso es no mejorar nada.
+Future<Size> _minimoQueEntraEnLaPantalla() async {
+  const deseado = Size(900, 600);
+  const piso = Size(480, 360);
+  try {
+    final pantalla = await screenRetriever.getPrimaryDisplay();
+    // `visibleSize` es el área SIN la barra de tareas; `size` es la pantalla
+    // entera. Se prefiere la primera porque es donde la ventana puede vivir.
+    final util = pantalla.visibleSize ?? pantalla.size;
+    if (!util.width.isFinite || !util.height.isFinite) return deseado;
+    return Size(
+      util.width.clamp(piso.width, deseado.width).toDouble(),
+      util.height.clamp(piso.height, deseado.height).toDouble(),
+    );
+  } catch (e) {
+    logger.info('No se pudo leer el tamaño de la pantalla, se usa el mínimo '
+        'de siempre: $e');
+    return deseado;
+  }
+}
+
 Offset? _leerPosicionGuardada() {
   final crudo = PrismHubStorage.getSetting(SettingKey.windowPosition);
   if (crudo is! String || crudo.isEmpty) return null;
