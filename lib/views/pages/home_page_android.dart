@@ -115,7 +115,12 @@ class _Cabecera extends StatelessWidget {
         // Menos a la derecha: los botones ya traen su propia zona de toque y
         // con el margen completo el ícono quedaba despegado del borde.
         margen - 8,
-        bajo ? 0 : 2,
+        // Aire entre la cabecera y la primera tarjeta. Pegados, el nombre de
+        // la app se leía como si fuera parte del carrusel; separados, se ve
+        // que es la cabecera de la pantalla y las portadas arrancan abajo.
+        //
+        // Acostado se recorta: ahí cada píxel de alto sale de las portadas.
+        bajo ? 4 : 14,
       ),
       child: Row(
         children: [
