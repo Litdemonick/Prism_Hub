@@ -24,9 +24,36 @@ class SplashScreen extends StatefulWidget {
   State<SplashScreen> createState() => _SplashScreenState();
 }
 
-class _SplashScreenState extends State<SplashScreen> {
+class _SplashScreenState extends State<SplashScreen>
+    with SingleTickerProviderStateMixin {
   static const _fondo = Color(0xFF08080F);
   static const _acento = Color(0xFFD777ED);
+
+  /// El latido del logo.
+  ///
+  /// Reemplaza a la rueda de siempre. La rueda dice "esperá"; esto dice "estoy
+  /// vivo", que es lo que corresponde en una pantalla de arranque — no hay
+  /// nada que el usuario tenga que esperar a propósito.
+  ///
+  /// Un solo controller para las dos cosas —el tamaño y la luz— porque van
+  /// juntas: el resplandor crece cuando el logo crece, como un corazón.
+  late final AnimationController _latido = AnimationController(
+    vsync: this,
+    duration: const Duration(milliseconds: 1500),
+  )..repeat(reverse: true);
+
+  late final Animation<double> _pulso = CurvedAnimation(
+    parent: _latido,
+    // easeInOutSine da un vaivén parejo, sin el tironcito que deja easeInOut
+    // en los extremos. En algo que late en bucle, ese tirón se nota.
+    curve: Curves.easeInOutSine,
+  );
+
+  @override
+  void dispose() {
+    _latido.dispose();
+    super.dispose();
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -67,17 +94,47 @@ class _SplashScreenState extends State<SplashScreen> {
                     children: [
                       _Aparece(
                         demora: Duration.zero,
-                        child: Image.asset(
-                          'assets/iconoapp2.png',
-                          width: ladoDelLogo,
-                          // Se le pide el tamaño de decodificación al motor:
-                          // el archivo es grande y sin esto se guarda en
-                          // memoria a resolución completa para mostrarlo
-                          // chiquito.
-                          cacheWidth: (ladoDelLogo *
-                                  MediaQuery.of(context).devicePixelRatio)
-                              .round(),
-                          filterQuality: FilterQuality.medium,
+                        child: AnimatedBuilder(
+                          animation: _pulso,
+                          // El logo va como `child`: se construye UNA vez y el
+                          // builder solo lo envuelve. Sin esto, cada cuadro
+                          // reconstruiría el Image.asset entero.
+                          child: Image.asset(
+                            'assets/iconoapp2.png',
+                            width: ladoDelLogo,
+                            // Se le pide el tamaño de decodificación al motor:
+                            // el archivo es grande y sin esto se guarda en
+                            // memoria a resolución completa para mostrarlo
+                            // chiquito.
+                            cacheWidth: (ladoDelLogo *
+                                    MediaQuery.of(context).devicePixelRatio)
+                                .round(),
+                            filterQuality: FilterQuality.medium,
+                          ),
+                          builder: (context, hijo) {
+                            final t = _pulso.value;
+                            return Container(
+                              decoration: BoxDecoration(
+                                shape: BoxShape.circle,
+                                boxShadow: [
+                                  BoxShadow(
+                                    color: _acento.withValues(
+                                        alpha: 0.16 + t * 0.20),
+                                    blurRadius: 40 + t * 46,
+                                    spreadRadius: 2 + t * 10,
+                                  ),
+                                ],
+                              ),
+                              // Late poco: 3% de más y de menos. Un latido
+                              // grande marea y encima delata que es un bucle;
+                              // uno chico se siente vivo sin llamar la
+                              // atención.
+                              child: Transform.scale(
+                                scale: 0.97 + t * 0.06,
+                                child: hijo,
+                              ),
+                            );
+                          },
                         ),
                       ),
                       const SizedBox(height: 22),
@@ -110,18 +167,9 @@ class _SplashScreenState extends State<SplashScreen> {
                           ),
                         ),
                       ),
-                      const SizedBox(height: 34),
-                      const _Aparece(
-                        demora: Duration(milliseconds: 520),
-                        child: SizedBox(
-                          width: 24,
-                          height: 24,
-                          child: CircularProgressIndicator(
-                            strokeWidth: 2.2,
-                            valueColor: AlwaysStoppedAnimation<Color>(_acento),
-                          ),
-                        ),
-                      ),
+                      // La rueda se sacó a propósito: el logo latiendo ya dice
+                      // que el app está viva, y una rueda encima solo agrega
+                      // ruido y sugiere una espera que no hay.
                     ],
                   ),
                 ),

@@ -33,6 +33,7 @@ class ParedDePortadas extends StatefulWidget {
     super.key,
     this.portadas = const [],
     this.opacidad = 0.5,
+    this.desenfoque = 0,
   });
 
   /// Portadas reales, si las hay. Vacío = la pared dibujada.
@@ -40,6 +41,24 @@ class ParedDePortadas extends StatefulWidget {
 
   /// Cuánto se deja ver. Por debajo va el contenido, así que nunca es 1.
   final double opacidad;
+
+  /// Cuánto se desenfoca, en píxeles. 0 = nítida.
+  ///
+  /// ── Por qué NO es un BackdropFilter ni un ImageFiltered ─────────────────
+  ///
+  /// Esos dos desenfocan **en cada cuadro**, y esta pared se mueve todo el
+  /// tiempo: sería pagar el efecto más caro de Flutter sesenta veces por
+  /// segundo, para siempre.
+  ///
+  /// Acá el desenfoque va **dentro del pincel**, al pintar cada tarjeta. Como
+  /// el dibujo entero queda cacheado en un RepaintBoundary, se paga UNA vez y
+  /// el movimiento después es gratis: mover una textura ya desenfocada cuesta
+  /// lo mismo que mover una nítida.
+  ///
+  /// Se usa fuerte en la bienvenida —donde la app está esperando al usuario y
+  /// puede permitírselo— y en 0 durante el arranque, que es cuando el hilo de
+  /// UI está más ocupado.
+  final double desenfoque;
 
   @override
   State<ParedDePortadas> createState() => _ParedDePortadasState();
@@ -88,7 +107,11 @@ class _ParedDePortadasState extends State<ParedDePortadas>
               final pared = RepaintBoundary(
                 child: CustomPaint(
                   size: Size(ancho, altoTotal),
-                  painter: _PintorDeLaPared(alto: alto, paso: paso),
+                  painter: _PintorDeLaPared(
+                    alto: alto,
+                    paso: paso,
+                    desenfoque: widget.desenfoque,
+                  ),
                 ),
               );
 
@@ -116,10 +139,15 @@ class _ParedDePortadasState extends State<ParedDePortadas>
 }
 
 class _PintorDeLaPared extends CustomPainter {
-  _PintorDeLaPared({required this.alto, required this.paso});
+  _PintorDeLaPared({
+    required this.alto,
+    required this.paso,
+    this.desenfoque = 0,
+  });
 
   final double alto;
   final double paso;
+  final double desenfoque;
 
   /// Los tonos de las tarjetas.
   ///
@@ -152,6 +180,11 @@ class _PintorDeLaPared extends CustomPainter {
     }
 
     final pincel = Paint();
+    // El desenfoque, dentro del pincel: entra en el dibujo cacheado y no
+    // cuesta nada por cuadro. Ver el porqué en ParedDePortadas.desenfoque.
+    if (desenfoque > 0) {
+      pincel.maskFilter = MaskFilter.blur(BlurStyle.normal, desenfoque);
+    }
     for (var f = 0; f < filas; f++) {
       // Las filas impares van corridas media tarjeta: alineadas se ven como
       // una grilla de planilla, no como una pared de portadas.
@@ -181,5 +214,7 @@ class _PintorDeLaPared extends CustomPainter {
 
   @override
   bool shouldRepaint(_PintorDeLaPared anterior) =>
-      anterior.alto != alto || anterior.paso != paso;
+      anterior.alto != alto ||
+      anterior.paso != paso ||
+      anterior.desenfoque != desenfoque;
 }
