@@ -7,6 +7,7 @@ import 'package:prismhub/views/pages/extension/extension_page.dart';
 import 'package:prismhub/controllers/watch/video_controller.dart';
 import 'package:prismhub/views/pages/home_page.dart';
 import 'package:prismhub/views/pages/library_page.dart';
+import 'package:prismhub/views/pages/history_page.dart';
 import 'package:prismhub/views/pages/nsfw18/nsfw18_zone_page.dart';
 import 'package:prismhub/controllers/main_controller.dart';
 import 'package:prismhub/views/pages/search/search_page.dart';
@@ -382,21 +383,124 @@ class _AndroidMainPageState extends fluent.State<AndroidMainPage> {
             ),
           ],
         ),
-        bottomNavigationBar: LayoutUtils.isTablet
-            ? null
-            : NavigationBar(
-                destinations: destinations
-                    .map((e) => NavigationDestination(
-                          icon: Icon(e.icon),
-                          selectedIcon: Icon(e.selectedIcon),
-                          label: e.label,
-                        ))
-                    .toList(),
-                labelBehavior:
-                    NavigationDestinationLabelBehavior.onlyShowSelected,
-                selectedIndex: c.selectedTab.value,
-                onDestinationSelected: c.changeTab,
+        // El contenido pasa POR DEBAJO de la barra.
+        //
+        // Con `extendBody`, Flutter le suma el alto de la barra al relleno de
+        // abajo del cuerpo, así que las páginas que usan SafeArea reservan ese
+        // lugar solas y nada queda tapado — pero el fondo y las portadas sí se
+        // ven correr por atrás, que es lo que hace que la barra se lea como
+        // algo que flota y no como un zócalo pegado.
+        extendBody: true,
+        bottomNavigationBar:
+            LayoutUtils.isTablet ? null : _barraFlotante(destinations),
+      ),
+    );
+  }
+
+  /// ── Cuántos íconos entran en la barra ────────────────────────────────
+  ///
+  /// Cuatro. Con los cinco destinos metidos a la fuerza en una barra flotante
+  /// —que es más angosta que el ancho de pantalla— los íconos quedan pegados y
+  /// se le erra al tocar. El quinto, Ajustes, se va a los tres puntos junto
+  /// con los atajos que antes no estaban en ningún lado.
+  ///
+  /// Ajustes es el que sale y no otro a propósito: es al que menos se entra de
+  /// los cinco, y encima ya tiene su atajo arriba en el Home.
+  static const _enLaBarra = 4;
+
+  Widget _barraFlotante(List<_Destination> destinos) {
+    // Lo que ocupa la barra del sistema —los tres botones, o la rayita de
+    // gestos—. Sin esto la barra flotante se apoya justo encima y en un
+    // teléfono con gestos el deslizar de atrás se come el toque.
+    final abajo = MediaQuery.viewPaddingOf(context).bottom;
+    return Padding(
+      padding: EdgeInsets.fromLTRB(14, 0, 14, abajo > 0 ? abajo * 0.35 + 8 : 12),
+      child: Row(
+        children: [
+          Expanded(
+            child: DecoratedBox(
+              decoration: BoxDecoration(
+                // Casi opaca a propósito. Un desenfoque de fondo se vería
+                // mejor, pero hay que recalcularlo en CADA cuadro mientras el
+                // usuario se desplaza, y encima de una lista de portadas eso
+                // es justo donde no sobran milisegundos.
+                color: const Color(0xF014141C),
+                borderRadius: BorderRadius.circular(34),
+                border: Border.all(color: Colors.white.withValues(alpha: 0.07)),
+                boxShadow: const [
+                  BoxShadow(
+                    color: Color(0x80000000),
+                    blurRadius: 18,
+                    offset: Offset(0, 6),
+                  ),
+                ],
               ),
+              child: SizedBox(
+                height: 60,
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+                  children: [
+                    for (var i = 0; i < _enLaBarra; i++)
+                      _IconoDeBarra(
+                        destino: destinos[i],
+                        elegido: c.selectedTab.value == i,
+                        onTap: () => c.changeTab(i),
+                      ),
+                  ],
+                ),
+              ),
+            ),
+          ),
+          const SizedBox(width: 10),
+          _BotonDeMas(onTap: _abrirMasOpciones),
+        ],
+      ),
+    );
+  }
+
+  /// Lo que no entró en la barra, en una hoja que sube desde abajo.
+  void _abrirMasOpciones() {
+    showModalBottomSheet<void>(
+      context: context,
+      backgroundColor: const Color(0xFF14141C),
+      showDragHandle: true,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(22)),
+      ),
+      builder: (hoja) => SafeArea(
+        top: false,
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            _OpcionDeHoja(
+              icono: Icons.settings_outlined,
+              texto: 'common.settings'.i18n,
+              onTap: () {
+                Navigator.pop(hoja);
+                c.changeTab(MainController.tabAjustes);
+              },
+            ),
+            _OpcionDeHoja(
+              icono: Icons.history_rounded,
+              texto: 'common.history'.i18n,
+              onTap: () {
+                Navigator.pop(hoja);
+                Get.to(() => const HistoryPage());
+              },
+            ),
+            _OpcionDeHoja(
+              icono: Icons.favorite_border_rounded,
+              texto: 'common.favorite'.i18n,
+              onTap: () {
+                Navigator.pop(hoja);
+                // La pestaña de favoritos de Historial. Mismo índice que usa
+                // Biblioteca — si cambia allá, cambia acá.
+                Get.to(() => const HistoryPage(initialTab: 3));
+              },
+            ),
+            const SizedBox(height: 8),
+          ],
+        ),
       ),
     );
   }
@@ -421,7 +525,24 @@ class _AndroidMainPageState extends fluent.State<AndroidMainPage> {
           RepaintBoundary(
             child: TickerMode(
               enabled: i == c.selectedTab.value,
-              child: pages[i],
+              // Todas menos Home terminan ARRIBA de la barra flotante.
+              //
+              // Con `extendBody` el cuerpo llega hasta el borde de abajo, y
+              // Flutter le suma el alto de la barra al relleno del MediaQuery.
+              // Este SafeArea es el que lo consume: sin él, la paginación de
+              // Extensiones y el final de Ajustes quedaban tapados por la
+              // barra, que es justo lo que no puede pasar.
+              //
+              // Home no lo lleva: ahí el punto ES que las portadas se vean
+              // correr por debajo, y su ListView ya reserva el lugar solo.
+              child: i == MainController.tabHome
+                  ? pages[i]
+                  : SafeArea(
+                      top: false,
+                      left: false,
+                      right: false,
+                      child: pages[i],
+                    ),
             ),
           ),
       ],
@@ -434,4 +555,129 @@ class _Destination {
   final IconData selectedIcon;
   final IconData icon;
   final String label;
+}
+
+/// Un ícono de la barra flotante.
+///
+/// El elegido se marca con un círculo relleno y no solo con color: sobre un
+/// fondo oscuro, dos tonos de gris no se distinguen de un vistazo, y menos con
+/// portadas de colores corriendo por detrás.
+class _IconoDeBarra extends StatelessWidget {
+  const _IconoDeBarra({
+    required this.destino,
+    required this.elegido,
+    required this.onTap,
+  });
+
+  final _Destination destino;
+  final bool elegido;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final acento = Theme.of(context).colorScheme.primary;
+    return Semantics(
+      button: true,
+      selected: elegido,
+      label: destino.label,
+      child: InkResponse(
+        onTap: onTap,
+        radius: 26,
+        child: AnimatedContainer(
+          duration: const Duration(milliseconds: 220),
+          curve: Curves.easeOutBack,
+          width: 44,
+          height: 44,
+          decoration: BoxDecoration(
+            // Círculo entero, no una pastilla: al lado del botón redondo de
+            // los tres puntos, una marca ovalada se veía como otra cosa.
+            shape: BoxShape.circle,
+            gradient: elegido
+                ? LinearGradient(
+                    begin: Alignment.topLeft,
+                    end: Alignment.bottomRight,
+                    colors: [
+                      acento.withValues(alpha: 0.42),
+                      acento.withValues(alpha: 0.18),
+                    ],
+                  )
+                : null,
+            // El aro es lo que la despega del fondo de la barra. Sin él, sobre
+            // un relleno translúcido, la marca se veía como una mancha.
+            border: elegido
+                ? Border.all(color: acento.withValues(alpha: 0.55), width: 1.2)
+                : null,
+            boxShadow: elegido
+                ? [
+                    BoxShadow(
+                      color: acento.withValues(alpha: 0.35),
+                      blurRadius: 14,
+                      spreadRadius: -2,
+                    ),
+                  ]
+                : null,
+          ),
+          child: AnimatedScale(
+            duration: const Duration(milliseconds: 220),
+            curve: Curves.easeOutBack,
+            scale: elegido ? 1.08 : 1.0,
+            child: Icon(
+              elegido ? destino.selectedIcon : destino.icon,
+              size: 23,
+              color: elegido ? Colors.white : Colors.white.withValues(alpha: 0.55),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+/// Los tres puntos, afuera de la barra.
+///
+/// Aparte y no como un ícono más: lo que hace no es cambiar de pestaña, y
+/// mezclarlo con los otros cuatro haría que se lea como una quinta pestaña.
+class _BotonDeMas extends StatelessWidget {
+  const _BotonDeMas({required this.onTap});
+
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final acento = Theme.of(context).colorScheme.primary;
+    return Material(
+      color: acento.withValues(alpha: 0.22),
+      shape: const CircleBorder(),
+      clipBehavior: Clip.antiAlias,
+      child: InkWell(
+        onTap: onTap,
+        child: SizedBox(
+          width: 60,
+          height: 60,
+          child: Icon(Icons.more_horiz_rounded, size: 26, color: acento),
+        ),
+      ),
+    );
+  }
+}
+
+class _OpcionDeHoja extends StatelessWidget {
+  const _OpcionDeHoja({
+    required this.icono,
+    required this.texto,
+    required this.onTap,
+  });
+
+  final IconData icono;
+  final String texto;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return ListTile(
+      leading: Icon(icono, color: Colors.white70),
+      title: Text(texto, style: const TextStyle(color: Colors.white)),
+      onTap: onTap,
+    );
+  }
 }
