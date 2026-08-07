@@ -2507,6 +2507,52 @@ class VideoPlayerController extends GetxController with WidgetsBindingObserver {
     }
   }
 
+  /// Apagado de emergencia: la app se está cerrando.
+  ///
+  /// ── Por qué no alcanza con el apagado normal ────────────────────────────
+  ///
+  /// `_shutdownPlayback` hace bien su trabajo, pero es una SECUENCIA LARGA:
+  /// baja el volumen, captura la miniatura de «Continuar viendo», guarda el
+  /// historial y recién ahí libera el reproductor. Eso está pensado para
+  /// cuando el usuario SALE del reproductor y la app sigue viva, y ahí cada
+  /// paso vale la pena.
+  ///
+  /// Cuando el proceso se está muriendo no hay tiempo para nada de eso. Y ahí
+  /// aparecía lo que se reportó: **la app se cerraba y el audio seguía
+  /// sonando**, porque mpv nunca llegó a recibir la orden de parar.
+  ///
+  /// Esto es lo contrario: lo mínimo, ya, sin esperar a nadie y sin await. Se
+  /// pierde la miniatura de «Continuar viendo» — y está bien, es lo barato de
+  /// perder cuando la alternativa es dejar audio sonando en un equipo donde ya
+  /// no hay ninguna ventana que lo pare.
+  ///
+  /// Es `static` a propósito: quien cierra la app no tiene por qué saber si
+  /// hay un reproductor abierto ni cómo encontrarlo.
+  static void apagarTodoYa() {
+    final c = _enUso;
+    if (c == null) return;
+    // Se marca ANTES de tocar nada: si algo más dispara el apagado normal
+    // mientras tanto, tiene que encontrar el camino ya cerrado en vez de
+    // arrancar una segunda secuencia sobre un reproductor que se está yendo.
+    c._disposed = true;
+    c._shutdownStarted = true;
+    _enUso = null;
+
+    // Las tres órdenes salen JUNTAS y sin esperar respuesta. Alcanza con que
+    // llegue una para que deje de sonar, y si alguna se cuelga —el bug de
+    // hilos de media_kit que ya está documentado más abajo— no arrastra a las
+    // otras. Con `await` una sola bastaría para que no se ejecute ninguna.
+    try {
+      unawaited(c.player.setVolume(0).catchError((_) {}));
+      unawaited(c.player.pause().catchError((_) {}));
+      unawaited(c.player.stop().catchError((_) {}));
+    } catch (e) {
+      // Ni siquiera esto puede tirar: estamos en el camino de cierre y una
+      // excepción acá dejaría la app colgada al salir.
+      logger.info('No se pudo apagar el reproductor al cerrar: $e');
+    }
+  }
+
   bool _disposed = false;
   bool get disposed => _disposed;
   final Completer<void> _shutdownCompleter = Completer<void>();
@@ -3621,7 +3667,18 @@ class VideoPlayerController extends GetxController with WidgetsBindingObserver {
     }
 
     if (state == AppLifecycleState.detached) {
-      // La app se está cerrando de verdad: se le suelta el televisor.
+      // ── Lo PRIMERO: callar el audio ──────────────────────────────────────
+      //
+      // Reportado en vivo: se cerraba la app y el vídeo se seguía escuchando.
+      // El apagado normal no llega a correr acá —es una secuencia larga y el
+      // proceso se está muriendo— así que va el de emergencia, que manda las
+      // órdenes y no espera a nadie. Ver apagarTodoYa.
+      //
+      // Antes que soltar el televisor a propósito: eso es una petición por red
+      // que puede tardar, y lo que el usuario tiene delante es el sonido.
+      apagarTodoYa();
+
+      // Y se le suelta el televisor.
       //
       // Sin esto quedaba reproduciendo nuestro vídeo para siempre, y encima
       // pidiéndoselo a un relay que muere con el proceso — o sea que terminaba

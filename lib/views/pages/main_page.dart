@@ -4,6 +4,7 @@ import 'package:get/get.dart';
 import 'package:go_router/go_router.dart';
 import 'package:prismhub/views/widgets/beta_notice.dart';
 import 'package:prismhub/views/pages/extension/extension_page.dart';
+import 'package:prismhub/controllers/watch/video_controller.dart';
 import 'package:prismhub/views/pages/home_page.dart';
 import 'package:prismhub/views/pages/library_page.dart';
 import 'package:prismhub/views/pages/nsfw18/nsfw18_zone_page.dart';
@@ -237,6 +238,21 @@ class _DesktopMainPageState extends State<DesktopMainPage> with WindowListener {
         ],
       ),
     );
+  }
+
+  /// La ventana se está cerrando: se calla el audio antes que nada.
+  ///
+  /// En escritorio, cerrar la ventana no siempre entrega
+  /// `AppLifecycleState.detached` a tiempo — y ahí aparecía lo que se reportó:
+  /// la app se cerraba y el vídeo se seguía escuchando, porque mpv nunca
+  /// recibió la orden de parar.
+  ///
+  /// Este evento sí llega, y llega temprano. Manda las órdenes y no espera a
+  /// nadie: el proceso se está yendo y bloquear el cierre para esperar una
+  /// respuesta sería cambiar un problema por otro peor.
+  @override
+  void onWindowClose() {
+    VideoPlayerController.apagarTodoYa();
   }
 
   @override
