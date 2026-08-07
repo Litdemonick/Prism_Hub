@@ -167,9 +167,26 @@ class _SplashScreenState extends State<SplashScreen>
                           ),
                         ),
                       ),
-                      // La rueda se sacó a propósito: el logo latiendo ya dice
-                      // que el app está viva, y una rueda encima solo agrega
-                      // ruido y sugiere una espera que no hay.
+                      const SizedBox(height: 34),
+                      // La rueda va con el latido, no en lugar de él: el logo
+                      // dice que la app está viva y la rueda dice que todavía
+                      // está preparando algo. Es lo último en aparecer, así
+                      // que cuando el arranque es corto casi ni se ve.
+                      //
+                      // Fina y chica a propósito: al lado de un logo que late,
+                      // una rueda gruesa le compite la atención al centro de
+                      // la pantalla en vez de acompañarlo.
+                      const _Aparece(
+                        demora: Duration(milliseconds: 520),
+                        child: SizedBox(
+                          width: 22,
+                          height: 22,
+                          child: CircularProgressIndicator(
+                            strokeWidth: 2.0,
+                            valueColor: AlwaysStoppedAnimation<Color>(_acento),
+                          ),
+                        ),
+                      ),
                     ],
                   ),
                 ),
