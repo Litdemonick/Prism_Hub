@@ -644,8 +644,29 @@ class CatalogoExtensionesController extends GetxController {
         salteadas++;
         continue;
       }
-      // Las +18 no entran al Home, así que sus filtros tampoco.
-      if (runtime.extension.nsfw) continue;
+      // ── Las mixtas SÍ aportan sus filtros ─────────────────────────────
+      //
+      // Acá se descartaba toda extensión marcada `nsfw`, con el criterio viejo
+      // de que «las +18 no entran al Home». Pero el armado de filas ya no usa
+      // ese criterio: las mixtas SÍ entran, con su parte normal (ver
+      // `instaladas` en _armarDeVerdad, y el comentario largo de ahí).
+      //
+      // O sea que ManhwaWeb tenía fila en el Home pero no aportaba un solo
+      // género al filtro, y filtrar por «Romance» la dejaba afuera de la parte
+      // de arriba como si no supiera filtrar. Sabe: tiene tipo, demografía,
+      // estado y géneros.
+      //
+      // No hay riesgo de colar nada: unas líneas más abajo, a toda extensión
+      // con un filtro de adultos se le anota su valor seguro —el que la propia
+      // extensión declara como defecto— y ese se manda SIEMPRE desde la zona
+      // normal. Es el mismo mecanismo que ya protege a las filas.
+      //
+      // Una +18 de punta a punta —HentaiLA, Eporner— sigue afuera: no tiene
+      // nada normal que filtrar.
+      if (runtime.extension.nsfw &&
+          !ExtensionUtils.esMixta(runtime.extension.package)) {
+        continue;
+      }
       try {
         final filtros =
             await runtime.createFilter().timeout(const Duration(seconds: 8));
