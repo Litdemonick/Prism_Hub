@@ -289,6 +289,19 @@ class _BarraDeFiltrosState extends State<_BarraDeFiltros> {
           c.estadosDisponibles.isEmpty &&
           c.formatosDisponibles.isEmpty;
 
+      // ── Reintentar mientras no haya nada ────────────────────────────────
+      //
+      // El primer intento sale al montar la barra, y puede volver con las manos
+      // vacías: la cola de pedidos todavía llena, una extensión que no
+      // contestó, sin red. Antes eso dejaba los chips sin aparecer en toda la
+      // sesión.
+      //
+      // Este build corre cada vez que algo del catálogo cambia —una fila que
+      // termina de cargar, por ejemplo—, así que sirve de reintento natural sin
+      // necesidad de un reloj. Y `cargarGeneros` se protege sola de correr dos
+      // veces a la vez, así que llamarla de más no cuesta nada.
+      if (cargandoChips) unawaited(c.cargarGeneros());
+
       // Se calcula UNA vez: se consultaba cuatro veces por construcción y cada
       // una armaba su propia lista. Misma clase de error que `_visibles`, y
       // acá además puede discrepar entre una lectura y la siguiente.
@@ -807,6 +820,9 @@ class _CarruselAndroidState extends State<_CarruselAndroid>
   String? _anclaPaquete;
   String? _anclaUrl;
 
+  /// A qué tarjeta va la animación en curso. Ver `_corregirViajeEnCurso`.
+  double _destino = 0;
+
   /// Barata y suficiente: cambia si cambió la cantidad de extensiones o la de
   /// portadas de alguna.
   static int _firmaDe(List<(String, List<ExtensionListItem>)> grupos) {
@@ -897,7 +913,9 @@ class _CarruselAndroidState extends State<_CarruselAndroid>
     final fraccion = _p - _p.floorToDouble();
     final i = planos.indexWhere((e) => e.$1 == pkg && e.$2.url == url);
     if (i >= 0) {
+      final antes = _p;
       _p = i + fraccion;
+      _corregirViajeEnCurso(_p - antes);
       return;
     }
     // La tarjeta ya no está —cambió el filtro, o la extensión devolvió otra
@@ -905,6 +923,31 @@ class _CarruselAndroidState extends State<_CarruselAndroid>
     _p = _indiceGlobal(grupos)
         .toDouble()
         .clamp(0.0, (planos.length - 1).toDouble());
+  }
+
+  /// Corre la animación en curso el mismo tanto que se corrió la posición.
+  ///
+  /// ── El agujero que quedaba ──────────────────────────────────────────────
+  ///
+  /// El `Tween` de `_irA` se arma con los índices que había EN ESE MOMENTO, y
+  /// su oyente escribe `_p` en cada cuadro. Así que un re-anclaje a mitad del
+  /// viaje se deshacía al instante: el siguiente cuadro pisaba `_p` con un
+  /// valor del espacio de índices viejo, y la tarjeta se iba a la anterior.
+  ///
+  /// Eso es lo que se veía como «deslizo y a veces me regresa». Pasaba solo si
+  /// la lista crecía justo entre soltar y que terminara de acomodarse —una
+  /// ventana de trescientos milisegundos— por eso era intermitente.
+  ///
+  /// Corrigiendo el viaje con el mismo desplazamiento, la animación sigue hacia
+  /// la MISMA tarjeta a la que iba, y termina donde corresponde.
+  void _corregirViajeEnCurso(double desplazamiento) {
+    if (desplazamiento == 0 || !_anim.isAnimating) return;
+    if (_viaje == null) return;
+    // El valor actual ya está corregido en `_p`; lo que hay que mover es el
+    // destino. Se rearma el viaje desde donde está ahora.
+    _destino += desplazamiento;
+    _viaje = Tween<double>(begin: _p, end: _destino)
+        .animate(CurvedAnimation(parent: _anim, curve: Curves.easeOutCubic));
   }
 
   /// Anota qué tarjeta se está mirando, para poder encontrarla después.
@@ -929,6 +972,7 @@ class _CarruselAndroidState extends State<_CarruselAndroid>
   void _irA(double destino, List<(String, List<ExtensionListItem>)> grupos) {
     _viaje = Tween<double>(begin: _p, end: destino)
         .animate(CurvedAnimation(parent: _anim, curve: Curves.easeOutCubic));
+    _destino = destino;
     _anim.forward(from: 0);
     // La posición guardada se actualiza YA, sin esperar a que termine el
     // viaje: si el usuario se va de la pestaña a mitad de la animación, tiene

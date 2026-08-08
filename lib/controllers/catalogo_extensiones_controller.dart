@@ -465,9 +465,39 @@ class CatalogoExtensionesController extends GetxController {
   /// Una extensión que falle o que no tenga género no rompe nada: simplemente
   /// no aporta.
   Future<void> cargarGeneros() async {
-    if (_generosLeidos) return;
-    _generosLeidos = true;
+    // ── Marca de EN CURSO, no de HECHO ──────────────────────────────────
+    //
+    // Antes se marcaba como leído al entrar, y si el escaneo no encontraba
+    // nada —porque la cola nunca se vació, o porque las extensiones no
+    // contestaron— quedaba marcado igual y NO SE REINTENTABA NUNCA. Los chips
+    // de filtro no aparecían en toda la sesión.
+    //
+    // Ahora la marca definitiva se pone solo cuando de verdad se leyó algo. Si
+    // falló, la próxima vez que alguien pida los géneros se vuelve a intentar.
+    if (_generosLeidos || _leyendoGeneros) return;
+    _leyendoGeneros = true;
+    try {
+      await _leerGeneros();
+    } finally {
+      _leyendoGeneros = false;
+    }
+  }
 
+  bool _leyendoGeneros = false;
+
+  /// Esta extensión está pidiendo contenido ahora mismo.
+  ///
+  /// Preguntarle los filtros mientras tanto haría que las dos llamadas se
+  /// pisen en su motor QuickJS y fallen las dos.
+  bool _ocupada(String package) {
+    for (final f in filas) {
+      if (f.package != package) continue;
+      return f.estado.value == EstadoDeFila.cargando || _cola.contains(f);
+    }
+    return false;
+  }
+
+  Future<void> _leerGeneros() async {
     // ── Primero que terminen las filas ─────────────────────────────────
     //
     // `createFilter()` y `latest()` corren en el MISMO motor QuickJS de cada
@@ -478,17 +508,35 @@ class CatalogoExtensionesController extends GetxController {
     // Llamando a los géneros apenas se monta el Home, las `createFilter()`
     // caían encima de las `latest()` que estaban en vuelo y **fallaban las
     // dos**: el Home entero quedaba diciendo «no respondió».
-    for (var i = 0; i < 60 && (_enVuelo > 0 || _cola.isNotEmpty); i++) {
-      await Future<void>.delayed(const Duration(milliseconds: 500));
-    }
+    // Un respiro para que arranque la primera tanda, y nada más. Esperar a que
+    // la cola se vacíe ENTERA era el error: en una tablet con el emulador
+    // lento, o con `traerMas` pidiendo más páginas, esa cola casi nunca está
+    // vacía. Se agotaban los treinta segundos, el escaneo salía con las manos
+    // vacías y los chips no aparecían nunca. En el teléfono sí, porque
+    // contestaba más rápido — de ahí que pasara en una y no en la otra.
+    await Future<void>.delayed(const Duration(milliseconds: 800));
 
     // Lo guardado ya está en pantalla; esto lo confirma o lo corrige. Si el
     // escaneo no encuentra nada —sin extensiones activas, todas fallando— se
     // deja lo anterior en vez de vaciar la barra.
     final cuantas = <String, int>{};
     var alguna = false;
+    var salteadas = 0;
     for (final e in _motoresDelHome.entries) {
       final runtime = e.value;
+      // ── Se saltea la que está ocupada, no se espera a todas ────────────
+      //
+      // El motor QuickJS es de CADA extensión, así que el choque es por
+      // extensión y no global: mientras JKAnime trae su contenido, se le
+      // pueden pedir los filtros a TioAnime sin ningún riesgo.
+      //
+      // La que esté ocupada se saltea y queda para el próximo intento — que
+      // sale solo, porque la barra vuelve a pedir los géneros mientras no
+      // tenga ninguno.
+      if (_ocupada(e.key)) {
+        salteadas++;
+        continue;
+      }
       // Las +18 no entran al Home, así que sus filtros tampoco.
       if (runtime.extension.nsfw) continue;
       try {
@@ -547,7 +595,11 @@ class CatalogoExtensionesController extends GetxController {
       }
     }
 
+    // Sin nada leído no se marca como hecho: se reintenta la próxima.
     if (!alguna) return;
+    // Y tampoco se cierra si quedó alguna sin consultar: sus géneros faltarían
+    // para siempre. Se muestran los que ya hay y el próximo intento completa.
+    if (salteadas == 0) _generosLeidos = true;
 
     bool ofrecible(String id) => (cuantas[id] ?? 0) >= _minimoParaOfrecer;
 
@@ -1279,6 +1331,9 @@ class CatalogoExtensionesController extends GetxController {
   }
 
   Future<void> refrescarTodo() async {
+    // Tirar de la pantalla también reintenta los filtros: si la primera vez no
+    // se pudieron leer, este es el gesto con el que el usuario pide de nuevo.
+    unawaited(cargarGeneros());
     for (final fila in filas) {
       pedirSiHaceFalta(fila, forzar: true);
     }
