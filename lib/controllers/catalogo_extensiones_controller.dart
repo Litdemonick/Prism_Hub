@@ -178,11 +178,34 @@ class CatalogoExtensionesController extends GetxController {
   Future<void> cargarGeneros() async {
     if (_generosLeidos) return;
     _generosLeidos = true;
+
+    // ── Primero que terminen las filas ─────────────────────────────────
+    //
+    // `createFilter()` y `latest()` corren en el MISMO motor QuickJS de cada
+    // extensión, y ese motor no es reentrante — el comentario de
+    // extension_service.dart:715 ya documenta un error viejo por dos llamadas
+    // pisándose sobre la misma instancia.
+    //
+    // Llamando a los géneros apenas se monta el Home, las diecisiete
+    // `createFilter()` caían encima de las `latest()` que estaban en vuelo, y
+    // **fallaban las dos**: el Home entero quedaba diciendo «no respondió».
+    //
+    // Se espera a que la cola se vacíe. Con tope, porque un sitio colgado no
+    // puede dejar los filtros sin cargar para siempre: a los treinta segundos
+    // se intenta igual, y lo que falle simplemente no aporta géneros.
+    for (var i = 0; i < 60 && (_enVuelo > 0 || _cola.isNotEmpty); i++) {
+      await Future<void>.delayed(const Duration(milliseconds: 500));
+    }
+
     final union = <String>{};
     for (final fila in filas) {
       if (fila.estadoExt != EstadoExtension.activa) continue;
       final runtime = ExtensionUtils.enabledRuntimes[fila.package];
       if (runtime == null) continue;
+      // Las +18 no entran al Home, así que sus géneros tampoco. Sin esto se
+      // colaba un chip «+18» entre Acción y Aventura — de una extensión que
+      // el Home ni siquiera muestra.
+      if (runtime.extension.nsfw == true) continue;
       try {
         final filtros = await runtime
             .createFilter()
@@ -201,6 +224,9 @@ class CatalogoExtensionesController extends GetxController {
             final limpia = etiqueta.trim();
             // La opción vacía es «todos»: no es un género.
             if (limpia.isEmpty || clave.isEmpty) return;
+            // Y una opción que se llama «+18» tampoco: es una puerta a
+            // contenido adulto disfrazada de género.
+            if (limpia.contains('+18') || limpia.contains('18+')) return;
             porEtiqueta[limpia] = clave;
             union.add(limpia);
           });
@@ -233,19 +259,29 @@ class CatalogoExtensionesController extends GetxController {
   }
 
   /// Deja lo elegido como aplicado y vuelve a pedir todo.
+  ///
+  /// ── Lo viejo se queda hasta que llegue lo nuevo ────────────────────────
+  ///
+  /// La primera versión de esto vaciaba `items` y `destacados` antes de pedir
+  /// nada. Se veía pésimo y era peligroso: si un sitio tardaba o fallaba —y
+  /// con once a la vez siempre falla alguno— esa fila se quedaba SIN nada y
+  /// mostrando «no respondió». O sea que aplicar un filtro podía dejar el Home
+  /// entero vacío, y encima daba a entender que la culpa era de las
+  /// extensiones.
+  ///
+  /// Ahora solo se marca que hay que volver a pedir (`traidoEl = null`). Cada
+  /// fila reemplaza su contenido cuando el suyo llega, y la que falle se queda
+  /// con lo de antes — que es exactamente la regla que `_traer` ya seguía para
+  /// los refrescos normales.
+  ///
+  /// El precio es un rato con contenido del filtro anterior en pantalla. Es
+  /// mucho más barato que un Home en blanco.
   Future<void> aplicarFiltros() async {
     tipoAplicado = tipoElegido.value;
     generoAplicado = generoElegido.value;
-    // El carrusel se arma de lo que llega, así que se vacía: si no, quedarían
-    // mezcladas las portadas de antes del filtro con las de después.
-    destacados.clear();
-    carruselExt = 0;
-    carruselPos = 0;
     for (final fila in filas) {
-      fila.items.clear();
       fila.traidoEl = null;
     }
-    filas.refresh();
     await refrescarTodo();
   }
 

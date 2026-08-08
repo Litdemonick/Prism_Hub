@@ -57,7 +57,21 @@ class HomeAndroid extends StatelessWidget {
       child: Obx(() {
         if (c.filas.isEmpty) return const _SinExtensiones();
         return RefreshIndicator(
-          onRefresh: c.refrescarTodo,
+          // ── Deslizar aplica los filtros ────────────────────────────────
+          //
+          // Y no solo refresca. El aviso de arriba dice «deslizá hacia abajo
+          // para aplicar», y hasta acá el gesto llamaba a `refrescarTodo`,
+          // que vuelve a pedir lo mismo de antes: el usuario marcaba un
+          // género, deslizaba, y no cambiaba nada.
+          //
+          // Sin cambios pendientes se comporta como siempre.
+          onRefresh: () async {
+            if (c.hayCambiosSinAplicar) {
+              await c.aplicarFiltros();
+              return;
+            }
+            await c.refrescarTodo();
+          },
           child: ListView.builder(
             physics: const AlwaysScrollableScrollPhysics(),
             // Lo que ocupa la barra flotante, que con `extendBody` llega acá
