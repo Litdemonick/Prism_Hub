@@ -573,7 +573,25 @@ class _AndroidMainPageState extends fluent.State<AndroidMainPage> {
               ? null
               : AnimatedSlide(
                   offset: _barraEscondida ? const Offset(0, 1.6) : Offset.zero,
-                  duration: const Duration(milliseconds: 260),
+                  // ── Sin animación cuando la causa es una ruta ────────────
+                  //
+                  // La barra se esconde por dos motivos distintos y no son
+                  // iguales. En Ajustes se esconde EN SU SITIO, con la pantalla
+                  // quieta detrás: ahí la animación es lo que explica que se
+                  // retiró, y se queda.
+                  //
+                  // Pero cuando se abre una pantalla encima —el reproductor, el
+                  // lector, una ficha— la barra ni se ve: la tapa la propia
+                  // ruta. Animarla no aporta nada y encima se nota justo en el
+                  // peor momento, al cerrar: la ruta se va hacia un lado y la
+                  // barra sube desde abajo por su cuenta, dos movimientos a la
+                  // vez para una sola acción. Eso es lo que se sentía raro.
+                  //
+                  // Ahí va instantánea: cuando la ruta termina de irse, la
+                  // barra ya está en su lugar.
+                  duration: _sinAnimarLaBarra
+                      ? Duration.zero
+                      : const Duration(milliseconds: 260),
                   curve: Curves.easeOutCubic,
                   child: _barraFlotante(destinations),
                 ),
@@ -845,6 +863,26 @@ class _AndroidMainPageState extends fluent.State<AndroidMainPage> {
       ObservadorDePila.hayPantallaEncima.value ||
       c.selectedTab.value == MainController.tabAjustes;
 
+  /// Si había una pantalla encima la última vez que se dibujó.
+  ///
+  /// Se guarda para saber POR QUÉ cambió la barra: si lo que cambió fue esto,
+  /// la causa es una ruta que se abrió o se cerró y la animación sobra. Ver el
+  /// comentario del AnimatedSlide.
+  bool _habiaPantallaEncima = false;
+
+  /// Si este cambio de la barra viene de una ruta y no de cambiar de zona.
+  ///
+  /// Se lee en `build` y actualiza el recuerdo de paso. No es un `setState`
+  /// escondido: es un campo suelto que solo se usa para elegir la duración de
+  /// la animación en este mismo dibujado.
+  bool get _sinAnimarLaBarra {
+    final ahora = ObservadorDePila.hayPantallaEncima.value;
+    final porRuta = ahora != _habiaPantallaEncima;
+    _habiaPantallaEncima = ahora;
+    // Con una pantalla encima tampoco se anima: no se ve, está tapada.
+    return porRuta || ahora;
+  }
+
   /// Los botones que salen de los tres puntos.
   ///
   /// Flotando sobre el contenido y no en una hoja que sube desde abajo: la
@@ -953,7 +991,6 @@ class _IconoDeBarra extends StatelessWidget {
     required this.destino,
     required this.elegido,
     required this.onTap,
-    this.tamano = 46,
   });
 
   final _Destination destino;
@@ -965,7 +1002,6 @@ class _IconoDeBarra extends StatelessWidget {
   /// En el riel acostado va más grande: ahí quedaron TRES destinos en una
   /// columna con alto de sobra, así que a 46 se veían chicos y perdidos contra
   /// el borde. De pie son cuatro en una barra angosta y ahí 46 es lo que entra.
-  final double tamano;
 
   @override
   Widget build(BuildContext context) {
@@ -976,12 +1012,12 @@ class _IconoDeBarra extends StatelessWidget {
       label: destino.label,
       child: InkResponse(
         onTap: onTap,
-        radius: tamano * 0.57,
+        radius: 46.0 * 0.57,
         child: AnimatedContainer(
           duration: const Duration(milliseconds: 200),
           curve: Curves.easeOut,
-          width: tamano,
-          height: tamano,
+          width: 46,
+          height: 46,
           decoration: BoxDecoration(
             shape: BoxShape.circle,
             color: elegido ? acento.withValues(alpha: 0.3) : Colors.transparent,
@@ -989,7 +1025,7 @@ class _IconoDeBarra extends StatelessWidget {
           child: Icon(
             elegido ? destino.selectedIcon : destino.icon,
             // Sigue al botón, para que la proporción sea la misma en los dos.
-            size: tamano * 0.5,
+            size: 46.0 * 0.5,
             color: elegido ? Colors.white : Colors.white.withValues(alpha: 0.6),
           ),
         ),
