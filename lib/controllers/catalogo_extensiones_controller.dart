@@ -429,7 +429,11 @@ class CatalogoExtensionesController extends GetxController {
       await Future<void>.delayed(const Duration(milliseconds: 500));
     }
 
+    // Lo guardado ya está en pantalla; esto lo confirma o lo corrige. Si el
+    // escaneo no encuentra nada —sin extensiones activas, todas fallando— se
+    // deja lo anterior en vez de vaciar la barra.
     final cuantas = <String, int>{};
+    var alguna = false;
     for (final e in _motoresDelHome.entries) {
       final runtime = e.value;
       // Las +18 no entran al Home, así que sus filtros tampoco.
@@ -470,6 +474,7 @@ class CatalogoExtensionesController extends GetxController {
         }
 
         if (deEsta.isNotEmpty) {
+          alguna = true;
           _ejesPorExtension[e.key] = deEsta;
           for (final id in deEsta.keys) {
             cuantas[id] = (cuantas[id] ?? 0) + 1;
@@ -480,6 +485,8 @@ class CatalogoExtensionesController extends GetxController {
       }
     }
 
+    if (!alguna) return;
+
     bool ofrecible(String id) => (cuantas[id] ?? 0) >= _minimoParaOfrecer;
 
     // En el orden de las listas curadas, no alfabético: así los más usados
@@ -489,6 +496,7 @@ class CatalogoExtensionesController extends GetxController {
     estadosDisponibles.assignAll(_estados.keys.where(ofrecible));
     formatosDisponibles.assignAll(_formatos.keys.where(ofrecible));
     _repartirModos();
+    unawaited(_guardarFiltros());
   }
 
   /// Decide qué muestra cada fila.
@@ -661,6 +669,9 @@ class CatalogoExtensionesController extends GetxController {
 
   Future<void> _armar() async {
     await _leerCache();
+    // Los filtros de la vez pasada, para que los chips estén puestos desde el
+    // primer cuadro en vez de aparecer a los pocos segundos.
+    await _leerFiltrosGuardados();
     // Antes de mirar qué hay: unas pocas del catálogo, para que el Home tenga
     // con qué llenarse aunque el usuario no haya instalado casi nada. Si falla
     // —sin red, catálogo caído— no pasa nada: sigue con lo que tenga.
@@ -940,6 +951,80 @@ class CatalogoExtensionesController extends GetxController {
 
   File get _archivo =>
       File(p.join(PrismHubDirectory.getDirectory, 'home_extensiones.json'));
+
+  // ─── El caché de los filtros ──────────────────────────────────────────────
+  //
+  // ── Por qué hace falta ──────────────────────────────────────────────────
+  //
+  // Leer los filtros llama a `createFilter()` en el motor QuickJS de cada
+  // extensión, y ese motor no es reentrante: si se hace mientras las filas
+  // piden contenido, se pisan y fallan las dos (ya pasó, ver `cargarGeneros`).
+  // Por eso los géneros esperan a que la cola se vacíe.
+  //
+  // La consecuencia era visible: se abría el Home, y varios segundos después
+  // aparecían los chips de golpe. Guardándolos, en el segundo arranque ya
+  // están puestos antes de dibujar nada, y el escaneo de fondo solo los
+  // actualiza si algo cambió.
+  //
+  // Archivo aparte del de las portadas a propósito: son cosas con vidas
+  // distintas —las portadas vencen a los treinta minutos, los filtros de un
+  // sitio casi nunca cambian— y mezclarlas obligaría a tirar las dos juntas.
+  File get _archivoFiltros =>
+      File(p.join(PrismHubDirectory.getDirectory, 'home_filtros.json'));
+
+  Future<void> _leerFiltrosGuardados() async {
+    try {
+      final f = _archivoFiltros;
+      if (!await f.exists()) return;
+      final crudo = jsonDecode(await f.readAsString());
+      if (crudo is! Map<String, dynamic>) return;
+
+      final ejes = crudo['ejes'];
+      if (ejes is Map) {
+        ejes.forEach((pkg, mapa) {
+          if (mapa is! Map) return;
+          final porId = <String, ({String clave, String valor})>{};
+          mapa.forEach((id, par) {
+            if (par is! List || par.length != 2) return;
+            porId['$id'] = (clave: '${par[0]}', valor: '${par[1]}');
+          });
+          if (porId.isNotEmpty) _ejesPorExtension['$pkg'] = porId;
+        });
+      }
+      final pop = crudo['popular'];
+      if (pop is Map) {
+        pop.forEach((pkg, par) {
+          if (par is! List || par.length != 2) return;
+          _popularPorExtension['$pkg'] = (clave: '${par[0]}', valor: '${par[1]}');
+        });
+      }
+      List<String> lista(String k) =>
+          (crudo[k] as List?)?.map((e) => '$e').toList() ?? const [];
+      generosDisponibles.assignAll(lista('generos'));
+      estadosDisponibles.assignAll(lista('estados'));
+      formatosDisponibles.assignAll(lista('formatos'));
+    } catch (e) {
+      // Un caché ilegible no puede impedir que el Home abra: se descarta y se
+      // vuelve a escanear como la primera vez.
+      logger.info('[home] filtros guardados ilegibles, se ignoran: $e');
+    }
+  }
+
+  Future<void> _guardarFiltros() async {
+    try {
+      await _archivoFiltros.writeAsString(jsonEncode({
+        'ejes': _ejesPorExtension.map((pkg, m) =>
+            MapEntry(pkg, m.map((id, d) => MapEntry(id, [d.clave, d.valor])))),
+        'popular': _popularPorExtension
+            .map((pkg, d) => MapEntry(pkg, [d.clave, d.valor])),
+        'generos': generosDisponibles.toList(),
+        'estados': estadosDisponibles.toList(),
+        'formatos': formatosDisponibles.toList(),
+      }));
+    } catch (e) {
+      logger.info('[home] no se pudieron guardar los filtros: $e');
+    }
+  }
 
   Future<void> _leerCache() async {
     try {

@@ -319,7 +319,13 @@ class _BarraDeFiltrosState extends State<_BarraDeFiltros> {
                   // Flexible y con su propio desplazamiento: con tres activos en
                   // un teléfono angosto, si no, se comerían la barra entera.
                   if (_marcados(c).isNotEmpty)
-                    Flexible(
+                    // Nunca más de un tercio del ancho. Sin el tope, con dos o
+                    // tres filtros puestos el grupo de activos se llevaba media
+                    // barra y a los demás chips les quedaba un hueco donde solo
+                    // entraba uno y medio.
+                    ConstrainedBox(
+                      constraints: BoxConstraints(
+                          maxWidth: MediaQuery.sizeOf(context).width / 3),
                       child: SingleChildScrollView(
                         scrollDirection: Axis.horizontal,
                         padding: EdgeInsets.only(left: _esTactil ? margen : 6),
