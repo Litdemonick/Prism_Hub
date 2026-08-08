@@ -480,7 +480,19 @@ class _BarraDeFiltrosState extends State<_BarraDeFiltros> {
             // lo que hay adentro, y nada se mueve.
             SizedBox(
               height: 44,
-              child: (c.hayCambiosSinAplicar || hayAlgo)
+              // ── En escritorio la fila está SIEMPRE ────────────────────
+              //
+              // Acá vive el botón de refrescar, y hasta ahora la fila entera
+              // solo aparecía si había un filtro puesto o marcado. O sea que
+              // el botón se escondía justo en el caso normal: sin ningún
+              // filtro, que es cuando alguien instala una extensión y quiere
+              // verla en el Home. Quedaba otra vez sin forma de actualizar que
+              // no fuera cerrar la app.
+              //
+              // En celular no hace falta: ahí se tira de la pantalla y el
+              // gesto está siempre disponible, así que la fila sigue
+              // apareciendo solo cuando tiene algo que decir.
+              child: (c.hayCambiosSinAplicar || hayAlgo || !_esTactil)
                   ? Padding(
                       padding: EdgeInsets.fromLTRB(margen, 10, margen, 0),
                       child: Row(
@@ -858,6 +870,30 @@ class _CarruselAndroidState extends State<_CarruselAndroid>
   String? _anclaPaquete;
   String? _anclaUrl;
 
+  /// Cuánto se pasó de la última tarjeta real, si está entre las que esperan.
+  ///
+  /// Entre los fantasmas no hay tarjeta que anclar —todavía no existen— así que
+  /// el ancla es la última REAL y esto guarda la distancia hasta ella. Ver
+  /// `_recordarAncla`.
+  double _sobrante = 0;
+
+  /// Cuántas tarjetas en espera se dibujan después de la última real.
+  ///
+  /// ── Por qué existen ─────────────────────────────────────────────────────
+  ///
+  /// Sin ellas el acordeón termina en seco: se desliza, se choca contra una
+  /// pared invisible y nada dice si viene más o si eso es todo. Con internet
+  /// lento la pared aparece mucho antes de que llegue la página siguiente, y se
+  /// siente como que la app se colgó.
+  ///
+  /// Tres brillando dicen «viene más» sin escribirlo, y de paso dan lugar para
+  /// seguir deslizando mientras se pide. Cuando el contenido llega, se
+  /// reemplazan por las tarjetas de verdad EN EL MISMO SITIO: no hay salto.
+  ///
+  /// Cero cuando ya no queda nada por traer: prometer contenido que no va a
+  /// venir es peor que mostrar el final.
+  static const _maxFantasmas = 3;
+
   /// A qué tarjeta va la animación en curso. Ver `_corregirViajeEnCurso`.
   double _destino = 0;
 
@@ -948,7 +984,10 @@ class _CarruselAndroidState extends State<_CarruselAndroid>
     final url = _anclaUrl;
     if (pkg == null || url == null) return;
 
-    final fraccion = _p - _p.floorToDouble();
+    // Entre los fantasmas el «resto» no es la fracción sino la distancia hasta
+    // la última real, que puede ser mayor que uno. En los dos casos es lo que
+    // hay que volver a sumarle al ancla.
+    final fraccion = _sobrante > 0 ? _sobrante : _p - _p.floorToDouble();
     final i = planos.indexWhere((e) => e.$1 == pkg && e.$2.url == url);
     if (i >= 0) {
       final antes = _p;
@@ -1001,6 +1040,22 @@ class _CarruselAndroidState extends State<_CarruselAndroid>
   /// solo cuando la lista crecia con el gesto pasado de la mitad, que es
   /// justamente cuando el usuario esta deslizando.
   void _recordarAncla(List<(String, ExtensionListItem)> planos) {
+    if (planos.isEmpty) return;
+    final ultimoReal = planos.length - 1;
+    // ── Parado entre las que esperan ──────────────────────────────────────
+    //
+    // Ahí no hay tarjeta que recordar. Se ancla a la última real y se guarda
+    // cuánto se pasó, así al llegar contenido nuevo el usuario queda justo
+    // donde estaba: al final de lo que ya había, mirando lo que acaba de
+    // aparecer. Anclar al número pelado lo dejaría en cualquier lado, porque
+    // las páginas nuevas se meten en el medio de la lista, no al final.
+    if (_p > ultimoReal) {
+      _anclaPaquete = planos[ultimoReal].$1;
+      _anclaUrl = planos[ultimoReal].$2.url;
+      _sobrante = _p - ultimoReal;
+      return;
+    }
+    _sobrante = 0;
     final i = _p.floor();
     if (i < 0 || i >= planos.length) return;
     _anclaPaquete = planos[i].$1;
@@ -1069,7 +1124,10 @@ class _CarruselAndroidState extends State<_CarruselAndroid>
         _reubicarPorAncla(planos, grupos);
       }
 
-      final ultimo = (planos.length - 1).toDouble();
+      // Hasta dónde se puede deslizar: las reales más las que esperan.
+      final fantasmas = widget.c.puedeTraerMas ? _maxFantasmas : 0;
+      final ultimoReal = (planos.length - 1).toDouble();
+      final ultimo = ultimoReal + fantasmas;
       if (_p > ultimo) _p = ultimo;
       if (_p < 0) _p = 0;
       // Con la posición ya acomodada, se anota qué tarjeta es. Va en cada
@@ -1117,15 +1175,24 @@ class _CarruselAndroidState extends State<_CarruselAndroid>
                   // ── Traer más cuando queda poco ──────────────────────
                   //
                   // Al soltar y no en cada píxel del arrastre: así se pide una
-                  // vez por gesto y no cincuenta. Cinco de margen alcanza —
-                  // mientras llegan, el usuario todavía tiene cinco tarjetas
-                  // por delante y no ve el final.
-                  if (destino >= ultimo - 5) {
+                  // vez por gesto y no cincuenta.
+                  //
+                  // El margen se cuenta desde la última REAL, no desde el tope
+                  // con fantasmas: si se contara desde el tope, las tres
+                  // tarjetas en espera se comerían el aviso y el pedido saldría
+                  // tres tarjetas más tarde, justo cuando ya se ve el final.
+                  //
+                  // Diez y no cinco. Con internet lento, cinco tarjetas es
+                  // menos de un segundo deslizando rápido y la página no llega
+                  // a tiempo; diez da margen sin pedir de más, porque igual no
+                  // se dispara dos veces mientras una está en curso.
+                  if (destino >= ultimoReal - 10) {
                     unawaited(widget.c.traerMas());
                   }
                 },
                 child: ClipRect(
-                    child: _acordeon(planos, m, caja.maxWidth, grupos)),
+                    child:
+                        _acordeon(planos, m, caja.maxWidth, grupos, fantasmas)),
               ),
             ),
             const SizedBox(height: 8),
@@ -1178,6 +1245,7 @@ class _CarruselAndroidState extends State<_CarruselAndroid>
     _MedidasCarrusel m,
     double anchoUtil,
     List<(String, List<ExtensionListItem>)> grupos,
+    int fantasmas,
   ) {
     double anchoDe(int i) {
       final lejos = (_p - i).abs().clamp(0.0, 1.0);
@@ -1194,8 +1262,11 @@ class _CarruselAndroidState extends State<_CarruselAndroid>
     // se pide una de más a cada lado: la que entra y la que sale siguen
     // dibujadas mientras se mueven, así que el borde nunca parpadea.
     final centroEntero = _p.round();
-    final desde = (centroEntero - 3).clamp(0, planos.length - 1);
-    final hasta = (centroEntero + 3).clamp(0, planos.length - 1);
+    // El tope incluye las que esperan: son parte del recorrido aunque todavía
+    // no tengan contenido.
+    final tope = planos.length - 1 + fantasmas;
+    final desde = (centroEntero - 3).clamp(0, tope);
+    final hasta = (centroEntero + 3).clamp(0, tope);
     final foco = _p.floor();
 
     // Dónde empieza cada una, una atrás de la otra.
@@ -1233,6 +1304,9 @@ class _CarruselAndroidState extends State<_CarruselAndroid>
       children: [
         for (var i = desde; i <= hasta; i++)
           Positioned(
+            key: ValueKey(i >= planos.length
+                ? 'esperando-$i'
+                : '${planos[i].$1}|${planos[i].$2.url}'),
             left: xs[i]! + dx,
             // Todas del MISMO alto. Lo que distingue a la elegida es el
             // ancho, y nada más: encogiéndolas también de alto quedaban
@@ -1252,38 +1326,43 @@ class _CarruselAndroidState extends State<_CarruselAndroid>
             //
             //   Contents::SetInheritedOpacity should never be called when
             //   Contents::CanAcceptOpacity returns false
-            child: _TarjetaGrande(
-              // ── El ancho para DECODIFICAR es fijo ──────────────────────
-              //
-              // Y no el ancho real de la tarjeta, que cambia en cada cuadro
-              // mientras el dedo arrastra. Con el real, la imagen se volvía a
-              // decodificar sesenta veces por segundo a un tamaño distinto, y
-              // eso es exactamente el parpadeo: entre una decodificación y la
-              // siguiente no hay nada que dibujar.
-              //
-              // Se pide siempre al tamaño de la grande: es el máximo al que se
-              // va a ver, así que nunca queda borrosa, y como el número no
-              // cambia, la imagen se decodifica UNA vez y se reusa.
-              ancho: m.ancho,
-              item: planos[i].$2,
-              fuente:
-                  ExtensionUtils.runtimes[planos[i].$1]?.extension.name ?? '',
-              cabeceras: _cabeceras(planos[i].$1),
-              // El texto solo en la que está en foco: en una tira de cincuenta
-              // píxeles no entra, y recortado se lee como un error.
-              conTexto: (_p - i).abs() < 0.5,
-              anchoTexto: m.ancho - 28,
-              onTap: () {
-                // Tocar una de los costados la trae al centro; tocar la que ya
-                // está en foco abre la ficha. Sin esto, para abrir la de al
-                // lado había que deslizar y después tocar.
-                if ((_p - i).abs() > 0.35) {
-                  _irA(i.toDouble(), grupos);
-                  return;
-                }
-                _abrir(context, planos[i].$2, planos[i].$1);
-              },
-            ),
+            // Todavía no llegó: una tarjeta brillando en su lugar. Cuando el
+            // contenido llegue va a ocupar exactamente este hueco.
+            child: i >= planos.length
+                ? Esqueleto(radio: 20, width: anchoDe(i), height: m.alto)
+                : _TarjetaGrande(
+                    // ── El ancho para DECODIFICAR es fijo ──────────────────────
+                    //
+                    // Y no el ancho real de la tarjeta, que cambia en cada cuadro
+                    // mientras el dedo arrastra. Con el real, la imagen se volvía a
+                    // decodificar sesenta veces por segundo a un tamaño distinto, y
+                    // eso es exactamente el parpadeo: entre una decodificación y la
+                    // siguiente no hay nada que dibujar.
+                    //
+                    // Se pide siempre al tamaño de la grande: es el máximo al que se
+                    // va a ver, así que nunca queda borrosa, y como el número no
+                    // cambia, la imagen se decodifica UNA vez y se reusa.
+                    ancho: m.ancho,
+                    item: planos[i].$2,
+                    fuente:
+                        ExtensionUtils.runtimes[planos[i].$1]?.extension.name ??
+                            '',
+                    cabeceras: _cabeceras(planos[i].$1),
+                    // El texto solo en la que está en foco: en una tira de cincuenta
+                    // píxeles no entra, y recortado se lee como un error.
+                    conTexto: (_p - i).abs() < 0.5,
+                    anchoTexto: m.ancho - 28,
+                    onTap: () {
+                      // Tocar una de los costados la trae al centro; tocar la que ya
+                      // está en foco abre la ficha. Sin esto, para abrir la de al
+                      // lado había que deslizar y después tocar.
+                      if ((_p - i).abs() > 0.35) {
+                        _irA(i.toDouble(), grupos);
+                        return;
+                      }
+                      _abrir(context, planos[i].$2, planos[i].$1);
+                    },
+                  ),
           ),
       ],
     );

@@ -1065,6 +1065,25 @@ class CatalogoExtensionesController extends GetxController {
   /// Las portadas nuevas se AGREGAN al final de la tanda de cada extensión, así
   /// que el orden que ya estaba en pantalla no se mueve: el usuario sigue
   /// deslizando y aparecen más adelante.
+  /// Si queda contenido por traer.
+  ///
+  /// Es la misma condición que usa `traerMas` para elegir a quién pedirle, pero
+  /// sin pedir nada: el acordeón la necesita para saber si dibuja tarjetas en
+  /// espera al final o si de verdad ya no hay más.
+  ///
+  /// Sirve para no mentir: dibujar tarjetas «cargando» al final cuando ya no
+  /// va a llegar nada más deja al usuario esperando algo que no existe.
+  ///
+  /// Con `any` y no con `_candidatasAMas.isNotEmpty`: esto se lee desde el
+  /// dibujo del acordeón, o sea sesenta veces por segundo mientras el dedo
+  /// arrastra. Armar la lista entera para preguntar si tiene algo sería tirar
+  /// once objetos por cuadro para nada.
+  bool get puedeTraerMas => filas.any((f) =>
+      (f.estadoExt == EstadoExtension.activa || f.esVistaPrevia) &&
+      f.pagina < _maxPaginas &&
+      f.items.isNotEmpty &&
+      (!hayFiltros || puedeConEsteGenero(f.package)));
+
   Future<void> traerMas() async {
     if (trayendoMas.value) return;
     final candidatas = filas
@@ -1083,13 +1102,39 @@ class CatalogoExtensionesController extends GetxController {
         _cola.add(fila);
       }
       _mover();
-      // Se espera a que la cola se vacíe para no volver a disparar encima.
+      // ── Se suelta apenas hay algo nuevo que mostrar ────────────────────
+      //
+      // Antes se esperaba a que la cola entera se vaciara, hasta treinta
+      // segundos. Con internet lento eso es una eternidad: el usuario llegaba
+      // al final, deslizaba, y cada gesto chocaba contra `trayendoMas` y se
+      // iba sin pedir nada. Tenía que volver atrás y bajar despacio para que
+      // alguna llegara sola. Medido y reportado en tablet.
+      //
+      // Lo que importa no es que contesten las once: es que haya algo más
+      // adelante. En cuanto la lista crece se suelta el cerrojo, así el
+      // siguiente gesto ya puede pedir la página que sigue mientras las
+      // lentas terminan por su cuenta —siguen en la cola, nadie las cancela—.
+      //
+      // El tope de treinta segundos sigue estando por si NINGUNA contesta:
+      // sin él, una extensión colgada dejaría el cerrojo puesto para siempre y
+      // no se podría pedir nunca más.
+      final antes = _cuantasPortadas();
       for (var i = 0; i < 120 && (_enVuelo > 0 || _cola.isNotEmpty); i++) {
         await Future<void>.delayed(const Duration(milliseconds: 250));
+        if (_cuantasPortadas() > antes) break;
       }
     } finally {
       trayendoMas.value = false;
     }
+  }
+
+  /// Cuántas portadas hay en total ahora mismo, sumando todas las filas.
+  int _cuantasPortadas() {
+    var n = 0;
+    for (final f in filas) {
+      n += f.items.length;
+    }
+    return n;
   }
 
   /// La pide si hace falta. La llama cada fila cuando entra en pantalla.
