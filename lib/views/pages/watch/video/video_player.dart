@@ -6,6 +6,7 @@ import 'package:prismhub/views/pages/watch/video/video_player_sidebar.dart';
 import 'package:prismhub/views/pages/watch/video/video_player_content.dart';
 import 'package:prismhub/data/services/extension_service.dart';
 import 'package:prismhub/views/widgets/platform_widget.dart';
+import 'package:prismhub/views/widgets/home/home_theme.dart';
 import 'package:prismhub/views/widgets/progress.dart';
 
 class VideoPlayer extends StatefulWidget {
@@ -240,28 +241,25 @@ class _VideoPlayerState extends State<VideoPlayer> {
 
     if (acostado) return Scaffold(body: _buildContent());
 
+    // De pie el contenido usa la pantalla ENTERA igual que acostado.
+    //
+    // El primer intento fue encerrar el vídeo en una caja 16:9 arriba y dejar
+    // negro debajo. Se veía mal y por un motivo claro: los controles viven
+    // DENTRO del reproductor, así que encogiendo la caja se encogían con él —
+    // los botones quedaban apretados sobre la imagen, pisándola, y los de la
+    // derecha directamente cortados.
+    //
+    // Ahora la caja es toda la pantalla y lo que se mueve es la IMAGEN: se
+    // ancla arriba (ver VideoPlayerConten). El resultado es el que se buscaba
+    // —vídeo arriba, espacio libre debajo— y los controles se reparten en esa
+    // pantalla entera, con la barra de abajo en el hueco en vez de encima del
+    // vídeo. Y sin tocar una línea de los controles, que es lo más delicado.
     return Scaffold(
-      backgroundColor: Colors.black,
-      body: SafeArea(
-        // Solo arriba: abajo queda la barra de navegación del sistema, y el
-        // contenido no tiene por qué meterse debajo.
-        bottom: false,
-        child: Column(
-          children: [
-            AspectRatio(
-              aspectRatio: 16 / 9,
-              child: _buildContent(),
-            ),
-            // Lo que queda debajo. Por ahora en negro: la lista de episodios ya
-            // vive en el panel lateral del propio reproductor, y meterla acá
-            // sería tenerla en dos sitios que se pueden desincronizar. El hueco
-            // igual hace falta —es lo que convierte esto en «vídeo arriba» en
-            // vez de «vídeo estirado»— y es donde va a ir lo que se sume
-            // después.
-            const Expanded(child: ColoredBox(color: Colors.black)),
-          ],
-        ),
-      ),
+      // Un fondo con algo de color en vez de negro puro. El hueco de abajo es
+      // media pantalla: en negro plano se lee como que la app se colgó, y con
+      // el mismo fondo del resto de la app se lee como parte del reproductor.
+      backgroundColor: HomeTheme.bg,
+      body: _buildContent(),
     );
   }
 

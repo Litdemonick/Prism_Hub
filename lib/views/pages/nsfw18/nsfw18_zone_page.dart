@@ -565,6 +565,22 @@ class _Nsfw18ZonePageState extends State<Nsfw18ZonePage> {
     );
   }
 
+  /// Los favoritos DE ESTA ZONA.
+  ///
+  /// Con `zone: true`, que es lo que hace que mire la otra instancia del
+  /// controlador. Sin eso se abrían los favoritos normales, o sea que lo
+  /// guardado acá no tenía dónde verse junto y aparecía mezclado del otro lado.
+  void _favoritos() {
+    if (Platform.isAndroid) {
+      Get.to(const HistoryPage(soloFavoritos: true, zone: true));
+      return;
+    }
+    router.push(
+      Uri(path: '/history', queryParameters: {'tab': '5', 'zone': '1'})
+          .toString(),
+    );
+  }
+
   Widget _buildAndroid(BuildContext context) {
     return Scaffold(
       backgroundColor: HomeTheme.bg,
@@ -574,6 +590,21 @@ class _Nsfw18ZonePageState extends State<Nsfw18ZonePage> {
           'nsfw18.title'.i18n,
           style: const TextStyle(color: HomeTheme.textPrimary),
         ),
+        actions: [
+          IconButton(
+            tooltip: 'home.favorite'.i18n,
+            onPressed: _favoritos,
+            icon: const Icon(Icons.favorite_border_rounded,
+                color: HomeTheme.textPrimary),
+          ),
+          // Y el historial DE ESTA ZONA al lado, con el mismo criterio.
+          IconButton(
+            tooltip: 'home.history'.i18n,
+            onPressed: () => _openHistoryTab(0),
+            icon:
+                const Icon(Icons.history_rounded, color: HomeTheme.textPrimary),
+          ),
+        ],
       ),
       body: RefreshIndicator(
         onRefresh: () => c.onRefresh(),

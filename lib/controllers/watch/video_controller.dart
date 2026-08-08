@@ -1184,22 +1184,25 @@ class VideoPlayerController extends GetxController with WidgetsBindingObserver {
     _enUso = this;
     WidgetsBinding.instance.addObserver(this);
     if (Platform.isAndroid) {
-      // ── Se abre acostado, pero se puede girar ──────────────────────────
+      // ── Se abre COMO ESTÉ el teléfono, y se puede girar ────────────────
       //
-      // Antes acá se BLOQUEABA la orientación en horizontal: girar el teléfono
-      // no hacía nada y el vídeo se veía siempre acostado, aunque uno quisiera
-      // dejarlo de pie para hacer otra cosa mientras.
+      // Antes se BLOQUEABA la orientación en horizontal: girar no hacía nada y
+      // el vídeo se veía siempre acostado. El modo inmersivo también se pedía
+      // acá; ahora lo maneja la página según la orientación, en
+      // `pantallaSegunOrientacion`, porque de pie hay que ver la barra de
+      // estado y la de navegación.
       //
-      // Ahora se abre acostado igual —que es como se quiere ver un vídeo— pero
-      // sin bloquear: `landscapeAutoMode` sin forzar el sensor gira la pantalla
-      // y deja que el sistema siga escuchándolo, así que girar el teléfono
-      // pasa a modo vertical y la página se rearma sola (ver VideoPlayer).
+      // Antes acá se forzaba la horizontal, con lo que abrir el reproductor
+      // teniendo el teléfono de pie daba un giro a acostado y —desde que se
+      // permite el vertical— otro giro de vuelta a vertical. Dos giros y medio
+      // segundo de pantalla dando vueltas para terminar donde ya estaba.
       //
-      // El modo inmersivo también se va de acá: de pie hay que ver la barra de
-      // estado y la de navegación, como en cualquier reproductor. Lo enciende y
-      // lo apaga la página según la orientación, en `pantallaSegunOrientacion`.
+      // Ahora no se fuerza nada: se sueltan las cuatro orientaciones y manda el
+      // sensor. De pie abre de pie, acostado abre acostado, y girar funciona en
+      // los dos sentidos. Que un vídeo se vea mejor acostado es cierto, pero
+      // eso lo decide quien mira girando el teléfono, no la app girándoselo.
+      await AutoOrientation.fullAutoMode();
       SystemChrome.setPreferredOrientations(DeviceOrientation.values);
-      await AutoOrientation.landscapeAutoMode();
     }
     _initSettings();
     _initPlayer();
@@ -2628,6 +2631,31 @@ class VideoPlayerController extends GetxController with WidgetsBindingObserver {
   Duration? _midStreamResumeAt;
 
   void _beginPlaybackShutdown() {
+    // ── Lo PRIMERO de todo: que deje de sonar ─────────────────────────────
+    //
+    // Antes lo primero que se hacía era bajar el volumen, sí, pero dentro de
+    // `_shutdownPlayback`, que es la parte asíncrona y corre DESPUÉS de todo
+    // esto. Y hay caminos de cierre que ni siquiera llegan ahí: si el
+    // reproductor se cierra mientras está el respaldo por navegador, o si algo
+    // en el medio de este desarmado tira una excepción, `_shutdownPlayback`
+    // queda sin llamarse y el audio sigue sonando encima de la pantalla
+    // anterior. Reportado en vivo: «cerré el reproductor y se seguía
+    // escuchando».
+    //
+    // Acá arriba de todo no puede fallar: es lo primero que corre en el único
+    // punto por el que pasan TODOS los cierres. Sin await —no hay que esperar
+    // a nadie para callar— y con la excepción tragada, porque si el
+    // reproductor ya está desarmado esto tira y no importa: si ya está
+    // desarmado, tampoco está sonando.
+    //
+    // Pausar además de bajar el volumen: con volumen cero el vídeo sigue
+    // corriendo y gastando, y si algo lo reanuda vuelve a oírse. Los dos van en
+    // paralelo, alcanza con que llegue uno.
+    try {
+      unawaited(player.setVolume(0).catchError((_) {}));
+      unawaited(player.pause().catchError((_) {}));
+    } catch (_) {}
+
     ++_switchServerGen;
     _disposed = true;
     // Solo si sigo siendo yo: entre dos episodios puede haberse registrado ya
@@ -6920,8 +6948,24 @@ class VideoPlayerController extends GetxController with WidgetsBindingObserver {
   /// ya está en el modo que corresponde, pedirlo de nuevo no cuesta nada.
   static void pantallaSegunOrientacion({required bool acostado}) {
     if (!Platform.isAndroid) return;
+    if (acostado) {
+      SystemChrome.setEnabledSystemUIMode(SystemUiMode.immersiveSticky);
+      return;
+    }
+    // ── De pie: `manual` con las dos barras, NO `edgeToEdge` ──────────────
+    //
+    // Con edgeToEdge las barras se ven pero el contenido se dibuja DEBAJO, así
+    // que la hora y la batería quedaban tapadas por el vídeo. Y peor: si esta
+    // era la última orden antes de salir, la app entera se quedaba así y no se
+    // veía la hora ni después de cerrar el reproductor. Reportado en vivo.
+    //
+    // `manual` con todos los overlays es lo que ya pide el resto de la app al
+    // salir del reproductor (ver la restauración más abajo): fuerza que las dos
+    // barras vuelvan RESERVANDO su espacio, sin depender de que el MediaQuery
+    // alcance a refrescar el relleno superior a tiempo.
     SystemChrome.setEnabledSystemUIMode(
-      acostado ? SystemUiMode.immersiveSticky : SystemUiMode.edgeToEdge,
+      SystemUiMode.manual,
+      overlays: SystemUiOverlay.values,
     );
   }
 

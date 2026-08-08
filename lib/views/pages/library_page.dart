@@ -90,6 +90,19 @@ class _LibraryPageState extends State<LibraryPage> {
     );
   }
 
+  /// Todos los favoritos, en su zona.
+  void _favoritos() {
+    if (Platform.isAndroid) {
+      Get.to(const HistoryPage(soloFavoritos: true));
+      return;
+    }
+    // En escritorio la navegación va por rutas, no por Get.to: usar Get.to acá
+    // empuja una pantalla que el shell no dibuja.
+    router.push(
+      Uri(path: '/history', queryParameters: {'tab': '5'}).toString(),
+    );
+  }
+
   void _openHistoryTab(int tab) {
     if (Platform.isAndroid) {
       // Las pestañas 3 y 4 son favoritos, y eso es SU zona, no una
@@ -367,16 +380,46 @@ class _LibraryPageState extends State<LibraryPage> {
                                 0,
                                 _tightTop(context) ? 4 : 10,
                               ),
-                              child: Align(
-                                alignment: AlignmentDirectional.centerStart,
-                                child: Text(
-                                  "common.library".i18n,
-                                  // Mismo estilo que el título de Inicio,
-                                  // desde un solo lugar.
-                                  style: HomeTheme.tituloDeZona(
-                                    bajo: _tightTop(context),
+                              child: Row(
+                                children: [
+                                  Expanded(
+                                    child: Text(
+                                      "common.library".i18n,
+                                      // Mismo estilo que el título de Inicio,
+                                      // desde un solo lugar.
+                                      style: HomeTheme.tituloDeZona(
+                                        bajo: _tightTop(context),
+                                      ),
+                                    ),
                                   ),
-                                ),
+                                  // Favoritos, alineado con el título.
+                                  //
+                                  // Acá y no escondido en otro lado: la
+                                  // Biblioteca YA muestra los favoritos en
+                                  // secciones, y este es el atajo a verlos
+                                  // todos. Estaba detrás de los tres puntos de
+                                  // la barra de abajo, que es donde nadie lo
+                                  // busca.
+                                  IconButton(
+                                    tooltip: 'home.favorite'.i18n,
+                                    onPressed: _favoritos,
+                                    icon: const Icon(
+                                      Icons.favorite_border_rounded,
+                                      color: HomeTheme.textPrimary,
+                                    ),
+                                  ),
+                                  // Y el historial al lado: los dos son «lo
+                                  // que ya viste o guardaste», que es de lo que
+                                  // trata esta pantalla.
+                                  IconButton(
+                                    tooltip: 'home.history'.i18n,
+                                    onPressed: () => _openHistoryTab(0),
+                                    icon: const Icon(
+                                      Icons.history_rounded,
+                                      color: HomeTheme.textPrimary,
+                                    ),
+                                  ),
+                                ],
                               ),
                             ),
                             // Obx propio: aísla la rotación del banner (cada

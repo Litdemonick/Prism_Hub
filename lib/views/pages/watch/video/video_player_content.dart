@@ -151,9 +151,18 @@ class _VideoPlayerContenState extends State<VideoPlayerConten> {
           // En VR no: ahi el recorte ya lo hace el propio reproductor con las
           // medidas reales (ver _aplicarRecorteVr), y mover el anclaje
           // descuadraria esa cuenta.
+          //
+          // ── Y DE PIE se ancla ARRIBA ─────────────────────────────────────
+          //
+          // De pie el vídeo es una franja 16:9 en una pantalla larga, así que
+          // centrado quedaba flotando en el medio con negro arriba y abajo. Va
+          // pegado arriba, como en cualquier reproductor de teléfono: la imagen
+          // arriba y el espacio libre debajo, que es donde caen los botones.
           alignment: (c.llenarPantalla.value && !c.vrUnaPantalla.value)
               ? Alignment.bottomCenter
-              : Alignment.center,
+              : (MediaQuery.orientationOf(context) == Orientation.portrait
+                  ? Alignment.topCenter
+                  : Alignment.center),
           subtitleViewConfiguration: const SubtitleViewConfiguration(
             visible: false,
           ),

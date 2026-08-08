@@ -73,8 +73,11 @@ class _HistoryPageState extends State<HistoryPage> {
   /// Historial: todo, vídeo y lectura. Favoritos: sus dos. Se trabaja con el
   /// índice GLOBAL y no con la posición dentro de la tira, para que
   /// `_onFavoritesTab` y todo lo que ya mira `_tabIndex` siga valiendo igual.
+  /// El índice de la pestaña «Todo» de Favoritos. Ver [_tabs].
+  static const _favTodo = 5;
+
   List<int> get _pestanas =>
-      widget.soloFavoritos ? const [3, 4] : const [0, 1, 2];
+      widget.soloFavoritos ? const [_favTodo, 3, 4] : const [0, 1, 2];
 
   late int _tabIndex = _pestanas.contains(widget.initialTab)
       ? widget.initialTab
@@ -93,6 +96,11 @@ class _HistoryPageState extends State<HistoryPage> {
     'extension-type.reading',
     'history.favorites-video',
     'history.favorites-reading',
+    // La quinta es «Todo» de Favoritos. Va al final y no al principio para no
+    // correr los índices de las otras cuatro, que están escritos en las
+    // pantallas que abren esta —Biblioteca, la Zona +18, el router— y en
+    // `_onFavoritesTab`.
+    'search.all',
   ];
 
   @override
@@ -119,8 +127,21 @@ class _HistoryPageState extends State<HistoryPage> {
     super.dispose();
   }
 
-  static const _video = {ExtensionType.bangumi};
-  static const _lectura = {ExtensionType.manga, ExtensionType.fikushon};
+  // ── Los tipos salen de ExtensionUtils, no de una lista propia ──────────
+  //
+  // Acá había dos conjuntos escritos a mano: vídeo era solo `bangumi` y lectura
+  // solo `manga` y `fikushon`. Pero el enum tiene además `mixed` y
+  // `mixedReading` —las extensiones que sirven para las dos cosas, como
+  // ManhwaWeb— y esos dos no caían en NINGUNA de las dos pestañas.
+  //
+  // O sea que un favorito o un capítulo de una extensión mixta era invisible:
+  // no salía en «Vídeo» ni en «Lectura», y en «Todo» sí. Reportado en vivo:
+  // «voy a lectura y no se ve nada y en el Inicio tengo favoritos de lectura».
+  //
+  // ExtensionUtils ya tiene los conjuntos buenos y los usa el resto de la app.
+  // Con una copia local estaban condenados a separarse, y se separaron.
+  static Set<ExtensionType> get _video => ExtensionUtils.videoTypes;
+  static Set<ExtensionType> get _lectura => ExtensionUtils.readingTypes;
 
   Set<ExtensionType>? get _typeFilter {
     switch (_tabIndex) {
@@ -130,6 +151,7 @@ class _HistoryPageState extends State<HistoryPage> {
       case 2:
       case 4:
         return _lectura;
+      // 0 (Todo del historial) y _favTodo (Todo de favoritos): sin filtro.
       default:
         return null;
     }
@@ -142,6 +164,8 @@ class _HistoryPageState extends State<HistoryPage> {
   bool? get _tabEsVideo {
     if (_tabIndex == 1 || _tabIndex == 3) return true;
     if (_tabIndex == 2 || _tabIndex == 4) return false;
+    // En «Todo» conviven los dos, así que manda la vertical: es la que sirve
+    // para ambos sin recortar.
     return null;
   }
 
@@ -639,6 +663,7 @@ class _HistoryPageState extends State<HistoryPage> {
   /// pastilla. Con «Vídeo» y «Lectura» alcanza y entran las dos holgadas.
   String _etiqueta(int global) {
     if (!widget.soloFavoritos) return _tabs[global].i18n;
+    if (global == _favTodo) return 'search.all'.i18n;
     return global == 3
         ? 'extension-type.video'.i18n
         : 'extension-type.reading'.i18n;
