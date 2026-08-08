@@ -1220,10 +1220,12 @@ class _CarruselAndroidState extends State<_CarruselAndroid>
                       // Este recorte deja escapar arriba y abajo justo para
                       // eso. Ya existía para las filas horizontales, que tienen
                       // el mismo problema con la sombra del ratón encima.
-                      child: ClipRect(
-                        clipper: const _SoloCostados(),
-                        child: _acordeon(
-                            planos, m, caja.maxWidth, grupos, fantasmas),
+                      child: _conPuntasDifuminadas(
+                        ClipRect(
+                          clipper: const _SoloCostados(),
+                          child: _acordeon(
+                              planos, m, caja.maxWidth, grupos, fantasmas),
+                        ),
                       ),
                     ),
                     // ── Flechas solo con mouse ─────────────────────────────
@@ -1494,6 +1496,49 @@ class _CarruselAndroidState extends State<_CarruselAndroid>
     );
   }
 
+  /// Desvanece las puntas del acordeón en vez de cortarlas de golpe.
+  ///
+  /// ── El problema ─────────────────────────────────────────────────────────
+  ///
+  /// El acordeón se desborda a propósito: las tarjetas siguen más allá del
+  /// borde para que se entienda que hay más. Pero el recorte las corta en
+  /// vertical y al ras, así que la de la punta muestra media esquina redonda y
+  /// el resto cuadrado. Parece un error de dibujo, no un recorte.
+  ///
+  /// ── Por qué solo en escritorio ──────────────────────────────────────────
+  ///
+  /// En un teléfono el acordeón va de borde a borde: el corte cae justo contra
+  /// el canto de la pantalla, donde nadie lo lee como un corte. En escritorio
+  /// cae en medio de la ventana, contra el fondo, y ahí sí se ve.
+  ///
+  /// Y esto cuesta: obliga a dibujar el acordeón en una capa aparte para
+  /// aplicarle la máscara, en cada cuadro del arrastre. En escritorio sobra
+  /// potencia; en un teléfono sería pagar por arreglar algo que no se nota.
+  static Widget _conPuntasDifuminadas(Widget acordeon) {
+    if (_esTactil) return acordeon;
+    return ShaderMask(
+      // `dstIn` apaga la propia imagen según el gris de la máscara, en vez de
+      // pintarle encima un degradado hacia el color de fondo. La diferencia
+      // importa: con un degradado opaco quedaría una banda del color del tema
+      // sobre el fondo animado, y se vería el borde de la banda.
+      blendMode: BlendMode.dstIn,
+      shaderCallback: (rect) => const LinearGradient(
+        begin: Alignment.centerLeft,
+        end: Alignment.centerRight,
+        colors: [
+          Colors.transparent,
+          Colors.white,
+          Colors.white,
+          Colors.transparent,
+        ],
+        // Angosto a propósito: lo justo para que la punta se apague, sin
+        // comerse la tarjeta que está entrando.
+        stops: [0.0, 0.05, 0.95, 1.0],
+      ).createShader(rect),
+      child: acordeon,
+    );
+  }
+
   /// Un disco oscuro detrás de la flecha, para que se lea sobre cualquier
   /// portada.
   static Widget _discoDeFlecha(Widget flecha) => DecoratedBox(
@@ -1621,10 +1666,22 @@ class _TarjetaGrande extends StatelessWidget {
         decoration: BoxDecoration(
           borderRadius: radio,
           color: HomeTheme.cardSurface,
-          // Un filo claro apenas visible. No es adorno: sobre una portada
-          // oscura, el borde de la tarjeta se funde con el fondo y no se sabe
-          // dónde termina. Con esto se lee la forma sin que parezca un marco.
-          border: Border.all(color: Colors.white.withValues(alpha: 0.11)),
+          // ── Sin filo claro ───────────────────────────────────────────────
+          //
+          // Había un borde blanco apenas visible para que la forma se leyera
+          // sobre una portada oscura. En una tarjeta suelta funciona; en el
+          // acordeón no, y por dos motivos.
+          //
+          // Uno: las tiras de los costados están a nueve píxeles una de otra,
+          // así que sus filos quedan de a pares y se leen como rayas verticales
+          // cruzando el carrusel, no como bordes de tarjeta.
+          //
+          // Dos: las de las puntas quedan cortadas por el recorte, y entonces
+          // el filo se ve solo arriba y abajo, terminando en seco contra el
+          // aire. Es la línea rara que se veía en escritorio.
+          //
+          // La sombra ya separa la tarjeta del fondo —y desde que dejó de
+          // recortarse se ve entera— así que el filo no hacía falta.
           boxShadow: const [
             BoxShadow(
               color: Color(0x73000000),
