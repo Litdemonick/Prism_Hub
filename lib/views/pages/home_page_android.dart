@@ -1072,7 +1072,24 @@ class _GrillaPaginada extends StatefulWidget {
 }
 
 class _GrillaPaginadaState extends State<_GrillaPaginada> {
-  static const _maxPaginas = 3;
+  /// Cuántas portadas ofrece cada extensión, en cualquier aparato.
+  ///
+  /// ── Por qué un número de PORTADAS y no de páginas ──────────────────────
+  ///
+  /// Porque cuántas entran por página depende de la pantalla: tres columnas
+  /// por dos filas en un teléfono, cinco por dos en una tablet. Con un tope de
+  /// páginas, el teléfono ofrecía dieciocho y la tablet treinta — la misma
+  /// extensión mostraba casi el doble de cosas según el aparato, sin ningún
+  /// motivo.
+  ///
+  /// Fijando las portadas y calculando las páginas al revés, todos ven más o
+  /// menos lo mismo: seis páginas de tres en un teléfono acostado, dos de diez
+  /// en una tablet.
+  static const _porExtension = 18;
+
+  /// Tope duro de páginas. No por contenido: por los puntitos. Con ocho o
+  /// nueve dejan de leerse como «vas por la segunda de tres».
+  static const _maxPaginas = 5;
   static const _hueco = 12.0;
 
   final _paginas = PageController();
@@ -1155,7 +1172,13 @@ class _GrillaPaginadaState extends State<_GrillaPaginada> {
       // las portadas del resto —hasta siete— y está bien: esto es una
       // vidriera, no el catálogo, y una fila vacía se nota mucho más que
       // cuatro portadas que nadie sabía que existían.
-      var paginas = widget.items.length ~/ porPagina;
+      // Las páginas salen de cuántas portadas se quieren mostrar, no al
+      // revés. Y siempre llenas: una a medias deja una fila de negro.
+      var paginas = (_porExtension / porPagina).round();
+      final llenasDisponibles = widget.items.length ~/ porPagina;
+      if (llenasDisponibles >= 1 && paginas > llenasDisponibles) {
+        paginas = llenasDisponibles;
+      }
       if (paginas < 1) paginas = 1;
       if (paginas > _maxPaginas) paginas = _maxPaginas;
       // Girar el teléfono cambia cuántas entran por página, así que la página
