@@ -406,6 +406,10 @@ class _ExtensionCardState extends State<ExtensionCard> {
       child: CacheNetWorkImagePic(
         icon,
         fit: BoxFit.contain,
+        // Al tamaño en que se dibuja, igual que en ExtensionTile: el
+        // repositorio muestra decenas de tarjetas de una y cada icono se
+        // decodificaba a resolución completa para una caja chica.
+        cacheWidth: (size * MediaQuery.devicePixelRatioOf(context)).round(),
         fallback: Icon(
           fluent.FluentIcons.puzzle,
           size: iconSize,

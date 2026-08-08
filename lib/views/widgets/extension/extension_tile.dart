@@ -336,6 +336,16 @@ class _ExtensionTileState extends State<ExtensionTile> {
         widget.extension.icon ?? '',
         key: ValueKey(widget.extension.icon),
         fit: BoxFit.contain,
+        // Se decodifica al tamaño en que se DIBUJA, no al del archivo.
+        //
+        // Sin esto, un icono de 512 píxeles se decodifica entero y se sube a
+        // la GPU entero para pintarse en una caja de 40. Con diecisiete
+        // extensiones eso es una ráfaga de subidas de textura justo al abrir
+        // la pantalla, y sale en el registro como cuadros lentos con
+        // `build=0ms` y el raster por las nubes — reportado en vivo en
+        // Android. Las tarjetas del Home ya lo hacían; estas se habían
+        // quedado afuera.
+        cacheWidth: (size * MediaQuery.devicePixelRatioOf(context)).round(),
         fallback: Icon(
           fluent.FluentIcons.puzzle,
           size: iconSize,

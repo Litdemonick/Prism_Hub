@@ -18,7 +18,7 @@ class AnimatedBackgroundGlow extends StatefulWidget {
 }
 
 class _AnimatedBackgroundGlowState extends State<AnimatedBackgroundGlow>
-    with SingleTickerProviderStateMixin {
+    with SingleTickerProviderStateMixin, WidgetsBindingObserver {
   late final AnimationController _controller = AnimationController(
     vsync: this,
     duration: const Duration(seconds: 24),
@@ -31,12 +31,32 @@ class _AnimatedBackgroundGlowState extends State<AnimatedBackgroundGlow>
   void initState() {
     super.initState();
     if (!_isDesktop) {
+      WidgetsBinding.instance.addObserver(this);
       _controller.repeat();
+    }
+  }
+
+  /// Se para cuando la app deja de estar a la vista.
+  ///
+  /// `repeat()` no se detiene solo: sin esto, este fondo sigue produciendo
+  /// sesenta cuadros por segundo con la app en segundo plano. No se ve nada y
+  /// se gasta batería igual. Y en cada uno de esos cuadros se rasteriza lo que
+  /// haya en pantalla que no tenga capa propia, que es de donde salían los
+  /// avisos de «FRAME LENTO» sin que el usuario tocara nada.
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState estado) {
+    if (_isDesktop) return;
+    final aLaVista = estado == AppLifecycleState.resumed;
+    if (aLaVista && !_controller.isAnimating) {
+      _controller.repeat();
+    } else if (!aLaVista && _controller.isAnimating) {
+      _controller.stop();
     }
   }
 
   @override
   void dispose() {
+    if (!_isDesktop) WidgetsBinding.instance.removeObserver(this);
     _controller.dispose();
     super.dispose();
   }
