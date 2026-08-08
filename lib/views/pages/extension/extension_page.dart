@@ -6,6 +6,7 @@ import 'package:flutter_i18n/flutter_i18n.dart';
 import 'package:get/get.dart';
 import 'package:prismhub/models/extension.dart';
 import 'package:prismhub/controllers/extension/extension_controller.dart';
+import 'package:prismhub/views/widgets/franja_de_zona.dart';
 import 'package:prismhub/views/widgets/extension/extension_tile.dart';
 import 'package:prismhub/views/pages/extension/extension_repo_page.dart';
 import 'package:prismhub/views/widgets/home/animated_background_glow.dart';
@@ -21,7 +22,6 @@ import 'package:prismhub/utils/router.dart';
 import 'package:prismhub/views/widgets/button.dart';
 import 'package:prismhub/views/widgets/messenger.dart';
 import 'package:prismhub/views/widgets/platform_widget.dart';
-import 'package:prismhub/views/widgets/search_appbar.dart';
 
 class ExtensionPage extends StatefulWidget {
   const ExtensionPage({super.key});
@@ -819,88 +819,85 @@ class _ExtensionPageState extends State<ExtensionPage> {
       _seguirLaPagina(page);
       return Scaffold(
         backgroundColor: HomeTheme.bg,
-        appBar: SearchAppBar(
-          title: 'common.extension-installed'.i18n,
-          hintText: 'common.search'.i18n,
-          textEditingController: _androidSearchController,
-          onChanged: (value) {
-            if (value.isEmpty) {
-              setState(() {
-                _search = '';
-                _page = 0;
-              });
-            }
-          },
-          onSubmitted: (value) {
-            setState(() {
-              _search = value;
-              _page = 0;
-            });
-          },
-          actions: [
-            // ── El filtro vive en la barra de arriba ────────────────────
-            //
-            // No en una fila propia debajo. Esa fila se llevaba su alto
-            // entero justo encima de la lista, y acostado —donde el alto es
-            // lo que falta— eso es media pantalla de tarjetas.
-            //
-            // El puntito avisa que hay un filtro puesto: metido dentro de la
-            // hoja, uno se olvida de que filtró y la lista corta parece un
-            // error.
-            IconButton(
-              tooltip: 'search.filter'.i18n,
-              onPressed: _abrirPanel,
-              icon: Stack(
-                clipBehavior: Clip.none,
-                children: [
-                  Icon(
-                    _masivoEnCurso
-                        ? Icons.hourglass_top_rounded
-                        : Icons.tune_rounded,
-                  ),
-                  if (_filter != _ExtFilter.todas)
-                    Positioned(
-                      right: -1,
-                      top: -1,
-                      child: Container(
-                        width: 9,
-                        height: 9,
-                        decoration: const BoxDecoration(
-                          color: HomeTheme.accentPink,
-                          shape: BoxShape.circle,
-                        ),
-                      ),
-                    ),
-                ],
-              ),
-            ),
-            if (c.errors.isNotEmpty)
-              IconButton(
-                icon: const Icon(Icons.error),
-                onPressed: () => _loadErrorDialog(),
-              ),
-            IconButton(
-              onPressed: () {
-                Get.to(
-                  () => const ExtensionRepoPage(),
-                );
-              },
-              icon: const Icon(Icons.download),
-            )
-          ],
-        ),
+        // Sin AppBar: el título va en la franja fina, dentro del cuerpo (ver
+        // FranjaDeZona). Una AppBar mide 56 y dibuja su propia superficie;
+        // acá el contenido pasa justo debajo del título, como en Inicio y en
+        // la Biblioteca, y acostado eso es media fila de tarjetas.
         body: Stack(
           children: [
             const Positioned.fill(child: AnimatedBackgroundGlow()),
             Column(
               children: [
-                // El aire de arriba y el de abajo de la barra se recortan en
-                // pantalla baja: en horizontal, cada bloque vertical se le
-                // resta directamente a la lista, que es lo único que importa
-                // ver ahí.
-                // Sin fila de filtros: el botón se fue a la barra de arriba
-                // (ver `actions`), así que la lista arranca acá mismo y las
-                // tarjetas suben todo lo que ocupaba esa franja.
+                FranjaDeZona(
+                  titulo: 'common.extension-installed'.i18n,
+                  ayuda: 'common.search'.i18n,
+                  controlador: _androidSearchController,
+                  alEscribir: (value) {
+                    if (value.isEmpty) {
+                      setState(() {
+                        _search = '';
+                        _page = 0;
+                      });
+                    }
+                  },
+                  alEnviar: (value) {
+                    setState(() {
+                      _search = value;
+                      _page = 0;
+                    });
+                  },
+                  acciones: [
+                    // ── El filtro vive en la franja de arriba ─────────────
+                    //
+                    // No en una fila propia debajo. Esa fila se llevaba su
+                    // alto entero justo encima de la lista, y acostado —donde
+                    // el alto es lo que falta— eso es media pantalla de
+                    // tarjetas.
+                    //
+                    // El puntito avisa que hay un filtro puesto: metido dentro
+                    // de la hoja, uno se olvida de que filtró y la lista corta
+                    // parece un error.
+                    AccionDeFranja(
+                      ayuda: 'search.filter'.i18n,
+                      alTocar: _abrirPanel,
+                      icono: Stack(
+                        clipBehavior: Clip.none,
+                        children: [
+                          Icon(
+                            _masivoEnCurso
+                                ? Icons.hourglass_top_rounded
+                                : Icons.tune_rounded,
+                          ),
+                          if (_filter != _ExtFilter.todas)
+                            Positioned(
+                              right: -1,
+                              top: -1,
+                              child: Container(
+                                width: 9,
+                                height: 9,
+                                decoration: const BoxDecoration(
+                                  color: HomeTheme.accentPink,
+                                  shape: BoxShape.circle,
+                                ),
+                              ),
+                            ),
+                        ],
+                      ),
+                    ),
+                    if (c.errors.isNotEmpty)
+                      AccionDeFranja(
+                        icono: const Icon(Icons.error),
+                        alTocar: () => _loadErrorDialog(),
+                      ),
+                    AccionDeFranja(
+                      icono: const Icon(Icons.download),
+                      alTocar: () => Get.to(() => const ExtensionRepoPage()),
+                    ),
+                  ],
+                ),
+                // El aire de abajo de la franja se recorta en pantalla baja:
+                // en horizontal, cada bloque vertical se le resta directamente
+                // a la lista, que es lo único que importa ver ahí.
                 SizedBox(height: _pantallaBaja(context) ? 2 : 6),
                 Expanded(
                   child: installed.isEmpty

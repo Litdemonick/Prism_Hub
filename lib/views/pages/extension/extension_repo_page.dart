@@ -14,7 +14,6 @@ import 'package:prismhub/utils/i18n.dart';
 import 'package:prismhub/utils/search_text.dart';
 import 'package:prismhub/views/widgets/button.dart';
 import 'package:prismhub/views/widgets/platform_widget.dart';
-import 'package:prismhub/views/widgets/progress.dart';
 import 'package:prismhub/views/widgets/search_appbar.dart';
 import 'package:prismhub/views/widgets/messenger.dart';
 

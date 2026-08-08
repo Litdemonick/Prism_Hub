@@ -7,6 +7,7 @@ import 'package:prismhub/utils/extension.dart';
 import 'package:prismhub/utils/prismhub_storage.dart';
 import 'package:prismhub/views/pages/nsfw18/nsfw18_search_page.dart';
 import 'package:prismhub/views/pages/search/extension_searcher_page.dart';
+import 'package:prismhub/views/widgets/franja_de_zona.dart';
 import 'package:prismhub/views/widgets/home/animated_background_glow.dart';
 import 'package:prismhub/views/widgets/home/home_theme.dart';
 import 'package:prismhub/views/widgets/home/refresh_button.dart';
@@ -14,7 +15,6 @@ import 'package:prismhub/views/widgets/search/search_all_extension.dart';
 import 'package:prismhub/router/router.dart';
 import 'package:prismhub/utils/i18n.dart';
 import 'package:prismhub/views/widgets/platform_widget.dart';
-import 'package:prismhub/views/widgets/search_appbar.dart';
 
 // Mismo lenguaje visual que Home/Historial (HomeTheme: fondo oscuro, chips
 // redondeados en vez de tabs/toggle buttons por defecto, caja de búsqueda
@@ -142,10 +142,12 @@ class _SearchPageState extends State<SearchPage> {
   Widget _botonDeFiltro(BuildContext context) {
     return Obx(() {
       final filtrando = c.cuurentExtensionType.value != null;
-      return IconButton(
-        tooltip: 'search.filter'.i18n,
-        onPressed: () => _abrirFiltros(context),
-        icon: Stack(
+      // AccionDeFranja y no IconButton: uno suelto viene a 48 y estira la
+      // franja justo lo que se quería sacar.
+      return AccionDeFranja(
+        ayuda: 'search.filter'.i18n,
+        alTocar: () => _abrirFiltros(context),
+        icono: Stack(
           clipBehavior: Clip.none,
           children: [
             const Icon(Icons.tune_rounded),
@@ -350,35 +352,10 @@ class _SearchPageState extends State<SearchPage> {
       // sin esto en horizontal el body se achicaba tanto que las partes
       // fijas (progreso + chips) ya no entraban y desbordaban.
       resizeToAvoidBottomInset: false,
-      appBar: SearchAppBar(
-        textEditingController: _searchController,
-        onChanged: (value) {
-          if (value.isEmpty) c.search.value = '';
-        },
-        onSubmitted: c.submitSearch,
-        hintText: "search.hint-text".i18n,
-        // Zona +18: título propio, tinte rojo y flecha para salir. El buscador
-        // normal es una pestaña del shell (no tiene a dónde volver), así que
-        // ahí estos tres van en null y queda igual que siempre.
-        title: widget.nsfwOnly
-            ? "nsfw18.search-zone-title".i18n
-            : "common.search".i18n,
-        backgroundColor: widget.nsfwOnly
-            ? HomeTheme.accentRed.withValues(alpha: 0.22)
-            : null,
-        leading: widget.nsfwOnly
-            ? IconButton(
-                icon: const Icon(Icons.arrow_back),
-                onPressed: () {
-                  if (Navigator.of(context).canPop()) {
-                    Navigator.of(context).pop();
-                  }
-                },
-              )
-            : null,
-        // El filtro de tipo, en la barra: ver _botonDeFiltro.
-        actions: [_botonDeFiltro(context)],
-      ),
+      // Sin AppBar: el título va en la franja fina, dentro del cuerpo (ver
+      // FranjaDeZona). Una AppBar mide 56 y dibuja su propia superficie; acá
+      // el contenido pasa justo debajo del título, como en Inicio y en la
+      // Biblioteca, y acostado eso es media fila de portadas de diferencia.
       body: RefreshIndicator(
         onRefresh: () async =>
             c.getRuntime(types: c.cuurentExtensionType.value),
@@ -391,7 +368,30 @@ class _SearchPageState extends State<SearchPage> {
               const Positioned.fill(child: AnimatedBackgroundGlow()),
               Column(
                 children: [
-                  // Sin la fila de chips: el filtro se fue a la barra de
+                  // Zona +18: título propio y flecha para salir. El buscador
+                  // normal es una pestaña del shell —no tiene a dónde volver—
+                  // así que ahí la flecha va en null y queda igual que siempre.
+                  FranjaDeZona(
+                    titulo: widget.nsfwOnly
+                        ? "nsfw18.search-zone-title".i18n
+                        : "common.search".i18n,
+                    controlador: _searchController,
+                    ayuda: "search.hint-text".i18n,
+                    alEscribir: (value) {
+                      if (value.isEmpty) c.search.value = '';
+                    },
+                    alEnviar: c.submitSearch,
+                    alVolver: widget.nsfwOnly
+                        ? () {
+                            if (Navigator.of(context).canPop()) {
+                              Navigator.of(context).pop();
+                            }
+                          }
+                        : null,
+                    // El filtro de tipo, en la franja: ver _botonDeFiltro.
+                    acciones: [_botonDeFiltro(context)],
+                  ),
+                  // Sin la fila de chips: el filtro se fue a la franja de
                   // arriba (ver _botonDeFiltro), así que los resultados
                   // arrancan acá mismo. Queda solo la barra de progreso, que
                   // son 3 puntos de alto y dice si todavía están buscando.
