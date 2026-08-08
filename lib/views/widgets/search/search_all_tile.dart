@@ -192,6 +192,22 @@ class _SearchAllTileState extends State<SearchAllTile> {
         // resultado nuevo.
         if (!widget.searchResult.completed) return _cargando();
 
+        // ── Sin conexión: bloques, no un aviso ────────────────────────────
+        //
+        // Decisión del usuario. Donde hay tarjetas, la zona se queda con los
+        // bloques brillando y no se escribe nada: con muchas extensiones
+        // instaladas, un aviso por fila —o incluso uno solo arriba— llenaba
+        // la pantalla de texto rojo en vez de contenido.
+        //
+        // Solo cuando la fila NO tiene nada que mostrar. Si ya había cargado
+        // algo antes, se sigue viendo eso: taparlo con bloques sería perder
+        // contenido que el usuario ya tenía delante.
+        if (widget.searchResult.error != null &&
+            isConnectionError(widget.searchResult.error) &&
+            (data == null || data.isEmpty)) {
+          return _cargando();
+        }
+
         // Un error con resultado previo válido (result no nulo/vacío) se
         // ignora acá — se prioriza seguir mostrando ese contenido viejo en
         // vez de taparlo con el mensaje de error apenas falla un refresh
