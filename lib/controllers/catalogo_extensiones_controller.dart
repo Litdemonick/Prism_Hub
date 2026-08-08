@@ -396,6 +396,24 @@ class CatalogoExtensionesController extends GetxController {
   ///
   /// Así que se miran TODOS los filtros de cada extensión y se anota, valor
   /// por valor, de qué filtro salió.
+  /// Por extensión, el valor SEGURO de cada filtro que tiene una puerta a
+  /// contenido adulto.
+  ///
+  /// ── Por qué se manda aunque ya sea el defecto ───────────────────────────
+  ///
+  /// Se midió (2026-08-08): solo ManhwaWeb y ShadeManga son mixtas —tienen
+  /// contenido normal y +18 detrás de un filtro— y las dos ya ponen «no» por su
+  /// cuenta cuando no se les dice nada.
+  ///
+  /// Pero eso es una promesa de cada extensión, no una garantía del app. Una
+  /// extensión nueva, o una actualización distraída, alcanzarían para que el
+  /// Home empiece a mostrar +18 sin que nadie se entere. Mandándolo explícito,
+  /// la regla la fija PrismHub y no depende de nadie.
+  ///
+  /// Y es lo que permite que estas extensiones SALGAN en la zona normal en vez
+  /// de esconderlas enteras: se muestra lo suyo, sin la parte de adultos.
+  final _segurosPorExtension = <String, Map<String, List<String>>>{};
+
   final _ejesPorExtension =
       <String, Map<String, ({String clave, String valor})>>{};
   bool _generosLeidos = false;
@@ -472,6 +490,14 @@ class CatalogoExtensionesController extends GetxController {
 
         final deEsta = <String, ({String clave, String valor})>{};
         for (final f in filtros.entries) {
+          // Un filtro con puerta a adultos: se anota su valor seguro —el que
+          // la propia extensión declara como defecto— para mandarlo siempre.
+          final adulto = f.value.adultOption;
+          if (adulto != null && adulto.isNotEmpty) {
+            (_segurosPorExtension[e.key] ??= {})[f.key] = [
+              f.value.defaultOption
+            ];
+          }
           final titulo = _normalizar(f.value.title);
           // «Género (+18)», «Adultos» y compañía: ni se miran.
           if (titulo.contains('18') || titulo.contains('adult')) continue;
@@ -1027,7 +1053,11 @@ class CatalogoExtensionesController extends GetxController {
   Map<String, List<String>>? _generoPara(String package) {
     final ejes = _ejesPorExtension[package];
     if (ejes == null) return null;
-    final filtro = <String, List<String>>{};
+    // Se arranca con lo seguro puesto: si esta extensión tiene una puerta a
+    // contenido adulto, va cerrada de entrada.
+    final filtro = <String, List<String>>{
+      ...?_segurosPorExtension[package],
+    };
     for (final id in [generoAplicado, estadoAplicado, formatoAplicado]) {
       if (id == null) continue;
       // Si la extensión entera ya es de ese formato, no hay nada que pedirle:
@@ -1037,7 +1067,11 @@ class CatalogoExtensionesController extends GetxController {
       // Dos ejes pueden caer en el mismo filtro del sitio; ahí se acumulan.
       (filtro[donde.clave] ??= <String>[]).add(donde.valor);
     }
-    return filtro.isEmpty ? null : filtro;
+    // Solo lo seguro y nada más no es un filtro: sería pedir lo mismo de
+    // siempre por un camino más caro. Ahí se deja que la fila use latest().
+    final soloSeguro =
+        filtro.length == (_segurosPorExtension[package]?.length ?? 0);
+    return (filtro.isEmpty || soloSeguro) ? null : filtro;
   }
 
   /// Alimenta el carrusel con la tanda de esta extensión.
