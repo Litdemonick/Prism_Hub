@@ -6,6 +6,7 @@ import 'package:flutter_i18n/flutter_i18n.dart';
 import 'package:prismhub/controllers/search_controller.dart';
 import 'package:prismhub/utils/error.dart';
 import 'package:prismhub/views/widgets/extension_item_card.dart';
+import 'package:prismhub/views/widgets/home/esqueleto.dart';
 import 'package:prismhub/views/widgets/home/home_theme.dart';
 import 'package:prismhub/views/widgets/horizontal_list.dart';
 
@@ -75,59 +76,96 @@ class _SearchAllTileState extends State<SearchAllTile> {
     });
   }
 
-  // Fila cargando: el indicador solo, centrado, sin nada debajo.
+  // ── Fila cargando: bloques que brillan, como en Inicio ──────────────────
   //
-  // Antes se dibujaban cuatro tarjetas de relleno y el indicador iba encima
-  // en un Stack centrado. El centro de la fila cae justo sobre una de esas
-  // tarjetas, así que el aro se veía asomando POR DETRÁS de ella, como si
-  // estuviera mal dibujado; y como el centro depende del ancho, al agrandar
-  // o achicar la ventana el aro se corría solo. Sin tarjetas debajo no hay
-  // con qué superponerse, sea cual sea el tamaño de la ventana.
+  // OJO, esto ya se intentó una vez y se sacó. Se dibujaban cuatro tarjetas de
+  // relleno con la RUEDA ENCIMA, centrada en un Stack. El centro de la fila
+  // cae justo sobre una de esas tarjetas, así que el aro se veía asomando por
+  // detrás de ella; y como el centro depende del ancho, al cambiar el tamaño
+  // de la ventana el aro se corría solo. Por eso quedó la rueda sola.
   //
-  // Mantiene el mismo alto que la fila con contenido, así que al llegar los
-  // datos nada salta de lugar.
+  // Los bloques vuelven, pero SIN la rueda: no hay nada centrado que pueda
+  // superponerse con ellos. Lo único que va encima es el aviso de "está
+  // tardando", y va sobre un velo que lo separa del fondo — y solo aparece a
+  // los doce segundos, no siempre.
+  //
+  // El motivo de traerlos es el de Inicio: la fila ya tiene la forma que va a
+  // tener con contenido, así que al llegar las portadas nada salta de lugar. Y
+  // con varias extensiones buscando a la vez, es lo que evita la pantalla
+  // llena de ruedas —o de avisos repetidos— cuando la red está caída.
+
+  /// El ancho de una tarjeta de esta fila, para que los bloques que esperan
+  /// midan lo mismo que las portadas que van a reemplazar.
+  double get _anchoTarjeta => Platform.isAndroid ? 104 : 150;
+
   Widget _cargando() {
+    final alto = Platform.isAndroid ? 170.0 : 280.0;
     return SizedBox(
-      height: Platform.isAndroid ? 170 : 280,
-      child: Center(
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            SizedBox(
-              width: 26,
-              height: 26,
-              child: CircularProgressIndicator(
-                strokeWidth: 2.4,
-                valueColor: AlwaysStoppedAnimation(
-                  HomeTheme.accentPink.withValues(alpha: 0.85),
+      height: alto,
+      child: Stack(
+        children: [
+          // ── Bloques brillando, no una rueda ──────────────────────────────
+          //
+          // Es lo mismo que hace el Inicio, y por el mismo motivo: la fila ya
+          // tiene la forma que va a tener cuando llegue el contenido, así que
+          // al llegar las portadas nada se mueve. Una rueda centrada deja la
+          // fila vacía y después todo aparece de golpe.
+          //
+          // Y con varias extensiones buscando a la vez, esto es lo que evita
+          // la pantalla llena de ruedas —o de avisos repetidos— cuando la red
+          // está caída: se ve una zona cargando, que es lo que de verdad está
+          // pasando.
+          ListView.separated(
+            scrollDirection: Axis.horizontal,
+            physics: const NeverScrollableScrollPhysics(),
+            padding: EdgeInsets.zero,
+            // Los que entran en pantalla y un par más. No hace falta saber
+            // cuántos resultados van a venir: son un relleno, no un dato.
+            itemCount: 8,
+            separatorBuilder: (_, __) => const SizedBox(width: 12),
+            itemBuilder: (_, __) => EsqueletoTarjeta(ancho: _anchoTarjeta),
+          ),
+          // El aviso de "está tardando" va ENCIMA de los bloques, centrado y
+          // sobre un velo, para que se lea sin tapar la forma de la fila.
+          if (_avisar)
+            Positioned.fill(
+              child: DecoratedBox(
+                decoration: BoxDecoration(
+                  color: HomeTheme.bg.withValues(alpha: 0.72),
+                ),
+                child: Center(
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      const Icon(Icons.hourglass_top_rounded,
+                          size: 20, color: HomeTheme.textMuted),
+                      const SizedBox(height: 10),
+                      // Ver _tardaDemasiado: unos bloques que brillan sin fin
+                      // y sin explicar nada se leen como que la app se colgó.
+                      Padding(
+                        padding: const EdgeInsets.symmetric(horizontal: 24),
+                        child: Text(
+                          FlutterI18n.translate(
+                            context,
+                            'common.extension-lenta',
+                            translationParams: {
+                              's': widget.searchResult.runitme.extension.name,
+                            },
+                          ),
+                          textAlign: TextAlign.center,
+                          style: const TextStyle(
+                            color: HomeTheme.textMuted,
+                            fontSize: 13,
+                            height: 1.35,
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
                 ),
               ),
             ),
-            // Y si tarda de más, se dice. Ver _tardaDemasiado: una rueda que no
-            // para y no explica nada se lee como que la app se colgó.
-            if (_avisar) ...[
-              const SizedBox(height: 14),
-              Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 24),
-                child: Text(
-                  FlutterI18n.translate(
-                    context,
-                    'common.extension-lenta',
-                    translationParams: {
-                      's': widget.searchResult.runitme.extension.name,
-                    },
-                  ),
-                  textAlign: TextAlign.center,
-                  style: const TextStyle(
-                    color: HomeTheme.textMuted,
-                    fontSize: 13,
-                    height: 1.35,
-                  ),
-                ),
-              ),
-            ],
-          ],
-        ),
+        ],
       ),
     );
   }

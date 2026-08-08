@@ -752,12 +752,12 @@ class _AndroidMainPageState extends fluent.State<AndroidMainPage> {
       ),
       (
         Icons.history_rounded,
-        'common.history'.i18n,
+        'home.history'.i18n,
         () => Get.to(() => const HistoryPage()),
       ),
       (
         Icons.favorite_border_rounded,
-        'common.favorite'.i18n,
+        'home.favorite'.i18n,
         // La pestaña de favoritos de Historial. Mismo índice que usa
         // Biblioteca — si cambia allá, cambia acá.
         () => Get.to(() => const HistoryPage(initialTab: 3)),

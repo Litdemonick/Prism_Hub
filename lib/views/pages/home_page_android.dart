@@ -744,7 +744,7 @@ class _Cabecera extends StatelessWidget {
           ),
           _BotonDeCabecera(
             icono: Icons.history_rounded,
-            etiqueta: 'common.history'.i18n,
+            etiqueta: 'home.history'.i18n,
             onTap: _historial,
           ),
           _BotonDeCabecera(
