@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 import 'package:prismhub/models/extension.dart';
@@ -71,6 +72,9 @@ class _VideoPlayerState extends State<VideoPlayer> {
           .timeout(const Duration(seconds: 4));
     } catch (_) {}
     if (!mounted) return;
+    // Y se espera a que TERMINE de entrar la pantalla. Ver _esperarLaEntrada.
+    await _esperarLaEntrada();
+    if (!mounted) return;
     // Sin lógica de "borrar el controller anterior de este tag": el tag ahora
     // es único por sesión (ver _tag), así que nunca hay uno previo que pisar.
     _c = Get.put(
@@ -105,6 +109,48 @@ class _VideoPlayerState extends State<VideoPlayer> {
       Get.delete<VideoPlayerController>(tag: _tag);
     }
     super.dispose();
+  }
+
+  /// Espera a que la animación de entrada de esta pantalla termine.
+  ///
+  /// ── Por qué, y qué se veía ──────────────────────────────────────────────
+  ///
+  /// Crear el controlador arranca mpv: abrir el motor, montar la textura,
+  /// resolver el servidor. Es lo más caro que hace la app, y estaba corriendo
+  /// EN MEDIO de la animación con la que esta pantalla entra. Los dos se pelean
+  /// el mismo hilo, así que la transición perdía cuadros justo al abrir — se
+  /// sentía como un tirón, y en la primera apertura de la app, cuando además
+  /// hay que cargar las bibliotecas nativas, mucho peor.
+  ///
+  /// Esperando a que la entrada termine, la animación corre sola y limpia, y el
+  /// arranque del reproductor empieza cuando ya no compite con nadie. No se
+  /// pierde tiempo real: lo que se demora es el arranque unos 250 ms, que es
+  /// exactamente lo que la animación tapa con la rueda que ya se muestra.
+  ///
+  /// Con tope, y no es de adorno: si algo deja la animación a medio camino —o
+  /// si la ruta no tiene animación, como puede pasar en escritorio— sin el tope
+  /// el reproductor no arrancaría nunca.
+  Future<void> _esperarLaEntrada() async {
+    final animacion = ModalRoute.of(context)?.animation;
+    if (animacion == null || animacion.status == AnimationStatus.completed) {
+      return;
+    }
+    final listo = Completer<void>();
+    void alCambiar(AnimationStatus estado) {
+      if (estado == AnimationStatus.completed ||
+          estado == AnimationStatus.dismissed) {
+        if (!listo.isCompleted) listo.complete();
+      }
+    }
+
+    animacion.addStatusListener(alCambiar);
+    try {
+      await listo.future.timeout(const Duration(milliseconds: 700));
+    } catch (_) {
+      // Se agotó el tope: se sigue igual, que es mejor que no abrir.
+    } finally {
+      animacion.removeStatusListener(alCambiar);
+    }
   }
 
   _buildContent() {
