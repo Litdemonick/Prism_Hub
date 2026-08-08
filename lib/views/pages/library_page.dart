@@ -300,6 +300,11 @@ class _LibraryPageState extends State<LibraryPage> {
               LayoutBuilder(
                 builder: (context, outerConstraints) {
                   return SingleChildScrollView(
+                    // Lo que ocupa la barra flotante. Va acá adentro y no
+                    // afuera de la página: afuera dejaba una banda negra
+                    // detrás de la barra en vez del fondo de la zona.
+                    padding: EdgeInsets.only(
+                        bottom: MediaQuery.paddingOf(context).bottom + 8),
                     // Sin esto, RefreshIndicator (deslizar para actualizar en
                     // Android) no dispara cuando el contenido entra entero en la
                     // pantalla (ej. recién instalado, poco contenido) — el scroll
@@ -371,7 +376,8 @@ class _LibraryPageState extends State<LibraryPage> {
       body: Column(
         children: [
           Padding(
-            padding: const EdgeInsets.fromLTRB(16, 6, 16, 6),
+            padding: EdgeInsets.fromLTRB(
+                16, MediaQuery.paddingOf(context).top + 6, 16, 6),
             child: Align(
               alignment: AlignmentDirectional.centerStart,
               child: Text(

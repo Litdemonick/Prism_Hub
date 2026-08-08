@@ -455,7 +455,20 @@ class _AndroidMainPageState extends fluent.State<AndroidMainPage> {
         body: Stack(children: [
         Column(
           children: [
-            SafeArea(bottom: false, child: _noConnectionBanner()),
+            // ── Sin SafeArea envolviéndolo ───────────────────────────
+            //
+            // Envuelto, reservaba la franja de la barra de estado SIEMPRE,
+            // también con el aviso oculto. Y esa franja se pinta ACÁ AFUERA de
+            // las páginas, así que quedaba negra plana mientras la zona de
+            // abajo tenía su fondo con brillo: se veía como una barra rara
+            // cruzando arriba de todo.
+            //
+            // Ahora el aviso se ocupa de su propio hueco cuando aparece, y
+            // cada zona empieza en el borde de la pantalla y pinta su fondo
+            // de arriba abajo. A cambio, cada una tiene que respetar la barra
+            // de estado por su cuenta — las que llevan AppBar ya lo hacían
+            // solas, y a las otras se les puso.
+            _noConnectionBanner(),
             Expanded(
               child: LayoutUtils.isTablet
                   ? Row(
@@ -741,24 +754,19 @@ class _AndroidMainPageState extends fluent.State<AndroidMainPage> {
           RepaintBoundary(
             child: TickerMode(
               enabled: i == c.selectedTab.value,
-              // Todas menos Home terminan ARRIBA de la barra flotante.
+              // ── Sin SafeArea de abajo tampoco ──────────────────────
               //
-              // Con `extendBody` el cuerpo llega hasta el borde de abajo, y
-              // Flutter le suma el alto de la barra al relleno del MediaQuery.
-              // Este SafeArea es el que lo consume: sin él, la paginación de
-              // Extensiones y el final de Ajustes quedaban tapados por la
-              // barra, que es justo lo que no puede pasar.
+              // Hacía lo mismo que el de arriba pero al revés: reservaba el
+              // alto de la barra flotante POR AFUERA de la página, así que
+              // detrás de la barra quedaba una banda negra en vez del fondo de
+              // la zona. Se veía como una sombra tapando.
               //
-              // Home no lo lleva: ahí el punto ES que las portadas se vean
-              // correr por debajo, y su ListView ya reserva el lugar solo.
-              child: i == MainController.tabHome
-                  ? pages[i]
-                  : SafeArea(
-                      top: false,
-                      left: false,
-                      right: false,
-                      child: pages[i],
-                    ),
+              // El lugar no se pierde: ahora cada zona se lo suma al relleno
+              // de su propia lista (`MediaQuery.paddingOf(context).bottom`,
+              // que con `extendBody` ya vale exactamente el alto de la barra).
+              // Así el fondo llega hasta el borde y lo que se desplaza igual
+              // termina por encima de la barra.
+              child: pages[i],
             ),
           ),
       ],

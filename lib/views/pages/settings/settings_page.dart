@@ -1791,7 +1791,9 @@ class _SettingsPageState extends State<SettingsPage> {
                     child: Builder(builder: (context) {
                       final items = _buildContent();
                       return ListView.builder(
-                        padding: const EdgeInsets.only(top: 4, bottom: 24),
+                        padding: EdgeInsets.only(
+                            top: 4,
+                            bottom: MediaQuery.paddingOf(context).bottom + 24),
                         itemCount: items.length,
                         itemBuilder: (context, i) => items[i],
                       );

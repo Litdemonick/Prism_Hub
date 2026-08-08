@@ -32,10 +32,9 @@ class HomeAndroid extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return SafeArea(
-      // Arriba no, y no hace falta: el aviso de «sin conexión» de main_page
-      // ya va envuelto en su propio SafeArea, y ese reserva la franja de la
-      // barra de estado ESTÉ O NO el aviso. O sea que acá adentro ya se
-      // empieza por debajo del reloj.
+      // Arriba no: la cabecera se encarga sola de la barra de estado, y así
+      // el fondo con brillo pasa por detrás del reloj en vez de cortarse en
+      // una franja negra.
       top: false,
       // Abajo tampoco: la barra flotante tiene que dejar ver las portadas
       // corriendo por atrás. El lugar no se pierde, se pasa al relleno de la
@@ -111,11 +110,10 @@ class _Cabecera extends StatelessWidget {
     return Padding(
       padding: EdgeInsets.fromLTRB(
         margen,
-        // Aire y nada más. **Acá NO se suma la barra de estado**: main_page ya
-        // dejó esa franja arriba de todo (ver el SafeArea de HomeAndroid), y
-        // sumarla otra vez era lo que dejaba el nombre de la app flotando al
-        // doble de distancia del reloj.
-        bajo ? 2 : 6,
+        // La barra de estado más un poco de aire. Ya no la reserva nadie
+        // más arriba, así que sin esto el nombre de la app se metería debajo
+        // del reloj.
+        MediaQuery.paddingOf(context).top + (bajo ? 2 : 6),
         // Menos a la derecha: los botones ya traen su propia zona de toque y
         // con el margen completo el ícono quedaba despegado del borde.
         margen - 8,

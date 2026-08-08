@@ -471,10 +471,12 @@ class _ExtensionPageState extends State<ExtensionPage> {
                         : ListView.builder(
                             physics: const AlwaysScrollableScrollPhysics(),
                             // Espacio a los costados y entre cards — antes
-                            // iban pegadas al borde de la pantalla.
-                            padding: const EdgeInsets.symmetric(
-                              horizontal: 16,
-                            ),
+                            // iban pegadas al borde de la pantalla. Y abajo,
+                            // lo que ocupa la barra flotante: adentro de la
+                            // lista, para que el fondo de la zona siga
+                            // llegando hasta el borde de la pantalla.
+                            padding: EdgeInsets.fromLTRB(16, 0, 16,
+                                MediaQuery.paddingOf(context).bottom + 8),
                             itemCount: pageItems.length,
                             itemBuilder: (_, i) {
                               return ExtensionTile(pageItems[i].extension);
