@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:io';
 
 import 'package:fluent_ui/fluent_ui.dart' as fluent;
@@ -477,6 +478,7 @@ class _DetailPageState extends State<DetailPage> {
               // propio alto. Acá los tres son iconos de barra: miden lo mismo,
               // se alinean solos y están siempre a mano.
               actions: [
+                _botonRefrescar(),
                 DetailFavoriteButton(tag: widget.tag, compacto: true),
                 DetailShareButton(tag: widget.tag, compacto: true),
                 DetailTrackingButton(
@@ -505,11 +507,11 @@ class _DetailPageState extends State<DetailPage> {
       ),
     );
 
-    if (!dosPaneles) return ficha;
+    if (!dosPaneles) return _conRefresco(ficha);
 
     return Row(
       children: [
-        SizedBox(width: anchoFicha, child: ficha),
+        SizedBox(width: anchoFicha, child: _conRefresco(ficha)),
         const VerticalDivider(width: 1, thickness: 1, color: HomeTheme.border),
         // El panel de capítulos se queda con todo el alto, incluida la franja
         // de la barra de estado — de ahí el SafeArea, que antes no estaba y
@@ -563,6 +565,44 @@ class _DetailPageState extends State<DetailPage> {
   }
 
   /// Lo mismo para la pestaña de sinopsis.
+  /// Envuelve la ficha con el gesto de deslizar hacia abajo para refrescar.
+  ///
+  /// ── El choque con el tope del scroll, y cómo se resuelve ────────────────
+  ///
+  /// Cuando el contenido entra sin plegar la cabecera, la pantalla se bloquea
+  /// a propósito (ver `physics`, arriba). Pero ese gesto es el MISMO que el de
+  /// refrescar: sin arrastre no hay nada que lo dispare, así que en esas
+  /// fichas —las de un solo capítulo— deslizar no haría nada.
+  ///
+  /// Por eso el refresco también vive como botón en la barra, en las dos
+  /// plataformas. El gesto es el camino natural cuando la ficha se desplaza; el
+  /// botón es el que siempre está.
+  Widget _conRefresco(Widget hijo) {
+    return RefreshIndicator(
+      onRefresh: c.refrescarAMano,
+      color: HomeTheme.accentPink,
+      backgroundColor: HomeTheme.cardSurface,
+      // Debajo de la barra, no encima: arriba de todo la rueda queda tapada
+      // por el título y la flecha de volver.
+      edgeOffset: MediaQuery.paddingOf(context).top + 56,
+      child: hijo,
+    );
+  }
+
+  /// El botón de refrescar, para cuando el gesto no aplica.
+  Widget _botonRefrescar() {
+    return Obx(() {
+      // Mientras carga no se ofrece: ya está trayendo lo mismo que pediría.
+      if (c.isLoading.value) return const SizedBox.shrink();
+      return IconButton(
+        tooltip: 'common.refresh'.i18n,
+        color: HomeTheme.textPrimary,
+        icon: const Icon(Icons.refresh_rounded),
+        onPressed: () => unawaited(c.refrescarAMano()),
+      );
+    });
+  }
+
   /// El alto REAL de la pestaña de sinopsis, medido por ella misma.
   ///
   /// Ver [DetailOverView.onAlto]. La estimación solo sabía contestar con la
@@ -853,6 +893,50 @@ class _DetailPageState extends State<DetailPage> {
                                   BotonPulsable(
                                       child:
                                           DetailShareButton(tag: widget.tag)),
+                                  const SizedBox(width: 8),
+                                  // Refrescar, junto al resto de las acciones
+                                  // de la ficha.
+                                  //
+                                  // Acá y no en una esquina suelta: es lo que
+                                  // se hace CON esta obra, igual que
+                                  // favorito o compartir, y en el escritorio
+                                  // no hay gesto de deslizar que lo cubra.
+                                  fluent.Button(
+                                    style: fluent.ButtonStyle(
+                                      backgroundColor:
+                                          fluent.WidgetStateProperty.all(
+                                        HomeTheme.cardSurface,
+                                      ),
+                                      foregroundColor:
+                                          fluent.WidgetStateProperty.all(
+                                        HomeTheme.textPrimary,
+                                      ),
+                                      shape: fluent.WidgetStateProperty.all(
+                                        RoundedRectangleBorder(
+                                          borderRadius:
+                                              BorderRadius.circular(999),
+                                          side: const BorderSide(
+                                              color: HomeTheme.border),
+                                        ),
+                                      ),
+                                    ),
+                                    onPressed: () =>
+                                        unawaited(c.refrescarAMano()),
+                                    child: Padding(
+                                      padding: const EdgeInsets.only(
+                                          left: 10, right: 10, top: 5,
+                                          bottom: 5),
+                                      child: Row(
+                                        mainAxisSize: MainAxisSize.min,
+                                        children: [
+                                          Text('common.refresh'.i18n),
+                                          const SizedBox(width: 8),
+                                          const Icon(fluent.FluentIcons.refresh,
+                                              size: 14),
+                                        ],
+                                      ),
+                                    ),
+                                  ),
                                   const SizedBox(width: 8),
                                   // Se oculta solo en películas — ver
                                   // DetailFinishedButton.

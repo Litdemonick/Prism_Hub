@@ -411,6 +411,36 @@ class DetailPageController extends GetxController {
     }
   }
 
+  /// Vuelve a pedir la ficha porque el usuario lo pidió.
+  ///
+  /// ── Por qué no alcanza con onRefresh() ──────────────────────────────────
+  ///
+  /// La ficha se guarda en una caché de sesión para que volver al mismo título
+  /// sea instantáneo. Llamando a onRefresh() a secas, getDetail() encuentra esa
+  /// copia y la devuelve: el gesto no traería nada nuevo y el usuario vería
+  /// exactamente lo mismo, sin entender por qué.
+  ///
+  /// Acá se tira la entrada de ESTE título —no la caché entera, que las demás
+  /// fichas siguen siendo válidas— y recién ahí se pide.
+  ///
+  /// El comentario de _sessionCache decía desde hacía rato que se invalidaba
+  /// «al hacer pull-to-refresh manual». Ese gesto no existía; ahora sí.
+  ///
+  /// No toca `isLoading`: refrescando ya hay contenido en pantalla y vaciarlo
+  /// para volver a llenarlo se ve como que la ficha se rompió y volvió. La
+  /// señal de que algo está pasando la da el propio gesto —la rueda de arriba
+  /// en el teléfono, el botón girando en el escritorio—.
+  Future<void> refrescarAMano() async {
+    _sessionCache.remove('$package:$url');
+    error.value = '';
+    try {
+      await onRefresh();
+    } catch (_) {
+      // onRefresh ya dejó el mensaje puesto. Propagarlo desde acá lo dejaría
+      // como un error sin nadie que lo atienda.
+    }
+  }
+
   /// Vuelve a pedir la ficha después de un fallo.
   ///
   /// Limpia el mensaje y vuelve a mostrar el indicador ANTES de pedir: sin
