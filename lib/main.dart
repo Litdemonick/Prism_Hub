@@ -75,6 +75,34 @@ void main(List<String> args) async {
 
     WidgetsFlutterBinding.ensureInitialized();
 
+    // ── La caché de imágenes, más grande que la de fábrica ────────────────
+    //
+    // Flutter guarda hasta 100 MB de imágenes YA DECODIFICADAS. Suena mucho y
+    // no lo es, porque lo que se guarda son píxeles crudos, no el archivo:
+    // cuatro bytes por píxel, sin comprimir.
+    //
+    // Las cuentas de esta app, en un teléfono de tres píxeles por punto:
+    //
+    //   · una portada del acordeón, de unos 300 puntos de ancho, ocupa
+    //     900 × 1350 × 4 = 4,8 MB. Seis en pantalla son 29 MB.
+    //   · una portada de fila, de 150 puntos, ocupa 1,2 MB. Dos filas ya son
+    //     otros 20 MB.
+    //   · el fondo de una ficha ocupa la pantalla entera: 1080 × 2400 × 4,
+    //     casi 10 MB él solo.
+    //   · y una página de manga a resolución completa se va a diez o quince.
+    //
+    // O sea que abrir una ficha —y peor, leer tres páginas— se lleva los 100 MB
+    // por delante y echa TODO lo del Inicio. Al volver, las portadas ya no
+    // están: cada tarjeta vuelve a mostrar el arte de respaldo y a
+    // decodificarse de cero. Eso es lo que se veía como «el Inicio se recarga
+    // solo al volver de una ficha», con el acordeón en bloques grises otra vez.
+    //
+    // Con 220 MB entran el Inicio entero y una ficha encima sin echar nada. No
+    // es memoria reservada: es un techo, y se llena solo con lo que de verdad
+    // se mostró. Y si el sistema avisa que falta memoria, Flutter vacía la
+    // caché él solo, así que el techo alto no deja a la app sin salida.
+    PaintingBinding.instance.imageCache.maximumSizeBytes = 220 << 20;
+
     // Instrumentación temporal de frames — para diagnosticar tirones reales.
     // En Windows debug, totalSpan también sube cuando hay huecos entre frames
     // durante hot restart/arranque aunque build+raster hayan costado casi

@@ -1,3 +1,4 @@
+import 'dart:math' as math;
 import 'package:flutter/material.dart';
 import 'package:prismhub/models/extension.dart';
 import 'package:prismhub/utils/extension.dart';
@@ -61,6 +62,17 @@ Future<bool?> showNsfwConfirmDialog(
       isVideo: isVideo,
       extensionIsNsfw: extensionIsNsfw,
     ),
+    // ── El contenido ya trae SU scroll ─────────────────────────────────
+    //
+    // Sin esto, el AlertDialog le pone otro por fuera, y es la trampa que el
+    // propio showPlatformDialog documenta: dos scrolls anidados se pelean el
+    // gesto —el de adentro se lo queda— y encima el de afuera hace que el
+    // diálogo pida el alto entero del contenido, así que las acciones se
+    // quedan sin lugar.
+    //
+    // Lo que se veía acostado: la tarjeta de «Sí, es contenido +18» cortada por
+    // la mitad y el botón de Cancelar montado encima.
+    scrollable: false,
     // Las acciones van dentro del contenido (las dos tarjetas), así que acá
     // solo queda cancelar. Cancelar devuelve null y quien llama trata eso como
     // "no hacer nada", no como "no es +18".
@@ -398,7 +410,20 @@ class _NsfwConfirmContent extends StatelessWidget {
     return ConstrainedBox(
       constraints: BoxConstraints(
         maxWidth: 420,
-        maxHeight: media.size.height * (tight ? 0.62 : 0.7),
+        // ── Se descuenta lo que ocupa el diálogo, no una fracción ────────
+        //
+        // Con pantalla baja, el 62% del alto no dejaba sitio para el título ni
+        // para el botón de cancelar: entre los tres pedían más que la pantalla
+        // y el diálogo terminaba con la última tarjeta cortada y el botón
+        // encima. Descontando lo que se lleva el diálogo —título, botones y
+        // sus márgenes— el contenido pide justo lo que queda y siempre entra.
+        //
+        // De pie sobra alto, así que ahí sigue la fracción de siempre: el
+        // diálogo no tiene por qué ocupar toda la pantalla cuando no hace
+        // falta.
+        maxHeight: tight
+            ? math.max(120.0, media.size.height - 200)
+            : media.size.height * 0.7,
       ),
       child: SingleChildScrollView(child: content),
     );

@@ -478,7 +478,9 @@ class _DetailPageState extends State<DetailPage> {
               // propio alto. Acá los tres son iconos de barra: miden lo mismo,
               // se alinean solos y están siempre a mano.
               actions: [
-                _botonRefrescar(),
+                // Sin botón de refrescar acá: en Android se refresca deslizando
+                // hacia abajo (ver _conRefresco), que es el gesto de siempre.
+                // El botón se queda en escritorio, donde ese gesto no existe.
                 DetailFavoriteButton(tag: widget.tag, compacto: true),
                 DetailShareButton(tag: widget.tag, compacto: true),
                 DetailTrackingButton(
@@ -587,20 +589,6 @@ class _DetailPageState extends State<DetailPage> {
       edgeOffset: MediaQuery.paddingOf(context).top + 56,
       child: hijo,
     );
-  }
-
-  /// El botón de refrescar, para cuando el gesto no aplica.
-  Widget _botonRefrescar() {
-    return Obx(() {
-      // Mientras carga no se ofrece: ya está trayendo lo mismo que pediría.
-      if (c.isLoading.value) return const SizedBox.shrink();
-      return IconButton(
-        tooltip: 'common.refresh'.i18n,
-        color: HomeTheme.textPrimary,
-        icon: const Icon(Icons.refresh_rounded),
-        onPressed: () => unawaited(c.refrescarAMano()),
-      );
-    });
   }
 
   /// El alto REAL de la pestaña de sinopsis, medido por ella misma.
