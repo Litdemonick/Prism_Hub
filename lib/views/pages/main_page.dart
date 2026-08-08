@@ -16,7 +16,6 @@ import 'package:prismhub/router/router.dart';
 import 'package:prismhub/utils/application.dart';
 import 'package:prismhub/utils/connectivity.dart';
 import 'package:prismhub/utils/i18n.dart';
-import 'package:prismhub/utils/layout.dart';
 import 'package:prismhub/utils/prismhub_storage.dart';
 import 'package:prismhub/views/widgets/window_caption_buttons.dart';
 import 'package:window_manager/window_manager.dart';
