@@ -362,8 +362,7 @@ class _BarraDeFiltrosState extends State<_BarraDeFiltros> {
                 children: [
                   // Flechas solo en escritorio: en una pantalla táctil la fila
                   // se arrastra con el dedo y las flechas solo taparían chips.
-                  if (!_esTactil && marcados.isEmpty)
-                    SizedBox(width: margen - 8),
+                  if (!_esTactil) SizedBox(width: margen - 8),
                   if (!_esTactil)
                     _FlechaDeFila(
                         icono: Icons.chevron_left_rounded,
@@ -377,50 +376,38 @@ class _BarraDeFiltrosState extends State<_BarraDeFiltros> {
                   //
                   // Flexible y con su propio desplazamiento: con tres activos en
                   // un teléfono angosto, si no, se comerían la barra entera.
-                  if (marcados.isNotEmpty)
-                    // ── Flexible Y con tope ──────────────────────────────
-                    //
-                    // El tope solo no alcanzaba: un ConstrainedBox suelto
-                    // dentro de un Row NO cede espacio, así que con varios
-                    // activos se pasaba del ancho y los chips terminaban
-                    // dibujándose encima de los de al lado.
-                    //
-                    // Flexible es lo que le dice al Row que puede achicarlo. El
-                    // tercio sigue estando para que el grupo de activos no se
-                    // lleve media barra.
-                    Flexible(
-                      child: ConstrainedBox(
-                        constraints: BoxConstraints(
-                            maxWidth: MediaQuery.sizeOf(context).width / 3),
-                        child: SingleChildScrollView(
-                          scrollDirection: Axis.horizontal,
-                          padding:
-                              EdgeInsets.only(left: _esTactil ? margen : 6),
-                          child: Row(
-                            children: [
-                              for (final m in marcados)
-                                Padding(
-                                  padding: const EdgeInsets.only(right: 8),
-                                  child: _Chip(
-                                      texto: m.$2, marcado: true, onTap: m.$3),
-                                ),
-                              _separadorDeChips,
-                            ],
-                          ),
-                        ),
-                      ),
-                    ),
                   Expanded(
                     child: SingleChildScrollView(
                       controller: _esTactil ? null : _scroll,
                       scrollDirection: Axis.horizontal,
                       padding: EdgeInsets.only(
-                          left: marcados.isNotEmpty
-                              ? 0
-                              : (_esTactil ? margen : 6),
+                          left: _esTactil ? margen : 6,
                           right: _esTactil ? margen : 6),
                       child: Row(
                         children: [
+                          // ── Los activos, primeros y en la MISMA fila ──────
+                          //
+                          // Antes iban en un grupo aparte, fijo a la izquierda
+                          // y fuera del área que se desplaza. La idea era que
+                          // el filtro puesto se viera siempre, pero ese grupo
+                          // se llevaba hasta un tercio del ancho y se lo quitaba
+                          // a los demás: al marcar uno, la fila de chips
+                          // terminaba trescientos píxeles antes y parecía que
+                          // todo se hubiera achicado. Reportado en las tres
+                          // plataformas, con capturas.
+                          //
+                          // Acá adentro no le quita ancho a nadie: la fila
+                          // ocupa lo mismo marcada que sin marcar. Y siguen
+                          // siendo lo primero que se ve, así que en la práctica
+                          // se ven igual —recién marcado nadie está desplazado
+                          // al final de los cuarenta y cuatro géneros—.
+                          for (final m in marcados)
+                            Padding(
+                              padding: const EdgeInsets.only(right: 8),
+                              child: _Chip(
+                                  texto: m.$2, marcado: true, onTap: m.$3),
+                            ),
+                          if (marcados.isNotEmpty) _separadorDeChips,
                           // ── Lo elegido, al principio de todo ──────────────────
                           //
                           // Con cuarenta y cuatro géneros, el chip marcado podía
