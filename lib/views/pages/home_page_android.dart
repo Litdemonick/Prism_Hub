@@ -908,8 +908,19 @@ class _CarruselAndroidState extends State<_CarruselAndroid>
   }
 
   /// Anota qué tarjeta se está mirando, para poder encontrarla después.
+  ///
+  /// ── Va por el PISO, no por el redondeo ──────────────────────────────────
+  ///
+  /// Y tiene que ser el mismo criterio que usa `_reubicarPorAncla` para la
+  /// fracción, o el ancla queda corrida.
+  ///
+  /// Con `_p = 5.7`: redondeando, el ancla seria la tarjeta 6, pero la fraccion
+  /// que se guarda —0.7— esta medida desde la 5. Al restaurar se le sumaba 0.7
+  /// al indice de la 6, o sea una tarjeta de mas. Ese era el salto: aparecia
+  /// solo cuando la lista crecia con el gesto pasado de la mitad, que es
+  /// justamente cuando el usuario esta deslizando.
   void _recordarAncla(List<(String, ExtensionListItem)> planos) {
-    final i = _p.round();
+    final i = _p.floor();
     if (i < 0 || i >= planos.length) return;
     _anclaPaquete = planos[i].$1;
     _anclaUrl = planos[i].$2.url;

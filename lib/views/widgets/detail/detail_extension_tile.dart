@@ -148,9 +148,7 @@ class DetailExtensionTile extends StatelessWidget {
           FlutterI18n.translate(
             context,
             'common.extension-missing',
-            translationParams: {
-              'package': c.package,
-            },
+            translationParams: {'package': ExtensionUtils.nombreDe(c.package)},
           ),
           style: const TextStyle(color: HomeTheme.textMuted),
         );

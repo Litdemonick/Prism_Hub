@@ -1446,7 +1446,7 @@ class _ExtensionSearcherPageState extends fluent.State<ExtensionSearcherPage> {
         FlutterI18n.translate(
           context,
           disabled ? 'common.extension-disabled' : 'common.extension-missing',
-          translationParams: {'package': widget.package},
+          translationParams: {'package': ExtensionUtils.nombreDe(widget.package)},
         ),
       );
       return PlatformWidget(

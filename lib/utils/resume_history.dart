@@ -29,7 +29,7 @@ Future<void> resumeHistoryItem(BuildContext context, History history) async {
       content: FlutterI18n.translate(
         context,
         disabled ? 'common.extension-disabled' : 'common.extension-missing',
-        translationParams: {'package': history.package},
+        translationParams: {'package': ExtensionUtils.nombreDe(history.package)},
       ),
       severity: fluent.InfoBarSeverity.error,
     );

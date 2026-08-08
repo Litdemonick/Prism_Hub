@@ -489,9 +489,7 @@ class DetailPageController extends GetxController {
           ExtensionUtils.runtimes.containsKey(package)
               ? 'common.extension-disabled'
               : 'common.extension-missing',
-          translationParams: {
-            'package': package,
-          },
+          translationParams: {'package': ExtensionUtils.nombreDe(package)},
         );
         showPlatformSnackbar(
           context: currentContext,
@@ -711,9 +709,7 @@ class DetailPageController extends GetxController {
         content: FlutterI18n.translate(
           currentContext,
           'common.extension-missing',
-          translationParams: {
-            'package': package,
-          },
+          translationParams: {'package': ExtensionUtils.nombreDe(package)},
         ),
         severity: fluent.InfoBarSeverity.error,
       );

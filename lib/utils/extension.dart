@@ -476,7 +476,7 @@ class ExtensionUtils {
         content: FlutterI18n.translate(
           context,
           'common.extension-missing',
-          translationParams: {'package': package},
+          translationParams: {'package': ExtensionUtils.nombreDe(package)},
         ),
         severity: InfoBarSeverity.error,
       );
@@ -913,6 +913,25 @@ class ExtensionUtils {
       ((PrismHubStorage.getSetting(SettingKey.disabledExtensions) as List?)
           ?.cast<String>()) ??
       <String>[];
+
+  /// El nombre legible de una extensión, a partir de su paquete.
+  ///
+  /// ── Por qué hace falta ──────────────────────────────────────────────────
+  ///
+  /// Los avisos de «falta la extensión» y «está deshabilitada» mostraban el
+  /// identificador tal cual: «Falta la extensión io.prismhub.tioanime». Eso no
+  /// le dice nada a nadie — el usuario conoce «TioAnime», no su paquete.
+  ///
+  /// Se busca entre las instaladas y, si no está, entre las de vista previa. Si
+  /// tampoco —una extensión que se desinstaló, o un enlace viejo— se devuelve
+  /// el paquete: es feo, pero es lo único que se sabe, y callar el dato dejaría
+  /// un aviso que no se puede accionar.
+  static String nombreDe(String package) {
+    final ext = runtimes[package]?.extension ??
+        vistaPrevia[package]?.extension;
+    final nombre = ext?.name.trim();
+    return (nombre == null || nombre.isEmpty) ? package : nombre;
+  }
 
   static bool isEnabled(String package) =>
       !disabledExtensions.contains(package);
