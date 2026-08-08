@@ -854,12 +854,14 @@ class _ExtensionPageState extends State<ExtensionPage> {
                         : ListView.builder(
                             physics: const AlwaysScrollableScrollPhysics(),
                             // Espacio a los costados y entre cards — antes
-                            // iban pegadas al borde de la pantalla. Y abajo,
-                            // lo que ocupa la barra flotante: adentro de la
-                            // lista, para que el fondo de la zona siga
-                            // llegando hasta el borde de la pantalla.
-                            padding: EdgeInsets.fromLTRB(16, 0, 16,
-                                MediaQuery.paddingOf(context).bottom + 8),
+                            // iban pegadas al borde de la pantalla.
+                            //
+                            // El hueco de la barra flotante ya NO se reserva
+                            // acá: ahora debajo de la lista van las flechitas,
+                            // y son ellas las que tienen que quedar por encima
+                            // de la barra. Reservándolo en los dos lados se
+                            // contaba dos veces y quedaba un hueco enorme.
+                            padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
                             itemCount: pageItems.length,
                             // Sin RepaintBoundary a mano: ListView.builder ya
                             // envuelve cada ítem en uno
@@ -882,7 +884,17 @@ class _ExtensionPageState extends State<ExtensionPage> {
                 // que es justo cuando uno las necesita.
                 if (totalPages > 1)
                   Padding(
-                    padding: const EdgeInsets.symmetric(vertical: 4),
+                    // Por encima de la barra flotante.
+                    //
+                    // El cuerpo pasa POR DEBAJO de ella (extendBody en
+                    // main_page), así que lo último de la columna quedaba
+                    // tapado: las flechitas se veían a medias detrás de los
+                    // íconos de navegación. `paddingOf(context).bottom` ya
+                    // trae el alto de la barra sumado, así que con eso alcanza.
+                    padding: EdgeInsets.only(
+                      top: 4,
+                      bottom: MediaQuery.paddingOf(context).bottom + 6,
+                    ),
                     child: _pager(
                       page: page,
                       totalPages: totalPages,

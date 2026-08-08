@@ -422,140 +422,162 @@ class _AndroidMainPageState extends fluent.State<AndroidMainPage> {
           Icons.settings_outlined, Icons.settings, 'common.settings'.i18n),
     ];
     return Obx(
-      () => Scaffold(
-        // Las 4 pestañas viven DENTRO de este Scaffold, así que poner
-        // resizeToAvoidBottomInset:false solo en el Scaffold interno de
-        // Búsqueda no alcanzaba: el de afuera seguía encogiéndose con el
-        // teclado y el overflow persistía (confirmado en vivo). Los campos
-        // de texto de estas pestañas están arriba (en la AppBar), así que
-        // el teclado puede superponerse sin tapar nada importante.
-        resizeToAvoidBottomInset: false,
-        // IndexedStack en vez de pages[index]: con pages[index], cambiar de
-        // pestaña sacaba el widget de la anterior del árbol y montaba uno
-        // nuevo de cero (initState, animaciones, scroll, todo desde cero)
-        // en cada toque — se sentía pesado/trabado. IndexedStack monta las
-        // 4 páginas una sola vez y solo oculta las que no están activas; los
-        // controllers GetX de cada una ya se reusaban entre pestañas (ver
-        // comentario en library_page.dart), así que esto no agrega trabajo de
-        // fondo nuevo, solo evita el remount constante.
-        // La capa de «más» va DENTRO del cuerpo y no en la barra: la barra
-        // mide lo que mide, y hacerla crecer para meter los botones ahí le
-        // cambiaría el relleno al cuerpo cada vez que se abre — o sea, todo
-        // el contenido pegando un salto al desplegar.
-        body: Stack(children: [
-          Column(
-            children: [
-              // ── Sin SafeArea envolviéndolo ───────────────────────────
-              //
-              // Envuelto, reservaba la franja de la barra de estado SIEMPRE,
-              // también con el aviso oculto. Y esa franja se pinta ACÁ AFUERA de
-              // las páginas, así que quedaba negra plana mientras la zona de
-              // abajo tenía su fondo con brillo: se veía como una barra rara
-              // cruzando arriba de todo.
-              //
-              // Ahora el aviso se ocupa de su propio hueco cuando aparece, y
-              // cada zona empieza en el borde de la pantalla y pinta su fondo
-              // de arriba abajo. A cambio, cada una tiene que respetar la barra
-              // de estado por su cuenta — las que llevan AppBar ya lo hacían
-              // solas, y a las otras se les puso.
-              _noConnectionBanner(),
-              Expanded(
-                child: _apaisado(context)
-                    // ── Teléfono acostado: riel a la izquierda ─────────────
-                    //
-                    // Abajo no puede quedarse. En horizontal el alto es lo único
-                    // que escasea —360 píxeles contra 800— y una barra abajo se
-                    // lleva la franja donde justamente se ven las portadas. A la
-                    // izquierda se come ancho, que es lo que sobra.
-                    //
-                    // Y va en un Row, no flotando encima: acostado el contenido
-                    // usa el ancho entero, así que una barra superpuesta taparía
-                    // la primera columna de tarjetas en vez de dejar ver algo por
-                    // detrás. Con el Row, el contenido empieza DESPUÉS del riel y
-                    // no se pisan nunca.
-                    ? Row(
-                        children: [
-                          // ── Al esconderse tiene que SOLTAR el ancho ───────
-                          //
-                          // Antes era un AnimatedSlide, que corre el riel hacia
-                          // afuera pero le deja el lugar reservado: en el Row
-                          // seguía ocupando su columna. O sea que en Ajustes
-                          // —la única zona donde la barra se esconde— quedaba
-                          // una franja vacía a la izquierda y todo el contenido
-                          // aparecía corrido a la derecha. Reportado en vivo.
-                          //
-                          // De pie no pasaba porque ahí la barra FLOTA encima
-                          // del contenido: correrla ya libera la pantalla.
-                          //
-                          // Con AnimatedSize el ancho se va con ella, así que
-                          // Ajustes usa la pantalla entera, y el encogerse se
-                          // ve como que la barra se retira.
-                          AnimatedSize(
-                            duration: const Duration(milliseconds: 260),
-                            curve: Curves.easeOutCubic,
-                            child: _barraEscondida
-                                ? const SizedBox.shrink()
-                                : _barraVertical(destinations),
-                          ),
-                          Expanded(
-                            // El riel YA dejó pasar la franja de la barra del
-                            // sistema. Sin sacarla de acá, el SafeArea de cada
-                            // zona la vuelve a reservar y el contenido queda con
-                            // el doble de margen a la izquierda.
-                            child: MediaQuery.removePadding(
-                              context: context,
-                              removeLeft: true,
-                              child: _buildPages(),
+      // ── El botón de atrás del sistema ──────────────────────────────────
+      //
+      // Las zonas NO son rutas: viven en un IndexedStack dentro de este mismo
+      // Scaffold. Así que para Android no hay nada apilado que desapilar, y su
+      // botón de atrás cerraba el app de una — incluso estando en Ajustes,
+      // adonde se entra a propósito desde otra zona.
+      //
+      // Con esto el atrás hace lo que uno espera: desde Ajustes vuelve a la
+      // zona de la que se vino (la misma que ofrece la flecha de su cabecera),
+      // desde cualquier otra vuelve a Inicio, y recién estando en Inicio sale.
+      // O sea que salir del app pasa a ser una decisión y no un accidente.
+      () => PopScope(
+        canPop: c.selectedTab.value == MainController.tabHome,
+        onPopInvokedWithResult: (salio, _) {
+          if (salio) return;
+          if (c.selectedTab.value == MainController.tabAjustes) {
+            c.changeTab(c.tabAnterior);
+            return;
+          }
+          c.changeTab(MainController.tabHome);
+        },
+        child: Scaffold(
+          // Las 4 pestañas viven DENTRO de este Scaffold, así que poner
+          // resizeToAvoidBottomInset:false solo en el Scaffold interno de
+          // Búsqueda no alcanzaba: el de afuera seguía encogiéndose con el
+          // teclado y el overflow persistía (confirmado en vivo). Los campos
+          // de texto de estas pestañas están arriba (en la AppBar), así que
+          // el teclado puede superponerse sin tapar nada importante.
+          resizeToAvoidBottomInset: false,
+          // IndexedStack en vez de pages[index]: con pages[index], cambiar de
+          // pestaña sacaba el widget de la anterior del árbol y montaba uno
+          // nuevo de cero (initState, animaciones, scroll, todo desde cero)
+          // en cada toque — se sentía pesado/trabado. IndexedStack monta las
+          // 4 páginas una sola vez y solo oculta las que no están activas; los
+          // controllers GetX de cada una ya se reusaban entre pestañas (ver
+          // comentario en library_page.dart), así que esto no agrega trabajo de
+          // fondo nuevo, solo evita el remount constante.
+          // La capa de «más» va DENTRO del cuerpo y no en la barra: la barra
+          // mide lo que mide, y hacerla crecer para meter los botones ahí le
+          // cambiaría el relleno al cuerpo cada vez que se abre — o sea, todo
+          // el contenido pegando un salto al desplegar.
+          body: Stack(children: [
+            Column(
+              children: [
+                // ── Sin SafeArea envolviéndolo ───────────────────────────
+                //
+                // Envuelto, reservaba la franja de la barra de estado SIEMPRE,
+                // también con el aviso oculto. Y esa franja se pinta ACÁ AFUERA de
+                // las páginas, así que quedaba negra plana mientras la zona de
+                // abajo tenía su fondo con brillo: se veía como una barra rara
+                // cruzando arriba de todo.
+                //
+                // Ahora el aviso se ocupa de su propio hueco cuando aparece, y
+                // cada zona empieza en el borde de la pantalla y pinta su fondo
+                // de arriba abajo. A cambio, cada una tiene que respetar la barra
+                // de estado por su cuenta — las que llevan AppBar ya lo hacían
+                // solas, y a las otras se les puso.
+                _noConnectionBanner(),
+                Expanded(
+                  child: _apaisado(context)
+                      // ── Teléfono acostado: riel a la izquierda ─────────────
+                      //
+                      // Abajo no puede quedarse. En horizontal el alto es lo único
+                      // que escasea —360 píxeles contra 800— y una barra abajo se
+                      // lleva la franja donde justamente se ven las portadas. A la
+                      // izquierda se come ancho, que es lo que sobra.
+                      //
+                      // Y va en un Row, no flotando encima: acostado el contenido
+                      // usa el ancho entero, así que una barra superpuesta taparía
+                      // la primera columna de tarjetas en vez de dejar ver algo por
+                      // detrás. Con el Row, el contenido empieza DESPUÉS del riel y
+                      // no se pisan nunca.
+                      ? Row(
+                          children: [
+                            // ── Al esconderse tiene que SOLTAR el ancho ───────
+                            //
+                            // Antes era un AnimatedSlide, que corre el riel hacia
+                            // afuera pero le deja el lugar reservado: en el Row
+                            // seguía ocupando su columna. O sea que en Ajustes
+                            // —la única zona donde la barra se esconde— quedaba
+                            // una franja vacía a la izquierda y todo el contenido
+                            // aparecía corrido a la derecha. Reportado en vivo.
+                            //
+                            // De pie no pasaba porque ahí la barra FLOTA encima
+                            // del contenido: correrla ya libera la pantalla.
+                            //
+                            // Con AnimatedSize el ancho se va con ella, así que
+                            // Ajustes usa la pantalla entera, y el encogerse se
+                            // ve como que la barra se retira.
+                            AnimatedSize(
+                              duration: const Duration(milliseconds: 260),
+                              curve: Curves.easeOutCubic,
+                              child: _barraEscondida
+                                  ? const SizedBox.shrink()
+                                  : _barraVertical(destinations),
                             ),
-                          ),
-                        ],
-                      )
-                    : _buildPages(),
-              ),
-            ],
-          ),
-          // Solo de pie: acostado no hay botón de tres puntos que lo abra
-          // (sus opciones van directas en el riel), y si quedó abierto al
-          // girar, no puede seguir puesto sobre la pantalla nueva.
-          if (_masAbierto && !_apaisado(context)) _capaDeMas(),
-        ]),
-        // El contenido pasa POR DEBAJO de la barra.
-        //
-        // Con `extendBody`, Flutter le suma el alto de la barra al relleno de
-        // abajo del cuerpo, así que las páginas que usan SafeArea reservan ese
-        // lugar solas y nada queda tapado — pero el fondo y las portadas sí se
-        // ven correr por atrás, que es lo que hace que la barra se lea como
-        // algo que flota y no como un zócalo pegado.
-        extendBody: true,
-        // AnimatedSlide y no un `if`: correrla no cambia cuánto mide, así
-        // que el relleno que el Scaffold le pasa al cuerpo se queda igual y
-        // el contenido no pega un salto cuando la barra se va.
-        // Abajo y centrada SIEMPRE, también acostado.
-        //
-        // Se probó al costado en horizontal, para no gastar alto. No va: el
-        // pulgar en horizontal cae abajo, no a la izquierda, y una barra
-        // flotando a media altura de la pantalla no se lee como la barra de
-        // navegación de nada. Queda pegada —con su aire— a la barra del
-        // sistema, que es donde el usuario ya la busca.
-        // ── La tablet usa la MISMA barra que el teléfono ─────────────────
-        //
-        // Antes le tocaba un NavigationRail de Material pegado a la
-        // izquierda, con etiquetas debajo de cada ícono. Eso era de otro
-        // diseño: sobre el fondo con brillo se veía como un panel de sistema
-        // metido a la fuerza, y encima ocupaba una columna fija todo el
-        // tiempo.
-        //
-        // Una tablet es una pantalla táctil grande, no un escritorio: le sirve
-        // lo mismo que al teléfono, con más aire. El aire ya lo da `_margen`,
-        // que en `amplio` y `enorme` deja 32 y 48 píxeles a los costados.
-        bottomNavigationBar: _apaisado(context)
-            ? null
-            : AnimatedSlide(
-                offset: _barraEscondida ? const Offset(0, 1.6) : Offset.zero,
-                duration: const Duration(milliseconds: 260),
-                curve: Curves.easeOutCubic,
-                child: _barraFlotante(destinations),
-              ),
+                            Expanded(
+                              // El riel YA dejó pasar la franja de la barra del
+                              // sistema. Sin sacarla de acá, el SafeArea de cada
+                              // zona la vuelve a reservar y el contenido queda con
+                              // el doble de margen a la izquierda.
+                              child: MediaQuery.removePadding(
+                                context: context,
+                                removeLeft: true,
+                                child: _buildPages(),
+                              ),
+                            ),
+                          ],
+                        )
+                      : _buildPages(),
+                ),
+              ],
+            ),
+            // Solo de pie: acostado no hay botón de tres puntos que lo abra
+            // (sus opciones van directas en el riel), y si quedó abierto al
+            // girar, no puede seguir puesto sobre la pantalla nueva.
+            if (_masAbierto && !_apaisado(context)) _capaDeMas(),
+          ]),
+          // El contenido pasa POR DEBAJO de la barra.
+          //
+          // Con `extendBody`, Flutter le suma el alto de la barra al relleno de
+          // abajo del cuerpo, así que las páginas que usan SafeArea reservan ese
+          // lugar solas y nada queda tapado — pero el fondo y las portadas sí se
+          // ven correr por atrás, que es lo que hace que la barra se lea como
+          // algo que flota y no como un zócalo pegado.
+          extendBody: true,
+          // AnimatedSlide y no un `if`: correrla no cambia cuánto mide, así
+          // que el relleno que el Scaffold le pasa al cuerpo se queda igual y
+          // el contenido no pega un salto cuando la barra se va.
+          // Abajo y centrada SIEMPRE, también acostado.
+          //
+          // Se probó al costado en horizontal, para no gastar alto. No va: el
+          // pulgar en horizontal cae abajo, no a la izquierda, y una barra
+          // flotando a media altura de la pantalla no se lee como la barra de
+          // navegación de nada. Queda pegada —con su aire— a la barra del
+          // sistema, que es donde el usuario ya la busca.
+          // ── La tablet usa la MISMA barra que el teléfono ─────────────────
+          //
+          // Antes le tocaba un NavigationRail de Material pegado a la
+          // izquierda, con etiquetas debajo de cada ícono. Eso era de otro
+          // diseño: sobre el fondo con brillo se veía como un panel de sistema
+          // metido a la fuerza, y encima ocupaba una columna fija todo el
+          // tiempo.
+          //
+          // Una tablet es una pantalla táctil grande, no un escritorio: le sirve
+          // lo mismo que al teléfono, con más aire. El aire ya lo da `_margen`,
+          // que en `amplio` y `enorme` deja 32 y 48 píxeles a los costados.
+          bottomNavigationBar: _apaisado(context)
+              ? null
+              : AnimatedSlide(
+                  offset: _barraEscondida ? const Offset(0, 1.6) : Offset.zero,
+                  duration: const Duration(milliseconds: 260),
+                  curve: Curves.easeOutCubic,
+                  child: _barraFlotante(destinations),
+                ),
+        ),
       ),
     );
   }
@@ -931,11 +953,19 @@ class _IconoDeBarra extends StatelessWidget {
     required this.destino,
     required this.elegido,
     required this.onTap,
+    this.tamano = 46,
   });
 
   final _Destination destino;
   final bool elegido;
   final VoidCallback onTap;
+
+  /// El lado del botón.
+  ///
+  /// En el riel acostado va más grande: ahí quedaron TRES destinos en una
+  /// columna con alto de sobra, así que a 46 se veían chicos y perdidos contra
+  /// el borde. De pie son cuatro en una barra angosta y ahí 46 es lo que entra.
+  final double tamano;
 
   @override
   Widget build(BuildContext context) {
@@ -946,19 +976,20 @@ class _IconoDeBarra extends StatelessWidget {
       label: destino.label,
       child: InkResponse(
         onTap: onTap,
-        radius: 26,
+        radius: tamano * 0.57,
         child: AnimatedContainer(
           duration: const Duration(milliseconds: 200),
           curve: Curves.easeOut,
-          width: 46,
-          height: 46,
+          width: tamano,
+          height: tamano,
           decoration: BoxDecoration(
             shape: BoxShape.circle,
             color: elegido ? acento.withValues(alpha: 0.3) : Colors.transparent,
           ),
           child: Icon(
             elegido ? destino.selectedIcon : destino.icon,
-            size: 23,
+            // Sigue al botón, para que la proporción sea la misma en los dos.
+            size: tamano * 0.5,
             color: elegido ? Colors.white : Colors.white.withValues(alpha: 0.6),
           ),
         ),
