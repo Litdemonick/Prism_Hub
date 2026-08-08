@@ -814,6 +814,9 @@ class _CarruselAndroidState extends State<_CarruselAndroid>
   double _p = 0;
   bool _sembrado = false;
 
+  /// El último aviso de «volvé al principio» que se atendió. Ver `reinicios`.
+  int _reinicioVisto = 0;
+
   late final AnimationController _anim = AnimationController(
     vsync: this,
     duration: const Duration(milliseconds: 340),
@@ -1154,6 +1157,38 @@ class _CarruselAndroidState extends State<_CarruselAndroid>
       final largoTanda = grupos[widget.c.carruselExt].$2.length;
       if (widget.c.carruselPos >= largoTanda) {
         widget.c.carruselPos = largoTanda > 0 ? largoTanda - 1 : 0;
+      }
+      // ── Filtrar lleva al principio ────────────────────────────────────
+      //
+      // Se mira acá, dentro del Obx, para que el aviso llegue solo: no hace
+      // falta que nadie llame a nada. Y se limpia el ancla, porque apunta a una
+      // tarjeta que con el filtro nuevo puede no estar.
+      final reinicio = widget.c.reinicios.value;
+      if (reinicio != _reinicioVisto) {
+        _reinicioVisto = reinicio;
+        _anclaPaquete = null;
+        _anclaUrl = null;
+        _sobrante = 0;
+        // ── Viajando, no de un salto ────────────────────────────────────
+        //
+        // Aparecer de golpe en la primera no se entiende: el usuario no sabe si
+        // volvió al principio o si le cambiaron la lista debajo. Yendo, se ve de
+        // dónde a dónde fue.
+        //
+        // El viaje se pide para el próximo cuadro y no acá: esto corre DENTRO de
+        // `build`, y arrancar la animación en el medio de un dibujo dispara un
+        // `setState` mientras Flutter todavía está dibujando.
+        //
+        // Si todavía no se había sembrado —o ya estaba en la primera— no hay
+        // nada que animar y se siembra en cero como siempre.
+        if (_sembrado && _p > 0.01) {
+          WidgetsBinding.instance.addPostFrameCallback((_) {
+            if (!mounted) return;
+            _irA(0, widget.c.destacadosVisibles);
+          });
+        } else {
+          _sembrado = false;
+        }
       }
       if (!_sembrado) {
         _sembrado = true;

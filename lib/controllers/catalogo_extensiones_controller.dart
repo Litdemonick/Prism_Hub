@@ -184,6 +184,14 @@ class CatalogoExtensionesController extends GetxController {
   /// aperturas seguidas podían caer en la misma y parecía que no rotaba.
   int _arranque = 0;
 
+  /// Sube cada vez que hay que llevar el acordeón al principio.
+  ///
+  /// Un contador y no un booleano: un booleano habría que apagarlo después, y si
+  /// el acordeón no estaba montado en ese momento se perdería el aviso. Con un
+  /// número, el acordeón compara con el último que vio y se pone al día cuando
+  /// le toque, sin que nadie tenga que limpiar nada.
+  final reinicios = 0.obs;
+
   /// Cuántas se toman de cada extensión para el carrusel.
   ///
   /// Ocho y no cinco: el acordeón deja ver cuatro o cinco de un vistazo, así
@@ -865,6 +873,13 @@ class CatalogoExtensionesController extends GetxController {
     estadoAplicado = estadoElegido.value;
     formatoAplicado = formatoElegido.value;
     aplicandoFiltros.value = true;
+    // ── Al principio del acordeón ──────────────────────────────────────
+    //
+    // Filtrar cambia QUÉ contenido hay, así que la posición vieja no significa
+    // nada: si estabas en la tarjeta treinta y el filtro deja doce, quedabas al
+    // final de una lista que no habías visto. Y si deja cuarenta, arrancabas por
+    // el medio sin haber visto lo primero, que es justo lo que pediste ver.
+    reinicios.value++;
     for (final fila in filas) {
       fila.traidoEl = null;
       // Se vuelve a la primera página: las que se habían pedido de más son de
