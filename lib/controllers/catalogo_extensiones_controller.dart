@@ -152,9 +152,37 @@ class CatalogoExtensionesController extends GetxController {
   /// vista calculada y no una lista aparte, al restablecer vuelve todo en el
   /// acto sin volver a pedirle nada a nadie.
   List<(String, List<ExtensionListItem>)> get destacadosVisibles {
-    if (!hayFiltros) return destacados;
-    return destacados.where((d) => puedeConEsteGenero(d.$1)).toList();
+    final lista = hayFiltros
+        ? destacados.where((d) => puedeConEsteGenero(d.$1)).toList()
+        : destacados.toList();
+    return _rotadas(lista);
   }
+
+  /// La misma lista, empezando por otra extensión.
+  ///
+  /// ── Por qué rota ────────────────────────────────────────────────────────
+  ///
+  /// El acordeón intercala una portada de cada extensión, así que de entrada ya
+  /// se ven ocho distintas. Pero la PRIMERA era siempre la misma —la primera de
+  /// la lista— y esa se lleva la atención: es la grande del centro al abrir.
+  ///
+  /// Rotando, cada vez que se abre la app arranca por la siguiente. Se recorre
+  /// el mismo contenido y en el mismo orden relativo; lo único que cambia es por
+  /// dónde se entra. Nada se repite ni se pierde: es la misma lista corrida.
+  List<(String, List<ExtensionListItem>)> _rotadas(
+      List<(String, List<ExtensionListItem>)> lista) {
+    if (lista.length < 2) return lista;
+    final desde = _arranque % lista.length;
+    if (desde == 0) return lista;
+    return [...lista.sublist(desde), ...lista.sublist(0, desde)];
+  }
+
+  /// Por qué extensión entra el acordeón esta vez.
+  ///
+  /// Se guarda en disco y sube de uno en cada apertura, así que cambia sola
+  /// aunque la app se cierre por completo. Un número al azar no servía: dos
+  /// aperturas seguidas podían caer en la misma y parecía que no rotaba.
+  int _arranque = 0;
 
   /// Cuántas se toman de cada extensión para el carrusel.
   ///
@@ -1707,10 +1735,35 @@ class CatalogoExtensionesController extends GetxController {
       if (!await f.exists()) return;
       final crudo = jsonDecode(await f.readAsString());
       if (crudo is Map<String, dynamic>) _cache = crudo;
+      // ── El turno de arranque, en el mismo archivo ─────────────────────
+      //
+      // Va acá y no en los ajustes para no sumar una clave más al almacén por
+      // un contador: este archivo ya se lee al abrir el Home y se escribe cuando
+      // llega contenido, así que el número viaja gratis. La clave lleva guion
+      // bajo para que no se confunda nunca con un paquete.
+      final guardado = _cache['_arranque'];
+      _arranque = (guardado is int ? guardado : 0) + 1;
+      // Se sube YA, sin esperar a que se guarde contenido: si la app se cierra
+      // sin traer nada, la próxima apertura tiene que arrancar en otra igual.
+      unawaited(_guardarArranque());
     } catch (e) {
       // Un caché ilegible no puede impedir que el Home abra: se descarta.
       logger.info('[home] caché ilegible, se ignora: $e');
       _cache = const {};
+    }
+  }
+
+  /// Deja anotado el turno de arranque para la próxima apertura.
+  Future<void> _guardarArranque() async {
+    try {
+      final copia = Map<String, dynamic>.from(_cache);
+      copia['_arranque'] = _arranque;
+      _cache = copia;
+      await _archivo.writeAsString(jsonEncode(copia));
+    } catch (e) {
+      // Si no se puede escribir, la próxima arranca donde esta: molesta pero no
+      // rompe nada.
+      logger.info('[home] no se pudo anotar el arranque: $e');
     }
   }
 
