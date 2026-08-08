@@ -17,6 +17,7 @@ import 'package:prismhub/utils/history_cover.dart';
 import 'package:prismhub/utils/i18n.dart';
 import 'package:prismhub/utils/search_text.dart';
 import 'package:prismhub/views/widgets/franja_de_zona.dart';
+import 'package:prismhub/views/widgets/home/esqueleto.dart';
 import 'package:prismhub/views/widgets/home/animated_background_glow.dart';
 import 'package:prismhub/views/widgets/home/home_media_card.dart';
 import 'package:prismhub/views/widgets/home/home_theme.dart';
@@ -312,26 +313,6 @@ class _HistoryPageState extends State<HistoryPage> {
     final history = _onFavoritesTab ? null : _filteredHistory();
     final itemCount = favorites?.length ?? history!.length;
 
-    if (itemCount == 0) {
-      final nothingAtAll = _c.resents.isEmpty && _c.favorites.isEmpty;
-      return SliverPadding(
-        padding: const EdgeInsets.symmetric(vertical: 80),
-        sliver: SliverFillRemaining(
-          hasScrollBody: false,
-          child: Center(
-            child: Text(
-              nothingAtAll
-                  ? (widget.zone
-                      ? 'nsfw18.no-record'.i18n
-                      : 'home.no-record'.i18n)
-                  : 'common.no-result'.i18n,
-              style: const TextStyle(color: HomeTheme.textMuted),
-            ),
-          ),
-        ),
-      );
-    }
-
     final isAndroidLandscape = Platform.isAndroid &&
         MediaQuery.of(context).orientation == Orientation.landscape;
 
@@ -359,6 +340,49 @@ class _HistoryPageState extends State<HistoryPage> {
                     ? HomeMediaCard.androidHeight
                     : HomeMediaCard.desktopHeight) +
             70;
+
+    // ── Todavía no se leyó la base: bloques, no un aviso ──────────────
+    //
+    // Las listas arrancan vacías, y vacío por «todavía no pregunté» se ve
+    // igual que vacío por «no hay nada». Sin distinguirlos, acá salía «no
+    // tenés nada todavía» en el parpadeo previo a la primera lectura, con la
+    // biblioteca llena. Los bloques además dejan la grilla ya con su forma, así
+    // que al llegar las portadas no salta nada — igual que en el Inicio.
+    if (itemCount == 0 && !_c.primeraCargaLista.value) {
+      return SliverToBoxAdapter(
+        child: SizedBox(
+          height: MediaQuery.sizeOf(context).height,
+          child: EsqueletoDeGrilla(
+            columnas: math.max(
+              1,
+              ((MediaQuery.sizeOf(context).width - 32 + 16) / (cardWidth + 16))
+                  .floor(),
+            ),
+            proporcion: cardWidth / cardExtent,
+          ),
+        ),
+      );
+    }
+
+    if (itemCount == 0) {
+      final nothingAtAll = _c.resents.isEmpty && _c.favorites.isEmpty;
+      return SliverPadding(
+        padding: const EdgeInsets.symmetric(vertical: 80),
+        sliver: SliverFillRemaining(
+          hasScrollBody: false,
+          child: Center(
+            child: Text(
+              nothingAtAll
+                  ? (widget.zone
+                      ? 'nsfw18.no-record'.i18n
+                      : 'home.no-record'.i18n)
+                  : 'common.no-result'.i18n,
+              style: const TextStyle(color: HomeTheme.textMuted),
+            ),
+          ),
+        ),
+      );
+    }
 
     // ── Las tarjetas LLENAN su celda ──────────────────────────────────
     //

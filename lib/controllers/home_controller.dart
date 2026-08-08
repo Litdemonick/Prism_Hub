@@ -60,6 +60,15 @@ class HomePageController extends GetxController {
   // where each one came from).
   final RxList<Favorite> favorites = <Favorite>[].obs;
 
+  /// Si ya se leyó la base al menos una vez.
+  ///
+  /// Las listas arrancan vacías, y vacío por «todavía no pregunté» se ve
+  /// exactamente igual que vacío por «no hay nada». Sin distinguirlos, el
+  /// Historial escribía «no tenés nada todavía» en el parpadeo previo a la
+  /// primera lectura, aunque estuviera lleno. Con esto muestra bloques
+  /// mientras espera, que es lo que hacen las demás zonas.
+  final primeraCargaLista = false.obs;
+
   // Portada real random para el fondo del hero — nunca se fabrica una imagen.
   final Rx<HeroBackground?> heroBackground = Rx(null);
 
@@ -182,6 +191,11 @@ class HomePageController extends GetxController {
     allHistory.value = historialZona;
     resents.value = resentsData;
     favorites.value = favoritesData;
+    // Ya se leyó la base al menos una vez. Antes de esto, las listas están
+    // vacías porque todavía no se preguntó, y eso NO es lo mismo que «no hay
+    // nada»: el Historial mostraba «no tenés nada todavía» durante el
+    // parpadeo de la lectura, con la biblioteca llena. Ver primeraCargaLista.
+    primeraCargaLista.value = true;
     unawaited(prewarmResumeHistoryTargets(resentsData));
     // Portadas que quedaron vacías: se recuperan de lo que ya hay guardado.
     //
