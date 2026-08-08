@@ -335,38 +335,38 @@ class _VideoPlayerMobileControlsState extends State<VideoPlayerMobileControls> {
                       // televisor. Era esto lo que aparecia al adelantar.
                       opacity: (_c.dlnaDevice.value == null &&
                               ((!_c.isGettingWatchData.value &&
-                                  !_c.hasRenderedFrame.value &&
-                                  // Ver el comentario equivalente en los
-                                  // controles de escritorio.
-                                  _c.error.value.isEmpty &&
-                                  // El aviso de "el servidor falló, tocá para
-                                  // reproducir" espera una acción del usuario:
-                                  // nada está cargando y la rueda no tiene por
-                                  // qué girar. Faltaba esta condición y se veía
-                                  // dando vueltas DETRÁS del aviso, que encima
-                                  // hace parecer que si uno espera se arregla
-                                  // solo. El fallo de servidor no se guarda en
-                                  // `error` —tiene su propio campo— así que la
-                                  // comprobación de arriba no lo cubría.
-                                  _c.serverFailedMessage.value.isEmpty &&
-                                  // Esperando que se elija/confirme servidor:
-                                  // el boton de play esta ahi pidiendo un
-                                  // toque y no hay nada cargando. La rueda
-                                  // girando detras hacia parecer que si uno
-                                  // espera arranca solo.
-                                  !_c.awaitingServerChoice.value &&
-                                  !_c.isWebViewActive.value) ||
-                              (_c.hasRenderedFrame.value &&
-                                  (_c.isSeeking.value ||
-                                      // imagenCongelada: con la red mal, mpv
-                                      // deja de avisar que esta cargando, asi
-                                      // que la rueda no salia y la pantalla
-                                      // quedaba quieta sin explicacion. Esto
-                                      // mira que la posicion no avance, que es
-                                      // lo unico que siempre se puede saber.
-                                      _c.imagenCongelada.value ||
-                                      (_c.isPlaying.value &&
-                                          _c.isActuallyBuffering.value)))))
+                                      !_c.hasRenderedFrame.value &&
+                                      // Ver el comentario equivalente en los
+                                      // controles de escritorio.
+                                      _c.error.value.isEmpty &&
+                                      // El aviso de "el servidor falló, tocá para
+                                      // reproducir" espera una acción del usuario:
+                                      // nada está cargando y la rueda no tiene por
+                                      // qué girar. Faltaba esta condición y se veía
+                                      // dando vueltas DETRÁS del aviso, que encima
+                                      // hace parecer que si uno espera se arregla
+                                      // solo. El fallo de servidor no se guarda en
+                                      // `error` —tiene su propio campo— así que la
+                                      // comprobación de arriba no lo cubría.
+                                      _c.serverFailedMessage.value.isEmpty &&
+                                      // Esperando que se elija/confirme servidor:
+                                      // el boton de play esta ahi pidiendo un
+                                      // toque y no hay nada cargando. La rueda
+                                      // girando detras hacia parecer que si uno
+                                      // espera arranca solo.
+                                      !_c.awaitingServerChoice.value &&
+                                      !_c.isWebViewActive.value) ||
+                                  (_c.hasRenderedFrame.value &&
+                                      (_c.isSeeking.value ||
+                                          // imagenCongelada: con la red mal, mpv
+                                          // deja de avisar que esta cargando, asi
+                                          // que la rueda no salia y la pantalla
+                                          // quedaba quieta sin explicacion. Esto
+                                          // mira que la posicion no avance, que es
+                                          // lo unico que siempre se puede saber.
+                                          _c.imagenCongelada.value ||
+                                          (_c.isPlaying.value &&
+                                              _c.isActuallyBuffering.value)))))
                           ? 1
                           : 0,
                       child: const Center(
@@ -1070,6 +1070,49 @@ class _VideoPlayerMobileControlsState extends State<VideoPlayerMobileControls> {
                 ),
               ),
             ),
+            // ── La flecha de volver NO se esconde ──────────────────────────
+            //
+            // Va aparte del encabezado, fuera de su desvanecido, para que se
+            // quede aunque los controles se oculten solos y aunque el vídeo
+            // esté a pantalla completa.
+            //
+            // El criterio ya se cambió una vez en la otra dirección: la flecha
+            // estaba siempre visible, se pidió que se ocultara con el resto, y
+            // ahora se vuelve a pedir que se quede. Se anota para que la
+            // próxima vez que alguien lea esto no lo tome por un descuido.
+            //
+            // El motivo de que se quede es sólido: es la ÚNICA salida de esta
+            // pantalla. Con los controles ocultos —que se ocultan solos a los
+            // pocos segundos— y sin barra del sistema, quedaba sin ninguna
+            // forma visible de volver: había que tocar para que aparecieran y
+            // recién ahí salir.
+            Positioned(
+              top: 0,
+              left: 0,
+              child: SafeArea(
+                bottom: false,
+                child: Padding(
+                  padding: const EdgeInsets.only(left: 8, top: 4),
+                  child: DecoratedBox(
+                    // Un fondo redondo detrás: la flecha sola, blanca, se
+                    // pierde sobre una escena clara, y ahora que se queda
+                    // encima del vídeo todo el tiempo tiene que leerse sobre
+                    // cualquier cosa.
+                    decoration: BoxDecoration(
+                      color: Colors.black.withValues(alpha: 0.45),
+                      shape: BoxShape.circle,
+                    ),
+                    child: IconButton(
+                      tooltip:
+                          MaterialLocalizations.of(context).backButtonTooltip,
+                      iconSize: 22,
+                      icon: const Icon(Icons.arrow_back, color: Colors.white),
+                      onPressed: () => unawaited(_c.closeRoute(context)),
+                    ),
+                  ),
+                ),
+              ),
+            ),
             Positioned(
               bottom: 0,
               left: 0,
@@ -1216,22 +1259,23 @@ class _PanelCasteandoState extends State<_PanelCasteando>
                       ? 'video.cast-seeking'.i18n
                       : conectando
                           ? 'video.cast-connecting'.i18n
-                      : !reproduciendo
-                          ? 'video.cast-paused-here'.i18n
-                          : velocidad != null
-                              ? FlutterI18n.translate(
-                                  context,
-                                  'video.cast-speed',
-                                  translationParams: {'speed': velocidad},
-                                )
-                              : 'video.cast-on-device'.i18n;
+                          : !reproduciendo
+                              ? 'video.cast-paused-here'.i18n
+                              : velocidad != null
+                                  ? FlutterI18n.translate(
+                                      context,
+                                      'video.cast-speed',
+                                      translationParams: {'speed': velocidad},
+                                    )
+                                  : 'video.cast-on-device'.i18n;
               return Text(
                 aviso ?? estado,
                 textAlign: TextAlign.center,
                 style: TextStyle(
                   fontSize: 13,
                   height: 1.4,
-                  fontWeight: aviso == null ? FontWeight.normal : FontWeight.w700,
+                  fontWeight:
+                      aviso == null ? FontWeight.normal : FontWeight.w700,
                   color: aviso == null
                       ? Colors.white.withValues(alpha: 0.75)
                       : HomeTheme.accentPink,
@@ -1424,8 +1468,7 @@ class _Header extends StatelessWidget {
               // del reproductor.
               final lista = controller.playList;
               final i = controller.index.value;
-              final episode =
-                  (i >= 0 && i < lista.length) ? lista[i].name : '';
+              final episode = (i >= 0 && i < lista.length) ? lista[i].name : '';
               return Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
