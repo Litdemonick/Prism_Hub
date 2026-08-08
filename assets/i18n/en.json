@@ -244,7 +244,14 @@
     "masivo-desactivadas": "{n} disabled.",
     "actualizar-todas": "Update all",
     "masivo-actualizadas": "{n} updated.",
-    "masivo-al-dia": "Everything was already up to date."
+    "masivo-al-dia": "Everything was already up to date.",
+    "instalar-todas": "Install all",
+    "desinstalar-todas": "Uninstall all",
+    "masivo-confirmar-borrado": "{n} extensions will be uninstalled. Their settings are lost and you would have to install them again.",
+    "masivo-desinstaladas": "{n} uninstalled.",
+    "masivo-instaladas": "{n} installed.",
+    "masivo-instaladas-con-fallos": "{n} installed, {f} failed.",
+    "masivo-nada-para-instalar": "Everything was already installed."
   },
   "extension-repo": {
     "error": "An error occurred!",

@@ -240,7 +240,14 @@
     "masivo-desactivadas": "Se desactivaron {n}.",
     "actualizar-todas": "Actualizar todas",
     "masivo-actualizadas": "{n} actualizadas.",
-    "masivo-al-dia": "Ya estaban todas al día."
+    "masivo-al-dia": "Ya estaban todas al día.",
+    "instalar-todas": "Instalar todas",
+    "desinstalar-todas": "Desinstalar todas",
+    "masivo-confirmar-borrado": "Se van a desinstalar {n} extensiones. Sus ajustes se pierden y para recuperarlas hay que instalarlas de nuevo.",
+    "masivo-desinstaladas": "{n} desinstaladas.",
+    "masivo-instaladas": "{n} instaladas.",
+    "masivo-instaladas-con-fallos": "{n} instaladas, {f} no se pudieron.",
+    "masivo-nada-para-instalar": "Ya estaban todas instaladas."
   },
   "extension-repo": {
     "error": "¡Ha ocurrido un error!",

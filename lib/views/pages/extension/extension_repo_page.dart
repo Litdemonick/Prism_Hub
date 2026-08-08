@@ -15,6 +15,7 @@ import 'package:prismhub/views/widgets/button.dart';
 import 'package:prismhub/views/widgets/platform_widget.dart';
 import 'package:prismhub/views/widgets/progress.dart';
 import 'package:prismhub/views/widgets/search_appbar.dart';
+import 'package:prismhub/views/widgets/messenger.dart';
 
 class ExtensionRepoPage extends StatefulWidget {
   const ExtensionRepoPage({super.key});
@@ -240,8 +241,7 @@ class _ExtensionRepoPageState extends State<ExtensionRepoPage> {
   // filtros activos (a diferencia de _content(), que sí filtra). Para el
   // resumen del encabezado ("9 extensiones · 7 instaladas · 2 disponibles").
   (int, int, int) _repoStats() {
-    final valid =
-        c.extensionsTemp.where((e) => e['package'] != null).toList();
+    final valid = c.extensionsTemp.where((e) => e['package'] != null).toList();
     final installed = valid
         .where((e) => ExtensionUtils.runtimes.containsKey(e['package']))
         .length;
@@ -359,9 +359,7 @@ class _ExtensionRepoPageState extends State<ExtensionRepoPage> {
     final iconSize = useFluent ? 14.0 : 22.0;
     Widget arrow(IconData icon, bool enabled, VoidCallback onTap) {
       return MouseRegion(
-        cursor: enabled
-            ? SystemMouseCursors.click
-            : SystemMouseCursors.basic,
+        cursor: enabled ? SystemMouseCursors.click : SystemMouseCursors.basic,
         child: GestureDetector(
           onTap: enabled ? onTap : null,
           child: SizedBox(
@@ -392,6 +390,88 @@ class _ExtensionRepoPageState extends State<ExtensionRepoPage> {
         Text(label, style: textStyle),
         arrow(rightIcon, nextEnabled, () => onChange(page + 1)),
       ],
+    );
+  }
+
+  /// Los paquetes que AHORA MISMO se pueden instalar con lo que hay filtrado.
+  ///
+  /// ── Por qué se anota desde el dibujo y no se recalcula ──────────────────
+  ///
+  /// El botón vive en la barra de filtros y la lista filtrada se arma en
+  /// `_content()`, que son dos ramas distintas del árbol. Recalcular los
+  /// filtros en el botón significaría escribir por segunda vez las mismas seis
+  /// reglas, y ese es exactamente el error contra el que avisa el comentario de
+  /// `_applyFilters` en la otra pantalla: dos copias que se desincronizan.
+  ///
+  /// Así hay una sola verdad. Anotar un campo mientras se dibuja no dispara
+  /// otro dibujo —no hay `setState`— y el botón lo lee recién cuando lo tocan,
+  /// con al menos un cuadro ya pasado.
+  List<String> _instalablesVisibles = const [];
+
+  /// Está instalando una tanda ahora mismo.
+  bool _instalandoTodas = false;
+
+  /// Instala las que se están viendo y todavía no están.
+  ///
+  /// ── Qué queda afuera, a propósito ───────────────────────────────────────
+  ///
+  /// Las ya instaladas —no hay nada que hacer— y las marcadas inestables: el
+  /// catálogo dice que están rotas o retiradas, y meterlas en el Home solo
+  /// llena la pantalla de filas vacías. Quien quiera una igual la instala desde
+  /// su tarjeta, donde el aviso está a la vista.
+  ///
+  /// Las +18 sí entran, pero apagadas si el interruptor general lo está — igual
+  /// que al instalarlas de a una. Ver `instalarDesdeCatalogo`.
+  Future<void> _instalarTodas() async {
+    if (_instalandoTodas) return;
+    final paquetes = List<String>.from(_instalablesVisibles);
+    if (paquetes.isEmpty) {
+      showPlatformSnackbar(
+        context: context,
+        title: 'extension.instalar-todas'.i18n,
+        content: 'extension.masivo-nada-para-instalar'.i18n,
+      );
+      return;
+    }
+
+    setState(() => _instalandoTodas = true);
+    var hechas = 0;
+    var fallidas = 0;
+    try {
+      // De a una: cada instalación baja el guion, verifica la firma y arranca
+      // el runtime. Diecisiete en paralelo pelean por el mismo hilo y encima
+      // dejarían la pantalla sin responder mientras tanto.
+      for (final pkg in paquetes) {
+        final entrada = c.extensions.firstWhere(
+          (e) => e['package']?.toString() == pkg,
+          orElse: () => null,
+        );
+        if (entrada is! Map) continue;
+        if (!mounted) return;
+        if (await ExtensionUtils.instalarDesdeCatalogo(entrada, context)) {
+          hechas++;
+        } else {
+          fallidas++;
+        }
+      }
+    } finally {
+      if (mounted) setState(() => _instalandoTodas = false);
+    }
+    if (!mounted) return;
+    showPlatformSnackbar(
+      context: context,
+      title: 'extension.instalar-todas'.i18n,
+      content: fallidas == 0
+          ? FlutterI18n.translate(
+              context,
+              'extension.masivo-instaladas',
+              translationParams: {'n': '$hechas'},
+            )
+          : FlutterI18n.translate(
+              context,
+              'extension.masivo-instaladas-con-fallos',
+              translationParams: {'n': '$hechas', 'f': '$fallidas'},
+            ),
     );
   }
 
@@ -562,6 +642,9 @@ class _ExtensionRepoPageState extends State<ExtensionRepoPage> {
         availableCards.where((e) => !e.unstable).toList();
     final unstableAvailableCards =
         availableCards.where((e) => e.unstable).toList();
+    // La misma lista que ve el usuario, para el botón «Instalar todas».
+    _instalablesVisibles =
+        stableAvailableCards.map((e) => e.package).toList(growable: false);
     final nonEmptyGroups = [
       installedCards,
       stableAvailableCards,
@@ -758,6 +841,16 @@ class _ExtensionRepoPageState extends State<ExtensionRepoPage> {
             c.search.value = value;
           },
           actions: [
+            // Instalar todo lo que dejaron los filtros. Al lado del embudo
+            // porque actua sobre lo que ese embudo eligio; en el celular no hay
+            // barra de filtros donde ponerlo, asi que va en la cabecera.
+            IconButton(
+              tooltip: 'extension.instalar-todas'.i18n,
+              icon: Icon(_instalandoTodas
+                  ? Icons.hourglass_top_rounded
+                  : Icons.download_for_offline_outlined),
+              onPressed: _instalandoTodas ? null : _instalarTodas,
+            ),
             IconButton(
               icon: const Icon(Icons.filter_list),
               onPressed: () {
@@ -886,8 +979,7 @@ class _ExtensionRepoPageState extends State<ExtensionRepoPage> {
                                       },
                                     ),
                                     fluent.MenuFlyoutItem(
-                                      text:
-                                          Text('extension-type.reading'.i18n),
+                                      text: Text('extension-type.reading'.i18n),
                                       onPressed: () {
                                         fluent.Flyout.of(context).close();
                                         c.searchType.value = _readingTypes;
@@ -943,8 +1035,7 @@ class _ExtensionRepoPageState extends State<ExtensionRepoPage> {
                                 )),
                             Obx(() => _filterChip(
                                   controller: _installedFlyoutController,
-                                  label:
-                                      'extension-repo.filter-installed'.i18n,
+                                  label: 'extension-repo.filter-installed'.i18n,
                                   value:
                                       'extension-repo.installed-${c.searchInstalled.value}'
                                           .i18n,
@@ -982,6 +1073,27 @@ class _ExtensionRepoPageState extends State<ExtensionRepoPage> {
                                       ),
                                   ],
                                 )),
+                            // Instalar todo lo que está a la vista. Al final
+                            // de la barra: es una acción, no un filtro, y
+                            // pegada a los filtros deja claro que actúa sobre
+                            // lo que ellos dejaron.
+                            fluent.Button(
+                              onPressed:
+                                  _instalandoTodas ? null : _instalarTodas,
+                              child: Row(
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  Icon(
+                                    _instalandoTodas
+                                        ? Icons.hourglass_top_rounded
+                                        : Icons.download_for_offline_outlined,
+                                    size: 16,
+                                  ),
+                                  const SizedBox(width: 7),
+                                  Text('extension.instalar-todas'.i18n),
+                                ],
+                              ),
+                            ),
                             SizedBox(
                               width: 260,
                               child: Obx(

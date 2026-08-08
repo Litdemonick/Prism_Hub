@@ -189,6 +189,75 @@ class _ExtensionPageState extends State<ExtensionPage> {
     );
   }
 
+  /// Está desinstalando todas ahora mismo.
+  bool _desinstalandoTodas = false;
+
+  /// Borra de golpe las extensiones que se están viendo.
+  ///
+  /// ── Sobre las FILTRADAS, y con confirmación ─────────────────────────────
+  ///
+  /// Mismo criterio que activar/desactivar: el botón hace lo que la pantalla
+  /// muestra. Si alguien está viendo «+18» y toca desinstalar, espera que se
+  /// vayan esas, no las diecisiete.
+  ///
+  /// A diferencia de los otros botones masivos, este no se deshace: volver
+  /// atrás significa reinstalar una por una y perder los ajustes de cada una.
+  /// Por eso pregunta antes, y dice cuántas son — «desinstalar todas» sin un
+  /// número es justo el aviso que la gente acepta sin leer.
+  Future<void> _desinstalarTodas() async {
+    if (_desinstalandoTodas) return;
+    final visibles = _applyFilters(c.runtimes.values.toList(growable: false));
+    if (visibles.isEmpty) return;
+
+    final confirma = await showPlatformDialog(
+      context: context,
+      title: 'extension.desinstalar-todas'.i18n,
+      content: Text(FlutterI18n.translate(
+        context,
+        'extension.masivo-confirmar-borrado',
+        translationParams: {'n': '${visibles.length}'},
+      )),
+      actions: [
+        PlatformTextButton(
+          onPressed: () => RouterUtils.pop(false),
+          child: Text('common.cancel'.i18n),
+        ),
+        PlatformFilledButton(
+          onPressed: () => RouterUtils.pop(true),
+          child: Text('common.confirm'.i18n),
+        ),
+      ],
+    );
+    if (confirma != true || !mounted) return;
+
+    setState(() => _desinstalandoTodas = true);
+    var hechas = 0;
+    try {
+      for (final r in visibles) {
+        try {
+          await ExtensionUtils.uninstall(r.extension.package);
+          hechas++;
+        } catch (e) {
+          // Un archivo trabado por el sistema no puede dejar a medias el resto.
+          logger.info('[extensiones] no se pudo desinstalar '
+              '${r.extension.package}: $e');
+        }
+      }
+    } finally {
+      if (mounted) setState(() => _desinstalandoTodas = false);
+    }
+    if (!mounted) return;
+    showPlatformSnackbar(
+      context: context,
+      title: 'extension.desinstalar-todas'.i18n,
+      content: FlutterI18n.translate(
+        context,
+        'extension.masivo-desinstaladas',
+        translationParams: {'n': '$hechas'},
+      ),
+    );
+  }
+
   /// Pantalla baja: horizontal de teléfono, donde el alto es el recurso caro.
   static bool _pantallaBaja(BuildContext context) =>
       MediaQuery.sizeOf(context).height < 520;
@@ -218,6 +287,13 @@ class _ExtensionPageState extends State<ExtensionPage> {
       icono: Icons.toggle_off_outlined,
       label: 'extension.desactivar-todas'.i18n,
       onTap: () => _cambiarTodas(false),
+    );
+    final desinstalar = _BotonMasivo(
+      icono: _desinstalandoTodas
+          ? Icons.hourglass_top_rounded
+          : Icons.delete_sweep_outlined,
+      label: 'extension.desinstalar-todas'.i18n,
+      onTap: _desinstalandoTodas ? null : _desinstalarTodas,
     );
     final actualizar = _BotonMasivo(
       icono: _actualizandoTodas
@@ -258,6 +334,8 @@ class _ExtensionPageState extends State<ExtensionPage> {
                 desactivar,
                 const SizedBox(width: 10),
                 actualizar,
+                const SizedBox(width: 10),
+                desinstalar,
               ],
             ),
           ),
@@ -280,6 +358,8 @@ class _ExtensionPageState extends State<ExtensionPage> {
         desactivar,
         const SizedBox(width: 10),
         actualizar,
+        const SizedBox(width: 10),
+        desinstalar,
       ],
     );
   }

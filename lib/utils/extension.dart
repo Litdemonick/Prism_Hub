@@ -750,8 +750,8 @@ class ExtensionUtils {
       try {
         final filtros =
             await e.value.createFilter().timeout(const Duration(seconds: 8));
-        final tienePuerta = filtros.values.any(
-            (f) => f.adultOption != null && f.adultOption!.isNotEmpty);
+        final tienePuerta = filtros.values
+            .any((f) => f.adultOption != null && f.adultOption!.isNotEmpty);
         if (tienePuerta) _mixtas.add(e.key);
       } catch (err) {
         // Si no se pudo saber, se la deja fuera. Una mixta que no aparece en
@@ -807,8 +807,7 @@ class ExtensionUtils {
   /// Las que están cargadas como vista previa, por paquete.
   static final Map<String, ExtensionService> vistaPrevia = {};
 
-  static bool esVistaPrevia(String package) =>
-      vistaPrevia.containsKey(package);
+  static bool esVistaPrevia(String package) => vistaPrevia.containsKey(package);
 
   static bool _vistaPreviaLista = false;
 
@@ -892,7 +891,8 @@ class ExtensionUtils {
     if (guion == null || guion.isEmpty) return;
 
     // La misma verificación que usa la instalación de verdad.
-    if (!ExtensionSignature.isOfficial(guion, entrada['signature'].toString())) {
+    if (!ExtensionSignature.isOfficial(
+        guion, entrada['signature'].toString())) {
       logger.warning(
           '[vista previa] firma inválida para $pkg — no se carga (posible manipulación).');
       return;
@@ -927,8 +927,7 @@ class ExtensionUtils {
   /// el paquete: es feo, pero es lo único que se sabe, y callar el dato dejaría
   /// un aviso que no se puede accionar.
   static String nombreDe(String package) {
-    final ext = runtimes[package]?.extension ??
-        vistaPrevia[package]?.extension;
+    final ext = runtimes[package]?.extension ?? vistaPrevia[package]?.extension;
     final nombre = ext?.name.trim();
     return (nombre == null || nombre.isEmpty) ? package : nombre;
   }
@@ -1260,6 +1259,129 @@ class ExtensionUtils {
   static Future<void> _yieldToNextFrame() async {
     await SchedulerBinding.instance.endOfFrame;
     await Future<void>.delayed(const Duration(milliseconds: 8));
+  }
+
+  /// Instala una extensión a partir de su entrada del catálogo.
+  ///
+  /// ── Por qué existe aparte de la tarjeta ─────────────────────────────────
+  ///
+  /// Instalar era algo que solo sabía hacer `ExtensionCard`, y solo de a una:
+  /// la lógica —bajar, verificar la firma, reintentar con el catálogo fresco,
+  /// ponerle el encabezado si le falta— vivía dentro del estado del widget.
+  /// «Instalar todas» necesita eso mismo sin una tarjeta que lo envuelva.
+  ///
+  /// La tarjeta sigue con su propio camino, que además pregunta por el +18 y
+  /// pinta la rueda. Acá no se pregunta nada: en una acción masiva un diálogo
+  /// por extensión sería insoportable, así que las +18 se instalan APAGADAS si
+  /// el interruptor general está apagado — el mismo criterio que ya usaba la
+  /// tarjeta cuando no podía preguntar.
+  ///
+  /// Devuelve true si quedó instalada. Los errores se registran y se devuelven
+  /// como false: en una tanda, una que falle no puede cortar a las demás.
+  static Future<bool> instalarDesdeCatalogo(
+    Map entrada,
+    BuildContext context,
+  ) async {
+    final package = entrada['package']?.toString();
+    if (package == null || package.isEmpty) return false;
+    try {
+      final baseUrl = (entrada['script'] ?? entrada['url'])?.toString() ??
+          '${PrismHubStorage.getSetting(SettingKey.prismhubRepoUrl)}'
+              '/repo/$package.js';
+      // Igual que en la tarjeta: GitHub cachea el .js unos minutos y sin esto
+      // se podría instalar la versión anterior recién publicada.
+      final sep = baseUrl.contains('?') ? '&' : '?';
+      final res = await dio.get<String>(
+        '$baseUrl${sep}t=${DateTime.now().millisecondsSinceEpoch}',
+        options: Options(receiveTimeout: const Duration(seconds: 20)),
+      );
+      var script = res.data;
+      if (script == null || script.isEmpty) return false;
+
+      final firma = entrada['signature']?.toString();
+      var oficial = false;
+      if (firma != null && firma.isNotEmpty) {
+        if (!ExtensionSignature.isOfficial(script, firma)) {
+          // Puede ser el caché del catálogo, no manipulación: se baja de nuevo
+          // forzado y se reintenta una vez. Ver el detalle en ExtensionCard.
+          final frescos = await _scriptConCatalogoFresco(package);
+          if (frescos == null) {
+            logger.warning('[extensiones] $package: firma inválida, no se '
+                'instala en la tanda');
+            return false;
+          }
+          script = frescos;
+        }
+        oficial = true;
+      }
+
+      if (!script.contains('==PrismHubExtension==') &&
+          !script.contains('==MiruExtension==') &&
+          !script.contains('@package')) {
+        final tipo = (entrada['type'] ?? 'bangumi').toString();
+        final cabecera = '// ==PrismHubExtension==\n'
+            '// @name         ${entrada['name'] ?? package}\n'
+            '// @version      ${entrada['version'] ?? '1.0.0'}\n'
+            '// @author       PrismPlus\n'
+            '// @lang         ${entrada['lang'] ?? 'all'}\n'
+            '// @license      ${entrada['license'] ?? 'MIT'}\n'
+            '// @icon         ${entrada['icon'] ?? ''}\n'
+            '// @package      $package\n'
+            '// @type         $tipo\n'
+            '// @nsfw         ${entrada['nsfw'] ?? false}\n'
+            '// @webSite      ${entrada['webSite'] ?? ''}\n'
+            '// @description  ${entrada['description'] ?? entrada['name'] ?? package}\n'
+            '// ==/PrismHubExtension==\n\n';
+        script = '$cabecera$script';
+      }
+
+      if (!context.mounted) return false;
+      await installByScript(script, context, officialVerified: oficial);
+      if (runtimes[package] == null) return false;
+
+      final esNsfw = entrada['nsfw'] == true || entrada['nsfw'] == 'true';
+      if (esNsfw && !isNsfwVisibleOutsideZone(true)) {
+        await setExtensionEnabled(package, false);
+        // Se anota para que vuelva sola al encender el interruptor de +18.
+        await anotarApagadaPorNsfw(package);
+      }
+      return true;
+    } catch (e) {
+      logger.warning('[extensiones] no se pudo instalar $package: $e');
+      return false;
+    }
+  }
+
+  /// El script de un paquete, bajando el catálogo de nuevo y forzado.
+  ///
+  /// Devuelve null si tampoco valida con el catálogo fresco: ahí sí hay que
+  /// rechazarlo. Es la versión sin widget de lo que hace ExtensionCard.
+  static Future<String?> _scriptConCatalogoFresco(String package) async {
+    try {
+      final lista = await fetchRepoIndex(forceRefresh: true, cacheBust: true);
+      final entrada = lista.firstWhere(
+        (e) => e is Map && e['package']?.toString() == package,
+        orElse: () => null,
+      );
+      if (entrada is! Map) return null;
+      final firma = entrada['signature']?.toString();
+      final direccion = (entrada['script'] ?? entrada['url'])?.toString();
+      if (firma == null || firma.isEmpty || direccion == null) return null;
+
+      final sep = direccion.contains('?') ? '&' : '?';
+      final res = await dio.get<String>(
+        '$direccion${sep}t=${DateTime.now().millisecondsSinceEpoch}',
+        options: Options(receiveTimeout: const Duration(seconds: 20)),
+      );
+      final script = res.data;
+      if (script == null || script.isEmpty) return null;
+      if (!ExtensionSignature.isOfficial(script, firma)) return null;
+      return script;
+    } catch (e) {
+      logger.warning('[extensiones] no se pudo reintentar con el catálogo '
+          'fresco para $package: $e');
+      return null;
+    }
   }
 
   static uninstall(String package) async {
