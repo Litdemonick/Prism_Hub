@@ -29,16 +29,28 @@ class HomeAndroid extends StatelessWidget {
 
   final CatalogoExtensionesController c;
 
-  /// Las filas que corresponden al tipo elegido.
+  /// Las filas que se dibujan: solo las que pueden traer contenido y que
+  /// entran en el tipo elegido.
+  ///
+  /// ── Por qué se van las apagadas y las no instaladas ─────────────────────
+  ///
+  /// Estaban a propósito, con su botón de «Activar» o «Instalar»: la idea era
+  /// que nadie se perdiera una extensión por no saber que existía.
+  ///
+  /// En la práctica no funciona. Con una sola extensión andando, el Home queda
+  /// con una portada arriba y DIECISÉIS renglones de botones debajo — se lee
+  /// como una lista de tareas pendientes, no como una pantalla para descubrir
+  /// algo. Y el lugar para prender o instalar ya existe, es la zona de
+  /// Extensiones, que está a un toque en la barra.
   ///
   /// El tipo se resuelve ACÁ y no pidiéndole nada a nadie: `extension.type` ya
   /// está cargado para las diecisiete. Elegir «solo mangas» es no dibujar las
-  /// que no lo son, y eso es instantáneo.
-  ///
-  /// El género es otra cosa: ese sí hay que preguntárselo al sitio, y por eso
-  /// espera a que el usuario actualice.
-  List<FilaDeExtension> _visibles(CatalogoExtensionesController c) =>
-      c.filas.where(c.entraEnElTipo).toList();
+  /// que no lo son, y eso es instantáneo. El género es otra cosa: ese sí hay
+  /// que preguntárselo al sitio, y por eso espera a que el usuario actualice.
+  List<FilaDeExtension> _visibles(CatalogoExtensionesController c) => c.filas
+      .where((f) => f.estadoExt == EstadoExtension.activa)
+      .where(c.entraEnElTipo)
+      .toList();
 
   @override
   Widget build(BuildContext context) {
