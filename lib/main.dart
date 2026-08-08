@@ -182,14 +182,28 @@ void main(List<String> args) async {
       return;
     }
 
-    // Las listas de bloqueo, ya juntas y listas para cuando se abra el
-    // navegador interno. Va con su propio try: quedarse sin bloqueador es
-    // molesto, pero no arrancar la app por eso sería peor.
-    try {
-      await BloqueadorAnuncios.cargar();
-    } catch (e) {
-      logger.warning('No se pudieron cargar las listas de bloqueo: $e');
-    }
+    // Las listas de bloqueo, para cuando se abra el navegador interno.
+    //
+    // ── SIN await: esto no puede atrasar el primer cuadro ────────────────
+    //
+    // Estaba esperándose acá, antes de runApp, y son varios archivos de listas
+    // que hay que leer y parsear. En Windows no se notaba porque la ventana ni
+    // se muestra hasta después de dibujar; en Android la pantalla está a la
+    // vista desde el primer instante, así que todo ese rato se veía el fondo
+    // oscuro vacío en vez del logo. Reportado en vivo: «una pantalla toda
+    // negra al abrir».
+    //
+    // El bloqueador recién hace falta cuando se abre el navegador interno, que
+    // es mucho después. Y el criterio ya estaba escrito unas líneas más
+    // arriba: lo pesado se carga DURANTE el splash, con algo en pantalla.
+    // Esta llamada se había quedado del lado equivocado.
+    unawaited(() async {
+      try {
+        await BloqueadorAnuncios.cargar();
+      } catch (e) {
+        logger.warning('No se pudieron cargar las listas de bloqueo: $e');
+      }
+    }());
 
     // Crea el entorno de WebView2 ya al arrancar, mientras COM del proceso
     // está recién inicializado y sano (ver el comentario largo en

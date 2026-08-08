@@ -21,14 +21,16 @@
 
     ── El logo se ve más chico que antes, y es a propósito del sistema ───────
 
-    Android le aplica al icono del splash una máscara circular y solo usa la
-    parte de adentro del lienzo. No es un recorte nuestro: es la regla de esa
-    API, la misma que siguen todas las apps.
+    ── El logo va por un drawable aparte ─────────────────────────────────────
+
+    Y no por el PNG directo: el sistema recorta ese icono con una máscara
+    circular, así que el logo tiene que ir metido en el área segura. De eso se
+    encarga launch_logo_splash, donde está el detalle.
 -->
 <resources>
     <style name="LaunchTheme" parent="@android:style/Theme.Light.NoTitleBar">
         <item name="android:windowSplashScreenBackground">@color/launch_background</item>
-        <item name="android:windowSplashScreenAnimatedIcon">@drawable/launch_logo</item>
+        <item name="android:windowSplashScreenAnimatedIcon">@drawable/launch_logo_splash</item>
         <item name="android:windowBackground">@drawable/launch_background</item>
     </style>
     <style name="NormalTheme" parent="@android:style/Theme.Light.NoTitleBar">

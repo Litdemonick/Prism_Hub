@@ -1,0 +1,25 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+    El logo del splash de Android 12, metido dentro de su área segura.
+
+    ── Por qué no se usa el PNG directo ──────────────────────────────────────
+
+    El sistema dibuja ese icono dentro de un círculo y solo respeta la parte
+    interna del lienzo: lo de afuera lo recorta. Como el logo ocupa el lienzo
+    entero, le cortaba las puntas — se veía «cortado», reportado en vivo.
+
+    La especificación de esa API reserva para el dibujo los dos tercios
+    centrales del lienzo. Con un 18% de margen a cada lado, el logo queda en el
+    64% del medio: entra completo en el círculo y con un poco de aire.
+
+    Va como drawable aparte y no tocando el PNG porque ese mismo archivo lo usa
+    también el splash viejo (launch_background.xml, para aparatos anteriores a
+    Android 12), donde NO hay máscara y el logo se ve entero sin recortarle
+    nada. Cambiar el PNG lo achicaría ahí sin necesidad.
+-->
+<inset xmlns:android="http://schemas.android.com/apk/res/android"
+    android:drawable="@drawable/launch_logo"
+    android:insetLeftFraction="18%"
+    android:insetTopFraction="18%"
+    android:insetRightFraction="18%"
+    android:insetBottomFraction="18%" />
