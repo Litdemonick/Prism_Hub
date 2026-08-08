@@ -470,7 +470,7 @@ class _AndroidMainPageState extends fluent.State<AndroidMainPage> {
             // solas, y a las otras se les puso.
             _noConnectionBanner(),
             Expanded(
-              child: _apaisado(context) && !LayoutUtils.isTablet
+              child: _apaisado(context)
                   // ── Teléfono acostado: riel a la izquierda ─────────────
                   //
                   // Abajo no puede quedarse. En horizontal el alto es lo único
@@ -507,27 +507,6 @@ class _AndroidMainPageState extends fluent.State<AndroidMainPage> {
                         ),
                       ],
                     )
-                  : LayoutUtils.isTablet
-                  ? Row(
-                      children: [
-                        NavigationRail(
-                          groupAlignment: 0,
-                          labelType: NavigationRailLabelType.all,
-                          destinations: destinations
-                              .map((e) => NavigationRailDestination(
-                                    icon: Icon(e.icon),
-                                    selectedIcon: Icon(e.selectedIcon),
-                                    label: Text(e.label),
-                                  ))
-                              .toList(),
-                          selectedIndex: c.selectedTab.value,
-                          onDestinationSelected: c.changeTab,
-                        ),
-                        Expanded(
-                          child: _buildPages(),
-                        ),
-                      ],
-                    )
                   : _buildPages(),
             ),
           ],
@@ -552,7 +531,18 @@ class _AndroidMainPageState extends fluent.State<AndroidMainPage> {
         // flotando a media altura de la pantalla no se lee como la barra de
         // navegación de nada. Queda pegada —con su aire— a la barra del
         // sistema, que es donde el usuario ya la busca.
-        bottomNavigationBar: LayoutUtils.isTablet || _apaisado(context)
+        // ── La tablet usa la MISMA barra que el teléfono ─────────────────
+        //
+        // Antes le tocaba un NavigationRail de Material pegado a la
+        // izquierda, con etiquetas debajo de cada ícono. Eso era de otro
+        // diseño: sobre el fondo con brillo se veía como un panel de sistema
+        // metido a la fuerza, y encima ocupaba una columna fija todo el
+        // tiempo.
+        //
+        // Una tablet es una pantalla táctil grande, no un escritorio: le sirve
+        // lo mismo que al teléfono, con más aire. El aire ya lo da `_margen`,
+        // que en `amplio` y `enorme` deja 32 y 48 píxeles a los costados.
+        bottomNavigationBar: _apaisado(context)
             ? null
             : AnimatedSlide(
                 offset: _barraEscondida
@@ -575,8 +565,11 @@ class _AndroidMainPageState extends fluent.State<AndroidMainPage> {
   /// los cinco, y encima ya tiene su atajo arriba en el Home.
   static const _enLaBarra = 4;
 
-  /// Teléfono acostado. No vale para tablets: una tablet horizontal tiene alto
-  /// de sobra y ya usa su propia barra lateral.
+  /// Pantalla ancha y BAJA: el teléfono acostado.
+  ///
+  /// Una tablet acostada NO entra acá aunque también sea ancha: tiene 800
+  /// píxeles de alto, así que la barra de abajo no le quita nada y el riel al
+  /// costado le comería ancho de gusto.
   static bool _apaisado(BuildContext context) =>
       MediaQuery.sizeOf(context).height < 500;
 
@@ -734,7 +727,7 @@ class _AndroidMainPageState extends fluent.State<AndroidMainPage> {
   /// único que pasó es que la barra mostró lo que tenía guardado. Saliendo
   /// desde el propio botón, se ve de dónde vienen y a qué vuelven.
   Widget _capaDeMas() {
-    final apaisado = _apaisado(context) && !LayoutUtils.isTablet;
+    final apaisado = _apaisado(context);
     final bordes = MediaQuery.viewPaddingOf(context);
 
     final opciones = <(IconData, String, VoidCallback)>[
