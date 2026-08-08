@@ -960,10 +960,25 @@ class _CarruselAndroidState extends State<_CarruselAndroid>
     // mismos títulos en dos páginas distintas y basta con que uno se cuele para
     // que el usuario vea el mismo anime dos veces al deslizar. Red de seguridad
     // barata: un conjunto de direcciones ya vistas.
+    // ── Una de cada extensión, por turnos ──────────────────────────────
+    //
+    // Antes se recorría extensión por extensión: las cuarenta de FuegoCine, y
+    // recién después las de AnimeFenix. Con eso el acordeón SIEMPRE empezaba con
+    // la misma —había que deslizar cuarenta tarjetas para ver otra— y las
+    // últimas extensiones no aparecían nunca.
+    //
+    // Por turnos, las primeras tarjetas son lo más nuevo de ocho extensiones
+    // distintas. Se ve de entrada todo lo que hay abajo, una de cada una, y
+    // recién cuando se agota la primera vuelta empieza la segunda. Las que
+    // tienen menos portadas se acaban antes y las demás siguen: no queda hueco.
     final todo = <(String, ExtensionListItem)>[];
     final vistas = <String>{};
-    for (final (package, items) in grupos) {
-      for (final item in items) {
+    final masLarga =
+        grupos.fold<int>(0, (m, g) => g.$2.length > m ? g.$2.length : m);
+    for (var vuelta = 0; vuelta < masLarga; vuelta++) {
+      for (final (package, items) in grupos) {
+        if (vuelta >= items.length) continue;
+        final item = items[vuelta];
         // La misma dirección en DOS extensiones distintas sí es otro ítem, así
         // que la clave lleva el paquete.
         if (!vistas.add('$package|${item.url}')) continue;
@@ -976,26 +991,41 @@ class _CarruselAndroidState extends State<_CarruselAndroid>
   }
 
   /// De (extensión, posición) al índice en la lista plana.
+  ///
+  /// ── Se busca, no se calcula ─────────────────────────────────────────────
+  ///
+  /// Antes se sumaban los largos de los grupos anteriores, y eso solo servía
+  /// mientras la lista fuera extensión por extensión. Ahora va por turnos —una
+  /// de cada una— así que ese cálculo daría cualquier cosa.
+  ///
+  /// Buscando en la lista ya aplanada no hay dos maneras de contar que puedan
+  /// discrepar: la posición sale de la misma lista que se dibuja. Es un recorrido
+  /// de unos cientos de elementos y solo corre cuando se pierde el ancla, no en
+  /// cada cuadro.
   int _indiceGlobal(List<(String, List<ExtensionListItem>)> grupos) {
+    final planos = _planosCache;
+    if (planos == null || planos.isEmpty || grupos.isEmpty) return 0;
     final ext = widget.c.carruselExt % grupos.length;
-    var i = 0;
-    for (var g = 0; g < ext; g++) {
-      i += grupos[g].$2.length;
-    }
-    return i + widget.c.carruselPos;
+    final (paquete, items) = grupos[ext];
+    if (items.isEmpty) return 0;
+    final pos = widget.c.carruselPos.clamp(0, items.length - 1);
+    final url = items[pos].url;
+    final i = planos.indexWhere((e) => e.$1 == paquete && e.$2.url == url);
+    return i >= 0 ? i : 0;
   }
 
   /// Del índice en la lista plana de vuelta a (extensión, posición).
   void _ubicar(List<(String, List<ExtensionListItem>)> grupos, int indice) {
-    var resto = indice;
+    final planos = _planosCache;
+    if (planos == null || indice < 0 || indice >= planos.length) return;
+    final (paquete, item) = planos[indice];
     for (var g = 0; g < grupos.length; g++) {
-      final largo = grupos[g].$2.length;
-      if (resto < largo) {
-        widget.c.carruselExt = g;
-        widget.c.carruselPos = resto;
-        return;
-      }
-      resto -= largo;
+      if (grupos[g].$1 != paquete) continue;
+      final pos = grupos[g].$2.indexWhere((e) => e.url == item.url);
+      if (pos < 0) return;
+      widget.c.carruselExt = g;
+      widget.c.carruselPos = pos;
+      return;
     }
   }
 
