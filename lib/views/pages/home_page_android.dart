@@ -1287,10 +1287,10 @@ class _CarruselAndroidState extends State<_CarruselAndroid>
                 ),
               ),
             ),
-            // Dieciséis y no ocho: la sombra de las tarjetas ya no se corta,
-            // así que necesita dónde caer. Con ocho llegaba a los puntitos y
-            // los ensuciaba.
-            const SizedBox(height: 16),
+            // En táctil la sombra sigue estando y ya no se corta, así que
+            // necesita dónde caer: con ocho llegaba a los puntitos. En
+            // escritorio no hay sombra, y dieciséis serían un hueco de gusto.
+            SizedBox(height: _esTactil ? 16 : 8),
             // ── Los puntitos NO crecen con la tanda ────────────────────
             //
             // Antes había uno por portada, así que al pedir más páginas la
@@ -1666,29 +1666,33 @@ class _TarjetaGrande extends StatelessWidget {
         decoration: BoxDecoration(
           borderRadius: radio,
           color: HomeTheme.cardSurface,
-          // ── Sin filo claro ───────────────────────────────────────────────
+          // ── El filo y la sombra, solo en pantalla táctil ─────────────────
           //
-          // Había un borde blanco apenas visible para que la forma se leyera
-          // sobre una portada oscura. En una tarjeta suelta funciona; en el
-          // acordeón no, y por dos motivos.
+          // El filo blanco y la sombra existen para que la forma de la tarjeta
+          // se lea sobre una portada oscura, y en el teléfono cumplen: ahí se
+          // ve una grande con dos tiras asomando contra el borde de la
+          // pantalla, y se ven bien.
           //
-          // Uno: las tiras de los costados están a nueve píxeles una de otra,
-          // así que sus filos quedan de a pares y se leen como rayas verticales
-          // cruzando el carrusel, no como bordes de tarjeta.
+          // En escritorio no. Las tiras quedan a nueve píxeles una de otra, así
+          // que los filos aparecen de a pares y las sombras se superponen en el
+          // hueco: se leen como rayas verticales entre portada y portada, no
+          // como bordes. Y las de las puntas quedan cortadas por el recorte,
+          // con el filo terminando en seco contra el aire.
           //
-          // Dos: las de las puntas quedan cortadas por el recorte, y entonces
-          // el filo se ve solo arriba y abajo, terminando en seco contra el
-          // aire. Es la línea rara que se veía en escritorio.
-          //
-          // La sombra ya separa la tarjeta del fondo —y desde que dejó de
-          // recortarse se ve entera— así que el filo no hacía falta.
-          boxShadow: const [
-            BoxShadow(
-              color: Color(0x73000000),
-              blurRadius: 20,
-              offset: Offset(0, 8),
-            ),
-          ],
+          // En una ventana grande la portada ya se ve entera y las esquinas
+          // redondas le dan forma de sobra. Limpia se ve mejor.
+          border: _esTactil
+              ? Border.all(color: Colors.white.withValues(alpha: 0.11))
+              : null,
+          boxShadow: _esTactil
+              ? const [
+                  BoxShadow(
+                    color: Color(0x73000000),
+                    blurRadius: 20,
+                    offset: Offset(0, 8),
+                  ),
+                ]
+              : null,
         ),
         child: ClipRRect(
           borderRadius: radio,
