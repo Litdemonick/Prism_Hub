@@ -18,7 +18,36 @@ import 'package:prismhub/views/widgets/pared_de_portadas.dart';
 ///   · **Dos animaciones y nada más**: la pared que se desplaza y el logo que
 ///     aparece. Cada una es un transform, no un repintado.
 class SplashScreen extends StatefulWidget {
-  const SplashScreen({super.key});
+  const SplashScreen({super.key, this.soloLogo = false});
+
+  /// Volviendo de segundo plano: solo el logo, sin presentación.
+  ///
+  /// ── Qué se estaba viendo, y por qué ─────────────────────────────────────
+  ///
+  /// Al volver a la app después de un rato, Android suele haber matado el
+  /// proceso, así que es un arranque en frío: el sistema dibuja su splash con
+  /// el logo. Hasta acá, igual que cualquier app.
+  ///
+  /// El problema venía después. Para no repetirle la presentación a quien
+  /// estuvo hace un minuto, en ese caso se dibujaba un rectángulo oscuro y
+  /// nada más. O sea que el logo del sistema aparecía y **se apagaba**,
+  /// dejando la pantalla en negro mientras la carga real seguía, y recién ahí
+  /// entraba el contenido. Reportado en vivo: «sale el logo, luego pantalla
+  /// negra, luego carga».
+  ///
+  /// Lo que hacen las apps de verdad es un relevo continuo: el logo del
+  /// sistema le entrega a uno igual, y de ahí al contenido. Nunca hay un
+  /// hueco.
+  ///
+  /// Con esto se dibuja solo el logo —sin la pared de portadas, sin el título,
+  /// sin la frase y sin la rueda— que es exactamente lo que venía mostrando el
+  /// sistema. La presentación completa se guarda para cuando la app se abre de
+  /// verdad, que es cuando tiene sentido.
+  ///
+  /// Y sigue sin costar tiempo: la espera artificial de 1,4 s se saltea igual
+  /// (ver `_volviendo` en main.dart). Esto dura lo que tarde la carga real y
+  /// ni un milisegundo más.
+  final bool soloLogo;
 
   @override
   State<SplashScreen> createState() => _SplashScreenState();
@@ -62,24 +91,29 @@ class _SplashScreenState extends State<SplashScreen>
       body: Stack(
         fit: StackFit.expand,
         children: [
-          const ParedDePortadas(opacidad: 0.45),
-          // El velo. Va DESPUÉS de la pared y antes del logo: oscurece hacia
-          // el centro para que el logo se lea sobre cualquier tarjeta que
-          // quede pasando por detrás, sin tener que apagar la pared entera.
-          const DecoratedBox(
-            decoration: BoxDecoration(
-              gradient: RadialGradient(
-                radius: 1.1,
-                colors: [
-                  Color(0xE608080F),
-                  Color(0xF208080F),
-                  _fondo,
-                ],
-                stops: [0.0, 0.55, 1.0],
+          // La pared y su velo solo en el arranque de verdad. Volviendo, el
+          // fondo tiene que ser el mismo liso que venía mostrando el sistema:
+          // cualquier cosa detrás delata el corte. Ver [soloLogo].
+          if (!widget.soloLogo) ...[
+            const ParedDePortadas(opacidad: 0.45),
+            // El velo. Va DESPUÉS de la pared y antes del logo: oscurece hacia
+            // el centro para que el logo se lea sobre cualquier tarjeta que
+            // quede pasando por detrás, sin tener que apagar la pared entera.
+            const DecoratedBox(
+              decoration: BoxDecoration(
+                gradient: RadialGradient(
+                  radius: 1.1,
+                  colors: [
+                    Color(0xE608080F),
+                    Color(0xF208080F),
+                    _fondo,
+                  ],
+                  stops: [0.0, 0.55, 1.0],
+                ),
               ),
+              child: SizedBox.expand(),
             ),
-            child: SizedBox.expand(),
-          ),
+          ],
           // LayoutBuilder + tamaño relativo al alto: con un ancho fijo, en
           // horizontal —donde el alto de un teléfono es mucho menor— la
           // columna no entraba y desbordaba. Confirmado en vivo.
@@ -92,8 +126,12 @@ class _SplashScreenState extends State<SplashScreen>
                   child: Column(
                     mainAxisSize: MainAxisSize.min,
                     children: [
+                      // Volviendo, el logo NO entra con la animación de
+                      // aparecer: el sistema ya lo tenía puesto, así que
+                      // volver a desvanecerlo desde cero sería un parpadeo.
                       _Aparece(
                         demora: Duration.zero,
+                        saltear: widget.soloLogo,
                         child: AnimatedBuilder(
                           animation: _pulso,
                           // El logo va como `child`: se construye UNA vez y el
@@ -137,56 +175,59 @@ class _SplashScreenState extends State<SplashScreen>
                           },
                         ),
                       ),
-                      const SizedBox(height: 22),
-                      const _Aparece(
-                        demora: Duration(milliseconds: 220),
-                        child: Text(
-                          'PrismHub',
-                          style: TextStyle(
-                            fontSize: 30,
-                            fontWeight: FontWeight.w800,
-                            color: Colors.white,
-                            letterSpacing: 0.4,
-                          ),
-                        ),
-                      ),
-                      const SizedBox(height: 8),
-                      const _Aparece(
-                        demora: Duration(milliseconds: 380),
-                        child: Padding(
-                          padding: EdgeInsets.symmetric(horizontal: 32),
+                      if (!widget.soloLogo) ...[
+                        const SizedBox(height: 22),
+                        const _Aparece(
+                          demora: Duration(milliseconds: 220),
                           child: Text(
-                            'Anime, series, películas, mangas y novelas '
-                            '— todo en un solo lugar.',
-                            textAlign: TextAlign.center,
+                            'PrismHub',
                             style: TextStyle(
-                              fontSize: 13.5,
-                              height: 1.4,
-                              color: Color(0xFFB9B4C7),
+                              fontSize: 30,
+                              fontWeight: FontWeight.w800,
+                              color: Colors.white,
+                              letterSpacing: 0.4,
                             ),
                           ),
                         ),
-                      ),
-                      const SizedBox(height: 34),
-                      // La rueda va con el latido, no en lugar de él: el logo
-                      // dice que la app está viva y la rueda dice que todavía
-                      // está preparando algo. Es lo último en aparecer, así
-                      // que cuando el arranque es corto casi ni se ve.
-                      //
-                      // Fina y chica a propósito: al lado de un logo que late,
-                      // una rueda gruesa le compite la atención al centro de
-                      // la pantalla en vez de acompañarlo.
-                      const _Aparece(
-                        demora: Duration(milliseconds: 520),
-                        child: SizedBox(
-                          width: 22,
-                          height: 22,
-                          child: CircularProgressIndicator(
-                            strokeWidth: 2.0,
-                            valueColor: AlwaysStoppedAnimation<Color>(_acento),
+                        const SizedBox(height: 8),
+                        const _Aparece(
+                          demora: Duration(milliseconds: 380),
+                          child: Padding(
+                            padding: EdgeInsets.symmetric(horizontal: 32),
+                            child: Text(
+                              'Anime, series, películas, mangas y novelas '
+                              '— todo en un solo lugar.',
+                              textAlign: TextAlign.center,
+                              style: TextStyle(
+                                fontSize: 13.5,
+                                height: 1.4,
+                                color: Color(0xFFB9B4C7),
+                              ),
+                            ),
                           ),
                         ),
-                      ),
+                        const SizedBox(height: 34),
+                        // La rueda va con el latido, no en lugar de él: el logo
+                        // dice que la app está viva y la rueda dice que todavía
+                        // está preparando algo. Es lo último en aparecer, así
+                        // que cuando el arranque es corto casi ni se ve.
+                        //
+                        // Fina y chica a propósito: al lado de un logo que late,
+                        // una rueda gruesa le compite la atención al centro de
+                        // la pantalla en vez de acompañarlo.
+                        const _Aparece(
+                          demora: Duration(milliseconds: 520),
+                          child: SizedBox(
+                            width: 22,
+                            height: 22,
+                            child: CircularProgressIndicator(
+                              strokeWidth: 2.0,
+                              valueColor:
+                                  AlwaysStoppedAnimation<Color>(_acento),
+                            ),
+                          ),
+                        ),
+                      ],
                     ],
                   ),
                 ),
@@ -207,13 +248,21 @@ class _SplashScreenState extends State<SplashScreen>
 /// `TweenAnimationBuilder` y no un controller: corre una sola vez, no hace
 /// falta nada que mantener vivo ni que liberar.
 class _Aparece extends StatelessWidget {
-  const _Aparece({required this.child, required this.demora});
+  const _Aparece({
+    required this.child,
+    required this.demora,
+    this.saltear = false,
+  });
 
   final Widget child;
   final Duration demora;
 
+  /// Se dibuja ya puesto, sin la entrada. Ver [SplashScreen.soloLogo].
+  final bool saltear;
+
   @override
   Widget build(BuildContext context) {
+    if (saltear) return child;
     return TweenAnimationBuilder<double>(
       tween: Tween(begin: 0.0, end: 1.0),
       duration: const Duration(milliseconds: 520),
@@ -226,7 +275,8 @@ class _Aparece extends StatelessWidget {
       ),
       builder: (context, t, hijo) => Opacity(
         opacity: t,
-        child: Transform.translate(offset: Offset(0, 14 * (1 - t)), child: hijo),
+        child:
+            Transform.translate(offset: Offset(0, 14 * (1 - t)), child: hijo),
       ),
       child: child,
     );
