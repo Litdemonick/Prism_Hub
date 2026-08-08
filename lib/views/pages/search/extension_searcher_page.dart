@@ -33,9 +33,26 @@ class ExtensionSearcherPage extends fluent.StatefulWidget {
     super.key,
     required this.package,
     this.keyWord,
+    this.soloAdulto = false,
   });
   final String package;
   final String? keyWord;
+
+  /// Se entró desde la Zona +18.
+  ///
+  /// ── Qué cambia ──────────────────────────────────────────────────────────
+  ///
+  /// En una extensión MIXTA —ShadeManga y ManhwaWeb son las dos que hay— el
+  /// contenido para adultos vive detrás de un filtro propio del sitio, y ese
+  /// filtro viene apagado por defecto. Así que entrando desde la Zona +18 se
+  /// veía el catálogo general: exactamente lo que esa zona no es.
+  ///
+  /// Con esto, al abrirla desde la zona el filtro de adultos arranca ENCENDIDO.
+  /// Lo de siempre sigue igual: desde el buscador normal entra apagado.
+  ///
+  /// Es el espejo de lo que hace el Home, que manda el valor seguro a la fuerza
+  /// (ver `_segurosPorExtension` en catalogo_extensiones_controller).
+  final bool soloAdulto;
 
   @override
   fluent.State<ExtensionSearcherPage> createState() =>
@@ -340,6 +357,13 @@ class _ExtensionSearcherPageState extends fluent.State<ExtensionSearcherPage> {
     try {
       _filters = await _runtime.createFilter();
       _filters!.forEach((key, value) {
+        // Desde la Zona +18, el filtro de adultos arranca encendido. Ver
+        // `soloAdulto`.
+        final adulto = value.adultOption;
+        if (widget.soloAdulto && adulto != null && adulto.isNotEmpty) {
+          _selectedFilters[key] = [adulto];
+          return;
+        }
         _selectedFilters[key] = [value.defaultOption];
       });
     } catch (e, st) {

@@ -292,6 +292,10 @@ class _SearchPageState extends State<SearchPage> {
                       Get.to(ExtensionSearcherPage(
                         package: c.getPackgeByIndex(index),
                         keyWord: c.search.value,
+                        // Desde la Zona +18 la extensión mixta se abre con su
+                        // filtro de adultos ya puesto: si no, mostraba su
+                        // catálogo general, que es justo lo que esa zona no es.
+                        soloAdulto: widget.nsfwOnly,
                       ));
                     }),
                   ),
