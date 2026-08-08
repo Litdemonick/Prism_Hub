@@ -79,7 +79,25 @@ class HomeWindows extends StatelessWidget {
             // initState — así, con 30 extensiones se piden las 2 o 3 que se
             // ven, no las 30.
             itemBuilder: (context, i) => switch (i) {
-              0 => _CarruselWindows(c: c),
+              // ── El mismo acordeón que en celular ───────────────────────
+              //
+              // Antes acá había un fondo grande a todo lo ancho que cambiaba
+              // solo cada ocho segundos. Se veía bien pero mostraba UNA
+              // portada: con once extensiones y cientos de títulos, el
+              // escritorio —que es donde más espacio sobra— era el que menos
+              // contenido enseñaba, y encima el usuario no podía elegir qué
+              // mirar.
+              //
+              // El acordeón vive en el archivo de Android, pero los tres son
+              // `part` de la misma biblioteca: se reusa tal cual, con la misma
+              // lógica de anclaje, fantasmas y pedido de más páginas. Escribir
+              // otro para escritorio sería tener dos que se desincronizan a la
+              // primera, que es el error que ya cometimos con los filtros.
+              //
+              // Se adapta solo: las medidas salen de `Ancho.de(context)` y la
+              // ventana de tarjetas que se dibuja sale del ancho real, así que
+              // en un monitor grande llena el costado en vez de dejar hueco.
+              0 => RepaintBoundary(child: _CarruselAndroid(c: c)),
               // Los mismos filtros que en celular. El widget vive en el
               // archivo de Android pero los tres son `part` de la misma
               // biblioteca, así que se reusa tal cual en vez de escribir otro
@@ -97,214 +115,6 @@ class HomeWindows extends StatelessWidget {
         );
       }),
     );
-  }
-}
-
-/// El fondo grande de arriba, que va cambiando solo.
-///
-/// Se alimenta de lo que van trayendo las extensiones, así que empieza vacío y
-/// se llena al toque. **No se reserva su alto cuando no hay nada**: un hueco
-/// negro de media pantalla al abrir se ve peor que empezar directo por las
-/// filas.
-class _CarruselWindows extends StatefulWidget {
-  const _CarruselWindows({required this.c});
-
-  final CatalogoExtensionesController c;
-
-  @override
-  State<_CarruselWindows> createState() => _CarruselWindowsState();
-}
-
-class _CarruselWindowsState extends State<_CarruselWindows> {
-  Timer? _reloj;
-
-  // La posición NO se guarda acá: vive en el controlador. Este widget se
-  // reconstruye al volver a la pestaña, así que un índice propio se perdía y el
-  // carrusel volvía a empezar siempre por la misma extensión. Ver
-  // CatalogoExtensionesController.carruselExt.
-
-  @override
-  void initState() {
-    super.initState();
-    // Ocho segundos: menos alcanza a cortar la lectura del título, y más se
-    // siente una imagen fija.
-    _reloj = Timer.periodic(const Duration(seconds: 8), (_) {
-      if (!mounted) return;
-      setState(widget.c.avanzarCarrusel);
-    });
-  }
-
-  @override
-  void dispose() {
-    _reloj?.cancel();
-    super.dispose();
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return Obx(() {
-      final grupos = widget.c.destacadosVisibles;
-      if (grupos.isEmpty) return const SizedBox(height: 12);
-      final (package, items) = grupos[widget.c.carruselExt % grupos.length];
-      if (items.isEmpty) return const SizedBox(height: 12);
-      final item = items[widget.c.carruselPos % items.length];
-      final a = Ancho.de(context);
-
-      // Lo que ocupa la barra de estado. En escritorio es cero.
-      final barra = MediaQuery.paddingOf(context).top;
-      // El alto sale del ANCHO disponible, no de la altura: en una ventana
-      // ancha y baja —una laptop, o el escritorio a media pantalla— reservar
-      // un porcentaje del alto dejaba el carrusel aplastado. Y se acota al
-      // alto real para que no se coma la pantalla entera.
-      //
-      // Se le SUMA la barra: la imagen crece para pasar por detrás de ella en
-      // vez de perder esa franja, así el carrusel se sigue viendo del mismo
-      // tamaño que si la barra no existiera.
-      final alto = (MediaQuery.sizeOf(context).width *
-                  a.elegir(
-                      compacto: 0.62, medio: 0.42, amplio: 0.30, enorme: 0.24))
-              .clamp(200.0, MediaQuery.sizeOf(context).height * 0.62) +
-          barra;
-
-      return SizedBox(
-        height: alto,
-        child: Stack(
-          fit: StackFit.expand,
-          children: [
-            // ── La imagen se DESVANECE, no se tapa ────────────────────────
-            //
-            // Antes el borde de abajo se cubría con un degradado que terminaba
-            // en el color de fondo, opaco. Eso dejaba una línea horizontal
-            // visible cruzando toda la pantalla: arriba de esa línea el
-            // degradado tapaba el fondo animado y abajo no, así que el brillo
-            // aparecía de golpe.
-            //
-            // Con una máscara, lo que se apaga es la propia imagen: su
-            // transparencia baja a cero hacia abajo y lo que hay detrás —el
-            // fondo animado— se ve igual a los dos lados del borde. No hay
-            // línea porque no hay borde.
-            ShaderMask(
-              blendMode: BlendMode.dstIn,
-              shaderCallback: (rect) => const LinearGradient(
-                begin: Alignment.topCenter,
-                end: Alignment.bottomCenter,
-                colors: [Colors.white, Colors.white, Colors.transparent],
-                stops: [0.0, 0.55, 1.0],
-              ).createShader(rect),
-              child: Stack(
-                fit: StackFit.expand,
-                children: [
-                  // El cruce entre imágenes va por la clave: al cambiar el
-                  // índice, AnimatedSwitcher entiende que es otro hijo y hace
-                  // el fundido.
-                  AnimatedSwitcher(
-                    duration: const Duration(milliseconds: 600),
-                    child: SizedBox.expand(
-                      key: ValueKey(item.url),
-                      child: CacheNetWorkImagePic(
-                        item.cover ?? '',
-                        fit: BoxFit.cover,
-                        headers: _cabeceras(package),
-                        placeholder:
-                            const ColoredBox(color: HomeTheme.cardSurface),
-                        fallback:
-                            const ColoredBox(color: HomeTheme.cardSurface),
-                      ),
-                    ),
-                  ),
-                  // Oscurece hacia abajo y hacia la izquierda para que el
-                  // texto se lea sobre cualquier portada. Los dos son
-                  // TRANSLÚCIDOS: si alguno terminara en un color opaco,
-                  // volvería la línea que este bloque vino a sacar.
-                  const DecoratedBox(
-                    decoration: BoxDecoration(
-                      gradient: LinearGradient(
-                        begin: Alignment.bottomCenter,
-                        end: Alignment.topCenter,
-                        colors: [Color(0xD90A0A12), Color(0x000A0A12)],
-                        stops: [0.0, 0.72],
-                      ),
-                    ),
-                  ),
-                  const DecoratedBox(
-                    decoration: BoxDecoration(
-                      gradient: LinearGradient(
-                        begin: Alignment.centerLeft,
-                        end: Alignment.centerRight,
-                        colors: [Color(0xE60A0A12), Color(0x000A0A12)],
-                        stops: [0.0, 0.7],
-                      ),
-                    ),
-                  ),
-                ],
-              ),
-            ),
-            Align(
-              alignment: Alignment.bottomLeft,
-              child: Padding(
-                padding: EdgeInsets.fromLTRB(
-                    _margen(context), barra, _margen(context), 26),
-                child: ConstrainedBox(
-                  constraints: const BoxConstraints(maxWidth: 560),
-                  child: Column(
-                    mainAxisSize: MainAxisSize.min,
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        ExtensionUtils.runtimes[package]?.extension.name ?? '',
-                        style: const TextStyle(
-                          fontSize: 11.5,
-                          letterSpacing: 1.2,
-                          fontWeight: FontWeight.w700,
-                          color: HomeTheme.accentPink,
-                        ),
-                      ),
-                      const SizedBox(height: 8),
-                      Text(
-                        item.title,
-                        maxLines: 2,
-                        overflow: TextOverflow.ellipsis,
-                        style: TextStyle(
-                          fontSize:
-                              a.elegir(compacto: 21, medio: 26, amplio: 34),
-                          height: 1.15,
-                          fontWeight: FontWeight.w800,
-                          color: Colors.white,
-                        ),
-                      ),
-                      const SizedBox(height: 16),
-                      _Indicadores(
-                        cantidad: items.length,
-                        actual: widget.c.carruselPos % items.length,
-                        onTocar: (i) =>
-                            setState(() => widget.c.carruselPos = i),
-                      ),
-                      const SizedBox(height: 14),
-                      FilledButton.icon(
-                        onPressed: () => _abrir(context, item, package),
-                        icon: const Icon(Icons.play_arrow_rounded, size: 22),
-                        label: Text('home.view-detail'.i18n),
-                        style: FilledButton.styleFrom(
-                          backgroundColor: HomeTheme.accentPink,
-                          foregroundColor: Colors.white,
-                          padding: EdgeInsets.symmetric(
-                            horizontal: a.elegir(compacto: 18, amplio: 22),
-                            vertical: a.elegir(compacto: 12, amplio: 14),
-                          ),
-                          shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(8),
-                          ),
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-              ),
-            ),
-          ],
-        ),
-      );
-    });
   }
 }
 

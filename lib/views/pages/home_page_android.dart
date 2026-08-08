@@ -1190,9 +1190,71 @@ class _CarruselAndroidState extends State<_CarruselAndroid>
                     unawaited(widget.c.traerMas());
                   }
                 },
-                child: ClipRect(
-                    child:
-                        _acordeon(planos, m, caja.maxWidth, grupos, fantasmas)),
+                child: Stack(
+                  children: [
+                    Positioned.fill(
+                      child: ClipRect(
+                        child: _acordeon(
+                            planos, m, caja.maxWidth, grupos, fantasmas),
+                      ),
+                    ),
+                    // ── Flechas solo con mouse ─────────────────────────────
+                    //
+                    // Arrastrar con el mouse funciona —el gesto es el mismo—
+                    // pero nadie lo intenta: en escritorio uno espera hacer
+                    // clic. Sin flechas, en PC el acordeón parecía una imagen
+                    // fija con tres portadas al lado.
+                    //
+                    // En pantalla táctil no van: el dedo ya arrastra, y dos
+                    // botones encima taparían justo las tarjetas de los
+                    // costados, que son las que invitan a deslizar.
+                    // Con su propio fondo: la flecha suelta es un ícono gris
+                    // claro, y acá cae encima de una portada. Sobre una imagen
+                    // oscura desaparece y sobre una clara tampoco se lee. El
+                    // disco la separa del fondo sea cual sea la portada.
+                    if (!_esTactil) ...[
+                      Positioned(
+                        left: 8,
+                        top: 0,
+                        bottom: 0,
+                        child: Center(
+                          child: _discoDeFlecha(
+                            _FlechaDeFila(
+                              icono: Icons.chevron_left_rounded,
+                              onTap: () => _irA(
+                                  (_p.roundToDouble() - 1).clamp(0.0, ultimo),
+                                  grupos),
+                            ),
+                          ),
+                        ),
+                      ),
+                      Positioned(
+                        right: 8,
+                        top: 0,
+                        bottom: 0,
+                        child: Center(
+                          child: _discoDeFlecha(
+                            _FlechaDeFila(
+                              icono: Icons.chevron_right_rounded,
+                              onTap: () {
+                                _irA(
+                                    (_p.roundToDouble() + 1).clamp(0.0, ultimo),
+                                    grupos);
+                                // Misma regla que al soltar el dedo: si queda
+                                // poco por delante, se pide la página siguiente.
+                                // Sin esto, quien navega a puro clic se choca
+                                // contra el final y no pasa nada.
+                                if (_p >= ultimoReal - 10) {
+                                  unawaited(widget.c.traerMas());
+                                }
+                              },
+                            ),
+                          ),
+                        ),
+                      ),
+                    ],
+                  ],
+                ),
               ),
             ),
             const SizedBox(height: 8),
@@ -1265,8 +1327,33 @@ class _CarruselAndroidState extends State<_CarruselAndroid>
     // El tope incluye las que esperan: son parte del recorrido aunque todavía
     // no tengan contenido.
     final tope = planos.length - 1 + fantasmas;
-    final desde = (centroEntero - 3).clamp(0, tope);
-    final hasta = (centroEntero + 3).clamp(0, tope);
+
+    // ── Cuántas se dibujan sale del ancho de la ventana ───────────────────
+    //
+    // Antes eran tres a cada lado y punto. En un teléfono alcanza de sobra,
+    // pero en un monitor ancho no: a los costados de la grande entran ocho o
+    // diez tiras, y las que pasaban de la séptima simplemente no se dibujaban.
+    // Quedaba un hueco negro contra los bordes.
+    //
+    // Se calcula cuántas tiras caben en lo que sobra a cada lado de la grande,
+    // y se pide una de más de margen: es la que está entrando o saliendo, y
+    // tiene que existir mientras se mueve o el borde parpadea.
+    //
+    // El mínimo de tres se queda: en pantallas angostas es lo que ya andaba, y
+    // bajar de ahí rompería el mismo borde que esto viene a arreglar.
+    final costado = (anchoUtil - m.ancho) / 2;
+    final cabenAlLado =
+        costado <= 0 ? 0 : (costado / (m.anchoChico + _aire)).ceil();
+    //
+    // Y con tope de diez. En un monitor ultra ancho la cuenta pediría veinte o
+    // más, y cada tarjeta decodifica su portada al tamaño de la grande —medio
+    // megabyte cada una— aunque en pantalla sea una tira de cien píxeles. Diez
+    // por lado ya llena un 4K; de ahí para arriba, lo que falte queda fuera del
+    // recorte y no se ve.
+    final radio = (cabenAlLado + 1).clamp(3, 10);
+
+    final desde = (centroEntero - radio).clamp(0, tope);
+    final hasta = (centroEntero + radio).clamp(0, tope);
     final foco = _p.floor();
 
     // Dónde empieza cada una, una atrás de la otra.
@@ -1367,6 +1454,16 @@ class _CarruselAndroidState extends State<_CarruselAndroid>
       ],
     );
   }
+
+  /// Un disco oscuro detrás de la flecha, para que se lea sobre cualquier
+  /// portada.
+  static Widget _discoDeFlecha(Widget flecha) => DecoratedBox(
+        decoration: const BoxDecoration(
+          shape: BoxShape.circle,
+          color: Color(0xB3101018),
+        ),
+        child: Padding(padding: const EdgeInsets.all(3), child: flecha),
+      );
 
   /// Cuánto mide la tarjeta en foco, cuánto las de los costados, y el alto.
   ///
