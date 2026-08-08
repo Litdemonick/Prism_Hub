@@ -309,9 +309,30 @@ class _FilaWindowsState extends State<_FilaWindows> {
                         clipBehavior: Clip.none,
                         padding:
                             EdgeInsets.symmetric(horizontal: _margen(context)),
-                        itemCount: items.length,
+                        // ── Y dos brillando al final si está trayendo ──
+                        //
+                        // Refrescar una fila que ya tiene portadas no las
+                        // reemplaza por bloques grises: eso probamos y se ve
+                        // mal —desaparecen, entran bloques, vuelven— tres
+                        // cambios para una sola espera.
+                        //
+                        // Pero sin nada, tampoco se notaba que estuviera
+                        // trabajando. Dos bloques al FINAL lo dicen sin mover
+                        // ni una tarjeta de las que ya están: se agregan
+                        // después de la última y se van cuando llega lo nuevo.
+                        itemCount: items.length +
+                            (widget.fila.refrescando.value ? 2 : 0),
                         separatorBuilder: (_, __) => const SizedBox(width: 14),
                         itemBuilder: (context, i) {
+                          if (i >= items.length) {
+                            return Padding(
+                              padding: const EdgeInsets.only(top: 10),
+                              child: EsqueletoTarjeta(
+                                ancho: TarjetaDeCatalogo.anchoPara(
+                                    Ancho.de(context)),
+                              ),
+                            );
+                          }
                           final item = items[i];
                           return Padding(
                             // Arriba, para que la tarjeta tenga hacia dónde
