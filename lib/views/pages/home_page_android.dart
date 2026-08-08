@@ -93,7 +93,20 @@ class HomeAndroid extends StatelessWidget {
       // Los costados SÍ. En horizontal es donde aparece la barra del sistema,
       // y es lo que evita que las tarjetas queden debajo de los botones.
       child: Obx(() {
-        if (c.filas.isEmpty) return const _SinExtensiones();
+        // ── Vacío no siempre es «no hay nada» ──────────────────────────
+        //
+        // Al abrir, la lista tarda un instante en armarse —y sin conexión, lo
+        // de la vista previa tarda más—. Mostrar «no tenés extensiones» en ese
+        // hueco es decirle al usuario algo que todavía no se sabe, y encima
+        // suena a que perdió lo que tenía.
+        //
+        // Los bloques grises dicen lo correcto: esperá. El mensaje aparece
+        // recién cuando de verdad terminó de mirar y no hay ninguna.
+        if (c.filas.isEmpty) {
+          return c.armado.value
+              ? const _SinExtensiones()
+              : const _HomeEsperando();
+        }
         // ── Se calcula UNA vez por construcción ──────────────────────────
         //
         // Antes `_visibles(c)` se llamaba de nuevo en cada línea que lo
@@ -1690,6 +1703,62 @@ class _CarruselEsperando extends StatelessWidget {
           ),
           const SizedBox(height: 20),
         ],
+      );
+    });
+  }
+}
+
+/// El Home mientras todavía no se sabe qué hay.
+class _HomeEsperando extends StatelessWidget {
+  const _HomeEsperando();
+
+  @override
+  Widget build(BuildContext context) {
+    return ListView(
+      physics: const NeverScrollableScrollPhysics(),
+      children: const [
+        _Cabecera(),
+        SizedBox(height: 8),
+        _CarruselEsperando(),
+        _FilaEsperando(),
+        _FilaEsperando(),
+      ],
+    );
+  }
+}
+
+/// Una fila con su nombre y sus portadas en gris.
+class _FilaEsperando extends StatelessWidget {
+  const _FilaEsperando();
+
+  @override
+  Widget build(BuildContext context) {
+    final margen = _margen(context);
+    final a = Ancho.de(context);
+    final columnas = a.elegir(compacto: 3, medio: 4, amplio: 5, enorme: 6);
+    return LayoutBuilder(builder: (context, caja) {
+      if (!caja.maxWidth.isFinite || caja.maxWidth < 120) {
+        return const SizedBox(height: 12);
+      }
+      final ancho =
+          (caja.maxWidth - margen * 2 - 12 * (columnas - 1)) / columnas;
+      return Padding(
+        padding: EdgeInsets.fromLTRB(margen, 20, margen, 0),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const Esqueleto(width: 150, height: 20, radio: 6),
+            const SizedBox(height: 12),
+            Row(
+              children: [
+                for (var i = 0; i < columnas; i++) ...[
+                  if (i > 0) const SizedBox(width: 12),
+                  EsqueletoTarjeta(ancho: ancho),
+                ],
+              ],
+            ),
+          ],
+        ),
       );
     });
   }

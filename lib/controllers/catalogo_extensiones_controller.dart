@@ -114,6 +114,12 @@ class CatalogoExtensionesController extends GetxController {
   /// en sitio en cada cambio y no se entendía de dónde venía cada portada.
   final destacados = <(String, List<ExtensionListItem>)>[].obs;
 
+  /// Ya se terminó de mirar qué extensiones hay.
+  ///
+  /// Hasta que sea true, una lista vacía significa «todavía no sé», no «no hay
+  /// nada» — y el Home muestra bloques en vez del mensaje de vacío.
+  final armado = false.obs;
+
   /// Las tandas que el carrusel puede mostrar AHORA.
   ///
   /// ── Por qué no es `destacados` a secas ──────────────────────────────────
@@ -762,13 +768,20 @@ class CatalogoExtensionesController extends GetxController {
     // Los filtros de la vez pasada, para que los chips estén puestos desde el
     // primer cuadro en vez de aparecer a los pocos segundos.
     await _leerFiltrosGuardados();
-    // Antes de mirar qué hay: unas pocas del catálogo, para que el Home tenga
-    // con qué llenarse aunque el usuario no haya instalado casi nada. Si falla
-    // —sin red, catálogo caído— no pasa nada: sigue con lo que tenga.
-    // Cuáles son mixtas: hace falta ANTES de armar la lista, porque decide si
-    // una extensión marcada +18 entra igual con su parte normal.
-    await ExtensionUtils.detectarMixtas();
-    await ExtensionUtils.prepararVistaPrevia();
+    // ── NADA de red antes de dibujar ───────────────────────────────────
+    //
+    // Acá se esperaba a `detectarMixtas` y `prepararVistaPrevia`. La segunda
+    // pide el catálogo por red, y SIN CONEXIÓN esa espera no termina hasta que
+    // vence el tiempo: el Home se quedaba en negro, sin filas y sin siquiera el
+    // mensaje de vacío, con la app entera aparentemente colgada.
+    //
+    // Las dos son mejoras, no requisitos: una decide si una extensión mixta
+    // entra al Home, la otra agrega extensiones de vidriera. Ninguna hace falta
+    // para mostrar lo que el usuario YA tiene instalado y cacheado.
+    //
+    // Así que van por detrás, y cuando terminan la lista se rehace. Con red se
+    // nota apenas; sin red, la app abre igual.
+    unawaited(_completarPorDetras());
     // ── Las +18 NO entran al Home, sin excepción ────────────────────────────
     //
     // A pedido explícito. Y se filtra por `extension.nsfw` y NO por
@@ -906,6 +919,7 @@ class CatalogoExtensionesController extends GetxController {
       _sumarADestacados(fila, items);
     }
     filas.assignAll(nuevas);
+    armado.value = true;
   }
 
   /// Hasta qué página se le pide a cada extensión.
@@ -1130,6 +1144,26 @@ class CatalogoExtensionesController extends GetxController {
       carruselExt = Random().nextInt(destacados.length);
       carruselPos = 0;
     }
+  }
+
+  /// Lo que necesita red o motores, después de que el Home ya se dibujó.
+  ///
+  /// Si algo de esto falla —sin conexión, catálogo caído, una extensión que no
+  /// contesta— el Home se queda con lo que ya mostró. Ninguna de las dos cosas
+  /// es imprescindible.
+  Future<void> _completarPorDetras() async {
+    try {
+      await ExtensionUtils.detectarMixtas();
+      await ExtensionUtils.prepararVistaPrevia();
+    } catch (e) {
+      logger.info('[home] no se pudo completar en segundo plano: $e');
+      return;
+    }
+    // Solo si apareció algo nuevo que mostrar.
+    if (ExtensionUtils.vistaPrevia.isEmpty && ExtensionUtils.mixtas.isEmpty) {
+      return;
+    }
+    await recargar();
   }
 
   /// Vuelve a armar la lista entera.

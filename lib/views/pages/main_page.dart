@@ -14,7 +14,6 @@ import 'package:prismhub/views/pages/search/search_page.dart';
 import 'package:prismhub/views/pages/settings/settings_page.dart';
 import 'package:prismhub/router/router.dart';
 import 'package:prismhub/utils/application.dart';
-import 'package:prismhub/utils/connectivity.dart';
 import 'package:prismhub/utils/i18n.dart';
 import 'package:prismhub/utils/prismhub_storage.dart';
 import 'package:prismhub/views/widgets/window_caption_buttons.dart';
@@ -26,28 +25,20 @@ import 'package:window_manager/window_manager.dart';
 // tarde (recién al fallar una petición) y otras (ej. Home) tragaban el error
 // en silencio, así que sin wifi la app no avisaba nada ahí.
 Widget _noConnectionBanner() {
-  return Obx(() {
-    if (ConnectivityUtils.isOnline.value) return const SizedBox.shrink();
-    return Container(
-      width: double.infinity,
-      color: Colors.orange.shade800,
-      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-      child: Row(
-        mainAxisAlignment: MainAxisAlignment.center,
-        children: [
-          const Icon(Icons.wifi_off, color: Colors.white, size: 16),
-          const SizedBox(width: 8),
-          Flexible(
-            child: Text(
-              'common.no-internet'.i18n,
-              textAlign: TextAlign.center,
-              style: const TextStyle(color: Colors.white, fontSize: 12),
-            ),
-          ),
-        ],
-      ),
-    );
-  });
+  // ── Sin barra naranja ───────────────────────────────────────────────────
+  //
+  // Cruzaba la pantalla entera, empujaba todo hacia abajo y tapaba el título
+  // de la zona. Y no ayudaba: el usuario ya sabe que no tiene wifi, y lo que
+  // necesita es entender que el app está esperando, no un cartel.
+  //
+  // Eso ahora lo dicen los bloques grises brillando en cada tarjeta: se ve
+  // dónde va a aparecer el contenido y que está en camino. Y cuando una
+  // extensión falla de verdad, su fila lo dice en una línea con su botón de
+  // reintentar — ahí sí, donde pasó.
+  //
+  // Se deja la función y no se borran sus llamadas: si algún día vuelve a
+  // hacer falta un aviso global, este es el lugar.
+  return const SizedBox.shrink();
 }
 
 class DesktopMainPage extends StatefulWidget {
