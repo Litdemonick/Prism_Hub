@@ -922,14 +922,51 @@ class ExtensionUtils {
   /// identificador tal cual: «Falta la extensión io.prismhub.tioanime». Eso no
   /// le dice nada a nadie — el usuario conoce «TioAnime», no su paquete.
   ///
-  /// Se busca entre las instaladas y, si no está, entre las de vista previa. Si
-  /// tampoco —una extensión que se desinstaló, o un enlace viejo— se devuelve
-  /// el paquete: es feo, pero es lo único que se sabe, y callar el dato dejaría
-  /// un aviso que no se puede accionar.
+  /// Se busca entre las instaladas y, si no está, entre las de vista previa.
+  ///
+  /// ── Y si tampoco está, en el CATÁLOGO ───────────────────────────────────
+  ///
+  /// Faltaba justo el caso en el que este método más se usa. El aviso que lo
+  /// llama es «falta la extensión», o sea que NO está instalada: los dos
+  /// primeros lugares donde se buscaba están vacíos por definición, y salía el
+  /// identificador crudo — «Falta la extensión io.prismhub.tioanime».
+  /// Reportado en vivo, con captura.
+  ///
+  /// El catálogo ya está leído en memoria (se usa para el Repositorio y para
+  /// las filas del Home), así que buscar ahí no cuesta una petición.
+  ///
+  /// ── Y si ni el catálogo la conoce ───────────────────────────────────────
+  ///
+  /// Se arma un nombre a partir del propio paquete —la última parte, con la
+  /// primera en mayúscula— en vez de mostrarlo entero. «Tioanime» no es
+  /// exactamente su nombre, pero se lee y se entiende de qué habla; el
+  /// identificador con puntos no le dice nada a nadie.
   static String nombreDe(String package) {
     final ext = runtimes[package]?.extension ?? vistaPrevia[package]?.extension;
     final nombre = ext?.name.trim();
-    return (nombre == null || nombre.isEmpty) ? package : nombre;
+    if (nombre != null && nombre.isNotEmpty) return nombre;
+
+    // Sin forzar red: se mira lo que ya esté leído. Si nunca se bajó el
+    // catálogo, se cae al nombre armado, que igual se lee bien.
+    for (final e in _repoIndexCache ?? const []) {
+      if (e is! Map) continue;
+      if (e['package']?.toString() != package) continue;
+      final delCatalogo = e['name']?.toString().trim();
+      if (delCatalogo != null && delCatalogo.isNotEmpty) return delCatalogo;
+    }
+
+    return _nombreDelPaquete(package);
+  }
+
+  /// Un nombre presentable sacado del identificador.
+  ///
+  /// «io.prismhub.tioanime» → «Tioanime». Es lo último que se prueba.
+  static String _nombreDelPaquete(String package) {
+    final partes = package.split('.').where((p) => p.isNotEmpty).toList();
+    if (partes.isEmpty) return package;
+    final ultima = partes.last;
+    if (ultima.isEmpty) return package;
+    return ultima[0].toUpperCase() + ultima.substring(1);
   }
 
   static bool isEnabled(String package) =>
