@@ -919,11 +919,30 @@ class _CarruselAndroidState extends State<_CarruselAndroid>
               ),
             ),
             const SizedBox(height: 8),
+            // ── Los puntitos NO crecen con la tanda ────────────────────
+            //
+            // Antes había uno por portada, así que al pedir más páginas la
+            // fila pasaba de ocho rayitas a dieciséis, a veinticuatro… hasta
+            // ocupar el ancho entero y dejar de significar nada.
+            //
+            // Ahora son ocho como mucho y cada una representa un tramo. Sirven
+            // para lo mismo —saber por dónde vas— sin volverse una regla
+            // graduada.
             _Indicadores(
-              cantidad: tanda.length,
-              actual: widget.c.carruselPos.clamp(0, tanda.length - 1),
-              onTocar: (i) =>
-                  _irA((base + i).toDouble().clamp(0.0, ultimo), grupos),
+              cantidad:
+                  tanda.length < _maxPuntitos ? tanda.length : _maxPuntitos,
+              actual: tanda.length <= _maxPuntitos
+                  ? widget.c.carruselPos.clamp(0, tanda.length - 1)
+                  : (widget.c.carruselPos * _maxPuntitos ~/ tanda.length)
+                      .clamp(0, _maxPuntitos - 1),
+              onTocar: (i) {
+                // Con la tanda larga, cada puntito lleva al principio de su
+                // tramo.
+                final destino = tanda.length <= _maxPuntitos
+                    ? i
+                    : i * tanda.length ~/ _maxPuntitos;
+                _irA((base + destino).toDouble().clamp(0.0, ultimo), grupos);
+              },
             ),
           ],
         );
