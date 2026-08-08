@@ -92,7 +92,12 @@ class CatalogoExtensionesController extends GetxController {
   final destacados = <(String, List<ExtensionListItem>)>[].obs;
 
   /// Cuántas se toman de cada extensión para el carrusel.
-  static const porExtension = 5;
+  ///
+  /// Ocho y no cinco: el acordeón deja ver cuatro o cinco de un vistazo, así
+  /// que con cinco por extensión el usuario llegaba al final de la tanda casi
+  /// sin deslizar. No cuesta nada — ya vienen en la misma respuesta de
+  /// `latest()`, y el acordeón solo construye las que están cerca del foco.
+  static const porExtension = 8;
 
   // ── Dónde va el carrusel ──────────────────────────────────────────────────
   //
@@ -168,6 +173,13 @@ class CatalogoExtensionesController extends GetxController {
       tipoElegido.value != tipoAplicado || generoElegido.value != generoAplicado;
 
   bool get hayFiltros => tipoAplicado != null || generoAplicado != null;
+
+  /// Hay un cambio de filtro en curso.
+  ///
+  /// Mientras dure, las filas muestran los bloques grises en vez de su
+  /// contenido: lo que está en pantalla es del filtro anterior, y dejarlo
+  /// quieto haría creer que tocar el chip no sirvió de nada.
+  final aplicandoFiltros = false.obs;
 
   /// Para cada extensión, de etiqueta de género a (clave del filtro, valor).
   ///
@@ -286,10 +298,21 @@ class CatalogoExtensionesController extends GetxController {
   Future<void> aplicarFiltros() async {
     tipoAplicado = tipoElegido.value;
     generoAplicado = generoElegido.value;
+    aplicandoFiltros.value = true;
     for (final fila in filas) {
       fila.traidoEl = null;
     }
-    await refrescarTodo();
+    try {
+      await refrescarTodo();
+      // `refrescarTodo` solo ENCOLA; el trabajo sigue después. Se espera a que
+      // la cola se vacíe para que los bloques grises no desaparezcan mientras
+      // todavía falta traer la mitad de las filas.
+      for (var i = 0; i < 80 && (_enVuelo > 0 || _cola.isNotEmpty); i++) {
+        await Future<void>.delayed(const Duration(milliseconds: 250));
+      }
+    } finally {
+      aplicandoFiltros.value = false;
+    }
   }
 
   /// Vuelve a como estaba: sin filtros.

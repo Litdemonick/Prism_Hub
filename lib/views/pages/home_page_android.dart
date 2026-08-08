@@ -963,7 +963,14 @@ class _FilaAndroidState extends State<_FilaAndroid> {
             const SizedBox(height: 10),
             _GrillaPaginada(
               items: items,
-              cargando: items.isEmpty && estado == EstadoDeFila.cargando,
+              // Con filtros en curso se muestran los bloques aunque HAYA
+              // contenido: lo que está en pantalla es del filtro anterior y
+              // dejarlo quieto haría creer que el filtro no hizo nada.
+              //
+              // En un refresco normal, en cambio, no: ahí lo que viene es lo
+              // mismo que ya se ve, y parpadear a gris sería empeorarlo.
+              cargando: estado == EstadoDeFila.cargando &&
+                  (items.isEmpty || widget.c.aplicandoFiltros.value),
               package: widget.fila.package,
             ),
           ],
@@ -1055,8 +1062,7 @@ class _GrillaPaginadaState extends State<_GrillaPaginada> {
     // **Una sola fila en horizontal.** Dos filas de portadas 2:3 miden más que
     // la pantalla de un teléfono acostado: la segunda quedaba siempre cortada
     // y había que desplazarse para ver media tarjeta.
-    final filas = MediaQuery.sizeOf(context).height < 500 ? 1 : 2;
-    final porPagina = columnas * filas;
+    final filasDeseadas = MediaQuery.sizeOf(context).height < 500 ? 1 : 2;
 
     // De la caja y no de MediaQuery: en horizontal el ancho de pantalla
     // incluye la franja de la barra del sistema y la grilla se desbordaba.
@@ -1064,6 +1070,20 @@ class _GrillaPaginadaState extends State<_GrillaPaginada> {
       if (!caja.maxWidth.isFinite || caja.maxWidth < 120) {
         return const SizedBox(height: 12);
       }
+      // ── Las filas salen del CONTENIDO, no del deseo ────────────────
+      //
+      // Reservando siempre dos, una extensión que devuelve cuatro portadas
+      // dejaba media pantalla de vacío negro debajo — se ve como si la app se
+      // hubiera colgado a mitad de dibujar.
+      //
+      // Ahora se reserva lo que de verdad hay: con cinco columnas y cuatro
+      // ítems va una fila y el alto es de una fila.
+      final filas = widget.items.isEmpty
+          ? filasDeseadas
+          : ((widget.items.length + columnas - 1) ~/ columnas)
+              .clamp(1, filasDeseadas);
+      final porPagina = columnas * filas;
+
       final anchoCelda =
           (caja.maxWidth - margen * 2 - _hueco * (columnas - 1)) / columnas;
       final altoCelda = TarjetaDeCatalogo.altoTotalDeAncho(anchoCelda);
