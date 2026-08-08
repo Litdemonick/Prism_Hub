@@ -1450,11 +1450,16 @@ class _Header extends StatelessWidget {
       padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
       child: Row(
         children: [
-          IconButton(
-            icon: const Icon(Icons.arrow_back, color: Colors.white),
-            onPressed: () => unawaited(controller.closeRoute(context)),
-          ),
-          const SizedBox(width: 4),
+          // La flecha de volver NO va acá.
+          //
+          // Vive aparte, fuera del desvanecido del encabezado, para que no se
+          // esconda con los controles (ver el Positioned de siempre-visible en
+          // _VideoPlayerMobileControls). Al agregarla allá quedó duplicada: dos
+          // flechas pegadas, una que se desvanecía y otra que no.
+          //
+          // Se deja el hueco que ocupaba para que el título no arranque contra
+          // el borde y siga alineado con la flecha de al lado.
+          const SizedBox(width: 52),
           Expanded(
             child: Obx(() {
               // Sin comprobar el índice, esto reventaba con un
