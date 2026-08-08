@@ -735,6 +735,13 @@ class _HistoryPageState extends State<HistoryPage> {
       _Orden.az: 'history.sort-az'.i18n,
       _Orden.za: 'history.sort-za'.i18n,
     };
+    final etiquetasRango = {
+      _Rango.siempre: 'history.range-all'.i18n,
+      _Rango.dia: 'history.range-day'.i18n,
+      _Rango.semana: 'history.range-week'.i18n,
+      _Rango.mes: 'history.range-month'.i18n,
+      _Rango.ano: 'history.range-year'.i18n,
+    };
     return Padding(
       padding: const EdgeInsets.fromLTRB(16, 10, 16, 0),
       child: Wrap(
@@ -753,6 +760,28 @@ class _HistoryPageState extends State<HistoryPage> {
                 fontSize: 12,
               ),
           if (!_onFavoritesTab) const SizedBox(width: 12),
+          // ── «Cuándo», que en escritorio faltaba ──────────────────────────
+          //
+          // El filtro se agregó pensando en la hoja del teléfono y acá quedó
+          // sin poner: en el mismo Historial, el teléfono podía acotar a las
+          // últimas 24 horas y el escritorio no. Lo que es lógica va en las dos
+          // plataformas; lo que cambia es cómo se muestra, y acá hay ancho para
+          // tenerlo a la vista en vez de detrás de un botón.
+          //
+          // En Favoritos no, mismo motivo que en la hoja: ahí la fecha es la de
+          // guardado y filtrar por ella no contesta nada.
+          if (!_onFavoritesTab) ...[
+            const Icon(Icons.schedule_rounded,
+                size: 16, color: HomeTheme.textMuted),
+            for (final r in _Rango.values)
+              _chip(
+                etiquetasRango[r]!,
+                _rango == r,
+                () => setState(() => _rango = r),
+                fontSize: 12,
+              ),
+            const SizedBox(width: 12),
+          ],
           Icon(Icons.sort, size: 16, color: HomeTheme.textMuted),
           for (final o in _Orden.values)
             _chip(

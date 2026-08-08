@@ -106,7 +106,13 @@ class HomeMediaCard extends StatefulWidget {
   // tamaño y el hueco reservado de otro.
   static double get anchoAncha => Platform.isAndroid ? 264 : 380;
   static double get altoImagenAncha => Platform.isAndroid ? 148 : 214;
-  static double get altoTotalAncha => Platform.isAndroid ? 210 : 276;
+  // El alto total tiene que cubrir la etiqueta de la extensión, no solo el
+  // subtítulo. La etiqueta es una pastilla con su relleno —unos 21 puntos—
+  // contra los 16 de una línea de texto suelta, así que con la cuenta vieja
+  // sobresalía por abajo y la franja de la fila se la comía a la mitad. Se ve
+  // en «Continuar viendo», que es donde la etiqueta dice de qué extensión
+  // viene cada cosa.
+  static double get altoTotalAncha => Platform.isAndroid ? 224 : 292;
 
   // ── Y es 16:9 EXACTO ───────────────────────────────────────────────────
   //
