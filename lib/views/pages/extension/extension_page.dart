@@ -730,6 +730,21 @@ class _ExtensionPageState extends State<ExtensionPage> {
     );
   }
 
+  /// Lo que hay que dejar libre abajo para la barra flotante.
+  ///
+  /// Sale de dos cosas fijas y no del relleno del MediaQuery: ese incluye la
+  /// barra flotante SOLO mientras está puesta, así que cuando se esconde
+  /// cambia, y todo lo que dependa de él pega un salto. Estos dos números no
+  /// se mueven: lo que ocupa la barra del sistema —los tres botones o la
+  /// rayita de gestos— y el alto de la flotante, que es constante.
+  ///
+  /// Los 62 y el cálculo del margen son los mismos que usa `_barraFlotante` en
+  /// main_page: si allá cambian, acá hay que acompañarlos.
+  static double _huecoDeLaBarra(BuildContext context) {
+    final sistema = MediaQuery.viewPaddingOf(context).bottom;
+    return 62 + (sistema > 0 ? sistema * 0.55 + 12 : 18);
+  }
+
   /// Las rayitas de abajo: en cuál página vas.
   ///
   /// ── No crecen con las páginas ───────────────────────────────────────────
@@ -1000,7 +1015,7 @@ class _ExtensionPageState extends State<ExtensionPage> {
                                     16,
                                     0,
                                     16,
-                                    MediaQuery.paddingOf(context).bottom +
+                                    _huecoDeLaBarra(context) +
                                         (totalPages > 1 ? 34 : 8),
                                   ),
                                   itemCount: dePagina.length,
@@ -1038,7 +1053,20 @@ class _ExtensionPageState extends State<ExtensionPage> {
                       Positioned(
                         left: 0,
                         right: 0,
-                        bottom: MediaQuery.paddingOf(context).bottom + 2,
+                        // ── Quietas, no atadas a la barra ────────────────
+                        //
+                        // Salía de `paddingOf(context).bottom`, que con
+                        // `extendBody` incluye el alto de la barra flotante. Y
+                        // ese número CAMBIA: cuando la barra se esconde, el
+                        // relleno se va con ella y las rayitas pegaban un
+                        // salto hacia abajo, como si estuvieran colgadas de la
+                        // barra en vez de pertenecer a la lista.
+                        //
+                        // Ahora salen de lo que ocupa la barra del SISTEMA
+                        // —que no cambia— más el alto de la flotante, que es
+                        // fijo. Quedan siempre en el mismo sitio, justo debajo
+                        // de la última tarjeta.
+                        bottom: _huecoDeLaBarra(context) + 6,
                         child: Center(child: _rayitas(page, totalPages)),
                       ),
                   ],
