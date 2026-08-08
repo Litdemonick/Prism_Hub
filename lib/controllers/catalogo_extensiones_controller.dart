@@ -700,6 +700,10 @@ class CatalogoExtensionesController extends GetxController {
           : fila.modo;
 
   Future<void> aplicarFiltros() async {
+    // Ya hay uno en curso: tocar «Filtrar» dos veces, o deslizar mientras
+    // todavía está pidiendo, encadenaba dos esperas de veinte segundos y dos
+    // tandas de pedidos a once sitios. La segunda se descarta.
+    if (aplicandoFiltros.value) return;
     tipoAplicado = tipoElegido.value;
     generoAplicado = generoElegido.value;
     estadoAplicado = estadoElegido.value;
@@ -763,7 +767,26 @@ class CatalogoExtensionesController extends GetxController {
     unawaited(_armar());
   }
 
+  /// Para que dos armados no se pisen.
+  ///
+  /// A `_armar` se llega por tres caminos: al abrir, al prender una extensión
+  /// desde su fila, y al terminar la carga de segundo plano. Los tres pueden
+  /// caer casi juntos, y como tiene `await` adentro, dos ejecuciones se
+  /// entrelazan y la segunda pisa la lista que la primera todavía estaba
+  /// llenando — se ve como un parpadeo o como filas que aparecen y se van.
+  bool _armando = false;
+
   Future<void> _armar() async {
+    if (_armando) return;
+    _armando = true;
+    try {
+      await _armarDeVerdad();
+    } finally {
+      _armando = false;
+    }
+  }
+
+  Future<void> _armarDeVerdad() async {
     await _leerCache();
     // Los filtros de la vez pasada, para que los chips estén puestos desde el
     // primer cuadro en vez de aparecer a los pocos segundos.
