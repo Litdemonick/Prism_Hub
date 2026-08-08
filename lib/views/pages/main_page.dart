@@ -470,7 +470,44 @@ class _AndroidMainPageState extends fluent.State<AndroidMainPage> {
             // solas, y a las otras se les puso.
             _noConnectionBanner(),
             Expanded(
-              child: LayoutUtils.isTablet
+              child: _apaisado(context) && !LayoutUtils.isTablet
+                  // ── Teléfono acostado: riel a la izquierda ─────────────
+                  //
+                  // Abajo no puede quedarse. En horizontal el alto es lo único
+                  // que escasea —360 píxeles contra 800— y una barra abajo se
+                  // lleva la franja donde justamente se ven las portadas. A la
+                  // izquierda se come ancho, que es lo que sobra.
+                  //
+                  // Y va en un Row, no flotando encima: acostado el contenido
+                  // usa el ancho entero, así que una barra superpuesta taparía
+                  // la primera columna de tarjetas en vez de dejar ver algo por
+                  // detrás. Con el Row, el contenido empieza DESPUÉS del riel y
+                  // no se pisan nunca.
+                  ? Row(
+                      children: [
+                        AnimatedSlide(
+                          // Se va por donde entró: hacia afuera por el costado.
+                          offset: _barraEscondida
+                              ? const Offset(-1.6, 0)
+                              : Offset.zero,
+                          duration: const Duration(milliseconds: 260),
+                          curve: Curves.easeOutCubic,
+                          child: _barraVertical(destinations),
+                        ),
+                        Expanded(
+                          // El riel YA dejó pasar la franja de la barra del
+                          // sistema. Sin sacarla de acá, el SafeArea de cada
+                          // zona la vuelve a reservar y el contenido queda con
+                          // el doble de margen a la izquierda.
+                          child: MediaQuery.removePadding(
+                            context: context,
+                            removeLeft: true,
+                            child: _buildPages(),
+                          ),
+                        ),
+                      ],
+                    )
+                  : LayoutUtils.isTablet
                   ? Row(
                       children: [
                         NavigationRail(
@@ -515,7 +552,7 @@ class _AndroidMainPageState extends fluent.State<AndroidMainPage> {
         // flotando a media altura de la pantalla no se lee como la barra de
         // navegación de nada. Queda pegada —con su aire— a la barra del
         // sistema, que es donde el usuario ya la busca.
-        bottomNavigationBar: LayoutUtils.isTablet
+        bottomNavigationBar: LayoutUtils.isTablet || _apaisado(context)
             ? null
             : AnimatedSlide(
                 offset: _barraEscondida
@@ -613,6 +650,45 @@ class _AndroidMainPageState extends fluent.State<AndroidMainPage> {
     );
   }
 
+  /// La barra, de pie, para el teléfono acostado.
+  ///
+  /// ── Sin pastilla, al revés que abajo ─────────────────────────────────────
+  ///
+  /// Abajo la pastilla hace falta: la barra cruza por encima de las portadas y
+  /// sin un fondo parejo los íconos se pierden. Acá no cruza nada — el riel
+  /// tiene su propia columna y el contenido empieza después—, así que un
+  /// recuadro alrededor sería una caja dibujada sobre el vacío.
+  ///
+  /// Lo único que se marca es el elegido, con su círculo.
+  Widget _barraVertical(List<_Destination> destinos) {
+    // En horizontal la barra del sistema se mete por un COSTADO, y de qué lado
+    // depende de hacia dónde giró el teléfono. `viewPadding.left` contesta las
+    // dos: vale cero cuando quedó del otro lado.
+    final costados = MediaQuery.viewPaddingOf(context);
+    return Padding(
+      // A la derecha va el aire que separa el riel del contenido. Sin él, la
+      // primera columna de tarjetas arranca pegada a los íconos.
+      padding: EdgeInsets.only(left: costados.left + 10, right: 14),
+      child: Column(
+        mainAxisAlignment: MainAxisAlignment.center,
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          for (var i = 0; i < _enLaBarra; i++)
+            Padding(
+              padding: const EdgeInsets.symmetric(vertical: 6),
+              child: _IconoDeBarra(
+                destino: destinos[i],
+                elegido: c.selectedTab.value == i,
+                onTap: () => c.changeTab(i),
+              ),
+            ),
+          const SizedBox(height: 14),
+          _botonDelExtremo(tamano: 46),
+        ],
+      ),
+    );
+  }
+
   /// El fondo de la pastilla, igual acostado que de pie.
   static final _pastilla = BoxDecoration(
     // Casi opaca. Un desenfoque de fondo se vería mejor, pero hay que
@@ -694,11 +770,17 @@ class _AndroidMainPageState extends fluent.State<AndroidMainPage> {
           Positioned(
             left: apaisado ? bordes.left + 10 : null,
             right: apaisado ? null : 18,
-            // Justo encima del botón del que salieron.
+            // Justo al lado del botón del que salieron. Acostado ese botón
+            // está a media altura —el riel va centrado— así que las opciones
+            // también; de pie está abajo, y salen hacia arriba.
+            top: apaisado ? 0 : null,
             bottom: apaisado
-                ? 84
+                ? 0
                 : (bordes.bottom > 0 ? bordes.bottom * 0.55 + 14 : 20) + 66,
             child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              mainAxisSize:
+                  apaisado ? MainAxisSize.max : MainAxisSize.min,
               crossAxisAlignment:
                   apaisado ? CrossAxisAlignment.start : CrossAxisAlignment.end,
               children: [
