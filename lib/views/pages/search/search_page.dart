@@ -436,11 +436,9 @@ class _SearchPageState extends State<SearchPage> {
                   children: [
                     Text(
                       'common.search'.i18n,
-                      style: const TextStyle(
-                        fontSize: 22,
-                        fontWeight: FontWeight.w800,
-                        color: HomeTheme.textPrimary,
-                      ),
+                      // Mismo estilo que el título de Inicio, desde un solo
+                      // lugar.
+                      style: HomeTheme.tituloDeZona(),
                     ),
                     const SizedBox(height: 16),
                     _buildProgress(),

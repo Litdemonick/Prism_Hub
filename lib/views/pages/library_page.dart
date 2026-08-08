@@ -386,12 +386,8 @@ class _LibraryPageState extends State<LibraryPage> {
                 // pantalla nueva, y en la barra de abajo el usuario tocaba
                 // «Biblioteca» y arriba le contestaba «Inicio».
                 "common.library".i18n,
-                style: const TextStyle(
-                  fontSize: 25,
-                  fontWeight: FontWeight.w800,
-                  letterSpacing: -0.6,
-                  color: HomeTheme.textPrimary,
-                ),
+                // Mismo estilo que el título de Inicio, desde un solo lugar.
+                style: HomeTheme.tituloDeZona(),
               ),
             ),
           ),

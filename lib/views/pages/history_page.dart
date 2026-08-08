@@ -710,10 +710,13 @@ class _HistoryPageState extends State<HistoryPage> {
               padding: const EdgeInsets.symmetric(horizontal: 16),
               child: Text(
                 widget.zone ? 'nsfw18.title'.i18n : 'home.history'.i18n,
-                style: const TextStyle(
-                  fontSize: 22,
-                  fontWeight: FontWeight.w800,
-                  color: HomeTheme.textPrimary,
+                // Mismo estilo que el título de Inicio, desde un solo lugar.
+                style: HomeTheme.tituloDeZona(
+                  // Acostado en un teléfono, 25 se come una franja que le
+                  // hace falta a la lista.
+                  bajo: Platform.isAndroid &&
+                      MediaQuery.of(context).orientation ==
+                          Orientation.landscape,
                 ),
               ),
             ),

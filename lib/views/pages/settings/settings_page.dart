@@ -926,11 +926,8 @@ class _SettingsPageState extends State<SettingsPage> {
       if (!Platform.isAndroid) ...[
         Text(
           'common.settings'.i18n,
-          style: const TextStyle(
-            fontSize: 20,
-            fontWeight: FontWeight.bold,
-            color: HomeTheme.textPrimary,
-          ),
+          // Mismo estilo que el título de Inicio, desde un solo lugar.
+          style: HomeTheme.tituloDeZona(),
         ),
         const SizedBox(height: 16),
       ],
@@ -1744,11 +1741,11 @@ class _SettingsPageState extends State<SettingsPage> {
           const SizedBox(width: 2),
           Text(
             'common.settings'.i18n,
-            style: const TextStyle(
-              fontSize: 24,
-              fontWeight: FontWeight.w800,
-              letterSpacing: -0.5,
-              color: HomeTheme.textPrimary,
+            // Mismo estilo que el título de Inicio, desde un solo lugar.
+            style: HomeTheme.tituloDeZona(
+              // Acostado en un teléfono, 25 se come una franja que le hace
+              // falta a la lista de opciones, que es larga.
+              bajo: MediaQuery.sizeOf(context).height < 520,
             ),
           ),
         ],

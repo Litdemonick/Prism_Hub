@@ -20,6 +20,30 @@ class HomeTheme {
   static const accentRed = Color(0xFFE5484D);
   static const cardSurface = Color(0xFF15151C);
 
+  /// El título de una zona: «Inicio», «Biblioteca», «Buscar», «Historial».
+  ///
+  /// ── Por qué está acá y no escrito en cada pantalla ──────────────────────
+  ///
+  /// Estaba repetido a mano en cada una, y con el tiempo se separaron: 25 en
+  /// Biblioteca, 22 en Buscar y en Historial, 20 y 24 en Ajustes. Cinco
+  /// pantallas hermanas con cuatro tamaños distintos, y solo la de Inicio en
+  /// blanco puro — el resto caía en textPrimary, que es gris clarito. Se
+  /// notaba al pasar de una a otra: el título cambiaba de peso y de color sin
+  /// que nada lo justificara.
+  ///
+  /// El de Inicio es el bueno y el que manda, porque es el que lleva el nombre
+  /// de la app: 25, bien grueso, con el interletrado cerrado y en BLANCO. Los
+  /// demás lo copian desde acá.
+  ///
+  /// [bajo] es para pantalla baja —un teléfono acostado— donde 25 se come una
+  /// franja que le hace falta al contenido.
+  static TextStyle tituloDeZona({bool bajo = false}) => TextStyle(
+        fontSize: bajo ? 21 : 25,
+        fontWeight: FontWeight.w800,
+        letterSpacing: -0.6,
+        color: Colors.white,
+      );
+
   static const heroGradient = LinearGradient(
     begin: Alignment.topLeft,
     end: Alignment.bottomRight,

@@ -734,12 +734,10 @@ class _Cabecera extends StatelessWidget {
               'PrismHub',
               maxLines: 1,
               overflow: TextOverflow.ellipsis,
-              style: TextStyle(
-                fontSize: bajo ? 21 : 25,
-                fontWeight: FontWeight.w800,
-                letterSpacing: -0.6,
-                color: Colors.white,
-              ),
+              // El molde de los títulos de zona vive en HomeTheme: este
+              // era el original, y las demás pantallas lo copiaban a mano
+              // hasta que se separaron. Ahora salen todos de ahí.
+              style: HomeTheme.tituloDeZona(bajo: bajo),
             ),
           ),
           _BotonDeCabecera(
