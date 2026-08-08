@@ -72,33 +72,50 @@ class HomeMediaCard extends StatefulWidget {
   // Expuestas como static para que HomeSection sepa cuánto alto reservar
   // para la fila entera (portada + título/subtítulo debajo) sin duplicar
   // el número a mano en dos archivos distintos.
-  static const double androidWidth = 150;
-  static const double androidHeight = 208;
-  static const double desktopWidth = 210;
-  static const double desktopHeight = 292;
+  // ── Más grandes ────────────────────────────────────────────────────────
+  //
+  // Todas subieron alrededor de un doce por ciento. Lo que las tenía chicas era
+  // el relleno de la caja que envolvía cada sección: ahora que esa caja no
+  // está (ver HomeSection.boxed), ese ancho quedó libre y lo aprovechan las
+  // portadas, que es lo único que uno mira.
+  //
+  // La proporción de cada una se conserva exacta, así que ninguna portada se
+  // deforma ni se recorta distinto que antes.
+  static const double androidWidth = 168;
+  static const double androidHeight = 233;
+  static const double desktopWidth = 236;
+  static const double desktopHeight = 328;
   // Android landscape: la tarjeta a tamaño "vertical" (208 de alto) no
   // entraba entera en el poco alto disponible (confirmado en vivo, sobre
   // todo en Historial) — más chica en horizontal, mismo aspecto ~0.72:1.
   // Variante HORIZONTAL (escritorio): 16:9, la misma forma que los frames de
   // vídeo, así la portada de "Continuar" ya no se recorta.
-  static const double wideWidth = 316;
+  static const double wideWidth = 380;
   // Las portadas de lectura (2:3) se muestran enteras, sin recortar, así que
   // lo que decide qué tan grandes se ven es el ALTO del marco. A 200 la card
   // quedaba demasiado grande —entraban pocas por fila y el bloque dominaba
   // la pantalla—, así que se baja a 186: el póster sigue en 124 de ancho
   // (bastante más que los 120 originales) y los frames de vídeo entran casi
   // exactos (1.70 contra 1.78 de 16:9), o sea sin recorte apreciable.
-  static const double wideImageHeight = 186;
+  // ── Y ahora es 16:9 EXACTO ─────────────────────────────────────────────
+  //
+  // Estaba en 316 × 186, o sea 1,70. Los frames de vídeo son 1,78, así que a
+  // cada captura se le comía una franja arriba y abajo. Con 380 × 214 la cuenta
+  // da 1,776: la miniatura entra entera, que era el motivo de que esta tarjeta
+  // existiera.
+  static const double wideImageHeight = 214;
   // Imagen + separación + dos líneas de título + la línea del subtítulo.
-  static const double wideTotalHeight = 248;
+  static const double wideTotalHeight = 276;
 
   // 112 quedaba MUY chico: en horizontal entraban ocho cards por fila y no se
   // leía ni el pill de la extensión. El apretón real venía del hero, que a
   // tamaño normal se comía toda la ventana en horizontal — ya se pone
   // compacto (ver HomeHeroBanner), así que acá sobra lugar para agrandarlas.
   // Se mantiene el mismo aspecto ~0.72:1 que las otras dos variantes.
-  static const double androidLandscapeWidth = 132;
-  static const double androidLandscapeHeight = 183;
+  // Acostado sube menos: ahí el alto es lo único que escasea, y cada punto que
+  // gana la tarjeta se lo saca a la fila entera, que ya entra justa.
+  static const double androidLandscapeWidth = 144;
+  static const double androidLandscapeHeight = 200;
 
   const HomeMediaCard({
     super.key,
