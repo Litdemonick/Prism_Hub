@@ -826,55 +826,63 @@ class _HistoryPageState extends State<HistoryPage> {
       resizeToAvoidBottomInset: false,
       // Sin AppBar: la franja fina, como Inicio, Biblioteca, Buscar y
       // Extensiones. Ver FranjaDeZona.
-      body: Column(
-        children: [
-          FranjaDeZona(
-            titulo: widget.zone ? 'nsfw18.title'.i18n : 'home.history'.i18n,
-            ayuda: 'common.search'.i18n,
-            controlador: _searchController,
-            alEscribir: (value) => setState(() => _query = value),
-            alEnviar: (value) => setState(() => _query = value),
-            acciones: [
-              // ── Los filtros, en un botón ────────────────────────────────
-              //
-              // Eran trece pastillas en cuatro renglones —cinco de pestaña,
-              // cuatro de estado, cuatro de orden— arriba de todo, antes de la
-              // primera tarjeta. Acostado eso era la pantalla entera.
-              //
-              // El puntito avisa que hay algo puesto: metido dentro de la hoja,
-              // uno se olvida de que filtró y la lista corta parece un error.
-              AccionDeFranja(
-                ayuda: 'search.filter'.i18n,
-                alTocar: _abrirFiltros,
-                icono: Stack(
-                  clipBehavior: Clip.none,
-                  children: [
-                    const Icon(Icons.tune_rounded),
-                    if (_hayFiltroPuesto)
-                      Positioned(
-                        right: -1,
-                        top: -1,
-                        child: Container(
-                          width: 9,
-                          height: 9,
-                          decoration: BoxDecoration(
-                            color: _accent,
-                            shape: BoxShape.circle,
-                          ),
+      // La franja se va al bajar y vuelve al llegar arriba, como el nombre de
+      // la app en el Inicio: acostado, clavada era una fila de portadas menos.
+      body: FranjaQueSeVa(
+        hijo: _buildBody(),
+        franja: FranjaDeZona(
+          titulo: widget.zone ? 'nsfw18.title'.i18n : 'home.history'.i18n,
+          // El Historial se abre ENCIMA del shell —desde el botón del Inicio—
+          // así que necesita su propia salida. Al quitarle la AppBar se fue
+          // con ella la flecha que Material ponía sola, y quedaba solo el atrás
+          // del sistema. En las pestañas del shell esto va en null: ahí no hay
+          // a dónde volver.
+          alVolver: () {
+            if (Navigator.of(context).canPop()) Navigator.of(context).pop();
+          },
+          ayuda: 'common.search'.i18n,
+          controlador: _searchController,
+          alEscribir: (value) => setState(() => _query = value),
+          alEnviar: (value) => setState(() => _query = value),
+          acciones: [
+            // ── Los filtros, en un botón ────────────────────────────────
+            //
+            // Eran trece pastillas en cuatro renglones —cinco de pestaña,
+            // cuatro de estado, cuatro de orden— arriba de todo, antes de la
+            // primera tarjeta. Acostado eso era la pantalla entera.
+            //
+            // El puntito avisa que hay algo puesto: metido dentro de la hoja,
+            // uno se olvida de que filtró y la lista corta parece un error.
+            AccionDeFranja(
+              ayuda: 'search.filter'.i18n,
+              alTocar: _abrirFiltros,
+              icono: Stack(
+                clipBehavior: Clip.none,
+                children: [
+                  const Icon(Icons.tune_rounded),
+                  if (_hayFiltroPuesto)
+                    Positioned(
+                      right: -1,
+                      top: -1,
+                      child: Container(
+                        width: 9,
+                        height: 9,
+                        decoration: BoxDecoration(
+                          color: _accent,
+                          shape: BoxShape.circle,
                         ),
                       ),
-                  ],
-                ),
+                    ),
+                ],
               ),
-              AccionDeFranja(
-                ayuda: 'common.delete-all'.i18n,
-                alTocar: _confirmClearAll,
-                icono: const Icon(Icons.delete_sweep_outlined),
-              ),
-            ],
-          ),
-          Expanded(child: _buildBody()),
-        ],
+            ),
+            AccionDeFranja(
+              ayuda: 'common.delete-all'.i18n,
+              alTocar: _confirmClearAll,
+              icono: const Icon(Icons.delete_sweep_outlined),
+            ),
+          ],
+        ),
       ),
     );
   }

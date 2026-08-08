@@ -366,52 +366,58 @@ class _SearchPageState extends State<SearchPage> {
           child: Stack(
             children: [
               const Positioned.fill(child: AnimatedBackgroundGlow()),
-              Column(
-                children: [
-                  // Zona +18: título propio y flecha para salir. El buscador
-                  // normal es una pestaña del shell —no tiene a dónde volver—
-                  // así que ahí la flecha va en null y queda igual que siempre.
-                  FranjaDeZona(
-                    titulo: widget.nsfwOnly
-                        ? "nsfw18.search-zone-title".i18n
-                        : "common.search".i18n,
-                    controlador: _searchController,
-                    ayuda: "search.hint-text".i18n,
-                    alEscribir: (value) {
-                      if (value.isEmpty) c.search.value = '';
-                    },
-                    alEnviar: c.submitSearch,
-                    alVolver: widget.nsfwOnly
-                        ? () {
-                            if (Navigator.of(context).canPop()) {
-                              Navigator.of(context).pop();
-                            }
+              // La franja se va al bajar y vuelve al llegar arriba, como el
+              // nombre de la app en el Inicio. Acostado, esa franja clavada
+              // era una fila de portadas menos, para siempre.
+              FranjaQueSeVa(
+                // Zona +18: título propio y flecha para salir. El buscador
+                // normal es una pestaña del shell —no tiene a dónde volver—
+                // así que ahí la flecha va en null y queda igual que siempre.
+                franja: FranjaDeZona(
+                  titulo: widget.nsfwOnly
+                      ? "nsfw18.search-zone-title".i18n
+                      : "common.search".i18n,
+                  controlador: _searchController,
+                  ayuda: "search.hint-text".i18n,
+                  alEscribir: (value) {
+                    if (value.isEmpty) c.search.value = '';
+                  },
+                  alEnviar: c.submitSearch,
+                  alVolver: widget.nsfwOnly
+                      ? () {
+                          if (Navigator.of(context).canPop()) {
+                            Navigator.of(context).pop();
                           }
-                        : null,
-                    // El filtro de tipo, en la franja: ver _botonDeFiltro.
-                    acciones: [_botonDeFiltro(context)],
-                  ),
-                  // Sin la fila de chips: el filtro se fue a la franja de
-                  // arriba (ver _botonDeFiltro), así que los resultados
-                  // arrancan acá mismo. Queda solo la barra de progreso, que
-                  // son 3 puntos de alto y dice si todavía están buscando.
-                  Padding(
-                    padding: const EdgeInsets.fromLTRB(16, 6, 16, 2),
-                    child: _buildProgress(),
-                  ),
-                  Expanded(
-                    child: _buildResults((index) {
-                      Get.to(ExtensionSearcherPage(
-                        package: c.getPackgeByIndex(index),
-                        keyWord: c.search.value,
-                        // Desde la Zona +18 la extensión mixta se abre con su
-                        // filtro de adultos ya puesto: si no, mostraba su
-                        // catálogo general, que es justo lo que esa zona no es.
-                        soloAdulto: widget.nsfwOnly,
-                      ));
-                    }),
-                  ),
-                ],
+                        }
+                      : null,
+                  // El filtro de tipo, en la franja: ver _botonDeFiltro.
+                  acciones: [_botonDeFiltro(context)],
+                ),
+                hijo: Column(
+                  children: [
+                    // Sin la fila de chips: el filtro se fue a la franja de
+                    // arriba (ver _botonDeFiltro), así que los resultados
+                    // arrancan acá mismo. Queda solo la barra de progreso, que
+                    // son 3 puntos de alto y dice si todavía están buscando.
+                    Padding(
+                      padding: const EdgeInsets.fromLTRB(16, 6, 16, 2),
+                      child: _buildProgress(),
+                    ),
+                    Expanded(
+                      child: _buildResults((index) {
+                        Get.to(ExtensionSearcherPage(
+                          package: c.getPackgeByIndex(index),
+                          keyWord: c.search.value,
+                          // Desde la Zona +18 la extensión mixta se abre con
+                          // su filtro de adultos ya puesto: si no, mostraba su
+                          // catálogo general, que es justo lo que esa zona no
+                          // es.
+                          soloAdulto: widget.nsfwOnly,
+                        ));
+                      }),
+                    ),
+                  ],
+                ),
               ),
             ],
           ),

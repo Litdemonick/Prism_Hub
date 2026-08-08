@@ -336,10 +336,6 @@ class _ExtensionPageState extends State<ExtensionPage> {
     );
   }
 
-  /// Pantalla baja: horizontal de teléfono, donde el alto es el recurso caro.
-  static bool _pantallaBaja(BuildContext context) =>
-      MediaQuery.sizeOf(context).height < 520;
-
   /// La barra de filtros: los chips con un botón a cada lado.
   ///
   /// ── Por qué así y no de las otras dos formas que se probaron ────────────
@@ -724,8 +720,7 @@ class _ExtensionPageState extends State<ExtensionPage> {
     final cortas = totalPages <= tope;
     return IndicadoresDePagina(
       cantidad: cortas ? totalPages : tope,
-      actual:
-          cortas ? page : (page * tope ~/ totalPages).clamp(0, tope - 1),
+      actual: cortas ? page : (page * tope ~/ totalPages).clamp(0, tope - 1),
       onTocar: (i) {
         final destino =
             cortas ? i : (i * totalPages ~/ tope).clamp(0, totalPages - 1);
@@ -826,81 +821,80 @@ class _ExtensionPageState extends State<ExtensionPage> {
         body: Stack(
           children: [
             const Positioned.fill(child: AnimatedBackgroundGlow()),
-            Column(
-              children: [
-                FranjaDeZona(
-                  titulo: 'common.extension-installed'.i18n,
-                  ayuda: 'common.search'.i18n,
-                  controlador: _androidSearchController,
-                  alEscribir: (value) {
-                    if (value.isEmpty) {
-                      setState(() {
-                        _search = '';
-                        _page = 0;
-                      });
-                    }
-                  },
-                  alEnviar: (value) {
+            // La franja se va al bajar y vuelve al llegar arriba, como el
+            // nombre de la app en el Inicio: acostado, clavada era una fila de
+            // tarjetas menos, para siempre.
+            FranjaQueSeVa(
+              franja: FranjaDeZona(
+                titulo: 'common.extension-installed'.i18n,
+                ayuda: 'common.search'.i18n,
+                controlador: _androidSearchController,
+                alEscribir: (value) {
+                  if (value.isEmpty) {
                     setState(() {
-                      _search = value;
+                      _search = '';
                       _page = 0;
                     });
-                  },
-                  acciones: [
-                    // ── El filtro vive en la franja de arriba ─────────────
-                    //
-                    // No en una fila propia debajo. Esa fila se llevaba su
-                    // alto entero justo encima de la lista, y acostado —donde
-                    // el alto es lo que falta— eso es media pantalla de
-                    // tarjetas.
-                    //
-                    // El puntito avisa que hay un filtro puesto: metido dentro
-                    // de la hoja, uno se olvida de que filtró y la lista corta
-                    // parece un error.
-                    AccionDeFranja(
-                      ayuda: 'search.filter'.i18n,
-                      alTocar: _abrirPanel,
-                      icono: Stack(
-                        clipBehavior: Clip.none,
-                        children: [
-                          Icon(
-                            _masivoEnCurso
-                                ? Icons.hourglass_top_rounded
-                                : Icons.tune_rounded,
-                          ),
-                          if (_filter != _ExtFilter.todas)
-                            Positioned(
-                              right: -1,
-                              top: -1,
-                              child: Container(
-                                width: 9,
-                                height: 9,
-                                decoration: const BoxDecoration(
-                                  color: HomeTheme.accentPink,
-                                  shape: BoxShape.circle,
-                                ),
+                  }
+                },
+                alEnviar: (value) {
+                  setState(() {
+                    _search = value;
+                    _page = 0;
+                  });
+                },
+                acciones: [
+                  // ── El filtro vive en la franja de arriba ─────────────
+                  //
+                  // No en una fila propia debajo. Esa fila se llevaba su
+                  // alto entero justo encima de la lista, y acostado —donde
+                  // el alto es lo que falta— eso es media pantalla de
+                  // tarjetas.
+                  //
+                  // El puntito avisa que hay un filtro puesto: metido dentro
+                  // de la hoja, uno se olvida de que filtró y la lista corta
+                  // parece un error.
+                  AccionDeFranja(
+                    ayuda: 'search.filter'.i18n,
+                    alTocar: _abrirPanel,
+                    icono: Stack(
+                      clipBehavior: Clip.none,
+                      children: [
+                        Icon(
+                          _masivoEnCurso
+                              ? Icons.hourglass_top_rounded
+                              : Icons.tune_rounded,
+                        ),
+                        if (_filter != _ExtFilter.todas)
+                          Positioned(
+                            right: -1,
+                            top: -1,
+                            child: Container(
+                              width: 9,
+                              height: 9,
+                              decoration: const BoxDecoration(
+                                color: HomeTheme.accentPink,
+                                shape: BoxShape.circle,
                               ),
                             ),
-                        ],
-                      ),
+                          ),
+                      ],
                     ),
-                    if (c.errors.isNotEmpty)
-                      AccionDeFranja(
-                        icono: const Icon(Icons.error),
-                        alTocar: () => _loadErrorDialog(),
-                      ),
+                  ),
+                  if (c.errors.isNotEmpty)
                     AccionDeFranja(
-                      icono: const Icon(Icons.download),
-                      alTocar: () => Get.to(() => const ExtensionRepoPage()),
+                      icono: const Icon(Icons.error),
+                      alTocar: () => _loadErrorDialog(),
                     ),
-                  ],
-                ),
-                // El aire de abajo de la franja se recorta en pantalla baja:
-                // en horizontal, cada bloque vertical se le resta directamente
-                // a la lista, que es lo único que importa ver ahí.
-                SizedBox(height: _pantallaBaja(context) ? 2 : 6),
-                Expanded(
-                  child: installed.isEmpty
+                  AccionDeFranja(
+                    icono: const Icon(Icons.download),
+                    alTocar: () => Get.to(() => const ExtensionRepoPage()),
+                  ),
+                ],
+              ),
+              hijo: Stack(
+                children: [
+                  installed.isEmpty
                       ? _conRefresco(
                           ListView(
                             physics: const AlwaysScrollableScrollPhysics(),
@@ -938,8 +932,7 @@ class _ExtensionPageState extends State<ExtensionPage> {
                                 .toList();
                             return _conRefresco(
                               ListView.builder(
-                                physics:
-                                    const AlwaysScrollableScrollPhysics(),
+                                physics: const AlwaysScrollableScrollPhysics(),
                                 // Espacio a los costados y entre cards — antes
                                 // iban pegadas al borde de la pantalla.
                                 //
@@ -966,32 +959,31 @@ class _ExtensionPageState extends State<ExtensionPage> {
                             );
                           },
                         ),
-                ),
-                // ── Rayitas abajo, no botones ───────────────────────
-                //
-                // Van después de la lista y no arriba: arriba se comían una
-                // franja pegada al buscador y cortaban la primera fila de
-                // tarjetas.
-                //
-                // Y son rayitas, no flechas: con el dedo la página se cambia
-                // deslizando, así que abajo solo hace falta decir en cuál vas.
-                // Las mismas del acordeón del Inicio, para que la app se sienta
-                // una sola.
-                if (totalPages > 1)
-                  Padding(
-                    // Por encima de la barra flotante.
-                    //
-                    // El cuerpo pasa POR DEBAJO de ella (extendBody en
-                    // main_page), así que lo último de la columna quedaba
-                    // tapado: se veía a medias detrás de los íconos de
-                    // navegación. `paddingOf(context).bottom` ya trae el alto
-                    // de la barra sumado, así que con eso alcanza.
-                    padding: EdgeInsets.only(
+                  // ── Rayitas abajo, ENCIMA de la lista ─────────────────
+                  //
+                  // Antes iban en la columna, debajo de la lista, y por eso le
+                  // comían su alto: la lista terminaba justo arriba de la barra
+                  // de navegación y detrás de la barra no pasaba nada. Con el
+                  // fondo liso ahí, la barra flotante parecía tener un fondo
+                  // propio en vez de dejar ver lo de atrás.
+                  //
+                  // Ahora la lista usa la pantalla entera y pasa por debajo de
+                  // la barra —el cuerpo ya lo hace, `extendBody` en main_page—
+                  // así que se ven las tarjetas moviéndose detrás de ella. Las
+                  // rayitas flotan encima, en su sitio de siempre.
+                  //
+                  // Y son rayitas, no flechas: con el dedo la página se cambia
+                  // deslizando, así que abajo solo hace falta decir en cuál
+                  // vas. Las mismas del acordeón del Inicio.
+                  if (totalPages > 1)
+                    Positioned(
+                      left: 0,
+                      right: 0,
                       bottom: MediaQuery.paddingOf(context).bottom + 2,
+                      child: Center(child: _rayitas(page, totalPages)),
                     ),
-                    child: Center(child: _rayitas(page, totalPages)),
-                  ),
-              ],
+                ],
+              ),
             ),
           ],
         ),

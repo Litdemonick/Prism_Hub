@@ -186,6 +186,102 @@ class _FranjaDeZonaState extends State<FranjaDeZona> {
   }
 }
 
+/// La franja, pero que se va al bajar y vuelve al llegar arriba.
+///
+/// ── Por qué no alcanzaba con que fuera fina ─────────────────────────────
+///
+/// Se le sacó la AppBar y quedó en la mitad de alto, pero seguía CLAVADA:
+/// acostado, esa franja se lleva una fila de portadas para siempre, y ahí el
+/// alto es lo único que escasea.
+///
+/// En el Inicio esto no pasa porque el nombre de la app es un elemento más de
+/// la lista: se desplaza con las portadas y al bajar desaparece. Buscar,
+/// Extensiones e Historial no lo pueden copiar tal cual —una de ellas dibuja
+/// sus páginas en un deslizador horizontal, y meter el buscador adentro serían
+/// tres campos de texto vivos a la vez peleándose el foco— así que se hace por
+/// afuera: se escucha el desplazamiento y la franja se recoge.
+///
+/// ── Vuelve arriba, no al primer tirón para arriba ───────────────────────
+///
+/// A propósito. Volviendo con cualquier movimiento hacia arriba, la franja
+/// aparece y desaparece sola mientras uno busca algo en el medio de la lista, y
+/// eso se lee como un parpadeo. Volviendo solo al llegar al principio se ve
+/// exactamente como en el Inicio: se fue con el contenido y está de vuelta
+/// cuando el contenido está de vuelta.
+class FranjaQueSeVa extends StatefulWidget {
+  const FranjaQueSeVa({
+    super.key,
+    required this.franja,
+    required this.hijo,
+  });
+
+  final Widget franja;
+
+  /// El contenido que se desplaza. De él salen los avisos que mueven la franja.
+  final Widget hijo;
+
+  @override
+  State<FranjaQueSeVa> createState() => _FranjaQueSeVaState();
+}
+
+class _FranjaQueSeVaState extends State<FranjaQueSeVa> {
+  bool _visible = true;
+
+  bool _mirar(ScrollNotification aviso) {
+    // Solo el desplazamiento vertical. El deslizador de páginas de Extensiones
+    // es horizontal y también avisa: sin este filtro, cambiar de página
+    // escondía la franja.
+    if (aviso.metrics.axis != Axis.vertical) return false;
+
+    if (aviso is ScrollUpdateNotification) {
+      final nuevo = aviso.metrics.pixels <= 0
+          ? true
+          : ((aviso.scrollDelta ?? 0) > 0 ? false : _visible);
+      if (nuevo != _visible) setState(() => _visible = nuevo);
+    }
+    // false: el aviso sigue subiendo. Cortarlo rompería a cualquier otro que
+    // esté escuchando más arriba —el refresco, por ejemplo—.
+    return false;
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      children: [
+        // ── Se encoge, y la franja NO se desmonta ─────────────────────────
+        //
+        // Encogerla y no correrla hacia arriba: corriéndola sale de la vista
+        // pero le queda el lugar reservado, así que no se ganaría el alto, que
+        // es todo el punto.
+        //
+        // Y con `child` por fuera del constructor, la franja se arma UNA vez y
+        // se reusa: si se cambiara por un SizedBox al esconderla, al volver se
+        // montaría de nuevo, el campo de búsqueda perdería si estaba abierto y
+        // su `autofocus` levantaría el teclado solo.
+        ClipRect(
+          child: TweenAnimationBuilder<double>(
+            tween: Tween<double>(begin: 1, end: _visible ? 1 : 0),
+            duration: const Duration(milliseconds: 220),
+            curve: Curves.easeOutCubic,
+            child: widget.franja,
+            builder: (context, t, franja) => Align(
+              alignment: Alignment.bottomCenter,
+              heightFactor: t,
+              child: franja,
+            ),
+          ),
+        ),
+        Expanded(
+          child: NotificationListener<ScrollNotification>(
+            onNotification: _mirar,
+            child: widget.hijo,
+          ),
+        ),
+      ],
+    );
+  }
+}
+
 /// Un botón para las [FranjaDeZona.acciones], del tamaño de la franja.
 ///
 /// Con nombre para que las zonas no tengan que acordarse del 40: un IconButton
