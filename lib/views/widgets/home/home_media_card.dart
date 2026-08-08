@@ -599,195 +599,221 @@ class _HomeMediaCardState extends State<HomeMediaCard> {
         onEnter: (_) => setState(() => _hover = true),
         onExit: (_) => setState(() => _hover = false),
         child: RepaintBoundary(
-          child: AnimatedContainer(
+          // ── La tarjeta se eleva, pero su zona de toque NO se mueve ───────
+          //
+          // Al pasar el ratón la tarjeta sube cuatro puntos. Estaba hecho con
+          // el `transform` de un AnimatedContainer, y un transform mueve el
+          // dibujo Y el área que responde al clic.
+          //
+          // Lo que pasaba: entrás con el ratón a la tarjeta y hacés clic
+          // enseguida. El clic cae DURANTE los 150 ms en los que la tarjeta se
+          // está elevando, o sea mientras su área de toque se está corriendo
+          // hacia arriba bajo el cursor. Si el puntero estaba en la franja de
+          // abajo, para cuando soltás ya quedó fuera y Flutter cancela el
+          // toque: el primer clic no hace nada y hay que dar otro. En pantalla
+          // completa casi no se nota porque uno ya viene con el ratón adentro y
+          // la elevación terminó hace rato; en ventana, con el ratón entrando
+          // desde el borde, pasa casi siempre. Reportado en vivo.
+          //
+          // `transformHitTests: false` es exactamente para esto: la tarjeta se
+          // ve elevada y el área de toque se queda donde estaba.
+          child: TweenAnimationBuilder<double>(
+            tween: Tween<double>(begin: 0, end: _hover ? -4 : 0),
             duration: const Duration(milliseconds: 150),
-            transform: Matrix4.translationValues(0, _hover ? -4 : 0, 0),
-            width: width,
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Container(
-                  width: width,
-                  height: height,
-                  clipBehavior: Clip.antiAlias,
-                  decoration: BoxDecoration(
-                    borderRadius: BorderRadius.circular(14),
-                    gradient: hasCover
-                        ? null
-                        : LinearGradient(
-                            begin: Alignment.topLeft,
-                            end: Alignment.bottomRight,
-                            colors: gradient,
-                          ),
-                    boxShadow: const [
-                      BoxShadow(
-                        color: Color(0x40000000),
-                        blurRadius: 8,
-                        offset: Offset(0, 4),
-                      ),
-                    ],
-                  ),
-                  child: Stack(
-                    fit: StackFit.expand,
-                    children: [
-                      if (widget.hidden)
-                        hiddenCover
-                      else if (widget.coverFile != null)
-                        // Capturas del vídeo: son horizontales (~16:9) dentro de
-                        // una card vertical (~0.72:1). Ni cover ni contain solos
-                        // funcionan — cover recortaba tanto a los costados que
-                        // del cuadro quedaba una franja irreconocible, y contain
-                        // deja dos barras negras enormes.
-                        //
-                        // Se muestra el frame ENTERO (contain) sobre un fondo
-                        // borroso de la MISMA imagen estirada a cubrir. Llena la
-                        // card, no recorta nada y no se ve estirado.
-                        //
-                        // El fondo se decodifica a un cuarto del tamaño: va
-                        // desenfocado, así que más resolución no se notaría y sí
-                        // costaría memoria en una lista con muchas cards.
-                        Stack(
-                          fit: StackFit.expand,
-                          children: [
-                            ImageFiltered(
-                              imageFilter:
-                                  ImageFilter.blur(sigmaX: 18, sigmaY: 18),
-                              child: Image.file(
-                                widget.coverFile!,
-                                fit: BoxFit.cover,
-                                width: double.infinity,
-                                height: double.infinity,
-                                cacheWidth:
-                                    (cacheWidth / 4).ceil().clamp(1, 4096),
-                                // Sin errorBuilder acá: si la imagen falla, el
-                                // de la capa de arriba ya muestra el default.
-                                errorBuilder: (_, __, ___) =>
-                                    const ColoredBox(color: Color(0xFF15151C)),
-                              ),
+            builder: (context, dy, hijo) => Transform.translate(
+              offset: Offset(0, dy),
+              transformHitTests: false,
+              child: hijo,
+            ),
+            child: SizedBox(
+              width: width,
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Container(
+                    width: width,
+                    height: height,
+                    clipBehavior: Clip.antiAlias,
+                    decoration: BoxDecoration(
+                      borderRadius: BorderRadius.circular(14),
+                      gradient: hasCover
+                          ? null
+                          : LinearGradient(
+                              begin: Alignment.topLeft,
+                              end: Alignment.bottomRight,
+                              colors: gradient,
                             ),
-                            // Oscurece un poco el fondo para que el frame de
-                            // adelante resalte y el texto de abajo siga legible.
-                            const ColoredBox(color: Color(0x66000000)),
-                            Padding(
-                              padding: const EdgeInsets.all(_coverInset),
-                              child: Image.file(
-                                widget.coverFile!,
-                                fit: BoxFit.contain,
-                                width: double.infinity,
-                                height: double.infinity,
-                                cacheWidth: cacheWidth,
-                                errorBuilder: (context, error, stackTrace) =>
-                                    defaultCover,
-                              ),
-                            ),
-                          ],
-                        )
-                      else if (hasCover)
-                        // El fondo borroso se puso cuando la imagen llegaba
-                        // DEFORMADA (cacheWidth+cacheHeight juntos hacían que
-                        // el decoder ignorara el aspecto original). Arreglado
-                        // eso, un póster de lectura (2:3) contra una card de
-                        // ~0.72:1 llena casi exacto con cover: se recorta un
-                        // 7% a los costados, imperceptible, y se ve como una
-                        // portada de verdad en vez de una imagen chica dentro
-                        // de un marco. El fondo borroso queda SOLO para el
-                        // caso donde de verdad hace falta: un frame de vídeo
-                        // (16:9) metido en una card alta, donde cover dejaría
-                        // una franja irreconocible.
-                        // Ver el mismo caso en la card ancha: cover para
-                        // que la portada llene la tarjeta, y el respaldo con
-                        // contain para que el logo no se corte.
-                        CacheNetWorkImagePic(
-                          widget.cover!,
-                          fit: BoxFit.cover,
-                          width: double.infinity,
-                          height: double.infinity,
-                          headers: widget.headers,
-                          fallback: defaultCover,
-                          cacheWidth: cacheWidth,
+                      boxShadow: const [
+                        BoxShadow(
+                          color: Color(0x40000000),
+                          blurRadius: 8,
+                          offset: Offset(0, 4),
                         ),
-                      // Ver la card ancha: los distintivos salieron de
-                      // encima de la portada. Acá tapaban una esquina de cada
-                      // lado, que en una card chica es bastante.
-                      if (widget.progress != null)
-                        Positioned(
-                          left: 0,
-                          right: 0,
-                          bottom: 0,
-                          child: Container(
-                            height: 4,
-                            color: const Color(0x80000000),
-                            alignment: Alignment.centerLeft,
-                            child: FractionallySizedBox(
-                              widthFactor: widget.progress!.clamp(0, 1),
-                              child: Container(color: widget.accent),
-                            ),
+                      ],
+                    ),
+                    child: Stack(
+                      fit: StackFit.expand,
+                      children: [
+                        if (widget.hidden)
+                          hiddenCover
+                        else if (widget.coverFile != null)
+                          // Capturas del vídeo: son horizontales (~16:9) dentro de
+                          // una card vertical (~0.72:1). Ni cover ni contain solos
+                          // funcionan — cover recortaba tanto a los costados que
+                          // del cuadro quedaba una franja irreconocible, y contain
+                          // deja dos barras negras enormes.
+                          //
+                          // Se muestra el frame ENTERO (contain) sobre un fondo
+                          // borroso de la MISMA imagen estirada a cubrir. Llena la
+                          // card, no recorta nada y no se ve estirado.
+                          //
+                          // El fondo se decodifica a un cuarto del tamaño: va
+                          // desenfocado, así que más resolución no se notaría y sí
+                          // costaría memoria en una lista con muchas cards.
+                          Stack(
+                            fit: StackFit.expand,
+                            children: [
+                              ImageFiltered(
+                                imageFilter:
+                                    ImageFilter.blur(sigmaX: 18, sigmaY: 18),
+                                child: Image.file(
+                                  widget.coverFile!,
+                                  fit: BoxFit.cover,
+                                  width: double.infinity,
+                                  height: double.infinity,
+                                  cacheWidth:
+                                      (cacheWidth / 4).ceil().clamp(1, 4096),
+                                  // Sin errorBuilder acá: si la imagen falla, el
+                                  // de la capa de arriba ya muestra el default.
+                                  errorBuilder: (_, __, ___) =>
+                                      const ColoredBox(
+                                          color: Color(0xFF15151C)),
+                                ),
+                              ),
+                              // Oscurece un poco el fondo para que el frame de
+                              // adelante resalte y el texto de abajo siga legible.
+                              const ColoredBox(color: Color(0x66000000)),
+                              Padding(
+                                padding: const EdgeInsets.all(_coverInset),
+                                child: Image.file(
+                                  widget.coverFile!,
+                                  fit: BoxFit.contain,
+                                  width: double.infinity,
+                                  height: double.infinity,
+                                  cacheWidth: cacheWidth,
+                                  errorBuilder: (context, error, stackTrace) =>
+                                      defaultCover,
+                                ),
+                              ),
+                            ],
+                          )
+                        else if (hasCover)
+                          // El fondo borroso se puso cuando la imagen llegaba
+                          // DEFORMADA (cacheWidth+cacheHeight juntos hacían que
+                          // el decoder ignorara el aspecto original). Arreglado
+                          // eso, un póster de lectura (2:3) contra una card de
+                          // ~0.72:1 llena casi exacto con cover: se recorta un
+                          // 7% a los costados, imperceptible, y se ve como una
+                          // portada de verdad en vez de una imagen chica dentro
+                          // de un marco. El fondo borroso queda SOLO para el
+                          // caso donde de verdad hace falta: un frame de vídeo
+                          // (16:9) metido en una card alta, donde cover dejaría
+                          // una franja irreconocible.
+                          // Ver el mismo caso en la card ancha: cover para
+                          // que la portada llene la tarjeta, y el respaldo con
+                          // contain para que el logo no se corte.
+                          CacheNetWorkImagePic(
+                            widget.cover!,
+                            fit: BoxFit.cover,
+                            width: double.infinity,
+                            height: double.infinity,
+                            headers: widget.headers,
+                            fallback: defaultCover,
+                            cacheWidth: cacheWidth,
                           ),
-                        ),
-                      _bordeCard(14),
-                    ],
-                  ),
-                ),
-                const SizedBox(height: 8),
-                // Título y distintivo a la izquierda, menú de tres puntos a la
-                // derecha — la misma disposición que la card ancha. Antes el
-                // menú iba ENCIMA de la portada y tapaba una esquina de la
-                // imagen.
-                Row(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          Text(
-                            widget.title,
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
-                            style: const TextStyle(
-                              color: HomeTheme.textPrimary,
-                              fontSize: 13.5,
-                              fontWeight: FontWeight.w600,
-                            ),
-                          ),
-                          if (widget.extensionName?.isNotEmpty == true) ...[
-                            const SizedBox(height: 4),
-                            Align(
+                        // Ver la card ancha: los distintivos salieron de
+                        // encima de la portada. Acá tapaban una esquina de cada
+                        // lado, que en una card chica es bastante.
+                        if (widget.progress != null)
+                          Positioned(
+                            left: 0,
+                            right: 0,
+                            bottom: 0,
+                            child: Container(
+                              height: 4,
+                              color: const Color(0x80000000),
                               alignment: Alignment.centerLeft,
-                              child: _extensionNamePill(),
+                              child: FractionallySizedBox(
+                                widthFactor: widget.progress!.clamp(0, 1),
+                                child: Container(color: widget.accent),
+                              ),
                             ),
-                          ] else if (widget.subtitle != null) ...[
-                            const SizedBox(height: 2),
+                          ),
+                        _bordeCard(14),
+                      ],
+                    ),
+                  ),
+                  const SizedBox(height: 8),
+                  // Título y distintivo a la izquierda, menú de tres puntos a la
+                  // derecha — la misma disposición que la card ancha. Antes el
+                  // menú iba ENCIMA de la portada y tapaba una esquina de la
+                  // imagen.
+                  Row(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
                             Text(
-                              widget.subtitle!,
+                              widget.title,
                               maxLines: 1,
                               overflow: TextOverflow.ellipsis,
                               style: const TextStyle(
-                                color: HomeTheme.textMuted,
-                                fontSize: 12,
+                                color: HomeTheme.textPrimary,
+                                fontSize: 13.5,
+                                fontWeight: FontWeight.w600,
                               ),
                             ),
+                            if (widget.extensionName?.isNotEmpty == true) ...[
+                              const SizedBox(height: 4),
+                              Align(
+                                alignment: Alignment.centerLeft,
+                                child: _extensionNamePill(),
+                              ),
+                            ] else if (widget.subtitle != null) ...[
+                              const SizedBox(height: 2),
+                              Text(
+                                widget.subtitle!,
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                                style: const TextStyle(
+                                  color: HomeTheme.textMuted,
+                                  fontSize: 12,
+                                ),
+                              ),
+                            ],
                           ],
-                        ],
+                        ),
                       ),
-                    ),
-                    if (hasMenu)
-                      _WideMenuButton(
-                        hidden: widget.hidden,
-                        onDelete: widget.onDelete,
-                        onToggleHide: widget.onToggleHide,
-                        deleteLabel: widget.deleteLabel,
-                        extraLabel: widget.extraActionLabel,
-                        extraIcon: widget.extraActionIcon,
-                        onExtra: widget.onExtraAction,
-                        onVerDetalle: widget.onVerDetalle,
-                        esFavorito: widget.esFavorito,
-                        onAlternarFavorito: widget.onAlternarFavorito,
-                      ),
-                  ],
-                ),
-              ],
+                      if (hasMenu)
+                        _WideMenuButton(
+                          hidden: widget.hidden,
+                          onDelete: widget.onDelete,
+                          onToggleHide: widget.onToggleHide,
+                          deleteLabel: widget.deleteLabel,
+                          extraLabel: widget.extraActionLabel,
+                          extraIcon: widget.extraActionIcon,
+                          onExtra: widget.onExtraAction,
+                          onVerDetalle: widget.onVerDetalle,
+                          esFavorito: widget.esFavorito,
+                          onAlternarFavorito: widget.onAlternarFavorito,
+                        ),
+                    ],
+                  ),
+                ],
+              ),
             ),
           ),
         ),
