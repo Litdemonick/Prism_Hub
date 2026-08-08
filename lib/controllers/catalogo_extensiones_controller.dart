@@ -289,6 +289,27 @@ class CatalogoExtensionesController extends GetxController {
     ],
   };
 
+  /// ── El formato: película, serie, OVA… ──────────────────────────────────
+  ///
+  /// Sale del filtro «Tipo», que ocho extensiones tienen. Del barrido salieron
+  /// etiquetas comparables: FuegoCine da «Películas/Series», AnimeFenix
+  /// «Película/Serie/OVA/Especial/Corto», JKAnime «Animes/Películas/Ovas».
+  ///
+  /// OJO, esto NO es lo mismo que los chips de Vídeo/Manga/Novela que se
+  /// sacaron. Aquellos eran el tipo de la EXTENSIÓN —y eso ya lo dice el
+  /// nombre de la fila—; esto es el formato de cada obra, que es una pregunta
+  /// distinta: «quiero una película», no «quiero una extensión de vídeo».
+  static const _formatos = <String, List<String>>{
+    'pelicula': ['pelicula', 'peliculas', 'movie', 'movies', 'film'],
+    'serie': ['serie', 'series', 'tv', 'tv anime', 'anime', 'animes'],
+    'ova': ['ova', 'ovas', 'ona', 'onas'],
+    'especial': ['especial', 'especiales', 'special', 'corto', 'cortos'],
+    'manhwa': ['manhwa', 'manhwas'],
+    'manhua': ['manhua', 'manhuas'],
+    'manga': ['manga', 'mangas'],
+    'novela': ['novela', 'novelas', 'novel', 'light novel'],
+  };
+
   /// Un chip solo aparece si al menos ESTAS extensiones pueden contestarlo.
   ///
   /// Con una sola, tocarlo dejaba el Home con una fila y quince líneas de «no
@@ -300,9 +321,13 @@ class CatalogoExtensionesController extends GetxController {
 
   /// Los estados que se ofrecen, en el orden de [_estados].
   final estadosDisponibles = <String>[].obs;
+  final formatosDisponibles = <String>[].obs;
 
   final estadoElegido = RxnString();
   String? estadoAplicado;
+
+  final formatoElegido = RxnString();
+  String? formatoAplicado;
 
   /// Lo que el usuario tocó pero todavía no aplicó.
   final tipoElegido = Rxn<ExtensionType>();
@@ -315,10 +340,14 @@ class CatalogoExtensionesController extends GetxController {
   bool get hayCambiosSinAplicar =>
       tipoElegido.value != tipoAplicado ||
       generoElegido.value != generoAplicado ||
-      estadoElegido.value != estadoAplicado;
+      estadoElegido.value != estadoAplicado ||
+      formatoElegido.value != formatoAplicado;
 
   bool get hayFiltros =>
-      tipoAplicado != null || generoAplicado != null || estadoAplicado != null;
+      tipoAplicado != null ||
+      generoAplicado != null ||
+      estadoAplicado != null ||
+      formatoAplicado != null;
 
   /// Hay un cambio de filtro en curso.
   ///
@@ -427,7 +456,9 @@ class CatalogoExtensionesController extends GetxController {
 
           f.value.options.forEach((clave, etiqueta) {
             if (clave.isEmpty) return;
-            final id = _canonicoDe(etiqueta) ?? _estadoDe(etiqueta);
+            final id = _canonicoDe(etiqueta) ??
+                _estadoDe(etiqueta) ??
+                _deLista(_formatos, etiqueta);
             // Lo que no está en las listas curadas se descarta. Ahí quedan
             // afuera «Blu-ray», «Castellano», las ochenta y pico de
             // TuMangaOnline, y los ejes que no sirven de forma global —el
@@ -456,6 +487,7 @@ class CatalogoExtensionesController extends GetxController {
     generosDisponibles
         .assignAll(_canonicos.keys.where(ofrecible));
     estadosDisponibles.assignAll(_estados.keys.where(ofrecible));
+    formatosDisponibles.assignAll(_formatos.keys.where(ofrecible));
     _repartirModos();
   }
 
@@ -506,10 +538,13 @@ class CatalogoExtensionesController extends GetxController {
   final _popularPorExtension = <String, ({String clave, String valor})>{};
 
   /// A qué estado canónico corresponde una etiqueta del sitio, si a alguno.
-  static String? _estadoDe(String etiqueta) {
+  static String? _estadoDe(String etiqueta) => _deLista(_estados, etiqueta);
+
+  /// Busca una etiqueta del sitio en una de las listas curadas.
+  static String? _deLista(Map<String, List<String>> lista, String etiqueta) {
     final n = _normalizar(etiqueta);
     if (n.isEmpty) return null;
-    for (final e in _estados.entries) {
+    for (final e in lista.entries) {
       if (e.value.contains(n)) return e.key;
     }
     return null;
@@ -518,7 +553,7 @@ class CatalogoExtensionesController extends GetxController {
   /// ¿Esta extensión puede contestar al género que está aplicado?
   bool puedeConEsteGenero(String package) {
     final ejes = _ejesPorExtension[package];
-    for (final id in [generoAplicado, estadoAplicado]) {
+    for (final id in [generoAplicado, estadoAplicado, formatoAplicado]) {
       if (id == null) continue;
       if (ejes == null || !ejes.containsKey(id)) return false;
     }
@@ -560,6 +595,7 @@ class CatalogoExtensionesController extends GetxController {
     tipoAplicado = tipoElegido.value;
     generoAplicado = generoElegido.value;
     estadoAplicado = estadoElegido.value;
+    formatoAplicado = formatoElegido.value;
     aplicandoFiltros.value = true;
     for (final fila in filas) {
       fila.traidoEl = null;
@@ -582,6 +618,7 @@ class CatalogoExtensionesController extends GetxController {
     tipoElegido.value = null;
     generoElegido.value = null;
     estadoElegido.value = null;
+    formatoElegido.value = null;
     await aplicarFiltros();
   }
 
@@ -817,7 +854,7 @@ class CatalogoExtensionesController extends GetxController {
     final ejes = _ejesPorExtension[package];
     if (ejes == null) return null;
     final filtro = <String, List<String>>{};
-    for (final id in [generoAplicado, estadoAplicado]) {
+    for (final id in [generoAplicado, estadoAplicado, formatoAplicado]) {
       if (id == null) continue;
       final donde = ejes[id];
       if (donde == null) continue;

@@ -142,7 +142,17 @@
     },
     "modo-reciente": "Lo más reciente",
     "modo-popular": "Lo más visto",
-    "modo-filtrado": "Según tu filtro"
+    "modo-filtrado": "Según tu filtro",
+    "formato": {
+      "pelicula": "Películas",
+      "serie": "Series",
+      "ova": "OVA",
+      "especial": "Especiales",
+      "manhwa": "Manhwa",
+      "manhua": "Manhua",
+      "manga": "Manga",
+      "novela": "Novelas"
+    }
   },
   "search": {
     "hint-text": "¡Por favor, busca ampliamente!~",

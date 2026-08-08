@@ -146,7 +146,17 @@
     },
     "modo-reciente": "Latest",
     "modo-popular": "Most watched",
-    "modo-filtrado": "Matching your filter"
+    "modo-filtrado": "Matching your filter",
+    "formato": {
+      "pelicula": "Movies",
+      "serie": "Series",
+      "ova": "OVA",
+      "especial": "Specials",
+      "manhwa": "Manhwa",
+      "manhua": "Manhua",
+      "manga": "Manga",
+      "novela": "Novels"
+    }
   },
   "search": {
     "hint-text": "Please use search wisely!~",

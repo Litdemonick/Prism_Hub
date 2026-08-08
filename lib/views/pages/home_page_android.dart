@@ -231,7 +231,9 @@ class _BarraDeFiltrosState extends State<_BarraDeFiltros> {
 
       // Sin géneros todavía —se leen en segundo plano, después de que carguen
       // las filas— no se dibuja una franja vacía esperando.
-      if (generos.isEmpty && c.estadosDisponibles.isEmpty) {
+      if (generos.isEmpty &&
+          c.estadosDisponibles.isEmpty &&
+          c.formatosDisponibles.isEmpty) {
         return const SizedBox(height: 6);
       }
 
@@ -279,13 +281,26 @@ class _BarraDeFiltrosState extends State<_BarraDeFiltros> {
                             c.estadoElegido.value == e ? null : e,
                       ),
                     ),
-                  if (c.estadosDisponibles.isNotEmpty && generos.isNotEmpty)
-                    Container(
-                      width: 1,
-                      height: 22,
-                      margin: const EdgeInsets.only(right: 8),
-                      color: Colors.white.withValues(alpha: 0.14),
+                  if (c.estadosDisponibles.isNotEmpty &&
+                      c.formatosDisponibles.isNotEmpty)
+                    _separadorDeChips,
+                  // El formato después del estado y antes del género: son
+                  // pocos y acotan mucho —«una película», «un manhwa»— así
+                  // que van donde se ven sin desplazar.
+                  for (final f in c.formatosDisponibles)
+                    Padding(
+                      padding: const EdgeInsets.only(right: 8),
+                      child: _Chip(
+                        texto: 'home.formato.$f'.i18n,
+                        marcado: c.formatoElegido.value == f,
+                        onTap: () => c.formatoElegido.value =
+                            c.formatoElegido.value == f ? null : f,
+                      ),
                     ),
+                  if ((c.estadosDisponibles.isNotEmpty ||
+                          c.formatosDisponibles.isNotEmpty) &&
+                      generos.isNotEmpty)
+                    _separadorDeChips,
                   for (final g in generos)
                     Padding(
                       padding: const EdgeInsets.only(right: 8),
@@ -377,6 +392,16 @@ class _BarraDeFiltrosState extends State<_BarraDeFiltros> {
   }
 
 }
+
+/// La rayita que separa un grupo de chips del siguiente.
+const _separadorDeChips = Padding(
+  padding: EdgeInsets.only(right: 8),
+  child: SizedBox(
+    width: 1,
+    height: 22,
+    child: ColoredBox(color: Color(0x24FFFFFF)),
+  ),
+);
 
 class _Chip extends StatelessWidget {
   const _Chip({
