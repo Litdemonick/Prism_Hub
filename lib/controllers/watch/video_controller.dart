@@ -1762,7 +1762,8 @@ class VideoPlayerController extends GetxController with WidgetsBindingObserver {
       if (_hayCuadro && !hasRenderedFrame.value) {
         final desde = _posicionAlPrimerCuadro ??= event;
         if (event - desde >= _avanceParaCreerle) {
-          _marcarQueYaSeVe('el vídeo avanzó ${(event - desde).inMilliseconds} ms');
+          _marcarQueYaSeVe(
+              'el vídeo avanzó ${(event - desde).inMilliseconds} ms');
         }
       }
       position.value = event;
@@ -4158,8 +4159,30 @@ class VideoPlayerController extends GetxController with WidgetsBindingObserver {
   }
 
   /// Qué panel abrir al tocar el botón de calidad, según de dónde vengan.
-  SidebarTab get pestanaDeCalidad =>
-      qualityMap.isNotEmpty ? SidebarTab.qualitys : SidebarTab.servers;
+  ///
+  /// ── Manda dónde hay algo PARA ELEGIR ────────────────────────────────────
+  ///
+  /// Antes alcanzaba con que el HLS trajera una variante para abrir su panel. Y
+  /// hay sitios donde el maestro trae UNA SOLA: cada resolución es un maestro
+  /// aparte, y las demás llegan por la cabecera de la extensión.
+  ///
+  /// Ahí la cuenta salía al revés: el panel de calidades se abría con una única
+  /// opción —la que ya estaba sonando— y las otras tres o cuatro quedaban
+  /// invisibles, en el otro panel, aunque la extensión las hubiera mandado.
+  /// Medido en un teléfono: el registro decía «Una sola calidad (1080p)» y el
+  /// botón mostraba solo esa, con 1080p a 4 Mbps como única salida.
+  ///
+  /// Ahora se abre el panel que de verdad tiene de qué elegir. Con dos o más
+  /// variantes en el HLS gana el HLS, que es la fuente más fiel. Con una sola,
+  /// y si lo que mandó la extensión son resoluciones, se ofrecen esas.
+  ///
+  /// Y si un vídeo tiene UNA calidad y nada más, se sigue abriendo su panel con
+  /// esa: no se pide nada de más ni se inventan opciones que no existen.
+  SidebarTab get pestanaDeCalidad {
+    if (qualityMap.length > 1) return SidebarTab.qualitys;
+    if (_servidoresSonCalidades) return SidebarTab.servers;
+    return qualityMap.isNotEmpty ? SidebarTab.qualitys : SidebarTab.servers;
+  }
 
   /// Ver un vídeo VR en una sola imagen, sin gafas.
   ///
