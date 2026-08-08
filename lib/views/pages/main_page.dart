@@ -474,7 +474,7 @@ class _AndroidMainPageState extends fluent.State<AndroidMainPage> {
                         AnimatedSlide(
                           // Acostado la barra está al costado, así que se va
                           // por donde entró: hacia afuera de la pantalla.
-                          offset: ObservadorDePila.hayPantallaEncima.value
+                          offset: _barraEscondida
                               ? const Offset(-1.6, 0)
                               : Offset.zero,
                           duration: const Duration(milliseconds: 260),
@@ -525,7 +525,7 @@ class _AndroidMainPageState extends fluent.State<AndroidMainPage> {
         bottomNavigationBar: LayoutUtils.isTablet || _apaisado(context)
             ? null
             : AnimatedSlide(
-                offset: ObservadorDePila.hayPantallaEncima.value
+                offset: _barraEscondida
                     ? const Offset(0, 1.6)
                     : Offset.zero,
                 duration: const Duration(milliseconds: 260),
@@ -550,73 +550,99 @@ class _AndroidMainPageState extends fluent.State<AndroidMainPage> {
   static bool _apaisado(BuildContext context) =>
       MediaQuery.sizeOf(context).height < 500;
 
-  /// ── Por qué la barra NO tiene fondo ──────────────────────────────────────
+  /// ── Por qué la barra SÍ lleva fondo ──────────────────────────────────────
   ///
-  /// Porque una pastilla opaca cruzando la pantalla es un zócalo, no algo que
-  /// flota: corta la lista en seco y esconde una franja entera de portadas.
-  /// Sin fondo, lo que se ve entre un botón y el otro es el contenido, y la
-  /// barra se lee como lo que es — botones apoyados encima.
+  /// Se probó sin él y no funciona: encima de una grilla de portadas, cuatro
+  /// íconos sueltos no se leen como un mando, se leen como cuatro manchas
+  /// blancas. Y la marca del elegido —lo único que dice dónde estás— se pierde
+  /// contra cualquier portada clara.
   ///
-  /// Lo que reemplaza al fondo es el CONTRASTE DE CADA BOTÓN: el elegido va en
-  /// un círculo sólido y los demás llevan una sombra pegada al ícono. Sobre
-  /// una portada clara, un ícono blanco pelado desaparece; con la sombra se
-  /// sigue leyendo sin tener que tapar nada.
+  /// La pastilla resuelve las dos cosas: agrupa los íconos en una sola pieza y
+  /// les da un fondo parejo contra el que la marca siempre significa lo mismo.
+  ///
+  /// Lo que la mantiene FLOTANDO y no pegada como un zócalo es otra cosa: no
+  /// llega a los bordes, está despegada de abajo, tiene esquinas redondas y el
+  /// contenido le pasa por detrás (`extendBody`). Fondo y zócalo no son lo
+  /// mismo.
   Widget _barraFlotante(List<_Destination> destinos) {
     // Lo que ocupa la barra del sistema —los tres botones, o la rayita de
     // gestos—. Sin esto la barra se apoya justo encima y en un teléfono con
     // gestos el deslizar de atrás se come el toque.
     final abajo = MediaQuery.viewPaddingOf(context).bottom;
     return Padding(
-      // Más despegada del borde. Pegada abajo se leía como un zócalo aunque
-      // no tuviera fondo; separada, se ve que flota sobre el contenido.
       padding:
-          EdgeInsets.fromLTRB(18, 0, 18, abajo > 0 ? abajo * 0.55 + 14 : 20),
-      child: SizedBox(
-        height: 58,
-        // Centrada, no repartida a lo ancho. Con los botones estirados a los
-        // bordes, los de las puntas quedaban pegados al filo de la pantalla y
-        // el conjunto se leía como cinco cosas sueltas en vez de como un
-        // mando. Juntos y al medio se lee como una sola pieza.
-        child: Row(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            for (var i = 0; i < _enLaBarra; i++)
-              Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 5),
-                child: _IconoDeBarra(
-                  destino: destinos[i],
-                  elegido: c.selectedTab.value == i,
-                  onTap: () => c.changeTab(i),
+          EdgeInsets.fromLTRB(16, 0, 16, abajo > 0 ? abajo * 0.55 + 12 : 18),
+      child: Row(
+        children: [
+          Expanded(
+            child: Align(
+              child: DecoratedBox(
+                decoration: _pastilla,
+                child: Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 6),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      for (var i = 0; i < _enLaBarra; i++)
+                        Padding(
+                          padding: const EdgeInsets.symmetric(
+                              horizontal: 3, vertical: 6),
+                          child: _IconoDeBarra(
+                            destino: destinos[i],
+                            elegido: c.selectedTab.value == i,
+                            onTap: () => c.changeTab(i),
+                          ),
+                        ),
+                    ],
+                  ),
                 ),
               ),
-            const SizedBox(width: 8),
-            _botonDelExtremo(),
-          ],
-        ),
+            ),
+          ),
+          const SizedBox(width: 10),
+          _botonDelExtremo(),
+        ],
       ),
     );
   }
 
-  /// El botón que cierra la barra por la derecha (o por abajo, acostado).
-  ///
-  /// Cambia de trabajo según dónde estés:
-  ///
-  ///   · En una de las cuatro zonas de la barra → los tres puntos, que abren
-  ///     lo que no entró.
-  ///   · En Ajustes → una flecha de volver. Ajustes es la única zona SIN botón
-  ///     propio en la barra, así que una vez adentro no hay nada marcado y no
-  ///     se sabe con qué salir. La flecha devuelve exactamente a la zona de la
-  ///     que se vino.
+  /// El fondo de la pastilla, igual acostado que de pie.
+  static final _pastilla = BoxDecoration(
+    // Casi opaca. Un desenfoque de fondo se vería mejor, pero hay que
+    // recalcularlo en CADA cuadro mientras el usuario se desplaza, y encima de
+    // una lista de portadas es justo donde no sobran milisegundos.
+    color: const Color(0xF20E0E14),
+    borderRadius: BorderRadius.circular(34),
+    // El aro es lo que la despega del contenido: sin él, sobre una zona oscura
+    // la pastilla se funde con el fondo y los íconos vuelven a verse sueltos.
+    border: Border.all(color: Colors.white.withValues(alpha: 0.09)),
+    boxShadow: const [
+      BoxShadow(color: Color(0x99000000), blurRadius: 20, offset: Offset(0, 8)),
+    ],
+  );
+
+  /// Los tres puntos, al extremo de la barra.
   Widget _botonDelExtremo({double tamano = 52}) {
-    final afuera = c.selectedTab.value >= _enLaBarra;
     return _BotonRedondo(
-      icono: afuera ? Icons.arrow_back_rounded : Icons.more_horiz_rounded,
+      icono: Icons.more_horiz_rounded,
       tamano: tamano,
-      onTap: afuera
-          ? () => c.changeTab(c.tabAnterior)
-          : () => setState(() => _masAbierto = !_masAbierto),
+      onTap: () => setState(() => _masAbierto = !_masAbierto),
     );
   }
+
+  /// Si la barra tiene que estar escondida ahora mismo.
+  ///
+  /// Dos motivos, y los dos son «acá estorba»:
+  ///
+  ///   · Hay una pantalla completa encima —una ficha, el reproductor,
+  ///     Historial—. Ahí la barra ya no manda nada.
+  ///   · Se está en Ajustes. Es una lista larga de opciones y la barra tapa
+  ///     justo las últimas; además Ajustes no tiene botón propio en la barra,
+  ///     así que no habría nada marcado. Su propia flecha se encarga de
+  ///     volver (ver settings_page.dart).
+  bool get _barraEscondida =>
+      ObservadorDePila.hayPantallaEncima.value ||
+      c.selectedTab.value == MainController.tabAjustes;
 
   /// Los botones que salen de los tres puntos.
   ///
@@ -700,20 +726,33 @@ class _AndroidMainPageState extends fluent.State<AndroidMainPage> {
     // depende de hacia dónde giró el teléfono. Se pregunta por los dos.
     final costados = MediaQuery.viewPaddingOf(context);
     return Padding(
-      padding: EdgeInsets.only(left: costados.left + 8, right: 6),
+      padding: EdgeInsets.only(left: costados.left + 8, right: 8),
       child: Column(
         mainAxisAlignment: MainAxisAlignment.center,
+        mainAxisSize: MainAxisSize.min,
         children: [
-          for (var i = 0; i < _enLaBarra; i++)
-            Padding(
-              padding: const EdgeInsets.symmetric(vertical: 7),
-              child: _IconoDeBarra(
-                destino: destinos[i],
-                elegido: c.selectedTab.value == i,
-                onTap: () => c.changeTab(i),
+          DecoratedBox(
+            decoration: _pastilla,
+            child: Padding(
+              padding: const EdgeInsets.symmetric(vertical: 6),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  for (var i = 0; i < _enLaBarra; i++)
+                    Padding(
+                      padding: const EdgeInsets.symmetric(
+                          vertical: 3, horizontal: 6),
+                      child: _IconoDeBarra(
+                        destino: destinos[i],
+                        elegido: c.selectedTab.value == i,
+                        onTap: () => c.changeTab(i),
+                      ),
+                    ),
+                ],
               ),
             ),
-          const SizedBox(height: 10),
+          ),
+          const SizedBox(height: 12),
           _botonDelExtremo(tamano: 46),
         ],
       ),
@@ -781,12 +820,10 @@ class _Destination {
 
 /// Un botón de la barra flotante.
 ///
-/// El elegido se marca con un círculo SÓLIDO, no con un cambio de color: sin
-/// fondo detrás, dos tonos de gris no se distinguen de un vistazo, y menos con
-/// portadas de colores corriendo por atrás.
-///
-/// Los que no están elegidos van sin círculo, para que se siga viendo lo que
-/// hay detrás. Lo que los mantiene legibles es la sombra pegada al ícono.
+/// El elegido se marca con un círculo relleno detrás. Sobre la pastilla, que
+/// es de un tono parejo, alcanza con eso: no hace falta que el círculo sea
+/// opaco ni que el ícono cambie de color, y así la marca se ve como parte de
+/// la barra y no como un botón distinto pegado encima.
 class _IconoDeBarra extends StatelessWidget {
   const _IconoDeBarra({
     required this.destino,
@@ -807,40 +844,20 @@ class _IconoDeBarra extends StatelessWidget {
       label: destino.label,
       child: InkResponse(
         onTap: onTap,
-        radius: 28,
+        radius: 26,
         child: AnimatedContainer(
-          duration: const Duration(milliseconds: 220),
-          curve: Curves.easeOutBack,
+          duration: const Duration(milliseconds: 200),
+          curve: Curves.easeOut,
           width: 46,
           height: 46,
           decoration: BoxDecoration(
             shape: BoxShape.circle,
-            // Sólido, no translúcido: encima de una portada, un relleno a
-            // medias toma el color de lo que hay detrás y la marca deja de
-            // significar lo mismo en cada tarjeta.
-            color: elegido ? acento : Colors.transparent,
-            boxShadow: elegido
-                ? [
-                    BoxShadow(
-                      color: acento.withValues(alpha: 0.45),
-                      blurRadius: 16,
-                      spreadRadius: -2,
-                    ),
-                  ]
-                : null,
+            color: elegido ? acento.withValues(alpha: 0.3) : Colors.transparent,
           ),
           child: Icon(
             elegido ? destino.selectedIcon : destino.icon,
-            size: 24,
-            color: elegido ? Colors.white : Colors.white.withValues(alpha: 0.9),
-            // Lo que hace legible al que NO está elegido. Sin fondo detrás, un
-            // ícono blanco sobre una portada clara se pierde entero.
-            shadows: elegido
-                ? null
-                : const [
-                    Shadow(color: Color(0xCC000000), blurRadius: 8),
-                    Shadow(color: Color(0x99000000), blurRadius: 3),
-                  ],
+            size: 23,
+            color: elegido ? Colors.white : Colors.white.withValues(alpha: 0.6),
           ),
         ),
       ),
@@ -866,7 +883,10 @@ class _BotonRedondo extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Material(
-      color: const Color(0xFF272733),
+      color: Color.alphaBlend(
+        Theme.of(context).colorScheme.primary.withValues(alpha: 0.34),
+        const Color(0xFF14141C),
+      ),
       shape: const CircleBorder(),
       clipBehavior: Clip.antiAlias,
       elevation: 6,

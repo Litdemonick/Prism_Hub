@@ -36,6 +36,7 @@ import 'package:prismhub/views/widgets/settings/settings_radios_tile.dart';
 import 'package:prismhub/views/widgets/settings/settings_switch_tile.dart';
 import 'package:prismhub/views/widgets/settings/settings_numberbox_button.dart';
 import 'package:prismhub/views/widgets/settings/settings_tile.dart';
+import 'package:prismhub/controllers/main_controller.dart';
 import 'package:prismhub/utils/i18n.dart';
 import 'package:prismhub/utils/prismhub_storage.dart';
 import 'package:prismhub/utils/router.dart';
@@ -1724,16 +1725,53 @@ class _SettingsPageState extends State<SettingsPage> {
     ];
   }
 
+  /// La flecha de volver y el título, arriba de todo.
+  Widget _cabecera(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(4, 4, 16, 2),
+      child: Row(
+        children: [
+          IconButton(
+            onPressed: () {
+              final c = Get.find<MainController>();
+              c.changeTab(c.tabAnterior);
+            },
+            tooltip: 'common.back'.i18n,
+            icon: const Icon(Icons.arrow_back_rounded,
+                color: HomeTheme.textPrimary),
+            constraints: const BoxConstraints(minWidth: 46, minHeight: 46),
+          ),
+          const SizedBox(width: 2),
+          Text(
+            'common.settings'.i18n,
+            style: const TextStyle(
+              fontSize: 24,
+              fontWeight: FontWeight.w800,
+              letterSpacing: -0.5,
+              color: HomeTheme.textPrimary,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
   Widget _buildAndroid(BuildContext context) {
     return Scaffold(
       backgroundColor: HomeTheme.bg,
-      appBar: AppBar(
-        backgroundColor: HomeTheme.bg,
-        title: Text(
-          'common.settings'.i18n,
-          style: const TextStyle(color: HomeTheme.textPrimary),
-        ),
-      ),
+      // ── Sin AppBar, y con su propia flecha ───────────────────────────────
+      //
+      // Ajustes es la única zona donde la barra flotante se esconde: es una
+      // lista larga de opciones y una barra encima tapa justo las últimas.
+      //
+      // Pero entonces hace falta una salida, porque a Ajustes se entra por los
+      // tres puntos y no hay botón suyo en la barra al que volver. La flecha
+      // devuelve a la zona de la que se vino.
+      //
+      // Y va como texto suelto en vez de AppBar por lo mismo que en Biblioteca:
+      // la AppBar dibuja su propia superficie y sobre el fondo animado queda
+      // como una franja cruzando la pantalla.
+      appBar: null,
       body: Container(
         color: HomeTheme.bg,
         child: Stack(
@@ -1744,14 +1782,24 @@ class _SettingsPageState extends State<SettingsPage> {
             // pesadas (en escritorio, Expander de fluent). Eso trababa la
             // pantalla unos segundos la primera vez que se abría. Con builder
             // solo se montan las que se ven.
-            Builder(builder: (context) {
-              final items = _buildContent();
-              return ListView.builder(
-                padding: const EdgeInsets.symmetric(vertical: 10),
-                itemCount: items.length,
-                itemBuilder: (context, i) => items[i],
-              );
-            }),
+            SafeArea(
+              bottom: false,
+              child: Column(
+                children: [
+                  _cabecera(context),
+                  Expanded(
+                    child: Builder(builder: (context) {
+                      final items = _buildContent();
+                      return ListView.builder(
+                        padding: const EdgeInsets.only(top: 4, bottom: 24),
+                        itemCount: items.length,
+                        itemBuilder: (context, i) => items[i],
+                      );
+                    }),
+                  ),
+                ],
+              ),
+            ),
           ],
         ),
       ),
