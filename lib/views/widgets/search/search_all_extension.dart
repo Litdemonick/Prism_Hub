@@ -81,7 +81,14 @@ class _SearchAllExtSearchState extends State<SearchAllExtSearch> {
       // no dispara cuando el contenido entra entero en la pantalla — el
       // scroll "corto" no deja hacer overscroll para activarlo.
       physics: const AlwaysScrollableScrollPhysics(),
-      padding: const EdgeInsets.symmetric(horizontal: 16),
+      // Abajo, lo que ocupa la barra flotante de celular. Sale del MediaQuery
+      // y no de una constante: en escritorio vale cero, así que esta lista la
+      // comparten las dos plataformas sin un `if` de por medio.
+      //
+      // Sin esto, la última extensión de la lista quedaba debajo de la barra y
+      // no se podía llegar a sus tarjetas por más que se desplazara.
+      padding: EdgeInsets.fromLTRB(
+          16, 0, 16, MediaQuery.paddingOf(context).bottom + 12),
       child: Column(
         children: [
           if (connectionErrorCount > 0)

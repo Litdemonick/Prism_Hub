@@ -207,18 +207,44 @@ class _CarruselAndroid extends StatefulWidget {
   State<_CarruselAndroid> createState() => _CarruselAndroidState();
 }
 
-class _CarruselAndroidState extends State<_CarruselAndroid> {
-  PageController? _paginas;
-  double? _fraccion;
+class _CarruselAndroidState extends State<_CarruselAndroid>
+    with SingleTickerProviderStateMixin {
+  /// Dónde está el carrusel, en índices y con decimales.
+  ///
+  /// 3.0 es «la cuarta, centrada y grande»; 3.5 es «a mitad de camino entre la
+  /// cuarta y la quinta, las dos del mismo tamaño». De este número salen TODOS
+  /// los anchos, así que el dibujo sigue al dedo sin saltos.
+  double _p = 0;
+  bool _sembrado = false;
 
-  // La posición NO se guarda acá: vive en el controlador. Este widget se
-  // reconstruye al volver a la pestaña, así que un índice propio se perdía y
-  // el carrusel volvía a empezar siempre por la misma extensión. Ver
-  // CatalogoExtensionesController.carruselExt.
+  late final AnimationController _anim = AnimationController(
+    vsync: this,
+    duration: const Duration(milliseconds: 340),
+  );
+  Animation<double>? _viaje;
+
+  /// Cuánto se encoge la vecina de al lado, de alto. Poco: lo que separa a la
+  /// elegida es sobre todo el ANCHO.
+  static const _encoge = 0.06;
+
+  /// Qué parte del ancho grande le queda a una tarjeta de los costados.
+  static const _proporcionChica = 0.22;
+
+  static const _aire = 9.0;
+
+  @override
+  void initState() {
+    super.initState();
+    _anim.addListener(() {
+      final v = _viaje;
+      if (v == null) return;
+      setState(() => _p = v.value);
+    });
+  }
 
   @override
   void dispose() {
-    _paginas?.dispose();
+    _anim.dispose();
     super.dispose();
   }
 
@@ -266,26 +292,14 @@ class _CarruselAndroidState extends State<_CarruselAndroid> {
     }
   }
 
-  /// El controlador del PageView, atado a la fracción de ancho que ocupa cada
-  /// tarjeta.
-  ///
-  /// Se rehace si esa fracción cambia —girar el teléfono, sobre todo— porque
-  /// `viewportFraction` es de solo lectura una vez creado. El viejo se tira
-  /// DESPUÉS del cuadro: soltarlo en pleno build lo destruiría mientras su
-  /// PageView todavía está montado.
-  PageController _controlador(double fraccion, int inicial) {
-    if (_paginas == null || _fraccion != fraccion) {
-      final viejo = _paginas;
-      if (viejo != null) {
-        WidgetsBinding.instance.addPostFrameCallback((_) => viejo.dispose());
-      }
-      _fraccion = fraccion;
-      _paginas = PageController(
-        viewportFraction: fraccion,
-        initialPage: inicial,
-      );
-    }
-    return _paginas!;
+  void _irA(double destino, List<(String, List<ExtensionListItem>)> grupos) {
+    _viaje = Tween<double>(begin: _p, end: destino)
+        .animate(CurvedAnimation(parent: _anim, curve: Curves.easeOutCubic));
+    _anim.forward(from: 0);
+    // La posición guardada se actualiza YA, sin esperar a que termine el
+    // viaje: si el usuario se va de la pestaña a mitad de la animación, tiene
+    // que volver a donde estaba yendo, no a donde estaba.
+    _ubicar(grupos, destino.round());
   }
 
   @override
@@ -298,16 +312,20 @@ class _CarruselAndroidState extends State<_CarruselAndroid> {
 
       // ── La posición guardada puede haber quedado colgada ──────────────
       //
-      // `carruselPos` sobrevive a la pestaña, pero la tanda que apunta no:
-      // si la extensión refresca y esta vez devuelve tres portadas en vez de
-      // cinco, el índice guardado apunta a una que ya no existe. Se acomoda
-      // ANTES de calcular nada, porque de ahí sale la página inicial del
-      // PageView y una página fuera de rango deja el carrusel en blanco.
+      // `carruselPos` sobrevive a la pestaña, pero la tanda que apunta no: si
+      // la extensión refresca y esta vez devuelve tres portadas en vez de
+      // cinco, el índice guardado apunta a una que ya no existe.
       widget.c.carruselExt = widget.c.carruselExt % grupos.length;
       final largoTanda = grupos[widget.c.carruselExt].$2.length;
       if (widget.c.carruselPos >= largoTanda) {
         widget.c.carruselPos = largoTanda > 0 ? largoTanda - 1 : 0;
       }
+      if (!_sembrado) {
+        _sembrado = true;
+        _p = _indiceGlobal(grupos).toDouble();
+      }
+      final ultimo = (planos.length - 1).toDouble();
+      if (_p > ultimo) _p = ultimo;
 
       // El ancho sale de acá y no de MediaQuery: en horizontal ya viene sin la
       // franja que se lleva la barra del sistema.
@@ -318,67 +336,42 @@ class _CarruselAndroidState extends State<_CarruselAndroid> {
         if (!caja.maxWidth.isFinite || caja.maxWidth < 120) {
           return const SizedBox(height: 12);
         }
-        final medidas = _medir(context, caja.maxWidth);
-        final ctrl = _controlador(medidas.fraccion, _indiceGlobal(grupos));
-
-        // La tanda de la extensión que se está mirando, para los puntitos: con
-        // la lista entera serían ochenta y cinco rayitas y no dirían nada. Así
-        // dicen «la tercera de las cinco de esta extensión», que sí se
-        // entiende.
-        final tanda = grupos[widget.c.carruselExt % grupos.length].$2;
+        final m = _medir(context, caja.maxWidth);
+        final tanda = grupos[widget.c.carruselExt].$2;
         final base = _indiceGlobal(grupos) - widget.c.carruselPos;
 
         return Column(
           children: [
             SizedBox(
-              // El alto de la tarjeta grande. Las vecinas se encogen DENTRO de
-              // este alto, así que la franja no cambia de tamaño al deslizar y
-              // nada de lo de abajo se mueve.
-              height: medidas.alto,
-              child: PageView.builder(
-                controller: ctrl,
-                itemCount: planos.length,
-                // Sin esto la sombra de la tarjeta se corta contra el borde.
-                clipBehavior: Clip.none,
-                onPageChanged: (i) {
-                  if (!mounted) return;
-                  setState(() => _ubicar(grupos, i));
+              height: m.alto,
+              child: GestureDetector(
+                behavior: HitTestBehavior.opaque,
+                onHorizontalDragStart: (_) => _anim.stop(),
+                onHorizontalDragUpdate: (d) {
+                  final paso = (m.ancho + m.anchoChico) / 2 + _aire;
+                  setState(() {
+                    _p = (_p - (d.primaryDelta ?? 0) / paso)
+                        .clamp(0.0, ultimo);
+                  });
                 },
-                itemBuilder: (context, i) {
-                  final (package, item) = planos[i];
-                  return _conFoco(
-                    ctrl,
-                    i,
-                    Center(
-                      child: SizedBox(
-                        // Puede ser más angosta que su casillero: cuando el
-                        // alto de la pantalla obliga a achicar la tarjeta, el
-                        // ancho la sigue para no deformar la portada.
-                        width: medidas.ancho,
-                        // El alto va explícito. Center afloja las
-                        // restricciones, y sin alto el Stack de la tarjeta
-                        // queda sin límite y tumba el layout.
-                        height: medidas.alto,
-                        child: _TarjetaGrande(
-                          ancho: medidas.ancho,
-                          item: item,
-                          fuente: ExtensionUtils
-                                  .runtimes[package]?.extension.name ??
-                              '',
-                          cabeceras: _cabeceras(package),
-                          onTap: () => _abrir(context, item, package),
-                        ),
-                      ),
-                    ),
-                  );
+                onHorizontalDragEnd: (d) {
+                  final v = d.primaryVelocity ?? 0;
+                  // Con impulso se salta a la siguiente aunque el dedo no haya
+                  // llegado a la mitad: es lo que espera un deslizar rápido.
+                  var destino = _p.roundToDouble();
+                  if (v.abs() > 380) {
+                    destino = v < 0 ? _p.floorToDouble() + 1 : _p.ceilToDouble() - 1;
+                  }
+                  _irA(destino.clamp(0.0, ultimo), grupos);
                 },
+                child: ClipRect(child: _acordeon(planos, m, caja.maxWidth, grupos)),
               ),
             ),
             const SizedBox(height: 8),
             _Indicadores(
               cantidad: tanda.length,
               actual: widget.c.carruselPos.clamp(0, tanda.length - 1),
-              onTocar: (i) => _saltarA(base + i),
+              onTocar: (i) => _irA((base + i).toDouble().clamp(0.0, ultimo), grupos),
             ),
           ],
         );
@@ -386,85 +379,112 @@ class _CarruselAndroidState extends State<_CarruselAndroid> {
     });
   }
 
-  /// Salta a una tarjeta desde los puntitos.
+  /// ── El acordeón ──────────────────────────────────────────────────────────
   ///
-  /// `animateToPage` revienta si el controlador todavía no tiene su PageView
-  /// enganchado — pasa si se toca un puntito en el mismo cuadro en que la
-  /// pantalla se está armando.
-  void _saltarA(int indice) {
-    final p = _paginas;
-    if (p == null || !p.hasClients) return;
-    p.animateToPage(
-      indice,
-      duration: const Duration(milliseconds: 350),
-      curve: Curves.easeOutCubic,
+  /// La diferencia con un carrusel común: acá las tarjetas **no miden todas lo
+  /// mismo**. La que está en foco es ancha y las de los costados son tiras
+  /// finas, y al deslizar la tira se va ENSANCHANDO hasta ocupar el centro
+  /// mientras la anterior se afina.
+  ///
+  /// Eso no se puede hacer con un PageView: sus páginas miden todas igual y
+  /// solo se corren. Por eso el ancho de cada una se calcula acá, a partir de
+  /// la distancia a `_p`, y se posicionan a mano.
+  ///
+  /// Solo se dibuja una ventana alrededor del foco —unas seis— y no las
+  /// ochenta y cinco: lo que queda fuera de la pantalla no se construye.
+  Widget _acordeon(
+    List<(String, ExtensionListItem)> planos,
+    _MedidasCarrusel m,
+    double anchoUtil,
+    List<(String, List<ExtensionListItem>)> grupos,
+  ) {
+    double anchoDe(int i) {
+      final lejos = (_p - i).abs().clamp(0.0, 1.0);
+      return m.anchoChico + (m.ancho - m.anchoChico) * (1 - lejos);
+    }
+
+    double altoDe(int i) {
+      final lejos = (_p - i).abs().clamp(0.0, 1.0);
+      return m.alto * (1 - _encoge * lejos);
+    }
+
+    final foco = _p.floor();
+    final desde = (foco - 2).clamp(0, planos.length - 1);
+    final hasta = (foco + 3).clamp(0, planos.length - 1);
+
+    // Dónde empieza cada una, una atrás de la otra.
+    final xs = <int, double>{};
+    var x = 0.0;
+    for (var i = desde; i <= hasta; i++) {
+      xs[i] = x;
+      x += anchoDe(i) + _aire;
+    }
+
+    double centroDe(int i) => (xs[i] ?? 0) + anchoDe(i) / 2;
+
+    // El punto que tiene que caer en el medio de la pantalla. Se interpola
+    // entre el centro de la actual y el de la siguiente, así el corrimiento
+    // acompaña al dedo sin escalones.
+    final f = foco.clamp(desde, hasta);
+    final t = _p - f;
+    final centro = (f + 1 <= hasta)
+        ? centroDe(f) + t * (centroDe(f + 1) - centroDe(f))
+        : centroDe(f);
+    final dx = anchoUtil / 2 - centro;
+
+    return Stack(
+      children: [
+        for (var i = desde; i <= hasta; i++)
+          Positioned(
+            left: xs[i]! + dx,
+            top: (m.alto - altoDe(i)) / 2,
+            width: anchoDe(i),
+            height: altoDe(i),
+            child: _TarjetaGrande(
+              ancho: anchoDe(i),
+              item: planos[i].$2,
+              fuente: ExtensionUtils
+                      .runtimes[planos[i].$1]?.extension.name ??
+                  '',
+              cabeceras: _cabeceras(planos[i].$1),
+              // El texto solo en la que está en foco: en una tira de cincuenta
+              // píxeles no entra, y recortado se lee como un error.
+              conTexto: (_p - i).abs() < 0.5,
+              onTap: () {
+                // Tocar una de los costados la trae al centro; tocar la que ya
+                // está en foco abre la ficha. Sin esto, para abrir la de al
+                // lado había que deslizar y después tocar.
+                if ((_p - i).abs() > 0.35) {
+                  _irA(i.toDouble(), grupos);
+                  return;
+                }
+                _abrir(context, planos[i].$2, planos[i].$1);
+              },
+            ),
+          ),
+      ],
     );
   }
 
-  /// ── La del medio grande, las de los costados chicas ──────────────────────
-  ///
-  /// No es adorno: es lo que dice CUÁL está elegida. Con todas del mismo alto,
-  /// las de los costados se leen como tarjetas cortadas por el borde de la
-  /// pantalla; encogidas se leen como «la que sigue», y las de más allá como
-  /// una pila que se va hacia el fondo.
-  ///
-  /// Se encoge solo el ALTO, no el ancho, para que no se abran huecos entre
-  /// una tarjeta y la otra.
-  ///
-  /// Y se mueve únicamente con el dedo: `ctrl.page` es la posición real del
-  /// gesto, así que el tamaño acompaña al arrastre y se queda quieto en cuanto
-  /// el usuario suelta.
-  Widget _conFoco(PageController ctrl, int i, Widget hijo) {
-    return AnimatedBuilder(
-      animation: ctrl,
-      builder: (context, quieto) {
-        final pagina = ctrl.hasClients && ctrl.position.haveDimensions
-            ? (ctrl.page ?? i.toDouble())
-            : ctrl.initialPage.toDouble();
-        final lejos = (pagina - i).abs().clamp(0.0, 2.0);
-        // Se encoge de a poco con la distancia: la de al lado un pelo, la de
-        // más allá otro pelo. Eso es lo que hace que al deslizar la vecina se
-        // vea CRECER hasta ocupar el centro, en vez de aparecer de golpe.
-        return Transform.scale(scaleY: 1 - 0.07 * lejos, child: quieto);
-      },
-      child: hijo,
-    );
-  }
-
-  /// Cuánto mide cada tarjeta y qué parte del ancho ocupa su casillero.
+  /// Cuánto mide la tarjeta en foco, cuánto las de los costados, y el alto.
   ///
   /// El orden importa: primero el ancho que se querría, después el alto que
   /// sale de ese ancho, y si ese alto no entra en la pantalla se recorta **y
   /// el ancho vuelve atrás con él**. Sin ese último paso, en horizontal
-  /// quedaban tarjetas chatas nadando en casilleros enormes.
+  /// quedaban tarjetas chatas nadando en huecos enormes.
   _MedidasCarrusel _medir(BuildContext context, double anchoUtil) {
-    // Poco, pero no cero: pegadas se leen como una sola imagen partida; con
-    // demasiado, la de al lado deja de parecer «la que sigue».
-    const aire = 9.0;
     const relacion = 1.1; // alto respecto del ancho
     final altoPantalla = MediaQuery.sizeOf(context).height;
     final a = Ancho.de(context);
-
-    // ── La fracción es DISCRETA, y eso importa ─────────────────────────
-    //
-    // `viewportFraction` es de solo lectura: cambiarla obliga a tirar el
-    // PageController y crear otro. Al girar el teléfono, Android manda una
-    // decena de tamaños intermedios; con la fracción salida de una cuenta
-    // continua, cada uno de esos tamaños creaba OTRO controlador — y eso es lo
-    // que se veía como una deformación mientras la pantalla gira.
-    //
-    // Saliendo del breakpoint y de si la pantalla es baja, solo puede tomar
-    // unos pocos valores: el controlador se rehace una vez, al cruzar el
-    // corte, y no diez veces por giro.
-    //
-    // El TAMAÑO de la tarjeta sigue siendo continuo: eso vive en un SizedBox
-    // adentro del casillero y se puede acomodar cuadro a cuadro sin costo.
     final bajo = altoPantalla < 500;
-    final fraccionIdeal = bajo
-        ? a.elegir(compacto: 0.42, medio: 0.3, amplio: 0.24, enorme: 0.2)
-        : a.elegir(compacto: 0.62, medio: 0.42, amplio: 0.32, enorme: 0.25);
 
-    var ancho = anchoUtil * fraccionIdeal - aire;
+    // Cuanto más ancha la pantalla, menos se lleva la tarjeta en foco: en una
+    // tablet, dos tercios del ancho serían una sola tarjeta enorme.
+    final parte = bajo
+        ? a.elegir(compacto: 0.46, medio: 0.36, amplio: 0.3, enorme: 0.24)
+        : a.elegir(compacto: 0.66, medio: 0.46, amplio: 0.36, enorme: 0.28);
+
+    var ancho = anchoUtil * parte;
     var alto = ancho * relacion;
 
     // En horizontal el alto es lo escaso; en vertical, lo que sobra.
@@ -477,30 +497,31 @@ class _CarruselAndroidState extends State<_CarruselAndroid> {
       alto = 160;
       ancho = alto / relacion;
     }
-    // Nunca más ancha que el lugar que hay: con una sola extensión y pantalla
-    // muy angosta, la cuenta de arriba podía pasarse.
-    if (ancho > anchoUtil - aire) ancho = anchoUtil - aire;
+    if (ancho > anchoUtil - _aire) ancho = anchoUtil - _aire;
 
     return _MedidasCarrusel(
       ancho: ancho,
+      anchoChico: (ancho * _proporcionChica).clamp(38.0, ancho),
       alto: alto,
-      // La del breakpoint, no la que saldría del ancho ya recortado: ver
-      // arriba. Se acota por si una pantalla rarísima la deja fuera de rango.
-      fraccion: fraccionIdeal.clamp(0.2, 1.0),
     );
   }
 }
 
+
 class _MedidasCarrusel {
   const _MedidasCarrusel({
     required this.ancho,
+    required this.anchoChico,
     required this.alto,
-    required this.fraccion,
   });
 
+  /// La que está en foco.
   final double ancho;
+
+  /// Las de los costados, cuando están del todo afuera del foco.
+  final double anchoChico;
+
   final double alto;
-  final double fraccion;
 }
 
 /// Una tarjeta grande del carrusel.
@@ -516,6 +537,7 @@ class _TarjetaGrande extends StatelessWidget {
     required this.fuente,
     required this.cabeceras,
     required this.onTap,
+    this.conTexto = true,
   });
 
   /// Para no decodificar la portada más grande de lo que se ve. Ver el
@@ -525,6 +547,10 @@ class _TarjetaGrande extends StatelessWidget {
   final String fuente;
   final Map<String, String>? cabeceras;
   final VoidCallback onTap;
+
+  /// En las tiras de los costados no entra ni una palabra, y un título
+  /// recortado a dos letras se lee como un error, no como información.
+  final bool conTexto;
 
   @override
   Widget build(BuildContext context) {
@@ -570,6 +596,7 @@ class _TarjetaGrande extends StatelessWidget {
                   ),
                 ),
               ),
+              if (conTexto)
               Align(
                 alignment: Alignment.bottomLeft,
                 child: Padding(
