@@ -20,6 +20,7 @@ import 'package:prismhub/data/services/extension_service.dart';
 import 'package:prismhub/utils/error.dart';
 import 'package:prismhub/utils/i18n.dart';
 import 'package:prismhub/views/widgets/extension_item_card.dart';
+import 'package:prismhub/views/widgets/home/esqueleto.dart';
 import 'package:prismhub/views/widgets/home/animated_background_glow.dart';
 import 'package:prismhub/views/widgets/home/home_theme.dart';
 import 'package:prismhub/views/widgets/home/refresh_button.dart';
@@ -1403,10 +1404,26 @@ class _ExtensionSearcherPageState extends fluent.State<ExtensionSearcherPage> {
                               Expanded(
                                 child: _nsfwBlocked
                                     ? _buildNsfwBlockedMessage()
+                                    // Bloques con la forma de la grilla, no
+                                    // una rueda: al llegar las portadas no se
+                                    // corre nada. Los mismos números que
+                                    // _grillaEscritorio.
                                     : _isLoading && _browseData.isEmpty
-                                        ? const Center(
-                                            child: CircularProgressIndicator(
-                                                color: HomeTheme.accentPink),
+                                        ? LayoutBuilder(
+                                            builder: (ctx, restricciones) {
+                                              final rejilla = _rejilla(
+                                                restricciones.maxWidth,
+                                                relleno: 32,
+                                                separacion: 16,
+                                                altoDelTexto: 44,
+                                              );
+                                              return EsqueletoDeGrilla(
+                                                columnas: rejilla.columnas,
+                                                proporcion: rejilla.proporcion,
+                                                padding:
+                                                    const EdgeInsets.all(16),
+                                              );
+                                            },
                                           )
                                         : (!_isLoading && _browseData.isEmpty)
                                             ? _buildNoResultsMessage()

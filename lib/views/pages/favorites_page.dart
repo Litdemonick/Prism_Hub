@@ -8,10 +8,10 @@ import 'package:prismhub/data/services/database_service.dart';
 import 'package:prismhub/utils/extension.dart';
 import 'package:prismhub/utils/i18n.dart';
 import 'package:prismhub/utils/search_text.dart';
+import 'package:prismhub/views/widgets/home/esqueleto.dart';
 import 'package:prismhub/views/widgets/extension_item_card.dart';
 import 'package:prismhub/views/widgets/home/home_theme.dart';
 import 'package:prismhub/views/widgets/platform_widget.dart';
-import 'package:prismhub/views/widgets/progress.dart';
 
 class FavoritesPage extends fluent.StatefulWidget {
   const FavoritesPage({super.key, required this.type});
@@ -131,11 +131,14 @@ class _FavoritesPageState extends fluent.State<FavoritesPage> {
             );
           }
 
+          // Bloques con la forma de la grilla, no una rueda: la Biblioteca ya
+          // tiene su forma desde el primer cuadro y al llegar las portadas nada
+          // salta de lugar. Los mismos números que el grid de abajo.
           if (!snapshot.hasData) {
-            return const SizedBox(
-              height: 300,
-              child: Center(
-                child: ProgressRing(),
+            return LayoutBuilder(
+              builder: (context, restricciones) => EsqueletoDeGrilla(
+                columnas: restricciones.maxWidth ~/ 120,
+                proporcion: 0.7,
               ),
             );
           }
@@ -224,9 +227,15 @@ class _FavoritesPageState extends fluent.State<FavoritesPage> {
                   );
                 }
 
+                // Igual que en Android: bloques con la forma del grid de
+                // abajo, no una rueda en el medio de la pantalla.
                 if (!snapshot.hasData) {
-                  return const Center(
-                    child: CircularProgressIndicator(),
+                  return LayoutBuilder(
+                    builder: (context, restricciones) => EsqueletoDeGrilla(
+                      columnas: restricciones.maxWidth ~/ 160,
+                      proporcion: 0.6,
+                      padding: const EdgeInsets.only(right: 8, bottom: 8, top: 8),
+                    ),
                   );
                 }
 

@@ -76,9 +76,28 @@ class _RelojDelBrillo with WidgetsBindingObserver {
   static final _vigia = _RelojDelBrillo();
   static bool _vigilando = false;
 
+  /// ── Solo se apaga si la app NO se está viendo ──────────────────────────
+  ///
+  /// Antes se apagaba con cualquier estado que no fuera `resumed`, y ahí entra
+  /// `inactive`, que en Android y en escritorio significa apenas «perdí el
+  /// foco»: la app se sigue viendo enterita. Basta con que se corra una
+  /// notificación por arriba, que se gire la pantalla o —en un emulador— que el
+  /// puntero se vaya de la ventana.
+  ///
+  /// Lo que se veía: los bloques que ya estaban puestos se quedaban quietos,
+  /// grises, sin brillar. Y no volvían solos, porque el reloj solo se reenciende
+  /// con un `resumed` explícito, que no llega si la app nunca se fue del todo.
+  /// Los bloques que se montaban DESPUÉS sí brillaban —`sumar` reenciende— así
+  /// que quedaba la mitad de la pantalla animada y la otra mitad congelada.
+  ///
+  /// Ahora se apaga solo con `paused` y `detached`, que son los dos estados en
+  /// los que de verdad no hay nadie mirando. Que era el motivo de todo esto: no
+  /// gastar batería animando algo que no se ve.
   @override
   void didChangeAppLifecycleState(AppLifecycleState estado) {
-    if (estado == AppLifecycleState.resumed) {
+    final aLaVista = estado != AppLifecycleState.paused &&
+        estado != AppLifecycleState.detached;
+    if (aLaVista) {
       if (_cuantos > 0) _encender();
       return;
     }
@@ -238,4 +257,103 @@ class EsqueletoTarjeta extends StatelessWidget {
         ),
         child: SizedBox(width: w, height: h),
       );
+}
+
+/// Una lista de bloques con forma de fila, para las zonas que no son grilla.
+///
+/// El repositorio y las extensiones instaladas no muestran portadas sino filas
+/// anchas con el ícono, el nombre y un botón. Un bloque por fila, del alto de
+/// la fila real, es lo que hace que al llegar el contenido nada se corra.
+class EsqueletoDeLista extends StatelessWidget {
+  const EsqueletoDeLista({
+    super.key,
+    required this.alto,
+    this.separacion = 12,
+    this.padding = const EdgeInsets.fromLTRB(16, 8, 16, 8),
+  });
+
+  final double alto;
+  final double separacion;
+  final EdgeInsets padding;
+
+  @override
+  Widget build(BuildContext context) {
+    return LayoutBuilder(builder: (context, restricciones) {
+      // Los que entran y uno más. Con techo: una pantalla alta pedía veinte
+      // bloques de gusto, y son relleno, no un dato.
+      final cuantos = ((restricciones.maxHeight - padding.vertical) /
+                  (alto + separacion))
+              .ceil()
+              .clamp(1, 8) +
+          1;
+      return ListView.separated(
+        // Quieta: mientras carga no hay a dónde ir, y dejarla desplazarse hace
+        // que los bloques se muevan como si fueran contenido de verdad.
+        physics: const NeverScrollableScrollPhysics(),
+        padding: padding,
+        itemCount: cuantos,
+        separatorBuilder: (_, __) => SizedBox(height: separacion),
+        itemBuilder: (_, __) => Esqueleto(radio: 12, height: alto),
+      );
+    });
+  }
+}
+
+/// Una grilla llena de bloques, con la misma forma que la de verdad.
+///
+/// ── Por qué hace falta una para grillas ─────────────────────────────────
+///
+/// [EsqueletoTarjeta] sirve para una fila, donde el ancho de la tarjeta lo pone
+/// quien la dibuja. En una grilla no: el ancho sale de dividir el espacio entre
+/// las columnas, así que copiar el cálculo en cada pantalla es pedir que se
+/// separen del grid real y que al llegar el contenido todo se corra.
+///
+/// Acá se le pasan los MISMOS [columnas] y [proporcion] que al grid de verdad y
+/// el ancho se calcula solo. Si mañana cambia el grid, cambia el bloque con él.
+class EsqueletoDeGrilla extends StatelessWidget {
+  const EsqueletoDeGrilla({
+    super.key,
+    required this.columnas,
+    required this.proporcion,
+    this.separacion = 16,
+    this.padding = const EdgeInsets.symmetric(horizontal: 16),
+  });
+
+  final int columnas;
+
+  /// El `childAspectRatio` del grid real: ancho dividido alto.
+  final double proporcion;
+  final double separacion;
+  final EdgeInsets padding;
+
+  @override
+  Widget build(BuildContext context) {
+    return LayoutBuilder(builder: (context, restricciones) {
+      final cols = columnas < 1 ? 1 : columnas;
+      final util = restricciones.maxWidth -
+          padding.horizontal -
+          separacion * (cols - 1);
+      final ancho = util / cols;
+      final alto = proporcion > 0 ? ancho / proporcion : ancho;
+      // Los que entran en pantalla y una fila más: son relleno, no un dato. Sin
+      // el techo, una pantalla alta pedía cincuenta bloques de gusto.
+      final filas =
+          ((restricciones.maxHeight / (alto + separacion)).ceil() + 1)
+              .clamp(1, 6);
+      return GridView.builder(
+        // Quieta: mientras carga no hay a dónde ir, y dejarla desplazarse hace
+        // que los bloques se muevan como si fueran contenido de verdad.
+        physics: const NeverScrollableScrollPhysics(),
+        padding: padding,
+        gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
+          crossAxisCount: cols,
+          childAspectRatio: proporcion,
+          crossAxisSpacing: separacion,
+          mainAxisSpacing: separacion,
+        ),
+        itemCount: cols * filas,
+        itemBuilder: (_, __) => Esqueleto(radio: 12, width: ancho, height: alto),
+      );
+    });
+  }
 }

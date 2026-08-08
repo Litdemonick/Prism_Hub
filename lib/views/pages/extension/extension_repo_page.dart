@@ -6,6 +6,7 @@ import 'package:get/get.dart';
 import 'package:prismhub/models/extension.dart';
 import 'package:prismhub/controllers/extension/extension_repo_controller.dart';
 import 'package:prismhub/views/widgets/extension/extension_card.dart';
+import 'package:prismhub/views/widgets/home/esqueleto.dart';
 import 'package:prismhub/views/widgets/home/animated_background_glow.dart';
 import 'package:prismhub/views/widgets/home/home_theme.dart';
 import 'package:prismhub/utils/extension.dart';
@@ -491,8 +492,11 @@ class _ExtensionRepoPageState extends State<ExtensionRepoPage> {
   }
 
   Widget _content() {
+    // Bloques con forma de fila, no una rueda: el repositorio ya tiene su
+    // forma desde el primer cuadro y al llegar el catálogo nada salta de
+    // lugar. Mismo criterio que el Inicio y que la Biblioteca.
     if (c.isLoading.value) {
-      return const Center(child: ProgressRing());
+      return const EsqueletoDeLista(alto: 96);
     }
     if (c.isError.value) {
       return Center(
