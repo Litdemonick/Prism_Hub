@@ -9,6 +9,7 @@ import 'package:get/get.dart';
 import 'package:image_gallery_saver_plus/image_gallery_saver_plus.dart';
 import 'package:prismhub/utils/i18n.dart';
 import 'package:prismhub/utils/request.dart';
+import 'package:prismhub/views/widgets/home/esqueleto.dart';
 import 'package:prismhub/views/widgets/messenger.dart';
 import 'package:prismhub/views/widgets/platform_widget.dart';
 
@@ -205,7 +206,31 @@ class _CacheNetWorkImagePicState extends State<CacheNetWorkImagePic> {
             // Reintento de una que ya habia fallado: se mantiene el arte de
             // respaldo en vez de vaciar la tarjeta (ver _reintentando).
             if (_reintentando) return _errorBuild();
-            return widget.placeholder ?? const SizedBox();
+            // ── El hueco brilla, en TODAS las imágenes ─────────────────────
+            //
+            // Antes acá iba un SizedBox vacío salvo que la pantalla pasara su
+            // propio placeholder — y eso solo lo hacía una. El resultado era
+            // disparejo: en una fila las tarjetas brillaban y en la de al lado
+            // quedaban en negro, y no se entendía si estaban cargando o si no
+            // había nada.
+            //
+            // Poniéndolo acá vale para todo lo que dibuje una imagen: Inicio,
+            // Buscar, Biblioteca, Historial, la portada de la ficha, su fondo
+            // y los iconos de las extensiones. Una sola línea en vez de
+            // repetir el bloque en cada pantalla.
+            //
+            // El brillo no cuesta un reloj por imagen: Esqueleto los comparte
+            // todos en uno solo, que además se apaga cuando la app pasa a
+            // segundo plano (ver _RelojDelBrillo).
+            return widget.placeholder ??
+                Esqueleto(
+                  width: widget.width,
+                  height: widget.height,
+                  // Sin esquinas propias: casi siempre va dentro de algo que
+                  // ya recorta (una tarjeta, la caja de la portada). Con radio
+                  // se veía un redondeo adentro de otro.
+                  radio: 0,
+                );
           case LoadState.completed:
             // Cargo bien: se olvida cualquier fallo anterior de esta URL.
             WidgetsBinding.instance.addPostFrameCallback((_) => _markLoaded());
