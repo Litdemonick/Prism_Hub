@@ -272,8 +272,16 @@ class _BarraDeFiltrosState extends State<_BarraDeFiltros> {
                 ],
               ],
             ),
-            if (c.hayCambiosSinAplicar || hayAlgo)
-              Padding(
+            // ── El alto está SIEMPRE reservado ────────────────────────
+            //
+            // Antes esta línea aparecía al marcar un chip y desaparecía al
+            // aplicar. Cada vez, todo lo de abajo —el carrusel y las filas
+            // enteras— saltaba cuarenta píxeles. Con el alto fijo solo cambia
+            // lo que hay adentro, y nada se mueve.
+            SizedBox(
+              height: 44,
+              child: (c.hayCambiosSinAplicar || hayAlgo)
+              ? Padding(
                 padding: EdgeInsets.fromLTRB(margen, 10, margen, 0),
                 child: Row(
                   children: [
@@ -318,7 +326,9 @@ class _BarraDeFiltrosState extends State<_BarraDeFiltros> {
                     ],
                   ],
                 ),
-              ),
+              )
+              : const SizedBox.shrink(),
+            ),
           ],
         ),
       );

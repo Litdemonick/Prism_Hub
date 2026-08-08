@@ -381,7 +381,20 @@ class _FilaWindowsState extends State<_FilaWindows> {
                         ),
                       ),
                     )
-                  : ListView.separated(
+                  // ── Recorte solo a los costados ────────────────────
+                  //
+                  // `Clip.none` está para que la sombra del hover no se corte,
+                  // pero también deja que las tarjetas se dibujen FUERA de la
+                  // fila: al desplazarse, la que sale asomaba por el borde
+                  // izquierdo y quedaba pintada encima del margen y hasta
+                  // debajo de la barra lateral.
+                  //
+                  // Este recorte devuelve un rectángulo más alto que la fila:
+                  // corta a izquierda y derecha —donde molesta— y deja pasar
+                  // arriba y abajo, que es por donde sale la sombra.
+                  : ClipRect(
+                      clipper: const _SoloCostados(),
+                      child: ListView.separated(
                       controller: _scroll,
                       scrollDirection: Axis.horizontal,
                       // Sin esto el recorte se come la sombra igual, por más
@@ -414,6 +427,7 @@ class _FilaWindowsState extends State<_FilaWindows> {
                           ),
                         );
                       },
+                    ),
                     ),
             ),
           ],
@@ -503,4 +517,24 @@ class _FlechaDeFilaState extends State<_FlechaDeFila> {
       ),
     );
   }
+}
+
+/// Recorta a izquierda y derecha, y deja pasar arriba y abajo.
+///
+/// Para las filas horizontales: hay que cortar lo que se sale por los
+/// costados —si no, las tarjetas se dibujan sobre el margen y sobre la barra
+/// lateral— pero NO lo que se sale por arriba y por abajo, que es la sombra de
+/// la tarjeta cuando se le pasa el mouse.
+class _SoloCostados extends CustomClipper<Rect> {
+  const _SoloCostados();
+
+  /// Cuánto se deja escapar arriba y abajo. Con la sombra actual sobra.
+  static const _aire = 60.0;
+
+  @override
+  Rect getClip(Size size) =>
+      Rect.fromLTRB(0, -_aire, size.width, size.height + _aire);
+
+  @override
+  bool shouldReclip(covariant CustomClipper<Rect> oldClipper) => false;
 }
