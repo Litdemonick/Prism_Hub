@@ -559,15 +559,22 @@ class _AndroidMainPageState extends fluent.State<AndroidMainPage> {
       // porque ahí la barra ni existía. Un Align sin alto propio LLENA.
       child: SizedBox(
         height: 62,
+        // Centrada como UNA pieza: la pastilla y los tres puntos juntos.
+        //
+        // Antes la pastilla iba en un Expanded y se centraba en el hueco que
+        // sobraba, o sea en el ancho MENOS el botón — y quedaba corrida a la
+        // izquierda respecto del centro real de la pantalla.
         child: Row(
-        children: [
-          Expanded(
-            child: Center(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Flexible(
               child: DecoratedBox(
                 decoration: _pastilla,
                 child: Padding(
                   padding: const EdgeInsets.symmetric(horizontal: 6),
                   child: Row(
+                    // Que no se estire: la pastilla mide lo que miden sus
+                    // cuatro íconos y nada más.
                     mainAxisSize: MainAxisSize.min,
                     children: [
                       for (var i = 0; i < _enLaBarra; i++)
@@ -585,11 +592,10 @@ class _AndroidMainPageState extends fluent.State<AndroidMainPage> {
                 ),
               ),
             ),
-          ),
-          const SizedBox(width: 10),
-          _botonDelExtremo(),
-        ],
-      ),
+            const SizedBox(width: 10),
+            _botonDelExtremo(),
+          ],
+        ),
       ),
     );
   }
