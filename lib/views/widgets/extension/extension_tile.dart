@@ -12,6 +12,7 @@ import 'package:prismhub/utils/i18n.dart';
 import 'package:prismhub/utils/prismhub_storage.dart';
 import 'package:prismhub/utils/request.dart';
 import 'package:prismhub/utils/router.dart';
+import 'package:prismhub/views/widgets/texto_que_no_cabe.dart';
 import 'package:prismhub/views/widgets/button.dart';
 import 'package:prismhub/views/widgets/cache_network_image.dart';
 import 'package:prismhub/views/widgets/home/home_theme.dart';
@@ -378,11 +379,12 @@ class _ExtensionTileState extends State<ExtensionTile> {
   Widget _buildAndroidTile(BuildContext context) {
     return ListTile(
       leading: _iconBox(size: 40, iconSize: 20),
-      title: Text(
+      // Si el nombre no entra, al lado sale el botón para verlo completo. En
+      // una lista de diecisiete, dos que empiezan igual y se cortan en el
+      // mismo punto se ven idénticas.
+      title: TextoQueNoCabe(
         widget.extension.name,
-        maxLines: 1,
-        overflow: TextOverflow.ellipsis,
-        style: const TextStyle(fontWeight: FontWeight.w600),
+        estilo: const TextStyle(fontWeight: FontWeight.w600),
       ),
       subtitle: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -652,12 +654,12 @@ class _ExtensionTileState extends State<ExtensionTile> {
                   children: [
                     _iconBox(size: 40, iconSize: 20),
                     const SizedBox(height: 10),
-                    Text(
+                    // Cortado, al lado sale el botón para verlo completo:
+                    // acá el nombre es lo único que distingue una tarjeta de
+                    // otra.
+                    TextoQueNoCabe(
                       widget.extension.name,
-                      textAlign: TextAlign.center,
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: const TextStyle(
+                      estilo: const TextStyle(
                         fontSize: 15,
                         fontWeight: FontWeight.w700,
                       ),
