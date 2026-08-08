@@ -106,7 +106,7 @@ class FilaDeExtension {
 ///      congelar a la que ya está lista. Nada de `Future.wait` sobre el grupo:
 ///      eso hace esperar a la más lenta de la tanda — la misma lección que ya
 ///      está escrita en el controlador de búsqueda.
-///   3. **Tope de tres a la vez.** Diecisiete peticiones simultáneas en un
+///   3. **Tope de cinco a la vez.** Diecisiete peticiones simultáneas en un
 ///      teléfono es peor que en tanda: se pelean la red y no llega ninguna.
 ///   4. **Caché en disco.** Al abrir se muestra lo guardado AL INSTANTE y se
 ///      refresca por detrás. Es la diferencia entre "abre ya" y "siempre
@@ -121,7 +121,25 @@ class CatalogoExtensionesController extends GetxController {
   static const _vigencia = Duration(minutes: 30);
 
   /// Cuántas extensiones se piden a la vez. Ver la decisión 3.
-  static const _aLaVez = 3;
+  ///
+  /// ── De tres a cinco ─────────────────────────────────────────────────────
+  ///
+  /// El tope estaba en tres, y lo que se había medido en su momento era que
+  /// diecisiete de golpe es peor que por tandas. Eso sigue siendo cierto, pero
+  /// no dice nada a favor del tres en particular.
+  ///
+  /// Con once extensiones instaladas, tres a la vez son cuatro tandas, y basta
+  /// una lenta para llevarse una tanda entera: LaMovie tardaba entre 21 y 27
+  /// segundos midiéndola, así que sola dejaba dos cupos parados esperándola.
+  /// Eso es lo que se siente al tirar para refrescar y quedarse un rato mirando
+  /// gris.
+  ///
+  /// Cinco, no diez: son once HOSTS distintos, así que no hay pelea por
+  /// conexiones contra un mismo servidor —el motivo clásico del tope— pero sí
+  /// la hay por el ancho de banda y por el hilo de JavaScript que las corre.
+  /// Cinco baja las tandas de cuatro a tres y deja margen para que una colgada
+  /// no bloquee al resto.
+  static const _aLaVez = 5;
 
   final filas = <FilaDeExtension>[].obs;
 
@@ -941,11 +959,26 @@ class CatalogoExtensionesController extends GetxController {
     filas.refresh();
     try {
       await refrescarTodo();
-      // `refrescarTodo` solo ENCOLA; el trabajo sigue después. Se espera a que
-      // la cola se vacíe para que los bloques grises no desaparezcan mientras
-      // todavía falta traer la mitad de las filas.
+      // ── Se suelta cuando hay algo REAL que mostrar, no cuando contestan
+      //    las once ──────────────────────────────────────────────────────
+      //
+      // `refrescarTodo` solo ENCOLA; el trabajo sigue después. Antes se
+      // esperaba a que la cola se vaciara entera, hasta veinte segundos: con
+      // una extensión lenta el usuario se quedaba mirando bloques grises un
+      // montón de rato aunque las primeras ya hubieran contestado.
+      //
+      // Ahora alcanza con que el acordeón tenga contenido de DOS extensiones
+      // —o de una, si es la única que puede con este filtro—. Con eso ya hay
+      // qué deslizar, y las que faltan se van sumando por detrás sin que nadie
+      // espere: la lista crece por el final y la rotación está anclada por
+      // paquete, así que nada se reordena bajo el dedo.
+      //
+      // El tope de veinte segundos se queda como red: si NINGUNA contesta, hay
+      // que soltar igual y dejar que cada fila muestre lo suyo.
+      final objetivo = _cuantasPuedenConElFiltro() >= 2 ? 2 : 1;
       for (var i = 0; i < 80 && (_enVuelo > 0 || _cola.isNotEmpty); i++) {
         await Future<void>.delayed(const Duration(milliseconds: 250));
+        if (destacadosVisibles.length >= objetivo) break;
       }
     } finally {
       aplicandoFiltros.value = false;
@@ -953,6 +986,15 @@ class CatalogoExtensionesController extends GetxController {
       // este filtro, y eso cambia dónde va.
       filas.refresh();
     }
+  }
+
+  /// Cuántas extensiones pueden contestar al filtro que está puesto.
+  ///
+  /// Para no esperar a dos cuando solo una puede: ahí la espera nunca se
+  /// cumpliría y se irían los veinte segundos completos.
+  int _cuantasPuedenConElFiltro() {
+    if (!hayFiltros) return filas.length;
+    return filas.where((f) => puedeConEsteGenero(f.package)).length;
   }
 
   /// Vuelve a como estaba: sin filtros.
@@ -1712,9 +1754,31 @@ class CatalogoExtensionesController extends GetxController {
   /// El tope es de quince segundos. No es para cortar el trabajo —las filas
   /// siguen en la cola y terminan igual— sino para que una extensión colgada no
   /// deje la rueda girando para siempre.
+  ///
+  /// ── Pero tampoco se espera a la última ──────────────────────────────────
+  ///
+  /// Esperar a las once era esperar a la más lenta de las once, que es la misma
+  /// trampa que la decisión 2 evita entre filas. Con una que tarda veinticinco
+  /// segundos, el gesto de refrescar se sentía lento aunque ocho ya hubieran
+  /// contestado y estuvieran en pantalla.
+  ///
+  /// Ahora la rueda se va cuando contestó la mayoría, y las que faltan siguen
+  /// en la cola y van apareciendo solas. No queda ningún hueco: la fila que
+  /// todavía no contestó muestra SUS bloques grises (EstadoDeFila.cargando), o
+  /// sea que se ve exactamente lo que pasa —esta ya está, esta viene—, en vez
+  /// de una rueda arriba que no dice de quién estamos esperando.
   Future<void> _esperarALaCola() async {
+    // De las que se pidieron, con cuántas alcanza para soltar la rueda. Tres
+    // cuartos: suficiente para que la pantalla ya esté llena, y deja afuera
+    // justo a la cola de rezagadas que es la que estiraba la espera.
+    final pedidas = filas.where((f) => f.refrescando.value).length;
+    final alcanza = pedidas > 0 ? (pedidas * 3 + 3) ~/ 4 : 0;
     for (var i = 0; i < 60 && (_enVuelo > 0 || _cola.isNotEmpty); i++) {
       await Future<void>.delayed(const Duration(milliseconds: 250));
+      if (alcanza == 0) continue;
+      final contestaron =
+          pedidas - filas.where((f) => f.refrescando.value).length;
+      if (contestaron >= alcanza) break;
     }
   }
 

@@ -1237,6 +1237,31 @@ class _CarruselAndroidState extends State<_CarruselAndroid>
       // Con filtro, la lista se arma en rondas de ocho; sin filtro, extensión
       // por extensión. Ver _planos.
       final conFiltro = widget.c.hayFiltros;
+
+      // ── Mientras se aplica un filtro no se deja deslizar ────────────────
+      //
+      // El síntoma: filtrabas, el acordeón te mandaba al principio, empezabas a
+      // moverte mientras todavía cargaba y al terminar te devolvía al principio
+      // otra vez.
+      //
+      // El motivo: `carruselExt` es un índice DENTRO de `destacadosVisibles`, y
+      // esa lista va creciendo a medida que contestan las extensiones. El índice
+      // cuatro de recién no es la misma extensión que el índice cuatro de ahora.
+      // Con la lista cambiando debajo, el ancla —la tarjeta que estabas mirando—
+      // se perdía, y sin ancla `_indiceGlobal` devuelve cero: al principio.
+      //
+      // Se podría intentar seguir la tarjeta por paquete en vez de por índice,
+      // pero no arregla el fondo: con el filtro puesto la lista se arma en rondas
+      // (ver _planos), así que cada extensión que llega REORDENA todo lo demás.
+      // Deslizarse sobre una lista que se está reordenando sola no tiene una
+      // posición «correcta» a la que volver.
+      //
+      // Así que mientras dura, los bloques grises y quieto. Es un solo viaje al
+      // principio, y cae cuando no estabas haciendo nada. La espera es corta a
+      // propósito: el controlador suelta apenas contestan dos extensiones, no
+      // cuando terminan las once (ver aplicarFiltros).
+      if (widget.c.aplicandoFiltros.value) return const _CarruselEsperando();
+
       final planos = grupos.isEmpty
           ? const <(String, ExtensionListItem)>[]
           : _planos(grupos, porBloques: conFiltro);
