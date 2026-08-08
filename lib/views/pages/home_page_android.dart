@@ -740,6 +740,9 @@ class _CarruselAndroidState extends State<_CarruselAndroid>
   /// Qué parte del ancho grande le queda a una tarjeta de los costados.
   static const _proporcionChica = 0.22;
 
+  /// Cuántas rayitas como mucho, por larga que sea la tanda.
+  static const _maxPuntitos = 8;
+
   static const _aire = 9.0;
 
   @override
