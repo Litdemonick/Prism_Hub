@@ -19,22 +19,26 @@ const double _coverInset = 8;
 // la decoración del Container que recorta la portada, el propio recorte lo
 // pisaba y en las esquinas redondeadas la línea desaparecía a trozos. Como
 // capa de arriba queda entera y del color correcto.
-Widget _bordeCard(Color accent, double radio) {
+//
+// ── Ya no es del color de la zona ───────────────────────────────────────
+//
+// Era rosa —el acento— alrededor de CADA tarjeta. Con una grilla llena, eso
+// son treinta recuadros rosas gritando a la vez y la portada, que es lo único
+// que importa mirar, queda en segundo plano. Lo que hacía falta era separar
+// una tarjeta de la de al lado, no pintarlas.
+//
+// Ahora es la misma línea gris que usan las demás superficies de la app
+// (HomeTheme.border). Separa igual y no compite con nada. El acento sigue
+// estando donde de verdad significa algo: la barra de progreso, la tilde de lo
+// elegido, el puntito del filtro.
+Widget _bordeCard(double radio) {
   return Positioned.fill(
     child: IgnorePointer(
       child: DecoratedBox(
         decoration: BoxDecoration(
           borderRadius: BorderRadius.circular(radio),
-          // Sólido (con transparencia desaparecía sobre portadas claras) y
-          // aclarado un cuarto hacia el blanco: el morado y el rojo puros
-          // quedaban duros contra las portadas, y este tono conserva el color
-          // de cada zona pero se integra mejor. 2px para que la línea se lea
-          // también en las esquinas redondeadas, donde una más fina se
-          // adelgaza y parece cortarse.
-          border: Border.all(
-            color: Color.lerp(accent, const Color(0xFFFFFFFF), 0.25)!,
-            width: 2,
-          ),
+          // Una línea fina: solo tiene que decir dónde termina la tarjeta.
+          border: Border.all(color: HomeTheme.border),
         ),
       ),
     ),
@@ -114,11 +118,14 @@ class HomeMediaCard extends StatefulWidget {
     this.extraActionIcon,
     this.onExtraAction,
     this.onVerDetalle,
+    this.esFavorito,
+    this.onAlternarFavorito,
     this.gradientSeed,
     this.hidden = false,
     this.onToggleHide,
     this.accent = HomeTheme.accentPink,
     this.horizontal = false,
+    this.ancho,
   });
 
   final String title;
@@ -167,6 +174,21 @@ class HomeMediaCard extends StatefulWidget {
   /// esta opcion, para ver la ficha de algo que estabas siguiendo habia que
   /// buscarlo de nuevo por el buscador.
   final VoidCallback? onVerDetalle;
+
+  /// Si el título ya está en favoritos. En null, la opción no se ofrece.
+  ///
+  /// ── Por qué en el menú y no como estrella suelta ───────────────────────
+  ///
+  /// Una estrella encima de la portada tapa la portada, que es lo único que la
+  /// tarjeta tiene que mostrar. Y ya hay un menú de tres puntos que junta todo
+  /// lo demás que se puede hacer con el título —ver la ficha, ocultarla,
+  /// borrarla—; que favorito viviera aparte era la única acción sin un lugar
+  /// claro donde buscarla.
+  final bool? esFavorito;
+  final VoidCallback? onAlternarFavorito;
+
+  /// Ancho a la medida, para las grillas. Ver dónde se usa.
+  final double? ancho;
   // Para elegir el degradado por posición cuando no hay portada — si no se
   // pasa, se deriva del título (mismo criterio que ColorUtils.getColorByText).
   final int? gradientSeed;
@@ -405,7 +427,7 @@ class _HomeMediaCardState extends State<HomeMediaCard> {
                               valueColor: AlwaysStoppedAnimation(widget.accent),
                             ),
                           ),
-                        _bordeCard(widget.accent, 8),
+                        _bordeCard(8),
                       ],
                     ),
                   ),
@@ -481,6 +503,8 @@ class _HomeMediaCardState extends State<HomeMediaCard> {
                         extraIcon: widget.extraActionIcon,
                         onExtra: widget.onExtraAction,
                         onVerDetalle: widget.onVerDetalle,
+                        esFavorito: widget.esFavorito,
+                        onAlternarFavorito: widget.onAlternarFavorito,
                       ),
                   ],
                 ),
@@ -508,19 +532,35 @@ class _HomeMediaCardState extends State<HomeMediaCard> {
     final hasMenu = widget.onDelete != null ||
         widget.onToggleHide != null ||
         widget.onExtraAction != null ||
-        widget.onVerDetalle != null;
+        widget.onVerDetalle != null ||
+        widget.onAlternarFavorito != null;
     final isAndroidLandscape = Platform.isAndroid &&
         MediaQuery.of(context).orientation == Orientation.landscape;
-    final width = isAndroidLandscape
+    final anchoBase = isAndroidLandscape
         ? HomeMediaCard.androidLandscapeWidth
         : Platform.isAndroid
             ? HomeMediaCard.androidWidth
             : HomeMediaCard.desktopWidth;
-    final height = isAndroidLandscape
+    final altoBase = isAndroidLandscape
         ? HomeMediaCard.androidLandscapeHeight
         : Platform.isAndroid
             ? HomeMediaCard.androidHeight
             : HomeMediaCard.desktopHeight;
+    // ── El ancho lo puede poner quien la dibuja ──────────────────────────
+    //
+    // En una FILA el ancho fijo es lo correcto: las tarjetas se desplazan de
+    // costado y todas tienen que medir igual.
+    //
+    // En una GRILLA no. La grilla reparte el ancho entre las columnas que
+    // entran, y la tarjeta se quedaba en sus 150 dentro de una celda de 164:
+    // sobraba aire a los costados de cada una y las portadas se veían chicas
+    // sin motivo. Pasándole el ancho de la celda, la tarjeta la llena.
+    //
+    // El alto sigue al ancho para no deformar la portada.
+    final width = widget.ancho ?? anchoBase;
+    final height = widget.ancho == null
+        ? altoBase
+        : widget.ancho! * (altoBase / anchoBase);
     final dpr = MediaQuery.devicePixelRatioOf(context);
     final cacheWidth = (width * dpr).ceil().clamp(1, 4096).toInt();
     final defaultCover = _arteRespaldo(cacheWidth);
@@ -667,7 +707,7 @@ class _HomeMediaCardState extends State<HomeMediaCard> {
                             ),
                           ),
                         ),
-                      _bordeCard(widget.accent, 14),
+                      _bordeCard(14),
                     ],
                   ),
                 ),
@@ -725,6 +765,8 @@ class _HomeMediaCardState extends State<HomeMediaCard> {
                         extraIcon: widget.extraActionIcon,
                         onExtra: widget.onExtraAction,
                         onVerDetalle: widget.onVerDetalle,
+                        esFavorito: widget.esFavorito,
+                        onAlternarFavorito: widget.onAlternarFavorito,
                       ),
                   ],
                 ),
@@ -751,6 +793,8 @@ class _WideMenuButton extends StatelessWidget {
     this.extraIcon,
     this.onExtra,
     this.onVerDetalle,
+    this.esFavorito,
+    this.onAlternarFavorito,
   });
 
   // Eran parámetros, con estos mismos valores por defecto. El único que los
@@ -766,6 +810,8 @@ class _WideMenuButton extends StatelessWidget {
   final IconData? extraIcon;
   final VoidCallback? onExtra;
   final VoidCallback? onVerDetalle;
+  final bool? esFavorito;
+  final VoidCallback? onAlternarFavorito;
 
   @override
   Widget build(BuildContext context) {
@@ -800,6 +846,7 @@ class _WideMenuButton extends StatelessWidget {
             if (v == 1) onDelete?.call();
             if (v == 2) onExtra?.call();
             if (v == 3) onVerDetalle?.call();
+            if (v == 4) onAlternarFavorito?.call();
           },
           itemBuilder: (context) => [
             // Ver la ficha va arriba de todo: es a donde uno quiere ir cuando
@@ -816,6 +863,33 @@ class _WideMenuButton extends StatelessWidget {
                     const SizedBox(width: 10),
                     Text(
                       'home.view-detail'.i18n,
+                      style: const TextStyle(
+                          color: HomeTheme.textPrimary, fontSize: 13),
+                    ),
+                  ],
+                ),
+              ),
+            // Favorito, justo después de ver la ficha: es lo que uno más hace
+            // con un título sin abrirlo. Con la estrella llena cuando ya está,
+            // para que se lea de un vistazo qué va a pasar al tocarla.
+            if (esFavorito != null && onAlternarFavorito != null)
+              PopupMenuItem<int>(
+                value: 4,
+                height: 40,
+                child: Row(
+                  children: [
+                    Icon(
+                      esFavorito! ? Icons.star_rounded : Icons.star_border,
+                      size: 17,
+                      color: esFavorito!
+                          ? HomeTheme.accentPink
+                          : HomeTheme.textMuted,
+                    ),
+                    const SizedBox(width: 10),
+                    Text(
+                      esFavorito!
+                          ? 'home.remove-favorite'.i18n
+                          : 'home.add-favorite'.i18n,
                       style: const TextStyle(
                           color: HomeTheme.textPrimary, fontSize: 13),
                     ),

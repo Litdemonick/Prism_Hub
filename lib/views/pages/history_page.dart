@@ -1,6 +1,9 @@
+import 'dart:math' as math;
 import 'dart:io';
 
 import 'package:fluent_ui/fluent_ui.dart' as fluent;
+import 'package:prismhub/utils/error.dart';
+import 'package:prismhub/views/widgets/messenger.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_i18n/flutter_i18n.dart';
 import 'package:get/get.dart';
@@ -203,6 +206,45 @@ class _HistoryPageState extends State<HistoryPage> {
     if (mounted) setState(() {});
   }
 
+  /// ¿Este título ya está en favoritos?
+  ///
+  /// Se mira en la lista que el controlador YA tiene en memoria y no con una
+  /// consulta a la base: esto se llama al dibujar cada tarjeta, y una consulta
+  /// por tarjeta en una grilla llena es una tormenta de lecturas por cada
+  /// cuadro. La lista se refresca sola al cambiar un favorito.
+  bool _esFavorito(String package, String url) =>
+      _c.favorites.any((f) => f.package == package && f.url == url);
+
+  Future<void> _alternarFavorito({
+    required String package,
+    required String url,
+    required String titulo,
+    String? portada,
+  }) async {
+    try {
+      await DatabaseService.toggleFavorite(
+        package: package,
+        url: url,
+        name: titulo,
+        cover: portada,
+        isNsfw: widget.zone,
+      );
+    } catch (e) {
+      // toggleFavorite exige que la extensión esté instalada: saca de ahí el
+      // paquete y el tipo. Con una desinstalada, en el historial todavía queda
+      // el título pero no hay de dónde sacar esos datos.
+      if (!mounted) return;
+      showPlatformSnackbar(
+        context: context,
+        content: friendlyError(e),
+        severity: fluent.InfoBarSeverity.error,
+      );
+      return;
+    }
+    await _c.onRefresh();
+    if (mounted) setState(() {});
+  }
+
   Future<void> _deleteFavorite(Favorite f) async {
     await DatabaseService.deleteFavorite(f.package, f.url);
     _forgetNsfwDecisionIfOpen(f.package, f.url);
@@ -318,38 +360,61 @@ class _HistoryPageState extends State<HistoryPage> {
                     : HomeMediaCard.desktopHeight) +
             70;
 
-    return SliverPadding(
-      padding: const EdgeInsets.all(16),
-      sliver: SliverGrid(
-        gridDelegate: SliverGridDelegateWithMaxCrossAxisExtent(
-          maxCrossAxisExtent: cardWidth + 16,
-          mainAxisExtent: cardExtent,
-          mainAxisSpacing: 20,
-          crossAxisSpacing: 16,
-        ),
-        delegate: SliverChildBuilderDelegate(
-          (context, index) {
-            final card = _onFavoritesTab
-                ? _buildFavoriteCard(favorites![index], ancha: usarAncha)
-                : _buildHistoryCard(history![index], ancha: usarAncha);
-            return Align(
-              alignment: Alignment.topCenter,
-              child: card,
-            );
-          },
-          childCount: itemCount,
-        ),
-      ),
+    // ── Las tarjetas LLENAN su celda ──────────────────────────────────
+    //
+    // Antes la grilla repartía el ancho entre las columnas que entraban y la
+    // tarjeta se quedaba en su ancho fijo dentro de la celda: en un teléfono,
+    // 150 dentro de 164. Con un Align centrándola, sobraba aire a los dos
+    // costados de cada una y las portadas se veían chicas sin motivo, más
+    // chicas que las del mismo tamaño en el Inicio, que van en fila y ahí el
+    // ancho fijo sí es lo correcto.
+    //
+    // Ahora se cuentan las columnas primero, se reparte el ancho que hay y ese
+    // es el que se le pasa a la tarjeta. El alto sale de la misma proporción,
+    // así que la portada no se deforma.
+    return SliverLayoutBuilder(
+      builder: (context, cons) {
+        const margen = 16.0;
+        const entre = 16.0;
+        final disponible = cons.crossAxisExtent - margen * 2;
+        final columnas =
+            math.max(1, ((disponible + entre) / (cardWidth + entre)).floor());
+        final ancho = (disponible - entre * (columnas - 1)) / columnas;
+        // La proporción de la tarjeta elegida, aplicada al ancho real.
+        final alto = ancho * (cardExtent / cardWidth);
+
+        return SliverPadding(
+          padding: const EdgeInsets.all(margen),
+          sliver: SliverGrid(
+            gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
+              crossAxisCount: columnas,
+              mainAxisExtent: alto,
+              mainAxisSpacing: 20,
+              crossAxisSpacing: entre,
+            ),
+            delegate: SliverChildBuilderDelegate(
+              (context, index) => _onFavoritesTab
+                  ? _buildFavoriteCard(favorites![index],
+                      ancha: usarAncha, ancho: ancho)
+                  : _buildHistoryCard(history![index],
+                      ancha: usarAncha, ancho: ancho),
+              childCount: itemCount,
+            ),
+          ),
+        );
+      },
     );
   }
 
-  Widget _buildFavoriteCard(Favorite f, {bool ancha = false}) {
+  Widget _buildFavoriteCard(Favorite f, {bool ancha = false, double? ancho}) {
     // Obx: igual que en library_page.dart — sin esto, togglear "ocultar" no
     // refrescaba la tarjeta acá (el RxSet de HiddenCards cambia, pero nada
     // en esta pantalla estaba suscripto a él) hasta reconstruir toda la
     // página (cambiar de pestaña y volver).
     return Obx(() => HomeMediaCard(
           horizontal: ancha,
+          // Solo la vertical: la apaisada ya trae su propio tamaño.
+          ancho: ancha ? null : ancho,
           key: ValueKey('fav-${f.package}-${f.url}'),
           title: f.title,
           subtitle: 'home.favorite'.i18n,
@@ -367,7 +432,7 @@ class _HistoryPageState extends State<HistoryPage> {
         ));
   }
 
-  Widget _buildHistoryCard(History h, {bool ancha = false}) {
+  Widget _buildHistoryCard(History h, {bool ancha = false, double? ancho}) {
     // La portada de vídeo puede ser una captura local O el póster de red (ver
     // PortadaHistorial). Antes acá se asumía siempre archivo local, así que un
     // ítem con póster de red hacía File("https://...") y la tarjeta quedaba
@@ -377,6 +442,8 @@ class _HistoryPageState extends State<HistoryPage> {
     // Obx: ver comentario en _buildFavoriteCard.
     return Obx(() => HomeMediaCard(
           horizontal: ancha,
+          // Solo la vertical: la apaisada ya trae su propio tamaño.
+          ancho: ancha ? null : ancho,
           key: ValueKey('hist-${h.package}-${h.url}'),
           title: h.title,
           subtitle: FlutterI18n.translate(
@@ -417,6 +484,16 @@ class _HistoryPageState extends State<HistoryPage> {
               headers: portada.necesitaHeaders
                   ? _c.headersForPackage(h.package)
                   : null),
+          // Marcar favorito sin abrir la ficha. Desde el Historial es donde
+          // más falta hace: uno acaba de leer un capítulo, vuelve, y hasta
+          // ahora tenía que entrar al título solo para tocar la estrella.
+          esFavorito: _esFavorito(h.package, h.url),
+          onAlternarFavorito: () => _alternarFavorito(
+            package: h.package,
+            url: h.url,
+            titulo: h.title,
+            portada: portada.archivo == null ? portada.url : null,
+          ),
           hidden: HiddenCards.isHidden(h.package, h.url),
           onToggleHide: () => HiddenCards.toggle(h.package, h.url),
           accent: _accent,
@@ -471,7 +548,20 @@ class _HistoryPageState extends State<HistoryPage> {
           scrollDirection: Axis.horizontal,
           padding: const EdgeInsets.symmetric(horizontal: 16),
           itemCount: _tabs.length,
-          separatorBuilder: (_, __) => const SizedBox(width: 10),
+          // ── Una raya entre el historial y los favoritos ────────────────
+          //
+          // Son dos cosas distintas: las tres primeras filtran lo que estuviste
+          // viendo, las dos últimas son tu lista guardada. En una tira de cinco
+          // pastillas iguales eso no se ve, y uno toca «Favoritos vídeo»
+          // creyendo que sigue filtrando el historial.
+          separatorBuilder: (_, i) => i == 2
+              ? Container(
+                  width: 1,
+                  height: 18,
+                  margin: const EdgeInsets.symmetric(horizontal: 12),
+                  color: HomeTheme.border,
+                )
+              : const SizedBox(width: 10),
           itemBuilder: (_, index) => Center(
             child: _chip(
               _tabs[index].i18n,
