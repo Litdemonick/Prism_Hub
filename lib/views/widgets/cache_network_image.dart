@@ -301,7 +301,39 @@ class _CacheNetWorkImagePicState extends State<CacheNetWorkImagePic> {
               // (barrierDismissible: false) — acá sí queremos ese
               // comportamiento, es solo un visor de imagen.
               barrierDismissible: true,
-              builder: (_) => thumnailPage,
+              // A pantalla completa y con su propia salida.
+              //
+              // Antes salía como un diálogo del tamaño de su contenido: la
+              // portada se veía CASI igual de chica que en la ficha, y al
+              // ampliarla se recortaba contra los bordes del diálogo en vez de
+              // usar la ventana. Un visor de imagen tiene que dar todo el
+              // espacio que hay.
+              //
+              // Ocupando la ventana entera ya no queda barrera que tocar para
+              // cerrar, así que el fondo cierra al hacerle clic y arriba a la
+              // derecha va la cruz. La imagen está por encima del fondo, así
+              // que arrastrarla para moverla no cierra nada.
+              builder: (dialogo) => Stack(
+                children: [
+                  Positioned.fill(
+                    child: GestureDetector(
+                      behavior: HitTestBehavior.opaque,
+                      onTap: () => Navigator.of(dialogo).pop(),
+                      child: const ColoredBox(color: Color(0xE6000000)),
+                    ),
+                  ),
+                  Positioned.fill(child: thumnailPage),
+                  Positioned(
+                    top: 12,
+                    right: 12,
+                    child: fluent.IconButton(
+                      icon: const Icon(fluent.FluentIcons.chrome_close,
+                          size: 16),
+                      onPressed: () => Navigator.of(dialogo).pop(),
+                    ),
+                  ),
+                ],
+              ),
             );
           },
           child: image,
@@ -395,14 +427,35 @@ class _ThumnailPageState extends State<_ThumnailPage> {
             return GestureConfig(
               minScale: 0.9,
               animationMinScale: 0.7,
-              maxScale: 3.0,
-              animationMaxScale: 3.5,
+              // ── Hasta ocho, no hasta tres ────────────────────────────
+              //
+              // Tres es poco para lo que la gente abre esto: mirar de cerca la
+              // portada, leer el texto chico de una tapa o buscar el crédito
+              // del autor. Y una portada mostrada entera ya arranca ocupando
+              // media pantalla, así que triplicarla se queda corto.
+              maxScale: 8.0,
+              animationMaxScale: 8.5,
               speed: 1.0,
               inertialSpeed: 100.0,
               initialScale: 1.0,
-              inPageView: true,
+              // false: esto NO vive dentro de un PageView. En true, el visor
+              // le cede el arrastre horizontal a un padre que no existe, y
+              // moverse de costado con la imagen ampliada se sentía trabado.
+              inPageView: false,
               reverseMousePointerScrollDirection: true,
               initialAlignment: InitialAlignment.center,
+            );
+          },
+          // Doble toque para acercar y alejar, que es lo que uno prueba
+          // primero. Sin esto, la única forma era el pellizco —imposible con
+          // el ratón— así que en escritorio no había manera de ampliar salvo
+          // la rueda.
+          onDoubleTap: (state) {
+            final origen = state.gestureDetails?.totalScale ?? 1.0;
+            final destino = origen < 1.5 ? 2.5 : 1.0;
+            state.handleDoubleTap(
+              scale: destino,
+              doubleTapPosition: state.pointerDownPosition,
             );
           },
         ),
