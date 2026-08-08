@@ -71,7 +71,10 @@ class HomeWindows extends StatelessWidget {
           },
           child: ListView.builder(
             physics: const AlwaysScrollableScrollPhysics(),
-            padding: const EdgeInsets.only(bottom: 36),
+            // Arriba también: el acordeón arrancaba pegado al borde de la
+            // ventana, sin nada entre la barra de título y la primera portada.
+            // Se leía como si el contenido estuviera cortado por arriba.
+            padding: const EdgeInsets.only(top: 20, bottom: 36),
             // +2: el fondo grande de arriba y la barra de filtros.
             itemCount: visibles.length + 2,
             // **Acá está la carga perezosa.** ListView.builder solo construye

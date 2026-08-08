@@ -809,7 +809,22 @@ class _CarruselAndroidState extends State<_CarruselAndroid>
   Animation<double>? _viaje;
 
   /// Qué parte del ancho grande le queda a una tarjeta de los costados.
-  static const _proporcionChica = 0.22;
+  ///
+  /// ── Por qué cambia con el tamaño de la pantalla ─────────────────────────
+  ///
+  /// En un teléfono, 0.22 es lo que hace que se vea UNA grande con dos tiras
+  /// asomando: la forma que se buscaba desde el principio.
+  ///
+  /// En un monitor ancho ese mismo número da tiras de cien píxeles, y entonces
+  /// entran trece a lo ancho. Deja de leerse como «una elegida con sus vecinas»
+  /// y pasa a ser una pared de portadas: cargado y sin foco. Medido en vivo con
+  /// la ventana maximizada.
+  ///
+  /// Con tiras más anchas entran las mismas siete que en el teléfono, ocupando
+  /// todo el ancho. La grande sigue destacando —más del doble que una tira— y
+  /// el acordeón se lee igual de ordenado que en Android, que es de donde salió.
+  static double _proporcionChicaDe(Ancho a) =>
+      a.elegir(compacto: 0.22, medio: 0.32, amplio: 0.42);
 
   /// Cuántas rayitas como mucho, por larga que sea la tanda.
   static const _maxPuntitos = 8;
@@ -1193,7 +1208,20 @@ class _CarruselAndroidState extends State<_CarruselAndroid>
                 child: Stack(
                   children: [
                     Positioned.fill(
+                      // ── Recorta a los costados, NO arriba y abajo ────────
+                      //
+                      // Cada tarjeta lleva una sombra desplazada ocho píxeles
+                      // hacia abajo. Con un recorte rectangular común, esa
+                      // sombra se corta al ras del borde inferior: se ve media
+                      // sombra terminando en seco, en línea recta, debajo de
+                      // cada portada. Con trece tarjetas al lado se leía como
+                      // una banda sucia cruzando el carrusel.
+                      //
+                      // Este recorte deja escapar arriba y abajo justo para
+                      // eso. Ya existía para las filas horizontales, que tienen
+                      // el mismo problema con la sombra del ratón encima.
                       child: ClipRect(
+                        clipper: const _SoloCostados(),
                         child: _acordeon(
                             planos, m, caja.maxWidth, grupos, fantasmas),
                       ),
@@ -1257,7 +1285,10 @@ class _CarruselAndroidState extends State<_CarruselAndroid>
                 ),
               ),
             ),
-            const SizedBox(height: 8),
+            // Dieciséis y no ocho: la sombra de las tarjetas ya no se corta,
+            // así que necesita dónde caer. Con ocho llegaba a los puntitos y
+            // los ensuciaba.
+            const SizedBox(height: 16),
             // ── Los puntitos NO crecen con la tanda ────────────────────
             //
             // Antes había uno por portada, así que al pedir más páginas la
@@ -1345,12 +1376,20 @@ class _CarruselAndroidState extends State<_CarruselAndroid>
     final cabenAlLado =
         costado <= 0 ? 0 : (costado / (m.anchoChico + _aire)).ceil();
     //
-    // Y con tope de diez. En un monitor ultra ancho la cuenta pediría veinte o
-    // más, y cada tarjeta decodifica su portada al tamaño de la grande —medio
-    // megabyte cada una— aunque en pantalla sea una tira de cien píxeles. Diez
-    // por lado ya llena un 4K; de ahí para arriba, lo que falte queda fuera del
-    // recorte y no se ve.
-    final radio = (cabenAlLado + 1).clamp(3, 10);
+    // ── Y nunca más de cuatro por lado ────────────────────────────────────
+    //
+    // Tres visibles y una de margen —la que está entrando o saliendo—. Ese es
+    // el acordeón que se buscaba: una elegida, tres vecinas a cada lado, y se
+    // acabó.
+    //
+    // Sin este tope, en una tablet ancha la cuenta pedía cinco o seis por lado
+    // y el carrusel se volvía una pared de portadas, sin nada que mirara al
+    // centro. Reportado en tablet y en escritorio, con la misma frase: se ven
+    // demasiadas.
+    //
+    // De paso acota lo que cuesta: cada tarjeta decodifica su portada al tamaño
+    // de la grande —medio megabyte— aunque en pantalla sea una tira.
+    final radio = (cabenAlLado + 1).clamp(3, 4);
 
     final desde = (centroEntero - radio).clamp(0, tope);
     final hasta = (centroEntero + radio).clamp(0, tope);
@@ -1519,7 +1558,7 @@ class _CarruselAndroidState extends State<_CarruselAndroid>
 
     return _MedidasCarrusel(
       ancho: ancho,
-      anchoChico: (ancho * _proporcionChica).clamp(38.0, ancho),
+      anchoChico: (ancho * _proporcionChicaDe(a)).clamp(38.0, ancho),
       alto: alto,
     );
   }
