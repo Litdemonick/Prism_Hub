@@ -169,11 +169,31 @@ class CatalogoExtensionesController extends GetxController {
   /// Rotando, cada vez que se abre la app arranca por la siguiente. Se recorre
   /// el mismo contenido y en el mismo orden relativo; lo único que cambia es por
   /// dónde se entra. Nada se repite ni se pierde: es la misma lista corrida.
+  /// Por qué extensión arranca, guardada POR NOMBRE y no por posición.
+  ///
+  /// ── El error que esto corrige ───────────────────────────────────────────
+  ///
+  /// Antes se rotaba con `_arranque % lista.length`, y esa cuenta cambia de
+  /// resultado cada vez que cambia el LARGO de la lista. Y el largo cambia
+  /// todo el tiempo: cada extensión que termina de cargar se suma, y poner o
+  /// sacar un filtro agrega o quita varias de una.
+  ///
+  /// O sea que el acordeón se reordenaba solo. Al restablecer los filtros se
+  /// veía clarísimo —mostraba una cosa, y al rato otra— pero también pasaba
+  /// mientras el Home cargaba, con cada extensión que iba contestando.
+  ///
+  /// Guardando el PAQUETE, la rotación es la misma pase lo que pase con el
+  /// largo: se busca esa extensión y se empieza por ella.
+  String? _paqueteDeArranque;
+
   List<(String, List<ExtensionListItem>)> _rotadas(
       List<(String, List<ExtensionListItem>)> lista) {
     if (lista.length < 2) return lista;
-    final desde = _arranque % lista.length;
-    if (desde == 0) return lista;
+    _paqueteDeArranque ??= lista[_arranque % lista.length].$1;
+    final desde = lista.indexWhere((d) => d.$1 == _paqueteDeArranque);
+    // Si no está en esta vista —la sacó un filtro— se empieza por la primera,
+    // igual que antes cuando la cuenta daba cero.
+    if (desde <= 0) return lista;
     return [...lista.sublist(desde), ...lista.sublist(0, desde)];
   }
 
@@ -214,6 +234,22 @@ class CatalogoExtensionesController extends GetxController {
   int carruselExt = 0;
   int carruselPos = 0;
   bool _carruselSembrado = false;
+
+  /// El acordeón ya se puso en su sitio en esta sesión del Home.
+  ///
+  /// ── Por qué vive acá y no en el widget ──────────────────────────────────
+  ///
+  /// Porque el widget se DESTRUYE al salir de pantalla: el Home es un
+  /// `ListView.builder` y el acordeón es su ítem 2, así que basta con bajar
+  /// un poco para que Flutter lo desmonte. Al volver a subir se creaba de
+  /// cero, con su marca de «ya me ubiqué» en falso, y volvía a arrancar en la
+  /// primera tarjeta. Reportado en vivo: «al hacer scroll el acordeón se
+  /// vuelve al inicio».
+  ///
+  /// El controlador sobrevive a todo eso, así que la marca también. Sigue
+  /// valiendo la regla de que abrir el Home empieza de cero — lo que cambia es
+  /// que desplazarse ya no cuenta como abrirlo.
+  bool acordeonUbicado = false;
 
   /// Avanza una posición. Al terminar la tanda de una extensión salta a la
   /// siguiente, desde su primera.
@@ -1243,14 +1279,35 @@ class CatalogoExtensionesController extends GetxController {
       f.items.isNotEmpty &&
       (!hayFiltros || puedeConEsteGenero(f.package)));
 
-  Future<void> traerMas() async {
+  /// Pide la página siguiente.
+  ///
+  /// ── [soloPaquete]: primero se termina la extensión que se está mirando ──
+  ///
+  /// Sin esto se le pedía a TODAS a la vez, y el resultado era el que se
+  /// reportó: el acordeón mostraba las ocho de una extensión y saltaba a la
+  /// siguiente sin haber terminado la primera. Como el pedido salía recién al
+  /// acercarse al final de la lista ENTERA, mientras uno recorría las ocho de
+  /// la primera no se pedía nada — así que ocho y a otra cosa.
+  ///
+  /// Pasando el paquete del foco, esa extensión sigue trayendo sus páginas
+  /// mientras uno la recorre, y recién cuando se le acaban (o llega al tope de
+  /// páginas) el acordeón continúa con la siguiente.
+  ///
+  /// Si la del foco ya no puede dar más, se les pide a las demás igual: el
+  /// acordeón nunca se puede quedar sin nada por delante.
+  Future<void> traerMas({String? soloPaquete}) async {
     if (trayendoMas.value) return;
-    final candidatas = filas
+    var candidatas = filas
         .where((f) => f.estadoExt == EstadoExtension.activa || f.esVistaPrevia)
         .where((f) => f.pagina < _maxPaginas)
         .where((f) => f.items.isNotEmpty)
         .where((f) => !hayFiltros || puedeConEsteGenero(f.package))
         .toList();
+    if (soloPaquete != null) {
+      final delFoco =
+          candidatas.where((f) => f.package == soloPaquete).toList();
+      if (delFoco.isNotEmpty) candidatas = delFoco;
+    }
     if (candidatas.isEmpty) return;
 
     trayendoMas.value = true;

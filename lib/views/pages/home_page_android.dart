@@ -929,8 +929,12 @@ class _CarruselAndroidState extends State<_CarruselAndroid>
 
   /// Barata y suficiente: cambia si cambió la cantidad de extensiones o la de
   /// portadas de alguna.
-  static int _firmaDe(List<(String, List<ExtensionListItem>)> grupos) {
-    var f = grupos.length;
+  static int _firmaDe(
+      List<(String, List<ExtensionListItem>)> grupos, bool porBloques) {
+    // El modo entra en la firma: al poner o sacar un filtro cambia cómo se
+    // arma la lista aunque el contenido sea el mismo, y sin esto se reusaría
+    // la de antes.
+    var f = grupos.length * 2 + (porBloques ? 1 : 0);
     for (final g in grupos) {
       f = f * 31 + g.$2.length;
     }
@@ -942,7 +946,8 @@ class _CarruselAndroidState extends State<_CarruselAndroid>
   int _firmaDeLosGrupos = -1;
 
   List<(String, ExtensionListItem)> _planos(
-      List<(String, List<ExtensionListItem>)> grupos) {
+      List<(String, List<ExtensionListItem>)> grupos,
+      {required bool porBloques}) {
     // ── Se rearma solo cuando cambió algo ──────────────────────────────
     //
     // Este método se llama desde `build`, y `build` corre en CADA cuadro del
@@ -953,7 +958,7 @@ class _CarruselAndroidState extends State<_CarruselAndroid>
     //
     // La firma es barata de calcular y alcanza: si cambió la cantidad de
     // extensiones o la de portadas de alguna, se rearma; si no, se reusa.
-    final firma = _firmaDe(grupos);
+    final firma = _firmaDe(grupos, porBloques);
     final guardado = _planosCache;
     if (guardado != null && firma == _firmaDeLosGrupos) return guardado;
 
@@ -977,14 +982,49 @@ class _CarruselAndroidState extends State<_CarruselAndroid>
     // rotación de cada apertura, no el orden de acá.
     final todo = <(String, ExtensionListItem)>[];
     final vistas = <String>{};
-    for (final (package, items) in grupos) {
-      for (final item in items) {
-        // La misma dirección en DOS extensiones distintas sí es otro ítem, así
-        // que la clave lleva el paquete.
-        if (!vistas.add('$package|${item.url}')) continue;
-        todo.add((package, item));
+
+    void sumar(String package, ExtensionListItem item) {
+      // La misma dirección en DOS extensiones distintas sí es otro ítem, así
+      // que la clave lleva el paquete.
+      if (!vistas.add('$package|${item.url}')) return;
+      todo.add((package, item));
+    }
+
+    if (!porBloques) {
+      for (final (package, items) in grupos) {
+        for (final item in items) {
+          sumar(package, item);
+        }
+      }
+    } else {
+      // ── CON FILTRO: rondas de ocho, no una extensión entera ────────────
+      //
+      // Con un filtro puesto lo que se está mirando es «lo que hay de esto en
+      // todos lados», así que agotar una extensión antes de pasar a la
+      // siguiente deja las demás sin verse. En rondas se ven ocho de cada una,
+      // y al terminar la vuelta empiezan las ocho siguientes de la primera.
+      //
+      // Sin filtro manda la otra regla: ahí el acordeón es la vidriera de la
+      // SECCIÓN de cada sitio y se lee de corrido.
+      const bloque = CatalogoExtensionesController.porExtension;
+      var desde = 0;
+      var quedaAlgo = true;
+      while (quedaAlgo) {
+        quedaAlgo = false;
+        for (final (package, items) in grupos) {
+          if (desde >= items.length) continue;
+          quedaAlgo = true;
+          final hasta = desde + bloque < items.length
+              ? desde + bloque
+              : items.length;
+          for (var i = desde; i < hasta; i++) {
+            sumar(package, items[i]);
+          }
+        }
+        desde += bloque;
       }
     }
+
     _firmaDeLosGrupos = firma;
     _planosCache = todo;
     return todo;
@@ -1119,6 +1159,65 @@ class _CarruselAndroidState extends State<_CarruselAndroid>
     _anclaUrl = planos[i].$2.url;
   }
 
+  /// Dónde termina, en la lista plana, el bloque de la extensión del foco.
+  int _finDelBloque(List<(String, ExtensionListItem)> planos, int desde) {
+    if (planos.isEmpty) return 0;
+    final i = desde.clamp(0, planos.length - 1);
+    final paquete = planos[i].$1;
+    var fin = i;
+    while (fin + 1 < planos.length && planos[fin + 1].$1 == paquete) {
+      fin++;
+    }
+    return fin;
+  }
+
+  /// Pide más contenido si conviene, y a QUIÉN conviene pedírselo.
+  ///
+  /// ── Primero se termina la extensión que se está mirando ─────────────────
+  ///
+  /// Antes solo se pedía al acercarse al final de la lista ENTERA. Como el
+  /// acordeón va extensión por extensión, mientras uno recorría las ocho de la
+  /// primera no se pedía nada: se acababan y saltaba a la siguiente. O sea
+  /// ocho de cada una y nunca el contenido completo de ninguna.
+  ///
+  /// Ahora se mira cuánto falta para el final del bloque ACTUAL. Al acercarse,
+  /// se le pide la página siguiente a ESA extensión, así sigue creciendo
+  /// mientras uno la recorre. Cuando ya no puede dar más, el bloque se termina
+  /// y recién ahí empieza el de la que sigue.
+  ///
+  /// La regla vieja se queda como red: cerca del final de todo se le pide a
+  /// cualquiera que pueda, para no quedarse sin nada por delante.
+  void _pedirMasSiHaceFalta(
+    List<(String, ExtensionListItem)> planos,
+    double destino,
+    double ultimoReal,
+  ) {
+    if (planos.isEmpty) return;
+    // ── Con filtro se le pide a TODAS, no a la del foco ────────────────────
+    //
+    // Ahí la lista va en rondas de ocho (ver _planos), así que hacer crecer
+    // solo la que se está mirando rompería las rondas: esa extensión pasaría a
+    // tener el doble que las demás. Pidiéndole a todas, la ronda siguiente
+    // llega completa.
+    if (widget.c.hayFiltros) {
+      if (destino >= ultimoReal - 10) unawaited(widget.c.traerMas());
+      return;
+    }
+    final foco = destino.round().clamp(0, planos.length - 1);
+    final finBloque = _finDelBloque(planos, foco);
+    // Cuatro tarjetas de aviso: es lo que se ve de un vistazo a cada lado, así
+    // que la página siguiente empieza a pedirse antes de que el hueco aparezca.
+    if (foco >= finBloque - 4) {
+      unawaited(widget.c.traerMas(soloPaquete: planos[foco].$1));
+      return;
+    }
+    // Diez y no cinco. Con internet lento, cinco tarjetas es menos de un
+    // segundo deslizando rápido y la página no llega a tiempo; diez da margen
+    // sin pedir de más, porque igual no se dispara dos veces mientras una está
+    // en curso.
+    if (destino >= ultimoReal - 10) unawaited(widget.c.traerMas());
+  }
+
   void _irA(double destino, List<(String, List<ExtensionListItem>)> grupos) {
     _viaje = Tween<double>(begin: _p, end: destino)
         .animate(CurvedAnimation(parent: _anim, curve: Curves.easeOutCubic));
@@ -1137,9 +1236,12 @@ class _CarruselAndroidState extends State<_CarruselAndroid>
       // Filtrando NO se vacía: las portadas se quedan y se reemplazan cuando
       // llega lo nuevo. Vaciarlo dejaba media pantalla en gris y después todo
       // de vuelta — dos saltos para una sola espera.
+      // Con filtro, la lista se arma en rondas de ocho; sin filtro, extensión
+      // por extensión. Ver _planos.
+      final conFiltro = widget.c.hayFiltros;
       final planos = grupos.isEmpty
           ? const <(String, ExtensionListItem)>[]
-          : _planos(grupos);
+          : _planos(grupos, porBloques: conFiltro);
       // Nada todavía: en vez de un hueco negro de media pantalla, las tarjetas
       // que van a venir, en gris. Así el Home ya tiene su forma desde el
       // primer cuadro y al cargar no da un salto.
@@ -1166,6 +1268,10 @@ class _CarruselAndroidState extends State<_CarruselAndroid>
         _anclaPaquete = null;
         _anclaUrl = null;
         _sobrante = 0;
+        // Filtrar sí manda al principio de verdad: se suelta también la marca
+        // del controlador, o al volver a montarse el acordeón se restauraría
+        // la posición vieja, que es de otro filtro.
+        widget.c.acordeonUbicado = false;
         // ── Viajando, no de un salto ────────────────────────────────────
         //
         // Aparecer de golpe en la primera no se entiende: el usuario no sabe si
@@ -1189,20 +1295,34 @@ class _CarruselAndroidState extends State<_CarruselAndroid>
       }
       if (!_sembrado) {
         _sembrado = true;
-        // ── Siempre desde la primera ──────────────────────────────────
-        //
-        // Antes arrancaba donde el usuario había quedado la vez pasada. La
-        // idea era no perderle el hilo, pero en la práctica molesta: al abrir
-        // la app te dejaba en la tarjeta cuarenta de la extensión siete, sin
-        // ninguna pista de por qué, y lo nuevo —que es a lo que uno viene—
-        // quedaba atrás. Encima, si esa tanda había cambiado, la posición
-        // guardada apuntaba a otra cosa.
-        //
-        // Abrir el Home es empezar de cero: la primera tarjeta de la primera
-        // extensión. Moverse desde ahí cuesta un gesto.
-        widget.c.carruselExt = 0;
-        widget.c.carruselPos = 0;
-        _p = 0;
+        if (!widget.c.acordeonUbicado) {
+          // ── Abrir el Home SÍ empieza desde la primera ─────────────────
+          //
+          // Antes arrancaba donde el usuario había quedado la vez pasada. La
+          // idea era no perderle el hilo, pero en la práctica molesta: al abrir
+          // la app te dejaba en la tarjeta cuarenta de la extensión siete, sin
+          // ninguna pista de por qué, y lo nuevo —que es a lo que uno viene—
+          // quedaba atrás. Encima, si esa tanda había cambiado, la posición
+          // guardada apuntaba a otra cosa.
+          widget.c.acordeonUbicado = true;
+          widget.c.carruselExt = 0;
+          widget.c.carruselPos = 0;
+          _p = 0;
+        } else {
+          // ── Pero DESPLAZARSE no ───────────────────────────────────────
+          //
+          // El Home es una lista perezosa y el acordeón es su ítem 2: bajando
+          // un poco, Flutter lo desmonta, y al volver a subir este estado nace
+          // otra vez en blanco. Con la regla de arriba a secas, eso lo mandaba
+          // a la primera tarjeta cada vez — que es el «al hacer scroll se
+          // vuelve al inicio» que se reportó.
+          //
+          // La posición de verdad vive en el controlador, que sobrevive al
+          // desmontaje, así que se vuelve a donde iba.
+          _p = _indiceGlobal(grupos)
+              .toDouble()
+              .clamp(0.0, (planos.length - 1).toDouble());
+        }
       }
       // ── La posición se re-ancla, y NUNCA en pleno gesto ─────────────
       //
@@ -1220,7 +1340,9 @@ class _CarruselAndroidState extends State<_CarruselAndroid>
       // tarjeta pega un tirón — se siente como si la app hubiera recargado
       // algo. Así que si la lista cambió mientras arrastrabas, queda anotado y
       // se acomoda al soltar, cuando ya no se nota.
-      final firma = _firmaDe(grupos);
+      // Con el modo incluido: poner o sacar un filtro reordena la lista aunque
+      // el contenido sea el mismo, y ahí también hay que volver a anclar.
+      final firma = _firmaDe(grupos, conFiltro);
       if (firma != _firmaVista) {
         _firmaVista = firma;
         _reubicarPorAncla(planos, grupos);
@@ -1284,13 +1406,9 @@ class _CarruselAndroidState extends State<_CarruselAndroid>
                   // tarjetas en espera se comerían el aviso y el pedido saldría
                   // tres tarjetas más tarde, justo cuando ya se ve el final.
                   //
-                  // Diez y no cinco. Con internet lento, cinco tarjetas es
-                  // menos de un segundo deslizando rápido y la página no llega
-                  // a tiempo; diez da margen sin pedir de más, porque igual no
-                  // se dispara dos veces mientras una está en curso.
-                  if (destino >= ultimoReal - 10) {
-                    unawaited(widget.c.traerMas());
-                  }
+                  // A quién pedirle y cuándo lo decide _pedirMasSiHaceFalta:
+                  // primero termina la extensión que se está mirando.
+                  _pedirMasSiHaceFalta(planos, destino, ultimoReal);
                 },
                 child: Stack(
                   children: [
