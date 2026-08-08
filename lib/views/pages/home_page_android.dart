@@ -1142,7 +1142,20 @@ class _GrillaPaginadaState extends State<_GrillaPaginada> {
         );
       }
 
-      var paginas = (widget.items.length + porPagina - 1) ~/ porPagina;
+      // ── Solo páginas LLENAS ────────────────────────────────────────
+      //
+      // Antes se redondeaba hacia arriba: con veinte portadas y ocho por
+      // página salían tres páginas, y la última tenía cuatro. Como el alto
+      // está reservado para dos filas —tiene que ser fijo, si no el Home
+      // saltaría al pasar de página— esa última dejaba una fila entera de
+      // negro debajo. Es exactamente el hueco que se ve al llegar al final de
+      // una extensión.
+      //
+      // Redondeando hacia ABAJO, todas las páginas están llenas. Se pierden
+      // las portadas del resto —hasta siete— y está bien: esto es una
+      // vidriera, no el catálogo, y una fila vacía se nota mucho más que
+      // cuatro portadas que nadie sabía que existían.
+      var paginas = widget.items.length ~/ porPagina;
       if (paginas < 1) paginas = 1;
       if (paginas > _maxPaginas) paginas = _maxPaginas;
       // Girar el teléfono cambia cuántas entran por página, así que la página
