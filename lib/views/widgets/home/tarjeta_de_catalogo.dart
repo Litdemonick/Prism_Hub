@@ -436,7 +436,22 @@ class _TarjetaDeCatalogoState extends State<TarjetaDeCatalogo> {
   Widget _portada(double ancho, double alto) {
     final url = widget.portada;
     if (url == null || url.isEmpty) return _sinPortada(ancho);
+    // ── Decodificar al tamaño que se VE, no al que vino ────────────────
+    //
+    // Una portada llega en 600×900 o más. Sin esto, cada una se decodifica
+    // entera y después se dibuja en una celda de 100 píxeles de ancho: se paga
+    // el mapa de bits completo en memoria y en GPU para tirar el 95%.
+    //
+    // En el Home de celular hay seis por página y varias filas cerca de la
+    // pantalla, así que se multiplica — y ahí es donde el desplazamiento se
+    // sentía pesado.
+    //
+    // Va por la densidad real del aparato: en una pantalla 3x, 100 píxeles
+    // lógicos son 300 de verdad, y decodificar menos que eso se vería borroso.
+    final cacheWidth =
+        (ancho * MediaQuery.devicePixelRatioOf(context)).ceil().clamp(1, 4096);
     return CacheNetWorkImagePic(
+      cacheWidth: cacheWidth,
       url,
       width: ancho,
       height: alto,

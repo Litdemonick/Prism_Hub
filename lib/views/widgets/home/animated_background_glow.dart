@@ -65,6 +65,36 @@ class _AnimatedBackgroundGlowState extends State<AnimatedBackgroundGlow>
     );
   }
 
+  /// Un manchón que se corre, con su degradado ya rasterizado.
+  ///
+  /// El `Align` sigue posicionando, pero el hijo es siempre EL MISMO widget
+  /// —mismo color, mismo tamaño— así que Flutter puede reusar su capa en vez
+  /// de volver a pintar el degradado.
+  Widget _blobMovil({
+    required Color color,
+    required double size,
+    required Alignment hacia,
+  }) {
+    return Align(
+      alignment: hacia,
+      child: RepaintBoundary(
+        child: SizedBox(
+          width: size,
+          height: size,
+          child: DecoratedBox(
+            decoration: BoxDecoration(
+              shape: BoxShape.circle,
+              gradient: RadialGradient(
+                colors: [color, color.withValues(alpha: 0)],
+                stops: const [0, 1],
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     return RepaintBoundary(
@@ -92,20 +122,28 @@ class _AnimatedBackgroundGlowState extends State<AnimatedBackgroundGlow>
                   ],
                 );
               }
+              // Los dos manchones se MUEVEN, no se vuelven a dibujar.
+              //
+              // Antes cada cuadro rearmaba el `Alignment` de cada uno, y eso
+              // obliga a repintar el degradado radial entero sesenta veces por
+              // segundo, a pantalla completa. Ahora el degradado se rasteriza
+              // una vez —de eso se encarga el RepaintBoundary de cada
+              // manchón— y lo único que cambia por cuadro es un corrimiento,
+              // que la GPU resuelve sin volver a calcular nada.
               return Stack(
                 children: [
-                  _blob(
+                  _blobMovil(
                     color: widget.accent.withValues(alpha: 0.16),
-                    alignment: Alignment(0.7 * math.cos(t), 0.6 * math.sin(t)),
                     size: blobSize,
+                    hacia: Alignment(0.7 * math.cos(t), 0.6 * math.sin(t)),
                   ),
-                  _blob(
+                  _blobMovil(
                     color: const Color(0xFF3D5AFE).withValues(alpha: 0.14),
-                    alignment: Alignment(
+                    size: blobSize * 0.94,
+                    hacia: Alignment(
                       -0.75 * math.cos(t * 0.7 + 2),
                       -0.6 * math.sin(t * 0.8 + 1),
                     ),
-                    size: blobSize * 0.94,
                   ),
                 ],
               );

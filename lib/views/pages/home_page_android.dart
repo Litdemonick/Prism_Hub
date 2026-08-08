@@ -69,10 +69,16 @@ class HomeAndroid extends StatelessWidget {
               // siempre, y acá lo que importa es la portada.
               0 => const _Cabecera(),
               1 => _CarruselAndroid(c: c),
-              _ => _FilaAndroid(
-                  key: ValueKey(c.filas[i - 2].package),
-                  c: c,
-                  fila: c.filas[i - 2],
+              // RepaintBoundary por fila: sin esto, cualquier repintado
+              // —el fondo animado, una portada que termina de cargar— vuelve a
+              // pintar TODA la lista visible. Con la capa propia, cada fila se
+              // guarda rasterizada y solo se rehace la que cambió.
+              _ => RepaintBoundary(
+                  child: _FilaAndroid(
+                    key: ValueKey(c.filas[i - 2].package),
+                    c: c,
+                    fila: c.filas[i - 2],
+                  ),
                 ),
             },
           ),
@@ -354,6 +360,7 @@ class _CarruselAndroidState extends State<_CarruselAndroid> {
                         // queda sin límite y tumba el layout.
                         height: medidas.alto,
                         child: _TarjetaGrande(
+                          ancho: medidas.ancho,
                           item: item,
                           fuente: ExtensionUtils
                                   .runtimes[package]?.extension.name ??
@@ -438,16 +445,30 @@ class _CarruselAndroidState extends State<_CarruselAndroid> {
     final altoPantalla = MediaQuery.sizeOf(context).height;
     final a = Ancho.de(context);
 
-    // Cuanto más ancha la pantalla, más chica la fracción: en una tablet, dos
-    // tercios del ancho serían una sola tarjeta enorme.
-    final fraccionIdeal =
-        a.elegir(compacto: 0.62, medio: 0.42, amplio: 0.32, enorme: 0.25);
+    // ── La fracción es DISCRETA, y eso importa ─────────────────────────
+    //
+    // `viewportFraction` es de solo lectura: cambiarla obliga a tirar el
+    // PageController y crear otro. Al girar el teléfono, Android manda una
+    // decena de tamaños intermedios; con la fracción salida de una cuenta
+    // continua, cada uno de esos tamaños creaba OTRO controlador — y eso es lo
+    // que se veía como una deformación mientras la pantalla gira.
+    //
+    // Saliendo del breakpoint y de si la pantalla es baja, solo puede tomar
+    // unos pocos valores: el controlador se rehace una vez, al cruzar el
+    // corte, y no diez veces por giro.
+    //
+    // El TAMAÑO de la tarjeta sigue siendo continuo: eso vive en un SizedBox
+    // adentro del casillero y se puede acomodar cuadro a cuadro sin costo.
+    final bajo = altoPantalla < 500;
+    final fraccionIdeal = bajo
+        ? a.elegir(compacto: 0.42, medio: 0.3, amplio: 0.24, enorme: 0.2)
+        : a.elegir(compacto: 0.62, medio: 0.42, amplio: 0.32, enorme: 0.25);
 
     var ancho = anchoUtil * fraccionIdeal - aire;
     var alto = ancho * relacion;
 
     // En horizontal el alto es lo escaso; en vertical, lo que sobra.
-    final tope = altoPantalla * (altoPantalla < 500 ? 0.66 : 0.4);
+    final tope = altoPantalla * (bajo ? 0.66 : 0.4);
     if (alto > tope) {
       alto = tope;
       ancho = alto / relacion;
@@ -463,7 +484,9 @@ class _CarruselAndroidState extends State<_CarruselAndroid> {
     return _MedidasCarrusel(
       ancho: ancho,
       alto: alto,
-      fraccion: ((ancho + aire) / anchoUtil).clamp(0.2, 1.0),
+      // La del breakpoint, no la que saldría del ancho ya recortado: ver
+      // arriba. Se acota por si una pantalla rarísima la deja fuera de rango.
+      fraccion: fraccionIdeal.clamp(0.2, 1.0),
     );
   }
 }
@@ -488,12 +511,16 @@ class _MedidasCarrusel {
 /// tarjeta es grande y el título tiene que viajar con la imagen al deslizar.
 class _TarjetaGrande extends StatelessWidget {
   const _TarjetaGrande({
+    required this.ancho,
     required this.item,
     required this.fuente,
     required this.cabeceras,
     required this.onTap,
   });
 
+  /// Para no decodificar la portada más grande de lo que se ve. Ver el
+  /// comentario largo en TarjetaDeCatalogo.
+  final double ancho;
   final ExtensionListItem item;
   final String fuente;
   final Map<String, String>? cabeceras;
@@ -524,6 +551,9 @@ class _TarjetaGrande extends StatelessWidget {
               CacheNetWorkImagePic(
                 item.cover ?? '',
                 fit: BoxFit.cover,
+                cacheWidth: (ancho * MediaQuery.devicePixelRatioOf(context))
+                    .ceil()
+                    .clamp(1, 4096),
                 headers: cabeceras,
                 placeholder: const ColoredBox(color: HomeTheme.cardSurface),
                 fallback: const ColoredBox(color: HomeTheme.cardSurface),
