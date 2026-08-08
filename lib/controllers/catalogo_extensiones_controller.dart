@@ -694,6 +694,26 @@ class CatalogoExtensionesController extends GetxController {
   /// no lo tienen siguen mostrando lo suyo, y el encabezado lo dice: mentirles
   /// con «según tu filtro» sobre contenido que no está filtrado es peor que no
   /// filtrar.
+  /// Cómo llama ESTA extensión a su sección de «lo último».
+  ///
+  /// Sale del manifiesto de la extensión (`@latestLabel`): «Programación»,
+  /// «Últimos añadidos», «Novedades». Es el nombre que el propio sitio le da a
+  /// esa sección, así que el usuario reconoce de dónde viene lo que ve.
+  ///
+  /// Null cuando la extensión no lo declara —una vieja, o una de la comunidad—
+  /// y ahí el Home cae al texto genérico. Nada se rompe por no tenerlo.
+  ///
+  /// Y solo aplica al modo «reciente»: con un filtro puesto, o mostrando lo más
+  /// visto, la fila NO está mostrando esa sección y decir su nombre sería
+  /// mentir.
+  String? etiquetaDe(FilaDeExtension fila) {
+    if (modoDe(fila) != ModoDeFila.reciente) return null;
+    final ext = ExtensionUtils.runtimes[fila.package]?.extension ??
+        ExtensionUtils.vistaPrevia[fila.package]?.extension;
+    final etiqueta = ext?.latestLabel?.trim();
+    return (etiqueta == null || etiqueta.isEmpty) ? null : etiqueta;
+  }
+
   ModoDeFila modoDe(FilaDeExtension fila) =>
       (hayFiltros && puedeConEsteGenero(fila.package))
           ? ModoDeFila.filtrado

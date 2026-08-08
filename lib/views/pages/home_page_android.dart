@@ -1471,11 +1471,12 @@ class _FilaAndroidState extends State<_FilaAndroid> {
             ),
           ),
           Text(
-            switch (widget.c.modoDe(widget.fila)) {
-              ModoDeFila.popular => 'home.modo-popular'.i18n,
-              ModoDeFila.filtrado => 'home.modo-filtrado'.i18n,
-              ModoDeFila.reciente => 'home.modo-reciente'.i18n,
-            },
+            widget.c.etiquetaDe(widget.fila) ??
+                switch (widget.c.modoDe(widget.fila)) {
+                  ModoDeFila.popular => 'home.modo-popular'.i18n,
+                  ModoDeFila.filtrado => 'home.modo-filtrado'.i18n,
+                  ModoDeFila.reciente => 'home.modo-reciente'.i18n,
+                },
             maxLines: 1,
             overflow: TextOverflow.ellipsis,
             style: const TextStyle(
