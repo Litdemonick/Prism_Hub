@@ -145,8 +145,24 @@ class HomeAndroid extends StatelessWidget {
             // desplazarse de gusto.
             padding: EdgeInsets.only(
                 bottom: MediaQuery.paddingOf(context).bottom + 10),
+            // ── Sin filas visibles, bloques grises: NUNCA el hueco ──────
+            //
+            // `visibles` puede quedar vacío aunque `filas` no lo esté: al
+            // arrancar, entre que se leen las extensiones, su estado de
+            // encendido y los filtros guardados, hay cuadros en los que ninguna
+            // pasa el filtro. Ahí el Home dibujaba el acordeón, la barra de
+            // filtros y NADA debajo, y las extensiones aparecían de golpe unos
+            // segundos después. Reportado en Windows, con captura.
+            //
+            // En vez de seguir persiguiendo cada motivo por el que la lista
+            // puede quedar corta un instante, se cubre el caso entero: si no
+            // hay ninguna que mostrar, van dos filas en gris. Cuando llegan las
+            // de verdad, ocupan su lugar sin que nada aparezca de la nada.
+            //
+            // El aviso de «no tenés extensiones» no se pierde: ese sale antes,
+            // arriba, y solo cuando `armado` dice que de verdad no hay ninguna.
             // +3: la cabecera, los filtros y el carrusel.
-            itemCount: visibles.length + 3,
+            itemCount: (visibles.isEmpty ? 2 : visibles.length) + 3,
             // **Acá está la carga perezosa.** ListView.builder solo construye
             // lo que está cerca de la pantalla, y cada fila pide en su
             // initState — así, con 30 extensiones se piden las 2 o 3 que se
@@ -170,15 +186,17 @@ class HomeAndroid extends StatelessWidget {
               // ListView pidió su `itemCount` y que llama acá puede haber
               // pasado un cuadro, y una lista más corta no puede tumbar la
               // pantalla entera por una fila de más.
-              _ => i - 3 < visibles.length
-                  ? RepaintBoundary(
-                      child: _FilaAndroid(
-                        key: ValueKey(visibles[i - 3].package),
-                        c: c,
-                        fila: visibles[i - 3],
-                      ),
-                    )
-                  : const SizedBox.shrink(),
+              _ => visibles.isEmpty
+                  ? const _FilaEsperando()
+                  : (i - 3 < visibles.length
+                      ? RepaintBoundary(
+                          child: _FilaAndroid(
+                            key: ValueKey(visibles[i - 3].package),
+                            c: c,
+                            fila: visibles[i - 3],
+                          ),
+                        )
+                      : const SizedBox.shrink()),
             },
           ),
         );
@@ -1122,7 +1140,20 @@ class _CarruselAndroidState extends State<_CarruselAndroid>
       }
       if (!_sembrado) {
         _sembrado = true;
-        _p = _indiceGlobal(grupos).toDouble();
+        // ── Siempre desde la primera ──────────────────────────────────
+        //
+        // Antes arrancaba donde el usuario había quedado la vez pasada. La
+        // idea era no perderle el hilo, pero en la práctica molesta: al abrir
+        // la app te dejaba en la tarjeta cuarenta de la extensión siete, sin
+        // ninguna pista de por qué, y lo nuevo —que es a lo que uno viene—
+        // quedaba atrás. Encima, si esa tanda había cambiado, la posición
+        // guardada apuntaba a otra cosa.
+        //
+        // Abrir el Home es empezar de cero: la primera tarjeta de la primera
+        // extensión. Moverse desde ahí cuesta un gesto.
+        widget.c.carruselExt = 0;
+        widget.c.carruselPos = 0;
+        _p = 0;
       }
       // ── La posición se re-ancla, y NUNCA en pleno gesto ─────────────
       //

@@ -94,7 +94,23 @@ class HomeWindows extends StatelessWidget {
             // Se leía como si el contenido estuviera cortado por arriba.
             padding: const EdgeInsets.only(top: 20, bottom: 36),
             // +2: el fondo grande de arriba y la barra de filtros.
-            itemCount: visibles.length + 2,
+            // ── Sin filas visibles, bloques grises: NUNCA el hueco ──────
+            //
+            // `visibles` puede quedar vacío aunque `filas` no lo esté: al
+            // arrancar, entre que se leen las extensiones, su estado de
+            // encendido y los filtros guardados, hay cuadros en los que ninguna
+            // pasa el filtro. Ahí el Home dibujaba el acordeón, la barra de
+            // filtros y NADA debajo, y las extensiones aparecían de golpe unos
+            // segundos después. Reportado en Windows, con captura.
+            //
+            // En vez de seguir persiguiendo cada motivo por el que la lista
+            // puede quedar corta un instante, se cubre el caso entero: si no
+            // hay ninguna que mostrar, van dos filas en gris. Cuando llegan las
+            // de verdad, ocupan su lugar sin que nada aparezca de la nada.
+            //
+            // El aviso de «no tenés extensiones» no se pierde: ese sale antes,
+            // arriba, y solo cuando `armado` dice que de verdad no hay ninguna.
+            itemCount: (visibles.isEmpty ? 2 : visibles.length) + 2,
             // **Acá está la carga perezosa.** ListView.builder solo construye
             // lo que está cerca de la pantalla, y cada fila pide en su
             // initState — así, con 30 extensiones se piden las 2 o 3 que se
@@ -139,13 +155,15 @@ class HomeWindows extends StatelessWidget {
               // biblioteca, así que se reusa tal cual en vez de escribir otro
               // que se desincronice a la primera.
               1 => _BarraDeFiltros(c: c),
-              _ => i - 2 < visibles.length
-                  ? _FilaWindows(
-                      key: ValueKey(visibles[i - 2].package),
-                      c: c,
-                      fila: visibles[i - 2],
-                    )
-                  : const SizedBox.shrink(),
+              _ => visibles.isEmpty
+                  ? const _FilaEsperando()
+                  : (i - 2 < visibles.length
+                      ? _FilaWindows(
+                          key: ValueKey(visibles[i - 2].package),
+                          c: c,
+                          fila: visibles[i - 2],
+                        )
+                      : const SizedBox.shrink()),
             },
           ),
         );
