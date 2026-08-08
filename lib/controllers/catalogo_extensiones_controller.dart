@@ -641,10 +641,33 @@ class CatalogoExtensionesController extends GetxController {
   /// Se reparte por POSICIÓN y no al azar: al azar, cada apertura de la app
   /// cambiaría el rótulo de una fila que trae exactamente lo mismo, y eso se
   /// lee como que la app no sabe lo que muestra.
+  ///
+  /// ── Y manda la sección del sitio ────────────────────────────────────────
+  ///
+  /// Si la extensión declara CÓMO SE LLAMA su sección de novedades —«Programa-
+  /// ción», «Episodios recientes», «Novedades»— esa gana, siempre. Es lo que la
+  /// página muestra al entrar, con su nombre, y es lo que el usuario espera ver
+  /// reflejado.
+  ///
+  /// Sin esta regla pasaba lo que se reportó con JKAnime: su fila caía en el
+  /// turno impar, pedía lo más visto, y el Home mostraba One Piece y Dragon
+  /// Ball Z —los de siempre— en vez de la Programación de hoy. El rótulo decía
+  /// «Lo más visto», así que no era un error de dibujo: era que estaba pidiendo
+  /// otra cosa. Y encima dejaba sin usar el nombre de sección que la extensión
+  /// se había tomado el trabajo de declarar.
+  ///
+  /// Medido: hoy las diecisiete declaran la suya, así que en la práctica ninguna
+  /// va por lo más visto. La alternancia se queda igual, no como resto: una
+  /// extensión de la comunidad que no declare su sección no tiene nombre propio
+  /// que mostrar, y ahí sí conviene la variedad.
   void _repartirModos() {
     var i = 0;
     for (final fila in filas) {
-      if (!_popularPorExtension.containsKey(fila.package)) {
+      final ext = ExtensionUtils.runtimes[fila.package]?.extension ??
+          ExtensionUtils.vistaPrevia[fila.package]?.extension;
+      final tieneSeccionPropia = (ext?.latestLabel?.trim() ?? '').isNotEmpty;
+      if (tieneSeccionPropia ||
+          !_popularPorExtension.containsKey(fila.package)) {
         fila.modo = ModoDeFila.reciente;
         continue;
       }
