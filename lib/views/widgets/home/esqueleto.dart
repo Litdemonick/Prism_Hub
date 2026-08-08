@@ -1,4 +1,6 @@
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/scheduler.dart';
 import 'package:prismhub/views/widgets/home/home_theme.dart';
 
 /// Bloques grises que brillan mientras se espera contenido.
@@ -17,6 +19,20 @@ import 'package:prismhub/views/widgets/home/home_theme.dart';
 /// Cuando ya se sabe que no va a llegar nada. Un esqueleto brillando para
 /// siempre es peor que un mensaje de error: el usuario se queda esperando algo
 /// que nunca va a venir. Para eso está la línea con el botón de reintentar.
+///
+/// ── Lo que costaba la primera versión ─────────────────────────────────────
+///
+/// Dos cosas, y las dos se multiplicaban por cada bloque en pantalla:
+///
+///   · **Un AnimationController propio.** Con una grilla cargando son diez
+///     bloques, más siete de los chips, más los del carrusel: treinta relojes
+///     independientes latiendo a la vez, cada uno pidiendo su cuadro.
+///   · **Un ShaderMask.** Eso obliga a Flutter a dibujar el bloque en una capa
+///     aparte para después aplicarle el degradado — un `saveLayer` por bloque
+///     y por cuadro, que es de las operaciones más caras que hay.
+///
+/// Ahora hay **un solo reloj compartido** por toda la app y el reflejo se
+/// dibuja como una franja recortada encima del bloque. Sin capas de más.
 class Esqueleto extends StatefulWidget {
   const Esqueleto({
     super.key,
@@ -37,57 +53,103 @@ class Esqueleto extends StatefulWidget {
   State<Esqueleto> createState() => _EsqueletoState();
 }
 
-class _EsqueletoState extends State<Esqueleto>
-    with SingleTickerProviderStateMixin {
-  late final AnimationController _c = AnimationController(
-    vsync: this,
-    duration: const Duration(milliseconds: 1400),
-  )..repeat();
+/// El reloj de TODOS los esqueletos.
+///
+/// Uno solo, estático, que arranca cuando aparece el primer bloque y se apaga
+/// cuando se va el último. Antes cada bloque traía el suyo: treinta relojes
+/// para animar exactamente lo mismo.
+class _RelojDelBrillo {
+  static final _valor = ValueNotifier<double>(0);
+  static Ticker? _ticker;
+  static int _cuantos = 0;
+
+  /// Cuánto tarda el reflejo en cruzar de un lado al otro.
+  static const _vuelta = Duration(milliseconds: 1400);
+
+  static ValueListenable<double> get valor => _valor;
+
+  static void sumar() {
+    _cuantos++;
+    if (_ticker != null) return;
+    _ticker = Ticker((elapsed) {
+      _valor.value = (elapsed.inMilliseconds % _vuelta.inMilliseconds) /
+          _vuelta.inMilliseconds;
+    })
+      ..start();
+  }
+
+  static void restar() {
+    _cuantos--;
+    if (_cuantos > 0) return;
+    // Sin bloques en pantalla no hay nada que animar: se apaga en vez de
+    // seguir pidiendo cuadros de gusto.
+    _cuantos = 0;
+    _ticker?.dispose();
+    _ticker = null;
+  }
+}
+
+class _EsqueletoState extends State<Esqueleto> {
+  @override
+  void initState() {
+    super.initState();
+    _RelojDelBrillo.sumar();
+  }
 
   @override
   void dispose() {
-    _c.dispose();
+    _RelojDelBrillo.restar();
     super.dispose();
   }
 
   @override
   Widget build(BuildContext context) {
-    final forma = widget.child ??
-        DecoratedBox(
-          decoration: BoxDecoration(
-            color: HomeTheme.cardSurface,
-            borderRadius: BorderRadius.circular(widget.radio),
-          ),
-          child: SizedBox(width: widget.width, height: widget.height),
-        );
+    final radio = BorderRadius.circular(widget.radio);
+    final forma =
+        widget.child ?? SizedBox(width: widget.width, height: widget.height);
 
-    // RepaintBoundary: el brillo corre en bucle, y sin la capa propia arrastra
-    // a repintar todo lo que tenga alrededor sesenta veces por segundo.
     return RepaintBoundary(
-      child: AnimatedBuilder(
-        animation: _c,
-        // La forma se pasa aparte para que no se reconstruya en cada cuadro:
-        // lo único que cambia es por dónde va el reflejo.
-        child: forma,
-        builder: (context, hijo) => ShaderMask(
-          blendMode: BlendMode.srcATop,
-          shaderCallback: (rect) {
-            // Un reflejo claro que cruza de izquierda a derecha. Va de -1 a 2
-            // para que entre y salga del todo en vez de aparecer y
-            // desaparecer en los bordes.
-            final x = -1 + 3 * _c.value;
-            return LinearGradient(
-              begin: Alignment(x - 1, -0.3),
-              end: Alignment(x + 1, 0.3),
-              colors: [
-                Colors.transparent,
-                Colors.white.withValues(alpha: 0.07),
-                Colors.transparent,
-              ],
-              stops: const [0.35, 0.5, 0.65],
-            ).createShader(rect);
-          },
-          child: hijo,
+      child: ClipRRect(
+        borderRadius: radio,
+        child: Stack(
+          children: [
+            // El bloque de base. Si vino un hijo, es él el que da la forma.
+            DecoratedBox(
+              decoration: BoxDecoration(
+                color: HomeTheme.cardSurface,
+                borderRadius: radio,
+              ),
+              child: forma,
+            ),
+            // Y el reflejo, encima y recortado. Se corre con un Transform, así
+            // que cada cuadro solo mueve una franja ya dibujada.
+            Positioned.fill(
+              child: IgnorePointer(
+                child: ValueListenableBuilder<double>(
+                  valueListenable: _RelojDelBrillo.valor,
+                  builder: (context, t, _) => FractionalTranslation(
+                    // De -1 a 2: entra y sale del todo, en vez de aparecer y
+                    // desaparecer en los bordes.
+                    translation: Offset(-1 + 3 * t, 0),
+                    child: const DecoratedBox(
+                      decoration: BoxDecoration(
+                        gradient: LinearGradient(
+                          begin: Alignment(-1, -0.3),
+                          end: Alignment(1, 0.3),
+                          colors: [
+                            Color(0x00FFFFFF),
+                            Color(0x12FFFFFF),
+                            Color(0x00FFFFFF),
+                          ],
+                          stops: [0.35, 0.5, 0.65],
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+            ),
+          ],
         ),
       ),
     );
@@ -98,6 +160,10 @@ class _EsqueletoState extends State<Esqueleto>
 ///
 /// Mide exactamente lo mismo que [TarjetaDeCatalogo] con el mismo ancho, así
 /// que al llegar el contenido la grilla no se mueve ni un píxel.
+///
+/// Un solo [Esqueleto] para las tres piezas y no uno por pieza: el brillo
+/// cruza la tarjeta entera de una vez, que es como se ve en cualquier app, y
+/// cuesta un tercio.
 class EsqueletoTarjeta extends StatelessWidget {
   const EsqueletoTarjeta({super.key, required this.ancho});
 

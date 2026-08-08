@@ -272,6 +272,11 @@ class _BarraDeFiltrosState extends State<_BarraDeFiltros> {
           c.estadosDisponibles.isEmpty &&
           c.formatosDisponibles.isEmpty;
 
+      // Se calcula UNA vez: se consultaba cuatro veces por construcción y cada
+      // una armaba su propia lista. Misma clase de error que `_visibles`, y
+      // acá además puede discrepar entre una lectura y la siguiente.
+      final marcados = _marcados(c);
+
       return Padding(
         // Despegada del título: pegada arriba, la barra se leía como parte de
         // la cabecera y no como algo que se puede tocar.
@@ -309,7 +314,7 @@ class _BarraDeFiltrosState extends State<_BarraDeFiltros> {
                 children: [
                   // Flechas solo en escritorio: en una pantalla táctil la fila
                   // se arrastra con el dedo y las flechas solo taparían chips.
-                  if (!_esTactil && _marcados(c).isEmpty)
+                  if (!_esTactil && marcados.isEmpty)
                     SizedBox(width: margen - 8),
                   if (!_esTactil)
                     _FlechaDeFila(
@@ -324,7 +329,7 @@ class _BarraDeFiltrosState extends State<_BarraDeFiltros> {
                   //
                   // Flexible y con su propio desplazamiento: con tres activos en
                   // un teléfono angosto, si no, se comerían la barra entera.
-                  if (_marcados(c).isNotEmpty)
+                  if (marcados.isNotEmpty)
                     // Nunca más de un tercio del ancho. Sin el tope, con dos o
                     // tres filtros puestos el grupo de activos se llevaba media
                     // barra y a los demás chips les quedaba un hueco donde solo
@@ -337,7 +342,7 @@ class _BarraDeFiltrosState extends State<_BarraDeFiltros> {
                         padding: EdgeInsets.only(left: _esTactil ? margen : 6),
                         child: Row(
                           children: [
-                            for (final m in _marcados(c))
+                            for (final m in marcados)
                               Padding(
                                 padding: const EdgeInsets.only(right: 8),
                                 child: _Chip(
@@ -353,7 +358,7 @@ class _BarraDeFiltrosState extends State<_BarraDeFiltros> {
                       controller: _esTactil ? null : _scroll,
                       scrollDirection: Axis.horizontal,
                       padding: EdgeInsets.only(
-                          left: _marcados(c).isNotEmpty
+                          left: marcados.isNotEmpty
                               ? 0
                               : (_esTactil ? margen : 6),
                           right: _esTactil ? margen : 6),
