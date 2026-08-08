@@ -476,7 +476,22 @@
     "finished": "Mark as finished",
     "finished-marked": "Series finished",
     "share": "Share",
-    "share-copied": "Link copied"
+    "share-copied": "Link copied",
+    "lang-other": "In %s",
+    "lang": {
+      "es": "In Spanish",
+      "en": "In English",
+      "ja": "In Japanese",
+      "ko": "In Korean",
+      "zh": "In Chinese",
+      "pt": "In Portuguese",
+      "fr": "In French",
+      "it": "In Italian",
+      "de": "In German",
+      "ru": "In Russian",
+      "ar": "In Arabic",
+      "multi": "Several languages"
+    }
   },
   "video": {
     "episodes": "Episodes",

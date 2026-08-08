@@ -247,13 +247,43 @@ class DetailPageController extends GetxController {
   /// fijas: una portada un poco más angosta que la caja dejaba franjas a los
   /// costados, y ahí no hay relleno que quede bien. Midiendo la de verdad, la
   /// imagen llena el hueco y no sobra nada.
+  /// La proporción REAL de la portada de ESTA ficha, cuando ya se pudo medir.
+  ///
+  /// Ver [anotarPortada].
+  final RxnDouble proporcionMedida = RxnDouble();
+
+  /// Anota el tamaño real de la portada que se está mostrando.
+  ///
+  /// [FormaPortada] decide por CATÁLOGO y tarda cuatro portadas en decidirse:
+  /// hasta entonces contesta la vertical de siempre. En una extensión de vídeo
+  /// eso significa abrir la ficha con la caja vertical y el fotograma 16:9
+  /// metido chico en el medio, con relleno borroso alrededor — y ahí se queda,
+  /// porque la ficha no se entera de cuándo el catálogo se decide. Lo mismo
+  /// pasa con un título suelto que traiga otra forma que el resto del sitio.
+  ///
+  /// Acá hay UNA portada, así que se le puede tomar la medida y darle a la
+  /// caja su forma exacta.
+  void anotarPortada(int ancho, int alto) {
+    if (ancho <= 0 || alto <= 0) return;
+    // El mismo recorte que usa FormaPortada: una imagen rarísima —un banner
+    // larguísimo, una tira finita— no puede deformar la cabecera entera.
+    final nueva = (ancho / alto).clamp(0.45, 2.2);
+    if (proporcionMedida.value == nueva) return;
+    proporcionMedida.value = nueva;
+  }
+
   double get portadaProporcion {
     final ext = extension;
     if (ext == null) return FormaPortada.proporcionVertical;
-    return FormaPortada.paraDibujar(
-      package,
-      esDeLectura: !ExtensionUtils.videoTypes.contains(ext.type),
-    );
+    final esDeLectura = !ExtensionUtils.videoTypes.contains(ext.type);
+    // Solo en vídeo. En lectura la tapa es vertical por convención aunque una
+    // portada suelta venga apaisada, y ese criterio ya está probado; en vídeo
+    // es justo donde la forma del catálogo falla.
+    if (!esDeLectura) {
+      final medida = proporcionMedida.value;
+      if (medida != null) return medida;
+    }
+    return FormaPortada.paraDibujar(package, esDeLectura: esDeLectura);
   }
 
   bool get portadaApaisada => portadaProporcion > 1;

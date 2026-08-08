@@ -62,8 +62,11 @@ class DetailShareButton extends StatelessWidget {
 
   Widget _buildAndroid(BuildContext context) {
     if (compacto) {
+      // Mismo molde que el compacto de favorito: los dos viven en la barra de
+      // arriba y tienen que medir igual.
       return IconButton(
         tooltip: 'detail.share'.i18n,
+        color: HomeTheme.textPrimary,
         icon: const Icon(Icons.share_outlined),
         onPressed: () => _compartir(context),
       );

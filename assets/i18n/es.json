@@ -472,7 +472,22 @@
     "finished": "Marcar como finalizada",
     "finished-marked": "Obra finalizada",
     "share": "Compartir",
-    "share-copied": "Enlace copiado"
+    "share-copied": "Enlace copiado",
+    "lang-other": "En %s",
+    "lang": {
+      "es": "En español",
+      "en": "En inglés",
+      "ja": "En japonés",
+      "ko": "En coreano",
+      "zh": "En chino",
+      "pt": "En portugués",
+      "fr": "En francés",
+      "it": "En italiano",
+      "de": "En alemán",
+      "ru": "En ruso",
+      "ar": "En árabe",
+      "multi": "Varios idiomas"
+    }
   },
   "video": {
     "episodes": "Episodios",

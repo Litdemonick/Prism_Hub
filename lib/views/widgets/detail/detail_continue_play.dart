@@ -13,8 +13,18 @@ class DetailContinuePlay extends StatefulWidget {
   const DetailContinuePlay({
     super.key,
     this.tag,
+    this.comoFab = false,
   });
   final String? tag;
+
+  /// Dibujarse como botón flotante en vez de como botón de una fila.
+  ///
+  /// En la ficha de Android la acción principal se fue de la cabecera al botón
+  /// flotante: ahí no se lleva alto de la cabecera —que en un teléfono en
+  /// vertical es lo que escasea— y, sobre todo, no desaparece al hacer scroll.
+  /// Antes se plegaba con la cabecera justo cuando uno estaba mirando la lista
+  /// y quería darle a leer.
+  final bool comoFab;
 
   @override
   State<DetailContinuePlay> createState() => _DetailContinuePlayState();
@@ -79,6 +89,55 @@ class _DetailContinuePlayState extends State<DetailContinuePlay> {
 
       final history = c.history.value;
       final data = c.detail;
+
+      if (widget.comoFab) {
+        // Se arma una sola vez la etiqueta y la acción, y después se dibuja:
+        // las tres ramas de abajo repiten el mismo botón con otro texto, y
+        // acá con el flotante ese enredo no hace falta.
+        String etiqueta = watchNowString;
+        VoidCallback? accion;
+        if (!c.isLoading.value) {
+          if (_canContinue(history)) {
+            final h = history!;
+            etiqueta = FlutterI18n.translate(
+              context,
+              'detail.continue-watching',
+              translationParams: {'episode': _episodeLabel(h)},
+            );
+            accion = () => c.goWatch(
+                  context,
+                  data!.episodes![h.episodeGroupId].urls,
+                  h.episodeId,
+                  h.episodeGroupId,
+                  autoResume: true,
+                );
+          } else if (data?.episodes != null && data!.episodes!.isNotEmpty) {
+            accion = () => c.goWatch(context, data.episodes![0].urls, 0, 0);
+          }
+        }
+        // Sin nada que abrir no se dibuja nada. Un botón flotante apagado
+        // ocupa la esquina y no hace nada; que no hay capítulos ya lo dice la
+        // lista, que es donde uno lo va a buscar.
+        if (accion == null) return const SizedBox.shrink();
+        return FloatingActionButton.extended(
+          onPressed: accion,
+          backgroundColor: HomeTheme.accentPink,
+          foregroundColor: HomeTheme.bg,
+          icon: const Icon(Icons.play_arrow_rounded),
+          label: ConstrainedBox(
+            // Tope al ancho: "Continuar Capítulo 128" en un teléfono angosto
+            // dejaba el botón cruzando la pantalla de lado a lado.
+            constraints: const BoxConstraints(maxWidth: 200),
+            child: Text(
+              etiqueta,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: const TextStyle(fontWeight: FontWeight.w700),
+            ),
+          ),
+        );
+      }
+
       if (c.isLoading.value) {
         return noEpisodes;
       }

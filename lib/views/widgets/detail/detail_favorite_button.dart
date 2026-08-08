@@ -34,14 +34,15 @@ class _DetailFavoriteButtonState extends State<DetailFavoriteButton> {
       () {
         final isFavorite = c.isFavorite.value;
         if (widget.compacto) {
+          // Va en la barra de arriba, al lado de compartir y de seguimiento:
+          // los tres son IconButton, así que miden lo mismo y se alinean
+          // solos. El rosa del acento y no colorScheme.primary, que es el
+          // morado semilla de Material y no un color del diseño.
           return IconButton(
-            tooltip: isFavorite
-                ? 'detail.favorited'.i18n
-                : 'detail.favorite'.i18n,
-            icon: Icon(
-              isFavorite ? Icons.favorite : Icons.favorite_border,
-              color: isFavorite ? Theme.of(context).colorScheme.primary : null,
-            ),
+            tooltip:
+                isFavorite ? 'detail.favorited'.i18n : 'detail.favorite'.i18n,
+            color: isFavorite ? HomeTheme.accentPink : HomeTheme.textPrimary,
+            icon: Icon(isFavorite ? Icons.favorite : Icons.favorite_border),
             onPressed: () async {
               await c.toggleFavorite(context);
             },
