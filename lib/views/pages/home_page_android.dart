@@ -48,7 +48,9 @@ class HomeAndroid extends StatelessWidget {
   /// que no lo son, y eso es instantáneo. El género es otra cosa: ese sí hay
   /// que preguntárselo al sitio, y por eso espera a que el usuario actualice.
   List<FilaDeExtension> _visibles(CatalogoExtensionesController c) => c.filas
-      .where((f) => f.estadoExt == EstadoExtension.activa)
+      // Las de vista previa también: no están encendidas —por eso son vista
+      // previa— pero sí traen contenido, que es lo único que el Home pide.
+      .where((f) => f.estadoExt == EstadoExtension.activa || f.esVistaPrevia)
       .where(c.entraEnElTipo)
       .toList();
 

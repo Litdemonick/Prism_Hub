@@ -369,6 +369,10 @@ class CatalogoExtensionesController extends GetxController {
     }
 
     final nuevas = instaladas.entries
+        // Las que se van a mostrar como vista previa salen de acá: si no,
+        // aparecerían dos veces —una apagada y otra con contenido— y con la
+        // misma clave, que además rompe el ListView.
+        .where((e) => !ExtensionUtils.esVistaPrevia(e.key))
         .map((e) => FilaDeExtension(
               package: e.key,
               nombre: e.value.extension.name,
@@ -494,6 +498,8 @@ class CatalogoExtensionesController extends GetxController {
     // en pantalla, refrescar por detrás no tiene que parpadear.
     if (fila.items.isEmpty) fila.estado.value = EstadoDeFila.cargando;
     try {
+      // En vista previa el motor puede venir de dos lados: uno bajado a
+      // propósito, o uno YA instalado que el usuario tiene apagado.
       final runtime = fila.esVistaPrevia
           ? ExtensionUtils.vistaPrevia[fila.package]
           : ExtensionUtils.enabledRuntimes[fila.package];

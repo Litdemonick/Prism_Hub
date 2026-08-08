@@ -759,13 +759,41 @@ class ExtensionUtils {
     if (_vistaPreviaLista) return;
     _vistaPreviaLista = true;
     try {
+      // ── Lo que importa es cuántas ANDAN, no cuántas hay ────────────────
+      //
+      // La primera versión miraba si estaba instalada, y eso dejaba fuera el
+      // caso más común: el usuario que tiene todo instalado y casi todo
+      // APAGADO. Ahí el Home quedaba con una fila y la vista previa no se
+      // activaba nunca, porque para ella «ya las tenía».
+      //
+      // Se cuenta lo que de verdad trae contenido: instalada Y encendida.
+      final activas = runtimes.entries
+          .where((e) => !e.value.extension.nsfw && isEnabled(e.key))
+          .length;
+      if (activas >= maxVistaPrevia) return;
+      var faltan = maxVistaPrevia - activas;
+
+      // ── Primero las apagadas, que salen gratis ─────────────────────────
+      //
+      // Están instaladas: su motor YA está cargado en memoria. Mostrar lo que
+      // tienen no cuesta ni una descarga ni un motor más — solo pedirles
+      // contenido, igual que a cualquier otra.
+      for (final e in runtimes.entries) {
+        if (faltan <= 0) break;
+        if (e.value.extension.nsfw || isEnabled(e.key)) continue;
+        vistaPrevia[e.key] = e.value;
+        faltan--;
+      }
+      if (faltan <= 0) return;
+
+      // ── Y si todavía faltan, se bajan del catálogo ─────────────────────
       final catalogo = await fetchRepoIndex();
       final elegidas = <Map>[];
       for (final e in catalogo.cast<Map>()) {
-        if (elegidas.length >= maxVistaPrevia) break;
+        if (elegidas.length >= faltan) break;
         final pkg = e['package']?.toString();
         if (pkg == null || pkg.isEmpty) continue;
-        // Ya la tiene: no hay nada que previsualizar.
+        // Ya la tiene instalada (encendida o apagada): no hay nada que bajar.
         if (runtimes.containsKey(pkg)) continue;
         // Las +18 no entran al Home ni por esta puerta.
         if (e['nsfw'] == true) continue;
