@@ -855,6 +855,9 @@ class CatalogoExtensionesController extends GetxController {
     unawaited(_armar());
   }
 
+  /// Cuántas veces se volvió a intentar armar por no haber motores todavía.
+  int _reintentosDeArmado = 0;
+
   /// Para que dos armados no se pisen.
   ///
   /// A `_armar` se llega por tres caminos: al abrir, al prender una extensión
@@ -1015,8 +1018,34 @@ class CatalogoExtensionesController extends GetxController {
 
     if (nuevas.isEmpty) {
       filas.clear();
+      // ── Puede ser que los motores todavía no estén ────────────────────
+      //
+      // Este armado sale al abrir el Home, y en ese momento las extensiones
+      // pueden estar todavía cargando: `runtimes` está vacío y esto termina sin
+      // una sola fila.
+      //
+      // Antes lo único que volvía a intentar era la carga de segundo plano, que
+      // depende de la RED —pide el catálogo—: con internet lento eran varios
+      // segundos de Home vacío y contenido apareciendo de golpe. Y `armado`
+      // sigue en falso, así que la pantalla se queda en bloques grises hasta
+      // entonces, sin nada que la despierte antes.
+      //
+      // Con este reintento, en cuanto los motores están la lista se arma, sin
+      // esperar a la red. Tres intentos cortos y se deja: si a los dos segundos
+      // no hay ninguna extensión, es que de verdad no hay, y ahí el que manda
+      // es el aviso de vacío.
+      if (_reintentosDeArmado < 3) {
+        _reintentosDeArmado++;
+        Future<void>.delayed(const Duration(milliseconds: 600), () {
+          if (filas.isEmpty) unawaited(_armar());
+        });
+        return;
+      }
+      // Se agotaron los intentos: ahora sí, no hay extensiones y se dice.
+      armado.value = true;
       return;
     }
+    _reintentosDeArmado = 0;
 
     // Lo guardado se muestra YA, sin esperar la red.
     for (final fila in nuevas) {

@@ -2245,18 +2245,28 @@ class _CarruselEsperando extends StatelessWidget {
 
 /// El Home mientras todavía no se sabe qué hay.
 class _HomeEsperando extends StatelessWidget {
-  const _HomeEsperando();
+  const _HomeEsperando({this.conCabecera = true});
+
+  /// El nombre del app arriba. En escritorio no va: ahí el título vive en la
+  /// barra de la ventana, y dibujarlo dos veces se vería como un error.
+  final bool conCabecera;
 
   @override
   Widget build(BuildContext context) {
     return ListView(
       physics: const NeverScrollableScrollPhysics(),
-      children: const [
-        _Cabecera(),
-        SizedBox(height: 8),
-        _CarruselEsperando(),
-        _FilaEsperando(),
-        _FilaEsperando(),
+      // En escritorio, el mismo aire de arriba que tiene el Home de verdad:
+      // sin esto el bloque del acordeón arranca pegado al borde y al llegar el
+      // contenido todo se corre veinte píxeles hacia abajo.
+      padding: conCabecera ? EdgeInsets.zero : const EdgeInsets.only(top: 20),
+      children: [
+        if (conCabecera) ...const [
+          _Cabecera(),
+          SizedBox(height: 8),
+        ],
+        const _CarruselEsperando(),
+        const _FilaEsperando(),
+        const _FilaEsperando(),
       ],
     );
   }

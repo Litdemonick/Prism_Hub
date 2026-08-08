@@ -28,7 +28,25 @@ class HomeWindows extends StatelessWidget {
       // igual, pero la app también corre en Android TV.
       top: false,
       child: Obx(() {
-        if (c.filas.isEmpty) return const _SinExtensiones();
+        // ── Bloques grises mientras se arma, no el mensaje de vacío ──────
+        //
+        // Antes acá iba directo el aviso de «no tenés extensiones». Pero al
+        // arrancar la app las filas TODAVÍA no están: hay que leer el caché de
+        // disco y esperar a que los motores de las extensiones terminen de
+        // cargar. En ese rato `filas` está vacío y no se sabe nada.
+        //
+        // Eso es la pantalla vacía al abrir en Windows, con el contenido
+        // apareciendo de golpe después. El Home de celular ya lo resolvía así
+        // desde antes; en escritorio faltaba, y era el único de los dos que
+        // mostraba el hueco.
+        //
+        // El mensaje aparece recién cuando `armado` dice que de verdad terminó
+        // de mirar y no encontró ninguna.
+        if (c.filas.isEmpty) {
+          return c.armado.value
+              ? const _SinExtensiones()
+              : const _HomeEsperando(conCabecera: false);
+        }
         // Igual que en celular: la lista se calcula UNA vez, para que
         // `itemCount` y el constructor no puedan discrepar cuando el filtro
         // acorta la lista entre una llamada y la otra.
