@@ -247,7 +247,8 @@
     "masivo-desinstaladas": "{n} desinstaladas.",
     "masivo-instaladas": "{n} instaladas.",
     "masivo-instaladas-con-fallos": "{n} instaladas, {f} no se pudieron.",
-    "masivo-nada-para-instalar": "Ya estaban todas instaladas."
+    "masivo-nada-para-instalar": "Ya estaban todas instaladas.",
+    "acciones": "Acciones"
   },
   "extension-repo": {
     "error": "¡Ha ocurrido un error!",

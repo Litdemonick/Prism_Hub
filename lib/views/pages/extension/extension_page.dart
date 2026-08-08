@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:fluent_ui/fluent_ui.dart' as fluent;
 import 'package:flutter/material.dart';
 import 'package:flutter_i18n/flutter_i18n.dart';
@@ -417,6 +419,182 @@ class _ExtensionPageState extends State<ExtensionPage> {
     );
   }
 
+  /// Un solo botón, y todo lo demás adentro. Solo en Android.
+  ///
+  /// ── Qué se recupera ─────────────────────────────────────────────────────
+  ///
+  /// La barra tenía cuatro botones de acción más siete chips de filtro. En un
+  /// teléfono eso no entra en una línea, así que se partía en dos y se comía
+  /// unos setenta puntos de alto — justo arriba de la lista, que es lo que uno
+  /// vino a ver. Con un botón, las tarjetas suben.
+  ///
+  /// Es el mismo patrón que ya usa el Repositorio de extensiones: una hoja que
+  /// sube con todo adentro. Que las dos pantallas hermanas se manejen igual
+  /// vale más que ahorrarse un toque.
+  ///
+  /// Al lado del botón queda a la vista qué filtro está puesto, si hay alguno:
+  /// escondido dentro de la hoja, uno se olvida de que filtró y la lista corta
+  /// parece un error.
+  Widget _buildBarraCompacta() {
+    final hayFiltro = _filter != _ExtFilter.todas;
+    return Row(
+      children: [
+        OutlinedButton.icon(
+          onPressed: _abrirPanel,
+          icon: Icon(
+            _masivoEnCurso ? Icons.hourglass_top_rounded : Icons.tune_rounded,
+            size: 18,
+          ),
+          label: Text('search.filter'.i18n),
+          style: ButtonStyle(
+            foregroundColor: WidgetStateProperty.all(HomeTheme.textPrimary),
+            side: WidgetStateProperty.all(
+              const BorderSide(color: HomeTheme.border),
+            ),
+          ),
+        ),
+        if (hayFiltro) ...[
+          const SizedBox(width: 10),
+          Flexible(
+            child: _ExtFilterChip(
+              label: _filter.label,
+              selected: true,
+              // Tocarlo quita el filtro: es el camino corto para volver a
+              // verlas todas sin tener que abrir la hoja de nuevo.
+              onTap: () => setState(() {
+                _filter = _ExtFilter.todas;
+                _page = 0;
+              }),
+            ),
+          ),
+        ],
+      ],
+    );
+  }
+
+  /// La hoja con los filtros y las acciones.
+  void _abrirPanel() {
+    showModalBottomSheet(
+      context: context,
+      showDragHandle: true,
+      useSafeArea: true,
+      isScrollControlled: true,
+      backgroundColor: HomeTheme.cardSurface,
+      builder: (hojaContext) {
+        // StatefulBuilder para que al tocar un chip se repinte la hoja: el
+        // setState de la página no llega acá, que es otro árbol.
+        return StatefulBuilder(
+          builder: (hojaContext, setHoja) {
+            Widget accion({
+              required IconData icono,
+              required String texto,
+              required Future<void> Function() alTocar,
+              Color? color,
+            }) {
+              return ListTile(
+                enabled: !_masivoEnCurso,
+                leading: Icon(
+                  _masivoEnCurso ? Icons.hourglass_top_rounded : icono,
+                  color: color ?? HomeTheme.textPrimary,
+                ),
+                title: Text(
+                  texto,
+                  style: TextStyle(color: color ?? HomeTheme.textPrimary),
+                ),
+                onTap: () {
+                  // Se cierra ANTES de arrancar: son acciones largas, y dejar
+                  // la hoja abierta encima tapa el aviso del final y deja
+                  // tocar otra cosa mientras corre.
+                  Navigator.of(hojaContext).pop();
+                  unawaited(_conElPasoCerrado(alTocar));
+                },
+              );
+            }
+
+            return SingleChildScrollView(
+              padding: const EdgeInsets.fromLTRB(20, 4, 20, 24),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    'search.filter'.i18n,
+                    style: const TextStyle(
+                      color: HomeTheme.textMuted,
+                      fontSize: 12,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                  const SizedBox(height: 10),
+                  Wrap(
+                    spacing: 8,
+                    runSpacing: 8,
+                    children: [
+                      for (final f in _ExtFilter.values)
+                        _ExtFilterChip(
+                          label: f.label,
+                          selected: _filter == f,
+                          onTap: () {
+                            // Las dos pantallas a la vez: la hoja para que el
+                            // chip se marque, y la página para que la lista se
+                            // rearme detrás mientras la hoja sigue abierta.
+                            setHoja(() {});
+                            setState(() {
+                              _filter = f;
+                              // Vuelve a la página 0: con menos resultados,
+                              // quedarse en la 3 mostraba una lista vacía sin
+                              // explicación.
+                              _page = 0;
+                            });
+                          },
+                        ),
+                    ],
+                  ),
+                  const SizedBox(height: 20),
+                  const Divider(height: 1, color: HomeTheme.border),
+                  const SizedBox(height: 12),
+                  Text(
+                    'extension.acciones'.i18n,
+                    style: const TextStyle(
+                      color: HomeTheme.textMuted,
+                      fontSize: 12,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                  const SizedBox(height: 4),
+                  accion(
+                    icono: Icons.toggle_on_outlined,
+                    texto: 'extension.activar-todas'.i18n,
+                    alTocar: () => _cambiarTodas(true),
+                  ),
+                  accion(
+                    icono: Icons.toggle_off_outlined,
+                    texto: 'extension.desactivar-todas'.i18n,
+                    alTocar: () => _cambiarTodas(false),
+                  ),
+                  accion(
+                    icono: Icons.system_update_alt_rounded,
+                    texto: 'extension.actualizar-todas'.i18n,
+                    alTocar: _actualizarTodas,
+                  ),
+                  // Última y en rojo: es la única que no se deshace. Ya
+                  // pregunta antes (ver _desinstalarTodas), pero que se vea
+                  // distinta evita el toque por inercia.
+                  accion(
+                    icono: Icons.delete_sweep_outlined,
+                    texto: 'extension.desinstalar-todas'.i18n,
+                    alTocar: _desinstalarTodas,
+                    color: const Color(0xFFE5484D),
+                  ),
+                ],
+              ),
+            );
+          },
+        );
+      },
+    );
+  }
+
   Widget _buildFilterChips() {
     return SingleChildScrollView(
       scrollDirection: Axis.horizontal,
@@ -644,7 +822,11 @@ class _ExtensionPageState extends State<ExtensionPage> {
                 Padding(
                   padding: EdgeInsets.fromLTRB(
                       16, 0, 16, _pantallaBaja(context) ? 4 : 10),
-                  child: _buildBarraDeFiltros(),
+                  // Android: un solo botón que abre la hoja con los
+                  // filtros y las acciones. Ver _buildBarraCompacta — así las
+                  // tarjetas suben y se gana el alto que se comían las dos
+                  // líneas de botones.
+                  child: _buildBarraCompacta(),
                 ),
                 if (totalPages > 1)
                   Padding(

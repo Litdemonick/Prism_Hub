@@ -251,7 +251,8 @@
     "masivo-desinstaladas": "{n} uninstalled.",
     "masivo-instaladas": "{n} installed.",
     "masivo-instaladas-con-fallos": "{n} installed, {f} failed.",
-    "masivo-nada-para-instalar": "Everything was already installed."
+    "masivo-nada-para-instalar": "Everything was already installed.",
+    "acciones": "Actions"
   },
   "extension-repo": {
     "error": "An error occurred!",
