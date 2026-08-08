@@ -47,12 +47,31 @@ class HomeAndroid extends StatelessWidget {
   /// está cargado para las diecisiete. Elegir «solo mangas» es no dibujar las
   /// que no lo son, y eso es instantáneo. El género es otra cosa: ese sí hay
   /// que preguntárselo al sitio, y por eso espera a que el usuario actualice.
-  List<FilaDeExtension> _visibles(CatalogoExtensionesController c) => c.filas
-      // Las de vista previa también: no están encendidas —por eso son vista
-      // previa— pero sí traen contenido, que es lo único que el Home pide.
-      .where((f) => f.estadoExt == EstadoExtension.activa || f.esVistaPrevia)
-      .where(c.entraEnElTipo)
-      .toList();
+  List<FilaDeExtension> _visibles(CatalogoExtensionesController c) {
+    final lista = c.filas
+        // Las de vista previa también: no están encendidas —por eso son vista
+        // previa— pero sí traen contenido, que es lo único que el Home pide.
+        .where((f) => f.estadoExt == EstadoExtension.activa || f.esVistaPrevia)
+        .where(c.entraEnElTipo)
+        .toList();
+
+      // ── Con filtro puesto, las que pueden contestarlo van arriba ──────
+      //
+      // Si no, el usuario marca «Isekai» y las primeras tres filas le dicen
+      // «no tiene ese género» — parece que el filtro rompió el Home, cuando en
+      // realidad hay contenido más abajo.
+      //
+      // Es un orden estable: entre las que sí pueden se respeta el orden
+      // original (el del historial), así que no baila de una carga a otra.
+      if (c.hayFiltros) {
+        lista.sort((a, b) {
+          final pa = c.puedeConEsteGenero(a.package) ? 0 : 1;
+          final pb = c.puedeConEsteGenero(b.package) ? 0 : 1;
+          return pa - pb;
+        });
+      }
+      return lista;
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -629,6 +648,10 @@ class _CarruselAndroidState extends State<_CarruselAndroid>
   Widget build(BuildContext context) {
     return Obx(() {
       final grupos = widget.c.destacados;
+      // Filtrando: bloques grises también acá. Lo que hay en el acordeón es
+      // del filtro anterior, y dejarlo quieto mientras se busca haría creer
+      // que no está pasando nada.
+      if (widget.c.aplicandoFiltros.value) return const _CarruselEsperando();
       final planos = grupos.isEmpty ? const <(String, ExtensionListItem)>[] : _planos(grupos);
       // Nada todavía: en vez de un hueco negro de media pantalla, las tarjetas
       // que van a venir, en gris. Así el Home ya tiene su forma desde el
@@ -761,32 +784,18 @@ class _CarruselAndroidState extends State<_CarruselAndroid>
     final centro = (f + 1 <= hasta)
         ? centroDe(f) + t * (centroDe(f + 1) - centroDe(f))
         : centroDe(f);
-    var dx = anchoUtil / 2 - centro;
+    final dx = anchoUtil / 2 - centro;
 
-    // ── En los extremos no se centra: se apoya en el borde ─────────────
+    // ── Siempre centrada, también en los extremos ──────────────────────
     //
-    // Centrar siempre significa que en la PRIMERA tarjeta no hay nada a la
-    // izquierda que llene ese lado, y queda un hueco negro de media pantalla
-    // —igual en la última, del otro lado—.
+    // Se probó apoyarla en el borde al llegar al principio o al final, para
+    // que no quedara hueco de un lado. Se ve peor: la tarjeta en foco cambia
+    // de sitio según dónde estés en la lista, así que la vista salta al pasar
+    // la primera o la última.
     //
-    // Se acota el corrimiento: llegando al principio, la primera se apoya en
-    // el margen izquierdo; llegando al final, la última en el derecho. En el
-    // medio no cambia nada, así que el deslizar se sigue sintiendo igual.
-    const borde = 12.0;
-    if (desde == 0) {
-      final tope = borde - xs[0]!;
-      if (dx > tope) dx = tope;
-    }
-    if (hasta == planos.length - 1) {
-      final piso = anchoUtil - borde - (xs[hasta]! + anchoDe(hasta));
-      if (dx < piso) dx = piso;
-    }
-    // Con menos tarjetas que ancho disponible las dos reglas se pelean; ahí
-    // gana el centrado, que es lo que se ve bien con dos o tres.
-    if (desde == 0 && hasta == planos.length - 1) {
-      final total = xs[hasta]! + anchoDe(hasta);
-      if (total < anchoUtil) dx = (anchoUtil - total) / 2;
-    }
+    // Centrada siempre, el foco está SIEMPRE en el mismo lugar de la pantalla
+    // y el ojo no tiene que ir a buscarlo. El hueco de los extremos es el
+    // precio, y es el barato.
 
     return Stack(
       children: [

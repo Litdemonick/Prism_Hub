@@ -32,10 +32,29 @@ class HomeWindows extends StatelessWidget {
         // Igual que en celular: la lista se calcula UNA vez, para que
         // `itemCount` y el constructor no puedan discrepar cuando el filtro
         // acorta la lista entre una llamada y la otra.
-        final visibles = c.filas
-            .where((f) => f.estadoExt == EstadoExtension.activa || f.esVistaPrevia)
-            .where(c.entraEnElTipo)
-            .toList();
+        final visibles = () {
+          final lista = c.filas
+              .where((f) =>
+                  f.estadoExt == EstadoExtension.activa || f.esVistaPrevia)
+              .where(c.entraEnElTipo)
+              .toList();
+          // ── Con filtro puesto, las que pueden contestarlo van arriba ──────
+          //
+          // Si no, el usuario marca «Isekai» y las primeras tres filas le dicen
+          // «no tiene ese género» — parece que el filtro rompió el Home, cuando en
+          // realidad hay contenido más abajo.
+          //
+          // Es un orden estable: entre las que sí pueden se respeta el orden
+          // original (el del historial), así que no baila de una carga a otra.
+          if (c.hayFiltros) {
+            lista.sort((a, b) {
+              final pa = c.puedeConEsteGenero(a.package) ? 0 : 1;
+              final pb = c.puedeConEsteGenero(b.package) ? 0 : 1;
+              return pa - pb;
+            });
+          }
+          return lista;
+        }();
         return RefreshIndicator(
           onRefresh: () async {
             if (c.hayCambiosSinAplicar) {
