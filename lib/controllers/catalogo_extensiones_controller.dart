@@ -1151,7 +1151,21 @@ class CatalogoExtensionesController extends GetxController {
   /// Si algo de esto falla —sin conexión, catálogo caído, una extensión que no
   /// contesta— el Home se queda con lo que ya mostró. Ninguna de las dos cosas
   /// es imprescindible.
+  bool _completado = false;
+
   Future<void> _completarPorDetras() async {
+    // ── Una sola vez, y esto NO es opcional ────────────────────────────
+    //
+    // Sin este candado hay un bucle infinito: al terminar, esto llama a
+    // `recargar()`, que llama a `_armar()`, que vuelve a lanzar esto. Los
+    // candados de `detectarMixtas` y `prepararVistaPrevia` no alcanzan —
+    // devuelven al toque, pero la llamada a `recargar()` de abajo sigue
+    // ocurriendo igual.
+    //
+    // En pantalla se veía como el Home rearmándose sin parar: todo
+    // parpadeando y moviéndose solo.
+    if (_completado) return;
+    _completado = true;
     try {
       await ExtensionUtils.detectarMixtas();
       await ExtensionUtils.prepararVistaPrevia();
