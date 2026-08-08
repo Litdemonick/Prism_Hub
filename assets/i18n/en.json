@@ -239,7 +239,10 @@
     "desactivar-todas": "Disable all",
     "masivo-salteadas": "Some 18+ were left off: the 18+ switch is off in Settings.",
     "masivo-activadas": "{n} enabled.",
-    "masivo-desactivadas": "{n} disabled."
+    "masivo-desactivadas": "{n} disabled.",
+    "actualizar-todas": "Update all",
+    "masivo-actualizadas": "{n} updated.",
+    "masivo-al-dia": "Everything was already up to date."
   },
   "extension-repo": {
     "error": "An error occurred!",

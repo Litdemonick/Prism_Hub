@@ -9,6 +9,7 @@ import 'package:prismhub/views/pages/extension/extension_repo_page.dart';
 import 'package:prismhub/views/widgets/home/animated_background_glow.dart';
 import 'package:prismhub/views/widgets/home/home_theme.dart';
 import 'package:prismhub/utils/extension.dart';
+import 'package:prismhub/utils/log.dart';
 import 'package:prismhub/utils/breakpoints.dart';
 import 'package:prismhub/utils/search_text.dart';
 import 'package:prismhub/router/router.dart';
@@ -124,9 +125,67 @@ class _ExtensionPageState extends State<ExtensionPage> {
       title: activar
           ? 'extension.activar-todas'.i18n
           : 'extension.desactivar-todas'.i18n,
-      content: salteadas == 0
-          ? base
-          : '$base ${'extension.masivo-salteadas'.i18n}',
+      content:
+          salteadas == 0 ? base : '$base ${'extension.masivo-salteadas'.i18n}',
+    );
+  }
+
+  /// Está actualizando todas ahora mismo.
+  bool _actualizandoTodas = false;
+
+  /// Baja la última versión de cada extensión instalada que tenga una.
+  ///
+  /// ── Por qué de a una y no todas a la vez ────────────────────────────────
+  ///
+  /// Cada actualización baja un guion, verifica su firma y reinstala. Diecisiete
+  /// en paralelo es diecisiete descargas y diecisiete verificaciones peleando
+  /// por el mismo hilo, y encima el catálogo se pide una vez por cada una.
+  ///
+  /// De a una tarda más, pero se puede contar cuántas van, y si una falla las
+  /// demás siguen. Es una acción que se hace de vez en cuando, no algo que
+  /// tenga que ser instantáneo.
+  ///
+  /// ── Sobre TODAS las instaladas, no sobre las filtradas ──────────────────
+  ///
+  /// Al revés que activar/desactivar. Ahí el botón hace lo que la pantalla
+  /// muestra porque prender de más es un error caro. Acá no: dejar una
+  /// extensión sin actualizar porque justo estaba filtrada no le sirve a nadie,
+  /// y una desactualizada deja de funcionar sin avisar.
+  Future<void> _actualizarTodas() async {
+    if (_actualizandoTodas) return;
+    setState(() => _actualizandoTodas = true);
+    var hechas = 0;
+    var fallidas = 0;
+    try {
+      final instaladas = c.runtimes.values.toList(growable: false);
+      for (final r in instaladas) {
+        final pkg = r.extension.package;
+        try {
+          if (!await ExtensionUtils.hasExtensionUpdate(pkg)) continue;
+          if (!mounted) return;
+          await ExtensionUtils.updateInstalledFromRepo(pkg, context);
+          hechas++;
+        } catch (e) {
+          // Una que falle no puede frenar a las demás: puede ser una extensión
+          // retirada del catálogo, o el sitio de descarga caído un momento.
+          fallidas++;
+          logger.info('[extensiones] no se pudo actualizar $pkg: $e');
+        }
+      }
+    } finally {
+      if (mounted) setState(() => _actualizandoTodas = false);
+    }
+    if (!mounted) return;
+    showPlatformSnackbar(
+      context: context,
+      title: 'extension.actualizar-todas'.i18n,
+      content: hechas == 0 && fallidas == 0
+          ? 'extension.masivo-al-dia'.i18n
+          : FlutterI18n.translate(
+              context,
+              'extension.masivo-actualizadas',
+              translationParams: {'n': '$hechas'},
+            ),
     );
   }
 
@@ -160,6 +219,15 @@ class _ExtensionPageState extends State<ExtensionPage> {
       label: 'extension.desactivar-todas'.i18n,
       onTap: () => _cambiarTodas(false),
     );
+    final actualizar = _BotonMasivo(
+      icono: _actualizandoTodas
+          ? Icons.hourglass_top_rounded
+          : Icons.system_update_alt_rounded,
+      label: 'extension.actualizar-todas'.i18n,
+      // Mientras corre, no se puede volver a tocar: son diecisiete descargas y
+      // dispararlas dos veces solo duplica el trabajo.
+      onTap: _actualizandoTodas ? null : _actualizarTodas,
+    );
 
     // ── Una línea o dos, y no lo decide solo el ancho ─────────────────────
     //
@@ -177,9 +245,21 @@ class _ExtensionPageState extends State<ExtensionPage> {
     if (!unaSolaLinea) {
       return Column(
         children: [
-          Row(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [activar, const SizedBox(width: 10), desactivar],
+          // Los tres en una fila que se puede correr: en un teléfono angosto
+          // no entran, y partirlos en dos líneas se comería el alto que le
+          // falta a la lista.
+          SingleChildScrollView(
+            scrollDirection: Axis.horizontal,
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                activar,
+                const SizedBox(width: 10),
+                desactivar,
+                const SizedBox(width: 10),
+                actualizar,
+              ],
+            ),
           ),
           const SizedBox(height: 10),
           _buildFilterChips(),
@@ -198,6 +278,8 @@ class _ExtensionPageState extends State<ExtensionPage> {
         Flexible(child: _buildFilterChips()),
         const SizedBox(width: 14),
         desactivar,
+        const SizedBox(width: 10),
+        actualizar,
       ],
     );
   }
@@ -789,7 +871,7 @@ class _BotonMasivo extends StatelessWidget {
 
   final IconData icono;
   final String label;
-  final VoidCallback onTap;
+  final VoidCallback? onTap;
 
   @override
   Widget build(BuildContext context) {

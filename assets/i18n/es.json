@@ -235,7 +235,10 @@
     "desactivar-todas": "Desactivar todas",
     "masivo-salteadas": "Algunas +18 quedaron sin activar: el interruptor de +18 está apagado en Ajustes.",
     "masivo-activadas": "Se activaron {n}.",
-    "masivo-desactivadas": "Se desactivaron {n}."
+    "masivo-desactivadas": "Se desactivaron {n}.",
+    "actualizar-todas": "Actualizar todas",
+    "masivo-actualizadas": "{n} actualizadas.",
+    "masivo-al-dia": "Ya estaban todas al día."
   },
   "extension-repo": {
     "error": "¡Ha ocurrido un error!",
