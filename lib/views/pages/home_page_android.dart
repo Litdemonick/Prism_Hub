@@ -212,7 +212,9 @@ class _BarraDeFiltrosState extends State<_BarraDeFiltros> {
 
       // Sin géneros todavía —se leen en segundo plano, después de que carguen
       // las filas— no se dibuja una franja vacía esperando.
-      if (generos.isEmpty) return const SizedBox(height: 6);
+      if (generos.isEmpty && c.estadosDisponibles.isEmpty) {
+        return const SizedBox(height: 6);
+      }
 
       return Padding(
         // Despegada del título: pegada arriba, la barra se leía como parte de
@@ -245,6 +247,26 @@ class _BarraDeFiltrosState extends State<_BarraDeFiltros> {
               padding: EdgeInsets.symmetric(horizontal: _esTactil ? margen : 6),
               child: Row(
                 children: [
+                  // El estado va primero: son dos chips y acotan mucho más que
+                  // un género —«algo terminado, para maratonear» es de las
+                  // primeras cosas que alguien busca—.
+                  for (final e in c.estadosDisponibles)
+                    Padding(
+                      padding: const EdgeInsets.only(right: 8),
+                      child: _Chip(
+                        texto: 'home.estado.$e'.i18n,
+                        marcado: c.estadoElegido.value == e,
+                        onTap: () => c.estadoElegido.value =
+                            c.estadoElegido.value == e ? null : e,
+                      ),
+                    ),
+                  if (c.estadosDisponibles.isNotEmpty && generos.isNotEmpty)
+                    Container(
+                      width: 1,
+                      height: 22,
+                      margin: const EdgeInsets.only(right: 8),
+                      color: Colors.white.withValues(alpha: 0.14),
+                    ),
                   for (final g in generos)
                     Padding(
                       padding: const EdgeInsets.only(right: 8),

@@ -135,7 +135,11 @@
       "seinen": "Seinen",
       "josei": "Josei"
     },
-    "filtros-aplicar": "Filtrar"
+    "filtros-aplicar": "Filtrar",
+    "estado": {
+      "emision": "En emisión",
+      "finalizado": "Finalizado"
+    }
   },
   "search": {
     "hint-text": "¡Por favor, busca ampliamente!~",

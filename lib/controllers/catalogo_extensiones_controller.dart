@@ -243,6 +243,34 @@ class CatalogoExtensionesController extends GetxController {
     'josei': ['josei'],
   };
 
+  /// ── El estado, el otro eje que sirve para todas ────────────────────────
+  ///
+  /// Del barrido de filtros (2026-08-07) salió que cinco extensiones tienen un
+  /// filtro «Estado» con las mismas dos ideas: lo que sigue saliendo y lo que
+  /// ya terminó. Es de las primeras cosas que alguien quiere acotar —«algo
+  /// terminado, para maratonear»— y no estaba.
+  static const _estados = <String, List<String>>{
+    'emision': [
+      'en emision',
+      'emision',
+      'en emisión',
+      'publicandose',
+      'en curso',
+      'ongoing',
+      'airing',
+      'releasing',
+    ],
+    'finalizado': [
+      'finalizado',
+      'finalizada',
+      'completado',
+      'concluido',
+      'terminado',
+      'finished',
+      'completed',
+    ],
+  };
+
   /// Un chip solo aparece si al menos ESTAS extensiones pueden contestarlo.
   ///
   /// Con una sola, tocarlo dejaba el Home con una fila y quince líneas de «no
@@ -251,6 +279,12 @@ class CatalogoExtensionesController extends GetxController {
 
   /// Los géneros que se ofrecen, en el orden de [_canonicos].
   final generosDisponibles = <String>[].obs;
+
+  /// Los estados que se ofrecen, en el orden de [_estados].
+  final estadosDisponibles = <String>[].obs;
+
+  final estadoElegido = RxnString();
+  String? estadoAplicado;
 
   /// Lo que el usuario tocó pero todavía no aplicó.
   final tipoElegido = Rxn<ExtensionType>();
@@ -261,9 +295,12 @@ class CatalogoExtensionesController extends GetxController {
   String? generoAplicado;
 
   bool get hayCambiosSinAplicar =>
-      tipoElegido.value != tipoAplicado || generoElegido.value != generoAplicado;
+      tipoElegido.value != tipoAplicado ||
+      generoElegido.value != generoAplicado ||
+      estadoElegido.value != estadoAplicado;
 
-  bool get hayFiltros => tipoAplicado != null || generoAplicado != null;
+  bool get hayFiltros =>
+      tipoAplicado != null || generoAplicado != null || estadoAplicado != null;
 
   /// Hay un cambio de filtro en curso.
   ///
@@ -272,10 +309,20 @@ class CatalogoExtensionesController extends GetxController {
   /// quieto haría creer que tocar el chip no sirvió de nada.
   final aplicandoFiltros = false.obs;
 
-  /// Para cada extensión: la clave de su filtro de género y, por cada género
-  /// canónico que sabe contestar, el valor que hay que mandarle.
-  final _generosPorExtension =
-      <String, ({String clave, Map<String, String> porCanonico})>{};
+  /// Para cada extensión y cada valor canónico —género o estado—, EN QUÉ
+  /// filtro vive y con qué valor se pide.
+  ///
+  /// ── Por qué se guarda también la clave del filtro ──────────────────────
+  ///
+  /// Porque el mismo concepto no vive siempre en el mismo sitio. Medido: en
+  /// JKAnime, ManhwaWeb y TuMangaOnline, «Shounen» y «Seinen» NO están bajo
+  /// «Género» sino bajo un filtro aparte llamado «Demografía». Buscando solo
+  /// en «Género», esos cuatro chips no funcionaban en ninguna extensión.
+  ///
+  /// Así que se miran TODOS los filtros de cada extensión y se anota, valor
+  /// por valor, de qué filtro salió.
+  final _ejesPorExtension =
+      <String, Map<String, ({String clave, String valor})>>{};
   bool _generosLeidos = false;
 
   /// Minúsculas, sin tildes y sin espacios de más.
@@ -338,57 +385,69 @@ class CatalogoExtensionesController extends GetxController {
     final cuantas = <String, int>{};
     for (final e in _motoresDelHome.entries) {
       final runtime = e.value;
-      // Las +18 no entran al Home, así que sus géneros tampoco.
+      // Las +18 no entran al Home, así que sus filtros tampoco.
       if (runtime.extension.nsfw) continue;
       try {
         final filtros =
             await runtime.createFilter().timeout(const Duration(seconds: 8));
-        for (final f in filtros.entries) {
-          // Por el título y no por el nombre de la clave: la clave es
-          // `genero`, `generes`, `g`… según el sitio.
-          final titulo = _normalizar(f.value.title);
-          if (!titulo.contains('genero')) continue;
-          // «Género (+18)» de ShadeManga y similares: ni se miran.
-          if (titulo.contains('18')) continue;
 
-          final porCanonico = <String, String>{};
+        final deEsta = <String, ({String clave, String valor})>{};
+        for (final f in filtros.entries) {
+          final titulo = _normalizar(f.value.title);
+          // «Género (+18)», «Adultos» y compañía: ni se miran.
+          if (titulo.contains('18') || titulo.contains('adult')) continue;
+
           f.value.options.forEach((clave, etiqueta) {
             if (clave.isEmpty) return;
-            final canonico = _canonicoDe(etiqueta);
-            // Lo que no está en la lista curada se descarta. Ahí quedan
-            // afuera «Blu-ray», «Castellano», «Especial» y las ochenta y pico
-            // de TuMangaOnline que nadie iba a leer.
-            if (canonico == null) return;
-            // Si el sitio tiene dos opciones que caen en el mismo canónico,
-            // manda la primera: la segunda suele ser una variante rara.
-            porCanonico.putIfAbsent(canonico, () => clave);
+            final id = _canonicoDe(etiqueta) ?? _estadoDe(etiqueta);
+            // Lo que no está en las listas curadas se descarta. Ahí quedan
+            // afuera «Blu-ray», «Castellano», las ochenta y pico de
+            // TuMangaOnline, y los ejes que no sirven de forma global —el
+            // orden, la letra, el año—.
+            if (id == null) return;
+            // Si el mismo valor aparece en dos filtros, manda el primero.
+            deEsta.putIfAbsent(id, () => (clave: f.key, valor: clave));
           });
+        }
 
-          if (porCanonico.isNotEmpty) {
-            _generosPorExtension[e.key] =
-                (clave: f.key, porCanonico: porCanonico);
-            for (final c in porCanonico.keys) {
-              cuantas[c] = (cuantas[c] ?? 0) + 1;
-            }
+        if (deEsta.isNotEmpty) {
+          _ejesPorExtension[e.key] = deEsta;
+          for (final id in deEsta.keys) {
+            cuantas[id] = (cuantas[id] ?? 0) + 1;
           }
-          break;
         }
       } catch (err) {
-        logger.info('[home] ${runtime.extension.name} no dio sus géneros: $err');
+        logger.info('[home] ${runtime.extension.name} no dio sus filtros: $err');
       }
     }
 
-    // En el orden de la lista curada, no alfabético: así los más usados
+    bool ofrecible(String id) => (cuantas[id] ?? 0) >= _minimoParaOfrecer;
+
+    // En el orden de las listas curadas, no alfabético: así los más usados
     // —Acción, Aventura, Comedia— quedan primero y no hay que desplazarse.
-    generosDisponibles.assignAll(_canonicos.keys
-        .where((g) => (cuantas[g] ?? 0) >= _minimoParaOfrecer));
+    generosDisponibles
+        .assignAll(_canonicos.keys.where(ofrecible));
+    estadosDisponibles.assignAll(_estados.keys.where(ofrecible));
+  }
+
+  /// A qué estado canónico corresponde una etiqueta del sitio, si a alguno.
+  static String? _estadoDe(String etiqueta) {
+    final n = _normalizar(etiqueta);
+    if (n.isEmpty) return null;
+    for (final e in _estados.entries) {
+      if (e.value.contains(n)) return e.key;
+    }
+    return null;
   }
 
   /// ¿Esta extensión puede contestar al género que está aplicado?
   bool puedeConEsteGenero(String package) {
-    final g = generoAplicado;
-    if (g == null) return true;
-    return _generosPorExtension[package]?.porCanonico.containsKey(g) ?? false;
+    final ejes = _ejesPorExtension[package];
+    for (final id in [generoAplicado, estadoAplicado]) {
+      if (id == null) continue;
+      if (ejes == null || !ejes.containsKey(id)) return false;
+    }
+    return true;
   }
 
   /// ¿Esta fila entra en el tipo elegido?
@@ -421,6 +480,7 @@ class CatalogoExtensionesController extends GetxController {
   Future<void> aplicarFiltros() async {
     tipoAplicado = tipoElegido.value;
     generoAplicado = generoElegido.value;
+    estadoAplicado = estadoElegido.value;
     aplicandoFiltros.value = true;
     for (final fila in filas) {
       fila.traidoEl = null;
@@ -442,6 +502,7 @@ class CatalogoExtensionesController extends GetxController {
   Future<void> restablecerFiltros() async {
     tipoElegido.value = null;
     generoElegido.value = null;
+    estadoElegido.value = null;
     await aplicarFiltros();
   }
 
@@ -667,13 +728,17 @@ class CatalogoExtensionesController extends GetxController {
   /// Null significa «pedí lo último de siempre»: o no hay género aplicado, o
   /// esta extensión no lo conoce.
   Map<String, List<String>>? _generoPara(String package) {
-    final etiqueta = generoAplicado;
-    if (etiqueta == null) return null;
-    final mapa = _generosPorExtension[package];
-    if (mapa == null) return null;
-    final valor = mapa.porCanonico[etiqueta];
-    if (valor == null) return null;
-    return {mapa.clave: [valor]};
+    final ejes = _ejesPorExtension[package];
+    if (ejes == null) return null;
+    final filtro = <String, List<String>>{};
+    for (final id in [generoAplicado, estadoAplicado]) {
+      if (id == null) continue;
+      final donde = ejes[id];
+      if (donde == null) continue;
+      // Dos ejes pueden caer en el mismo filtro del sitio; ahí se acumulan.
+      (filtro[donde.clave] ??= <String>[]).add(donde.valor);
+    }
+    return filtro.isEmpty ? null : filtro;
   }
 
   /// Alimenta el carrusel con la tanda de esta extensión.

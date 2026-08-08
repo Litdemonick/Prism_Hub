@@ -139,7 +139,11 @@
       "seinen": "Seinen",
       "josei": "Josei"
     },
-    "filtros-aplicar": "Apply filters"
+    "filtros-aplicar": "Apply filters",
+    "estado": {
+      "emision": "Ongoing",
+      "finalizado": "Completed"
+    }
   },
   "search": {
     "hint-text": "Please use search wisely!~",
