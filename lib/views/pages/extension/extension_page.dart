@@ -53,6 +53,25 @@ class _ExtensionPageState extends State<ExtensionPage> {
   // primera cada vez que llega una extensión.
   final _paginas = PageController();
 
+  /// El desplazamiento vertical de cada página, uno por página.
+  ///
+  /// ── Por qué hacen falta ────────────────────────────────────────────────
+  ///
+  /// Sin controlador propio, cada lista guarda su posición por su cuenta (es lo
+  /// que hace Flutter con PageStorage) y la RESTAURA al volver a dibujarse. En
+  /// un deslizador de páginas eso se siente roto: bajás en la página uno,
+  /// deslizás, y la dos aparece a media lista —donde la habías dejado hace
+  /// rato— así que parece que el contenido saltó o que se encimó con lo
+  /// anterior. Y mientras la lista está a mitad de camino, el deslizador se
+  /// resiste a cambiar de página: por eso «se traba y no deja bajar».
+  ///
+  /// Con un controlador por página se puede mandar cada una al principio al
+  /// cambiar, que es lo que uno espera: cambiar de página es empezar de arriba.
+  final _scrollDePagina = <int, ScrollController>{};
+
+  ScrollController _controlDe(int pagina) =>
+      _scrollDePagina.putIfAbsent(pagina, ScrollController.new);
+
   /// Deja el deslizador en la página que dice el estado.
   ///
   /// Hace falta porque `_page` cambia también desde afuera del gesto: al
@@ -637,6 +656,10 @@ class _ExtensionPageState extends State<ExtensionPage> {
     _androidSearchController.dispose();
     _scrollController.dispose();
     _paginas.dispose();
+    for (final c in _scrollDePagina.values) {
+      c.dispose();
+    }
+    _scrollDePagina.clear();
     super.dispose();
   }
 
@@ -929,7 +952,16 @@ class _ExtensionPageState extends State<ExtensionPage> {
                         : PageView.builder(
                             controller: _paginas,
                             itemCount: totalPages,
-                            onPageChanged: (i) => setState(() => _page = i),
+                            onPageChanged: (i) {
+                              setState(() => _page = i);
+                              // Cambiar de página es empezar de arriba. Sin
+                              // esto, la página que entra aparece donde la
+                              // habías dejado y se lee como un salto.
+                              final control = _scrollDePagina[i];
+                              if (control != null && control.hasClients) {
+                                control.jumpTo(0);
+                              }
+                            },
                             itemBuilder: (_, p) {
                               final dePagina = installed
                                   .skip(p * _pageSize)
@@ -937,6 +969,12 @@ class _ExtensionPageState extends State<ExtensionPage> {
                                   .toList();
                               return _conRefresco(
                                 ListView.builder(
+                                  controller: _controlDe(p),
+                                  // Sin PageStorage: la posición la maneja el
+                                  // controlador de arriba, y guardarla además
+                                  // acá era justo lo que hacía que la página
+                                  // que entra apareciera a media lista.
+                                  key: PageStorageKey<String>('ext-pag-$p'),
                                   physics:
                                       const AlwaysScrollableScrollPhysics(),
                                   // ── Se puede bajar MÁS ALLÁ de la barra ──
