@@ -1,0 +1,37 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+    El splash en Android 12 y para arriba.
+
+    ── Por qué hace falta un archivo aparte ──────────────────────────────────
+
+    Desde Android 12 el sistema dibuja el splash él mismo, con su propia API, y
+    para eso IGNORA el `android:windowBackground` del tema. O sea que el
+    launch_background con el logo centrado —que es lo que hay en
+    values/styles.xml— dejó de verse: el sistema mostraba su pantalla con el
+    icono del lanzador y nada más. Reportado en vivo: «no se ve el launch al
+    abrir el app».
+
+    Y pasa aunque la app apunte a un targetSdk viejo: el splash nuevo se aplica
+    según la versión del APARATO, no según a qué apunta la app.
+
+    Acá se le dice al sistema qué poner: el mismo fondo oscuro de siempre y el
+    mismo logo. windowBackground se deja igual para los aparatos que caen en
+    este archivo pero todavía usan el camino viejo en algún momento del
+    arranque, y para que el fondo detrás del logo sea el correcto.
+
+    ── El logo se ve más chico que antes, y es a propósito del sistema ───────
+
+    Android le aplica al icono del splash una máscara circular y solo usa la
+    parte de adentro del lienzo. No es un recorte nuestro: es la regla de esa
+    API, la misma que siguen todas las apps.
+-->
+<resources>
+    <style name="LaunchTheme" parent="@android:style/Theme.Light.NoTitleBar">
+        <item name="android:windowSplashScreenBackground">@color/launch_background</item>
+        <item name="android:windowSplashScreenAnimatedIcon">@drawable/launch_logo</item>
+        <item name="android:windowBackground">@drawable/launch_background</item>
+    </style>
+    <style name="NormalTheme" parent="@android:style/Theme.Light.NoTitleBar">
+        <item name="android:windowBackground">@color/launch_background</item>
+    </style>
+</resources>
