@@ -589,11 +589,44 @@ class CatalogoExtensionesController extends GetxController {
   /// ¿Esta extensión puede contestar al género que está aplicado?
   bool puedeConEsteGenero(String package) {
     final ejes = _ejesPorExtension[package];
-    for (final id in [generoAplicado, estadoAplicado, formatoAplicado]) {
+    for (final id in [generoAplicado, estadoAplicado]) {
       if (id == null) continue;
       if (ejes == null || !ejes.containsKey(id)) return false;
     }
+    final formato = formatoAplicado;
+    if (formato != null) {
+      final loTieneComoFiltro = ejes?.containsKey(formato) ?? false;
+      if (!loTieneComoFiltro && !_yaEsDeEseFormato(package, formato)) {
+        return false;
+      }
+    }
     return true;
+  }
+
+  /// La extensión ENTERA es de ese formato, así que no necesita filtrarlo.
+  ///
+  /// ── El caso que faltaba ─────────────────────────────────────────────────
+  ///
+  /// Olympus es un sitio de manga y su `type` lo dice, pero NO tiene filtro
+  /// «Tipo» — porque todo lo que publica ya es manga, no hay nada que elegir.
+  /// Con la regla anterior, pedirle el formato «Manga» lo dejaba afuera: justo
+  /// al revés de lo que corresponde.
+  ///
+  /// ── Por qué solo manga y novela ─────────────────────────────────────────
+  ///
+  /// Porque son los únicos donde el tipo de la extensión ES el formato. Un
+  /// sitio de vídeo tiene películas Y series mezcladas, así que su `type` no
+  /// alcanza para contestar «solo películas»: ahí sí hace falta el filtro del
+  /// sitio, y si no lo tiene, no puede.
+  bool _yaEsDeEseFormato(String package, String formato) {
+    final tipo = ExtensionUtils.runtimes[package]?.extension.type ??
+        ExtensionUtils.vistaPrevia[package]?.extension.type;
+    if (tipo == null) return false;
+    return switch (formato) {
+      'manga' => tipo == ExtensionType.manga,
+      'novela' => tipo == ExtensionType.fikushon,
+      _ => false,
+    };
   }
 
   /// ¿Esta fila entra en el tipo elegido?
@@ -997,6 +1030,8 @@ class CatalogoExtensionesController extends GetxController {
     final filtro = <String, List<String>>{};
     for (final id in [generoAplicado, estadoAplicado, formatoAplicado]) {
       if (id == null) continue;
+      // Si la extensión entera ya es de ese formato, no hay nada que pedirle:
+      // todo lo que devuelva sirve. Ver `_yaEsDeEseFormato`.
       final donde = ejes[id];
       if (donde == null) continue;
       // Dos ejes pueden caer en el mismo filtro del sitio; ahí se acumulan.

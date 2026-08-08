@@ -330,26 +330,35 @@ class _BarraDeFiltrosState extends State<_BarraDeFiltros> {
                   // Flexible y con su propio desplazamiento: con tres activos en
                   // un teléfono angosto, si no, se comerían la barra entera.
                   if (marcados.isNotEmpty)
-                    // Nunca más de un tercio del ancho. Sin el tope, con dos o
-                    // tres filtros puestos el grupo de activos se llevaba media
-                    // barra y a los demás chips les quedaba un hueco donde solo
-                    // entraba uno y medio.
-                    ConstrainedBox(
-                      constraints: BoxConstraints(
-                          maxWidth: MediaQuery.sizeOf(context).width / 3),
-                      child: SingleChildScrollView(
-                        scrollDirection: Axis.horizontal,
-                        padding: EdgeInsets.only(left: _esTactil ? margen : 6),
-                        child: Row(
-                          children: [
-                            for (final m in marcados)
-                              Padding(
-                                padding: const EdgeInsets.only(right: 8),
-                                child: _Chip(
-                                    texto: m.$2, marcado: true, onTap: m.$3),
-                              ),
-                            _separadorDeChips,
-                          ],
+                    // ── Flexible Y con tope ──────────────────────────────
+                    //
+                    // El tope solo no alcanzaba: un ConstrainedBox suelto
+                    // dentro de un Row NO cede espacio, así que con varios
+                    // activos se pasaba del ancho y los chips terminaban
+                    // dibujándose encima de los de al lado.
+                    //
+                    // Flexible es lo que le dice al Row que puede achicarlo. El
+                    // tercio sigue estando para que el grupo de activos no se
+                    // lleve media barra.
+                    Flexible(
+                      child: ConstrainedBox(
+                        constraints: BoxConstraints(
+                            maxWidth: MediaQuery.sizeOf(context).width / 3),
+                        child: SingleChildScrollView(
+                          scrollDirection: Axis.horizontal,
+                          padding:
+                              EdgeInsets.only(left: _esTactil ? margen : 6),
+                          child: Row(
+                            children: [
+                              for (final m in marcados)
+                                Padding(
+                                  padding: const EdgeInsets.only(right: 8),
+                                  child: _Chip(
+                                      texto: m.$2, marcado: true, onTap: m.$3),
+                                ),
+                              _separadorDeChips,
+                            ],
+                          ),
                         ),
                       ),
                     ),
@@ -548,6 +557,10 @@ class _Chip extends StatelessWidget {
         ),
         child: Row(
           mainAxisSize: MainAxisSize.min,
+          // Centrado: con el hueco del ganchito siempre reservado, alinear al
+          // principio dejaba el texto corrido a la derecha en los que no están
+          // marcados.
+          mainAxisAlignment: MainAxisAlignment.center,
           children: [
             // El ganchito, no solo el color: sobre un fondo oscuro, «rosa
             // tenue» y «gris» se parecen bastante, y encima hay gente que no
@@ -1315,6 +1328,7 @@ class _FilaAndroidState extends State<_FilaAndroid> {
             _encabezado(),
             const SizedBox(height: 10),
             _GrillaPaginada(
+              c: widget.c,
               items: items,
               // Con filtros en curso se muestran los bloques aunque HAYA
               // contenido: lo que está en pantalla es del filtro anterior y
@@ -1393,11 +1407,13 @@ class _FilaAndroidState extends State<_FilaAndroid> {
 /// Para ver todo está la flecha del encabezado.
 class _GrillaPaginada extends StatefulWidget {
   const _GrillaPaginada({
+    required this.c,
     required this.items,
     required this.cargando,
     required this.package,
   });
 
+  final CatalogoExtensionesController c;
   final List<ExtensionListItem> items;
   final bool cargando;
   final String package;
@@ -1509,8 +1525,17 @@ class _GrillaPaginadaState extends State<_GrillaPaginada> {
       // cuatro portadas que nadie sabía que existían.
       // Las páginas salen de cuántas portadas se quieren mostrar, no al
       // revés. Y siempre llenas: una a medias deja una fila de negro.
-      var paginas = (_porExtension / porPagina).round();
+      // ── La grilla CRECE con lo que vaya llegando ────────────────────
+      //
+      // Antes se quedaba en las dieciocho de la primera carga: el usuario
+      // pasaba una página y se acababa, aunque la extensión tuviera cientos.
+      //
+      // Ahora el objetivo de dieciocho es el PISO, no el techo: si ya hay más
+      // portadas traídas —porque se pidieron más al llegar al final— la grilla
+      // suma páginas hasta el tope.
+      final objetivo = (_porExtension / porPagina).round();
       final llenasDisponibles = widget.items.length ~/ porPagina;
+      var paginas = llenasDisponibles > objetivo ? llenasDisponibles : objetivo;
       if (llenasDisponibles >= 1 && paginas > llenasDisponibles) {
         paginas = llenasDisponibles;
       }
@@ -1538,7 +1563,13 @@ class _GrillaPaginadaState extends State<_GrillaPaginada> {
             child: PageView.builder(
               controller: _paginas,
               itemCount: paginas,
-              onPageChanged: (i) => setState(() => _actual = i),
+              onPageChanged: (i) {
+                setState(() => _actual = i);
+                // Al llegar a la última se piden más. Igual que en el
+                // acordeón: una vez por gesto, y el controlador ignora el
+                // pedido si ya hay uno en curso.
+                if (i >= paginas - 1) unawaited(widget.c.traerMas());
+              },
               itemBuilder: (context, pagina) {
                 final desde = pagina * porPagina;
                 final hasta =
