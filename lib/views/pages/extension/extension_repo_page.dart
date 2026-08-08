@@ -453,10 +453,25 @@ class _ExtensionRepoPageState extends State<ExtensionRepoPage> {
         } else {
           fallidas++;
         }
+        // Un cuadro para la pantalla entre una y otra. Arrancar el runtime es
+        // trabajo de CPU y bloquea el isolate: encadenándolas sin soltar, la
+        // rueda del botón no se movía y el app parecía colgado hasta que
+        // terminaba la tanda entera.
+        await ExtensionUtils.cederElCuadro();
       }
     } finally {
       if (mounted) setState(() => _instalandoTodas = false);
     }
+    if (!mounted) return;
+    // ── Rehacer la lista al terminar la tanda ────────────────────────────
+    //
+    // Explícito y no confiando en el aviso que manda cada instalación: ese
+    // aviso se junta con los de la ráfaga y llega un rato después (ver
+    // ExtensionUtils._pedirReload), así que las tarjetas de las recién
+    // instaladas se quedaban un momento con el botón «Instalar» puesto — que
+    // es justo lo que se reportó. Acá se sabe que la tanda terminó, así que se
+    // pide una vez y queda al día de una.
+    await c.onRefresh(forceRefresh: false);
     if (!mounted) return;
     showPlatformSnackbar(
       context: context,

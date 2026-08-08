@@ -991,7 +991,44 @@ class ExtensionUtils {
       list.add(package);
     }
     await PrismHubStorage.setSetting(SettingKey.disabledExtensions, list);
-    _reloadPage();
+    // _pedirReload y no _reloadPage: esto se llama UNA VEZ POR EXTENSIÓN desde
+    // «activar todas», y recargar el app entero diecisiete veces seguidas lo
+    // dejaba sin responder.
+    _pedirReload();
+  }
+
+  /// Prende o apaga VARIAS de una sola vez.
+  ///
+  /// [setExtensionEnabled] lee la lista entera de desactivadas, la modifica y
+  /// la vuelve a escribir. Llamarlo en un bucle son diecisiete lecturas y
+  /// diecisiete escrituras del mismo dato, más diecisiete pedidos de recarga.
+  /// Acá se arma la lista final una vez, se escribe una vez y se recarga una
+  /// vez.
+  ///
+  /// Devuelve cuántas cambiaron de verdad: las que ya estaban como se pedía no
+  /// cuentan.
+  static Future<int> setExtensionsEnabled(
+    Iterable<String> packages,
+    bool enabled,
+  ) async {
+    // Copia y no la lista que devuelve el getter: esa viene de un `cast`, que
+    // es una VISTA sobre la guardada. Modificarla en el lugar cambia el dato
+    // antes de escribirlo, y si algo falla en el medio queda a mitad de camino
+    // sin haberse guardado nunca.
+    final lista = List<String>.from(disabledExtensions);
+    var cambiadas = 0;
+    for (final package in packages) {
+      if (enabled) {
+        if (lista.remove(package)) cambiadas++;
+      } else if (!lista.contains(package)) {
+        lista.add(package);
+        cambiadas++;
+      }
+    }
+    if (cambiadas == 0) return 0;
+    await PrismHubStorage.setSetting(SettingKey.disabledExtensions, lista);
+    _pedirReload();
+    return cambiadas;
   }
 
   // Only enabled runtimes — used for search/discovery so disabled sources hide.
@@ -1304,12 +1341,22 @@ class ExtensionUtils {
     // Se salta archivos que no son .js (cachés, temporales, etc.).
     for (final e in extensionsList) {
       await installByPath(e.path);
-      await _yieldToNextFrame();
+      await cederElCuadro();
     }
-    _reloadPage();
+    _pedirReload();
   }
 
-  static Future<void> _yieldToNextFrame() async {
+  /// Le deja un cuadro al dibujado antes de seguir.
+  ///
+  /// `initRuntime` es trabajo de CPU (QuickJS) y bloquea el isolate ENTERO
+  /// mientras corre. Encadenando extensiones sin soltar, la pantalla no dibuja
+  /// un solo cuadro de punta a punta: no se mueve la rueda, no responden los
+  /// botones y parece que el app se colgó. Reportado en vivo con las acciones
+  /// masivas.
+  ///
+  /// Público a propósito: lo necesita cualquier bucle que instale, actualice o
+  /// desinstale de a varias, no solo la carga inicial.
+  static Future<void> cederElCuadro() async {
     await SchedulerBinding.instance.endOfFrame;
     await Future<void>.delayed(const Duration(milliseconds: 8));
   }
@@ -1532,7 +1579,11 @@ class ExtensionUtils {
     } finally {
       _loading.remove(pkg);
     }
-    safeReload ? _safeReloadPage() : _reloadPage();
+    // Las dos ramas terminan en lo mismo desde que la recarga se junta y se
+    // difiere: al correr fuera de esta pila, una excepción suya ya no podía
+    // llegarle al instalador de todos modos, así que se registra y no se
+    // propaga (ver _correrReload). `safeReload` se deja por los llamadores.
+    _pedirReload();
   }
 
   static void _showInstallError(BuildContext context, Object e) {
@@ -1609,13 +1660,80 @@ class ExtensionUtils {
     }
   }
 
-  static _safeReloadPage() {
-    try {
-      _reloadPage();
-    } catch (_) {}
+  static _safeReloadPage() => _pedirReload();
+
+  /// Espera antes de recargar, para juntar toda una ráfaga en una sola vez.
+  ///
+  /// 250 ms: no se nota al usar la app y alcanza de sobra para que una acción
+  /// masiva termine de recorrer sus extensiones.
+  static Timer? _reloadEnEspera;
+
+  /// Hay una recarga corriendo AHORA.
+  static bool _recargando = false;
+
+  /// Llegó un cambio mientras se recargaba y hay que volver a hacerlo al
+  /// terminar — una sola vez, no una por cambio.
+  static bool _reloadPedidoDeNuevo = false;
+
+  /// Pide recargar las pantallas, juntando los pedidos de una misma ráfaga.
+  ///
+  /// ── Por qué esto existe ─────────────────────────────────────────────────
+  ///
+  /// [_reloadPage] rehace Inicio (sus dos zonas), Buscar (sus dos instancias),
+  /// Instaladas y el Repositorio: consultas a la base y pedidos de red. Y se
+  /// llamaba UNA VEZ POR EXTENSIÓN, porque cuelga de setExtensionEnabled.
+  ///
+  /// O sea que «activar todas» con diecisiete instaladas lanzaba diecisiete
+  /// cascadas, ninguna esperando a la anterior, todas peleando por el mismo
+  /// hilo. Reportado en vivo: el app se quedaba sin responder y no se podía
+  /// tocar ningún botón. Y tocando el botón de nuevo se sumaban otras
+  /// diecisiete, así que empeoraba solo.
+  ///
+  /// El candado de la pantalla (`_masivoEnCurso`) no alcanzaba para esto: se
+  /// suelta cuando el bucle termina, pero las recargas que largó siguen
+  /// corriendo por su cuenta.
+  ///
+  /// Con esto, diecisiete cambios seguidos cuestan UNA recarga. Y como la
+  /// espera se reinicia con cada pedido, machacar el botón tampoco encadena
+  /// nada: se recarga una sola vez, cuando la ráfaga para.
+  static void _pedirReload() {
+    _reloadEnEspera?.cancel();
+    _reloadEnEspera = Timer(
+      const Duration(milliseconds: 250),
+      _correrReload,
+    );
   }
 
-  static _reloadPage() {
+  static Future<void> _correrReload() async {
+    _reloadEnEspera = null;
+    // Ya hay una corriendo: se anota y se repite al final. Sin esto, una
+    // ráfaga más larga que la propia recarga volvía a encimarlas.
+    if (_recargando) {
+      _reloadPedidoDeNuevo = true;
+      return;
+    }
+    _recargando = true;
+    try {
+      await _reloadPage();
+    } catch (e) {
+      // Una pantalla que falle al refrescarse no puede dejar la marca puesta:
+      // eso bloquearía TODAS las recargas siguientes hasta reiniciar el app.
+      logger.info('[extensiones] fallo al recargar las pantallas: $e');
+    } finally {
+      _recargando = false;
+    }
+    if (_reloadPedidoDeNuevo) {
+      _reloadPedidoDeNuevo = false;
+      _pedirReload();
+    }
+  }
+
+  /// Rehace las pantallas que dependen de qué extensiones hay activas.
+  ///
+  /// No se llama derecho desde ningún lado: se pide por [_pedirReload], que
+  /// junta las ráfagas. Y ahora ESPERA a que terminen — antes largaba los
+  /// refrescos y volvía enseguida, así que nadie sabía cuántos había en vuelo.
+  static Future<void> _reloadPage() async {
     // 重载扩展页面
     if (Get.isRegistered<ExtensionPageController>()) {
       Get.find<ExtensionPageController>().callRefresh();
@@ -1638,14 +1756,17 @@ class ExtensionUtils {
     // desinstalada seguia figurando como instalada— hasta reabrir la pagina
     // o esperar a que venciera la cache.
     if (Get.isRegistered<ExtensionRepoPageController>()) {
-      Get.find<ExtensionRepoPageController>().onRefresh(forceRefresh: false);
+      await Get.find<ExtensionRepoPageController>()
+          .onRefresh(forceRefresh: false);
     }
 
     // Home (Continuar/Favoritos/fondo del hero) — sin esto, desactivar o
     // desinstalar una extensión dejaba su contenido visible en Home hasta
-    // el próximo refresco manual o hasta reabrir la página.
-    HomePageController.callRefreshAll();
+    // el próximo refresco manual o hasta reabrir la página. Es la más cara de
+    // las cuatro: consulta el historial de las dos zonas y rearma el fondo.
+    await HomePageController.callRefreshAll();
   }
+
 
   static final RegExp _episodeNumberPattern = RegExp(r'\d+(?:\.\d+)?');
 

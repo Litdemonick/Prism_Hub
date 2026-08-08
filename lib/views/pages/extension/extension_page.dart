@@ -133,14 +133,22 @@ class _ExtensionPageState extends State<ExtensionPage> {
     // Activarlas igual dejaría contenido adulto disponible sin que nadie lo
     // haya pedido, que es justo lo que ese interruptor existe para evitar.
     var salteadas = 0;
+    final paquetes = <String>[];
     for (final r in visibles) {
       final ext = r.extension;
       if (activar && !ExtensionUtils.isNsfwVisibleOutsideZone(ext.nsfw)) {
         salteadas++;
         continue;
       }
-      await ExtensionUtils.setExtensionEnabled(ext.package, activar);
+      paquetes.add(ext.package);
     }
+    // Una sola llamada y no una por extensión.
+    //
+    // En bucle, cada vuelta leía y reescribía la lista entera de desactivadas
+    // Y pedía recargar Inicio, Buscar, Instaladas y el Repositorio. Con
+    // diecisiete instaladas eran diecisiete cascadas encimadas y el app se
+    // quedaba sin responder — reportado en vivo, no se podía tocar nada.
+    await ExtensionUtils.setExtensionsEnabled(paquetes, activar);
     if (!mounted) return;
     final hechas = visibles.length - salteadas;
     // Frase entera, no un número suelto: «17» a secas no dice si son las que
@@ -195,6 +203,10 @@ class _ExtensionPageState extends State<ExtensionPage> {
           if (!mounted) return;
           await ExtensionUtils.updateInstalledFromRepo(pkg, context);
           hechas++;
+          // Un cuadro para la pantalla: reinstalar arranca el runtime, que es
+          // trabajo de CPU y bloquea el isolate entero. Sin esto la tanda deja
+          // el app sin dibujar de punta a punta.
+          await ExtensionUtils.cederElCuadro();
         } catch (e) {
           // Una que falle no puede frenar a las demás: puede ser una extensión
           // retirada del catálogo, o el sitio de descarga caído un momento.
@@ -272,6 +284,9 @@ class _ExtensionPageState extends State<ExtensionPage> {
           logger.info('[extensiones] no se pudo desinstalar '
               '${r.extension.package}: $e');
         }
+        // Igual que en las otras tandas: un cuadro para la pantalla entre una
+        // y otra, así la rueda se mueve y el app no parece colgado.
+        await ExtensionUtils.cederElCuadro();
       }
     } finally {
       if (mounted) setState(() => _desinstalandoTodas = false);
@@ -678,6 +693,13 @@ class _ExtensionPageState extends State<ExtensionPage> {
                             padding: EdgeInsets.fromLTRB(16, 0, 16,
                                 MediaQuery.paddingOf(context).bottom + 8),
                             itemCount: pageItems.length,
+                            // Sin RepaintBoundary a mano: ListView.builder ya
+                            // envuelve cada ítem en uno
+                            // (SliverChildBuilderDelegate.addRepaintBoundaries
+                            // viene en true). Ponerlo acá sería una capa
+                            // anidada de gusto. La grilla de más abajo SÍ lo
+                            // necesita, porque ahí las tarjetas se arman con
+                            // un `for` y no pasan por ese delegate.
                             itemBuilder: (_, i) {
                               return ExtensionTile(pageItems[i].extension);
                             },
@@ -903,7 +925,12 @@ class _ExtensionPageState extends State<ExtensionPage> {
                                       for (final ext in pageItems)
                                         SizedBox(
                                           width: 260,
-                                          child: ExtensionTile(ext.extension),
+                                          // Su capa propia, igual que en la
+                                          // lista de arriba.
+                                          child: RepaintBoundary(
+                                            child:
+                                                ExtensionTile(ext.extension),
+                                          ),
                                         ),
                                     ],
                                   ),
