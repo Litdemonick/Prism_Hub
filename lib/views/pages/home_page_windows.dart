@@ -100,7 +100,22 @@ class HomeWindows extends StatelessWidget {
               // Se adapta solo: las medidas salen de `Ancho.de(context)` y la
               // ventana de tarjetas que se dibuja sale del ancho real, así que
               // en un monitor grande llena el costado en vez de dejar hueco.
-              0 => RepaintBoundary(child: _CarruselAndroid(c: c)),
+              // ── Con el mismo margen que las filas de abajo ────────────
+              //
+              // Sin esto el acordeón iba de borde a borde y la tarjeta quedaba
+              // pegada a la barra lateral de iconos, sin nada en medio. Se ve
+              // sobre todo con la ventana angosta, donde la grande se lleva
+              // casi todo el ancho y termina tocando la barra.
+              //
+              // El margen es el mismo que usan las filas, así que el acordeón
+              // queda alineado con ellas en vez de sobresalir. Las tarjetas de
+              // los costados se siguen recortando igual —el recorte solo se
+              // corre hacia adentro— así que no se pierde la señal de que hay
+              // más para el lado.
+              0 => Padding(
+                  padding: EdgeInsets.symmetric(horizontal: _margen(context)),
+                  child: RepaintBoundary(child: _CarruselAndroid(c: c)),
+                ),
               // Los mismos filtros que en celular. El widget vive en el
               // archivo de Android pero los tres son `part` de la misma
               // biblioteca, así que se reusa tal cual en vez de escribir otro
