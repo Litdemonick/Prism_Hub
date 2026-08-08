@@ -391,8 +391,11 @@ class _FilaWindowsState extends State<_FilaWindows> {
               // pantalla cuando hay un filtro en curso — lo que se ve es del
               // filtro anterior, y dejarlo quieto haría creer que no pasó
               // nada.
-              child: (estado == EstadoDeFila.cargando &&
-                      (items.isEmpty || widget.c.aplicandoFiltros.value))
+              // Solo si no hay nada que mostrar: con contenido en pantalla,
+              // cambiarlo por bloques y volver son dos saltos para una espera.
+              // Que está buscando lo dice el encabezado. Ver el comentario
+              // largo en la grilla de celular.
+              child: (items.isEmpty && estado == EstadoDeFila.cargando)
                   ? ListView.separated(
                       scrollDirection: Axis.horizontal,
                       padding:
@@ -485,12 +488,14 @@ class _FilaWindowsState extends State<_FilaWindows> {
                   ),
                 ),
                 Text(
-                  widget.c.etiquetaDe(widget.fila) ??
-                      switch (widget.c.modoDe(widget.fila)) {
-                        ModoDeFila.popular => 'home.modo-popular'.i18n,
-                        ModoDeFila.filtrado => 'home.modo-filtrado'.i18n,
-                        ModoDeFila.reciente => 'home.modo-reciente'.i18n,
-                      },
+                  widget.c.aplicandoFiltros.value
+                      ? 'home.modo-buscando'.i18n
+                      : widget.c.etiquetaDe(widget.fila) ??
+                          switch (widget.c.modoDe(widget.fila)) {
+                            ModoDeFila.popular => 'home.modo-popular'.i18n,
+                            ModoDeFila.filtrado => 'home.modo-filtrado'.i18n,
+                            ModoDeFila.reciente => 'home.modo-reciente'.i18n,
+                          },
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
                   style: const TextStyle(

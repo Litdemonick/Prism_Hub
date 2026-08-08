@@ -880,10 +880,9 @@ class _CarruselAndroidState extends State<_CarruselAndroid>
   Widget build(BuildContext context) {
     return Obx(() {
       final grupos = widget.c.destacadosVisibles;
-      // Filtrando: bloques grises también acá. Lo que hay en el acordeón es
-      // del filtro anterior, y dejarlo quieto mientras se busca haría creer
-      // que no está pasando nada.
-      if (widget.c.aplicandoFiltros.value) return const _CarruselEsperando();
+      // Filtrando NO se vacía: las portadas se quedan y se reemplazan cuando
+      // llega lo nuevo. Vaciarlo dejaba media pantalla en gris y después todo
+      // de vuelta — dos saltos para una sola espera.
       final planos = grupos.isEmpty
           ? const <(String, ExtensionListItem)>[]
           : _planos(grupos);
@@ -1438,14 +1437,18 @@ class _FilaAndroidState extends State<_FilaAndroid> {
             _GrillaPaginada(
               c: widget.c,
               items: items,
-              // Con filtros en curso se muestran los bloques aunque HAYA
-              // contenido: lo que está en pantalla es del filtro anterior y
-              // dejarlo quieto haría creer que el filtro no hizo nada.
+              // ── Los bloques SOLO si no hay nada que mostrar ─────────
               //
-              // En un refresco normal, en cambio, no: ahí lo que viene es lo
-              // mismo que ya se ve, y parpadear a gris sería empeorarlo.
-              cargando: estado == EstadoDeFila.cargando &&
-                  (items.isEmpty || widget.c.aplicandoFiltros.value),
+              // Se probó mostrarlos también al filtrar, con contenido en
+              // pantalla, para que se notara que estaba trabajando. Se ve mal:
+              // las tarjetas desaparecen, entran bloques grises y vuelven a
+              // aparecer tarjetas. Son tres cambios visuales para una sola
+              // cosa, y parece que la pantalla se rompiera.
+              //
+              // Ahora las tarjetas se quedan EN SU LUGAR y se reemplazan cuando
+              // llega lo nuevo. Que está buscando lo dice el encabezado, en la
+              // línea que ya está ahí — así no se mueve nada.
+              cargando: items.isEmpty && estado == EstadoDeFila.cargando,
               package: widget.fila.package,
             ),
           ],
@@ -1475,12 +1478,14 @@ class _FilaAndroidState extends State<_FilaAndroid> {
             ),
           ),
           Text(
-            widget.c.etiquetaDe(widget.fila) ??
-                switch (widget.c.modoDe(widget.fila)) {
-                  ModoDeFila.popular => 'home.modo-popular'.i18n,
-                  ModoDeFila.filtrado => 'home.modo-filtrado'.i18n,
-                  ModoDeFila.reciente => 'home.modo-reciente'.i18n,
-                },
+            widget.c.aplicandoFiltros.value
+                ? 'home.modo-buscando'.i18n
+                : widget.c.etiquetaDe(widget.fila) ??
+                    switch (widget.c.modoDe(widget.fila)) {
+                      ModoDeFila.popular => 'home.modo-popular'.i18n,
+                      ModoDeFila.filtrado => 'home.modo-filtrado'.i18n,
+                      ModoDeFila.reciente => 'home.modo-reciente'.i18n,
+                    },
             maxLines: 1,
             overflow: TextOverflow.ellipsis,
             style: const TextStyle(
