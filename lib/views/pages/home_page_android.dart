@@ -197,6 +197,30 @@ class _BarraDeFiltrosState extends State<_BarraDeFiltros> {
     super.dispose();
   }
 
+  /// Los filtros que están marcados, con su texto y cómo apagarlos.
+  ///
+  /// Se devuelven en el mismo orden que los grupos de la barra —estado,
+  /// formato, género— para que al marcar dos no bailen entre sí.
+  List<(String, String, VoidCallback)> _marcados(
+      CatalogoExtensionesController c) {
+    final lista = <(String, String, VoidCallback)>[];
+    final e = c.estadoElegido.value;
+    if (e != null) {
+      lista.add((e, 'home.estado.$e'.i18n, () => c.estadoElegido.value = null));
+    }
+    final f = c.formatoElegido.value;
+    if (f != null) {
+      lista.add(
+          (f, 'home.formato.$f'.i18n, () => c.formatoElegido.value = null));
+    }
+    final g = c.generoElegido.value;
+    if (g != null) {
+      lista.add(
+          (g, 'home.genero.$g'.i18n, () => c.generoElegido.value = null));
+    }
+    return lista;
+  }
+
   /// Corre la fila de chips la mayor parte de su ancho.
   void _correr(int signo) {
     if (!_scroll.hasClients) return;
@@ -255,23 +279,59 @@ class _BarraDeFiltrosState extends State<_BarraDeFiltros> {
               children: [
                 // Flechas solo en escritorio: en una pantalla táctil la fila
                 // se arrastra con el dedo y las flechas solo taparían chips.
-                if (!_esTactil) ...[
+                if (!_esTactil && _marcados(c).isEmpty)
                   SizedBox(width: margen - 8),
+                if (!_esTactil)
                   _FlechaDeFila(
                       icono: Icons.chevron_left_rounded,
                       onTap: () => _correr(-1)),
-                ],
+                // ── Los activos, FIJOS a la izquierda ─────────────────
+                //
+                // Fuera del área que se desplaza: así el filtro puesto se ve
+                // siempre, aunque el usuario se haya ido al final de los
+                // cuarenta y cuatro géneros buscando otro. Antes iba adentro y
+                // se perdía de vista al primer arrastre.
+                //
+                // Flexible y con su propio desplazamiento: con tres activos en
+                // un teléfono angosto, si no, se comerían la barra entera.
+                if (_marcados(c).isNotEmpty)
+                  Flexible(
+                    child: SingleChildScrollView(
+                      scrollDirection: Axis.horizontal,
+                      padding: EdgeInsets.only(left: _esTactil ? margen : 6),
+                      child: Row(
+                        children: [
+                          for (final m in _marcados(c))
+                            Padding(
+                              padding: const EdgeInsets.only(right: 8),
+                              child: _Chip(
+                                  texto: m.$2, marcado: true, onTap: m.$3),
+                            ),
+                          _separadorDeChips,
+                        ],
+                      ),
+                    ),
+                  ),
                 Expanded(
                   child: SingleChildScrollView(
               controller: _esTactil ? null : _scroll,
               scrollDirection: Axis.horizontal,
-              padding: EdgeInsets.symmetric(horizontal: _esTactil ? margen : 6),
+              padding: EdgeInsets.only(
+                  left: _marcados(c).isNotEmpty ? 0 : (_esTactil ? margen : 6),
+                  right: _esTactil ? margen : 6),
               child: Row(
                 children: [
+                  // ── Lo elegido, al principio de todo ──────────────────
+                  //
+                  // Con cuarenta y cuatro géneros, el chip marcado podía
+                  // quedar a tres pantallazos de distancia: el usuario filtra
+                  // y después no ve por qué filtró. Adelante y con su ganchito
+                  // se lee de un vistazo, y se apaga tocándolo sin buscarlo.
                   // El estado va primero: son dos chips y acotan mucho más que
                   // un género —«algo terminado, para maratonear» es de las
                   // primeras cosas que alguien busca—.
                   for (final e in c.estadosDisponibles)
+                    if (c.estadoElegido.value != e)
                     Padding(
                       padding: const EdgeInsets.only(right: 8),
                       child: _Chip(
@@ -288,6 +348,7 @@ class _BarraDeFiltrosState extends State<_BarraDeFiltros> {
                   // pocos y acotan mucho —«una película», «un manhwa»— así
                   // que van donde se ven sin desplazar.
                   for (final f in c.formatosDisponibles)
+                    if (c.formatoElegido.value != f)
                     Padding(
                       padding: const EdgeInsets.only(right: 8),
                       child: _Chip(
@@ -302,6 +363,7 @@ class _BarraDeFiltrosState extends State<_BarraDeFiltros> {
                       generos.isNotEmpty)
                     _separadorDeChips,
                   for (final g in generos)
+                    if (c.generoElegido.value != g)
                     Padding(
                       padding: const EdgeInsets.only(right: 8),
                       child: _Chip(
@@ -1025,7 +1087,11 @@ class _TarjetaGrande extends StatelessWidget {
                     .ceil()
                     .clamp(1, 4096),
                 headers: cabeceras,
-                placeholder: const ColoredBox(color: HomeTheme.cardSurface),
+                // Un bloque brillando mientras baja la portada, no un
+                // rectángulo gris quieto. Con el gris, una tarjeta a medio
+                // cargar se ve igual que una rota; con el brillo se entiende
+                // que está en camino.
+                placeholder: const Esqueleto(radio: 20),
                 fallback: const ColoredBox(color: HomeTheme.cardSurface),
               ),
               // Translúcido de punta a punta: si terminara en un color opaco
@@ -1133,13 +1199,16 @@ class _FilaAndroidState extends State<_FilaAndroid> {
     if (widget.fila.estadoExt != EstadoExtension.activa) {
       return _FilaInactiva(fila: widget.fila, c: widget.c);
     }
-    // Hay un género aplicado y este sitio no lo tiene entre sus filtros.
-    // Se dice, en una línea: mostrarla con lo último de siempre haría creer
-    // que ese contenido es del género elegido, y esconderla dejaría al usuario
-    // preguntándose adónde se fue su extensión.
-    if (!widget.c.puedeConEsteGenero(widget.fila.package)) {
-      return _FilaSinEseGenero(nombre: widget.fila.nombre);
-    }
+    // ── Sin ese filtro, igual se muestra ────────────────────────────
+    //
+    // Antes acá iba una línea diciendo «no tiene ese género» en vez de la
+    // fila. Se probó y no sirve: el usuario marca «Manga» y se queda con media
+    // pantalla de renglones de disculpa en lugar de contenido.
+    //
+    // Ahora la fila trae lo suyo de siempre y el encabezado dice «Lo más
+    // reciente» en vez de «Según tu filtro». Se ve contenido, y no se miente
+    // sobre qué es. Las que SÍ pueden filtrar ya van arriba (ver `_visibles`),
+    // así que estas quedan abajo sin estorbar.
     return Obx(() {
       final estado = widget.fila.estado.value;
       final items = widget.fila.items;
@@ -1508,33 +1577,3 @@ class _CarruselEsperando extends StatelessWidget {
   }
 }
 
-/// La extensión no ofrece el género que está aplicado.
-class _FilaSinEseGenero extends StatelessWidget {
-  const _FilaSinEseGenero({required this.nombre});
-
-  final String nombre;
-
-  @override
-  Widget build(BuildContext context) {
-    final margen = _margen(context);
-    return Padding(
-      padding: EdgeInsets.fromLTRB(margen, 14, margen, 0),
-      child: Row(
-        children: [
-          const Icon(Icons.filter_alt_off_outlined,
-              size: 16, color: HomeTheme.textMuted),
-          const SizedBox(width: 8),
-          Expanded(
-            child: Text(
-              '$nombre · ${'home.fila-sin-genero'.i18n}',
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-              style: const TextStyle(
-                  fontSize: 12.5, color: HomeTheme.textMuted),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-}

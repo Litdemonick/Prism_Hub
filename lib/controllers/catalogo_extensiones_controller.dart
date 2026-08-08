@@ -588,8 +588,15 @@ class CatalogoExtensionesController extends GetxController {
   /// El precio es un rato con contenido del filtro anterior en pantalla. Es
   /// mucho más barato que un Home en blanco.
   /// Lo que muestra una fila ahora mismo, para el encabezado.
+  ///
+  /// Solo dice «según tu filtro» si esta extensión PUEDE contestarlo. Las que
+  /// no lo tienen siguen mostrando lo suyo, y el encabezado lo dice: mentirles
+  /// con «según tu filtro» sobre contenido que no está filtrado es peor que no
+  /// filtrar.
   ModoDeFila modoDe(FilaDeExtension fila) =>
-      hayFiltros ? ModoDeFila.filtrado : fila.modo;
+      (hayFiltros && puedeConEsteGenero(fila.package))
+          ? ModoDeFila.filtrado
+          : fila.modo;
 
   Future<void> aplicarFiltros() async {
     tipoAplicado = tipoElegido.value;
