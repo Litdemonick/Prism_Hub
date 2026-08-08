@@ -39,20 +39,26 @@ class HomeWindows extends StatelessWidget {
               .where(c.entraEnElTipo)
               .toList();
 
-          // ── El orden NO cambia al filtrar ─────────────────────────────────
+          // ── Con filtro puesto, las que lo tienen van arriba ────────────────
           //
-          // Se probó subir las que pueden contestar el filtro. Se ve mal: al
-          // aplicar, cada fila cambia de sitio y el título que estabas mirando se
-          // reemplaza por el de otra extensión — parece que la app se barajó sola.
+          // Esto se sacó una vez porque al aplicar cambiaba el título que el usuario
+          // estaba mirando. Vuelve, pero ahora el reordenamiento pasa EN EL MISMO
+          // INSTANTE en que todas las filas pasan a bloques grises —`aplicarFiltros`
+          // avisa antes de pedir nada— así que no se ve un título reemplazando a
+          // otro sobre contenido: se ve la lista acomodándose para el filtro, y
+          // recién después se llena.
           //
-          // Y ya no hace falta. Antes las que no tenían el filtro mostraban una
-          // línea de disculpa, y dejarlas arriba era media pantalla vacía; ahora
-          // todas traen contenido —filtrado si pueden, lo último si no, y el
-          // encabezado lo dice— así que ninguna posición está desperdiciada.
-          //
-          // El orden se queda como está: por lo que más usás. Cada fila cambia su
-          // contenido en su lugar, con los bloques grises mientras llega.
-
+          // Y hace falta: sin esto, marcar «Isekai» dejaba arriba las extensiones
+          // que no lo tienen, y había que bajar hasta el final para encontrar las que
+          // sí. El orden es estable —entre las que pueden se respeta el de siempre,
+          // el del historial— así que no baila entre cargas.
+          if (c.hayFiltros) {
+            lista.sort((a, b) {
+              final pa = c.puedeConEsteGenero(a.package) ? 0 : 1;
+              final pb = c.puedeConEsteGenero(b.package) ? 0 : 1;
+              return pa - pb;
+            });
+          }
           return lista;
         }();
         return RefreshIndicator(
