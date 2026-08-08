@@ -209,6 +209,38 @@ class CatalogoExtensionesController extends GetxController {
       'vida cotidiana',
       'slice of life',
     ],
+    // ── Los que salieron del segundo barrido ─────────────────────────────
+    //
+    // Se volvió a medir pidiendo etiquetas presentes en DOS o más extensiones
+    // en vez de tres. Estos aparecieron con esa vara, y son géneros de verdad
+    // —no estados como «Finalizado» ni formatos como «OVA», que se
+    // descartaron a mano—.
+    'ecchi': ['ecchi'],
+    'harem': ['harem'],
+    'superpoderes': ['superpoderes', 'super poderes', 'super power'],
+    'demonios': ['demonios', 'demons'],
+    'gore': ['gore'],
+    'vampiros': ['vampiros', 'vampire', 'vampires'],
+    'isekai': ['isekai'],
+    'tragedia': ['tragedia', 'tragedy'],
+    'parodia': ['parodia', 'parody'],
+    'musica': ['musica', 'music', 'musical'],
+    'policia': ['policia', 'policial', 'police'],
+    'samurai': ['samurai', 'samurais'],
+    'espacial': ['espacial', 'space'],
+    'apocaliptico': ['apocaliptico', 'post-apocaliptico', 'apocalyptic'],
+    'reencarnacion': ['reencarnacion', 'reincarnation'],
+    'infantil': ['infantil', 'kids'],
+    'carreras': ['carreras', 'racing'],
+    'demencia': ['demencia', 'dementia'],
+    'boys-love': ['boys love', 'boys-love', 'yaoi', 'bl'],
+    'girls-love': ['girls love', 'girls-love', 'yuri', 'gl'],
+    // Demografías. No son género en sentido estricto, pero en un catálogo de
+    // manga y anime es por donde mucha gente busca.
+    'shounen': ['shounen', 'shonen'],
+    'shoujo': ['shoujo', 'shojo'],
+    'seinen': ['seinen'],
+    'josei': ['josei'],
   };
 
   /// Un chip solo aparece si al menos ESTAS extensiones pueden contestarlo.

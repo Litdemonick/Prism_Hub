@@ -16,7 +16,6 @@ import 'package:prismhub/views/widgets/home/animated_background_glow.dart';
 import 'package:prismhub/views/widgets/home/esqueleto.dart';
 import 'package:prismhub/views/widgets/home/home_theme.dart';
 import 'package:prismhub/views/widgets/home/tarjeta_de_catalogo.dart';
-import 'package:prismhub/views/widgets/progress.dart';
 
 // ── Por qué está partido en tres archivos ───────────────────────────────────
 //

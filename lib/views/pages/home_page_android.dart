@@ -168,6 +168,28 @@ class _BarraDeFiltros extends StatefulWidget {
 }
 
 class _BarraDeFiltrosState extends State<_BarraDeFiltros> {
+  /// Para las flechas de escritorio. En celular no se usa: ahí la fila se
+  /// arrastra con el dedo.
+  final _scroll = ScrollController();
+
+  @override
+  void dispose() {
+    _scroll.dispose();
+    super.dispose();
+  }
+
+  /// Corre la fila de chips la mayor parte de su ancho.
+  void _correr(int signo) {
+    if (!_scroll.hasClients) return;
+    final salto = _scroll.position.viewportDimension * 0.8;
+    _scroll.animateTo(
+      (_scroll.offset + salto * signo)
+          .clamp(0.0, _scroll.position.maxScrollExtent),
+      duration: const Duration(milliseconds: 300),
+      curve: Curves.easeOutCubic,
+    );
+  }
+
   @override
   void initState() {
     super.initState();
@@ -188,58 +210,80 @@ class _BarraDeFiltrosState extends State<_BarraDeFiltros> {
       final generos = c.generosDisponibles;
       final hayAlgo = c.tipoElegido.value != null || c.generoElegido.value != null;
 
+      // Sin géneros todavía —se leen en segundo plano, después de que carguen
+      // las filas— no se dibuja una franja vacía esperando.
+      if (generos.isEmpty) return const SizedBox(height: 6);
+
       return Padding(
-        padding: const EdgeInsets.only(bottom: 12),
+        // Despegada del título: pegada arriba, la barra se leía como parte de
+        // la cabecera y no como algo que se puede tocar.
+        padding: const EdgeInsets.only(top: 14, bottom: 14),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            SingleChildScrollView(
+            // ── Solo géneros ──────────────────────────────────────────
+            //
+            // Los chips de tipo —Vídeo, Manga, Novela— se sacaron: en el Home
+            // cada fila YA lleva el nombre de su extensión, y con eso el
+            // usuario sabe de sobra si está mirando anime o manga. Ocupaban la
+            // primera pantalla de la barra empujando los géneros, que son los
+            // que de verdad sirven para encontrar algo.
+            Row(
+              children: [
+                // Flechas solo en escritorio: en una pantalla táctil la fila
+                // se arrastra con el dedo y las flechas solo taparían chips.
+                if (!_esTactil) ...[
+                  SizedBox(width: margen - 8),
+                  _FlechaDeFila(
+                      icono: Icons.chevron_left_rounded,
+                      onTap: () => _correr(-1)),
+                ],
+                Expanded(
+                  child: SingleChildScrollView(
+              controller: _esTactil ? null : _scroll,
               scrollDirection: Axis.horizontal,
-              padding: EdgeInsets.symmetric(horizontal: margen),
+              padding: EdgeInsets.symmetric(horizontal: _esTactil ? margen : 6),
               child: Row(
                 children: [
-                  for (final t in _tipos)
+                  for (final g in generos)
                     Padding(
                       padding: const EdgeInsets.only(right: 8),
                       child: _Chip(
-                        texto: t.$2.i18n,
-                        marcado: c.tipoElegido.value == t.$1,
+                        // El chip muestra la traducción; lo que se guarda y se
+                        // compara es el identificador.
+                        texto: 'home.genero.$g'.i18n,
+                        marcado: c.generoElegido.value == g,
                         // Volver a tocar el mismo lo apaga: sin eso, una vez
-                        // elegido un tipo no habría forma de volver a «todos»
-                        // salvo con Restablecer.
-                        onTap: () => c.tipoElegido.value =
-                            c.tipoElegido.value == t.$1 ? null : t.$1,
+                        // elegido un género no habría forma de volver a
+                        // «todos» salvo con Restablecer.
+                        onTap: () => c.generoElegido.value =
+                            c.generoElegido.value == g ? null : g,
                       ),
                     ),
-                  if (generos.isNotEmpty) ...[
-                    Container(
-                      width: 1,
-                      height: 22,
-                      margin: const EdgeInsets.only(right: 8),
-                      color: Colors.white.withValues(alpha: 0.14),
-                    ),
-                    for (final g in generos)
-                      Padding(
-                        padding: const EdgeInsets.only(right: 8),
-                        child: _Chip(
-                          // El chip muestra la traducción; lo que se guarda y
-                          // se compara es el identificador.
-                          texto: 'home.genero.$g'.i18n,
-                          marcado: c.generoElegido.value == g,
-                          onTap: () => c.generoElegido.value =
-                              c.generoElegido.value == g ? null : g,
-                        ),
-                      ),
-                  ],
                 ],
               ),
+                  ),
+                ),
+                if (!_esTactil) ...[
+                  _FlechaDeFila(
+                      icono: Icons.chevron_right_rounded,
+                      onTap: () => _correr(1)),
+                  SizedBox(width: margen - 8),
+                ],
+              ],
             ),
             if (c.hayCambiosSinAplicar || hayAlgo)
               Padding(
                 padding: EdgeInsets.fromLTRB(margen, 10, margen, 0),
                 child: Row(
                   children: [
-                    if (c.hayCambiosSinAplicar) ...[
+                    // ── Cómo se aplica, según el aparato ──────────────
+                    //
+                    // En celular se desliza hacia abajo, que es el gesto que
+                    // ya existe para refrescar. En escritorio ese gesto no
+                    // existe —nadie tira de una ventana con el mouse— así que
+                    // ahí va un botón, que es lo que se busca.
+                    if (c.hayCambiosSinAplicar && _esTactil) ...[
                       const Icon(Icons.arrow_downward_rounded,
                           size: 15, color: HomeTheme.accentPink),
                       const SizedBox(width: 6),
@@ -255,10 +299,23 @@ class _BarraDeFiltrosState extends State<_BarraDeFiltros> {
                       ),
                     ] else
                       const Spacer(),
-                    TextButton(
-                      onPressed: c.restablecerFiltros,
-                      child: Text('home.filtros-restablecer'.i18n),
-                    ),
+                    if (hayAlgo || c.hayFiltros)
+                      TextButton(
+                        onPressed: c.restablecerFiltros,
+                        child: Text('home.filtros-restablecer'.i18n),
+                      ),
+                    if (!_esTactil && c.hayCambiosSinAplicar) ...[
+                      const SizedBox(width: 8),
+                      FilledButton.icon(
+                        onPressed: c.aplicarFiltros,
+                        icon: const Icon(Icons.filter_alt_rounded, size: 18),
+                        label: Text('home.filtros-aplicar'.i18n),
+                        style: FilledButton.styleFrom(
+                          backgroundColor: HomeTheme.accentPink,
+                          foregroundColor: Colors.white,
+                        ),
+                      ),
+                    ],
                   ],
                 ),
               ),
@@ -268,12 +325,6 @@ class _BarraDeFiltrosState extends State<_BarraDeFiltros> {
     });
   }
 
-  /// Los tipos, con el nombre que ya usa el resto de la app.
-  static const _tipos = <(ExtensionType, String)>[
-    (ExtensionType.bangumi, 'extension-type.video'),
-    (ExtensionType.manga, 'extension-type.comic'),
-    (ExtensionType.fikushon, 'extension-type.novel'),
-  ];
 }
 
 class _Chip extends StatelessWidget {
@@ -678,7 +729,32 @@ class _CarruselAndroidState extends State<_CarruselAndroid>
     final centro = (f + 1 <= hasta)
         ? centroDe(f) + t * (centroDe(f + 1) - centroDe(f))
         : centroDe(f);
-    final dx = anchoUtil / 2 - centro;
+    var dx = anchoUtil / 2 - centro;
+
+    // ── En los extremos no se centra: se apoya en el borde ─────────────
+    //
+    // Centrar siempre significa que en la PRIMERA tarjeta no hay nada a la
+    // izquierda que llene ese lado, y queda un hueco negro de media pantalla
+    // —igual en la última, del otro lado—.
+    //
+    // Se acota el corrimiento: llegando al principio, la primera se apoya en
+    // el margen izquierdo; llegando al final, la última en el derecho. En el
+    // medio no cambia nada, así que el deslizar se sigue sintiendo igual.
+    const borde = 12.0;
+    if (desde == 0) {
+      final tope = borde - xs[0]!;
+      if (dx > tope) dx = tope;
+    }
+    if (hasta == planos.length - 1) {
+      final piso = anchoUtil - borde - (xs[hasta]! + anchoDe(hasta));
+      if (dx < piso) dx = piso;
+    }
+    // Con menos tarjetas que ancho disponible las dos reglas se pelean; ahí
+    // gana el centrado, que es lo que se ve bien con dos o tres.
+    if (desde == 0 && hasta == planos.length - 1) {
+      final total = xs[hasta]! + anchoDe(hasta);
+      if (total < anchoUtil) dx = (anchoUtil - total) / 2;
+    }
 
     return Stack(
       children: [
@@ -691,7 +767,14 @@ class _CarruselAndroidState extends State<_CarruselAndroid>
             top: 0,
             width: anchoDe(i),
             height: m.alto,
-            child: _TarjetaGrande(
+            child: Opacity(
+              // Las de la punta se desvanecen en vez de cortarse de golpe.
+              // La ventana llega hasta tres de distancia, así que entre dos y
+              // tres la tarjeta se apaga: para cuando sale del dibujo ya es
+              // invisible, y no se ve aparecer ni desaparecer nada.
+              opacity: (1 - ((_p - i).abs() - 2).clamp(0.0, 1.0))
+                  .clamp(0.0, 1.0),
+              child: _TarjetaGrande(
               // ── El ancho para DECODIFICAR es fijo ──────────────────────
               //
               // Y no el ancho real de la tarjeta, que cambia en cada cuadro
@@ -723,6 +806,7 @@ class _CarruselAndroidState extends State<_CarruselAndroid>
                 }
                 _abrir(context, planos[i].$2, planos[i].$1);
               },
+              ),
             ),
           ),
       ],

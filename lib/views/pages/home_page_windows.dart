@@ -360,8 +360,27 @@ class _FilaWindowsState extends State<_FilaWindows> {
               // recortaba contra su borde y la sombra aparecía cortada en
               // línea recta — se veía peor que no tenerla.
               height: TarjetaDeCatalogo.altoTotalPara(Ancho.de(context)) + 28,
-              child: (items.isEmpty && estado == EstadoDeFila.cargando)
-                  ? const Center(child: ProgressRing())
+              // Bloques grises con la forma de las tarjetas, igual que en
+              // celular: dicen QUÉ va a aparecer y dónde, así que al llegar el
+              // contenido nada se mueve. Y salen también con contenido en
+              // pantalla cuando hay un filtro en curso — lo que se ve es del
+              // filtro anterior, y dejarlo quieto haría creer que no pasó
+              // nada.
+              child: (estado == EstadoDeFila.cargando &&
+                      (items.isEmpty || widget.c.aplicandoFiltros.value))
+                  ? ListView.separated(
+                      scrollDirection: Axis.horizontal,
+                      padding:
+                          EdgeInsets.symmetric(horizontal: _margen(context)),
+                      itemCount: 6,
+                      separatorBuilder: (_, __) => const SizedBox(width: 14),
+                      itemBuilder: (context, i) => Padding(
+                        padding: const EdgeInsets.only(top: 10),
+                        child: EsqueletoTarjeta(
+                          ancho: TarjetaDeCatalogo.anchoPara(Ancho.de(context)),
+                        ),
+                      ),
+                    )
                   : ListView.separated(
                       controller: _scroll,
                       scrollDirection: Axis.horizontal,
