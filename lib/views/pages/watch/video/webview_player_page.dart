@@ -573,8 +573,9 @@ class _WebViewPlayerPageState extends State<WebViewPlayerPage>
   Future<void> _vigilarQueHayaReproductor(
       InAppWebViewController controller) async {
     if (_yaSeCerroSinReproductor) return;
-    await Future<void>.delayed(
-        Platform.isAndroid ? const Duration(seconds: 20) : const Duration(seconds: 8));
+    await Future<void>.delayed(Platform.isAndroid
+        ? const Duration(seconds: 20)
+        : const Duration(seconds: 8));
     if (!mounted || _yaSeCerroSinReproductor) return;
     try {
       final r = await controller.evaluateJavascript(source: '''
@@ -766,11 +767,19 @@ class _WebViewPlayerPageState extends State<WebViewPlayerPage>
     _installCreationFailureDetector();
     _prepareMount();
     _resetHideTimer();
-    SystemChrome.setEnabledSystemUIMode(SystemUiMode.immersiveSticky);
-    SystemChrome.setPreferredOrientations([
-      DeviceOrientation.landscapeLeft,
-      DeviceOrientation.landscapeRight,
-    ]);
+    // ── Ya no se BLOQUEA la horizontal ─────────────────────────────────
+    //
+    // Acá se clavaba la pantalla en horizontal. Cuando el reproductor nativo
+    // hacía lo mismo daba igual, pero ahora ese abre como esté el teléfono y
+    // se puede girar: pasar al respaldo por navegador te tironeaba a
+    // horizontal a la fuerza y, al volver, el vertical quedaba trabado —
+    // reportado en vivo, «no deja volver en vertical el app».
+    //
+    // Mismo criterio que el nativo: no se fuerza nada y manda el sensor. Es la
+    // misma página web en los dos casos, y las webs de vídeo se ven bien de
+    // pie; el que quiera acostado gira el teléfono, que ahora sí responde.
+    SystemChrome.setPreferredOrientations(DeviceOrientation.values);
+    _barrasSegunOrientacion();
     // Si se llega acá desde el reproductor nativo ya en pantalla completa,
     // sincronizar el estado real para que el botón no crea que hace falta
     // "entrar" cuando ya está.
@@ -1015,6 +1024,15 @@ class _WebViewPlayerPageState extends State<WebViewPlayerPage>
   }
 
   @override
+  void didChangeMetrics() {
+    super.didChangeMetrics();
+    // Girar el teléfono cambia si las barras tienen que verse o no. Sin esto,
+    // al pasar a vertical se quedaban escondidas y la pantalla se veía sin
+    // ninguna salida.
+    _barrasSegunOrientacion();
+  }
+
+  @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
     // paused/hidden: la app se va a segundo plano o se está cerrando — mejor
     // esfuerzo, no hay garantía de que el proceso siga vivo el tiempo
@@ -1057,7 +1075,30 @@ class _WebViewPlayerPageState extends State<WebViewPlayerPage>
   /// Volver a pedirlo no puede romper nada: si ya está puesto, no cambia nada.
   void _ocultarBarrasDelSistema() {
     if (!Platform.isAndroid) return;
-    SystemChrome.setEnabledSystemUIMode(SystemUiMode.immersiveSticky);
+    _barrasSegunOrientacion();
+  }
+
+  /// Esconde las barras del sistema solo acostado.
+  ///
+  /// De pie tienen que verse: la de navegación es la única salida —esta
+  /// pantalla no tiene barra propia— y la de estado hace falta para ver la hora
+  /// y la batería. Acostado el vídeo ocupa todo y las barras estorban.
+  ///
+  /// Es el mismo criterio que el reproductor nativo (ver
+  /// VideoPlayerController.pantallaSegunOrientacion) y por el mismo motivo:
+  /// desde que se puede girar, dejarlas escondidas de pie deja al usuario sin
+  /// forma de salir salvo el gesto.
+  void _barrasSegunOrientacion() {
+    if (!Platform.isAndroid || !mounted) return;
+    final acostado = MediaQuery.orientationOf(context) == Orientation.landscape;
+    if (acostado) {
+      SystemChrome.setEnabledSystemUIMode(SystemUiMode.immersiveSticky);
+      return;
+    }
+    SystemChrome.setEnabledSystemUIMode(
+      SystemUiMode.manual,
+      overlays: SystemUiOverlay.values,
+    );
   }
 
   // Pausa el vídeo/audio del sitio sin tocar nada más: no descarga la fuente, no

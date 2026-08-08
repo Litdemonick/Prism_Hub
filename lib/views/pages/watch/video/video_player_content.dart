@@ -4,6 +4,7 @@ import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 import 'package:media_kit_video/media_kit_video.dart';
+import 'package:prismhub/views/widgets/home/home_theme.dart';
 import 'package:prismhub/controllers/watch/video_controller.dart';
 import 'package:prismhub/views/pages/watch/video/video_player_desktop_controls.dart';
 import 'package:prismhub/views/pages/watch/video/video_player_mobile_controls.dart';
@@ -121,6 +122,20 @@ class _VideoPlayerContenState extends State<VideoPlayerConten> {
         c,
         Video(
           controller: c.videoController,
+          // ── De pie, el hueco NO es negro ──────────────────────────────
+          //
+          // El vídeo es una franja 16:9 anclada arriba, así que debajo queda
+          // media pantalla libre. En negro plano eso se lee como que la app se
+          // rompió o se quedó colgada: no hay nada que diga que ese hueco es
+          // parte del reproductor. Con el fondo de la app se entiende que es la
+          // misma pantalla y que ahí es donde caen los controles.
+          //
+          // Acostado se queda en negro, que es lo correcto: ahí el hueco son
+          // las franjas de un vídeo que no llena, y cualquier color que no sea
+          // negro compite con la imagen.
+          fill: MediaQuery.orientationOf(context) == Orientation.portrait
+              ? HomeTheme.bg
+              : Colors.black,
           // Con el modo VR puesto, la imagen LLENA la pantalla.
           //
           // Al recortar un VR a la mitad izquierda queda un cuadro con otra
