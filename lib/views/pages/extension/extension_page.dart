@@ -667,29 +667,50 @@ class _ExtensionPageState extends State<ExtensionPage> {
     final label = '${page + 1}/$totalPages';
     final prevEnabled = page > 0;
     final nextEnabled = page < totalPages - 1;
-    const textStyle = TextStyle(fontSize: 11, color: HomeTheme.textMuted);
-    // En Android el tap target de antes (icono de 14px + 3px de padding,
-    // ~20x20 en total) era muy chico para tocar con el dedo — 44x44 es el
-    // mínimo recomendado. Desktop se queda compacto (usa mouse, no dedo).
-    final tapSize = useFluent ? 20.0 : 44.0;
-    final iconSize = useFluent ? 14.0 : 22.0;
+    // ── Con el dedo, grandes y con forma de botón ────────────────────────
+    //
+    // Ahora que van al final de la lista, son lo último que se ve y lo que hay
+    // que tocar para seguir. Dos flechitas finas sobre el fondo negro no se
+    // leen como algo que se pueda tocar: se pierden.
+    //
+    // En el teléfono van en un círculo con su superficie y su borde —los
+    // mismos de las tarjetas— y con el número más grande en el medio. En el
+    // escritorio se quedan compactas: ahí es un ratón, no un dedo, y la
+    // paginación va apretada arriba del grid.
+    final textStyle = TextStyle(
+      fontSize: useFluent ? 11 : 14,
+      fontWeight: useFluent ? FontWeight.normal : FontWeight.w700,
+      color: useFluent ? HomeTheme.textMuted : HomeTheme.textPrimary,
+    );
+    final tapSize = useFluent ? 20.0 : 52.0;
+    final iconSize = useFluent ? 14.0 : 28.0;
     Widget arrow(IconData icon, bool enabled, VoidCallback onTap) {
+      final color = enabled
+          ? (useFluent ? HomeTheme.textMuted : HomeTheme.textPrimary)
+          : HomeTheme.textMuted.withValues(alpha: 0.3);
       return MouseRegion(
         cursor: enabled ? SystemMouseCursors.click : SystemMouseCursors.basic,
         child: GestureDetector(
           onTap: enabled ? onTap : null,
-          child: SizedBox(
+          child: Container(
             width: tapSize,
             height: tapSize,
-            child: Center(
-              child: Icon(
-                icon,
-                size: iconSize,
-                color: enabled
-                    ? HomeTheme.textMuted
-                    : HomeTheme.textMuted.withValues(alpha: 0.3),
-              ),
-            ),
+            decoration: useFluent
+                ? null
+                : BoxDecoration(
+                    shape: BoxShape.circle,
+                    // Apagado también se ve, pero sin invitar: si desaparece,
+                    // en la última página parece que faltara un botón.
+                    color: enabled
+                        ? HomeTheme.cardSurface
+                        : HomeTheme.cardSurface.withValues(alpha: 0.5),
+                    border: Border.all(
+                      color: enabled
+                          ? HomeTheme.border
+                          : HomeTheme.border.withValues(alpha: 0.5),
+                    ),
+                  ),
+            child: Center(child: Icon(icon, size: iconSize, color: color)),
           ),
         ),
       );

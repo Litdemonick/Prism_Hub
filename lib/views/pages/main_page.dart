@@ -671,38 +671,50 @@ class _AndroidMainPageState extends fluent.State<AndroidMainPage> {
     // dos: vale cero cuando quedó del otro lado.
     final costados = MediaQuery.viewPaddingOf(context);
     return Padding(
-      // A la derecha va el aire que separa el riel del contenido. Sin él, la
-      // primera columna de tarjetas arranca pegada a los íconos.
-      padding: EdgeInsets.only(left: costados.left + 10, right: 14),
-      child: Column(
-        mainAxisAlignment: MainAxisAlignment.center,
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          for (var i = 0; i < _enElRiel; i++)
-            Padding(
-              padding: const EdgeInsets.symmetric(vertical: 6),
-              child: _IconoDeBarra(
-                destino: destinos[i],
-                elegido: c.selectedTab.value == i,
-                onTap: () => _irAZona(i),
+      // Aire parejo a los dos lados del riel, además de lo que se lleve la
+      // barra del sistema. Con 10 a la izquierda y 14 a la derecha los íconos
+      // quedaban corridos contra el borde en vez de centrados en su franja.
+      padding: EdgeInsets.only(left: costados.left + 12, right: 12),
+      // ── Centrado a lo alto, explícito ─────────────────────────────────────
+      //
+      // Antes solo estaba el mainAxisAlignment de la columna, que centra
+      // DENTRO del alto que le den. Y el alto que le daban no era el de la
+      // pantalla: la barra del sistema de arriba lo corría, así que el riel
+      // quedaba más cerca del borde superior que del inferior.
+      //
+      // Con el Center la columna se mide contra la franja entera y queda a
+      // media altura de verdad, esté el aparato girado para donde esté.
+      child: Center(
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            for (var i = 0; i < _enElRiel; i++)
+              Padding(
+                padding: const EdgeInsets.symmetric(vertical: 6),
+                child: _IconoDeBarra(
+                  destino: destinos[i],
+                  elegido: c.selectedTab.value == i,
+                  onTap: () => _irAZona(i),
+                ),
               ),
-            ),
-          // ── Acostado, el riel es SOLO esas tres ─────────────────────────
-          //
-          // Ni los tres puntos ni las opciones que salían de ellos. El riel
-          // acostado es una columna angosta contra el borde: cuantos más
-          // íconos tiene, menos se distingue a qué zona se va, y el
-          // desplegable encima quedaba peor todavía —se dibujaba sobre el
-          // propio riel y empujaba los botones hacia arriba—.
-          //
-          // Lo que queda afuera sigue teniendo por dónde: Ajustes por su
-          // atajo del Home, Historial y Favoritos desde Biblioteca (sus «ver
-          // más» abren esas mismas pestañas), y Extensiones desde el aviso de
-          // «no tenés extensiones activas» y desde el Repositorio.
-          //
-          // De pie no cambia nada: barra abajo con cuatro y el resto en los
-          // tres puntos, que ahí sí hacen falta porque el ancho es el que es.
-        ],
+            // ── Acostado, el riel es SOLO esas tres ─────────────────────────
+            //
+            // Ni los tres puntos ni las opciones que salían de ellos. El riel
+            // acostado es una columna angosta contra el borde: cuantos más
+            // íconos tiene, menos se distingue a qué zona se va, y el
+            // desplegable encima quedaba peor todavía —se dibujaba sobre el
+            // propio riel y empujaba los botones hacia arriba—.
+            //
+            // Lo que queda afuera sigue teniendo por dónde: Ajustes por su
+            // atajo del Home, Historial y Favoritos desde Biblioteca (sus «ver
+            // más» abren esas mismas pestañas), y Extensiones desde el aviso de
+            // «no tenés extensiones activas» y desde el Repositorio.
+            //
+            // De pie no cambia nada: barra abajo con cuatro y el resto en los
+            // tres puntos, que ahí sí hacen falta porque el ancho es el que es.
+          ],
+        ),
       ),
     );
   }
