@@ -252,13 +252,19 @@ class _BarraDeFiltrosState extends State<_BarraDeFiltros> {
       final hayAlgo =
           c.tipoElegido.value != null || c.generoElegido.value != null;
 
-      // Sin géneros todavía —se leen en segundo plano, después de que carguen
-      // las filas— no se dibuja una franja vacía esperando.
-      if (generos.isEmpty &&
+      // ── El alto de la barra NUNCA cambia ──────────────────────────────
+      //
+      // Los géneros se leen en segundo plano, después de que carguen las
+      // filas. Antes, mientras tanto, la barra medía seis píxeles y al llegar
+      // saltaba a su tamaño completo empujando el carrusel y todas las filas
+      // hacia abajo — el usuario ya estaba mirando algo y se le movía solo.
+      //
+      // Ahora ocupa siempre lo mismo y lo que cambia es el contenido:
+      // primero bloques grises con forma de chip, después los chips de
+      // verdad. Igual que las tarjetas.
+      final cargandoChips = generos.isEmpty &&
           c.estadosDisponibles.isEmpty &&
-          c.formatosDisponibles.isEmpty) {
-        return const SizedBox(height: 6);
-      }
+          c.formatosDisponibles.isEmpty;
 
       return Padding(
         // Despegada del título: pegada arriba, la barra se leía como parte de
@@ -274,123 +280,142 @@ class _BarraDeFiltrosState extends State<_BarraDeFiltros> {
             // usuario sabe de sobra si está mirando anime o manga. Ocupaban la
             // primera pantalla de la barra empujando los géneros, que son los
             // que de verdad sirven para encontrar algo.
-            Row(
-              children: [
-                // Flechas solo en escritorio: en una pantalla táctil la fila
-                // se arrastra con el dedo y las flechas solo taparían chips.
-                if (!_esTactil && _marcados(c).isEmpty)
-                  SizedBox(width: margen - 8),
-                if (!_esTactil)
-                  _FlechaDeFila(
-                      icono: Icons.chevron_left_rounded,
-                      onTap: () => _correr(-1)),
-                // ── Los activos, FIJOS a la izquierda ─────────────────
-                //
-                // Fuera del área que se desplaza: así el filtro puesto se ve
-                // siempre, aunque el usuario se haya ido al final de los
-                // cuarenta y cuatro géneros buscando otro. Antes iba adentro y
-                // se perdía de vista al primer arrastre.
-                //
-                // Flexible y con su propio desplazamiento: con tres activos en
-                // un teléfono angosto, si no, se comerían la barra entera.
-                if (_marcados(c).isNotEmpty)
-                  Flexible(
+            if (cargandoChips)
+              SizedBox(
+                height: 40,
+                child: ListView.separated(
+                  scrollDirection: Axis.horizontal,
+                  physics: const NeverScrollableScrollPhysics(),
+                  padding: EdgeInsets.symmetric(horizontal: margen),
+                  itemCount: 7,
+                  separatorBuilder: (_, __) => const SizedBox(width: 8),
+                  // Anchos distintos: siete cápsulas idénticas se leen como un
+                  // patrón, no como chips que están por aparecer.
+                  itemBuilder: (_, i) => Esqueleto(
+                    radio: 20,
+                    width: 78.0 + (i % 3) * 26,
+                    height: 38,
+                  ),
+                ),
+              )
+            else
+              Row(
+                children: [
+                  // Flechas solo en escritorio: en una pantalla táctil la fila
+                  // se arrastra con el dedo y las flechas solo taparían chips.
+                  if (!_esTactil && _marcados(c).isEmpty)
+                    SizedBox(width: margen - 8),
+                  if (!_esTactil)
+                    _FlechaDeFila(
+                        icono: Icons.chevron_left_rounded,
+                        onTap: () => _correr(-1)),
+                  // ── Los activos, FIJOS a la izquierda ─────────────────
+                  //
+                  // Fuera del área que se desplaza: así el filtro puesto se ve
+                  // siempre, aunque el usuario se haya ido al final de los
+                  // cuarenta y cuatro géneros buscando otro. Antes iba adentro y
+                  // se perdía de vista al primer arrastre.
+                  //
+                  // Flexible y con su propio desplazamiento: con tres activos en
+                  // un teléfono angosto, si no, se comerían la barra entera.
+                  if (_marcados(c).isNotEmpty)
+                    Flexible(
+                      child: SingleChildScrollView(
+                        scrollDirection: Axis.horizontal,
+                        padding: EdgeInsets.only(left: _esTactil ? margen : 6),
+                        child: Row(
+                          children: [
+                            for (final m in _marcados(c))
+                              Padding(
+                                padding: const EdgeInsets.only(right: 8),
+                                child: _Chip(
+                                    texto: m.$2, marcado: true, onTap: m.$3),
+                              ),
+                            _separadorDeChips,
+                          ],
+                        ),
+                      ),
+                    ),
+                  Expanded(
                     child: SingleChildScrollView(
+                      controller: _esTactil ? null : _scroll,
                       scrollDirection: Axis.horizontal,
-                      padding: EdgeInsets.only(left: _esTactil ? margen : 6),
+                      padding: EdgeInsets.only(
+                          left: _marcados(c).isNotEmpty
+                              ? 0
+                              : (_esTactil ? margen : 6),
+                          right: _esTactil ? margen : 6),
                       child: Row(
                         children: [
-                          for (final m in _marcados(c))
-                            Padding(
-                              padding: const EdgeInsets.only(right: 8),
-                              child: _Chip(
-                                  texto: m.$2, marcado: true, onTap: m.$3),
-                            ),
-                          _separadorDeChips,
+                          // ── Lo elegido, al principio de todo ──────────────────
+                          //
+                          // Con cuarenta y cuatro géneros, el chip marcado podía
+                          // quedar a tres pantallazos de distancia: el usuario filtra
+                          // y después no ve por qué filtró. Adelante y con su ganchito
+                          // se lee de un vistazo, y se apaga tocándolo sin buscarlo.
+                          // El estado va primero: son dos chips y acotan mucho más que
+                          // un género —«algo terminado, para maratonear» es de las
+                          // primeras cosas que alguien busca—.
+                          for (final e in c.estadosDisponibles)
+                            if (c.estadoElegido.value != e)
+                              Padding(
+                                padding: const EdgeInsets.only(right: 8),
+                                child: _Chip(
+                                  texto: 'home.estado.$e'.i18n,
+                                  marcado: c.estadoElegido.value == e,
+                                  onTap: () => c.estadoElegido.value =
+                                      c.estadoElegido.value == e ? null : e,
+                                ),
+                              ),
+                          if (c.estadosDisponibles.isNotEmpty &&
+                              c.formatosDisponibles.isNotEmpty)
+                            _separadorDeChips,
+                          // El formato después del estado y antes del género: son
+                          // pocos y acotan mucho —«una película», «un manhwa»— así
+                          // que van donde se ven sin desplazar.
+                          for (final f in c.formatosDisponibles)
+                            if (c.formatoElegido.value != f)
+                              Padding(
+                                padding: const EdgeInsets.only(right: 8),
+                                child: _Chip(
+                                  texto: 'home.formato.$f'.i18n,
+                                  marcado: c.formatoElegido.value == f,
+                                  onTap: () => c.formatoElegido.value =
+                                      c.formatoElegido.value == f ? null : f,
+                                ),
+                              ),
+                          if ((c.estadosDisponibles.isNotEmpty ||
+                                  c.formatosDisponibles.isNotEmpty) &&
+                              generos.isNotEmpty)
+                            _separadorDeChips,
+                          for (final g in generos)
+                            if (c.generoElegido.value != g)
+                              Padding(
+                                padding: const EdgeInsets.only(right: 8),
+                                child: _Chip(
+                                  // El chip muestra la traducción; lo que se guarda y se
+                                  // compara es el identificador.
+                                  texto: 'home.genero.$g'.i18n,
+                                  marcado: c.generoElegido.value == g,
+                                  // Volver a tocar el mismo lo apaga: sin eso, una vez
+                                  // elegido un género no habría forma de volver a
+                                  // «todos» salvo con Restablecer.
+                                  onTap: () => c.generoElegido.value =
+                                      c.generoElegido.value == g ? null : g,
+                                ),
+                              ),
                         ],
                       ),
                     ),
                   ),
-                Expanded(
-                  child: SingleChildScrollView(
-                    controller: _esTactil ? null : _scroll,
-                    scrollDirection: Axis.horizontal,
-                    padding: EdgeInsets.only(
-                        left: _marcados(c).isNotEmpty
-                            ? 0
-                            : (_esTactil ? margen : 6),
-                        right: _esTactil ? margen : 6),
-                    child: Row(
-                      children: [
-                        // ── Lo elegido, al principio de todo ──────────────────
-                        //
-                        // Con cuarenta y cuatro géneros, el chip marcado podía
-                        // quedar a tres pantallazos de distancia: el usuario filtra
-                        // y después no ve por qué filtró. Adelante y con su ganchito
-                        // se lee de un vistazo, y se apaga tocándolo sin buscarlo.
-                        // El estado va primero: son dos chips y acotan mucho más que
-                        // un género —«algo terminado, para maratonear» es de las
-                        // primeras cosas que alguien busca—.
-                        for (final e in c.estadosDisponibles)
-                          if (c.estadoElegido.value != e)
-                            Padding(
-                              padding: const EdgeInsets.only(right: 8),
-                              child: _Chip(
-                                texto: 'home.estado.$e'.i18n,
-                                marcado: c.estadoElegido.value == e,
-                                onTap: () => c.estadoElegido.value =
-                                    c.estadoElegido.value == e ? null : e,
-                              ),
-                            ),
-                        if (c.estadosDisponibles.isNotEmpty &&
-                            c.formatosDisponibles.isNotEmpty)
-                          _separadorDeChips,
-                        // El formato después del estado y antes del género: son
-                        // pocos y acotan mucho —«una película», «un manhwa»— así
-                        // que van donde se ven sin desplazar.
-                        for (final f in c.formatosDisponibles)
-                          if (c.formatoElegido.value != f)
-                            Padding(
-                              padding: const EdgeInsets.only(right: 8),
-                              child: _Chip(
-                                texto: 'home.formato.$f'.i18n,
-                                marcado: c.formatoElegido.value == f,
-                                onTap: () => c.formatoElegido.value =
-                                    c.formatoElegido.value == f ? null : f,
-                              ),
-                            ),
-                        if ((c.estadosDisponibles.isNotEmpty ||
-                                c.formatosDisponibles.isNotEmpty) &&
-                            generos.isNotEmpty)
-                          _separadorDeChips,
-                        for (final g in generos)
-                          if (c.generoElegido.value != g)
-                            Padding(
-                              padding: const EdgeInsets.only(right: 8),
-                              child: _Chip(
-                                // El chip muestra la traducción; lo que se guarda y se
-                                // compara es el identificador.
-                                texto: 'home.genero.$g'.i18n,
-                                marcado: c.generoElegido.value == g,
-                                // Volver a tocar el mismo lo apaga: sin eso, una vez
-                                // elegido un género no habría forma de volver a
-                                // «todos» salvo con Restablecer.
-                                onTap: () => c.generoElegido.value =
-                                    c.generoElegido.value == g ? null : g,
-                              ),
-                            ),
-                      ],
-                    ),
-                  ),
-                ),
-                if (!_esTactil) ...[
-                  _FlechaDeFila(
-                      icono: Icons.chevron_right_rounded,
-                      onTap: () => _correr(1)),
-                  SizedBox(width: margen - 8),
+                  if (!_esTactil) ...[
+                    _FlechaDeFila(
+                        icono: Icons.chevron_right_rounded,
+                        onTap: () => _correr(1)),
+                    SizedBox(width: margen - 8),
+                  ],
                 ],
-              ],
-            ),
+              ),
             // ── El alto está SIEMPRE reservado ────────────────────────
             //
             // Antes esta línea aparecía al marcar un chip y desaparecía al
