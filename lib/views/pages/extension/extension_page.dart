@@ -95,6 +95,36 @@ class _ExtensionPageState extends State<ExtensionPage> {
   /// el usuario está viendo «Lectura» y toca desactivar, espera que se apaguen
   /// las de lectura — no las diecisiete. El botón hace lo que la pantalla
   /// muestra.
+  /// Hay una acción masiva corriendo AHORA MISMO.
+  ///
+  /// ── Una sola para las cuatro ────────────────────────────────────────────
+  ///
+  /// Activar, desactivar, actualizar y desinstalar tocan todas lo mismo: la
+  /// lista de extensiones instaladas y sus archivos en disco. Dos a la vez no es
+  /// «el doble de rápido», es una carrera: desinstalar mientras se actualiza deja
+  /// media extensión escrita, y activar mientras se desinstala vuelve a prender
+  /// algo que ya no está.
+  ///
+  /// Con una sola marca compartida, la primera que arranca bloquea las cuatro
+  /// hasta terminar. Y como cada botón la mira para apagarse, tocar quince veces
+  /// hace exactamente lo mismo que tocar una.
+  bool _masivoEnCurso = false;
+
+  /// Corre una acción masiva con el paso cerrado detrás.
+  ///
+  /// El `finally` no es adorno: si la de adentro tira una excepción y la marca
+  /// quedara puesta, los cuatro botones se apagarían para siempre y habría que
+  /// reiniciar la app para volver a usarlos.
+  Future<void> _conElPasoCerrado(Future<void> Function() accion) async {
+    if (_masivoEnCurso) return;
+    setState(() => _masivoEnCurso = true);
+    try {
+      await accion();
+    } finally {
+      if (mounted) setState(() => _masivoEnCurso = false);
+    }
+  }
+
   Future<void> _cambiarTodas(bool activar) async {
     final visibles = _applyFilters(c.runtimes.values.toList(growable: false));
     if (visibles.isEmpty) return;
@@ -279,30 +309,38 @@ class _ExtensionPageState extends State<ExtensionPage> {
   /// rendija de cien píxeles.
   Widget _buildBarraDeFiltros() {
     final activar = _BotonMasivo(
-      icono: Icons.toggle_on_outlined,
+      icono: _masivoEnCurso
+          ? Icons.hourglass_top_rounded
+          : Icons.toggle_on_outlined,
       label: 'extension.activar-todas'.i18n,
-      onTap: () => _cambiarTodas(true),
+      onTap: _masivoEnCurso
+          ? null
+          : () => _conElPasoCerrado(() => _cambiarTodas(true)),
     );
     final desactivar = _BotonMasivo(
-      icono: Icons.toggle_off_outlined,
+      icono: _masivoEnCurso
+          ? Icons.hourglass_top_rounded
+          : Icons.toggle_off_outlined,
       label: 'extension.desactivar-todas'.i18n,
-      onTap: () => _cambiarTodas(false),
+      onTap: _masivoEnCurso
+          ? null
+          : () => _conElPasoCerrado(() => _cambiarTodas(false)),
     );
     final desinstalar = _BotonMasivo(
-      icono: _desinstalandoTodas
+      icono: _masivoEnCurso
           ? Icons.hourglass_top_rounded
           : Icons.delete_sweep_outlined,
       label: 'extension.desinstalar-todas'.i18n,
-      onTap: _desinstalandoTodas ? null : _desinstalarTodas,
+      onTap: _masivoEnCurso ? null : () => _conElPasoCerrado(_desinstalarTodas),
     );
     final actualizar = _BotonMasivo(
-      icono: _actualizandoTodas
+      icono: _masivoEnCurso
           ? Icons.hourglass_top_rounded
           : Icons.system_update_alt_rounded,
       label: 'extension.actualizar-todas'.i18n,
       // Mientras corre, no se puede volver a tocar: son diecisiete descargas y
       // dispararlas dos veces solo duplica el trabajo.
-      onTap: _actualizandoTodas ? null : _actualizarTodas,
+      onTap: _masivoEnCurso ? null : () => _conElPasoCerrado(_actualizarTodas),
     );
 
     // ── Una línea o dos, y no lo decide solo el ancho ─────────────────────

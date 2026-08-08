@@ -172,7 +172,29 @@ class _ExtensionTileState extends State<ExtensionTile> {
     return result == true;
   }
 
+  /// Este interruptor está trabajando.
+  ///
+  /// Prender o apagar escribe en disco y toca la lista de motores, y el
+  /// interruptor de Flutter deja darle mil veces por segundo. Sin esta guarda,
+  /// castigarlo encadenaba escrituras contradictorias sobre el mismo paquete y
+  /// el estado terminaba siendo el de la que ganara la carrera, no el último que
+  /// pidió el usuario.
+  bool _cambiandoEstado = false;
+
   Future<void> _toggleEnabled(bool value) async {
+    if (_cambiandoEstado) return;
+    _cambiandoEstado = true;
+    try {
+      await _toggleEnabledDeVerdad(value);
+    } finally {
+      if (mounted) setState(() => _cambiandoEstado = false);
+      // Sin `mounted` no hay setState, pero la marca se libera igual: si el
+      // widget volviera, tiene que poder cambiarse de nuevo.
+      _cambiandoEstado = false;
+    }
+  }
+
+  Future<void> _toggleEnabledDeVerdad(bool value) async {
     // Una extension marcada inestable no se puede ACTIVAR. Antes se podia:
     // el interruptor la prendia igual y recien al tocar su contenido saltaba
     // el aviso, asi que quedaba encendida en la lista y aportando resultados
@@ -467,7 +489,10 @@ class _ExtensionTileState extends State<ExtensionTile> {
       trailing: Row(
         mainAxisSize: MainAxisSize.min,
         children: [
-          Switch(value: _enabled, onChanged: _toggleEnabled),
+          Switch(
+            value: _enabled,
+            onChanged: _cambiandoEstado ? null : _toggleEnabled,
+          ),
           IconButton(
             onPressed: () {
               // 弹出菜单 — solo desinstalar (ajustes/editar código quitados a
@@ -676,8 +701,9 @@ class _ExtensionTileState extends State<ExtensionTile> {
                 if (widget.extension.nsfw)
                   _badge('18+', color: Colors.redAccent),
                 if (_unstable)
-                  _badge(ExtensionUtils.etiquetaCortaInestable(_motivoInestable),
-                    color: Colors.orange),
+                  _badge(
+                      ExtensionUtils.etiquetaCortaInestable(_motivoInestable),
+                      color: Colors.orange),
                 if (_updateRequired)
                   _badge('extension.update-required'.i18n,
                       color: Colors.redAccent),
@@ -714,7 +740,7 @@ class _ExtensionTileState extends State<ExtensionTile> {
               children: [
                 fluent.ToggleSwitch(
                   checked: _enabled,
-                  onChanged: _toggleEnabled,
+                  onChanged: _cambiandoEstado ? null : _toggleEnabled,
                 ),
                 Row(
                   mainAxisSize: MainAxisSize.min,
