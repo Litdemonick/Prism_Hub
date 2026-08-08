@@ -1180,6 +1180,16 @@ class CatalogoExtensionesController extends GetxController {
   ///
   /// Se toman [porExtension] con portada. Sin portada no sirven: el carrusel
   /// es una imagen grande y un hueco ahí se ve peor que no mostrar nada.
+  /// Si dos tandas tienen exactamente las mismas portadas, en el mismo orden.
+  static bool _mismasPortadas(
+      List<ExtensionListItem> a, List<ExtensionListItem> b) {
+    if (a.length != b.length) return false;
+    for (var i = 0; i < a.length; i++) {
+      if (a[i].url != b[i].url) return false;
+    }
+    return true;
+  }
+
   void _sumarADestacados(FilaDeExtension fila, List<ExtensionListItem> items) {
     // ── El tope CRECE con las páginas ────────────────────────────────────
     //
@@ -1197,6 +1207,19 @@ class CatalogoExtensionesController extends GetxController {
     if (conPortada.isEmpty) return;
     final i = destacados.indexWhere((d) => d.$1 == fila.package);
     if (i >= 0) {
+      // ── No avisar si no cambió nada ──────────────────────────────────
+      //
+      // Acá se reemplazaba la entrada siempre, y eso notifica a la lista
+      // observable: el Obx del acordeón se rearma entero —medidas, seis
+      // tarjetas, re-anclaje de la posición—.
+      //
+      // El problema es cuándo pasa. Cada fila pide su contenido al entrar en
+      // pantalla, así que AL DESPLAZARSE por el Home se disparaba una detrás de
+      // otra, aunque el refresco devolviera exactamente lo mismo. Eso es el
+      // parpadeo: el acordeón rearmándose mientras el usuario baja.
+      //
+      // Comparar las direcciones es barato al lado de reconstruirlo.
+      if (_mismasPortadas(destacados[i].$2, conPortada)) return;
       destacados[i] = (fila.package, conPortada);
     } else {
       destacados.add((fila.package, conPortada));

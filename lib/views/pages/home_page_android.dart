@@ -157,7 +157,11 @@ class HomeAndroid extends StatelessWidget {
               // siempre, y acá lo que importa es la portada.
               0 => const _Cabecera(),
               1 => _BarraDeFiltros(c: c),
-              2 => _CarruselAndroid(c: c),
+              // El acordeón en su propia capa: mide, calcula y dibuja seis
+              // tarjetas grandes. Sin esto, cualquier repintado de la lista
+              // —una fila que termina de cargar más abajo— lo arrastra a
+              // repintarse entero aunque no haya cambiado nada suyo.
+              2 => RepaintBoundary(child: _CarruselAndroid(c: c)),
               // RepaintBoundary por fila: sin esto, cualquier repintado
               // —el fondo animado, una portada que termina de cargar— vuelve a
               // pintar TODA la lista visible. Con la capa propia, cada fila se
