@@ -1665,7 +1665,16 @@ class _TarjetaGrande extends StatelessWidget {
       child: DecoratedBox(
         decoration: BoxDecoration(
           borderRadius: radio,
-          color: HomeTheme.cardSurface,
+          // ── Sin relleno detrás de la portada ─────────────────────────────
+          //
+          // Había un fondo del color de las tarjetas. Es redondeado, y la
+          // portada va recortada encima con el mismo radio: donde el recorte
+          // suaviza el borde, ese fondo —más claro que el de la pantalla— se
+          // asoma un píxel y deja un hilo claro siguiendo el contorno. Es la
+          // línea que se veía debajo de la tarjeta en escritorio.
+          //
+          // No hacía falta: mientras la portada carga, el hueco ya lo pinta el
+          // marcador de posición, que va ADENTRO del recorte y no se asoma.
           // ── El filo y la sombra, solo en pantalla táctil ─────────────────
           //
           // El filo blanco y la sombra existen para que la forma de la tarjeta
@@ -1859,7 +1868,21 @@ class _FilaAndroidState extends State<_FilaAndroid> {
               // Ahora las tarjetas se quedan EN SU LUGAR y se reemplazan cuando
               // llega lo nuevo. Que está buscando lo dice el encabezado, en la
               // línea que ya está ahí — así no se mueve nada.
-              cargando: items.isEmpty && estado == EstadoDeFila.cargando,
+              // ── Pendiente TAMBIÉN cuenta como cargando ──────────────
+              //
+              // Antes solo salían los bloques con el estado `cargando`, que se
+              // pone cuando la fila EMPIEZA a pedir. Pero la cola atiende tres
+              // a la vez: con once extensiones, ocho quedan en `pendiente`
+              // esperando turno, con la lista vacía y sin bloques.
+              //
+              // Eso es la pantalla en blanco al entrar: filas sin nada debajo
+              // del título y contenido que aparecía de golpe cuando les tocaba.
+              // Reportado en escritorio, pero pasa en los tres.
+              //
+              // Con `pendiente` incluido, desde el primer cuadro cada fila
+              // muestra la forma de lo que va a llegar y nada aparece de la
+              // nada.
+              cargando: items.isEmpty && estado != EstadoDeFila.fallo,
               package: widget.fila.package,
             ),
           ],

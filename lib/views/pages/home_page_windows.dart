@@ -223,7 +223,21 @@ class _FilaWindowsState extends State<_FilaWindows> {
               // cambiarlo por bloques y volver son dos saltos para una espera.
               // Que está buscando lo dice el encabezado. Ver el comentario
               // largo en la grilla de celular.
-              child: (items.isEmpty && estado == EstadoDeFila.cargando)
+              // ── Pendiente TAMBIÉN cuenta como cargando ──────────────
+              //
+              // Antes solo salían los bloques con el estado `cargando`, que se
+              // pone cuando la fila EMPIEZA a pedir. Pero la cola atiende tres
+              // a la vez: con once extensiones, ocho quedan en `pendiente`
+              // esperando turno, con la lista vacía y sin bloques.
+              //
+              // Eso es la pantalla en blanco al entrar: filas sin nada debajo
+              // del título y contenido que aparecía de golpe cuando les tocaba.
+              // Reportado en escritorio, pero pasa en los tres.
+              //
+              // Con `pendiente` incluido, desde el primer cuadro cada fila
+              // muestra la forma de lo que va a llegar y nada aparece de la
+              // nada.
+              child: (items.isEmpty && estado != EstadoDeFila.fallo)
                   ? ListView.separated(
                       scrollDirection: Axis.horizontal,
                       padding:
