@@ -222,7 +222,9 @@ class _BarraDeFiltrosState extends State<_BarraDeFiltros> {
                       Padding(
                         padding: const EdgeInsets.only(right: 8),
                         child: _Chip(
-                          texto: g,
+                          // El chip muestra la traducción; lo que se guarda y
+                          // se compara es el identificador.
+                          texto: 'home.genero.$g'.i18n,
                           marcado: c.generoElegido.value == g,
                           onTap: () => c.generoElegido.value =
                               c.generoElegido.value == g ? null : g,
@@ -644,9 +646,19 @@ class _CarruselAndroidState extends State<_CarruselAndroid>
     }
 
 
+    // ── Siempre dos a cada lado ────────────────────────────────────────
+    //
+    // La ventana se centraba en `_p.floor()`, que salta de golpe al cruzar un
+    // entero: en ese cuadro, la tarjeta del extremo pasaba a quedar fuera de
+    // la ventana y **desaparecía de la nada** en vez de irse deslizando.
+    //
+    // Redondeando, la ventana cambia cuando la tarjeta del centro ya cambió, y
+    // se pide una de más a cada lado: la que entra y la que sale siguen
+    // dibujadas mientras se mueven, así que el borde nunca parpadea.
+    final centroEntero = _p.round();
+    final desde = (centroEntero - 3).clamp(0, planos.length - 1);
+    final hasta = (centroEntero + 3).clamp(0, planos.length - 1);
     final foco = _p.floor();
-    final desde = (foco - 2).clamp(0, planos.length - 1);
-    final hasta = (foco + 3).clamp(0, planos.length - 1);
 
     // Dónde empieza cada una, una atrás de la otra.
     final xs = <int, double>{};

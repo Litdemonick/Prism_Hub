@@ -88,7 +88,29 @@
     "activar": "Activar",
     "filtros-desliza": "Deslizá hacia abajo para aplicar los filtros",
     "filtros-restablecer": "Restablecer",
-    "fila-sin-genero": "no tiene ese género"
+    "fila-sin-genero": "no tiene ese género",
+    "genero": {
+      "accion": "Acción",
+      "aventura": "Aventura",
+      "comedia": "Comedia",
+      "drama": "Drama",
+      "romance": "Romance",
+      "terror": "Terror",
+      "suspenso": "Suspenso",
+      "misterio": "Misterio",
+      "fantasia": "Fantasía",
+      "ciencia-ficcion": "Ciencia ficción",
+      "sobrenatural": "Sobrenatural",
+      "psicologico": "Psicológico",
+      "artes-marciales": "Artes marciales",
+      "deportes": "Deportes",
+      "historico": "Histórico",
+      "escolar": "Escolar",
+      "magia": "Magia",
+      "mecha": "Mecha",
+      "militar": "Militar",
+      "recuentos": "Vida cotidiana"
+    }
   },
   "search": {
     "hint-text": "¡Por favor, busca ampliamente!~",

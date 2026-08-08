@@ -5,6 +5,7 @@ import 'dart:math';
 
 import 'package:get/get.dart';
 import 'package:prismhub/data/services/database_service.dart';
+import 'package:prismhub/data/services/extension_service.dart';
 import 'package:prismhub/models/index.dart';
 import 'package:prismhub/utils/extension.dart';
 import 'package:prismhub/utils/log.dart';
@@ -158,7 +159,65 @@ class CatalogoExtensionesController extends GetxController {
   // tiran a la basura. Se elige tranquilo y se aplica de una, tirando de la
   // pantalla hacia abajo.
 
-  /// Los géneros que ofrece al menos una extensión, ya unidos y ordenados.
+  /// ── La lista de géneros es CURADA, no la unión de todo ─────────────────
+  ///
+  /// La primera versión juntaba todas las opciones de todas las extensiones.
+  /// Salían más de cien chips, y entre ellos «Blu-ray», «Castellano»,
+  /// «Aenime», «Especial» y «Todas» — que no son géneros — más duplicados por
+  /// idioma y por acento.
+  ///
+  /// Se midió qué ofrece cada una (2026-08-07, ocho extensiones no +18 con
+  /// filtro de género). El vocabulario resultó bastante consistente en
+  /// español, así que no hace falta traducir nada: alcanza con **elegir** los
+  /// que de verdad son géneros y aceptar las variantes con que cada sitio los
+  /// escribe.
+  ///
+  /// ── La clave es un IDENTIFICADOR, no un texto ──────────────────────────
+  ///
+  /// La app está en español y en inglés, así que lo que se ve en el chip sale
+  /// de i18n (`home.genero.<id>`). Si la clave fuera «Acción», el género
+  /// elegido cambiaría de nombre al cambiar de idioma y dejaría de coincidir
+  /// con lo guardado.
+  ///
+  /// La lista son las formas ya normalizadas —minúsculas y sin tildes— con las
+  /// que el género puede venir del sitio. Van las españolas y las inglesas:
+  /// hoy todas las extensiones escriben en español, pero las que vengan en
+  /// inglés van a encajar sin tocar nada.
+  static const _canonicos = <String, List<String>>{
+    'accion': ['accion', 'action'],
+    'aventura': ['aventura', 'aventuras', 'adventure'],
+    'comedia': ['comedia', 'comedy'],
+    'drama': ['drama'],
+    'romance': ['romance', 'romantico', 'romantica'],
+    'terror': ['terror', 'horror'],
+    'suspenso': ['suspenso', 'suspense', 'thriller'],
+    'misterio': ['misterio', 'mystery'],
+    'fantasia': ['fantasia', 'fantasy'],
+    'ciencia-ficcion': ['ciencia ficcion', 'ciencia-ficcion', 'sci-fi', 'scifi', 'science fiction'],
+    'sobrenatural': ['sobrenatural', 'supernatural'],
+    'psicologico': ['psicologico', 'psychological'],
+    'artes-marciales': ['artes marciales', 'marcial', 'martial arts'],
+    'deportes': ['deportes', 'deporte', 'sports'],
+    'historico': ['historico', 'historia', 'historical'],
+    'escolar': ['escolares', 'escolar', 'colegial', 'vida escolar', 'school'],
+    'magia': ['magia', 'magic'],
+    'mecha': ['mecha'],
+    'militar': ['militar', 'military'],
+    'recuentos': [
+      'recuentos de la vida',
+      'cosas de la vida',
+      'vida cotidiana',
+      'slice of life',
+    ],
+  };
+
+  /// Un chip solo aparece si al menos ESTAS extensiones pueden contestarlo.
+  ///
+  /// Con una sola, tocarlo dejaba el Home con una fila y quince líneas de «no
+  /// tiene ese género» — se leía como que el filtro rompió algo.
+  static const _minimoParaOfrecer = 2;
+
+  /// Los géneros que se ofrecen, en el orden de [_canonicos].
   final generosDisponibles = <String>[].obs;
 
   /// Lo que el usuario tocó pero todavía no aplicó.
@@ -181,17 +240,51 @@ class CatalogoExtensionesController extends GetxController {
   /// quieto haría creer que tocar el chip no sirvió de nada.
   final aplicandoFiltros = false.obs;
 
-  /// Para cada extensión, de etiqueta de género a (clave del filtro, valor).
-  ///
-  /// Se arma una sola vez por sesión: `createFilter()` corre JavaScript en el
-  /// motor de la extensión, y hacerlo en cada pedido sería pagarlo de más.
-  final _generosPorExtension = <String, ({String clave, Map<String, String> porEtiqueta})>{};
+  /// Para cada extensión: la clave de su filtro de género y, por cada género
+  /// canónico que sabe contestar, el valor que hay que mandarle.
+  final _generosPorExtension =
+      <String, ({String clave, Map<String, String> porCanonico})>{};
   bool _generosLeidos = false;
+
+  /// Minúsculas, sin tildes y sin espacios de más.
+  ///
+  /// Es lo que permite que «Ciencia Ficción», «ciencia ficcion» y «Ciencia
+  /// ficción» sean lo mismo sin tener que anotarlas las tres.
+  static String _normalizar(String s) {
+    const con = 'áàäâéèëêíìïîóòöôúùüûñç';
+    const sin = 'aaaaeeeeiiiioooouuuunc';
+    var r = s.toLowerCase().trim();
+    for (var i = 0; i < con.length; i++) {
+      r = r.replaceAll(con[i], sin[i]);
+    }
+    return r.replaceAll(RegExp(r'\s+'), ' ');
+  }
+
+  /// A qué género canónico corresponde una etiqueta del sitio, si a alguno.
+  static String? _canonicoDe(String etiqueta) {
+    final n = _normalizar(etiqueta);
+    if (n.isEmpty) return null;
+    for (final e in _canonicos.entries) {
+      if (e.value.contains(n)) return e.key;
+    }
+    return null;
+  }
+
+  /// Todos los motores que alimentan el Home: los encendidos y los de vista
+  /// previa.
+  ///
+  /// Los dos, porque las filas del Home salen de los dos. Mirando solo los
+  /// encendidos, un usuario sin nada activado no veía ningún chip aunque el
+  /// Home estuviera lleno de contenido de la vista previa.
+  Map<String, ExtensionService> get _motoresDelHome => {
+        ...ExtensionUtils.enabledRuntimes,
+        ...ExtensionUtils.vistaPrevia,
+      };
 
   /// Lee los géneros de cada extensión y arma la lista de chips.
   ///
   /// Una extensión que falle o que no tenga género no rompe nada: simplemente
-  /// no aporta etiquetas.
+  /// no aporta.
   Future<void> cargarGeneros() async {
     if (_generosLeidos) return;
     _generosLeidos = true;
@@ -203,71 +296,67 @@ class CatalogoExtensionesController extends GetxController {
     // extension_service.dart:715 ya documenta un error viejo por dos llamadas
     // pisándose sobre la misma instancia.
     //
-    // Llamando a los géneros apenas se monta el Home, las diecisiete
-    // `createFilter()` caían encima de las `latest()` que estaban en vuelo, y
-    // **fallaban las dos**: el Home entero quedaba diciendo «no respondió».
-    //
-    // Se espera a que la cola se vacíe. Con tope, porque un sitio colgado no
-    // puede dejar los filtros sin cargar para siempre: a los treinta segundos
-    // se intenta igual, y lo que falle simplemente no aporta géneros.
+    // Llamando a los géneros apenas se monta el Home, las `createFilter()`
+    // caían encima de las `latest()` que estaban en vuelo y **fallaban las
+    // dos**: el Home entero quedaba diciendo «no respondió».
     for (var i = 0; i < 60 && (_enVuelo > 0 || _cola.isNotEmpty); i++) {
       await Future<void>.delayed(const Duration(milliseconds: 500));
     }
 
-    final union = <String>{};
-    for (final fila in filas) {
-      if (fila.estadoExt != EstadoExtension.activa) continue;
-      final runtime = ExtensionUtils.enabledRuntimes[fila.package];
-      if (runtime == null) continue;
-      // Las +18 no entran al Home, así que sus géneros tampoco. Sin esto se
-      // colaba un chip «+18» entre Acción y Aventura — de una extensión que
-      // el Home ni siquiera muestra.
-      if (runtime.extension.nsfw == true) continue;
+    final cuantas = <String, int>{};
+    for (final e in _motoresDelHome.entries) {
+      final runtime = e.value;
+      // Las +18 no entran al Home, así que sus géneros tampoco.
+      if (runtime.extension.nsfw) continue;
       try {
-        final filtros = await runtime
-            .createFilter()
-            .timeout(const Duration(seconds: 8));
-        for (final e in filtros.entries) {
+        final filtros =
+            await runtime.createFilter().timeout(const Duration(seconds: 8));
+        for (final f in filtros.entries) {
           // Por el título y no por el nombre de la clave: la clave es
-          // `genero`, `genres`, `g`… según el sitio.
-          final titulo = e.value.title.toLowerCase();
-          if (!titulo.contains('género') && !titulo.contains('genero')) {
-            continue;
-          }
-          // Las de +18 no aportan al Home, ni siquiera sus etiquetas.
-          if (titulo.contains('+18')) continue;
-          final porEtiqueta = <String, String>{};
-          e.value.options.forEach((clave, etiqueta) {
-            final limpia = etiqueta.trim();
-            // La opción vacía es «todos»: no es un género.
-            if (limpia.isEmpty || clave.isEmpty) return;
-            // Y las que son una puerta a contenido adulto disfrazada de
-            // género tampoco: el Home no muestra +18 ni por acá.
-            final baja = limpia.toLowerCase();
-            const puertas = ['+18', '18+', 'adult', 'adulto', 'hentai', 'erótico', 'erotico'];
-            if (puertas.any(baja.contains)) return;
-            porEtiqueta[limpia] = clave;
-            union.add(limpia);
+          // `genero`, `generes`, `g`… según el sitio.
+          final titulo = _normalizar(f.value.title);
+          if (!titulo.contains('genero')) continue;
+          // «Género (+18)» de ShadeManga y similares: ni se miran.
+          if (titulo.contains('18')) continue;
+
+          final porCanonico = <String, String>{};
+          f.value.options.forEach((clave, etiqueta) {
+            if (clave.isEmpty) return;
+            final canonico = _canonicoDe(etiqueta);
+            // Lo que no está en la lista curada se descarta. Ahí quedan
+            // afuera «Blu-ray», «Castellano», «Especial» y las ochenta y pico
+            // de TuMangaOnline que nadie iba a leer.
+            if (canonico == null) return;
+            // Si el sitio tiene dos opciones que caen en el mismo canónico,
+            // manda la primera: la segunda suele ser una variante rara.
+            porCanonico.putIfAbsent(canonico, () => clave);
           });
-          if (porEtiqueta.isNotEmpty) {
-            _generosPorExtension[fila.package] =
-                (clave: e.key, porEtiqueta: porEtiqueta);
+
+          if (porCanonico.isNotEmpty) {
+            _generosPorExtension[e.key] =
+                (clave: f.key, porCanonico: porCanonico);
+            for (final c in porCanonico.keys) {
+              cuantas[c] = (cuantas[c] ?? 0) + 1;
+            }
           }
           break;
         }
-      } catch (e) {
-        logger.info('[home] ${fila.nombre} no dio sus géneros: $e');
+      } catch (err) {
+        logger.info('[home] ${runtime.extension.name} no dio sus géneros: $err');
       }
     }
-    final lista = union.toList()..sort();
-    generosDisponibles.assignAll(lista);
+
+    // En el orden de la lista curada, no alfabético: así los más usados
+    // —Acción, Aventura, Comedia— quedan primero y no hay que desplazarse.
+    generosDisponibles.assignAll(_canonicos.keys
+        .where((g) => (cuantas[g] ?? 0) >= _minimoParaOfrecer));
   }
 
   /// ¿Esta extensión puede contestar al género que está aplicado?
   bool puedeConEsteGenero(String package) {
     final g = generoAplicado;
     if (g == null) return true;
-    return _generosPorExtension[package]?.porEtiqueta.containsKey(g) ?? false;
+    return _generosPorExtension[package]?.porCanonico.containsKey(g) ?? false;
   }
 
   /// ¿Esta fila entra en el tipo elegido?
@@ -550,7 +639,7 @@ class CatalogoExtensionesController extends GetxController {
     if (etiqueta == null) return null;
     final mapa = _generosPorExtension[package];
     if (mapa == null) return null;
-    final valor = mapa.porEtiqueta[etiqueta];
+    final valor = mapa.porCanonico[etiqueta];
     if (valor == null) return null;
     return {mapa.clave: [valor]};
   }

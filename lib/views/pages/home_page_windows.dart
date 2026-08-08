@@ -29,24 +29,45 @@ class HomeWindows extends StatelessWidget {
       top: false,
       child: Obx(() {
         if (c.filas.isEmpty) return const _SinExtensiones();
+        // Igual que en celular: la lista se calcula UNA vez, para que
+        // `itemCount` y el constructor no puedan discrepar cuando el filtro
+        // acorta la lista entre una llamada y la otra.
+        final visibles = c.filas
+            .where((f) => f.estadoExt == EstadoExtension.activa || f.esVistaPrevia)
+            .where(c.entraEnElTipo)
+            .toList();
         return RefreshIndicator(
-          onRefresh: c.refrescarTodo,
+          onRefresh: () async {
+            if (c.hayCambiosSinAplicar) {
+              await c.aplicarFiltros();
+              return;
+            }
+            await c.refrescarTodo();
+          },
           child: ListView.builder(
             physics: const AlwaysScrollableScrollPhysics(),
             padding: const EdgeInsets.only(bottom: 36),
-            // +1 por el fondo grande de arriba.
-            itemCount: c.filas.length + 1,
+            // +2: el fondo grande de arriba y la barra de filtros.
+            itemCount: visibles.length + 2,
             // **Acá está la carga perezosa.** ListView.builder solo construye
             // lo que está cerca de la pantalla, y cada fila pide en su
             // initState — así, con 30 extensiones se piden las 2 o 3 que se
             // ven, no las 30.
-            itemBuilder: (context, i) => i == 0
-                ? _CarruselWindows(c: c)
-                : _FilaWindows(
-                    key: ValueKey(c.filas[i - 1].package),
-                    c: c,
-                    fila: c.filas[i - 1],
-                  ),
+            itemBuilder: (context, i) => switch (i) {
+              0 => _CarruselWindows(c: c),
+              // Los mismos filtros que en celular. El widget vive en el
+              // archivo de Android pero los tres son `part` de la misma
+              // biblioteca, así que se reusa tal cual en vez de escribir otro
+              // que se desincronice a la primera.
+              1 => _BarraDeFiltros(c: c),
+              _ => i - 2 < visibles.length
+                  ? _FilaWindows(
+                      key: ValueKey(visibles[i - 2].package),
+                      c: c,
+                      fila: visibles[i - 2],
+                    )
+                  : const SizedBox.shrink(),
+            },
           ),
         );
       }),

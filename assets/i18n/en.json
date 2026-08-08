@@ -92,7 +92,29 @@
     "activar": "Enable",
     "filtros-desliza": "Pull down to apply the filters",
     "filtros-restablecer": "Reset",
-    "fila-sin-genero": "doesn't have that genre"
+    "fila-sin-genero": "doesn't have that genre",
+    "genero": {
+      "accion": "Action",
+      "aventura": "Adventure",
+      "comedia": "Comedy",
+      "drama": "Drama",
+      "romance": "Romance",
+      "terror": "Horror",
+      "suspenso": "Thriller",
+      "misterio": "Mystery",
+      "fantasia": "Fantasy",
+      "ciencia-ficcion": "Sci-Fi",
+      "sobrenatural": "Supernatural",
+      "psicologico": "Psychological",
+      "artes-marciales": "Martial Arts",
+      "deportes": "Sports",
+      "historico": "Historical",
+      "escolar": "School",
+      "magia": "Magic",
+      "mecha": "Mecha",
+      "militar": "Military",
+      "recuentos": "Slice of Life"
+    }
   },
   "search": {
     "hint-text": "Please use search wisely!~",
