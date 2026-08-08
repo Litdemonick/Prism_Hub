@@ -18,7 +18,7 @@ class AnimatedBackgroundGlow extends StatefulWidget {
 }
 
 class _AnimatedBackgroundGlowState extends State<AnimatedBackgroundGlow>
-    with SingleTickerProviderStateMixin, WidgetsBindingObserver {
+    with SingleTickerProviderStateMixin {
   late final AnimationController _controller = AnimationController(
     vsync: this,
     duration: const Duration(seconds: 24),
@@ -27,36 +27,31 @@ class _AnimatedBackgroundGlowState extends State<AnimatedBackgroundGlow>
   bool get _isDesktop =>
       Platform.isWindows || Platform.isLinux || Platform.isMacOS;
 
+  /// ── El fondo ya NO se mueve ─────────────────────────────────────────────
+  ///
+  /// El reloj se queda en cero y nadie lo arranca: el degradado se dibuja una
+  /// vez, en su posición de siempre, y ahí se queda. Se conserva el degradado
+  /// —es lo que hace que el fondo no sea un negro plano— y se va únicamente el
+  /// movimiento.
+  ///
+  /// El motivo es el costo. Esto latía a sesenta cuadros por segundo en TODAS
+  /// las zonas a la vez, y en cada uno de esos cuadros se vuelve a pintar lo
+  /// que haya encima que no tenga capa propia. Era el fondo de la app entera
+  /// gastando batería para un movimiento que casi no se nota, y ya había
+  /// obligado a escribir un vigilante del ciclo de vida solo para que no
+  /// siguiera latiendo en segundo plano.
+  ///
+  /// El controlador se queda declarado a propósito, sin arrancar: el
+  /// AnimatedBuilder de más abajo lo lee, y sacarlo entero obligaba a rehacer
+  /// el dibujado por un cambio que es de una línea. Sin `repeat()` no pide un
+  /// solo cuadro.
   @override
   void initState() {
     super.initState();
-    if (!_isDesktop) {
-      WidgetsBinding.instance.addObserver(this);
-      _controller.repeat();
-    }
-  }
-
-  /// Se para cuando la app deja de estar a la vista.
-  ///
-  /// `repeat()` no se detiene solo: sin esto, este fondo sigue produciendo
-  /// sesenta cuadros por segundo con la app en segundo plano. No se ve nada y
-  /// se gasta batería igual. Y en cada uno de esos cuadros se rasteriza lo que
-  /// haya en pantalla que no tenga capa propia, que es de donde salían los
-  /// avisos de «FRAME LENTO» sin que el usuario tocara nada.
-  @override
-  void didChangeAppLifecycleState(AppLifecycleState estado) {
-    if (_isDesktop) return;
-    final aLaVista = estado == AppLifecycleState.resumed;
-    if (aLaVista && !_controller.isAnimating) {
-      _controller.repeat();
-    } else if (!aLaVista && _controller.isAnimating) {
-      _controller.stop();
-    }
   }
 
   @override
   void dispose() {
-    if (!_isDesktop) WidgetsBinding.instance.removeObserver(this);
     _controller.dispose();
     super.dispose();
   }
