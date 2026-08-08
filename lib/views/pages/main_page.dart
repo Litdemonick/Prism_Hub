@@ -457,34 +457,7 @@ class _AndroidMainPageState extends fluent.State<AndroidMainPage> {
           children: [
             SafeArea(bottom: false, child: _noConnectionBanner()),
             Expanded(
-              child: _apaisado(context) && !LayoutUtils.isTablet
-                  // ── Teléfono acostado: la barra se va al costado ──────
-                  //
-                  // Abajo no puede quedarse. En horizontal el alto es lo
-                  // único que escasea —360 píxeles contra 800— y una barra
-                  // abajo se lleva la franja donde justamente se ven las
-                  // portadas. Al costado se come ancho, que es lo que sobra.
-                  //
-                  // Y va en un Row, no flotando encima: en horizontal el
-                  // contenido llega hasta el borde, así que una barra
-                  // superpuesta taparía la primera columna de tarjetas en vez
-                  // de dejar ver algo por detrás.
-                  ? Row(
-                      children: [
-                        AnimatedSlide(
-                          // Acostado la barra está al costado, así que se va
-                          // por donde entró: hacia afuera de la pantalla.
-                          offset: _barraEscondida
-                              ? const Offset(-1.6, 0)
-                              : Offset.zero,
-                          duration: const Duration(milliseconds: 260),
-                          curve: Curves.easeOutCubic,
-                          child: _barraVertical(destinations),
-                        ),
-                        Expanded(child: _buildPages()),
-                      ],
-                    )
-                  : LayoutUtils.isTablet
+              child: LayoutUtils.isTablet
                   ? Row(
                       children: [
                         NavigationRail(
@@ -522,7 +495,14 @@ class _AndroidMainPageState extends fluent.State<AndroidMainPage> {
         // AnimatedSlide y no un `if`: correrla no cambia cuánto mide, así
         // que el relleno que el Scaffold le pasa al cuerpo se queda igual y
         // el contenido no pega un salto cuando la barra se va.
-        bottomNavigationBar: LayoutUtils.isTablet || _apaisado(context)
+        // Abajo y centrada SIEMPRE, también acostado.
+        //
+        // Se probó al costado en horizontal, para no gastar alto. No va: el
+        // pulgar en horizontal cae abajo, no a la izquierda, y una barra
+        // flotando a media altura de la pantalla no se lee como la barra de
+        // navegación de nada. Queda pegada —con su aire— a la barra del
+        // sistema, que es donde el usuario ya la busca.
+        bottomNavigationBar: LayoutUtils.isTablet
             ? null
             : AnimatedSlide(
                 offset: _barraEscondida
@@ -572,10 +552,17 @@ class _AndroidMainPageState extends fluent.State<AndroidMainPage> {
     return Padding(
       padding:
           EdgeInsets.fromLTRB(16, 0, 16, abajo > 0 ? abajo * 0.55 + 12 : 18),
-      child: Row(
+      // El alto va EXPLÍCITO. Sin él, el Align de adentro se estira hasta el
+      // máximo que le dan —que en un bottomNavigationBar es la pantalla
+      // entera— y con `extendBody` ese alto se convierte en relleno del
+      // cuerpo: la app quedaba en negro en vertical, y en horizontal no,
+      // porque ahí la barra ni existía. Un Align sin alto propio LLENA.
+      child: SizedBox(
+        height: 62,
+        child: Row(
         children: [
           Expanded(
-            child: Align(
+            child: Center(
               child: DecoratedBox(
                 decoration: _pastilla,
                 child: Padding(
@@ -602,6 +589,7 @@ class _AndroidMainPageState extends fluent.State<AndroidMainPage> {
           const SizedBox(width: 10),
           _botonDelExtremo(),
         ],
+      ),
       ),
     );
   }
@@ -715,45 +703,6 @@ class _AndroidMainPageState extends fluent.State<AndroidMainPage> {
               ],
             ),
           ),
-        ],
-      ),
-    );
-  }
-
-  /// La misma barra, de pie, para el teléfono acostado.
-  Widget _barraVertical(List<_Destination> destinos) {
-    // En horizontal la barra del sistema se mete por un costado, y de qué lado
-    // depende de hacia dónde giró el teléfono. Se pregunta por los dos.
-    final costados = MediaQuery.viewPaddingOf(context);
-    return Padding(
-      padding: EdgeInsets.only(left: costados.left + 8, right: 8),
-      child: Column(
-        mainAxisAlignment: MainAxisAlignment.center,
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          DecoratedBox(
-            decoration: _pastilla,
-            child: Padding(
-              padding: const EdgeInsets.symmetric(vertical: 6),
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  for (var i = 0; i < _enLaBarra; i++)
-                    Padding(
-                      padding: const EdgeInsets.symmetric(
-                          vertical: 3, horizontal: 6),
-                      child: _IconoDeBarra(
-                        destino: destinos[i],
-                        elegido: c.selectedTab.value == i,
-                        onTap: () => c.changeTab(i),
-                      ),
-                    ),
-                ],
-              ),
-            ),
-          ),
-          const SizedBox(height: 12),
-          _botonDelExtremo(tamano: 46),
         ],
       ),
     );

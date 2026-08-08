@@ -52,8 +52,12 @@ class HomeAndroid extends StatelessWidget {
             physics: const AlwaysScrollableScrollPhysics(),
             // Lo que ocupa la barra flotante, que con `extendBody` llega acá
             // como relleno del MediaQuery, más aire.
+            // `padding.bottom` ya viene siendo el alto exacto de la barra
+            // flotante, cortesía de `extendBody`. Solo se le suma un poco de
+            // aire: más que eso es un hueco negro al final que obliga a
+            // desplazarse de gusto.
             padding: EdgeInsets.only(
-                bottom: MediaQuery.paddingOf(context).bottom + 28),
+                bottom: MediaQuery.paddingOf(context).bottom + 10),
             // +2: la cabecera y el carrusel.
             itemCount: c.filas.length + 2,
             // **Acá está la carga perezosa.** ListView.builder solo construye
