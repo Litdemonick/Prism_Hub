@@ -547,16 +547,22 @@ class _Chip extends StatelessWidget {
       onTap: onTap,
       child: AnimatedContainer(
         duration: const Duration(milliseconds: 160),
-        // ── El ancho NO cambia al marcarlo ──────────────────────────────
+        // ── Ni el ancho ni la posición del texto cambian al marcarlo ──────
         //
-        // Antes el relleno izquierdo se achicaba para hacerle sitio al
-        // ganchito, así que el chip crecía unos píxeles al tocarlo y empujaba
-        // a todos los de la derecha — se veía como si se pegaran entre sí.
+        // Van tres intentos con esto, así que vale explicar por qué los dos
+        // anteriores no alcanzaban:
         //
-        // Ahora el hueco del ganchito está SIEMPRE reservado: cuando no está
-        // marcado se rellena con espacio del mismo tamaño. El chip mide igual
-        // en los dos estados y nada se mueve.
-        padding: const EdgeInsets.fromLTRB(12, 8, 14, 8),
+        //   1. Achicar el relleno izquierdo para hacerle sitio al ganchito.
+        //      El chip CRECÍA al tocarlo y empujaba a los de la derecha.
+        //   2. Reservar el hueco del ganchito siempre, dentro de la fila.
+        //      El ancho ya no cambiaba, pero el texto quedaba corrido a la
+        //      derecha en los que NO estaban marcados — el hueco vacío lo
+        //      empujaba igual.
+        //
+        // Lo que funciona: relleno **parejo a los dos lados** y el ganchito
+        // fuera del flujo, dibujado encima. El texto está centrado siempre,
+        // el chip mide lo mismo en los dos estados, y nada se mueve.
+        padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 8),
         decoration: BoxDecoration(
           color: marcado
               ? HomeTheme.accentPink.withValues(alpha: 0.18)
@@ -568,33 +574,31 @@ class _Chip extends StatelessWidget {
                 : Colors.white.withValues(alpha: 0.08),
           ),
         ),
-        child: Row(
-          mainAxisSize: MainAxisSize.min,
-          // Centrado: con el hueco del ganchito siempre reservado, alinear al
-          // principio dejaba el texto corrido a la derecha en los que no están
-          // marcados.
-          mainAxisAlignment: MainAxisAlignment.center,
+        child: Stack(
+          clipBehavior: Clip.none,
+          alignment: Alignment.center,
           children: [
-            // El ganchito, no solo el color: sobre un fondo oscuro, «rosa
-            // tenue» y «gris» se parecen bastante, y encima hay gente que no
-            // distingue esos dos tonos. La marca tiene que ser una forma.
-            // El hueco existe siempre; lo que cambia es si se dibuja el
-            // ganchito o no. Ver el comentario del relleno, arriba.
-            SizedBox(
-              width: 21,
-              child: marcado
-                  ? const Icon(Icons.check_rounded,
-                      size: 16, color: HomeTheme.accentPink)
-                  : null,
-            ),
             Text(
               texto,
+              textAlign: TextAlign.center,
               style: TextStyle(
                 fontSize: 13.5,
                 fontWeight: FontWeight.w600,
                 color: marcado ? Colors.white : HomeTheme.textMuted,
               ),
             ),
+            // El ganchito, no solo el color: sobre un fondo oscuro, «rosa
+            // tenue» y «gris» se parecen bastante, y hay gente que no
+            // distingue esos dos tonos. La marca tiene que ser una forma.
+            //
+            // Va como capa y con desplazamiento negativo: se mete en el relleno
+            // de 24 que ya está reservado, sin ocupar lugar en el flujo.
+            if (marcado)
+              const Positioned(
+                left: -19,
+                child: Icon(Icons.check_rounded,
+                    size: 15, color: HomeTheme.accentPink),
+              ),
           ],
         ),
       ),

@@ -161,25 +161,36 @@ class _EsqueletoState extends State<Esqueleto> {
               child: IgnorePointer(
                 child: ValueListenableBuilder<double>(
                   valueListenable: _RelojDelBrillo.valor,
-                  builder: (context, t, _) => FractionalTranslation(
-                    // De -1 a 2: entra y sale del todo, en vez de aparecer y
-                    // desaparecer en los bordes.
-                    translation: Offset(-1 + 3 * t, 0),
-                    child: const DecoratedBox(
+                  builder: (context, t, _) {
+                    // ── El reflejo se MUEVE dentro de la caja ────────────
+                    //
+                    // Antes se corría la caja entera con FractionalTranslation,
+                    // de -1 a +2 de su propio ancho. El problema: durante buena
+                    // parte del ciclo la caja está fuera del recorte, así que la
+                    // franja aparecía a medias, se cortaba contra el borde y
+                    // desaparecía — se veía como si la tarjeta estuviera
+                    // partida.
+                    //
+                    // Ahora la caja se queda quieta y lo que viaja son las
+                    // paradas del degradado. Rearmar un degradado por cuadro no
+                    // cuesta una capa de dibujo, así que sigue siendo barato, y
+                    // la franja cruza completa de lado a lado.
+                    final x = -1 + 3 * t;
+                    return DecoratedBox(
                       decoration: BoxDecoration(
                         gradient: LinearGradient(
-                          begin: Alignment(-1, -0.3),
-                          end: Alignment(1, 0.3),
-                          colors: [
+                          begin: Alignment(x - 0.6, -0.4),
+                          end: Alignment(x + 0.6, 0.4),
+                          colors: const [
                             Color(0x00FFFFFF),
-                            Color(0x12FFFFFF),
+                            Color(0x14FFFFFF),
                             Color(0x00FFFFFF),
                           ],
-                          stops: [0.35, 0.5, 0.65],
+                          stops: const [0.0, 0.5, 1.0],
                         ),
                       ),
-                    ),
-                  ),
+                    );
+                  },
                 ),
               ),
             ),
