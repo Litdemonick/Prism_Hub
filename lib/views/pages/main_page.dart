@@ -564,13 +564,26 @@ class _AndroidMainPageState extends fluent.State<AndroidMainPage> {
   /// los cinco, y encima ya tiene su atajo arriba en el Home.
   static const _enLaBarra = 4;
 
-  /// Pantalla ancha y BAJA: el teléfono acostado.
+  /// El aparato está acostado: la barra va al costado y no abajo.
   ///
-  /// Una tablet acostada NO entra acá aunque también sea ancha: tiene 800
-  /// píxeles de alto, así que la barra de abajo no le quita nada y el riel al
-  /// costado le comería ancho de gusto.
-  static bool _apaisado(BuildContext context) =>
-      MediaQuery.sizeOf(context).height < 500;
+  /// ── Se mira la ORIENTACIÓN, no el alto ──────────────────────────────────
+  ///
+  /// Antes esto era `alto < 500`, pensado para el teléfono acostado. Una
+  /// tablet acostada tiene 800 píxeles de alto, así que nunca entraba: se
+  /// quedaba con la barra abajo aunque estuviera igual de horizontal que el
+  /// teléfono. Y la tablet vive acostada la mayor parte del tiempo.
+  ///
+  /// Con la orientación entran las dos, y sigue afuera lo que corresponde: una
+  /// tablet DE PIE es alta y angosta, ahí la barra va abajo como en cualquier
+  /// teléfono.
+  ///
+  /// El mínimo de ancho es para no mandar al costado una ventana angosta que
+  /// por poco quedó más ancha que alta — ahí el riel se comería un tercio de
+  /// la pantalla.
+  static bool _apaisado(BuildContext context) {
+    final t = MediaQuery.sizeOf(context);
+    return t.width > t.height && t.width >= 600;
+  }
 
   /// ── Por qué la barra SÍ lleva fondo ──────────────────────────────────────
   ///
@@ -626,7 +639,7 @@ class _AndroidMainPageState extends fluent.State<AndroidMainPage> {
                           child: _IconoDeBarra(
                             destino: destinos[i],
                             elegido: c.selectedTab.value == i,
-                            onTap: () => c.changeTab(i),
+                            onTap: () => _irAZona(i),
                           ),
                         ),
                     ],
@@ -671,7 +684,7 @@ class _AndroidMainPageState extends fluent.State<AndroidMainPage> {
               child: _IconoDeBarra(
                 destino: destinos[i],
                 elegido: c.selectedTab.value == i,
-                onTap: () => c.changeTab(i),
+                onTap: () => _irAZona(i),
               ),
             ),
           const SizedBox(height: 14),
@@ -695,6 +708,17 @@ class _AndroidMainPageState extends fluent.State<AndroidMainPage> {
       BoxShadow(color: Color(0x99000000), blurRadius: 20, offset: Offset(0, 8)),
     ],
   );
+
+  /// Cambia de zona y cierra el desplegable.
+  ///
+  /// Los tres puntos se abren encima del contenido, así que si el usuario se
+  /// va a otra zona con ellos abiertos —tocando una opción, o el ícono de
+  /// Inicio que asoma por debajo del velo— la capa se quedaba puesta sobre la
+  /// pantalla nueva. Toda salida de acá pasa por este método.
+  void _irAZona(int i) {
+    if (_masAbierto) setState(() => _masAbierto = false);
+    c.changeTab(i);
+  }
 
   /// Los tres puntos, al extremo de la barra.
   Widget _botonDelExtremo({double tamano = 52}) {
@@ -733,7 +757,7 @@ class _AndroidMainPageState extends fluent.State<AndroidMainPage> {
       (
         Icons.settings_outlined,
         'common.settings'.i18n,
-        () => c.changeTab(MainController.tabAjustes),
+        () => _irAZona(MainController.tabAjustes),
       ),
       (
         Icons.history_rounded,

@@ -39,7 +39,14 @@ class ExtensionService {
     ]);
   }
 
-  initRuntime(Extension ext) async {
+  /// Levanta el motor de esta extensión.
+  ///
+  /// [rutaGuion] existe para la vista previa del Home: esas extensiones NO
+  /// están instaladas y su guion vive en otra carpeta, porque cualquier `.js`
+  /// dentro de `extensionsDir` se considera instalado (hay un escaneo y hasta
+  /// un vigilante de esa carpeta). Sin este parámetro, previsualizar una
+  /// extensión sería instalarla por la puerta de atrás.
+  initRuntime(Extension ext, {String? rutaGuion}) async {
     extension = ext;
     className = extension.package.replaceAll('.', '');
     // example: if the package name is com.example.extension the class name will be comexampleextension
@@ -49,8 +56,8 @@ class ExtensionService {
       className = "${className.replaceAll(RegExp(r'[^a-zA-z]'), '')}Renamed";
     }
     // 读取文件
-    final file =
-        File('${ExtensionUtils.extensionsDir}/${extension.package}.js');
+    final file = File(
+        rutaGuion ?? '${ExtensionUtils.extensionsDir}/${extension.package}.js');
     final content = await file.readAsString();
 
     // 初始化runtime

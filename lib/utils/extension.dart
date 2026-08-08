@@ -705,6 +705,118 @@ class ExtensionUtils {
         'extensions',
       );
 
+  // ─── Vista previa del Home ────────────────────────────────────────────────
+  //
+  // ── Qué es ──────────────────────────────────────────────────────────────
+  //
+  // Unas pocas extensiones del catálogo que el usuario NO instaló, cargadas
+  // solo para que el Home tenga contenido desde el primer arranque. Con una
+  // sola extensión instalada de fábrica, el Home mostraba una fila y nada más.
+  //
+  // ── Qué NO es ───────────────────────────────────────────────────────────
+  //
+  // No es instalar. Su guion vive en OTRA carpeta a propósito: cualquier `.js`
+  // dentro de `extensionsDir` se considera instalado —hay un escaneo al
+  // arrancar y un vigilante de esa carpeta— así que ponerlas ahí las metería
+  // en la lista del usuario sin que él lo pidiera.
+  //
+  // Tampoco aparecen en Extensiones, ni en Buscar, ni resuelven vídeo. Solo
+  // llenan filas del Home. Al tocar una tarjeta se ofrece instalarla de
+  // verdad, y ahí sí pasa por el camino normal.
+  //
+  // ── La firma se verifica igual ──────────────────────────────────────────
+  //
+  // Y sin excepción: acá se ejecuta código que el usuario no eligió, así que
+  // es JUSTO donde menos se puede aflojar. Una entrada sin firma, o con firma
+  // que no valida, no se previsualiza y punto.
+  //
+  // ── Cuántas ─────────────────────────────────────────────────────────────
+  //
+  // Cuatro. Cada una es un motor QuickJS más y un sitio más al que se le pide
+  // contenido cada vez que se abre el Home: con las diecisiete sería tráfico y
+  // memoria que nadie pidió. Cuatro alcanza para que el Home se vea vivo.
+  static const maxVistaPrevia = 4;
+
+  static String get vistaPreviaDir => path.join(
+        PrismHubDirectory.getDirectory,
+        'vista_previa',
+      );
+
+  /// Las que están cargadas como vista previa, por paquete.
+  static final Map<String, ExtensionService> vistaPrevia = {};
+
+  static bool esVistaPrevia(String package) =>
+      vistaPrevia.containsKey(package);
+
+  static bool _vistaPreviaLista = false;
+
+  /// Baja, verifica y levanta unas pocas extensiones del catálogo.
+  ///
+  /// Silenciosa por diseño: si no hay red, o el catálogo no contesta, o una
+  /// firma no valida, el Home simplemente muestra lo que el usuario tenga.
+  /// Nada de esto es un error que valga interrumpir a nadie.
+  static Future<void> prepararVistaPrevia() async {
+    if (_vistaPreviaLista) return;
+    _vistaPreviaLista = true;
+    try {
+      final catalogo = await fetchRepoIndex();
+      final elegidas = <Map>[];
+      for (final e in catalogo.cast<Map>()) {
+        if (elegidas.length >= maxVistaPrevia) break;
+        final pkg = e['package']?.toString();
+        if (pkg == null || pkg.isEmpty) continue;
+        // Ya la tiene: no hay nada que previsualizar.
+        if (runtimes.containsKey(pkg)) continue;
+        // Las +18 no entran al Home ni por esta puerta.
+        if (e['nsfw'] == true) continue;
+        // Sin firma no se ejecuta. Ver el comentario de arriba.
+        final firma = e['signature']?.toString();
+        if (firma == null || firma.isEmpty) continue;
+        elegidas.add(e);
+      }
+      if (elegidas.isEmpty) return;
+
+      Directory(vistaPreviaDir).createSync(recursive: true);
+      for (final e in elegidas) {
+        try {
+          await _levantarVistaPrevia(e);
+        } catch (err) {
+          logger.info('[vista previa] ${e['package']} no se pudo cargar: $err');
+        }
+      }
+    } catch (e) {
+      logger.info('[vista previa] no se pudo preparar: $e');
+    }
+  }
+
+  static Future<void> _levantarVistaPrevia(Map entrada) async {
+    final pkg = entrada['package'].toString();
+    final url = (entrada['script'] ?? entrada['url'])?.toString();
+    if (url == null || url.isEmpty) return;
+
+    final js = await dio.get<String>(
+      url,
+      options: Options(receiveTimeout: const Duration(seconds: 20)),
+    );
+    final guion = js.data;
+    if (guion == null || guion.isEmpty) return;
+
+    // La misma verificación que usa la instalación de verdad.
+    if (!ExtensionSignature.isOfficial(guion, entrada['signature'].toString())) {
+      logger.warning(
+          '[vista previa] firma inválida para $pkg — no se carga (posible manipulación).');
+      return;
+    }
+
+    final archivo = File(path.join(vistaPreviaDir, '$pkg.js'));
+    await archivo.writeAsString(guion);
+
+    final ext = parseExtension(guion);
+    final servicio = ExtensionService();
+    await servicio.initRuntime(ext, rutaGuion: archivo.path);
+    vistaPrevia[pkg] = servicio;
+  }
+
   // 已禁用的扩展 (enable/disable). Disabled extensions stay installed but are
   // excluded from search/discovery.
   static List<String> get disabledExtensions =>

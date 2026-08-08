@@ -28,11 +28,16 @@ class FilaDeExtension {
     required this.package,
     required this.nombre,
     this.estadoExt = EstadoExtension.activa,
+    this.esVistaPrevia = false,
   });
 
   final String package;
   final String nombre;
   final EstadoExtension estadoExt;
+
+  /// El usuario NO la tiene instalada: se cargó solo para que el Home tenga
+  /// contenido. Al tocar una de sus tarjetas se le ofrece instalarla.
+  final bool esVistaPrevia;
 
   final estado = EstadoDeFila.pendiente.obs;
   final items = <ExtensionListItem>[].obs;
@@ -255,7 +260,9 @@ class CatalogoExtensionesController extends GetxController {
   bool entraEnElTipo(FilaDeExtension fila) {
     final t = tipoAplicado;
     if (t == null) return true;
-    return ExtensionUtils.runtimes[fila.package]?.extension.type == t;
+    final ext = ExtensionUtils.runtimes[fila.package]?.extension ??
+        ExtensionUtils.vistaPrevia[fila.package]?.extension;
+    return ext?.type == t;
   }
 
   /// Deja lo elegido como aplicado y vuelve a pedir todo.
@@ -304,6 +311,10 @@ class CatalogoExtensionesController extends GetxController {
 
   Future<void> _armar() async {
     await _leerCache();
+    // Antes de mirar qué hay: unas pocas del catálogo, para que el Home tenga
+    // con qué llenarse aunque el usuario no haya instalado casi nada. Si falla
+    // —sin red, catálogo caído— no pasa nada: sigue con lo que tenga.
+    await ExtensionUtils.prepararVistaPrevia();
     // ── Las +18 NO entran al Home, sin excepción ────────────────────────────
     //
     // A pedido explícito. Y se filtra por `extension.nsfw` y NO por
@@ -358,6 +369,20 @@ class CatalogoExtensionesController extends GetxController {
         return a.nombre.toLowerCase().compareTo(b.nombre.toLowerCase());
       });
 
+    // ── Y unas pocas del catálogo, ya cargadas ──────────────────────────
+    //
+    // Van DESPUÉS de las instaladas: lo que el usuario eligió manda, y esto es
+    // relleno para que el Home no quede en una sola fila. Ver
+    // ExtensionUtils.prepararVistaPrevia.
+    for (final e in ExtensionUtils.vistaPrevia.entries) {
+      if (e.value.extension.nsfw) continue;
+      nuevas.add(FilaDeExtension(
+        package: e.key,
+        nombre: e.value.extension.name,
+        esVistaPrevia: true,
+      ));
+    }
+
     // Y al final, las del catálogo que el usuario todavía no tiene.
     //
     // El catálogo se lee de lo YA GUARDADO, sin forzar red: esto corre al abrir
@@ -372,6 +397,9 @@ class CatalogoExtensionesController extends GetxController {
         final nombre = e['name']?.toString();
         if (pkg == null || nombre == null) continue;
         if (instaladas.containsKey(pkg)) continue;
+        // Ya está arriba con su contenido: repetirla acá como «Instalar»
+        // sería listarla dos veces.
+        if (ExtensionUtils.esVistaPrevia(pkg)) continue;
         // El catálogo solo trae `nsfw` cuando es true, y como texto.
         final esNsfw = e['nsfw'] == true || e['nsfw']?.toString() == 'true';
         if (esNsfw) continue;
@@ -443,7 +471,9 @@ class CatalogoExtensionesController extends GetxController {
     // en pantalla, refrescar por detrás no tiene que parpadear.
     if (fila.items.isEmpty) fila.estado.value = EstadoDeFila.cargando;
     try {
-      final runtime = ExtensionUtils.enabledRuntimes[fila.package];
+      final runtime = fila.esVistaPrevia
+          ? ExtensionUtils.vistaPrevia[fila.package]
+          : ExtensionUtils.enabledRuntimes[fila.package];
       if (runtime == null) {
         fila.estado.value = EstadoDeFila.fallo;
         return;
