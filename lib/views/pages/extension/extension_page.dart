@@ -419,59 +419,6 @@ class _ExtensionPageState extends State<ExtensionPage> {
     );
   }
 
-  /// Un solo botón, y todo lo demás adentro. Solo en Android.
-  ///
-  /// ── Qué se recupera ─────────────────────────────────────────────────────
-  ///
-  /// La barra tenía cuatro botones de acción más siete chips de filtro. En un
-  /// teléfono eso no entra en una línea, así que se partía en dos y se comía
-  /// unos setenta puntos de alto — justo arriba de la lista, que es lo que uno
-  /// vino a ver. Con un botón, las tarjetas suben.
-  ///
-  /// Es el mismo patrón que ya usa el Repositorio de extensiones: una hoja que
-  /// sube con todo adentro. Que las dos pantallas hermanas se manejen igual
-  /// vale más que ahorrarse un toque.
-  ///
-  /// Al lado del botón queda a la vista qué filtro está puesto, si hay alguno:
-  /// escondido dentro de la hoja, uno se olvida de que filtró y la lista corta
-  /// parece un error.
-  Widget _buildBarraCompacta() {
-    final hayFiltro = _filter != _ExtFilter.todas;
-    return Row(
-      children: [
-        OutlinedButton.icon(
-          onPressed: _abrirPanel,
-          icon: Icon(
-            _masivoEnCurso ? Icons.hourglass_top_rounded : Icons.tune_rounded,
-            size: 18,
-          ),
-          label: Text('search.filter'.i18n),
-          style: ButtonStyle(
-            foregroundColor: WidgetStateProperty.all(HomeTheme.textPrimary),
-            side: WidgetStateProperty.all(
-              const BorderSide(color: HomeTheme.border),
-            ),
-          ),
-        ),
-        if (hayFiltro) ...[
-          const SizedBox(width: 10),
-          Flexible(
-            child: _ExtFilterChip(
-              label: _filter.label,
-              selected: true,
-              // Tocarlo quita el filtro: es el camino corto para volver a
-              // verlas todas sin tener que abrir la hoja de nuevo.
-              onTap: () => setState(() {
-                _filter = _ExtFilter.todas;
-                _page = 0;
-              }),
-            ),
-          ),
-        ],
-      ],
-    );
-  }
-
   /// La hoja con los filtros y las acciones.
   void _abrirPanel() {
     showModalBottomSheet(
@@ -792,6 +739,42 @@ class _ExtensionPageState extends State<ExtensionPage> {
             });
           },
           actions: [
+            // ── El filtro vive en la barra de arriba ────────────────────
+            //
+            // No en una fila propia debajo. Esa fila se llevaba su alto
+            // entero justo encima de la lista, y acostado —donde el alto es
+            // lo que falta— eso es media pantalla de tarjetas.
+            //
+            // El puntito avisa que hay un filtro puesto: metido dentro de la
+            // hoja, uno se olvida de que filtró y la lista corta parece un
+            // error.
+            IconButton(
+              tooltip: 'search.filter'.i18n,
+              onPressed: _abrirPanel,
+              icon: Stack(
+                clipBehavior: Clip.none,
+                children: [
+                  Icon(
+                    _masivoEnCurso
+                        ? Icons.hourglass_top_rounded
+                        : Icons.tune_rounded,
+                  ),
+                  if (_filter != _ExtFilter.todas)
+                    Positioned(
+                      right: -1,
+                      top: -1,
+                      child: Container(
+                        width: 9,
+                        height: 9,
+                        decoration: const BoxDecoration(
+                          color: HomeTheme.accentPink,
+                          shape: BoxShape.circle,
+                        ),
+                      ),
+                    ),
+                ],
+              ),
+            ),
             if (c.errors.isNotEmpty)
               IconButton(
                 icon: const Icon(Icons.error),
@@ -816,18 +799,10 @@ class _ExtensionPageState extends State<ExtensionPage> {
                 // pantalla baja: en horizontal, cada bloque vertical se le
                 // resta directamente a la lista, que es lo único que importa
                 // ver ahí.
-                SizedBox(height: _pantallaBaja(context) ? 2 : 8),
-                // Paginación arriba de la lista (no abajo) — mismo criterio
-                // que el repositorio de extensiones.
-                Padding(
-                  padding: EdgeInsets.fromLTRB(
-                      16, 0, 16, _pantallaBaja(context) ? 4 : 10),
-                  // Android: un solo botón que abre la hoja con los
-                  // filtros y las acciones. Ver _buildBarraCompacta — así las
-                  // tarjetas suben y se gana el alto que se comían las dos
-                  // líneas de botones.
-                  child: _buildBarraCompacta(),
-                ),
+                // Sin fila de filtros: el botón se fue a la barra de arriba
+                // (ver `actions`), así que la lista arranca acá mismo y las
+                // tarjetas suben todo lo que ocupaba esa franja.
+                SizedBox(height: _pantallaBaja(context) ? 2 : 6),
                 if (totalPages > 1)
                   Padding(
                     padding: const EdgeInsets.only(bottom: 8),

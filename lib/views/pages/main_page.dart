@@ -443,65 +443,65 @@ class _AndroidMainPageState extends fluent.State<AndroidMainPage> {
         // cambiaría el relleno al cuerpo cada vez que se abre — o sea, todo
         // el contenido pegando un salto al desplegar.
         body: Stack(children: [
-        Column(
-          children: [
-            // ── Sin SafeArea envolviéndolo ───────────────────────────
-            //
-            // Envuelto, reservaba la franja de la barra de estado SIEMPRE,
-            // también con el aviso oculto. Y esa franja se pinta ACÁ AFUERA de
-            // las páginas, así que quedaba negra plana mientras la zona de
-            // abajo tenía su fondo con brillo: se veía como una barra rara
-            // cruzando arriba de todo.
-            //
-            // Ahora el aviso se ocupa de su propio hueco cuando aparece, y
-            // cada zona empieza en el borde de la pantalla y pinta su fondo
-            // de arriba abajo. A cambio, cada una tiene que respetar la barra
-            // de estado por su cuenta — las que llevan AppBar ya lo hacían
-            // solas, y a las otras se les puso.
-            _noConnectionBanner(),
-            Expanded(
-              child: _apaisado(context)
-                  // ── Teléfono acostado: riel a la izquierda ─────────────
-                  //
-                  // Abajo no puede quedarse. En horizontal el alto es lo único
-                  // que escasea —360 píxeles contra 800— y una barra abajo se
-                  // lleva la franja donde justamente se ven las portadas. A la
-                  // izquierda se come ancho, que es lo que sobra.
-                  //
-                  // Y va en un Row, no flotando encima: acostado el contenido
-                  // usa el ancho entero, así que una barra superpuesta taparía
-                  // la primera columna de tarjetas en vez de dejar ver algo por
-                  // detrás. Con el Row, el contenido empieza DESPUÉS del riel y
-                  // no se pisan nunca.
-                  ? Row(
-                      children: [
-                        AnimatedSlide(
-                          // Se va por donde entró: hacia afuera por el costado.
-                          offset: _barraEscondida
-                              ? const Offset(-1.6, 0)
-                              : Offset.zero,
-                          duration: const Duration(milliseconds: 260),
-                          curve: Curves.easeOutCubic,
-                          child: _barraVertical(destinations),
-                        ),
-                        Expanded(
-                          // El riel YA dejó pasar la franja de la barra del
-                          // sistema. Sin sacarla de acá, el SafeArea de cada
-                          // zona la vuelve a reservar y el contenido queda con
-                          // el doble de margen a la izquierda.
-                          child: MediaQuery.removePadding(
-                            context: context,
-                            removeLeft: true,
-                            child: _buildPages(),
+          Column(
+            children: [
+              // ── Sin SafeArea envolviéndolo ───────────────────────────
+              //
+              // Envuelto, reservaba la franja de la barra de estado SIEMPRE,
+              // también con el aviso oculto. Y esa franja se pinta ACÁ AFUERA de
+              // las páginas, así que quedaba negra plana mientras la zona de
+              // abajo tenía su fondo con brillo: se veía como una barra rara
+              // cruzando arriba de todo.
+              //
+              // Ahora el aviso se ocupa de su propio hueco cuando aparece, y
+              // cada zona empieza en el borde de la pantalla y pinta su fondo
+              // de arriba abajo. A cambio, cada una tiene que respetar la barra
+              // de estado por su cuenta — las que llevan AppBar ya lo hacían
+              // solas, y a las otras se les puso.
+              _noConnectionBanner(),
+              Expanded(
+                child: _apaisado(context)
+                    // ── Teléfono acostado: riel a la izquierda ─────────────
+                    //
+                    // Abajo no puede quedarse. En horizontal el alto es lo único
+                    // que escasea —360 píxeles contra 800— y una barra abajo se
+                    // lleva la franja donde justamente se ven las portadas. A la
+                    // izquierda se come ancho, que es lo que sobra.
+                    //
+                    // Y va en un Row, no flotando encima: acostado el contenido
+                    // usa el ancho entero, así que una barra superpuesta taparía
+                    // la primera columna de tarjetas en vez de dejar ver algo por
+                    // detrás. Con el Row, el contenido empieza DESPUÉS del riel y
+                    // no se pisan nunca.
+                    ? Row(
+                        children: [
+                          AnimatedSlide(
+                            // Se va por donde entró: hacia afuera por el costado.
+                            offset: _barraEscondida
+                                ? const Offset(-1.6, 0)
+                                : Offset.zero,
+                            duration: const Duration(milliseconds: 260),
+                            curve: Curves.easeOutCubic,
+                            child: _barraVertical(destinations),
                           ),
-                        ),
-                      ],
-                    )
-                  : _buildPages(),
-            ),
-          ],
-        ),
-        if (_masAbierto) _capaDeMas(),
+                          Expanded(
+                            // El riel YA dejó pasar la franja de la barra del
+                            // sistema. Sin sacarla de acá, el SafeArea de cada
+                            // zona la vuelve a reservar y el contenido queda con
+                            // el doble de margen a la izquierda.
+                            child: MediaQuery.removePadding(
+                              context: context,
+                              removeLeft: true,
+                              child: _buildPages(),
+                            ),
+                          ),
+                        ],
+                      )
+                    : _buildPages(),
+              ),
+            ],
+          ),
+          if (_masAbierto) _capaDeMas(),
         ]),
         // El contenido pasa POR DEBAJO de la barra.
         //
@@ -535,9 +535,7 @@ class _AndroidMainPageState extends fluent.State<AndroidMainPage> {
         bottomNavigationBar: _apaisado(context)
             ? null
             : AnimatedSlide(
-                offset: _barraEscondida
-                    ? const Offset(0, 1.6)
-                    : Offset.zero,
+                offset: _barraEscondida ? const Offset(0, 1.6) : Offset.zero,
                 duration: const Duration(milliseconds: 260),
                 curve: Curves.easeOutCubic,
                 child: _barraFlotante(destinations),
@@ -679,7 +677,7 @@ class _AndroidMainPageState extends fluent.State<AndroidMainPage> {
               ),
             ),
           const SizedBox(height: 14),
-          _botonDelExtremo(tamano: 46),
+          _botonDelExtremo(tamano: _ladoDelExtremo),
         ],
       ),
     );
@@ -709,6 +707,36 @@ class _AndroidMainPageState extends fluent.State<AndroidMainPage> {
   void _irAZona(int i) {
     if (_masAbierto) setState(() => _masAbierto = false);
     c.changeTab(i);
+  }
+
+  /// El lado del botón de los tres puntos cuando la barra va acostada.
+  ///
+  /// Con nombre y no repetido a mano: de esta medida depende dónde arranca la
+  /// fila de opciones, y si los dos números se separan, las opciones se meten
+  /// encima del riel.
+  static const double _ladoDelExtremo = 46;
+
+  /// Una opción del desplegable.
+  ///
+  /// Escalonadas: salen una atrás de otra, así se lee el recorrido en vez de
+  /// aparecer las tres de golpe. Acostado el icono va primero, porque la fila
+  /// crece hacia la derecha y el icono es el que tiene que quedar del lado del
+  /// botón que las abrió.
+  Widget _opcion(
+    List<(IconData, String, VoidCallback)> opciones,
+    int i,
+    bool apaisado,
+  ) {
+    return _OpcionFlotante(
+      icono: opciones[i].$1,
+      texto: opciones[i].$2,
+      demora: Duration(milliseconds: 60 * (opciones.length - i)),
+      iconoPrimero: apaisado,
+      onTap: () {
+        setState(() => _masAbierto = false);
+        opciones[i].$3();
+      },
+    );
   }
 
   /// Los tres puntos, al extremo de la barra.
@@ -775,41 +803,55 @@ class _AndroidMainPageState extends fluent.State<AndroidMainPage> {
             child: const ColoredBox(color: Color(0xB3000000)),
           ),
           Positioned(
-            left: apaisado ? bordes.left + 10 : null,
+            // ── Acostado salen HACIA LA DERECHA, no hacia arriba ───────────
+            //
+            // Antes esto era una columna anclada al mismo borde izquierdo que
+            // el riel, así que las opciones se apilaban ENCIMA de los íconos
+            // de la barra y subían por la pantalla. Reportado en vivo: «los
+            // botones se desplazan arriba, era el botón en sí y no solo el
+            // texto».
+            //
+            // Ahora es una FILA que arranca justo después del riel: las
+            // opciones salen del botón hacia el costado libre, que es donde
+            // hay lugar cuando el teléfono está acostado. De pie se queda como
+            // estaba —columna que sube desde el botón, que ahí está abajo—.
+            //
+            // El desplazamiento horizontal es la red: con tres opciones entran
+            // de sobra, pero si mañana son cinco no se salen de la pantalla.
+            left: apaisado ? bordes.left + 10 + _ladoDelExtremo + 14 : null,
             right: apaisado ? null : 18,
-            // Justo al lado del botón del que salieron. Acostado ese botón
-            // está a media altura —el riel va centrado— así que las opciones
-            // también; de pie está abajo, y salen hacia arriba.
             top: apaisado ? 0 : null,
             bottom: apaisado
                 ? 0
                 : (bordes.bottom > 0 ? bordes.bottom * 0.55 + 14 : 20) + 66,
-            child: Column(
-              mainAxisAlignment: MainAxisAlignment.center,
-              mainAxisSize:
-                  apaisado ? MainAxisSize.max : MainAxisSize.min,
-              crossAxisAlignment:
-                  apaisado ? CrossAxisAlignment.start : CrossAxisAlignment.end,
-              children: [
-                for (var i = 0; i < opciones.length; i++)
-                  Padding(
-                    padding: const EdgeInsets.only(bottom: 12),
-                    child: _OpcionFlotante(
-                      icono: opciones[i].$1,
-                      texto: opciones[i].$2,
-                      // Escalonadas: salen una atrás de otra, de arriba hacia
-                      // el botón, así se lee el recorrido en vez de aparecer
-                      // las tres de golpe.
-                      demora: Duration(milliseconds: 60 * (opciones.length - i)),
-                      iconoPrimero: apaisado,
-                      onTap: () {
-                        setState(() => _masAbierto = false);
-                        opciones[i].$3();
-                      },
+            child: apaisado
+                ? Center(
+                    child: SingleChildScrollView(
+                      scrollDirection: Axis.horizontal,
+                      padding: const EdgeInsets.only(right: 16),
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          for (var i = 0; i < opciones.length; i++)
+                            Padding(
+                              padding: const EdgeInsets.only(right: 12),
+                              child: _opcion(opciones, i, apaisado),
+                            ),
+                        ],
+                      ),
                     ),
+                  )
+                : Column(
+                    mainAxisSize: MainAxisSize.min,
+                    crossAxisAlignment: CrossAxisAlignment.end,
+                    children: [
+                      for (var i = 0; i < opciones.length; i++)
+                        Padding(
+                          padding: const EdgeInsets.only(bottom: 12),
+                          child: _opcion(opciones, i, apaisado),
+                        ),
+                    ],
                   ),
-              ],
-            ),
           ),
         ],
       ),
