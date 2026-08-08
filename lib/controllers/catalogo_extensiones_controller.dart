@@ -241,9 +241,11 @@ class CatalogoExtensionesController extends GetxController {
             final limpia = etiqueta.trim();
             // La opción vacía es «todos»: no es un género.
             if (limpia.isEmpty || clave.isEmpty) return;
-            // Y una opción que se llama «+18» tampoco: es una puerta a
-            // contenido adulto disfrazada de género.
-            if (limpia.contains('+18') || limpia.contains('18+')) return;
+            // Y las que son una puerta a contenido adulto disfrazada de
+            // género tampoco: el Home no muestra +18 ni por acá.
+            final baja = limpia.toLowerCase();
+            const puertas = ['+18', '18+', 'adult', 'adulto', 'hentai', 'erótico', 'erotico'];
+            if (puertas.any(baja.contains)) return;
             porEtiqueta[limpia] = clave;
             union.add(limpia);
           });

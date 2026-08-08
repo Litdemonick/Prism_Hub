@@ -741,14 +741,24 @@ class _CarruselAndroidState extends State<_CarruselAndroid>
     // Cuanto más ancha la pantalla, menos se lleva la tarjeta en foco: en una
     // tablet, dos tercios del ancho serían una sola tarjeta enorme.
     final parte = bajo
-        ? a.elegir(compacto: 0.46, medio: 0.36, amplio: 0.3, enorme: 0.24)
-        : a.elegir(compacto: 0.66, medio: 0.46, amplio: 0.36, enorme: 0.28);
+        ? a.elegir(compacto: 0.46, medio: 0.36, amplio: 0.34, enorme: 0.28)
+        : a.elegir(compacto: 0.66, medio: 0.5, amplio: 0.42, enorme: 0.34);
 
     var ancho = anchoUtil * parte;
     var alto = ancho * relacion;
 
-    // En horizontal el alto es lo escaso; en vertical, lo que sobra.
-    final tope = altoPantalla * (bajo ? 0.66 : 0.4);
+    // ── Cuánto alto se le deja ─────────────────────────────────────────
+    //
+    // En un teléfono acostado el alto es lo escaso, así que se le da casi
+    // todo. De pie sobra, y el carrusel no puede comerse la pantalla: hay
+    // filas debajo que también tienen que verse sin desplazar.
+    //
+    // La tablet es el caso que faltaba. Con el 0.4 del teléfono, sus 800
+    // píxeles de alto daban tarjetas de 320 — chiquitas y perdidas en 1280 de
+    // ancho. Tiene sitio de sobra para el doble, y debajo igual entra la
+    // primera fila.
+    final tope = altoPantalla *
+        (bajo ? 0.66 : a.elegir(compacto: 0.4, medio: 0.42, amplio: 0.55));
     if (alto > tope) {
       alto = tope;
       ancho = alto / relacion;
