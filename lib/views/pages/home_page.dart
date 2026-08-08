@@ -15,6 +15,7 @@ import 'package:prismhub/views/widgets/cache_network_image.dart';
 import 'package:prismhub/views/widgets/home/animated_background_glow.dart';
 import 'package:prismhub/views/widgets/home/esqueleto.dart';
 import 'package:prismhub/views/widgets/home/home_theme.dart';
+import 'package:prismhub/views/widgets/home/indicadores_de_pagina.dart';
 import 'package:prismhub/views/widgets/home/tarjeta_de_catalogo.dart';
 
 // ── Por qué está partido en tres archivos ───────────────────────────────────
@@ -240,60 +241,6 @@ class _SinRespuesta extends StatelessWidget {
           ),
         ],
       ),
-    );
-  }
-}
-
-/// Las rayitas que dicen en cuál de la tanda vas.
-///
-/// Rayas y no puntos: con puntos, cinco posiciones se leen como cinco puntos
-/// sueltos y no como una barra de avance. La raya llena ocupa lugar y se
-/// entiende de un vistazo cuánto queda de la tanda.
-///
-/// Se pueden tocar para saltar directo. Es un objetivo chiquito, así que cada
-/// una lleva un área de toque más grande que la raya que se ve.
-class _Indicadores extends StatelessWidget {
-  const _Indicadores({
-    required this.cantidad,
-    required this.actual,
-    required this.onTocar,
-  });
-
-  final int cantidad;
-  final int actual;
-  final ValueChanged<int> onTocar;
-
-  @override
-  Widget build(BuildContext context) {
-    // Con una sola no hay nada que indicar.
-    if (cantidad < 2) return const SizedBox.shrink();
-    return Row(
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        for (var i = 0; i < cantidad; i++)
-          GestureDetector(
-            behavior: HitTestBehavior.opaque,
-            onTap: () => onTocar(i),
-            child: Padding(
-              // El aire va ADENTRO del área de toque, no entre widgets: así lo
-              // que se puede tocar es más grande que la raya sin que las rayas
-              // queden separadas de más.
-              padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 8),
-              child: AnimatedContainer(
-                duration: const Duration(milliseconds: 220),
-                curve: Curves.easeOut,
-                width: i == actual ? 30 : 20,
-                height: 3,
-                decoration: BoxDecoration(
-                  color: i == actual
-                      ? HomeTheme.accentPink
-                      : Colors.white.withValues(alpha: 0.35),
-                  borderRadius: BorderRadius.circular(2),
-                ),
-              ),
-            ),
-          ),
-      ],
     );
   }
 }

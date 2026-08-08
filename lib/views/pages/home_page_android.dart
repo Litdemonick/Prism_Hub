@@ -1528,7 +1528,7 @@ class _CarruselAndroidState extends State<_CarruselAndroid>
             // Ahora son ocho como mucho y cada una representa un tramo. Sirven
             // para lo mismo —saber por dónde vas— sin volverse una regla
             // graduada.
-            _Indicadores(
+            IndicadoresDePagina(
               cantidad:
                   tanda.length < _maxPuntitos ? tanda.length : _maxPuntitos,
               actual: tanda.length <= _maxPuntitos
@@ -2425,7 +2425,7 @@ class _GrillaPaginadaState extends State<_GrillaPaginada> {
           // deslizar.
           if (paginas > 1) ...[
             const SizedBox(height: 6),
-            _Indicadores(
+            IndicadoresDePagina(
               cantidad: paginas,
               actual: _actual,
               onTocar: (i) {

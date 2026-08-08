@@ -10,6 +10,7 @@ import 'package:prismhub/views/widgets/extension/extension_tile.dart';
 import 'package:prismhub/views/pages/extension/extension_repo_page.dart';
 import 'package:prismhub/views/widgets/home/animated_background_glow.dart';
 import 'package:prismhub/views/widgets/home/home_theme.dart';
+import 'package:prismhub/views/widgets/home/indicadores_de_pagina.dart';
 import 'package:prismhub/utils/extension.dart';
 import 'package:prismhub/utils/log.dart';
 import 'package:prismhub/utils/breakpoints.dart';
@@ -39,6 +40,36 @@ class _ExtensionPageState extends State<ExtensionPage> {
   // de Android) — cada plataforma con su propio tamaño de página.
   static const _pageSize = 5;
   int _page = 0;
+
+  // ── En el teléfono la página se cambia deslizando ──────────────────────
+  //
+  // Las flechitas se quedan en escritorio, donde hay un ratón y un puntero
+  // fino. Con el dedo, deslizar es el gesto natural —es el que ya se usa en el
+  // acordeón del Inicio— y encima devuelve la franja de abajo que ocupaban los
+  // botones: son tarjetas que se ven.
+  //
+  // El PageController se crea acá y no en `build` porque tiene que sobrevivir a
+  // los redibujados: si se armara nuevo en cada uno, la página volvería a la
+  // primera cada vez que llega una extensión.
+  final _paginas = PageController();
+
+  /// Deja el deslizador en la página que dice el estado.
+  ///
+  /// Hace falta porque `_page` cambia también desde afuera del gesto: al
+  /// filtrar, al buscar y al desinstalar vuelve a cero, y ahí el PageController
+  /// no se entera solo. Se pide para el próximo cuadro porque esto se llama
+  /// desde `build` y saltar de página en medio de un dibujo dispara un
+  /// `setState` mientras Flutter todavía está dibujando.
+  void _seguirLaPagina(int pagina) {
+    if (!_paginas.hasClients) return;
+    final actual = _paginas.page?.round() ?? _paginas.initialPage;
+    if (actual == pagina) return;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted || !_paginas.hasClients) return;
+      if ((_paginas.page?.round() ?? 0) == pagina) return;
+      _paginas.jumpToPage(pagina);
+    });
+  }
 
   // Búsqueda por nombre — Android y desktop comparten el mismo estado (solo
   // uno de los dos builders está montado a la vez). Estado local, no en el
@@ -609,6 +640,7 @@ class _ExtensionPageState extends State<ExtensionPage> {
     c.isPageOpen = false;
     _androidSearchController.dispose();
     _scrollController.dispose();
+    _paginas.dispose();
     super.dispose();
   }
 
@@ -657,6 +689,51 @@ class _ExtensionPageState extends State<ExtensionPage> {
   // Flechitas "‹ X/Y ›" compactas — mismo widget que el repositorio de
   // extensiones (ver extension_repo_page.dart), repetido acá porque no
   // comparten State. No se muestra nada si entra todo en una sola página.
+  /// Envuelve una lista para que se pueda tirar de ella y refrescar.
+  ///
+  /// Con nombre porque ahora hay una por página del deslizador, y el
+  /// RefreshIndicator tiene que ir ADENTRO de cada una: puesto por fuera del
+  /// PageView no encuentra a quién escucharle el tirón —el PageView se desplaza
+  /// de costado, no para abajo— y el gesto se perdía.
+  Widget _conRefresco(Widget lista) {
+    return RefreshIndicator(
+      onRefresh: () async {
+        // desdeElBoton: lo pidio el usuario, asi que se vuelve a pedir el
+        // catalogo de verdad. Limpiar la cache no alcanzaba: onRefresh solo
+        // releia los mapas locales, y el fetch recien salia cuando alguna
+        // tarjeta lo pedia por su cuenta — para entonces la pantalla ya se
+        // habia dibujado con los datos viejos.
+        await c.onRefresh(desdeElBoton: true);
+      },
+      color: HomeTheme.accentPink,
+      backgroundColor: HomeTheme.cardSurface,
+      child: lista,
+    );
+  }
+
+  /// Las rayitas de abajo: en cuál página vas.
+  ///
+  /// ── No crecen con las páginas ───────────────────────────────────────────
+  ///
+  /// Con veinte páginas, veinte rayitas son una línea punteada donde no se
+  /// distingue cuál está encendida, y encima la fila cambia de ancho cada vez
+  /// que entra o sale una extensión. Con el tope, cada raya representa un tramo
+  /// y la fila mide siempre lo mismo.
+  Widget _rayitas(int page, int totalPages) {
+    const tope = IndicadoresDePagina.maximo;
+    final cortas = totalPages <= tope;
+    return IndicadoresDePagina(
+      cantidad: cortas ? totalPages : tope,
+      actual:
+          cortas ? page : (page * tope ~/ totalPages).clamp(0, tope - 1),
+      onTocar: (i) {
+        final destino =
+            cortas ? i : (i * totalPages ~/ tope).clamp(0, totalPages - 1);
+        setState(() => _page = destino);
+      },
+    );
+  }
+
   Widget _pager({
     required int page,
     required int totalPages,
@@ -737,8 +814,9 @@ class _ExtensionPageState extends State<ExtensionPage> {
       final totalPages =
           installed.isEmpty ? 0 : (installed.length / _pageSize).ceil();
       final page = totalPages == 0 ? 0 : _page.clamp(0, totalPages - 1);
-      final pageItems =
-          installed.skip(page * _pageSize).take(_pageSize).toList();
+      // El deslizador tiene que quedar donde dice el estado: al filtrar, al
+      // buscar y al desinstalar la pagina vuelve a cero desde afuera del gesto.
+      _seguirLaPagina(page);
       return Scaffold(
         backgroundColor: HomeTheme.bg,
         appBar: SearchAppBar(
@@ -825,20 +903,9 @@ class _ExtensionPageState extends State<ExtensionPage> {
                 // tarjetas suben todo lo que ocupaba esa franja.
                 SizedBox(height: _pantallaBaja(context) ? 2 : 6),
                 Expanded(
-                  child: RefreshIndicator(
-                    onRefresh: () async {
-                      // desdeElBoton: lo pidio el usuario, asi que se vuelve a
-                      // pedir el catalogo de verdad. Limpiar la cache no
-                      // alcanzaba: onRefresh solo releia los mapas locales, y
-                      // el fetch recien salia cuando alguna tarjeta lo pedia
-                      // por su cuenta — para entonces la pantalla ya se habia
-                      // dibujado con los datos viejos.
-                      await c.onRefresh(desdeElBoton: true);
-                    },
-                    color: HomeTheme.accentPink,
-                    backgroundColor: HomeTheme.cardSurface,
-                    child: installed.isEmpty
-                        ? ListView(
+                  child: installed.isEmpty
+                      ? _conRefresco(
+                          ListView(
                             physics: const AlwaysScrollableScrollPhysics(),
                             children: [
                               SizedBox(
@@ -850,57 +917,82 @@ class _ExtensionPageState extends State<ExtensionPage> {
                                 ),
                               ),
                             ],
-                          )
-                        : ListView.builder(
-                            physics: const AlwaysScrollableScrollPhysics(),
-                            // Espacio a los costados y entre cards — antes
-                            // iban pegadas al borde de la pantalla.
-                            //
-                            // El hueco de la barra flotante ya NO se reserva
-                            // acá: ahora debajo de la lista van las flechitas,
-                            // y son ellas las que tienen que quedar por encima
-                            // de la barra. Reservándolo en los dos lados se
-                            // contaba dos veces y quedaba un hueco enorme.
-                            padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
-                            itemCount: pageItems.length,
-                            // Sin RepaintBoundary a mano: ListView.builder ya
-                            // envuelve cada ítem en uno
-                            // (SliverChildBuilderDelegate.addRepaintBoundaries
-                            // viene en true). Ponerlo acá sería una capa
-                            // anidada de gusto. La grilla de más abajo SÍ lo
-                            // necesita, porque ahí las tarjetas se arman con
-                            // un `for` y no pasan por ese delegate.
-                            itemBuilder: (_, i) {
-                              return ExtensionTile(pageItems[i].extension);
-                            },
                           ),
-                  ),
+                        )
+                      // ── Se desliza para cambiar de página ────────────
+                      //
+                      // El PageView es horizontal y la lista de adentro
+                      // vertical, así que los dos gestos conviven sin pelearse:
+                      // arrastrar de costado cambia de página y tirar para
+                      // abajo sigue refrescando.
+                      //
+                      // Cada página arma SU tanda acá adentro en vez de recibir
+                      // la de afuera: las de al lado también se construyen al
+                      // asomar, y con una sola tanda se verían las mismas cinco
+                      // extensiones en las tres.
+                      : PageView.builder(
+                          controller: _paginas,
+                          itemCount: totalPages,
+                          onPageChanged: (i) => setState(() => _page = i),
+                          itemBuilder: (_, p) {
+                            final dePagina = installed
+                                .skip(p * _pageSize)
+                                .take(_pageSize)
+                                .toList();
+                            return _conRefresco(
+                              ListView.builder(
+                                physics:
+                                    const AlwaysScrollableScrollPhysics(),
+                                // Espacio a los costados y entre cards — antes
+                                // iban pegadas al borde de la pantalla.
+                                //
+                                // El hueco de la barra flotante ya NO se
+                                // reserva acá: debajo de la lista van las
+                                // rayitas, y son ellas las que tienen que
+                                // quedar por encima de la barra. Reservándolo
+                                // en los dos lados se contaba dos veces y
+                                // quedaba un hueco enorme.
+                                padding:
+                                    const EdgeInsets.fromLTRB(16, 0, 16, 8),
+                                itemCount: dePagina.length,
+                                // Sin RepaintBoundary a mano: ListView.builder
+                                // ya envuelve cada ítem en uno
+                                // (SliverChildBuilderDelegate
+                                // .addRepaintBoundaries viene en true). Ponerlo
+                                // acá sería una capa anidada de gusto. La
+                                // grilla de más abajo SÍ lo necesita, porque
+                                // ahí las tarjetas se arman con un for suelto y
+                                // no pasan por ese delegate.
+                                itemBuilder: (_, i) =>
+                                    ExtensionTile(dePagina[i].extension),
+                              ),
+                            );
+                          },
+                        ),
                 ),
-                // ── Las flechitas van ABAJO, después de la lista ───────────
+                // ── Rayitas abajo, no botones ───────────────────────
                 //
-                // Arriba se comían una franja pegada al buscador y cortaban la
-                // primera fila de tarjetas. Acá las tarjetas arrancan al ras
-                // del título, y las flechitas aparecen al llegar al final —
-                // que es justo cuando uno las necesita.
+                // Van después de la lista y no arriba: arriba se comían una
+                // franja pegada al buscador y cortaban la primera fila de
+                // tarjetas.
+                //
+                // Y son rayitas, no flechas: con el dedo la página se cambia
+                // deslizando, así que abajo solo hace falta decir en cuál vas.
+                // Las mismas del acordeón del Inicio, para que la app se sienta
+                // una sola.
                 if (totalPages > 1)
                   Padding(
                     // Por encima de la barra flotante.
                     //
                     // El cuerpo pasa POR DEBAJO de ella (extendBody en
                     // main_page), así que lo último de la columna quedaba
-                    // tapado: las flechitas se veían a medias detrás de los
-                    // íconos de navegación. `paddingOf(context).bottom` ya
-                    // trae el alto de la barra sumado, así que con eso alcanza.
+                    // tapado: se veía a medias detrás de los íconos de
+                    // navegación. `paddingOf(context).bottom` ya trae el alto
+                    // de la barra sumado, así que con eso alcanza.
                     padding: EdgeInsets.only(
-                      top: 4,
-                      bottom: MediaQuery.paddingOf(context).bottom + 6,
+                      bottom: MediaQuery.paddingOf(context).bottom + 2,
                     ),
-                    child: _pager(
-                      page: page,
-                      totalPages: totalPages,
-                      useFluent: false,
-                      onChange: (p) => setState(() => _page = p),
-                    ),
+                    child: Center(child: _rayitas(page, totalPages)),
                   ),
               ],
             ),
