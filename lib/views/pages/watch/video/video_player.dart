@@ -212,6 +212,59 @@ class _VideoPlayerState extends State<VideoPlayer> {
     });
   }
 
+  /// El reproductor de pie, estilo YouTube: el vídeo arriba y el resto debajo.
+  ///
+  /// ── Por qué existe esta rama ────────────────────────────────────────────
+  ///
+  /// Hasta ahora el reproductor BLOQUEABA la pantalla en horizontal: girar el
+  /// teléfono no hacía nada. Está bien para mirar, pero deja afuera lo que uno
+  /// hace la mitad del tiempo — dejar algo sonando y seguir con otra cosa, o
+  /// simplemente sostener el teléfono de una mano.
+  ///
+  /// Acostado NO CAMBIA NADA: se devuelve exactamente lo mismo que antes, el
+  /// contenido ocupando la pantalla entera. Esta rama es aditiva a propósito,
+  /// porque el reproductor es la parte más delicada de la app y no vale la pena
+  /// tocar el camino que ya funciona para agregar uno nuevo.
+  ///
+  /// De pie, el vídeo va en una caja 16:9 arriba de todo —la forma real del
+  /// contenido, así que no se recorta ni deja franjas— con sus controles
+  /// adentro, y debajo queda el resto de la pantalla. Las barras del sistema
+  /// vuelven a verse: acá el vídeo no es todo, y esconder la de navegación
+  /// dejaría sin salida.
+  Widget _androidSegunOrientacion(BuildContext context) {
+    final acostado = MediaQuery.orientationOf(context) == Orientation.landscape;
+
+    // Se pide en cada construcción y no una sola vez: la orientación cambia
+    // sin avisar por ningún otro lado, y esto es idempotente.
+    VideoPlayerController.pantallaSegunOrientacion(acostado: acostado);
+
+    if (acostado) return Scaffold(body: _buildContent());
+
+    return Scaffold(
+      backgroundColor: Colors.black,
+      body: SafeArea(
+        // Solo arriba: abajo queda la barra de navegación del sistema, y el
+        // contenido no tiene por qué meterse debajo.
+        bottom: false,
+        child: Column(
+          children: [
+            AspectRatio(
+              aspectRatio: 16 / 9,
+              child: _buildContent(),
+            ),
+            // Lo que queda debajo. Por ahora en negro: la lista de episodios ya
+            // vive en el panel lateral del propio reproductor, y meterla acá
+            // sería tenerla en dos sitios que se pueden desincronizar. El hueco
+            // igual hace falta —es lo que convierte esto en «vídeo arriba» en
+            // vez de «vídeo estirado»— y es donde va a ir lo que se sume
+            // después.
+            const Expanded(child: ColoredBox(color: Colors.black)),
+          ],
+        ),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     // ExcludeSemantics: el reproductor reconstruye sus controles cada frame
@@ -224,7 +277,7 @@ class _VideoPlayerState extends State<VideoPlayer> {
       child: PlatformBuildWidget(
         androidBuilder: (context) => Theme(
           data: ThemeData.dark(useMaterial3: true),
-          child: Scaffold(body: _buildContent()),
+          child: _androidSegunOrientacion(context),
         ),
         desktopBuilder: ((context) => _buildContent()),
       ),

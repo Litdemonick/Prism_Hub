@@ -1184,12 +1184,22 @@ class VideoPlayerController extends GetxController with WidgetsBindingObserver {
     _enUso = this;
     WidgetsBinding.instance.addObserver(this);
     if (Platform.isAndroid) {
-      // 切换到横屏
-      SystemChrome.setPreferredOrientations(
-        [DeviceOrientation.landscapeLeft, DeviceOrientation.landscapeRight],
-      );
-      SystemChrome.setEnabledSystemUIMode(SystemUiMode.immersiveSticky);
-      await AutoOrientation.landscapeAutoMode(forceSensor: true);
+      // ── Se abre acostado, pero se puede girar ──────────────────────────
+      //
+      // Antes acá se BLOQUEABA la orientación en horizontal: girar el teléfono
+      // no hacía nada y el vídeo se veía siempre acostado, aunque uno quisiera
+      // dejarlo de pie para hacer otra cosa mientras.
+      //
+      // Ahora se abre acostado igual —que es como se quiere ver un vídeo— pero
+      // sin bloquear: `landscapeAutoMode` sin forzar el sensor gira la pantalla
+      // y deja que el sistema siga escuchándolo, así que girar el teléfono
+      // pasa a modo vertical y la página se rearma sola (ver VideoPlayer).
+      //
+      // El modo inmersivo también se va de acá: de pie hay que ver la barra de
+      // estado y la de navegación, como en cualquier reproductor. Lo enciende y
+      // lo apaga la página según la orientación, en `pantallaSegunOrientacion`.
+      SystemChrome.setPreferredOrientations(DeviceOrientation.values);
+      await AutoOrientation.landscapeAutoMode();
     }
     _initSettings();
     _initPlayer();
@@ -6896,6 +6906,23 @@ class VideoPlayerController extends GetxController with WidgetsBindingObserver {
       await AutoOrientation.fullAutoMode();
       SystemChrome.setPreferredOrientations(DeviceOrientation.values);
     }
+  }
+
+  /// Enciende o apaga el modo inmersivo según cómo esté el teléfono.
+  ///
+  /// Acostado se esconden las barras del sistema: el vídeo ocupa la pantalla y
+  /// nada más importa. De pie NO: ahí el vídeo es una franja arriba y debajo
+  /// queda la app, así que esconder la barra de navegación deja al usuario sin
+  /// forma de salir salvo el gesto, y la de estado hace falta para ver la hora
+  /// y la batería mientras se mira algo largo.
+  ///
+  /// La llama la página cada vez que cambia la orientación. Es idempotente: si
+  /// ya está en el modo que corresponde, pedirlo de nuevo no cuesta nada.
+  static void pantallaSegunOrientacion({required bool acostado}) {
+    if (!Platform.isAndroid) return;
+    SystemChrome.setEnabledSystemUIMode(
+      acostado ? SystemUiMode.immersiveSticky : SystemUiMode.edgeToEdge,
+    );
   }
 
   @override

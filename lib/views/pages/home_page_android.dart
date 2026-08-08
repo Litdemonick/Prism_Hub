@@ -704,6 +704,20 @@ class _Cabecera extends StatelessWidget {
 
   void _historial() => Get.to(() => const HistoryPage());
 
+  /// Favoritos y Extensiones instaladas, desde la cabecera del Inicio.
+  ///
+  /// Los dos ya se podían abrir, pero escondidos: favoritos estaba detrás de
+  /// los tres puntos de la barra de abajo, y las extensiones había que buscar
+  /// su pestaña. Son las dos cosas que uno abre todo el tiempo, así que van
+  /// al lado del historial, que es de la misma familia: atajos a otra pantalla
+  /// desde el Inicio.
+  void _favoritos() => Get.to(() => const HistoryPage(soloFavoritos: true));
+
+  void _extensiones() {
+    if (!Get.isRegistered<MainController>()) return;
+    Get.find<MainController>().changeTab(MainController.tabExtensiones);
+  }
+
   @override
   Widget build(BuildContext context) {
     final margen = _margen(context);
@@ -739,6 +753,16 @@ class _Cabecera extends StatelessWidget {
               // hasta que se separaron. Ahora salen todos de ahí.
               style: HomeTheme.tituloDeZona(bajo: bajo),
             ),
+          ),
+          _BotonDeCabecera(
+            icono: Icons.favorite_border_rounded,
+            etiqueta: 'home.favorite'.i18n,
+            onTap: _favoritos,
+          ),
+          _BotonDeCabecera(
+            icono: Icons.extension_outlined,
+            etiqueta: 'common.extension-installed'.i18n,
+            onTap: _extensiones,
           ),
           _BotonDeCabecera(
             icono: Icons.history_rounded,
@@ -1012,9 +1036,8 @@ class _CarruselAndroidState extends State<_CarruselAndroid>
         for (final (package, items) in grupos) {
           if (desde >= items.length) continue;
           quedaAlgo = true;
-          final hasta = desde + bloque < items.length
-              ? desde + bloque
-              : items.length;
+          final hasta =
+              desde + bloque < items.length ? desde + bloque : items.length;
           for (var i = desde; i < hasta; i++) {
             sumar(package, items[i]);
           }

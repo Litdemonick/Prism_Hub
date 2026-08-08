@@ -1008,9 +1008,8 @@ class _HistoryPageState extends State<HistoryPage> {
         // llegaba el aviso solo si además cambiaba «Continuar» — cualquier
         // cambio que tocara únicamente allHistory pasaba de largo y la pantalla
         // se quedaba con lo de antes.
-        final _ = _c.resents.length +
-            _c.favorites.length +
-            _c.allHistory.length;
+        final _ =
+            _c.resents.length + _c.favorites.length + _c.allHistory.length;
 
         return Container(
           color: HomeTheme.bg,
