@@ -58,18 +58,39 @@ class Esqueleto extends StatefulWidget {
 /// Uno solo, estático, que arranca cuando aparece el primer bloque y se apaga
 /// cuando se va el último. Antes cada bloque traía el suyo: treinta relojes
 /// para animar exactamente lo mismo.
-class _RelojDelBrillo {
+class _RelojDelBrillo with WidgetsBindingObserver {
   static final _valor = ValueNotifier<double>(0);
   static Ticker? _ticker;
   static int _cuantos = 0;
+
+  /// ── Por qué hace falta escuchar el ciclo de vida ─────────────────────────
+  ///
+  /// Un `Ticker` creado a mano —sin un TickerProvider de widget— NO se calla
+  /// cuando la app pasa a segundo plano ni cuando la pestaña se oculta: sigue
+  /// pidiendo un cuadro por vez, para siempre.
+  ///
+  /// Normalmente no se nota porque los bloques desaparecen en cuanto llega el
+  /// contenido. Pero SIN CONEXIÓN no llega nunca: la app queda con los bloques
+  /// puestos, el usuario la manda al fondo, y el reloj sigue latiendo a
+  /// sesenta cuadros por segundo gastando batería sin que nadie lo vea.
+  static final _vigia = _RelojDelBrillo();
+  static bool _vigilando = false;
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState estado) {
+    if (estado == AppLifecycleState.resumed) {
+      if (_cuantos > 0) _encender();
+      return;
+    }
+    _apagar();
+  }
 
   /// Cuánto tarda el reflejo en cruzar de un lado al otro.
   static const _vuelta = Duration(milliseconds: 1400);
 
   static ValueListenable<double> get valor => _valor;
 
-  static void sumar() {
-    _cuantos++;
+  static void _encender() {
     if (_ticker != null) return;
     _ticker = Ticker((elapsed) {
       _valor.value = (elapsed.inMilliseconds % _vuelta.inMilliseconds) /
@@ -78,14 +99,27 @@ class _RelojDelBrillo {
       ..start();
   }
 
+  static void _apagar() {
+    _ticker?.dispose();
+    _ticker = null;
+  }
+
+  static void sumar() {
+    _cuantos++;
+    if (!_vigilando) {
+      _vigilando = true;
+      WidgetsBinding.instance.addObserver(_vigia);
+    }
+    _encender();
+  }
+
   static void restar() {
     _cuantos--;
     if (_cuantos > 0) return;
     // Sin bloques en pantalla no hay nada que animar: se apaga en vez de
     // seguir pidiendo cuadros de gusto.
     _cuantos = 0;
-    _ticker?.dispose();
-    _ticker = null;
+    _apagar();
   }
 }
 

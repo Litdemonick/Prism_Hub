@@ -1094,6 +1094,12 @@ class CatalogoExtensionesController extends GetxController {
       unawaited(_guardarCache(fila, fila.items));
     } catch (e) {
       logger.info('[home] ${fila.nombre} no respondió: $e');
+      // ── Si falló, se devuelve la página ────────────────────────────────
+      //
+      // `traerMas` sube `pagina` ANTES de pedir. Si el pedido falla y no se
+      // vuelve atrás, la próxima vez se pide la página siguiente a la que
+      // nunca llegó: el contenido de la que falló se saltea para siempre.
+      if (fila.pagina > 1) fila.pagina--;
       // Con datos viejos en pantalla NO se marca como fallo: mostrar lo de
       // antes es mejor que borrarlo porque el refresco falló.
       fila.estado.value =

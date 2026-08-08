@@ -749,6 +749,10 @@ class _CarruselAndroidState extends State<_CarruselAndroid>
   void initState() {
     super.initState();
     _anim.addListener(() {
+      // Tocar otra zona mientras el acordeón se está acomodando desmonta este
+      // widget con la animación en curso. Sin esta guarda, el oyente llama a
+      // setState sobre algo que ya no está.
+      if (!mounted) return;
       final v = _viaje;
       if (v == null) return;
       setState(() => _p = v.value);
@@ -770,6 +774,25 @@ class _CarruselAndroidState extends State<_CarruselAndroid>
   /// La lista solo CRECE POR EL FINAL —cada extensión que contesta se agrega
   /// al final de `destacados`— así que un índice que el usuario ya está
   /// mirando nunca se le corre bajo los pies.
+  /// La firma de la lista la última vez que se acomodó la posición.
+  int _firmaVista = -1;
+
+  /// El dedo está en la pantalla.
+  bool _arrastrando = false;
+
+  /// La lista cambió durante el gesto y falta acomodar la posición.
+  bool _reanclarAlSoltar = false;
+
+  /// Barata y suficiente: cambia si cambió la cantidad de extensiones o la de
+  /// portadas de alguna.
+  static int _firmaDe(List<(String, List<ExtensionListItem>)> grupos) {
+    var f = grupos.length;
+    for (final g in grupos) {
+      f = f * 31 + g.$2.length;
+    }
+    return f;
+  }
+
   /// El resultado de la última vez, para no rearmarlo en cada cuadro.
   List<(String, ExtensionListItem)>? _planosCache;
   int _firmaDeLosGrupos = -1;
@@ -786,16 +809,23 @@ class _CarruselAndroidState extends State<_CarruselAndroid>
     //
     // La firma es barata de calcular y alcanza: si cambió la cantidad de
     // extensiones o la de portadas de alguna, se rearma; si no, se reusa.
-    var firma = grupos.length;
-    for (final g in grupos) {
-      firma = firma * 31 + g.$2.length;
-    }
+    final firma = _firmaDe(grupos);
     final guardado = _planosCache;
     if (guardado != null && firma == _firmaDeLosGrupos) return guardado;
 
+    // ── Sin repetidos, por si acaso ────────────────────────────────────
+    //
+    // Cada tanda ya se arma sin duplicados, pero algunos sitios devuelven los
+    // mismos títulos en dos páginas distintas y basta con que uno se cuele para
+    // que el usuario vea el mismo anime dos veces al deslizar. Red de seguridad
+    // barata: un conjunto de direcciones ya vistas.
     final todo = <(String, ExtensionListItem)>[];
+    final vistas = <String>{};
     for (final (package, items) in grupos) {
       for (final item in items) {
+        // La misma dirección en DOS extensiones distintas sí es otro ítem, así
+        // que la clave lleva el paquete.
+        if (!vistas.add('$package|${item.url}')) continue;
         todo.add((package, item));
       }
     }
@@ -868,8 +898,36 @@ class _CarruselAndroidState extends State<_CarruselAndroid>
         _sembrado = true;
         _p = _indiceGlobal(grupos).toDouble();
       }
+      // ── La posición se re-ancla, y NUNCA en pleno gesto ─────────────
+      //
+      // `_p` es un índice en la lista APLANADA. Cuando `traerMas` suma portadas
+      // a una extensión, todos los índices posteriores se corren: el mismo `_p`
+      // pasa a apuntar a otra tarjeta. Eso es lo que se veía como un salto
+      // hacia atrás.
+      //
+      // La posición de verdad es (extensión, posición en la tanda), que
+      // `_ubicar` mantiene al día y no se corre cuando otra extensión crece. Al
+      // detectar que la lista cambió, `_p` se recalcula desde ahí.
+      //
+      // Pero eso corre en `build`, y `build` corre en cada cuadro del arrastre.
+      // Hacerlo con el dedo en la pantalla pierde la fracción del gesto y la
+      // tarjeta pega un tirón — se siente como si la app hubiera recargado
+      // algo. Así que si la lista cambió mientras arrastrabas, queda anotado y
+      // se acomoda al soltar, cuando ya no se nota.
+      final firma = _firmaDe(grupos);
+      if (firma != _firmaVista) {
+        if (_arrastrando || _anim.isAnimating) {
+          _reanclarAlSoltar = true;
+        } else {
+          _firmaVista = firma;
+          _reanclarAlSoltar = false;
+          _p = _indiceGlobal(grupos).toDouble();
+        }
+      }
+
       final ultimo = (planos.length - 1).toDouble();
       if (_p > ultimo) _p = ultimo;
+      if (_p < 0) _p = 0;
 
       // El ancho sale de acá y no de MediaQuery: en horizontal ya viene sin la
       // franja que se lleva la barra del sistema.
@@ -890,7 +948,10 @@ class _CarruselAndroidState extends State<_CarruselAndroid>
               height: m.alto,
               child: GestureDetector(
                 behavior: HitTestBehavior.opaque,
-                onHorizontalDragStart: (_) => _anim.stop(),
+                onHorizontalDragStart: (_) {
+                  _anim.stop();
+                  _arrastrando = true;
+                },
                 onHorizontalDragUpdate: (d) {
                   final paso = (m.ancho + m.anchoChico) / 2 + _aire;
                   setState(() {
@@ -898,6 +959,10 @@ class _CarruselAndroidState extends State<_CarruselAndroid>
                   });
                 },
                 onHorizontalDragEnd: (d) {
+                  _arrastrando = false;
+                  // Si la lista creció durante el gesto, se acomoda ahora:
+                  // invalidando la firma, el próximo build re-ancla.
+                  if (_reanclarAlSoltar) _firmaVista = -1;
                   final v = d.primaryVelocity ?? 0;
                   // Con impulso se salta a la siguiente aunque el dedo no haya
                   // llegado a la mitad: es lo que espera un deslizar rápido.
