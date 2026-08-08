@@ -58,6 +58,10 @@ class FilaDeExtension {
   /// y se dice en el encabezado, para que el usuario sepa qué está viendo.
   ModoDeFila modo = ModoDeFila.reciente;
 
+  /// Por qué página va. Sube cuando el usuario llega al final del carrusel y
+  /// se piden más portadas. Ver `traerMas`.
+  int pagina = 1;
+
   final estado = EstadoDeFila.pendiente.obs;
   final items = <ExtensionListItem>[].obs;
 
@@ -109,6 +113,24 @@ class CatalogoExtensionesController extends GetxController {
   /// extensión y recién ahí salta a la siguiente. Mezcladas, saltaba de sitio
   /// en sitio en cada cambio y no se entendía de dónde venía cada portada.
   final destacados = <(String, List<ExtensionListItem>)>[].obs;
+
+  /// Las tandas que el carrusel puede mostrar AHORA.
+  ///
+  /// ── Por qué no es `destacados` a secas ──────────────────────────────────
+  ///
+  /// Porque con un filtro puesto, las extensiones que no lo tienen siguen
+  /// trayendo su contenido de siempre —y está bien, su fila lo aclara con «Lo
+  /// más reciente»—. Pero el carrusel no tiene encabezado por extensión: es una
+  /// sola tira. Ahí, una película de FuegoCine entre puros animes en emisión se
+  /// lee como que el filtro no funciona.
+  ///
+  /// Así que el carrusel muestra solo lo que SÍ está filtrado. Y como es una
+  /// vista calculada y no una lista aparte, al restablecer vuelve todo en el
+  /// acto sin volver a pedirle nada a nadie.
+  List<(String, List<ExtensionListItem>)> get destacadosVisibles {
+    if (!hayFiltros) return destacados;
+    return destacados.where((d) => puedeConEsteGenero(d.$1)).toList();
+  }
 
   /// Cuántas se toman de cada extensión para el carrusel.
   ///
@@ -211,7 +233,13 @@ class CatalogoExtensionesController extends GetxController {
     'suspenso': ['suspenso', 'suspense', 'thriller'],
     'misterio': ['misterio', 'mystery'],
     'fantasia': ['fantasia', 'fantasy'],
-    'ciencia-ficcion': ['ciencia ficcion', 'ciencia-ficcion', 'sci-fi', 'scifi', 'science fiction'],
+    'ciencia-ficcion': [
+      'ciencia ficcion',
+      'ciencia-ficcion',
+      'sci-fi',
+      'scifi',
+      'science fiction'
+    ],
     'sobrenatural': ['sobrenatural', 'supernatural'],
     'psicologico': ['psicologico', 'psychological'],
     'artes-marciales': ['artes marciales', 'marcial', 'martial arts'],
@@ -481,7 +509,8 @@ class CatalogoExtensionesController extends GetxController {
           }
         }
       } catch (err) {
-        logger.info('[home] ${runtime.extension.name} no dio sus filtros: $err');
+        logger
+            .info('[home] ${runtime.extension.name} no dio sus filtros: $err');
       }
     }
 
@@ -491,8 +520,7 @@ class CatalogoExtensionesController extends GetxController {
 
     // En el orden de las listas curadas, no alfabético: así los más usados
     // —Acción, Aventura, Comedia— quedan primero y no hay que desplazarse.
-    generosDisponibles
-        .assignAll(_canonicos.keys.where(ofrecible));
+    generosDisponibles.assignAll(_canonicos.keys.where(ofrecible));
     estadosDisponibles.assignAll(_estados.keys.where(ofrecible));
     formatosDisponibles.assignAll(_formatos.keys.where(ofrecible));
     _repartirModos();
@@ -614,6 +642,9 @@ class CatalogoExtensionesController extends GetxController {
     aplicandoFiltros.value = true;
     for (final fila in filas) {
       fila.traidoEl = null;
+      // Se vuelve a la primera página: las que se habían pedido de más son de
+      // otra búsqueda y no tienen nada que ver con este filtro.
+      fila.pagina = 1;
     }
     // ── Avisar del cambio A MANO ───────────────────────────────────────
     //
@@ -774,8 +805,8 @@ class CatalogoExtensionesController extends GetxController {
           estadoExt: EstadoExtension.noInstalada,
         ));
       }
-      porInstalar
-          .sort((a, b) => a.nombre.toLowerCase().compareTo(b.nombre.toLowerCase()));
+      porInstalar.sort(
+          (a, b) => a.nombre.toLowerCase().compareTo(b.nombre.toLowerCase()));
       nuevas.addAll(porInstalar);
     } catch (e) {
       logger.info('[home] no se pudo leer el catálogo: $e');
@@ -793,12 +824,70 @@ class CatalogoExtensionesController extends GetxController {
       final items = _desdeJson(guardado['items']);
       if (items.isEmpty) continue;
       fila.items.assignAll(items);
-      fila.traidoEl =
-          DateTime.tryParse(guardado['fecha']?.toString() ?? '');
+      fila.traidoEl = DateTime.tryParse(guardado['fecha']?.toString() ?? '');
       fila.estado.value = EstadoDeFila.lista;
       _sumarADestacados(fila, items);
     }
     filas.assignAll(nuevas);
+  }
+
+  /// Hasta qué página se le pide a cada extensión.
+  ///
+  /// Alto a propósito: JKAnime o TioAnime tienen cientos de títulos en emisión,
+  /// y la idea es que el que quiera seguir deslizando pueda. Veinticinco
+  /// páginas son unas doscientas portadas por extensión — con once, más de dos
+  /// mil.
+  ///
+  /// Pero tope al fin, y no infinito. Cada página es un pedido más al sitio, y
+  /// una lista que crece sin límite termina costando aunque cada ítem sea
+  /// barato. Si alguien llega hasta acá, ya vio más de lo que cualquier
+  /// pantalla de inicio pretende mostrar.
+  ///
+  /// En disco NO se guarda todo: el caché se recorta a 24 por extensión (ver
+  /// ). Lo de más vive solo mientras la app está abierta, que es
+  /// donde tiene sentido.
+  static const _maxPaginas = 25;
+
+  /// Si se está trayendo una página más ahora mismo.
+  final trayendoMas = false.obs;
+
+  /// Pide una página más a cada extensión que ya mostró la anterior.
+  ///
+  /// ── Cómo evita el atracón ───────────────────────────────────────────────
+  ///
+  /// Va por la MISMA cola que el resto: tope de tres pedidos a la vez, y una
+  /// extensión colgada no bloquea a las demás. Y no se dispara de nuevo
+  /// mientras la anterior está en curso —`trayendoMas`— así que deslizar
+  /// rápido hasta el final no encadena cinco tandas de once pedidos.
+  ///
+  /// Las portadas nuevas se AGREGAN al final de la tanda de cada extensión, así
+  /// que el orden que ya estaba en pantalla no se mueve: el usuario sigue
+  /// deslizando y aparecen más adelante.
+  Future<void> traerMas() async {
+    if (trayendoMas.value) return;
+    final candidatas = filas
+        .where((f) => f.estadoExt == EstadoExtension.activa || f.esVistaPrevia)
+        .where((f) => f.pagina < _maxPaginas)
+        .where((f) => f.items.isNotEmpty)
+        .where((f) => !hayFiltros || puedeConEsteGenero(f.package))
+        .toList();
+    if (candidatas.isEmpty) return;
+
+    trayendoMas.value = true;
+    try {
+      for (final fila in candidatas) {
+        if (_cola.contains(fila)) continue;
+        fila.pagina++;
+        _cola.add(fila);
+      }
+      _mover();
+      // Se espera a que la cola se vacíe para no volver a disparar encima.
+      for (var i = 0; i < 120 && (_enVuelo > 0 || _cola.isNotEmpty); i++) {
+        await Future<void>.delayed(const Duration(milliseconds: 250));
+      }
+    } finally {
+      trayendoMas.value = false;
+    }
   }
 
   /// La pide si hace falta. La llama cada fila cuando entra en pantalla.
@@ -860,21 +949,35 @@ class CatalogoExtensionesController extends GetxController {
           ? _popularPorExtension[fila.package]
           : null;
       final filtro = genero ??
-          (popular == null ? null : {popular.clave: [popular.valor]});
+          (popular == null
+              ? null
+              : {
+                  popular.clave: [popular.valor]
+                });
+      // La página que toca. Empieza en 1 y sube cuando el usuario pide más.
+      final pagina = fila.pagina;
       final items = await (filtro == null
-              ? runtime.latest(1)
-              : runtime.search('', 1, filter: filtro))
+              ? runtime.latest(pagina)
+              : runtime.search('', pagina, filter: filtro))
           .timeout(const Duration(seconds: 20));
       if (items.isEmpty) {
         fila.estado.value =
             fila.items.isEmpty ? EstadoDeFila.fallo : EstadoDeFila.lista;
         return;
       }
-      fila.items.assignAll(items);
+      if (pagina <= 1) {
+        fila.items.assignAll(items);
+      } else {
+        // Página siguiente: se AGREGA, sin repetir lo que ya estaba. Algunos
+        // sitios devuelven ítems solapados entre páginas, y una portada
+        // duplicada en el carrusel se lee como un error.
+        final vistas = fila.items.map((e) => e.url).toSet();
+        fila.items.addAll(items.where((e) => !vistas.contains(e.url)));
+      }
       fila.traidoEl = DateTime.now();
       fila.estado.value = EstadoDeFila.lista;
-      _sumarADestacados(fila, items);
-      unawaited(_guardarCache(fila, items));
+      _sumarADestacados(fila, fila.items);
+      unawaited(_guardarCache(fila, fila.items));
     } catch (e) {
       logger.info('[home] ${fila.nombre} no respondió: $e');
       // Con datos viejos en pantalla NO se marca como fallo: mostrar lo de
@@ -995,7 +1098,8 @@ class CatalogoExtensionesController extends GetxController {
       if (pop is Map) {
         pop.forEach((pkg, par) {
           if (par is! List || par.length != 2) return;
-          _popularPorExtension['$pkg'] = (clave: '${par[0]}', valor: '${par[1]}');
+          _popularPorExtension['$pkg'] =
+              (clave: '${par[0]}', valor: '${par[1]}');
         });
       }
       List<String> lista(String k) =>

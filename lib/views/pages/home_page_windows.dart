@@ -143,7 +143,7 @@ class _CarruselWindowsState extends State<_CarruselWindows> {
   @override
   Widget build(BuildContext context) {
     return Obx(() {
-      final grupos = widget.c.destacados;
+      final grupos = widget.c.destacadosVisibles;
       if (grupos.isEmpty) return const SizedBox(height: 12);
       final (package, items) = grupos[widget.c.carruselExt % grupos.length];
       if (items.isEmpty) return const SizedBox(height: 12);

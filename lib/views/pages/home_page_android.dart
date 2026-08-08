@@ -525,7 +525,16 @@ class _Chip extends StatelessWidget {
       onTap: onTap,
       child: AnimatedContainer(
         duration: const Duration(milliseconds: 160),
-        padding: EdgeInsets.fromLTRB(marcado ? 10 : 14, 8, 14, 8),
+        // ── El ancho NO cambia al marcarlo ──────────────────────────────
+        //
+        // Antes el relleno izquierdo se achicaba para hacerle sitio al
+        // ganchito, así que el chip crecía unos píxeles al tocarlo y empujaba
+        // a todos los de la derecha — se veía como si se pegaran entre sí.
+        //
+        // Ahora el hueco del ganchito está SIEMPRE reservado: cuando no está
+        // marcado se rellena con espacio del mismo tamaño. El chip mide igual
+        // en los dos estados y nada se mueve.
+        padding: const EdgeInsets.fromLTRB(12, 8, 14, 8),
         decoration: BoxDecoration(
           color: marcado
               ? HomeTheme.accentPink.withValues(alpha: 0.18)
@@ -543,11 +552,15 @@ class _Chip extends StatelessWidget {
             // El ganchito, no solo el color: sobre un fondo oscuro, «rosa
             // tenue» y «gris» se parecen bastante, y encima hay gente que no
             // distingue esos dos tonos. La marca tiene que ser una forma.
-            if (marcado) ...[
-              const Icon(Icons.check_rounded,
-                  size: 16, color: HomeTheme.accentPink),
-              const SizedBox(width: 5),
-            ],
+            // El hueco existe siempre; lo que cambia es si se dibuja el
+            // ganchito o no. Ver el comentario del relleno, arriba.
+            SizedBox(
+              width: 21,
+              child: marcado
+                  ? const Icon(Icons.check_rounded,
+                      size: 16, color: HomeTheme.accentPink)
+                  : null,
+            ),
             Text(
               texto,
               style: TextStyle(
@@ -728,14 +741,37 @@ class _CarruselAndroidState extends State<_CarruselAndroid>
   /// La lista solo CRECE POR EL FINAL —cada extensión que contesta se agrega
   /// al final de `destacados`— así que un índice que el usuario ya está
   /// mirando nunca se le corre bajo los pies.
+  /// El resultado de la última vez, para no rearmarlo en cada cuadro.
+  List<(String, ExtensionListItem)>? _planosCache;
+  int _firmaDeLosGrupos = -1;
+
   List<(String, ExtensionListItem)> _planos(
       List<(String, List<ExtensionListItem>)> grupos) {
+    // ── Se rearma solo cuando cambió algo ──────────────────────────────
+    //
+    // Este método se llama desde `build`, y `build` corre en CADA cuadro del
+    // arrastre —el gesto hace setState para mover el acordeón—. Con ocho
+    // portadas por extensión eso ya eran noventa allocations por cuadro; al
+    // permitir pedir más páginas, pueden ser dos mil. Sesenta veces por
+    // segundo, mientras el dedo está en la pantalla.
+    //
+    // La firma es barata de calcular y alcanza: si cambió la cantidad de
+    // extensiones o la de portadas de alguna, se rearma; si no, se reusa.
+    var firma = grupos.length;
+    for (final g in grupos) {
+      firma = firma * 31 + g.$2.length;
+    }
+    final guardado = _planosCache;
+    if (guardado != null && firma == _firmaDeLosGrupos) return guardado;
+
     final todo = <(String, ExtensionListItem)>[];
     for (final (package, items) in grupos) {
       for (final item in items) {
         todo.add((package, item));
       }
     }
+    _firmaDeLosGrupos = firma;
+    _planosCache = todo;
     return todo;
   }
 
@@ -776,7 +812,7 @@ class _CarruselAndroidState extends State<_CarruselAndroid>
   @override
   Widget build(BuildContext context) {
     return Obx(() {
-      final grupos = widget.c.destacados;
+      final grupos = widget.c.destacadosVisibles;
       // Filtrando: bloques grises también acá. Lo que hay en el acordeón es
       // del filtro anterior, y dejarlo quieto mientras se busca haría creer
       // que no está pasando nada.
@@ -842,6 +878,15 @@ class _CarruselAndroidState extends State<_CarruselAndroid>
                         v < 0 ? _p.floorToDouble() + 1 : _p.ceilToDouble() - 1;
                   }
                   _irA(destino.clamp(0.0, ultimo), grupos);
+                  // ── Traer más cuando queda poco ──────────────────────
+                  //
+                  // Al soltar y no en cada píxel del arrastre: así se pide una
+                  // vez por gesto y no cincuenta. Cinco de margen alcanza —
+                  // mientras llegan, el usuario todavía tiene cinco tarjetas
+                  // por delante y no ve el final.
+                  if (destino >= ultimo - 5) {
+                    unawaited(widget.c.traerMas());
+                  }
                 },
                 child: ClipRect(
                     child: _acordeon(planos, m, caja.maxWidth, grupos)),
