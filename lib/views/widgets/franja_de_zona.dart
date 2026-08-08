@@ -186,151 +186,25 @@ class _FranjaDeZonaState extends State<FranjaDeZona> {
   }
 }
 
-/// La franja, pero que se va al bajar y vuelve al llegar arriba.
-///
-/// ── Por qué no alcanzaba con que fuera fina ─────────────────────────────
-///
-/// Se le sacó la AppBar y quedó en la mitad de alto, pero seguía CLAVADA:
-/// acostado, esa franja se lleva una fila de portadas para siempre, y ahí el
-/// alto es lo único que escasea.
-///
-/// En el Inicio esto no pasa porque el nombre de la app es un elemento más de
-/// la lista: se desplaza con las portadas y al bajar desaparece. Buscar,
-/// Extensiones e Historial no lo pueden copiar tal cual —una de ellas dibuja
-/// sus páginas en un deslizador horizontal, y meter el buscador adentro serían
-/// tres campos de texto vivos a la vez peleándose el foco— así que se hace por
-/// afuera: se escucha el desplazamiento y la franja se recoge.
-///
-/// ── Vuelve arriba, no al primer tirón para arriba ───────────────────────
-///
-/// A propósito. Volviendo con cualquier movimiento hacia arriba, la franja
-/// aparece y desaparece sola mientras uno busca algo en el medio de la lista, y
-/// eso se lee como un parpadeo. Volviendo solo al llegar al principio se ve
-/// exactamente como en el Inicio: se fue con el contenido y está de vuelta
-/// cuando el contenido está de vuelta.
-class FranjaQueSeVa extends StatefulWidget {
-  const FranjaQueSeVa({
-    super.key,
-    required this.franja,
-    required this.constructor,
-    this.altoExtra = 0,
-  });
-
-  final Widget franja;
-
-  /// Lo que mide [franja] de más allá de la franja en sí.
-  ///
-  /// Buscar cuelga su barrita de progreso debajo del título para que se vaya
-  /// con él —si se quedara sola arriba, flotaría sin nada a qué pertenecer— y
-  /// eso son unos puntos más de alto que el contenido tiene que descontar.
-  final double altoExtra;
-
-  /// El contenido que se desplaza.
-  ///
-  /// Recibe cuánto mide la franja: ese valor va como relleno ARRIBA de su área
-  /// desplazable, para que el primer elemento arranque debajo de la franja y no
-  /// tapado por ella. Es un contrato explícito y no una cuenta escondida
-  /// justamente para que cada zona lo sume donde corresponde —cada una arma su
-  /// lista distinto— en vez de adivinarlo desde acá.
-  final Widget Function(double arriba) constructor;
-
-  @override
-  State<FranjaQueSeVa> createState() => _FranjaQueSeVaState();
-}
-
-class _FranjaQueSeVaState extends State<FranjaQueSeVa>
-    with SingleTickerProviderStateMixin {
-  late final AnimationController _control = AnimationController(
-    vsync: this,
-    duration: const Duration(milliseconds: 220),
-    value: 0,
-  );
-
-  @override
-  void dispose() {
-    _control.dispose();
-    super.dispose();
-  }
-
-  bool _mirar(ScrollNotification aviso) {
-    // Solo el desplazamiento vertical. El deslizador de páginas de Extensiones
-    // es horizontal y también avisa: sin este filtro, cambiar de página
-    // escondía la franja.
-    if (aviso.metrics.axis != Axis.vertical) return false;
-
-    if (aviso is ScrollUpdateNotification) {
-      // Vuelve al llegar arriba y no al primer tirón hacia arriba, a propósito.
-      // Volviendo con cualquier movimiento, la franja aparece y desaparece sola
-      // mientras uno busca algo en el medio de la lista, y eso se lee como un
-      // parpadeo. Volviendo solo al principio se ve como en el Inicio: se fue
-      // con el contenido y está de vuelta cuando el contenido está de vuelta.
-      if (aviso.metrics.pixels <= 0) {
-        _control.reverse();
-      } else if ((aviso.scrollDelta ?? 0) > 0) {
-        _control.forward();
-      }
-    }
-    // false: el aviso sigue subiendo. Cortarlo rompería a cualquier otro que
-    // esté escuchando más arriba —el refresco, por ejemplo—.
-    return false;
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    // Lo que mide la franja entera, barra de estado incluida. Sale de los
-    // mismos números que usa FranjaDeZona para su relleno.
-    final alto = MediaQuery.paddingOf(context).top +
-        8 +
-        FranjaDeZona.alto +
-        widget.altoExtra;
-
-    return Stack(
-      children: [
-        // ── El contenido ocupa la pantalla ENTERA ─────────────────────────
-        //
-        // Y la franja va encima, no arriba en una columna. Esto es un arreglo
-        // de algo que se sentía muy mal: puesta en una columna, esconderla
-        // cambiaba el ALTO del área desplazable, y el contenido de adentro está
-        // anclado a su posición de desplazamiento, no a la pantalla. O sea que
-        // mientras el dedo arrastraba hacia arriba, la lista pegaba además un
-        // salto de cuarenta y pico de puntos hacia arriba por su cuenta. Dos
-        // movimientos a la vez para un solo gesto.
-        //
-        // Flotando encima, el área desplazable mide siempre lo mismo y el
-        // contenido solo hace lo que el dedo le pide. Lo que se gana es real
-        // igual: el contenido pasa POR DEBAJO de la franja, así que al
-        // esconderse aparece lo que había detrás.
-        Positioned.fill(
-          child: NotificationListener<ScrollNotification>(
-            onNotification: _mirar,
-            child: widget.constructor(alto),
-          ),
-        ),
-        // La franja se corre hacia arriba hasta salir. Sin ClipRect ni cambio
-        // de tamaño: solo se mueve, y moverse no obliga a nadie a rehacer su
-        // distribución.
-        Positioned(
-          left: 0,
-          right: 0,
-          top: 0,
-          child: AnimatedBuilder(
-            animation: _control,
-            child: widget.franja,
-            builder: (context, franja) => Transform.translate(
-              offset: Offset(
-                  0,
-                  -alto *
-                      Curves.easeOutCubic.transform(
-                        _control.value,
-                      )),
-              child: franja,
-            ),
-          ),
-        ),
-      ],
-    );
-  }
-}
+// ── Y cómo se esconde al desplazar ──────────────────────────────────────
+//
+// No se esconde sola. Se probó: un envoltorio que escuchaba el desplazamiento y
+// recogía la franja. Con la franja en una columna eso cambiaba el ALTO del área
+// desplazable, y el contenido está anclado a su posición de desplazamiento, no
+// a la pantalla: mientras el dedo arrastraba, la lista pegaba además un salto
+// por su cuenta. Flotando encima se arreglaba el salto, pero la franja
+// apareciendo y desapareciendo sola se seguía sintiendo rara.
+//
+// Lo que hace el Inicio es más simple y es lo que se copia: el título es UN
+// ELEMENTO MÁS de la lista. Se desplaza con las portadas, al bajar se va, al
+// subir vuelve, y no hay ninguna animación ni ningún oyente de por medio —
+// porque no está pasando nada raro, solo se está desplazando la lista.
+//
+// Así que cada zona mete la franja como primer elemento de SU área desplazable.
+// La única que no puede es Extensiones, que dibuja sus páginas en un deslizador
+// horizontal: meter el buscador adentro serían tres campos de texto vivos a la
+// vez peleándose el foco. Ahí la franja se queda fija arriba, que es lo que
+// hacía antes de todo esto.
 
 /// Un botón para las [FranjaDeZona.acciones], del tamaño de la franja.
 ///

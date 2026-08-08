@@ -83,7 +83,9 @@ class _LibraryPageState extends State<LibraryPage> {
 
   void _openHistoryTab(int tab) {
     if (Platform.isAndroid) {
-      Get.to(HistoryPage(initialTab: tab));
+      // Las pestañas 3 y 4 son favoritos, y eso es SU zona, no una
+      // pestaña del Historial. Ver HistoryPage.soloFavoritos.
+      Get.to(HistoryPage(initialTab: tab, soloFavoritos: tab >= 3));
       return;
     }
     router.push(
@@ -120,7 +122,15 @@ class _LibraryPageState extends State<LibraryPage> {
         itemWidth: ancha ? HomeMediaCard.wideWidth : null,
         itemHeight: ancha ? HomeMediaCard.wideTotalHeight : null,
         itemCoverHeight: ancha ? HomeMediaCard.wideImageHeight : null,
-        boxed: true,
+        // Sin caja alrededor de la sección.
+        //
+        // Era un panel apenas más claro que el fondo con su borde, y con dos o
+        // tres secciones seguidas la pantalla quedaba llena de recuadros
+        // anidados: el recuadro de la sección, adentro el de cada tarjeta, y
+        // dentro de ese la portada. El título de la sección y el aire entre
+        // una y otra ya alcanzan para separarlas, y sin la caja las portadas
+        // ganan el ancho que se llevaba su relleno.
+        boxed: false,
         accent: HomeTheme.accentPink,
         title: titulo,
         onClickMore: () => _openHistoryTab(tab),
@@ -194,7 +204,15 @@ class _LibraryPageState extends State<LibraryPage> {
         itemWidth: ancha ? HomeMediaCard.wideWidth : null,
         itemHeight: ancha ? HomeMediaCard.wideTotalHeight : null,
         itemCoverHeight: ancha ? HomeMediaCard.wideImageHeight : null,
-        boxed: true,
+        // Sin caja alrededor de la sección.
+        //
+        // Era un panel apenas más claro que el fondo con su borde, y con dos o
+        // tres secciones seguidas la pantalla quedaba llena de recuadros
+        // anidados: el recuadro de la sección, adentro el de cada tarjeta, y
+        // dentro de ese la portada. El título de la sección y el aire entre
+        // una y otra ya alcanzan para separarlas, y sin la caja las portadas
+        // ganan el ancho que se llevaba su relleno.
+        boxed: false,
         accent: HomeTheme.accentPink,
         title: titulo,
         onClickMore: () => _openHistoryTab(tab),
@@ -322,10 +340,36 @@ class _LibraryPageState extends State<LibraryPage> {
                       constraints:
                           BoxConstraints(minHeight: outerConstraints.maxHeight),
                       child: Padding(
-                        padding: const EdgeInsets.all(16),
+                        padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
                         child: Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
+                            // El título, como primer elemento de la lista.
+                            //
+                            // Decía «Inicio», que era verdad cuando esta
+                            // pantalla ERA el Home. Al partirse en dos quedó el
+                            // título viejo pegado a la pantalla nueva, y en la
+                            // barra de abajo el usuario tocaba «Biblioteca» y
+                            // arriba le contestaba «Inicio».
+                            Padding(
+                              padding: EdgeInsets.fromLTRB(
+                                0,
+                                MediaQuery.paddingOf(context).top + 6,
+                                0,
+                                _tightTop(context) ? 4 : 10,
+                              ),
+                              child: Align(
+                                alignment: AlignmentDirectional.centerStart,
+                                child: Text(
+                                  "common.library".i18n,
+                                  // Mismo estilo que el título de Inicio,
+                                  // desde un solo lugar.
+                                  style: HomeTheme.tituloDeZona(
+                                    bajo: _tightTop(context),
+                                  ),
+                                ),
+                              ),
+                            ),
                             // Obx propio: aísla la rotación del banner (cada
                             // 20s) del resto de Home — ver comentario arriba.
                             Obx(() => HomeHeroBanner(
@@ -373,27 +417,15 @@ class _LibraryPageState extends State<LibraryPage> {
       // El título no se pierde: pasa a ser texto suelto, igual que el
       // «PrismHub» del Home, y se desplaza con el contenido en vez de comerse
       // una franja fija para siempre.
+      // El título ya no va acá afuera: entró al desplazamiento, como primer
+      // elemento (ver _buildContent). Así se va con las tarjetas al bajar en
+      // vez de comerse una franja fija para siempre — exactamente lo que hace
+      // el nombre de la app en el Inicio.
       body: Column(
         children: [
-          Padding(
-            padding: EdgeInsets.fromLTRB(
-                16, MediaQuery.paddingOf(context).top + 6, 16, 6),
-            child: Align(
-              alignment: AlignmentDirectional.centerStart,
-              child: Text(
-                // Decía «Inicio», que era verdad cuando esta pantalla ERA el
-                // Home. Al partirse en dos quedó el título viejo pegado a la
-                // pantalla nueva, y en la barra de abajo el usuario tocaba
-                // «Biblioteca» y arriba le contestaba «Inicio».
-                "common.library".i18n,
-                // Mismo estilo que el título de Inicio, desde un solo lugar.
-                style: HomeTheme.tituloDeZona(),
-              ),
-            ),
-          ),
-          // Además del refresco automático (ver HomePageController), deslizar
-          // para abajo lo fuerza al toque — sin esperar el timer.
           Expanded(
+            // Además del refresco automático (ver HomePageController),
+            // deslizar para abajo lo fuerza al toque — sin esperar el timer.
             child: RefreshIndicator(
               onRefresh: () => c.onRefresh(),
               color: HomeTheme.accentPink,

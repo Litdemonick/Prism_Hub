@@ -62,13 +62,18 @@ final router = GoRouter(
           path: '/history',
           pageBuilder: (context, state) => _animation(
             state,
-            HistoryPage(
-              initialTab: int.tryParse(
+            () {
+              final tab = int.tryParse(
                     state.uri.queryParameters['tab'] ?? '',
                   ) ??
-                  0,
-              zone: state.uri.queryParameters['zone'] == '1',
-            ),
+                  0;
+              return HistoryPage(
+                initialTab: tab,
+                zone: state.uri.queryParameters['zone'] == '1',
+                // Las pestañas 3 y 4 son favoritos, y eso es su propia zona.
+                soloFavoritos: tab >= 3,
+              );
+            }(),
           ),
         ),
         GoRoute(

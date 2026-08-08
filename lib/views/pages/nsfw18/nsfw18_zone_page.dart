@@ -264,7 +264,13 @@ class _Nsfw18ZonePageState extends State<Nsfw18ZonePage> {
 
   void _openHistoryTab(int tab) {
     if (Platform.isAndroid) {
-      Get.to(HistoryPage(initialTab: tab, zone: true));
+      // Las pestañas 3 y 4 son favoritos, y eso es SU zona, no una
+      // pestaña del Historial. Ver HistoryPage.soloFavoritos.
+      Get.to(HistoryPage(
+        initialTab: tab,
+        zone: true,
+        soloFavoritos: tab >= 3,
+      ));
       return;
     }
     router.push(
@@ -303,7 +309,15 @@ class _Nsfw18ZonePageState extends State<Nsfw18ZonePage> {
         itemWidth: ancha ? HomeMediaCard.wideWidth : null,
         itemHeight: ancha ? HomeMediaCard.wideTotalHeight : null,
         itemCoverHeight: ancha ? HomeMediaCard.wideImageHeight : null,
-        boxed: true,
+        // Sin caja alrededor de la sección.
+        //
+        // Era un panel apenas más claro que el fondo con su borde, y con dos o
+        // tres secciones seguidas la pantalla quedaba llena de recuadros
+        // anidados: el recuadro de la sección, adentro el de cada tarjeta, y
+        // dentro de ese la portada. El título de la sección y el aire entre
+        // una y otra ya alcanzan para separarlas, y sin la caja las portadas
+        // ganan el ancho que se llevaba su relleno.
+        boxed: false,
         accent: HomeTheme.accentRed,
         title: titulo,
         onClickMore: () => _openHistoryTab(tab),
@@ -377,7 +391,15 @@ class _Nsfw18ZonePageState extends State<Nsfw18ZonePage> {
         itemWidth: ancha ? HomeMediaCard.wideWidth : null,
         itemHeight: ancha ? HomeMediaCard.wideTotalHeight : null,
         itemCoverHeight: ancha ? HomeMediaCard.wideImageHeight : null,
-        boxed: true,
+        // Sin caja alrededor de la sección.
+        //
+        // Era un panel apenas más claro que el fondo con su borde, y con dos o
+        // tres secciones seguidas la pantalla quedaba llena de recuadros
+        // anidados: el recuadro de la sección, adentro el de cada tarjeta, y
+        // dentro de ese la portada. El título de la sección y el aire entre
+        // una y otra ya alcanzan para separarlas, y sin la caja las portadas
+        // ganan el ancho que se llevaba su relleno.
+        boxed: false,
         accent: HomeTheme.accentRed,
         title: titulo,
         onClickMore: () => _openHistoryTab(tab),

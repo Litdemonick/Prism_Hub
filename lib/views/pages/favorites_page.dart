@@ -105,6 +105,48 @@ class _FavoritesPageState extends fluent.State<FavoritesPage> {
   /// reparte el ancho disponible y ese es el que recibe la tarjeta. Con el
   /// ancho fijo de antes quedaba aire a los costados de cada una y las
   /// portadas se veían chicas sin motivo.
+  /// La misma grilla, pero como sliver: en Android va dentro de un
+  /// CustomScrollView junto con la franja del título.
+  Widget _grillaSliver(List<Favorite> lista) {
+    final anchoTarjeta = Platform.isAndroid
+        ? HomeMediaCard.androidWidth
+        : HomeMediaCard.desktopWidth;
+    final altoTarjeta = (Platform.isAndroid
+            ? HomeMediaCard.androidHeight
+            : HomeMediaCard.desktopHeight) +
+        70;
+    return SliverLayoutBuilder(builder: (context, cons) {
+      const margen = 16.0;
+      const entre = 16.0;
+      final disponible = cons.crossAxisExtent - margen * 2;
+      final columnas =
+          math.max(1, ((disponible + entre) / (anchoTarjeta + entre)).floor());
+      final ancho = (disponible - entre * (columnas - 1)) / columnas;
+      return SliverPadding(
+        padding: EdgeInsets.fromLTRB(
+          margen,
+          0,
+          margen,
+          MediaQuery.paddingOf(context).bottom + margen,
+        ),
+        sliver: SliverGrid(
+          gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
+            crossAxisCount: columnas,
+            mainAxisExtent: ancho * (altoTarjeta / anchoTarjeta),
+            crossAxisSpacing: entre,
+            mainAxisSpacing: 20,
+          ),
+          delegate: SliverChildBuilderDelegate(
+            // Obx: el conjunto de tarjetas ocultas es reactivo, y sin esto
+            // ocultarla no repintaba nada hasta salir y volver.
+            (context, i) => Obx(() => _tarjeta(lista[i], ancho)),
+            childCount: lista.length,
+          ),
+        ),
+      );
+    });
+  }
+
   Widget _grilla(List<Favorite> lista, [double arriba = 0]) {
     final anchoTarjeta = Platform.isAndroid
         ? HomeMediaCard.androidWidth
@@ -245,44 +287,56 @@ class _FavoritesPageState extends fluent.State<FavoritesPage> {
       // Sin AppBar: la franja fina, igual que el Historial, Buscar y
       // Extensiones. Y el buscador vive DENTRO de ella, así que se va la fila
       // que ocupaba debajo del título.
-      body: FranjaQueSeVa(
-        franja: FranjaDeZona(
-          titulo: titulo,
-          ayuda: 'common.search'.i18n,
-          controlador: _searchController,
-          alEscribir: (v) => setState(() => _query = v),
-          alEnviar: (v) => setState(() => _query = v),
-          // Se abre encima del shell, así que necesita su propia salida.
-          alVolver: () {
-            if (Navigator.of(context).canPop()) Navigator.of(context).pop();
-          },
-        ),
-        constructor: (arriba) => RefreshIndicator(
-          onRefresh: _leer,
-          color: HomeTheme.accentPink,
-          backgroundColor: HomeTheme.cardSurface,
-          child: datos == null
+      // La franja va DENTRO del desplazamiento, como primer trozo: se va con
+      // las tarjetas al bajar y vuelve al subir, igual que el nombre de la app
+      // en el Inicio. Ver la nota en franja_de_zona.dart.
+      body: RefreshIndicator(
+        onRefresh: _leer,
+        color: HomeTheme.accentPink,
+        backgroundColor: HomeTheme.cardSurface,
+        child: CustomScrollView(
+          physics: const AlwaysScrollableScrollPhysics(),
+          slivers: [
+            SliverToBoxAdapter(
+              child: FranjaDeZona(
+                titulo: titulo,
+                ayuda: 'common.search'.i18n,
+                controlador: _searchController,
+                alEscribir: (v) => setState(() => _query = v),
+                alEnviar: (v) => setState(() => _query = v),
+                // Se abre encima del shell, así que necesita su propia salida.
+                alVolver: () {
+                  if (Navigator.of(context).canPop()) {
+                    Navigator.of(context).pop();
+                  }
+                },
+              ),
+            ),
+            if (datos == null)
               // Bloques mientras se lee la base. Vacío por «todavía no
               // pregunté» se ve igual que vacío por «no hay nada», y sin
               // distinguirlos salía «no hay resultados» con la lista llena.
-              ? _esperando(arriba)
-              : filtrados.isEmpty
-                  ? ListView(
-                      physics: const AlwaysScrollableScrollPhysics(),
-                      children: [
-                        SizedBox(
-                          height: 260,
-                          child: Center(
-                            child: Text(
-                              "common.no-result".i18n,
-                              style:
-                                  const TextStyle(color: HomeTheme.textMuted),
-                            ),
-                          ),
-                        ),
-                      ],
-                    )
-                  : _grilla(filtrados, arriba),
+              SliverToBoxAdapter(
+                child: SizedBox(
+                  height: MediaQuery.sizeOf(context).height,
+                  child: _esperando(),
+                ),
+              )
+            else if (filtrados.isEmpty)
+              SliverToBoxAdapter(
+                child: SizedBox(
+                  height: 260,
+                  child: Center(
+                    child: Text(
+                      "common.no-result".i18n,
+                      style: const TextStyle(color: HomeTheme.textMuted),
+                    ),
+                  ),
+                ),
+              )
+            else
+              _grillaSliver(filtrados),
+          ],
         ),
       ),
     );

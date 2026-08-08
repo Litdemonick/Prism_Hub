@@ -821,172 +821,179 @@ class _ExtensionPageState extends State<ExtensionPage> {
         body: Stack(
           children: [
             const Positioned.fill(child: AnimatedBackgroundGlow()),
-            // La franja se va al bajar y vuelve al llegar arriba, como el
-            // nombre de la app en el Inicio: acostado, clavada era una fila de
-            // tarjetas menos, para siempre.
-            FranjaQueSeVa(
-              franja: FranjaDeZona(
-                titulo: 'common.extension-installed'.i18n,
-                ayuda: 'common.search'.i18n,
-                controlador: _androidSearchController,
-                alEscribir: (value) {
-                  if (value.isEmpty) {
+            // ── Acá la franja se queda fija ─────────────────────────────
+            //
+            // Es la única zona que no la puede meter dentro de su área
+            // desplazable: las páginas van en un deslizador horizontal, y
+            // meter el buscador adentro serían tres campos de texto vivos a la
+            // vez peleándose el foco. Ver la nota en franja_de_zona.dart.
+            Column(
+              children: [
+                FranjaDeZona(
+                  titulo: 'common.extension-installed'.i18n,
+                  ayuda: 'common.search'.i18n,
+                  controlador: _androidSearchController,
+                  alEscribir: (value) {
+                    if (value.isEmpty) {
+                      setState(() {
+                        _search = '';
+                        _page = 0;
+                      });
+                    }
+                  },
+                  alEnviar: (value) {
                     setState(() {
-                      _search = '';
+                      _search = value;
                       _page = 0;
                     });
-                  }
-                },
-                alEnviar: (value) {
-                  setState(() {
-                    _search = value;
-                    _page = 0;
-                  });
-                },
-                acciones: [
-                  // ── El filtro vive en la franja de arriba ─────────────
-                  //
-                  // No en una fila propia debajo. Esa fila se llevaba su
-                  // alto entero justo encima de la lista, y acostado —donde
-                  // el alto es lo que falta— eso es media pantalla de
-                  // tarjetas.
-                  //
-                  // El puntito avisa que hay un filtro puesto: metido dentro
-                  // de la hoja, uno se olvida de que filtró y la lista corta
-                  // parece un error.
-                  AccionDeFranja(
-                    ayuda: 'search.filter'.i18n,
-                    alTocar: _abrirPanel,
-                    icono: Stack(
-                      clipBehavior: Clip.none,
-                      children: [
-                        Icon(
-                          _masivoEnCurso
-                              ? Icons.hourglass_top_rounded
-                              : Icons.tune_rounded,
-                        ),
-                        if (_filter != _ExtFilter.todas)
-                          Positioned(
-                            right: -1,
-                            top: -1,
-                            child: Container(
-                              width: 9,
-                              height: 9,
-                              decoration: const BoxDecoration(
-                                color: HomeTheme.accentPink,
-                                shape: BoxShape.circle,
-                              ),
-                            ),
-                          ),
-                      ],
-                    ),
-                  ),
-                  if (c.errors.isNotEmpty)
+                  },
+                  acciones: [
+                    // ── El filtro vive en la franja de arriba ─────────────
+                    //
+                    // No en una fila propia debajo. Esa fila se llevaba su
+                    // alto entero justo encima de la lista, y acostado —donde
+                    // el alto es lo que falta— eso es media pantalla de
+                    // tarjetas.
+                    //
+                    // El puntito avisa que hay un filtro puesto: metido dentro
+                    // de la hoja, uno se olvida de que filtró y la lista corta
+                    // parece un error.
                     AccionDeFranja(
-                      icono: const Icon(Icons.error),
-                      alTocar: () => _loadErrorDialog(),
-                    ),
-                  AccionDeFranja(
-                    icono: const Icon(Icons.download),
-                    alTocar: () => Get.to(() => const ExtensionRepoPage()),
-                  ),
-                ],
-              ),
-              constructor: (arriba) => Stack(
-                children: [
-                  installed.isEmpty
-                      ? _conRefresco(
-                          ListView(
-                            physics: const AlwaysScrollableScrollPhysics(),
-                            padding: EdgeInsets.only(top: arriba),
-                            children: [
-                              SizedBox(
-                                height: 300,
-                                child: Center(
-                                  child: Text(installedAll.isEmpty
-                                      ? 'common.no-extension'.i18n
-                                      : 'common.no-result'.i18n),
+                      ayuda: 'search.filter'.i18n,
+                      alTocar: _abrirPanel,
+                      icono: Stack(
+                        clipBehavior: Clip.none,
+                        children: [
+                          Icon(
+                            _masivoEnCurso
+                                ? Icons.hourglass_top_rounded
+                                : Icons.tune_rounded,
+                          ),
+                          if (_filter != _ExtFilter.todas)
+                            Positioned(
+                              right: -1,
+                              top: -1,
+                              child: Container(
+                                width: 9,
+                                height: 9,
+                                decoration: const BoxDecoration(
+                                  color: HomeTheme.accentPink,
+                                  shape: BoxShape.circle,
                                 ),
                               ),
-                            ],
-                          ),
-                        )
-                      // ── Se desliza para cambiar de página ────────────
-                      //
-                      // El PageView es horizontal y la lista de adentro
-                      // vertical, así que los dos gestos conviven sin pelearse:
-                      // arrastrar de costado cambia de página y tirar para
-                      // abajo sigue refrescando.
-                      //
-                      // Cada página arma SU tanda acá adentro en vez de recibir
-                      // la de afuera: las de al lado también se construyen al
-                      // asomar, y con una sola tanda se verían las mismas cinco
-                      // extensiones en las tres.
-                      : PageView.builder(
-                          controller: _paginas,
-                          itemCount: totalPages,
-                          onPageChanged: (i) => setState(() => _page = i),
-                          itemBuilder: (_, p) {
-                            final dePagina = installed
-                                .skip(p * _pageSize)
-                                .take(_pageSize)
-                                .toList();
-                            return _conRefresco(
-                              ListView.builder(
-                                physics: const AlwaysScrollableScrollPhysics(),
-                                // Espacio a los costados y entre cards — antes
-                                // iban pegadas al borde de la pantalla.
-                                //
-                                // El hueco de la barra flotante ya NO se
-                                // reserva acá: debajo de la lista van las
-                                // rayitas, y son ellas las que tienen que
-                                // quedar por encima de la barra. Reservándolo
-                                // en los dos lados se contaba dos veces y
-                                // quedaba un hueco enorme.
-                                // `arriba` deja libre lo que ocupa la franja
-                                // que flota encima: sin eso la primera tarjeta
-                                // arranca tapada. Ver FranjaQueSeVa.
-                                padding: EdgeInsets.fromLTRB(16, arriba, 16, 8),
-                                itemCount: dePagina.length,
-                                // Sin RepaintBoundary a mano: ListView.builder
-                                // ya envuelve cada ítem en uno
-                                // (SliverChildBuilderDelegate
-                                // .addRepaintBoundaries viene en true). Ponerlo
-                                // acá sería una capa anidada de gusto. La
-                                // grilla de más abajo SÍ lo necesita, porque
-                                // ahí las tarjetas se arman con un for suelto y
-                                // no pasan por ese delegate.
-                                itemBuilder: (_, i) =>
-                                    ExtensionTile(dePagina[i].extension),
-                              ),
-                            );
-                          },
-                        ),
-                  // ── Rayitas abajo, ENCIMA de la lista ─────────────────
-                  //
-                  // Antes iban en la columna, debajo de la lista, y por eso le
-                  // comían su alto: la lista terminaba justo arriba de la barra
-                  // de navegación y detrás de la barra no pasaba nada. Con el
-                  // fondo liso ahí, la barra flotante parecía tener un fondo
-                  // propio en vez de dejar ver lo de atrás.
-                  //
-                  // Ahora la lista usa la pantalla entera y pasa por debajo de
-                  // la barra —el cuerpo ya lo hace, `extendBody` en main_page—
-                  // así que se ven las tarjetas moviéndose detrás de ella. Las
-                  // rayitas flotan encima, en su sitio de siempre.
-                  //
-                  // Y son rayitas, no flechas: con el dedo la página se cambia
-                  // deslizando, así que abajo solo hace falta decir en cuál
-                  // vas. Las mismas del acordeón del Inicio.
-                  if (totalPages > 1)
-                    Positioned(
-                      left: 0,
-                      right: 0,
-                      bottom: MediaQuery.paddingOf(context).bottom + 2,
-                      child: Center(child: _rayitas(page, totalPages)),
+                            ),
+                        ],
+                      ),
                     ),
-                ],
-              ),
+                    if (c.errors.isNotEmpty)
+                      AccionDeFranja(
+                        icono: const Icon(Icons.error),
+                        alTocar: () => _loadErrorDialog(),
+                      ),
+                    AccionDeFranja(
+                      icono: const Icon(Icons.download),
+                      alTocar: () => Get.to(() => const ExtensionRepoPage()),
+                    ),
+                  ],
+                ),
+                Expanded(
+                    child: Stack(
+                  children: [
+                    installed.isEmpty
+                        ? _conRefresco(
+                            ListView(
+                              physics: const AlwaysScrollableScrollPhysics(),
+                              children: [
+                                SizedBox(
+                                  height: 300,
+                                  child: Center(
+                                    child: Text(installedAll.isEmpty
+                                        ? 'common.no-extension'.i18n
+                                        : 'common.no-result'.i18n),
+                                  ),
+                                ),
+                              ],
+                            ),
+                          )
+                        // ── Se desliza para cambiar de página ────────────
+                        //
+                        // El PageView es horizontal y la lista de adentro
+                        // vertical, así que los dos gestos conviven sin pelearse:
+                        // arrastrar de costado cambia de página y tirar para
+                        // abajo sigue refrescando.
+                        //
+                        // Cada página arma SU tanda acá adentro en vez de recibir
+                        // la de afuera: las de al lado también se construyen al
+                        // asomar, y con una sola tanda se verían las mismas cinco
+                        // extensiones en las tres.
+                        : PageView.builder(
+                            controller: _paginas,
+                            itemCount: totalPages,
+                            onPageChanged: (i) => setState(() => _page = i),
+                            itemBuilder: (_, p) {
+                              final dePagina = installed
+                                  .skip(p * _pageSize)
+                                  .take(_pageSize)
+                                  .toList();
+                              return _conRefresco(
+                                ListView.builder(
+                                  physics:
+                                      const AlwaysScrollableScrollPhysics(),
+                                  // Espacio a los costados y entre cards — antes
+                                  // iban pegadas al borde de la pantalla.
+                                  //
+                                  // El hueco de la barra flotante ya NO se
+                                  // reserva acá: debajo de la lista van las
+                                  // rayitas, y son ellas las que tienen que
+                                  // quedar por encima de la barra. Reservándolo
+                                  // en los dos lados se contaba dos veces y
+                                  // quedaba un hueco enorme.
+                                  // `arriba` deja libre lo que ocupa la franja
+                                  // que flota encima: sin eso la primera tarjeta
+                                  // arranca tapada. Ver FranjaQueSeVa.
+                                  padding:
+                                      const EdgeInsets.fromLTRB(16, 0, 16, 8),
+                                  itemCount: dePagina.length,
+                                  // Sin RepaintBoundary a mano: ListView.builder
+                                  // ya envuelve cada ítem en uno
+                                  // (SliverChildBuilderDelegate
+                                  // .addRepaintBoundaries viene en true). Ponerlo
+                                  // acá sería una capa anidada de gusto. La
+                                  // grilla de más abajo SÍ lo necesita, porque
+                                  // ahí las tarjetas se arman con un for suelto y
+                                  // no pasan por ese delegate.
+                                  itemBuilder: (_, i) =>
+                                      ExtensionTile(dePagina[i].extension),
+                                ),
+                              );
+                            },
+                          ),
+                    // ── Rayitas abajo, ENCIMA de la lista ─────────────────
+                    //
+                    // Antes iban en la columna, debajo de la lista, y por eso le
+                    // comían su alto: la lista terminaba justo arriba de la barra
+                    // de navegación y detrás de la barra no pasaba nada. Con el
+                    // fondo liso ahí, la barra flotante parecía tener un fondo
+                    // propio en vez de dejar ver lo de atrás.
+                    //
+                    // Ahora la lista usa la pantalla entera y pasa por debajo de
+                    // la barra —el cuerpo ya lo hace, `extendBody` en main_page—
+                    // así que se ven las tarjetas moviéndose detrás de ella. Las
+                    // rayitas flotan encima, en su sitio de siempre.
+                    //
+                    // Y son rayitas, no flechas: con el dedo la página se cambia
+                    // deslizando, así que abajo solo hace falta decir en cuál
+                    // vas. Las mismas del acordeón del Inicio.
+                    if (totalPages > 1)
+                      Positioned(
+                        left: 0,
+                        right: 0,
+                        bottom: MediaQuery.paddingOf(context).bottom + 2,
+                        child: Center(child: _rayitas(page, totalPages)),
+                      ),
+                  ],
+                )),
+              ],
             ),
           ],
         ),

@@ -29,11 +29,32 @@ import 'package:prismhub/views/widgets/platform_widget.dart';
 // needed for either). Mismo estilo visual que Home (HomeTheme + HomeMediaCard)
 // para que se sienta parte de la misma app, no una pantalla aparte.
 class HistoryPage extends StatefulWidget {
-  const HistoryPage({super.key, this.initialTab = 0, this.zone = false});
+  const HistoryPage({
+    super.key,
+    this.initialTab = 0,
+    this.zone = false,
+    this.soloFavoritos = false,
+  });
   final int initialTab;
   // true: instancia de la Zona +18 (HomePageController.zoneTag, tema rojo).
   // Es la misma pantalla, apuntando a la OTRA instancia del controller.
   final bool zone;
+
+  /// Abre como FAVORITOS y no como Historial.
+  ///
+  /// ── Por qué no son dos pantallas ────────────────────────────────────────
+  ///
+  /// Porque hacen exactamente lo mismo: una grilla de tarjetas, con buscador,
+  /// orden, borrado y menú de tres puntos. Duplicar el archivo garantiza que en
+  /// dos semanas una tenga un arreglo que la otra no.
+  ///
+  /// Lo que sí eran dos cosas y estaban mezcladas es lo que ve el usuario: las
+  /// cinco pestañas en una sola tira, con el título «Historial» arriba. Entrar
+  /// a Favoritos y que la pantalla dijera «Historial» no tiene defensa.
+  ///
+  /// Con esta bandera cada entrada abre SU zona: su título, y solo las
+  /// pestañas que le corresponden. Vale igual para la zona normal y la +18.
+  final bool soloFavoritos;
 
   @override
   State<HistoryPage> createState() => _HistoryPageState();
@@ -45,7 +66,18 @@ class _HistoryPageState extends State<HistoryPage> {
   );
   late final Color _accent =
       widget.zone ? HomeTheme.accentRed : HomeTheme.accentPink;
-  late int _tabIndex = widget.initialTab;
+
+  /// Los índices de [_tabs] que esta zona muestra.
+  ///
+  /// Historial: todo, vídeo y lectura. Favoritos: sus dos. Se trabaja con el
+  /// índice GLOBAL y no con la posición dentro de la tira, para que
+  /// `_onFavoritesTab` y todo lo que ya mira `_tabIndex` siga valiendo igual.
+  List<int> get _pestanas =>
+      widget.soloFavoritos ? const [3, 4] : const [0, 1, 2];
+
+  late int _tabIndex = _pestanas.contains(widget.initialTab)
+      ? widget.initialTab
+      : _pestanas.first;
   final _searchController = TextEditingController();
   String _query = '';
 
@@ -559,6 +591,18 @@ class _HistoryPageState extends State<HistoryPage> {
     );
   }
 
+  /// El nombre de una pestaña.
+  ///
+  /// En Favoritos se acortan: la zona ya se llama «Favoritos», así que decir
+  /// «Favoritos vídeo» y «Favoritos lectura» repite la palabra en cada
+  /// pastilla. Con «Vídeo» y «Lectura» alcanza y entran las dos holgadas.
+  String _etiqueta(int global) {
+    if (!widget.soloFavoritos) return _tabs[global].i18n;
+    return global == 3
+        ? 'extension-type.video'.i18n
+        : 'extension-type.reading'.i18n;
+  }
+
   Widget _buildTabs() {
     // ── En el teléfono, una sola fila que se desliza ─────────────────────
     //
@@ -571,28 +615,18 @@ class _HistoryPageState extends State<HistoryPage> {
         child: ListView.separated(
           scrollDirection: Axis.horizontal,
           padding: const EdgeInsets.symmetric(horizontal: 16),
-          itemCount: _tabs.length,
-          // ── Una raya entre el historial y los favoritos ────────────────
-          //
-          // Son dos cosas distintas: las tres primeras filtran lo que estuviste
-          // viendo, las dos últimas son tu lista guardada. En una tira de cinco
-          // pastillas iguales eso no se ve, y uno toca «Favoritos vídeo»
-          // creyendo que sigue filtrando el historial.
-          separatorBuilder: (_, i) => i == 2
-              ? Container(
-                  width: 1,
-                  height: 18,
-                  margin: const EdgeInsets.symmetric(horizontal: 12),
-                  color: HomeTheme.border,
-                )
-              : const SizedBox(width: 10),
-          itemBuilder: (_, index) => Center(
-            child: _chip(
-              _tabs[index].i18n,
-              index == _tabIndex,
-              () => setState(() => _tabIndex = index),
-            ),
-          ),
+          itemCount: _pestanas.length,
+          separatorBuilder: (_, __) => const SizedBox(width: 10),
+          itemBuilder: (_, i) {
+            final global = _pestanas[i];
+            return Center(
+              child: _chip(
+                _etiqueta(global),
+                global == _tabIndex,
+                () => setState(() => _tabIndex = global),
+              ),
+            );
+          },
         ),
       );
     }
@@ -607,14 +641,14 @@ class _HistoryPageState extends State<HistoryPage> {
             Platform.isAndroid ? WrapAlignment.center : WrapAlignment.start,
         spacing: 10,
         runSpacing: 10,
-        children: List.generate(
-          _tabs.length,
-          (index) => _chip(
-            _tabs[index].i18n,
-            index == _tabIndex,
-            () => setState(() => _tabIndex = index),
-          ),
-        ),
+        children: [
+          for (final global in _pestanas)
+            _chip(
+              _etiqueta(global),
+              global == _tabIndex,
+              () => setState(() => _tabIndex = global),
+            ),
+        ],
       ),
     );
   }
@@ -882,10 +916,9 @@ class _HistoryPageState extends State<HistoryPage> {
     );
   }
 
-  /// [arriba] es lo que ocupa la franja que flota encima: se reserva como
-  /// primer trozo del desplazamiento para que las pestañas no arranquen
-  /// tapadas. Ver FranjaQueSeVa. En escritorio no hay franja y vale cero.
-  Widget _buildBody([double arriba = 0]) {
+  /// [cabecera] es la franja del título, que va como primer trozo del
+  /// desplazamiento. En escritorio no hay franja y va en null.
+  Widget _buildBody([Widget? cabecera]) {
     return Obx(
       () {
         // Se leen ACÁ, síncrono, dentro del Obx. Las tarjetas se arman
@@ -911,7 +944,8 @@ class _HistoryPageState extends State<HistoryPage> {
               Positioned.fill(
                 child: CustomScrollView(
                   slivers: [
-                    SliverToBoxAdapter(child: SizedBox(height: arriba + 8)),
+                    if (cabecera != null) SliverToBoxAdapter(child: cabecera),
+                    const SliverToBoxAdapter(child: SizedBox(height: 8)),
                     SliverToBoxAdapter(child: _buildTabs()),
                     // En el teléfono, estado y orden viven en la hoja del
                     // botón de filtros, y el buscador y «borrar todo» en la
@@ -945,10 +979,16 @@ class _HistoryPageState extends State<HistoryPage> {
       // Extensiones. Ver FranjaDeZona.
       // La franja se va al bajar y vuelve al llegar arriba, como el nombre de
       // la app en el Inicio: acostado, clavada era una fila de portadas menos.
-      body: FranjaQueSeVa(
-        constructor: _buildBody,
-        franja: FranjaDeZona(
-          titulo: widget.zone ? 'nsfw18.title'.i18n : 'home.history'.i18n,
+      // La franja va DENTRO del desplazamiento, como primer trozo: se va con
+      // las tarjetas al bajar y vuelve al subir, igual que el nombre de la app
+      // en el Inicio. Ver la nota en franja_de_zona.dart.
+      body: _buildBody(
+        FranjaDeZona(
+          titulo: widget.soloFavoritos
+              ? 'home.favorite'.i18n
+              : widget.zone
+                  ? 'nsfw18.title'.i18n
+                  : 'home.history'.i18n,
           // El Historial se abre ENCIMA del shell —desde el botón del Inicio—
           // así que necesita su propia salida. Al quitarle la AppBar se fue
           // con ella la flecha que Material ponía sola, y quedaba solo el atrás
@@ -1015,7 +1055,11 @@ class _HistoryPageState extends State<HistoryPage> {
             Padding(
               padding: const EdgeInsets.symmetric(horizontal: 16),
               child: Text(
-                widget.zone ? 'nsfw18.title'.i18n : 'home.history'.i18n,
+                widget.soloFavoritos
+                    ? 'home.favorite'.i18n
+                    : widget.zone
+                        ? 'nsfw18.title'.i18n
+                        : 'home.history'.i18n,
                 // Mismo estilo que el título de Inicio, desde un solo lugar.
                 style: HomeTheme.tituloDeZona(
                   // Acostado en un teléfono, 25 se come una franja que le

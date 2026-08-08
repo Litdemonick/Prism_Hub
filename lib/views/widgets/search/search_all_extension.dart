@@ -15,13 +15,16 @@ class SearchAllExtSearch extends StatefulWidget {
     required this.kw,
     required this.runtimeList,
     required this.onClickMore,
-    this.arriba = 0,
+    this.cabecera,
   });
 
-  /// Lo que hay que dejar libre arriba: la franja del título flota encima y el
-  /// contenido pasa por debajo, así que la primera fila tiene que arrancar más
-  /// abajo o quedaría tapada. Ver FranjaQueSeVa.
-  final double arriba;
+  /// La franja del título, como PRIMER elemento de la lista.
+  ///
+  /// Adentro y no arriba en una columna: así se desplaza con los resultados y
+  /// al bajar se va sola, igual que el nombre de la app en el Inicio. Sin
+  /// animaciones ni oyentes: no está pasando nada raro, solo se desplaza la
+  /// lista. Ver la nota en franja_de_zona.dart.
+  final Widget? cabecera;
   final String kw;
   final List<SearchResult> runtimeList;
   final Function(int) onClickMore;
@@ -83,24 +86,30 @@ class _SearchAllExtSearchState extends State<SearchAllExtSearch> {
       //
       // Sin esto, la última extensión de la lista quedaba debajo de la barra y
       // no se podía llegar a sus tarjetas por más que se desplazara.
-      padding: EdgeInsets.fromLTRB(
-          16, widget.arriba, 16, MediaQuery.paddingOf(context).bottom + 12),
+      // Sin relleno lateral acá: la franja va de borde a borde, como en el
+      // Inicio, así que el margen lo pone cada fila.
+      padding:
+          EdgeInsets.only(bottom: MediaQuery.paddingOf(context).bottom + 12),
       child: Column(
         children: [
+          if (widget.cabecera != null) widget.cabecera!,
           for (final entry in widget.runtimeList.asMap().entries)
-            SearchAllTile(
-              // Key estable por extensión — sin esto, Flutter reconcilia
-              // esta lista por POSICIÓN: cuando una extensión sube al frente
-              // (ver getResult(), las que traen resultados se insertan
-              // primero), cada índice de acá para abajo se corre, y Flutter
-              // termina actualizando el tile equivocado en cada posición en
-              // vez de simplemente mover el que ya existía.
-              key: ValueKey(entry.value.runitme.extension.package),
-              kw: widget.kw,
-              searchResult: entry.value,
-              onClickMore: () {
-                widget.onClickMore(entry.key);
-              },
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 16),
+              child: SearchAllTile(
+                // Key estable por extensión — sin esto, Flutter reconcilia
+                // esta lista por POSICIÓN: cuando una extensión sube al frente
+                // (ver getResult(), las que traen resultados se insertan
+                // primero), cada índice de acá para abajo se corre, y Flutter
+                // termina actualizando el tile equivocado en cada posición en
+                // vez de simplemente mover el que ya existía.
+                key: ValueKey(entry.value.runitme.extension.package),
+                kw: widget.kw,
+                searchResult: entry.value,
+                onClickMore: () {
+                  widget.onClickMore(entry.key);
+                },
+              ),
             )
         ],
       ),

@@ -344,8 +344,8 @@ class _SearchPageState extends State<SearchPage> {
     });
   }
 
-  /// Los resultados, dejando libre lo que ocupa la franja que flota encima.
-  Widget _buildResultados(double arriba, void Function(int) onClickMore) {
+  /// Los resultados, con la franja del título como primer elemento.
+  Widget _buildResultados(Widget cabecera, void Function(int) onClickMore) {
     return Obx(() {
       // ignore: invalid_use_of_protected_member
       final list = c.searchResultList.value;
@@ -353,7 +353,7 @@ class _SearchPageState extends State<SearchPage> {
         kw: c.search.value,
         runtimeList: list,
         onClickMore: onClickMore,
-        arriba: arriba,
+        cabecera: cabecera,
       );
     });
   }
@@ -380,16 +380,17 @@ class _SearchPageState extends State<SearchPage> {
           child: Stack(
             children: [
               const Positioned.fill(child: AnimatedBackgroundGlow()),
-              // La franja se va al bajar y vuelve al llegar arriba, como el
-              // nombre de la app en el Inicio. Acostado, esa franja clavada
-              // era una fila de portadas menos, para siempre.
-              FranjaQueSeVa(
-                // Zona +18: título propio y flecha para salir. El buscador
-                // normal es una pestaña del shell —no tiene a dónde volver—
-                // así que ahí la flecha va en null y queda igual que siempre.
-                franja: Column(
+              // La franja va DENTRO del área desplazable, como primer
+              // elemento: se va con los resultados al bajar y vuelve al subir,
+              // igual que el nombre de la app en el Inicio. Ver la nota en
+              // franja_de_zona.dart.
+              _buildResultados(
+                Column(
                   mainAxisSize: MainAxisSize.min,
                   children: [
+                    // Zona +18: título propio y flecha para salir. El buscador
+                    // normal es una pestaña del shell —no tiene a dónde
+                    // volver— así que ahí la flecha va en null.
                     FranjaDeZona(
                       titulo: widget.nsfwOnly
                           ? "nsfw18.search-zone-title".i18n
@@ -412,26 +413,21 @@ class _SearchPageState extends State<SearchPage> {
                     ),
                     // Son 3 puntos de alto y dice si todavía están buscando.
                     Padding(
-                      padding: const EdgeInsets.fromLTRB(16, 4, 16, 2),
+                      padding: const EdgeInsets.fromLTRB(16, 4, 16, 6),
                       child: _buildProgress(),
                     ),
                   ],
                 ),
-                // La barrita de progreso viaja CON el título y no debajo: si
-                // se quedara clavada arriba mientras la franja se va, quedaría
-                // una rayita flotando sola sin nada a qué pertenecer.
-                altoExtra: 14,
-                constructor: (arriba) => _buildResultados(arriba, (index) {
+                (index) {
                   Get.to(ExtensionSearcherPage(
                     package: c.getPackgeByIndex(index),
                     keyWord: c.search.value,
-                    // Desde la Zona +18 la extensión mixta se abre con
-                    // su filtro de adultos ya puesto: si no, mostraba su
-                    // catálogo general, que es justo lo que esa zona no
-                    // es.
+                    // Desde la Zona +18 la extensión mixta se abre con su
+                    // filtro de adultos ya puesto: si no, mostraba su catálogo
+                    // general, que es justo lo que esa zona no es.
                     soloAdulto: widget.nsfwOnly,
                   ));
-                }),
+                },
               ),
             ],
           ),
