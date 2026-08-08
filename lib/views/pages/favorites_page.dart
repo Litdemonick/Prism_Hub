@@ -1,4 +1,9 @@
 import 'dart:io';
+import 'dart:math' as math;
+import 'package:get/get.dart';
+import 'package:prismhub/utils/hidden_cards.dart';
+import 'package:prismhub/views/widgets/home/home_media_card.dart';
+import 'package:prismhub/views/widgets/franja_de_zona.dart';
 
 import 'package:fluent_ui/fluent_ui.dart' as fluent;
 import 'package:flutter/material.dart';
@@ -9,7 +14,6 @@ import 'package:prismhub/utils/extension.dart';
 import 'package:prismhub/utils/i18n.dart';
 import 'package:prismhub/utils/search_text.dart';
 import 'package:prismhub/views/widgets/home/esqueleto.dart';
-import 'package:prismhub/views/widgets/extension_item_card.dart';
 import 'package:prismhub/views/widgets/home/home_theme.dart';
 import 'package:prismhub/views/widgets/platform_widget.dart';
 
@@ -22,17 +26,133 @@ class FavoritesPage extends fluent.StatefulWidget {
 }
 
 class _FavoritesPageState extends fluent.State<FavoritesPage> {
-  // Una sola vez (no re-fetch por tecla) — el buscador de acá adentro solo
-  // filtra localmente lo que ya se cargó, mismo criterio que HistoryPage.
-  late final Future<List<Favorite>> _future =
-      DatabaseService.getFavoritesByType(type: widget.type);
+  // ── La lista se relee, no se pide una sola vez ─────────────────────────
+  //
+  // Era un Future creado en el estado, o sea una lectura y nada más. Alcanzaba
+  // mientras la pantalla solo mostraba: ahora desde acá se puede quitar de
+  // favoritos y ocultar una tarjeta, y con el Future clavado la tarjeta que
+  // acababas de quitar seguía ahí hasta salir y volver a entrar.
+  List<Favorite>? _datos;
+
   final _searchController = TextEditingController();
   String _query = '';
+
+  @override
+  void initState() {
+    super.initState();
+    _leer();
+  }
+
+  Future<void> _leer() async {
+    final datos = await DatabaseService.getFavoritesByType(type: widget.type);
+    if (!mounted) return;
+    setState(() => _datos = datos);
+  }
 
   @override
   void dispose() {
     _searchController.dispose();
     super.dispose();
+  }
+
+  Future<void> _quitar(Favorite f) async {
+    await DatabaseService.deleteFavorite(f.package, f.url);
+    await _leer();
+  }
+
+  void _abrir(Favorite f) {
+    ExtensionUtils.openExtensionDetail(
+      context,
+      package: f.package,
+      url: f.url,
+      cover: f.cover,
+    );
+  }
+
+  Map<String, String>? _cabeceras(String package) {
+    final sitio = ExtensionUtils.runtimes[package]?.extension.webSite;
+    if (sitio == null || sitio.isEmpty) return null;
+    return {'Referer': sitio};
+  }
+
+  /// Una tarjeta de favorito, la misma que usan el Inicio y el Historial.
+  ///
+  /// Antes acá iba una tarjeta chica y distinta, sin menú de tres puntos: no se
+  /// podía quitar de favoritos, ni ocultar, ni abrir la ficha desde el menú, y
+  /// se veía más chica que la misma obra en cualquier otra pantalla.
+  Widget _tarjeta(Favorite f, double ancho) {
+    return HomeMediaCard(
+      key: ValueKey('fav-${f.package}-${f.url}'),
+      ancho: ancho,
+      title: f.title,
+      subtitle: 'home.favorite'.i18n,
+      type: f.type,
+      cover: f.cover,
+      headers: _cabeceras(f.package),
+      onTap: () => _abrir(f),
+      onVerDetalle: () => _abrir(f),
+      onDelete: () => _quitar(f),
+      esFavorito: true,
+      onAlternarFavorito: () => _quitar(f),
+      hidden: HiddenCards.isHidden(f.package, f.url),
+      onToggleHide: () => HiddenCards.toggle(f.package, f.url),
+    );
+  }
+
+  /// La grilla, con las tarjetas llenando su celda.
+  ///
+  /// Misma cuenta que el Historial: se cuentan las columnas que entran, se
+  /// reparte el ancho disponible y ese es el que recibe la tarjeta. Con el
+  /// ancho fijo de antes quedaba aire a los costados de cada una y las
+  /// portadas se veían chicas sin motivo.
+  Widget _grilla(List<Favorite> lista) {
+    final anchoTarjeta = Platform.isAndroid
+        ? HomeMediaCard.androidWidth
+        : HomeMediaCard.desktopWidth;
+    final altoTarjeta = (Platform.isAndroid
+            ? HomeMediaCard.androidHeight
+            : HomeMediaCard.desktopHeight) +
+        70;
+    return LayoutBuilder(builder: (context, cons) {
+      const margen = 16.0;
+      const entre = 16.0;
+      final disponible = cons.maxWidth - margen * 2;
+      final columnas =
+          math.max(1, ((disponible + entre) / (anchoTarjeta + entre)).floor());
+      final ancho = (disponible - entre * (columnas - 1)) / columnas;
+      return GridView.builder(
+        padding: const EdgeInsets.fromLTRB(margen, 0, margen, margen),
+        gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
+          crossAxisCount: columnas,
+          mainAxisExtent: ancho * (altoTarjeta / anchoTarjeta),
+          crossAxisSpacing: entre,
+          mainAxisSpacing: 20,
+        ),
+        itemCount: lista.length,
+        // Obx: el conjunto de tarjetas ocultas es reactivo, y sin esto
+        // ocultarla no repintaba nada hasta salir y volver.
+        itemBuilder: (context, i) => Obx(() => _tarjeta(lista[i], ancho)),
+      );
+    });
+  }
+
+  /// Los bloques que brillan, con la misma forma que la grilla de arriba.
+  Widget _esperando() {
+    final anchoTarjeta = Platform.isAndroid
+        ? HomeMediaCard.androidWidth
+        : HomeMediaCard.desktopWidth;
+    final altoTarjeta = (Platform.isAndroid
+            ? HomeMediaCard.androidHeight
+            : HomeMediaCard.desktopHeight) +
+        70;
+    return LayoutBuilder(builder: (context, cons) {
+      final columnas = math.max(
+          1, ((cons.maxWidth - 32 + 16) / (anchoTarjeta + 16)).floor());
+      return EsqueletoDeGrilla(
+        columnas: columnas,
+        proporcion: anchoTarjeta / altoTarjeta,
+      );
+    });
   }
 
   List<Favorite> _filter(List<Favorite> data) {
@@ -97,8 +217,7 @@ class _FavoritesPageState extends fluent.State<FavoritesPage> {
         suffix: _query.isEmpty
             ? null
             : fluent.IconButton(
-                icon:
-                    const Icon(fluent.FluentIcons.chrome_close, size: 9.0),
+                icon: const Icon(fluent.FluentIcons.chrome_close, size: 9.0),
                 onPressed: () => setState(() {
                   _searchController.clear();
                   _query = '';
@@ -110,80 +229,60 @@ class _FavoritesPageState extends fluent.State<FavoritesPage> {
   }
 
   Widget _buildAndroid(BuildContext context) {
+    final titulo = FlutterI18n.translate(
+      context,
+      "home.favorite-all",
+      translationParams: {
+        "type": ExtensionUtils.typeToString(widget.type).toLowerCase(),
+      },
+    );
+    final datos = _datos;
+    final filtrados = datos == null ? const <Favorite>[] : _filter(datos);
+
     return Scaffold(
-      appBar: AppBar(
-        title: Text(
-          FlutterI18n.translate(
-            context,
-            "home.favorite-all",
-            translationParams: {
-              "type": ExtensionUtils.typeToString(widget.type).toLowerCase(),
-            },
-          ),
+      backgroundColor: HomeTheme.bg,
+      // Sin AppBar: la franja fina, igual que el Historial, Buscar y
+      // Extensiones. Y el buscador vive DENTRO de ella, así que se va la fila
+      // que ocupaba debajo del título.
+      body: FranjaQueSeVa(
+        franja: FranjaDeZona(
+          titulo: titulo,
+          ayuda: 'common.search'.i18n,
+          controlador: _searchController,
+          alEscribir: (v) => setState(() => _query = v),
+          alEnviar: (v) => setState(() => _query = v),
+          // Se abre encima del shell, así que necesita su propia salida.
+          alVolver: () {
+            if (Navigator.of(context).canPop()) Navigator.of(context).pop();
+          },
         ),
-      ),
-      body: FutureBuilder(
-        future: _future,
-        builder: ((context, snapshot) {
-          if (snapshot.hasError) {
-            return Center(
-              child: Text("${snapshot.error}"),
-            );
-          }
-
-          // Bloques con la forma de la grilla, no una rueda: la Biblioteca ya
-          // tiene su forma desde el primer cuadro y al llegar las portadas nada
-          // salta de lugar. Los mismos números que el grid de abajo.
-          if (!snapshot.hasData) {
-            return LayoutBuilder(
-              builder: (context, restricciones) => EsqueletoDeGrilla(
-                columnas: restricciones.maxWidth ~/ 120,
-                proporcion: 0.7,
-              ),
-            );
-          }
-          final data = snapshot.data ?? [];
-          final filtered = _filter(data);
-
-          return Column(
-            children: [
-              Padding(
-                padding: const EdgeInsets.fromLTRB(16, 16, 16, 8),
-                child: _buildSearchBox(),
-              ),
-              Expanded(
-                child: data.isEmpty
-                    ? Center(child: Text("common.no-result".i18n))
-                    : filtered.isEmpty
-                        ? Center(child: Text("common.no-result".i18n))
-                        : LayoutBuilder(
-                            builder: (context, constraints) =>
-                                GridView.builder(
-                              padding:
-                                  const EdgeInsets.symmetric(horizontal: 16),
-                              gridDelegate:
-                                  SliverGridDelegateWithFixedCrossAxisCount(
-                                crossAxisCount: constraints.maxWidth ~/ 120,
-                                childAspectRatio: 0.7,
-                                crossAxisSpacing: 16,
-                                mainAxisSpacing: 16,
-                              ),
-                              itemCount: filtered.length,
-                              itemBuilder: (context, index) {
-                                final item = filtered[index];
-                                return ExtensionItemCard(
-                                  title: item.title,
-                                  url: item.url,
-                                  package: item.package,
-                                  cover: item.cover,
-                                );
-                              },
+        hijo: RefreshIndicator(
+          onRefresh: _leer,
+          color: HomeTheme.accentPink,
+          backgroundColor: HomeTheme.cardSurface,
+          child: datos == null
+              // Bloques mientras se lee la base. Vacío por «todavía no
+              // pregunté» se ve igual que vacío por «no hay nada», y sin
+              // distinguirlos salía «no hay resultados» con la lista llena.
+              ? _esperando()
+              : filtrados.isEmpty
+                  ? ListView(
+                      physics: const AlwaysScrollableScrollPhysics(),
+                      children: [
+                        SizedBox(
+                          height: 260,
+                          child: Center(
+                            child: Text(
+                              "common.no-result".i18n,
+                              style:
+                                  const TextStyle(color: HomeTheme.textMuted),
                             ),
                           ),
-              ),
-            ],
-          );
-        }),
+                        ),
+                      ],
+                    )
+                  : _grilla(filtrados),
+        ),
       ),
     );
   }
@@ -216,62 +315,24 @@ class _FavoritesPageState extends fluent.State<FavoritesPage> {
           ),
           const SizedBox(height: 16),
           Expanded(
-            child: FutureBuilder(
-              future: _future,
-              builder: ((context, snapshot) {
-                if (snapshot.hasError) {
-                  return Center(
-                    child: Text(
-                      snapshot.error.toString(),
-                    ),
-                  );
-                }
-
-                // Igual que en Android: bloques con la forma del grid de
-                // abajo, no una rueda en el medio de la pantalla.
-                if (!snapshot.hasData) {
-                  return LayoutBuilder(
-                    builder: (context, restricciones) => EsqueletoDeGrilla(
-                      columnas: restricciones.maxWidth ~/ 160,
-                      proporcion: 0.6,
-                      padding: const EdgeInsets.only(right: 8, bottom: 8, top: 8),
-                    ),
-                  );
-                }
-
-                final data = snapshot.data ?? [];
-                final filtered = _filter(data);
-
-                if (data.isEmpty || filtered.isEmpty) {
-                  return Center(
-                    child: Text("common.no-result".i18n),
-                  );
-                }
-
-                return LayoutBuilder(
-                  builder: ((context, constraints) => GridView.builder(
-                        padding:
-                            const EdgeInsets.only(right: 8, bottom: 8, top: 8),
-                        gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
-                          crossAxisCount: constraints.maxWidth ~/ 160,
-                          childAspectRatio: 0.6,
-                          crossAxisSpacing: 16,
-                          mainAxisSpacing: 16,
-                        ),
-                        itemCount: filtered.length,
-                        itemBuilder: (context, index) {
-                          final item = filtered[index];
-                          return ExtensionItemCard(
-                            title: item.title,
-                            url: item.url,
-                            package: item.package,
-                            cover: item.cover,
-                          );
-                        },
-                      )),
+            child: Builder(builder: (context) {
+              final datos = _datos;
+              // Bloques mientras se lee la base, igual que en Android: vacío
+              // por «todavía no pregunté» se ve igual que vacío por «no hay
+              // nada», y sin distinguirlos salía «no hay resultados» con la
+              // lista llena.
+              if (datos == null) return _esperando();
+              final filtrados = _filter(datos);
+              if (filtrados.isEmpty) {
+                return Center(
+                  child: Text(
+                    "common.no-result".i18n,
+                    style: const TextStyle(color: HomeTheme.textMuted),
+                  ),
                 );
-              }),
-            ),
+              }
+              return _grilla(filtrados);
+            }),
           )
         ],
       ),

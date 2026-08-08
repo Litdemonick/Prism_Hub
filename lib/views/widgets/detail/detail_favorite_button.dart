@@ -80,6 +80,24 @@ class _DetailFavoriteButtonState extends State<DetailFavoriteButton> {
   Widget _buildDesktop(BuildContext context) {
     return Obx(() {
       final isFavorite = c.isFavorite.value;
+      // Compacto: solo el icono, para la barra de arriba de la ficha. Es el
+      // mismo criterio que en el teléfono —favorito y compartir viven arriba,
+      // como iconos— y saca de encima de la portada dos botones anchos con
+      // texto que no aportaban nada que el icono no diga.
+      if (widget.compacto) {
+        return fluent.IconButton(
+          icon: Icon(
+            isFavorite
+                ? fluent.FluentIcons.heart_fill
+                : fluent.FluentIcons.heart,
+            size: 18,
+            color: isFavorite ? HomeTheme.accentPink : HomeTheme.textPrimary,
+          ),
+          onPressed: () async {
+            await c.toggleFavorite(context);
+          },
+        );
+      }
       return fluent.Button(
         style: fluent.ButtonStyle(
           backgroundColor: fluent.WidgetStateProperty.all(

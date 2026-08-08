@@ -27,7 +27,6 @@ import 'package:prismhub/views/widgets/detail/detail_card_tile.dart';
 import 'package:prismhub/views/widgets/detail/detail_tracking_button.dart';
 import 'package:prismhub/views/widgets/home/home_theme.dart';
 import 'package:prismhub/views/widgets/platform_widget.dart';
-import 'package:prismhub/views/widgets/boton_pulsable.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 class DetailPage extends StatefulWidget {
@@ -144,7 +143,8 @@ class _DetailPageState extends State<DetailPage> {
                 // porque quien decide es el controlador, no cada pantalla.
                 Obx(() => c.tardaDemasiado.value
                     ? Padding(
-                        padding: const EdgeInsets.only(top: 18, left: 32, right: 32),
+                        padding:
+                            const EdgeInsets.only(top: 18, left: 32, right: 32),
                         child: Text(
                           FlutterI18n.translate(
                             context,
@@ -418,80 +418,79 @@ class _DetailPageState extends State<DetailPage> {
           // puede contar exacto. La sinopsis puede ser larguísima y bloquearla
           // por error escondería texto, que es peor que un desplazamiento de
           // sobra.
-          physics: sinScroll(pestana)
-              ? const NeverScrollableScrollPhysics()
-              : null,
-        headerSliverBuilder: (BuildContext context, bool innerBoxIsScrolled) {
-          return [
-            SliverAppBar(
-              pinned: true,
-              floating: false,
-              snap: false,
-              primary: true,
-              // El tema de la app deja TODAS las barras transparentes
-              // (appBarTheme.backgroundColor). Acá eso se nota: al hacer
-              // scroll, el cuerpo de la página pasa por debajo de la barra y
-              // se veía la lista de capítulos cruzando por encima del botón de
-              // atrás. Con el fondo puesto, la barra tapa lo que pasa debajo.
-              backgroundColor: HomeTheme.bg,
-              surfaceTintColor: Colors.transparent,
-              title: DetailAppbarTitle(
-                c.detail?.title ?? '',
-                controller: c.scrollController,
-                desde: medidas.relevoDelTitulo,
-              ),
-              flexibleSpace: DetailAppbarflexibleSpace(
-                tag: widget.tag,
-                medidas: medidas,
-              ),
-              bottom: hayPestanas
-                  ? PreferredSize(
-                      preferredSize: const Size.fromHeight(48),
-                      // Fondo sólido: el TabBar es transparente por defecto —
-                      // sin esto, una franja de la portada/imagen del hero se
-                      // veía asomando (recortada, fea) justo arriba de las
-                      // pestañas en vez de quedar tapada prolijamente.
-                      child: Container(
-                        color: HomeTheme.bg,
-                        // Sin estilar, TabBar usa los colores por defecto de
-                        // Material: el indicador sale MORADO —el color semilla
-                        // del tema, que no es el del app— y debajo queda una
-                        // línea divisoria GRIS que Material 3 dibuja sola. Las
-                        // dos cruzaban la ficha de lado a lado y no pegaban con
-                        // nada del diseño.
-                        child: TabBar(
-                          tabs: tabs,
-                          indicatorColor: HomeTheme.accentPink,
-                          labelColor: HomeTheme.textPrimary,
-                          unselectedLabelColor: HomeTheme.textMuted,
-                          // La franja de arriba ya la da el Container de acá,
-                          // así que la divisoria solo agregaba una raya suelta.
-                          dividerColor: Colors.transparent,
-                          indicatorSize: TabBarIndicatorSize.label,
-                        ),
-                      ),
-                    )
-                  : null,
-              // Favorito y compartir viven acá, no en la cabecera. En la
-              // cabecera se plegaban con el scroll —justo cuando uno ya está
-              // mirando la lista— y encima cada uno tenía su propia forma y su
-              // propio alto. Acá los tres son iconos de barra: miden lo mismo,
-              // se alinean solos y están siempre a mano.
-              actions: [
-                // Sin botón de refrescar acá: en Android se refresca deslizando
-                // hacia abajo (ver _conRefresco), que es el gesto de siempre.
-                // El botón se queda en escritorio, donde ese gesto no existe.
-                DetailFavoriteButton(tag: widget.tag, compacto: true),
-                DetailShareButton(tag: widget.tag, compacto: true),
-                DetailTrackingButton(
-                  tag: widget.tag,
+          physics:
+              sinScroll(pestana) ? const NeverScrollableScrollPhysics() : null,
+          headerSliverBuilder: (BuildContext context, bool innerBoxIsScrolled) {
+            return [
+              SliverAppBar(
+                pinned: true,
+                floating: false,
+                snap: false,
+                primary: true,
+                // El tema de la app deja TODAS las barras transparentes
+                // (appBarTheme.backgroundColor). Acá eso se nota: al hacer
+                // scroll, el cuerpo de la página pasa por debajo de la barra y
+                // se veía la lista de capítulos cruzando por encima del botón de
+                // atrás. Con el fondo puesto, la barra tapa lo que pasa debajo.
+                backgroundColor: HomeTheme.bg,
+                surfaceTintColor: Colors.transparent,
+                title: DetailAppbarTitle(
+                  c.detail?.title ?? '',
+                  controller: c.scrollController,
+                  desde: medidas.relevoDelTitulo,
                 ),
-                const SizedBox(width: 4),
-              ],
-              expandedHeight: medidas.alto,
-            ),
-          ];
-        },
+                flexibleSpace: DetailAppbarflexibleSpace(
+                  tag: widget.tag,
+                  medidas: medidas,
+                ),
+                bottom: hayPestanas
+                    ? PreferredSize(
+                        preferredSize: const Size.fromHeight(48),
+                        // Fondo sólido: el TabBar es transparente por defecto —
+                        // sin esto, una franja de la portada/imagen del hero se
+                        // veía asomando (recortada, fea) justo arriba de las
+                        // pestañas en vez de quedar tapada prolijamente.
+                        child: Container(
+                          color: HomeTheme.bg,
+                          // Sin estilar, TabBar usa los colores por defecto de
+                          // Material: el indicador sale MORADO —el color semilla
+                          // del tema, que no es el del app— y debajo queda una
+                          // línea divisoria GRIS que Material 3 dibuja sola. Las
+                          // dos cruzaban la ficha de lado a lado y no pegaban con
+                          // nada del diseño.
+                          child: TabBar(
+                            tabs: tabs,
+                            indicatorColor: HomeTheme.accentPink,
+                            labelColor: HomeTheme.textPrimary,
+                            unselectedLabelColor: HomeTheme.textMuted,
+                            // La franja de arriba ya la da el Container de acá,
+                            // así que la divisoria solo agregaba una raya suelta.
+                            dividerColor: Colors.transparent,
+                            indicatorSize: TabBarIndicatorSize.label,
+                          ),
+                        ),
+                      )
+                    : null,
+                // Favorito y compartir viven acá, no en la cabecera. En la
+                // cabecera se plegaban con el scroll —justo cuando uno ya está
+                // mirando la lista— y encima cada uno tenía su propia forma y su
+                // propio alto. Acá los tres son iconos de barra: miden lo mismo,
+                // se alinean solos y están siempre a mano.
+                actions: [
+                  // Sin botón de refrescar acá: en Android se refresca deslizando
+                  // hacia abajo (ver _conRefresco), que es el gesto de siempre.
+                  // El botón se queda en escritorio, donde ese gesto no existe.
+                  DetailFavoriteButton(tag: widget.tag, compacto: true),
+                  DetailShareButton(tag: widget.tag, compacto: true),
+                  DetailTrackingButton(
+                    tag: widget.tag,
+                  ),
+                  const SizedBox(width: 4),
+                ],
+                expandedHeight: medidas.alto,
+              ),
+            ];
+          },
           body: SafeArea(
             top: false,
             child: TabBarView(
@@ -723,6 +722,38 @@ class _DetailPageState extends State<DetailPage> {
     });
   }
 
+  /// Las acciones de la ficha en escritorio: favorito, compartir y refrescar.
+  ///
+  /// En una tarjeta con fondo propio y no sueltos sobre la portada: encima de
+  /// una imagen clara, tres iconos blancos no se leen.
+  Widget _barraDeAcciones() {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 2),
+      decoration: BoxDecoration(
+        color: HomeTheme.cardSurface.withValues(alpha: 0.9),
+        borderRadius: BorderRadius.circular(999),
+        border: Border.all(color: HomeTheme.border),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          DetailFavoriteButton(tag: widget.tag, compacto: true),
+          DetailShareButton(tag: widget.tag, compacto: true),
+          Obx(() {
+            // Mientras carga no se ofrece: ya está trayendo lo mismo que
+            // pediría. En el teléfono este botón no está —ahí se refresca
+            // deslizando— pero en escritorio ese gesto no existe.
+            if (c.isLoading.value) return const SizedBox.shrink();
+            return fluent.IconButton(
+              icon: const Icon(fluent.FluentIcons.refresh, size: 16),
+              onPressed: () => unawaited(c.refrescarAMano()),
+            );
+          }),
+        ],
+      ),
+    );
+  }
+
   Widget _buildDesktopDetail(BuildContext context) {
     return Obx(() {
       if (c.error.value.isNotEmpty) {
@@ -871,61 +902,12 @@ class _DetailPageState extends State<DetailPage> {
                               const SizedBox(height: 18),
                               Row(
                                 children: [
-                                  // 收藏按钮
-                                  // Ver BotonPulsable: la misma señal al
-                                  // tocar que en el telefono.
-                                  BotonPulsable(
-                                      child: DetailFavoriteButton(
-                                          tag: widget.tag)),
-                                  const SizedBox(width: 8),
-                                  BotonPulsable(
-                                      child:
-                                          DetailShareButton(tag: widget.tag)),
-                                  const SizedBox(width: 8),
-                                  // Refrescar, junto al resto de las acciones
-                                  // de la ficha.
-                                  //
-                                  // Acá y no en una esquina suelta: es lo que
-                                  // se hace CON esta obra, igual que
-                                  // favorito o compartir, y en el escritorio
-                                  // no hay gesto de deslizar que lo cubra.
-                                  fluent.Button(
-                                    style: fluent.ButtonStyle(
-                                      backgroundColor:
-                                          fluent.WidgetStateProperty.all(
-                                        HomeTheme.cardSurface,
-                                      ),
-                                      foregroundColor:
-                                          fluent.WidgetStateProperty.all(
-                                        HomeTheme.textPrimary,
-                                      ),
-                                      shape: fluent.WidgetStateProperty.all(
-                                        RoundedRectangleBorder(
-                                          borderRadius:
-                                              BorderRadius.circular(999),
-                                          side: const BorderSide(
-                                              color: HomeTheme.border),
-                                        ),
-                                      ),
-                                    ),
-                                    onPressed: () =>
-                                        unawaited(c.refrescarAMano()),
-                                    child: Padding(
-                                      padding: const EdgeInsets.only(
-                                          left: 10, right: 10, top: 5,
-                                          bottom: 5),
-                                      child: Row(
-                                        mainAxisSize: MainAxisSize.min,
-                                        children: [
-                                          Text('common.refresh'.i18n),
-                                          const SizedBox(width: 8),
-                                          const Icon(fluent.FluentIcons.refresh,
-                                              size: 14),
-                                        ],
-                                      ),
-                                    ),
-                                  ),
-                                  const SizedBox(width: 8),
+                                  // Favorito, compartir y refrescar YA NO van
+                                  // acá: se fueron a la barra de arriba, como
+                                  // en el teléfono (ver _barraDeAcciones).
+                                  // Eran cuatro botones anchos con texto
+                                  // cruzando la portada, y tres de ellos decían
+                                  // con palabras lo que el icono ya dice.
                                   // Se oculta solo en películas — ver
                                   // DetailFinishedButton.
                                   DetailFinishedButton(tag: widget.tag),
@@ -1184,7 +1166,24 @@ class _DetailPageState extends State<DetailPage> {
                 ),
               );
             },
-          ))
+          )),
+          // ── Las acciones, arriba a la derecha ────────────────────────
+          //
+          // Estaban dentro del hero, en una fila de botones anchos con texto
+          // cruzando la portada. Tres de ellos —favorito, compartir,
+          // refrescar— decían con palabras exactamente lo que su icono ya
+          // dice, y encima se iban con el desplazamiento justo cuando uno ya
+          // está mirando la lista de capítulos.
+          //
+          // Arriba y fijos, como en el teléfono: los tres miden lo mismo, se
+          // alinean solos y están siempre a mano. Lo que se queda abajo es lo
+          // que NO se puede resumir en un icono («marcar como finalizada») o
+          // lo que abre otra pantalla (el seguimiento).
+          Positioned(
+            top: 8,
+            right: 12,
+            child: _barraDeAcciones(),
+          ),
         ],
       );
       return _transicion('listo', contenido);

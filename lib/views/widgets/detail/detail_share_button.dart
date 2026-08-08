@@ -82,12 +82,18 @@ class DetailShareButton extends StatelessWidget {
   }
 
   Widget _buildDesktop(BuildContext context) {
+    // Compacto: solo el icono, para la barra de arriba de la ficha. Ver el
+    // mismo caso en DetailFavoriteButton.
+    if (compacto) {
+      return fluent.IconButton(
+        icon: const Icon(fluent.FluentIcons.share, size: 18),
+        onPressed: () => _compartir(context),
+      );
+    }
     return fluent.Button(
       style: fluent.ButtonStyle(
-        backgroundColor:
-            fluent.WidgetStateProperty.all(HomeTheme.cardSurface),
-        foregroundColor:
-            fluent.WidgetStateProperty.all(HomeTheme.textPrimary),
+        backgroundColor: fluent.WidgetStateProperty.all(HomeTheme.cardSurface),
+        foregroundColor: fluent.WidgetStateProperty.all(HomeTheme.textPrimary),
         shape: fluent.WidgetStateProperty.all(
           RoundedRectangleBorder(
             borderRadius: BorderRadius.circular(999),
