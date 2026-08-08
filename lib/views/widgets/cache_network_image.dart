@@ -215,6 +215,18 @@ class _CacheNetWorkImagePicState extends State<CacheNetWorkImagePic> {
     final image = ExtendedImage.network(
       widget.url,
       headers: widget.headers,
+      // ── Contra el parpadeo al volver a una zona ──────────────────────────
+      //
+      // Con esto, mientras la imagen se vuelve a decodificar se sigue pintando
+      // el ÚLTIMO fotograma que ya tenía en vez de quedar en blanco. Sin esto,
+      // cualquier recarga —y en Android hay varias: el sistema le pide memoria
+      // a la app al abrir una ficha o el reproductor, y Flutter suelta lo
+      // decodificado— dejaba la tarjeta vacía un instante y volvía. Eso es el
+      // parpadeo que se ve al ir a Ajustes y volver al Inicio.
+      //
+      // No cambia nada cuando la imagen es NUEVA (no hay fotograma anterior
+      // que mantener): ahí sigue saliendo el bloque brillando como siempre.
+      gaplessPlayback: true,
       fit: widget.fit,
       width: widget.width,
       height: widget.height,
@@ -441,58 +453,87 @@ class _ThumnailPageState extends State<_ThumnailPage> {
   }
 
   Widget _buildContent(BuildContext context) {
+    final imagen = ExtendedImage.network(
+      widget.url,
+      headers: widget.headers,
+      cache: true,
+      fit: BoxFit.contain,
+      mode: ExtendedImageMode.gesture,
+      // ── Arrastrar hacia abajo cierra, y solo en el teléfono ─────────────
+      //
+      // Sin esto el ExtendedImageSlidePage de afuera no hacía nada: la página
+      // deslizable necesita que la imagen se lo diga. O sea que el gesto de
+      // bajar para cerrar —el que uno prueba primero en cualquier visor— no
+      // existía y había que buscar la flecha de atrás.
+      //
+      // En escritorio va apagado a propósito: ahí se cierra con la cruz o
+      // haciendo clic en el fondo, y arrastrar con el ratón tiene que servir
+      // para MOVER la imagen ampliada, no para cerrar sin querer.
+      enableSlideOutPage: Platform.isAndroid,
+      initGestureConfigHandler: (state) {
+        return GestureConfig(
+          minScale: 0.9,
+          animationMinScale: 0.7,
+          // ── Hasta ocho, no hasta tres ────────────────────────────
+          //
+          // Tres es poco para lo que la gente abre esto: mirar de cerca la
+          // portada, leer el texto chico de una tapa o buscar el crédito del
+          // autor. Y una portada mostrada entera ya arranca ocupando media
+          // pantalla, así que triplicarla se queda corto.
+          maxScale: 8.0,
+          animationMaxScale: 8.5,
+          speed: 1.0,
+          // Más inercia al soltar. Con 100 el movimiento se frenaba en seco
+          // apenas levantabas el dedo y se sentía pegajoso; con 220 sigue de
+          // largo un poco, que es lo que hace que se sienta suelto.
+          inertialSpeed: 220.0,
+          initialScale: 1.0,
+          // false: esto NO vive dentro de un PageView. En true, el visor le
+          // cede el arrastre horizontal a un padre que no existe, y moverse de
+          // costado con la imagen ampliada se sentía trabado.
+          inPageView: false,
+          // La rueda hacia arriba ACERCA, que es lo que hace todo lo demás.
+          // Estaba al revés y era lo primero que descolocaba con el ratón.
+          reverseMousePointerScrollDirection: false,
+          initialAlignment: InitialAlignment.center,
+        );
+      },
+      // Doble toque para acercar y alejar, que es lo que uno prueba primero.
+      // Sin esto, la única forma era el pellizco —imposible con el ratón— así
+      // que en escritorio no había manera de ampliar salvo la rueda.
+      //
+      // Acerca HACIA DONDE tocaste, no al centro: si tocás una esquina y la
+      // imagen se acerca al medio, hay que arrastrar para volver a lo que
+      // querías ver.
+      onDoubleTap: (state) {
+        final origen = state.gestureDetails?.totalScale ?? 1.0;
+        state.handleDoubleTap(
+          scale: origen < 1.5 ? 3.0 : 1.0,
+          doubleTapPosition: state.pointerDownPosition,
+        );
+      },
+    );
+
+    // En escritorio, sin página deslizable: no hace nada con la imagen que no
+    // se desliza, y de paso se saca una capa del medio.
+    if (!Platform.isAndroid) return Center(child: imagen);
+
     return Center(
       child: ExtendedImageSlidePage(
-        slideAxis: SlideAxis.both,
+        // Solo vertical. Con `both`, arrastrar de costado cerraba el visor en
+        // vez de mover la imagen ampliada, que es justo para lo que uno
+        // arrastra de costado cuando le hizo zoom.
+        slideAxis: SlideAxis.vertical,
         slideType: SlideType.onlyImage,
         slidePageBackgroundHandler: (offset, pageSize) {
-          final color = Platform.isAndroid
-              ? Theme.of(context).scaffoldBackgroundColor
-              : fluent.FluentTheme.of(context).scaffoldBackgroundColor;
-          return color.withValues(alpha: 0);
+          // El fondo se va aclarando a medida que arrastrás: así se ve que el
+          // gesto está haciendo algo y hasta dónde hay que llegar. Antes era
+          // transparente siempre y el arrastre no daba ninguna señal.
+          final recorrido =
+              (offset.distance / (pageSize.height / 2)).clamp(0.0, 1.0);
+          return Colors.black.withValues(alpha: 0.9 * (1 - recorrido));
         },
-        child: ExtendedImage.network(
-          widget.url,
-          headers: widget.headers,
-          cache: true,
-          fit: BoxFit.contain,
-          mode: ExtendedImageMode.gesture,
-          initGestureConfigHandler: (state) {
-            return GestureConfig(
-              minScale: 0.9,
-              animationMinScale: 0.7,
-              // ── Hasta ocho, no hasta tres ────────────────────────────
-              //
-              // Tres es poco para lo que la gente abre esto: mirar de cerca la
-              // portada, leer el texto chico de una tapa o buscar el crédito
-              // del autor. Y una portada mostrada entera ya arranca ocupando
-              // media pantalla, así que triplicarla se queda corto.
-              maxScale: 8.0,
-              animationMaxScale: 8.5,
-              speed: 1.0,
-              inertialSpeed: 100.0,
-              initialScale: 1.0,
-              // false: esto NO vive dentro de un PageView. En true, el visor
-              // le cede el arrastre horizontal a un padre que no existe, y
-              // moverse de costado con la imagen ampliada se sentía trabado.
-              inPageView: false,
-              reverseMousePointerScrollDirection: true,
-              initialAlignment: InitialAlignment.center,
-            );
-          },
-          // Doble toque para acercar y alejar, que es lo que uno prueba
-          // primero. Sin esto, la única forma era el pellizco —imposible con
-          // el ratón— así que en escritorio no había manera de ampliar salvo
-          // la rueda.
-          onDoubleTap: (state) {
-            final origen = state.gestureDetails?.totalScale ?? 1.0;
-            final destino = origen < 1.5 ? 2.5 : 1.0;
-            state.handleDoubleTap(
-              scale: destino,
-              doubleTapPosition: state.pointerDownPosition,
-            );
-          },
-        ),
+        child: imagen,
       ),
     );
   }

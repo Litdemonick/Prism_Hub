@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:math' as math;
 import 'dart:io';
 
@@ -95,6 +96,24 @@ class _HistoryPageState extends State<HistoryPage> {
   ];
 
   @override
+  void initState() {
+    super.initState();
+    // ── Se relee la base al abrir ──────────────────────────────────────────
+    //
+    // No estaba, y por eso «marco un favorito, entro a Favoritos y no hay
+    // nada». Las listas del controlador se llenan cuando el controlador
+    // arranca, y de ahí en más solo cambian si algo las vuelve a pedir. Marcar
+    // un favorito desde la ficha escribe en la base pero no le avisa a esta
+    // pantalla, así que se abría con la lista de hace un rato — vacía si es la
+    // primera vez.
+    //
+    // Es una lectura local, no red: cuesta nada y garantiza que lo que se ve
+    // es lo que hay. Sin await ni bloqueo: mientras llega se muestran los
+    // bloques, y cuando llega se dibuja sola.
+    unawaited(_c.onRefresh());
+  }
+
+  @override
   void dispose() {
     _searchController.dispose();
     super.dispose();
@@ -129,6 +148,24 @@ class _HistoryPageState extends State<HistoryPage> {
   // ── Filtros de estado y orden ─────────────────────────────────────────────
   _EstadoFiltro _estado = _EstadoFiltro.todos;
   _Orden _orden = _Orden.recientes;
+  _Rango _rango = _Rango.siempre;
+
+  /// Desde qué momento entra algo en la lista. `null` = sin corte.
+  DateTime? get _desde {
+    final ahora = DateTime.now();
+    switch (_rango) {
+      case _Rango.siempre:
+        return null;
+      case _Rango.dia:
+        return ahora.subtract(const Duration(hours: 24));
+      case _Rango.semana:
+        return ahora.subtract(const Duration(days: 7));
+      case _Rango.mes:
+        return ahora.subtract(const Duration(days: 30));
+      case _Rango.ano:
+        return ahora.subtract(const Duration(days: 365));
+    }
+  }
 
   List<History> _aplicarEstado(List<History> list) {
     switch (_estado) {
@@ -173,6 +210,8 @@ class _HistoryPageState extends State<HistoryPage> {
     final base = _c.allHistory.where((h) {
       if (type != null && !type.contains(h.type)) return false;
       if (!SearchText.matchesQuery(h.title, _query)) return false;
+      final desde = _desde;
+      if (desde != null && h.date.isBefore(desde)) return false;
       return true;
     }).toList();
     return _aplicarOrden(
@@ -707,7 +746,9 @@ class _HistoryPageState extends State<HistoryPage> {
   /// El orden por defecto NO cuenta como filtro: es el que tiene siempre, y un
   /// puntito encendido desde el arranque no avisa de nada.
   bool get _hayFiltroPuesto =>
-      _estado != _EstadoFiltro.todos || _orden != _Orden.recientes;
+      _estado != _EstadoFiltro.todos ||
+      _orden != _Orden.recientes ||
+      _rango != _Rango.siempre;
 
   /// Estado y orden, en una hoja.
   ///
@@ -726,6 +767,13 @@ class _HistoryPageState extends State<HistoryPage> {
       _Orden.antiguos: 'history.sort-oldest'.i18n,
       _Orden.az: 'history.sort-az'.i18n,
       _Orden.za: 'history.sort-za'.i18n,
+    };
+    final etiquetasRango = {
+      _Rango.siempre: 'history.range-all'.i18n,
+      _Rango.dia: 'history.range-day'.i18n,
+      _Rango.semana: 'history.range-week'.i18n,
+      _Rango.mes: 'history.range-month'.i18n,
+      _Rango.ano: 'history.range-year'.i18n,
     };
 
     showModalBottomSheet(
@@ -778,6 +826,28 @@ class _HistoryPageState extends State<HistoryPage> {
                             _estado == e,
                             () {
                               setState(() => _estado = e);
+                              setHoja(() {});
+                            },
+                          ),
+                      ],
+                    ),
+                  ],
+                  // Cuándo: solo en el Historial. En Favoritos la fecha es
+                  // la de guardado, y filtrar por ella no contesta ninguna
+                  // pregunta que uno se haga — ahí se guarda justamente para
+                  // que no importe cuándo fue.
+                  if (!_onFavoritesTab) ...[
+                    titulo('history.when'.i18n),
+                    Wrap(
+                      spacing: 8,
+                      runSpacing: 8,
+                      children: [
+                        for (final r in _Rango.values)
+                          _chip(
+                            etiquetasRango[r]!,
+                            _rango == r,
+                            () {
+                              setState(() => _rango = r);
                               setHoja(() {});
                             },
                           ),
@@ -931,7 +1001,16 @@ class _HistoryPageState extends State<HistoryPage> {
         // su alcance y tiraba "improper use of a GetX has been detected"
         // (confirmado en vivo). Mismo motivo documentado en library_page.dart.
         // ignore: unused_local_variable
-        final _ = _c.resents.length + _c.favorites.length;
+        // allHistory también, no solo las otras dos.
+        //
+        // Faltaba, y es lo que lee el Historial: `resents` es la lista de
+        // «Continuar», que excluye lo terminado. O sea que al Historial le
+        // llegaba el aviso solo si además cambiaba «Continuar» — cualquier
+        // cambio que tocara únicamente allHistory pasaba de largo y la pantalla
+        // se quedaba con lo de antes.
+        final _ = _c.resents.length +
+            _c.favorites.length +
+            _c.allHistory.length;
 
         return Container(
           color: HomeTheme.bg,
@@ -1098,3 +1177,8 @@ class _HistoryPageState extends State<HistoryPage> {
 enum _EstadoFiltro { todos, pendiente, completado, finalizado }
 
 enum _Orden { recientes, antiguos, az, za }
+
+/// Desde cuándo se muestra. Solo en el Historial: en Favoritos la fecha es la
+/// de guardado y filtrar por ella no responde ninguna pregunta que uno se haga
+/// —ahí se guarda justamente para que no importe cuándo fue—.
+enum _Rango { siempre, dia, semana, mes, ano }
