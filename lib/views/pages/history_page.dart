@@ -882,7 +882,10 @@ class _HistoryPageState extends State<HistoryPage> {
     );
   }
 
-  Widget _buildBody() {
+  /// [arriba] es lo que ocupa la franja que flota encima: se reserva como
+  /// primer trozo del desplazamiento para que las pestañas no arranquen
+  /// tapadas. Ver FranjaQueSeVa. En escritorio no hay franja y vale cero.
+  Widget _buildBody([double arriba = 0]) {
     return Obx(
       () {
         // Se leen ACÁ, síncrono, dentro del Obx. Las tarjetas se arman
@@ -908,7 +911,7 @@ class _HistoryPageState extends State<HistoryPage> {
               Positioned.fill(
                 child: CustomScrollView(
                   slivers: [
-                    const SliverToBoxAdapter(child: SizedBox(height: 8)),
+                    SliverToBoxAdapter(child: SizedBox(height: arriba + 8)),
                     SliverToBoxAdapter(child: _buildTabs()),
                     // En el teléfono, estado y orden viven en la hoja del
                     // botón de filtros, y el buscador y «borrar todo» en la
@@ -943,7 +946,7 @@ class _HistoryPageState extends State<HistoryPage> {
       // La franja se va al bajar y vuelve al llegar arriba, como el nombre de
       // la app en el Inicio: acostado, clavada era una fila de portadas menos.
       body: FranjaQueSeVa(
-        hijo: _buildBody(),
+        constructor: _buildBody,
         franja: FranjaDeZona(
           titulo: widget.zone ? 'nsfw18.title'.i18n : 'home.history'.i18n,
           // El Historial se abre ENCIMA del shell —desde el botón del Inicio—

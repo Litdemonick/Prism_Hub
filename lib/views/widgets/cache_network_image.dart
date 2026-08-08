@@ -90,6 +90,35 @@ class _CacheNetWorkImagePicState extends State<CacheNetWorkImagePic> {
   // una portada quede ausente un rato largo.
   static const Duration _ventanaDeFallo = Duration(seconds: 20);
 
+  /// Las que YA cargaron bien alguna vez en esta sesión.
+  ///
+  /// ── El agujero que tapa ─────────────────────────────────────────────────
+  ///
+  /// El registro de fallos de arriba corta por lo sano: si una portada falló
+  /// hace menos de veinte segundos, la tarjeta muestra el arte de respaldo sin
+  /// siquiera intentar cargarla. Eso está bien para una portada que nunca
+  /// cargó —no tiene sentido pelearse con un sitio caído— pero es un desastre
+  /// para una que se estaba viendo perfecta hace un segundo.
+  ///
+  /// Y en Android pasa seguido. Al abrir una ficha, el sistema le pide memoria
+  /// a la app y Flutter suelta las imágenes decodificadas; al volver, las
+  /// portadas del Inicio se piden todas de nuevo a la vez, y bajo esa
+  /// contención alguna se cae. Con eso queda anotada y su tarjeta se va al
+  /// arte de respaldo por veinte segundos, hasta que vence la ventana y
+  /// reaparece: eso es el parpadeo. En escritorio no pasa porque ahí nadie le
+  /// pide memoria a la app, así que las portadas nunca se vuelven a pedir.
+  ///
+  /// Con esta lista, una portada que ya se vio no se da por caída nunca: si
+  /// hay que traerla otra vez se muestra el bloque brillando mientras llega,
+  /// que es la verdad —está cargando— en vez de mentir con «no se pudo».
+  static final Set<String> _yaCargaron = <String>{};
+
+  /// Tope de la lista de arriba, para que no crezca sin fin en una sesión
+  /// larga. Al llegar se vacía entera: perder la memoria de qué cargó bien no
+  /// rompe nada, solo devuelve el comportamiento de antes hasta que se vuelvan
+  /// a ver.
+  static const int _topeYaCargaron = 3000;
+
   // Incluye los headers en la clave — si la primera vez falló sin headers
   // (ej. un sitio que exige Referer y no se lo dimos) y después se reintenta
   // CON los headers correctos, es un intento distinto y merece una
@@ -109,6 +138,9 @@ class _CacheNetWorkImagePicState extends State<CacheNetWorkImagePic> {
   bool _tamanoAvisado = false;
 
   bool get _failed {
+    // Una que ya se vio bien no se da por caída: se reintenta y mientras tanto
+    // se muestra el bloque brillando. Ver _yaCargaron.
+    if (_yaCargaron.contains(_failureKey)) return false;
     final cuando = _fallosRecientes[_failureKey];
     if (cuando == null) return false;
     if (DateTime.now().difference(cuando) < _ventanaDeFallo) return true;
@@ -128,6 +160,8 @@ class _CacheNetWorkImagePicState extends State<CacheNetWorkImagePic> {
   // siga contando en contra de una URL que evidentemente ya funciona.
   void _markLoaded() {
     _fallosRecientes.remove(_failureKey);
+    if (_yaCargaron.length >= _topeYaCargaron) _yaCargaron.clear();
+    _yaCargaron.add(_failureKey);
     _reintentando = false;
   }
 

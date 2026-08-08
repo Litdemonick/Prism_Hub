@@ -212,20 +212,45 @@ class FranjaQueSeVa extends StatefulWidget {
   const FranjaQueSeVa({
     super.key,
     required this.franja,
-    required this.hijo,
+    required this.constructor,
+    this.altoExtra = 0,
   });
 
   final Widget franja;
 
-  /// El contenido que se desplaza. De él salen los avisos que mueven la franja.
-  final Widget hijo;
+  /// Lo que mide [franja] de más allá de la franja en sí.
+  ///
+  /// Buscar cuelga su barrita de progreso debajo del título para que se vaya
+  /// con él —si se quedara sola arriba, flotaría sin nada a qué pertenecer— y
+  /// eso son unos puntos más de alto que el contenido tiene que descontar.
+  final double altoExtra;
+
+  /// El contenido que se desplaza.
+  ///
+  /// Recibe cuánto mide la franja: ese valor va como relleno ARRIBA de su área
+  /// desplazable, para que el primer elemento arranque debajo de la franja y no
+  /// tapado por ella. Es un contrato explícito y no una cuenta escondida
+  /// justamente para que cada zona lo sume donde corresponde —cada una arma su
+  /// lista distinto— en vez de adivinarlo desde acá.
+  final Widget Function(double arriba) constructor;
 
   @override
   State<FranjaQueSeVa> createState() => _FranjaQueSeVaState();
 }
 
-class _FranjaQueSeVaState extends State<FranjaQueSeVa> {
-  bool _visible = true;
+class _FranjaQueSeVaState extends State<FranjaQueSeVa>
+    with SingleTickerProviderStateMixin {
+  late final AnimationController _control = AnimationController(
+    vsync: this,
+    duration: const Duration(milliseconds: 220),
+    value: 0,
+  );
+
+  @override
+  void dispose() {
+    _control.dispose();
+    super.dispose();
+  }
 
   bool _mirar(ScrollNotification aviso) {
     // Solo el desplazamiento vertical. El deslizador de páginas de Extensiones
@@ -234,10 +259,16 @@ class _FranjaQueSeVaState extends State<FranjaQueSeVa> {
     if (aviso.metrics.axis != Axis.vertical) return false;
 
     if (aviso is ScrollUpdateNotification) {
-      final nuevo = aviso.metrics.pixels <= 0
-          ? true
-          : ((aviso.scrollDelta ?? 0) > 0 ? false : _visible);
-      if (nuevo != _visible) setState(() => _visible = nuevo);
+      // Vuelve al llegar arriba y no al primer tirón hacia arriba, a propósito.
+      // Volviendo con cualquier movimiento, la franja aparece y desaparece sola
+      // mientras uno busca algo en el medio de la lista, y eso se lee como un
+      // parpadeo. Volviendo solo al principio se ve como en el Inicio: se fue
+      // con el contenido y está de vuelta cuando el contenido está de vuelta.
+      if (aviso.metrics.pixels <= 0) {
+        _control.reverse();
+      } else if ((aviso.scrollDelta ?? 0) > 0) {
+        _control.forward();
+      }
     }
     // false: el aviso sigue subiendo. Cortarlo rompería a cualquier otro que
     // esté escuchando más arriba —el refresco, por ejemplo—.
@@ -246,35 +277,54 @@ class _FranjaQueSeVaState extends State<FranjaQueSeVa> {
 
   @override
   Widget build(BuildContext context) {
-    return Column(
+    // Lo que mide la franja entera, barra de estado incluida. Sale de los
+    // mismos números que usa FranjaDeZona para su relleno.
+    final alto = MediaQuery.paddingOf(context).top +
+        8 +
+        FranjaDeZona.alto +
+        widget.altoExtra;
+
+    return Stack(
       children: [
-        // ── Se encoge, y la franja NO se desmonta ─────────────────────────
+        // ── El contenido ocupa la pantalla ENTERA ─────────────────────────
         //
-        // Encogerla y no correrla hacia arriba: corriéndola sale de la vista
-        // pero le queda el lugar reservado, así que no se ganaría el alto, que
-        // es todo el punto.
+        // Y la franja va encima, no arriba en una columna. Esto es un arreglo
+        // de algo que se sentía muy mal: puesta en una columna, esconderla
+        // cambiaba el ALTO del área desplazable, y el contenido de adentro está
+        // anclado a su posición de desplazamiento, no a la pantalla. O sea que
+        // mientras el dedo arrastraba hacia arriba, la lista pegaba además un
+        // salto de cuarenta y pico de puntos hacia arriba por su cuenta. Dos
+        // movimientos a la vez para un solo gesto.
         //
-        // Y con `child` por fuera del constructor, la franja se arma UNA vez y
-        // se reusa: si se cambiara por un SizedBox al esconderla, al volver se
-        // montaría de nuevo, el campo de búsqueda perdería si estaba abierto y
-        // su `autofocus` levantaría el teclado solo.
-        ClipRect(
-          child: TweenAnimationBuilder<double>(
-            tween: Tween<double>(begin: 1, end: _visible ? 1 : 0),
-            duration: const Duration(milliseconds: 220),
-            curve: Curves.easeOutCubic,
-            child: widget.franja,
-            builder: (context, t, franja) => Align(
-              alignment: Alignment.bottomCenter,
-              heightFactor: t,
-              child: franja,
-            ),
-          ),
-        ),
-        Expanded(
+        // Flotando encima, el área desplazable mide siempre lo mismo y el
+        // contenido solo hace lo que el dedo le pide. Lo que se gana es real
+        // igual: el contenido pasa POR DEBAJO de la franja, así que al
+        // esconderse aparece lo que había detrás.
+        Positioned.fill(
           child: NotificationListener<ScrollNotification>(
             onNotification: _mirar,
-            child: widget.hijo,
+            child: widget.constructor(alto),
+          ),
+        ),
+        // La franja se corre hacia arriba hasta salir. Sin ClipRect ni cambio
+        // de tamaño: solo se mueve, y moverse no obliga a nadie a rehacer su
+        // distribución.
+        Positioned(
+          left: 0,
+          right: 0,
+          top: 0,
+          child: AnimatedBuilder(
+            animation: _control,
+            child: widget.franja,
+            builder: (context, franja) => Transform.translate(
+              offset: Offset(
+                  0,
+                  -alto *
+                      Curves.easeOutCubic.transform(
+                        _control.value,
+                      )),
+              child: franja,
+            ),
           ),
         ),
       ],

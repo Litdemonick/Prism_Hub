@@ -892,12 +892,13 @@ class _ExtensionPageState extends State<ExtensionPage> {
                   ),
                 ],
               ),
-              hijo: Stack(
+              constructor: (arriba) => Stack(
                 children: [
                   installed.isEmpty
                       ? _conRefresco(
                           ListView(
                             physics: const AlwaysScrollableScrollPhysics(),
+                            padding: EdgeInsets.only(top: arriba),
                             children: [
                               SizedBox(
                                 height: 300,
@@ -942,8 +943,10 @@ class _ExtensionPageState extends State<ExtensionPage> {
                                 // quedar por encima de la barra. Reservándolo
                                 // en los dos lados se contaba dos veces y
                                 // quedaba un hueco enorme.
-                                padding:
-                                    const EdgeInsets.fromLTRB(16, 0, 16, 8),
+                                // `arriba` deja libre lo que ocupa la franja
+                                // que flota encima: sin eso la primera tarjeta
+                                // arranca tapada. Ver FranjaQueSeVa.
+                                padding: EdgeInsets.fromLTRB(16, arriba, 16, 8),
                                 itemCount: dePagina.length,
                                 // Sin RepaintBoundary a mano: ListView.builder
                                 // ya envuelve cada ítem en uno

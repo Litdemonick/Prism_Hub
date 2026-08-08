@@ -105,7 +105,7 @@ class _FavoritesPageState extends fluent.State<FavoritesPage> {
   /// reparte el ancho disponible y ese es el que recibe la tarjeta. Con el
   /// ancho fijo de antes quedaba aire a los costados de cada una y las
   /// portadas se veían chicas sin motivo.
-  Widget _grilla(List<Favorite> lista) {
+  Widget _grilla(List<Favorite> lista, [double arriba = 0]) {
     final anchoTarjeta = Platform.isAndroid
         ? HomeMediaCard.androidWidth
         : HomeMediaCard.desktopWidth;
@@ -121,7 +121,7 @@ class _FavoritesPageState extends fluent.State<FavoritesPage> {
           math.max(1, ((disponible + entre) / (anchoTarjeta + entre)).floor());
       final ancho = (disponible - entre * (columnas - 1)) / columnas;
       return GridView.builder(
-        padding: const EdgeInsets.fromLTRB(margen, 0, margen, margen),
+        padding: EdgeInsets.fromLTRB(margen, arriba, margen, margen),
         gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
           crossAxisCount: columnas,
           mainAxisExtent: ancho * (altoTarjeta / anchoTarjeta),
@@ -137,7 +137,7 @@ class _FavoritesPageState extends fluent.State<FavoritesPage> {
   }
 
   /// Los bloques que brillan, con la misma forma que la grilla de arriba.
-  Widget _esperando() {
+  Widget _esperando([double arriba = 0]) {
     final anchoTarjeta = Platform.isAndroid
         ? HomeMediaCard.androidWidth
         : HomeMediaCard.desktopWidth;
@@ -151,6 +151,7 @@ class _FavoritesPageState extends fluent.State<FavoritesPage> {
       return EsqueletoDeGrilla(
         columnas: columnas,
         proporcion: anchoTarjeta / altoTarjeta,
+        padding: EdgeInsets.fromLTRB(16, arriba, 16, 16),
       );
     });
   }
@@ -256,7 +257,7 @@ class _FavoritesPageState extends fluent.State<FavoritesPage> {
             if (Navigator.of(context).canPop()) Navigator.of(context).pop();
           },
         ),
-        hijo: RefreshIndicator(
+        constructor: (arriba) => RefreshIndicator(
           onRefresh: _leer,
           color: HomeTheme.accentPink,
           backgroundColor: HomeTheme.cardSurface,
@@ -264,7 +265,7 @@ class _FavoritesPageState extends fluent.State<FavoritesPage> {
               // Bloques mientras se lee la base. Vacío por «todavía no
               // pregunté» se ve igual que vacío por «no hay nada», y sin
               // distinguirlos salía «no hay resultados» con la lista llena.
-              ? _esperando()
+              ? _esperando(arriba)
               : filtrados.isEmpty
                   ? ListView(
                       physics: const AlwaysScrollableScrollPhysics(),
@@ -281,7 +282,7 @@ class _FavoritesPageState extends fluent.State<FavoritesPage> {
                         ),
                       ],
                     )
-                  : _grilla(filtrados),
+                  : _grilla(filtrados, arriba),
         ),
       ),
     );

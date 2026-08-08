@@ -344,6 +344,20 @@ class _SearchPageState extends State<SearchPage> {
     });
   }
 
+  /// Los resultados, dejando libre lo que ocupa la franja que flota encima.
+  Widget _buildResultados(double arriba, void Function(int) onClickMore) {
+    return Obx(() {
+      // ignore: invalid_use_of_protected_member
+      final list = c.searchResultList.value;
+      return SearchAllExtSearch(
+        kw: c.search.value,
+        runtimeList: list,
+        onClickMore: onClickMore,
+        arriba: arriba,
+      );
+    });
+  }
+
   Widget _buildAndroidSearch(BuildContext context) {
     return Scaffold(
       backgroundColor: HomeTheme.bg,
@@ -373,51 +387,51 @@ class _SearchPageState extends State<SearchPage> {
                 // Zona +18: título propio y flecha para salir. El buscador
                 // normal es una pestaña del shell —no tiene a dónde volver—
                 // así que ahí la flecha va en null y queda igual que siempre.
-                franja: FranjaDeZona(
-                  titulo: widget.nsfwOnly
-                      ? "nsfw18.search-zone-title".i18n
-                      : "common.search".i18n,
-                  controlador: _searchController,
-                  ayuda: "search.hint-text".i18n,
-                  alEscribir: (value) {
-                    if (value.isEmpty) c.search.value = '';
-                  },
-                  alEnviar: c.submitSearch,
-                  alVolver: widget.nsfwOnly
-                      ? () {
-                          if (Navigator.of(context).canPop()) {
-                            Navigator.of(context).pop();
-                          }
-                        }
-                      : null,
-                  // El filtro de tipo, en la franja: ver _botonDeFiltro.
-                  acciones: [_botonDeFiltro(context)],
-                ),
-                hijo: Column(
+                franja: Column(
+                  mainAxisSize: MainAxisSize.min,
                   children: [
-                    // Sin la fila de chips: el filtro se fue a la franja de
-                    // arriba (ver _botonDeFiltro), así que los resultados
-                    // arrancan acá mismo. Queda solo la barra de progreso, que
-                    // son 3 puntos de alto y dice si todavía están buscando.
-                    Padding(
-                      padding: const EdgeInsets.fromLTRB(16, 6, 16, 2),
-                      child: _buildProgress(),
+                    FranjaDeZona(
+                      titulo: widget.nsfwOnly
+                          ? "nsfw18.search-zone-title".i18n
+                          : "common.search".i18n,
+                      controlador: _searchController,
+                      ayuda: "search.hint-text".i18n,
+                      alEscribir: (value) {
+                        if (value.isEmpty) c.search.value = '';
+                      },
+                      alEnviar: c.submitSearch,
+                      alVolver: widget.nsfwOnly
+                          ? () {
+                              if (Navigator.of(context).canPop()) {
+                                Navigator.of(context).pop();
+                              }
+                            }
+                          : null,
+                      // El filtro de tipo, en la franja: ver _botonDeFiltro.
+                      acciones: [_botonDeFiltro(context)],
                     ),
-                    Expanded(
-                      child: _buildResults((index) {
-                        Get.to(ExtensionSearcherPage(
-                          package: c.getPackgeByIndex(index),
-                          keyWord: c.search.value,
-                          // Desde la Zona +18 la extensión mixta se abre con
-                          // su filtro de adultos ya puesto: si no, mostraba su
-                          // catálogo general, que es justo lo que esa zona no
-                          // es.
-                          soloAdulto: widget.nsfwOnly,
-                        ));
-                      }),
+                    // Son 3 puntos de alto y dice si todavía están buscando.
+                    Padding(
+                      padding: const EdgeInsets.fromLTRB(16, 4, 16, 2),
+                      child: _buildProgress(),
                     ),
                   ],
                 ),
+                // La barrita de progreso viaja CON el título y no debajo: si
+                // se quedara clavada arriba mientras la franja se va, quedaría
+                // una rayita flotando sola sin nada a qué pertenecer.
+                altoExtra: 14,
+                constructor: (arriba) => _buildResultados(arriba, (index) {
+                  Get.to(ExtensionSearcherPage(
+                    package: c.getPackgeByIndex(index),
+                    keyWord: c.search.value,
+                    // Desde la Zona +18 la extensión mixta se abre con
+                    // su filtro de adultos ya puesto: si no, mostraba su
+                    // catálogo general, que es justo lo que esa zona no
+                    // es.
+                    soloAdulto: widget.nsfwOnly,
+                  ));
+                }),
               ),
             ],
           ),

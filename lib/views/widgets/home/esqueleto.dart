@@ -215,19 +215,19 @@ class _EsqueletoState extends State<Esqueleto> {
                   child: ValueListenableBuilder<double>(
                     valueListenable: _RelojDelBrillo.valor,
                     builder: (context, t, _) {
-                    // ── El reflejo se MUEVE dentro de la caja ────────────
-                    //
-                    // Antes se corría la caja entera con FractionalTranslation,
-                    // de -1 a +2 de su propio ancho. El problema: durante buena
-                    // parte del ciclo la caja está fuera del recorte, así que la
-                    // franja aparecía a medias, se cortaba contra el borde y
-                    // desaparecía — se veía como si la tarjeta estuviera
-                    // partida.
-                    //
-                    // Ahora la caja se queda quieta y lo que viaja son las
-                    // paradas del degradado. Rearmar un degradado por cuadro no
-                    // cuesta una capa de dibujo, así que sigue siendo barato, y
-                    // la franja cruza completa de lado a lado.
+                      // ── El reflejo se MUEVE dentro de la caja ────────────
+                      //
+                      // Antes se corría la caja entera con FractionalTranslation,
+                      // de -1 a +2 de su propio ancho. El problema: durante buena
+                      // parte del ciclo la caja está fuera del recorte, así que la
+                      // franja aparecía a medias, se cortaba contra el borde y
+                      // desaparecía — se veía como si la tarjeta estuviera
+                      // partida.
+                      //
+                      // Ahora la caja se queda quieta y lo que viaja son las
+                      // paradas del degradado. Rearmar un degradado por cuadro no
+                      // cuesta una capa de dibujo, así que sigue siendo barato, y
+                      // la franja cruza completa de lado a lado.
                       final x = -1 + 3 * t;
                       return DecoratedBox(
                         decoration: BoxDecoration(
@@ -315,11 +315,11 @@ class EsqueletoDeLista extends StatelessWidget {
     return LayoutBuilder(builder: (context, restricciones) {
       // Los que entran y uno más. Con techo: una pantalla alta pedía veinte
       // bloques de gusto, y son relleno, no un dato.
-      final cuantos = ((restricciones.maxHeight - padding.vertical) /
-                  (alto + separacion))
-              .ceil()
-              .clamp(1, 8) +
-          1;
+      final cuantos =
+          ((restricciones.maxHeight - padding.vertical) / (alto + separacion))
+                  .ceil()
+                  .clamp(1, 8) +
+              1;
       return ListView.separated(
         // Quieta: mientras carga no hay a dónde ir, y dejarla desplazarse hace
         // que los bloques se muevan como si fueran contenido de verdad.
@@ -364,16 +364,14 @@ class EsqueletoDeGrilla extends StatelessWidget {
   Widget build(BuildContext context) {
     return LayoutBuilder(builder: (context, restricciones) {
       final cols = columnas < 1 ? 1 : columnas;
-      final util = restricciones.maxWidth -
-          padding.horizontal -
-          separacion * (cols - 1);
+      final util =
+          restricciones.maxWidth - padding.horizontal - separacion * (cols - 1);
       final ancho = util / cols;
       final alto = proporcion > 0 ? ancho / proporcion : ancho;
       // Los que entran en pantalla y una fila más: son relleno, no un dato. Sin
       // el techo, una pantalla alta pedía cincuenta bloques de gusto.
-      final filas =
-          ((restricciones.maxHeight / (alto + separacion)).ceil() + 1)
-              .clamp(1, 6);
+      final filas = ((restricciones.maxHeight / (alto + separacion)).ceil() + 1)
+          .clamp(1, 6);
       return GridView.builder(
         // Quieta: mientras carga no hay a dónde ir, y dejarla desplazarse hace
         // que los bloques se muevan como si fueran contenido de verdad.
@@ -386,7 +384,8 @@ class EsqueletoDeGrilla extends StatelessWidget {
           mainAxisSpacing: separacion,
         ),
         itemCount: cols * filas,
-        itemBuilder: (_, __) => Esqueleto(radio: 12, width: ancho, height: alto),
+        itemBuilder: (_, __) =>
+            Esqueleto(radio: 12, width: ancho, height: alto),
       );
     });
   }

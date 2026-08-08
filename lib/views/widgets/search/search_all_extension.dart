@@ -15,7 +15,13 @@ class SearchAllExtSearch extends StatefulWidget {
     required this.kw,
     required this.runtimeList,
     required this.onClickMore,
+    this.arriba = 0,
   });
+
+  /// Lo que hay que dejar libre arriba: la franja del título flota encima y el
+  /// contenido pasa por debajo, así que la primera fila tiene que arrancar más
+  /// abajo o quedaría tapada. Ver FranjaQueSeVa.
+  final double arriba;
   final String kw;
   final List<SearchResult> runtimeList;
   final Function(int) onClickMore;
@@ -78,7 +84,7 @@ class _SearchAllExtSearchState extends State<SearchAllExtSearch> {
       // Sin esto, la última extensión de la lista quedaba debajo de la barra y
       // no se podía llegar a sus tarjetas por más que se desplazara.
       padding: EdgeInsets.fromLTRB(
-          16, 0, 16, MediaQuery.paddingOf(context).bottom + 12),
+          16, widget.arriba, 16, MediaQuery.paddingOf(context).bottom + 12),
       child: Column(
         children: [
           for (final entry in widget.runtimeList.asMap().entries)
