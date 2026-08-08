@@ -939,20 +939,32 @@ class _ExtensionPageState extends State<ExtensionPage> {
                                 ListView.builder(
                                   physics:
                                       const AlwaysScrollableScrollPhysics(),
-                                  // Espacio a los costados y entre cards — antes
-                                  // iban pegadas al borde de la pantalla.
+                                  // ── Se puede bajar MÁS ALLÁ de la barra ──
                                   //
-                                  // El hueco de la barra flotante ya NO se
-                                  // reserva acá: debajo de la lista van las
-                                  // rayitas, y son ellas las que tienen que
-                                  // quedar por encima de la barra. Reservándolo
-                                  // en los dos lados se contaba dos veces y
-                                  // quedaba un hueco enorme.
-                                  // `arriba` deja libre lo que ocupa la franja
-                                  // que flota encima: sin eso la primera tarjeta
-                                  // arranca tapada. Ver FranjaQueSeVa.
-                                  padding:
-                                      const EdgeInsets.fromLTRB(16, 0, 16, 8),
+                                  // Espacio a los costados y entre tarjetas —
+                                  // antes iban pegadas al borde—, y abajo lo
+                                  // que ocupan la barra flotante y las rayitas
+                                  // de página, que van encima de la lista.
+                                  //
+                                  // Ese hueco de abajo hacía falta y no estaba.
+                                  // La lista terminaba justo donde empieza la
+                                  // barra, así que la última tarjeta quedaba
+                                  // debajo de los íconos de navegación y no
+                                  // había forma de pasar de largo: el
+                                  // desplazamiento se acababa ahí, con la
+                                  // tarjeta tapada a medias.
+                                  //
+                                  // `paddingOf(context).bottom` ya trae el alto
+                                  // de la barra (el cuerpo pasa por debajo,
+                                  // extendBody en main_page); los 34 son las
+                                  // rayitas y su aire.
+                                  padding: EdgeInsets.fromLTRB(
+                                    16,
+                                    0,
+                                    16,
+                                    MediaQuery.paddingOf(context).bottom +
+                                        (totalPages > 1 ? 34 : 8),
+                                  ),
                                   itemCount: dePagina.length,
                                   // Sin RepaintBoundary a mano: ListView.builder
                                   // ya envuelve cada ítem en uno
