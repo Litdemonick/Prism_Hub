@@ -833,14 +833,19 @@ class _CarruselAndroidState extends State<_CarruselAndroid>
             top: 0,
             width: anchoDe(i),
             height: m.alto,
-            child: Opacity(
-              // Las de la punta se desvanecen en vez de cortarse de golpe.
-              // La ventana llega hasta tres de distancia, así que entre dos y
-              // tres la tarjeta se apaga: para cuando sale del dibujo ya es
-              // invisible, y no se ve aparecer ni desaparecer nada.
-              opacity: (1 - ((_p - i).abs() - 2).clamp(0.0, 1.0))
-                  .clamp(0.0, 1.0),
-              child: _TarjetaGrande(
+            // ── Sin Opacity acá ──────────────────────────────────────────
+            //
+            // Había un desvanecido para las tarjetas de la punta. Sobraba: el
+            // acordeón va dentro de un ClipRect, así que a esa distancia ya
+            // están fuera de la pantalla y no se ven igual.
+            //
+            // Y costaba caro. Un Opacity sobre algo con sombra y recorte
+            // obliga a dibujarlo en una capa aparte, y con Impeller además
+            // saltaba una queja por cada tarjeta, cinco veces por cuadro:
+            //
+            //   Contents::SetInheritedOpacity should never be called when
+            //   Contents::CanAcceptOpacity returns false
+            child: _TarjetaGrande(
               // ── El ancho para DECODIFICAR es fijo ──────────────────────
               //
               // Y no el ancho real de la tarjeta, que cambia en cada cuadro
@@ -872,7 +877,6 @@ class _CarruselAndroidState extends State<_CarruselAndroid>
                 }
                 _abrir(context, planos[i].$2, planos[i].$1);
               },
-              ),
             ),
           ),
       ],
