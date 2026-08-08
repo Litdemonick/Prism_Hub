@@ -23,6 +23,20 @@ enum EstadoDeFila { pendiente, cargando, lista, fallo }
 /// existe — escondidas, nadie descubre que están.
 enum EstadoExtension { activa, desactivada, noInstalada }
 
+/// Qué criterio usa una fila para traer su contenido.
+enum ModoDeFila {
+  /// Lo último que publicó la extensión. Es lo que da `latest()`, y lo que
+  /// pueden todas.
+  reciente,
+
+  /// Lo más visto. Solo donde la extensión tiene un orden por popularidad —
+  /// medido: JKAnime, LaMovie y ManhwaWeb. En las demás no se puede pedir.
+  popular,
+
+  /// Hay un filtro puesto: lo que manda es el filtro, no el criterio.
+  filtrado,
+}
+
 /// Una fila del Home: una extensión y lo último que tiene.
 class FilaDeExtension {
   FilaDeExtension({
@@ -39,6 +53,10 @@ class FilaDeExtension {
   /// El usuario NO la tiene instalada: se cargó solo para que el Home tenga
   /// contenido. Al tocar una de sus tarjetas se le ofrece instalarla.
   final bool esVistaPrevia;
+
+  /// Qué está mostrando esta fila. Lo decide el controlador al armar la lista
+  /// y se dice en el encabezado, para que el usuario sepa qué está viendo.
+  ModoDeFila modo = ModoDeFila.reciente;
 
   final estado = EstadoDeFila.pendiente.obs;
   final items = <ExtensionListItem>[].obs;
@@ -397,6 +415,16 @@ class CatalogoExtensionesController extends GetxController {
           // «Género (+18)», «Adultos» y compañía: ni se miran.
           if (titulo.contains('18') || titulo.contains('adult')) continue;
 
+          // ¿Este filtro sabe ordenar por lo más visto?
+          if (titulo.contains('orden')) {
+            f.value.options.forEach((clave, etiqueta) {
+              if (clave.isEmpty) return;
+              if (!_formasDePopular.contains(_normalizar(etiqueta))) return;
+              _popularPorExtension.putIfAbsent(
+                  e.key, () => (clave: f.key, valor: clave));
+            });
+          }
+
           f.value.options.forEach((clave, etiqueta) {
             if (clave.isEmpty) return;
             final id = _canonicoDe(etiqueta) ?? _estadoDe(etiqueta);
@@ -428,7 +456,54 @@ class CatalogoExtensionesController extends GetxController {
     generosDisponibles
         .assignAll(_canonicos.keys.where(ofrecible));
     estadosDisponibles.assignAll(_estados.keys.where(ofrecible));
+    _repartirModos();
   }
+
+  /// Decide qué muestra cada fila.
+  ///
+  /// ── Por qué no todas «Populares» ────────────────────────────────────────
+  ///
+  /// Porque el Home se lee de arriba abajo y si todas las filas dijeran lo
+  /// mismo, el rótulo dejaría de significar nada. Alternando, la de arriba
+  /// trae lo último y la siguiente lo más visto — y con dos criterios se ve
+  /// más variedad de títulos, que es a lo que se vino.
+  ///
+  /// Se reparte por POSICIÓN y no al azar: al azar, cada apertura de la app
+  /// cambiaría el rótulo de una fila que trae exactamente lo mismo, y eso se
+  /// lee como que la app no sabe lo que muestra.
+  void _repartirModos() {
+    var i = 0;
+    for (final fila in filas) {
+      if (!_popularPorExtension.containsKey(fila.package)) {
+        fila.modo = ModoDeFila.reciente;
+        continue;
+      }
+      fila.modo = i.isOdd ? ModoDeFila.popular : ModoDeFila.reciente;
+      i++;
+    }
+    filas.refresh();
+  }
+
+  /// Cómo se llama «lo más visto» en cada sitio.
+  ///
+  /// Medido (2026-08-07): de las once no +18, solo JKAnime, LaMovie y
+  /// ManhwaWeb tienen un orden por popularidad. Las demás únicamente saben
+  /// devolver lo último, y eso es lo que su fila va a decir — no se inventa un
+  /// «Populares» que en realidad sería lo mismo de siempre.
+  static const _formasDePopular = [
+    'popularidad',
+    'populares',
+    'popular',
+    'mas vistos',
+    'mas visto',
+    'vistos',
+    'valorados',
+    'views',
+  ];
+
+  /// Para cada extensión que sabe ordenar por popularidad: en qué filtro y con
+  /// qué valor.
+  final _popularPorExtension = <String, ({String clave, String valor})>{};
 
   /// A qué estado canónico corresponde una etiqueta del sitio, si a alguno.
   static String? _estadoDe(String etiqueta) {
@@ -477,6 +552,10 @@ class CatalogoExtensionesController extends GetxController {
   ///
   /// El precio es un rato con contenido del filtro anterior en pantalla. Es
   /// mucho más barato que un Home en blanco.
+  /// Lo que muestra una fila ahora mismo, para el encabezado.
+  ModoDeFila modoDe(FilaDeExtension fila) =>
+      hayFiltros ? ModoDeFila.filtrado : fila.modo;
+
   Future<void> aplicarFiltros() async {
     tipoAplicado = tipoElegido.value;
     generoAplicado = generoElegido.value;
@@ -700,9 +779,16 @@ class CatalogoExtensionesController extends GetxController {
       // Sin filtros, esto es EXACTAMENTE lo de antes. La rama nueva solo se
       // pisa cuando el usuario eligió algo.
       final genero = _generoPara(fila.package);
-      final items = await (genero == null
+      // Sin filtro, algunas filas piden lo más visto en vez de lo último.
+      // Solo las que saben: ver _popularPorExtension.
+      final popular = (genero == null && fila.modo == ModoDeFila.popular)
+          ? _popularPorExtension[fila.package]
+          : null;
+      final filtro = genero ??
+          (popular == null ? null : {popular.clave: [popular.valor]});
+      final items = await (filtro == null
               ? runtime.latest(1)
-              : runtime.search('', 1, filter: genero))
+              : runtime.search('', 1, filter: filtro))
           .timeout(const Duration(seconds: 20));
       if (items.isEmpty) {
         fila.estado.value =

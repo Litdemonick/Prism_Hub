@@ -1150,28 +1150,41 @@ class _FilaAndroidState extends State<_FilaAndroid> {
     final margen = _margen(context);
     return Padding(
       padding: EdgeInsets.symmetric(horizontal: margen),
-      child: Row(
+      // El nombre y, debajo, qué está mostrando. Sin eso, dos filas iguales
+      // con títulos distintos no dicen por qué son distintas.
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Expanded(
-            child: Text(
-              widget.fila.nombre,
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-              style: TextStyle(
-                fontSize: Ancho.de(context).elegir(compacto: 18, medio: 20),
-                fontWeight: FontWeight.w800,
-                color: HomeTheme.textPrimary,
-                letterSpacing: -0.2,
-              ),
+          Text(
+            widget.fila.nombre,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: TextStyle(
+              fontSize: Ancho.de(context).elegir(compacto: 18, medio: 20),
+              fontWeight: FontWeight.w800,
+              color: HomeTheme.textPrimary,
+              letterSpacing: -0.2,
             ),
           ),
-          // Sin flecha. Los puntitos de abajo ya dicen que hay más y cómo
-          // llegar —deslizando—, y un ícono repetido en cada extensión era la
-          // misma línea diecisiete veces peleándole espacio al título.
+          Text(
+            switch (widget.c.modoDe(widget.fila)) {
+              ModoDeFila.popular => 'home.modo-popular'.i18n,
+              ModoDeFila.filtrado => 'home.modo-filtrado'.i18n,
+              ModoDeFila.reciente => 'home.modo-reciente'.i18n,
+            },
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: const TextStyle(
+              fontSize: 12,
+              fontWeight: FontWeight.w500,
+              color: HomeTheme.textMuted,
+            ),
+          ),
         ],
       ),
     );
   }
+
 }
 
 /// Las portadas de una extensión, en grilla que se pasa de página.

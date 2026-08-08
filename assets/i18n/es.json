@@ -139,7 +139,10 @@
     "estado": {
       "emision": "En emisión",
       "finalizado": "Finalizado"
-    }
+    },
+    "modo-reciente": "Lo más reciente",
+    "modo-popular": "Lo más visto",
+    "modo-filtrado": "Según tu filtro"
   },
   "search": {
     "hint-text": "¡Por favor, busca ampliamente!~",

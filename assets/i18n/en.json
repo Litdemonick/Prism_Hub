@@ -143,7 +143,10 @@
     "estado": {
       "emision": "Ongoing",
       "finalizado": "Completed"
-    }
+    },
+    "modo-reciente": "Latest",
+    "modo-popular": "Most watched",
+    "modo-filtrado": "Matching your filter"
   },
   "search": {
     "hint-text": "Please use search wisely!~",

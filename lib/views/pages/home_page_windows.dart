@@ -461,17 +461,38 @@ class _FilaWindowsState extends State<_FilaWindows> {
       child: Row(
         children: [
           Expanded(
-            child: Text(
-              widget.fila.nombre,
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-              style: TextStyle(
-                fontSize: Ancho.de(context)
-                    .elegir(compacto: 17, medio: 19, amplio: 22),
-                fontWeight: FontWeight.w800,
-                color: HomeTheme.textPrimary,
-                letterSpacing: -0.2,
-              ),
+            // El nombre y, debajo, qué está mostrando. Sin eso, dos filas
+            // iguales con títulos distintos no dicen por qué son distintas.
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  widget.fila.nombre,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: TextStyle(
+                    fontSize: Ancho.de(context)
+                        .elegir(compacto: 17, medio: 19, amplio: 22),
+                    fontWeight: FontWeight.w800,
+                    color: HomeTheme.textPrimary,
+                    letterSpacing: -0.2,
+                  ),
+                ),
+                Text(
+                  switch (widget.c.modoDe(widget.fila)) {
+                    ModoDeFila.popular => 'home.modo-popular'.i18n,
+                    ModoDeFila.filtrado => 'home.modo-filtrado'.i18n,
+                    ModoDeFila.reciente => 'home.modo-reciente'.i18n,
+                  },
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: const TextStyle(
+                    fontSize: 12,
+                    fontWeight: FontWeight.w500,
+                    color: HomeTheme.textMuted,
+                  ),
+                ),
+              ],
             ),
           ),
           // Flechas para recorrer la fila.
