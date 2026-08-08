@@ -687,29 +687,21 @@ class _AndroidMainPageState extends fluent.State<AndroidMainPage> {
                 onTap: () => _irAZona(i),
               ),
             ),
-          // ── Acostado no hay tres puntos ────────────────────────────────
+          // ── Acostado, el riel es SOLO esas tres ─────────────────────────
           //
-          // El riel es vertical y tiene alto de sobra, así que las tres que
-          // vivían escondidas —Ajustes, Historial y Favoritos— entran
-          // directas. Esconderlas detrás de un botón tiene sentido en la
-          // barra de abajo, que es angosta y solo entran cuatro; acá era
-          // pedir un toque de más por nada.
+          // Ni los tres puntos ni las opciones que salían de ellos. El riel
+          // acostado es una columna angosta contra el borde: cuantos más
+          // íconos tiene, menos se distingue a qué zona se va, y el
+          // desplegable encima quedaba peor todavía —se dibujaba sobre el
+          // propio riel y empujaba los botones hacia arriba—.
           //
-          // Y de paso desaparece el desplegable que se metía encima del
-          // propio riel. De pie sigue igual: ahí el espacio es el que es.
-          const SizedBox(height: 14),
-          for (final extra in _extras(conExtensiones: true))
-            Padding(
-              padding: const EdgeInsets.symmetric(vertical: 6),
-              child: Tooltip(
-                message: extra.$2,
-                child: _BotonRedondo(
-                  icono: extra.$1,
-                  tamano: _ladoDelExtremo,
-                  onTap: extra.$3,
-                ),
-              ),
-            ),
+          // Lo que queda afuera sigue teniendo por dónde: Ajustes por su
+          // atajo del Home, Historial y Favoritos desde Biblioteca (sus «ver
+          // más» abren esas mismas pestañas), y Extensiones desde el aviso de
+          // «no tenés extensiones activas» y desde el Repositorio.
+          //
+          // De pie no cambia nada: barra abajo con cuatro y el resto en los
+          // tres puntos, que ahí sí hacen falta porque el ancho es el que es.
         ],
       ),
     );
@@ -720,19 +712,7 @@ class _AndroidMainPageState extends fluent.State<AndroidMainPage> {
   ///
   /// En un solo lugar porque las usan los dos caminos: de pie salen del
   /// desplegable de los tres puntos, y acostado van directas en el riel.
-  /// [conExtensiones]: acostado, Extensiones tampoco está en el riel (ver
-  /// _enElRiel), así que se suma acá. De pie sí está en la barra de abajo y
-  /// repetirla en el desplegable sería listarla dos veces.
-  List<(IconData, String, VoidCallback)> _extras({
-    bool conExtensiones = false,
-  }) =>
-      [
-        if (conExtensiones)
-          (
-            Icons.extension_outlined,
-            'common.extension'.i18n,
-            () => _irAZona(MainController.tabExtensiones),
-          ),
+  List<(IconData, String, VoidCallback)> _extras() => [
         (
           Icons.settings_outlined,
           'common.settings'.i18n,
@@ -778,29 +758,16 @@ class _AndroidMainPageState extends fluent.State<AndroidMainPage> {
     c.changeTab(i);
   }
 
-  /// El lado del botón de los tres puntos cuando la barra va acostada.
-  ///
-  /// Con nombre y no repetido a mano: de esta medida depende dónde arranca la
-  /// fila de opciones, y si los dos números se separan, las opciones se meten
-  /// encima del riel.
-  static const double _ladoDelExtremo = 46;
-
   /// Una opción del desplegable.
   ///
   /// Escalonadas: salen una atrás de otra, así se lee el recorrido en vez de
-  /// aparecer las tres de golpe. Acostado el icono va primero, porque la fila
-  /// crece hacia la derecha y el icono es el que tiene que quedar del lado del
-  /// botón que las abrió.
-  Widget _opcion(
-    List<(IconData, String, VoidCallback)> opciones,
-    int i,
-    bool apaisado,
-  ) {
+  /// aparecer las tres de golpe.
+  Widget _opcion(List<(IconData, String, VoidCallback)> opciones, int i) {
     return _OpcionFlotante(
       icono: opciones[i].$1,
       texto: opciones[i].$2,
       demora: Duration(milliseconds: 60 * (opciones.length - i)),
-      iconoPrimero: apaisado,
+      iconoPrimero: false,
       onTap: () {
         setState(() => _masAbierto = false);
         opciones[i].$3();
@@ -838,9 +805,7 @@ class _AndroidMainPageState extends fluent.State<AndroidMainPage> {
   /// único que pasó es que la barra mostró lo que tenía guardado. Saliendo
   /// desde el propio botón, se ve de dónde vienen y a qué vuelven.
   Widget _capaDeMas() {
-    final apaisado = _apaisado(context);
     final bordes = MediaQuery.viewPaddingOf(context);
-
     final opciones = _extras();
 
     return Positioned.fill(
@@ -853,56 +818,23 @@ class _AndroidMainPageState extends fluent.State<AndroidMainPage> {
             onTap: () => setState(() => _masAbierto = false),
             child: const ColoredBox(color: Color(0xB3000000)),
           ),
+          // Solo de pie: acostado no hay botón que abra esto (ver
+          // _barraVertical), así que no hace falta la variante horizontal —
+          // la había, y era código que no se ejecutaba nunca.
           Positioned(
-            // ── Acostado salen HACIA LA DERECHA, no hacia arriba ───────────
-            //
-            // Antes esto era una columna anclada al mismo borde izquierdo que
-            // el riel, así que las opciones se apilaban ENCIMA de los íconos
-            // de la barra y subían por la pantalla. Reportado en vivo: «los
-            // botones se desplazan arriba, era el botón en sí y no solo el
-            // texto».
-            //
-            // Ahora es una FILA que arranca justo después del riel: las
-            // opciones salen del botón hacia el costado libre, que es donde
-            // hay lugar cuando el teléfono está acostado. De pie se queda como
-            // estaba —columna que sube desde el botón, que ahí está abajo—.
-            //
-            // El desplazamiento horizontal es la red: con tres opciones entran
-            // de sobra, pero si mañana son cinco no se salen de la pantalla.
-            left: apaisado ? bordes.left + 10 + _ladoDelExtremo + 14 : null,
-            right: apaisado ? null : 18,
-            top: apaisado ? 0 : null,
-            bottom: apaisado
-                ? 0
-                : (bordes.bottom > 0 ? bordes.bottom * 0.55 + 14 : 20) + 66,
-            child: apaisado
-                ? Center(
-                    child: SingleChildScrollView(
-                      scrollDirection: Axis.horizontal,
-                      padding: const EdgeInsets.only(right: 16),
-                      child: Row(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          for (var i = 0; i < opciones.length; i++)
-                            Padding(
-                              padding: const EdgeInsets.only(right: 12),
-                              child: _opcion(opciones, i, apaisado),
-                            ),
-                        ],
-                      ),
-                    ),
-                  )
-                : Column(
-                    mainAxisSize: MainAxisSize.min,
-                    crossAxisAlignment: CrossAxisAlignment.end,
-                    children: [
-                      for (var i = 0; i < opciones.length; i++)
-                        Padding(
-                          padding: const EdgeInsets.only(bottom: 12),
-                          child: _opcion(opciones, i, apaisado),
-                        ),
-                    ],
+            right: 18,
+            bottom: (bordes.bottom > 0 ? bordes.bottom * 0.55 + 14 : 20) + 66,
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.end,
+              children: [
+                for (var i = 0; i < opciones.length; i++)
+                  Padding(
+                    padding: const EdgeInsets.only(bottom: 12),
+                    child: _opcion(opciones, i),
                   ),
+              ],
+            ),
           ),
         ],
       ),
