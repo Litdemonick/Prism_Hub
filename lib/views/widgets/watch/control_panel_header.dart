@@ -5,6 +5,7 @@ import 'package:flutter_animate/flutter_animate.dart';
 import 'package:get/get.dart';
 import 'package:prismhub/utils/extension.dart';
 import 'package:prismhub/utils/router.dart';
+import 'package:prismhub/views/widgets/home/home_theme.dart';
 import 'package:prismhub/views/widgets/watch/playlist.dart';
 import 'package:prismhub/controllers/watch/reader_controller.dart';
 import 'package:prismhub/router/router.dart';
@@ -79,6 +80,18 @@ class _ControlPanelHeaderState<T extends ReaderController>
                 onPressed: () {
                   showModalBottomSheet(
                     context: context,
+                    // Como el resto de las hojas de la app: esquinas
+                    // redondeadas, agarradera arriba y un tope de ancho para
+                    // que en una tablet no cruce de lado a lado. Estas dos
+                    // eran las únicas que salían cuadradas y a pantalla
+                    // completa, y se notaba.
+                    backgroundColor: HomeTheme.cardSurface,
+                    showDragHandle: true,
+                    constraints: const BoxConstraints(maxWidth: 640),
+                    shape: const RoundedRectangleBorder(
+                      borderRadius:
+                          BorderRadius.vertical(top: Radius.circular(20)),
+                    ),
                     builder: (context) => widget.buildSettings!(context),
                   );
                 },
@@ -93,6 +106,23 @@ class _ControlPanelHeaderState<T extends ReaderController>
               onPressed: () {
                 showModalBottomSheet(
                   context: context,
+                  backgroundColor: HomeTheme.cardSurface,
+                  showDragHandle: true,
+                  // Alta, pero no hasta arriba de todo: con la lista de una
+                  // obra larga la hoja tapaba hasta la barra de estado y no se
+                  // veía nada del lector que quedaba detrás, así que costaba
+                  // entender que era una hoja y no otra pantalla.
+                  constraints: BoxConstraints(
+                    maxWidth: 640,
+                    maxHeight: MediaQuery.sizeOf(context).height * 0.82,
+                  ),
+                  shape: const RoundedRectangleBorder(
+                    borderRadius:
+                        BorderRadius.vertical(top: Radius.circular(20)),
+                  ),
+                  // Sin esto la hoja se queda en la mitad de la pantalla y hay
+                  // que arrastrarla antes de poder buscar el capítulo.
+                  isScrollControlled: true,
                   builder: (context) {
                     return Obx(
                       () => PlayList(
