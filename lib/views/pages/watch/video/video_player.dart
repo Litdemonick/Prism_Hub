@@ -1,3 +1,4 @@
+import 'dart:math' as math;
 import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
@@ -215,9 +216,21 @@ class _VideoPlayerState extends State<VideoPlayer> {
                               ),
                             ],
                           ),
+                          // ── El aviso no se achica de pie ──────────────
+                          //
+                          // El ancho salía de una fracción del ancho de la
+                          // pantalla, y de pie ese ancho es la mitad: el aviso
+                          // —«no se pudo reproducir», el panel de ajustes—
+                          // quedaba en una columna angosta con las palabras
+                          // partidas, mientras que acostado se veía bien. El
+                          // texto no cambia de largo porque el teléfono gire.
+                          //
+                          // Ahora usa casi todo el ancho que hay, con un techo
+                          // para que en una tablet o acostado no se estire de
+                          // lado a lado, que ahí sí se lee peor.
                           constraints: BoxConstraints(
-                            maxHeight: 200,
-                            maxWidth: maxWidth * 0.8,
+                            maxHeight: 260,
+                            maxWidth: math.min(maxWidth - 48, 420),
                           ),
                           child: DefaultTextStyle(
                             style: const TextStyle(

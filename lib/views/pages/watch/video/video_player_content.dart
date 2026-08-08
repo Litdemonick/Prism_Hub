@@ -167,17 +167,20 @@ class _VideoPlayerContenState extends State<VideoPlayerConten> {
           // medidas reales (ver _aplicarRecorteVr), y mover el anclaje
           // descuadraria esa cuenta.
           //
-          // ── Y DE PIE se ancla ARRIBA ─────────────────────────────────────
+          // ── De pie va CENTRADA ───────────────────────────────────────────
           //
-          // De pie el vídeo es una franja 16:9 en una pantalla larga, así que
-          // centrado quedaba flotando en el medio con negro arriba y abajo. Va
-          // pegado arriba, como en cualquier reproductor de teléfono: la imagen
-          // arriba y el espacio libre debajo, que es donde caen los botones.
+          // Se probó anclada arriba, pensando en «vídeo arriba y controles
+          // abajo». No es lo que hace un reproductor de pie: pegada al techo, la
+          // imagen queda contra la barra de estado y el título se le monta
+          // encima, y todo el aire sobra abajo de golpe.
+          //
+          // Centrada queda con aire arriba y abajo repartido: el título respira
+          // en la franja de arriba, los controles en la de abajo, y la imagen —
+          // que es lo que uno mira— queda a la altura de los ojos. Es lo que
+          // hace YouTube de pie a pantalla completa.
           alignment: (c.llenarPantalla.value && !c.vrUnaPantalla.value)
               ? Alignment.bottomCenter
-              : (MediaQuery.orientationOf(context) == Orientation.portrait
-                  ? Alignment.topCenter
-                  : Alignment.center),
+              : Alignment.center,
           subtitleViewConfiguration: const SubtitleViewConfiguration(
             visible: false,
           ),
