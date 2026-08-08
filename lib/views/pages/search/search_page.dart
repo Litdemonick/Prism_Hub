@@ -124,21 +124,133 @@ class _SearchPageState extends State<SearchPage> {
     });
   }
 
-  // Versión Android: ancho completo, centrada, se puede envolver a una
-  // segunda línea (no hay nada más en esa fila).
-  Widget _buildTypeChips(BuildContext context) {
-    return SizedBox(
-      width: double.infinity,
-      child: Wrap(
-        alignment: WrapAlignment.center,
-        spacing: 10,
-        runSpacing: 10,
-        children: [
-          ...List.generate(_types.length, _chip),
-          // Va en la misma fila de chips: comparte forma y alto, así que en
-          // celular se acomoda solo si no entra (el Wrap lo baja de línea).
-          _buildNsfwButton(context),
-        ],
+  /// El filtro de tipo, en la barra de arriba. Solo Android.
+  ///
+  /// ── Por qué sale del cuerpo ─────────────────────────────────────────────
+  ///
+  /// Los chips vivían en una fila propia debajo del buscador, y esa franja se
+  /// llevaba su alto justo encima de los resultados — que es lo que uno vino a
+  /// ver. Acostado, donde el alto es lo que falta, era media pantalla de
+  /// portadas.
+  ///
+  /// Es el mismo patrón que ya usan Instaladas y el Repositorio: un icono que
+  /// abre una hoja. Que las tres zonas se manejen igual vale más que ahorrarse
+  /// un toque.
+  ///
+  /// El puntito avisa cuando hay un tipo elegido: metido dentro de la hoja,
+  /// uno se olvida de que filtró y una lista corta parece un error.
+  Widget _botonDeFiltro(BuildContext context) {
+    return Obx(() {
+      final filtrando = c.cuurentExtensionType.value != null;
+      return IconButton(
+        tooltip: 'search.filter'.i18n,
+        onPressed: () => _abrirFiltros(context),
+        icon: Stack(
+          clipBehavior: Clip.none,
+          children: [
+            const Icon(Icons.tune_rounded),
+            if (filtrando)
+              Positioned(
+                right: -1,
+                top: -1,
+                child: Container(
+                  width: 9,
+                  height: 9,
+                  decoration: BoxDecoration(
+                    color: _accent,
+                    shape: BoxShape.circle,
+                  ),
+                ),
+              ),
+          ],
+        ),
+      );
+    });
+  }
+
+  void _abrirFiltros(BuildContext context) {
+    showModalBottomSheet(
+      context: context,
+      showDragHandle: true,
+      useSafeArea: true,
+      isScrollControlled: true,
+      backgroundColor: HomeTheme.cardSurface,
+      builder: (hojaContext) {
+        return StatefulBuilder(
+          builder: (hojaContext, setHoja) {
+            return SingleChildScrollView(
+              padding: const EdgeInsets.fromLTRB(20, 4, 20, 24),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    'search.filter'.i18n,
+                    style: const TextStyle(
+                      color: HomeTheme.textMuted,
+                      fontSize: 12,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                  const SizedBox(height: 10),
+                  Wrap(
+                    spacing: 10,
+                    runSpacing: 10,
+                    children: [
+                      for (var i = 0; i < _types.length; i++)
+                        _chipDeHoja(i, setHoja),
+                    ],
+                  ),
+                  // La Zona +18 no es un filtro: es otra pantalla. Va abajo y
+                  // separada, para que no se lea como un tipo más.
+                  Builder(builder: (context) {
+                    final boton = _buildNsfwButton(context);
+                    if (boton is SizedBox) return const SizedBox.shrink();
+                    return Padding(
+                      padding: const EdgeInsets.only(top: 20),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          const Divider(height: 1, color: HomeTheme.border),
+                          const SizedBox(height: 16),
+                          boton,
+                        ],
+                      ),
+                    );
+                  }),
+                ],
+              ),
+            );
+          },
+        );
+      },
+    );
+  }
+
+  /// Un chip dentro de la hoja: repinta la hoja Y aplica la búsqueda.
+  Widget _chipDeHoja(int index, void Function(void Function()) setHoja) {
+    final type = _types[index];
+    final selected = c.cuurentExtensionType.value == type;
+    return GestureDetector(
+      onTap: () {
+        c.getRuntime(types: type);
+        setHoja(() {});
+      },
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 9),
+        decoration: BoxDecoration(
+          color: selected ? _accent.withValues(alpha: 0.18) : HomeTheme.bg,
+          borderRadius: BorderRadius.circular(999),
+          border: Border.all(color: selected ? _accent : HomeTheme.border),
+        ),
+        child: Text(
+          _typeLabels[index].i18n,
+          style: TextStyle(
+            color: selected ? _accent : HomeTheme.textPrimary,
+            fontSize: 13,
+            fontWeight: FontWeight.w600,
+          ),
+        ),
       ),
     );
   }
@@ -264,6 +376,8 @@ class _SearchPageState extends State<SearchPage> {
                 },
               )
             : null,
+        // El filtro de tipo, en la barra: ver _botonDeFiltro.
+        actions: [_botonDeFiltro(context)],
       ),
       body: RefreshIndicator(
         onRefresh: () async =>
@@ -277,15 +391,13 @@ class _SearchPageState extends State<SearchPage> {
               const Positioned.fill(child: AnimatedBackgroundGlow()),
               Column(
                 children: [
+                  // Sin la fila de chips: el filtro se fue a la barra de
+                  // arriba (ver _botonDeFiltro), así que los resultados
+                  // arrancan acá mismo. Queda solo la barra de progreso, que
+                  // son 3 puntos de alto y dice si todavía están buscando.
                   Padding(
-                    padding: const EdgeInsets.fromLTRB(16, 12, 16, 8),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        _buildProgress(),
-                        _buildTypeChips(context),
-                      ],
-                    ),
+                    padding: const EdgeInsets.fromLTRB(16, 6, 16, 2),
+                    child: _buildProgress(),
                   ),
                   Expanded(
                     child: _buildResults((index) {

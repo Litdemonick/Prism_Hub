@@ -7,6 +7,7 @@ import 'package:prismhub/controllers/search_controller.dart';
 import 'package:prismhub/utils/error.dart';
 import 'package:prismhub/views/widgets/extension_item_card.dart';
 import 'package:prismhub/views/widgets/home/esqueleto.dart';
+import 'package:prismhub/views/widgets/home/home_media_card.dart';
 import 'package:prismhub/views/widgets/home/home_theme.dart';
 import 'package:prismhub/views/widgets/horizontal_list.dart';
 
@@ -94,12 +95,25 @@ class _SearchAllTileState extends State<SearchAllTile> {
   // con varias extensiones buscando a la vez, es lo que evita la pantalla
   // llena de ruedas —o de avisos repetidos— cuando la red está caída.
 
-  /// El ancho de una tarjeta de esta fila, para que los bloques que esperan
-  /// midan lo mismo que las portadas que van a reemplazar.
-  double get _anchoTarjeta => Platform.isAndroid ? 104 : 150;
+  /// El ancho de una tarjeta de esta fila.
+  ///
+  /// En el teléfono es el MISMO que el del Inicio (HomeMediaCard.androidWidth):
+  /// estaba en 110 contra los 150 de allá, y al pasar de una zona a la otra las
+  /// portadas se veían encogidas sin ningún motivo. Con el mismo número, la
+  /// app se siente una sola.
+  ///
+  /// Con nombre y en un solo lugar porque lo usan las tarjetas de verdad Y los
+  /// bloques que esperan: si se separan, al llegar el contenido todo se corre.
+  static double get anchoTarjeta =>
+      Platform.isAndroid ? HomeMediaCard.androidWidth : 170;
+
+  /// El alto de la fila. Sigue al ancho: la portada guarda su proporción y
+  /// debajo van el título y la línea de la extensión.
+  static double get altoFila =>
+      Platform.isAndroid ? HomeMediaCard.androidHeight : 280;
 
   Widget _cargando() {
-    final alto = Platform.isAndroid ? 170.0 : 280.0;
+    final alto = altoFila;
     return SizedBox(
       height: alto,
       child: Stack(
@@ -123,7 +137,7 @@ class _SearchAllTileState extends State<SearchAllTile> {
             // cuántos resultados van a venir: son un relleno, no un dato.
             itemCount: 8,
             separatorBuilder: (_, __) => const SizedBox(width: 12),
-            itemBuilder: (_, __) => EsqueletoTarjeta(ancho: _anchoTarjeta),
+            itemBuilder: (_, __) => EsqueletoTarjeta(ancho: anchoTarjeta),
           ),
           // El aviso de "está tardando" va ENCIMA de los bloques, centrado y
           // sobre un velo, para que se lea sin tapar la forma de la fila.
@@ -221,7 +235,7 @@ class _SearchAllTileState extends State<SearchAllTile> {
           // alto que las demás filas (antes un Text suelto sin SizedBox
           // hacía que la fila se "achicara" comparada con una con contenido).
           return SizedBox(
-            height: Platform.isAndroid ? 170 : 280,
+            height: altoFila,
             child: Center(
               child: Text(
                 friendlyError(widget.searchResult.error!),
@@ -242,7 +256,7 @@ class _SearchAllTileState extends State<SearchAllTile> {
         // fila, sin aclarar CUÁL de todas es la que no encontró nada.
         if (data.isEmpty) {
           return SizedBox(
-            height: Platform.isAndroid ? 170 : 280,
+            height: altoFila,
             child: Center(
               child: Text(
                 FlutterI18n.translate(
@@ -260,14 +274,14 @@ class _SearchAllTileState extends State<SearchAllTile> {
         }
 
         return SizedBox(
-          height: Platform.isAndroid ? 170 : 280,
+          height: altoFila,
           child: ListView.builder(
             scrollDirection: Axis.horizontal,
             controller: controller,
             itemCount: data.length,
             itemBuilder: ((context, index) {
               return Container(
-                width: Platform.isAndroid ? 110 : 170,
+                width: anchoTarjeta,
                 margin: const EdgeInsets.only(right: 16),
                 child: ExtensionItemCard(
                   headers: data[index].headers,
