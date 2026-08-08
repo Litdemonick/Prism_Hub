@@ -8,18 +8,25 @@
     interna del lienzo: lo de afuera lo recorta. Como el logo ocupa el lienzo
     entero, le cortaba las puntas — se veía «cortado», reportado en vivo.
 
-    La especificación de esa API reserva para el dibujo los dos tercios
-    centrales del lienzo. Con un 18% de margen a cada lado, el logo queda en el
-    64% del medio: entra completo en el círculo y con un poco de aire.
+    ── Las medidas salen de la especificación, no de tantear ─────────────────
 
-    Va como drawable aparte y no tocando el PNG porque ese mismo archivo lo usa
-    también el splash viejo (launch_background.xml, para aparatos anteriores a
-    Android 12), donde NO hay máscara y el logo se ve entero sin recortarle
-    nada. Cambiar el PNG lo achicaría ahí sin necesidad.
+    Esa API le da al icono un lienzo de 288dp y reserva para el dibujo los
+    192dp centrales cuando el icono no trae fondo propio. O sea 48dp de margen
+    a cada lado: (288 - 192) / 2.
+
+    En dp y no en fracciones: los atributos insetLeftFraction y compañía NO
+    existen, y el enlazado de recursos falla con «attribute not found». Los que
+    valen son estos cuatro, que están desde el principio.
+
+    ── Y va como drawable aparte ─────────────────────────────────────────────
+
+    En vez de achicar el PNG, porque ese mismo archivo lo usa también el splash
+    viejo (launch_background.xml, para aparatos anteriores a Android 12), donde
+    NO hay máscara y el logo se ve entero sin recortarle nada.
 -->
 <inset xmlns:android="http://schemas.android.com/apk/res/android"
     android:drawable="@drawable/launch_logo"
-    android:insetLeftFraction="18%"
-    android:insetTopFraction="18%"
-    android:insetRightFraction="18%"
-    android:insetBottomFraction="18%" />
+    android:insetLeft="48dp"
+    android:insetTop="48dp"
+    android:insetRight="48dp"
+    android:insetBottom="48dp" />
