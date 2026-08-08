@@ -1668,9 +1668,38 @@ class VideoPlayerController extends GetxController with WidgetsBindingObserver {
           history.progress.isNotEmpty &&
           history.episodeId == index.value &&
           history.episodeGroupId == episodeGroupId) {
-        _isAutoSeekPosition = true;
-        player.seek(Duration(seconds: int.tryParse(history.progress) ?? 0));
-        sendMessage(Message(Text('video.resume-last-playback'.i18n)));
+        final guardado = int.tryParse(history.progress) ?? 0;
+        // ── Y acá el segundo candado ──────────────────────────────────────
+        //
+        // El de arriba (al guardar) evita que entren posiciones imposibles de
+        // ahora en adelante, pero las que YA están en la base de alguien que
+        // viene usando el app siguen ahí. Sin esto, esa gente seguiría
+        // arrancando en cualquier lado hasta que el vídeo terminara una vez.
+        //
+        // Se compara contra la duración REAL, la que acaba de informar el
+        // reproductor — este listener es justamente el de la duración, así que
+        // acá ya se sabe cuánto dura el vídeo de verdad.
+        //
+        // Contra la duración GUARDADA no alcanzaba, y ese fue el agujero: en
+        // la fuente donde el problema aparece, la posición y la duración se
+        // inflan JUNTAS. Un progreso de 800 s sobre una duración guardada de
+        // 850 s se ve perfectamente sano, pasa el control, y el vídeo salta a
+        // un punto que no existe. Por eso en el teléfono empezó a arrancar
+        // desde cero y en el escritorio seguía saltando: distinta base de
+        // datos, distintos números guardados.
+        //
+        // Cinco segundos de margen: reanudar justo en el último instante es lo
+        // mismo que verlo terminado.
+        final duracionReal = event.inSeconds;
+        final fueraDeRango = guardado < 0 || guardado > duracionReal - 5;
+        if (fueraDeRango) {
+          logger.info('historial: se ignora una posición guardada imposible '
+              '($guardado s sobre $duracionReal s reales) y se empieza de cero');
+        } else if (guardado > 0) {
+          _isAutoSeekPosition = true;
+          player.seek(Duration(seconds: guardado));
+          sendMessage(Message(Text('video.resume-last-playback'.i18n)));
+        }
       }
     }));
 
@@ -3911,6 +3940,35 @@ class VideoPlayerController extends GetxController with WidgetsBindingObserver {
               ? duration.value.inSeconds
               : _duracionCastAlCerrar.inSeconds);
 
+      // ── El progreso que se guarda tiene que ser creíble ──────────────────
+      //
+      // Si la posición cae fuera de la duración, no se guarda: se deja en cero
+      // y el vídeo empieza de nuevo la próxima vez.
+      //
+      // Por qué hace falta: hay fuentes donde la posición y la duración crecen
+      // mientras el vídeo carga (anotado en PROGRESO para Pornhub, medido: la
+      // lista es VOD y trae su marca de final, así que el problema es de este
+      // lado). Cuando eso pasa se guardaba una posición inventada, y a la
+      // siguiente reproducción el reanudar saltaba ahí: el usuario abría un
+      // vídeo y arrancaba en cualquier lado. Peor todavía, mpv pedía un
+      // pedacito muy adelantado y el CDN contestaba 410 — visto en vivo,
+      // «Failed to open segment 202 of playlist 0» repetido hasta rendirse.
+      //
+      // El candado va acá, al GUARDAR, y no solo al reanudar: una vez que el
+      // número malo entra a la base, se arrastra a la lista de Continuar, al
+      // Historial y al porcentaje. Mejor no dejarlo entrar.
+      //
+      // Vale para todas las extensiones a propósito: la posición puede salirse
+      // de rango en cualquier fuente de HLS, y guardar algo imposible nunca es
+      // lo correcto.
+      final progresoCreible =
+          duracionSeg > 0 && posicionSeg >= 0 && posicionSeg <= duracionSeg;
+      if (!progresoCreible && duracionSeg > 0) {
+        logger.info('historial: no se guarda una posición imposible '
+            '($posicionSeg s sobre $duracionSeg s de duración)');
+      }
+      final posicionAGuardar = progresoCreible ? posicionSeg : 0;
+
       // El frame puede venir ya tomado desde _shutdownPlayback (el caso normal
       // al cerrar el reproductor, donde capturar acá sería tarde) o tomarse en
       // el momento, para las llamadas que ocurren con la reproducción viva.
@@ -3943,7 +4001,7 @@ class VideoPlayerController extends GetxController with WidgetsBindingObserver {
           ..episodeId = index.value
           ..episodeTitle = epName
           ..title = title
-          ..progress = posicionSeg.toString()
+          ..progress = posicionAGuardar.toString()
           ..totalProgress = duracionSeg.toString()
           ..isNsfw = isNsfw
           // Al día solo si es el último episodio Y llegó al final de verdad.
