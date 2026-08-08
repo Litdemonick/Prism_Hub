@@ -501,7 +501,10 @@ class _AndroidMainPageState extends fluent.State<AndroidMainPage> {
               ),
             ],
           ),
-          if (_masAbierto) _capaDeMas(),
+          // Solo de pie: acostado no hay botón de tres puntos que lo abra
+          // (sus opciones van directas en el riel), y si quedó abierto al
+          // girar, no puede seguir puesto sobre la pantalla nueva.
+          if (_masAbierto && !_apaisado(context)) _capaDeMas(),
         ]),
         // El contenido pasa POR DEBAJO de la barra.
         //
@@ -552,6 +555,14 @@ class _AndroidMainPageState extends fluent.State<AndroidMainPage> {
   /// Ajustes es el que sale y no otro a propósito: es al que menos se entra de
   /// los cinco, y encima ya tiene su atajo arriba en el Home.
   static const _enLaBarra = 4;
+
+  /// Cuántos van arriba del todo en el riel acostado.
+  ///
+  /// Tres: Inicio, Biblioteca y Buscar — a las que de verdad se entra. Con las
+  /// cuatro de la barra de abajo, el riel quedaba tan cargado que no se
+  /// distinguía a qué zona se iba. Extensiones no se pierde: baja con las
+  /// otras tres de más abajo, que acostado van directas igual.
+  static const _enElRiel = 3;
 
   /// El aparato está acostado: la barra va al costado y no abajo.
   ///
@@ -667,7 +678,7 @@ class _AndroidMainPageState extends fluent.State<AndroidMainPage> {
         mainAxisAlignment: MainAxisAlignment.center,
         mainAxisSize: MainAxisSize.min,
         children: [
-          for (var i = 0; i < _enLaBarra; i++)
+          for (var i = 0; i < _enElRiel; i++)
             Padding(
               padding: const EdgeInsets.symmetric(vertical: 6),
               child: _IconoDeBarra(
@@ -676,12 +687,70 @@ class _AndroidMainPageState extends fluent.State<AndroidMainPage> {
                 onTap: () => _irAZona(i),
               ),
             ),
+          // ── Acostado no hay tres puntos ────────────────────────────────
+          //
+          // El riel es vertical y tiene alto de sobra, así que las tres que
+          // vivían escondidas —Ajustes, Historial y Favoritos— entran
+          // directas. Esconderlas detrás de un botón tiene sentido en la
+          // barra de abajo, que es angosta y solo entran cuatro; acá era
+          // pedir un toque de más por nada.
+          //
+          // Y de paso desaparece el desplegable que se metía encima del
+          // propio riel. De pie sigue igual: ahí el espacio es el que es.
           const SizedBox(height: 14),
-          _botonDelExtremo(tamano: _ladoDelExtremo),
+          for (final extra in _extras(conExtensiones: true))
+            Padding(
+              padding: const EdgeInsets.symmetric(vertical: 6),
+              child: Tooltip(
+                message: extra.$2,
+                child: _BotonRedondo(
+                  icono: extra.$1,
+                  tamano: _ladoDelExtremo,
+                  onTap: extra.$3,
+                ),
+              ),
+            ),
         ],
       ),
     );
   }
+
+  /// Las tres que no entran en la barra de abajo: Ajustes, Historial y
+  /// Favoritos.
+  ///
+  /// En un solo lugar porque las usan los dos caminos: de pie salen del
+  /// desplegable de los tres puntos, y acostado van directas en el riel.
+  /// [conExtensiones]: acostado, Extensiones tampoco está en el riel (ver
+  /// _enElRiel), así que se suma acá. De pie sí está en la barra de abajo y
+  /// repetirla en el desplegable sería listarla dos veces.
+  List<(IconData, String, VoidCallback)> _extras({
+    bool conExtensiones = false,
+  }) =>
+      [
+        if (conExtensiones)
+          (
+            Icons.extension_outlined,
+            'common.extension'.i18n,
+            () => _irAZona(MainController.tabExtensiones),
+          ),
+        (
+          Icons.settings_outlined,
+          'common.settings'.i18n,
+          () => _irAZona(MainController.tabAjustes),
+        ),
+        (
+          Icons.history_rounded,
+          'home.history'.i18n,
+          () => Get.to(() => const HistoryPage()),
+        ),
+        (
+          Icons.favorite_border_rounded,
+          'home.favorite'.i18n,
+          // La pestaña de favoritos de Historial. Mismo índice que usa
+          // Biblioteca — si cambia allá, cambia acá.
+          () => Get.to(() => const HistoryPage(initialTab: 3)),
+        ),
+      ];
 
   /// El fondo de la pastilla, igual acostado que de pie.
   static final _pastilla = BoxDecoration(
@@ -772,25 +841,7 @@ class _AndroidMainPageState extends fluent.State<AndroidMainPage> {
     final apaisado = _apaisado(context);
     final bordes = MediaQuery.viewPaddingOf(context);
 
-    final opciones = <(IconData, String, VoidCallback)>[
-      (
-        Icons.settings_outlined,
-        'common.settings'.i18n,
-        () => _irAZona(MainController.tabAjustes),
-      ),
-      (
-        Icons.history_rounded,
-        'home.history'.i18n,
-        () => Get.to(() => const HistoryPage()),
-      ),
-      (
-        Icons.favorite_border_rounded,
-        'home.favorite'.i18n,
-        // La pestaña de favoritos de Historial. Mismo índice que usa
-        // Biblioteca — si cambia allá, cambia acá.
-        () => Get.to(() => const HistoryPage(initialTab: 3)),
-      ),
-    ];
+    final opciones = _extras();
 
     return Positioned.fill(
       child: Stack(

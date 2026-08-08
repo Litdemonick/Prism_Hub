@@ -803,16 +803,6 @@ class _ExtensionPageState extends State<ExtensionPage> {
                 // (ver `actions`), así que la lista arranca acá mismo y las
                 // tarjetas suben todo lo que ocupaba esa franja.
                 SizedBox(height: _pantallaBaja(context) ? 2 : 6),
-                if (totalPages > 1)
-                  Padding(
-                    padding: const EdgeInsets.only(bottom: 8),
-                    child: _pager(
-                      page: page,
-                      totalPages: totalPages,
-                      useFluent: false,
-                      onChange: (p) => setState(() => _page = p),
-                    ),
-                  ),
                 Expanded(
                   child: RefreshIndicator(
                     onRefresh: () async {
@@ -863,6 +853,22 @@ class _ExtensionPageState extends State<ExtensionPage> {
                           ),
                   ),
                 ),
+                // ── Las flechitas van ABAJO, después de la lista ───────────
+                //
+                // Arriba se comían una franja pegada al buscador y cortaban la
+                // primera fila de tarjetas. Acá las tarjetas arrancan al ras
+                // del título, y las flechitas aparecen al llegar al final —
+                // que es justo cuando uno las necesita.
+                if (totalPages > 1)
+                  Padding(
+                    padding: const EdgeInsets.symmetric(vertical: 4),
+                    child: _pager(
+                      page: page,
+                      totalPages: totalPages,
+                      useFluent: false,
+                      onChange: (p) => setState(() => _page = p),
+                    ),
+                  ),
               ],
             ),
           ],
@@ -1085,8 +1091,7 @@ class _ExtensionPageState extends State<ExtensionPage> {
                                           // Su capa propia, igual que en la
                                           // lista de arriba.
                                           child: RepaintBoundary(
-                                            child:
-                                                ExtensionTile(ext.extension),
+                                            child: ExtensionTile(ext.extension),
                                           ),
                                         ),
                                     ],
