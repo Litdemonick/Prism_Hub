@@ -765,6 +765,9 @@ class CatalogoExtensionesController extends GetxController {
     // Antes de mirar qué hay: unas pocas del catálogo, para que el Home tenga
     // con qué llenarse aunque el usuario no haya instalado casi nada. Si falla
     // —sin red, catálogo caído— no pasa nada: sigue con lo que tenga.
+    // Cuáles son mixtas: hace falta ANTES de armar la lista, porque decide si
+    // una extensión marcada +18 entra igual con su parte normal.
+    await ExtensionUtils.detectarMixtas();
     await ExtensionUtils.prepararVistaPrevia();
     // ── Las +18 NO entran al Home, sin excepción ────────────────────────────
     //
@@ -778,8 +781,23 @@ class CatalogoExtensionesController extends GetxController {
     //
     // Se miran TODAS las instaladas, no solo las encendidas: una apagada
     // igual tiene su fila, con un botón para prenderla.
+    // ── Las mixtas SÍ entran ────────────────────────────────────────────
+    //
+    // Antes se descartaba toda extensión marcada `nsfw`, y eso dejaba fuera a
+    // ManhwaWeb — que es mixta: tiene manhwa y manga normales, y lo +18 detrás
+    // de un filtro propio. Esconderla entera era perder su parte normal.
+    //
+    // Lo que garantiza que no se cuele nada es otra cosa: a las mixtas SIEMPRE
+    // se les manda el valor seguro de su filtro de adultos (ver
+    // `_segurosPorExtension`). La zona normal ve su contenido normal; la Zona
+    // +18 ve el otro, con el filtro invertido.
+    //
+    // Una extensión +18 de punta a punta —HentaiLA, Eporner— sigue afuera: no
+    // tiene nada normal que mostrar.
     final instaladas = Map.fromEntries(
-      ExtensionUtils.runtimes.entries.where((e) => !e.value.extension.nsfw),
+      ExtensionUtils.runtimes.entries.where((e) =>
+          !e.value.extension.nsfw ||
+          ExtensionUtils.esMixta(e.value.extension.package)),
     );
 
     // ── El orden: primero lo que de verdad usás ─────────────────────────────
@@ -1067,11 +1085,16 @@ class CatalogoExtensionesController extends GetxController {
       // Dos ejes pueden caer en el mismo filtro del sitio; ahí se acumulan.
       (filtro[donde.clave] ??= <String>[]).add(donde.valor);
     }
-    // Solo lo seguro y nada más no es un filtro: sería pedir lo mismo de
-    // siempre por un camino más caro. Ahí se deja que la fila use latest().
-    final soloSeguro =
-        filtro.length == (_segurosPorExtension[package]?.length ?? 0);
-    return (filtro.isEmpty || soloSeguro) ? null : filtro;
+    // ── Con lo seguro puesto SIEMPRE se usa search ────────────────────
+    //
+    // Aunque el usuario no haya elegido nada. `latest()` no acepta filtros, así
+    // que por ese camino no hay forma de decirle «sin contenido para adultos» —
+    // y en ManhwaWeb `latest()` va a otro endpoint del sitio, uno que no toma
+    // ese parámetro.
+    //
+    // Costar un `search(''')` en vez de un `latest()` para dos extensiones es
+    // barato. Que se cuele una portada +18 en el Home no lo es.
+    return filtro.isEmpty ? null : filtro;
   }
 
   /// Alimenta el carrusel con la tanda de esta extensión.
@@ -1079,9 +1102,18 @@ class CatalogoExtensionesController extends GetxController {
   /// Se toman [porExtension] con portada. Sin portada no sirven: el carrusel
   /// es una imagen grande y un hueco ahí se ve peor que no mostrar nada.
   void _sumarADestacados(FilaDeExtension fila, List<ExtensionListItem> items) {
+    // ── El tope CRECE con las páginas ────────────────────────────────────
+    //
+    // Acá estaba el techo que dejaba el acordeón corto. Tomaba ocho y punto,
+    // así que pedir más páginas no servía: `traerMas` traía cuarenta portadas y
+    // este `take` volvía a dejar ocho.
+    //
+    // Ahora son ocho POR PÁGINA traída: con la primera hay ocho, con la
+    // segunda dieciséis, y así. Es lo que hace que deslizando se siga
+    // encontrando contenido en vez de terminarse a la segunda vuelta.
     final conPortada = items
         .where((i) => (i.cover ?? '').isNotEmpty)
-        .take(porExtension)
+        .take(porExtension * fila.pagina)
         .toList();
     if (conPortada.isEmpty) return;
     final i = destacados.indexWhere((d) => d.$1 == fila.package);

@@ -67,8 +67,18 @@ class SearchPageController extends GetxController {
     // ninguna, sin excepción — antes bastaba con tener el switch de NSFW
     // prendido para que apareciesen acá mezcladas con el resto.
     if (nsfwOnly) {
-      exts.removeWhere((element) => !element.extension.nsfw);
+      // Las +18 enteras, MÁS las mixtas: ShadeManga y ManhwaWeb tienen una
+      // sección de adultos detrás de un filtro propio, y sin esto quedaban
+      // fuera de su propia zona. Al abrirlas desde acá, el buscador por
+      // extensión les pone ese filtro puesto de entrada (ver `soloAdulto` en
+      // ExtensionSearcherPage).
+      exts.removeWhere((element) =>
+          !element.extension.nsfw &&
+          !ExtensionUtils.esMixta(element.extension.package));
     } else {
+      // Y acá al revés: fuera las +18 enteras. Una mixta SÍ se queda, con su
+      // contenido normal — el filtro de adultos va cerrado por defecto y el
+      // app lo manda explícito.
       exts.removeWhere((element) => element.extension.nsfw);
     }
     // Escribir el NOMBRE de una extension la encuentra.

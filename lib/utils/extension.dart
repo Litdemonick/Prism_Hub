@@ -700,6 +700,68 @@ class ExtensionUtils {
         officialVerified: officialVerified);
   }
 
+  // ─── Extensiones MIXTAS ───────────────────────────────────────────────────
+  //
+  // Una extensión mixta tiene contenido normal Y contenido +18, separados por
+  // un filtro propio del sitio. Hoy son dos: ShadeManga y ManhwaWeb.
+  //
+  // ── Por qué la marca `nsfw` no alcanza ──────────────────────────────────
+  //
+  // Porque es binaria, y con ella una extensión solo puede vivir en UNA zona:
+  // el buscador normal descarta las `nsfw`, y el de la Zona +18 descarta las
+  // que no lo son. Una mixta tiene que estar en las dos — con su contenido
+  // normal en una y el de adultos en la otra.
+  //
+  // ── Por qué no basta con mirar `adultOption` ─────────────────────────────
+  //
+  // Porque HentaiLA también tiene uno: su filtro de «Censura» usa
+  // `adultOption` para marcar la opción sin censurar. Pero HentaiLA es +18 de
+  // punta a punta — no tiene nada «normal» que mostrar. Tomar `adultOption`
+  // como señal de mixta la habría metido en la zona normal, que es exactamente
+  // el error que no se puede cometer.
+  //
+  // Así que la regla mira las dos cosas: **mixta = el manifiesto dice que NO es
+  // +18 entera, Y además tiene un filtro con puerta a adultos**. Una extensión
+  // marcada `nsfw: true` no se consulta nunca, así que no hay forma de que se
+  // filtre a la zona normal por un `adultOption` usado para otra cosa.
+  static final Set<String> _mixtas = {};
+  static bool _mixtasLeidas = false;
+
+  /// Las que tienen contenido normal y +18 a la vez.
+  ///
+  /// Vacío hasta que alguien llame a [detectarMixtas]. Devolver vacío es el
+  /// lado seguro: la Zona +18 muestra una extensión mixta de menos, que es
+  /// mucho mejor que la zona normal mostrando una de más.
+  static Set<String> get mixtas => _mixtas;
+
+  static bool esMixta(String package) => _mixtas.contains(package);
+
+  /// Averigua cuáles son mixtas. Una sola vez por sesión.
+  ///
+  /// `createFilter()` corre JavaScript en el motor de cada extensión y ese
+  /// motor no es reentrante, así que esto NO se llama al arrancar: lo llama la
+  /// pantalla que lo necesita, cuando ya no hay nada más pidiéndole cosas.
+  static Future<void> detectarMixtas() async {
+    if (_mixtasLeidas) return;
+    _mixtasLeidas = true;
+    for (final e in runtimes.entries) {
+      // Las +18 enteras no se consultan: ver el comentario de arriba.
+      if (e.value.extension.nsfw) continue;
+      try {
+        final filtros =
+            await e.value.createFilter().timeout(const Duration(seconds: 8));
+        final tienePuerta = filtros.values.any(
+            (f) => f.adultOption != null && f.adultOption!.isNotEmpty);
+        if (tienePuerta) _mixtas.add(e.key);
+      } catch (err) {
+        // Si no se pudo saber, se la deja fuera. Una mixta que no aparece en
+        // la Zona +18 es un contenido menos; una +18 que aparece en la zona
+        // normal es un problema.
+        logger.info('[mixtas] ${e.value.extension.name}: $err');
+      }
+    }
+  }
+
   static String get extensionsDir => path.join(
         PrismHubDirectory.getDirectory,
         'extensions',
