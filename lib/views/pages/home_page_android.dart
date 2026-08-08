@@ -512,6 +512,18 @@ class _BarraDeFiltrosState extends State<_BarraDeFiltros> {
                               onPressed: c.restablecerFiltros,
                               child: Text('home.filtros-restablecer'.i18n),
                             ),
+                          // En escritorio no hay «tirar para refrescar»: el gesto
+                          // no existe con mouse. Sin esto, la única forma de poner el
+                          // Home al día —o de que aparezca una extensión recién
+                          // instalada— era cerrar y volver a abrir la app.
+                          if (!_esTactil) ...[
+                            const SizedBox(width: 8),
+                            _BotonDeBarra(
+                              icono: Icons.refresh_rounded,
+                              etiqueta: 'home.refrescar'.i18n,
+                              onTap: c.refrescarTodo,
+                            ),
+                          ],
                           if (!_esTactil && c.hayCambiosSinAplicar) ...[
                             const SizedBox(width: 8),
                             FilledButton.icon(
@@ -546,6 +558,32 @@ const _separadorDeChips = Padding(
     child: ColoredBox(color: Color(0x24FFFFFF)),
   ),
 );
+
+/// Un botón discreto de la barra de filtros, solo con su ícono.
+class _BotonDeBarra extends StatelessWidget {
+  const _BotonDeBarra({
+    required this.icono,
+    required this.etiqueta,
+    required this.onTap,
+  });
+
+  final IconData icono;
+  final String etiqueta;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return Tooltip(
+      message: etiqueta,
+      child: IconButton(
+        onPressed: onTap,
+        icon: Icon(icono, size: 20, color: HomeTheme.textMuted),
+        constraints: const BoxConstraints(minWidth: 38, minHeight: 38),
+        splashRadius: 19,
+      ),
+    );
+  }
+}
 
 class _Chip extends StatelessWidget {
   const _Chip({

@@ -166,7 +166,8 @@
       "nuevos-manhwas": "Nuevos manhwas",
       "lo-mas-reciente": "Lo más reciente"
     },
-    "modo-buscando": "Buscando…"
+    "modo-buscando": "Buscando…",
+    "refrescar": "Refrescar"
   },
   "search": {
     "hint-text": "¡Por favor, busca ampliamente!~",

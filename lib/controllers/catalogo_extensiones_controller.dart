@@ -1320,6 +1320,23 @@ class CatalogoExtensionesController extends GetxController {
     await recargar();
   }
 
+  /// Si el conjunto de extensiones que alimentan el Home ya no es el mismo.
+  ///
+  /// Compara los paquetes, no la cantidad: instalar una y desactivar otra deja
+  /// el mismo número y sí es un cambio.
+  bool _cambiaronLasExtensiones() {
+    final ahora = <String>{
+      ...ExtensionUtils.runtimes.entries
+          .where((e) =>
+              !e.value.extension.nsfw ||
+              ExtensionUtils.esMixta(e.value.extension.package))
+          .map((e) => e.key),
+      ...ExtensionUtils.vistaPrevia.keys,
+    };
+    final antes = filas.map((f) => f.package).toSet();
+    return ahora.length != antes.length || !ahora.containsAll(antes);
+  }
+
   /// Vuelve a armar la lista entera.
   ///
   /// Hace falta cuando cambia el ESTADO de una extensión —se prendió, se
@@ -1334,6 +1351,20 @@ class CatalogoExtensionesController extends GetxController {
     // Tirar de la pantalla también reintenta los filtros: si la primera vez no
     // se pudieron leer, este es el gesto con el que el usuario pide de nuevo.
     unawaited(cargarGeneros());
+
+    // ── Y si cambió QUÉ extensiones hay, se rehace la lista ──────────────
+    //
+    // Antes esto solo volvía a pedir contenido a las filas que YA existían. Si
+    // el usuario instalaba una extensión nueva y volvía al Home, no aparecía
+    // por más que tirara de la pantalla: la fila no existía y nada la creaba.
+    // Había que cerrar la app.
+    //
+    // Refrescar es el gesto de «poneme al día», así que también tiene que
+    // enterarse de las que se instalaron, se prendieron o se apagaron.
+    if (_cambiaronLasExtensiones()) {
+      await recargar();
+      return;
+    }
     for (final fila in filas) {
       pedirSiHaceFalta(fila, forzar: true);
     }
