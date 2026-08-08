@@ -1176,15 +1176,12 @@ class ExtensionUtils {
           case FileSystemEvent.delete:
             runtimes.remove(package);
             extensionErrorMap.remove(event.path);
-            _safeReloadPage();
+            _recargarConCalma();
             break;
           case FileSystemEvent.create:
           case FileSystemEvent.modify:
             if (_loading.contains(package)) break;
-            runtimes.remove(package);
-            extensionErrorMap.remove(event.path);
-            await installByPath(event.path);
-            _safeReloadPage();
+            _reinstalarConCalma(package, event.path);
             break;
         }
       }
@@ -1197,6 +1194,62 @@ class ExtensionUtils {
     // Recién ahora runtimes está poblado — necesario para saber qué
     // packages son nsfw:true.
     await _migrateNsfwHistoryFavorites();
+  }
+
+  /// Relojes por paquete, para no reinstalar la misma extensión cinco veces.
+  static final Map<String, Timer> _relojesDeArchivo = {};
+
+  /// Reinstala una extensión que cambió en disco, agrupando los avisos.
+  ///
+  /// ── El problema medido ──────────────────────────────────────────────────
+  ///
+  /// El sistema de archivos no manda UN aviso por escritura: manda varios. En
+  /// el registro de Android se ven **tres `modify` por extensión**, uno detrás
+  /// del otro. Y cada uno hacía el trabajo completo: sacar el motor, volver a
+  /// instalar el guion —que arranca un intérprete de JavaScript nuevo— y
+  /// recargar la pantalla.
+  ///
+  /// Con una extensión no se nota. Al tocar «Activar todas» son diecisiete, o
+  /// sea unas cincuenta reinstalaciones y cincuenta recargas de pantalla
+  /// encimadas. Eso es lo que se sintió como que la app se trababa al volver al
+  /// Home y desplazarse: no era el Home, era el intérprete arrancando cincuenta
+  /// veces mientras se dibujaba.
+  ///
+  /// Con un reloj corto por paquete, los tres avisos de la misma extensión se
+  /// vuelven uno. Trescientos milisegundos alcanzan de sobra —los tres llegan
+  /// en el mismo instante— y no se siente como demora: instalar ya tardaba más
+  /// que eso.
+  static void _reinstalarConCalma(String package, String ruta) {
+    _relojesDeArchivo[package]?.cancel();
+    _relojesDeArchivo[package] =
+        Timer(const Duration(milliseconds: 300), () async {
+      _relojesDeArchivo.remove(package);
+      if (_loading.contains(package)) return;
+      runtimes.remove(package);
+      extensionErrorMap.remove(ruta);
+      try {
+        await installByPath(ruta);
+      } catch (e) {
+        // Una que falle no puede dejar el vigilante roto para las demás.
+        logger.info('[extensiones] no se pudo reinstalar $package: $e');
+      }
+      _recargarConCalma();
+    });
+  }
+
+  /// Un solo reloj para la recarga de pantalla.
+  static Timer? _relojDeRecarga;
+
+  /// Recarga la pantalla UNA vez, aunque cambien diecisiete extensiones.
+  ///
+  /// Cada `_safeReloadPage` rearma el Home entero. Diecisiete seguidas es
+  /// diecisiete veces el mismo trabajo, y solo la última sirve.
+  static void _recargarConCalma() {
+    _relojDeRecarga?.cancel();
+    _relojDeRecarga = Timer(const Duration(milliseconds: 400), () {
+      _relojDeRecarga = null;
+      _safeReloadPage();
+    });
   }
 
   // Ver DatabaseService.markNsfwByPackages: marca retroactivamente el
