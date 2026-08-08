@@ -475,14 +475,27 @@ class _AndroidMainPageState extends fluent.State<AndroidMainPage> {
                     // no se pisan nunca.
                     ? Row(
                         children: [
-                          AnimatedSlide(
-                            // Se va por donde entró: hacia afuera por el costado.
-                            offset: _barraEscondida
-                                ? const Offset(-1.6, 0)
-                                : Offset.zero,
+                          // ── Al esconderse tiene que SOLTAR el ancho ───────
+                          //
+                          // Antes era un AnimatedSlide, que corre el riel hacia
+                          // afuera pero le deja el lugar reservado: en el Row
+                          // seguía ocupando su columna. O sea que en Ajustes
+                          // —la única zona donde la barra se esconde— quedaba
+                          // una franja vacía a la izquierda y todo el contenido
+                          // aparecía corrido a la derecha. Reportado en vivo.
+                          //
+                          // De pie no pasaba porque ahí la barra FLOTA encima
+                          // del contenido: correrla ya libera la pantalla.
+                          //
+                          // Con AnimatedSize el ancho se va con ella, así que
+                          // Ajustes usa la pantalla entera, y el encogerse se
+                          // ve como que la barra se retira.
+                          AnimatedSize(
                             duration: const Duration(milliseconds: 260),
                             curve: Curves.easeOutCubic,
-                            child: _barraVertical(destinations),
+                            child: _barraEscondida
+                                ? const SizedBox.shrink()
+                                : _barraVertical(destinations),
                           ),
                           Expanded(
                             // El riel YA dejó pasar la franja de la barra del
