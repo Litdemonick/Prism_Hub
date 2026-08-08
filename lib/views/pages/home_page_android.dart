@@ -68,6 +68,18 @@ class HomeAndroid extends StatelessWidget {
       // y es lo que evita que las tarjetas queden debajo de los botones.
       child: Obx(() {
         if (c.filas.isEmpty) return const _SinExtensiones();
+        // ── Se calcula UNA vez por construcción ──────────────────────────
+        //
+        // Antes `_visibles(c)` se llamaba de nuevo en cada línea que lo
+        // necesitaba: una para `itemCount` y otra por cada ítem. Son listas
+        // recién filtradas, y entre una llamada y la siguiente el filtro puede
+        // haber cambiado —al aplicar un tipo, la lista se acorta— así que
+        // `itemCount` decía diez y el constructor encontraba dos:
+        //
+        //   RangeError (length): Invalid value: Not in inclusive range 0..1: 2
+        //
+        // Con la lista capturada acá, las dos cuentas salen del mismo dato.
+        final visibles = _visibles(c);
         return RefreshIndicator(
           // ── Deslizar aplica los filtros ────────────────────────────────
           //
@@ -95,7 +107,7 @@ class HomeAndroid extends StatelessWidget {
             padding: EdgeInsets.only(
                 bottom: MediaQuery.paddingOf(context).bottom + 10),
             // +3: la cabecera, los filtros y el carrusel.
-            itemCount: _visibles(c).length + 3,
+            itemCount: visibles.length + 3,
             // **Acá está la carga perezosa.** ListView.builder solo construye
             // lo que está cerca de la pantalla, y cada fila pide en su
             // initState — así, con 30 extensiones se piden las 2 o 3 que se
@@ -111,13 +123,19 @@ class HomeAndroid extends StatelessWidget {
               // —el fondo animado, una portada que termina de cargar— vuelve a
               // pintar TODA la lista visible. Con la capa propia, cada fila se
               // guarda rasterizada y solo se rehace la que cambió.
-              _ => RepaintBoundary(
-                  child: _FilaAndroid(
-                    key: ValueKey(_visibles(c)[i - 3].package),
-                    c: c,
-                    fila: _visibles(c)[i - 3],
-                  ),
-                ),
+              // El índice se vuelve a comprobar igual: entre que el
+              // ListView pidió su `itemCount` y que llama acá puede haber
+              // pasado un cuadro, y una lista más corta no puede tumbar la
+              // pantalla entera por una fila de más.
+              _ => i - 3 < visibles.length
+                  ? RepaintBoundary(
+                      child: _FilaAndroid(
+                        key: ValueKey(visibles[i - 3].package),
+                        c: c,
+                        fila: visibles[i - 3],
+                      ),
+                    )
+                  : const SizedBox.shrink(),
             },
           ),
         );
