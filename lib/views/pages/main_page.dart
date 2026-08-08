@@ -1088,16 +1088,23 @@ class _TransicionDeZonaState extends State<_TransicionDeZona>
       child: widget.child,
       builder: (context, hijo) {
         final t = Curves.easeOutCubic.transform(_c.value);
-        return Opacity(
-          // Nunca del todo transparente: un parpadeo a negro se nota más que
-          // el movimiento.
-          opacity: 0.35 + 0.65 * t,
-          child: Transform.translate(
-            // Corto a propósito. Un desplazamiento largo se siente lento
-            // aunque dure lo mismo, y acá se cambia de pestaña todo el tiempo.
-            offset: Offset(_lado * 34 * (1 - t), 0),
-            child: hijo,
-          ),
+        // ── Solo corrimiento, sin desvanecido ────────────────────────────
+        //
+        // El Opacity que había acá envolvía la pila ENTERA de pestañas, y eso
+        // obliga a Flutter a dibujar todo en una capa aparte para después
+        // aplicarle la transparencia. Con Impeller además saltaba una queja en
+        // cada cambio de zona:
+        //
+        //   Contents::SetInheritedOpacity should never be called when
+        //   Contents::CanAcceptOpacity returns false
+        //
+        // El corrimiento solo ya se lee igual de bien y no cuesta ninguna capa
+        // de más: es una transformación, no un redibujado.
+        return Transform.translate(
+          // Corto a propósito. Un desplazamiento largo se siente lento aunque
+          // dure lo mismo, y acá se cambia de pestaña todo el tiempo.
+          offset: Offset(_lado * 34 * (1 - t), 0),
+          child: hijo,
         );
       },
     );
