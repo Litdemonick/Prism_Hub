@@ -600,6 +600,23 @@ class CatalogoExtensionesController extends GetxController {
     for (final fila in filas) {
       fila.traidoEl = null;
     }
+    // ── Avisar del cambio A MANO ───────────────────────────────────────
+    //
+    // `tipoAplicado`, `generoAplicado` y `formatoAplicado` son campos planos,
+    // no Rx. Eso es a propósito —se leen en cada fila y no hace falta que cada
+    // lectura suscriba— pero tiene una consecuencia: al aplicar no cambia nada
+    // observable, así que el Obx del Home NO se entera.
+    //
+    // El síntoma medido en PC: se filtraba y las extensiones que no tenían ese
+    // género seguían arriba; había que bajar hasta el final para encontrar las
+    // que sí. Recién al salir del Home y volver aparecían ordenadas, porque
+    // ahí el árbol se reconstruía por otro motivo.
+    //
+    // Este `refresh` es el aviso. Y va ANTES de pedir nada: el orden se sabe
+    // de entrada —sale de los filtros ya leídos, no del contenido— así que los
+    // bloques grises salen directamente en su sitio definitivo y no se mueve
+    // nada cuando llegan las portadas.
+    filas.refresh();
     try {
       await refrescarTodo();
       // `refrescarTodo` solo ENCOLA; el trabajo sigue después. Se espera a que
@@ -610,6 +627,9 @@ class CatalogoExtensionesController extends GetxController {
       }
     } finally {
       aplicandoFiltros.value = false;
+      // Y otra vez al terminar: alguna fila pudo quedar sin contenido para
+      // este filtro, y eso cambia dónde va.
+      filas.refresh();
     }
   }
 
