@@ -785,11 +785,27 @@ class _CarruselAndroidState extends State<_CarruselAndroid>
   /// La firma de la lista la última vez que se acomodó la posición.
   int _firmaVista = -1;
 
-  /// El dedo está en la pantalla.
-  bool _arrastrando = false;
-
-  /// La lista cambió durante el gesto y falta acomodar la posición.
-  bool _reanclarAlSoltar = false;
+  /// ── El ancla es la TARJETA, no un número ────────────────────────────────
+  ///
+  /// `_p` es una posición en la lista aplanada, y esa lista CRECE por el medio:
+  /// cuando `traerMas` le suma ocho portadas a una extensión, todo lo que viene
+  /// después se corre ocho lugares. El mismo `_p` pasa a apuntar a otra
+  /// tarjeta.
+  ///
+  /// La version anterior recalculaba `_p` desde (extension, posicion). Eso
+  /// arreglaba el caso simple, pero perdia la FRACCION del gesto —el usuario
+  /// estaba a mitad de camino entre dos tarjetas y quedaba clavado en una— asi
+  /// que habia que esperar a que soltara. Y ahi aparecia el otro problema: al
+  /// soltar, la animacion arrancaba hacia un destino calculado con los indices
+  /// VIEJOS, terminaba en el lugar equivocado, y recien despues se corregia.
+  /// Eso es el «va para atras, para adelante, y despues se acomoda».
+  ///
+  /// Guardando qué tarjeta se está mirando, encontrarla de nuevo en la lista
+  /// nueva es exacto: se le suma la misma fracción y el dibujo no cambia ni un
+  /// píxel. Al ser invisible, se puede hacer EN CUALQUIER MOMENTO —incluso con
+  /// el dedo en la pantalla— y desaparece toda la maquinaria de postergarlo.
+  String? _anclaPaquete;
+  String? _anclaUrl;
 
   /// Barata y suficiente: cambia si cambió la cantidad de extensiones o la de
   /// portadas de alguna.
@@ -866,6 +882,39 @@ class _CarruselAndroidState extends State<_CarruselAndroid>
     }
   }
 
+  /// Vuelve a poner `_p` sobre la MISMA tarjeta después de que la lista cambió.
+  ///
+  /// Se conserva la parte decimal: si el usuario estaba a un tercio de camino
+  /// hacia la siguiente, sigue a un tercio. Por eso no se ve nada.
+  void _reubicarPorAncla(
+    List<(String, ExtensionListItem)> planos,
+    List<(String, List<ExtensionListItem>)> grupos,
+  ) {
+    final pkg = _anclaPaquete;
+    final url = _anclaUrl;
+    if (pkg == null || url == null) return;
+
+    final fraccion = _p - _p.floorToDouble();
+    final i = planos.indexWhere((e) => e.$1 == pkg && e.$2.url == url);
+    if (i >= 0) {
+      _p = i + fraccion;
+      return;
+    }
+    // La tarjeta ya no está —cambió el filtro, o la extensión devolvió otra
+    // cosa—. Ahí se cae a la posición guardada, que es lo mejor que hay.
+    _p = _indiceGlobal(grupos)
+        .toDouble()
+        .clamp(0.0, (planos.length - 1).toDouble());
+  }
+
+  /// Anota qué tarjeta se está mirando, para poder encontrarla después.
+  void _recordarAncla(List<(String, ExtensionListItem)> planos) {
+    final i = _p.round();
+    if (i < 0 || i >= planos.length) return;
+    _anclaPaquete = planos[i].$1;
+    _anclaUrl = planos[i].$2.url;
+  }
+
   void _irA(double destino, List<(String, List<ExtensionListItem>)> grupos) {
     _viaje = Tween<double>(begin: _p, end: destino)
         .animate(CurvedAnimation(parent: _anim, curve: Curves.easeOutCubic));
@@ -923,18 +972,18 @@ class _CarruselAndroidState extends State<_CarruselAndroid>
       // se acomoda al soltar, cuando ya no se nota.
       final firma = _firmaDe(grupos);
       if (firma != _firmaVista) {
-        if (_arrastrando || _anim.isAnimating) {
-          _reanclarAlSoltar = true;
-        } else {
-          _firmaVista = firma;
-          _reanclarAlSoltar = false;
-          _p = _indiceGlobal(grupos).toDouble();
-        }
+        _firmaVista = firma;
+        _reubicarPorAncla(planos, grupos);
       }
 
       final ultimo = (planos.length - 1).toDouble();
       if (_p > ultimo) _p = ultimo;
       if (_p < 0) _p = 0;
+      // Con la posición ya acomodada, se anota qué tarjeta es. Va en cada
+      // cuadro a propósito: durante el arrastre el foco cambia todo el tiempo,
+      // y el ancla tiene que seguirlo o al crecer la lista apuntaría a una
+      // tarjeta que el usuario dejó atrás hace rato.
+      _recordarAncla(planos);
 
       // El ancho sale de acá y no de MediaQuery: en horizontal ya viene sin la
       // franja que se lleva la barra del sistema.
@@ -955,10 +1004,7 @@ class _CarruselAndroidState extends State<_CarruselAndroid>
               height: m.alto,
               child: GestureDetector(
                 behavior: HitTestBehavior.opaque,
-                onHorizontalDragStart: (_) {
-                  _anim.stop();
-                  _arrastrando = true;
-                },
+                onHorizontalDragStart: (_) => _anim.stop(),
                 onHorizontalDragUpdate: (d) {
                   final paso = (m.ancho + m.anchoChico) / 2 + _aire;
                   setState(() {
@@ -966,10 +1012,6 @@ class _CarruselAndroidState extends State<_CarruselAndroid>
                   });
                 },
                 onHorizontalDragEnd: (d) {
-                  _arrastrando = false;
-                  // Si la lista creció durante el gesto, se acomoda ahora:
-                  // invalidando la firma, el próximo build re-ancla.
-                  if (_reanclarAlSoltar) _firmaVista = -1;
                   final v = d.primaryVelocity ?? 0;
                   // Con impulso se salta a la siguiente aunque el dedo no haya
                   // llegado a la mitad: es lo que espera un deslizar rápido.
