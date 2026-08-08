@@ -8,6 +8,7 @@ import 'package:prismhub/data/services/database_service.dart';
 import 'package:prismhub/data/services/extension_service.dart';
 import 'package:prismhub/models/index.dart';
 import 'package:prismhub/utils/extension.dart';
+import 'package:prismhub/utils/i18n.dart';
 import 'package:prismhub/utils/log.dart';
 import 'package:prismhub/utils/prismhub_directory.dart';
 import 'package:path/path.dart' as p;
@@ -710,8 +711,23 @@ class CatalogoExtensionesController extends GetxController {
     if (modoDe(fila) != ModoDeFila.reciente) return null;
     final ext = ExtensionUtils.runtimes[fila.package]?.extension ??
         ExtensionUtils.vistaPrevia[fila.package]?.extension;
-    final etiqueta = ext?.latestLabel?.trim();
-    return (etiqueta == null || etiqueta.isEmpty) ? null : etiqueta;
+    final clave = ext?.latestLabel?.trim();
+    if (clave == null || clave.isEmpty) return null;
+
+    // ── Se traduce, con respaldo ────────────────────────────────────────
+    //
+    // La extensión manda una CLAVE (`programacion`, `novedades`) y acá se
+    // busca su texto en el idioma del usuario. Si la clave no está en el
+    // diccionario —una extensión de la comunidad que inventó la suya, o una
+    // nueva del repo que llegó antes que la traducción— i18n devuelve la ruta
+    // completa, que no le sirve a nadie.
+    //
+    // En ese caso se muestra lo que vino tal cual. Es peor idioma pero es
+    // información real, y una extensión no puede quedarse sin rótulo por no
+    // estar en una lista nuestra.
+    final ruta = 'home.seccion.$clave';
+    final texto = ruta.i18n;
+    return texto == ruta ? clave : texto;
   }
 
   ModoDeFila modoDe(FilaDeExtension fila) =>

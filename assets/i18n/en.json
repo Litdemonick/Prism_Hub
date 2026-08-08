@@ -156,6 +156,19 @@
       "manhua": "Manhua",
       "manga": "Manga",
       "novela": "Novels"
+    },
+    "seccion": {
+      "programacion": "Schedule",
+      "ultimos-anadidos": "Recently added",
+      "anadidos-recientemente": "Recently added",
+      "recien-anadidas": "Recently added",
+      "novedades": "What's new",
+      "episodios-recientes": "Recent episodes",
+      "ultimos-episodios": "Latest episodes",
+      "nuevos-lanzamientos": "New releases",
+      "nuevos-capitulos": "New chapters",
+      "nuevos-manhwas": "New manhwa",
+      "lo-mas-reciente": "Latest"
     }
   },
   "search": {
