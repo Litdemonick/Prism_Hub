@@ -143,15 +143,42 @@ class _RelojDelBrillo with WidgetsBindingObserver {
 }
 
 class _EsqueletoState extends State<Esqueleto> {
+  /// Si este bloque está en una pantalla que se ve.
+  ///
+  /// ── El desperdicio que había ────────────────────────────────────────────
+  ///
+  /// Al abrir un capítulo, la ficha NO se desmonta: queda debajo, tapada por
+  /// el lector o el reproductor. Y con ella quedan sus bloques grises, cada uno
+  /// escuchando el reloj y reconstruyéndose sesenta veces por segundo durante
+  /// todo el rato que dura el capítulo. No se ven —hay una pantalla opaca
+  /// encima— pero se rehacen igual.
+  ///
+  /// Flutter ya avisa de esto: el Navigator envuelve cada ruta en un
+  /// `TickerMode` y lo apaga cuando queda tapada. Lo que pasa es que eso
+  /// silencia a los Ticker de los widgets con TickerProvider, y el reloj del
+  /// brillo es uno solo, creado a mano —está explicado más arriba—, así que no
+  /// se enteraba. Ahora se mira acá.
+  ///
+  /// Se lee en didChangeDependencies porque TickerMode es un InheritedWidget:
+  /// avisa solo cuando cambia, sin que nadie tenga que preguntar.
+  bool _seVe = false;
+
   @override
-  void initState() {
-    super.initState();
-    _RelojDelBrillo.sumar();
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    final ahora = TickerMode.valuesOf(context).enabled;
+    if (ahora == _seVe) return;
+    if (_seVe) {
+      _RelojDelBrillo.restar();
+    } else {
+      _RelojDelBrillo.sumar();
+    }
+    _seVe = ahora;
   }
 
   @override
   void dispose() {
-    _RelojDelBrillo.restar();
+    if (_seVe) _RelojDelBrillo.restar();
     super.dispose();
   }
 
@@ -176,11 +203,18 @@ class _EsqueletoState extends State<Esqueleto> {
             ),
             // Y el reflejo, encima y recortado. Se corre con un Transform, así
             // que cada cuadro solo mueve una franja ya dibujada.
-            Positioned.fill(
-              child: IgnorePointer(
-                child: ValueListenableBuilder<double>(
-                  valueListenable: _RelojDelBrillo.valor,
-                  builder: (context, t, _) {
+            //
+            // Tapado por otra pantalla no se escucha al reloj: sin esto, cada
+            // bloque se rehacía sesenta veces por segundo sin que nadie lo
+            // viera. Ver _seVe.
+            if (!_seVe)
+              const SizedBox.shrink()
+            else
+              Positioned.fill(
+                child: IgnorePointer(
+                  child: ValueListenableBuilder<double>(
+                    valueListenable: _RelojDelBrillo.valor,
+                    builder: (context, t, _) {
                     // ── El reflejo se MUEVE dentro de la caja ────────────
                     //
                     // Antes se corría la caja entera con FractionalTranslation,
@@ -194,25 +228,25 @@ class _EsqueletoState extends State<Esqueleto> {
                     // paradas del degradado. Rearmar un degradado por cuadro no
                     // cuesta una capa de dibujo, así que sigue siendo barato, y
                     // la franja cruza completa de lado a lado.
-                    final x = -1 + 3 * t;
-                    return DecoratedBox(
-                      decoration: BoxDecoration(
-                        gradient: LinearGradient(
-                          begin: Alignment(x - 0.6, -0.4),
-                          end: Alignment(x + 0.6, 0.4),
-                          colors: const [
-                            Color(0x00FFFFFF),
-                            Color(0x14FFFFFF),
-                            Color(0x00FFFFFF),
-                          ],
-                          stops: const [0.0, 0.5, 1.0],
+                      final x = -1 + 3 * t;
+                      return DecoratedBox(
+                        decoration: BoxDecoration(
+                          gradient: LinearGradient(
+                            begin: Alignment(x - 0.6, -0.4),
+                            end: Alignment(x + 0.6, 0.4),
+                            colors: const [
+                              Color(0x00FFFFFF),
+                              Color(0x14FFFFFF),
+                              Color(0x00FFFFFF),
+                            ],
+                            stops: const [0.0, 0.5, 1.0],
+                          ),
                         ),
-                      ),
-                    );
-                  },
+                      );
+                    },
+                  ),
                 ),
               ),
-            ),
           ],
         ),
       ),

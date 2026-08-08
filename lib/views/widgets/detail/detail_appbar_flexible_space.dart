@@ -148,7 +148,21 @@ class _DetailAppbarflexibleSpaceState extends State<DetailAppbarflexibleSpace> {
   late DetailPageController c = Get.find(tag: widget.tag);
 
   double _offset = 1;
-  double _opacity = 1;
+  /// Cuánto se ve el bloque de la cabecera, de 1 a 0 según el desplazamiento.
+  ///
+  /// ── Por qué un ValueNotifier y no un campo con setState ────────────────
+  ///
+  /// Era un campo, y `_handleScroll` hacía `setState` en cada cuadro del
+  /// desplazamiento. Eso rehacía la cabecera ENTERA sesenta veces por segundo:
+  /// el fondo, la portada, la línea de la extensión y el título — y el título
+  /// se mide con un TextPainter antes de dibujarse, para saber si hace falta el
+  /// botón de «ver completo». O sea que cada cuadro del scroll pagaba una
+  /// medición de texto que siempre daba lo mismo.
+  ///
+  /// Con el notificador, deslizar no reconstruye nada: solo se vuelven a armar
+  /// las dos piezas que de verdad dependen del valor —el velo y la caja que se
+  /// desvanece— y el contenido de adentro se pasa ya hecho, por `child`.
+  final _opacidad = ValueNotifier<double>(1);
 
   MedidasCabecera get _m => widget.medidas;
 
@@ -161,14 +175,15 @@ class _DetailAppbarflexibleSpaceState extends State<DetailAppbarflexibleSpace> {
   @override
   void dispose() {
     c.scrollController.removeListener(_handleScroll);
+    _opacidad.dispose();
     super.dispose();
   }
 
   void _handleScroll() {
     _offset = c.scrollController.offset;
     final next = _scrollListener();
-    if ((next - _opacity).abs() < 0.02) return;
-    setState(() => _opacity = next);
+    if ((next - _opacidad.value).abs() < 0.02) return;
+    _opacidad.value = next;
   }
 
   double _scrollListener() {
@@ -240,8 +255,11 @@ class _DetailAppbarflexibleSpaceState extends State<DetailAppbarflexibleSpace> {
         // cualquier portada —arriba el degradado es casi transparente— y la
         // imagen sigue estando. Que la barra tape el cuerpo de la página no
         // depende de este velo sino del fondo del SliverAppBar, que es sólido.
-        ColoredBox(
-          color: HomeTheme.bg.withValues(alpha: (1 - _opacity) * 0.78),
+        ValueListenableBuilder<double>(
+          valueListenable: _opacidad,
+          builder: (context, o, _) => ColoredBox(
+            color: HomeTheme.bg.withValues(alpha: (1 - o) * 0.78),
+          ),
         ),
       ],
     );
@@ -404,17 +422,23 @@ class _DetailAppbarflexibleSpaceState extends State<DetailAppbarflexibleSpace> {
             // ahí, y sus botones seguían recibiendo toques. Con la cabecera
             // plegada se podía tocar "Continuar" sin verlo, a través de la
             // barra.
-            child: IgnorePointer(
-              ignoring: _opacity < 0.05,
-              child: Opacity(
-                opacity: _opacity,
-                // Además de desvanecerse, el bloque se va un poco hacia
-                // arriba. Solo con la opacidad el cambio se lee como un
-                // parpadeo; acompañándolo con un desplazamiento chico se
-                // entiende que la cabecera se está plegando.
-                child: Transform.translate(
-                  offset: Offset(0, (1 - _opacity) * -14),
-                  child: _contenido(),
+            child: ValueListenableBuilder<double>(
+              valueListenable: _opacidad,
+              // El contenido se arma UNA vez y se pasa hecho: deslizar solo
+              // cambia la opacidad y el desplazamiento, no lo que hay adentro.
+              child: _contenido(),
+              builder: (context, o, contenido) => IgnorePointer(
+                ignoring: o < 0.05,
+                child: Opacity(
+                  opacity: o,
+                  // Además de desvanecerse, el bloque se va un poco hacia
+                  // arriba. Solo con la opacidad el cambio se lee como un
+                  // parpadeo; acompañándolo con un desplazamiento chico se
+                  // entiende que la cabecera se está plegando.
+                  child: Transform.translate(
+                    offset: Offset(0, (1 - o) * -14),
+                    child: contenido,
+                  ),
                 ),
               ),
             ),
