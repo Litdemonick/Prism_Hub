@@ -963,25 +963,22 @@ class _CarruselAndroidState extends State<_CarruselAndroid>
     // mismos títulos en dos páginas distintas y basta con que uno se cuele para
     // que el usuario vea el mismo anime dos veces al deslizar. Red de seguridad
     // barata: un conjunto de direcciones ya vistas.
-    // ── Una de cada extensión, por turnos ──────────────────────────────
+    // ── Por bloques: las ocho de una, después las ocho de la otra ──────
     //
-    // Antes se recorría extensión por extensión: las cuarenta de FuegoCine, y
-    // recién después las de AnimeFenix. Con eso el acordeón SIEMPRE empezaba con
-    // la misma —había que deslizar cuarenta tarjetas para ver otra— y las
-    // últimas extensiones no aparecían nunca.
+    // Se probó intercalar una de cada extensión por turnos, y no es lo que se
+    // quiere: el acordeón es la vidriera de la SECCIÓN de cada sitio —«Últimos
+    // añadidos», «Programación», «Nuevos capítulos»— y esa sección se lee de
+    // corrido. Mezclada, cada tarjeta era de otro sitio y no se entendía qué se
+    // estaba mirando.
     //
-    // Por turnos, las primeras tarjetas son lo más nuevo de ocho extensiones
-    // distintas. Se ve de entrada todo lo que hay abajo, una de cada una, y
-    // recién cuando se agota la primera vuelta empieza la segunda. Las que
-    // tienen menos portadas se acaban antes y las demás siguen: no queda hueco.
+    // Recorriendo extensión por extensión, las ocho primeras son la sección de
+    // una, las ocho siguientes la de otra, y el encabezado de cada tarjeta dice
+    // de dónde viene. Que no arranque siempre por la misma lo resuelve la
+    // rotación de cada apertura, no el orden de acá.
     final todo = <(String, ExtensionListItem)>[];
     final vistas = <String>{};
-    final masLarga =
-        grupos.fold<int>(0, (m, g) => g.$2.length > m ? g.$2.length : m);
-    for (var vuelta = 0; vuelta < masLarga; vuelta++) {
-      for (final (package, items) in grupos) {
-        if (vuelta >= items.length) continue;
-        final item = items[vuelta];
+    for (final (package, items) in grupos) {
+      for (final item in items) {
         // La misma dirección en DOS extensiones distintas sí es otro ítem, así
         // que la clave lleva el paquete.
         if (!vistas.add('$package|${item.url}')) continue;
@@ -2180,6 +2177,21 @@ class _GrillaPaginadaState extends State<_GrillaPaginada> {
       }
       if (paginas < 1) paginas = 1;
       if (paginas > _maxPaginas) paginas = _maxPaginas;
+      // ── Una página más, brillando, mientras trae ───────────────────────
+      //
+      // No se reemplazan las portadas que ya están: eso se probó y se ve mal
+      // —desaparecen, entran bloques, vuelven—. Va como página EXTRA al final,
+      // así lo que se está mirando no se mueve y el puntito de más dice que hay
+      // algo viniendo.
+      //
+      // Página entera y no dos celdas sueltas: esta grilla dibuja solo páginas
+      // llenas a propósito, porque una a medias deja una fila de negro (ver
+      // arriba). Dos celdas romperían justamente eso.
+      final trayendo = widget.c.filas
+              .any((f) => f.package == widget.package && f.refrescando.value) &&
+          widget.items.isNotEmpty;
+      final paginaExtra = trayendo && paginas < _maxPaginas;
+      if (paginaExtra) paginas++;
       // Girar el teléfono cambia cuántas entran por página, así que la página
       // en la que estaba el usuario puede dejar de existir. Sin esto el
       // PageView se queda apuntando a una página que ya no está y muestra un
@@ -2210,6 +2222,25 @@ class _GrillaPaginadaState extends State<_GrillaPaginada> {
                 if (i >= paginas - 1) unawaited(widget.c.traerMas());
               },
               itemBuilder: (context, pagina) {
+                // La página extra: bloques en gris, sin contenido detrás.
+                if (paginaExtra && pagina == paginas - 1) {
+                  return Padding(
+                    padding: EdgeInsets.symmetric(horizontal: margen),
+                    child: GridView.builder(
+                      physics: const NeverScrollableScrollPhysics(),
+                      padding: EdgeInsets.zero,
+                      gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
+                        crossAxisCount: columnas,
+                        mainAxisSpacing: _hueco,
+                        crossAxisSpacing: _hueco,
+                        childAspectRatio: anchoCelda / altoCelda,
+                      ),
+                      itemCount: porPagina,
+                      itemBuilder: (_, __) =>
+                          EsqueletoTarjeta(ancho: anchoCelda),
+                    ),
+                  );
+                }
                 final desde = pagina * porPagina;
                 final hasta =
                     desde + porPagina < visibles ? desde + porPagina : visibles;
