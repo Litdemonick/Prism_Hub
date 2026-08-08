@@ -13,6 +13,7 @@ import 'package:prismhub/utils/hidden_cards.dart';
 import 'package:prismhub/utils/history_cover.dart';
 import 'package:prismhub/utils/i18n.dart';
 import 'package:prismhub/utils/search_text.dart';
+import 'package:prismhub/views/widgets/franja_de_zona.dart';
 import 'package:prismhub/views/widgets/home/animated_background_glow.dart';
 import 'package:prismhub/views/widgets/home/home_media_card.dart';
 import 'package:prismhub/views/widgets/home/home_theme.dart';
@@ -458,6 +459,29 @@ class _HistoryPageState extends State<HistoryPage> {
   }
 
   Widget _buildTabs() {
+    // ── En el teléfono, una sola fila que se desliza ─────────────────────
+    //
+    // Cinco pastillas no entran a lo ancho, así que el Wrap las partía en dos
+    // renglones. Deslizando entran las cinco en uno solo, y el renglón que se
+    // ahorra es una fila de portadas que se ve.
+    if (Platform.isAndroid) {
+      return SizedBox(
+        height: 38,
+        child: ListView.separated(
+          scrollDirection: Axis.horizontal,
+          padding: const EdgeInsets.symmetric(horizontal: 16),
+          itemCount: _tabs.length,
+          separatorBuilder: (_, __) => const SizedBox(width: 10),
+          itemBuilder: (_, index) => Center(
+            child: _chip(
+              _tabs[index].i18n,
+              index == _tabIndex,
+              () => setState(() => _tabIndex = index),
+            ),
+          ),
+        ),
+      );
+    }
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 16),
       child: Wrap(
@@ -525,6 +549,113 @@ class _HistoryPageState extends State<HistoryPage> {
             ),
         ],
       ),
+    );
+  }
+
+  /// ¿Hay algún filtro puesto? Para el puntito del botón.
+  ///
+  /// El orden por defecto NO cuenta como filtro: es el que tiene siempre, y un
+  /// puntito encendido desde el arranque no avisa de nada.
+  bool get _hayFiltroPuesto =>
+      _estado != _EstadoFiltro.todos || _orden != _Orden.recientes;
+
+  /// Estado y orden, en una hoja.
+  ///
+  /// La misma hoja que ya usan Extensiones, el repositorio y Buscar: un botón
+  /// en la franja de arriba que la abre. Antes eran ocho pastillas en dos
+  /// renglones fijos encima de la primera tarjeta.
+  void _abrirFiltros() {
+    final etiquetasEstado = {
+      _EstadoFiltro.todos: 'history.state-all'.i18n,
+      _EstadoFiltro.pendiente: 'history.state-pending'.i18n,
+      _EstadoFiltro.completado: 'history.state-completed'.i18n,
+      _EstadoFiltro.finalizado: 'history.state-finished'.i18n,
+    };
+    final etiquetasOrden = {
+      _Orden.recientes: 'history.sort-recent'.i18n,
+      _Orden.antiguos: 'history.sort-oldest'.i18n,
+      _Orden.az: 'history.sort-az'.i18n,
+      _Orden.za: 'history.sort-za'.i18n,
+    };
+
+    showModalBottomSheet(
+      context: context,
+      showDragHandle: true,
+      useSafeArea: true,
+      isScrollControlled: true,
+      backgroundColor: HomeTheme.cardSurface,
+      constraints: const BoxConstraints(maxWidth: 640),
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      ),
+      builder: (hojaContext) {
+        // StatefulBuilder para que al tocar una pastilla se repinte la hoja: el
+        // setState de la página no llega acá, que es otro árbol. Y el de la
+        // página se llama igual, para que la lista de atrás se filtre en el
+        // momento y se vea el efecto sin cerrar.
+        return StatefulBuilder(
+          builder: (hojaContext, setHoja) {
+            Widget titulo(String texto) => Padding(
+                  padding: const EdgeInsets.fromLTRB(0, 12, 0, 10),
+                  child: Text(
+                    texto,
+                    style: const TextStyle(
+                      fontSize: 15,
+                      fontWeight: FontWeight.w700,
+                      color: HomeTheme.textPrimary,
+                    ),
+                  ),
+                );
+
+            return SingleChildScrollView(
+              padding: const EdgeInsets.fromLTRB(20, 0, 20, 24),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  // El estado no se ofrece en Favoritos: ahí no hay avance del
+                  // usuario que filtrar —eso vive en el historial— y dejar
+                  // pastillas que no hacen nada confunde más que ayudar.
+                  if (!_onFavoritesTab) ...[
+                    titulo('history.state'.i18n),
+                    Wrap(
+                      spacing: 8,
+                      runSpacing: 8,
+                      children: [
+                        for (final e in _EstadoFiltro.values)
+                          _chip(
+                            etiquetasEstado[e]!,
+                            _estado == e,
+                            () {
+                              setState(() => _estado = e);
+                              setHoja(() {});
+                            },
+                          ),
+                      ],
+                    ),
+                  ],
+                  titulo('history.sort'.i18n),
+                  Wrap(
+                    spacing: 8,
+                    runSpacing: 8,
+                    children: [
+                      for (final o in _Orden.values)
+                        _chip(
+                          etiquetasOrden[o]!,
+                          _orden == o,
+                          () {
+                            setState(() => _orden = o);
+                            setHoja(() {});
+                          },
+                        ),
+                    ],
+                  ),
+                ],
+              ),
+            );
+          },
+        );
+      },
     );
   }
 
@@ -665,8 +796,14 @@ class _HistoryPageState extends State<HistoryPage> {
                   slivers: [
                     const SliverToBoxAdapter(child: SizedBox(height: 8)),
                     SliverToBoxAdapter(child: _buildTabs()),
-                    SliverToBoxAdapter(child: _buildFiltrosYOrden()),
-                    SliverToBoxAdapter(child: _buildSearchAndActions()),
+                    // En el teléfono, estado y orden viven en la hoja del
+                    // botón de filtros, y el buscador y «borrar todo» en la
+                    // franja de arriba. En escritorio hay ancho de sobra y se
+                    // quedan a la vista, que es más rápido de usar con ratón.
+                    if (!Platform.isAndroid) ...[
+                      SliverToBoxAdapter(child: _buildFiltrosYOrden()),
+                      SliverToBoxAdapter(child: _buildSearchAndActions()),
+                    ],
                     _buildGrid(),
                   ],
                 ),
@@ -687,14 +824,58 @@ class _HistoryPageState extends State<HistoryPage> {
       // quedaba nada y desbordaba (confirmado en vivo). El buscador está
       // ARRIBA, así que sigue visible con el teclado abierto.
       resizeToAvoidBottomInset: false,
-      appBar: AppBar(
-        backgroundColor: HomeTheme.bg,
-        title: Text(
-          widget.zone ? 'nsfw18.title'.i18n : 'home.history'.i18n,
-          style: const TextStyle(color: HomeTheme.textPrimary),
-        ),
+      // Sin AppBar: la franja fina, como Inicio, Biblioteca, Buscar y
+      // Extensiones. Ver FranjaDeZona.
+      body: Column(
+        children: [
+          FranjaDeZona(
+            titulo: widget.zone ? 'nsfw18.title'.i18n : 'home.history'.i18n,
+            ayuda: 'common.search'.i18n,
+            controlador: _searchController,
+            alEscribir: (value) => setState(() => _query = value),
+            alEnviar: (value) => setState(() => _query = value),
+            acciones: [
+              // ── Los filtros, en un botón ────────────────────────────────
+              //
+              // Eran trece pastillas en cuatro renglones —cinco de pestaña,
+              // cuatro de estado, cuatro de orden— arriba de todo, antes de la
+              // primera tarjeta. Acostado eso era la pantalla entera.
+              //
+              // El puntito avisa que hay algo puesto: metido dentro de la hoja,
+              // uno se olvida de que filtró y la lista corta parece un error.
+              AccionDeFranja(
+                ayuda: 'search.filter'.i18n,
+                alTocar: _abrirFiltros,
+                icono: Stack(
+                  clipBehavior: Clip.none,
+                  children: [
+                    const Icon(Icons.tune_rounded),
+                    if (_hayFiltroPuesto)
+                      Positioned(
+                        right: -1,
+                        top: -1,
+                        child: Container(
+                          width: 9,
+                          height: 9,
+                          decoration: BoxDecoration(
+                            color: _accent,
+                            shape: BoxShape.circle,
+                          ),
+                        ),
+                      ),
+                  ],
+                ),
+              ),
+              AccionDeFranja(
+                ayuda: 'common.delete-all'.i18n,
+                alTocar: _confirmClearAll,
+                icono: const Icon(Icons.delete_sweep_outlined),
+              ),
+            ],
+          ),
+          Expanded(child: _buildBody()),
+        ],
       ),
-      body: _buildBody(),
     );
   }
 

@@ -2,8 +2,6 @@ import 'dart:io';
 
 import 'package:flutter/material.dart';
 import 'package:package_info_plus/package_info_plus.dart';
-import 'package:flutter_i18n/flutter_i18n.dart';
-import 'package:prismhub/utils/extension.dart';
 import 'package:prismhub/utils/i18n.dart';
 import 'package:prismhub/utils/log.dart';
 import 'package:prismhub/utils/prismhub_storage.dart';

@@ -663,6 +663,25 @@ class _ExtensionSearcherPageState extends fluent.State<ExtensionSearcherPage> {
     }
   }
 
+  /// ¿Hay algún filtro cambiado respecto de como viene?
+  ///
+  /// Para el puntito del botón: metido dentro de la hoja, uno se olvida de que
+  /// filtró y una lista corta parece un error. Se compara contra la opción por
+  /// defecto de cada filtro, no contra «vacío»: `_initFilters` los deja a todos
+  /// con la suya puesta, así que vacío no existe nunca.
+  bool get _hayFiltroPuesto {
+    final filtros = _filters;
+    if (filtros == null) return false;
+    for (final entrada in filtros.entries) {
+      final elegido = _selectedFilters[entrada.key];
+      if (elegido == null) continue;
+      if (elegido.length != 1 || elegido.first != entrada.value.defaultOption) {
+        return true;
+      }
+    }
+    return false;
+  }
+
   _onFilter(BuildContext context) {
     final fiterWidget = _ExtensionFilterWidget(
       runtime: _runtime,
@@ -677,7 +696,15 @@ class _ExtensionSearcherPageState extends fluent.State<ExtensionSearcherPage> {
     if (Platform.isAndroid) {
       showModalBottomSheet(
         context: context,
-        backgroundColor: HomeTheme.bg,
+        // Como el resto de las hojas de la app: la superficie de tarjeta y las
+        // esquinas redondeadas. Esta era la única que salía con el fondo de la
+        // pantalla y en escuadra, así que se leía como otra pantalla en vez de
+        // como una hoja.
+        backgroundColor: HomeTheme.cardSurface,
+        constraints: const BoxConstraints(maxWidth: 640),
+        shape: const RoundedRectangleBorder(
+          borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+        ),
         // Sin isScrollControlled/DraggableScrollableSheet, el sheet quedaba
         // con una altura fija chica (no la real disponible) — en horizontal
         // (poca altura vertical) apenas entraban 1-2 filas de chips.
@@ -989,7 +1016,22 @@ class _ExtensionSearcherPageState extends fluent.State<ExtensionSearcherPage> {
         actions: [
           if (_filters != null)
             IconButton(
-              icon: const Icon(Icons.filter_alt_rounded),
+              tooltip: 'search.filter'.i18n,
+              // tune_rounded y no filter_alt: es el que usan Buscar,
+              // Extensiones, el repositorio y el Historial. Dos íconos para lo
+              // mismo hacen dudar de si hacen lo mismo.
+              icon: Stack(
+                clipBehavior: Clip.none,
+                children: [
+                  const Icon(Icons.tune_rounded),
+                  if (_hayFiltroPuesto)
+                    const Positioned(
+                      right: -1,
+                      top: -1,
+                      child: _PuntoDeFiltro(),
+                    ),
+                ],
+              ),
               onPressed: () => _onFilter(context),
             ),
         ],
@@ -1728,6 +1770,26 @@ class _NotaDeFiltros extends StatelessWidget {
             ),
           ),
         ],
+      ),
+    );
+  }
+}
+
+/// El puntito que avisa que hay un filtro puesto.
+///
+/// Con nombre y acá porque es el mismo en todas las zonas: nueve puntos, del
+/// color de acento, en la esquina del botón.
+class _PuntoDeFiltro extends StatelessWidget {
+  const _PuntoDeFiltro();
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: 9,
+      height: 9,
+      decoration: const BoxDecoration(
+        color: HomeTheme.accentPink,
+        shape: BoxShape.circle,
       ),
     );
   }
