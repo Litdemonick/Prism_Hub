@@ -23,7 +23,16 @@ import 'package:prismhub/views/widgets/platform_widget.dart';
 // Card ancha estilo Crunchyroll: solo en escritorio (Windows/Linux). En
 // Android se mantiene la vertical, que es la que entra bien en pantallas
 // chicas tanto en vertical como en horizontal.
-final bool _wideCards = !Platform.isAndroid;
+// ── La ancha va en las DOS plataformas ──────────────────────────────────
+//
+// Era solo de escritorio, y en Android «Continuar viendo» usaba la vertical:
+// un marco de póster para una captura de vídeo. La captura es 16:9, así que
+// entraba recortada por los costados —se perdía media escena— o con franjas.
+// Justo lo que esta tarjeta vino a resolver.
+//
+// El tamaño del teléfono lo pone HomeMediaCard.anchoAncha, que ya distingue
+// plataforma: los mismos 16:9, más chicos.
+const bool _wideCards = true;
 
 // true en horizontal de celular, donde el alto útil es ~300-390 y cada bloque
 // de aire vertical se nota muchísimo más que en vertical o en escritorio.
@@ -119,9 +128,9 @@ class _LibraryPageState extends State<LibraryPage> {
       required int tab,
     }) {
       return HomeSection(
-        itemWidth: ancha ? HomeMediaCard.wideWidth : null,
-        itemHeight: ancha ? HomeMediaCard.wideTotalHeight : null,
-        itemCoverHeight: ancha ? HomeMediaCard.wideImageHeight : null,
+        itemWidth: ancha ? HomeMediaCard.anchoAncha : null,
+        itemHeight: ancha ? HomeMediaCard.altoTotalAncha : null,
+        itemCoverHeight: ancha ? HomeMediaCard.altoImagenAncha : null,
         // Sin caja alrededor de la sección.
         //
         // Era un panel apenas más claro que el fondo con su borde, y con dos o
@@ -201,9 +210,9 @@ class _LibraryPageState extends State<LibraryPage> {
       return HomeSection(
         // La ancha usa su propio tamaño; la vertical deja los valores por
         // defecto, que ya se adaptan a cada plataforma y orientación.
-        itemWidth: ancha ? HomeMediaCard.wideWidth : null,
-        itemHeight: ancha ? HomeMediaCard.wideTotalHeight : null,
-        itemCoverHeight: ancha ? HomeMediaCard.wideImageHeight : null,
+        itemWidth: ancha ? HomeMediaCard.anchoAncha : null,
+        itemHeight: ancha ? HomeMediaCard.altoTotalAncha : null,
+        itemCoverHeight: ancha ? HomeMediaCard.altoImagenAncha : null,
         // Sin caja alrededor de la sección.
         //
         // Era un panel apenas más claro que el fondo con su borde, y con dos o

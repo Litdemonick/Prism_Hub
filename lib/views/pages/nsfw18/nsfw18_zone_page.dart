@@ -30,7 +30,9 @@ import 'package:prismhub/views/widgets/platform_widget.dart';
 // Card ancha estilo Crunchyroll: solo en escritorio (Windows/Linux). En
 // Android se mantiene la vertical, que es la que entra bien en pantallas
 // chicas tanto en vertical como en horizontal.
-final bool _wideCards = !Platform.isAndroid;
+// La ancha va en las dos plataformas, igual que en la Biblioteca: es un marco
+// 16:9 para una captura 16:9. Ver el comentario en library_page.dart.
+const bool _wideCards = true;
 
 // true en horizontal de celular, donde el alto útil es ~300-390 y cada bloque
 // de aire vertical se nota muchísimo más que en vertical o en escritorio.
@@ -199,7 +201,8 @@ class _Nsfw18DisabledPage extends StatelessWidget {
                         // confirmado en vivo). El isRegistered es para que el
                         // pop pase igual si el controller no estuviera.
                         if (Get.isRegistered<MainController>()) {
-                          Get.find<MainController>().changeTab(MainController.tabAjustes);
+                          Get.find<MainController>()
+                              .changeTab(MainController.tabAjustes);
                         }
                         // Mismo criterio que "Explorar catálogo": hasta el
                         // shell, no una sola capa (ver el comentario ahí).
@@ -306,9 +309,9 @@ class _Nsfw18ZonePageState extends State<Nsfw18ZonePage> {
       required int tab,
     }) {
       return HomeSection(
-        itemWidth: ancha ? HomeMediaCard.wideWidth : null,
-        itemHeight: ancha ? HomeMediaCard.wideTotalHeight : null,
-        itemCoverHeight: ancha ? HomeMediaCard.wideImageHeight : null,
+        itemWidth: ancha ? HomeMediaCard.anchoAncha : null,
+        itemHeight: ancha ? HomeMediaCard.altoTotalAncha : null,
+        itemCoverHeight: ancha ? HomeMediaCard.altoImagenAncha : null,
         // Sin caja alrededor de la sección.
         //
         // Era un panel apenas más claro que el fondo con su borde, y con dos o
@@ -388,9 +391,9 @@ class _Nsfw18ZonePageState extends State<Nsfw18ZonePage> {
       return HomeSection(
         // La ancha usa su propio tamaño; la vertical deja los valores por
         // defecto, que ya se adaptan a cada plataforma y orientación.
-        itemWidth: ancha ? HomeMediaCard.wideWidth : null,
-        itemHeight: ancha ? HomeMediaCard.wideTotalHeight : null,
-        itemCoverHeight: ancha ? HomeMediaCard.wideImageHeight : null,
+        itemWidth: ancha ? HomeMediaCard.anchoAncha : null,
+        itemHeight: ancha ? HomeMediaCard.altoTotalAncha : null,
+        itemCoverHeight: ancha ? HomeMediaCard.altoImagenAncha : null,
         // Sin caja alrededor de la sección.
         //
         // Era un panel apenas más claro que el fondo con su borde, y con dos o

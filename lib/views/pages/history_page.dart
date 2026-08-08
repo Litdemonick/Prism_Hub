@@ -353,10 +353,12 @@ class _HistoryPageState extends State<HistoryPage> {
     // alto y una única forma, así que ahí manda la vertical: es la que sirve
     // para ambos sin recortar. Es el mismo motivo por el que en el Home hubo
     // que partir "Continuar" en dos filas.
-    final usarAncha = _tabEsVideo == true && !Platform.isAndroid;
+    // También en Android: es un marco 16:9 para una captura 16:9, y con la
+    // vertical la miniatura entraba recortada. Ver HomeMediaCard.anchoAncha.
+    final usarAncha = _tabEsVideo == true;
 
     final cardWidth = usarAncha
-        ? HomeMediaCard.wideWidth
+        ? HomeMediaCard.anchoAncha
         : isAndroidLandscape
             ? HomeMediaCard.androidLandscapeWidth
             : Platform.isAndroid
@@ -365,7 +367,7 @@ class _HistoryPageState extends State<HistoryPage> {
     // La ancha ya trae su alto TOTAL (imagen + textos); la vertical solo el de
     // la portada, así que a esa hay que sumarle lo que va debajo.
     final cardExtent = usarAncha
-        ? HomeMediaCard.wideTotalHeight + 18
+        ? HomeMediaCard.altoTotalAncha + 18
         : (isAndroidLandscape
                 ? HomeMediaCard.androidLandscapeHeight
                 : Platform.isAndroid

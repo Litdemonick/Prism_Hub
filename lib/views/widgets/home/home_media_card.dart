@@ -90,22 +90,33 @@ class HomeMediaCard extends StatefulWidget {
   // todo en Historial) — más chica en horizontal, mismo aspecto ~0.72:1.
   // Variante HORIZONTAL (escritorio): 16:9, la misma forma que los frames de
   // vídeo, así la portada de "Continuar" ya no se recorta.
-  static const double wideWidth = 380;
-  // Las portadas de lectura (2:3) se muestran enteras, sin recortar, así que
-  // lo que decide qué tan grandes se ven es el ALTO del marco. A 200 la card
-  // quedaba demasiado grande —entraban pocas por fila y el bloque dominaba
-  // la pantalla—, así que se baja a 186: el póster sigue en 124 de ancho
-  // (bastante más que los 120 originales) y los frames de vídeo entran casi
-  // exactos (1.70 contra 1.78 de 16:9), o sea sin recorte apreciable.
-  // ── Y ahora es 16:9 EXACTO ─────────────────────────────────────────────
+  // ── Y también en el teléfono ───────────────────────────────────────────
   //
-  // Estaba en 316 × 186, o sea 1,70. Los frames de vídeo son 1,78, así que a
-  // cada captura se le comía una franja arriba y abajo. Con 380 × 214 la cuenta
-  // da 1,776: la miniatura entra entera, que era el motivo de que esta tarjeta
-  // existiera.
-  static const double wideImageHeight = 214;
-  // Imagen + separación + dos líneas de título + la línea del subtítulo.
-  static const double wideTotalHeight = 276;
+  // La ancha era solo de escritorio: en Android, «Continuar viendo» usaba la
+  // vertical, o sea un marco de póster para una CAPTURA DE VÍDEO. La captura es
+  // 16:9, así que entraba recortada por los costados —se perdía media escena— o
+  // con franjas. Justo lo que esta tarjeta vino a resolver.
+  //
+  // Los números del teléfono son los mismos 16:9, más chicos: 264 de ancho
+  // dejan ver la tarjeta entera y el borde de la siguiente en una pantalla de
+  // 360, que es lo que invita a deslizar.
+  //
+  // Getters y no constantes porque dependen de la plataforma. Quien los use
+  // tiene que usar LOS TRES: mezclarlos con los viejos deja la imagen de un
+  // tamaño y el hueco reservado de otro.
+  static double get anchoAncha => Platform.isAndroid ? 264 : 380;
+  static double get altoImagenAncha => Platform.isAndroid ? 148 : 214;
+  static double get altoTotalAncha => Platform.isAndroid ? 210 : 276;
+
+  // ── Y es 16:9 EXACTO ───────────────────────────────────────────────────
+  //
+  // En escritorio estaba en 316 × 186, o sea 1,70. Los frames de vídeo son
+  // 1,78, así que a cada captura se le comía una franja arriba y abajo: hacía
+  // lo contrario de para lo que existe esta tarjeta. Con 380 × 214 da 1,776 y
+  // la miniatura entra entera. En el teléfono, 264 × 148 da 1,784.
+  //
+  // El alto TOTAL suma la imagen, la separación, dos líneas de título y la del
+  // subtítulo.
 
   // 112 quedaba MUY chico: en horizontal entraban ocho cards por fila y no se
   // leía ni el pill de la extensión. El apretón real venía del hero, que a
@@ -261,7 +272,7 @@ class _HomeMediaCardState extends State<HomeMediaCard> {
   // flag en una línea.
   Widget _buildHorizontal(BuildContext context) {
     final dpr = MediaQuery.devicePixelRatioOf(context);
-    final imgW = (HomeMediaCard.wideWidth * dpr).ceil().clamp(1, 4096);
+    final imgW = (HomeMediaCard.anchoAncha * dpr).ceil().clamp(1, 4096);
     final hasCover = !widget.hidden &&
         (widget.cover?.isNotEmpty == true || widget.coverFile != null);
 
@@ -343,7 +354,7 @@ class _HomeMediaCardState extends State<HomeMediaCard> {
         onExit: (_) => setState(() => _hover = false),
         child: RepaintBoundary(
           child: SizedBox(
-            width: HomeMediaCard.wideWidth,
+            width: HomeMediaCard.anchoAncha,
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               mainAxisSize: MainAxisSize.min,
@@ -358,8 +369,8 @@ class _HomeMediaCardState extends State<HomeMediaCard> {
                     borderRadius: BorderRadius.circular(8),
                   ),
                   child: SizedBox(
-                    width: HomeMediaCard.wideWidth,
-                    height: HomeMediaCard.wideImageHeight,
+                    width: HomeMediaCard.anchoAncha,
+                    height: HomeMediaCard.altoImagenAncha,
                     child: Stack(
                       fit: StackFit.expand,
                       children: [
