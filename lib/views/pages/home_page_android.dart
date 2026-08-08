@@ -55,22 +55,21 @@ class HomeAndroid extends StatelessWidget {
         .where(c.entraEnElTipo)
         .toList();
 
-      // ── Con filtro puesto, las que pueden contestarlo van arriba ──────
-      //
-      // Si no, el usuario marca «Isekai» y las primeras tres filas le dicen
-      // «no tiene ese género» — parece que el filtro rompió el Home, cuando en
-      // realidad hay contenido más abajo.
-      //
-      // Es un orden estable: entre las que sí pueden se respeta el orden
-      // original (el del historial), así que no baila de una carga a otra.
-      if (c.hayFiltros) {
-        lista.sort((a, b) {
-          final pa = c.puedeConEsteGenero(a.package) ? 0 : 1;
-          final pb = c.puedeConEsteGenero(b.package) ? 0 : 1;
-          return pa - pb;
-        });
-      }
-      return lista;
+    // ── El orden NO cambia al filtrar ─────────────────────────────────
+    //
+    // Se probó subir las que pueden contestar el filtro. Se ve mal: al
+    // aplicar, cada fila cambia de sitio y el título que estabas mirando se
+    // reemplaza por el de otra extensión — parece que la app se barajó sola.
+    //
+    // Y ya no hace falta. Antes las que no tenían el filtro mostraban una
+    // línea de disculpa, y dejarlas arriba era media pantalla vacía; ahora
+    // todas traen contenido —filtrado si pueden, lo último si no, y el
+    // encabezado lo dice— así que ninguna posición está desperdiciada.
+    //
+    // El orden se queda como está: por lo que más usás. Cada fila cambia su
+    // contenido en su lugar, con los bloques grises mientras llega.
+
+    return lista;
   }
 
   @override
@@ -215,8 +214,7 @@ class _BarraDeFiltrosState extends State<_BarraDeFiltros> {
     }
     final g = c.generoElegido.value;
     if (g != null) {
-      lista.add(
-          (g, 'home.genero.$g'.i18n, () => c.generoElegido.value = null));
+      lista.add((g, 'home.genero.$g'.i18n, () => c.generoElegido.value = null));
     }
     return lista;
   }
@@ -251,7 +249,8 @@ class _BarraDeFiltrosState extends State<_BarraDeFiltros> {
     return Obx(() {
       final c = widget.c;
       final generos = c.generosDisponibles;
-      final hayAlgo = c.tipoElegido.value != null || c.generoElegido.value != null;
+      final hayAlgo =
+          c.tipoElegido.value != null || c.generoElegido.value != null;
 
       // Sin géneros todavía —se leen en segundo plano, después de que carguen
       // las filas— no se dibuja una franja vacía esperando.
@@ -314,72 +313,74 @@ class _BarraDeFiltrosState extends State<_BarraDeFiltros> {
                   ),
                 Expanded(
                   child: SingleChildScrollView(
-              controller: _esTactil ? null : _scroll,
-              scrollDirection: Axis.horizontal,
-              padding: EdgeInsets.only(
-                  left: _marcados(c).isNotEmpty ? 0 : (_esTactil ? margen : 6),
-                  right: _esTactil ? margen : 6),
-              child: Row(
-                children: [
-                  // ── Lo elegido, al principio de todo ──────────────────
-                  //
-                  // Con cuarenta y cuatro géneros, el chip marcado podía
-                  // quedar a tres pantallazos de distancia: el usuario filtra
-                  // y después no ve por qué filtró. Adelante y con su ganchito
-                  // se lee de un vistazo, y se apaga tocándolo sin buscarlo.
-                  // El estado va primero: son dos chips y acotan mucho más que
-                  // un género —«algo terminado, para maratonear» es de las
-                  // primeras cosas que alguien busca—.
-                  for (final e in c.estadosDisponibles)
-                    if (c.estadoElegido.value != e)
-                    Padding(
-                      padding: const EdgeInsets.only(right: 8),
-                      child: _Chip(
-                        texto: 'home.estado.$e'.i18n,
-                        marcado: c.estadoElegido.value == e,
-                        onTap: () => c.estadoElegido.value =
-                            c.estadoElegido.value == e ? null : e,
-                      ),
+                    controller: _esTactil ? null : _scroll,
+                    scrollDirection: Axis.horizontal,
+                    padding: EdgeInsets.only(
+                        left: _marcados(c).isNotEmpty
+                            ? 0
+                            : (_esTactil ? margen : 6),
+                        right: _esTactil ? margen : 6),
+                    child: Row(
+                      children: [
+                        // ── Lo elegido, al principio de todo ──────────────────
+                        //
+                        // Con cuarenta y cuatro géneros, el chip marcado podía
+                        // quedar a tres pantallazos de distancia: el usuario filtra
+                        // y después no ve por qué filtró. Adelante y con su ganchito
+                        // se lee de un vistazo, y se apaga tocándolo sin buscarlo.
+                        // El estado va primero: son dos chips y acotan mucho más que
+                        // un género —«algo terminado, para maratonear» es de las
+                        // primeras cosas que alguien busca—.
+                        for (final e in c.estadosDisponibles)
+                          if (c.estadoElegido.value != e)
+                            Padding(
+                              padding: const EdgeInsets.only(right: 8),
+                              child: _Chip(
+                                texto: 'home.estado.$e'.i18n,
+                                marcado: c.estadoElegido.value == e,
+                                onTap: () => c.estadoElegido.value =
+                                    c.estadoElegido.value == e ? null : e,
+                              ),
+                            ),
+                        if (c.estadosDisponibles.isNotEmpty &&
+                            c.formatosDisponibles.isNotEmpty)
+                          _separadorDeChips,
+                        // El formato después del estado y antes del género: son
+                        // pocos y acotan mucho —«una película», «un manhwa»— así
+                        // que van donde se ven sin desplazar.
+                        for (final f in c.formatosDisponibles)
+                          if (c.formatoElegido.value != f)
+                            Padding(
+                              padding: const EdgeInsets.only(right: 8),
+                              child: _Chip(
+                                texto: 'home.formato.$f'.i18n,
+                                marcado: c.formatoElegido.value == f,
+                                onTap: () => c.formatoElegido.value =
+                                    c.formatoElegido.value == f ? null : f,
+                              ),
+                            ),
+                        if ((c.estadosDisponibles.isNotEmpty ||
+                                c.formatosDisponibles.isNotEmpty) &&
+                            generos.isNotEmpty)
+                          _separadorDeChips,
+                        for (final g in generos)
+                          if (c.generoElegido.value != g)
+                            Padding(
+                              padding: const EdgeInsets.only(right: 8),
+                              child: _Chip(
+                                // El chip muestra la traducción; lo que se guarda y se
+                                // compara es el identificador.
+                                texto: 'home.genero.$g'.i18n,
+                                marcado: c.generoElegido.value == g,
+                                // Volver a tocar el mismo lo apaga: sin eso, una vez
+                                // elegido un género no habría forma de volver a
+                                // «todos» salvo con Restablecer.
+                                onTap: () => c.generoElegido.value =
+                                    c.generoElegido.value == g ? null : g,
+                              ),
+                            ),
+                      ],
                     ),
-                  if (c.estadosDisponibles.isNotEmpty &&
-                      c.formatosDisponibles.isNotEmpty)
-                    _separadorDeChips,
-                  // El formato después del estado y antes del género: son
-                  // pocos y acotan mucho —«una película», «un manhwa»— así
-                  // que van donde se ven sin desplazar.
-                  for (final f in c.formatosDisponibles)
-                    if (c.formatoElegido.value != f)
-                    Padding(
-                      padding: const EdgeInsets.only(right: 8),
-                      child: _Chip(
-                        texto: 'home.formato.$f'.i18n,
-                        marcado: c.formatoElegido.value == f,
-                        onTap: () => c.formatoElegido.value =
-                            c.formatoElegido.value == f ? null : f,
-                      ),
-                    ),
-                  if ((c.estadosDisponibles.isNotEmpty ||
-                          c.formatosDisponibles.isNotEmpty) &&
-                      generos.isNotEmpty)
-                    _separadorDeChips,
-                  for (final g in generos)
-                    if (c.generoElegido.value != g)
-                    Padding(
-                      padding: const EdgeInsets.only(right: 8),
-                      child: _Chip(
-                        // El chip muestra la traducción; lo que se guarda y se
-                        // compara es el identificador.
-                        texto: 'home.genero.$g'.i18n,
-                        marcado: c.generoElegido.value == g,
-                        // Volver a tocar el mismo lo apaga: sin eso, una vez
-                        // elegido un género no habría forma de volver a
-                        // «todos» salvo con Restablecer.
-                        onTap: () => c.generoElegido.value =
-                            c.generoElegido.value == g ? null : g,
-                      ),
-                    ),
-                ],
-              ),
                   ),
                 ),
                 if (!_esTactil) ...[
@@ -399,60 +400,60 @@ class _BarraDeFiltrosState extends State<_BarraDeFiltros> {
             SizedBox(
               height: 44,
               child: (c.hayCambiosSinAplicar || hayAlgo)
-              ? Padding(
-                padding: EdgeInsets.fromLTRB(margen, 10, margen, 0),
-                child: Row(
-                  children: [
-                    // ── Cómo se aplica, según el aparato ──────────────
-                    //
-                    // En celular se desliza hacia abajo, que es el gesto que
-                    // ya existe para refrescar. En escritorio ese gesto no
-                    // existe —nadie tira de una ventana con el mouse— así que
-                    // ahí va un botón, que es lo que se busca.
-                    if (c.hayCambiosSinAplicar && _esTactil) ...[
-                      const Icon(Icons.arrow_downward_rounded,
-                          size: 15, color: HomeTheme.accentPink),
-                      const SizedBox(width: 6),
-                      Expanded(
-                        child: Text(
-                          'home.filtros-desliza'.i18n,
-                          style: const TextStyle(
-                            fontSize: 12.5,
-                            color: HomeTheme.accentPink,
-                            fontWeight: FontWeight.w600,
-                          ),
-                        ),
+                  ? Padding(
+                      padding: EdgeInsets.fromLTRB(margen, 10, margen, 0),
+                      child: Row(
+                        children: [
+                          // ── Cómo se aplica, según el aparato ──────────────
+                          //
+                          // En celular se desliza hacia abajo, que es el gesto que
+                          // ya existe para refrescar. En escritorio ese gesto no
+                          // existe —nadie tira de una ventana con el mouse— así que
+                          // ahí va un botón, que es lo que se busca.
+                          if (c.hayCambiosSinAplicar && _esTactil) ...[
+                            const Icon(Icons.arrow_downward_rounded,
+                                size: 15, color: HomeTheme.accentPink),
+                            const SizedBox(width: 6),
+                            Expanded(
+                              child: Text(
+                                'home.filtros-desliza'.i18n,
+                                style: const TextStyle(
+                                  fontSize: 12.5,
+                                  color: HomeTheme.accentPink,
+                                  fontWeight: FontWeight.w600,
+                                ),
+                              ),
+                            ),
+                          ] else
+                            const Spacer(),
+                          if (hayAlgo || c.hayFiltros)
+                            TextButton(
+                              onPressed: c.restablecerFiltros,
+                              child: Text('home.filtros-restablecer'.i18n),
+                            ),
+                          if (!_esTactil && c.hayCambiosSinAplicar) ...[
+                            const SizedBox(width: 8),
+                            FilledButton.icon(
+                              onPressed: c.aplicarFiltros,
+                              icon: const Icon(Icons.filter_alt_rounded,
+                                  size: 18),
+                              label: Text('home.filtros-aplicar'.i18n),
+                              style: FilledButton.styleFrom(
+                                backgroundColor: HomeTheme.accentPink,
+                                foregroundColor: Colors.white,
+                              ),
+                            ),
+                          ],
+                        ],
                       ),
-                    ] else
-                      const Spacer(),
-                    if (hayAlgo || c.hayFiltros)
-                      TextButton(
-                        onPressed: c.restablecerFiltros,
-                        child: Text('home.filtros-restablecer'.i18n),
-                      ),
-                    if (!_esTactil && c.hayCambiosSinAplicar) ...[
-                      const SizedBox(width: 8),
-                      FilledButton.icon(
-                        onPressed: c.aplicarFiltros,
-                        icon: const Icon(Icons.filter_alt_rounded, size: 18),
-                        label: Text('home.filtros-aplicar'.i18n),
-                        style: FilledButton.styleFrom(
-                          backgroundColor: HomeTheme.accentPink,
-                          foregroundColor: Colors.white,
-                        ),
-                      ),
-                    ],
-                  ],
-                ),
-              )
-              : const SizedBox.shrink(),
+                    )
+                  : const SizedBox.shrink(),
             ),
           ],
         ),
       );
     });
   }
-
 }
 
 /// La rayita que separa un grupo de chips del siguiente.
@@ -655,7 +656,6 @@ class _CarruselAndroidState extends State<_CarruselAndroid>
   );
   Animation<double>? _viaje;
 
-
   /// Qué parte del ancho grande le queda a una tarjeta de los costados.
   static const _proporcionChica = 0.22;
 
@@ -739,7 +739,9 @@ class _CarruselAndroidState extends State<_CarruselAndroid>
       // del filtro anterior, y dejarlo quieto mientras se busca haría creer
       // que no está pasando nada.
       if (widget.c.aplicandoFiltros.value) return const _CarruselEsperando();
-      final planos = grupos.isEmpty ? const <(String, ExtensionListItem)>[] : _planos(grupos);
+      final planos = grupos.isEmpty
+          ? const <(String, ExtensionListItem)>[]
+          : _planos(grupos);
       // Nada todavía: en vez de un hueco negro de media pantalla, las tarjetas
       // que van a venir, en gris. Así el Home ya tiene su forma desde el
       // primer cuadro y al cargar no da un salto.
@@ -785,8 +787,7 @@ class _CarruselAndroidState extends State<_CarruselAndroid>
                 onHorizontalDragUpdate: (d) {
                   final paso = (m.ancho + m.anchoChico) / 2 + _aire;
                   setState(() {
-                    _p = (_p - (d.primaryDelta ?? 0) / paso)
-                        .clamp(0.0, ultimo);
+                    _p = (_p - (d.primaryDelta ?? 0) / paso).clamp(0.0, ultimo);
                   });
                 },
                 onHorizontalDragEnd: (d) {
@@ -795,18 +796,21 @@ class _CarruselAndroidState extends State<_CarruselAndroid>
                   // llegado a la mitad: es lo que espera un deslizar rápido.
                   var destino = _p.roundToDouble();
                   if (v.abs() > 380) {
-                    destino = v < 0 ? _p.floorToDouble() + 1 : _p.ceilToDouble() - 1;
+                    destino =
+                        v < 0 ? _p.floorToDouble() + 1 : _p.ceilToDouble() - 1;
                   }
                   _irA(destino.clamp(0.0, ultimo), grupos);
                 },
-                child: ClipRect(child: _acordeon(planos, m, caja.maxWidth, grupos)),
+                child: ClipRect(
+                    child: _acordeon(planos, m, caja.maxWidth, grupos)),
               ),
             ),
             const SizedBox(height: 8),
             _Indicadores(
               cantidad: tanda.length,
               actual: widget.c.carruselPos.clamp(0, tanda.length - 1),
-              onTocar: (i) => _irA((base + i).toDouble().clamp(0.0, ultimo), grupos),
+              onTocar: (i) =>
+                  _irA((base + i).toDouble().clamp(0.0, ultimo), grupos),
             ),
           ],
         );
@@ -837,7 +841,6 @@ class _CarruselAndroidState extends State<_CarruselAndroid>
       final lejos = (_p - i).abs().clamp(0.0, 1.0);
       return m.anchoChico + (m.ancho - m.anchoChico) * (1 - lejos);
     }
-
 
     // ── Siempre dos a cada lado ────────────────────────────────────────
     //
@@ -921,9 +924,8 @@ class _CarruselAndroidState extends State<_CarruselAndroid>
               // cambia, la imagen se decodifica UNA vez y se reusa.
               ancho: m.ancho,
               item: planos[i].$2,
-              fuente: ExtensionUtils
-                      .runtimes[planos[i].$1]?.extension.name ??
-                  '',
+              fuente:
+                  ExtensionUtils.runtimes[planos[i].$1]?.extension.name ?? '',
               cabeceras: _cabeceras(planos[i].$1),
               // El texto solo en la que está en foco: en una tira de cincuenta
               // píxeles no entra, y recortado se lee como un error.
@@ -1004,7 +1006,6 @@ class _CarruselAndroidState extends State<_CarruselAndroid>
     );
   }
 }
-
 
 class _MedidasCarrusel {
   const _MedidasCarrusel({
@@ -1107,58 +1108,58 @@ class _TarjetaGrande extends StatelessWidget {
                 ),
               ),
               if (conTexto)
-              Align(
-                alignment: Alignment.bottomLeft,
-                child: Padding(
-                  padding: const EdgeInsets.fromLTRB(14, 0, 14, 13),
-                  // ── El texto tiene ancho FIJO ──────────────────────────
-                  //
-                  // Y no el de la tarjeta, que cambia cuadro a cuadro
-                  // mientras el dedo arrastra. Con el ancho variable, el
-                  // título se vuelve a repartir en líneas sesenta veces por
-                  // segundo: las palabras saltan de renglón, la elipsis
-                  // aparece y desaparece, y las letras se ven «temblar».
-                  //
-                  // Fijándolo al ancho de la tarjeta en foco, el texto se
-                  // compone UNA vez. Lo que sobra queda fuera del recorte de
-                  // la tarjeta, que es exactamente lo que se quiere: el
-                  // título entra completo justo cuando la tarjeta termina de
-                  // abrirse.
-                  child: OverflowBox(
-                    alignment: Alignment.bottomLeft,
-                    maxWidth: anchoTexto,
-                    minWidth: anchoTexto,
-                    child: Column(
-                    mainAxisSize: MainAxisSize.min,
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        item.title,
-                        maxLines: 2,
-                        overflow: TextOverflow.ellipsis,
-                        style: const TextStyle(
-                          fontSize: 16,
-                          height: 1.2,
-                          fontWeight: FontWeight.w800,
-                          color: Colors.white,
-                        ),
+                Align(
+                  alignment: Alignment.bottomLeft,
+                  child: Padding(
+                    padding: const EdgeInsets.fromLTRB(14, 0, 14, 13),
+                    // ── El texto tiene ancho FIJO ──────────────────────────
+                    //
+                    // Y no el de la tarjeta, que cambia cuadro a cuadro
+                    // mientras el dedo arrastra. Con el ancho variable, el
+                    // título se vuelve a repartir en líneas sesenta veces por
+                    // segundo: las palabras saltan de renglón, la elipsis
+                    // aparece y desaparece, y las letras se ven «temblar».
+                    //
+                    // Fijándolo al ancho de la tarjeta en foco, el texto se
+                    // compone UNA vez. Lo que sobra queda fuera del recorte de
+                    // la tarjeta, que es exactamente lo que se quiere: el
+                    // título entra completo justo cuando la tarjeta termina de
+                    // abrirse.
+                    child: OverflowBox(
+                      alignment: Alignment.bottomLeft,
+                      maxWidth: anchoTexto,
+                      minWidth: anchoTexto,
+                      child: Column(
+                        mainAxisSize: MainAxisSize.min,
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            item.title,
+                            maxLines: 2,
+                            overflow: TextOverflow.ellipsis,
+                            style: const TextStyle(
+                              fontSize: 16,
+                              height: 1.2,
+                              fontWeight: FontWeight.w800,
+                              color: Colors.white,
+                            ),
+                          ),
+                          const SizedBox(height: 2),
+                          Text(
+                            fuente,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: const TextStyle(
+                              fontSize: 12.5,
+                              fontWeight: FontWeight.w500,
+                              color: HomeTheme.textMuted,
+                            ),
+                          ),
+                        ],
                       ),
-                      const SizedBox(height: 2),
-                      Text(
-                        fuente,
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        style: const TextStyle(
-                          fontSize: 12.5,
-                          fontWeight: FontWeight.w500,
-                          color: HomeTheme.textMuted,
-                        ),
-                      ),
-                    ],
                     ),
                   ),
                 ),
-              ),
             ],
           ),
         ),
@@ -1282,7 +1283,6 @@ class _FilaAndroidState extends State<_FilaAndroid> {
       ),
     );
   }
-
 }
 
 /// Las portadas de una extensión, en grilla que se pasa de página.
@@ -1576,4 +1576,3 @@ class _CarruselEsperando extends StatelessWidget {
     });
   }
 }
-

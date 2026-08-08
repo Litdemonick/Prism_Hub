@@ -38,21 +38,21 @@ class HomeWindows extends StatelessWidget {
                   f.estadoExt == EstadoExtension.activa || f.esVistaPrevia)
               .where(c.entraEnElTipo)
               .toList();
-          // ── Con filtro puesto, las que pueden contestarlo van arriba ──────
+
+          // ── El orden NO cambia al filtrar ─────────────────────────────────
           //
-          // Si no, el usuario marca «Isekai» y las primeras tres filas le dicen
-          // «no tiene ese género» — parece que el filtro rompió el Home, cuando en
-          // realidad hay contenido más abajo.
+          // Se probó subir las que pueden contestar el filtro. Se ve mal: al
+          // aplicar, cada fila cambia de sitio y el título que estabas mirando se
+          // reemplaza por el de otra extensión — parece que la app se barajó sola.
           //
-          // Es un orden estable: entre las que sí pueden se respeta el orden
-          // original (el del historial), así que no baila de una carga a otra.
-          if (c.hayFiltros) {
-            lista.sort((a, b) {
-              final pa = c.puedeConEsteGenero(a.package) ? 0 : 1;
-              final pb = c.puedeConEsteGenero(b.package) ? 0 : 1;
-              return pa - pb;
-            });
-          }
+          // Y ya no hace falta. Antes las que no tenían el filtro mostraban una
+          // línea de disculpa, y dejarlas arriba era media pantalla vacía; ahora
+          // todas traen contenido —filtrado si pueden, lo último si no, y el
+          // encabezado lo dice— así que ninguna posición está desperdiciada.
+          //
+          // El orden se queda como está: por lo que más usás. Cada fila cambia su
+          // contenido en su lugar, con los bloques grises mientras llega.
+
           return lista;
         }();
         return RefreshIndicator(
@@ -414,39 +414,39 @@ class _FilaWindowsState extends State<_FilaWindows> {
                   : ClipRect(
                       clipper: const _SoloCostados(),
                       child: ListView.separated(
-                      controller: _scroll,
-                      scrollDirection: Axis.horizontal,
-                      // Sin esto el recorte se come la sombra igual, por más
-                      // aire que se le dé: un ListView recorta en su borde
-                      // por defecto.
-                      clipBehavior: Clip.none,
-                      padding:
-                          EdgeInsets.symmetric(horizontal: _margen(context)),
-                      itemCount: items.length,
-                      separatorBuilder: (_, __) => const SizedBox(width: 14),
-                      itemBuilder: (context, i) {
-                        final item = items[i];
-                        return Padding(
-                          // Arriba, para que la tarjeta tenga hacia dónde
-                          // crecer sin pisar el título de la fila.
-                          padding: const EdgeInsets.only(top: 10),
-                          child: TarjetaDeCatalogo(
-                            titulo: item.title,
-                            portada: item.cover,
-                            cabeceras: _cabeceras(widget.fila.package),
-                            encabezado: widget.fila.nombre,
-                            // `update` es lo único con forma de fecha que
-                            // devuelve `latest()`. Cada extensión lo escribe a
-                            // su manera —«hace 2 días», «Ep 12», una fecha— así
-                            // que se muestra TAL CUAL: normalizarlo acá sería
-                            // inventar una precisión que el dato no tiene.
-                            fecha: item.update,
-                            onTap: () =>
-                                _abrir(context, item, widget.fila.package),
-                          ),
-                        );
-                      },
-                    ),
+                        controller: _scroll,
+                        scrollDirection: Axis.horizontal,
+                        // Sin esto el recorte se come la sombra igual, por más
+                        // aire que se le dé: un ListView recorta en su borde
+                        // por defecto.
+                        clipBehavior: Clip.none,
+                        padding:
+                            EdgeInsets.symmetric(horizontal: _margen(context)),
+                        itemCount: items.length,
+                        separatorBuilder: (_, __) => const SizedBox(width: 14),
+                        itemBuilder: (context, i) {
+                          final item = items[i];
+                          return Padding(
+                            // Arriba, para que la tarjeta tenga hacia dónde
+                            // crecer sin pisar el título de la fila.
+                            padding: const EdgeInsets.only(top: 10),
+                            child: TarjetaDeCatalogo(
+                              titulo: item.title,
+                              portada: item.cover,
+                              cabeceras: _cabeceras(widget.fila.package),
+                              encabezado: widget.fila.nombre,
+                              // `update` es lo único con forma de fecha que
+                              // devuelve `latest()`. Cada extensión lo escribe a
+                              // su manera —«hace 2 días», «Ep 12», una fecha— así
+                              // que se muestra TAL CUAL: normalizarlo acá sería
+                              // inventar una precisión que el dato no tiene.
+                              fecha: item.update,
+                              onTap: () =>
+                                  _abrir(context, item, widget.fila.package),
+                            ),
+                          );
+                        },
+                      ),
                     ),
             ),
           ],
