@@ -29,6 +29,17 @@ class HomeAndroid extends StatelessWidget {
 
   final CatalogoExtensionesController c;
 
+  /// Las filas que corresponden al tipo elegido.
+  ///
+  /// El tipo se resuelve ACÁ y no pidiéndole nada a nadie: `extension.type` ya
+  /// está cargado para las diecisiete. Elegir «solo mangas» es no dibujar las
+  /// que no lo son, y eso es instantáneo.
+  ///
+  /// El género es otra cosa: ese sí hay que preguntárselo al sitio, y por eso
+  /// espera a que el usuario actualice.
+  List<FilaDeExtension> _visibles(CatalogoExtensionesController c) =>
+      c.filas.where(c.entraEnElTipo).toList();
+
   @override
   Widget build(BuildContext context) {
     return SafeArea(
@@ -57,8 +68,8 @@ class HomeAndroid extends StatelessWidget {
             // desplazarse de gusto.
             padding: EdgeInsets.only(
                 bottom: MediaQuery.paddingOf(context).bottom + 10),
-            // +2: la cabecera y el carrusel.
-            itemCount: c.filas.length + 2,
+            // +3: la cabecera, los filtros y el carrusel.
+            itemCount: _visibles(c).length + 3,
             // **Acá está la carga perezosa.** ListView.builder solo construye
             // lo que está cerca de la pantalla, y cada fila pide en su
             // initState — así, con 30 extensiones se piden las 2 o 3 que se
@@ -68,22 +79,206 @@ class HomeAndroid extends StatelessWidget {
               // barra clavada arriba se come una franja de pantalla para
               // siempre, y acá lo que importa es la portada.
               0 => const _Cabecera(),
-              1 => _CarruselAndroid(c: c),
+              1 => _BarraDeFiltros(c: c),
+              2 => _CarruselAndroid(c: c),
               // RepaintBoundary por fila: sin esto, cualquier repintado
               // —el fondo animado, una portada que termina de cargar— vuelve a
               // pintar TODA la lista visible. Con la capa propia, cada fila se
               // guarda rasterizada y solo se rehace la que cambió.
               _ => RepaintBoundary(
                   child: _FilaAndroid(
-                    key: ValueKey(c.filas[i - 2].package),
+                    key: ValueKey(_visibles(c)[i - 3].package),
                     c: c,
-                    fila: c.filas[i - 2],
+                    fila: _visibles(c)[i - 3],
                   ),
                 ),
             },
           ),
         );
       }),
+    );
+  }
+}
+
+/// Los filtros del Home: por tipo y por género.
+///
+/// ── Por qué no se aplican al tocar ────────────────────────────────────────
+///
+/// Porque aplicar un género significa volver a pedirle contenido a once
+/// sitios. Tocando tres chips seguidos serían tres tandas de once pedidos, y
+/// las dos primeras se tiran a la basura antes de llegar.
+///
+/// Entonces el toque solo MARCA. Cuando el usuario terminó de elegir, tira de
+/// la pantalla hacia abajo y ahí se pide todo, una vez. Mientras haya algo
+/// marcado sin aplicar, aparece un aviso que lo dice — un filtro elegido que
+/// no cambió nada en pantalla se lee como que la app no funciona.
+class _BarraDeFiltros extends StatefulWidget {
+  const _BarraDeFiltros({required this.c});
+
+  final CatalogoExtensionesController c;
+
+  @override
+  State<_BarraDeFiltros> createState() => _BarraDeFiltrosState();
+}
+
+class _BarraDeFiltrosState extends State<_BarraDeFiltros> {
+  @override
+  void initState() {
+    super.initState();
+    // Los géneros se leen una vez por sesión, y recién cuando el Home ya está
+    // en pantalla: `createFilter()` corre JavaScript en el motor de cada
+    // extensión, y hacerlo durante el arranque sería sumarle tiempo justo al
+    // momento en que menos sobra.
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      widget.c.cargarGeneros();
+    });
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final margen = _margen(context);
+    return Obx(() {
+      final c = widget.c;
+      final generos = c.generosDisponibles;
+      final hayAlgo = c.tipoElegido.value != null || c.generoElegido.value != null;
+
+      return Padding(
+        padding: const EdgeInsets.only(bottom: 12),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            SingleChildScrollView(
+              scrollDirection: Axis.horizontal,
+              padding: EdgeInsets.symmetric(horizontal: margen),
+              child: Row(
+                children: [
+                  for (final t in _tipos)
+                    Padding(
+                      padding: const EdgeInsets.only(right: 8),
+                      child: _Chip(
+                        texto: t.$2.i18n,
+                        marcado: c.tipoElegido.value == t.$1,
+                        // Volver a tocar el mismo lo apaga: sin eso, una vez
+                        // elegido un tipo no habría forma de volver a «todos»
+                        // salvo con Restablecer.
+                        onTap: () => c.tipoElegido.value =
+                            c.tipoElegido.value == t.$1 ? null : t.$1,
+                      ),
+                    ),
+                  if (generos.isNotEmpty) ...[
+                    Container(
+                      width: 1,
+                      height: 22,
+                      margin: const EdgeInsets.only(right: 8),
+                      color: Colors.white.withValues(alpha: 0.14),
+                    ),
+                    for (final g in generos)
+                      Padding(
+                        padding: const EdgeInsets.only(right: 8),
+                        child: _Chip(
+                          texto: g,
+                          marcado: c.generoElegido.value == g,
+                          onTap: () => c.generoElegido.value =
+                              c.generoElegido.value == g ? null : g,
+                        ),
+                      ),
+                  ],
+                ],
+              ),
+            ),
+            if (c.hayCambiosSinAplicar || hayAlgo)
+              Padding(
+                padding: EdgeInsets.fromLTRB(margen, 10, margen, 0),
+                child: Row(
+                  children: [
+                    if (c.hayCambiosSinAplicar) ...[
+                      const Icon(Icons.arrow_downward_rounded,
+                          size: 15, color: HomeTheme.accentPink),
+                      const SizedBox(width: 6),
+                      Expanded(
+                        child: Text(
+                          'home.filtros-desliza'.i18n,
+                          style: const TextStyle(
+                            fontSize: 12.5,
+                            color: HomeTheme.accentPink,
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                      ),
+                    ] else
+                      const Spacer(),
+                    TextButton(
+                      onPressed: c.restablecerFiltros,
+                      child: Text('home.filtros-restablecer'.i18n),
+                    ),
+                  ],
+                ),
+              ),
+          ],
+        ),
+      );
+    });
+  }
+
+  /// Los tipos, con el nombre que ya usa el resto de la app.
+  static const _tipos = <(ExtensionType, String)>[
+    (ExtensionType.bangumi, 'extension-type.video'),
+    (ExtensionType.manga, 'extension-type.comic'),
+    (ExtensionType.fikushon, 'extension-type.novel'),
+  ];
+}
+
+class _Chip extends StatelessWidget {
+  const _Chip({
+    required this.texto,
+    required this.marcado,
+    required this.onTap,
+  });
+
+  final String texto;
+  final bool marcado;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      onTap: onTap,
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 160),
+        padding: EdgeInsets.fromLTRB(marcado ? 10 : 14, 8, 14, 8),
+        decoration: BoxDecoration(
+          color: marcado
+              ? HomeTheme.accentPink.withValues(alpha: 0.18)
+              : HomeTheme.cardSurface,
+          borderRadius: BorderRadius.circular(20),
+          border: Border.all(
+            color: marcado
+                ? HomeTheme.accentPink
+                : Colors.white.withValues(alpha: 0.08),
+          ),
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            // El ganchito, no solo el color: sobre un fondo oscuro, «rosa
+            // tenue» y «gris» se parecen bastante, y encima hay gente que no
+            // distingue esos dos tonos. La marca tiene que ser una forma.
+            if (marcado) ...[
+              const Icon(Icons.check_rounded,
+                  size: 16, color: HomeTheme.accentPink),
+              const SizedBox(width: 5),
+            ],
+            Text(
+              texto,
+              style: TextStyle(
+                fontSize: 13.5,
+                fontWeight: FontWeight.w600,
+                color: marcado ? Colors.white : HomeTheme.textMuted,
+              ),
+            ),
+          ],
+        ),
+      ),
     );
   }
 }
@@ -459,6 +654,7 @@ class _CarruselAndroidState extends State<_CarruselAndroid>
               // El texto solo en la que está en foco: en una tira de cincuenta
               // píxeles no entra, y recortado se lee como un error.
               conTexto: (_p - i).abs() < 0.5,
+              anchoTexto: m.ancho - 28,
               onTap: () {
                 // Tocar una de los costados la trae al centro; tocar la que ya
                 // está en foco abre la ficha. Sin esto, para abrir la de al
@@ -556,6 +752,7 @@ class _TarjetaGrande extends StatelessWidget {
     required this.cabeceras,
     required this.onTap,
     this.conTexto = true,
+    this.anchoTexto = 0,
   });
 
   /// Para no decodificar la portada más grande de lo que se ve. Ver el
@@ -570,6 +767,9 @@ class _TarjetaGrande extends StatelessWidget {
   /// recortado a dos letras se lee como un error, no como información.
   final bool conTexto;
 
+  /// Con qué ancho se compone el texto. Ver el comentario largo abajo.
+  final double anchoTexto;
+
   @override
   Widget build(BuildContext context) {
     final radio = BorderRadius.circular(20);
@@ -579,6 +779,10 @@ class _TarjetaGrande extends StatelessWidget {
         decoration: BoxDecoration(
           borderRadius: radio,
           color: HomeTheme.cardSurface,
+          // Un filo claro apenas visible. No es adorno: sobre una portada
+          // oscura, el borde de la tarjeta se funde con el fondo y no se sabe
+          // dónde termina. Con esto se lee la forma sin que parezca un marco.
+          border: Border.all(color: Colors.white.withValues(alpha: 0.11)),
           boxShadow: const [
             BoxShadow(
               color: Color(0x73000000),
@@ -619,7 +823,24 @@ class _TarjetaGrande extends StatelessWidget {
                 alignment: Alignment.bottomLeft,
                 child: Padding(
                   padding: const EdgeInsets.fromLTRB(14, 0, 14, 13),
-                  child: Column(
+                  // ── El texto tiene ancho FIJO ──────────────────────────
+                  //
+                  // Y no el de la tarjeta, que cambia cuadro a cuadro
+                  // mientras el dedo arrastra. Con el ancho variable, el
+                  // título se vuelve a repartir en líneas sesenta veces por
+                  // segundo: las palabras saltan de renglón, la elipsis
+                  // aparece y desaparece, y las letras se ven «temblar».
+                  //
+                  // Fijándolo al ancho de la tarjeta en foco, el texto se
+                  // compone UNA vez. Lo que sobra queda fuera del recorte de
+                  // la tarjeta, que es exactamente lo que se quiere: el
+                  // título entra completo justo cuando la tarjeta termina de
+                  // abrirse.
+                  child: OverflowBox(
+                    alignment: Alignment.bottomLeft,
+                    maxWidth: anchoTexto,
+                    minWidth: anchoTexto,
+                    child: Column(
                     mainAxisSize: MainAxisSize.min,
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
@@ -646,6 +867,7 @@ class _TarjetaGrande extends StatelessWidget {
                         ),
                       ),
                     ],
+                    ),
                   ),
                 ),
               ),
@@ -688,6 +910,13 @@ class _FilaAndroidState extends State<_FilaAndroid> {
     // fila vacía va una línea con lo que hay que hacer para que traiga algo.
     if (widget.fila.estadoExt != EstadoExtension.activa) {
       return _FilaInactiva(fila: widget.fila, c: widget.c);
+    }
+    // Hay un género aplicado y este sitio no lo tiene entre sus filtros.
+    // Se dice, en una línea: mostrarla con lo último de siempre haría creer
+    // que ese contenido es del género elegido, y esconderla dejaría al usuario
+    // preguntándose adónde se fue su extensión.
+    if (!widget.c.puedeConEsteGenero(widget.fila.package)) {
+      return _FilaSinEseGenero(nombre: widget.fila.nombre);
     }
     return Obx(() {
       final estado = widget.fila.estado.value;
@@ -985,5 +1214,36 @@ class _CarruselEsperando extends StatelessWidget {
         ],
       );
     });
+  }
+}
+
+/// La extensión no ofrece el género que está aplicado.
+class _FilaSinEseGenero extends StatelessWidget {
+  const _FilaSinEseGenero({required this.nombre});
+
+  final String nombre;
+
+  @override
+  Widget build(BuildContext context) {
+    final margen = _margen(context);
+    return Padding(
+      padding: EdgeInsets.fromLTRB(margen, 14, margen, 0),
+      child: Row(
+        children: [
+          const Icon(Icons.filter_alt_off_outlined,
+              size: 16, color: HomeTheme.textMuted),
+          const SizedBox(width: 8),
+          Expanded(
+            child: Text(
+              '$nombre · ${'home.fila-sin-genero'.i18n}',
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: const TextStyle(
+                  fontSize: 12.5, color: HomeTheme.textMuted),
+            ),
+          ),
+        ],
+      ),
+    );
   }
 }

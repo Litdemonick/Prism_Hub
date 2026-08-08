@@ -89,7 +89,10 @@
     "zona-en-camino": "Nothing here yet: this zone gets its sections with the metadata layer.",
     "sin-extensiones": "No extensions enabled. Install one from Extensions and its content will show up here.",
     "fila-sin-respuesta": "did not respond",
-    "activar": "Enable"
+    "activar": "Enable",
+    "filtros-desliza": "Pull down to apply the filters",
+    "filtros-restablecer": "Reset",
+    "fila-sin-genero": "doesn't have that genre"
   },
   "search": {
     "hint-text": "Please use search wisely!~",

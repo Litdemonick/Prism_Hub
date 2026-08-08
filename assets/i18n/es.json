@@ -85,7 +85,10 @@
     "zona-en-camino": "Todavía no hay nada acá: las secciones de esta zona llegan con la capa de metadatos.",
     "sin-extensiones": "No tenés extensiones activas. Instalá alguna desde Extensiones y su contenido va a aparecer acá.",
     "fila-sin-respuesta": "no respondió",
-    "activar": "Activar"
+    "activar": "Activar",
+    "filtros-desliza": "Deslizá hacia abajo para aplicar los filtros",
+    "filtros-restablecer": "Restablecer",
+    "fila-sin-genero": "no tiene ese género"
   },
   "search": {
     "hint-text": "¡Por favor, busca ampliamente!~",

@@ -117,6 +117,145 @@ class CatalogoExtensionesController extends GetxController {
     }
   }
 
+  // ─── Los filtros del Home ─────────────────────────────────────────────────
+  //
+  // ── Lo que se puede filtrar y lo que no ─────────────────────────────────
+  //
+  // Se midió extensión por extensión (2026-08-07):
+  //
+  //   · **Tipo** (anime, series y películas, manga, novela): sale de
+  //     `extension.type`, que la app ya tiene para las 17. Es fiable siempre y
+  //     no hace falta preguntarle nada al sitio — se filtra qué FILAS se
+  //     muestran, no qué trae cada una.
+  //
+  //   · **Género** (romance, terror…): sale del `createFilter()` de cada
+  //     extensión. Lo tienen 8 de las 11 que no son +18. FuegoCine, Olympus y
+  //     ShadeManga NO: a esas un género no les puede hacer nada, y se dicen
+  //     así en pantalla en vez de mostrarlas vacías.
+  //
+  // ── Por qué se comparan por ETIQUETA y no por clave ─────────────────────
+  //
+  // Porque la clave es del sitio: «Romance» es `romance` en una, `12` en otra
+  // y `genero/romance/` en la tercera. No hay forma de cruzarlas. La etiqueta,
+  // en cambio, es el texto que el propio sitio le muestra a la gente, y ahí sí
+  // coinciden. Así que un chip «Romance» se traduce, extensión por extensión,
+  // a la clave que cada una espera.
+  //
+  // ── Por qué no se aplica al tocar ───────────────────────────────────────
+  //
+  // Porque aplicar significa volver a pedirle a ONCE sitios. Tocando tres
+  // chips seguidos serían tres tandas de once pedidos, y las dos primeras se
+  // tiran a la basura. Se elige tranquilo y se aplica de una, tirando de la
+  // pantalla hacia abajo.
+
+  /// Los géneros que ofrece al menos una extensión, ya unidos y ordenados.
+  final generosDisponibles = <String>[].obs;
+
+  /// Lo que el usuario tocó pero todavía no aplicó.
+  final tipoElegido = Rxn<ExtensionType>();
+  final generoElegido = RxnString();
+
+  /// Lo que está aplicado de verdad, o sea con lo que se pidió el contenido.
+  ExtensionType? tipoAplicado;
+  String? generoAplicado;
+
+  bool get hayCambiosSinAplicar =>
+      tipoElegido.value != tipoAplicado || generoElegido.value != generoAplicado;
+
+  bool get hayFiltros => tipoAplicado != null || generoAplicado != null;
+
+  /// Para cada extensión, de etiqueta de género a (clave del filtro, valor).
+  ///
+  /// Se arma una sola vez por sesión: `createFilter()` corre JavaScript en el
+  /// motor de la extensión, y hacerlo en cada pedido sería pagarlo de más.
+  final _generosPorExtension = <String, ({String clave, Map<String, String> porEtiqueta})>{};
+  bool _generosLeidos = false;
+
+  /// Lee los géneros de cada extensión y arma la lista de chips.
+  ///
+  /// Una extensión que falle o que no tenga género no rompe nada: simplemente
+  /// no aporta etiquetas.
+  Future<void> cargarGeneros() async {
+    if (_generosLeidos) return;
+    _generosLeidos = true;
+    final union = <String>{};
+    for (final fila in filas) {
+      if (fila.estadoExt != EstadoExtension.activa) continue;
+      final runtime = ExtensionUtils.enabledRuntimes[fila.package];
+      if (runtime == null) continue;
+      try {
+        final filtros = await runtime
+            .createFilter()
+            .timeout(const Duration(seconds: 8));
+        for (final e in filtros.entries) {
+          // Por el título y no por el nombre de la clave: la clave es
+          // `genero`, `genres`, `g`… según el sitio.
+          final titulo = e.value.title.toLowerCase();
+          if (!titulo.contains('género') && !titulo.contains('genero')) {
+            continue;
+          }
+          // Las de +18 no aportan al Home, ni siquiera sus etiquetas.
+          if (titulo.contains('+18')) continue;
+          final porEtiqueta = <String, String>{};
+          e.value.options.forEach((clave, etiqueta) {
+            final limpia = etiqueta.trim();
+            // La opción vacía es «todos»: no es un género.
+            if (limpia.isEmpty || clave.isEmpty) return;
+            porEtiqueta[limpia] = clave;
+            union.add(limpia);
+          });
+          if (porEtiqueta.isNotEmpty) {
+            _generosPorExtension[fila.package] =
+                (clave: e.key, porEtiqueta: porEtiqueta);
+          }
+          break;
+        }
+      } catch (e) {
+        logger.info('[home] ${fila.nombre} no dio sus géneros: $e');
+      }
+    }
+    final lista = union.toList()..sort();
+    generosDisponibles.assignAll(lista);
+  }
+
+  /// ¿Esta extensión puede contestar al género que está aplicado?
+  bool puedeConEsteGenero(String package) {
+    final g = generoAplicado;
+    if (g == null) return true;
+    return _generosPorExtension[package]?.porEtiqueta.containsKey(g) ?? false;
+  }
+
+  /// ¿Esta fila entra en el tipo elegido?
+  bool entraEnElTipo(FilaDeExtension fila) {
+    final t = tipoAplicado;
+    if (t == null) return true;
+    return ExtensionUtils.runtimes[fila.package]?.extension.type == t;
+  }
+
+  /// Deja lo elegido como aplicado y vuelve a pedir todo.
+  Future<void> aplicarFiltros() async {
+    tipoAplicado = tipoElegido.value;
+    generoAplicado = generoElegido.value;
+    // El carrusel se arma de lo que llega, así que se vacía: si no, quedarían
+    // mezcladas las portadas de antes del filtro con las de después.
+    destacados.clear();
+    carruselExt = 0;
+    carruselPos = 0;
+    for (final fila in filas) {
+      fila.items.clear();
+      fila.traidoEl = null;
+    }
+    filas.refresh();
+    await refrescarTodo();
+  }
+
+  /// Vuelve a como estaba: sin filtros.
+  Future<void> restablecerFiltros() async {
+    tipoElegido.value = null;
+    generoElegido.value = null;
+    await aplicarFiltros();
+  }
+
   var _enVuelo = 0;
   final _cola = <FilaDeExtension>[];
   Map<String, dynamic> _cache = const {};
@@ -273,9 +412,19 @@ class CatalogoExtensionesController extends GetxController {
         fila.estado.value = EstadoDeFila.fallo;
         return;
       }
-      // Tope propio: sin esto, un sitio colgado deja la fila girando para
-      // siempre. Con él, a los 20 s dice que no respondió y ofrece reintentar.
-      final items = await runtime.latest(1).timeout(const Duration(seconds: 20));
+      // ── Con género aplicado se pide por búsqueda, no por «lo último» ──
+      //
+      // `latest()` no acepta filtros: devuelve lo último y punto. El que sí
+      // los acepta es `search()`, con la palabra vacía — que es como el propio
+      // buscador de la app lista un género completo.
+      //
+      // Sin filtros, esto es EXACTAMENTE lo de antes. La rama nueva solo se
+      // pisa cuando el usuario eligió algo.
+      final genero = _generoPara(fila.package);
+      final items = await (genero == null
+              ? runtime.latest(1)
+              : runtime.search('', 1, filter: genero))
+          .timeout(const Duration(seconds: 20));
       if (items.isEmpty) {
         fila.estado.value =
             fila.items.isEmpty ? EstadoDeFila.fallo : EstadoDeFila.lista;
@@ -293,6 +442,20 @@ class CatalogoExtensionesController extends GetxController {
       fila.estado.value =
           fila.items.isEmpty ? EstadoDeFila.fallo : EstadoDeFila.lista;
     }
+  }
+
+  /// El filtro concreto que hay que mandarle a ESTA extensión, o null.
+  ///
+  /// Null significa «pedí lo último de siempre»: o no hay género aplicado, o
+  /// esta extensión no lo conoce.
+  Map<String, List<String>>? _generoPara(String package) {
+    final etiqueta = generoAplicado;
+    if (etiqueta == null) return null;
+    final mapa = _generosPorExtension[package];
+    if (mapa == null) return null;
+    final valor = mapa.porEtiqueta[etiqueta];
+    if (valor == null) return null;
+    return {mapa.clave: [valor]};
   }
 
   /// Alimenta el carrusel con la tanda de esta extensión.
