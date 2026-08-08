@@ -223,9 +223,6 @@ class _CarruselAndroidState extends State<_CarruselAndroid>
   );
   Animation<double>? _viaje;
 
-  /// Cuánto se encoge la vecina de al lado, de alto. Poco: lo que separa a la
-  /// elegida es sobre todo el ANCHO.
-  static const _encoge = 0.06;
 
   /// Qué parte del ancho grande le queda a una tarjeta de los costados.
   static const _proporcionChica = 0.22;
@@ -306,9 +303,11 @@ class _CarruselAndroidState extends State<_CarruselAndroid>
   Widget build(BuildContext context) {
     return Obx(() {
       final grupos = widget.c.destacados;
-      if (grupos.isEmpty) return const SizedBox(height: 12);
-      final planos = _planos(grupos);
-      if (planos.isEmpty) return const SizedBox(height: 12);
+      final planos = grupos.isEmpty ? const <(String, ExtensionListItem)>[] : _planos(grupos);
+      // Nada todavía: en vez de un hueco negro de media pantalla, las tarjetas
+      // que van a venir, en gris. Así el Home ya tiene su forma desde el
+      // primer cuadro y al cargar no da un salto.
+      if (planos.isEmpty) return const _CarruselEsperando();
 
       // ── La posición guardada puede haber quedado colgada ──────────────
       //
@@ -403,10 +402,6 @@ class _CarruselAndroidState extends State<_CarruselAndroid>
       return m.anchoChico + (m.ancho - m.anchoChico) * (1 - lejos);
     }
 
-    double altoDe(int i) {
-      final lejos = (_p - i).abs().clamp(0.0, 1.0);
-      return m.alto * (1 - _encoge * lejos);
-    }
 
     final foco = _p.floor();
     final desde = (foco - 2).clamp(0, planos.length - 1);
@@ -437,11 +432,25 @@ class _CarruselAndroidState extends State<_CarruselAndroid>
         for (var i = desde; i <= hasta; i++)
           Positioned(
             left: xs[i]! + dx,
-            top: (m.alto - altoDe(i)) / 2,
+            // Todas del MISMO alto. Lo que distingue a la elegida es el
+            // ancho, y nada más: encogiéndolas también de alto quedaban
+            // escalonadas, como si cada una estuviera a otra distancia.
+            top: 0,
             width: anchoDe(i),
-            height: altoDe(i),
+            height: m.alto,
             child: _TarjetaGrande(
-              ancho: anchoDe(i),
+              // ── El ancho para DECODIFICAR es fijo ──────────────────────
+              //
+              // Y no el ancho real de la tarjeta, que cambia en cada cuadro
+              // mientras el dedo arrastra. Con el real, la imagen se volvía a
+              // decodificar sesenta veces por segundo a un tamaño distinto, y
+              // eso es exactamente el parpadeo: entre una decodificación y la
+              // siguiente no hay nada que dibujar.
+              //
+              // Se pide siempre al tamaño de la grande: es el máximo al que se
+              // va a ver, así que nunca queda borrosa, y como el número no
+              // cambia, la imagen se decodifica UNA vez y se reusa.
+              ancho: m.ancho,
               item: planos[i].$2,
               fuente: ExtensionUtils
                       .runtimes[planos[i].$1]?.extension.name ??
@@ -473,10 +482,19 @@ class _CarruselAndroidState extends State<_CarruselAndroid>
   /// el ancho vuelve atrás con él**. Sin ese último paso, en horizontal
   /// quedaban tarjetas chatas nadando en huecos enormes.
   _MedidasCarrusel _medir(BuildContext context, double anchoUtil) {
-    const relacion = 1.1; // alto respecto del ancho
     final altoPantalla = MediaQuery.sizeOf(context).height;
     final a = Ancho.de(context);
     final bajo = altoPantalla < 500;
+
+    // ── La forma cambia con la orientación ─────────────────────────────
+    //
+    // De pie, la tarjeta es un poco más alta que ancha. Acostado no puede
+    // serlo: el alto disponible es la mitad, así que mantener esa proporción
+    // obliga a tarjetas angostas — y entran cuatro o cinco, chiquitas, en vez
+    // de las dos grandes que se quieren ver.
+    //
+    // Acostado se da vuelta: más ancha que alta, y entran dos.
+    final relacion = bajo ? 0.86 : 1.1; // alto respecto del ancho
 
     // Cuanto más ancha la pantalla, menos se lleva la tarjeta en foco: en una
     // tablet, dos tercios del ancho serían una sola tarjeta enorme.
@@ -797,8 +815,26 @@ class _GrillaPaginadaState extends State<_GrillaPaginada> {
       final alto = altoCelda * filas + _hueco * (filas - 1);
 
       if (widget.cargando) {
+        // La grilla que VIENE, en gris y brillando. Mismas medidas, mismas
+        // posiciones: cuando llegan las portadas no se mueve nada.
         return SizedBox(
-            height: alto, child: const Center(child: ProgressRing()));
+          height: alto,
+          child: Padding(
+            padding: EdgeInsets.symmetric(horizontal: margen),
+            child: GridView.builder(
+              physics: const NeverScrollableScrollPhysics(),
+              padding: EdgeInsets.zero,
+              gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
+                crossAxisCount: columnas,
+                mainAxisSpacing: _hueco,
+                crossAxisSpacing: _hueco,
+                childAspectRatio: anchoCelda / altoCelda,
+              ),
+              itemCount: porPagina,
+              itemBuilder: (_, __) => EsqueletoTarjeta(ancho: anchoCelda),
+            ),
+          ),
+        );
       }
 
       var paginas = (widget.items.length + porPagina - 1) ~/ porPagina;
@@ -884,6 +920,68 @@ class _GrillaPaginadaState extends State<_GrillaPaginada> {
               },
             ),
           ],
+        ],
+      );
+    });
+  }
+}
+
+/// El carrusel antes de que llegue la primera extensión.
+class _CarruselEsperando extends StatelessWidget {
+  const _CarruselEsperando();
+
+  @override
+  Widget build(BuildContext context) {
+    return LayoutBuilder(builder: (context, caja) {
+      if (!caja.maxWidth.isFinite || caja.maxWidth < 120) {
+        return const SizedBox(height: 12);
+      }
+      final a = Ancho.de(context);
+      final altoPantalla = MediaQuery.sizeOf(context).height;
+      final bajo = altoPantalla < 500;
+      final relacion = bajo ? 0.86 : 1.1;
+      final parte = bajo
+          ? a.elegir(compacto: 0.46, medio: 0.36, amplio: 0.3, enorme: 0.24)
+          : a.elegir(compacto: 0.66, medio: 0.46, amplio: 0.36, enorme: 0.28);
+      var ancho = caja.maxWidth * parte;
+      var alto = ancho * relacion;
+      final tope = altoPantalla * (bajo ? 0.66 : 0.4);
+      if (alto > tope) {
+        alto = tope;
+        ancho = alto / relacion;
+      }
+      return Column(
+        children: [
+          SizedBox(
+            height: alto,
+            child: ClipRect(
+              child: Stack(
+                children: [
+                  // La grande al medio y una tira a cada lado: la misma forma
+                  // que va a tener cuando cargue.
+                  Positioned(
+                    left: caja.maxWidth / 2 - ancho / 2,
+                    width: ancho,
+                    height: alto,
+                    child: Esqueleto(radio: 20, width: ancho, height: alto),
+                  ),
+                  Positioned(
+                    left: caja.maxWidth / 2 - ancho / 2 - ancho * 0.22 - 9,
+                    width: ancho * 0.22,
+                    height: alto,
+                    child: Esqueleto(radio: 20, height: alto),
+                  ),
+                  Positioned(
+                    left: caja.maxWidth / 2 + ancho / 2 + 9,
+                    width: ancho * 0.22,
+                    height: alto,
+                    child: Esqueleto(radio: 20, height: alto),
+                  ),
+                ],
+              ),
+            ),
+          ),
+          const SizedBox(height: 20),
         ],
       );
     });
