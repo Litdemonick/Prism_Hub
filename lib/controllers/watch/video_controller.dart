@@ -6829,7 +6829,12 @@ class VideoPlayerController extends GetxController with WidgetsBindingObserver {
     // libre para siempre (hasta reiniciar la app), porque nada más en la app
     // vuelve a pedir "todas las orientaciones". fullAutoMode restaura la
     // auto-rotación real según el sensor/config del sistema.
-    if (!LayoutUtils.isTablet) {
+    // esTablet y no el isTablet de antes: aquel se calculaba una vez y se
+    // guardaba, y acá el app SIEMPRE está acostado — si esta era la primera
+    // pantalla en preguntar, un teléfono quedaba marcado como tablet y este
+    // bloque no corría nunca. O sea que salir del reproductor dejaba la app
+    // trabada en horizontal hasta reiniciarla.
+    if (!LayoutUtils.esTablet) {
       await AutoOrientation.fullAutoMode();
       SystemChrome.setPreferredOrientations(DeviceOrientation.values);
     }

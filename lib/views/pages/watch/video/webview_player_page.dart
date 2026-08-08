@@ -1206,7 +1206,12 @@ class _WebViewPlayerPageState extends State<WebViewPlayerPage>
     if (!Platform.isAndroid) return;
     // Mismo criterio que el reproductor nativo: en tablet no se toca la
     // orientación (nunca se la forzó).
-    if (!LayoutUtils.isTablet) {
+    //
+    // esTablet mira el lado corto de la pantalla, que no cambia al girar. Con
+    // el isTablet de antes —ancho medido una vez y guardado— acá se preguntaba
+    // estando acostado, así que un teléfono podía quedar marcado como tablet y
+    // este bloque no soltaba nunca el bloqueo de orientación.
+    if (!LayoutUtils.esTablet) {
       unawaited(AutoOrientation.fullAutoMode());
       SystemChrome.setPreferredOrientations(DeviceOrientation.values);
     }
