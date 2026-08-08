@@ -1118,11 +1118,23 @@ class CatalogoExtensionesController extends GetxController {
 
     // Lo guardado se muestra YA, sin esperar la red.
     for (final fila in nuevas) {
-      // Salvo que la fila venga reusada y ya tenga lo suyo: lo que hay en
-      // memoria es más nuevo que el archivo, y puede tener varias páginas
-      // pedidas. Pisarlo con lo guardado le sacaría al usuario las portadas
-      // que ya había traído deslizando.
-      if (fila.items.isNotEmpty) continue;
+      // ── La reusada no se toca, pero SÍ vuelve al acordeón ─────────────
+      //
+      // Si viene reusada y ya tiene lo suyo, su contenido no se pisa: lo que
+      // hay en memoria es más nuevo que el archivo y puede tener varias
+      // páginas pedidas. Pisarlo le sacaría al usuario las portadas que ya
+      // había traído deslizando.
+      //
+      // Pero hay que volver a sumarla igual. `recargar()` vacía el acordeón
+      // antes de armar, así que saltear la fila entera la dejaba afuera: las
+      // filas de abajo mostraban su contenido y el acordeón se quedaba en
+      // bloques grises para siempre. Se arreglaba tocando refrescar, porque
+      // eso vuelve a pedir y al llegar el contenido la suma de nuevo — que es
+      // exactamente el síntoma que se reportó.
+      if (fila.items.isNotEmpty) {
+        _sumarADestacados(fila, fila.items);
+        continue;
+      }
       final guardado = _cache[fila.package];
       if (guardado is! Map) continue;
       final items = _desdeJson(guardado['items']);
