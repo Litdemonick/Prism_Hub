@@ -539,13 +539,69 @@ class _AppRoot extends StatefulWidget {
   State<_AppRoot> createState() => _AppRootState();
 }
 
-class _AppRootState extends State<_AppRoot> {
+class _AppRootState extends State<_AppRoot> with WidgetsBindingObserver {
   bool _ready = false;
+
+  /// Si este arranque viene de una app que estaba en segundo plano hace nada.
+  ///
+  /// ── El problema ───────────────────────────────────────────────────────
+  ///
+  /// Mientras el proceso vive, volver a la app no pasa por acá y no hay
+  /// animación de arranque. Pero Android MATA procesos en segundo plano
+  /// cuando le falta memoria, y también cuando el usuario sale con el botón
+  /// de atrás. Entonces «volver» es en realidad un arranque en frío completo,
+  /// con su animación y su espera mínima — y desde afuera se ve como que la
+  /// app se reinicia sola cada vez que la dejás un rato.
+  ///
+  /// ── Qué se puede y qué no ─────────────────────────────────────────────
+  ///
+  /// La inicialización de verdad —base de datos, extensiones, media_kit— hay
+  /// que hacerla igual: el proceso murió y no hay nada cargado. Eso no se
+  /// puede saltear sin romper la app.
+  ///
+  /// Lo que SÍ se saltea es la espera **artificial** de 1,4 segundos, que está
+  /// para que la animación se alcance a ver. Si el usuario estuvo acá hace un
+  /// minuto, esa animación no le dice nada nuevo: solo le cuesta un segundo y
+  /// medio. Sin ella, un arranque con todo cacheado es casi instantáneo.
+  bool _volviendo = false;
+
+  /// Cuándo se fue la app a segundo plano por última vez, en milisegundos.
+  static const _claveUltimoUso = 'ultimo-uso-ms';
+
+  /// Cuánto vale considerar que «se estaba usando». Cinco minutos: más que eso
+  /// y volver ya se siente como abrir la app, no como retomarla.
+  static const _ventanaEnCaliente = Duration(minutes: 5);
 
   @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addObserver(this);
     _init();
+  }
+
+  @override
+  void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
+    super.dispose();
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState estado) {
+    super.didChangeAppLifecycleState(estado);
+    // Se anota al IRSE, no al volver: cuando Android decide matar el proceso ya
+    // no corre nada nuestro, así que la última marca tiene que estar puesta de
+    // antes. `paused` es el último aviso garantizado.
+    if (estado != AppLifecycleState.paused) return;
+    unawaited(
+      PrismHubStorage.setSetting(
+        _claveUltimoUso,
+        DateTime.now().millisecondsSinceEpoch,
+      ).catchError((Object e) {
+        // Que no se pueda anotar solo significa un arranque con animación de
+        // más. No vale tumbar nada por eso.
+        logger.info('No se pudo anotar el último uso: $e');
+      }),
+    );
   }
 
   Future<void> _init() async {
@@ -560,6 +616,10 @@ class _AppRootState extends State<_AppRoot> {
     } catch (e) {
       debugPrint('ERROR: ApplicationUtils.ensureInitialized falló: $e');
     }
+    // Recién acá se puede preguntar: el almacenamiento lo abre la línea de
+    // arriba. Para entonces la animación ya empezó, y está bien — lo que se
+    // gana es no ESPERARLA.
+    _mirarSiVolvemos();
     try {
       await ConnectivityUtils.ensureInitialized();
     } catch (e) {
@@ -603,12 +663,33 @@ class _AppRootState extends State<_AppRoot> {
     if (Platform.isAndroid) {
       await NotificacionReproductor.encender();
     }
-    await minDuration;
+    // Solo se espera la duración mínima en un arranque de verdad. Volviendo,
+    // se entra en cuanto lo de arriba terminó.
+    if (!_volviendo) await minDuration;
     if (mounted) setState(() => _ready = true);
     _abrirEnlacePendiente();
     // Android entrega los enlaces por su propio canal, no por argumentos: el
     // que abrio la app y tambien los que llegan con la app ya abierta.
     unawaited(Compartir.escucharAndroid(_irAlEnlace));
+  }
+
+  /// Decide si este arranque es «volver» o «abrir».
+  void _mirarSiVolvemos() {
+    try {
+      final ultimo = PrismHubStorage.getSetting(_claveUltimoUso);
+      if (ultimo is! int) return;
+      final pasado = DateTime.now().millisecondsSinceEpoch - ultimo;
+      // El negativo cubre un reloj movido hacia atrás: ahí no se sabe cuánto
+      // pasó, y ante la duda se trata como arranque normal.
+      if (pasado < 0 || pasado > _ventanaEnCaliente.inMilliseconds) return;
+      _volviendo = true;
+      // Se corta la animación en el acto, sin esperar a que termine de
+      // cargar: si igual quedan unos cuadros de espera, que sean sobre el
+      // fondo y no sobre un logo latiendo que ya se vio hace un minuto.
+      if (mounted) setState(() {});
+    } catch (e) {
+      logger.info('No se pudo leer el último uso: $e');
+    }
   }
 
   /// Abre la ficha del enlace con el que se arrancó, si hubo uno.
@@ -693,9 +774,14 @@ class _AppRootState extends State<_AppRoot> {
   @override
   Widget build(BuildContext context) {
     if (!_ready) {
-      return const MaterialApp(
+      return MaterialApp(
         debugShowCheckedModeBanner: false,
-        home: SplashScreen(),
+        // Volviendo, ni logo ni latido: solo el fondo, para que el corte al
+        // contenido real no se note. La animación es para presentarse, y a
+        // quien estuvo acá hace un minuto no hay que presentarse de nuevo.
+        home: _volviendo
+            ? const ColoredBox(color: HomeTheme.bg)
+            : const SplashScreen(),
       );
     }
     return const MainApp();
