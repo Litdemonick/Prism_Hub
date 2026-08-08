@@ -1535,8 +1535,21 @@ class CatalogoExtensionesController extends GetxController {
   /// instaló— y no solo su contenido: ahí una fila tiene que pasar de
   /// «apagada» a activa, y eso no se arregla refrescando lo que ya está.
   Future<void> recargar() async {
-    destacados.clear();
+    // ── El acordeón NO se vacía primero ───────────────────────────────────
+    //
+    // Antes esto arrancaba con `destacados.clear()`, y eso es un parpadeo
+    // garantizado: el acordeón pasa a bloques grises y vuelve a llenarse. Y al
+    // abrir la app pasa más de una vez —el armado se reintenta si los motores
+    // todavía no están, y la carga de segundo plano vuelve a armar cuando
+    // termina— así que se veían dos o tres destellos seguidos. En una tablet,
+    // donde el acordeón ocupa media pantalla, se nota muchísimo más.
+    //
+    // Se arma primero y recién después se sacan las que ya no tienen fila. Así
+    // lo que estaba en pantalla sigue ahí todo el tiempo y solo desaparece lo
+    // que de verdad se fue.
     await _armar();
+    final vigentes = filas.map((f) => f.package).toSet();
+    destacados.removeWhere((g) => !vigentes.contains(g.$1));
   }
 
   /// Se está poniendo el Home al día ahora mismo.
