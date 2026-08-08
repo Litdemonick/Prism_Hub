@@ -348,7 +348,8 @@ class _FilaWindowsState extends State<_FilaWindows> {
                   ),
                 ),
                 Text(
-                  widget.c.aplicandoFiltros.value
+                  // Su propio estado, no el global: ver `refrescando`.
+                  widget.fila.refrescando.value
                       ? 'home.modo-buscando'.i18n
                       : widget.c.etiquetaDe(widget.fila) ??
                           switch (widget.c.modoDe(widget.fila)) {

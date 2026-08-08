@@ -66,6 +66,23 @@ class FilaDeExtension {
   final estado = EstadoDeFila.pendiente.obs;
   final items = <ExtensionListItem>[].obs;
 
+  /// ESTA fila está pidiendo algo ahora mismo.
+  ///
+  /// ── Por qué no alcanzaba con `estado` ───────────────────────────────────
+  ///
+  /// `estado` pasa a `cargando` solo cuando la fila no tiene NADA que mostrar:
+  /// refrescar una que ya tiene portadas la deja en `lista` todo el tiempo, a
+  /// propósito, para que las tarjetas no desaparezcan mientras llega lo nuevo.
+  ///
+  /// Pero entonces no había forma de saber que esa fila estaba trabajando, y el
+  /// encabezado tenía que mirar una bandera GLOBAL —«se están aplicando
+  /// filtros»— que no se apaga hasta que contestan las once. Resultado: filas
+  /// que ya tenían su contenido nuevo seguían diciendo «Buscando…» durante
+  /// veinte segundos por culpa de la más lenta.
+  ///
+  /// Con esto cada fila apaga su propio cartel en cuanto le llega lo suyo.
+  final refrescando = false.obs;
+
   /// De cuándo son los datos que se están mostrando. null = nunca cargó.
   DateTime? traidoEl;
 }
@@ -855,6 +872,35 @@ class CatalogoExtensionesController extends GetxController {
     unawaited(_armar());
   }
 
+  /// La fila que YA estaba para ese paquete, si sigue sirviendo.
+  ///
+  /// ── Por qué no se rehacen todas ─────────────────────────────────────────
+  ///
+  /// Armar creaba una `FilaDeExtension` nueva para cada paquete, siempre. Y
+  /// como armar es lo que corre al instalar, prender o apagar una extensión,
+  /// bastaba con tocar UNA para que las otras dieciséis perdieran sus portadas
+  /// y su estado, y volvieran a pedir todo desde cero.
+  ///
+  /// Eso es el parpadeo al refrescar: la pantalla entera se iba a bloques
+  /// grises y volvía. Con la fila reusada, las que ya tenían contenido no se
+  /// enteran de nada y solo la recién llegada aparece —en su lugar definitivo,
+  /// con sus bloques— y se llena sola.
+  ///
+  /// Se reusa solo si es LA MISMA: mismo nombre, mismo estado, misma clase. Una
+  /// que pasó de apagada a encendida tiene que empezar de nuevo, porque lo que
+  /// mostraba antes era el aviso de que estaba apagada.
+  FilaDeExtension _reusarOCrear(FilaDeExtension recien) {
+    for (final vieja in filas) {
+      if (vieja.package == recien.package &&
+          vieja.nombre == recien.nombre &&
+          vieja.estadoExt == recien.estadoExt &&
+          vieja.esVistaPrevia == recien.esVistaPrevia) {
+        return vieja;
+      }
+    }
+    return recien;
+  }
+
   /// Cuántas veces se volvió a intentar armar por no haber motores todavía.
   int _reintentosDeArmado = 0;
 
@@ -946,13 +992,13 @@ class CatalogoExtensionesController extends GetxController {
         // aparecerían dos veces —una apagada y otra con contenido— y con la
         // misma clave, que además rompe el ListView.
         .where((e) => !ExtensionUtils.esVistaPrevia(e.key))
-        .map((e) => FilaDeExtension(
+        .map((e) => _reusarOCrear(FilaDeExtension(
               package: e.key,
               nombre: e.value.extension.name,
               estadoExt: ExtensionUtils.isEnabled(e.key)
                   ? EstadoExtension.activa
                   : EstadoExtension.desactivada,
-            ))
+            )))
         .toList()
       ..sort((a, b) {
         // Las encendidas arriba: son las únicas que traen contenido, y son a
@@ -976,11 +1022,11 @@ class CatalogoExtensionesController extends GetxController {
     // ExtensionUtils.prepararVistaPrevia.
     for (final e in ExtensionUtils.vistaPrevia.entries) {
       if (e.value.extension.nsfw) continue;
-      nuevas.add(FilaDeExtension(
+      nuevas.add(_reusarOCrear(FilaDeExtension(
         package: e.key,
         nombre: e.value.extension.name,
         esVistaPrevia: true,
-      ));
+      )));
     }
 
     // Y al final, las del catálogo que el usuario todavía no tiene.
@@ -1049,6 +1095,11 @@ class CatalogoExtensionesController extends GetxController {
 
     // Lo guardado se muestra YA, sin esperar la red.
     for (final fila in nuevas) {
+      // Salvo que la fila venga reusada y ya tenga lo suyo: lo que hay en
+      // memoria es más nuevo que el archivo, y puede tener varias páginas
+      // pedidas. Pisarlo con lo guardado le sacaría al usuario las portadas
+      // que ya había traído deslizando.
+      if (fila.items.isNotEmpty) continue;
       final guardado = _cache[fila.package];
       if (guardado is! Map) continue;
       final items = _desdeJson(guardado['items']);
@@ -1059,6 +1110,7 @@ class CatalogoExtensionesController extends GetxController {
       _sumarADestacados(fila, items);
     }
     filas.assignAll(nuevas);
+    _firmaArmada = _firmaDeExtensiones();
     armado.value = true;
   }
 
@@ -1128,6 +1180,7 @@ class CatalogoExtensionesController extends GetxController {
       for (final fila in candidatas) {
         if (_cola.contains(fila)) continue;
         fila.pagina++;
+        fila.refrescando.value = true;
         _cola.add(fila);
       }
       _mover();
@@ -1181,6 +1234,7 @@ class CatalogoExtensionesController extends GetxController {
       }
     }
     if (_cola.contains(fila)) return;
+    fila.refrescando.value = true;
     _cola.add(fila);
     _mover();
   }
@@ -1197,6 +1251,16 @@ class CatalogoExtensionesController extends GetxController {
   }
 
   Future<void> _traer(FilaDeExtension fila) async {
+    try {
+      await _traerDeVerdad(fila);
+    } finally {
+      // Siempre, incluso si falló: un cartel de «Buscando…» que no se apaga es
+      // peor que no haberlo puesto.
+      fila.refrescando.value = false;
+    }
+  }
+
+  Future<void> _traerDeVerdad(FilaDeExtension fila) async {
     // Solo se muestra "cargando" si no hay nada viejo que mostrar. Con datos
     // en pantalla, refrescar por detrás no tiene que parpadear.
     if (fila.items.isEmpty) fila.estado.value = EstadoDeFila.cargando;
@@ -1398,18 +1462,37 @@ class CatalogoExtensionesController extends GetxController {
   ///
   /// Compara los paquetes, no la cantidad: instalar una y desactivar otra deja
   /// el mismo número y sí es un cambio.
-  bool _cambiaronLasExtensiones() {
-    final ahora = <String>{
-      ...ExtensionUtils.runtimes.entries
-          .where((e) =>
-              !e.value.extension.nsfw ||
-              ExtensionUtils.esMixta(e.value.extension.package))
-          .map((e) => e.key),
-      ...ExtensionUtils.vistaPrevia.keys,
-    };
-    final antes = filas.map((f) => f.package).toSet();
-    return ahora.length != antes.length || !ahora.containsAll(antes);
+  bool _cambiaronLasExtensiones() => _firmaDeExtensiones() != _firmaArmada;
+
+  /// Qué extensiones hay y en qué estado, en una cadena comparable.
+  ///
+  /// ── Por qué una firma y no comparar con `filas` ──────────────────────────
+  ///
+  /// El intento anterior comparaba los paquetes que hay instalados contra los
+  /// de las filas dibujadas. No servía: el Home también dibuja filas para las
+  /// APAGADAS y para unas cuantas del catálogo que el usuario no instaló, y
+  /// esas nunca están en `runtimes`. Los dos conjuntos casi siempre diferían,
+  /// así que refrescar rehacía la lista entera SIEMPRE — justo el trabajo de
+  /// más que se quería evitar, y encima con el parpadeo que trae.
+  ///
+  /// Y al revés, se le escapaba lo importante: prender o apagar una extensión
+  /// no cambia qué paquetes hay, solo su estado. Activar una y refrescar no la
+  /// traía.
+  ///
+  /// La firma lleva el paquete Y si está encendida, más las de vidriera. Con
+  /// eso los cuatro casos quedan cubiertos: instalar, desinstalar, prender y
+  /// apagar.
+  String _firmaDeExtensiones() {
+    final partes = <String>[
+      for (final e in ExtensionUtils.runtimes.entries)
+        '${e.key}:${ExtensionUtils.isEnabled(e.key) ? 1 : 0}',
+      for (final p in ExtensionUtils.vistaPrevia.keys) 'v:$p',
+    ]..sort();
+    return partes.join(',');
   }
+
+  /// La firma con la que se armó la lista que está en pantalla.
+  String _firmaArmada = '';
 
   /// Vuelve a armar la lista entera.
   ///
@@ -1421,7 +1504,26 @@ class CatalogoExtensionesController extends GetxController {
     await _armar();
   }
 
+  /// Se está poniendo el Home al día ahora mismo.
+  ///
+  /// Lo mira el botón de escritorio para girar mientras dura y no dejarse tocar
+  /// dos veces.
+  final refrescando = false.obs;
+
   Future<void> refrescarTodo() async {
+    // Dos refrescos encima no traen nada nuevo: el segundo encuentra la cola
+    // llena y solo alarga la espera. Tocar el botón dos veces, o tirar de la
+    // pantalla mientras ya estaba trabajando, no puede empeorar las cosas.
+    if (refrescando.value) return;
+    refrescando.value = true;
+    try {
+      await _refrescarDeVerdad();
+    } finally {
+      refrescando.value = false;
+    }
+  }
+
+  Future<void> _refrescarDeVerdad() async {
     // Tirar de la pantalla también reintenta los filtros: si la primera vez no
     // se pudieron leer, este es el gesto con el que el usuario pide de nuevo.
     unawaited(cargarGeneros());
@@ -1437,10 +1539,34 @@ class CatalogoExtensionesController extends GetxController {
     // enterarse de las que se instalaron, se prendieron o se apagaron.
     if (_cambiaronLasExtensiones()) {
       await recargar();
+      // Las filas nuevas piden lo suyo al dibujarse; se las espera igual que a
+      // las de siempre, o la rueda se iría con todo todavía en gris.
+      await _esperarALaCola();
       return;
     }
     for (final fila in filas) {
       pedirSiHaceFalta(fila, forzar: true);
+    }
+    await _esperarALaCola();
+  }
+
+  /// Espera a que las filas terminen de traer lo suyo.
+  ///
+  /// ── Por qué hay que esperar ─────────────────────────────────────────────
+  ///
+  /// `pedirSiHaceFalta` solo ENCOLA y vuelve enseguida, así que sin esto
+  /// `refrescarTodo` terminaba en un milisegundo. En Android eso se veía
+  /// clarísimo: la rueda de «tirar para refrescar» aparecía y desaparecía de
+  /// golpe, antes de que llegara una sola portada, y parecía que el gesto no
+  /// había hecho nada. En escritorio era peor todavía, porque ahí no hay ni
+  /// rueda: el botón no daba ninguna señal.
+  ///
+  /// El tope es de quince segundos. No es para cortar el trabajo —las filas
+  /// siguen en la cola y terminan igual— sino para que una extensión colgada no
+  /// deje la rueda girando para siempre.
+  Future<void> _esperarALaCola() async {
+    for (var i = 0; i < 60 && (_enVuelo > 0 || _cola.isNotEmpty); i++) {
+      await Future<void>.delayed(const Duration(milliseconds: 250));
     }
   }
 

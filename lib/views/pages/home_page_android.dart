@@ -531,9 +531,16 @@ class _BarraDeFiltrosState extends State<_BarraDeFiltros> {
                           if (!_esTactil) ...[
                             const SizedBox(width: 8),
                             _BotonDeBarra(
-                              icono: Icons.refresh_rounded,
+                              // Mientras trabaja cambia de ícono y no se deja
+                              // tocar: sin eso, el botón no daba ninguna señal
+                              // de que estuviera pasando algo y la gente lo
+                              // tocaba tres veces seguidas.
+                              icono: c.refrescando.value
+                                  ? Icons.hourglass_top_rounded
+                                  : Icons.refresh_rounded,
                               etiqueta: 'home.refrescar'.i18n,
-                              onTap: c.refrescarTodo,
+                              onTap:
+                                  c.refrescando.value ? null : c.refrescarTodo,
                             ),
                           ],
                           if (!_esTactil && c.hayCambiosSinAplicar) ...[
@@ -581,7 +588,7 @@ class _BotonDeBarra extends StatelessWidget {
 
   final IconData icono;
   final String etiqueta;
-  final VoidCallback onTap;
+  final VoidCallback? onTap;
 
   @override
   Widget build(BuildContext context) {
@@ -1912,7 +1919,8 @@ class _FilaAndroidState extends State<_FilaAndroid> {
             ),
           ),
           Text(
-            widget.c.aplicandoFiltros.value
+            // Su propio estado, no el global: ver `refrescando`.
+            widget.fila.refrescando.value
                 ? 'home.modo-buscando'.i18n
                 : widget.c.etiquetaDe(widget.fila) ??
                     switch (widget.c.modoDe(widget.fila)) {
