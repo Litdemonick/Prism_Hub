@@ -195,17 +195,26 @@ class _HorizontalTitleState extends State<HorizontalTitle> {
           ),
           child: Row(
             children: [
+              // Con el color puesto, no heredado.
+              //
+              // Este es el título de la fila en escritorio, y era un TextStyle
+              // sin color: caía en la tipografía de Fluent, que trae la suya
+              // según SU tema. El nombre de la extensión quedaba invisible
+              // sobre el fondo claro — la flecha de al lado sí se veía, porque
+              // los iconos de Fluent sí toman el color del tema.
               Text(
                 widget.text,
-                style: const TextStyle(
+                style: TextStyle(
                   fontSize: 16,
                   fontWeight: FontWeight.bold,
+                  color: HomeTheme.textPrimary,
                 ),
               ),
               const SizedBox(width: 8),
-              const Icon(
+              Icon(
                 fluent.FluentIcons.chevron_right_med,
                 size: 14,
+                color: HomeTheme.textPrimary,
               )
             ],
           ),

@@ -908,7 +908,24 @@ class _MainAppState extends State<MainApp> {
         themeMode: ModoDeColor.claro ? ThemeMode.light : ThemeMode.dark,
         theme: _buildTheme(Brightness.light, cjkFontFallback),
         darkTheme: _buildTheme(Brightness.dark, cjkFontFallback),
-        home: const AndroidMainPage(),
+        // ── Sin `const`, y NO es un descuido ──────────────────────────────
+        //
+        // Un widget const es siempre LA MISMA instancia. Cuando el oyente de
+        // arriba rehace el árbol por un cambio de modo, Flutter compara el
+        // widget viejo con el nuevo, ve que son idénticos y se saltea todo su
+        // subárbol: o sea la app entera de Android.
+        //
+        // Ese era el bug: en escritorio el modo cambiaba al instante —ahí la
+        // raíz arma sus pantallas por rutas, que sí se rehacen— y en Android
+        // había que salir de la pestaña y volver para verlo. No era lentitud ni
+        // un problema del interruptor: la pantalla directamente no se enteraba.
+        //
+        // Sin const se crea una instancia nueva en cada reconstrucción de la
+        // raíz, que pasa solo al cambiar el modo. El estado no se pierde: es el
+        // mismo tipo de widget en la misma posición, así que Flutter reusa su
+        // Element y su State.
+        // ignore: prefer_const_constructors
+        home: AndroidMainPage(),
         localizationsDelegates: [
           I18nUtils.flutterI18nDelegate,
           GlobalMaterialLocalizations.delegate,

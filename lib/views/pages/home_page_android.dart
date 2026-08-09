@@ -1990,14 +1990,26 @@ class _TarjetaGrande extends StatelessWidget {
               //
               // Translúcido de punta a punta: si terminara en un color opaco
               // cortaría la portada con una línea recta.
+              // ── Corto y pegado al texto ────────────────────────────────
+              //
+              // Llegaba hasta el 60% de la altura de la tarjeta. En la grande
+              // del centro —la única que ahora lleva velo— eso es una mancha
+              // oscura que se come más de media portada, y se lee como una
+              // sombra puesta ahí sin motivo en vez de como el fondo del
+              // título.
+              //
+              // Hasta el 32% alcanza de sobra: el título ocupa dos renglones y
+              // la línea de la extensión uno, y el velo tiene que cubrir eso y
+              // nada más. La portada se ve casi entera y el texto sigue
+              // legible sobre cualquier imagen.
               if (conTexto)
                 const DecoratedBox(
                   decoration: BoxDecoration(
                     gradient: LinearGradient(
                       begin: Alignment.bottomCenter,
                       end: Alignment.topCenter,
-                      colors: [Color(0xE6000000), Color(0x00000000)],
-                      stops: [0.0, 0.6],
+                      colors: [Color(0xD9000000), Color(0x00000000)],
+                      stops: [0.0, 0.32],
                     ),
                   ),
                 ),
