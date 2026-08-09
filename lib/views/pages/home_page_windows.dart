@@ -274,18 +274,14 @@ class _FilaWindowsState extends State<_FilaWindows> {
               // muestra la forma de lo que va a llegar y nada aparece de la
               // nada.
               child: (items.isEmpty && estado != EstadoDeFila.fallo)
-                  ? ListView.separated(
-                      scrollDirection: Axis.horizontal,
+                  // Los que entran, no seis fijos: en una ventana ancha la fila
+                  // de bloques terminaba a media pantalla. Ver EsqueletoDeFila.
+                  ? EsqueletoDeFila(
+                      ancho: TarjetaDeCatalogo.anchoPara(Ancho.de(context)),
+                      separacion: 14,
                       padding:
                           EdgeInsets.symmetric(horizontal: _margen(context)),
-                      itemCount: 6,
-                      separatorBuilder: (_, __) => const SizedBox(width: 14),
-                      itemBuilder: (context, i) => Padding(
-                        padding: const EdgeInsets.only(top: 10),
-                        child: EsqueletoTarjeta(
-                          ancho: TarjetaDeCatalogo.anchoPara(Ancho.de(context)),
-                        ),
-                      ),
+                      paddingDeCadaUno: const EdgeInsets.only(top: 10),
                     )
                   // ── Recorte solo a los costados ────────────────────
                   //

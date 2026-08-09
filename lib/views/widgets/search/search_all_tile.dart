@@ -129,16 +129,11 @@ class _SearchAllTileState extends State<SearchAllTile> {
           // la pantalla llena de ruedas —o de avisos repetidos— cuando la red
           // está caída: se ve una zona cargando, que es lo que de verdad está
           // pasando.
-          ListView.separated(
-            scrollDirection: Axis.horizontal,
-            physics: const NeverScrollableScrollPhysics(),
-            padding: EdgeInsets.zero,
-            // Los que entran en pantalla y un par más. No hace falta saber
-            // cuántos resultados van a venir: son un relleno, no un dato.
-            itemCount: 8,
-            separatorBuilder: (_, __) => const SizedBox(width: 12),
-            itemBuilder: (_, __) => EsqueletoTarjeta(ancho: anchoTarjeta),
-          ),
+          // Los que ENTRAN, no ocho fijos: en una ventana ancha la fila de
+          // bloques se cortaba a media pantalla y quedaba un vacío al costado,
+          // que se lee como «esta extensión ya trajo y trajo poco». Ver
+          // EsqueletoDeFila.
+          EsqueletoDeFila(ancho: anchoTarjeta),
           // El aviso de "está tardando" va ENCIMA de los bloques, centrado y
           // sobre un velo, para que se lea sin tapar la forma de la fila.
           if (_avisar)

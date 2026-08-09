@@ -293,6 +293,68 @@ class EsqueletoTarjeta extends StatelessWidget {
       );
 }
 
+/// Una fila horizontal de tarjetas fantasma que **llega hasta el borde**.
+///
+/// ── Por qué no un número fijo ───────────────────────────────────────────
+///
+/// Estaba a ojo —seis en el Inicio de escritorio, ocho en Buscar— y eso alcanza
+/// en una ventana angosta. En una ancha se nota enseguida: la fila se cortaba a
+/// media pantalla y quedaba un vacío al costado, justo donde va a haber
+/// tarjetas. Se leía como que esa extensión ya había cargado y traído poco, que
+/// es lo contrario de lo que está pasando.
+///
+/// Acá se cuentan los que entran de verdad. Con `ceil`, así el último asoma
+/// cortado por el borde — que es exactamente lo que hace una fila con contenido
+/// real, y por eso al llegar las tarjetas la forma no cambia.
+class EsqueletoDeFila extends StatelessWidget {
+  const EsqueletoDeFila({
+    super.key,
+    required this.ancho,
+    this.separacion = 12,
+    this.padding = EdgeInsets.zero,
+    this.paddingDeCadaUno = EdgeInsets.zero,
+  });
+
+  /// El ancho de UNA tarjeta, el mismo que va a tener la de verdad.
+  final double ancho;
+
+  final double separacion;
+
+  /// El de la fila entera.
+  final EdgeInsets padding;
+
+  /// El de cada bloque — en el Inicio las tarjetas llevan aire arriba para
+  /// poder crecer al pasarles el mouse sin pisar el título de la fila.
+  final EdgeInsets paddingDeCadaUno;
+
+  @override
+  Widget build(BuildContext context) {
+    return LayoutBuilder(builder: (context, caja) {
+      // Se descuenta solo el margen IZQUIERDO: el de la derecha no acota nada,
+      // porque la idea es justamente pasarse del borde.
+      final util = caja.maxWidth - padding.left;
+      // Un tope por las dudas: si el ancho llegara raro —cero, infinito, una
+      // ventana en pleno arrastre— esto no puede pedir mil bloques.
+      final cuantos = (util.isFinite && util > 0 && ancho > 0)
+          ? ((util + separacion) / (ancho + separacion)).ceil().clamp(1, 24)
+          : 1;
+      return ListView.separated(
+        scrollDirection: Axis.horizontal,
+        // Quieta: mientras carga no hay a dónde ir, y dejarla desplazarse hace
+        // que los bloques se muevan como si fueran contenido de verdad.
+        physics: const NeverScrollableScrollPhysics(),
+        padding: padding,
+        itemCount: cuantos,
+        separatorBuilder: (_, __) => SizedBox(width: separacion),
+        itemBuilder: (_, __) => Padding(
+          padding: paddingDeCadaUno,
+          child: EsqueletoTarjeta(ancho: ancho),
+        ),
+      );
+    });
+  }
+}
+
 /// Una lista de bloques con forma de fila, para las zonas que no son grilla.
 ///
 /// El repositorio y las extensiones instaladas no muestran portadas sino filas
