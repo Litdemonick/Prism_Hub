@@ -10,6 +10,7 @@ import 'package:image_gallery_saver_plus/image_gallery_saver_plus.dart';
 import 'package:prismhub/utils/i18n.dart';
 import 'package:prismhub/utils/request.dart';
 import 'package:prismhub/views/widgets/home/esqueleto.dart';
+import 'package:prismhub/views/widgets/home/home_theme.dart';
 import 'package:prismhub/views/widgets/messenger.dart';
 import 'package:prismhub/views/widgets/platform_widget.dart';
 
@@ -373,10 +374,19 @@ class _CacheNetWorkImagePicState extends State<CacheNetWorkImagePic> {
                       // que uno vino a mirar, y en modo claro es peor todavía
                       // porque lo que asoma es claro y compite de frente.
                       //
-                      // Oscuro también en claro, a propósito: un visor de
-                      // imagen se mira mejor sobre negro, y es lo que hace
-                      // cualquiera de ellos tenga el tema que tenga.
-                      child: const ColoredBox(color: Color(0xFA07070A)),
+                      // Y sigue al modo. Se probó dejarlo oscuro siempre, con
+                      // el argumento de que un visor de imagen se mira mejor
+                      // sobre negro. No pega: con el modo claro puesto, abrir
+                      // una portada apagaba la pantalla entera y cerrarla la
+                      // volvía a prender, y ese golpe se nota más que cualquier
+                      // ventaja de mirar sobre negro.
+                      //
+                      // Casi opaco en los dos, que es lo que resolvía el
+                      // problema de fondo: al 90% se veía la pantalla de atrás
+                      // asomando alrededor de la imagen.
+                      child: ColoredBox(
+                        color: HomeTheme.bg.withValues(alpha: 0.98),
+                      ),
                     ),
                   ),
                   Positioned.fill(child: thumnailPage),
