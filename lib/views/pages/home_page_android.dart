@@ -1974,18 +1974,33 @@ class _TarjetaGrande extends StatelessWidget {
                 placeholder: const Esqueleto(radio: 20),
                 fallback: ColoredBox(color: HomeTheme.cardSurface),
               ),
+              // ── El velo va SOLO donde hay texto ────────────────────────
+              //
+              // Existe para que el título se lea sobre cualquier portada. En
+              // una tarjeta sin título no protege nada: es una mancha oscura
+              // en el borde de abajo y nada más.
+              //
+              // Se dibujaba en TODAS, y las de los costados son slivers de
+              // cuarenta píxeles de ancho: sus velos quedaban como rayitas
+              // verticales oscuras pegadas al pie del acordeón, y entre una
+              // tarjeta y la siguiente el hueco los cortaba. Eso es la «sombra
+              // con líneas» de abajo. Se nota en escritorio porque ahí se ven
+              // varias tarjetas chicas a la vez; en el teléfono, con una sola
+              // grande, pasaba desapercibido.
+              //
               // Translúcido de punta a punta: si terminara en un color opaco
               // cortaría la portada con una línea recta.
-              const DecoratedBox(
-                decoration: BoxDecoration(
-                  gradient: LinearGradient(
-                    begin: Alignment.bottomCenter,
-                    end: Alignment.topCenter,
-                    colors: [Color(0xE6000000), Color(0x00000000)],
-                    stops: [0.0, 0.6],
+              if (conTexto)
+                const DecoratedBox(
+                  decoration: BoxDecoration(
+                    gradient: LinearGradient(
+                      begin: Alignment.bottomCenter,
+                      end: Alignment.topCenter,
+                      colors: [Color(0xE6000000), Color(0x00000000)],
+                      stops: [0.0, 0.6],
+                    ),
                   ),
                 ),
-              ),
               if (conTexto)
                 Align(
                   alignment: Alignment.bottomLeft,
