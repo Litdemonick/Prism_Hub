@@ -799,22 +799,27 @@ class _SettingsPageState extends State<SettingsPage> {
   void _openSkipIntervalPage(BuildContext context) {
     Navigator.of(context).push(
       MaterialPageRoute(
-        builder: (_) => Scaffold(
-          backgroundColor: HomeTheme.bg,
-          appBar: AppBar(
+        // SigueElModo por lo mismo que en SettingsExpanderTile: los colores de
+        // acá se leen UNA vez, al abrir la pantalla, y sin esto el fondo se
+        // queda con el modo que hubiera en ese momento.
+        builder: (_) => SigueElModo(
+          builder: (_) => Scaffold(
             backgroundColor: HomeTheme.bg,
-            title: Text(
-              'settings.skip-interval'.i18n,
-              style: TextStyle(color: HomeTheme.textPrimary),
+            appBar: AppBar(
+              backgroundColor: HomeTheme.bg,
+              title: Text(
+                'settings.skip-interval'.i18n,
+                style: TextStyle(color: HomeTheme.textPrimary),
+              ),
             ),
-          ),
-          body: SingleChildScrollView(
-            padding: const EdgeInsets.all(16),
-            child: StatefulBuilder(
-              // StatefulBuilder propio: esta página vive fuera del árbol de
-              // Ajustes, así que el setState de allá no la alcanza — sin esto
-              // el botón de restablecer no refrescaba los números.
-              builder: (context, _) => _buildSkipIntervalContent(),
+            body: SingleChildScrollView(
+              padding: const EdgeInsets.all(16),
+              child: StatefulBuilder(
+                // StatefulBuilder propio: esta página vive fuera del árbol de
+                // Ajustes, así que el setState de allá no la alcanza — sin esto
+                // el botón de restablecer no refrescaba los números.
+                builder: (context, _) => _buildSkipIntervalContent(),
+              ),
             ),
           ),
         ),

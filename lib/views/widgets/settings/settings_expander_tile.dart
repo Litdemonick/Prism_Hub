@@ -102,8 +102,14 @@ class _SettingsExpanderTileState extends State<SettingsExpanderTile> {
           title: widget.title,
           buildSubtitle: () => widget.subTitle,
           onTap: () {
+            // SigueElModo: sin esto la subpágina se armaba una sola vez, al
+            // abrirla, y su fondo quedaba con el color de ESE momento. Al
+            // cambiar de modo los títulos de adentro pasaban a la paleta nueva
+            // —son widgets propios que releen el color— y el fondo se quedaba
+            // con el viejo: texto casi negro sobre fondo casi negro.
             Get.to(
-              () => Scaffold(
+              () => SigueElModo(
+                builder: (context) => Scaffold(
                 backgroundColor: HomeTheme.bg,
                 // El teclado se superpone en vez de encoger — los campos de
                 // esta subpágina abren diálogo propio, así que no hace falta
@@ -129,12 +135,19 @@ class _SettingsExpanderTileState extends State<SettingsExpanderTile> {
                   // no hacía nada.
                   child: fluent.FluentTheme(
                     data: fluent.FluentThemeData(
-                      brightness: Brightness.dark,
+                      // El brillo también sale del modo. Estaba fijo en oscuro,
+                      // así que los widgets de fluent de adentro (el selector
+                      // numérico del reproductor, por ejemplo) seguían con la
+                      // paleta oscura sobre el fondo claro.
+                      brightness: ModoDeColor.claro
+                          ? Brightness.light
+                          : Brightness.dark,
                       accentColor: fluent.Colors.purple,
                       scaffoldBackgroundColor: HomeTheme.bg,
                     ),
                     child: widget.content,
                   ),
+                ),
                 ),
               ),
             );

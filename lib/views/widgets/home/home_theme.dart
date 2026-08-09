@@ -79,6 +79,35 @@ class ModoDeColor {
   }
 }
 
+/// Envuelve una pantalla EMPUJADA para que se rehaga al cambiar el modo.
+///
+/// ── El agujero que tapa ─────────────────────────────────────────────────
+///
+/// El oyente de la raíz rehace el árbol desde arriba, y eso alcanza para las
+/// pantallas que cuelgan de ahí. Pero una pantalla empujada
+/// (`Get.to(() => Scaffold(...))`, `Navigator.push`) se arma UNA vez, cuando
+/// se abre: el color que se le pase en ese momento —`backgroundColor:
+/// HomeTheme.bg`— queda congelado en el widget que guarda la ruta.
+///
+/// Lo confuso es que la pantalla igual cambiaba **a medias**: lo de adentro
+/// son widgets propios que vuelven a leer los colores cada vez que se
+/// construyen, así que los títulos pasaban a la paleta clara mientras el fondo
+/// seguía oscuro. Se veía peor que si no hubiera cambiado nada: texto casi
+/// negro sobre fondo casi negro.
+///
+/// Con esto la pantalla queda suscrita al interruptor y se rehace entera.
+class SigueElModo extends StatelessWidget {
+  const SigueElModo({super.key, required this.builder});
+
+  final WidgetBuilder builder;
+
+  @override
+  Widget build(BuildContext context) => ValueListenableBuilder<bool>(
+        valueListenable: ModoDeColor.notificador,
+        builder: (context, _, __) => builder(context),
+      );
+}
+
 // Colores exactos del diseño (Figma → HTML exportado), convertidos de OKLCH
 // a hex. No se cambia la tipografía de la app (Plus Jakarta Sans requeriría
 // empaquetar fuentes nuevas) — el resto del estilo (color, espaciado, forma)
