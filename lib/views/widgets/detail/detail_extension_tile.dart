@@ -54,12 +54,12 @@ class _StatusBadge extends StatelessWidget {
       decoration: BoxDecoration(
         color: color,
         borderRadius: BorderRadius.circular(999),
-        border: Border.all(color: Colors.white.withValues(alpha: 0.55)),
+        border: Border.all(color: HomeTheme.contraste.withValues(alpha: 0.55)),
       ),
       child: Text(
         _statusLabel(status)!,
-        style: const TextStyle(
-          color: Colors.white,
+        style: TextStyle(
+          color: HomeTheme.contraste,
           fontSize: 12,
           fontWeight: FontWeight.w600,
         ),

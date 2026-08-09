@@ -63,7 +63,7 @@ class IndicadoresDePagina extends StatelessWidget {
                 decoration: BoxDecoration(
                   color: i == actual
                       ? HomeTheme.accentPink
-                      : Colors.white.withValues(alpha: 0.35),
+                      : HomeTheme.contraste.withValues(alpha: 0.35),
                   borderRadius: BorderRadius.circular(2),
                 ),
               ),

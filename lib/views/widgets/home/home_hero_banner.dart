@@ -183,8 +183,13 @@ class HomeHeroBanner extends StatelessWidget {
                                   ),
                                   child: Text(
                                     'home.hero-cta'.i18n,
-                                    style: const TextStyle(
-                                      color: Color(0xFF17141F),
+                                    style: TextStyle(
+                                      // El botón se pinta con el color de
+                                      // máximo contraste, así que su texto va
+                                      // en el opuesto. Estaba fijo en casi
+                                      // negro: en modo claro quedaba una caja
+                                      // negra con el texto negro adentro.
+                                      color: HomeTheme.sobreContraste,
                                       fontWeight: FontWeight.w700,
                                       fontSize: 13.5,
                                     ),

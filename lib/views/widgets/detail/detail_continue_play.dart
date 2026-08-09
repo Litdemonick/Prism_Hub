@@ -77,7 +77,7 @@ class _DetailContinuePlayState extends State<DetailContinuePlay> {
         label: Text(noEpisodesString),
         style: ButtonStyle(
           backgroundColor: WidgetStateProperty.all(Colors.grey),
-          foregroundColor: WidgetStateProperty.all(Colors.white),
+          foregroundColor: WidgetStateProperty.all(HomeTheme.contraste),
           minimumSize: WidgetStateProperty.all(
             const Size(double.infinity, 42),
           ),

@@ -1,5 +1,6 @@
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
+import 'package:get/get.dart';
 
 /// Qué modo de color usa la app.
 ///
@@ -31,6 +32,18 @@ class ModoDeColor {
   static set claro(bool valor) {
     if (notificador.value == valor) return;
     notificador.value = valor;
+    // ── Y se fuerza el redibujado de TODO ────────────────────────────────
+    //
+    // El oyente de la raíz rehace el árbol desde arriba, pero eso NO alcanza:
+    // Flutter reusa los elementos cuyo widget no cambió, y las pantallas que
+    // el Navigator tiene guardadas viven en su propio estado — se quedaban con
+    // los colores de antes hasta salir y volver a entrar, o hasta reiniciar la
+    // app. Reportado en vivo.
+    //
+    // `forceAppUpdate` marca cada elemento como pendiente de rehacer. Es caro,
+    // sí: pasa una vez, cuando alguien toca el interruptor, y es exactamente el
+    // caso para el que existe.
+    Get.forceAppUpdate();
   }
 }
 
@@ -97,6 +110,28 @@ class HomeTheme {
   static Color get accentRed => _claro ? _accentRedClaro : _accentRedOscuro;
   static Color get cardSurface =>
       _claro ? _cardSurfaceClaro : _cardSurfaceOscuro;
+
+  /// El color que CONTRASTA con el fondo de la app.
+  ///
+  /// Blanco en oscuro, casi negro en claro. Es para lo que antes estaba escrito
+  /// como `Colors.white` a mano: textos e iconos dibujados encima de una
+  /// superficie de la app. En oscuro devuelve exactamente lo de siempre, así
+  /// que reemplazarlo no cambia nada allá.
+  ///
+  /// OJO con dónde se usa: NO sirve para lo que va encima de una PORTADA. Ahí
+  /// el fondo es la imagen, no la app, y el blanco es correcto en los dos modos
+  /// —por eso esas encima llevan un velo oscuro—. Cambiarlo ahí dejaría texto
+  /// oscuro sobre una imagen oscura.
+  static Color get contraste => _claro ? _textPrimaryClaro : Colors.white;
+
+  /// El color que se lee ENCIMA de [contraste] y de [textPrimary].
+  ///
+  /// O sea el inverso: casi negro en oscuro, blanco en claro. Lo usan los
+  /// botones rellenos, que se pintan con el color de máximo contraste y llevan
+  /// su texto en el opuesto. Sin esto, el botón principal del Inicio quedaba en
+  /// modo claro como una caja negra con el texto negro adentro: invisible.
+  static Color get sobreContraste =>
+      _claro ? _cardSurfaceClaro : const Color(0xFF17141F);
 
   /// El título de una zona: «Inicio», «Biblioteca», «Buscar», «Historial».
   ///

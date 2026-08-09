@@ -1,3 +1,4 @@
+import 'package:prismhub/views/widgets/home/home_theme.dart';
 import 'package:flutter/material.dart';
 import 'package:prismhub/models/extension.dart';
 import 'package:prismhub/utils/extension.dart';
@@ -37,12 +38,12 @@ class ExtensionTypeBadge extends StatelessWidget {
       decoration: BoxDecoration(
         color: _color,
         borderRadius: BorderRadius.circular(20),
-        border: Border.all(color: Colors.white.withValues(alpha: 0.55)),
+        border: Border.all(color: HomeTheme.contraste.withValues(alpha: 0.55)),
       ),
       child: Text(
         ExtensionUtils.typeToString(type),
-        style: const TextStyle(
-          color: Colors.white,
+        style: TextStyle(
+          color: HomeTheme.contraste,
           fontSize: 10,
           fontWeight: FontWeight.bold,
         ),

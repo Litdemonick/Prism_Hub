@@ -650,7 +650,7 @@ class _Chip extends StatelessWidget {
           border: Border.all(
             color: marcado
                 ? HomeTheme.accentPink
-                : Colors.white.withValues(alpha: 0.08),
+                : HomeTheme.contraste.withValues(alpha: 0.08),
           ),
         ),
         child: Stack(
@@ -1942,7 +1942,7 @@ class _TarjetaGrande extends StatelessWidget {
           // En una ventana grande la portada ya se ve entera y las esquinas
           // redondas le dan forma de sobra. Limpia se ve mejor.
           border: _esTactil
-              ? Border.all(color: Colors.white.withValues(alpha: 0.11))
+              ? Border.all(color: HomeTheme.contraste.withValues(alpha: 0.11))
               : null,
           boxShadow: _esTactil
               ? const [
@@ -2015,11 +2015,11 @@ class _TarjetaGrande extends StatelessWidget {
                             item.title,
                             maxLines: 2,
                             overflow: TextOverflow.ellipsis,
-                            style: const TextStyle(
+                            style: TextStyle(
                               fontSize: 16,
                               height: 1.2,
                               fontWeight: FontWeight.w800,
-                              color: Colors.white,
+                              color: HomeTheme.contraste,
                             ),
                           ),
                           const SizedBox(height: 2),

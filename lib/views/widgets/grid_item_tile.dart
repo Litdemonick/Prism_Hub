@@ -1,3 +1,4 @@
+import 'package:prismhub/views/widgets/home/home_theme.dart';
 import 'package:flutter/material.dart';
 import 'package:prismhub/models/extension.dart';
 import 'package:prismhub/views/widgets/cover.dart';
@@ -85,8 +86,8 @@ class _GridItemTileState extends State<GridItemTile> {
                     child: Text(
                       widget.title,
                       overflow: TextOverflow.ellipsis,
-                      style: const TextStyle(
-                        color: Colors.white,
+                      style: TextStyle(
+                        color: HomeTheme.contraste,
                       ),
                     ),
                   ),
@@ -94,8 +95,8 @@ class _GridItemTileState extends State<GridItemTile> {
                     Text(
                       widget.subtitle!,
                       overflow: TextOverflow.ellipsis,
-                      style: const TextStyle(
-                        color: Colors.white,
+                      style: TextStyle(
+                        color: HomeTheme.contraste,
                         fontSize: 10,
                       ),
                     ),

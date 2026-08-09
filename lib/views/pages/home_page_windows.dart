@@ -457,7 +457,7 @@ class _FlechaDeFilaState extends State<_FlechaDeFila> {
           decoration: BoxDecoration(
             shape: BoxShape.circle,
             color: _encima
-                ? Colors.white.withValues(alpha: 0.12)
+                ? HomeTheme.contraste.withValues(alpha: 0.12)
                 : Colors.transparent,
           ),
           child: Icon(

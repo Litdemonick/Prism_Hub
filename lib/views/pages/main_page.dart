@@ -1,4 +1,5 @@
 import 'package:fluent_ui/fluent_ui.dart' as fluent;
+import 'package:prismhub/views/widgets/home/home_theme.dart';
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 import 'package:go_router/go_router.dart';
@@ -124,7 +125,7 @@ class _DesktopMainPageState extends State<DesktopMainPage> with WindowListener {
               Container(
                 width: 1,
                 height: 16,
-                color: Colors.white.withValues(alpha: 0.22),
+                color: HomeTheme.contraste.withValues(alpha: 0.22),
               ),
               const SizedBox(width: 10),
               Text(
@@ -132,7 +133,7 @@ class _DesktopMainPageState extends State<DesktopMainPage> with WindowListener {
                 style: TextStyle(
                   fontSize: 15.5,
                   fontWeight: FontWeight.w500,
-                  color: Colors.white.withValues(alpha: 0.72),
+                  color: HomeTheme.contraste.withValues(alpha: 0.72),
                 ),
               ),
             ],
@@ -806,7 +807,7 @@ class _AndroidMainPageState extends fluent.State<AndroidMainPage> {
     borderRadius: BorderRadius.circular(34),
     // El aro es lo que la despega del contenido: sin él, sobre una zona oscura
     // la pastilla se funde con el fondo y los íconos vuelven a verse sueltos.
-    border: Border.all(color: Colors.white.withValues(alpha: 0.09)),
+    border: Border.all(color: HomeTheme.contraste.withValues(alpha: 0.09)),
     boxShadow: const [
       BoxShadow(color: Color(0x99000000), blurRadius: 20, offset: Offset(0, 8)),
     ],
@@ -1026,7 +1027,7 @@ class _IconoDeBarra extends StatelessWidget {
             elegido ? destino.selectedIcon : destino.icon,
             // Sigue al botón, para que la proporción sea la misma en los dos.
             size: 46.0 * 0.5,
-            color: elegido ? Colors.white : Colors.white.withValues(alpha: 0.6),
+            color: elegido ? Colors.white : HomeTheme.contraste.withValues(alpha: 0.6),
           ),
         ),
       ),
@@ -1065,7 +1066,7 @@ class _BotonRedondo extends StatelessWidget {
         child: SizedBox(
           width: tamano,
           height: tamano,
-          child: Icon(icono, size: 25, color: Colors.white),
+          child: Icon(icono, size: 25, color: HomeTheme.contraste),
         ),
       ),
     );
@@ -1105,8 +1106,8 @@ class _OpcionFlotante extends StatelessWidget {
       ),
       child: Text(
         texto,
-        style: const TextStyle(
-          color: Colors.white,
+        style: TextStyle(
+          color: HomeTheme.contraste,
           fontSize: 14.5,
           fontWeight: FontWeight.w600,
         ),

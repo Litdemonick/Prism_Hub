@@ -875,6 +875,12 @@ class _MainAppState extends State<MainApp> {
     // InheritedWidget: cambiar el modo NO avisa a nadie por su cuenta. Este
     // oyente es el que le dice al árbol que se rehaga, y como envuelve la raíz,
     // el cambio llega a todas las pantallas de una.
+    //
+    // El cambio es INSTANTÁNEO y no un fundido, a propósito. Se probó envolver
+    // esto en un AnimatedSwitcher: para cruzar dos imágenes necesita que el
+    // hijo sea «otro» widget, y con la raíz eso significa destruir y recrear la
+    // app entera — se pierde dónde estabas y se tiran todos los controladores.
+    // Un cambio de color no puede costar eso.
     return ValueListenableBuilder<bool>(
       valueListenable: ModoDeColor.notificador,
       builder: (context, _, __) => GetMaterialApp(

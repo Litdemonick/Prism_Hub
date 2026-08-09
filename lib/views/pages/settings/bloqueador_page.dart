@@ -326,7 +326,7 @@ class _BloqueadorPageState extends State<BloqueadorPage> {
                       child: SwitchListTile(
                         value: activo,
                         activeTrackColor: const Color(0xFF69F0AE),
-                        hoverColor: Colors.white.withValues(alpha: 0.04),
+                        hoverColor: HomeTheme.contraste.withValues(alpha: 0.04),
                         contentPadding: const EdgeInsets.symmetric(
                             horizontal: 16, vertical: 6),
                         title: const Text(
@@ -400,7 +400,7 @@ class _BloqueadorPageState extends State<BloqueadorPage> {
                               foregroundColor:
                                   WidgetStatePropertyAll(HomeTheme.textMuted),
                               overlayColor: WidgetStatePropertyAll(
-                                  Colors.white.withValues(alpha: 0.05)),
+                                  HomeTheme.contraste.withValues(alpha: 0.05)),
                               textStyle: const WidgetStatePropertyAll(
                                 TextStyle(
                                     fontSize: 12, fontWeight: FontWeight.w600),
@@ -653,7 +653,7 @@ class _FilaLista extends StatelessWidget {
           SwitchListTile(
             value: lista.activa,
             activeTrackColor: const Color(0xFF69F0AE),
-            hoverColor: Colors.white.withValues(alpha: 0.04),
+            hoverColor: HomeTheme.contraste.withValues(alpha: 0.04),
             title: Text(lista.nombre,
                 maxLines: 1, overflow: TextOverflow.ellipsis),
             subtitle: Text(
@@ -960,7 +960,7 @@ class _PanelCatalogoState extends State<_PanelCatalogo> {
                       foregroundColor:
                           WidgetStatePropertyAll(HomeTheme.textMuted),
                       overlayColor: WidgetStatePropertyAll(
-                          Colors.white.withValues(alpha: 0.05)),
+                          HomeTheme.contraste.withValues(alpha: 0.05)),
                       textStyle: const WidgetStatePropertyAll(
                         TextStyle(fontSize: 12.5, fontWeight: FontWeight.w600),
                       ),
