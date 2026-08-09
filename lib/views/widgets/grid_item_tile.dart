@@ -86,8 +86,15 @@ class _GridItemTileState extends State<GridItemTile> {
                     child: Text(
                       widget.title,
                       overflow: TextOverflow.ellipsis,
+                      // DEBAJO de la portada, no encima: el fondo acá es el de
+                      // la página, así que el color sí sigue al modo — blanco
+                      // en oscuro, casi negro en claro.
+                      //
+                      // Se probó ponerlo blanco fijo pensando que iba sobre la
+                      // imagen. No: en modo claro quedaba blanco sobre casi
+                      // blanco y desaparecía igual, solo que al revés.
                       style: TextStyle(
-                        color: HomeTheme.contraste,
+                        color: HomeTheme.textPrimary,
                       ),
                     ),
                   ),
@@ -96,7 +103,7 @@ class _GridItemTileState extends State<GridItemTile> {
                       widget.subtitle!,
                       overflow: TextOverflow.ellipsis,
                       style: TextStyle(
-                        color: HomeTheme.contraste,
+                        color: HomeTheme.textMuted,
                         fontSize: 10,
                       ),
                     ),
