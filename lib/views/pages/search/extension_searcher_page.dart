@@ -686,6 +686,8 @@ class _ExtensionSearcherPageState extends fluent.State<ExtensionSearcherPage> {
     final fiterWidget = _ExtensionFilterWidget(
       runtime: _runtime,
       filters: _filters!,
+      // Fuera de la Zona +18 la puerta a adultos ni se ofrece.
+      desdeLaZona18: widget.soloAdulto,
       selectedFilters: _selectedFilters,
       onSelectFilter: (selectedFilters, filters) {
         _selectedFilters = selectedFilters;
@@ -1527,7 +1529,26 @@ class _ExtensionFilterWidget extends StatefulWidget {
     required this.selectedFilters,
     required this.onSelectFilter,
     required this.filters,
+    required this.desdeLaZona18,
   });
+
+  /// Si esta pantalla se abrió desde la Zona +18.
+  ///
+  /// ── Para qué ────────────────────────────────────────────────────────────
+  ///
+  /// La puerta a contenido para adultos de una extensión es un filtro más del
+  /// sitio, así que salía en el panel como cualquier otro: dos opciones y a
+  /// elegir. O sea que desde el buscador normal alcanzaba con tocar una para
+  /// traer justo lo que esa zona no muestra.
+  ///
+  /// Que arranque cerrado no basta: lo que hace falta es que ahí no se pueda
+  /// abrir. Fuera de la zona, ese filtro no se dibuja y su valor se queda en el
+  /// seguro, que es el que la propia extensión declara por defecto.
+  ///
+  /// Dentro de la zona sí aparece, porque ahí es justamente lo que se fue a
+  /// buscar — y esa puerta ya tiene la suya: el PIN y el ajuste general.
+  final bool desdeLaZona18;
+
   final ExtensionService runtime;
   final Map<String, ExtensionFilter> filters;
   final Map<String, List<String>> selectedFilters;
@@ -1543,6 +1564,18 @@ class _ExtensionFilterWidget extends StatefulWidget {
 class _ExtensionFilterWidgetState extends State<_ExtensionFilterWidget> {
   late final ExtensionService _runtime = widget.runtime;
   late Map<String, ExtensionFilter> _filters = widget.filters;
+
+  /// Los filtros que se dibujan. Ver [_ExtensionFilterWidget.desdeLaZona18].
+  ///
+  /// Se saca el que abre la puerta a contenido para adultos cuando no se entró
+  /// por la Zona +18. Su valor no se toca: queda con el que trae puesto, que es
+  /// el seguro.
+  List<MapEntry<String, ExtensionFilter>> get _visibles => _filters.entries
+      .where((e) =>
+          widget.desdeLaZona18 ||
+          e.value.adultOption == null ||
+          e.value.adultOption!.isEmpty)
+      .toList();
   late Map<String, List<String>> _selectedFilters = widget.selectedFilters;
   final _scrollController = ScrollController();
 
@@ -1684,7 +1717,7 @@ class _ExtensionFilterWidgetState extends State<_ExtensionFilterWidget> {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  for (final filter in _filters.entries) ...[
+                  for (final filter in _visibles) ...[
                     Text(
                       filter.value.title,
                       style: TextStyle(
@@ -1718,7 +1751,7 @@ class _ExtensionFilterWidgetState extends State<_ExtensionFilterWidget> {
                       ],
                     ),
                     const SizedBox(height: 16),
-                    if (filter.key != _filters.keys.last)
+                    if (filter.key != _visibles.last.key)
                       Divider(color: HomeTheme.border, height: 1),
                     const SizedBox(height: 16),
                   ],
