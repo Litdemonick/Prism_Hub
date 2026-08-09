@@ -753,6 +753,29 @@ class ExtensionUtils {
 
   static bool esMixta(String package) => _mixtas.contains(package);
 
+  /// El filtro que hay que mandarle a una extensión para pedirle SOLO su
+  /// contenido normal.
+  ///
+  /// ── Por qué vive acá y no en cada pantalla ──────────────────────────────
+  ///
+  /// Porque son varias las que piden catálogo —el Inicio, el buscador, la
+  /// grilla de cada extensión— y la regla tiene que ser una sola. Cada una
+  /// armando la suya es cómo se cuela una portada donde no va: alcanza con que
+  /// una sola se olvide.
+  ///
+  /// Sale de la propia extensión: el valor que declara como defecto en el
+  /// filtro que abre la puerta a adultos. Y se manda EXPLÍCITO aunque ya sea
+  /// su defecto, porque «viene apagado» es una promesa de la extensión y no
+  /// una garantía del app: una actualización distraída bastaría para que el
+  /// Inicio empiece a mostrar lo que no debe.
+  ///
+  /// Se llena en [detectarMixtas], que ya le pregunta sus filtros a cada una,
+  /// así que no cuesta ninguna llamada de más.
+  static Map<String, List<String>>? segurosDe(String package) =>
+      _seguros[package];
+
+  static final Map<String, Map<String, List<String>>> _seguros = {};
+
   /// Averigua cuáles son mixtas. Una sola vez por sesión.
   ///
   /// `createFilter()` corre JavaScript en el motor de cada extensión y ese
@@ -762,6 +785,7 @@ class ExtensionUtils {
     // Una desinstalada no puede seguir contando como nada.
     _mixtas.removeWhere((p) => !runtimes.containsKey(p));
     _mixtasVistas.removeWhere((p, _) => !runtimes.containsKey(p));
+    _seguros.removeWhere((p, _) => !runtimes.containsKey(p));
     for (final e in runtimes.entries) {
       final version = e.value.extension.version;
       // Ya se miró ESTA versión: no se le vuelve a pedir nada al motor.
@@ -776,9 +800,21 @@ class ExtensionUtils {
       try {
         final filtros =
             await e.value.createFilter().timeout(const Duration(seconds: 8));
-        final tienePuerta = filtros.values
-            .any((f) => f.adultOption != null && f.adultOption!.isNotEmpty);
-        if (tienePuerta) _mixtas.add(e.key);
+        // De paso se anota el valor SEGURO de cada puerta. Ver segurosDe: es
+        // el mismo recorrido, así que sale gratis, y deja el dato en un solo
+        // lugar para todas las pantallas que piden catálogo.
+        final seguros = <String, List<String>>{};
+        for (final f in filtros.entries) {
+          final adulto = f.value.adultOption;
+          if (adulto == null || adulto.isEmpty) continue;
+          seguros[f.key] = [f.value.defaultOption];
+        }
+        if (seguros.isEmpty) {
+          _seguros.remove(e.key);
+        } else {
+          _seguros[e.key] = seguros;
+          _mixtas.add(e.key);
+        }
       } catch (err) {
         // Si no se pudo saber, se la deja fuera. Una mixta que no aparece en
         // la Zona +18 es un contenido menos; una +18 que aparece en la zona

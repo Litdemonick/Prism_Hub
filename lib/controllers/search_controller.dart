@@ -231,7 +231,38 @@ class SearchPageController extends GetxController {
         final esNombreDeLaExtension =
             _coincidenPorNombre.contains(element.runitme.extension.package);
         if (search.value.isEmpty || esNombreDeLaExtension) {
-          resultFuture = element.runitme.latest(1);
+          // ── El CATÁLOGO, no «lo último» ──────────────────────────────────
+          //
+          // Acá se pedía `latest(1)`, que es la sección de novedades del sitio.
+          // Esta pantalla es la otra mitad del recorrido: el Inicio ya muestra
+          // lo reciente de cada extensión, y acá se viene a ver QUÉ TIENE cada
+          // una. Con novedades, Ikigai se quedaba en un puñado de tarjetas
+          // teniendo un catálogo entero detrás.
+          //
+          // `search('')` es como el propio buscador lista un catálogo completo.
+          // Medido contra la red el 2026-08-08: las diecisiete extensiones
+          // devuelven contenido, entre 15 y 71 títulos en la primera página.
+          //
+          // Una página y nada más, a propósito: la fila es una muestra para
+          // recorrer de un vistazo, no el catálogo entero. Quien quiera seguir
+          // entra a la extensión, que es donde está la grilla con sus filtros y
+          // su búsqueda.
+          //
+          // ── Y con la puerta CERRADA, puesta por el app ──────────────────
+          //
+          // Pedir el catálogo a secas deja la decisión en manos de la
+          // extensión: las dos que tienen las dos cosas ponen «no» por su
+          // cuenta, pero eso es una promesa suya y no una garantía de acá. Una
+          // actualización distraída bastaría para que esta pantalla —la normal,
+          // fuera de la zona— empiece a mostrar lo que no debe.
+          //
+          // Es la misma regla que el Inicio ya aplica a sus filas, ahora desde
+          // un solo lugar. En la Zona +18 no se manda: allá el filtro lo pone
+          // la propia pantalla de la extensión, al revés.
+          final seguro = nsfwOnly
+              ? null
+              : ExtensionUtils.segurosDe(element.runitme.extension.package);
+          resultFuture = element.runitme.search('', 1, filter: seguro);
         } else {
           resultFuture = element.runitme.searchFirstPageWithBroadening(
               SearchText.sanitizeForRemoteQuery(search.value));

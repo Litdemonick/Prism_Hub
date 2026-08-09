@@ -1608,7 +1608,13 @@ class CatalogoExtensionesController extends GetxController {
     if (ejes == null) return null;
     // Se arranca con lo seguro puesto: si esta extensión tiene una puerta a
     // contenido adulto, va cerrada de entrada.
+    // Las dos fuentes, no una: la que se leyó al armar los chips y la que
+    // anota la clasificación de extensiones. Las dos preguntan lo mismo a la
+    // misma extensión, pero se llenan en momentos distintos — si una todavía
+    // no corrió, la otra tapa el hueco. Acá una ausencia significa «puerta
+    // abierta», así que conviene que sea difícil que falten las dos.
     final filtro = <String, List<String>>{
+      ...?ExtensionUtils.segurosDe(package),
       ...?_segurosPorExtension[package],
     };
     var eligioAlgo = false;

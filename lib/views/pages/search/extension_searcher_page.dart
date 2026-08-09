@@ -1570,9 +1570,18 @@ class _ExtensionFilterWidgetState extends State<_ExtensionFilterWidget> {
   /// Se saca el que abre la puerta a contenido para adultos cuando no se entró
   /// por la Zona +18. Su valor no se toca: queda con el que trae puesto, que es
   /// el seguro.
+  /// Una extensión que YA es de adultos de punta a punta.
+  ///
+  /// Ahí el filtro no es ninguna puerta: todo su catálogo lo es, y esconderlo
+  /// solo le saca al usuario una opción legítima —el de censura de HentaiLA,
+  /// por ejemplo— sin proteger nada. A esta pantalla no se llega sin haber
+  /// pasado antes por la confirmación y el PIN.
+  bool get _extensionDeAdultos => _runtime.extension.nsfw;
+
   List<MapEntry<String, ExtensionFilter>> get _visibles => _filters.entries
       .where((e) =>
           widget.desdeLaZona18 ||
+          _extensionDeAdultos ||
           e.value.adultOption == null ||
           e.value.adultOption!.isEmpty)
       .toList();
