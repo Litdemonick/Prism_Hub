@@ -41,7 +41,10 @@ class _DetailFavoriteButtonState extends State<DetailFavoriteButton> {
           return IconButton(
             tooltip:
                 isFavorite ? 'detail.favorited'.i18n : 'detail.favorite'.i18n,
-            color: isFavorite ? HomeTheme.accentPink : HomeTheme.textPrimary,
+            // Encima de la portada, así que blanco: con el color del tema
+            // pasaba a casi negro en modo claro y desaparecía contra la imagen.
+            // Ver HomeTheme.sobrePortada.
+            color: isFavorite ? HomeTheme.accentPink : HomeTheme.sobrePortada,
             icon: Icon(isFavorite ? Icons.favorite : Icons.favorite_border),
             onPressed: () async {
               await c.toggleFavorite(context);

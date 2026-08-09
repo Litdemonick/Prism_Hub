@@ -1942,7 +1942,8 @@ class _TarjetaGrande extends StatelessWidget {
           // En una ventana grande la portada ya se ve entera y las esquinas
           // redondas le dan forma de sobra. Limpia se ve mejor.
           border: _esTactil
-              ? Border.all(color: HomeTheme.contraste.withValues(alpha: 0.11))
+              ? Border.all(
+                  color: HomeTheme.sobrePortada.withValues(alpha: 0.11))
               : null,
           boxShadow: _esTactil
               ? const [
@@ -2019,7 +2020,11 @@ class _TarjetaGrande extends StatelessWidget {
                               fontSize: 16,
                               height: 1.2,
                               fontWeight: FontWeight.w800,
-                              color: HomeTheme.contraste,
+                              // Va ENCIMA de la portada, con su velo debajo:
+                              // blanco en los dos modos. Con el color del tema
+                              // pasaba a casi negro en claro y desaparecía
+                              // contra la imagen. Ver HomeTheme.sobrePortada.
+                              color: HomeTheme.sobrePortada,
                             ),
                           ),
                           const SizedBox(height: 2),
@@ -2030,7 +2035,8 @@ class _TarjetaGrande extends StatelessWidget {
                             style: TextStyle(
                               fontSize: 12.5,
                               fontWeight: FontWeight.w500,
-                              color: HomeTheme.textMuted,
+                              color: HomeTheme.sobrePortada
+                                  .withValues(alpha: 0.78),
                             ),
                           ),
                         ],

@@ -39,14 +39,28 @@ class _DetailFinishedButtonState extends State<DetailFinishedButton> {
         label: Text(
           marcado ? 'detail.finished-marked'.i18n : 'detail.finished'.i18n,
         ),
+        // ── Relleno sólido, no contorno pálido ────────────────────────────
+        //
+        // Estaba con el fondo del acento al 18% y el texto en ese mismo acento.
+        // Sobre el fondo oscuro se leía; sobre el claro quedaba un rosa lavado
+        // encima de casi blanco, y ni el texto ni el icono se distinguían.
+        //
+        // Relleno sólido con el texto en el color opuesto: se lee igual en los
+        // dos modos y además se ve que es un botón, que antes tampoco quedaba
+        // claro. Sin marcar sigue de contorno, que es lo correcto para una
+        // acción secundaria.
         style: ButtonStyle(
           minimumSize: WidgetStateProperty.all(const Size(double.infinity, 50)),
-          backgroundColor: marcado
-              ? WidgetStateProperty.all(
-                  HomeTheme.accentPink.withValues(alpha: 0.18))
-              : null,
-          foregroundColor:
+          backgroundColor:
               marcado ? WidgetStateProperty.all(HomeTheme.accentPink) : null,
+          foregroundColor: WidgetStateProperty.all(
+            marcado ? HomeTheme.sobrePortada : HomeTheme.accentPink,
+          ),
+          side: marcado
+              ? null
+              : WidgetStateProperty.all(
+                  BorderSide(color: HomeTheme.accentPink),
+                ),
         ),
         onPressed: () => c.toggleSeriesFinished(context),
       );

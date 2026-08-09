@@ -482,7 +482,7 @@ class _TituloDeLaFicha extends StatelessWidget {
         child: SelectableText(
           texto,
           style: TextStyle(
-            color: HomeTheme.textPrimary,
+            color: HomeTheme.sobrePortada,
             fontSize: 20,
             height: 1.35,
             fontWeight: FontWeight.w700,
@@ -498,7 +498,7 @@ class _TituloDeLaFicha extends StatelessWidget {
       fontSize: tamano,
       height: 1.2,
       fontWeight: FontWeight.w800,
-      color: HomeTheme.textPrimary,
+      color: HomeTheme.sobrePortada,
       // El título va sobre la propia portada ampliada. En una imagen clara el
       // texto blanco se comía con el fondo aunque el degradado ayude.
       shadows: const [
@@ -547,7 +547,7 @@ class _TituloDeLaFicha extends StatelessWidget {
                 // El propio título como ayuda: mantener pulsado ya lo muestra,
                 // sin abrir nada y sin inventar una cadena nueva que traducir.
                 tooltip: texto,
-                color: HomeTheme.textPrimary,
+                color: HomeTheme.sobrePortada,
                 icon: const Icon(Icons.more_horiz_rounded),
                 onPressed: () => _verCompleto(context),
               ),

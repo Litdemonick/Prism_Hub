@@ -66,7 +66,8 @@ class DetailShareButton extends StatelessWidget {
       // arriba y tienen que medir igual.
       return IconButton(
         tooltip: 'detail.share'.i18n,
-        color: HomeTheme.textPrimary,
+        // Encima de la portada. Ver HomeTheme.sobrePortada.
+        color: HomeTheme.sobrePortada,
         icon: const Icon(Icons.share_outlined),
         onPressed: () => _compartir(context),
       );

@@ -607,7 +607,8 @@ class _DetailPageState extends State<DetailPage> {
       if (c.isLoading.value) return const SizedBox.shrink();
       return IconButton(
         tooltip: 'common.refresh'.i18n,
-        color: HomeTheme.textPrimary,
+        // Encima de la portada. Ver HomeTheme.sobrePortada.
+        color: HomeTheme.sobrePortada,
         icon: const Icon(Icons.refresh_rounded),
         onPressed: () => unawaited(c.refrescarAMano()),
       );

@@ -196,7 +196,7 @@ class _EsqueletoState extends State<Esqueleto> {
             // El bloque de base. Si vino un hijo, es él el que da la forma.
             DecoratedBox(
               decoration: BoxDecoration(
-                color: HomeTheme.cardSurface,
+                color: HomeTheme.esqueletoBase,
                 borderRadius: radio,
               ),
               child: forma,
@@ -234,10 +234,10 @@ class _EsqueletoState extends State<Esqueleto> {
                           gradient: LinearGradient(
                             begin: Alignment(x - 0.6, -0.4),
                             end: Alignment(x + 0.6, 0.4),
-                            colors: const [
-                              Color(0x00FFFFFF),
-                              Color(0x14FFFFFF),
-                              Color(0x00FFFFFF),
+                            colors: [
+                              HomeTheme.esqueletoBrillo.withValues(alpha: 0),
+                              HomeTheme.esqueletoBrillo,
+                              HomeTheme.esqueletoBrillo.withValues(alpha: 0),
                             ],
                             stops: const [0.0, 0.5, 1.0],
                           ),
@@ -286,7 +286,7 @@ class EsqueletoTarjeta extends StatelessWidget {
 
   static Widget _bloque(double w, double h, double r) => DecoratedBox(
         decoration: BoxDecoration(
-          color: HomeTheme.cardSurface,
+          color: HomeTheme.esqueletoBase,
           borderRadius: BorderRadius.circular(r),
         ),
         child: SizedBox(width: w, height: h),

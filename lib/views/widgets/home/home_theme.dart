@@ -133,6 +133,34 @@ class HomeTheme {
   static Color get sobreContraste =>
       _claro ? _cardSurfaceClaro : const Color(0xFF17141F);
 
+  /// El color del texto que va ENCIMA de una portada.
+  ///
+  /// Siempre blanco, en los dos modos, y no es un olvido: ahí el fondo no es la
+  /// app sino la imagen, que puede ser de cualquier color. Por eso esas
+  /// pantallas llevan un velo oscuro debajo del texto — con el velo puesto, el
+  /// blanco se lee sobre cualquier portada.
+  ///
+  /// El título de la ficha usaba [textPrimary] y en modo claro pasó a ser casi
+  /// negro sobre una imagen oscura: no se leía nada. Este es el que va ahí.
+  static const sobrePortada = Color(0xFFFFFFFF);
+
+  /// El gris de los bloques que esperan contenido.
+  ///
+  /// No puede ser [cardSurface]: en claro esa superficie es BLANCA, igual que
+  /// la tarjeta que va a reemplazarla, así que el bloque desaparecía contra el
+  /// fondo y no se veía nada cargando. Tiene que ser un tono por DEBAJO de la
+  /// superficie, que es el papel que cumple en oscuro.
+  static Color get esqueletoBase =>
+      _claro ? const Color(0xFFE4E6EE) : _cardSurfaceOscuro;
+
+  /// El reflejo que cruza el bloque.
+  ///
+  /// En oscuro es un blanco muy tenue, porque el bloque es oscuro y lo que se
+  /// nota es un ACLARADO. En claro hay que hacer lo contrario: sobre un gris
+  /// claro, un reflejo blanco no se ve; el que se nota es un oscurecido.
+  static Color get esqueletoBrillo =>
+      _claro ? const Color(0x12000000) : const Color(0x14FFFFFF);
+
   /// El título de una zona: «Inicio», «Biblioteca», «Buscar», «Historial».
   ///
   /// ── Por qué está acá y no escrito en cada pantalla ──────────────────────
