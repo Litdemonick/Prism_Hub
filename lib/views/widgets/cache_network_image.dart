@@ -365,7 +365,18 @@ class _CacheNetWorkImagePicState extends State<CacheNetWorkImagePic> {
                     child: GestureDetector(
                       behavior: HitTestBehavior.opaque,
                       onTap: () => Navigator.of(dialogo).pop(),
-                      child: const ColoredBox(color: Color(0xE6000000)),
+                      // ── Casi opaco, y oscuro en los DOS modos ─────────
+                      //
+                      // Estaba al 90%: se veía la pantalla de atrás por
+                      // detrás de la portada, con su texto y sus tarjetas
+                      // asomando alrededor de la imagen. Distrae de lo único
+                      // que uno vino a mirar, y en modo claro es peor todavía
+                      // porque lo que asoma es claro y compite de frente.
+                      //
+                      // Oscuro también en claro, a propósito: un visor de
+                      // imagen se mira mejor sobre negro, y es lo que hace
+                      // cualquiera de ellos tenga el tema que tenga.
+                      child: const ColoredBox(color: Color(0xFA07070A)),
                     ),
                   ),
                   Positioned.fill(child: thumnailPage),

@@ -739,35 +739,49 @@ class _AndroidMainPageState extends fluent.State<AndroidMainPage> {
       // Con el Center la columna se mide contra la franja entera y queda a
       // media altura de verdad, esté el aparato girado para donde esté.
       child: Center(
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            for (var i = 0; i < _enElRiel; i++)
-              Padding(
-                padding: const EdgeInsets.symmetric(vertical: 6),
-                child: _IconoDeBarra(
-                  destino: destinos[i],
-                  elegido: c.selectedTab.value == i,
-                  onTap: () => _irAZona(i),
+        // ── El riel también va en su pastilla oscura ──────────────────────
+        //
+        // Acostado los iconos iban sueltos sobre la página, sin nada detrás.
+        // Con la app en oscuro eso pasaba porque son blancos sobre un fondo
+        // oscuro; en modo claro quedaban blancos sobre casi blanco y el riel
+        // desaparecía entero.
+        //
+        // Con la misma pastilla que la barra de abajo se resuelve y además
+        // quedan iguales: acostado y de pie son la misma barra, solo que
+        // girada, y no había motivo para que se vieran distintas.
+        child: Container(
+          padding: const EdgeInsets.symmetric(vertical: 6, horizontal: 4),
+          decoration: _pastilla,
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              for (var i = 0; i < _enElRiel; i++)
+                Padding(
+                  padding: const EdgeInsets.symmetric(vertical: 6),
+                  child: _IconoDeBarra(
+                    destino: destinos[i],
+                    elegido: c.selectedTab.value == i,
+                    onTap: () => _irAZona(i),
+                  ),
                 ),
-              ),
-            // ── Acostado, el riel es SOLO esas tres ─────────────────────────
-            //
-            // Ni los tres puntos ni las opciones que salían de ellos. El riel
-            // acostado es una columna angosta contra el borde: cuantos más
-            // íconos tiene, menos se distingue a qué zona se va, y el
-            // desplegable encima quedaba peor todavía —se dibujaba sobre el
-            // propio riel y empujaba los botones hacia arriba—.
-            //
-            // Lo que queda afuera sigue teniendo por dónde: Ajustes por su
-            // atajo del Home, Historial y Favoritos desde Biblioteca (sus «ver
-            // más» abren esas mismas pestañas), y Extensiones desde el aviso de
-            // «no tenés extensiones activas» y desde el Repositorio.
-            //
-            // De pie no cambia nada: barra abajo con cuatro y el resto en los
-            // tres puntos, que ahí sí hacen falta porque el ancho es el que es.
-          ],
+              // ── Acostado, el riel es SOLO esas tres ─────────────────────────
+              //
+              // Ni los tres puntos ni las opciones que salían de ellos. El riel
+              // acostado es una columna angosta contra el borde: cuantos más
+              // íconos tiene, menos se distingue a qué zona se va, y el
+              // desplegable encima quedaba peor todavía —se dibujaba sobre el
+              // propio riel y empujaba los botones hacia arriba—.
+              //
+              // Lo que queda afuera sigue teniendo por dónde: Ajustes por su
+              // atajo del Home, Historial y Favoritos desde Biblioteca (sus «ver
+              // más» abren esas mismas pestañas), y Extensiones desde el aviso de
+              // «no tenés extensiones activas» y desde el Repositorio.
+              //
+              // De pie no cambia nada: barra abajo con cuatro y el resto en los
+              // tres puntos, que ahí sí hacen falta porque el ancho es el que es.
+            ],
+          ),
         ),
       ),
     );
