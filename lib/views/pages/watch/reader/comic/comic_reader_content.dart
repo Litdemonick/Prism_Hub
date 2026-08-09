@@ -523,7 +523,17 @@ class _ComicReaderContentState extends State<ComicReaderContent> {
     // Mismo negro que Home/Historial/Buscar (antes: colorScheme.surface /
     // micaBackgroundColor, un gris bastante más claro que no hacía juego
     // con el brillo animado de abajo, pensado para ese tono específico).
-    final backgroundColor = HomeTheme.oscuroFondo;
+    // ── La zona de lectura también sigue al modo ────────────────────────
+    //
+    // Estaba clavada en el negro de la app, con el criterio de que una página
+    // se mira sobre oscuro. Pero una página de manga o de manhwa es en su
+    // mayoría BLANCA, así que sobre negro lo que queda es un marco oscuro
+    // rodeando una franja clara — y con el modo claro puesto encima, la barra
+    // de arriba quedaba blanca y el resto negro, que es lo peor de los dos.
+    //
+    // Siguiendo al modo, en claro la página se funde con el fondo y en oscuro
+    // queda exactamente como estaba.
+    final backgroundColor = HomeTheme.bg;
 
     // Outermost catch-all for wheel scroll in cascade mode: wraps literally
     // everything this widget returns, so it's guaranteed shallower than the
@@ -1587,8 +1597,10 @@ class _PagedLoadError extends StatelessWidget {
               const SizedBox(height: 12),
               Text(
                 'reader.page-load-failed'.i18n,
-                style:
-                    TextStyle(color: HomeTheme.oscuroTextoTenue, fontSize: 13),
+                // Va sobre el fondo de la zona de lectura, que ahora sigue al
+                // modo: si se quedaba en el gris claro, en modo claro no se
+                // leía el aviso de que la página no cargó.
+                style: TextStyle(color: HomeTheme.textMuted, fontSize: 13),
               ),
             ],
           ),

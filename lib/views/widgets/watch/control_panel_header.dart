@@ -71,8 +71,21 @@ class _ControlPanelHeaderState<T extends ReaderController>
     return SafeArea(
       child: Container(
         height: 60,
-        color: Theme.of(context).scaffoldBackgroundColor,
+        // ── La barra del lector SIGUE al modo ──────────────────────────────
+        //
+        // Blanca en claro y oscura en oscuro, como el resto de la app. Lo que
+        // se queda oscuro es la zona de lectura, que es donde va la página;
+        // esto de acá es interfaz.
+        //
+        // Va puesto a mano igual, y ese era el problema: salía del tema
+        // (scaffoldBackgroundColor para el fondo, y el color de texto del
+        // AppBar para el título), y el AppBar de Material sobre una pantalla
+        // que por dentro es oscura terminaba con el título ilegible.
+        color: HomeTheme.cardSurface,
         child: AppBar(
+          backgroundColor: HomeTheme.cardSurface,
+          // Pinta el título, la flecha de volver y los tres iconos de una.
+          foregroundColor: HomeTheme.textPrimary,
           title: Text(_c.title),
           actions: [
             if (widget.buildSettings != null)
@@ -85,7 +98,7 @@ class _ControlPanelHeaderState<T extends ReaderController>
                     // que en una tablet no cruce de lado a lado. Estas dos
                     // eran las únicas que salían cuadradas y a pantalla
                     // completa, y se notaba.
-                    backgroundColor: HomeTheme.oscuroSuperficie,
+                    backgroundColor: HomeTheme.cardSurface,
                     showDragHandle: true,
                     constraints: const BoxConstraints(maxWidth: 640),
                     shape: const RoundedRectangleBorder(
@@ -106,7 +119,7 @@ class _ControlPanelHeaderState<T extends ReaderController>
               onPressed: () {
                 showModalBottomSheet(
                   context: context,
-                  backgroundColor: HomeTheme.oscuroSuperficie,
+                  backgroundColor: HomeTheme.cardSurface,
                   showDragHandle: true,
                   // Alta, pero no hasta arriba de todo: con la lista de una
                   // obra larga la hoja tapaba hasta la barra de estado y no se
@@ -161,10 +174,27 @@ class _ControlPanelHeaderState<T extends ReaderController>
       final lista = _c.playList;
       final i = _c.index.value;
       final episodio = (i >= 0 && i < lista.length) ? lista[i].name : '';
-      return Container(
+      // ── La barra del lector SIGUE al modo ───────────────────────────────
+      //
+      // Clara en claro y oscura en oscuro, como el resto de la app. Lo que se
+      // queda oscuro es la zona donde va la página; esto de acá es interfaz.
+      //
+      // Va puesto a mano igual, y ese era el problema: el fondo salía del mica
+      // de Fluent y el texto y los iconos de su tipografía, los dos siguiendo
+      // el tema de Fluent y no el modo de la app. Sobre esta barra eso daba un
+      // título que no se leía.
+      //
+      // El FluentTheme envuelve la barra entera para que el título, los iconos
+      // y los botones de ventana tomen todos el mismo, en vez de ir pintando
+      // uno por uno y olvidarse de alguno.
+      return fluent.FluentTheme(
+        data: fluent.FluentThemeData(
+          brightness: ModoDeColor.claro ? Brightness.light : Brightness.dark,
+        ),
+        child: Container(
         width: double.infinity,
         height: 40,
-        color: fluent.FluentTheme.of(context).micaBackgroundColor,
+        color: HomeTheme.cardSurface,
         padding: const EdgeInsets.only(left: 16),
         child: Row(
           mainAxisSize: MainAxisSize.min,
@@ -179,8 +209,12 @@ class _ControlPanelHeaderState<T extends ReaderController>
             Expanded(
               child: DragToMoveArea(
                 child: Text(
-                  _c.title + episodio,
+                  // Con separador: era `_c.title + episodio`, pegados sin nada
+                  // en el medio, así que se leía «Una Carta De Amor Del
+                  // FuturoCap. 2: …» como si fuera una sola palabra.
+                  episodio.isEmpty ? _c.title : '${_c.title} · $episodio',
                   overflow: TextOverflow.ellipsis,
+                  style: TextStyle(color: HomeTheme.textPrimary),
                 ),
               ),
             ),
@@ -223,8 +257,18 @@ class _ControlPanelHeaderState<T extends ReaderController>
                 icon: const Icon(fluent.FluentIcons.collapse_menu),
                 onPressed: () {
                   _playListFlayoutcontroller.showFlyout(builder: (context) {
-                    return SizedBox(
+                    // Con fondo propio, del modo. El flyout de Fluent es
+                    // translúcido, así que sin esto la lista de capítulos
+                    // quedaba flotando sobre la página de manga y se leía la
+                    // una encima de la otra.
+                    return Container(
                       width: 300,
+                      decoration: BoxDecoration(
+                        color: HomeTheme.cardSurface,
+                        borderRadius: BorderRadius.circular(8),
+                        border: Border.all(color: HomeTheme.border),
+                      ),
+                      clipBehavior: Clip.antiAlias,
                       child: Obx(
                         () => PlayList(
                           title: _c.title,
@@ -244,12 +288,14 @@ class _ControlPanelHeaderState<T extends ReaderController>
             SizedBox(
               width: 138,
               // La tercera copia de los mismos tres botones. Ver
-              // BotonesVentana.
+              // BotonesVentana. Toma el brillo del FluentTheme de esta barra,
+              // que es el del modo.
               child: BotonesVentana(
                 brightness: fluent.FluentTheme.of(context).brightness,
               ),
             ),
           ],
+        ),
         ),
       ).animate().fade();
     });

@@ -24,7 +24,7 @@ class PlayList extends fluent.StatelessWidget {
     final actual = list.isEmpty ? 0 : selectIndex.clamp(0, list.length - 1);
 
     return Material(
-      color: HomeTheme.oscuroSuperficie,
+      color: HomeTheme.cardSurface,
       child: SafeArea(
         top: false,
         child: Column(
@@ -43,7 +43,7 @@ class PlayList extends fluent.StatelessWidget {
                 style: TextStyle(
                   fontSize: 17,
                   fontWeight: FontWeight.bold,
-                  color: HomeTheme.oscuroTexto,
+                  color: HomeTheme.textPrimary,
                 ),
               ),
             ),
@@ -81,13 +81,29 @@ class PlayList extends fluent.StatelessWidget {
       initialScrollIndex: actual,
       padding: const EdgeInsets.all(8),
       itemBuilder: (context, index) {
+        final elegido = index == actual;
         return fluent.ListTile.selectable(
-          title: Text(list[index]),
+          // Con el color puesto, del modo.
+          //
+          // Era un Text sin estilo: sin color cae en la tipografía de Fluent,
+          // que trae la suya según SU tema, y no según el modo de la app. El
+          // panel de capítulos se abre sobre la página de manga, así que
+          // acertar acá es la diferencia entre leer la lista y no verla.
+          //
+          // El elegido va en el acento, igual que en el teléfono, para que las
+          // dos plataformas marquen lo mismo de la misma forma.
+          title: Text(
+            list[index],
+            style: TextStyle(
+              color: elegido ? HomeTheme.accentPink : HomeTheme.textPrimary,
+              fontWeight: elegido ? FontWeight.w700 : FontWeight.w400,
+            ),
+          ),
           onPressed: () {
             onChange(index);
           },
           // Por índice, mismo motivo que en Android.
-          selected: index == actual,
+          selected: elegido,
         );
       },
     );
@@ -133,7 +149,7 @@ class PlaylistAndroidTile extends StatelessWidget {
       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 3),
       child: Material(
         color: selected
-            ? HomeTheme.oscuroAcento.withValues(alpha: 0.14)
+            ? HomeTheme.accentPink.withValues(alpha: 0.14)
             : Colors.transparent,
         borderRadius: BorderRadius.circular(12),
         child: InkWell(
@@ -151,8 +167,8 @@ class PlaylistAndroidTile extends StatelessWidget {
                     style: TextStyle(
                       fontSize: 14,
                       color: selected
-                          ? HomeTheme.oscuroAcento
-                          : HomeTheme.oscuroTexto,
+                          ? HomeTheme.accentPink
+                          : HomeTheme.textPrimary,
                       fontWeight: selected ? FontWeight.w700 : FontWeight.w500,
                     ),
                   ),
@@ -163,7 +179,7 @@ class PlaylistAndroidTile extends StatelessWidget {
                     child: Icon(
                       Icons.check_circle,
                       size: 20,
-                      color: HomeTheme.oscuroAcento,
+                      color: HomeTheme.accentPink,
                     ),
                   ),
               ],
