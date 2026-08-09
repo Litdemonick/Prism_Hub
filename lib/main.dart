@@ -333,13 +333,10 @@ void main(List<String> args) async {
       });
     }
 
-    if (Platform.isAndroid) {
-      SystemUiOverlayStyle style = const SystemUiOverlayStyle(
-        statusBarColor: Colors.transparent,
-        statusBarIconBrightness: Brightness.dark,
-      );
-      SystemChrome.setSystemUIOverlayStyle(style);
-    }
+    // Las barras del sistema ya se pidieron más arriba, con el modo real
+    // (ModoDeColor.aplicarBarrasDelSistema). Acá había una segunda llamada que
+    // volvía a pedirlas con `Brightness.dark` FIJO, o sea sin mirar el modo, y
+    // se ejecutaba después: pisaba a la buena en cada arranque.
 
     // Si la app se abrió por un enlace compartido, se anota para navegar
     // cuando el árbol ya exista. No se usa como ruta inicial a propósito: así
@@ -974,11 +971,39 @@ class _MainAppState extends State<MainApp> {
       // Se apaga acá y no zona por zona: son cinco pantallas más las que se
       // abren encima, y cualquiera que se agregue después heredaría el mismo
       // problema.
-      appBarTheme: const AppBarTheme(
+      appBarTheme: AppBarTheme(
         backgroundColor: Colors.transparent,
         surfaceTintColor: Colors.transparent,
         scrolledUnderElevation: 0,
         elevation: 0,
+        // ── Y de acá salen los iconos del sistema ──────────────────────────
+        //
+        // La hora, la batería y la señal las dibuja Android del color que la
+        // app le pida, y quien tiene la última palabra NO es la llamada suelta
+        // a SystemChrome: cada AppBar de Material anota su propio estilo en
+        // cada cuadro, y esa anotación pisa lo que se haya pedido antes.
+        //
+        // Sin decírselo, ese estilo lo DEDUCE del fondo de la barra. Y el fondo
+        // acá arriba es transparente, que al medirle el brillo da «oscuro» —así
+        // que todas las AppBar de la app venían pidiendo iconos CLAROS, siempre.
+        // En modo oscuro acertaba de casualidad; en claro dejaba la hora y la
+        // señal blancas sobre fondo casi blanco: la barra de arriba se veía
+        // vacía, y lo único que se distinguía era la batería por su contorno.
+        //
+        // Puesto acá vale para las cinco zonas y para todo lo que se abra
+        // encima, sin tener que acordarse pantalla por pantalla.
+        systemOverlayStyle: SystemUiOverlayStyle(
+          statusBarColor: Colors.transparent,
+          // Brightness.dark = iconos OSCUROS. El nombre confunde: habla del
+          // contenido que hay DETRÁS, no del color de los iconos.
+          statusBarIconBrightness:
+              brightness == Brightness.dark ? Brightness.light : Brightness.dark,
+          statusBarBrightness:
+              brightness == Brightness.dark ? Brightness.dark : Brightness.light,
+          systemNavigationBarColor: Colors.transparent,
+          systemNavigationBarIconBrightness:
+              brightness == Brightness.dark ? Brightness.light : Brightness.dark,
+        ),
       ),
       // Mismo motivo, para las hojas y tarjetas que también se tiñen solas.
       bottomSheetTheme: const BottomSheetThemeData(
