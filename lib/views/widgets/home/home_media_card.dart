@@ -254,8 +254,17 @@ class _HomeMediaCardState extends State<HomeMediaCard> {
       // Opaco, no semitransparente: este pill vive debajo de la portada,
       // pero el mismo widget se usa en contextos donde queda encima, y ahí
       // el 65% de opacidad dejaba ver la imagen a través del texto.
+      // ── El fondo sigue al modo ────────────────────────────────────────
+      //
+      // Estaba fijo en un azul muy oscuro. Con el texto puesto en el color del
+      // tema —casi negro en claro— quedaba negro sobre azul oscuro: la
+      // etiqueta se veía como una mancha sin letras. En claro va la superficie
+      // de tarjeta, un tono por debajo, que es el mismo papel que cumplía el
+      // azul en oscuro.
       decoration: BoxDecoration(
-        color: const Color(0xFF202030),
+        color: ModoDeColor.claro
+            ? HomeTheme.esqueletoBase
+            : const Color(0xFF202030),
         borderRadius: BorderRadius.circular(6),
         border: Border.all(color: HomeTheme.border),
       ),

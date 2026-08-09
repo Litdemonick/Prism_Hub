@@ -18,7 +18,7 @@ class ComicReaderSettings extends StatelessWidget {
 
     if (Platform.isAndroid) {
       return Material(
-        color: HomeTheme.cardSurface,
+        color: HomeTheme.oscuroSuperficie,
         child: SafeArea(
           top: false,
           child: SingleChildScrollView(
@@ -40,9 +40,9 @@ class ComicReaderSettings extends StatelessWidget {
           constraints: const BoxConstraints(maxWidth: 460),
           child: Container(
             decoration: BoxDecoration(
-              color: HomeTheme.cardSurface,
+              color: HomeTheme.oscuroSuperficie,
               borderRadius: BorderRadius.circular(12),
-              border: Border.all(color: HomeTheme.border),
+              border: Border.all(color: HomeTheme.oscuroBorde),
               boxShadow: const [
                 BoxShadow(
                   color: Color(0x66000000),
@@ -74,7 +74,7 @@ class ComicReaderSettings extends StatelessWidget {
             style: TextStyle(
               fontSize: 17,
               fontWeight: FontWeight.bold,
-              color: HomeTheme.textPrimary,
+              color: HomeTheme.oscuroTexto,
             ),
           ),
         ),
@@ -109,7 +109,7 @@ class ComicReaderSettings extends StatelessWidget {
             ],
           ),
         ),
-        Divider(height: 24, color: HomeTheme.border),
+        Divider(height: 24, color: HomeTheme.oscuroBorde),
         Padding(
           padding: const EdgeInsets.fromLTRB(20, 4, 20, 12),
           child: Text(
@@ -117,7 +117,7 @@ class ComicReaderSettings extends StatelessWidget {
             style: TextStyle(
               fontSize: 17,
               fontWeight: FontWeight.bold,
-              color: HomeTheme.textPrimary,
+              color: HomeTheme.oscuroTexto,
             ),
           ),
         ),
@@ -182,7 +182,7 @@ class _AlignTile extends StatelessWidget {
       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 3),
       child: Material(
         color: selected
-            ? HomeTheme.accentPink.withValues(alpha: 0.14)
+            ? HomeTheme.oscuroAcento.withValues(alpha: 0.14)
             : Colors.transparent,
         borderRadius: BorderRadius.circular(12),
         child: InkWell(
@@ -195,7 +195,7 @@ class _AlignTile extends StatelessWidget {
                 Icon(
                   icon,
                   size: 22,
-                  color: selected ? HomeTheme.accentPink : HomeTheme.textMuted,
+                  color: selected ? HomeTheme.oscuroAcento : HomeTheme.oscuroTextoTenue,
                 ),
                 const SizedBox(width: 14),
                 Expanded(
@@ -204,8 +204,8 @@ class _AlignTile extends StatelessWidget {
                     style: TextStyle(
                       fontSize: 14,
                       color: selected
-                          ? HomeTheme.accentPink
-                          : HomeTheme.textPrimary,
+                          ? HomeTheme.oscuroAcento
+                          : HomeTheme.oscuroTexto,
                       fontWeight: selected ? FontWeight.w700 : FontWeight.w500,
                     ),
                   ),
@@ -214,7 +214,7 @@ class _AlignTile extends StatelessWidget {
                   Icon(
                     Icons.check_circle,
                     size: 20,
-                    color: HomeTheme.accentPink,
+                    color: HomeTheme.oscuroAcento,
                   ),
               ],
             ),
@@ -249,7 +249,7 @@ class _ModeTile extends StatelessWidget {
       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 3),
       child: Material(
         color: selected
-            ? HomeTheme.accentPink.withValues(alpha: 0.14)
+            ? HomeTheme.oscuroAcento.withValues(alpha: 0.14)
             : Colors.transparent,
         borderRadius: BorderRadius.circular(12),
         child: InkWell(
@@ -265,7 +265,7 @@ class _ModeTile extends StatelessWidget {
                 Icon(
                   icon,
                   size: 22,
-                  color: selected ? HomeTheme.accentPink : HomeTheme.textMuted,
+                  color: selected ? HomeTheme.oscuroAcento : HomeTheme.oscuroTextoTenue,
                 ),
                 const SizedBox(width: 14),
                 Expanded(
@@ -278,8 +278,8 @@ class _ModeTile extends StatelessWidget {
                         style: TextStyle(
                           fontSize: 14,
                           color: selected
-                              ? HomeTheme.accentPink
-                              : HomeTheme.textPrimary,
+                              ? HomeTheme.oscuroAcento
+                              : HomeTheme.oscuroTexto,
                           fontWeight:
                               selected ? FontWeight.w700 : FontWeight.w500,
                         ),
@@ -288,7 +288,7 @@ class _ModeTile extends StatelessWidget {
                       Text(
                         subtitle,
                         style: TextStyle(
-                          color: HomeTheme.textMuted,
+                          color: HomeTheme.oscuroTextoTenue,
                           fontSize: 12,
                         ),
                       ),
@@ -299,7 +299,7 @@ class _ModeTile extends StatelessWidget {
                   Icon(
                     Icons.check_circle,
                     size: 20,
-                    color: HomeTheme.accentPink,
+                    color: HomeTheme.oscuroAcento,
                   ),
               ],
             ),

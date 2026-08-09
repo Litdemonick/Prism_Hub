@@ -76,7 +76,7 @@ class _AvisoCentrado extends StatelessWidget {
                 // el texto ilegible.
                 color: const Color(0xFF15151C),
                 borderRadius: BorderRadius.circular(14),
-                border: Border.all(color: HomeTheme.accentPink, width: 1.5),
+                border: Border.all(color: HomeTheme.oscuroAcento, width: 1.5),
                 boxShadow: const [
                   BoxShadow(color: Color(0x66000000), blurRadius: 18),
                 ],
@@ -85,14 +85,14 @@ class _AvisoCentrado extends StatelessWidget {
                 mainAxisSize: MainAxisSize.min,
                 children: [
                   Icon(Icons.school_outlined,
-                      color: HomeTheme.accentPink, size: 20),
+                      color: HomeTheme.oscuroAcento, size: 20),
                   const SizedBox(width: 12),
                   Flexible(
                     child: Text(
                       controlador.texto,
                       textAlign: TextAlign.center,
                       style: TextStyle(
-                        color: HomeTheme.textPrimary,
+                        color: HomeTheme.oscuroTexto,
                         fontSize: 14,
                         fontWeight: FontWeight.w600,
                       ),
@@ -433,7 +433,7 @@ class _TutorialReproductorState extends State<TutorialReproductor>
                   paso.titulo,
                   textAlign: TextAlign.center,
                   style: TextStyle(
-                    color: HomeTheme.textPrimary,
+                    color: HomeTheme.oscuroTexto,
                     fontSize: 19,
                     fontWeight: FontWeight.w800,
                   ),
@@ -443,7 +443,7 @@ class _TutorialReproductorState extends State<TutorialReproductor>
                   paso.detalle,
                   textAlign: TextAlign.center,
                   style: TextStyle(
-                    color: HomeTheme.textMuted,
+                    color: HomeTheme.oscuroTextoTenue,
                     fontSize: 14,
                     height: 1.4,
                   ),
@@ -460,7 +460,7 @@ class _TutorialReproductorState extends State<TutorialReproductor>
                         height: 6,
                         decoration: BoxDecoration(
                           color: k == i
-                              ? HomeTheme.accentPink
+                              ? HomeTheme.oscuroAcento
                               : Colors.white.withValues(alpha: 0.28),
                           borderRadius: BorderRadius.circular(999),
                         ),
@@ -475,7 +475,7 @@ class _TutorialReproductorState extends State<TutorialReproductor>
                       onPressed: _terminar,
                       child: Text(
                         'video.tutorial.skip'.i18n,
-                        style: TextStyle(color: HomeTheme.textMuted),
+                        style: TextStyle(color: HomeTheme.oscuroTextoTenue),
                       ),
                     ),
                     // Volver atras: los pasos traen el numero de segundos que
@@ -488,14 +488,14 @@ class _TutorialReproductorState extends State<TutorialReproductor>
                         onPressed: () => setState(() => _indice = i - 1),
                         child: Text(
                           'video.tutorial.back'.i18n,
-                          style: TextStyle(color: HomeTheme.textPrimary),
+                          style: TextStyle(color: HomeTheme.oscuroTexto),
                         ),
                       ),
                     ],
                     const SizedBox(width: 12),
                     FilledButton(
                       style: FilledButton.styleFrom(
-                        backgroundColor: HomeTheme.accentPink,
+                        backgroundColor: HomeTheme.oscuroAcento,
                         padding: const EdgeInsets.symmetric(
                             horizontal: 26, vertical: 12),
                       ),
@@ -582,7 +582,7 @@ class _DemoGesto extends StatelessWidget {
               return Center(
                 child: Opacity(
                   opacity: 0.55 + vaiven * 0.45,
-                  child: Icon(icono, size: 44, color: HomeTheme.accentPink),
+                  child: Icon(icono, size: 44, color: HomeTheme.oscuroAcento),
                 ),
               );
           }
@@ -613,12 +613,12 @@ class _DemoGesto extends StatelessWidget {
                   height: 44,
                   decoration: BoxDecoration(
                     shape: BoxShape.circle,
-                    color: HomeTheme.accentPink.withValues(alpha: 0.28),
-                    border: Border.all(color: HomeTheme.accentPink, width: 2),
+                    color: HomeTheme.oscuroAcento.withValues(alpha: 0.28),
+                    border: Border.all(color: HomeTheme.oscuroAcento, width: 2),
                   ),
                   child: icono == null
                       ? null
-                      : Icon(icono, size: 20, color: HomeTheme.textPrimary),
+                      : Icon(icono, size: 20, color: HomeTheme.oscuroTexto),
                 ),
               ),
             ),

@@ -317,7 +317,7 @@ class _VideoPlayerState extends State<VideoPlayer> {
       // Un fondo con algo de color en vez de negro puro. El hueco de abajo es
       // media pantalla: en negro plano se lee como que la app se colgó, y con
       // el mismo fondo del resto de la app se lee como parte del reproductor.
-      backgroundColor: HomeTheme.bg,
+      backgroundColor: HomeTheme.oscuroFondo,
       body: _buildContent(),
     );
   }

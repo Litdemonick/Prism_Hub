@@ -1034,7 +1034,7 @@ class _FilaSeleccionable extends StatelessWidget {
       padding: const EdgeInsets.only(bottom: 4),
       child: Material(
         color: activo
-            ? HomeTheme.accentPink.withValues(alpha: 0.18)
+            ? HomeTheme.oscuroAcento.withValues(alpha: 0.18)
             : Colors.transparent,
         borderRadius: BorderRadius.circular(10),
         child: ListTile(
@@ -1043,7 +1043,7 @@ class _FilaSeleccionable extends StatelessWidget {
             borderRadius: BorderRadius.circular(10),
             side: BorderSide(
               color: activo
-                  ? HomeTheme.accentPink
+                  ? HomeTheme.oscuroAcento
                   : Colors.white.withValues(alpha: 0.12),
             ),
           ),
@@ -1052,7 +1052,7 @@ class _FilaSeleccionable extends StatelessWidget {
               : Icon(
                   icono,
                   size: 18,
-                  color: activo ? HomeTheme.accentPink : colorIcono,
+                  color: activo ? HomeTheme.oscuroAcento : colorIcono,
                 ),
           // Sin el leading, el ListTile deja un hueco a la izquierda igual;
           // con horizontalTitleGap chico el icono queda pegado al texto y la
@@ -1062,13 +1062,13 @@ class _FilaSeleccionable extends StatelessWidget {
           title: Text(
             texto,
             style: TextStyle(
-              color: activo ? HomeTheme.accentPink : HomeTheme.textPrimary,
+              color: activo ? HomeTheme.oscuroAcento : HomeTheme.oscuroTexto,
               fontWeight: activo ? FontWeight.w700 : FontWeight.w400,
             ),
           ),
           trailing: activo
               ? Icon(Icons.check_rounded,
-                  size: 18, color: HomeTheme.accentPink)
+                  size: 18, color: HomeTheme.oscuroAcento)
               : null,
           onTap: onTap,
         ),
@@ -1099,7 +1099,7 @@ class _PanelVacio extends StatelessWidget {
             Text(
               texto,
               textAlign: TextAlign.center,
-              style: TextStyle(color: HomeTheme.textMuted, fontSize: 13),
+              style: TextStyle(color: HomeTheme.oscuroTextoTenue, fontSize: 13),
             ),
           ],
         ),

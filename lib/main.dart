@@ -202,6 +202,9 @@ void main(List<String> args) async {
       // cambiara sola a claro delante del usuario.
       ModoDeColor.notificador.value =
           PrismHubStorage.getSetting(SettingKey.modoClaro) == true;
+      // Y se le avisa al sistema de qué color pintar la hora y la batería: la
+      // preferencia puede venir en claro desde el primer cuadro.
+      ModoDeColor.aplicarBarrasDelSistema();
     } catch (e, st) {
       // Antes esto solo se logueaba y se seguía como si nada. No se puede:
       // con el almacenamiento caído, TODOS los getSetting() devuelven null, y
@@ -884,27 +887,27 @@ class _MainAppState extends State<MainApp> {
     return ValueListenableBuilder<bool>(
       valueListenable: ModoDeColor.notificador,
       builder: (context, _, __) => GetMaterialApp(
-      title: "PrismHub",
-      // Le avisa a la barra flotante cuándo hay una pantalla encima, para que
-      // se esconda deslizándose en vez de desaparecer de golpe. Ver
-      // ObservadorDePila en main_page.dart.
-      navigatorObservers: [ObservadorDePila()],
-      debugShowCheckedModeBanner: false,
-      themeMode: c.theme,
-      theme: _buildTheme(Brightness.light, cjkFontFallback),
-      darkTheme: _buildTheme(Brightness.dark, cjkFontFallback),
-      home: const AndroidMainPage(),
-      localizationsDelegates: [
-        I18nUtils.flutterI18nDelegate,
-        GlobalMaterialLocalizations.delegate,
-        GlobalWidgetsLocalizations.delegate,
-        GlobalCupertinoLocalizations.delegate,
-      ],
-      // Sin supportedLocales, el resolvedor cae a inglés aunque los delegados
-      // estén puestos — por eso el selector de fecha salía en inglés con la
-      // app en español.
-      supportedLocales: const [Locale('es'), Locale('en')],
-      locale: Locale(I18nUtils.currentLanguageCode),
+        title: "PrismHub",
+        // Le avisa a la barra flotante cuándo hay una pantalla encima, para que
+        // se esconda deslizándose en vez de desaparecer de golpe. Ver
+        // ObservadorDePila en main_page.dart.
+        navigatorObservers: [ObservadorDePila()],
+        debugShowCheckedModeBanner: false,
+        themeMode: c.theme,
+        theme: _buildTheme(Brightness.light, cjkFontFallback),
+        darkTheme: _buildTheme(Brightness.dark, cjkFontFallback),
+        home: const AndroidMainPage(),
+        localizationsDelegates: [
+          I18nUtils.flutterI18nDelegate,
+          GlobalMaterialLocalizations.delegate,
+          GlobalWidgetsLocalizations.delegate,
+          GlobalCupertinoLocalizations.delegate,
+        ],
+        // Sin supportedLocales, el resolvedor cae a inglés aunque los delegados
+        // estén puestos — por eso el selector de fecha salía en inglés con la
+        // app en español.
+        supportedLocales: const [Locale('es'), Locale('en')],
+        locale: Locale(I18nUtils.currentLanguageCode),
       ),
     );
   }
@@ -1031,59 +1034,59 @@ class _MainAppState extends State<MainApp> {
     return ValueListenableBuilder<bool>(
       valueListenable: ModoDeColor.notificador,
       builder: (context, _, __) => fluent.FluentApp.router(
-      title: 'PrismHub',
-      debugShowCheckedModeBanner: false,
-      routerConfig: router,
-      themeMode: c.theme,
-      darkTheme: fluent.FluentThemeData(
-        brightness: Brightness.dark,
-        visualDensity: VisualDensity.standard,
-        accentColor: _fluentAccent,
-      ),
-      theme: fluent.FluentThemeData(
-        visualDensity: VisualDensity.standard,
-        accentColor: _fluentAccent,
-      ),
-      localizationsDelegates: [
-        I18nUtils.flutterI18nDelegate,
-        GlobalMaterialLocalizations.delegate,
-        GlobalWidgetsLocalizations.delegate,
-        GlobalCupertinoLocalizations.delegate,
-      ],
-      supportedLocales: const [Locale('es'), Locale('en')],
-      locale: Locale(I18nUtils.currentLanguageCode),
-      builder: (context, child) {
-        return MediaQuery(
-          data: MediaQuery.of(context).copyWith(
-            textScaler: TextScaler.noScaling,
-          ),
-          child: Directionality(
-            textDirection: TextDirection.ltr,
-            child: DefaultTextStyle(
-              style: const TextStyle(
-                fontFamily: "Noto Sans CJK SC",
-                fontFamilyFallback: [
-                  "Noto Sans CJK JP",
-                  "Noto Sans CJK KR",
-                  "Noto Sans CJK TC",
-                  "Noto Sans CJK HK",
-                  "Microsoft Yahei",
-                  "SimSun",
-                  "Arial Unicode MS",
-                ],
-              ),
-              // El embedder de Windows spamea "Failed to update ui::AXTree"
-              // en cualquier página con rebuilds frecuentes (Obx, streams de
-              // posición/progreso, listas reactivas) — es ruido del engine,
-              // no un bug de la app. Se excluye semántica en toda la app de
-              // escritorio (ya se hacía puntualmente en el reproductor).
-              child: ExcludeSemantics(
-                child: child ?? const SizedBox(),
+        title: 'PrismHub',
+        debugShowCheckedModeBanner: false,
+        routerConfig: router,
+        themeMode: c.theme,
+        darkTheme: fluent.FluentThemeData(
+          brightness: Brightness.dark,
+          visualDensity: VisualDensity.standard,
+          accentColor: _fluentAccent,
+        ),
+        theme: fluent.FluentThemeData(
+          visualDensity: VisualDensity.standard,
+          accentColor: _fluentAccent,
+        ),
+        localizationsDelegates: [
+          I18nUtils.flutterI18nDelegate,
+          GlobalMaterialLocalizations.delegate,
+          GlobalWidgetsLocalizations.delegate,
+          GlobalCupertinoLocalizations.delegate,
+        ],
+        supportedLocales: const [Locale('es'), Locale('en')],
+        locale: Locale(I18nUtils.currentLanguageCode),
+        builder: (context, child) {
+          return MediaQuery(
+            data: MediaQuery.of(context).copyWith(
+              textScaler: TextScaler.noScaling,
+            ),
+            child: Directionality(
+              textDirection: TextDirection.ltr,
+              child: DefaultTextStyle(
+                style: const TextStyle(
+                  fontFamily: "Noto Sans CJK SC",
+                  fontFamilyFallback: [
+                    "Noto Sans CJK JP",
+                    "Noto Sans CJK KR",
+                    "Noto Sans CJK TC",
+                    "Noto Sans CJK HK",
+                    "Microsoft Yahei",
+                    "SimSun",
+                    "Arial Unicode MS",
+                  ],
+                ),
+                // El embedder de Windows spamea "Failed to update ui::AXTree"
+                // en cualquier página con rebuilds frecuentes (Obx, streams de
+                // posición/progreso, listas reactivas) — es ruido del engine,
+                // no un bug de la app. Se excluye semántica en toda la app de
+                // escritorio (ya se hacía puntualmente en el reproductor).
+                child: ExcludeSemantics(
+                  child: child ?? const SizedBox(),
+                ),
               ),
             ),
-          ),
-        );
-      },
+          );
+        },
       ),
     );
   }

@@ -164,7 +164,7 @@ class _VideoPlayerDesktopControlsState
         // vez del oscuro+morado del reproductor.
         data: FluentTheme.of(context).copyWith(
           accentColor:
-              AccentColor.swatch({'normal': HomeTheme.accentPink}),
+              AccentColor.swatch({'normal': HomeTheme.oscuroAcento}),
         ),
         child: ContentDialog(
           title: const Text('¡Un momento!'),
@@ -254,7 +254,7 @@ class _VideoPlayerDesktopControlsState
                             decoration: BoxDecoration(
                               color: const Color(0xB3000000),
                               borderRadius: BorderRadius.circular(999),
-                              border: Border.all(color: HomeTheme.accentPink),
+                              border: Border.all(color: HomeTheme.oscuroAcento),
                             ),
                             child: Row(
                               mainAxisSize: MainAxisSize.min,
@@ -263,7 +263,7 @@ class _VideoPlayerDesktopControlsState
                                   (salto ?? 0) < 0
                                       ? material.Icons.fast_rewind
                                       : material.Icons.fast_forward,
-                                  color: HomeTheme.accentPink,
+                                  color: HomeTheme.oscuroAcento,
                                   size: 20,
                                 ),
                                 const SizedBox(width: 8),
@@ -310,14 +310,14 @@ class _VideoPlayerDesktopControlsState
                             decoration: BoxDecoration(
                               color: const Color(0xB3000000),
                               borderRadius: BorderRadius.circular(999),
-                              border: Border.all(color: HomeTheme.accentPink),
+                              border: Border.all(color: HomeTheme.oscuroAcento),
                             ),
                             child: Row(
                               mainAxisSize: MainAxisSize.min,
                               children: [
                                 material.Icon(
                                   material.Icons.volume_up,
-                                  color: HomeTheme.accentPink,
+                                  color: HomeTheme.oscuroAcento,
                                   size: 20,
                                 ),
                                 const SizedBox(width: 8),
@@ -424,7 +424,7 @@ class _VideoPlayerDesktopControlsState
                                 child: material.CircularProgressIndicator(
                                   strokeWidth: 3.5,
                                   valueColor: material.AlwaysStoppedAnimation(
-                                      HomeTheme.accentPink),
+                                      HomeTheme.oscuroAcento),
                                 ),
                               ),
                             ),
@@ -517,10 +517,10 @@ class _VideoPlayerDesktopControlsState
                               padding: const EdgeInsets.symmetric(
                                   horizontal: 28, vertical: 22),
                               decoration: BoxDecoration(
-                                color: HomeTheme.cardSurface
+                                color: HomeTheme.oscuroSuperficie
                                     .withValues(alpha: 0.92),
                                 borderRadius: BorderRadius.circular(16),
-                                border: Border.all(color: HomeTheme.border),
+                                border: Border.all(color: HomeTheme.oscuroBorde),
                               ),
                               child: Column(
                                 mainAxisSize: MainAxisSize.min,
@@ -529,7 +529,7 @@ class _VideoPlayerDesktopControlsState
                                     padding: const EdgeInsets.all(18),
                                     decoration: BoxDecoration(
                                       shape: BoxShape.circle,
-                                      color: HomeTheme.accentPink,
+                                      color: HomeTheme.oscuroAcento,
                                     ),
                                     child: const Icon(FluentIcons.play_solid,
                                         color: Colors.white, size: 32),
@@ -1037,7 +1037,7 @@ class _Footer extends StatelessWidget {
                                 padding: EdgeInsets.all(4),
                                 child: ProgressRing(
                                   strokeWidth: 2.5,
-                                  activeColor: HomeTheme.accentPink,
+                                  activeColor: HomeTheme.oscuroAcento,
                                 ),
                               ),
                             );
@@ -1272,7 +1272,7 @@ class _VolumeState extends State<_Volume> {
               return FluentTheme(
                 data: FluentThemeData.dark().copyWith(
                   accentColor: AccentColor.swatch(
-                      {'normal': HomeTheme.accentPink}),
+                      {'normal': HomeTheme.oscuroAcento}),
                 ),
                 child: FlyoutContent(
                   useAcrylic: true,
@@ -1374,7 +1374,7 @@ class _EpisodeState extends State<_Episode> {
                 return FluentTheme(
                   data: FluentThemeData.dark().copyWith(
                     accentColor: AccentColor.swatch(
-                        {'normal': HomeTheme.accentPink}),
+                        {'normal': HomeTheme.oscuroAcento}),
                   ),
                   child: FlyoutContent(
                     padding: const EdgeInsets.all(0),
@@ -1480,7 +1480,7 @@ class _QualityState extends State<_Quality> {
                               trailing: quality.key ==
                                       widget.controller.currentQuality.value
                                   ? Icon(FluentIcons.check_mark,
-                                      size: 12, color: HomeTheme.accentPink)
+                                      size: 12, color: HomeTheme.oscuroAcento)
                                   : null,
                               onPressed: () {
                                 widget.controller.switchQuality(
@@ -1497,7 +1497,7 @@ class _QualityState extends State<_Quality> {
                               trailing: servidor ==
                                       widget.controller.currentServerName.value
                                   ? Icon(FluentIcons.check_mark,
-                                      size: 12, color: HomeTheme.accentPink)
+                                      size: 12, color: HomeTheme.oscuroAcento)
                                   : null,
                               onPressed: () {
                                 widget.controller.switchServer(servidor);
@@ -1551,7 +1551,7 @@ class _TrackState extends State<_Track> {
               return FluentTheme(
                 data: FluentThemeData.dark().copyWith(
                   accentColor: AccentColor.swatch(
-                      {'normal': HomeTheme.accentPink}),
+                      {'normal': HomeTheme.oscuroAcento}),
                 ),
                 child: FlyoutContent(
                   useAcrylic: true,
@@ -1794,7 +1794,7 @@ class _PanelCasteandoState extends State<_PanelCasteando>
               // El borde se tiñe mientras espera: da una señal mas de que hay
               // algo en curso, sin agregar otro elemento a la caja.
               color: conectando
-                  ? HomeTheme.accentPink.withValues(alpha: 0.55)
+                  ? HomeTheme.oscuroAcento.withValues(alpha: 0.55)
                   : Colors.white.withValues(alpha: 0.12),
             ),
             boxShadow: const [
@@ -1825,7 +1825,7 @@ class _PanelCasteandoState extends State<_PanelCasteando>
                         child: material.CircularProgressIndicator(
                           strokeWidth: 3.5,
                           valueColor: material.AlwaysStoppedAnimation(
-                              HomeTheme.accentPink),
+                              HomeTheme.oscuroAcento),
                         ),
                       )
                     : Icon(
@@ -1834,7 +1834,7 @@ class _PanelCasteandoState extends State<_PanelCasteando>
                             : material.Icons.pause_circle_outline,
                         key: ValueKey(reproduciendo),
                         size: 46,
-                        color: HomeTheme.accentPink,
+                        color: HomeTheme.oscuroAcento,
                       ),
               ),
               const SizedBox(height: 14),
@@ -1886,7 +1886,7 @@ class _PanelCasteandoState extends State<_PanelCasteando>
                             aviso == null ? FontWeight.normal : FontWeight.w700,
                         color: aviso == null
                             ? Colors.white.withValues(alpha: 0.75)
-                            : HomeTheme.accentPink,
+                            : HomeTheme.oscuroAcento,
                       ),
                     ),
                   );
@@ -2038,13 +2038,13 @@ class _AyudaTeclasCast extends StatelessWidget {
                 // golpe: es lo que hace que el recorrido se vea continuo.
                 color: Color.lerp(
                   Colors.white.withValues(alpha: 0.06),
-                  HomeTheme.accentPink.withValues(alpha: 0.22),
+                  HomeTheme.oscuroAcento.withValues(alpha: 0.22),
                   luz,
                 ),
                 border: Border.all(
                   color: Color.lerp(
                     Colors.white.withValues(alpha: 0.16),
-                    HomeTheme.accentPink,
+                    HomeTheme.oscuroAcento,
                     luz,
                   )!,
                 ),
@@ -2122,7 +2122,7 @@ class _CastState extends State<_Cast> {
           icon: Icon(
             connected ? material.Icons.cast_connected : material.Icons.cast,
             size: 22,
-            color: connected ? HomeTheme.accentPink : null,
+            color: connected ? HomeTheme.oscuroAcento : null,
           ),
           onPressed: () {
             // Mismo criterio que en el telefono: elegir aparato lleva unos
@@ -2135,7 +2135,7 @@ class _CastState extends State<_Cast> {
                 return FluentTheme(
                   data: FluentThemeData.dark().copyWith(
                     accentColor: AccentColor.swatch(
-                        {'normal': HomeTheme.accentPink}),
+                        {'normal': HomeTheme.oscuroAcento}),
                   ),
                   child: FlyoutContent(
                     useAcrylic: true,
@@ -2270,7 +2270,7 @@ class _TorrentFilesState extends State<_TorrentFiles> {
               return FluentTheme(
                 data: FluentThemeData.dark().copyWith(
                   accentColor: AccentColor.swatch(
-                      {'normal': HomeTheme.accentPink}),
+                      {'normal': HomeTheme.oscuroAcento}),
                 ),
                 child: FlyoutContent(
                   useAcrylic: true,
@@ -2345,7 +2345,7 @@ class _SpeedState extends State<_Speed> {
               return FluentTheme(
                 data: FluentThemeData.dark().copyWith(
                   accentColor: AccentColor.swatch(
-                      {'normal': HomeTheme.accentPink}),
+                      {'normal': HomeTheme.oscuroAcento}),
                 ),
                 child: FlyoutContent(
                   useAcrylic: true,
@@ -2472,7 +2472,7 @@ class _SeekBarState extends State<_SeekBar> {
 
     return FluentTheme(
       data: FluentTheme.of(context).copyWith(
-        accentColor: AccentColor.swatch({'normal': HomeTheme.accentPink}),
+        accentColor: AccentColor.swatch({'normal': HomeTheme.oscuroAcento}),
       ),
       // Sin altura fija: el Stack se ajusta solo a la altura natural del
       // Slider (el hijo más alto, sin posicionar).
@@ -2524,7 +2524,7 @@ class _SeekBarState extends State<_SeekBar> {
                             // contra eso. Con esto queda una gradación
                             // clara: rosa sólido (reproducido) → rosa
                             // (bufferizado) → blanco (nada aún).
-                            color: HomeTheme.accentPink.withValues(alpha: 0.7),
+                            color: HomeTheme.oscuroAcento.withValues(alpha: 0.7),
                             borderRadius: BorderRadius.circular(999),
                           ),
                         ),
@@ -2665,7 +2665,7 @@ class _FlechaTira extends StatelessWidget {
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 2),
       child: IconButton(
-        icon: Icon(icono, size: 12, color: HomeTheme.textPrimary),
+        icon: Icon(icono, size: 12, color: HomeTheme.oscuroTexto),
         onPressed: onTap,
       ),
     );
@@ -2699,16 +2699,16 @@ class _ServerTab extends StatelessWidget {
             // detrás, el texto se volvía ilegible. selected pasa a violeta
             // sólido de verdad, así que el texto ahí va blanco (violeta
             // sobre violeta era invisible).
-            color: selected ? HomeTheme.accentPink : HomeTheme.cardSurface,
+            color: selected ? HomeTheme.oscuroAcento : HomeTheme.oscuroSuperficie,
             borderRadius: BorderRadius.circular(999),
             border: Border.all(
-              color: selected ? HomeTheme.accentPink : HomeTheme.border,
+              color: selected ? HomeTheme.oscuroAcento : HomeTheme.oscuroBorde,
               width: selected ? 1.4 : 1,
             ),
             boxShadow: selected
                 ? [
                     BoxShadow(
-                      color: HomeTheme.accentPink.withValues(alpha: 0.45),
+                      color: HomeTheme.oscuroAcento.withValues(alpha: 0.45),
                       blurRadius: 10,
                       spreadRadius: 0.5,
                     ),

@@ -523,7 +523,7 @@ class _ComicReaderContentState extends State<ComicReaderContent> {
     // Mismo negro que Home/Historial/Buscar (antes: colorScheme.surface /
     // micaBackgroundColor, un gris bastante más claro que no hacía juego
     // con el brillo animado de abajo, pensado para ese tono específico).
-    final backgroundColor = HomeTheme.bg;
+    final backgroundColor = HomeTheme.oscuroFondo;
 
     // Outermost catch-all for wheel scroll in cascade mode: wraps literally
     // everything this widget returns, so it's guaranteed shallower than the
@@ -1588,7 +1588,7 @@ class _PagedLoadError extends StatelessWidget {
               Text(
                 'reader.page-load-failed'.i18n,
                 style:
-                    TextStyle(color: HomeTheme.textMuted, fontSize: 13),
+                    TextStyle(color: HomeTheme.oscuroTextoTenue, fontSize: 13),
               ),
             ],
           ),

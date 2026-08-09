@@ -385,7 +385,7 @@ class _VideoPlayerMobileControlsState extends State<VideoPlayerMobileControls> {
                               child: CircularProgressIndicator(
                                 strokeWidth: 3.5,
                                 valueColor: AlwaysStoppedAnimation(
-                                    HomeTheme.accentPink),
+                                    HomeTheme.oscuroAcento),
                               ),
                             ),
                           ),
@@ -746,11 +746,11 @@ class _VideoPlayerMobileControlsState extends State<VideoPlayerMobileControls> {
                             decoration: BoxDecoration(
                               shape: BoxShape.circle,
                               color:
-                                  HomeTheme.accentPink.withValues(alpha: 0.18),
-                              border: Border.all(color: HomeTheme.accentPink),
+                                  HomeTheme.oscuroAcento.withValues(alpha: 0.18),
+                              border: Border.all(color: HomeTheme.oscuroAcento),
                             ),
                             child: Icon(Icons.play_arrow,
-                                color: HomeTheme.accentPink, size: 36),
+                                color: HomeTheme.oscuroAcento, size: 36),
                           ),
                           const SizedBox(height: 10),
                           const Text(
@@ -958,7 +958,7 @@ class _VideoPlayerMobileControlsState extends State<VideoPlayerMobileControls> {
                           decoration: BoxDecoration(
                             color: const Color(0xB3000000),
                             borderRadius: BorderRadius.circular(999),
-                            border: Border.all(color: HomeTheme.accentPink),
+                            border: Border.all(color: HomeTheme.oscuroAcento),
                           ),
                           child: Row(
                             mainAxisSize: MainAxisSize.min,
@@ -967,7 +967,7 @@ class _VideoPlayerMobileControlsState extends State<VideoPlayerMobileControls> {
                                 (_saltoVisible ?? 0) < 0
                                     ? Icons.fast_rewind
                                     : Icons.fast_forward,
-                                color: HomeTheme.accentPink,
+                                color: HomeTheme.oscuroAcento,
                                 size: 20,
                               ),
                               const SizedBox(width: 8),
@@ -1223,7 +1223,7 @@ class _PanelCasteandoState extends State<_PanelCasteando>
                 child: CircularProgressIndicator(
                   strokeWidth: 3.5,
                   valueColor:
-                      AlwaysStoppedAnimation<Color>(HomeTheme.accentPink),
+                      AlwaysStoppedAnimation<Color>(HomeTheme.oscuroAcento),
                 ),
               )
             else
@@ -1232,7 +1232,7 @@ class _PanelCasteandoState extends State<_PanelCasteando>
                     ? Icons.cast_connected
                     : Icons.pause_circle_outline,
                 size: 44,
-                color: HomeTheme.accentPink,
+                color: HomeTheme.oscuroAcento,
               ),
             const SizedBox(height: 14),
             Text(
@@ -1278,7 +1278,7 @@ class _PanelCasteandoState extends State<_PanelCasteando>
                       aviso == null ? FontWeight.normal : FontWeight.w700,
                   color: aviso == null
                       ? Colors.white.withValues(alpha: 0.75)
-                      : HomeTheme.accentPink,
+                      : HomeTheme.oscuroAcento,
                 ),
               );
             }),
@@ -1370,13 +1370,13 @@ class _AyudaGestosCast extends StatelessWidget {
                 shape: BoxShape.circle,
                 color: Color.lerp(
                   Colors.white.withValues(alpha: 0.06),
-                  HomeTheme.accentPink.withValues(alpha: 0.22),
+                  HomeTheme.oscuroAcento.withValues(alpha: 0.22),
                   luz,
                 ),
                 border: Border.all(
                   color: Color.lerp(
                     Colors.white.withValues(alpha: 0.16),
-                    HomeTheme.accentPink,
+                    HomeTheme.oscuroAcento,
                     luz,
                   )!,
                 ),
@@ -1538,7 +1538,7 @@ class _Header extends StatelessWidget {
                   IconButton(
                     tooltip: 'common.disconnect'.i18n,
                     icon: Icon(Icons.cast_connected,
-                        color: HomeTheme.accentPink),
+                        color: HomeTheme.oscuroAcento),
                     onPressed: () => _confirmarDesconectar(context),
                   ),
                 ],
@@ -1660,7 +1660,7 @@ class _Footer extends StatelessWidget {
                         height: 24,
                         child: CircularProgressIndicator(
                           strokeWidth: 2,
-                          color: HomeTheme.accentPink,
+                          color: HomeTheme.oscuroAcento,
                         ),
                       ),
                     );

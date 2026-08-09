@@ -1,4 +1,7 @@
+import 'dart:io';
+
 import 'package:flutter/foundation.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 
@@ -44,6 +47,35 @@ class ModoDeColor {
     // sí: pasa una vez, cuando alguien toca el interruptor, y es exactamente el
     // caso para el que existe.
     Get.forceAppUpdate();
+    aplicarBarrasDelSistema();
+  }
+
+  /// Le dice al sistema de qué color tiene que dibujar SUS iconos.
+  ///
+  /// ── Por qué hace falta ──────────────────────────────────────────────────
+  ///
+  /// La hora, la batería y la señal las dibuja Android, no la app, y las pinta
+  /// del color que la app le pida. Estaban pedidas en claro —lo correcto sobre
+  /// un fondo oscuro— y al encender el modo claro quedaban blancas sobre casi
+  /// blanco: la barra de arriba se veía vacía.
+  ///
+  /// Se llama al cambiar el modo y también al arrancar, porque la preferencia
+  /// se lee de disco y puede venir en claro desde el primer cuadro.
+  ///
+  /// `systemNavigationBar` va con el mismo criterio: es la barra de los tres
+  /// botones de abajo, y ahí pasaba lo mismo.
+  static void aplicarBarrasDelSistema() {
+    if (!Platform.isAndroid) return;
+    // Brightness.dark = iconos OSCUROS. El nombre confunde: se refiere al
+    // contenido que hay DETRÁS, no al color de los iconos.
+    final iconos = claro ? Brightness.dark : Brightness.light;
+    SystemChrome.setSystemUIOverlayStyle(SystemUiOverlayStyle(
+      statusBarColor: Colors.transparent,
+      statusBarIconBrightness: iconos,
+      statusBarBrightness: claro ? Brightness.light : Brightness.dark,
+      systemNavigationBarColor: Colors.transparent,
+      systemNavigationBarIconBrightness: iconos,
+    ));
   }
 }
 
@@ -91,6 +123,24 @@ class HomeTheme {
   static const _accentPinkClaro = Color(0xFF9B3BB8);
   static const _accentRedClaro = Color(0xFFC0272D);
   static const _cardSurfaceClaro = Color(0xFFFFFFFF);
+
+  // ── La paleta oscura, accesible a propósito ─────────────────────────────
+  //
+  // Para las pantallas que se quedan oscuras SIEMPRE, gane el modo que gane: el
+  // reproductor y el lector. Ahí el contenido es un vídeo o una página de
+  // manga sobre negro, y una interfaz clara alrededor de eso no es una opción
+  // de estilo — encandila y compite con lo que se está mirando. Es lo que hace
+  // cualquier reproductor, incluso los que tienen tema claro.
+  //
+  // Se exponen los mismos valores de siempre, sin duplicarlos: si mañana cambia
+  // el oscuro, cambia también acá.
+  static const oscuroFondo = _bgOscuro;
+  static const oscuroSuperficie = _cardSurfaceOscuro;
+  static const oscuroTexto = _textPrimaryOscuro;
+  static const oscuroTextoTenue = _textMutedOscuro;
+  static const oscuroBorde = _borderOscuro;
+  static const oscuroAcento = _accentPinkOscuro;
+  static const oscuroAcentoRojo = _accentRedOscuro;
 
   static bool get _claro => ModoDeColor.claro;
 

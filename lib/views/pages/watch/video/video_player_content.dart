@@ -134,7 +134,7 @@ class _VideoPlayerContenState extends State<VideoPlayerConten> {
           // las franjas de un vídeo que no llena, y cualquier color que no sea
           // negro compite con la imagen.
           fill: MediaQuery.orientationOf(context) == Orientation.portrait
-              ? HomeTheme.bg
+              ? HomeTheme.oscuroFondo
               : Colors.black,
           // Con el modo VR puesto, la imagen LLENA la pantalla.
           //

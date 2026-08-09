@@ -24,7 +24,7 @@ class PlayList extends fluent.StatelessWidget {
     final actual = list.isEmpty ? 0 : selectIndex.clamp(0, list.length - 1);
 
     return Material(
-      color: HomeTheme.cardSurface,
+      color: HomeTheme.oscuroSuperficie,
       child: SafeArea(
         top: false,
         child: Column(
@@ -43,7 +43,7 @@ class PlayList extends fluent.StatelessWidget {
                 style: TextStyle(
                   fontSize: 17,
                   fontWeight: FontWeight.bold,
-                  color: HomeTheme.textPrimary,
+                  color: HomeTheme.oscuroTexto,
                 ),
               ),
             ),
@@ -133,7 +133,7 @@ class PlaylistAndroidTile extends StatelessWidget {
       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 3),
       child: Material(
         color: selected
-            ? HomeTheme.accentPink.withValues(alpha: 0.14)
+            ? HomeTheme.oscuroAcento.withValues(alpha: 0.14)
             : Colors.transparent,
         borderRadius: BorderRadius.circular(12),
         child: InkWell(
@@ -151,8 +151,8 @@ class PlaylistAndroidTile extends StatelessWidget {
                     style: TextStyle(
                       fontSize: 14,
                       color: selected
-                          ? HomeTheme.accentPink
-                          : HomeTheme.textPrimary,
+                          ? HomeTheme.oscuroAcento
+                          : HomeTheme.oscuroTexto,
                       fontWeight: selected ? FontWeight.w700 : FontWeight.w500,
                     ),
                   ),
@@ -163,7 +163,7 @@ class PlaylistAndroidTile extends StatelessWidget {
                     child: Icon(
                       Icons.check_circle,
                       size: 20,
-                      color: HomeTheme.accentPink,
+                      color: HomeTheme.oscuroAcento,
                     ),
                   ),
               ],

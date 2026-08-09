@@ -85,7 +85,7 @@ class _ControlPanelHeaderState<T extends ReaderController>
                     // que en una tablet no cruce de lado a lado. Estas dos
                     // eran las únicas que salían cuadradas y a pantalla
                     // completa, y se notaba.
-                    backgroundColor: HomeTheme.cardSurface,
+                    backgroundColor: HomeTheme.oscuroSuperficie,
                     showDragHandle: true,
                     constraints: const BoxConstraints(maxWidth: 640),
                     shape: const RoundedRectangleBorder(
@@ -106,7 +106,7 @@ class _ControlPanelHeaderState<T extends ReaderController>
               onPressed: () {
                 showModalBottomSheet(
                   context: context,
-                  backgroundColor: HomeTheme.cardSurface,
+                  backgroundColor: HomeTheme.oscuroSuperficie,
                   showDragHandle: true,
                   // Alta, pero no hasta arriba de todo: con la lista de una
                   // obra larga la hoja tapaba hasta la barra de estado y no se
