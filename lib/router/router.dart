@@ -109,6 +109,10 @@ final router = GoRouter(
             ExtensionSearcherPage(
               package: state.uri.queryParameters['package'] ?? '',
               keyWord: state.uri.queryParameters['keyWord'],
+              // Si se llegó desde la Zona +18. Lo pone quien empuja la ruta
+              // (ver search_page). Sin esto, en escritorio la extensión se
+              // abría siempre como si viniera del buscador normal.
+              soloAdulto: state.uri.queryParameters['soloAdulto'] == '1',
             ),
           ),
         ),

@@ -568,6 +568,17 @@ class _SearchPageState extends State<SearchPage> {
                     queryParameters: {
                       "package": c.getPackgeByIndex(index),
                       "keyWord": c.search.value,
+                      // ── La marca de la zona viaja en la ruta ────────────
+                      //
+                      // En Android la extensión se abre con Get.to y el dato
+                      // se pasa como parámetro; acá manda go_router, y la ruta
+                      // no lo llevaba. Resultado: entrando desde la Zona +18
+                      // en escritorio, la extensión se abría como si viniera
+                      // del buscador normal — con su filtro de adultos
+                      // escondido, o sea sin poder buscar lo que se fue a
+                      // buscar ahí. En el teléfono no pasaba, de ahí que se
+                      // viera solo en PC.
+                      if (widget.nsfwOnly) "soloAdulto": "1",
                     },
                   ).toString());
                 }),

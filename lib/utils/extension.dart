@@ -774,7 +774,21 @@ class ExtensionUtils {
   static Map<String, List<String>>? segurosDe(String package) =>
       _seguros[package];
 
+  /// Lo contrario: el filtro para pedirle su contenido para ADULTOS.
+  ///
+  /// Es el espejo de [segurosDe] y existe por el mismo motivo. La Zona +18
+  /// mostraba el catálogo normal de estas extensiones: al no mandarles nada,
+  /// cada una aplicaba su propio defecto —que es el seguro, a propósito— y la
+  /// zona terminaba enseñando One Piece y Dragon Ball. Justo lo que esa zona
+  /// no es.
+  ///
+  /// Solo tiene entrada para las que declaran una puerta. Una extensión que ya
+  /// es de adultos entera no necesita ninguna: todo lo suyo lo es.
+  static Map<String, List<String>>? adultosDe(String package) =>
+      _adultos[package];
+
   static final Map<String, Map<String, List<String>>> _seguros = {};
+  static final Map<String, Map<String, List<String>>> _adultos = {};
 
   /// Averigua cuáles son mixtas. Una sola vez por sesión.
   ///
@@ -786,6 +800,7 @@ class ExtensionUtils {
     _mixtas.removeWhere((p) => !runtimes.containsKey(p));
     _mixtasVistas.removeWhere((p, _) => !runtimes.containsKey(p));
     _seguros.removeWhere((p, _) => !runtimes.containsKey(p));
+    _adultos.removeWhere((p, _) => !runtimes.containsKey(p));
     for (final e in runtimes.entries) {
       final version = e.value.extension.version;
       // Ya se miró ESTA versión: no se le vuelve a pedir nada al motor.
@@ -804,15 +819,19 @@ class ExtensionUtils {
         // el mismo recorrido, así que sale gratis, y deja el dato en un solo
         // lugar para todas las pantallas que piden catálogo.
         final seguros = <String, List<String>>{};
+        final adultos = <String, List<String>>{};
         for (final f in filtros.entries) {
           final adulto = f.value.adultOption;
           if (adulto == null || adulto.isEmpty) continue;
           seguros[f.key] = [f.value.defaultOption];
+          adultos[f.key] = [adulto];
         }
         if (seguros.isEmpty) {
           _seguros.remove(e.key);
+          _adultos.remove(e.key);
         } else {
           _seguros[e.key] = seguros;
+          _adultos[e.key] = adultos;
           _mixtas.add(e.key);
         }
       } catch (err) {

@@ -1665,7 +1665,16 @@ class CatalogoExtensionesController extends GetxController {
   /// Lo correcto a futuro es que esto lo declare cada extensión en su
   /// manifiesto, como ya hace con `latestLabel`, en vez de vivir acá. Mientras
   /// tanto, una lista corta y medida es mejor que aflojar la regla para todas.
-  static const _loUltimoYaEsSeguro = {'io.prismhub.manhwaweb'};
+  ///   · **MangaDex** (medido el 2026-08-09) — su API clasifica CADA obra, y
+  ///     su «lo último» pide solo las dos categorías aptas, escritas dentro de
+  ///     la extensión y sin depender de ningún filtro. Sin esta excepción, la
+  ///     fila mostraba las obras más seguidas del catálogo —One Punch-Man,
+  ///     Chainsaw Man, Frieren— en vez de los capítulos recién subidos, que es
+  ///     lo que su sección promete.
+  static const _loUltimoYaEsSeguro = {
+    'io.prismhub.manhwaweb',
+    'io.prismhub.mangadex',
+  };
 
   /// Alimenta el carrusel con la tanda de esta extensión.
   ///

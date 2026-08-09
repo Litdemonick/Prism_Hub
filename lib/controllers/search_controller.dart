@@ -259,10 +259,21 @@ class SearchPageController extends GetxController {
           // Es la misma regla que el Inicio ya aplica a sus filas, ahora desde
           // un solo lugar. En la Zona +18 no se manda: allá el filtro lo pone
           // la propia pantalla de la extensión, al revés.
-          final seguro = nsfwOnly
-              ? null
-              : ExtensionUtils.segurosDe(element.runitme.extension.package);
-          resultFuture = element.runitme.search('', 1, filter: seguro);
+          // ── Y en la Zona +18, al REVÉS ─────────────────────────────────
+          //
+          // Acá se mandaba null, o sea nada, y cada extensión aplicaba su
+          // propio defecto — que es el seguro, a propósito. Resultado: la Zona
+          // +18 mostraba el catálogo normal, con One Piece y Dragon Ball.
+          // Justo lo que esa zona no es.
+          //
+          // Se manda el valor de adultos por el mismo camino y desde el mismo
+          // lugar, así que las dos zonas son la misma regla con el valor
+          // cambiado. Si después el usuario toca el filtro, manda él.
+          final paquete = element.runitme.extension.package;
+          final filtroDeZona = nsfwOnly
+              ? ExtensionUtils.adultosDe(paquete)
+              : ExtensionUtils.segurosDe(paquete);
+          resultFuture = element.runitme.search('', 1, filter: filtroDeZona);
         } else {
           resultFuture = element.runitme.searchFirstPageWithBroadening(
               SearchText.sanitizeForRemoteQuery(search.value));
