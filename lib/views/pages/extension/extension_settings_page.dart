@@ -12,7 +12,6 @@ import 'package:prismhub/router/router.dart';
 import 'package:prismhub/data/services/database_service.dart';
 import 'package:prismhub/utils/extension.dart';
 import 'package:prismhub/utils/i18n.dart';
-import 'package:prismhub/utils/layout.dart';
 import 'package:prismhub/views/widgets/cache_network_image.dart';
 import 'package:prismhub/views/widgets/card_tile.dart';
 import 'package:prismhub/views/widgets/messenger.dart';
@@ -137,6 +136,19 @@ class _ExtensionSettingsPageState extends State<ExtensionSettingsPage> {
       }
       final extension = c.runtime.value!.extension;
 
+      // Dos paneles según el ancho que hay AHORA.
+      //
+      // Antes salía de LayoutUtils.isTablet, que medía el ancho una sola vez y
+      // lo guardaba para toda la sesión: al girar el aparato esta pantalla se
+      // quedaba con el diseño de antes —una tablet acostada mostrando la
+      // columna angosta, o un teléfono derecho peleando por armar dos paneles—
+      // hasta salir y volver a entrar.
+      //
+      // Y es una pregunta de DISEÑO, no de aparato: lo que importa es cuánto
+      // ancho hay, no qué aparato es. 720 es el mismo corte que usa la ficha:
+      // debajo de eso, dos columnas son dos rendijas.
+      final dosPaneles = MediaQuery.sizeOf(context).width >= 720;
+
       final content = SingleChildScrollView(
         child: Column(
           children: [
@@ -222,7 +234,7 @@ class _ExtensionSettingsPageState extends State<ExtensionSettingsPage> {
                 ],
               ),
             ),
-            if (!LayoutUtils.isTablet) ...[
+            if (!dosPaneles) ...[
               const Divider(),
               SettingsTile(
                 isCard: true,
@@ -249,7 +261,7 @@ class _ExtensionSettingsPageState extends State<ExtensionSettingsPage> {
         appBar: AppBar(
           title: Text('extension-info.title'.i18n),
         ),
-        body: LayoutUtils.isTablet
+        body: dosPaneles
             ? Row(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [

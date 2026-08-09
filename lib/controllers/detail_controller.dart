@@ -148,6 +148,17 @@ class DetailPageController extends GetxController {
   final Rx<Favorite?> favorite = Rx(null);
   final RxString error = ''.obs;
 
+  /// Mira el historial de este título mientras la ficha está abierta.
+  ///
+  /// El reproductor y el lector guardan el progreso al cerrarse, o sea DESPUÉS
+  /// de que la ficha ya leyó el historial una única vez al abrirse. Por eso
+  /// había que salir de la ficha y volver a entrar para que el botón de
+  /// "continuar" dijera dónde habías quedado. Con esto la ficha se entera sola.
+  ///
+  /// Solo dispara una relectura: no toca nada más y no reemplaza a getHistory()
+  /// —lo llama—, así que el camino de siempre queda igual.
+  StreamSubscription<void>? _miradaAlHistorial;
+
   /// Si lo que falló fue la conexión y no la extensión.
   ///
   /// El texto ya sale traducido de friendlyError, pero para la pantalla hace
@@ -157,6 +168,44 @@ class DetailPageController extends GetxController {
   final RxBool errorEsDeConexion = false.obs;
 
   final RxBool isLoading = true.obs;
+
+  /// La ficha está tardando más de lo normal.
+  ///
+  /// Con el sitio de una extensión caído, la pantalla se quedaba con la rueda
+  /// girando para siempre y sin decir nada — desde afuera eso se lee como que
+  /// la app se colgó. Medido en LaMovie el 2026-08-06: su propio sitio tardaba
+  /// entre 21 y 27 segundos, y abierto en un navegador directamente no cargaba.
+  ///
+  /// Doce segundos, el mismo criterio que en la fila de la búsqueda: por encima
+  /// de lo que tarda una extensión sana y por debajo del límite del puente de
+  /// red, así el aviso llega ANTES de que el pedido muera.
+  ///
+  /// Es SOLO un aviso: no cancela nada. Si la ficha llega después, entra igual.
+  final RxBool tardaDemasiado = false.obs;
+
+  /// Lo que se ve es lo guardado de antes: no se pudo traer nada nuevo.
+  ///
+  /// Al entrar a una ficha ya vista se muestra lo de la caché y se refresca por
+  /// detrás. Ese refresco fallaba en silencio, así que con el sitio caído se
+  /// veía una ficha que podía estar vieja —capítulos de menos— sin ninguna
+  /// señal. Ahora se dice.
+  final RxBool mostrandoCache = false.obs;
+
+  Timer? _relojDeLaFicha;
+
+  void _mirarSiTarda() {
+    _relojDeLaFicha?.cancel();
+    tardaDemasiado.value = false;
+    _relojDeLaFicha = Timer(const Duration(seconds: 12), () {
+      if (isLoading.value) tardaDemasiado.value = true;
+    });
+  }
+
+  void _dejarDeMirar() {
+    _relojDeLaFicha?.cancel();
+    _relojDeLaFicha = null;
+    tardaDemasiado.value = false;
+  }
   final RxInt selectEpGroup = 0.obs;
   final RxString aniListID = ''.obs;
   final Rx<TMDBDetail?> tmdb = Rx(null);
@@ -198,13 +247,43 @@ class DetailPageController extends GetxController {
   /// fijas: una portada un poco más angosta que la caja dejaba franjas a los
   /// costados, y ahí no hay relleno que quede bien. Midiendo la de verdad, la
   /// imagen llena el hueco y no sobra nada.
+  /// La proporción REAL de la portada de ESTA ficha, cuando ya se pudo medir.
+  ///
+  /// Ver [anotarPortada].
+  final RxnDouble proporcionMedida = RxnDouble();
+
+  /// Anota el tamaño real de la portada que se está mostrando.
+  ///
+  /// [FormaPortada] decide por CATÁLOGO y tarda cuatro portadas en decidirse:
+  /// hasta entonces contesta la vertical de siempre. En una extensión de vídeo
+  /// eso significa abrir la ficha con la caja vertical y el fotograma 16:9
+  /// metido chico en el medio, con relleno borroso alrededor — y ahí se queda,
+  /// porque la ficha no se entera de cuándo el catálogo se decide. Lo mismo
+  /// pasa con un título suelto que traiga otra forma que el resto del sitio.
+  ///
+  /// Acá hay UNA portada, así que se le puede tomar la medida y darle a la
+  /// caja su forma exacta.
+  void anotarPortada(int ancho, int alto) {
+    if (ancho <= 0 || alto <= 0) return;
+    // El mismo recorte que usa FormaPortada: una imagen rarísima —un banner
+    // larguísimo, una tira finita— no puede deformar la cabecera entera.
+    final nueva = (ancho / alto).clamp(0.45, 2.2);
+    if (proporcionMedida.value == nueva) return;
+    proporcionMedida.value = nueva;
+  }
+
   double get portadaProporcion {
     final ext = extension;
     if (ext == null) return FormaPortada.proporcionVertical;
-    return FormaPortada.paraDibujar(
-      package,
-      esDeLectura: !ExtensionUtils.videoTypes.contains(ext.type),
-    );
+    final esDeLectura = !ExtensionUtils.videoTypes.contains(ext.type);
+    // Solo en vídeo. En lectura la tapa es vertical por convención aunque una
+    // portada suelta venga apaisada, y ese criterio ya está probado; en vídeo
+    // es justo donde la forma del catálogo falla.
+    if (!esDeLectura) {
+      final medida = proporcionMedida.value;
+      if (medida != null) return medida;
+    }
+    return FormaPortada.paraDibujar(package, esDeLectura: esDeLectura);
   }
 
   bool get portadaApaisada => portadaProporcion > 1;
@@ -290,6 +369,18 @@ class DetailPageController extends GetxController {
         ),
       )
     ]);
+
+    // Se engancha ANTES de la primera carga: así también cubre el caso de
+    // volver del reproductor mientras la ficha todavía se estaba armando.
+    _miradaAlHistorial =
+        DatabaseService.watchHistoryByPackageAndUrl(package, url).listen((_) {
+      // Sin la ficha cargada no hay con qué comparar el episodio guardado
+      // (getHistory usa detail!.episodes) — cuando termine de cargar, la lee
+      // igual por el camino de siempre.
+      if (detail == null) return;
+      getHistory();
+    });
+
     super.onInit();
   }
 
@@ -312,10 +403,41 @@ class DetailPageController extends GetxController {
       await getTMDBDetail();
       await getHistory();
       isLoading.value = false;
+      _dejarDeMirar();
     } catch (e) {
       error.value = friendlyError(e);
       errorEsDeConexion.value = isConnectionError(e);
       rethrow;
+    }
+  }
+
+  /// Vuelve a pedir la ficha porque el usuario lo pidió.
+  ///
+  /// ── Por qué no alcanza con onRefresh() ──────────────────────────────────
+  ///
+  /// La ficha se guarda en una caché de sesión para que volver al mismo título
+  /// sea instantáneo. Llamando a onRefresh() a secas, getDetail() encuentra esa
+  /// copia y la devuelve: el gesto no traería nada nuevo y el usuario vería
+  /// exactamente lo mismo, sin entender por qué.
+  ///
+  /// Acá se tira la entrada de ESTE título —no la caché entera, que las demás
+  /// fichas siguen siendo válidas— y recién ahí se pide.
+  ///
+  /// El comentario de _sessionCache decía desde hacía rato que se invalidaba
+  /// «al hacer pull-to-refresh manual». Ese gesto no existía; ahora sí.
+  ///
+  /// No toca `isLoading`: refrescando ya hay contenido en pantalla y vaciarlo
+  /// para volver a llenarlo se ve como que la ficha se rompió y volvió. La
+  /// señal de que algo está pasando la da el propio gesto —la rueda de arriba
+  /// en el teléfono, el botón girando en el escritorio—.
+  Future<void> refrescarAMano() async {
+    _sessionCache.remove('$package:$url');
+    error.value = '';
+    try {
+      await onRefresh();
+    } catch (_) {
+      // onRefresh ya dejó el mensaje puesto. Propagarlo desde acá lo dejaría
+      // como un error sin nadie que lo atienda.
     }
   }
 
@@ -328,6 +450,7 @@ class DetailPageController extends GetxController {
   Future<void> reintentar() async {
     error.value = '';
     isLoading.value = true;
+    _mirarSiTarda();
     try {
       await onRefresh();
     } catch (_) {
@@ -387,6 +510,9 @@ class DetailPageController extends GetxController {
   }
 
   getRemoteDeatil() async {
+    // Se pide de nuevo: si esta vez sí llega, el aviso de "esto es lo guardado"
+    // no tiene que quedar puesto.
+    mostrandoCache.value = false;
     final cacheKey = '$package:$url';
     // Si ya tenemos el dato en memoria (misma sesión) lo usamos directo y
     // actualizamos en background sin bloquear la UI — pero NO si la
@@ -423,9 +549,7 @@ class DetailPageController extends GetxController {
           ExtensionUtils.runtimes.containsKey(package)
               ? 'common.extension-disabled'
               : 'common.extension-missing',
-          translationParams: {
-            'package': package,
-          },
+          translationParams: {'package': ExtensionUtils.nombreDe(package)},
         );
         showPlatformSnackbar(
           context: currentContext,
@@ -470,7 +594,21 @@ class DetailPageController extends GetxController {
         anilistID: aniListID.value,
       );
     } catch (_) {
-      // Fallo silencioso: seguimos con lo que tenemos en caché.
+      // Se sigue con lo de la caché, que es lo correcto: mejor la ficha de
+      // antes que una pantalla vacía. Pero YA NO en silencio — antes no había
+      // forma de saber que lo que se estaba viendo podía estar viejo (con
+      // capítulos de menos, por ejemplo) porque el sitio no contestó.
+      if (mostrandoCache.value) return;
+      mostrandoCache.value = true;
+      // Con el aviso de siempre y no un cartel propio: así sale igual en
+      // celular y en escritorio sin tocar los dos diseños de la ficha, que es
+      // justo donde se rompen las cosas.
+      if (!currentContext.mounted) return;
+      showPlatformSnackbar(
+        context: currentContext,
+        content: 'common.detalle-desde-cache'.i18n,
+        severity: fluent.InfoBarSeverity.warning,
+      );
     }
   }
 
@@ -631,9 +769,7 @@ class DetailPageController extends GetxController {
         content: FlutterI18n.translate(
           currentContext,
           'common.extension-missing',
-          translationParams: {
-            'package': package,
-          },
+          translationParams: {'package': ExtensionUtils.nombreDe(package)},
         ),
         severity: fluent.InfoBarSeverity.error,
       );
@@ -741,6 +877,8 @@ class DetailPageController extends GetxController {
 
   @override
   void onClose() {
+    _relojDeLaFicha?.cancel();
+    _miradaAlHistorial?.cancel();
     scrollController.dispose();
     Get.find<MainController>().setAcitons([]);
     super.onClose();

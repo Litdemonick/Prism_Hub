@@ -15,6 +15,14 @@ class DetailBackgroundColor extends StatefulWidget {
 class _DetailBackgroundColorState extends State<DetailBackgroundColor> {
   double scrollOffset = 0;
 
+  /// Hasta dónde llega a taparse la portada del fondo.
+  ///
+  /// Con 1 (lo de antes) la imagen desaparecía del todo al bajar y volvía al
+  /// subir, y parecía que se hubiera perdido. Quedándose en 0,86 todo lo que va
+  /// encima se sigue leyendo igual —el degradado termina en el fondo sólido de
+  /// la app unos centímetros más abajo— pero la portada nunca deja de estar.
+  static const double _velo = 0.86;
+
   @override
   void initState() {
     super.initState();
@@ -41,7 +49,7 @@ class _DetailBackgroundColorState extends State<DetailBackgroundColor> {
           begin: Alignment.topCenter,
           end: Alignment.bottomCenter,
           colors: [
-            HomeTheme.bg.withValues(alpha: scrollOffset / 255),
+            HomeTheme.bg.withValues(alpha: (scrollOffset / 255) * _velo),
             HomeTheme.bg,
           ],
         ),

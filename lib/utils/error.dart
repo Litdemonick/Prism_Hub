@@ -64,13 +64,55 @@ bool isConnectionError(Object? error) {
   return markers.any(e.contains);
 }
 
+/// ¿La conexión SÍ se llegó a establecer y lo que falló fue el otro lado?
+///
+/// Porque no es lo mismo y hasta ahora se decía igual: **todo** fallo de red
+/// salía como "conectate a internet", y en la mayoría de los casos el internet
+/// del usuario estaba perfecto.
+///
+/// Medido el 2026-08-06 con Vidhide: la extensión resolvía bien y el CDN
+/// (`acek-cdn.com`) contestaba **502 y 504** en tres episodios distintos. El
+/// app decía que era su internet. Un rato después cargó solo, sin que nadie
+/// tocara nada — porque nunca fue el internet.
+///
+/// La diferencia está en el tipo:
+///
+///   NO llegamos a conectar     no hay DNS, no hay ruta, rechazó la conexión.
+///                              Ahí sí puede ser el internet del usuario.
+///   Conectamos y se cayó       el otro lado no mandó a tiempo, cortó la
+///                              conexión o la reinició. El internet anda; el
+///                              que está mal es el servidor.
+///
+/// `isConnectionError` sigue devolviendo true para los dos, así que ninguna
+/// pantalla cambia de camino: lo único que cambia es el texto.
+bool _falloDelOtroLado(Object? error) {
+  if (error is DioException &&
+      (error.type == DioExceptionType.receiveTimeout ||
+          error.type == DioExceptionType.sendTimeout)) {
+    return true;
+  }
+  final e = error.toString().toLowerCase();
+  const delOtroLado = [
+    'connection reset',
+    'connection closed',
+    'software caused connection abort',
+    'dioexception [receive timeout]',
+    'dioexception [send timeout]',
+    'receiving timeout',
+    'sending timeout',
+  ];
+  return delOtroLado.any(e.contains);
+}
+
 /// Maps a raw error to a clean, user-facing message. Connection failures
-/// become a friendly "connect to the internet" notice; anything else returns
-/// its first line so we never dump a full stack trace at the user.
+/// become a friendly notice; anything else returns its first line so we never
+/// dump a full stack trace at the user.
 String friendlyError(Object? error) {
   if (error == null) return '';
   if (isConnectionError(error)) {
-    return 'common.no-internet'.i18n;
+    return _falloDelOtroLado(error)
+        ? 'common.fuente-no-responde'.i18n
+        : 'common.no-internet'.i18n;
   }
   if (isTimeoutError(error)) {
     return 'common.source-timeout'.i18n;

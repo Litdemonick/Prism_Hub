@@ -34,14 +34,18 @@ class _DetailFavoriteButtonState extends State<DetailFavoriteButton> {
       () {
         final isFavorite = c.isFavorite.value;
         if (widget.compacto) {
+          // Va en la barra de arriba, al lado de compartir y de seguimiento:
+          // los tres son IconButton, así que miden lo mismo y se alinean
+          // solos. El rosa del acento y no colorScheme.primary, que es el
+          // morado semilla de Material y no un color del diseño.
           return IconButton(
-            tooltip: isFavorite
-                ? 'detail.favorited'.i18n
-                : 'detail.favorite'.i18n,
-            icon: Icon(
-              isFavorite ? Icons.favorite : Icons.favorite_border,
-              color: isFavorite ? Theme.of(context).colorScheme.primary : null,
-            ),
+            tooltip:
+                isFavorite ? 'detail.favorited'.i18n : 'detail.favorite'.i18n,
+            // Encima de la portada, así que blanco: con el color del tema
+            // pasaba a casi negro en modo claro y desaparecía contra la imagen.
+            // Ver HomeTheme.sobrePortada.
+            color: isFavorite ? HomeTheme.accentPink : HomeTheme.sobrePortada,
+            icon: Icon(isFavorite ? Icons.favorite : Icons.favorite_border),
             onPressed: () async {
               await c.toggleFavorite(context);
             },
@@ -79,6 +83,24 @@ class _DetailFavoriteButtonState extends State<DetailFavoriteButton> {
   Widget _buildDesktop(BuildContext context) {
     return Obx(() {
       final isFavorite = c.isFavorite.value;
+      // Compacto: solo el icono, para la barra de arriba de la ficha. Es el
+      // mismo criterio que en el teléfono —favorito y compartir viven arriba,
+      // como iconos— y saca de encima de la portada dos botones anchos con
+      // texto que no aportaban nada que el icono no diga.
+      if (widget.compacto) {
+        return fluent.IconButton(
+          icon: Icon(
+            isFavorite
+                ? fluent.FluentIcons.heart_fill
+                : fluent.FluentIcons.heart,
+            size: 18,
+            color: isFavorite ? HomeTheme.accentPink : HomeTheme.textPrimary,
+          ),
+          onPressed: () async {
+            await c.toggleFavorite(context);
+          },
+        );
+      }
       return fluent.Button(
         style: fluent.ButtonStyle(
           backgroundColor: fluent.WidgetStateProperty.all(

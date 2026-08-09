@@ -27,7 +27,17 @@ class PortadaConRelevo extends StatefulWidget {
     this.noText = false,
     this.canFullScreen = false,
     this.entera = false,
+    this.onTamanoReal,
   });
+
+  /// El tamaño real de la imagen que se termina mostrando.
+  ///
+  /// La ficha lo usa para darle a la caja la forma de ESTA portada. La forma
+  /// que publica el catálogo (ver FormaPortada) es la típica de la extensión y
+  /// tarda cuatro portadas en decidirse: hasta entonces, y en los títulos que
+  /// traen otra forma, la caja quedaba equivocada y la imagen se veía chica en
+  /// el medio con relleno borroso alrededor.
+  final void Function(int ancho, int alto)? onTamanoReal;
 
   /// El título, para el recuadro de color con el nombre cuando no hay imagen.
   final String alt;
@@ -89,8 +99,11 @@ class _PortadaConRelevoState extends State<PortadaConRelevo> {
     // El aviso de "ya cargó" se reaprovecha del tamaño real que manda la
     // imagen. Llega en mitad de un dibujado, así que el cambio de estado se
     // pide para el fotograma siguiente y no en el momento.
-    void avisar(int _, int __) {
-      if (_finalLista) return;
+    void avisar(int ancho, int alto) {
+      widget.onTamanoReal?.call(ancho, alto);
+      // El relevo es lo único que necesita rearmarse. Sin relevo (una sola
+      // imagen) esto sería un setState de más en cada carga.
+      if (!_hayRelevo || _finalLista) return;
       WidgetsBinding.instance.addPostFrameCallback((_) {
         if (mounted) setState(() => _finalLista = true);
       });
@@ -153,7 +166,12 @@ class _PortadaConRelevoState extends State<PortadaConRelevo> {
       // —la mayoría de las extensiones devuelven la misma portada que ya
       // traía la tarjeta—. Por acá tiene que valer igual el ajuste de que la
       // imagen se vea entera.
-      return _imagen(unica, cabeceras, tocable: widget.canFullScreen);
+      return _imagen(
+        unica,
+        cabeceras,
+        avisarCuandoCargue: widget.onTamanoReal != null,
+        tocable: widget.canFullScreen,
+      );
     }
 
     return Stack(

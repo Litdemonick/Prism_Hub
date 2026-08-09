@@ -113,7 +113,7 @@ class _DetailTrackingButtonState extends State<DetailTrackingButton> {
           shape: fluent.WidgetStateProperty.all(
             RoundedRectangleBorder(
               borderRadius: BorderRadius.circular(999),
-              side: const BorderSide(color: HomeTheme.border),
+              side: BorderSide(color: HomeTheme.border),
             ),
           ),
         ),

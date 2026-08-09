@@ -9,7 +9,7 @@ import 'package:prismhub/views/widgets/horizontal_scroll_fade.dart';
 // prev/next redondeados) sin tocar HorizontalList, que es compartido con
 // Búsqueda/otras páginas y no debía cambiar.
 class HomeSection extends StatefulWidget {
-  const HomeSection({
+  HomeSection({
     super.key,
     required this.title,
     required this.onClickMore,
@@ -20,7 +20,7 @@ class HomeSection extends StatefulWidget {
     this.itemHeight,
     this.itemCoverHeight,
     this.boxed = false,
-    this.accent = HomeTheme.accentPink,
+    this.accent,
   });
 
   final String title;
@@ -43,7 +43,10 @@ class HomeSection extends StatefulWidget {
   // como una lista larga de cards sueltas sobre el fondo de la página.
   final bool boxed;
   // Zona +18: se pasa HomeTheme.accentRed para diferenciar esa pantalla.
-  final Color accent;
+  /// En null usa el acento del tema. Ver AnimatedBackgroundGlow.accent.
+  final Color? accent;
+
+  Color get acento => accent ?? HomeTheme.accentPink;
 
   @override
   State<HomeSection> createState() => _HomeSectionState();
@@ -124,7 +127,7 @@ class _HomeSectionState extends State<HomeSection> {
                       duration: const Duration(milliseconds: 150),
                       style: TextStyle(
                         color: _headerHover
-                            ? widget.accent
+                            ? widget.acento
                             : HomeTheme.textPrimary,
                         fontSize: 17,
                         fontWeight: FontWeight.w700,
@@ -136,7 +139,7 @@ class _HomeSectionState extends State<HomeSection> {
                       duration: const Duration(milliseconds: 150),
                       style: TextStyle(
                         color:
-                            _headerHover ? widget.accent : HomeTheme.textMuted,
+                            _headerHover ? widget.acento : HomeTheme.textMuted,
                         fontSize: 15,
                       ),
                       child: AnimatedSlide(
@@ -182,7 +185,7 @@ class _HomeSectionState extends State<HomeSection> {
             // Se centran con la PORTADA, no con el alto total de la fila
             // (que suma el título de abajo) — por eso quedaban corridas.
             arrowCenterFromTop: (widget.itemCoverHeight ?? effHeight) / 2,
-            arrowColor: widget.accent,
+            arrowColor: widget.acento,
             // Salto largo: estas flechas son las de "pasar rápido".
             pageScroll: true,
             // Solo la flecha, sin el velo de fondo.
@@ -278,13 +281,13 @@ class HomeGhostCard extends StatelessWidget {
                   ),
                 ),
                 child:
-                    const Icon(Icons.add, color: HomeTheme.textMuted, size: 20),
+                    Icon(Icons.add, color: HomeTheme.textMuted, size: 20),
               ),
               const SizedBox(height: 10),
               Text(
                 text,
                 textAlign: TextAlign.center,
-                style: const TextStyle(
+                style: TextStyle(
                     color: HomeTheme.textMuted, fontSize: 12.5, height: 1.4),
               ),
             ],

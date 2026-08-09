@@ -1,3 +1,4 @@
+import 'package:prismhub/views/widgets/home/home_theme.dart';
 import 'package:flutter/material.dart';
 import 'package:prismhub/models/extension.dart';
 import 'package:prismhub/views/widgets/cover.dart';
@@ -85,8 +86,20 @@ class _GridItemTileState extends State<GridItemTile> {
                     child: Text(
                       widget.title,
                       overflow: TextOverflow.ellipsis,
+                      // ENCIMA de la portada, y por eso blanco fijo.
+                      //
+                      // Este bloque es un Positioned dentro del Stack de la
+                      // tarjeta: va sobre la imagen, con el degradado negro de
+                      // acá arriba como fondo. O sea que el fondo NO es el de
+                      // la app y no sigue al modo.
+                      //
+                      // Estaba en textPrimary, que en modo claro es casi negro:
+                      // texto negro sobre el velo negro de la portada. Se leía
+                      // como que el título directamente no estaba.
+                      //
+                      // Ver HomeTheme.sobrePortada, que existe justo para esto.
                       style: const TextStyle(
-                        color: Colors.white,
+                        color: HomeTheme.sobrePortada,
                       ),
                     ),
                   ),
@@ -94,8 +107,11 @@ class _GridItemTileState extends State<GridItemTile> {
                     Text(
                       widget.subtitle!,
                       overflow: TextOverflow.ellipsis,
+                      // Mismo caso que el título: va sobre el velo. Blanco
+                      // apagado en vez de textMuted, que en claro es un gris
+                      // oscuro y sobre negro tampoco se lee.
                       style: const TextStyle(
-                        color: Colors.white,
+                        color: Color(0xCCFFFFFF),
                         fontSize: 10,
                       ),
                     ),
@@ -171,18 +187,30 @@ class _GridItemTileState extends State<GridItemTile> {
             ),
             const SizedBox(height: 8),
             // 文字只显示一行
+            // Acá SÍ va el color del modo, y con el color puesto a mano.
+            //
+            // En escritorio el título va DEBAJO de la portada, sobre el fondo
+            // de la página: es lo contrario del teléfono, donde va encima de la
+            // imagen. Así que el que corresponde es textPrimary.
+            //
+            // No tenía ningún estilo, y sin color el texto cae en la tipografía
+            // de Fluent, que trae la suya según SU tema: quedaba blanco sobre
+            // el fondo claro y no se veía ni un título en toda la grilla. Es lo
+            // mismo que le pasaba al título de las filas del Inicio.
             SizedBox(
               height: 20,
               child: Text(
                 widget.title,
                 overflow: TextOverflow.ellipsis,
+                style: TextStyle(color: HomeTheme.textPrimary),
               ),
             ),
             if (widget.subtitle != null)
               Text(
                 widget.subtitle.toString(),
-                style: const TextStyle(
+                style: TextStyle(
                   fontSize: 12,
+                  color: HomeTheme.textMuted,
                 ),
               ),
           ],

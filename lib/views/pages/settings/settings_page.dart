@@ -36,6 +36,7 @@ import 'package:prismhub/views/widgets/settings/settings_radios_tile.dart';
 import 'package:prismhub/views/widgets/settings/settings_switch_tile.dart';
 import 'package:prismhub/views/widgets/settings/settings_numberbox_button.dart';
 import 'package:prismhub/views/widgets/settings/settings_tile.dart';
+import 'package:prismhub/controllers/main_controller.dart';
 import 'package:prismhub/utils/i18n.dart';
 import 'package:prismhub/utils/prismhub_storage.dart';
 import 'package:prismhub/utils/router.dart';
@@ -323,7 +324,7 @@ class _SettingsPageState extends State<SettingsPage> {
         child: Row(
           mainAxisSize: MainAxisSize.min,
           children: [
-            const SizedBox(
+            SizedBox(
               width: 22,
               height: 22,
               child: CircularProgressIndicator(
@@ -524,7 +525,7 @@ class _SettingsPageState extends State<SettingsPage> {
           child: Row(
             mainAxisSize: MainAxisSize.min,
             children: [
-              const SizedBox(
+              SizedBox(
                 width: 22,
                 height: 22,
                 child: CircularProgressIndicator(
@@ -725,7 +726,7 @@ class _SettingsPageState extends State<SettingsPage> {
             child: Text(
               etiqueta,
               style:
-                  const TextStyle(color: HomeTheme.textPrimary, fontSize: 14),
+                  TextStyle(color: HomeTheme.textPrimary, fontSize: 14),
             ),
           ),
           _MobileStepper(settingKey: key, fallback: porDef),
@@ -751,13 +752,13 @@ class _SettingsPageState extends State<SettingsPage> {
           child: Row(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              const Icon(Icons.touch_app,
+              Icon(Icons.touch_app,
                   color: HomeTheme.accentPink, size: 22),
               const SizedBox(width: 12),
               Expanded(
                 child: Text(
                   'settings.skip-interval-mobile-help'.i18n,
-                  style: const TextStyle(
+                  style: TextStyle(
                       color: HomeTheme.textMuted, fontSize: 13, height: 1.4),
                 ),
               ),
@@ -798,22 +799,27 @@ class _SettingsPageState extends State<SettingsPage> {
   void _openSkipIntervalPage(BuildContext context) {
     Navigator.of(context).push(
       MaterialPageRoute(
-        builder: (_) => Scaffold(
-          backgroundColor: HomeTheme.bg,
-          appBar: AppBar(
+        // SigueElModo por lo mismo que en SettingsExpanderTile: los colores de
+        // acá se leen UNA vez, al abrir la pantalla, y sin esto el fondo se
+        // queda con el modo que hubiera en ese momento.
+        builder: (_) => SigueElModo(
+          builder: (_) => Scaffold(
             backgroundColor: HomeTheme.bg,
-            title: Text(
-              'settings.skip-interval'.i18n,
-              style: const TextStyle(color: HomeTheme.textPrimary),
+            appBar: AppBar(
+              backgroundColor: HomeTheme.bg,
+              title: Text(
+                'settings.skip-interval'.i18n,
+                style: TextStyle(color: HomeTheme.textPrimary),
+              ),
             ),
-          ),
-          body: SingleChildScrollView(
-            padding: const EdgeInsets.all(16),
-            child: StatefulBuilder(
-              // StatefulBuilder propio: esta página vive fuera del árbol de
-              // Ajustes, así que el setState de allá no la alcanza — sin esto
-              // el botón de restablecer no refrescaba los números.
-              builder: (context, _) => _buildSkipIntervalContent(),
+            body: SingleChildScrollView(
+              padding: const EdgeInsets.all(16),
+              child: StatefulBuilder(
+                // StatefulBuilder propio: esta página vive fuera del árbol de
+                // Ajustes, así que el setState de allá no la alcanza — sin esto
+                // el botón de restablecer no refrescaba los números.
+                builder: (context, _) => _buildSkipIntervalContent(),
+              ),
             ),
           ),
         ),
@@ -861,7 +867,7 @@ class _SettingsPageState extends State<SettingsPage> {
       maxWidth: 520,
       content: Text(
         'settings.legal-body'.i18n,
-        style: const TextStyle(
+        style: TextStyle(
           color: HomeTheme.textMuted,
           fontSize: 13,
           height: 1.5,
@@ -925,11 +931,8 @@ class _SettingsPageState extends State<SettingsPage> {
       if (!Platform.isAndroid) ...[
         Text(
           'common.settings'.i18n,
-          style: const TextStyle(
-            fontSize: 20,
-            fontWeight: FontWeight.bold,
-            color: HomeTheme.textPrimary,
-          ),
+          // Mismo estilo que el título de Inicio, desde un solo lugar.
+          style: HomeTheme.tituloDeZona(),
         ),
         const SizedBox(height: 16),
       ],
@@ -993,6 +996,22 @@ class _SettingsPageState extends State<SettingsPage> {
               },
             ),
             // 启动检查更新
+            // ── Modo claro ──────────────────────────────────────────────
+            //
+            // Los colores de la app son getters estáticos (ver HomeTheme), así
+            // que con cambiar la marca se adapta todo. Lo que hace falta
+            // además es avisarle al árbol, y de eso se encarga el oyente que
+            // envuelve la raíz en main.dart.
+            SettingsSwitchTile(
+              title: 'settings.light-mode'.i18n,
+              buildSubtitle: () => 'settings.light-mode-subtitle'.i18n,
+              buildValue: () =>
+                  PrismHubStorage.getSetting(SettingKey.modoClaro) == true,
+              onChanged: (value) async {
+                await PrismHubStorage.setSetting(SettingKey.modoClaro, value);
+                ModoDeColor.claro = value;
+              },
+            ),
             SettingsSwitchTile(
               title: 'settings.auto-check-update'.i18n,
               buildSubtitle: () => 'settings.auto-check-update-subtitle'.i18n,
@@ -1197,7 +1216,7 @@ class _SettingsPageState extends State<SettingsPage> {
               child: Text(
                 'settings.repo-official-note'.i18n,
                 style:
-                    const TextStyle(fontSize: 12, color: HomeTheme.textMuted),
+                    TextStyle(fontSize: 12, color: HomeTheme.textMuted),
               ),
             ),
             const SizedBox(height: 8),
@@ -1398,6 +1417,43 @@ class _SettingsPageState extends State<SettingsPage> {
       ),
       const SizedBox(height: 10),
       // Debug
+      // El bloqueador tiene sección propia.
+      //
+      // Estaba metido entre "ver registro" y "exportar registro", con las
+      // herramientas de diagnóstico, y ahí nadie lo encuentra: no tiene nada
+      // que ver con los registros — es lo que decide si al usuario le saltan
+      // ventanas de casino mirando una película.
+      SettingsExpanderTile(
+        title: 'Bloqueador de anuncios',
+        subTitle: 'Corta anuncios y ventanas emergentes en el navegador interno',
+        androidIcon: Icons.shield_outlined,
+        icon: fluent.FluentIcons.shield,
+        content: Column(
+          children: [
+            SettingsTile(
+              title: 'Abrir el bloqueador',
+              buildSubtitle: () => BloqueadorAnuncios.activo
+                  ? '${BloqueadorAnuncios.cuantosDominios} dominios bloqueados · '
+                      '${BloqueadorAnuncios.cuantosDeFabrica} vienen puestos'
+                  : 'Apagado. Encendelo para cortar anuncios y emergentes',
+              onTap: () => _abrirBloqueador(context),
+              trailing: PlatformWidget(
+                androidWidget: TextButton(
+                  onPressed: () => _abrirBloqueador(context),
+                  child: Text('settings.open'.i18n),
+                ),
+                desktopWidget: fluent.FilledButton(
+                  onPressed: () => _abrirBloqueador(context),
+                  child: Text('settings.open'.i18n),
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+      // La separación va DESPUÉS de cada sección, igual que las demás. Sin
+      // esto, el bloqueador quedaba pegado al de Registros.
+      const SizedBox(height: 10),
       SettingsExpanderTile(
         title: "settings.log".i18n,
         subTitle: 'settings.log-subtitle'.i18n,
@@ -1430,29 +1486,6 @@ class _SettingsPageState extends State<SettingsPage> {
                 ),
                 desktopWidget: fluent.FilledButton(
                   onPressed: () => _abrirVisorDeRegistro(context),
-                  child: Text('settings.open'.i18n),
-                ),
-              ),
-            ),
-            const SizedBox(height: 10),
-            // El bloqueador vive acá, con las herramientas, y no en la sección
-            // del reproductor: no toca la reproducción, solo el navegador
-            // interno.
-            SettingsTile(
-              title: 'Bloqueador de anuncios',
-              buildSubtitle: () => BloqueadorAnuncios.activo
-                  ? '${BloqueadorAnuncios.cuantosDominios} dominios bloqueados '
-                      'en el navegador interno'
-                  : 'Apagado. Instalá una lista para bloquear anuncios en el '
-                      'navegador interno',
-              onTap: () => _abrirBloqueador(context),
-              trailing: PlatformWidget(
-                androidWidget: TextButton(
-                  onPressed: () => _abrirBloqueador(context),
-                  child: Text('settings.open'.i18n),
-                ),
-                desktopWidget: fluent.FilledButton(
-                  onPressed: () => _abrirBloqueador(context),
                   child: Text('settings.open'.i18n),
                 ),
               ),
@@ -1654,7 +1687,7 @@ class _SettingsPageState extends State<SettingsPage> {
                 borderRadius: BorderRadius.circular(20),
                 border: Border.all(color: HomeTheme.accentPink),
               ),
-              child: const Text(
+              child: Text(
                 "BETA",
                 style: TextStyle(
                   color: HomeTheme.accentPink,
@@ -1668,12 +1701,12 @@ class _SettingsPageState extends State<SettingsPage> {
               'settings.about-description'.i18n,
               textAlign:
                   Platform.isAndroid ? TextAlign.center : TextAlign.start,
-              style: const TextStyle(color: HomeTheme.textPrimary, height: 1.4),
+              style: TextStyle(color: HomeTheme.textPrimary, height: 1.4),
             ),
             const SizedBox(height: 20),
             Text(
               'settings.contributors'.i18n,
-              style: const TextStyle(color: HomeTheme.textPrimary),
+              style: TextStyle(color: HomeTheme.textPrimary),
             ),
             const SizedBox(height: 8),
             Obx(
@@ -1694,7 +1727,7 @@ class _SettingsPageState extends State<SettingsPage> {
                             },
                             child: Text(
                               contributor['login'],
-                              style: const TextStyle(
+                              style: TextStyle(
                                 color: HomeTheme.accentPink,
                               ),
                             ),
@@ -1710,34 +1743,83 @@ class _SettingsPageState extends State<SettingsPage> {
     ];
   }
 
+  /// La flecha de volver y el título, arriba de todo.
+  Widget _cabecera(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(4, 4, 16, 2),
+      child: Row(
+        children: [
+          IconButton(
+            onPressed: () {
+              final c = Get.find<MainController>();
+              c.changeTab(c.tabAnterior);
+            },
+            tooltip: 'common.back'.i18n,
+            icon: Icon(Icons.arrow_back_rounded,
+                color: HomeTheme.textPrimary),
+            constraints: const BoxConstraints(minWidth: 46, minHeight: 46),
+          ),
+          const SizedBox(width: 2),
+          Text(
+            'common.settings'.i18n,
+            // Mismo estilo que el título de Inicio, desde un solo lugar.
+            style: HomeTheme.tituloDeZona(
+              // Acostado en un teléfono, 25 se come una franja que le hace
+              // falta a la lista de opciones, que es larga.
+              bajo: MediaQuery.sizeOf(context).height < 520,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
   Widget _buildAndroid(BuildContext context) {
     return Scaffold(
       backgroundColor: HomeTheme.bg,
-      appBar: AppBar(
-        backgroundColor: HomeTheme.bg,
-        title: Text(
-          'common.settings'.i18n,
-          style: const TextStyle(color: HomeTheme.textPrimary),
-        ),
-      ),
+      // ── Sin AppBar, y con su propia flecha ───────────────────────────────
+      //
+      // Ajustes es la única zona donde la barra flotante se esconde: es una
+      // lista larga de opciones y una barra encima tapa justo las últimas.
+      //
+      // Pero entonces hace falta una salida, porque a Ajustes se entra por los
+      // tres puntos y no hay botón suyo en la barra al que volver. La flecha
+      // devuelve a la zona de la que se vino.
+      //
+      // Y va como texto suelto en vez de AppBar por lo mismo que en Biblioteca:
+      // la AppBar dibuja su propia superficie y sobre el fondo animado queda
+      // como una franja cruzando la pantalla.
+      appBar: null,
       body: Container(
         color: HomeTheme.bg,
         child: Stack(
           children: [
-            const Positioned.fill(child: AnimatedBackgroundGlow()),
+            Positioned.fill(child: AnimatedBackgroundGlow()),
             // ListView.builder y no ListView(children:): la segunda forma
             // MONTA todos los hijos de una, y esta página son varias secciones
             // pesadas (en escritorio, Expander de fluent). Eso trababa la
             // pantalla unos segundos la primera vez que se abría. Con builder
             // solo se montan las que se ven.
-            Builder(builder: (context) {
-              final items = _buildContent();
-              return ListView.builder(
-                padding: const EdgeInsets.symmetric(vertical: 10),
-                itemCount: items.length,
-                itemBuilder: (context, i) => items[i],
-              );
-            }),
+            SafeArea(
+              bottom: false,
+              child: Column(
+                children: [
+                  _cabecera(context),
+                  Expanded(
+                    child: Builder(builder: (context) {
+                      final items = _buildContent();
+                      return ListView.builder(
+                        padding: EdgeInsets.only(
+                            top: 4,
+                            bottom: MediaQuery.paddingOf(context).bottom + 24),
+                        itemCount: items.length,
+                        itemBuilder: (context, i) => items[i],
+                      );
+                    }),
+                  ),
+                ],
+              ),
+            ),
           ],
         ),
       ),
@@ -1752,7 +1834,7 @@ class _SettingsPageState extends State<SettingsPage> {
         color: HomeTheme.bg,
         child: Stack(
           children: [
-            const Positioned.fill(child: AnimatedBackgroundGlow()),
+            Positioned.fill(child: AnimatedBackgroundGlow()),
             // Ver el mismo cambio en la versión Android.
             Builder(builder: (context) {
               final items = _buildContent();
@@ -1796,7 +1878,7 @@ class _SkipIntervalTile extends StatelessWidget {
             padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 14),
             child: Row(
               children: [
-                const Icon(Icons.fast_forward,
+                Icon(Icons.fast_forward,
                     color: HomeTheme.accentPink, size: 22),
                 const SizedBox(width: 14),
                 Expanded(
@@ -1805,7 +1887,7 @@ class _SkipIntervalTile extends StatelessWidget {
                     children: [
                       Text(
                         'settings.skip-interval'.i18n,
-                        style: const TextStyle(
+                        style: TextStyle(
                           color: HomeTheme.textPrimary,
                           fontSize: 15,
                         ),
@@ -1813,7 +1895,7 @@ class _SkipIntervalTile extends StatelessWidget {
                       const SizedBox(height: 2),
                       Text(
                         'settings.skip-interval-short'.i18n,
-                        style: const TextStyle(
+                        style: TextStyle(
                           color: HomeTheme.textMuted,
                           fontSize: 12,
                         ),
@@ -1821,7 +1903,7 @@ class _SkipIntervalTile extends StatelessWidget {
                     ],
                   ),
                 ),
-                const Icon(Icons.chevron_right,
+                Icon(Icons.chevron_right,
                     color: HomeTheme.textMuted, size: 20),
               ],
             ),
@@ -1897,7 +1979,7 @@ class _MobileStepperState extends State<_MobileStepper> {
           child: Text(
             '${_valor.round()} s',
             textAlign: TextAlign.center,
-            style: const TextStyle(
+            style: TextStyle(
               color: HomeTheme.textPrimary,
               fontWeight: FontWeight.w700,
               fontSize: 15,
@@ -2034,7 +2116,7 @@ class _DialogoClaveState extends State<_DialogoClave> {
             ),
             child: Row(
               children: [
-                const Icon(Icons.folder_zip_outlined,
+                Icon(Icons.folder_zip_outlined,
                     size: 18, color: HomeTheme.accentPink),
                 const SizedBox(width: 8),
                 // Flexible: un nombre largo en un teléfono angosto se sale de
@@ -2212,7 +2294,7 @@ class _BarraDeImportacion extends StatelessWidget {
                   minHeight: 8,
                   backgroundColor:
                       HomeTheme.accentPink.withValues(alpha: 0.18),
-                  valueColor: const AlwaysStoppedAnimation<Color>(
+                  valueColor: AlwaysStoppedAnimation<Color>(
                       HomeTheme.accentPink),
                 ),
               ),
@@ -2221,7 +2303,7 @@ class _BarraDeImportacion extends StatelessWidget {
                 alignment: Alignment.centerRight,
                 child: Text(
                   valor <= 0 ? '' : '${(suave * 100).round()}%',
-                  style: const TextStyle(
+                  style: TextStyle(
                     fontSize: 12,
                     fontWeight: FontWeight.w700,
                     color: HomeTheme.accentPink,

@@ -9,6 +9,8 @@ import 'package:get/get.dart';
 import 'package:image_gallery_saver_plus/image_gallery_saver_plus.dart';
 import 'package:prismhub/utils/i18n.dart';
 import 'package:prismhub/utils/request.dart';
+import 'package:prismhub/views/widgets/home/esqueleto.dart';
+import 'package:prismhub/views/widgets/home/home_theme.dart';
 import 'package:prismhub/views/widgets/messenger.dart';
 import 'package:prismhub/views/widgets/platform_widget.dart';
 
@@ -89,6 +91,35 @@ class _CacheNetWorkImagePicState extends State<CacheNetWorkImagePic> {
   // una portada quede ausente un rato largo.
   static const Duration _ventanaDeFallo = Duration(seconds: 20);
 
+  /// Las que YA cargaron bien alguna vez en esta sesión.
+  ///
+  /// ── El agujero que tapa ─────────────────────────────────────────────────
+  ///
+  /// El registro de fallos de arriba corta por lo sano: si una portada falló
+  /// hace menos de veinte segundos, la tarjeta muestra el arte de respaldo sin
+  /// siquiera intentar cargarla. Eso está bien para una portada que nunca
+  /// cargó —no tiene sentido pelearse con un sitio caído— pero es un desastre
+  /// para una que se estaba viendo perfecta hace un segundo.
+  ///
+  /// Y en Android pasa seguido. Al abrir una ficha, el sistema le pide memoria
+  /// a la app y Flutter suelta las imágenes decodificadas; al volver, las
+  /// portadas del Inicio se piden todas de nuevo a la vez, y bajo esa
+  /// contención alguna se cae. Con eso queda anotada y su tarjeta se va al
+  /// arte de respaldo por veinte segundos, hasta que vence la ventana y
+  /// reaparece: eso es el parpadeo. En escritorio no pasa porque ahí nadie le
+  /// pide memoria a la app, así que las portadas nunca se vuelven a pedir.
+  ///
+  /// Con esta lista, una portada que ya se vio no se da por caída nunca: si
+  /// hay que traerla otra vez se muestra el bloque brillando mientras llega,
+  /// que es la verdad —está cargando— en vez de mentir con «no se pudo».
+  static final Set<String> _yaCargaron = <String>{};
+
+  /// Tope de la lista de arriba, para que no crezca sin fin en una sesión
+  /// larga. Al llegar se vacía entera: perder la memoria de qué cargó bien no
+  /// rompe nada, solo devuelve el comportamiento de antes hasta que se vuelvan
+  /// a ver.
+  static const int _topeYaCargaron = 3000;
+
   // Incluye los headers en la clave — si la primera vez falló sin headers
   // (ej. un sitio que exige Referer y no se lo dimos) y después se reintenta
   // CON los headers correctos, es un intento distinto y merece una
@@ -108,6 +139,9 @@ class _CacheNetWorkImagePicState extends State<CacheNetWorkImagePic> {
   bool _tamanoAvisado = false;
 
   bool get _failed {
+    // Una que ya se vio bien no se da por caída: se reintenta y mientras tanto
+    // se muestra el bloque brillando. Ver _yaCargaron.
+    if (_yaCargaron.contains(_failureKey)) return false;
     final cuando = _fallosRecientes[_failureKey];
     if (cuando == null) return false;
     if (DateTime.now().difference(cuando) < _ventanaDeFallo) return true;
@@ -127,6 +161,8 @@ class _CacheNetWorkImagePicState extends State<CacheNetWorkImagePic> {
   // siga contando en contra de una URL que evidentemente ya funciona.
   void _markLoaded() {
     _fallosRecientes.remove(_failureKey);
+    if (_yaCargaron.length >= _topeYaCargaron) _yaCargaron.clear();
+    _yaCargaron.add(_failureKey);
     _reintentando = false;
   }
 
@@ -180,6 +216,18 @@ class _CacheNetWorkImagePicState extends State<CacheNetWorkImagePic> {
     final image = ExtendedImage.network(
       widget.url,
       headers: widget.headers,
+      // ── Contra el parpadeo al volver a una zona ──────────────────────────
+      //
+      // Con esto, mientras la imagen se vuelve a decodificar se sigue pintando
+      // el ÚLTIMO fotograma que ya tenía en vez de quedar en blanco. Sin esto,
+      // cualquier recarga —y en Android hay varias: el sistema le pide memoria
+      // a la app al abrir una ficha o el reproductor, y Flutter suelta lo
+      // decodificado— dejaba la tarjeta vacía un instante y volvía. Eso es el
+      // parpadeo que se ve al ir a Ajustes y volver al Inicio.
+      //
+      // No cambia nada cuando la imagen es NUEVA (no hay fotograma anterior
+      // que mantener): ahí sigue saliendo el bloque brillando como siempre.
+      gaplessPlayback: true,
       fit: widget.fit,
       width: widget.width,
       height: widget.height,
@@ -205,7 +253,31 @@ class _CacheNetWorkImagePicState extends State<CacheNetWorkImagePic> {
             // Reintento de una que ya habia fallado: se mantiene el arte de
             // respaldo en vez de vaciar la tarjeta (ver _reintentando).
             if (_reintentando) return _errorBuild();
-            return widget.placeholder ?? const SizedBox();
+            // ── El hueco brilla, en TODAS las imágenes ─────────────────────
+            //
+            // Antes acá iba un SizedBox vacío salvo que la pantalla pasara su
+            // propio placeholder — y eso solo lo hacía una. El resultado era
+            // disparejo: en una fila las tarjetas brillaban y en la de al lado
+            // quedaban en negro, y no se entendía si estaban cargando o si no
+            // había nada.
+            //
+            // Poniéndolo acá vale para todo lo que dibuje una imagen: Inicio,
+            // Buscar, Biblioteca, Historial, la portada de la ficha, su fondo
+            // y los iconos de las extensiones. Una sola línea en vez de
+            // repetir el bloque en cada pantalla.
+            //
+            // El brillo no cuesta un reloj por imagen: Esqueleto los comparte
+            // todos en uno solo, que además se apaga cuando la app pasa a
+            // segundo plano (ver _RelojDelBrillo).
+            return widget.placeholder ??
+                Esqueleto(
+                  width: widget.width,
+                  height: widget.height,
+                  // Sin esquinas propias: casi siempre va dentro de algo que
+                  // ya recorta (una tarjeta, la caja de la portada). Con radio
+                  // se veía un redondeo adentro de otro.
+                  radio: 0,
+                );
           case LoadState.completed:
             // Cargo bien: se olvida cualquier fallo anterior de esta URL.
             WidgetsBinding.instance.addPostFrameCallback((_) => _markLoaded());
@@ -276,7 +348,59 @@ class _CacheNetWorkImagePicState extends State<CacheNetWorkImagePic> {
               // (barrierDismissible: false) — acá sí queremos ese
               // comportamiento, es solo un visor de imagen.
               barrierDismissible: true,
-              builder: (_) => thumnailPage,
+              // A pantalla completa y con su propia salida.
+              //
+              // Antes salía como un diálogo del tamaño de su contenido: la
+              // portada se veía CASI igual de chica que en la ficha, y al
+              // ampliarla se recortaba contra los bordes del diálogo en vez de
+              // usar la ventana. Un visor de imagen tiene que dar todo el
+              // espacio que hay.
+              //
+              // Ocupando la ventana entera ya no queda barrera que tocar para
+              // cerrar, así que el fondo cierra al hacerle clic y arriba a la
+              // derecha va la cruz. La imagen está por encima del fondo, así
+              // que arrastrarla para moverla no cierra nada.
+              builder: (dialogo) => Stack(
+                children: [
+                  Positioned.fill(
+                    child: GestureDetector(
+                      behavior: HitTestBehavior.opaque,
+                      onTap: () => Navigator.of(dialogo).pop(),
+                      // ── Casi opaco, y oscuro en los DOS modos ─────────
+                      //
+                      // Estaba al 90%: se veía la pantalla de atrás por
+                      // detrás de la portada, con su texto y sus tarjetas
+                      // asomando alrededor de la imagen. Distrae de lo único
+                      // que uno vino a mirar, y en modo claro es peor todavía
+                      // porque lo que asoma es claro y compite de frente.
+                      //
+                      // Y sigue al modo. Se probó dejarlo oscuro siempre, con
+                      // el argumento de que un visor de imagen se mira mejor
+                      // sobre negro. No pega: con el modo claro puesto, abrir
+                      // una portada apagaba la pantalla entera y cerrarla la
+                      // volvía a prender, y ese golpe se nota más que cualquier
+                      // ventaja de mirar sobre negro.
+                      //
+                      // Casi opaco en los dos, que es lo que resolvía el
+                      // problema de fondo: al 90% se veía la pantalla de atrás
+                      // asomando alrededor de la imagen.
+                      child: ColoredBox(
+                        color: HomeTheme.bg.withValues(alpha: 0.98),
+                      ),
+                    ),
+                  ),
+                  Positioned.fill(child: thumnailPage),
+                  Positioned(
+                    top: 12,
+                    right: 12,
+                    child: fluent.IconButton(
+                      icon: const Icon(fluent.FluentIcons.chrome_close,
+                          size: 16),
+                      onPressed: () => Navigator.of(dialogo).pop(),
+                    ),
+                  ),
+                ],
+              ),
             );
           },
           child: image,
@@ -350,37 +474,87 @@ class _ThumnailPageState extends State<_ThumnailPage> {
   }
 
   Widget _buildContent(BuildContext context) {
+    final imagen = ExtendedImage.network(
+      widget.url,
+      headers: widget.headers,
+      cache: true,
+      fit: BoxFit.contain,
+      mode: ExtendedImageMode.gesture,
+      // ── Arrastrar hacia abajo cierra, y solo en el teléfono ─────────────
+      //
+      // Sin esto el ExtendedImageSlidePage de afuera no hacía nada: la página
+      // deslizable necesita que la imagen se lo diga. O sea que el gesto de
+      // bajar para cerrar —el que uno prueba primero en cualquier visor— no
+      // existía y había que buscar la flecha de atrás.
+      //
+      // En escritorio va apagado a propósito: ahí se cierra con la cruz o
+      // haciendo clic en el fondo, y arrastrar con el ratón tiene que servir
+      // para MOVER la imagen ampliada, no para cerrar sin querer.
+      enableSlideOutPage: Platform.isAndroid,
+      initGestureConfigHandler: (state) {
+        return GestureConfig(
+          minScale: 0.9,
+          animationMinScale: 0.7,
+          // ── Hasta ocho, no hasta tres ────────────────────────────
+          //
+          // Tres es poco para lo que la gente abre esto: mirar de cerca la
+          // portada, leer el texto chico de una tapa o buscar el crédito del
+          // autor. Y una portada mostrada entera ya arranca ocupando media
+          // pantalla, así que triplicarla se queda corto.
+          maxScale: 8.0,
+          animationMaxScale: 8.5,
+          speed: 1.0,
+          // Más inercia al soltar. Con 100 el movimiento se frenaba en seco
+          // apenas levantabas el dedo y se sentía pegajoso; con 220 sigue de
+          // largo un poco, que es lo que hace que se sienta suelto.
+          inertialSpeed: 220.0,
+          initialScale: 1.0,
+          // false: esto NO vive dentro de un PageView. En true, el visor le
+          // cede el arrastre horizontal a un padre que no existe, y moverse de
+          // costado con la imagen ampliada se sentía trabado.
+          inPageView: false,
+          // La rueda hacia arriba ACERCA, que es lo que hace todo lo demás.
+          // Estaba al revés y era lo primero que descolocaba con el ratón.
+          reverseMousePointerScrollDirection: false,
+          initialAlignment: InitialAlignment.center,
+        );
+      },
+      // Doble toque para acercar y alejar, que es lo que uno prueba primero.
+      // Sin esto, la única forma era el pellizco —imposible con el ratón— así
+      // que en escritorio no había manera de ampliar salvo la rueda.
+      //
+      // Acerca HACIA DONDE tocaste, no al centro: si tocás una esquina y la
+      // imagen se acerca al medio, hay que arrastrar para volver a lo que
+      // querías ver.
+      onDoubleTap: (state) {
+        final origen = state.gestureDetails?.totalScale ?? 1.0;
+        state.handleDoubleTap(
+          scale: origen < 1.5 ? 3.0 : 1.0,
+          doubleTapPosition: state.pointerDownPosition,
+        );
+      },
+    );
+
+    // En escritorio, sin página deslizable: no hace nada con la imagen que no
+    // se desliza, y de paso se saca una capa del medio.
+    if (!Platform.isAndroid) return Center(child: imagen);
+
     return Center(
       child: ExtendedImageSlidePage(
-        slideAxis: SlideAxis.both,
+        // Solo vertical. Con `both`, arrastrar de costado cerraba el visor en
+        // vez de mover la imagen ampliada, que es justo para lo que uno
+        // arrastra de costado cuando le hizo zoom.
+        slideAxis: SlideAxis.vertical,
         slideType: SlideType.onlyImage,
         slidePageBackgroundHandler: (offset, pageSize) {
-          final color = Platform.isAndroid
-              ? Theme.of(context).scaffoldBackgroundColor
-              : fluent.FluentTheme.of(context).scaffoldBackgroundColor;
-          return color.withValues(alpha: 0);
+          // El fondo se va aclarando a medida que arrastrás: así se ve que el
+          // gesto está haciendo algo y hasta dónde hay que llegar. Antes era
+          // transparente siempre y el arrastre no daba ninguna señal.
+          final recorrido =
+              (offset.distance / (pageSize.height / 2)).clamp(0.0, 1.0);
+          return Colors.black.withValues(alpha: 0.9 * (1 - recorrido));
         },
-        child: ExtendedImage.network(
-          widget.url,
-          headers: widget.headers,
-          cache: true,
-          fit: BoxFit.contain,
-          mode: ExtendedImageMode.gesture,
-          initGestureConfigHandler: (state) {
-            return GestureConfig(
-              minScale: 0.9,
-              animationMinScale: 0.7,
-              maxScale: 3.0,
-              animationMaxScale: 3.5,
-              speed: 1.0,
-              inertialSpeed: 100.0,
-              initialScale: 1.0,
-              inPageView: true,
-              reverseMousePointerScrollDirection: true,
-              initialAlignment: InitialAlignment.center,
-            );
-          },
-        ),
+        child: imagen,
       ),
     );
   }

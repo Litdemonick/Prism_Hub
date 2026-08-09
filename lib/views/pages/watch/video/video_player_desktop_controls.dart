@@ -10,7 +10,7 @@ import 'package:media_kit_video/media_kit_video.dart';
 import 'package:prismhub/controllers/watch/video_controller.dart';
 import 'package:prismhub/views/pages/watch/video/video_player_cast.dart';
 import 'package:prismhub/views/pages/watch/video/webview_player_page.dart'
-    show isKnownNativeServer, openWebViewPlayer;
+    show openWebViewPlayer;
 import 'package:prismhub/utils/i18n.dart';
 import 'package:prismhub/utils/prismhub_storage.dart';
 import 'package:prismhub/views/widgets/cache_network_image.dart';
@@ -164,7 +164,7 @@ class _VideoPlayerDesktopControlsState
         // vez del oscuro+morado del reproductor.
         data: FluentTheme.of(context).copyWith(
           accentColor:
-              AccentColor.swatch(const {'normal': HomeTheme.accentPink}),
+              AccentColor.swatch({'normal': HomeTheme.oscuroAcento}),
         ),
         child: ContentDialog(
           title: const Text('¡Un momento!'),
@@ -254,7 +254,7 @@ class _VideoPlayerDesktopControlsState
                             decoration: BoxDecoration(
                               color: const Color(0xB3000000),
                               borderRadius: BorderRadius.circular(999),
-                              border: Border.all(color: HomeTheme.accentPink),
+                              border: Border.all(color: HomeTheme.oscuroAcento),
                             ),
                             child: Row(
                               mainAxisSize: MainAxisSize.min,
@@ -263,7 +263,7 @@ class _VideoPlayerDesktopControlsState
                                   (salto ?? 0) < 0
                                       ? material.Icons.fast_rewind
                                       : material.Icons.fast_forward,
-                                  color: HomeTheme.accentPink,
+                                  color: HomeTheme.oscuroAcento,
                                   size: 20,
                                 ),
                                 const SizedBox(width: 8),
@@ -310,14 +310,14 @@ class _VideoPlayerDesktopControlsState
                             decoration: BoxDecoration(
                               color: const Color(0xB3000000),
                               borderRadius: BorderRadius.circular(999),
-                              border: Border.all(color: HomeTheme.accentPink),
+                              border: Border.all(color: HomeTheme.oscuroAcento),
                             ),
                             child: Row(
                               mainAxisSize: MainAxisSize.min,
                               children: [
-                                const material.Icon(
+                                material.Icon(
                                   material.Icons.volume_up,
-                                  color: HomeTheme.accentPink,
+                                  color: HomeTheme.oscuroAcento,
                                   size: 20,
                                 ),
                                 const SizedBox(width: 8),
@@ -376,38 +376,39 @@ class _VideoPlayerDesktopControlsState
                         // televisor. Mismo criterio que en celular.
                         opacity: (_c.dlnaDevice.value == null &&
                                 ((!_c.isGettingWatchData.value &&
-                                    !_c.hasRenderedFrame.value &&
-                                    // Si hay un error en pantalla, ahi hay una
-                                    // tarjeta con su boton (reintentar / elegir
-                                    // otro servidor) y NO se esta cargando
-                                    // nada: la rueda girando detras hacia
-                                    // pensar que algo seguia en curso.
-                                    _c.error.value.isEmpty &&
-                                    // Mismo caso que el error de arriba: el
-                                    // aviso de "el servidor fallo, toca para
-                                    // reproducir" espera una accion y no hay
-                                    // nada cargando. El fallo de servidor no
-                                    // se guarda en `error` —tiene su propio
-                                    // campo— asi que la comprobacion anterior
-                                    // no lo cubria.
-                                    _c.serverFailedMessage.value.isEmpty &&
-                                    // Mismo caso: el boton de play espera un
-                                    // clic, no hay nada cargando.
-                                    !_c.awaitingServerChoice.value &&
-                                    // Con el reproductor de WebView activo no
-                                    // va a pintarse nunca un cuadro nativo, asi
-                                    // que esta rueda giraria para siempre.
-                                    !_c.isWebViewActive.value) ||
-                                (_c.hasRenderedFrame.value &&
-                                    (_c.isSeeking.value ||
-                                        // Ver imagenCongelada: con la red mal
-                                        // mpv deja de avisar que carga.
-                                        _c.imagenCongelada.value ||
-                                        (_c.isPlaying.value &&
-                                            _c.isActuallyBuffering.value)))))
+                                        !_c.hasRenderedFrame.value &&
+                                        // Si hay un error en pantalla, ahi hay una
+                                        // tarjeta con su boton (reintentar / elegir
+                                        // otro servidor) y NO se esta cargando
+                                        // nada: la rueda girando detras hacia
+                                        // pensar que algo seguia en curso.
+                                        _c.error.value.isEmpty &&
+                                        // Mismo caso que el error de arriba: el
+                                        // aviso de "el servidor fallo, toca para
+                                        // reproducir" espera una accion y no hay
+                                        // nada cargando. El fallo de servidor no
+                                        // se guarda en `error` —tiene su propio
+                                        // campo— asi que la comprobacion anterior
+                                        // no lo cubria.
+                                        _c.serverFailedMessage.value.isEmpty &&
+                                        // Mismo caso: el boton de play espera un
+                                        // clic, no hay nada cargando.
+                                        !_c.awaitingServerChoice.value &&
+                                        // Con el reproductor de WebView activo no
+                                        // va a pintarse nunca un cuadro nativo, asi
+                                        // que esta rueda giraria para siempre.
+                                        !_c.isWebViewActive.value) ||
+                                    (_c.hasRenderedFrame.value &&
+                                        (_c.isSeeking.value ||
+                                            // Ver imagenCongelada: con la red mal
+                                            // mpv deja de avisar que carga.
+                                            _c.imagenCongelada.value ||
+                                            (_c.isPlaying.value &&
+                                                _c.isActuallyBuffering
+                                                    .value)))))
                             ? 1
                             : 0,
-                        child: const Center(
+                        child: Center(
                           child: DecoratedBox(
                             decoration: BoxDecoration(
                               // Disco oscuro detrás: sobre un fotograma claro
@@ -423,7 +424,7 @@ class _VideoPlayerDesktopControlsState
                                 child: material.CircularProgressIndicator(
                                   strokeWidth: 3.5,
                                   valueColor: material.AlwaysStoppedAnimation(
-                                      HomeTheme.accentPink),
+                                      HomeTheme.oscuroAcento),
                                 ),
                               ),
                             ),
@@ -516,19 +517,19 @@ class _VideoPlayerDesktopControlsState
                               padding: const EdgeInsets.symmetric(
                                   horizontal: 28, vertical: 22),
                               decoration: BoxDecoration(
-                                color: HomeTheme.cardSurface
+                                color: HomeTheme.oscuroSuperficie
                                     .withValues(alpha: 0.92),
                                 borderRadius: BorderRadius.circular(16),
-                                border: Border.all(color: HomeTheme.border),
+                                border: Border.all(color: HomeTheme.oscuroBorde),
                               ),
                               child: Column(
                                 mainAxisSize: MainAxisSize.min,
                                 children: [
                                   Container(
                                     padding: const EdgeInsets.all(18),
-                                    decoration: const BoxDecoration(
+                                    decoration: BoxDecoration(
                                       shape: BoxShape.circle,
-                                      color: HomeTheme.accentPink,
+                                      color: HomeTheme.oscuroAcento,
                                     ),
                                     child: const Icon(FluentIcons.play_solid,
                                         color: Colors.white, size: 32),
@@ -1029,14 +1030,14 @@ class _Footer extends StatelessWidget {
                           // Resolviendo el servidor elegido — bloquear el
                           // botón para no permitir otro toque mientras carga.
                           if (controller.isGettingWatchData.value) {
-                            return const SizedBox(
+                            return SizedBox(
                               width: 30,
                               height: 30,
                               child: Padding(
                                 padding: EdgeInsets.all(4),
                                 child: ProgressRing(
                                   strokeWidth: 2.5,
-                                  activeColor: HomeTheme.accentPink,
+                                  activeColor: HomeTheme.oscuroAcento,
                                 ),
                               ),
                             );
@@ -1271,7 +1272,7 @@ class _VolumeState extends State<_Volume> {
               return FluentTheme(
                 data: FluentThemeData.dark().copyWith(
                   accentColor: AccentColor.swatch(
-                      const {'normal': HomeTheme.accentPink}),
+                      {'normal': HomeTheme.oscuroAcento}),
                 ),
                 child: FlyoutContent(
                   useAcrylic: true,
@@ -1373,7 +1374,7 @@ class _EpisodeState extends State<_Episode> {
                 return FluentTheme(
                   data: FluentThemeData.dark().copyWith(
                     accentColor: AccentColor.swatch(
-                        const {'normal': HomeTheme.accentPink}),
+                        {'normal': HomeTheme.oscuroAcento}),
                   ),
                   child: FlyoutContent(
                     padding: const EdgeInsets.all(0),
@@ -1478,8 +1479,8 @@ class _QualityState extends State<_Quality> {
                               title: Text(quality.key),
                               trailing: quality.key ==
                                       widget.controller.currentQuality.value
-                                  ? const Icon(FluentIcons.check_mark,
-                                      size: 12, color: HomeTheme.accentPink)
+                                  ? Icon(FluentIcons.check_mark,
+                                      size: 12, color: HomeTheme.oscuroAcento)
                                   : null,
                               onPressed: () {
                                 widget.controller.switchQuality(
@@ -1495,8 +1496,8 @@ class _QualityState extends State<_Quality> {
                               title: Text(servidor),
                               trailing: servidor ==
                                       widget.controller.currentServerName.value
-                                  ? const Icon(FluentIcons.check_mark,
-                                      size: 12, color: HomeTheme.accentPink)
+                                  ? Icon(FluentIcons.check_mark,
+                                      size: 12, color: HomeTheme.oscuroAcento)
                                   : null,
                               onPressed: () {
                                 widget.controller.switchServer(servidor);
@@ -1550,7 +1551,7 @@ class _TrackState extends State<_Track> {
               return FluentTheme(
                 data: FluentThemeData.dark().copyWith(
                   accentColor: AccentColor.swatch(
-                      const {'normal': HomeTheme.accentPink}),
+                      {'normal': HomeTheme.oscuroAcento}),
                 ),
                 child: FlyoutContent(
                   useAcrylic: true,
@@ -1635,19 +1636,68 @@ class _TrackState extends State<_Track> {
                           ),
                         ),
                         const SizedBox(height: 5),
-                        // 来自视频的音轨
-                        for (final audio
-                            in widget.controller.player.state.tracks.audio)
-                          if (audio.language != null || audio.title != null)
+                        // Las pistas de audio del propio vídeo.
+                        //
+                        // **Se muestran TODAS.** Antes se salteaban las que no
+                        // traían ni título ni idioma, y con eso una pista sin
+                        // etiquetar —que existe y se puede elegir— quedaba
+                        // invisible: el menú aparecía vacío y parecía que el
+                        // vídeo tenía un solo audio. Si no tiene nombre se la
+                        // llama por su número, que es peor que un nombre pero
+                        // mucho mejor que no estar.
+                        // Las que declara la lista maestra de HLS.
+                        //
+                        // Van primero porque son las que traen nombre de
+                        // idioma —«Español», «English»— y son las que el
+                        // usuario está buscando. Ver audiosHls en
+                        // video_controller.dart: mpv no las ve solo.
+                        for (final (i, audio)
+                            in widget.controller.audiosHls.indexed)
+                          ListTile.selectable(
+                            selected:
+                                widget.controller.audioHlsElegido.value == i,
+                            title: Text(audio.nombre),
+                            subtitle: audio.idioma != null ? Text(audio.idioma!) : null,
+                            onPressed: () {
+                              widget.controller.elegirAudioHls(i);
+                              Flyout.of(context).close();
+                            },
+                          ),
+                        if (_audiosDe(widget.controller).isEmpty &&
+                            widget.controller.audiosHls.isEmpty)
+                          Padding(
+                            padding: const EdgeInsets.fromLTRB(10, 4, 10, 4),
+                            child: Text(
+                              'Este vídeo trae un solo audio',
+                              style: TextStyle(
+                                fontSize: 12,
+                                color: Colors.white.withAlpha(120),
+                              ),
+                            ),
+                          ),
+                        // Las que mpv lista por su cuenta se muestran SOLO si
+                        // el maestro no trajo idiomas.
+                        //
+                        // Con las dos listas juntas salía «Español, English,
+                        // Pista 1, Español, Español»: la sin nombre es la que
+                        // viene pegada al vídeo —o sea, la misma que
+                        // «Español»— y las repetidas son las externas, que mpv
+                        // agrega a su lista apenas se cargan. Todo eso es el
+                        // mismo puñado de audios contado tres veces.
+                        if (widget.controller.audiosHls.isEmpty)
+                          for (final (i, audio)
+                              in _audiosDe(widget.controller).indexed)
                             ListTile.selectable(
                               selected: audio ==
                                   widget.controller.player.state.track.audio,
-                              title: Text(audio.title ?? ''),
-                              subtitle: Text(audio.language ?? ''),
+                              title: Text(_nombreDePista(
+                                  audio.title, audio.language, i)),
+                              subtitle:
+                                  audio.title != null && audio.language != null
+                                      ? Text(audio.language!)
+                                      : null,
                               onPressed: () {
-                                widget.controller.player.setAudioTrack(
-                                  audio,
-                                );
+                                widget.controller.player.setAudioTrack(audio);
                                 Flyout.of(context).close();
                               },
                             ),
@@ -1744,7 +1794,7 @@ class _PanelCasteandoState extends State<_PanelCasteando>
               // El borde se tiñe mientras espera: da una señal mas de que hay
               // algo en curso, sin agregar otro elemento a la caja.
               color: conectando
-                  ? HomeTheme.accentPink.withValues(alpha: 0.55)
+                  ? HomeTheme.oscuroAcento.withValues(alpha: 0.55)
                   : Colors.white.withValues(alpha: 0.12),
             ),
             boxShadow: const [
@@ -1758,104 +1808,104 @@ class _PanelCasteandoState extends State<_PanelCasteando>
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
-            // El icono se funde en vez de saltar. Pasar de la rueda a
-            // "conectado" de golpe se sentia un corte, sobre todo porque es lo
-            // primero que mira el ojo.
-            AnimatedSwitcher(
-              duration: const Duration(milliseconds: 240),
-              transitionBuilder: (hijo, anim) => FadeTransition(
-                opacity: anim,
-                child: ScaleTransition(scale: anim, child: hijo),
-              ),
-              child: conectando
-                  ? const SizedBox(
-                      key: ValueKey('rueda'),
-                      width: 46,
-                      height: 46,
-                      child: material.CircularProgressIndicator(
-                        strokeWidth: 3.5,
-                        valueColor: material.AlwaysStoppedAnimation(
-                            HomeTheme.accentPink),
+              // El icono se funde en vez de saltar. Pasar de la rueda a
+              // "conectado" de golpe se sentia un corte, sobre todo porque es lo
+              // primero que mira el ojo.
+              AnimatedSwitcher(
+                duration: const Duration(milliseconds: 240),
+                transitionBuilder: (hijo, anim) => FadeTransition(
+                  opacity: anim,
+                  child: ScaleTransition(scale: anim, child: hijo),
+                ),
+                child: conectando
+                    ? SizedBox(
+                        key: ValueKey('rueda'),
+                        width: 46,
+                        height: 46,
+                        child: material.CircularProgressIndicator(
+                          strokeWidth: 3.5,
+                          valueColor: material.AlwaysStoppedAnimation(
+                              HomeTheme.oscuroAcento),
+                        ),
+                      )
+                    : Icon(
+                        reproduciendo
+                            ? material.Icons.cast_connected
+                            : material.Icons.pause_circle_outline,
+                        key: ValueKey(reproduciendo),
+                        size: 46,
+                        color: HomeTheme.oscuroAcento,
                       ),
-                    )
-                  : Icon(
-                      reproduciendo
-                          ? material.Icons.cast_connected
-                          : material.Icons.pause_circle_outline,
-                      key: ValueKey(reproduciendo),
-                      size: 46,
-                      color: HomeTheme.accentPink,
-                    ),
-            ),
-            const SizedBox(height: 14),
-            Text(
-              device.nombre,
-              textAlign: TextAlign.center,
-              style: const TextStyle(
-                fontSize: 18,
-                fontWeight: FontWeight.bold,
-                color: Colors.white,
               ),
-            ),
-            const SizedBox(height: 6),
-            ConstrainedBox(
-              constraints: const BoxConstraints(maxWidth: 360),
-              child: Builder(builder: (context) {
-                final aviso = controller.castAviso.value;
-                final texto = aviso ??
-                    (cambiandoEpisodio
-                        ? 'video.cast-changing-episode'.i18n
-                        : buscando
-                            ? 'video.cast-seeking'.i18n
-                            : conectando
-                                ? 'video.cast-connecting'.i18n
-                                : !reproduciendo
-                                    ? 'video.cast-paused-desktop'.i18n
-                                    : controller.castVelocidad.value != null
-                                        ? FlutterI18n.translate(
-                                            context,
-                                            'video.cast-speed',
-                                            translationParams: {
-                                              'speed': controller
-                                                  .castVelocidad.value!
-                                            },
-                                          )
-                                        : 'video.cast-on-device'.i18n);
-                // El texto tambien se funde: cambia seguido (conectando,
-                // buscando, volumen...) y saltar de uno a otro daba tirones.
-                return AnimatedSwitcher(
-                  duration: const Duration(milliseconds: 200),
-                  child: Text(
-                    texto,
-                    key: ValueKey(texto),
-                    textAlign: TextAlign.center,
-                    style: TextStyle(
-                      fontSize: 13,
-                      height: 1.4,
-                      fontWeight:
-                          aviso == null ? FontWeight.normal : FontWeight.w700,
-                      color: aviso == null
-                          ? Colors.white.withValues(alpha: 0.75)
-                          : HomeTheme.accentPink,
+              const SizedBox(height: 14),
+              Text(
+                device.nombre,
+                textAlign: TextAlign.center,
+                style: const TextStyle(
+                  fontSize: 18,
+                  fontWeight: FontWeight.bold,
+                  color: Colors.white,
+                ),
+              ),
+              const SizedBox(height: 6),
+              ConstrainedBox(
+                constraints: const BoxConstraints(maxWidth: 360),
+                child: Builder(builder: (context) {
+                  final aviso = controller.castAviso.value;
+                  final texto = aviso ??
+                      (cambiandoEpisodio
+                          ? 'video.cast-changing-episode'.i18n
+                          : buscando
+                              ? 'video.cast-seeking'.i18n
+                              : conectando
+                                  ? 'video.cast-connecting'.i18n
+                                  : !reproduciendo
+                                      ? 'video.cast-paused-desktop'.i18n
+                                      : controller.castVelocidad.value != null
+                                          ? FlutterI18n.translate(
+                                              context,
+                                              'video.cast-speed',
+                                              translationParams: {
+                                                'speed': controller
+                                                    .castVelocidad.value!
+                                              },
+                                            )
+                                          : 'video.cast-on-device'.i18n);
+                  // El texto tambien se funde: cambia seguido (conectando,
+                  // buscando, volumen...) y saltar de uno a otro daba tirones.
+                  return AnimatedSwitcher(
+                    duration: const Duration(milliseconds: 200),
+                    child: Text(
+                      texto,
+                      key: ValueKey(texto),
+                      textAlign: TextAlign.center,
+                      style: TextStyle(
+                        fontSize: 13,
+                        height: 1.4,
+                        fontWeight:
+                            aviso == null ? FontWeight.normal : FontWeight.w700,
+                        color: aviso == null
+                            ? Colors.white.withValues(alpha: 0.75)
+                            : HomeTheme.oscuroAcento,
+                      ),
                     ),
-                  ),
-                );
-              }),
-            ),
-            // Ayuda dibujada en vez de explicada en un parrafo, igual que en
-            // celular pero con las teclas que se usan aca. Se pliega sola
-            // mientras hay algo en curso, en vez de desaparecer de golpe.
-            AnimatedSize(
-              duration: const Duration(milliseconds: 240),
-              curve: Curves.easeOut,
-              child: conectando
-                  ? const SizedBox(width: double.infinity)
-                  : Padding(
-                      padding: const EdgeInsets.only(top: 18),
-                      child: _AyudaTeclasCast(anim: _anim),
-                    ),
-            ),
-          ],
+                  );
+                }),
+              ),
+              // Ayuda dibujada en vez de explicada en un parrafo, igual que en
+              // celular pero con las teclas que se usan aca. Se pliega sola
+              // mientras hay algo en curso, en vez de desaparecer de golpe.
+              AnimatedSize(
+                duration: const Duration(milliseconds: 240),
+                curve: Curves.easeOut,
+                child: conectando
+                    ? const SizedBox(width: double.infinity)
+                    : Padding(
+                        padding: const EdgeInsets.only(top: 18),
+                        child: _AyudaTeclasCast(anim: _anim),
+                      ),
+              ),
+            ],
           ),
         ),
       );
@@ -1916,8 +1966,8 @@ class _AyudaTeclasCast extends StatelessWidget {
                 const SizedBox(width: 10),
                 _pista('←', atrasFino, _cerca(aguja, 1, 5)),
                 const SizedBox(width: 10),
-                _pista(
-                    'Espacio', 'video.cast-hint-pause'.i18n, _cerca(aguja, 2, 5)),
+                _pista('Espacio', 'video.cast-hint-pause'.i18n,
+                    _cerca(aguja, 2, 5)),
                 const SizedBox(width: 10),
                 _pista('→', adelanteFino, _cerca(aguja, 3, 5)),
                 const SizedBox(width: 10),
@@ -1935,8 +1985,8 @@ class _AyudaTeclasCast extends StatelessWidget {
             Row(
               mainAxisSize: MainAxisSize.min,
               children: [
-                _pista('↑', 'video.cast-hint-volume-up'.i18n,
-                    _cerca(aguja, 0, 5)),
+                _pista(
+                    '↑', 'video.cast-hint-volume-up'.i18n, _cerca(aguja, 0, 5)),
                 const SizedBox(width: 10),
                 _pista('↓', 'video.cast-hint-volume-down'.i18n,
                     _cerca(aguja, 2, 5)),
@@ -1981,21 +2031,20 @@ class _AyudaTeclasCast extends StatelessWidget {
           mainAxisSize: MainAxisSize.min,
           children: [
             Container(
-              padding:
-                  const EdgeInsets.symmetric(horizontal: 12, vertical: 7),
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 7),
               decoration: BoxDecoration(
                 borderRadius: BorderRadius.circular(8),
                 // Los colores se mezclan segun la luz, en vez de cambiar de
                 // golpe: es lo que hace que el recorrido se vea continuo.
                 color: Color.lerp(
                   Colors.white.withValues(alpha: 0.06),
-                  HomeTheme.accentPink.withValues(alpha: 0.22),
+                  HomeTheme.oscuroAcento.withValues(alpha: 0.22),
                   luz,
                 ),
                 border: Border.all(
                   color: Color.lerp(
                     Colors.white.withValues(alpha: 0.16),
-                    HomeTheme.accentPink,
+                    HomeTheme.oscuroAcento,
                     luz,
                   )!,
                 ),
@@ -2050,6 +2099,12 @@ class _CastState extends State<_Cast> {
         // Si el reproductor nativo no esta andando, castear tampoco va a andar:
         // el televisor pide el mismo video y se topa con lo mismo. Se apaga el
         // boton y el tooltip dice el motivo. Ver puedeCastear en el controlador.
+        // Mientras el vídeo se está abriendo el botón no se dibuja, igual que
+        // en el teléfono: es un estado de unos segundos que se resuelve solo, y
+        // un botón apagado ahí no le dice nada a nadie. Ver mostrarBotonDeCast.
+        if (!widget.controller.mostrarBotonDeCast) {
+          return const SizedBox.shrink();
+        }
         final habilitado = widget.controller.puedeCastear;
         if (!habilitado) {
           return Tooltip(
@@ -2067,7 +2122,7 @@ class _CastState extends State<_Cast> {
           icon: Icon(
             connected ? material.Icons.cast_connected : material.Icons.cast,
             size: 22,
-            color: connected ? HomeTheme.accentPink : null,
+            color: connected ? HomeTheme.oscuroAcento : null,
           ),
           onPressed: () {
             // Mismo criterio que en el telefono: elegir aparato lleva unos
@@ -2080,7 +2135,7 @@ class _CastState extends State<_Cast> {
                 return FluentTheme(
                   data: FluentThemeData.dark().copyWith(
                     accentColor: AccentColor.swatch(
-                        const {'normal': HomeTheme.accentPink}),
+                        {'normal': HomeTheme.oscuroAcento}),
                   ),
                   child: FlyoutContent(
                     useAcrylic: true,
@@ -2215,7 +2270,7 @@ class _TorrentFilesState extends State<_TorrentFiles> {
               return FluentTheme(
                 data: FluentThemeData.dark().copyWith(
                   accentColor: AccentColor.swatch(
-                      const {'normal': HomeTheme.accentPink}),
+                      {'normal': HomeTheme.oscuroAcento}),
                 ),
                 child: FlyoutContent(
                   useAcrylic: true,
@@ -2290,7 +2345,7 @@ class _SpeedState extends State<_Speed> {
               return FluentTheme(
                 data: FluentThemeData.dark().copyWith(
                   accentColor: AccentColor.swatch(
-                      const {'normal': HomeTheme.accentPink}),
+                      {'normal': HomeTheme.oscuroAcento}),
                 ),
                 child: FlyoutContent(
                   useAcrylic: true,
@@ -2417,7 +2472,7 @@ class _SeekBarState extends State<_SeekBar> {
 
     return FluentTheme(
       data: FluentTheme.of(context).copyWith(
-        accentColor: AccentColor.swatch(const {'normal': HomeTheme.accentPink}),
+        accentColor: AccentColor.swatch({'normal': HomeTheme.oscuroAcento}),
       ),
       // Sin altura fija: el Stack se ajusta solo a la altura natural del
       // Slider (el hijo más alto, sin posicionar).
@@ -2469,7 +2524,7 @@ class _SeekBarState extends State<_SeekBar> {
                             // contra eso. Con esto queda una gradación
                             // clara: rosa sólido (reproducido) → rosa
                             // (bufferizado) → blanco (nada aún).
-                            color: HomeTheme.accentPink.withValues(alpha: 0.7),
+                            color: HomeTheme.oscuroAcento.withValues(alpha: 0.7),
                             borderRadius: BorderRadius.circular(999),
                           ),
                         ),
@@ -2577,7 +2632,8 @@ class _ServerTabBarState extends State<_ServerTabBar> {
                       _ServerTab(
                         label: entry.key,
                         selected: entry.key == current,
-                        isNative: isKnownNativeServer(entry.key, entry.value),
+                        isNative: widget.controller
+                            .esServidorNativo(entry.key, entry.value),
                         onTap: () => widget.controller.selectServer(entry.key),
                       ),
                       const SizedBox(width: 8),
@@ -2609,7 +2665,7 @@ class _FlechaTira extends StatelessWidget {
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 2),
       child: IconButton(
-        icon: Icon(icono, size: 12, color: HomeTheme.textPrimary),
+        icon: Icon(icono, size: 12, color: HomeTheme.oscuroTexto),
         onPressed: onTap,
       ),
     );
@@ -2643,16 +2699,16 @@ class _ServerTab extends StatelessWidget {
             // detrás, el texto se volvía ilegible. selected pasa a violeta
             // sólido de verdad, así que el texto ahí va blanco (violeta
             // sobre violeta era invisible).
-            color: selected ? HomeTheme.accentPink : HomeTheme.cardSurface,
+            color: selected ? HomeTheme.oscuroAcento : HomeTheme.oscuroSuperficie,
             borderRadius: BorderRadius.circular(999),
             border: Border.all(
-              color: selected ? HomeTheme.accentPink : HomeTheme.border,
+              color: selected ? HomeTheme.oscuroAcento : HomeTheme.oscuroBorde,
               width: selected ? 1.4 : 1,
             ),
             boxShadow: selected
                 ? [
                     BoxShadow(
-                      color: HomeTheme.accentPink.withValues(alpha: 0.45),
+                      color: HomeTheme.oscuroAcento.withValues(alpha: 0.45),
                       blurRadius: 10,
                       spreadRadius: 0.5,
                     ),
@@ -2692,4 +2748,25 @@ class _ServerTab extends StatelessWidget {
       ),
     );
   }
+}
+
+/// Las pistas de audio de verdad del vídeo, sin la de "sin audio".
+///
+/// media_kit siempre suma una entrada `no` y otra `auto` que no son pistas: son
+/// órdenes para el reproductor. Mostrarlas en la lista confundía más de lo que
+/// ayudaba, porque quedaban mezcladas con «Español» e «English».
+List<AudioTrack> _audiosDe(VideoPlayerController c) =>
+    c.player.state.tracks.audio
+        .where((a) => a != AudioTrack.no() && a != AudioTrack.auto())
+        .toList();
+
+/// Cómo llamar a una pista en la lista.
+///
+/// Se prefiere el nombre que trae; si no hay, el idioma; y si tampoco, el
+/// número. Una pista sin etiqueta se puede elegir igual, así que tiene que
+/// figurar.
+String _nombreDePista(String? titulo, String? idioma, int indice) {
+  if (titulo != null && titulo.trim().isNotEmpty) return titulo;
+  if (idioma != null && idioma.trim().isNotEmpty) return idioma;
+  return 'Pista ${indice + 1}';
 }

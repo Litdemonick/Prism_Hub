@@ -1,7 +1,9 @@
+import 'dart:async';
 import 'dart:io';
 
 import 'package:fluent_ui/fluent_ui.dart' as fluent;
 import 'package:flutter/material.dart';
+import 'package:flutter_i18n/flutter_i18n.dart';
 import 'package:get/get.dart';
 import 'package:prismhub/views/widgets/button.dart';
 import 'package:prismhub/views/widgets/detail/detail_finished_button.dart';
@@ -9,7 +11,9 @@ import 'package:prismhub/data/providers/tmdb_provider.dart';
 import 'package:prismhub/models/extension.dart';
 import 'package:prismhub/controllers/detail_controller.dart';
 import 'package:prismhub/views/widgets/detail/detail_appbar_flexible_space.dart';
+import 'package:prismhub/views/widgets/detail/detail_appbar_back.dart';
 import 'package:prismhub/views/widgets/detail/detail_appbar_title.dart';
+import 'package:prismhub/views/widgets/detail/detail_continue_play.dart';
 import 'package:prismhub/views/widgets/detail/detail_background_color.dart';
 import 'package:prismhub/views/widgets/detail/detail_episodes.dart';
 import 'package:prismhub/views/widgets/detail/detail_extension_tile.dart';
@@ -17,15 +21,13 @@ import 'package:prismhub/views/widgets/detail/detail_favorite_button.dart';
 import 'package:prismhub/views/widgets/detail/detail_share_button.dart';
 import 'package:prismhub/views/widgets/detail/detail_overview.dart';
 import 'package:prismhub/views/widgets/detail/portada_con_relevo.dart';
+import 'package:prismhub/utils/forma_portada.dart';
 import 'package:prismhub/utils/i18n.dart';
-import 'package:prismhub/utils/layout.dart';
 import 'package:prismhub/views/widgets/cache_network_image.dart';
-import 'package:prismhub/views/widgets/cover.dart';
 import 'package:prismhub/views/widgets/detail/detail_card_tile.dart';
 import 'package:prismhub/views/widgets/detail/detail_tracking_button.dart';
 import 'package:prismhub/views/widgets/home/home_theme.dart';
 import 'package:prismhub/views/widgets/platform_widget.dart';
-import 'package:prismhub/views/widgets/boton_pulsable.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 class DetailPage extends StatefulWidget {
@@ -124,14 +126,45 @@ class _DetailPageState extends State<DetailPage> {
               child: ColoredBox(color: Color(0xCC08090D)),
             ),
           ],
-          const Center(
-            child: SizedBox(
-              width: 38,
-              height: 38,
-              child: CircularProgressIndicator(
-                strokeWidth: 3,
-                valueColor: AlwaysStoppedAnimation(HomeTheme.accentPink),
-              ),
+          Center(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                SizedBox(
+                  width: 38,
+                  height: 38,
+                  child: CircularProgressIndicator(
+                    strokeWidth: 3,
+                    valueColor: AlwaysStoppedAnimation(HomeTheme.accentPink),
+                  ),
+                ),
+                // Y si tarda de más, se dice en vez de girar sin fin. Ver
+                // tardaDemasiado en el controlador: es la misma idea que en la
+                // fila de la búsqueda, y va igual en celular y en escritorio
+                // porque quien decide es el controlador, no cada pantalla.
+                Obx(() => c.tardaDemasiado.value
+                    ? Padding(
+                        padding:
+                            const EdgeInsets.only(top: 18, left: 32, right: 32),
+                        child: Text(
+                          FlutterI18n.translate(
+                            context,
+                            'common.extension-lenta',
+                            translationParams: {
+                              's': c.runtime.value?.extension.name ??
+                                  'La extensión',
+                            },
+                          ),
+                          textAlign: TextAlign.center,
+                          style: TextStyle(
+                            color: HomeTheme.textMuted,
+                            fontSize: 13,
+                            height: 1.35,
+                          ),
+                        ),
+                      )
+                    : const SizedBox.shrink()),
+              ],
             ),
           ),
           // Botón de volver propio: mientras carga no existe todavía el
@@ -142,8 +175,18 @@ class _DetailPageState extends State<DetailPage> {
               child: Align(
                 alignment: Alignment.topLeft,
                 child: IconButton(
-                  icon: const Icon(Icons.arrow_back,
-                      color: HomeTheme.textPrimary),
+                  // Con la portada previa detrás, el fondo es el velo oscuro
+                  // de arriba y no el de la app: ahí va blanca en los dos
+                  // modos. Sin portada el fondo sí es el de la app y sigue al
+                  // modo. Con textPrimary a secas, en modo claro la flecha
+                  // quedaba casi negra sobre el velo — invisible, y es la
+                  // única salida mientras carga.
+                  icon: Icon(
+                    Icons.arrow_back,
+                    color: previa != null
+                        ? HomeTheme.sobrePortada
+                        : HomeTheme.textPrimary,
+                  ),
                   // Navigator directo, no RouterUtils: esta rama es solo
                   // Android, donde la página se empuja con Get.to sobre el
                   // navegador de GetMaterialApp.
@@ -190,7 +233,7 @@ class _DetailPageState extends State<DetailPage> {
                   Obx(() => Text(
                         c.error.value,
                         textAlign: TextAlign.center,
-                        style: const TextStyle(
+                        style: TextStyle(
                           color: HomeTheme.textPrimary,
                           fontSize: 15,
                           height: 1.4,
@@ -213,7 +256,7 @@ class _DetailPageState extends State<DetailPage> {
               child: Align(
                 alignment: Alignment.topLeft,
                 child: IconButton(
-                  icon: const Icon(Icons.arrow_back,
+                  icon: Icon(Icons.arrow_back,
                       color: HomeTheme.textPrimary),
                   onPressed: () => Navigator.of(context).maybePop(),
                 ),
@@ -226,14 +269,21 @@ class _DetailPageState extends State<DetailPage> {
 
   Widget _buildAndroidDetail(BuildContext context) {
     return Scaffold(
-      body: Obx(() {
-        late String episodesString;
-        if (c.type == ExtensionType.bangumi) {
-          episodesString = 'video.episodes'.i18n;
-        } else {
-          episodesString = 'reader.chapters'.i18n;
+      // La acción principal, siempre a la vista.
+      //
+      // Estaba dentro de la cabecera, así que se desvanecía con ella: uno baja
+      // a mirar la lista, decide, y el botón de leer ya no estaba. Acá se
+      // queda puesto, no se lleva alto de la cabecera —que en un teléfono en
+      // vertical es lo que falta— y vale igual en las tres formas de la
+      // pantalla. Cuando no hay nada que abrir no se dibuja: ver
+      // DetailContinuePlay.comoFab.
+      floatingActionButton: Obx(() {
+        if (c.error.value.isNotEmpty || c.isLoading.value) {
+          return const SizedBox.shrink();
         }
-
+        return DetailContinuePlay(tag: widget.tag, comoFab: true);
+      }),
+      body: Obx(() {
         if (c.error.value.isNotEmpty) {
           return _transicion('error', _pantallaDeError(context));
         }
@@ -247,181 +297,505 @@ class _DetailPageState extends State<DetailPage> {
           return _transicion('cargando', _pantallaCargando(context));
         }
 
-        final tabs = [
-          if (!LayoutUtils.isTablet) Tab(text: episodesString),
-          Tab(text: 'detail.overview'.i18n),
-          if (c.type == ExtensionType.bangumi) Tab(text: 'detail.cast'.i18n),
-        ];
-
-        // Fijo en 400 tapaba casi toda la pantalla en horizontal sin dejar
-        // lugar para capítulos/sinopsis debajo. En vez de solo achicar el
-        // mismo diseño vertical (portada arriba, texto+botones apilados
-        // abajo — con poca altura eso dejaba la portada recortada y pegada
-        // al botón de atrás), en horizontal el hero pasa a un layout
-        // HORIZONTAL propio (ver DetailAppbarflexibleSpace.landscape):
-        // portada a la izquierda, título+botones a la derecha, usando el
-        // ancho de sobra en vez de pelear por la poca altura.
-        final isLandscape =
-            MediaQuery.of(context).orientation == Orientation.landscape;
-        // 440 en vertical (antes 400): los botones pasaron a dos filas para que
-        // las etiquetas entren enteras, y el titulo a cuatro lineas porque los
-        // largos se cortaban. Con 400 ese bloque se desbordaba hacia arriba y
-        // se metia debajo del boton de atras.
+        // LayoutBuilder y no MediaQuery a secas: lo que importa es el tamaño
+        // que la ficha tiene DE VERDAD para trabajar. Con la app en pantalla
+        // partida o en una ventana chica de Android, la pantalla mide una cosa
+        // y la ficha otra.
         //
-        // Llego a estar en 470 con los botones de 50 de alto. Bajados a 42 y
-        // con menos aire entre filas, el bloque ocupa 30 menos: dejarlo en 470
-        // seria un encabezado innecesariamente alto que empuja los episodios
-        // fuera de la pantalla.
-        final heroHeight = isLandscape ? 200.0 : 440.0;
+        // Y el ValueListenableBuilder es por la forma de las portadas:
+        // FormaPortada decide por catálogo y tarda cuatro portadas en hacerlo.
+        // Si se resuelve con la ficha abierta, avisa por `revision` — sin
+        // escucharla, la caja se quedaba con la forma equivocada hasta salir y
+        // volver a entrar.
+        return ValueListenableBuilder<int>(
+          valueListenable: FormaPortada.revision,
+          builder: (context, _, __) => LayoutBuilder(
+            builder: (context, constraints) => _transicion(
+              'listo',
+              _fichaArmada(context, constraints.biggest),
+            ),
+          ),
+        );
+      }),
+    );
+  }
 
-        final content = DefaultTabController(
-          length: tabs.length,
-          child: NestedScrollView(
-            controller: c.scrollController,
-            headerSliverBuilder:
-                (BuildContext context, bool innerBoxIsScrolled) {
-              return [
-                SliverAppBar(
-                  pinned: true,
-                  floating: false,
-                  snap: false,
-                  primary: true,
-                  title: DetailAppbarTitle(
-                    c.detail?.title ?? '',
-                    controller: c.scrollController,
-                  ),
-                  flexibleSpace: DetailAppbarflexibleSpace(
+  /// La ficha ya cargada, armada para el tamaño que hay.
+  ///
+  /// Dos formas, y las dos salen del ancho medido en el momento:
+  ///
+  /// - **Un panel** (teléfono en vertical): cabecera, pestañas y debajo la
+  ///   lista de capítulos o la sinopsis.
+  /// - **Dos paneles** (tablet, y también el teléfono acostado): la ficha a la
+  ///   izquierda y la lista de capítulos a la derecha, entera y con todo el
+  ///   alto. En horizontal esto es la diferencia entre ver dos capítulos y ver
+  ///   la lista completa.
+  Widget _fichaArmada(BuildContext context, Size tamano) {
+    final episodesString = c.type == ExtensionType.bangumi
+        ? 'video.episodes'.i18n
+        : 'reader.chapters'.i18n;
+
+    // Antes esto salía de LayoutUtils.isTablet, que mide el ancho UNA vez y lo
+    // guarda para toda la sesión: al rotar seguía contestando lo de antes, así
+    // que un aparato que arrancó en vertical dibujaba el diseño angosto sobre
+    // una pantalla apaisada, y uno que arrancó acostado quedaba con dos
+    // paneles al ponerlo derecho. Ese cacheado NO se toca —lo usa el
+    // reproductor para otra decisión— pero acá se mide en vivo.
+    //
+    // No alcanza con el ancho. Una tablet de 10" en vertical (800x1280) pasa
+    // los 720 y partirla en dos deja la ficha en 368 puntos: la portada baja a
+    // 95x137, más chica que en un teléfono. Así que se parte cuando la
+    // pantalla es ancha para lo alta que es —el caso de acostado, que es donde
+    // hace falta— o cuando hay tanto ancho que las dos mitades siguen siendo
+    // holgadas.
+    //
+    // Y hay un tercer caso, que es el que faltaba: la PANTALLA BAJA. Con menos
+    // de 480 puntos de alto no entra apilar cabecera, pestañas y lista de
+    // ninguna manera — el contenido queda espachurrado abajo y, apenas se
+    // desplaza, se mete debajo de la barra: se veía el botón «Reproducir»
+    // partido al medio por las pestañas. Ahí la lista tiene que ir al costado,
+    // donde se queda con el alto entero y sin ninguna barra encima que la
+    // pueda tapar. Con 560 de ancho ya alcanza para partir, aunque no llegue a
+    // los 720 de la regla de arriba.
+    final dosPaneles = tamano.width >= 1000 ||
+        (tamano.width >= 720 && tamano.width >= tamano.height * 0.9) ||
+        (tamano.height < 480 && tamano.width >= 560);
+
+    final tabs = [
+      if (!dosPaneles) Tab(text: episodesString),
+      Tab(text: 'detail.overview'.i18n),
+      if (c.type == ExtensionType.bangumi) Tab(text: 'detail.cast'.i18n),
+    ];
+    // Una sola pestaña no es una pestaña: es un rótulo que se lleva 48 puntos
+    // de alto sin ofrecer nada que elegir. Pasa con dos paneles en lectura,
+    // donde los capítulos ya están al costado y solo queda la sinopsis.
+    final hayPestanas = tabs.length > 1;
+
+    // Con dos paneles, la ficha se queda con algo más de la mitad: la lista de
+    // capítulos son etiquetas cortas y le alcanza con menos, y de ese ancho de
+    // más sale que el título entre entero al lado de la portada. El techo de
+    // 600 es para pantallas grandes, donde la mitad de 1600 sería una columna
+    // absurdamente ancha para una portada y un título.
+    // El piso baja a 300 (antes 320) para que en una ventana chica y baja el
+    // panel de los capítulos no quede en una rendija: a 560 de ancho, 300 acá
+    // le dejan 259 al de al lado, que es lo mínimo para una tarjeta.
+    final anchoFicha =
+        dosPaneles ? (tamano.width * 0.52).clamp(300.0, 600.0) : tamano.width;
+
+    final medidas = MedidasCabecera(
+      disponible: Size(
+        anchoFicha,
+        tamano.height - MediaQuery.paddingOf(context).top,
+      ),
+      proporcionPortada: c.portadaProporcion,
+      reservaInferior: hayPestanas ? 48 : 0,
+    );
+
+    // El alto libre debajo de la cabecera desplegada. De acá sale si cada
+    // pestaña necesita desplazamiento o no.
+    final relleno = MediaQuery.paddingOf(context);
+    final espacioLibre = tamano.height -
+        relleno.top -
+        relleno.bottom -
+        medidas.alto -
+        (hayPestanas ? 48 : 0);
+
+    // Una entrada por pestaña, en el mismo orden: si su contenido entra sin
+    // plegar la cabecera, ahí la pantalla no se desplaza.
+    final entraCadaPestana = <bool>[
+      if (!dosPaneles) _capitulosEntran(context, anchoFicha, espacioLibre),
+      _sinopsisEntra(context, anchoFicha, espacioLibre),
+      // El reparto es una lista de largo desconocido: nunca se bloquea.
+      if (c.type == ExtensionType.bangumi) false,
+    ];
+
+    bool sinScroll(int pestana) =>
+        pestana >= 0 &&
+        pestana < entraCadaPestana.length &&
+        entraCadaPestana[pestana];
+
+    final ficha = DefaultTabController(
+      length: tabs.length,
+      child: _SegunLaPestana(
+        alCambiar: (pestana) => _volverArribaSiNoHayScroll(sinScroll(pestana)),
+        builder: (context, pestana) => NestedScrollView(
+          controller: c.scrollController,
+          // El tope que faltaba: si la lista entra sin plegar la cabecera, la
+          // pantalla no se desplaza. Con un capítulo solo se podía seguir
+          // bajando hasta dejar la cabecera plegada y la pantalla casi vacía,
+          // sin nada que ver más abajo.
+          //
+          // Solo en la pestaña de capítulos, que es la única cuyo alto se
+          // puede contar exacto. La sinopsis puede ser larguísima y bloquearla
+          // por error escondería texto, que es peor que un desplazamiento de
+          // sobra.
+          physics:
+              sinScroll(pestana) ? const NeverScrollableScrollPhysics() : null,
+          headerSliverBuilder: (BuildContext context, bool innerBoxIsScrolled) {
+            return [
+              SliverAppBar(
+                pinned: true,
+                floating: false,
+                snap: false,
+                primary: true,
+                // El tema de la app deja TODAS las barras transparentes
+                // (appBarTheme.backgroundColor). Acá eso se nota: al hacer
+                // scroll, el cuerpo de la página pasa por debajo de la barra y
+                // se veía la lista de capítulos cruzando por encima del botón de
+                // atrás. Con el fondo puesto, la barra tapa lo que pasa debajo.
+                backgroundColor: HomeTheme.bg,
+                surfaceTintColor: Colors.transparent,
+                // Flecha propia: la automática toma el color del tema, o sea
+                // el de la barra PLEGADA, y desplegada queda sobre la portada.
+                // En modo claro eso daba una flecha casi negra encima de una
+                // imagen oscura. Ver DetailAppbarBack.
+                leading: DetailAppbarBack(
+                  controller: c.scrollController,
+                  desde: medidas.relevoDelTitulo,
+                  onVolver: () => Navigator.of(context).maybePop(),
+                ),
+                title: DetailAppbarTitle(
+                  c.detail?.title ?? '',
+                  controller: c.scrollController,
+                  desde: medidas.relevoDelTitulo,
+                ),
+                flexibleSpace: DetailAppbarflexibleSpace(
+                  tag: widget.tag,
+                  medidas: medidas,
+                ),
+                bottom: hayPestanas
+                    ? PreferredSize(
+                        preferredSize: const Size.fromHeight(48),
+                        // Fondo sólido: el TabBar es transparente por defecto —
+                        // sin esto, una franja de la portada/imagen del hero se
+                        // veía asomando (recortada, fea) justo arriba de las
+                        // pestañas en vez de quedar tapada prolijamente.
+                        child: Container(
+                          color: HomeTheme.bg,
+                          // Sin estilar, TabBar usa los colores por defecto de
+                          // Material: el indicador sale MORADO —el color semilla
+                          // del tema, que no es el del app— y debajo queda una
+                          // línea divisoria GRIS que Material 3 dibuja sola. Las
+                          // dos cruzaban la ficha de lado a lado y no pegaban con
+                          // nada del diseño.
+                          child: TabBar(
+                            tabs: tabs,
+                            indicatorColor: HomeTheme.accentPink,
+                            labelColor: HomeTheme.textPrimary,
+                            unselectedLabelColor: HomeTheme.textMuted,
+                            // La franja de arriba ya la da el Container de acá,
+                            // así que la divisoria solo agregaba una raya suelta.
+                            dividerColor: Colors.transparent,
+                            indicatorSize: TabBarIndicatorSize.label,
+                          ),
+                        ),
+                      )
+                    : null,
+                // Favorito y compartir viven acá, no en la cabecera. En la
+                // cabecera se plegaban con el scroll —justo cuando uno ya está
+                // mirando la lista— y encima cada uno tenía su propia forma y su
+                // propio alto. Acá los tres son iconos de barra: miden lo mismo,
+                // se alinean solos y están siempre a mano.
+                actions: [
+                  // ── El botón solo cuando el gesto NO puede ──────────────
+                  //
+                  // En Android se refresca deslizando hacia abajo, así que el
+                  // botón sobra y se sacó. Pero hay un caso en el que el gesto
+                  // no existe: cuando el contenido entra sin plegar la
+                  // cabecera, la pantalla se bloquea a propósito (ver
+                  // `physics`) y sin arrastre no hay nada que dispare el
+                  // refresco. Pasa en las fichas de un solo capítulo.
+                  //
+                  // Sacando el botón sin mirar eso, esas fichas se quedaban sin
+                  // ninguna forma de ponerse al día. Así que aparece justo ahí
+                  // y en ningún otro lado.
+                  if (sinScroll(pestana)) _botonRefrescar(),
+                  DetailFavoriteButton(tag: widget.tag, compacto: true),
+                  DetailShareButton(tag: widget.tag, compacto: true),
+                  DetailTrackingButton(
                     tag: widget.tag,
-                    height: heroHeight,
-                    landscape: isLandscape,
                   ),
-                  // Fondo sólido: el TabBar es transparente por defecto —
-                  // sin esto, una franja de la portada/imagen del hero se
-                  // veía asomando (recortada, fea) justo arriba de las
-                  // pestañas en vez de quedar tapada prolijamente.
-                  bottom: PreferredSize(
-                    preferredSize: const Size.fromHeight(48),
-                    child: Container(
-                      color: HomeTheme.bg,
-                      // Sin estilar, TabBar usa los colores por defecto de
-                      // Material: el indicador sale MORADO —el color semilla
-                      // del tema, que no es el del app— y debajo queda una
-                      // línea divisoria GRIS que Material 3 dibuja sola. Las
-                      // dos cruzaban la ficha de lado a lado y no pegaban con
-                      // nada del diseño.
-                      child: TabBar(
-                        tabs: tabs,
-                        indicatorColor: HomeTheme.accentPink,
-                        labelColor: HomeTheme.textPrimary,
-                        unselectedLabelColor: HomeTheme.textMuted,
-                        // La franja de arriba ya la da el Container de acá, así
-                        // que la divisoria solo agregaba una raya suelta.
-                        dividerColor: Colors.transparent,
-                        indicatorSize: TabBarIndicatorSize.label,
-                      ),
-                    ),
-                  ),
-                  actions: [
-                    // DetailTrackingButton
-                    DetailTrackingButton(
-                      tag: widget.tag,
-                    ),
-                  ],
-                  expandedHeight: heroHeight,
+                  const SizedBox(width: 4),
+                ],
+                expandedHeight: medidas.alto,
+              ),
+            ];
+          },
+          body: SafeArea(
+            top: false,
+            child: TabBarView(
+              children: [
+                if (!dosPaneles) DetailEpisodes(tag: widget.tag),
+                DetailOverView(
+                  tag: widget.tag,
+                  onAlto: _anotarAltoSinopsis,
                 ),
-              ];
-            },
-            body: Padding(
-              padding: const EdgeInsets.all(8),
-              child: SafeArea(
-                top: false,
-                child: TabBarView(
-                  children: [
-                    if (!LayoutUtils.isTablet)
-                      DetailEpisodes(
-                        tag: widget.tag,
-                      ),
-                    DetailOverView(
-                      tag: widget.tag,
-                    ),
-                    if (c.type == ExtensionType.bangumi)
-                      Obx(() {
-                        if (c.tmdbDetail == null ||
-                            c.tmdbDetail!.casts.isEmpty) {
-                          return Column(
-                            children: [
-                              const SizedBox(height: 100),
-                              Text('detail.no-tmdb-data'.i18n),
-                              const SizedBox(height: 8),
-                              FilledButton(
-                                onPressed: () {
-                                  c.modifyTMDBBinding();
-                                },
-                                child: Text(
-                                  'detail.modify-tmdb-binding'.i18n,
-                                ),
-                              )
-                            ],
-                          );
-                        }
-                        return ListView.builder(
-                          padding: const EdgeInsets.all(0),
-                          itemBuilder: (context, index) {
-                            final cast = c.tmdbDetail!.casts[index];
-                            late String url = '';
-                            if (cast.profilePath != null) {
-                              url =
-                                  TmdbApi.getImageUrl(cast.profilePath!) ?? '';
-                            }
+                if (c.type == ExtensionType.bangumi) _repartoAndroid(context),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
 
-                            return ListTile(
-                              leading: Container(
-                                decoration: const BoxDecoration(
-                                  shape: BoxShape.circle,
-                                ),
-                                clipBehavior: Clip.antiAlias,
-                                child: CacheNetWorkImagePic(
-                                  url,
-                                  width: 50,
-                                  height: 50,
-                                  headers: c.detail?.headers,
-                                ),
-                              ),
-                              title: Text(cast.name),
-                              subtitle: Text(cast.character),
-                              onTap: () {
-                                launchUrl(
-                                  Uri.parse(
-                                    "https://www.themoviedb.org/person/${cast.id}",
-                                  ),
-                                );
-                              },
-                            );
-                          },
-                          itemCount: c.tmdbDetail!.casts.length,
-                        );
-                      }),
-                  ],
-                ),
+    if (!dosPaneles) return _conRefresco(ficha);
+
+    return Row(
+      children: [
+        SizedBox(width: anchoFicha, child: _conRefresco(ficha)),
+        VerticalDivider(width: 1, thickness: 1, color: HomeTheme.border),
+        // El panel de capítulos se queda con todo el alto, incluida la franja
+        // de la barra de estado — de ahí el SafeArea, que antes no estaba y
+        // dejaba el primer capítulo debajo del reloj.
+        Expanded(
+          child: SafeArea(
+            left: false,
+            child: DetailEpisodes(tag: widget.tag),
+          ),
+        ),
+      ],
+    );
+  }
+
+  /// ¿La lista de capítulos entra sin tener que plegar la cabecera?
+  ///
+  /// Si entra, la pantalla no se desplaza (ver `physics`, más arriba): con un
+  /// capítulo solo se podía seguir bajando hasta dejar la cabecera plegada y
+  /// la pantalla casi vacía.
+  ///
+  /// Ante la duda se contesta que NO entra. Bloquear el desplazamiento de más
+  /// escondería contenido —y eso es peor que un desplazamiento de sobra— así
+  /// que cada alto va estimado por lo ALTO (68 por capítulo es una tarjeta de
+  /// dos líneas más su separación, el caso más grande) y encima se pide un
+  /// margen de 48 puntos.
+  bool _capitulosEntran(
+      BuildContext context, double anchoFicha, double espacioLibre) {
+    final grupos = c.detail?.episodes;
+    if (grupos == null || grupos.isEmpty) return false;
+    final indice = c.selectEpGroup.value;
+    if (indice < 0 || indice >= grupos.length) return false;
+    final urls = grupos[indice].urls;
+    if (urls.isEmpty) return false;
+
+    // Con muchos capítulos no entra ni por asomo, y medir uno por uno solo
+    // tiene sentido mientras la cuenta pueda dar justa.
+    if (urls.length > 40) return false;
+
+    final alto = GeometriaCapitulos.altoDeLaLista(
+      context: context,
+      ancho: anchoFicha,
+      etiquetas: [for (final u in urls) DetailEpisodes.etiquetaDe(u.name)],
+      enGrilla: c.type == ExtensionType.bangumi,
+      hayGrupos: grupos.length > 1,
+    );
+    if (alto == null) return false;
+    // 8 de margen y no 48: las alturas ya no se estiman, se miden con la misma
+    // geometría con la que se dibuja la lista. El margen grande de antes hacía
+    // que la cuenta diera "no entra" casi siempre y no se bloqueara nada.
+    return alto + 8 <= espacioLibre;
+  }
+
+  /// Lo mismo para la pestaña de sinopsis.
+  /// Envuelve la ficha con el gesto de deslizar hacia abajo para refrescar.
+  ///
+  /// ── El choque con el tope del scroll, y cómo se resuelve ────────────────
+  ///
+  /// Cuando el contenido entra sin plegar la cabecera, la pantalla se bloquea
+  /// a propósito (ver `physics`, arriba). Pero ese gesto es el MISMO que el de
+  /// refrescar: sin arrastre no hay nada que lo dispare, así que en esas
+  /// fichas —las de un solo capítulo— deslizar no haría nada.
+  ///
+  /// Por eso el refresco también vive como botón en la barra, en las dos
+  /// plataformas. El gesto es el camino natural cuando la ficha se desplaza; el
+  /// botón es el que siempre está.
+  Widget _conRefresco(Widget hijo) {
+    return RefreshIndicator(
+      onRefresh: c.refrescarAMano,
+      color: HomeTheme.accentPink,
+      backgroundColor: HomeTheme.cardSurface,
+      // Debajo de la barra, no encima: arriba de todo la rueda queda tapada
+      // por el título y la flecha de volver.
+      edgeOffset: MediaQuery.paddingOf(context).top + 56,
+      child: hijo,
+    );
+  }
+
+  /// El botón de refrescar, para cuando el gesto de deslizar no aplica.
+  Widget _botonRefrescar() {
+    return Obx(() {
+      // Mientras carga no se ofrece: ya está trayendo lo mismo que pediría.
+      if (c.isLoading.value) return const SizedBox.shrink();
+      return IconButton(
+        tooltip: 'common.refresh'.i18n,
+        // Encima de la portada. Ver HomeTheme.sobrePortada.
+        color: HomeTheme.sobrePortada,
+        icon: const Icon(Icons.refresh_rounded),
+        onPressed: () => unawaited(c.refrescarAMano()),
+      );
+    });
+  }
+
+  /// El alto REAL de la pestaña de sinopsis, medido por ella misma.
+  ///
+  /// Ver [DetailOverView.onAlto]. La estimación solo sabía contestar con la
+  /// sinopsis pelada: en cuanto hay datos de TMDB —que en vídeo es casi
+  /// siempre— se rendía, y esta pestaña no se bloqueaba nunca.
+  double? _altoSinopsis;
+
+  void _anotarAltoSinopsis(double alto) {
+    if (!mounted) return;
+    final anterior = _altoSinopsis;
+    if (anterior != null && (anterior - alto).abs() < 1) return;
+    setState(() => _altoSinopsis = alto);
+  }
+
+  bool _sinopsisEntra(
+      BuildContext context, double anchoFicha, double espacioLibre) {
+    // La medida de verdad manda; llega después del primer dibujado. Hasta
+    // entonces se usa la estimación, que es conservadora.
+    final alto =
+        _altoSinopsis ?? DetailOverView.altoEstimado(context, anchoFicha, c);
+    // null es "no se puede saber" — ver DetailOverView.altoEstimado. Ahí se da
+    // por hecho que no entra: bloquear el desplazamiento por error escondería
+    // texto, y eso es peor que un desplazamiento de sobra.
+    if (alto == null) return false;
+    // 8 y no 48: esto ya no se estima, se mide.
+    return alto + 8 <= espacioLibre;
+  }
+
+  /// Al entrar a una pestaña que no se puede desplazar, la pantalla no puede
+  /// quedarse a medio plegar: se vuelve arriba sola.
+  void _volverArribaSiNoHayScroll(bool sinScroll) {
+    if (!sinScroll) return;
+    final controlador = c.scrollController;
+    if (!controlador.hasClients || controlador.offset <= 0) return;
+    // Después del fotograma: esto sale de un aviso del TabController, en plena
+    // reconstrucción, y mover el scroll ahí mismo es pedir problemas.
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted || !controlador.hasClients) return;
+      controlador.animateTo(
+        0,
+        duration: const Duration(milliseconds: 220),
+        curve: Curves.easeOut,
+      );
+    });
+  }
+
+  /// La pestaña de reparto (solo vídeo, y solo si TMDB devolvió algo).
+  Widget _repartoAndroid(BuildContext context) {
+    return Obx(() {
+      if (c.tmdbDetail == null || c.tmdbDetail!.casts.isEmpty) {
+        // ── Centrado y con scroll, no colgado de un hueco fijo ────────────
+        //
+        // Antes era un Column con 100 puntos de relleno arriba y sin nada que
+        // lo dejara desplazarse. En una pantalla baja eso no entra: el texto
+        // quedaba cortado contra las pestañas y sin márgenes, pegado a los dos
+        // bordes. Se reportó con captura.
+        //
+        // Centrado ocupa lo que hay, y con el scroll de respaldo nunca se
+        // desborda por chica que sea la caja.
+        return LayoutBuilder(
+          builder: (context, cons) => SingleChildScrollView(
+            padding: const EdgeInsets.fromLTRB(24, 16, 24, 24),
+            child: ConstrainedBox(
+              constraints: BoxConstraints(
+                minHeight: (cons.maxHeight - 40).clamp(0.0, double.infinity),
+              ),
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  Text(
+                    'detail.no-tmdb-data'.i18n,
+                    textAlign: TextAlign.center,
+                    style: TextStyle(
+                      color: HomeTheme.textMuted,
+                      height: 1.4,
+                    ),
+                  ),
+                  const SizedBox(height: 16),
+                  FilledButton(
+                    onPressed: () {
+                      c.modifyTMDBBinding();
+                    },
+                    child: Text(
+                      'detail.modify-tmdb-binding'.i18n,
+                    ),
+                  )
+                ],
               ),
             ),
           ),
         );
-        if (LayoutUtils.isTablet) {
-          return Row(
-            children: [
-              Expanded(child: content),
-              Expanded(
-                child: SafeArea(
-                    child: DetailEpisodes(
-                  tag: widget.tag,
-                )),
+      }
+      return ListView.builder(
+        // El mismo hueco de abajo que la lista de capítulos: el botón flotante
+        // se apoya en esa esquina y tapaba al último del reparto.
+        padding: const EdgeInsets.only(bottom: 88),
+        itemBuilder: (context, index) {
+          final cast = c.tmdbDetail!.casts[index];
+          late String url = '';
+          if (cast.profilePath != null) {
+            url = TmdbApi.getImageUrl(cast.profilePath!) ?? '';
+          }
+
+          return ListTile(
+            leading: Container(
+              decoration: const BoxDecoration(
+                shape: BoxShape.circle,
               ),
-            ],
+              clipBehavior: Clip.antiAlias,
+              child: CacheNetWorkImagePic(
+                url,
+                width: 50,
+                height: 50,
+                headers: c.detail?.headers,
+              ),
+            ),
+            title: Text(cast.name),
+            subtitle: Text(cast.character),
+            onTap: () {
+              launchUrl(
+                Uri.parse(
+                  "https://www.themoviedb.org/person/${cast.id}",
+                ),
+              );
+            },
           );
-        }
-        return _transicion('listo', content);
-      }),
+        },
+        itemCount: c.tmdbDetail!.casts.length,
+      );
+    });
+  }
+
+  /// Las acciones de la ficha en escritorio: favorito, compartir y refrescar.
+  ///
+  /// En una tarjeta con fondo propio y no sueltos sobre la portada: encima de
+  /// una imagen clara, tres iconos blancos no se leen.
+  Widget _barraDeAcciones() {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 2),
+      decoration: BoxDecoration(
+        color: HomeTheme.cardSurface.withValues(alpha: 0.9),
+        borderRadius: BorderRadius.circular(999),
+        border: Border.all(color: HomeTheme.border),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          DetailFavoriteButton(tag: widget.tag, compacto: true),
+          DetailShareButton(tag: widget.tag, compacto: true),
+          Obx(() {
+            // Mientras carga no se ofrece: ya está trayendo lo mismo que
+            // pediría. En el teléfono este botón no está —ahí se refresca
+            // deslizando— pero en escritorio ese gesto no existe.
+            if (c.isLoading.value) return const SizedBox.shrink();
+            return fluent.IconButton(
+              icon: const Icon(fluent.FluentIcons.refresh, size: 16),
+              onPressed: () => unawaited(c.refrescarAMano()),
+            );
+          }),
+        ],
+      ),
     );
   }
 
@@ -454,6 +828,17 @@ class _DetailPageState extends State<DetailPage> {
           ),
           Positioned.fill(child: LayoutBuilder(
             builder: (context, constraints) {
+              // El aire de arriba y el alto del bloque salen de la ventana, no
+              // de dos números fijos. Con 300 de aire más 330 de bloque, en una
+              // ventana de 700 de alto la ficha entera arrancaba fuera de la
+              // pantalla: había que desplazar para ver hasta el título. Y en un
+              // monitor grande sobraba fondo vacío arriba.
+              final altoVentana = constraints.maxHeight;
+              final aireArriba = (altoVentana * 0.34).clamp(120.0, 320.0);
+              final altoHero = (altoVentana * 0.44).clamp(240.0, 400.0);
+              // Mismo criterio que en el teléfono: el título crece con el
+              // bloque en vez de quedar clavado en 30.
+              final tamanoTitulo = (altoHero * 0.09).clamp(24.0, 34.0);
               return SingleChildScrollView(
                 controller: c.scrollController,
                 padding: EdgeInsets.symmetric(
@@ -462,9 +847,9 @@ class _DetailPageState extends State<DetailPage> {
                 ),
                 child: Column(
                   children: [
-                    const SizedBox(height: 300),
+                    SizedBox(height: aireArriba),
                     SizedBox(
-                      height: 330,
+                      height: altoHero,
                       child: Row(
                         children: [
                           // c.portada y no c.detail!.cover: si la extensión no
@@ -492,17 +877,28 @@ class _DetailPageState extends State<DetailPage> {
                                     // una apaisada saldría enorme y una
                                     // vertical, minúscula.
                                     width: c.portadaApaisada
-                                        ? 320
-                                        : 330 * c.portadaProporcion,
+                                        ? altoHero * 0.97
+                                        : altoHero * c.portadaProporcion,
                                     height: c.portadaApaisada
-                                        ? 320 / c.portadaProporcion
-                                        : 330,
+                                        ? altoHero * 0.97 / c.portadaProporcion
+                                        : altoHero,
                                     clipBehavior: Clip.antiAlias,
                                     decoration: BoxDecoration(
                                       color: HomeTheme.cardSurface,
-                                      borderRadius: BorderRadius.circular(10),
+                                      borderRadius: BorderRadius.circular(12),
                                       border:
                                           Border.all(color: HomeTheme.border),
+                                      // La misma sombra que en el teléfono: la
+                                      // portada va sobre su propia imagen
+                                      // ampliada y sin esto el borde se pierde
+                                      // en las portadas oscuras.
+                                      boxShadow: const [
+                                        BoxShadow(
+                                          color: Color(0x99000000),
+                                          blurRadius: 24,
+                                          offset: Offset(0, 10),
+                                        ),
+                                      ],
                                     ),
                                     child: PortadaConRelevo(
                                       alt: c.detail?.title ?? '',
@@ -527,29 +923,36 @@ class _DetailPageState extends State<DetailPage> {
                             children: [
                               SelectableText(
                                 c.detail?.title ?? '',
-                                maxLines: 2,
-                                style: const TextStyle(
-                                  fontSize: 30,
+                                // 3 líneas (antes 2): con dos, los títulos
+                                // largos se cortaban teniendo lugar de sobra
+                                // al lado de la portada.
+                                maxLines: 3,
+                                style: TextStyle(
+                                  fontSize: tamanoTitulo,
+                                  height: 1.15,
                                   fontWeight: FontWeight.w800,
                                   color: HomeTheme.textPrimary,
+                                  // Igual que en el teléfono: el título va
+                                  // sobre la propia portada ampliada y sobre
+                                  // una imagen clara se comía con el fondo.
+                                  shadows: const [
+                                    Shadow(
+                                        color: Color(0xCC000000),
+                                        blurRadius: 14),
+                                  ],
                                 ),
                               ),
-                              const SizedBox(height: 20),
+                              const SizedBox(height: 18),
                               DetailExtensionTile(tag: widget.tag),
-                              const SizedBox(height: 20),
+                              const SizedBox(height: 18),
                               Row(
                                 children: [
-                                  // 收藏按钮
-                                  // Ver BotonPulsable: la misma señal al
-                                  // tocar que en el telefono.
-                                  BotonPulsable(
-                                      child: DetailFavoriteButton(
-                                          tag: widget.tag)),
-                                  const SizedBox(width: 8),
-                                  BotonPulsable(
-                                      child:
-                                          DetailShareButton(tag: widget.tag)),
-                                  const SizedBox(width: 8),
+                                  // Favorito, compartir y refrescar YA NO van
+                                  // acá: se fueron a la barra de arriba, como
+                                  // en el teléfono (ver _barraDeAcciones).
+                                  // Eran cuatro botones anchos con texto
+                                  // cruzando la portada, y tres de ellos decían
+                                  // con palabras lo que el icono ya dice.
                                   // Se oculta solo en películas — ver
                                   // DetailFinishedButton.
                                   DetailFinishedButton(tag: widget.tag),
@@ -574,7 +977,7 @@ class _DetailPageState extends State<DetailPage> {
                                           RoundedRectangleBorder(
                                             borderRadius:
                                                 BorderRadius.circular(999),
-                                            side: const BorderSide(
+                                            side: BorderSide(
                                                 color: HomeTheme.border),
                                           ),
                                         ),
@@ -709,7 +1112,7 @@ class _DetailPageState extends State<DetailPage> {
                                             const SizedBox(height: 8),
                                             Text(
                                               cast.name,
-                                              style: const TextStyle(
+                                              style: TextStyle(
                                                 fontWeight: FontWeight.bold,
                                                 color: HomeTheme.textPrimary,
                                               ),
@@ -717,7 +1120,7 @@ class _DetailPageState extends State<DetailPage> {
                                             Text(
                                               cast.character,
                                               overflow: TextOverflow.ellipsis,
-                                              style: const TextStyle(
+                                              style: TextStyle(
                                                   color: HomeTheme.textMuted),
                                             ),
                                           ],
@@ -808,7 +1211,24 @@ class _DetailPageState extends State<DetailPage> {
                 ),
               );
             },
-          ))
+          )),
+          // ── Las acciones, arriba a la derecha ────────────────────────
+          //
+          // Estaban dentro del hero, en una fila de botones anchos con texto
+          // cruzando la portada. Tres de ellos —favorito, compartir,
+          // refrescar— decían con palabras exactamente lo que su icono ya
+          // dice, y encima se iban con el desplazamiento justo cuando uno ya
+          // está mirando la lista de capítulos.
+          //
+          // Arriba y fijos, como en el teléfono: los tres miden lo mismo, se
+          // alinean solos y están siempre a mano. Lo que se queda abajo es lo
+          // que NO se puede resumir en un icono («marcar como finalizada») o
+          // lo que abre otra pantalla (el seguimiento).
+          Positioned(
+            top: 8,
+            right: 12,
+            child: _barraDeAcciones(),
+          ),
         ],
       );
       return _transicion('listo', contenido);
@@ -824,6 +1244,53 @@ class _DetailPageState extends State<DetailPage> {
   }
 }
 
+/// Rearma a su hijo cuando cambia la pestaña visible — y SOLO entonces.
+///
+/// De la pestaña activa depende si la pantalla se puede desplazar o no, así
+/// que hay que enterarse del cambio. Escuchando la animación del TabController
+/// se reconstruiría en cada fotograma del deslizamiento, que es tirar trabajo:
+/// acá se compara el índice y se avisa una sola vez.
+class _SegunLaPestana extends StatefulWidget {
+  const _SegunLaPestana({required this.builder, this.alCambiar});
+
+  final Widget Function(BuildContext context, int pestana) builder;
+  final void Function(int pestana)? alCambiar;
+
+  @override
+  State<_SegunLaPestana> createState() => _SegunLaPestanaState();
+}
+
+class _SegunLaPestanaState extends State<_SegunLaPestana> {
+  TabController? _tab;
+  int _indice = 0;
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    final nuevo = DefaultTabController.of(context);
+    if (identical(nuevo, _tab)) return;
+    _tab?.removeListener(_alCambiar);
+    _tab = nuevo..addListener(_alCambiar);
+    _indice = nuevo.index;
+  }
+
+  void _alCambiar() {
+    final actual = _tab?.index ?? 0;
+    if (actual == _indice) return;
+    setState(() => _indice = actual);
+    widget.alCambiar?.call(actual);
+  }
+
+  @override
+  void dispose() {
+    _tab?.removeListener(_alCambiar);
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) => widget.builder(context, _indice);
+}
+
 _buildInfoTile(BuildContext context, String title, String value) {
   return Column(
     crossAxisAlignment: CrossAxisAlignment.start,
@@ -831,7 +1298,7 @@ _buildInfoTile(BuildContext context, String title, String value) {
     children: [
       Text(
         title,
-        style: const TextStyle(
+        style: TextStyle(
           fontWeight: FontWeight.bold,
           color: HomeTheme.textPrimary,
         ),
@@ -839,7 +1306,7 @@ _buildInfoTile(BuildContext context, String title, String value) {
       const SizedBox(height: 8),
       SelectableText(
         value,
-        style: const TextStyle(color: HomeTheme.textMuted),
+        style: TextStyle(color: HomeTheme.textMuted),
       ),
       const SizedBox(height: 16)
     ],

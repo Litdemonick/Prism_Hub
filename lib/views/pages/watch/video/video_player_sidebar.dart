@@ -11,8 +11,6 @@ import 'package:prismhub/views/widgets/platform_widget.dart';
 import 'package:prismhub/views/widgets/watch/playlist.dart';
 import 'package:prismhub/views/widgets/home/home_theme.dart';
 import 'package:prismhub/views/widgets/watch/tutorial_reproductor.dart';
-import 'package:prismhub/views/pages/watch/video/webview_player_page.dart'
-    show isKnownNativeServer;
 
 enum SidebarTab {
   episodes,
@@ -1036,7 +1034,7 @@ class _FilaSeleccionable extends StatelessWidget {
       padding: const EdgeInsets.only(bottom: 4),
       child: Material(
         color: activo
-            ? HomeTheme.accentPink.withValues(alpha: 0.18)
+            ? HomeTheme.oscuroAcento.withValues(alpha: 0.18)
             : Colors.transparent,
         borderRadius: BorderRadius.circular(10),
         child: ListTile(
@@ -1045,7 +1043,7 @@ class _FilaSeleccionable extends StatelessWidget {
             borderRadius: BorderRadius.circular(10),
             side: BorderSide(
               color: activo
-                  ? HomeTheme.accentPink
+                  ? HomeTheme.oscuroAcento
                   : Colors.white.withValues(alpha: 0.12),
             ),
           ),
@@ -1054,7 +1052,7 @@ class _FilaSeleccionable extends StatelessWidget {
               : Icon(
                   icono,
                   size: 18,
-                  color: activo ? HomeTheme.accentPink : colorIcono,
+                  color: activo ? HomeTheme.oscuroAcento : colorIcono,
                 ),
           // Sin el leading, el ListTile deja un hueco a la izquierda igual;
           // con horizontalTitleGap chico el icono queda pegado al texto y la
@@ -1064,13 +1062,13 @@ class _FilaSeleccionable extends StatelessWidget {
           title: Text(
             texto,
             style: TextStyle(
-              color: activo ? HomeTheme.accentPink : HomeTheme.textPrimary,
+              color: activo ? HomeTheme.oscuroAcento : HomeTheme.oscuroTexto,
               fontWeight: activo ? FontWeight.w700 : FontWeight.w400,
             ),
           ),
           trailing: activo
-              ? const Icon(Icons.check_rounded,
-                  size: 18, color: HomeTheme.accentPink)
+              ? Icon(Icons.check_rounded,
+                  size: 18, color: HomeTheme.oscuroAcento)
               : null,
           onTap: onTap,
         ),
@@ -1101,7 +1099,7 @@ class _PanelVacio extends StatelessWidget {
             Text(
               texto,
               textAlign: TextAlign.center,
-              style: const TextStyle(color: HomeTheme.textMuted, fontSize: 13),
+              style: TextStyle(color: HomeTheme.oscuroTextoTenue, fontSize: 13),
             ),
           ],
         ),
@@ -1181,10 +1179,10 @@ class _ServerSelector extends StatelessWidget {
             _FilaSeleccionable(
               texto: entry.key,
               activo: entry.key == current,
-              icono: isKnownNativeServer(entry.key, entry.value)
+              icono: controller.esServidorNativo(entry.key, entry.value)
                   ? Icons.bolt_rounded
                   : Icons.public_rounded,
-              colorIcono: isKnownNativeServer(entry.key, entry.value)
+              colorIcono: controller.esServidorNativo(entry.key, entry.value)
                   ? const Color(0xFF69F0AE)
                   : const Color(0xFF7FB2FF),
               onTap: () {
@@ -1263,19 +1261,46 @@ class _TrackSelector extends StatelessWidget {
           title: 'video.audio'.i18n,
         ),
         const SizedBox(height: 5),
-        for (final audio in controller.player.state.tracks.audio)
-          if (audio.language != null || audio.title != null)
-            ListTile(
-              selected: audio == controller.player.state.track.audio,
-              title: Text(audio.title ?? ''),
-              subtitle: Text(audio.language ?? ''),
-              onTap: () {
-                controller.player.setAudioTrack(
-                  audio,
-                );
-                controller.showSidebar.value = false;
-              },
+        // Las pistas de audio del propio vídeo. **Se muestran TODAS**: antes
+        // se salteaban las que no traían ni título ni idioma y quedaban
+        // invisibles aunque se pudieran elegir. Ver la misma nota en
+        // video_player_desktop_controls.dart.
+        // Las que declara la lista maestra de HLS: son las que traen nombre
+        // de idioma y las que mpv no ve solo. Ver audiosHls en
+        // video_controller.dart.
+        for (final (i, audio) in controller.audiosHls.indexed)
+          ListTile(
+            selected: controller.audioHlsElegido.value == i,
+            title: Text(audio.nombre),
+            subtitle: audio.idioma != null ? Text(audio.idioma!) : null,
+            onTap: () {
+              controller.elegirAudioHls(i);
+              controller.showSidebar.value = false;
+            },
+          ),
+        if (_audiosDelVideo(controller).isEmpty && controller.audiosHls.isEmpty)
+          Padding(
+            padding: const EdgeInsets.fromLTRB(16, 2, 16, 6),
+            child: Text(
+              'Este vídeo trae un solo audio',
+              style:
+                  TextStyle(fontSize: 12, color: Colors.white.withAlpha(120)),
             ),
+          ),
+        for (final (i, audio) in _audiosDelVideo(controller).indexed)
+          ListTile(
+            selected: audio == controller.player.state.track.audio,
+            title: Text(_nombreDeLaPista(audio.title, audio.language, i)),
+            subtitle: audio.title != null && audio.language != null
+                ? Text(audio.language!)
+                : null,
+            onTap: () {
+              controller.player.setAudioTrack(
+                audio,
+              );
+              controller.showSidebar.value = false;
+            },
+          ),
       ],
     );
   }
@@ -1306,4 +1331,18 @@ class _TorrentFiles extends StatelessWidget {
       ],
     );
   }
+}
+
+/// Las pistas de audio de verdad, sin las entradas `no` y `auto` que media_kit
+/// agrega y que no son pistas sino órdenes para el reproductor.
+List<AudioTrack> _audiosDelVideo(VideoPlayerController c) =>
+    c.player.state.tracks.audio
+        .where((a) => a != AudioTrack.no() && a != AudioTrack.auto())
+        .toList();
+
+/// El nombre que se muestra: el suyo, el idioma, o el número.
+String _nombreDeLaPista(String? titulo, String? idioma, int indice) {
+  if (titulo != null && titulo.trim().isNotEmpty) return titulo;
+  if (idioma != null && idioma.trim().isNotEmpty) return idioma;
+  return 'Pista ${indice + 1}';
 }

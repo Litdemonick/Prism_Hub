@@ -335,41 +335,41 @@ class _VideoPlayerMobileControlsState extends State<VideoPlayerMobileControls> {
                       // televisor. Era esto lo que aparecia al adelantar.
                       opacity: (_c.dlnaDevice.value == null &&
                               ((!_c.isGettingWatchData.value &&
-                                  !_c.hasRenderedFrame.value &&
-                                  // Ver el comentario equivalente en los
-                                  // controles de escritorio.
-                                  _c.error.value.isEmpty &&
-                                  // El aviso de "el servidor falló, tocá para
-                                  // reproducir" espera una acción del usuario:
-                                  // nada está cargando y la rueda no tiene por
-                                  // qué girar. Faltaba esta condición y se veía
-                                  // dando vueltas DETRÁS del aviso, que encima
-                                  // hace parecer que si uno espera se arregla
-                                  // solo. El fallo de servidor no se guarda en
-                                  // `error` —tiene su propio campo— así que la
-                                  // comprobación de arriba no lo cubría.
-                                  _c.serverFailedMessage.value.isEmpty &&
-                                  // Esperando que se elija/confirme servidor:
-                                  // el boton de play esta ahi pidiendo un
-                                  // toque y no hay nada cargando. La rueda
-                                  // girando detras hacia parecer que si uno
-                                  // espera arranca solo.
-                                  !_c.awaitingServerChoice.value &&
-                                  !_c.isWebViewActive.value) ||
-                              (_c.hasRenderedFrame.value &&
-                                  (_c.isSeeking.value ||
-                                      // imagenCongelada: con la red mal, mpv
-                                      // deja de avisar que esta cargando, asi
-                                      // que la rueda no salia y la pantalla
-                                      // quedaba quieta sin explicacion. Esto
-                                      // mira que la posicion no avance, que es
-                                      // lo unico que siempre se puede saber.
-                                      _c.imagenCongelada.value ||
-                                      (_c.isPlaying.value &&
-                                          _c.isActuallyBuffering.value)))))
+                                      !_c.hasRenderedFrame.value &&
+                                      // Ver el comentario equivalente en los
+                                      // controles de escritorio.
+                                      _c.error.value.isEmpty &&
+                                      // El aviso de "el servidor falló, tocá para
+                                      // reproducir" espera una acción del usuario:
+                                      // nada está cargando y la rueda no tiene por
+                                      // qué girar. Faltaba esta condición y se veía
+                                      // dando vueltas DETRÁS del aviso, que encima
+                                      // hace parecer que si uno espera se arregla
+                                      // solo. El fallo de servidor no se guarda en
+                                      // `error` —tiene su propio campo— así que la
+                                      // comprobación de arriba no lo cubría.
+                                      _c.serverFailedMessage.value.isEmpty &&
+                                      // Esperando que se elija/confirme servidor:
+                                      // el boton de play esta ahi pidiendo un
+                                      // toque y no hay nada cargando. La rueda
+                                      // girando detras hacia parecer que si uno
+                                      // espera arranca solo.
+                                      !_c.awaitingServerChoice.value &&
+                                      !_c.isWebViewActive.value) ||
+                                  (_c.hasRenderedFrame.value &&
+                                      (_c.isSeeking.value ||
+                                          // imagenCongelada: con la red mal, mpv
+                                          // deja de avisar que esta cargando, asi
+                                          // que la rueda no salia y la pantalla
+                                          // quedaba quieta sin explicacion. Esto
+                                          // mira que la posicion no avance, que es
+                                          // lo unico que siempre se puede saber.
+                                          _c.imagenCongelada.value ||
+                                          (_c.isPlaying.value &&
+                                              _c.isActuallyBuffering.value)))))
                           ? 1
                           : 0,
-                      child: const Center(
+                      child: Center(
                         child: DecoratedBox(
                           decoration: BoxDecoration(
                             // Disco oscuro detrás: sobre un fotograma claro
@@ -385,7 +385,7 @@ class _VideoPlayerMobileControlsState extends State<VideoPlayerMobileControls> {
                               child: CircularProgressIndicator(
                                 strokeWidth: 3.5,
                                 valueColor: AlwaysStoppedAnimation(
-                                    HomeTheme.accentPink),
+                                    HomeTheme.oscuroAcento),
                               ),
                             ),
                           ),
@@ -746,11 +746,11 @@ class _VideoPlayerMobileControlsState extends State<VideoPlayerMobileControls> {
                             decoration: BoxDecoration(
                               shape: BoxShape.circle,
                               color:
-                                  HomeTheme.accentPink.withValues(alpha: 0.18),
-                              border: Border.all(color: HomeTheme.accentPink),
+                                  HomeTheme.oscuroAcento.withValues(alpha: 0.18),
+                              border: Border.all(color: HomeTheme.oscuroAcento),
                             ),
-                            child: const Icon(Icons.play_arrow,
-                                color: HomeTheme.accentPink, size: 36),
+                            child: Icon(Icons.play_arrow,
+                                color: HomeTheme.oscuroAcento, size: 36),
                           ),
                           const SizedBox(height: 10),
                           const Text(
@@ -958,7 +958,7 @@ class _VideoPlayerMobileControlsState extends State<VideoPlayerMobileControls> {
                           decoration: BoxDecoration(
                             color: const Color(0xB3000000),
                             borderRadius: BorderRadius.circular(999),
-                            border: Border.all(color: HomeTheme.accentPink),
+                            border: Border.all(color: HomeTheme.oscuroAcento),
                           ),
                           child: Row(
                             mainAxisSize: MainAxisSize.min,
@@ -967,7 +967,7 @@ class _VideoPlayerMobileControlsState extends State<VideoPlayerMobileControls> {
                                 (_saltoVisible ?? 0) < 0
                                     ? Icons.fast_rewind
                                     : Icons.fast_forward,
-                                color: HomeTheme.accentPink,
+                                color: HomeTheme.oscuroAcento,
                                 size: 20,
                               ),
                               const SizedBox(width: 8),
@@ -1066,6 +1066,49 @@ class _VideoPlayerMobileControlsState extends State<VideoPlayerMobileControls> {
                       // bajo demanda desde el botón de servidor en el footer
                       // (ver SidebarTab.servers).
                     ],
+                  ),
+                ),
+              ),
+            ),
+            // ── La flecha de volver NO se esconde ──────────────────────────
+            //
+            // Va aparte del encabezado, fuera de su desvanecido, para que se
+            // quede aunque los controles se oculten solos y aunque el vídeo
+            // esté a pantalla completa.
+            //
+            // El criterio ya se cambió una vez en la otra dirección: la flecha
+            // estaba siempre visible, se pidió que se ocultara con el resto, y
+            // ahora se vuelve a pedir que se quede. Se anota para que la
+            // próxima vez que alguien lea esto no lo tome por un descuido.
+            //
+            // El motivo de que se quede es sólido: es la ÚNICA salida de esta
+            // pantalla. Con los controles ocultos —que se ocultan solos a los
+            // pocos segundos— y sin barra del sistema, quedaba sin ninguna
+            // forma visible de volver: había que tocar para que aparecieran y
+            // recién ahí salir.
+            Positioned(
+              top: 0,
+              left: 0,
+              child: SafeArea(
+                bottom: false,
+                child: Padding(
+                  padding: const EdgeInsets.only(left: 8, top: 4),
+                  child: DecoratedBox(
+                    // Un fondo redondo detrás: la flecha sola, blanca, se
+                    // pierde sobre una escena clara, y ahora que se queda
+                    // encima del vídeo todo el tiempo tiene que leerse sobre
+                    // cualquier cosa.
+                    decoration: BoxDecoration(
+                      color: Colors.black.withValues(alpha: 0.45),
+                      shape: BoxShape.circle,
+                    ),
+                    child: IconButton(
+                      tooltip:
+                          MaterialLocalizations.of(context).backButtonTooltip,
+                      iconSize: 22,
+                      icon: const Icon(Icons.arrow_back, color: Colors.white),
+                      onPressed: () => unawaited(_c.closeRoute(context)),
+                    ),
                   ),
                 ),
               ),
@@ -1174,13 +1217,13 @@ class _PanelCasteandoState extends State<_PanelCasteando>
           mainAxisSize: MainAxisSize.min,
           children: [
             if (conectando)
-              const SizedBox(
+              SizedBox(
                 width: 44,
                 height: 44,
                 child: CircularProgressIndicator(
                   strokeWidth: 3.5,
                   valueColor:
-                      AlwaysStoppedAnimation<Color>(HomeTheme.accentPink),
+                      AlwaysStoppedAnimation<Color>(HomeTheme.oscuroAcento),
                 ),
               )
             else
@@ -1189,7 +1232,7 @@ class _PanelCasteandoState extends State<_PanelCasteando>
                     ? Icons.cast_connected
                     : Icons.pause_circle_outline,
                 size: 44,
-                color: HomeTheme.accentPink,
+                color: HomeTheme.oscuroAcento,
               ),
             const SizedBox(height: 14),
             Text(
@@ -1216,25 +1259,26 @@ class _PanelCasteandoState extends State<_PanelCasteando>
                       ? 'video.cast-seeking'.i18n
                       : conectando
                           ? 'video.cast-connecting'.i18n
-                      : !reproduciendo
-                          ? 'video.cast-paused-here'.i18n
-                          : velocidad != null
-                              ? FlutterI18n.translate(
-                                  context,
-                                  'video.cast-speed',
-                                  translationParams: {'speed': velocidad},
-                                )
-                              : 'video.cast-on-device'.i18n;
+                          : !reproduciendo
+                              ? 'video.cast-paused-here'.i18n
+                              : velocidad != null
+                                  ? FlutterI18n.translate(
+                                      context,
+                                      'video.cast-speed',
+                                      translationParams: {'speed': velocidad},
+                                    )
+                                  : 'video.cast-on-device'.i18n;
               return Text(
                 aviso ?? estado,
                 textAlign: TextAlign.center,
                 style: TextStyle(
                   fontSize: 13,
                   height: 1.4,
-                  fontWeight: aviso == null ? FontWeight.normal : FontWeight.w700,
+                  fontWeight:
+                      aviso == null ? FontWeight.normal : FontWeight.w700,
                   color: aviso == null
                       ? Colors.white.withValues(alpha: 0.75)
-                      : HomeTheme.accentPink,
+                      : HomeTheme.oscuroAcento,
                 ),
               );
             }),
@@ -1326,13 +1370,13 @@ class _AyudaGestosCast extends StatelessWidget {
                 shape: BoxShape.circle,
                 color: Color.lerp(
                   Colors.white.withValues(alpha: 0.06),
-                  HomeTheme.accentPink.withValues(alpha: 0.22),
+                  HomeTheme.oscuroAcento.withValues(alpha: 0.22),
                   luz,
                 ),
                 border: Border.all(
                   color: Color.lerp(
                     Colors.white.withValues(alpha: 0.16),
-                    HomeTheme.accentPink,
+                    HomeTheme.oscuroAcento,
                     luz,
                   )!,
                 ),
@@ -1406,11 +1450,16 @@ class _Header extends StatelessWidget {
       padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
       child: Row(
         children: [
-          IconButton(
-            icon: const Icon(Icons.arrow_back, color: Colors.white),
-            onPressed: () => unawaited(controller.closeRoute(context)),
-          ),
-          const SizedBox(width: 4),
+          // La flecha de volver NO va acá.
+          //
+          // Vive aparte, fuera del desvanecido del encabezado, para que no se
+          // esconda con los controles (ver el Positioned de siempre-visible en
+          // _VideoPlayerMobileControls). Al agregarla allá quedó duplicada: dos
+          // flechas pegadas, una que se desvanecía y otra que no.
+          //
+          // Se deja el hueco que ocupaba para que el título no arranque contra
+          // el borde y siga alineado con la flecha de al lado.
+          const SizedBox(width: 52),
           Expanded(
             child: Obx(() {
               // Sin comprobar el índice, esto reventaba con un
@@ -1424,8 +1473,7 @@ class _Header extends StatelessWidget {
               // del reproductor.
               final lista = controller.playList;
               final i = controller.index.value;
-              final episode =
-                  (i >= 0 && i < lista.length) ? lista[i].name : '';
+              final episode = (i >= 0 && i < lista.length) ? lista[i].name : '';
               return Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
@@ -1455,6 +1503,13 @@ class _Header extends StatelessWidget {
           // asi que ofrecerlo igual solo termina en pantalla negra alla. Se
           // avisa el motivo al tocarlo. Ver puedeCastear en el controlador.
           Obx(() {
+            // Todavia abriendo el video: el boton NO se dibuja. Antes se
+            // dibujaba apagado y cada toque escupia un aviso, asi que tocarlo
+            // tres veces mientras cargaba dejaba tres encimados. Ver
+            // mostrarBotonDeCast en el controlador.
+            if (!controller.mostrarBotonDeCast) {
+              return const SizedBox.shrink();
+            }
             // Casteando: reintentar y desconectar, arriba y fuera del video.
             // Antes estaban en el medio de la pantalla, encima de la imagen y
             // justo donde se toca para pausar.
@@ -1482,8 +1537,8 @@ class _Header extends StatelessWidget {
                   // nada en el medio de un episodio.
                   IconButton(
                     tooltip: 'common.disconnect'.i18n,
-                    icon: const Icon(Icons.cast_connected,
-                        color: HomeTheme.accentPink),
+                    icon: Icon(Icons.cast_connected,
+                        color: HomeTheme.oscuroAcento),
                     onPressed: () => _confirmarDesconectar(context),
                   ),
                 ],
@@ -1598,14 +1653,14 @@ class _Footer extends StatelessWidget {
                   // Resolviendo el servidor elegido — bloquear el botón para
                   // no permitir otro toque/doble intento mientras carga.
                   if (controller.isGettingWatchData.value) {
-                    return const IconButton(
+                    return IconButton(
                       onPressed: null,
                       icon: SizedBox(
                         width: 24,
                         height: 24,
                         child: CircularProgressIndicator(
                           strokeWidth: 2,
-                          color: HomeTheme.accentPink,
+                          color: HomeTheme.oscuroAcento,
                         ),
                       ),
                     );

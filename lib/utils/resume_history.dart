@@ -29,7 +29,7 @@ Future<void> resumeHistoryItem(BuildContext context, History history) async {
       content: FlutterI18n.translate(
         context,
         disabled ? 'common.extension-disabled' : 'common.extension-missing',
-        translationParams: {'package': history.package},
+        translationParams: {'package': ExtensionUtils.nombreDe(history.package)},
       ),
       severity: fluent.InfoBarSeverity.error,
     );
@@ -281,7 +281,7 @@ class _ResumeHistoryLoaderPageState extends State<_ResumeHistoryLoaderPage> {
 
   @override
   Widget build(BuildContext context) {
-    return const Scaffold(
+    return Scaffold(
       backgroundColor: HomeTheme.bg,
       body: Center(child: ProgressRing()),
     );
@@ -342,7 +342,7 @@ class _DeferredResumeWatchPage extends StatelessWidget {
   Widget build(BuildContext context) {
     return DeferredRouteContent(
       pushAnimation: pushAnimation,
-      placeholder: const Scaffold(
+      placeholder: Scaffold(
         backgroundColor: HomeTheme.bg,
         body: Center(child: ProgressRing()),
       ),

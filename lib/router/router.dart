@@ -12,6 +12,7 @@ import 'package:prismhub/views/pages/extension/extension_settings_page.dart';
 import 'package:prismhub/views/pages/favorites_page.dart';
 import 'package:prismhub/views/pages/history_page.dart';
 import 'package:prismhub/views/pages/home_page.dart';
+import 'package:prismhub/views/pages/library_page.dart';
 import 'package:prismhub/views/pages/main_page.dart';
 import 'package:prismhub/views/pages/nsfw18/nsfw18_search_page.dart';
 import 'package:prismhub/views/pages/nsfw18/nsfw18_zone_page.dart';
@@ -50,17 +51,29 @@ final router = GoRouter(
           path: '/',
           pageBuilder: (context, state) => _animation(state, const HomePage()),
         ),
+        // Biblioteca: lo que el usuario ya tiene. Es el Home de antes, movido
+        // tal cual — ver library_page.dart.
+        GoRoute(
+          path: '/biblioteca',
+          pageBuilder: (context, state) =>
+              _animation(state, const LibraryPage()),
+        ),
         GoRoute(
           path: '/history',
           pageBuilder: (context, state) => _animation(
             state,
-            HistoryPage(
-              initialTab: int.tryParse(
+            () {
+              final tab = int.tryParse(
                     state.uri.queryParameters['tab'] ?? '',
                   ) ??
-                  0,
-              zone: state.uri.queryParameters['zone'] == '1',
-            ),
+                  0;
+              return HistoryPage(
+                initialTab: tab,
+                zone: state.uri.queryParameters['zone'] == '1',
+                // Las pestañas 3 y 4 son favoritos, y eso es su propia zona.
+                soloFavoritos: tab >= 3,
+              );
+            }(),
           ),
         ),
         GoRoute(
@@ -96,6 +109,10 @@ final router = GoRouter(
             ExtensionSearcherPage(
               package: state.uri.queryParameters['package'] ?? '',
               keyWord: state.uri.queryParameters['keyWord'],
+              // Si se llegó desde la Zona +18. Lo pone quien empuja la ruta
+              // (ver search_page). Sin esto, en escritorio la extensión se
+              // abría siempre como si viniera del buscador normal.
+              soloAdulto: state.uri.queryParameters['soloAdulto'] == '1',
             ),
           ),
         ),

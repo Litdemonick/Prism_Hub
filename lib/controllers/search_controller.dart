@@ -67,8 +67,37 @@ class SearchPageController extends GetxController {
     // ninguna, sin excepción — antes bastaba con tener el switch de NSFW
     // prendido para que apareciesen acá mezcladas con el resto.
     if (nsfwOnly) {
-      exts.removeWhere((element) => !element.extension.nsfw);
+      // ── Acá están TODAS, con las +18 primero ─────────────────────────────
+      //
+      // Antes se descartaba todo lo que no fuera +18 o mixta. La idea era que
+      // la zona mostrara solo lo suyo, pero en la práctica dejaba a alguien que
+      // entró a buscar sin poder buscar en el resto de sus extensiones: tenía
+      // que salir de la zona, buscar, y volver.
+      //
+      // Ahora no se saca ninguna y manda el ORDEN: las de adultos enteras
+      // primero, después las que tienen las dos cosas, y al final las normales.
+      // Lo que se vino a buscar queda arriba, y lo demás está si hace falta.
+      //
+      // Al abrir una desde acá, el buscador por extensión le pone su filtro de
+      // adultos de entrada (ver `soloAdulto` en ExtensionSearcherPage); a una
+      // normal no hay nada que ponerle y se comporta como siempre.
+      int rango(ExtensionService e) {
+        if (e.extension.nsfw) return 0;
+        if (ExtensionUtils.esMixta(e.extension.package)) return 1;
+        return 2;
+      }
+
+      // Estable dentro de cada grupo: sin esto, dos extensiones del mismo
+      // rango podrían bailar de posición entre búsquedas.
+      final orden = {for (var i = 0; i < exts.length; i++) exts[i]: i};
+      exts.sort((a, b) {
+        final r = rango(a).compareTo(rango(b));
+        return r != 0 ? r : orden[a]!.compareTo(orden[b]!);
+      });
     } else {
+      // Y acá al revés: fuera las +18 enteras. Una mixta SÍ se queda, con su
+      // contenido normal — el filtro de adultos va cerrado por defecto y el
+      // app lo manda explícito.
       exts.removeWhere((element) => element.extension.nsfw);
     }
     // Escribir el NOMBRE de una extension la encuentra.
@@ -221,7 +250,49 @@ class SearchPageController extends GetxController {
         final esNombreDeLaExtension =
             _coincidenPorNombre.contains(element.runitme.extension.package);
         if (search.value.isEmpty || esNombreDeLaExtension) {
-          resultFuture = element.runitme.latest(1);
+          // ── El CATÁLOGO, no «lo último» ──────────────────────────────────
+          //
+          // Acá se pedía `latest(1)`, que es la sección de novedades del sitio.
+          // Esta pantalla es la otra mitad del recorrido: el Inicio ya muestra
+          // lo reciente de cada extensión, y acá se viene a ver QUÉ TIENE cada
+          // una. Con novedades, Ikigai se quedaba en un puñado de tarjetas
+          // teniendo un catálogo entero detrás.
+          //
+          // `search('')` es como el propio buscador lista un catálogo completo.
+          // Medido contra la red el 2026-08-08: las diecisiete extensiones
+          // devuelven contenido, entre 15 y 71 títulos en la primera página.
+          //
+          // Una página y nada más, a propósito: la fila es una muestra para
+          // recorrer de un vistazo, no el catálogo entero. Quien quiera seguir
+          // entra a la extensión, que es donde está la grilla con sus filtros y
+          // su búsqueda.
+          //
+          // ── Y con la puerta CERRADA, puesta por el app ──────────────────
+          //
+          // Pedir el catálogo a secas deja la decisión en manos de la
+          // extensión: las dos que tienen las dos cosas ponen «no» por su
+          // cuenta, pero eso es una promesa suya y no una garantía de acá. Una
+          // actualización distraída bastaría para que esta pantalla —la normal,
+          // fuera de la zona— empiece a mostrar lo que no debe.
+          //
+          // Es la misma regla que el Inicio ya aplica a sus filas, ahora desde
+          // un solo lugar. En la Zona +18 no se manda: allá el filtro lo pone
+          // la propia pantalla de la extensión, al revés.
+          // ── Y en la Zona +18, al REVÉS ─────────────────────────────────
+          //
+          // Acá se mandaba null, o sea nada, y cada extensión aplicaba su
+          // propio defecto — que es el seguro, a propósito. Resultado: la Zona
+          // +18 mostraba el catálogo normal, con One Piece y Dragon Ball.
+          // Justo lo que esa zona no es.
+          //
+          // Se manda el valor de adultos por el mismo camino y desde el mismo
+          // lugar, así que las dos zonas son la misma regla con el valor
+          // cambiado. Si después el usuario toca el filtro, manda él.
+          final paquete = element.runitme.extension.package;
+          final filtroDeZona = nsfwOnly
+              ? ExtensionUtils.adultosDe(paquete)
+              : ExtensionUtils.segurosDe(paquete);
+          resultFuture = element.runitme.search('', 1, filter: filtroDeZona);
         } else {
           resultFuture = element.runitme.searchFirstPageWithBroadening(
               SearchText.sanitizeForRemoteQuery(search.value));

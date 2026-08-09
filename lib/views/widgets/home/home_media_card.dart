@@ -13,28 +13,32 @@ import 'package:prismhub/views/widgets/home/home_theme.dart';
 // debajo en una sola línea con ellipsis.
 // Margen entre la portada mostrada entera y el borde del marco. Ver el
 // comentario donde se usa: sin él la imagen toca los bordes y parece cortada.
-const double _coverInset = 8;
+double _coverInset = 8;
 
 // Borde dibujado ENCIMA del contenido, como última capa del Stack. Puesto en
 // la decoración del Container que recorta la portada, el propio recorte lo
 // pisaba y en las esquinas redondeadas la línea desaparecía a trozos. Como
 // capa de arriba queda entera y del color correcto.
-Widget _bordeCard(Color accent, double radio) {
+//
+// ── Ya no es del color de la zona ───────────────────────────────────────
+//
+// Era rosa —el acento— alrededor de CADA tarjeta. Con una grilla llena, eso
+// son treinta recuadros rosas gritando a la vez y la portada, que es lo único
+// que importa mirar, queda en segundo plano. Lo que hacía falta era separar
+// una tarjeta de la de al lado, no pintarlas.
+//
+// Ahora es la misma línea gris que usan las demás superficies de la app
+// (HomeTheme.border). Separa igual y no compite con nada. El acento sigue
+// estando donde de verdad significa algo: la barra de progreso, la tilde de lo
+// elegido, el puntito del filtro.
+Widget _bordeCard(double radio) {
   return Positioned.fill(
     child: IgnorePointer(
       child: DecoratedBox(
         decoration: BoxDecoration(
           borderRadius: BorderRadius.circular(radio),
-          // Sólido (con transparencia desaparecía sobre portadas claras) y
-          // aclarado un cuarto hacia el blanco: el morado y el rojo puros
-          // quedaban duros contra las portadas, y este tono conserva el color
-          // de cada zona pero se integra mejor. 2px para que la línea se lea
-          // también en las esquinas redondeadas, donde una más fina se
-          // adelgaza y parece cortarse.
-          border: Border.all(
-            color: Color.lerp(accent, const Color(0xFFFFFFFF), 0.25)!,
-            width: 2,
-          ),
+          // Una línea fina: solo tiene que decir dónde termina la tarjeta.
+          border: Border.all(color: HomeTheme.border),
         ),
       ),
     ),
@@ -68,35 +72,69 @@ class HomeMediaCard extends StatefulWidget {
   // Expuestas como static para que HomeSection sepa cuánto alto reservar
   // para la fila entera (portada + título/subtítulo debajo) sin duplicar
   // el número a mano en dos archivos distintos.
-  static const double androidWidth = 150;
-  static const double androidHeight = 208;
-  static const double desktopWidth = 210;
-  static const double desktopHeight = 292;
+  // ── Más grandes ────────────────────────────────────────────────────────
+  //
+  // Todas subieron alrededor de un doce por ciento. Lo que las tenía chicas era
+  // el relleno de la caja que envolvía cada sección: ahora que esa caja no
+  // está (ver HomeSection.boxed), ese ancho quedó libre y lo aprovechan las
+  // portadas, que es lo único que uno mira.
+  //
+  // La proporción de cada una se conserva exacta, así que ninguna portada se
+  // deforma ni se recorta distinto que antes.
+  static double androidWidth = 168;
+  static double androidHeight = 233;
+  static double desktopWidth = 236;
+  static double desktopHeight = 328;
   // Android landscape: la tarjeta a tamaño "vertical" (208 de alto) no
   // entraba entera en el poco alto disponible (confirmado en vivo, sobre
   // todo en Historial) — más chica en horizontal, mismo aspecto ~0.72:1.
   // Variante HORIZONTAL (escritorio): 16:9, la misma forma que los frames de
   // vídeo, así la portada de "Continuar" ya no se recorta.
-  static const double wideWidth = 316;
-  // Las portadas de lectura (2:3) se muestran enteras, sin recortar, así que
-  // lo que decide qué tan grandes se ven es el ALTO del marco. A 200 la card
-  // quedaba demasiado grande —entraban pocas por fila y el bloque dominaba
-  // la pantalla—, así que se baja a 186: el póster sigue en 124 de ancho
-  // (bastante más que los 120 originales) y los frames de vídeo entran casi
-  // exactos (1.70 contra 1.78 de 16:9), o sea sin recorte apreciable.
-  static const double wideImageHeight = 186;
-  // Imagen + separación + dos líneas de título + la línea del subtítulo.
-  static const double wideTotalHeight = 248;
+  // ── Y también en el teléfono ───────────────────────────────────────────
+  //
+  // La ancha era solo de escritorio: en Android, «Continuar viendo» usaba la
+  // vertical, o sea un marco de póster para una CAPTURA DE VÍDEO. La captura es
+  // 16:9, así que entraba recortada por los costados —se perdía media escena— o
+  // con franjas. Justo lo que esta tarjeta vino a resolver.
+  //
+  // Los números del teléfono son los mismos 16:9, más chicos: 264 de ancho
+  // dejan ver la tarjeta entera y el borde de la siguiente en una pantalla de
+  // 360, que es lo que invita a deslizar.
+  //
+  // Getters y no constantes porque dependen de la plataforma. Quien los use
+  // tiene que usar LOS TRES: mezclarlos con los viejos deja la imagen de un
+  // tamaño y el hueco reservado de otro.
+  static double get anchoAncha => Platform.isAndroid ? 264 : 380;
+  static double get altoImagenAncha => Platform.isAndroid ? 148 : 214;
+  // El alto total tiene que cubrir la etiqueta de la extensión, no solo el
+  // subtítulo. La etiqueta es una pastilla con su relleno —unos 21 puntos—
+  // contra los 16 de una línea de texto suelta, así que con la cuenta vieja
+  // sobresalía por abajo y la franja de la fila se la comía a la mitad. Se ve
+  // en «Continuar viendo», que es donde la etiqueta dice de qué extensión
+  // viene cada cosa.
+  static double get altoTotalAncha => Platform.isAndroid ? 224 : 292;
+
+  // ── Y es 16:9 EXACTO ───────────────────────────────────────────────────
+  //
+  // En escritorio estaba en 316 × 186, o sea 1,70. Los frames de vídeo son
+  // 1,78, así que a cada captura se le comía una franja arriba y abajo: hacía
+  // lo contrario de para lo que existe esta tarjeta. Con 380 × 214 da 1,776 y
+  // la miniatura entra entera. En el teléfono, 264 × 148 da 1,784.
+  //
+  // El alto TOTAL suma la imagen, la separación, dos líneas de título y la del
+  // subtítulo.
 
   // 112 quedaba MUY chico: en horizontal entraban ocho cards por fila y no se
   // leía ni el pill de la extensión. El apretón real venía del hero, que a
   // tamaño normal se comía toda la ventana en horizontal — ya se pone
   // compacto (ver HomeHeroBanner), así que acá sobra lugar para agrandarlas.
   // Se mantiene el mismo aspecto ~0.72:1 que las otras dos variantes.
-  static const double androidLandscapeWidth = 132;
-  static const double androidLandscapeHeight = 183;
+  // Acostado sube menos: ahí el alto es lo único que escasea, y cada punto que
+  // gana la tarjeta se lo saca a la fila entera, que ya entra justa.
+  static double androidLandscapeWidth = 144;
+  static double androidLandscapeHeight = 200;
 
-  const HomeMediaCard({
+  HomeMediaCard({
     super.key,
     required this.title,
     this.subtitle,
@@ -114,11 +152,14 @@ class HomeMediaCard extends StatefulWidget {
     this.extraActionIcon,
     this.onExtraAction,
     this.onVerDetalle,
+    this.esFavorito,
+    this.onAlternarFavorito,
     this.gradientSeed,
     this.hidden = false,
     this.onToggleHide,
-    this.accent = HomeTheme.accentPink,
+    this.accent,
     this.horizontal = false,
+    this.ancho,
   });
 
   final String title;
@@ -167,6 +208,21 @@ class HomeMediaCard extends StatefulWidget {
   /// esta opcion, para ver la ficha de algo que estabas siguiendo habia que
   /// buscarlo de nuevo por el buscador.
   final VoidCallback? onVerDetalle;
+
+  /// Si el título ya está en favoritos. En null, la opción no se ofrece.
+  ///
+  /// ── Por qué en el menú y no como estrella suelta ───────────────────────
+  ///
+  /// Una estrella encima de la portada tapa la portada, que es lo único que la
+  /// tarjeta tiene que mostrar. Y ya hay un menú de tres puntos que junta todo
+  /// lo demás que se puede hacer con el título —ver la ficha, ocultarla,
+  /// borrarla—; que favorito viviera aparte era la única acción sin un lugar
+  /// claro donde buscarla.
+  final bool? esFavorito;
+  final VoidCallback? onAlternarFavorito;
+
+  /// Ancho a la medida, para las grillas. Ver dónde se usa.
+  final double? ancho;
   // Para elegir el degradado por posición cuando no hay portada — si no se
   // pasa, se deriva del título (mismo criterio que ColorUtils.getColorByText).
   final int? gradientSeed;
@@ -177,7 +233,10 @@ class HomeMediaCard extends StatefulWidget {
   final VoidCallback? onToggleHide;
   // Zona +18: se pasa HomeTheme.accentRed para diferenciar la barra de
   // progreso en esa pantalla.
-  final Color accent;
+  /// En null usa el acento del tema. Ver AnimatedBackgroundGlow.accent.
+  final Color? accent;
+
+  Color get acento => accent ?? HomeTheme.accentPink;
   // true = variante horizontal 16:9 (solo Home de escritorio). La vertical
   // sigue siendo el default en todos los demás lugares.
   final bool horizontal;
@@ -195,8 +254,17 @@ class _HomeMediaCardState extends State<HomeMediaCard> {
       // Opaco, no semitransparente: este pill vive debajo de la portada,
       // pero el mismo widget se usa en contextos donde queda encima, y ahí
       // el 65% de opacidad dejaba ver la imagen a través del texto.
+      // ── El fondo sigue al modo ────────────────────────────────────────
+      //
+      // Estaba fijo en un azul muy oscuro. Con el texto puesto en el color del
+      // tema —casi negro en claro— quedaba negro sobre azul oscuro: la
+      // etiqueta se veía como una mancha sin letras. En claro va la superficie
+      // de tarjeta, un tono por debajo, que es el mismo papel que cumplía el
+      // azul en oscuro.
       decoration: BoxDecoration(
-        color: const Color(0xFF202030),
+        color: ModoDeColor.claro
+            ? HomeTheme.esqueletoBase
+            : const Color(0xFF202030),
         borderRadius: BorderRadius.circular(6),
         border: Border.all(color: HomeTheme.border),
       ),
@@ -204,7 +272,7 @@ class _HomeMediaCardState extends State<HomeMediaCard> {
         widget.extensionName!,
         maxLines: 1,
         overflow: TextOverflow.ellipsis,
-        style: const TextStyle(
+        style: TextStyle(
           color: HomeTheme.textPrimary,
           fontSize: 11,
           fontWeight: FontWeight.w600,
@@ -222,7 +290,7 @@ class _HomeMediaCardState extends State<HomeMediaCard> {
   // flag en una línea.
   Widget _buildHorizontal(BuildContext context) {
     final dpr = MediaQuery.devicePixelRatioOf(context);
-    final imgW = (HomeMediaCard.wideWidth * dpr).ceil().clamp(1, 4096);
+    final imgW = (HomeMediaCard.anchoAncha * dpr).ceil().clamp(1, 4096);
     final hasCover = !widget.hidden &&
         (widget.cover?.isNotEmpty == true || widget.coverFile != null);
 
@@ -304,7 +372,7 @@ class _HomeMediaCardState extends State<HomeMediaCard> {
         onExit: (_) => setState(() => _hover = false),
         child: RepaintBoundary(
           child: SizedBox(
-            width: HomeMediaCard.wideWidth,
+            width: HomeMediaCard.anchoAncha,
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               mainAxisSize: MainAxisSize.min,
@@ -319,8 +387,8 @@ class _HomeMediaCardState extends State<HomeMediaCard> {
                     borderRadius: BorderRadius.circular(8),
                   ),
                   child: SizedBox(
-                    width: HomeMediaCard.wideWidth,
-                    height: HomeMediaCard.wideImageHeight,
+                    width: HomeMediaCard.anchoAncha,
+                    height: HomeMediaCard.altoImagenAncha,
                     child: Stack(
                       fit: StackFit.expand,
                       children: [
@@ -375,7 +443,7 @@ class _HomeMediaCardState extends State<HomeMediaCard> {
                                 // Sólido y con contorno, mismo criterio que el
                                 // resto de los distintivos: sobre una portada
                                 // clara uno translúcido no se lee.
-                                color: widget.accent,
+                                color: widget.acento,
                                 borderRadius: BorderRadius.circular(999),
                                 border:
                                     Border.all(color: const Color(0x8CFFFFFF)),
@@ -402,10 +470,10 @@ class _HomeMediaCardState extends State<HomeMediaCard> {
                               minHeight: 3,
                               backgroundColor:
                                   Colors.white.withValues(alpha: 0.25),
-                              valueColor: AlwaysStoppedAnimation(widget.accent),
+                              valueColor: AlwaysStoppedAnimation(widget.acento),
                             ),
                           ),
-                        _bordeCard(widget.accent, 8),
+                        _bordeCard(8),
                       ],
                     ),
                   ),
@@ -430,7 +498,7 @@ class _HomeMediaCardState extends State<HomeMediaCard> {
                                     widget.subtitle!.toUpperCase(),
                                     maxLines: 1,
                                     overflow: TextOverflow.ellipsis,
-                                    style: const TextStyle(
+                                    style: TextStyle(
                                       color: HomeTheme.textMuted,
                                       fontSize: 10.5,
                                       fontWeight: FontWeight.w700,
@@ -450,7 +518,7 @@ class _HomeMediaCardState extends State<HomeMediaCard> {
                             // panel.
                             maxLines: 1,
                             overflow: TextOverflow.ellipsis,
-                            style: const TextStyle(
+                            style: TextStyle(
                               color: HomeTheme.textPrimary,
                               fontSize: 14,
                               fontWeight: FontWeight.w700,
@@ -481,6 +549,8 @@ class _HomeMediaCardState extends State<HomeMediaCard> {
                         extraIcon: widget.extraActionIcon,
                         onExtra: widget.onExtraAction,
                         onVerDetalle: widget.onVerDetalle,
+                        esFavorito: widget.esFavorito,
+                        onAlternarFavorito: widget.onAlternarFavorito,
                       ),
                   ],
                 ),
@@ -508,19 +578,35 @@ class _HomeMediaCardState extends State<HomeMediaCard> {
     final hasMenu = widget.onDelete != null ||
         widget.onToggleHide != null ||
         widget.onExtraAction != null ||
-        widget.onVerDetalle != null;
+        widget.onVerDetalle != null ||
+        widget.onAlternarFavorito != null;
     final isAndroidLandscape = Platform.isAndroid &&
         MediaQuery.of(context).orientation == Orientation.landscape;
-    final width = isAndroidLandscape
+    final anchoBase = isAndroidLandscape
         ? HomeMediaCard.androidLandscapeWidth
         : Platform.isAndroid
             ? HomeMediaCard.androidWidth
             : HomeMediaCard.desktopWidth;
-    final height = isAndroidLandscape
+    final altoBase = isAndroidLandscape
         ? HomeMediaCard.androidLandscapeHeight
         : Platform.isAndroid
             ? HomeMediaCard.androidHeight
             : HomeMediaCard.desktopHeight;
+    // ── El ancho lo puede poner quien la dibuja ──────────────────────────
+    //
+    // En una FILA el ancho fijo es lo correcto: las tarjetas se desplazan de
+    // costado y todas tienen que medir igual.
+    //
+    // En una GRILLA no. La grilla reparte el ancho entre las columnas que
+    // entran, y la tarjeta se quedaba en sus 150 dentro de una celda de 164:
+    // sobraba aire a los costados de cada una y las portadas se veían chicas
+    // sin motivo. Pasándole el ancho de la celda, la tarjeta la llena.
+    //
+    // El alto sigue al ancho para no deformar la portada.
+    final width = widget.ancho ?? anchoBase;
+    final height = widget.ancho == null
+        ? altoBase
+        : widget.ancho! * (altoBase / anchoBase);
     final dpr = MediaQuery.devicePixelRatioOf(context);
     final cacheWidth = (width * dpr).ceil().clamp(1, 4096).toInt();
     final defaultCover = _arteRespaldo(cacheWidth);
@@ -542,193 +628,221 @@ class _HomeMediaCardState extends State<HomeMediaCard> {
         onEnter: (_) => setState(() => _hover = true),
         onExit: (_) => setState(() => _hover = false),
         child: RepaintBoundary(
-          child: AnimatedContainer(
+          // ── La tarjeta se eleva, pero su zona de toque NO se mueve ───────
+          //
+          // Al pasar el ratón la tarjeta sube cuatro puntos. Estaba hecho con
+          // el `transform` de un AnimatedContainer, y un transform mueve el
+          // dibujo Y el área que responde al clic.
+          //
+          // Lo que pasaba: entrás con el ratón a la tarjeta y hacés clic
+          // enseguida. El clic cae DURANTE los 150 ms en los que la tarjeta se
+          // está elevando, o sea mientras su área de toque se está corriendo
+          // hacia arriba bajo el cursor. Si el puntero estaba en la franja de
+          // abajo, para cuando soltás ya quedó fuera y Flutter cancela el
+          // toque: el primer clic no hace nada y hay que dar otro. En pantalla
+          // completa casi no se nota porque uno ya viene con el ratón adentro y
+          // la elevación terminó hace rato; en ventana, con el ratón entrando
+          // desde el borde, pasa casi siempre. Reportado en vivo.
+          //
+          // `transformHitTests: false` es exactamente para esto: la tarjeta se
+          // ve elevada y el área de toque se queda donde estaba.
+          child: TweenAnimationBuilder<double>(
+            tween: Tween<double>(begin: 0, end: _hover ? -4 : 0),
             duration: const Duration(milliseconds: 150),
-            transform: Matrix4.translationValues(0, _hover ? -4 : 0, 0),
-            width: width,
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Container(
-                  width: width,
-                  height: height,
-                  clipBehavior: Clip.antiAlias,
-                  decoration: BoxDecoration(
-                    borderRadius: BorderRadius.circular(14),
-                    gradient: hasCover
-                        ? null
-                        : LinearGradient(
-                            begin: Alignment.topLeft,
-                            end: Alignment.bottomRight,
-                            colors: gradient,
-                          ),
-                    boxShadow: const [
-                      BoxShadow(
-                        color: Color(0x40000000),
-                        blurRadius: 8,
-                        offset: Offset(0, 4),
-                      ),
-                    ],
-                  ),
-                  child: Stack(
-                    fit: StackFit.expand,
-                    children: [
-                      if (widget.hidden)
-                        hiddenCover
-                      else if (widget.coverFile != null)
-                        // Capturas del vídeo: son horizontales (~16:9) dentro de
-                        // una card vertical (~0.72:1). Ni cover ni contain solos
-                        // funcionan — cover recortaba tanto a los costados que
-                        // del cuadro quedaba una franja irreconocible, y contain
-                        // deja dos barras negras enormes.
-                        //
-                        // Se muestra el frame ENTERO (contain) sobre un fondo
-                        // borroso de la MISMA imagen estirada a cubrir. Llena la
-                        // card, no recorta nada y no se ve estirado.
-                        //
-                        // El fondo se decodifica a un cuarto del tamaño: va
-                        // desenfocado, así que más resolución no se notaría y sí
-                        // costaría memoria en una lista con muchas cards.
-                        Stack(
-                          fit: StackFit.expand,
-                          children: [
-                            ImageFiltered(
-                              imageFilter:
-                                  ImageFilter.blur(sigmaX: 18, sigmaY: 18),
-                              child: Image.file(
-                                widget.coverFile!,
-                                fit: BoxFit.cover,
-                                width: double.infinity,
-                                height: double.infinity,
-                                cacheWidth:
-                                    (cacheWidth / 4).ceil().clamp(1, 4096),
-                                // Sin errorBuilder acá: si la imagen falla, el
-                                // de la capa de arriba ya muestra el default.
-                                errorBuilder: (_, __, ___) =>
-                                    const ColoredBox(color: Color(0xFF15151C)),
-                              ),
+            builder: (context, dy, hijo) => Transform.translate(
+              offset: Offset(0, dy),
+              transformHitTests: false,
+              child: hijo,
+            ),
+            child: SizedBox(
+              width: width,
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Container(
+                    width: width,
+                    height: height,
+                    clipBehavior: Clip.antiAlias,
+                    decoration: BoxDecoration(
+                      borderRadius: BorderRadius.circular(14),
+                      gradient: hasCover
+                          ? null
+                          : LinearGradient(
+                              begin: Alignment.topLeft,
+                              end: Alignment.bottomRight,
+                              colors: gradient,
                             ),
-                            // Oscurece un poco el fondo para que el frame de
-                            // adelante resalte y el texto de abajo siga legible.
-                            const ColoredBox(color: Color(0x66000000)),
-                            Padding(
-                              padding: const EdgeInsets.all(_coverInset),
-                              child: Image.file(
-                                widget.coverFile!,
-                                fit: BoxFit.contain,
-                                width: double.infinity,
-                                height: double.infinity,
-                                cacheWidth: cacheWidth,
-                                errorBuilder: (context, error, stackTrace) =>
-                                    defaultCover,
-                              ),
-                            ),
-                          ],
-                        )
-                      else if (hasCover)
-                        // El fondo borroso se puso cuando la imagen llegaba
-                        // DEFORMADA (cacheWidth+cacheHeight juntos hacían que
-                        // el decoder ignorara el aspecto original). Arreglado
-                        // eso, un póster de lectura (2:3) contra una card de
-                        // ~0.72:1 llena casi exacto con cover: se recorta un
-                        // 7% a los costados, imperceptible, y se ve como una
-                        // portada de verdad en vez de una imagen chica dentro
-                        // de un marco. El fondo borroso queda SOLO para el
-                        // caso donde de verdad hace falta: un frame de vídeo
-                        // (16:9) metido en una card alta, donde cover dejaría
-                        // una franja irreconocible.
-                        // Ver el mismo caso en la card ancha: cover para
-                        // que la portada llene la tarjeta, y el respaldo con
-                        // contain para que el logo no se corte.
-                        CacheNetWorkImagePic(
-                          widget.cover!,
-                          fit: BoxFit.cover,
-                          width: double.infinity,
-                          height: double.infinity,
-                          headers: widget.headers,
-                          fallback: defaultCover,
-                          cacheWidth: cacheWidth,
+                      boxShadow: const [
+                        BoxShadow(
+                          color: Color(0x40000000),
+                          blurRadius: 8,
+                          offset: Offset(0, 4),
                         ),
-                      // Ver la card ancha: los distintivos salieron de
-                      // encima de la portada. Acá tapaban una esquina de cada
-                      // lado, que en una card chica es bastante.
-                      if (widget.progress != null)
-                        Positioned(
-                          left: 0,
-                          right: 0,
-                          bottom: 0,
-                          child: Container(
-                            height: 4,
-                            color: const Color(0x80000000),
-                            alignment: Alignment.centerLeft,
-                            child: FractionallySizedBox(
-                              widthFactor: widget.progress!.clamp(0, 1),
-                              child: Container(color: widget.accent),
-                            ),
+                      ],
+                    ),
+                    child: Stack(
+                      fit: StackFit.expand,
+                      children: [
+                        if (widget.hidden)
+                          hiddenCover
+                        else if (widget.coverFile != null)
+                          // Capturas del vídeo: son horizontales (~16:9) dentro de
+                          // una card vertical (~0.72:1). Ni cover ni contain solos
+                          // funcionan — cover recortaba tanto a los costados que
+                          // del cuadro quedaba una franja irreconocible, y contain
+                          // deja dos barras negras enormes.
+                          //
+                          // Se muestra el frame ENTERO (contain) sobre un fondo
+                          // borroso de la MISMA imagen estirada a cubrir. Llena la
+                          // card, no recorta nada y no se ve estirado.
+                          //
+                          // El fondo se decodifica a un cuarto del tamaño: va
+                          // desenfocado, así que más resolución no se notaría y sí
+                          // costaría memoria en una lista con muchas cards.
+                          Stack(
+                            fit: StackFit.expand,
+                            children: [
+                              ImageFiltered(
+                                imageFilter:
+                                    ImageFilter.blur(sigmaX: 18, sigmaY: 18),
+                                child: Image.file(
+                                  widget.coverFile!,
+                                  fit: BoxFit.cover,
+                                  width: double.infinity,
+                                  height: double.infinity,
+                                  cacheWidth:
+                                      (cacheWidth / 4).ceil().clamp(1, 4096),
+                                  // Sin errorBuilder acá: si la imagen falla, el
+                                  // de la capa de arriba ya muestra el default.
+                                  errorBuilder: (_, __, ___) =>
+                                      const ColoredBox(
+                                          color: Color(0xFF15151C)),
+                                ),
+                              ),
+                              // Oscurece un poco el fondo para que el frame de
+                              // adelante resalte y el texto de abajo siga legible.
+                              const ColoredBox(color: Color(0x66000000)),
+                              Padding(
+                                padding: EdgeInsets.all(_coverInset),
+                                child: Image.file(
+                                  widget.coverFile!,
+                                  fit: BoxFit.contain,
+                                  width: double.infinity,
+                                  height: double.infinity,
+                                  cacheWidth: cacheWidth,
+                                  errorBuilder: (context, error, stackTrace) =>
+                                      defaultCover,
+                                ),
+                              ),
+                            ],
+                          )
+                        else if (hasCover)
+                          // El fondo borroso se puso cuando la imagen llegaba
+                          // DEFORMADA (cacheWidth+cacheHeight juntos hacían que
+                          // el decoder ignorara el aspecto original). Arreglado
+                          // eso, un póster de lectura (2:3) contra una card de
+                          // ~0.72:1 llena casi exacto con cover: se recorta un
+                          // 7% a los costados, imperceptible, y se ve como una
+                          // portada de verdad en vez de una imagen chica dentro
+                          // de un marco. El fondo borroso queda SOLO para el
+                          // caso donde de verdad hace falta: un frame de vídeo
+                          // (16:9) metido en una card alta, donde cover dejaría
+                          // una franja irreconocible.
+                          // Ver el mismo caso en la card ancha: cover para
+                          // que la portada llene la tarjeta, y el respaldo con
+                          // contain para que el logo no se corte.
+                          CacheNetWorkImagePic(
+                            widget.cover!,
+                            fit: BoxFit.cover,
+                            width: double.infinity,
+                            height: double.infinity,
+                            headers: widget.headers,
+                            fallback: defaultCover,
+                            cacheWidth: cacheWidth,
                           ),
-                        ),
-                      _bordeCard(widget.accent, 14),
-                    ],
-                  ),
-                ),
-                const SizedBox(height: 8),
-                // Título y distintivo a la izquierda, menú de tres puntos a la
-                // derecha — la misma disposición que la card ancha. Antes el
-                // menú iba ENCIMA de la portada y tapaba una esquina de la
-                // imagen.
-                Row(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          Text(
-                            widget.title,
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
-                            style: const TextStyle(
-                              color: HomeTheme.textPrimary,
-                              fontSize: 13.5,
-                              fontWeight: FontWeight.w600,
-                            ),
-                          ),
-                          if (widget.extensionName?.isNotEmpty == true) ...[
-                            const SizedBox(height: 4),
-                            Align(
+                        // Ver la card ancha: los distintivos salieron de
+                        // encima de la portada. Acá tapaban una esquina de cada
+                        // lado, que en una card chica es bastante.
+                        if (widget.progress != null)
+                          Positioned(
+                            left: 0,
+                            right: 0,
+                            bottom: 0,
+                            child: Container(
+                              height: 4,
+                              color: const Color(0x80000000),
                               alignment: Alignment.centerLeft,
-                              child: _extensionNamePill(),
+                              child: FractionallySizedBox(
+                                widthFactor: widget.progress!.clamp(0, 1),
+                                child: Container(color: widget.acento),
+                              ),
                             ),
-                          ] else if (widget.subtitle != null) ...[
-                            const SizedBox(height: 2),
+                          ),
+                        _bordeCard(14),
+                      ],
+                    ),
+                  ),
+                  const SizedBox(height: 8),
+                  // Título y distintivo a la izquierda, menú de tres puntos a la
+                  // derecha — la misma disposición que la card ancha. Antes el
+                  // menú iba ENCIMA de la portada y tapaba una esquina de la
+                  // imagen.
+                  Row(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
                             Text(
-                              widget.subtitle!,
+                              widget.title,
                               maxLines: 1,
                               overflow: TextOverflow.ellipsis,
-                              style: const TextStyle(
-                                color: HomeTheme.textMuted,
-                                fontSize: 12,
+                              style: TextStyle(
+                                color: HomeTheme.textPrimary,
+                                fontSize: 13.5,
+                                fontWeight: FontWeight.w600,
                               ),
                             ),
+                            if (widget.extensionName?.isNotEmpty == true) ...[
+                              const SizedBox(height: 4),
+                              Align(
+                                alignment: Alignment.centerLeft,
+                                child: _extensionNamePill(),
+                              ),
+                            ] else if (widget.subtitle != null) ...[
+                              const SizedBox(height: 2),
+                              Text(
+                                widget.subtitle!,
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                                style: TextStyle(
+                                  color: HomeTheme.textMuted,
+                                  fontSize: 12,
+                                ),
+                              ),
+                            ],
                           ],
-                        ],
+                        ),
                       ),
-                    ),
-                    if (hasMenu)
-                      _WideMenuButton(
-                        hidden: widget.hidden,
-                        onDelete: widget.onDelete,
-                        onToggleHide: widget.onToggleHide,
-                        deleteLabel: widget.deleteLabel,
-                        extraLabel: widget.extraActionLabel,
-                        extraIcon: widget.extraActionIcon,
-                        onExtra: widget.onExtraAction,
-                        onVerDetalle: widget.onVerDetalle,
-                      ),
-                  ],
-                ),
-              ],
+                      if (hasMenu)
+                        _WideMenuButton(
+                          hidden: widget.hidden,
+                          onDelete: widget.onDelete,
+                          onToggleHide: widget.onToggleHide,
+                          deleteLabel: widget.deleteLabel,
+                          extraLabel: widget.extraActionLabel,
+                          extraIcon: widget.extraActionIcon,
+                          onExtra: widget.onExtraAction,
+                          onVerDetalle: widget.onVerDetalle,
+                          esFavorito: widget.esFavorito,
+                          onAlternarFavorito: widget.onAlternarFavorito,
+                        ),
+                    ],
+                  ),
+                ],
+              ),
             ),
           ),
         ),
@@ -751,11 +865,13 @@ class _WideMenuButton extends StatelessWidget {
     this.extraIcon,
     this.onExtra,
     this.onVerDetalle,
+    this.esFavorito,
+    this.onAlternarFavorito,
   });
 
   // Eran parámetros, con estos mismos valores por defecto. El único que los
   // pasaba distinto era el menú de encima de la portada, que ya no existe.
-  static const Color _iconColor = HomeTheme.textMuted;
+  static Color _iconColor = HomeTheme.textMuted;
   static const double _size = 28;
 
   final bool hidden;
@@ -766,6 +882,8 @@ class _WideMenuButton extends StatelessWidget {
   final IconData? extraIcon;
   final VoidCallback? onExtra;
   final VoidCallback? onVerDetalle;
+  final bool? esFavorito;
+  final VoidCallback? onAlternarFavorito;
 
   @override
   Widget build(BuildContext context) {
@@ -787,19 +905,20 @@ class _WideMenuButton extends StatelessWidget {
           color: HomeTheme.cardSurface,
           shape: RoundedRectangleBorder(
             borderRadius: BorderRadius.circular(10),
-            side: const BorderSide(color: HomeTheme.border),
+            side: BorderSide(color: HomeTheme.border),
           ),
           // OJO: `constraints` acá es el tamaño del MENÚ desplegado, no el del
           // botón. Ponerle el tamaño del botón (30x30) abría un menú de 30px,
           // que se ve como "no abre nada". El tamaño del botón se controla con
           // el SizedBox de abajo.
           constraints: const BoxConstraints(minWidth: 170),
-          icon: const Icon(Icons.more_vert, color: _iconColor, size: 18),
+          icon: Icon(Icons.more_vert, color: _iconColor, size: 18),
           onSelected: (v) {
             if (v == 0) onToggleHide?.call();
             if (v == 1) onDelete?.call();
             if (v == 2) onExtra?.call();
             if (v == 3) onVerDetalle?.call();
+            if (v == 4) onAlternarFavorito?.call();
           },
           itemBuilder: (context) => [
             // Ver la ficha va arriba de todo: es a donde uno quiere ir cuando
@@ -811,12 +930,39 @@ class _WideMenuButton extends StatelessWidget {
                 height: 40,
                 child: Row(
                   children: [
-                    const Icon(Icons.info_outline,
+                    Icon(Icons.info_outline,
                         size: 17, color: HomeTheme.textMuted),
                     const SizedBox(width: 10),
                     Text(
                       'home.view-detail'.i18n,
-                      style: const TextStyle(
+                      style: TextStyle(
+                          color: HomeTheme.textPrimary, fontSize: 13),
+                    ),
+                  ],
+                ),
+              ),
+            // Favorito, justo después de ver la ficha: es lo que uno más hace
+            // con un título sin abrirlo. Con la estrella llena cuando ya está,
+            // para que se lea de un vistazo qué va a pasar al tocarla.
+            if (esFavorito != null && onAlternarFavorito != null)
+              PopupMenuItem<int>(
+                value: 4,
+                height: 40,
+                child: Row(
+                  children: [
+                    Icon(
+                      esFavorito! ? Icons.star_rounded : Icons.star_border,
+                      size: 17,
+                      color: esFavorito!
+                          ? HomeTheme.accentPink
+                          : HomeTheme.textMuted,
+                    ),
+                    const SizedBox(width: 10),
+                    Text(
+                      esFavorito!
+                          ? 'home.remove-favorite'.i18n
+                          : 'home.add-favorite'.i18n,
+                      style: TextStyle(
                           color: HomeTheme.textPrimary, fontSize: 13),
                     ),
                   ],
@@ -849,7 +995,7 @@ class _WideMenuButton extends StatelessWidget {
                       child: Text(
                         extraLabel!,
                         overflow: TextOverflow.ellipsis,
-                        style: const TextStyle(
+                        style: TextStyle(
                             color: HomeTheme.textPrimary, fontSize: 13),
                       ),
                     ),
@@ -872,7 +1018,7 @@ class _WideMenuButton extends StatelessWidget {
                     const SizedBox(width: 10),
                     Text(
                       hidden ? 'home.show-card'.i18n : 'home.hide-card'.i18n,
-                      style: const TextStyle(
+                      style: TextStyle(
                           color: HomeTheme.textPrimary, fontSize: 13),
                     ),
                   ],

@@ -116,7 +116,7 @@ class _SettingNumboxButtonState extends State<SettingNumboxButton> {
                   widget.title,
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
-                  style: const TextStyle(color: HomeTheme.textPrimary),
+                  style: TextStyle(color: HomeTheme.textPrimary),
                 ),
           ),
           const SizedBox(width: 8),
@@ -128,7 +128,7 @@ class _SettingNumboxButtonState extends State<SettingNumboxButton> {
               '$texto s',
               textAlign: TextAlign.center,
               maxLines: 1,
-              style: const TextStyle(
+              style: TextStyle(
                 color: HomeTheme.textPrimary,
                 fontWeight: FontWeight.w700,
                 fontSize: 15,
@@ -154,7 +154,7 @@ class _SettingNumboxButtonState extends State<SettingNumboxButton> {
                 ),
                 child: Text(
                   buttonSwitch ? widget.button2text : widget.button1text,
-                  style: const TextStyle(
+                  style: TextStyle(
                     color: HomeTheme.accentPink,
                     fontSize: 12,
                     fontWeight: FontWeight.w700,

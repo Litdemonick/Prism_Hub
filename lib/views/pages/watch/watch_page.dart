@@ -57,7 +57,7 @@ class WatchPage extends StatelessWidget {
           installed == null
               ? 'common.extension-missing'
               : 'common.extension-disabled',
-          translationParams: {'package': package},
+          translationParams: {'package': ExtensionUtils.nombreDe(package)},
         ),
       );
       return Scaffold(body: Center(child: message));

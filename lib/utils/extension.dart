@@ -476,7 +476,7 @@ class ExtensionUtils {
         content: FlutterI18n.translate(
           context,
           'common.extension-missing',
-          translationParams: {'package': package},
+          translationParams: {'package': ExtensionUtils.nombreDe(package)},
         ),
         severity: InfoBarSeverity.error,
       );
@@ -593,7 +593,7 @@ class ExtensionUtils {
     );
     if (go != true) return;
     if (Platform.isAndroid) {
-      Get.find<MainController>().changeTab(2);
+      Get.find<MainController>().changeTab(MainController.tabExtensiones);
       return;
     }
     router.go('/extension');
@@ -604,7 +604,7 @@ class ExtensionUtils {
   static const _esperaEntreAperturas = Duration(milliseconds: 700);
 
   // Navegación compartida a DetailPage — antes duplicada (con pequeñas
-  // variaciones de copy/paste) en ExtensionItemCard, home_page.dart,
+  // variaciones de copy/paste) en ExtensionItemCard, library_page.dart,
   // nsfw18_zone_page.dart y history_page.dart, ninguna con chequeo de
   // actualización. Ahora todas pasan por acá: si hace falta actualizar,
   // corta con el aviso de blockedByPendingUpdate en vez de entrar.
@@ -700,10 +700,298 @@ class ExtensionUtils {
         officialVerified: officialVerified);
   }
 
+  // ─── Extensiones MIXTAS ───────────────────────────────────────────────────
+  //
+  // Una extensión mixta tiene contenido normal Y contenido +18, separados por
+  // un filtro propio del sitio. Hoy son dos: ShadeManga y ManhwaWeb.
+  //
+  // ── Por qué la marca `nsfw` no alcanza ──────────────────────────────────
+  //
+  // Porque es binaria, y con ella una extensión solo puede vivir en UNA zona:
+  // el buscador normal descarta las `nsfw`, y el de la Zona +18 descarta las
+  // que no lo son. Una mixta tiene que estar en las dos — con su contenido
+  // normal en una y el de adultos en la otra.
+  //
+  // ── Por qué no basta con mirar `adultOption` ─────────────────────────────
+  //
+  // Porque HentaiLA también tiene uno: su filtro de «Censura» usa
+  // `adultOption` para marcar la opción sin censurar. Pero HentaiLA es +18 de
+  // punta a punta — no tiene nada «normal» que mostrar. Tomar `adultOption`
+  // como señal de mixta la habría metido en la zona normal, que es exactamente
+  // el error que no se puede cometer.
+  //
+  // Así que la regla mira las dos cosas: **mixta = el manifiesto dice que NO es
+  // +18 entera, Y además tiene un filtro con puerta a adultos**. Una extensión
+  // marcada `nsfw: true` no se consulta nunca, así que no hay forma de que se
+  // filtre a la zona normal por un `adultOption` usado para otra cosa.
+  static final Set<String> _mixtas = {};
+
+  /// Qué paquetes ya se consultaron, y con qué VERSIÓN.
+  ///
+  /// ── Por qué la versión y no un simple «ya se hizo» ──────────────────────
+  ///
+  /// Era un booleano de una sola vez por sesión, y nunca se invalidaba. Con eso,
+  /// instalar o actualizar una extensión con la app abierta la dejaba sin
+  /// clasificar hasta reiniciar — y «sin clasificar» es el peor de los estados
+  /// para una que trae las dos cosas: no entra a la zona normal por no estar
+  /// reconocida, y tampoco a la Zona +18 por no ser de adultos entera. Se cae de
+  /// las dos, y desde afuera parece que la extensión desapareció.
+  ///
+  /// Pasó en vivo con ManhwaWeb al corregir su manifiesto: la versión nueva ya
+  /// venía bien declarada y el app seguía con la respuesta de la anterior.
+  ///
+  /// Guardando la versión, cada actualización se vuelve a mirar sola y una que
+  /// no cambió no cuesta nada: se saltea sin tocar su motor.
+  static final Map<String, String> _mixtasVistas = {};
+
+  /// Las que tienen contenido normal y +18 a la vez.
+  ///
+  /// Vacío hasta que alguien llame a [detectarMixtas]. Devolver vacío es el
+  /// lado seguro: la Zona +18 muestra una extensión mixta de menos, que es
+  /// mucho mejor que la zona normal mostrando una de más.
+  static Set<String> get mixtas => _mixtas;
+
+  static bool esMixta(String package) => _mixtas.contains(package);
+
+  /// El filtro que hay que mandarle a una extensión para pedirle SOLO su
+  /// contenido normal.
+  ///
+  /// ── Por qué vive acá y no en cada pantalla ──────────────────────────────
+  ///
+  /// Porque son varias las que piden catálogo —el Inicio, el buscador, la
+  /// grilla de cada extensión— y la regla tiene que ser una sola. Cada una
+  /// armando la suya es cómo se cuela una portada donde no va: alcanza con que
+  /// una sola se olvide.
+  ///
+  /// Sale de la propia extensión: el valor que declara como defecto en el
+  /// filtro que abre la puerta a adultos. Y se manda EXPLÍCITO aunque ya sea
+  /// su defecto, porque «viene apagado» es una promesa de la extensión y no
+  /// una garantía del app: una actualización distraída bastaría para que el
+  /// Inicio empiece a mostrar lo que no debe.
+  ///
+  /// Se llena en [detectarMixtas], que ya le pregunta sus filtros a cada una,
+  /// así que no cuesta ninguna llamada de más.
+  static Map<String, List<String>>? segurosDe(String package) =>
+      _seguros[package];
+
+  /// Lo contrario: el filtro para pedirle su contenido para ADULTOS.
+  ///
+  /// Es el espejo de [segurosDe] y existe por el mismo motivo. La Zona +18
+  /// mostraba el catálogo normal de estas extensiones: al no mandarles nada,
+  /// cada una aplicaba su propio defecto —que es el seguro, a propósito— y la
+  /// zona terminaba enseñando One Piece y Dragon Ball. Justo lo que esa zona
+  /// no es.
+  ///
+  /// Solo tiene entrada para las que declaran una puerta. Una extensión que ya
+  /// es de adultos entera no necesita ninguna: todo lo suyo lo es.
+  static Map<String, List<String>>? adultosDe(String package) =>
+      _adultos[package];
+
+  static final Map<String, Map<String, List<String>>> _seguros = {};
+  static final Map<String, Map<String, List<String>>> _adultos = {};
+
+  /// Averigua cuáles son mixtas. Una sola vez por sesión.
+  ///
+  /// `createFilter()` corre JavaScript en el motor de cada extensión y ese
+  /// motor no es reentrante, así que esto NO se llama al arrancar: lo llama la
+  /// pantalla que lo necesita, cuando ya no hay nada más pidiéndole cosas.
+  static Future<void> detectarMixtas() async {
+    // Una desinstalada no puede seguir contando como nada.
+    _mixtas.removeWhere((p) => !runtimes.containsKey(p));
+    _mixtasVistas.removeWhere((p, _) => !runtimes.containsKey(p));
+    _seguros.removeWhere((p, _) => !runtimes.containsKey(p));
+    _adultos.removeWhere((p, _) => !runtimes.containsKey(p));
+    for (final e in runtimes.entries) {
+      final version = e.value.extension.version;
+      // Ya se miró ESTA versión: no se le vuelve a pedir nada al motor.
+      if (_mixtasVistas[e.key] == version) continue;
+      _mixtasVistas[e.key] = version;
+      // Se borra lo que se supiera de la versión anterior: una actualización
+      // puede sacar o agregar la puerta, y arrastrar la respuesta vieja sería
+      // exactamente el error que esto viene a corregir.
+      _mixtas.remove(e.key);
+      // Las +18 enteras no se consultan: ver el comentario de arriba.
+      if (e.value.extension.nsfw) continue;
+      try {
+        final filtros =
+            await e.value.createFilter().timeout(const Duration(seconds: 8));
+        // De paso se anota el valor SEGURO de cada puerta. Ver segurosDe: es
+        // el mismo recorrido, así que sale gratis, y deja el dato en un solo
+        // lugar para todas las pantallas que piden catálogo.
+        final seguros = <String, List<String>>{};
+        final adultos = <String, List<String>>{};
+        for (final f in filtros.entries) {
+          final adulto = f.value.adultOption;
+          if (adulto == null || adulto.isEmpty) continue;
+          seguros[f.key] = [f.value.defaultOption];
+          adultos[f.key] = [adulto];
+        }
+        if (seguros.isEmpty) {
+          _seguros.remove(e.key);
+          _adultos.remove(e.key);
+        } else {
+          _seguros[e.key] = seguros;
+          _adultos[e.key] = adultos;
+          _mixtas.add(e.key);
+        }
+      } catch (err) {
+        // Si no se pudo saber, se la deja fuera. Una mixta que no aparece en
+        // la Zona +18 es un contenido menos; una +18 que aparece en la zona
+        // normal es un problema.
+        //
+        // Y se olvida que se la miró, así que el próximo intento la vuelve a
+        // consultar: si falló por un tropiezo puntual —el motor ocupado, un
+        // tiempo agotado— no queda mal clasificada para toda la sesión.
+        _mixtasVistas.remove(e.key);
+        logger.info('[mixtas] ${e.value.extension.name}: $err');
+      }
+    }
+  }
+
   static String get extensionsDir => path.join(
         PrismHubDirectory.getDirectory,
         'extensions',
       );
+
+  // ─── Vista previa del Home ────────────────────────────────────────────────
+  //
+  // ── Qué es ──────────────────────────────────────────────────────────────
+  //
+  // Unas pocas extensiones del catálogo que el usuario NO instaló, cargadas
+  // solo para que el Home tenga contenido desde el primer arranque. Con una
+  // sola extensión instalada de fábrica, el Home mostraba una fila y nada más.
+  //
+  // ── Qué NO es ───────────────────────────────────────────────────────────
+  //
+  // No es instalar. Su guion vive en OTRA carpeta a propósito: cualquier `.js`
+  // dentro de `extensionsDir` se considera instalado —hay un escaneo al
+  // arrancar y un vigilante de esa carpeta— así que ponerlas ahí las metería
+  // en la lista del usuario sin que él lo pidiera.
+  //
+  // Tampoco aparecen en Extensiones, ni en Buscar, ni resuelven vídeo. Solo
+  // llenan filas del Home. Al tocar una tarjeta se ofrece instalarla de
+  // verdad, y ahí sí pasa por el camino normal.
+  //
+  // ── La firma se verifica igual ──────────────────────────────────────────
+  //
+  // Y sin excepción: acá se ejecuta código que el usuario no eligió, así que
+  // es JUSTO donde menos se puede aflojar. Una entrada sin firma, o con firma
+  // que no valida, no se previsualiza y punto.
+  //
+  // ── Cuántas ─────────────────────────────────────────────────────────────
+  //
+  // Cuatro. Cada una es un motor QuickJS más y un sitio más al que se le pide
+  // contenido cada vez que se abre el Home: con las diecisiete sería tráfico y
+  // memoria que nadie pidió. Cuatro alcanza para que el Home se vea vivo.
+  static const maxVistaPrevia = 4;
+
+  static String get vistaPreviaDir => path.join(
+        PrismHubDirectory.getDirectory,
+        'vista_previa',
+      );
+
+  /// Las que están cargadas como vista previa, por paquete.
+  static final Map<String, ExtensionService> vistaPrevia = {};
+
+  static bool esVistaPrevia(String package) => vistaPrevia.containsKey(package);
+
+  static bool _vistaPreviaLista = false;
+
+  /// Baja, verifica y levanta unas pocas extensiones del catálogo.
+  ///
+  /// Silenciosa por diseño: si no hay red, o el catálogo no contesta, o una
+  /// firma no valida, el Home simplemente muestra lo que el usuario tenga.
+  /// Nada de esto es un error que valga interrumpir a nadie.
+  static Future<void> prepararVistaPrevia() async {
+    if (_vistaPreviaLista) return;
+    _vistaPreviaLista = true;
+    try {
+      // ── Lo que importa es cuántas ANDAN, no cuántas hay ────────────────
+      //
+      // La primera versión miraba si estaba instalada, y eso dejaba fuera el
+      // caso más común: el usuario que tiene todo instalado y casi todo
+      // APAGADO. Ahí el Home quedaba con una fila y la vista previa no se
+      // activaba nunca, porque para ella «ya las tenía».
+      //
+      // Se cuenta lo que de verdad trae contenido: instalada Y encendida.
+      final activas = runtimes.entries
+          .where((e) => !e.value.extension.nsfw && isEnabled(e.key))
+          .length;
+      if (activas >= maxVistaPrevia) return;
+      var faltan = maxVistaPrevia - activas;
+
+      // ── Primero las apagadas, que salen gratis ─────────────────────────
+      //
+      // Están instaladas: su motor YA está cargado en memoria. Mostrar lo que
+      // tienen no cuesta ni una descarga ni un motor más — solo pedirles
+      // contenido, igual que a cualquier otra.
+      for (final e in runtimes.entries) {
+        if (faltan <= 0) break;
+        if (e.value.extension.nsfw || isEnabled(e.key)) continue;
+        vistaPrevia[e.key] = e.value;
+        faltan--;
+      }
+      if (faltan <= 0) return;
+
+      // ── Y si todavía faltan, se bajan del catálogo ─────────────────────
+      final catalogo = await fetchRepoIndex();
+      final elegidas = <Map>[];
+      for (final e in catalogo.cast<Map>()) {
+        if (elegidas.length >= faltan) break;
+        final pkg = e['package']?.toString();
+        if (pkg == null || pkg.isEmpty) continue;
+        // Ya la tiene instalada (encendida o apagada): no hay nada que bajar.
+        if (runtimes.containsKey(pkg)) continue;
+        // Las +18 no entran al Home ni por esta puerta.
+        if (e['nsfw'] == true) continue;
+        // Sin firma no se ejecuta. Ver el comentario de arriba.
+        final firma = e['signature']?.toString();
+        if (firma == null || firma.isEmpty) continue;
+        elegidas.add(e);
+      }
+      if (elegidas.isEmpty) return;
+
+      Directory(vistaPreviaDir).createSync(recursive: true);
+      for (final e in elegidas) {
+        try {
+          await _levantarVistaPrevia(e);
+        } catch (err) {
+          logger.info('[vista previa] ${e['package']} no se pudo cargar: $err');
+        }
+      }
+    } catch (e) {
+      logger.info('[vista previa] no se pudo preparar: $e');
+    }
+  }
+
+  static Future<void> _levantarVistaPrevia(Map entrada) async {
+    final pkg = entrada['package'].toString();
+    final url = (entrada['script'] ?? entrada['url'])?.toString();
+    if (url == null || url.isEmpty) return;
+
+    final js = await dio.get<String>(
+      url,
+      options: Options(receiveTimeout: const Duration(seconds: 20)),
+    );
+    final guion = js.data;
+    if (guion == null || guion.isEmpty) return;
+
+    // La misma verificación que usa la instalación de verdad.
+    if (!ExtensionSignature.isOfficial(
+        guion, entrada['signature'].toString())) {
+      logger.warning(
+          '[vista previa] firma inválida para $pkg — no se carga (posible manipulación).');
+      return;
+    }
+
+    final archivo = File(path.join(vistaPreviaDir, '$pkg.js'));
+    await archivo.writeAsString(guion);
+
+    final ext = parseExtension(guion);
+    final servicio = ExtensionService();
+    await servicio.initRuntime(ext, rutaGuion: archivo.path);
+    vistaPrevia[pkg] = servicio;
+  }
 
   // 已禁用的扩展 (enable/disable). Disabled extensions stay installed but are
   // excluded from search/discovery.
@@ -711,6 +999,61 @@ class ExtensionUtils {
       ((PrismHubStorage.getSetting(SettingKey.disabledExtensions) as List?)
           ?.cast<String>()) ??
       <String>[];
+
+  /// El nombre legible de una extensión, a partir de su paquete.
+  ///
+  /// ── Por qué hace falta ──────────────────────────────────────────────────
+  ///
+  /// Los avisos de «falta la extensión» y «está deshabilitada» mostraban el
+  /// identificador tal cual: «Falta la extensión io.prismhub.tioanime». Eso no
+  /// le dice nada a nadie — el usuario conoce «TioAnime», no su paquete.
+  ///
+  /// Se busca entre las instaladas y, si no está, entre las de vista previa.
+  ///
+  /// ── Y si tampoco está, en el CATÁLOGO ───────────────────────────────────
+  ///
+  /// Faltaba justo el caso en el que este método más se usa. El aviso que lo
+  /// llama es «falta la extensión», o sea que NO está instalada: los dos
+  /// primeros lugares donde se buscaba están vacíos por definición, y salía el
+  /// identificador crudo — «Falta la extensión io.prismhub.tioanime».
+  /// Reportado en vivo, con captura.
+  ///
+  /// El catálogo ya está leído en memoria (se usa para el Repositorio y para
+  /// las filas del Home), así que buscar ahí no cuesta una petición.
+  ///
+  /// ── Y si ni el catálogo la conoce ───────────────────────────────────────
+  ///
+  /// Se arma un nombre a partir del propio paquete —la última parte, con la
+  /// primera en mayúscula— en vez de mostrarlo entero. «Tioanime» no es
+  /// exactamente su nombre, pero se lee y se entiende de qué habla; el
+  /// identificador con puntos no le dice nada a nadie.
+  static String nombreDe(String package) {
+    final ext = runtimes[package]?.extension ?? vistaPrevia[package]?.extension;
+    final nombre = ext?.name.trim();
+    if (nombre != null && nombre.isNotEmpty) return nombre;
+
+    // Sin forzar red: se mira lo que ya esté leído. Si nunca se bajó el
+    // catálogo, se cae al nombre armado, que igual se lee bien.
+    for (final e in _repoIndexCache ?? const []) {
+      if (e is! Map) continue;
+      if (e['package']?.toString() != package) continue;
+      final delCatalogo = e['name']?.toString().trim();
+      if (delCatalogo != null && delCatalogo.isNotEmpty) return delCatalogo;
+    }
+
+    return _nombreDelPaquete(package);
+  }
+
+  /// Un nombre presentable sacado del identificador.
+  ///
+  /// «io.prismhub.tioanime» → «Tioanime». Es lo último que se prueba.
+  static String _nombreDelPaquete(String package) {
+    final partes = package.split('.').where((p) => p.isNotEmpty).toList();
+    if (partes.isEmpty) return package;
+    final ultima = partes.last;
+    if (ultima.isEmpty) return package;
+    return ultima[0].toUpperCase() + ultima.substring(1);
+  }
 
   static bool isEnabled(String package) =>
       !disabledExtensions.contains(package);
@@ -771,7 +1114,44 @@ class ExtensionUtils {
       list.add(package);
     }
     await PrismHubStorage.setSetting(SettingKey.disabledExtensions, list);
-    _reloadPage();
+    // _pedirReload y no _reloadPage: esto se llama UNA VEZ POR EXTENSIÓN desde
+    // «activar todas», y recargar el app entero diecisiete veces seguidas lo
+    // dejaba sin responder.
+    _pedirReload();
+  }
+
+  /// Prende o apaga VARIAS de una sola vez.
+  ///
+  /// [setExtensionEnabled] lee la lista entera de desactivadas, la modifica y
+  /// la vuelve a escribir. Llamarlo en un bucle son diecisiete lecturas y
+  /// diecisiete escrituras del mismo dato, más diecisiete pedidos de recarga.
+  /// Acá se arma la lista final una vez, se escribe una vez y se recarga una
+  /// vez.
+  ///
+  /// Devuelve cuántas cambiaron de verdad: las que ya estaban como se pedía no
+  /// cuentan.
+  static Future<int> setExtensionsEnabled(
+    Iterable<String> packages,
+    bool enabled,
+  ) async {
+    // Copia y no la lista que devuelve el getter: esa viene de un `cast`, que
+    // es una VISTA sobre la guardada. Modificarla en el lugar cambia el dato
+    // antes de escribirlo, y si algo falla en el medio queda a mitad de camino
+    // sin haberse guardado nunca.
+    final lista = List<String>.from(disabledExtensions);
+    var cambiadas = 0;
+    for (final package in packages) {
+      if (enabled) {
+        if (lista.remove(package)) cambiadas++;
+      } else if (!lista.contains(package)) {
+        lista.add(package);
+        cambiadas++;
+      }
+    }
+    if (cambiadas == 0) return 0;
+    await PrismHubStorage.setSetting(SettingKey.disabledExtensions, lista);
+    _pedirReload();
+    return cambiadas;
   }
 
   // Only enabled runtimes — used for search/discovery so disabled sources hide.
@@ -956,15 +1336,12 @@ class ExtensionUtils {
           case FileSystemEvent.delete:
             runtimes.remove(package);
             extensionErrorMap.remove(event.path);
-            _safeReloadPage();
+            _recargarConCalma();
             break;
           case FileSystemEvent.create:
           case FileSystemEvent.modify:
             if (_loading.contains(package)) break;
-            runtimes.remove(package);
-            extensionErrorMap.remove(event.path);
-            await installByPath(event.path);
-            _safeReloadPage();
+            _reinstalarConCalma(package, event.path);
             break;
         }
       }
@@ -977,6 +1354,62 @@ class ExtensionUtils {
     // Recién ahora runtimes está poblado — necesario para saber qué
     // packages son nsfw:true.
     await _migrateNsfwHistoryFavorites();
+  }
+
+  /// Relojes por paquete, para no reinstalar la misma extensión cinco veces.
+  static final Map<String, Timer> _relojesDeArchivo = {};
+
+  /// Reinstala una extensión que cambió en disco, agrupando los avisos.
+  ///
+  /// ── El problema medido ──────────────────────────────────────────────────
+  ///
+  /// El sistema de archivos no manda UN aviso por escritura: manda varios. En
+  /// el registro de Android se ven **tres `modify` por extensión**, uno detrás
+  /// del otro. Y cada uno hacía el trabajo completo: sacar el motor, volver a
+  /// instalar el guion —que arranca un intérprete de JavaScript nuevo— y
+  /// recargar la pantalla.
+  ///
+  /// Con una extensión no se nota. Al tocar «Activar todas» son diecisiete, o
+  /// sea unas cincuenta reinstalaciones y cincuenta recargas de pantalla
+  /// encimadas. Eso es lo que se sintió como que la app se trababa al volver al
+  /// Home y desplazarse: no era el Home, era el intérprete arrancando cincuenta
+  /// veces mientras se dibujaba.
+  ///
+  /// Con un reloj corto por paquete, los tres avisos de la misma extensión se
+  /// vuelven uno. Trescientos milisegundos alcanzan de sobra —los tres llegan
+  /// en el mismo instante— y no se siente como demora: instalar ya tardaba más
+  /// que eso.
+  static void _reinstalarConCalma(String package, String ruta) {
+    _relojesDeArchivo[package]?.cancel();
+    _relojesDeArchivo[package] =
+        Timer(const Duration(milliseconds: 300), () async {
+      _relojesDeArchivo.remove(package);
+      if (_loading.contains(package)) return;
+      runtimes.remove(package);
+      extensionErrorMap.remove(ruta);
+      try {
+        await installByPath(ruta);
+      } catch (e) {
+        // Una que falle no puede dejar el vigilante roto para las demás.
+        logger.info('[extensiones] no se pudo reinstalar $package: $e');
+      }
+      _recargarConCalma();
+    });
+  }
+
+  /// Un solo reloj para la recarga de pantalla.
+  static Timer? _relojDeRecarga;
+
+  /// Recarga la pantalla UNA vez, aunque cambien diecisiete extensiones.
+  ///
+  /// Cada `_safeReloadPage` rearma el Home entero. Diecisiete seguidas es
+  /// diecisiete veces el mismo trabajo, y solo la última sirve.
+  static void _recargarConCalma() {
+    _relojDeRecarga?.cancel();
+    _relojDeRecarga = Timer(const Duration(milliseconds: 400), () {
+      _relojDeRecarga = null;
+      _safeReloadPage();
+    });
   }
 
   // Ver DatabaseService.markNsfwByPackages: marca retroactivamente el
@@ -1031,14 +1464,147 @@ class ExtensionUtils {
     // Se salta archivos que no son .js (cachés, temporales, etc.).
     for (final e in extensionsList) {
       await installByPath(e.path);
-      await _yieldToNextFrame();
+      await cederElCuadro();
     }
-    _reloadPage();
+    _pedirReload();
   }
 
-  static Future<void> _yieldToNextFrame() async {
+  /// Le deja un cuadro al dibujado antes de seguir.
+  ///
+  /// `initRuntime` es trabajo de CPU (QuickJS) y bloquea el isolate ENTERO
+  /// mientras corre. Encadenando extensiones sin soltar, la pantalla no dibuja
+  /// un solo cuadro de punta a punta: no se mueve la rueda, no responden los
+  /// botones y parece que el app se colgó. Reportado en vivo con las acciones
+  /// masivas.
+  ///
+  /// Público a propósito: lo necesita cualquier bucle que instale, actualice o
+  /// desinstale de a varias, no solo la carga inicial.
+  static Future<void> cederElCuadro() async {
     await SchedulerBinding.instance.endOfFrame;
     await Future<void>.delayed(const Duration(milliseconds: 8));
+  }
+
+  /// Instala una extensión a partir de su entrada del catálogo.
+  ///
+  /// ── Por qué existe aparte de la tarjeta ─────────────────────────────────
+  ///
+  /// Instalar era algo que solo sabía hacer `ExtensionCard`, y solo de a una:
+  /// la lógica —bajar, verificar la firma, reintentar con el catálogo fresco,
+  /// ponerle el encabezado si le falta— vivía dentro del estado del widget.
+  /// «Instalar todas» necesita eso mismo sin una tarjeta que lo envuelva.
+  ///
+  /// La tarjeta sigue con su propio camino, que además pregunta por el +18 y
+  /// pinta la rueda. Acá no se pregunta nada: en una acción masiva un diálogo
+  /// por extensión sería insoportable, así que las +18 se instalan APAGADAS si
+  /// el interruptor general está apagado — el mismo criterio que ya usaba la
+  /// tarjeta cuando no podía preguntar.
+  ///
+  /// Devuelve true si quedó instalada. Los errores se registran y se devuelven
+  /// como false: en una tanda, una que falle no puede cortar a las demás.
+  static Future<bool> instalarDesdeCatalogo(
+    Map entrada,
+    BuildContext context,
+  ) async {
+    final package = entrada['package']?.toString();
+    if (package == null || package.isEmpty) return false;
+    try {
+      final baseUrl = (entrada['script'] ?? entrada['url'])?.toString() ??
+          '${PrismHubStorage.getSetting(SettingKey.prismhubRepoUrl)}'
+              '/repo/$package.js';
+      // Igual que en la tarjeta: GitHub cachea el .js unos minutos y sin esto
+      // se podría instalar la versión anterior recién publicada.
+      final sep = baseUrl.contains('?') ? '&' : '?';
+      final res = await dio.get<String>(
+        '$baseUrl${sep}t=${DateTime.now().millisecondsSinceEpoch}',
+        options: Options(receiveTimeout: const Duration(seconds: 20)),
+      );
+      var script = res.data;
+      if (script == null || script.isEmpty) return false;
+
+      final firma = entrada['signature']?.toString();
+      var oficial = false;
+      if (firma != null && firma.isNotEmpty) {
+        if (!ExtensionSignature.isOfficial(script, firma)) {
+          // Puede ser el caché del catálogo, no manipulación: se baja de nuevo
+          // forzado y se reintenta una vez. Ver el detalle en ExtensionCard.
+          final frescos = await _scriptConCatalogoFresco(package);
+          if (frescos == null) {
+            logger.warning('[extensiones] $package: firma inválida, no se '
+                'instala en la tanda');
+            return false;
+          }
+          script = frescos;
+        }
+        oficial = true;
+      }
+
+      if (!script.contains('==PrismHubExtension==') &&
+          !script.contains('==MiruExtension==') &&
+          !script.contains('@package')) {
+        final tipo = (entrada['type'] ?? 'bangumi').toString();
+        final cabecera = '// ==PrismHubExtension==\n'
+            '// @name         ${entrada['name'] ?? package}\n'
+            '// @version      ${entrada['version'] ?? '1.0.0'}\n'
+            '// @author       PrismPlus\n'
+            '// @lang         ${entrada['lang'] ?? 'all'}\n'
+            '// @license      ${entrada['license'] ?? 'MIT'}\n'
+            '// @icon         ${entrada['icon'] ?? ''}\n'
+            '// @package      $package\n'
+            '// @type         $tipo\n'
+            '// @nsfw         ${entrada['nsfw'] ?? false}\n'
+            '// @webSite      ${entrada['webSite'] ?? ''}\n'
+            '// @description  ${entrada['description'] ?? entrada['name'] ?? package}\n'
+            '// ==/PrismHubExtension==\n\n';
+        script = '$cabecera$script';
+      }
+
+      if (!context.mounted) return false;
+      await installByScript(script, context, officialVerified: oficial);
+      if (runtimes[package] == null) return false;
+
+      final esNsfw = entrada['nsfw'] == true || entrada['nsfw'] == 'true';
+      if (esNsfw && !isNsfwVisibleOutsideZone(true)) {
+        await setExtensionEnabled(package, false);
+        // Se anota para que vuelva sola al encender el interruptor de +18.
+        await anotarApagadaPorNsfw(package);
+      }
+      return true;
+    } catch (e) {
+      logger.warning('[extensiones] no se pudo instalar $package: $e');
+      return false;
+    }
+  }
+
+  /// El script de un paquete, bajando el catálogo de nuevo y forzado.
+  ///
+  /// Devuelve null si tampoco valida con el catálogo fresco: ahí sí hay que
+  /// rechazarlo. Es la versión sin widget de lo que hace ExtensionCard.
+  static Future<String?> _scriptConCatalogoFresco(String package) async {
+    try {
+      final lista = await fetchRepoIndex(forceRefresh: true, cacheBust: true);
+      final entrada = lista.firstWhere(
+        (e) => e is Map && e['package']?.toString() == package,
+        orElse: () => null,
+      );
+      if (entrada is! Map) return null;
+      final firma = entrada['signature']?.toString();
+      final direccion = (entrada['script'] ?? entrada['url'])?.toString();
+      if (firma == null || firma.isEmpty || direccion == null) return null;
+
+      final sep = direccion.contains('?') ? '&' : '?';
+      final res = await dio.get<String>(
+        '$direccion${sep}t=${DateTime.now().millisecondsSinceEpoch}',
+        options: Options(receiveTimeout: const Duration(seconds: 20)),
+      );
+      final script = res.data;
+      if (script == null || script.isEmpty) return null;
+      if (!ExtensionSignature.isOfficial(script, firma)) return null;
+      return script;
+    } catch (e) {
+      logger.warning('[extensiones] no se pudo reintentar con el catálogo '
+          'fresco para $package: $e');
+      return null;
+    }
   }
 
   static uninstall(String package) async {
@@ -1136,7 +1702,11 @@ class ExtensionUtils {
     } finally {
       _loading.remove(pkg);
     }
-    safeReload ? _safeReloadPage() : _reloadPage();
+    // Las dos ramas terminan en lo mismo desde que la recarga se junta y se
+    // difiere: al correr fuera de esta pila, una excepción suya ya no podía
+    // llegarle al instalador de todos modos, así que se registra y no se
+    // propaga (ver _correrReload). `safeReload` se deja por los llamadores.
+    _pedirReload();
   }
 
   static void _showInstallError(BuildContext context, Object e) {
@@ -1213,13 +1783,80 @@ class ExtensionUtils {
     }
   }
 
-  static _safeReloadPage() {
-    try {
-      _reloadPage();
-    } catch (_) {}
+  static _safeReloadPage() => _pedirReload();
+
+  /// Espera antes de recargar, para juntar toda una ráfaga en una sola vez.
+  ///
+  /// 250 ms: no se nota al usar la app y alcanza de sobra para que una acción
+  /// masiva termine de recorrer sus extensiones.
+  static Timer? _reloadEnEspera;
+
+  /// Hay una recarga corriendo AHORA.
+  static bool _recargando = false;
+
+  /// Llegó un cambio mientras se recargaba y hay que volver a hacerlo al
+  /// terminar — una sola vez, no una por cambio.
+  static bool _reloadPedidoDeNuevo = false;
+
+  /// Pide recargar las pantallas, juntando los pedidos de una misma ráfaga.
+  ///
+  /// ── Por qué esto existe ─────────────────────────────────────────────────
+  ///
+  /// [_reloadPage] rehace Inicio (sus dos zonas), Buscar (sus dos instancias),
+  /// Instaladas y el Repositorio: consultas a la base y pedidos de red. Y se
+  /// llamaba UNA VEZ POR EXTENSIÓN, porque cuelga de setExtensionEnabled.
+  ///
+  /// O sea que «activar todas» con diecisiete instaladas lanzaba diecisiete
+  /// cascadas, ninguna esperando a la anterior, todas peleando por el mismo
+  /// hilo. Reportado en vivo: el app se quedaba sin responder y no se podía
+  /// tocar ningún botón. Y tocando el botón de nuevo se sumaban otras
+  /// diecisiete, así que empeoraba solo.
+  ///
+  /// El candado de la pantalla (`_masivoEnCurso`) no alcanzaba para esto: se
+  /// suelta cuando el bucle termina, pero las recargas que largó siguen
+  /// corriendo por su cuenta.
+  ///
+  /// Con esto, diecisiete cambios seguidos cuestan UNA recarga. Y como la
+  /// espera se reinicia con cada pedido, machacar el botón tampoco encadena
+  /// nada: se recarga una sola vez, cuando la ráfaga para.
+  static void _pedirReload() {
+    _reloadEnEspera?.cancel();
+    _reloadEnEspera = Timer(
+      const Duration(milliseconds: 250),
+      _correrReload,
+    );
   }
 
-  static _reloadPage() {
+  static Future<void> _correrReload() async {
+    _reloadEnEspera = null;
+    // Ya hay una corriendo: se anota y se repite al final. Sin esto, una
+    // ráfaga más larga que la propia recarga volvía a encimarlas.
+    if (_recargando) {
+      _reloadPedidoDeNuevo = true;
+      return;
+    }
+    _recargando = true;
+    try {
+      await _reloadPage();
+    } catch (e) {
+      // Una pantalla que falle al refrescarse no puede dejar la marca puesta:
+      // eso bloquearía TODAS las recargas siguientes hasta reiniciar el app.
+      logger.info('[extensiones] fallo al recargar las pantallas: $e');
+    } finally {
+      _recargando = false;
+    }
+    if (_reloadPedidoDeNuevo) {
+      _reloadPedidoDeNuevo = false;
+      _pedirReload();
+    }
+  }
+
+  /// Rehace las pantallas que dependen de qué extensiones hay activas.
+  ///
+  /// No se llama derecho desde ningún lado: se pide por [_pedirReload], que
+  /// junta las ráfagas. Y ahora ESPERA a que terminen — antes largaba los
+  /// refrescos y volvía enseguida, así que nadie sabía cuántos había en vuelo.
+  static Future<void> _reloadPage() async {
     // 重载扩展页面
     if (Get.isRegistered<ExtensionPageController>()) {
       Get.find<ExtensionPageController>().callRefresh();
@@ -1242,14 +1879,17 @@ class ExtensionUtils {
     // desinstalada seguia figurando como instalada— hasta reabrir la pagina
     // o esperar a que venciera la cache.
     if (Get.isRegistered<ExtensionRepoPageController>()) {
-      Get.find<ExtensionRepoPageController>().onRefresh(forceRefresh: false);
+      await Get.find<ExtensionRepoPageController>()
+          .onRefresh(forceRefresh: false);
     }
 
     // Home (Continuar/Favoritos/fondo del hero) — sin esto, desactivar o
     // desinstalar una extensión dejaba su contenido visible en Home hasta
-    // el próximo refresco manual o hasta reabrir la página.
-    HomePageController.callRefreshAll();
+    // el próximo refresco manual o hasta reabrir la página. Es la más cara de
+    // las cuatro: consulta el historial de las dos zonas y rearma el fondo.
+    await HomePageController.callRefreshAll();
   }
+
 
   static final RegExp _episodeNumberPattern = RegExp(r'\d+(?:\.\d+)?');
 

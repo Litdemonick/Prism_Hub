@@ -11,6 +11,7 @@ import 'package:flutter_i18n/flutter_i18n.dart';
 import 'package:flutter_markdown/flutter_markdown.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:prismhub/utils/i18n.dart';
+import 'package:prismhub/utils/modo_app.dart';
 import 'package:prismhub/utils/request.dart';
 import 'package:prismhub/utils/prismhub_storage.dart';
 import 'package:prismhub/utils/router.dart';
@@ -307,6 +308,17 @@ class ApplicationUtils {
   // versión desplegada, no hay un "instalable" que forzar.
   static Future<void> checkForcedUpdate(BuildContext context) async {
     if (kIsWeb) return;
+    // En una compilación de prueba no se avisa de actualizaciones.
+    //
+    // Esa compilación se rehace todo el tiempo mientras se trabaja, así que
+    // comparar su versión contra la publicada da "hay una nueva" casi siempre
+    // — y este aviso es el que BLOQUEA la app hasta actualizar. Quedaba
+    // tapando la pantalla justo cuando se está probando un cambio.
+    //
+    // Solo se calla el aviso: la comprobación manual desde Ajustes sigue
+    // estando, para poder verificar que el flujo de actualización anda (ver
+    // checkUpdate, que avisa en qué modo está).
+    if (!ModoApp.esRelease) return;
     if (_forcedUpdatePageOpen) return;
     final activeCheck = _forcedUpdateCheckInFlight;
     if (activeCheck != null) return activeCheck;
@@ -421,6 +433,22 @@ class ApplicationUtils {
   }
 
   static checkUpdate(BuildContext context, {bool showSnackbar = false}) async {
+    // En una compilación de prueba se dice y no se comprueba nada.
+    //
+    // Comparar la versión de una compilación de trabajo contra la publicada no
+    // significa nada: se rehace en cada cambio. Pero tampoco conviene que el
+    // botón se quede mudo, porque desde afuera no se distingue de que esté
+    // roto — así que se explica por qué no hizo nada.
+    if (!ModoApp.esRelease) {
+      if (context.mounted) {
+        showPlatformSnackbar(
+          context: context,
+          content: 'Estás en una compilación de prueba (${ModoApp.etiqueta}): '
+              'las actualizaciones solo se comprueban en la versión publicada.',
+        );
+      }
+      return;
+    }
     try {
       const url =
           "https://api.github.com/repos/Litdemonick/Prism_Hub/releases/latest";
@@ -1429,7 +1457,7 @@ class _ForcedUpdatePageState extends State<_ForcedUpdatePage> {
                     surfaceTintColor: Colors.transparent,
                     shape: RoundedRectangleBorder(
                         borderRadius: BorderRadius.circular(12),
-                        side: const BorderSide(color: HomeTheme.border)),
+                        side: BorderSide(color: HomeTheme.border)),
                     child: Container(
                       constraints: const BoxConstraints(
                         maxWidth: 600,
@@ -1452,7 +1480,7 @@ class _ForcedUpdatePageState extends State<_ForcedUpdatePage> {
                             ),
                             child: Row(
                               children: [
-                                const Icon(Icons.system_update,
+                                Icon(Icons.system_update,
                                     size: 24, color: HomeTheme.accentPink),
                                 const SizedBox(width: 12),
                                 Expanded(
@@ -1464,7 +1492,7 @@ class _ForcedUpdatePageState extends State<_ForcedUpdatePage> {
                                         'version': widget.remoteVersion
                                       },
                                     ),
-                                    style: const TextStyle(
+                                    style: TextStyle(
                                       fontSize: 16,
                                       fontWeight: FontWeight.bold,
                                       color: HomeTheme.accentPink,
@@ -1499,7 +1527,7 @@ class _ForcedUpdatePageState extends State<_ForcedUpdatePage> {
                                           'actual': packageInfo.version
                                         },
                                       ),
-                                      style: const TextStyle(
+                                      style: TextStyle(
                                           color: HomeTheme.textPrimary),
                                     ),
                                     const SizedBox(height: 16),
@@ -1565,7 +1593,7 @@ class _ForcedUpdatePageState extends State<_ForcedUpdatePage> {
               surfaceTintColor: Colors.transparent,
               shape: RoundedRectangleBorder(
                   borderRadius: BorderRadius.circular(12),
-                  side: const BorderSide(color: HomeTheme.border)),
+                  side: BorderSide(color: HomeTheme.border)),
               child: Container(
                 constraints: BoxConstraints(
                   // Tope de ancho: en horizontal, con el telefono acostado, la
@@ -1596,7 +1624,7 @@ class _ForcedUpdatePageState extends State<_ForcedUpdatePage> {
                           child: Column(
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
-                              const Icon(Icons.system_update,
+                              Icon(Icons.system_update,
                                   size: 48, color: HomeTheme.accentPink),
                               const SizedBox(height: 16),
                               Text(
@@ -1607,7 +1635,7 @@ class _ForcedUpdatePageState extends State<_ForcedUpdatePage> {
                                     'version': widget.remoteVersion
                                   },
                                 ),
-                                style: const TextStyle(
+                                style: TextStyle(
                                   fontSize: 20,
                                   fontWeight: FontWeight.bold,
                                   color: HomeTheme.textPrimary,
@@ -1622,7 +1650,7 @@ class _ForcedUpdatePageState extends State<_ForcedUpdatePage> {
                                           'actual': packageInfo.version
                                         },
                                       ),
-                                style: const TextStyle(
+                                style: TextStyle(
                                     color: HomeTheme.textPrimary),
                               ),
                               const SizedBox(height: 16),
@@ -1771,12 +1799,12 @@ class _NotasDeVersionState extends State<_NotasDeVersion> {
 /// no pegar con nada se leia mal. La usan el dialogo de "hay version nueva"
 /// y la pantalla de actualizacion obligatoria, que muestran lo mismo.
 MarkdownStyleSheet estiloNotasVersion() {
-  const cuerpo = TextStyle(
+  final cuerpo = TextStyle(
     color: HomeTheme.textPrimary,
     fontSize: 13.5,
     height: 1.5,
   );
-  const titulo = TextStyle(
+  final titulo = TextStyle(
     color: HomeTheme.textPrimary,
     fontWeight: FontWeight.w700,
     height: 1.35,
@@ -1803,11 +1831,11 @@ MarkdownStyleSheet estiloNotasVersion() {
     blockquoteDecoration: BoxDecoration(
       color: HomeTheme.cardSurface,
       borderRadius: BorderRadius.circular(8),
-      border: const Border(
+      border: Border(
         left: BorderSide(color: HomeTheme.accentPink, width: 3),
       ),
     ),
-    code: const TextStyle(
+    code: TextStyle(
       color: HomeTheme.accentPink,
       fontSize: 12.5,
       fontFamily: 'monospace',
@@ -1819,7 +1847,7 @@ MarkdownStyleSheet estiloNotasVersion() {
       borderRadius: BorderRadius.circular(8),
       border: Border.all(color: HomeTheme.border),
     ),
-    horizontalRuleDecoration: const BoxDecoration(
+    horizontalRuleDecoration: BoxDecoration(
       border: Border(top: BorderSide(color: HomeTheme.border)),
     ),
     tableHead: cuerpo.copyWith(fontWeight: FontWeight.w700),
@@ -1848,7 +1876,7 @@ class _BarraVentanaActualizacion extends StatelessWidget {
   Widget build(BuildContext context) {
     return Container(
       height: 40,
-      decoration: const BoxDecoration(
+      decoration: BoxDecoration(
         color: HomeTheme.cardSurface,
         border: Border(bottom: BorderSide(color: HomeTheme.border)),
       ),
@@ -1863,10 +1891,10 @@ class _BarraVentanaActualizacion extends StatelessWidget {
                 padding: const EdgeInsets.symmetric(horizontal: 14),
                 child: Row(
                   children: [
-                    const Icon(Icons.system_update,
+                    Icon(Icons.system_update,
                         size: 16, color: HomeTheme.accentPink),
                     const SizedBox(width: 10),
-                    const Text(
+                    Text(
                       'PrismHub',
                       style: TextStyle(
                         color: HomeTheme.textPrimary,
@@ -1877,7 +1905,7 @@ class _BarraVentanaActualizacion extends StatelessWidget {
                     const SizedBox(width: 8),
                     Text(
                       'v${packageInfo.version}',
-                      style: const TextStyle(
+                      style: TextStyle(
                         color: HomeTheme.textMuted,
                         fontSize: 12,
                       ),
@@ -2083,7 +2111,7 @@ class _BarraDeDescarga extends StatelessWidget {
                 minHeight: 6,
                 backgroundColor: HomeTheme.accentPink.withValues(alpha: 0.18),
                 valueColor:
-                    const AlwaysStoppedAnimation<Color>(HomeTheme.accentPink),
+                    AlwaysStoppedAnimation<Color>(HomeTheme.accentPink),
               ),
             ),
             const SizedBox(height: 8),
@@ -2103,7 +2131,7 @@ class _BarraDeDescarga extends StatelessWidget {
                 if (valor.parte != null)
                   Text(
                     '${(valor.parte! * 100).round()}%',
-                    style: const TextStyle(
+                    style: TextStyle(
                       fontSize: 12,
                       fontWeight: FontWeight.w700,
                       color: HomeTheme.accentPink,

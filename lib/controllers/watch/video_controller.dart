@@ -31,6 +31,8 @@ import 'package:prismhub/utils/cast_log.dart';
 import 'package:prismhub/utils/connectivity.dart';
 import 'package:prismhub/utils/cast_metadata.dart';
 import 'package:prismhub/utils/notificacion_reproductor.dart';
+import 'package:prismhub/utils/audio_hls.dart';
+import 'package:prismhub/utils/bomba_de_datos.dart';
 import 'package:prismhub/utils/cast_relay_server.dart';
 import 'package:prismhub/utils/watch_state.dart';
 import 'package:prismhub/data/services/database_service.dart';
@@ -41,7 +43,7 @@ import 'package:prismhub/utils/layout.dart';
 import 'package:prismhub/utils/prismhub_directory.dart';
 import 'package:prismhub/views/pages/watch/video/video_player_sidebar.dart';
 import 'package:prismhub/views/pages/watch/video/webview_player_page.dart'
-    show isDirectStream;
+    show isDirectStream, isKnownNativeServer;
 import 'package:window_manager/window_manager.dart';
 import 'package:path/path.dart' as path;
 import 'package:fluent_ui/fluent_ui.dart' as fluent;
@@ -184,6 +186,105 @@ class VideoPlayerController extends GetxController with WidgetsBindingObserver {
   // 字幕
   final subtitles = <SubtitleTrack>[].obs;
 
+  /// Los idiomas que ofrece la lista maestra de HLS.
+  ///
+  /// **Cómo están armados estos servidores, que es lo que explica todo.**
+  /// Medido en vimeos el 2026-08-06, pidiendo cada lista que menciona el
+  /// maestro y mirando qué pedacitos trae:
+  ///
+  ///   #EXT-X-MEDIA:TYPE=AUDIO,NAME="Español",…,URI=".../index-a1.m3u8"
+  ///   #EXT-X-MEDIA:TYPE=AUDIO,NAME="English",…,URI=".../index-a2.m3u8"
+  ///   #EXT-X-STREAM-INF:RESOLUTION=1280x720,…,AUDIO="audio0"
+  ///   .../vtp8u5tj06i8_h/index-v1-a2.m3u8      → seg-1-v1-a2.ts
+  ///
+  /// El nombre del archivo lleva el audio adentro: `v1-a2` es **vídeo 1 con el
+  /// audio 2 pegado**, y el audio 2 es el inglés. O sea que la variante que se
+  /// reproduce ya viene doblada al inglés, y las pistas sueltas de arriba son
+  /// la alternativa.
+  ///
+  /// Dos cosas se siguen de ahí:
+  ///
+  /// **Por qué mpv veía un solo audio.** La variante es autosuficiente, así que
+  /// ffmpeg usa el audio que trae pegado y ni abre las otras.
+  ///
+  /// **Por qué decía «Español» y sonaba en inglés.** El maestro marca el
+  /// español con `DEFAULT=YES` —porque para el reproductor de la web lo es— y
+  /// nosotros dejábamos sonar el audio del vídeo, que es el a2. La etiqueta
+  /// decía una cosa y el altavoz otra.
+  ///
+  /// Y de ahí sale el arreglo: cambiar de idioma es pedir la MISMA variante con
+  /// otro número. Comprobado que `index-v1-a1.m3u8` existe, responde con el
+  /// mismo vale y baja vídeo de verdad.
+  final audiosHls = <PistaDeAudio>[].obs;
+
+  /// Cuál está sonando. -1 es "no hay idiomas que elegir".
+  ///
+  /// Sale de mirar qué `-aN` traen las variantes del maestro, no de creerle al
+  /// `DEFAULT=YES`: el que suena es el que está pegado al vídeo.
+  final audioHlsElegido = (-1).obs;
+
+  /// Si se está cambiando el idioma, para que se vea en pantalla.
+  final cambiandoAudio = false.obs;
+
+  /// Lo que se le pasó a mpv la última vez, para poder repetirlo con otro
+  /// idioma sin volver a resolver el servidor.
+  String? _fuenteUrl;
+  Map<String, String>? _fuenteHeaders;
+
+  /// Cambia el idioma del audio.
+  ///
+  /// **Se rehace la lista maestra apuntando al audio elegido.** El vídeo y el
+  /// audio quedan en el mismo archivo, como venían, así que van sincronizados
+  /// por construcción: no hay dos relojes que juntar.
+  ///
+  /// Antes se cargaba la pista suelta como audio externo. Eso son dos demuxers
+  /// distintos, cada uno con su reloj, y al engancharlos en marcha el audio
+  /// arrancaba donde él creía que iba: se escuchaba corrido, y encima el
+  /// reproductor se trababa. Saltar a la posición justo después tampoco alcanzó.
+  ///
+  /// El maestro rehecho se guarda en un archivo y se abre desde ahí. Sus
+  /// direcciones son absolutas, así que a mpv le da igual de dónde salga la
+  /// lista: los pedacitos los sigue pidiendo al servidor con las mismas
+  /// cabeceras.
+  ///
+  /// **No es instantáneo**, y no puede serlo: mpv tiene que volver a abrir. En
+  /// la web sí lo es porque hls.js cambia la pista dentro de la misma sesión y
+  /// conserva el reloj — mpv no tiene forma de hacer eso. A cambio, queda bien
+  /// sincronizado y en el idioma que dice.
+  Future<void> elegirAudioHls(int indice) async {
+    if (indice < 0 || indice >= audiosHls.length) return;
+    if (indice == audioHlsElegido.value) return;
+    // Dos cambios encimados dejaban a mpv abriendo dos fuentes a la vez, y de
+    // ahí salía que se trabara y no respondiera al play.
+    if (cambiandoAudio.value) return;
+    final actual = _fuenteUrl;
+    final headers = _fuenteHeaders;
+    if (actual == null || headers == null) return;
+
+    cambiandoAudio.value = true;
+    final donde = position.value;
+    final quiere = audiosHls[indice];
+    try {
+      hasRenderedFrame.value = false;
+      // Fuente nueva: se olvida el cuadro anterior y la red se rearma
+      // sola con el primer cuadro de esta. Ver hasRenderedFrame.
+      _hayCuadro = false;
+      _posicionAlPrimerCuadro = null;
+      _redDeLaRueda?.cancel();
+      _redDeLaRueda = null;
+      final conIdioma = AudioHls.conAudio(actual, quiere.numero);
+      await player.open(Media(conIdioma, httpHeaders: headers));
+      _fuenteUrl = conIdioma;
+      audioHlsElegido.value = indice;
+      if (donde > Duration.zero) await _saltarCuandoSePueda(donde);
+      logger.info('audio cambiado a ${quiere.nombre} (a${quiere.numero})');
+    } catch (e) {
+      logger.warning('no se pudo cambiar el audio', e);
+    } finally {
+      cambiandoAudio.value = false;
+    }
+  }
+
   // 画质
   final currentQuality = "".obs;
   final qualityMap = <String, String>{};
@@ -249,6 +350,25 @@ class VideoPlayerController extends GetxController with WidgetsBindingObserver {
   // Selector de servidores (llenado desde X-Servers header de la extensión)
   final availableServers = <String, String>{}.obs; // nombre → embed URL
   final serverReferers = <String, String>{}; // nombre → referer (no observable)
+  // nombre → si reproduce acá dentro (rayo) o abre el navegador (mundo), según
+  // lo que diga la extensión. Solo están los que ella declara; del resto no hay
+  // entrada y se sigue adivinando por nombre y host (ver isKnownNativeServer).
+  //
+  // Lo dice la extensión porque es la única que puede saberlo: el mismo nombre
+  // de servidor reproduce nativo en un sitio y no en otro. "StreamWish" es el
+  // caso de manual — en JKAnime anda y en HentaiLA y AnimeFenix termina en
+  // premilkyway.com, que está bloqueado. Por nombre no hay forma de acertarle
+  // a los dos.
+  final serverNative =
+      <String, bool>{}; // no observable, igual que serverReferers
+
+  /// Si a este servidor le corresponde el rayo (reproduce acá dentro) o el
+  /// mundo (abre el navegador interno).
+  ///
+  /// Manda lo que diga la extensión, que es la que midió ESE servidor en ESE
+  /// sitio. Si no dice nada, se adivina por nombre y host como siempre.
+  bool esServidorNativo(String name, String url) =>
+      serverNative[name] ?? isKnownNativeServer(name, url);
   final currentServerName = ''.obs;
   final serverFailedMessage = ''.obs;
   // false entre "el servidor abrió" y "ya se ve el primer frame real" — media
@@ -256,7 +376,103 @@ class VideoPlayerController extends GetxController with WidgetsBindingObserver {
   // videoParams ya hayan llegado (streaming HLS: el buffering inicial pasa
   // SIN el flag de buffering en true, así que sin esto la pantalla quedaba
   // en negro sin ningún spinner, como si estuviera trabada de verdad).
+  /// Ahora se apaga cuando el vídeo AVANZA, no cuando aparece el cuadro.
+  ///
+  /// mpv decodifica el primer cuadro y **se queda en pausa** llenando el
+  /// colchón (`cache-pause-initial`, con `cache-pause-wait`). Apagando la
+  /// rueda ahí, lo que se veía era: rueda, imagen congelada unos segundos, y
+  /// recién después el vídeo. Parecía que se colgaba justo al empezar.
+  ///
+  /// El colchón NO se toca: está en 3 s porque con menos el vídeo se cortaba al
+  /// primer bache en los servidores lentos. Lo que cambia es solo cuándo se
+  /// apaga la rueda, para que tape la espera en vez de mostrar un cuadro que no
+  /// se mueve.
   final hasRenderedFrame = false.obs;
+
+  /// mpv ya decodificó el primer cuadro. No alcanza para apagar la rueda.
+  bool _hayCuadro = false;
+
+  /// Dónde estaba la posición cuando apareció el cuadro.
+  ///
+  /// Sirve para medir si el vídeo avanzó **de verdad**. Al principio alcanzaba
+  /// con que la posición pasara de cero, y eso se cumple con cuarenta
+  /// milisegundos: la rueda se apagaba al primer parpadeo y quedaba la imagen
+  /// quieta los segundos que mpv tardaba en llenar el colchón. Medido el
+  /// 2026-08-06 con Vimeos — «rueda apagada» a las 19.107 y el vídeo todavía en
+  /// `posición: 0s` a las 25.469, seis segundos de imagen congelada sin rueda.
+  Duration? _posicionAlPrimerCuadro;
+
+  /// Cuánto tiene que avanzar para dar por hecho que está reproduciendo.
+  ///
+  /// Con menos entra el parpadeo de mpv al posicionarse; con mucho más, la
+  /// rueda se quedaría puesta encima de un vídeo que ya se ve andando.
+  static const _avanceParaCreerle = Duration(milliseconds: 700);
+
+  /// El vídeo todavía no arrancó: se está esperando el primer cuadro.
+  ///
+  /// **Mientras esto sea cierto no se le hace caso a play, pausa ni saltos.**
+  /// Ahí el reproductor está a medio abrir, y tocarlo es la forma más rápida de
+  /// dejarlo en un estado del que no vuelve — pedirle pausa a mpv antes de que
+  /// termine de colocarse, o un salto a una posición que todavía no existe.
+  /// Quien lo toca no está haciendo nada raro: ve una rueda y prueba.
+  ///
+  /// Se corta con las mismas condiciones con las que los controles deciden
+  /// mostrar la rueda: si hay un error en pantalla, un aviso de servidor caído
+  /// o falta elegir servidor, NO se está cargando nada y el botón tiene que
+  /// responder. Y casteando tampoco: ahí el reproductor de acá está parado a
+  /// propósito y el que manda es el aparato.
+  bool get esperandoElPrimerCuadro =>
+      dlnaDevice.value == null &&
+      !isGettingWatchData.value &&
+      !hasRenderedFrame.value &&
+      error.value.isEmpty &&
+      serverFailedMessage.value.isEmpty &&
+      !awaitingServerChoice.value &&
+      !isWebViewActive.value;
+
+  /// Red de seguridad: la rueda no puede quedarse girando para siempre.
+  ///
+  /// Se apaga sola al avanzar el vídeo, y también cuando la app pausa a
+  /// propósito (el diálogo de "¿continuar donde te quedaste?"). Pero si
+  /// apareciera un caso que no previmos —una fuente que muestra el cuadro y
+  /// nunca avanza, o un pausado que llega por un camino distinto—, esto la
+  /// apaga igual y se vuelve al comportamiento de antes en vez de dejar al
+  /// usuario mirando una rueda eterna.
+  ///
+  /// Seis segundos: el doble de lo que puede tardar el colchón.
+  Timer? _redDeLaRueda;
+
+  void _ponerRedDeSeguridadDeLaRueda() {
+    if (hasRenderedFrame.value || _redDeLaRueda != null) return;
+    _redDeLaRueda = Timer(const Duration(seconds: 6), () {
+      _redDeLaRueda = null;
+      if (_disposed || hasRenderedFrame.value) return;
+      logger.info('rueda apagada: RED DE SEGURIDAD — el cuadro apareció y el '
+          'vídeo no avanzó en 6 s');
+      // Y se mide EN ESE INSTANTE, que es el que interesa: acá se sabe si
+      // estaba en pausa, esperando datos, o parado por otra cosa.
+      unawaited(_medir('no avanzó en 6 s'));
+      hasRenderedFrame.value = true;
+    });
+  }
+
+  /// El vídeo ya se está viendo de verdad: se apaga la rueda.
+  ///
+  /// Se dice POR QUÉ se apagó. Sin esto no había forma de saber, mirando un
+  /// registro, si una compilación llevaba este cambio o el de antes — y eso ya
+  /// costó una vuelta entera de pruebas.
+  void _marcarQueYaSeVe([String porQue = 'el vídeo avanzó']) {
+    if (hasRenderedFrame.value) return;
+    if (!_hayCuadro) {
+      logger.info('rueda: todavía no hay cuadro ($porQue), se sigue esperando');
+      return;
+    }
+    _redDeLaRueda?.cancel();
+    _redDeLaRueda = null;
+    hasRenderedFrame.value = true;
+    logger.info('rueda apagada: $porQue');
+  }
+
   // Flag de buffering YA corregido con la posición real — ver
   // player.stream.buffering.listen más abajo. El flag crudo de mpv
   // (paused-for-cache) confirmado en vivo que a veces queda pegado en true
@@ -345,6 +561,9 @@ class VideoPlayerController extends GetxController with WidgetsBindingObserver {
         'demuxer-max-bytes',
         'hls-bitrate',
         'demuxer-lavf-o',
+        // Para poder ver si la preferencia de idioma quedó puesta de verdad, en
+        // vez de suponerlo cuando algo suena en inglés.
+        'alang',
       ]) {
         final valor = (await np.getProperty(nombre)).trim();
         ajustes.add('$nombre=${valor.isEmpty ? '—' : valor}');
@@ -371,10 +590,26 @@ class VideoPlayerController extends GetxController with WidgetsBindingObserver {
       final caudal = d(await np.getProperty('cache-speed'));
       final bitrate = d(await np.getProperty('video-bitrate'));
       final tirados = d(await np.getProperty('frame-drop-count'));
+      // **El ESTADO del reproductor, no solo cuánto lleva descargado.**
+      //
+      // Sin esto se discutió tres veces sobre por qué el vídeo no arrancaba
+      // mirando únicamente el colchón, y las tres se cambió el ajuste
+      // equivocado. Estas cuatro dicen sin ambigüedad si está en pausa, si está
+      // esperando datos, o si está esperando otra cosa:
+      //
+      //   pause             lo pausó alguien (la app o quien mira)
+      //   paused-for-cache  mpv esperando datos
+      //   core-idle         no está decodificando nada
+      //   time-pos          el segundo exacto, con decimales
+      final pausa = d(await np.getProperty('pause'));
+      final porCache = d(await np.getProperty('paused-for-cache'));
+      final quieto = d(await np.getProperty('core-idle'));
+      final donde = d(await np.getProperty('time-pos'));
       logger.info('medición ($motivo) · colchón: $colchon s · entrando: '
           '$caudal B/s · variante: $bitrate bps · cuadros tirados: $tirados · '
           'calidad: ${currentQuality.value} · posición: '
-          '${position.value.inSeconds}s');
+          '${position.value.inSeconds}s · time-pos: $donde · pause: $pausa · '
+          'paused-for-cache: $porCache · core-idle: $quieto');
     } catch (e) {
       logger
           .info('medición ($motivo): no se pudieron leer las propiedades — $e');
@@ -914,6 +1149,24 @@ class VideoPlayerController extends GetxController with WidgetsBindingObserver {
   }
 
   /// Por que no se puede castear, para el aviso del boton apagado.
+  /// Si el botón de castear tiene que estar en pantalla.
+  ///
+  /// Mientras el vídeo todavía se está abriendo, **no**. Antes se dibujaba
+  /// igual, apagado, y en el teléfono cada toque escupía un aviso: tocarlo tres
+  /// veces mientras cargaba dejaba tres avisos encimados. Y no aportaba nada,
+  /// porque es un estado que dura unos segundos y se resuelve solo.
+  ///
+  /// Cuando el motivo es PERMANENTE el botón sí se queda: en el respaldo por
+  /// navegador no hay una dirección que mandarle al televisor, y ahí el aviso
+  /// explica algo que no va a cambiar por esperar. Esconderlo dejaría al
+  /// usuario buscando un botón que estaba hace un momento.
+  bool get mostrarBotonDeCast {
+    // Ya conectado: tiene que seguir para poder cortar.
+    if (dlnaDevice.value != null) return true;
+    if (isWebViewActive.value || webViewFallback.value != null) return true;
+    return puedeCastear;
+  }
+
   String get motivoSinCast {
     if (isGettingWatchData.value) return 'video.cast-wait'.i18n;
     if (isWebViewActive.value || webViewFallback.value != null) {
@@ -931,12 +1184,25 @@ class VideoPlayerController extends GetxController with WidgetsBindingObserver {
     _enUso = this;
     WidgetsBinding.instance.addObserver(this);
     if (Platform.isAndroid) {
-      // 切换到横屏
-      SystemChrome.setPreferredOrientations(
-        [DeviceOrientation.landscapeLeft, DeviceOrientation.landscapeRight],
-      );
-      SystemChrome.setEnabledSystemUIMode(SystemUiMode.immersiveSticky);
-      await AutoOrientation.landscapeAutoMode(forceSensor: true);
+      // ── Se abre COMO ESTÉ el teléfono, y se puede girar ────────────────
+      //
+      // Antes se BLOQUEABA la orientación en horizontal: girar no hacía nada y
+      // el vídeo se veía siempre acostado. El modo inmersivo también se pedía
+      // acá; ahora lo maneja la página según la orientación, en
+      // `pantallaSegunOrientacion`, porque de pie hay que ver la barra de
+      // estado y la de navegación.
+      //
+      // Antes acá se forzaba la horizontal, con lo que abrir el reproductor
+      // teniendo el teléfono de pie daba un giro a acostado y —desde que se
+      // permite el vertical— otro giro de vuelta a vertical. Dos giros y medio
+      // segundo de pantalla dando vueltas para terminar donde ya estaba.
+      //
+      // Ahora no se fuerza nada: se sueltan las cuatro orientaciones y manda el
+      // sensor. De pie abre de pie, acostado abre acostado, y girar funciona en
+      // los dos sentidos. Que un vídeo se vea mejor acostado es cierto, pero
+      // eso lo decide quien mira girando el teléfono, no la app girándoselo.
+      await AutoOrientation.fullAutoMode();
+      SystemChrome.setPreferredOrientations(DeviceOrientation.values);
     }
     _initSettings();
     _initPlayer();
@@ -1081,11 +1347,41 @@ class VideoPlayerController extends GetxController with WidgetsBindingObserver {
       // Cuánto se junta antes de arrancar, y cuánto se vuelve a juntar después
       // de quedarse sin datos. De fábrica es 1 segundo, que para el caso de
       // arriba es casi lo mismo que nada: reanudaría para volver a cortarse.
+      // **Tres, y NO es lo que hace que el vídeo tarde en arrancar.**
+      //
+      // Se probó con ocho y con uno el 2026-08-06 buscando el parón del
+      // arranque, y ninguno cambió nada:
+      //
+      //     con 8 → colchón 6,98 s, el vídeo quieto (esperaba llegar a 8)
+      //     con 3 → colchón 2,92 s, el vídeo quieto
+      //     con 1 → colchón 2,92 s, el vídeo quieto IGUAL
+      //
+      // Con el umbral en uno y casi tres segundos de colchón ya no hay nada que
+      // esperar, así que lo que tiene parado el vídeo es otra cosa. Queda en
+      // tres, que es el valor con el que se venía y el que evita que un parón a
+      // mitad reanude para cortarse enseguida.
       await np.setProperty('cache-pause-wait', '3');
       await np.setProperty('cache-secs', '30');
       await np.setProperty(
           'demuxer-max-bytes', Platform.isAndroid ? '96MiB' : '192MiB');
       await np.setProperty('demuxer-readahead-secs', '10');
+      // **El español primero, cuando la fuente trae varios idiomas.**
+      //
+      // Estos sitios son de contenido en español y quien los usa quiere el
+      // latino, pero muchos servidores pegan el inglés como pista por omisión y
+      // así arrancaba. Con esto mpv elige él mismo la pista en español si la
+      // hay, y si no hay se queda con la que traiga — que es justo lo que se
+      // busca: nunca queda mudo ni en un idioma que no está.
+      //
+      // Va además de la elección por dirección que hace `_comoAbrir` para los
+      // maestros con `-aN`, y no en su lugar: aquélla solo sirve donde la
+      // dirección lleva el número de pista, y ésta funciona en cualquier fuente
+      // con varias pistas de verdad —un MP4 con dos audios, un maestro con
+      // renditions separadas— y en las dos plataformas por igual.
+      //
+      // Se listan varias formas del mismo idioma porque los sitios las escriben
+      // como se les ocurre: `es`, `spa`, `es-419`, `Latino`.
+      await np.setProperty('alang', 'spa,es,es-419,es-LA,es-MX,esp,lat');
       // Con qué calidad ARRANCA solo. No es un tope.
       //
       // Antes arrancaba siempre en la más alta que ofreciera el stream, o sea
@@ -1331,15 +1627,27 @@ class VideoPlayerController extends GetxController with WidgetsBindingObserver {
 
     _seguirVolumenLocal();
 
-    // Primer cuadro real pintado — recién acá se apaga el spinner de carga
-    // del centro (ver comentario en hasRenderedFrame).
+    // Primer cuadro real pintado.
+    //
+    // **Pero acá NO se apaga la rueda.** Ver `_hayCuadro`: mpv decodifica el
+    // primer cuadro y se queda en pausa llenando el colchón, así que apagarla
+    // en este momento mostraba la imagen congelada unos segundos antes de que
+    // arrancara. Se apaga cuando el vídeo AVANZA.
     _addSubscription(player.stream.videoParams.listen((p) {
-      final primerCuadro = !hasRenderedFrame.value;
-      if ((p.w ?? 0) > 0 && (p.h ?? 0) > 0) hasRenderedFrame.value = true;
+      final primerCuadro = !_hayCuadro;
+      if ((p.w ?? 0) > 0 && (p.h ?? 0) > 0) {
+        final antes = _hayCuadro;
+        _hayCuadro = true;
+        if (!antes) {
+          logger.info('rueda: primer cuadro listo, se espera a que el vídeo '
+              'avance para apagarla');
+        }
+        _ponerRedDeSeguridadDeLaRueda();
+      }
       // Al primer cuadro se anota QUÉ variante eligió mpv. Es el dato que falta
       // para saber si un vídeo que se para eligió una calidad que la conexión no
       // sostiene — mpv no la cambia nunca por su cuenta.
-      if (primerCuadro && hasRenderedFrame.value) {
+      if (primerCuadro && _hayCuadro) {
         unawaited(_medir('arrancó'));
       }
       // El VR se decide ACA y no en el aviso de la altura.
@@ -1351,6 +1659,24 @@ class VideoPlayerController extends GetxController with WidgetsBindingObserver {
       // juntas en el mismo aviso, asi que no hay nada que se pueda cruzar.
       if ((p.w ?? 0) > 0 && (p.h ?? 0) > 0) {
         esVideoVr.value = _pareceVr(p.w, p.h, _pistasDeVr);
+        // Y aca se decide que pasa con el recorte que traia el video ANTERIOR.
+        //
+        // Al abrir contenido nuevo el recorte se quita siempre (ver
+        // _olvidarRecorteVr), asi que este es el momento en que se sabe si
+        // corresponde volver a ponerlo: recien ahora se conocen las medidas del
+        // video nuevo, que son las que necesita el recorte.
+        //
+        // Una sola vez por video. Este aviso llega mas de una vez, y reaplicar
+        // el recorte en cada uno seria pelearle al usuario que lo apago a mano.
+        if (_vrPorReaplicar) {
+          _vrPorReaplicar = false;
+          // Transmitiendo no: el recorte lo hace mpv y el televisor decodifica
+          // por su cuenta, asi que no le llega. Igual que el interruptor, que
+          // queda deshabilitado mientras se castea.
+          if (esVideoVr.value && dlnaDevice.value == null) {
+            unawaited(alternarVrUnaPantalla());
+          }
+        }
       }
     }));
 
@@ -1373,9 +1699,38 @@ class VideoPlayerController extends GetxController with WidgetsBindingObserver {
           history.progress.isNotEmpty &&
           history.episodeId == index.value &&
           history.episodeGroupId == episodeGroupId) {
-        _isAutoSeekPosition = true;
-        player.seek(Duration(seconds: int.tryParse(history.progress) ?? 0));
-        sendMessage(Message(Text('video.resume-last-playback'.i18n)));
+        final guardado = int.tryParse(history.progress) ?? 0;
+        // ── Y acá el segundo candado ──────────────────────────────────────
+        //
+        // El de arriba (al guardar) evita que entren posiciones imposibles de
+        // ahora en adelante, pero las que YA están en la base de alguien que
+        // viene usando el app siguen ahí. Sin esto, esa gente seguiría
+        // arrancando en cualquier lado hasta que el vídeo terminara una vez.
+        //
+        // Se compara contra la duración REAL, la que acaba de informar el
+        // reproductor — este listener es justamente el de la duración, así que
+        // acá ya se sabe cuánto dura el vídeo de verdad.
+        //
+        // Contra la duración GUARDADA no alcanzaba, y ese fue el agujero: en
+        // la fuente donde el problema aparece, la posición y la duración se
+        // inflan JUNTAS. Un progreso de 800 s sobre una duración guardada de
+        // 850 s se ve perfectamente sano, pasa el control, y el vídeo salta a
+        // un punto que no existe. Por eso en el teléfono empezó a arrancar
+        // desde cero y en el escritorio seguía saltando: distinta base de
+        // datos, distintos números guardados.
+        //
+        // Cinco segundos de margen: reanudar justo en el último instante es lo
+        // mismo que verlo terminado.
+        final duracionReal = event.inSeconds;
+        final fueraDeRango = guardado < 0 || guardado > duracionReal - 5;
+        if (fueraDeRango) {
+          logger.info('historial: se ignora una posición guardada imposible '
+              '($guardado s sobre $duracionReal s reales) y se empieza de cero');
+        } else if (guardado > 0) {
+          _isAutoSeekPosition = true;
+          player.seek(Duration(seconds: guardado));
+          sendMessage(Message(Text('video.resume-last-playback'.i18n)));
+        }
       }
     }));
 
@@ -1460,6 +1815,17 @@ class VideoPlayerController extends GetxController with WidgetsBindingObserver {
       // posicion actual la haria volver atras entre toque y toque, que es lo
       // que impedia encadenar saltos.
       if (!_aceptarPosicion(event)) return;
+      // ¿Avanzó DE VERDAD? Ver _posicionAlPrimerCuadro: que la posición pase de
+      // cero no alcanza, eso pasa apenas mpv se coloca. Se mide contra dónde
+      // estaba cuando apareció el cuadro, así también vale cuando se retoma un
+      // episodio por la mitad.
+      if (_hayCuadro && !hasRenderedFrame.value) {
+        final desde = _posicionAlPrimerCuadro ??= event;
+        if (event - desde >= _avanceParaCreerle) {
+          _marcarQueYaSeVe(
+              'el vídeo avanzó ${(event - desde).inMilliseconds} ms');
+        }
+      }
       position.value = event;
       _refrescarNotificacion();
       // Avance real de posición → hay frames nuevos reproduciéndose, así que
@@ -1707,6 +2073,12 @@ class VideoPlayerController extends GetxController with WidgetsBindingObserver {
     isGettingWatchData.value = true;
     awaitingServerChoice.value = false;
     hasRenderedFrame.value = false;
+    // Fuente nueva: se olvida el cuadro anterior y la red se rearma
+    // sola con el primer cuadro de esta. Ver hasRenderedFrame.
+    _hayCuadro = false;
+    _posicionAlPrimerCuadro = null;
+    _redDeLaRueda?.cancel();
+    _redDeLaRueda = null;
     // Las calidades son de ESTE video, no de los anteriores.
     //
     // Se llenaba con qualityMap[...] = ... y no se limpiaba nunca, asi que
@@ -1722,6 +2094,14 @@ class VideoPlayerController extends GetxController with WidgetsBindingObserver {
     qualityMap.clear();
     // Contenido nuevo: el reintento por software vuelve a estar disponible.
     _reintentoPorSoftware = false;
+    // El recorte de VR es del REPRODUCTOR, no del archivo.
+    //
+    // Abrir otro video no lo saca, y las medidas con las que se calculo son las
+    // del anterior: en uno de otra resolucion recorta cualquier cosa. Lo grave
+    // es el caso en que el video nuevo NO es VR — ahi el interruptor desaparece
+    // del panel, porque solo sale en videos VR, y el recorte se queda puesto
+    // sin ninguna forma de apagarlo salvo saliendo del reproductor.
+    await _olvidarRecorteVr();
     // No arrastrar el "avanzó hace poco" del video/servidor ANTERIOR — sin
     // esto, un corte real justo al cambiar de contenido podía quedar sin
     // spinner un instante porque todavía valía el timestamp viejo.
@@ -1983,6 +2363,9 @@ class VideoPlayerController extends GetxController with WidgetsBindingObserver {
           }
           // Si hay progreso guardado, emitir señal al UI para mostrar el diálogo.
           if (_pendingResumeSeconds != null) {
+            // Pausado a proposito para preguntar: la rueda no puede quedar
+            // girando detras del dialogo. Ver hasRenderedFrame.
+            _marcarQueYaSeVe('pausado a propósito para preguntar');
             resumePrompt.value = _pendingResumeSeconds;
             _pendingResumeSeconds = null;
           }
@@ -2127,6 +2510,19 @@ class VideoPlayerController extends GetxController with WidgetsBindingObserver {
               .addAll(parsed.map((k, v) => MapEntry(k, v.toString())));
         } catch (_) {}
       }
+      // Rayo/mundo dicho por la extensión, cuando lo dice. Solo vienen los
+      // servidores que ella declara: los que no, quedan afuera del mapa y los
+      // sigue decidiendo isKnownNativeServer por su cuenta.
+      serverNative.clear();
+      if (headers.containsKey('X-Server-Native')) {
+        try {
+          final Map<String, dynamic> parsed =
+              jsonDecode(headers['X-Server-Native']!);
+          parsed.forEach((k, v) {
+            if (v is bool) serverNative[k] = v;
+          });
+        } catch (_) {}
+      }
       // Servidor actual
       currentServerName.value = headers['X-Primary-Server'] ??
           (availableServers.isNotEmpty ? availableServers.keys.first : '');
@@ -2136,6 +2532,7 @@ class VideoPlayerController extends GetxController with WidgetsBindingObserver {
       watchData!.headers = Map.from(headers)
         ..remove('X-Servers')
         ..remove('X-Server-Referers')
+        ..remove('X-Server-Native')
         ..remove('X-Primary-Server')
         ..remove('X-Page-Url');
     }
@@ -2179,6 +2576,52 @@ class VideoPlayerController extends GetxController with WidgetsBindingObserver {
     }
   }
 
+  /// Apagado de emergencia: la app se está cerrando.
+  ///
+  /// ── Por qué no alcanza con el apagado normal ────────────────────────────
+  ///
+  /// `_shutdownPlayback` hace bien su trabajo, pero es una SECUENCIA LARGA:
+  /// baja el volumen, captura la miniatura de «Continuar viendo», guarda el
+  /// historial y recién ahí libera el reproductor. Eso está pensado para
+  /// cuando el usuario SALE del reproductor y la app sigue viva, y ahí cada
+  /// paso vale la pena.
+  ///
+  /// Cuando el proceso se está muriendo no hay tiempo para nada de eso. Y ahí
+  /// aparecía lo que se reportó: **la app se cerraba y el audio seguía
+  /// sonando**, porque mpv nunca llegó a recibir la orden de parar.
+  ///
+  /// Esto es lo contrario: lo mínimo, ya, sin esperar a nadie y sin await. Se
+  /// pierde la miniatura de «Continuar viendo» — y está bien, es lo barato de
+  /// perder cuando la alternativa es dejar audio sonando en un equipo donde ya
+  /// no hay ninguna ventana que lo pare.
+  ///
+  /// Es `static` a propósito: quien cierra la app no tiene por qué saber si
+  /// hay un reproductor abierto ni cómo encontrarlo.
+  static void apagarTodoYa() {
+    final c = _enUso;
+    if (c == null) return;
+    // Se marca ANTES de tocar nada: si algo más dispara el apagado normal
+    // mientras tanto, tiene que encontrar el camino ya cerrado en vez de
+    // arrancar una segunda secuencia sobre un reproductor que se está yendo.
+    c._disposed = true;
+    c._shutdownStarted = true;
+    _enUso = null;
+
+    // Las tres órdenes salen JUNTAS y sin esperar respuesta. Alcanza con que
+    // llegue una para que deje de sonar, y si alguna se cuelga —el bug de
+    // hilos de media_kit que ya está documentado más abajo— no arrastra a las
+    // otras. Con `await` una sola bastaría para que no se ejecute ninguna.
+    try {
+      unawaited(c.player.setVolume(0).catchError((_) {}));
+      unawaited(c.player.pause().catchError((_) {}));
+      unawaited(c.player.stop().catchError((_) {}));
+    } catch (e) {
+      // Ni siquiera esto puede tirar: estamos en el camino de cierre y una
+      // excepción acá dejaría la app colgada al salir.
+      logger.info('No se pudo apagar el reproductor al cerrar: $e');
+    }
+  }
+
   bool _disposed = false;
   bool get disposed => _disposed;
   final Completer<void> _shutdownCompleter = Completer<void>();
@@ -2214,6 +2657,31 @@ class VideoPlayerController extends GetxController with WidgetsBindingObserver {
   Duration? _midStreamResumeAt;
 
   void _beginPlaybackShutdown() {
+    // ── Lo PRIMERO de todo: que deje de sonar ─────────────────────────────
+    //
+    // Antes lo primero que se hacía era bajar el volumen, sí, pero dentro de
+    // `_shutdownPlayback`, que es la parte asíncrona y corre DESPUÉS de todo
+    // esto. Y hay caminos de cierre que ni siquiera llegan ahí: si el
+    // reproductor se cierra mientras está el respaldo por navegador, o si algo
+    // en el medio de este desarmado tira una excepción, `_shutdownPlayback`
+    // queda sin llamarse y el audio sigue sonando encima de la pantalla
+    // anterior. Reportado en vivo: «cerré el reproductor y se seguía
+    // escuchando».
+    //
+    // Acá arriba de todo no puede fallar: es lo primero que corre en el único
+    // punto por el que pasan TODOS los cierres. Sin await —no hay que esperar
+    // a nadie para callar— y con la excepción tragada, porque si el
+    // reproductor ya está desarmado esto tira y no importa: si ya está
+    // desarmado, tampoco está sonando.
+    //
+    // Pausar además de bajar el volumen: con volumen cero el vídeo sigue
+    // corriendo y gastando, y si algo lo reanuda vuelve a oírse. Los dos van en
+    // paralelo, alcanza con que llegue uno.
+    try {
+      unawaited(player.setVolume(0).catchError((_) {}));
+      unawaited(player.pause().catchError((_) {}));
+    } catch (_) {}
+
     ++_switchServerGen;
     _disposed = true;
     // Solo si sigo siendo yo: entre dos episodios puede haberse registrado ya
@@ -2227,6 +2695,11 @@ class VideoPlayerController extends GetxController with WidgetsBindingObserver {
     _dlnaTimer?.cancel();
     _bufferingStallTimer?.cancel();
     _qualitySwitchTimer?.cancel();
+    _redDeLaRueda?.cancel();
+    _redDeLaRueda = null;
+    // Cada lectura abierta es un socket contra el servidor: al cerrar el
+    // reproductor hay que soltarlas o quedan colgadas hasta reiniciar la app.
+    _soltarLaBomba();
     // Estos dos son de un solo disparo, asi que no dejan nada dando vueltas,
     // pero si el reproductor se cierra en el medio saltan despues y escriben
     // sobre observables de un controlador ya destruido.
@@ -2646,6 +3119,12 @@ class VideoPlayerController extends GetxController with WidgetsBindingObserver {
     webViewFallback.value = null;
     awaitingServerChoice.value = false;
     hasRenderedFrame.value = false;
+    // Fuente nueva: se olvida el cuadro anterior y la red se rearma
+    // sola con el primer cuadro de esta. Ver hasRenderedFrame.
+    _hayCuadro = false;
+    _posicionAlPrimerCuadro = null;
+    _redDeLaRueda?.cancel();
+    _redDeLaRueda = null;
     _lastPositionAdvanceAt = null;
     _lastPositionSeen = null;
     isActuallyBuffering.value = false;
@@ -2679,6 +3158,9 @@ class VideoPlayerController extends GetxController with WidgetsBindingObserver {
           _markNativePlayback(name);
           if (_pendingResumeSeconds != null) {
             await player.pause();
+            // Pausado a proposito para preguntar: la rueda no puede quedar
+            // girando detras del dialogo. Ver hasRenderedFrame.
+            _marcarQueYaSeVe('pausado a propósito para preguntar');
             resumePrompt.value = _pendingResumeSeconds;
             _pendingResumeSeconds = null;
           }
@@ -2709,6 +3191,9 @@ class VideoPlayerController extends GetxController with WidgetsBindingObserver {
           _markNativePlayback(name);
           if (_pendingResumeSeconds != null) {
             await player.pause();
+            // Pausado a proposito para preguntar: la rueda no puede quedar
+            // girando detras del dialogo. Ver hasRenderedFrame.
+            _marcarQueYaSeVe('pausado a propósito para preguntar');
             resumePrompt.value = _pendingResumeSeconds;
             _pendingResumeSeconds = null;
           }
@@ -2725,9 +3210,17 @@ class VideoPlayerController extends GetxController with WidgetsBindingObserver {
     final referer = newWatch.headers?['Referer'] ?? serverReferers[name];
     if (referer != null) headers['Referer'] = referer;
     // Copiar headers útiles (excluir X-* que solo aplican al listado de episodio)
+    //
+    // Menos las que son una DECLARACIÓN del servidor sobre cómo hay que leerlo:
+    // esas nacen en la carpeta de ese servidor dentro de la extensión y tienen
+    // que llegar hasta acá. Se sacan más adelante, antes de abrir nada, para que
+    // no salgan a la red como si fueran cabeceras de verdad (ver
+    // _tryOpenPlayer).
     if (newWatch.headers != null) {
       for (final e in newWatch.headers!.entries) {
-        if (!e.key.startsWith('X-')) headers[e.key] = e.value;
+        if (!e.key.startsWith('X-') || e.key == _lecturaContinua) {
+          headers[e.key] = e.value;
+        }
       }
     }
 
@@ -2763,6 +3256,9 @@ class VideoPlayerController extends GetxController with WidgetsBindingObserver {
       // mostraba el diálogo y arrancaba de cero en silencio.
       if (_pendingResumeSeconds != null) {
         await player.pause();
+        // Pausado a proposito para preguntar: la rueda no puede quedar
+        // girando detras del dialogo. Ver hasRenderedFrame.
+        _marcarQueYaSeVe('pausado a propósito para preguntar');
         resumePrompt.value = _pendingResumeSeconds;
         _pendingResumeSeconds = null;
       }
@@ -3242,6 +3738,18 @@ class VideoPlayerController extends GetxController with WidgetsBindingObserver {
 
     if (state == AppLifecycleState.resumed) {
       _enSegundoPlano = false;
+      // La hora y la batería se vuelven a esconder.
+      //
+      // El modo inmersivo se pide UNA sola vez, en onInit, y Android lo suelta
+      // al volver de segundo plano — que en un teléfono es tan simple como
+      // apagar y encender la pantalla. Cuando lo suelta, la barra de estado se
+      // queda puesta arriba del vídeo hasta salir y volver a entrar.
+      //
+      // Volver a pedirlo no puede romper nada: si ya está puesto, no cambia
+      // nada. Mismo arreglo que en la pantalla del navegador interno.
+      if (Platform.isAndroid) {
+        SystemChrome.setEnabledSystemUIMode(SystemUiMode.immersiveSticky);
+      }
       // Cuenta limpia: los fallos de mientras no estuvo en pantalla no valen,
       // porque pudieron ser del recorte de red y no del televisor.
       _fallosDeCastSeguidos = 0;
@@ -3253,7 +3761,18 @@ class VideoPlayerController extends GetxController with WidgetsBindingObserver {
     }
 
     if (state == AppLifecycleState.detached) {
-      // La app se está cerrando de verdad: se le suelta el televisor.
+      // ── Lo PRIMERO: callar el audio ──────────────────────────────────────
+      //
+      // Reportado en vivo: se cerraba la app y el vídeo se seguía escuchando.
+      // El apagado normal no llega a correr acá —es una secuencia larga y el
+      // proceso se está muriendo— así que va el de emergencia, que manda las
+      // órdenes y no espera a nadie. Ver apagarTodoYa.
+      //
+      // Antes que soltar el televisor a propósito: eso es una petición por red
+      // que puede tardar, y lo que el usuario tiene delante es el sonido.
+      apagarTodoYa();
+
+      // Y se le suelta el televisor.
       //
       // Sin esto quedaba reproduciendo nuestro vídeo para siempre, y encima
       // pidiéndoselo a un relay que muere con el proceso — o sea que terminaba
@@ -3485,6 +4004,35 @@ class VideoPlayerController extends GetxController with WidgetsBindingObserver {
               ? duration.value.inSeconds
               : _duracionCastAlCerrar.inSeconds);
 
+      // ── El progreso que se guarda tiene que ser creíble ──────────────────
+      //
+      // Si la posición cae fuera de la duración, no se guarda: se deja en cero
+      // y el vídeo empieza de nuevo la próxima vez.
+      //
+      // Por qué hace falta: hay fuentes donde la posición y la duración crecen
+      // mientras el vídeo carga (anotado en PROGRESO para Pornhub, medido: la
+      // lista es VOD y trae su marca de final, así que el problema es de este
+      // lado). Cuando eso pasa se guardaba una posición inventada, y a la
+      // siguiente reproducción el reanudar saltaba ahí: el usuario abría un
+      // vídeo y arrancaba en cualquier lado. Peor todavía, mpv pedía un
+      // pedacito muy adelantado y el CDN contestaba 410 — visto en vivo,
+      // «Failed to open segment 202 of playlist 0» repetido hasta rendirse.
+      //
+      // El candado va acá, al GUARDAR, y no solo al reanudar: una vez que el
+      // número malo entra a la base, se arrastra a la lista de Continuar, al
+      // Historial y al porcentaje. Mejor no dejarlo entrar.
+      //
+      // Vale para todas las extensiones a propósito: la posición puede salirse
+      // de rango en cualquier fuente de HLS, y guardar algo imposible nunca es
+      // lo correcto.
+      final progresoCreible =
+          duracionSeg > 0 && posicionSeg >= 0 && posicionSeg <= duracionSeg;
+      if (!progresoCreible && duracionSeg > 0) {
+        logger.info('historial: no se guarda una posición imposible '
+            '($posicionSeg s sobre $duracionSeg s de duración)');
+      }
+      final posicionAGuardar = progresoCreible ? posicionSeg : 0;
+
       // El frame puede venir ya tomado desde _shutdownPlayback (el caso normal
       // al cerrar el reproductor, donde capturar acá sería tarde) o tomarse en
       // el momento, para las llamadas que ocurren con la reproducción viva.
@@ -3517,7 +4065,7 @@ class VideoPlayerController extends GetxController with WidgetsBindingObserver {
           ..episodeId = index.value
           ..episodeTitle = epName
           ..title = title
-          ..progress = posicionSeg.toString()
+          ..progress = posicionAGuardar.toString()
           ..totalProgress = duracionSeg.toString()
           ..isNsfw = isNsfw
           // Al día solo si es el último episodio Y llegó al final de verdad.
@@ -3733,8 +4281,30 @@ class VideoPlayerController extends GetxController with WidgetsBindingObserver {
   }
 
   /// Qué panel abrir al tocar el botón de calidad, según de dónde vengan.
-  SidebarTab get pestanaDeCalidad =>
-      qualityMap.isNotEmpty ? SidebarTab.qualitys : SidebarTab.servers;
+  ///
+  /// ── Manda dónde hay algo PARA ELEGIR ────────────────────────────────────
+  ///
+  /// Antes alcanzaba con que el HLS trajera una variante para abrir su panel. Y
+  /// hay sitios donde el maestro trae UNA SOLA: cada resolución es un maestro
+  /// aparte, y las demás llegan por la cabecera de la extensión.
+  ///
+  /// Ahí la cuenta salía al revés: el panel de calidades se abría con una única
+  /// opción —la que ya estaba sonando— y las otras tres o cuatro quedaban
+  /// invisibles, en el otro panel, aunque la extensión las hubiera mandado.
+  /// Medido en un teléfono: el registro decía «Una sola calidad (1080p)» y el
+  /// botón mostraba solo esa, con 1080p a 4 Mbps como única salida.
+  ///
+  /// Ahora se abre el panel que de verdad tiene de qué elegir. Con dos o más
+  /// variantes en el HLS gana el HLS, que es la fuente más fiel. Con una sola,
+  /// y si lo que mandó la extensión son resoluciones, se ofrecen esas.
+  ///
+  /// Y si un vídeo tiene UNA calidad y nada más, se sigue abriendo su panel con
+  /// esa: no se pide nada de más ni se inventan opciones que no existen.
+  SidebarTab get pestanaDeCalidad {
+    if (qualityMap.length > 1) return SidebarTab.qualitys;
+    if (_servidoresSonCalidades) return SidebarTab.servers;
+    return qualityMap.isNotEmpty ? SidebarTab.qualitys : SidebarTab.servers;
+  }
 
   /// Ver un vídeo VR en una sola imagen, sin gafas.
   ///
@@ -3854,7 +4424,9 @@ class VideoPlayerController extends GetxController with WidgetsBindingObserver {
       final actual = watchData;
       if (actual == null) return;
       await player.open(Media(actual.url, httpHeaders: actual.headers));
-      if (donde > Duration.zero) await player.seek(donde);
+      // Mismo cuidado que en "continuar viendo": pedirle el salto a mpv
+      // apenas vuelve open() se pierde si todavia no conoce la duracion.
+      if (donde > Duration.zero) await _saltarCuandoSePueda(donde);
     } catch (e) {
       logger.warning('El reintento por software tambien fallo', e);
     }
@@ -3901,6 +4473,36 @@ class VideoPlayerController extends GetxController with WidgetsBindingObserver {
         ((w - mitad) * vrDesplazamiento.value).round().clamp(0, w - mitad);
     await np.setProperty('video-crop', '${mitad}x$h+$x+0');
     return (await np.getProperty('video-crop')).trim().isNotEmpty;
+  }
+
+  /// El recorte de VR quedo pendiente de volver a ponerse en el video nuevo.
+  ///
+  /// Lo pone _olvidarRecorteVr y lo consume el aviso de medidas, que es donde
+  /// se sabe si el video nuevo tambien es VR. Ver el listener de videoParams.
+  bool _vrPorReaplicar = false;
+
+  /// Quita el recorte de VR antes de abrir otro video.
+  ///
+  /// Deja anotado si estaba puesto, para que el video nuevo lo recupere si
+  /// tambien es VR: pasar de un episodio VR al siguiente no tiene por que
+  /// obligar a volver a encender el interruptor.
+  Future<void> _olvidarRecorteVr() async {
+    _vrPorReaplicar = vrUnaPantalla.value;
+    if (!vrUnaPantalla.value) return;
+    vrUnaPantalla.value = false;
+    if (player.platform is! NativePlayer) return;
+    final np = player.platform as NativePlayer;
+    try {
+      await _aplicarRecorteVr(np, false);
+      // Y el filtro, que es el camino de respaldo cuando esta version de mpv no
+      // tiene video-crop. Solo si hay algo puesto: nadie mas escribe vf, pero
+      // borrarlo a ciegas seria pisar lo que pusiera otro.
+      if ((await np.getProperty('vf')).trim().isNotEmpty) {
+        await np.setProperty('vf', '');
+      }
+    } catch (e) {
+      logger.warning('No se pudo quitar el recorte de VR del vídeo anterior', e);
+    }
   }
 
   Future<void> alternarVrUnaPantalla() async {
@@ -4453,11 +5055,19 @@ class VideoPlayerController extends GetxController with WidgetsBindingObserver {
     // aparecia, asi que el rato hasta el primer cuadro se veia como una
     // pantalla negra trabada.
     hasRenderedFrame.value = false;
+    // Fuente nueva: se olvida el cuadro anterior y la red se rearma
+    // sola con el primer cuadro de esta. Ver hasRenderedFrame.
+    _hayCuadro = false;
+    _posicionAlPrimerCuadro = null;
+    _redDeLaRueda?.cancel();
+    _redDeLaRueda = null;
     try {
       await player.open(Media(actual.url, httpHeaders: actual.headers));
       // El salto va DESPUES de que open() termino, que es cuando mpv ya conoce
       // la duracion; pedirlo antes se pierde y el episodio arrancaba de cero.
-      if (donde > Duration.zero) await player.seek(donde);
+      // Mismo cuidado que en "continuar viendo": pedirle el salto a mpv
+      // apenas vuelve open() se pierde si todavia no conoce la duracion.
+      if (donde > Duration.zero) await _saltarCuandoSePueda(donde);
     } catch (e) {
       logger.warning(
           'No se pudo retomar la reproduccion local tras el cast', e);
@@ -4830,6 +5440,29 @@ class VideoPlayerController extends GetxController with WidgetsBindingObserver {
       'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 '
       '(KHTML, like Gecko) Chrome/125.0.0.0 Safari/537.36';
 
+  /// Con esto una extensión declara que a ESE servidor hay que leerle el archivo
+  /// de una sola vez en vez de pedirle tramos sueltos.
+  ///
+  /// **No es una cabecera HTTP**: es una declaración que viaja por el mismo
+  /// canal que las demás `X-` y se saca antes de pedirle nada a la fuente.
+  ///
+  /// La app no sabe qué servidores la necesitan ni tiene por qué saberlo: el que
+  /// tiene la medición es el resolver del servidor, en su carpeta dentro de la
+  /// extensión (hoy, `jkanime/servidores/mp4upload/`). Así arreglar un servidor
+  /// no le cambia el camino a ningún otro. Ver BombaDeDatos.
+  static const _lecturaContinua = 'X-Lectura-Continua';
+
+  /// La dirección local que está sirviendo la bomba, si hay alguna andando.
+  String? _bombaUrl;
+
+  /// Suelta la bomba anterior y sus lecturas abiertas contra la fuente.
+  void _soltarLaBomba() {
+    final vieja = _bombaUrl;
+    if (vieja == null) return;
+    _bombaUrl = null;
+    BombaDeDatos.soltar(vieja);
+  }
+
   Future<bool> _tryOpenPlayer(String url, Map<String, String>? headers) async {
     if (_disposed) return false;
     if (url.startsWith('error://')) {
@@ -4854,11 +5487,33 @@ class VideoPlayerController extends GetxController with WidgetsBindingObserver {
     // libmpv por defecto envía "Lavf/X.X.X" que los CDNs de streaming bloquean.
     final hdrs = <String, String>{'User-Agent': _browserUA};
     if (headers != null) hdrs.addAll(headers);
+    // La declaración de la extensión se lee y se SACA: de acá para abajo todo lo
+    // que quede en el mapa sale a la red, y esto no es una cabecera de verdad.
+    //
+    // Se saca de las DOS: de `hdrs`, que es lo que se le pasa a mpv, y de una
+    // copia de las de la extensión, que es lo que sigue viaje. Copia y no el
+    // mapa original: ese es de `watchData` y lo comparten otros.
+    final lecturaContinua = hdrs.remove(_lecturaContinua) == '1';
+    final headersLimpias = headers == null
+        ? null
+        : (Map<String, String>.of(headers)..remove(_lecturaContinua));
+    // La bomba anterior se suelta ANTES de abrir otra fuente: cada una deja
+    // lecturas abiertas contra el servidor y nadie más las va a cerrar.
+    _soltarLaBomba();
     // Cómo conviene abrir esta fuente: tal cual, por el relay para esquivar
     // nodos caídos, o directamente no intentarlo. Ver _comoAbrir.
-    final plan = await _comoAbrir(url, headers);
+    // Las pistas del maestro anterior no valen para esta fuente: se olvidan
+    // antes de mirarla. `_comoAbrir` las vuelve a llenar si esta trae.
+    // Se reemplaza en vez de vaciar: si lo que hay adentro vino inmodificable,
+    // `clear()` tira una excepción y corta la reproducción antes de empezar.
+    audiosHls.value = <PistaDeAudio>[];
+    audioHlsElegido.value = -1;
+    final plan = await _comoAbrir(url, headersLimpias, lecturaContinua);
     if (_disposed) return false;
+    _fuenteUrl = plan.url ?? url;
+    _fuenteHeaders = hdrs;
     await player.open(Media(plan.url ?? url, httpHeaders: hdrs));
+
     if (_disposed) {
       try {
         unawaited(player.stop());
@@ -4935,7 +5590,32 @@ class VideoPlayerController extends GetxController with WidgetsBindingObserver {
         playList[index.value].url,
       );
 
+  /// Si al retomar conviene ir derecho al navegador en vez de intentar nativo.
+  ///
+  /// **Ojo con la clave de ese recuerdo: es el EPISODIO, no el servidor.** O sea
+  /// que apenas UNO de los servidores del episodio cae al navegador, queda
+  /// marcado el episodio entero — y a partir de ahí CUALQUIER servidor que se
+  /// retome abre el navegador sin siquiera intentar el reproductor de la app.
+  ///
+  /// Eso hacía que un servidor que reproduce perfecto, como UA Directo o UA
+  /// Goodstream en FuegoCine, se abriera en el navegador para siempre solo
+  /// porque otro de la lista había fallado antes. Y no se recuperaba solo: el
+  /// recuerdo solo se pisa cuando algo vuelve a reproducir nativo, que es
+  /// justamente lo que este atajo impedía.
+  ///
+  /// Por eso ahora manda lo que diga la extensión: si declara que ese servidor
+  /// reproduce en la app, se intenta nativo aunque el recuerdo diga otra cosa.
+  /// Si falla de verdad, la app cae al navegador sola como siempre — se pierde
+  /// un intento, no la reproducción.
+  ///
+  /// El atajo se conserva para los que la extensión marca como de navegador:
+  /// ahí sí ahorra el intento inútil y abre más rápido.
   bool _shouldResumeInWebView() {
+    final nombre = currentServerName.value;
+    final url = availableServers[nombre];
+    if (url != null && url.isNotEmpty && esServidorNativo(nombre, url)) {
+      return false;
+    }
     return PrismHubStorage.getLastPlaybackMode(
           runtime.extension.package,
           playList[index.value].url,
@@ -5019,14 +5699,73 @@ class VideoPlayerController extends GetxController with WidgetsBindingObserver {
   ///
   /// `reconnect` (a secas) se deja puesto en los dos casos: reconectar cuando
   /// se corta la conexión sigue siendo bueno. Lo que estorba es lo otro.
-  Future<void> _dejarSaltarDentroDelArchivo(bool archivoEntero) async {
+  Future<void> _dejarSaltarDentroDelArchivo(
+    bool archivoEntero,
+    String url,
+    Map<String, String>? headers,
+  ) async {
     final np = player.platform;
     if (np is! NativePlayer) return;
     // En Linux reconnect va apagado a propósito (ver dónde se ponen estas
     // opciones al arrancar) — no se toca desde acá.
     if (Platform.isLinux) return;
+    // `multiple_requests=1` solo en el archivo entero: que ffmpeg REUSE la misma
+    // conexión para pedir otro tramo, en vez de abrir una nueva cada vez.
+    //
+    // Es lo que faltaba para los MP4 mal entrelazados, y recién ahora se sabe
+    // por qué. Medido el 2026-08-05 con dos títulos de FuegoCine, los dos con el
+    // índice al final, uno se corta y el otro va perfecto:
+    //
+    //   el que falla   vídeo del MB 0 al 568 · audio del MB 568 al 608
+    //   el que anda    vídeo y audio mezclados cada ~1 KB de punta a punta
+    //
+    // O sea que el que falla NO está entrelazado: el audio está entero al final.
+    // Para armar cada segundo hay que leer vídeo al principio y audio a 568 MB
+    // de distancia — dos saltos de medio giga por segundo. Y cada salto, sin
+    // esto, es cerrar la conexión y abrir otra: TCP más TLS, unos 250 ms que se
+    // van en apretón de manos. A dos por segundo se va medio segundo de cada
+    // segundo en saludar, y por eso entran 40 KB/s con el servidor dando 7 MB/s.
+    //
+    // **Por qué antes se creyó que esto no servía:** figuraba descartado porque
+    // "demuxer-lavf-o va al lector de MP4, no al protocolo". Es falso, y lo
+    // prueba la propia línea de al lado: `reconnect` es una opción del protocolo
+    // HTTP de ffmpeg y se pasa por acá desde siempre, y funciona. libavformat
+    // baja al protocolo las opciones que el demuxer no reconoce.
+    //
+    // Va SOLO en el archivo entero. En una lista de pedacitos cada uno es una
+    // dirección distinta y no hay nada que reusar.
+    // ── `multiple_requests=1`: por qué está, con la medición al lado ───────
+    //
+    // **Este servidor cobra caro cada pedido nuevo.** Medido en mp4upload el
+    // 2026-08-06, sobre el mismo archivo y la misma red:
+    //
+    //   pedido abierto (`bytes=0-`), leyendo de corrido   1812 KB/s
+    //   lo mismo desde el medio, tras un salto            1789 KB/s
+    //   un trozo cerrado de 1 MB                           514 KB/s
+    //   un trozo cerrado de 256 KB                         171 KB/s
+    //
+    // Tarda cerca de un segundo y medio en empezar a contestar, y recién ahí
+    // agarra velocidad. O sea que lo que importa no es el ancho de banda sino
+    // CUÁNTOS pedidos se hacen: pidiendo de a poco y reconectando cada vez, el
+    // caudal se derrumba a unos 6 KB/s y el vídeo se congela con el colchón en
+    // cero.
+    //
+    // Y el servidor contesta `connection: close`, así que sin esta opción cada
+    // lectura después de un salto abre una conexión nueva y paga ese segundo y
+    // medio otra vez. `multiple_requests` le pide a ffmpeg que mande los
+    // pedidos siguientes por la conexión que ya tiene.
+    //
+    // Va SOLO en el archivo entero: en una lista de pedacitos cada uno es una
+    // dirección distinta y no hay nada que reusar.
+    //
+    // **Ojo con volver a sacarla.** Ya se sacó dos veces hoy por conclusiones
+    // equivocadas: se la estaba midiendo junto a otro cambio del mismo día
+    // —poner las pistas de vídeo en automático antes de cada apertura— que era
+    // el que dejaba la pantalla en negro. Con los dos encima ninguna prueba
+    // decía nada. Si hay que volver a evaluarla, que sea sola.
     final opciones = archivoEntero
-        ? 'reconnect=1,reconnect_delay_max=5,seg_max_retry=3'
+        ? 'reconnect=1,reconnect_delay_max=5,seg_max_retry=3,'
+            'multiple_requests=1'
         : 'reconnect=1,reconnect_streamed=1,reconnect_delay_max=5,'
             'seg_max_retry=3';
     try {
@@ -5035,9 +5774,14 @@ class VideoPlayerController extends GetxController with WidgetsBindingObserver {
       // ignora el cambio, en el registro se ve la diferencia en vez de tener
       // que suponerlo.
       final quedo = await np.getProperty('demuxer-lavf-o');
+      // Se dice aparte si la reutilización de conexión ENTRÓ, y se lee de lo
+      // que quedó puesto de verdad, no de lo que se pidió. Es el dato que hay
+      // que mirar cuando un archivo mal entrelazado sigue cortándose: si acá
+      // dice "no", el problema es que la opción no llegó, no el archivo.
       logger.info('saltar dentro del archivo: '
           '${archivoEntero ? 'SÍ (archivo entero)' : 'no (lista de pedacitos)'}'
           ' · quedó: $quedo');
+      _anotarDondeEstaElIndice(url, headers);
     } catch (e) {
       // Que no se pueda ajustar no puede impedir reproducir: se sigue con lo
       // que haya quedado puesto al arrancar.
@@ -5045,9 +5789,98 @@ class VideoPlayerController extends GetxController with WidgetsBindingObserver {
     }
   }
 
+  /// Anota en el registro dónde tiene el índice el archivo que se va a abrir.
+  ///
+  /// Es SOLO para el registro: no cambia ni un ajuste del reproductor. Está
+  /// puesto con tres candados para que no pueda estropear nada de lo que hoy
+  /// funciona en las demás extensiones:
+  ///
+  /// 1. **No se espera.** Sale sin bloquear, así que no le agrega ni un
+  ///    milisegundo a la apertura del vídeo, ande rápido o lento el servidor.
+  /// 2. **Va después de mpv.** Los pocos servidores que dan enlaces de un solo
+  ///    uso lo gastarían con el primer pedido: se deja que ese sea el de mpv y
+  ///    no el nuestro. Si para cuando miramos el enlace ya no sirve, se anota
+  ///    que no se pudo ver y listo — el vídeo ya está andando.
+  /// 3. **Solo archivos de vídeo.** Con una lista cerrada de extensiones, así
+  ///    una dirección rara no se lleva un pedido que no le toca.
+  void _anotarDondeEstaElIndice(String url, Map<String, String>? headers) {
+    const enteros = ['.mp4', '.mkv', '.webm', '.mov', '.avi', '.m4v'];
+    final ruta = url.split('?').first.toLowerCase();
+    if (!enteros.any(ruta.endsWith)) return;
+    unawaited(Future.delayed(const Duration(seconds: 5), () async {
+      logger
+          .info('índice del archivo: ${await _comoEstaElIndice(url, headers)}');
+    }));
+  }
+
+  /// Dónde tiene el índice un MP4: al principio, al final, o no se pudo ver.
+  ///
+  /// El índice (`moov`) es la tabla que dice en qué byte está cada segundo de
+  /// vídeo y de audio. Puede ir al principio o al final, según con qué programa
+  /// se armó el archivo, y la diferencia es enorme al reproducir por internet:
+  ///
+  ///  - al principio → se lee de entrada y después el archivo va de corrido
+  ///  - al final     → para armar cada segundo hay que ir al fondo y volver
+  ///
+  /// Medido con dos títulos del MISMO servidor y el MISMO host: el de 4,6 GB
+  /// con el índice al principio reproduce perfecto, y el de 638 MB con el
+  /// índice al final se corta todo el rato — 114 saltos de posición para bajar
+  /// menos de 1 MB, mientras el servidor entrega 8-9 MB/s. No es el servidor ni
+  /// el tamaño: es cómo quedó armado ese archivo.
+  ///
+  /// Cuesta UN pedido de 2 KB. Devuelve las TRES respuestas por separado —al
+  /// final, al principio, no se pudo ver— y no un sí/no: juntar "está sano" con
+  /// "no se pudo mirar" deja el registro diciendo lo mismo en dos situaciones
+  /// que no tienen nada que ver, y ahí no se sabe cuál de las dos pasó.
+  Future<String> _comoEstaElIndice(
+      String url, Map<String, String>? headers) async {
+    try {
+      final res = await dio.get<List<int>>(
+        url,
+        options: Options(
+          responseType: ResponseType.bytes,
+          headers: {...?headers, 'Range': 'bytes=0-2047'},
+          receiveTimeout: const Duration(seconds: 6),
+          // 206 es lo esperado; 200 significa que ignoró el rango y mandó el
+          // archivo entero, y eso tampoco es un error para lo que hace falta.
+          validateStatus: (c) => c != null && c < 400,
+        ),
+      );
+      final datos = res.data;
+      if (datos == null || datos.length < 16) {
+        return 'no se pudo ver (llegó vacío)';
+      }
+      final texto = String.fromCharCodes(datos);
+      final moov = texto.indexOf('moov');
+      final mdat = texto.indexOf('mdat');
+      // **No confundir "no lo veo desde acá" con "está roto".**
+      //
+      // Esta sonda mira solo los primeros 2 KB. Si ahí no aparece `mdat`, antes
+      // decía "no parece un MP4" — y eso hizo perder un rato largo con
+      // mp4upload, cuyo archivo es un MP4 impecable: empieza con `ftyp`, mide
+      // 295 MB y baja a 1 MB/s. Lo único que pasaba es que su `mdat` cae más
+      // allá de los 2 KB que se leen.
+      //
+      // Así que primero se comprueba si es un MP4 —el `ftyp` de los primeros
+      // bytes lo dice— y recién después se opina sobre dónde está el índice.
+      final esMp4 = texto.indexOf('ftyp') >= 0 && texto.indexOf('ftyp') < 16;
+      if (mdat < 0) {
+        return esMp4
+            ? 'es un MP4, pero el índice no entra en los primeros 2 KB'
+            : 'no se pudo ver (no parece un MP4)';
+      }
+      return moov < 0 || moov > mdat
+          ? 'AL FINAL — de los que se cortan'
+          : 'al principio — de los que van de corrido';
+    } catch (e) {
+      return 'no se pudo ver ($e)';
+    }
+  }
+
   Future<_ComoAbrir> _comoAbrir(
     String url,
     Map<String, String>? headers,
+    bool lecturaContinua,
   ) async {
     // La ficha del servidor, SIEMPRE, aunque no haya nada que hacer. Sirve para
     // revisar extensión por extensión sin cruzar líneas a mano.
@@ -5060,10 +5893,34 @@ class VideoPlayerController extends GetxController with WidgetsBindingObserver {
       logger.info('ficha · $servidor · ${sinParametros.endsWith('.mp4') ? 'MP4 '
               'directo' : 'no es una lista HLS'} · $donde · va directo a mpv, no '
           'hay pedacitos que repartir');
-      await _dejarSaltarDentroDelArchivo(!sinParametros.endsWith('.m3u8'));
+      final entero = !sinParametros.endsWith('.m3u8');
+      await _dejarSaltarDentroDelArchivo(entero, url, headers);
+      // Este servidor cobra carísimo cada pedido nuevo y la extensión lo
+      // declaró: se le lee el archivo de una sola vez. Solo para archivo entero
+      // — en una lista de pedacitos cada uno es una dirección distinta y no hay
+      // ninguna lectura que sostener.
+      if (entero && lecturaContinua) {
+        // Con las MISMAS cabeceras con las que habría salido mpv: de acá en
+        // adelante la que le pide a la fuente es la bomba, y la fuente no tiene
+        // por qué notar el cambio. Sin el User-Agent de navegador, varios CDNs
+        // contestan 403.
+        final porLaBomba = await BombaDeDatos.registrar(
+          url: url,
+          cabeceras: {'User-Agent': _browserUA, ...?headers},
+        );
+        if (porLaBomba != null) {
+          _bombaUrl = porLaBomba;
+          logger.info('ficha · $servidor · SE LE LEE DE UNA SOLA VEZ · $donde '
+              'cobra ~1,5 s por cada pedido nuevo, así que la app le mantiene '
+              'la lectura abierta y le sirve al reproductor desde ahí');
+          return _ComoAbrir.con(porLaBomba);
+        }
+        logger.info('ficha · $servidor · no se pudo leer de una sola vez · va '
+            'directo a mpv como siempre');
+      }
       return const _ComoAbrir.talCual();
     }
-    await _dejarSaltarDentroDelArchivo(false);
+    await _dejarSaltarDentroDelArchivo(false, url, headers);
 
     final hdrs = <String, String>{'User-Agent': _browserUA};
     if (headers != null) hdrs.addAll(headers);
@@ -5085,6 +5942,62 @@ class VideoPlayerController extends GetxController with WidgetsBindingObserver {
 
     var lista = maestro;
     var direccion = url;
+
+    // Las pistas de audio del maestro, para poder ofrecerlas en el menú.
+    // Se rehace en cada fuente: son de ESTE vídeo y no del anterior.
+    final delMaestro = AudioHls.delMaestro(maestro);
+    // Copia propia por el mismo motivo: lo que se le asigna al RxList tiene
+    // que ser una lista que se pueda tocar después.
+    audiosHls.value = List<PistaDeAudio>.of(delMaestro.pistas);
+    audioHlsElegido.value = delMaestro.sonando;
+
+    // ── Con varios idiomas: se abre la variante del idioma que corresponde ──
+    //
+    // **Y arranca en español**, que es lo que se quiere en estos sitios. El
+    // servidor pega el inglés al vídeo —la variante se llama `v1-a2` y el a2 es
+    // el inglés—, así que sin esto el episodio empieza en inglés aunque el
+    // maestro marque el español como preferido.
+    //
+    // Se le da a mpv la variante directa y no el maestro. Se probó al revés y
+    // no sirve para estos servidores: como cada variante ya trae su audio
+    // pegado, ffmpeg usa ese y ni abre las otras pistas, así que el maestro no
+    // aporta ni la elección de idioma ni un segundo audio en el menú. Lo único
+    // que aportaría es cambiar de calidad, y a cambio se escucha en el idioma
+    // equivocado.
+    //
+    // También se probó rehacer el maestro en un archivo propio apuntando al
+    // audio elegido. mpv lo abre y no carga nada: una lista en disco que
+    // adentro apunta a internet es para él una "lista insegura". Ni siquiera
+    // con `load-unsafe-playlists` arrancó — medido en vivo, entró siempre por
+    // el camino de respaldo.
+    if (delMaestro.pistas.isNotEmpty) {
+      final quiere = AudioHls.preferido(delMaestro.pistas, delMaestro.sonando);
+      final variante = _mejorVarianteDe(maestro, Uri.parse(url));
+      if (variante != null) {
+        final antes = variante.toString();
+        final conIdioma = AudioHls.conAudio(antes, quiere.numero);
+        // **Solo se dice "español" si de verdad se cambió.**
+        //
+        // `_conAudio` reescribe el `-aN` de la dirección, y si esa dirección no
+        // tiene esa forma devuelve la MISMA sin avisar. Antes se marcaba el
+        // idioma preferido igual, así que el selector decía «Español» y se
+        // escuchaba inglés — reportado en vivo con Goodstream el 2026-08-06. El
+        // menú mintiendo es peor que el idioma equivocado: quien lo ve piensa
+        // que ya lo tiene puesto y ni prueba a cambiarlo.
+        final seCambio = conIdioma != antes;
+        audioHlsElegido.value =
+            seCambio ? delMaestro.pistas.indexOf(quiere) : delMaestro.sonando;
+        logger.info('ficha · $servidor · idiomas: '
+            '${audiosHls.map((a) => '${a.nombre} (a${a.numero})').join(', ')}'
+            ' · el vídeo trae a${delMaestro.pistas[delMaestro.sonando].numero}'
+            '${seCambio ? ' · se abre en ${quiere.nombre}' : ' · NO se pudo '
+                'cambiar de idioma por la dirección (no lleva -aN), se abre en '
+                '${delMaestro.pistas[delMaestro.sonando].nombre} y el selector '
+                'lo dice'}');
+        await _dejarSaltarDentroDelArchivo(false, url, headers);
+        return _ComoAbrir.con(conIdioma);
+      }
+    }
 
     // Lista maestra: se elige una variante y se sigue.
     if (maestro.contains('#EXT-X-STREAM-INF')) {
@@ -5148,8 +6061,34 @@ class VideoPlayerController extends GetxController with WidgetsBindingObserver {
     // y solo agregaría un intermediario. Pero si veníamos de un maestro, se le
     // pasa a mpv la variante YA resuelta: es un viaje menos al CDN, y en estos
     // servidores cada viaje se paga en segundos.
+    //
+    // **Salvo que ese atajo le esconda algo a mpv.** El maestro es el único que
+    // declara las pistas alternativas —los `#EXT-X-MEDIA` con los audios y los
+    // subtítulos— y la lista de calidades. La variante sola no las trae: es un
+    // único flujo, con su audio pegado y nada más.
+    //
+    // Medido en LaMovie el 2026-08-06: el maestro de vimeos declara DOS audios,
+    // «Español» por omisión e «English», y al entregarle la variante el
+    // reproductor quedaba con uno solo y sin selector de idioma. Lo mismo con la
+    // calidad: dos variantes en el maestro, una sola elegible después.
+    //
+    // Así que cuando hay algo que elegir se le da el maestro y lo resuelve mpv,
+    // que para eso está. El viaje de más se paga una vez; perder el audio en
+    // inglés se paga toda la película.
     if (nodos.length < 2) {
       final conVariante = direccion != url;
+      final hayPistas = maestro.contains('#EXT-X-MEDIA');
+      final variasCalidades =
+          RegExp(r'#EXT-X-STREAM-INF').allMatches(maestro).length > 1;
+      if (conVariante && (hayPistas || variasCalidades)) {
+        final que = <String>[
+          if (hayPistas) 'pistas de audio o subtítulos',
+          if (variasCalidades) 'varias calidades',
+        ].join(' y ');
+        logger.info('ficha · $servidor · un solo nodo (${nodos.first}) · se le '
+            'pasa el MAESTRO a mpv: trae $que y la variante sola las perdería');
+        return const _ComoAbrir.talCual();
+      }
       logger.info('ficha · $servidor · un solo nodo (${nodos.first}) · va '
           'directo a mpv${conVariante ? ', con la variante ya resuelta (un '
               'viaje menos al CDN)' : ''}');
@@ -5273,11 +6212,62 @@ class VideoPlayerController extends GetxController with WidgetsBindingObserver {
   }
 
   // Responde al diálogo "¿Continuar donde te quedaste?" — usuario aceptó.
-  void confirmResume(int seconds) {
+  //
+  // **El salto se pedía y se perdía.** Se llamaba a `seek` en el mismo instante
+  // en que el usuario tocaba el botón, y en ese momento mpv puede no conocer
+  // todavía la duración del vídeo: sin duración no sabe adónde ir y descarta el
+  // pedido sin decir nada. El aviso decía "te quedaste en el minuto tal", uno
+  // aceptaba, y el episodio arrancaba de cero.
+  //
+  // No es nuevo en este archivo: al volver de castear ya estaba anotado que el
+  // salto tiene que ir DESPUÉS de que `open()` terminó, que es cuando mpv ya
+  // conoce la duración. Faltaba acá.
+  //
+  // Así que se espera a que la conozca, se salta, y se COMPRUEBA que haya
+  // llegado. Si no llegó se reintenta: con HLS el primer salto a veces cae en
+  // un pedacito que todavía no se bajó y mpv vuelve solo al principio.
+  Future<void> confirmResume(int seconds) async {
     _isAutoSeekPosition = true;
     resumePrompt.value = null;
-    player.seek(Duration(seconds: seconds));
-    player.play();
+    final destino = Duration(seconds: seconds);
+    await player.play();
+    await _saltarCuandoSePueda(destino);
+  }
+
+  /// Salta a [destino] en cuanto el reproductor esté en condiciones, y se
+  /// asegura de que haya quedado ahí.
+  Future<void> _saltarCuandoSePueda(Duration destino) async {
+    // Hasta doce segundos esperando la duración. Es de sobra para lo que tarda
+    // un HLS en abrir, y si no llegó en ese rato es que algo más está mal: se
+    // intenta igual, porque quedarse sin saltar es peor que un salto fallido.
+    final reloj = Stopwatch()..start();
+    while (!_disposed && reloj.elapsed < const Duration(seconds: 12)) {
+      final total = duration.value;
+      if (total > Duration.zero && total > destino) break;
+      await Future<void>.delayed(const Duration(milliseconds: 150));
+    }
+    if (_disposed) return;
+
+    for (var intento = 1; intento <= 3; intento++) {
+      try {
+        await player.seek(destino);
+      } catch (e) {
+        logger.warning('no se pudo saltar a $destino', e);
+        return;
+      }
+      await Future<void>.delayed(const Duration(milliseconds: 700));
+      if (_disposed) return;
+      final donde = position.value;
+      // Diez segundos de margen: mpv salta al punto de corte más cercano, que
+      // en HLS es el principio de un pedacito y casi nunca el segundo exacto.
+      if ((donde - destino).abs() < const Duration(seconds: 10)) {
+        logger.info('continuar viendo: quedó en '
+            '${donde.inMinutes}:${(donde.inSeconds % 60).toString().padLeft(2, '0')}');
+        return;
+      }
+      logger.info('continuar viendo: el salto a $destino no agarró '
+          '(quedó en $donde), intento $intento de 3');
+    }
   }
 
   // Responde al diálogo "¿Continuar donde te quedaste?" — usuario canceló.
@@ -5392,6 +6382,9 @@ class VideoPlayerController extends GetxController with WidgetsBindingObserver {
       _markNativePlayback(name);
       if (_pendingResumeSeconds != null) {
         await player.pause();
+        // Pausado a proposito para preguntar: la rueda no puede quedar
+        // girando detras del dialogo. Ver hasRenderedFrame.
+        _marcarQueYaSeVe('pausado a propósito para preguntar');
         resumePrompt.value = _pendingResumeSeconds;
         _pendingResumeSeconds = null;
       }
@@ -5615,6 +6608,11 @@ class VideoPlayerController extends GetxController with WidgetsBindingObserver {
     // Mismo motivo que en safePlay: con el tutorial arriba nada arranca el
     // video, ni siquiera un atajo de teclado que se cuele.
     if (tutorialArriba.value) return;
+    // Cargando no se toca. Ver esperandoElPrimerCuadro.
+    if (esperandoElPrimerCuadro) {
+      logger.info('play/pausa ignorado: el vídeo todavía está cargando');
+      return;
+    }
     if (dlnaDevice.value == null) {
       player.playOrPause();
       return;
@@ -5732,6 +6730,21 @@ class VideoPlayerController extends GetxController with WidgetsBindingObserver {
 
   seek(Duration destino) async {
     if (_disposed) return;
+    // **La barra de progreso, bloqueada mientras carga.**
+    //
+    // Acá y no en la barra: seek() es el único punto de entrada de la barra, de
+    // los atajos de teclado y de los botones de salto, así que cortarlo una vez
+    // los cubre todos en las tres plataformas y no hay forma de esquivarlo.
+    //
+    // Solo mientras se espera el PRIMER cuadro. Un salto durante un parón a
+    // mitad de reproducción sí se atiende: ahí el vídeo ya está abierto, y
+    // encadenar saltos es justamente lo que se quiere poder hacer cuando algo
+    // se traba.
+    if (esperandoElPrimerCuadro) {
+      logger.info('salto a ${destino.inSeconds}s ignorado: el vídeo todavía '
+          'está cargando');
+      return;
+    }
     // Acá y no en cada botón: seek() es el único punto de entrada para la
     // barra de progreso, los atajos de teclado y los saltos, así que marcarlo
     // una vez cubre todos los casos en las tres plataformas.
@@ -5968,10 +6981,48 @@ class VideoPlayerController extends GetxController with WidgetsBindingObserver {
     // libre para siempre (hasta reiniciar la app), porque nada más en la app
     // vuelve a pedir "todas las orientaciones". fullAutoMode restaura la
     // auto-rotación real según el sensor/config del sistema.
-    if (!LayoutUtils.isTablet) {
+    // esTablet y no el isTablet de antes: aquel se calculaba una vez y se
+    // guardaba, y acá el app SIEMPRE está acostado — si esta era la primera
+    // pantalla en preguntar, un teléfono quedaba marcado como tablet y este
+    // bloque no corría nunca. O sea que salir del reproductor dejaba la app
+    // trabada en horizontal hasta reiniciarla.
+    if (!LayoutUtils.esTablet) {
       await AutoOrientation.fullAutoMode();
       SystemChrome.setPreferredOrientations(DeviceOrientation.values);
     }
+  }
+
+  /// Enciende o apaga el modo inmersivo según cómo esté el teléfono.
+  ///
+  /// Acostado se esconden las barras del sistema: el vídeo ocupa la pantalla y
+  /// nada más importa. De pie NO: ahí el vídeo es una franja arriba y debajo
+  /// queda la app, así que esconder la barra de navegación deja al usuario sin
+  /// forma de salir salvo el gesto, y la de estado hace falta para ver la hora
+  /// y la batería mientras se mira algo largo.
+  ///
+  /// La llama la página cada vez que cambia la orientación. Es idempotente: si
+  /// ya está en el modo que corresponde, pedirlo de nuevo no cuesta nada.
+  static void pantallaSegunOrientacion({required bool acostado}) {
+    if (!Platform.isAndroid) return;
+    if (acostado) {
+      SystemChrome.setEnabledSystemUIMode(SystemUiMode.immersiveSticky);
+      return;
+    }
+    // ── De pie: `manual` con las dos barras, NO `edgeToEdge` ──────────────
+    //
+    // Con edgeToEdge las barras se ven pero el contenido se dibuja DEBAJO, así
+    // que la hora y la batería quedaban tapadas por el vídeo. Y peor: si esta
+    // era la última orden antes de salir, la app entera se quedaba así y no se
+    // veía la hora ni después de cerrar el reproductor. Reportado en vivo.
+    //
+    // `manual` con todos los overlays es lo que ya pide el resto de la app al
+    // salir del reproductor (ver la restauración más abajo): fuerza que las dos
+    // barras vuelvan RESERVANDO su espacio, sin depender de que el MediaQuery
+    // alcance a refrescar el relleno superior a tiempo.
+    SystemChrome.setEnabledSystemUIMode(
+      SystemUiMode.manual,
+      overlays: SystemUiOverlay.values,
+    );
   }
 
   @override
@@ -6057,3 +7108,5 @@ class _ComoAbrir {
   /// Dirección a abrir. Null = la original.
   final String? url;
 }
+
+/// Un idioma de audio de los que ofrece una lista maestra de HLS.

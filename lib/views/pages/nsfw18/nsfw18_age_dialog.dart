@@ -63,7 +63,7 @@ class Nsfw18AgeDialog {
           title: 'nsfw18.age-denied-title'.i18n,
           content: Text(
             'nsfw18.age-denied'.i18n,
-            style: const TextStyle(color: HomeTheme.textMuted, height: 1.45),
+            style: TextStyle(color: HomeTheme.textMuted, height: 1.45),
           ),
           actions: [
             Builder(

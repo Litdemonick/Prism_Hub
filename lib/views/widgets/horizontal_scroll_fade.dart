@@ -1,3 +1,4 @@
+import 'package:prismhub/views/widgets/home/home_theme.dart';
 import 'dart:io';
 
 import 'package:fluent_ui/fluent_ui.dart' as fluent;
@@ -190,7 +191,7 @@ class _HorizontalScrollFadeState extends State<HorizontalScrollFade>
       ),
       child: Icon(
         right ? Icons.chevron_right : Icons.chevron_left,
-        color: Colors.white,
+        color: HomeTheme.contraste,
         size: 18,
       ),
     );

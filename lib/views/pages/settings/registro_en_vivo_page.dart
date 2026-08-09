@@ -148,7 +148,7 @@ class _RegistroEnVivoPageState extends State<RegistroEnVivoPage> {
           child: Text(
             'settings.log-empty'.i18n,
             textAlign: TextAlign.center,
-            style: const TextStyle(color: HomeTheme.textMuted, fontSize: 13),
+            style: TextStyle(color: HomeTheme.textMuted, fontSize: 13),
           ),
         ),
       );
@@ -184,7 +184,7 @@ class _RegistroEnVivoPageState extends State<RegistroEnVivoPage> {
       color: HomeTheme.accentPink.withValues(alpha: 0.14),
       child: Text(
         'settings.log-paused-hint'.i18n,
-        style: const TextStyle(fontSize: 12, color: HomeTheme.textPrimary),
+        style: TextStyle(fontSize: 12, color: HomeTheme.textPrimary),
       ),
     );
   }
@@ -227,7 +227,7 @@ class _RegistroEnVivoPageState extends State<RegistroEnVivoPage> {
         backgroundColor: HomeTheme.bg,
         title: Text(
           _titulo,
-          style: const TextStyle(color: HomeTheme.textPrimary),
+          style: TextStyle(color: HomeTheme.textPrimary),
         ),
         actions: [
           IconButton(
@@ -255,7 +255,7 @@ class _RegistroEnVivoPageState extends State<RegistroEnVivoPage> {
               alignment: Alignment.centerLeft,
               child: Text(
                 _contador,
-                style: const TextStyle(
+                style: TextStyle(
                     fontSize: 12, color: HomeTheme.textMuted),
               ),
             ),
@@ -297,7 +297,7 @@ class _RegistroEnVivoPageState extends State<RegistroEnVivoPage> {
                     const SizedBox(height: 4),
                     Text(
                       _contador,
-                      style: const TextStyle(
+                      style: TextStyle(
                           fontSize: 12, color: HomeTheme.textMuted),
                     ),
                   ],

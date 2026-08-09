@@ -157,17 +157,17 @@ class _VideoPlayerCastState extends State<VideoPlayerCast> {
             enabled: false,
             leading: Icon(
               Icons.tv_off_rounded,
-              color: HomeTheme.textMuted.withValues(alpha: 0.6),
+              color: HomeTheme.oscuroTextoTenue.withValues(alpha: 0.6),
             ),
             title: Text(
               descartado.nombre,
-              style: const TextStyle(color: HomeTheme.textMuted),
+              style: TextStyle(color: HomeTheme.oscuroTextoTenue),
             ),
             subtitle: Text(
               descartado.motivo,
               maxLines: 1,
               overflow: TextOverflow.ellipsis,
-              style: const TextStyle(color: HomeTheme.textMuted),
+              style: TextStyle(color: HomeTheme.oscuroTextoTenue),
             ),
           ),
         Padding(

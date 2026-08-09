@@ -7,11 +7,16 @@ import 'package:prismhub/views/widgets/home/home_theme.dart';
 // Fondo ambiental animado. Usa gradientes radiales en vez de blur gaussiano:
 // el look sigue siendo suave, pero evita un ImageFilter.blur por frame.
 class AnimatedBackgroundGlow extends StatefulWidget {
-  const AnimatedBackgroundGlow({super.key, this.accent = HomeTheme.accentPink});
+  AnimatedBackgroundGlow({super.key, this.accent});
 
   // Zona +18: se pasa HomeTheme.accentRed para diferenciarla visualmente del
   // Home normal, reusando este mismo widget en vez de duplicarlo.
-  final Color accent;
+  /// En null usa el acento del tema. No puede tener valor por defecto:
+  /// los colores son getters —cambian con el modo claro/oscuro— y un valor por
+  /// defecto tiene que ser constante.
+  final Color? accent;
+
+  Color get acento => accent ?? HomeTheme.accentPink;
 
   @override
   State<AnimatedBackgroundGlow> createState() => _AnimatedBackgroundGlowState();
@@ -27,12 +32,27 @@ class _AnimatedBackgroundGlowState extends State<AnimatedBackgroundGlow>
   bool get _isDesktop =>
       Platform.isWindows || Platform.isLinux || Platform.isMacOS;
 
+  /// ── El fondo ya NO se mueve ─────────────────────────────────────────────
+  ///
+  /// El reloj se queda en cero y nadie lo arranca: el degradado se dibuja una
+  /// vez, en su posición de siempre, y ahí se queda. Se conserva el degradado
+  /// —es lo que hace que el fondo no sea un negro plano— y se va únicamente el
+  /// movimiento.
+  ///
+  /// El motivo es el costo. Esto latía a sesenta cuadros por segundo en TODAS
+  /// las zonas a la vez, y en cada uno de esos cuadros se vuelve a pintar lo
+  /// que haya encima que no tenga capa propia. Era el fondo de la app entera
+  /// gastando batería para un movimiento que casi no se nota, y ya había
+  /// obligado a escribir un vigilante del ciclo de vida solo para que no
+  /// siguiera latiendo en segundo plano.
+  ///
+  /// El controlador se queda declarado a propósito, sin arrancar: el
+  /// AnimatedBuilder de más abajo lo lee, y sacarlo entero obligaba a rehacer
+  /// el dibujado por un cambio que es de una línea. Sin `repeat()` no pide un
+  /// solo cuadro.
   @override
   void initState() {
     super.initState();
-    if (!_isDesktop) {
-      _controller.repeat();
-    }
   }
 
   @override
@@ -65,6 +85,36 @@ class _AnimatedBackgroundGlowState extends State<AnimatedBackgroundGlow>
     );
   }
 
+  /// Un manchón que se corre, con su degradado ya rasterizado.
+  ///
+  /// El `Align` sigue posicionando, pero el hijo es siempre EL MISMO widget
+  /// —mismo color, mismo tamaño— así que Flutter puede reusar su capa en vez
+  /// de volver a pintar el degradado.
+  Widget _blobMovil({
+    required Color color,
+    required double size,
+    required Alignment hacia,
+  }) {
+    return Align(
+      alignment: hacia,
+      child: RepaintBoundary(
+        child: SizedBox(
+          width: size,
+          height: size,
+          child: DecoratedBox(
+            decoration: BoxDecoration(
+              shape: BoxShape.circle,
+              gradient: RadialGradient(
+                colors: [color, color.withValues(alpha: 0)],
+                stops: const [0, 1],
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     return RepaintBoundary(
@@ -80,7 +130,7 @@ class _AnimatedBackgroundGlowState extends State<AnimatedBackgroundGlow>
                 return Stack(
                   children: [
                     _blob(
-                      color: widget.accent.withValues(alpha: 0.12),
+                      color: widget.acento.withValues(alpha: 0.12),
                       alignment: const Alignment(0.72, 0.42),
                       size: blobSize,
                     ),
@@ -92,20 +142,28 @@ class _AnimatedBackgroundGlowState extends State<AnimatedBackgroundGlow>
                   ],
                 );
               }
+              // Los dos manchones se MUEVEN, no se vuelven a dibujar.
+              //
+              // Antes cada cuadro rearmaba el `Alignment` de cada uno, y eso
+              // obliga a repintar el degradado radial entero sesenta veces por
+              // segundo, a pantalla completa. Ahora el degradado se rasteriza
+              // una vez —de eso se encarga el RepaintBoundary de cada
+              // manchón— y lo único que cambia por cuadro es un corrimiento,
+              // que la GPU resuelve sin volver a calcular nada.
               return Stack(
                 children: [
-                  _blob(
-                    color: widget.accent.withValues(alpha: 0.16),
-                    alignment: Alignment(0.7 * math.cos(t), 0.6 * math.sin(t)),
+                  _blobMovil(
+                    color: widget.acento.withValues(alpha: 0.16),
                     size: blobSize,
+                    hacia: Alignment(0.7 * math.cos(t), 0.6 * math.sin(t)),
                   ),
-                  _blob(
+                  _blobMovil(
                     color: const Color(0xFF3D5AFE).withValues(alpha: 0.14),
-                    alignment: Alignment(
+                    size: blobSize * 0.94,
+                    hacia: Alignment(
                       -0.75 * math.cos(t * 0.7 + 2),
                       -0.6 * math.sin(t * 0.8 + 1),
                     ),
-                    size: blobSize * 0.94,
                   ),
                 ],
               );

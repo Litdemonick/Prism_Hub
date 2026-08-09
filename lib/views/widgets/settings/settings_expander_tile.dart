@@ -62,12 +62,12 @@ class _SettingsExpanderTileState extends State<SettingsExpanderTile> {
             Text(
               widget.title,
               style:
-                  const TextStyle(fontSize: 20, color: HomeTheme.textPrimary),
+                  TextStyle(fontSize: 20, color: HomeTheme.textPrimary),
             ),
             const SizedBox(height: 2),
             Text(
               widget.subTitle,
-              style: const TextStyle(fontSize: 12, color: HomeTheme.textMuted),
+              style: TextStyle(fontSize: 12, color: HomeTheme.textMuted),
             ),
             const SizedBox(height: 15),
             widget.content,
@@ -102,8 +102,14 @@ class _SettingsExpanderTileState extends State<SettingsExpanderTile> {
           title: widget.title,
           buildSubtitle: () => widget.subTitle,
           onTap: () {
+            // SigueElModo: sin esto la subpágina se armaba una sola vez, al
+            // abrirla, y su fondo quedaba con el color de ESE momento. Al
+            // cambiar de modo los títulos de adentro pasaban a la paleta nueva
+            // —son widgets propios que releen el color— y el fondo se quedaba
+            // con el viejo: texto casi negro sobre fondo casi negro.
             Get.to(
-              () => Scaffold(
+              () => SigueElModo(
+                builder: (context) => Scaffold(
                 backgroundColor: HomeTheme.bg,
                 // El teclado se superpone en vez de encoger — los campos de
                 // esta subpágina abren diálogo propio, así que no hace falta
@@ -112,7 +118,7 @@ class _SettingsExpanderTileState extends State<SettingsExpanderTile> {
                 appBar: AppBar(
                   backgroundColor: HomeTheme.bg,
                   title: Text(widget.title,
-                      style: const TextStyle(color: HomeTheme.textPrimary)),
+                      style: TextStyle(color: HomeTheme.textPrimary)),
                 ),
                 // SingleChildScrollView: en horizontal el alto útil es la
                 // mitad y este contenido (varias opciones apiladas) no entra
@@ -129,12 +135,19 @@ class _SettingsExpanderTileState extends State<SettingsExpanderTile> {
                   // no hacía nada.
                   child: fluent.FluentTheme(
                     data: fluent.FluentThemeData(
-                      brightness: Brightness.dark,
+                      // El brillo también sale del modo. Estaba fijo en oscuro,
+                      // así que los widgets de fluent de adentro (el selector
+                      // numérico del reproductor, por ejemplo) seguían con la
+                      // paleta oscura sobre el fondo claro.
+                      brightness: ModoDeColor.claro
+                          ? Brightness.light
+                          : Brightness.dark,
                       accentColor: fluent.Colors.purple,
                       scaffoldBackgroundColor: HomeTheme.bg,
                     ),
                     child: widget.content,
                   ),
+                ),
                 ),
               ),
             );
@@ -156,9 +169,9 @@ class _SettingsExpanderTileState extends State<SettingsExpanderTile> {
           top: const Radius.circular(10),
           bottom: open ? Radius.zero : const Radius.circular(10),
         ),
-        side: const BorderSide(color: HomeTheme.border),
+        side: BorderSide(color: HomeTheme.border),
       ),
-      contentShape: (open) => const RoundedRectangleBorder(
+      contentShape: (open) => RoundedRectangleBorder(
         borderRadius: BorderRadius.vertical(bottom: Radius.circular(10)),
         side: BorderSide(color: HomeTheme.border),
       ),
@@ -170,7 +183,7 @@ class _SettingsExpanderTileState extends State<SettingsExpanderTile> {
         children: [
           const SizedBox(height: 10),
           Text(widget.title,
-              style: const TextStyle(color: HomeTheme.textPrimary)),
+              style: TextStyle(color: HomeTheme.textPrimary)),
           const SizedBox(height: 2),
           SettingsSubtitle(widget.subTitle),
           const SizedBox(height: 15)

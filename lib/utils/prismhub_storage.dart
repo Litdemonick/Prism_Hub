@@ -306,6 +306,7 @@ class PrismHubStorage {
       I18nUtils.supportedLanguages.contains(systemLang) ? systemLang : 'en',
     );
     await _initSetting(SettingKey.novelFontSize, 18.0);
+    await _initSetting(SettingKey.mangaStripAlign, 'centro');
     await _initSetting(SettingKey.theme, 'system');
     await _initSetting(SettingKey.enableNSFW, false);
     nsfwEnabled.value = getSetting(SettingKey.enableNSFW) == true;
@@ -319,6 +320,7 @@ class PrismHubStorage {
     await _initSetting(SettingKey.aniListToken, '');
     await _initSetting(SettingKey.aniListUserId, '');
     await _initSetting(SettingKey.autoTracking, true);
+    await _initSetting(SettingKey.modoClaro, false);
     await _initSetting(SettingKey.checkNewEpisodes, true);
     await _initSetting(SettingKey.windowSize, "1280,720");
     await _initSetting(SettingKey.androidWebviewUA, _defaultAndroidUA);
@@ -469,6 +471,11 @@ class SettingKey {
   static const autoCheckUpdate = 'AutoCheckUpdate';
   static const language = 'Language';
   static const novelFontSize = 'NovelFontSize';
+  // Dónde se pega la franja del manhwa cuando sobra ancho: 'izquierda',
+  // 'centro' (de fábrica, como venía siendo) o 'derecha'. Va como preferencia
+  // global y no por obra a propósito: depende de con qué mano se sostiene el
+  // teléfono o de dónde está la ventana, no del título que se lee.
+  static const mangaStripAlign = 'MangaStripAlign';
   static const enableNSFW = 'EnableNSFW';
   // Versión en la que el usuario aceptó el aviso de beta. Vacío = todavía no
   // lo aceptó, así que el aviso vuelve a salir en el próximo arranque.
@@ -521,6 +528,10 @@ class SettingKey {
   static const aniListToken = 'AniListToken';
   static const aniListUserId = 'AniListUserId';
   static const autoTracking = 'AutoTracking';
+
+  /// Modo claro encendido. Por defecto apagado: la app nació oscura y así la
+  /// vio siempre todo el mundo; el claro es una elección, no el arranque.
+  static const modoClaro = 'ModoClaro';
   static const windowSize = 'WindowsSize';
   static const windowPosition = 'WindowsPosition';
   static const androidWebviewUA = "AndroidWebviewUA";

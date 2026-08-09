@@ -39,6 +39,7 @@ class Extension {
     this.icon,
     this.url,
     this.description,
+    this.latestLabel,
   });
 
   final bool nsfw;
@@ -53,6 +54,17 @@ class Extension {
   String? icon;
   String? url;
   String? description;
+
+  /// Cómo llama el sitio a su sección de «lo último»: «Programación»,
+  /// «Últimos añadidos», «Novedades».
+  ///
+  /// Lo declara la extensión en su manifiesto y viaja en la cabecera del
+  /// paquete (@latestLabel). El Home lo muestra debajo del nombre de la fila,
+  /// para que el usuario sepa QUÉ está viendo y no solo de dónde viene.
+  ///
+  /// Opcional a propósito: una extensión vieja, o una de la comunidad que no lo
+  /// declare, simplemente cae al texto genérico. Nada se rompe por no tenerlo.
+  String? latestLabel;
 
   factory Extension.fromJson(Map<String, dynamic> json) =>
       _$ExtensionFromJson(json);

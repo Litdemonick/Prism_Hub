@@ -1,8 +1,11 @@
 import 'dart:async';
+import 'dart:convert';
 import 'dart:io';
 
 import 'package:auto_orientation/auto_orientation.dart';
+import 'package:fluent_ui/fluent_ui.dart' show InfoBarSeverity;
 import 'package:flutter/material.dart';
+import 'package:flutter_i18n/flutter_i18n.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_inappwebview/flutter_inappwebview.dart';
 import 'package:path/path.dart' as p;
@@ -11,6 +14,7 @@ import 'package:prismhub/utils/bloqueador_anuncios.dart';
 import 'package:prismhub/utils/log.dart';
 import 'package:prismhub/utils/prismhub_directory.dart';
 import 'package:prismhub/utils/prismhub_storage.dart';
+import 'package:prismhub/views/widgets/messenger.dart';
 import 'package:url_launcher/url_launcher.dart';
 import 'package:window_manager/window_manager.dart';
 
@@ -114,6 +118,17 @@ bool isDirectStream(String url) {
 // por sitio. Se usa `contains` en minúsculas a propósito: cada extensión
 // etiqueta distinto ("Streamtape LAT", "byse", "Voex"), y el nombre corto del
 // host es lo único estable entre todas.
+//
+// **Esto es el respaldo, no la fuente.** Una extensión puede decir servidor por
+// servidor si lleva rayo o mundo, y eso manda (ver `esServidorNativo` en
+// video_controller.dart). Acá se cae solo cuando la extensión no dice nada.
+//
+// Y es respaldo por un motivo: adivinar por nombre no alcanza. El mismo
+// servidor reproduce nativo en un sitio y no en otro — "StreamWish" anda en
+// JKAnime y en HentaiLA y AnimeFenix termina en premilkyway.com, que está
+// bloqueado. Este nombre está en la lista de abajo, así que a esos dos les
+// promete rayo y los abre en el navegador. No se puede arreglar acá sin
+// romperle el rayo a JKAnime: lo arregla cada extensión diciendo lo suyo.
 const _knownReliableServerNames = {
   'voe',
   'doodstream',
@@ -128,6 +143,11 @@ const _knownReliableServerNames = {
   'mixdrop',
   'mediafire',
   'mp4upload',
+  // Faltaba desde el arreglo anterior de los iconos: reproduce nativo desde
+  // hace rato y salía con el mundo. Medido pidiendo un rango real — la página
+  // del embed trae el mp4 en texto plano y devuelve 206 video/mp4 desde
+  // vidcache.net.
+  'yourupload',
   'hexload',
   'savefiles',
   'byse',
@@ -150,8 +170,47 @@ const _hostsNativosConfirmados = {
   'gscdn', // wrapper -> goodstream
   'goodstream',
   'rumble.cloud', // mp4 directo
+  // Medidos uno por uno contra el resolver de verdad, pidiendo la direccion y
+  // mirando que volviera un m3u8 servible. Los tres reproducen en la app desde
+  // hace rato; lo unico que faltaba era decirlo en el icono.
+  'dropload', // empaquetado -> m3u8 en dropcdn.io
+  'dr0pstream', // el mismo, a donde redirige dropload
+  'vimeos', // empaquetado -> m3u8 en vimeos.zip
+  'ok.ru', // el resolver del SDK saca el m3u8 de vkuser.net
+  'okru',
   'nupload', // pendiente: todavia no resuelve
 };
+
+/// Los envoltorios que solo llevan la direccion de otro sitio adentro.
+///
+/// FuegoCine sirve casi todo a traves de una pagina de blogspot que no
+/// reproduce nada: el video real va en `?link=<direccion>` o en `r=<base64>`.
+/// Mirando solo el envoltorio no se puede saber nada —todos parecen iguales—,
+/// asi que sus 195 botones de archivo directo aparecian con el mundo aunque
+/// son un mp4 que la app abre sin ayuda de nadie.
+///
+/// Devuelve null si no es un envoltorio o si no se le puede leer el destino, y
+/// entonces todo sigue como antes.
+String? _destinoDelEnvoltorio(String url) {
+  if (!url.contains('blogspot.com')) return null;
+  final link = RegExp(r'[?&]link=([^&]+)').firstMatch(url);
+  if (link != null) {
+    try {
+      return Uri.decodeComponent(link.group(1)!);
+    } catch (_) {
+      return null;
+    }
+  }
+  final r = RegExp(r'[?&]r=([A-Za-z0-9+/=]+)$').firstMatch(url);
+  if (r != null) {
+    try {
+      return utf8.decode(base64Decode(r.group(1)!));
+    } catch (_) {
+      return null;
+    }
+  }
+  return null;
+}
 
 /// True si el rayito de "nativo confiable" corresponde a esta pestaña.
 bool _esHostNativo(String url) {
@@ -167,6 +226,13 @@ bool _esHostNativo(String url) {
 bool isKnownNativeServer(String serverName, String url) {
   if (isDirectStream(url)) return true;
   if (_esHostNativo(url)) return true;
+  // Si es un envoltorio, lo que vale es a donde apunta. Se mira una sola vez y
+  // no en cadena: un envoltorio dentro de otro no existe en ningun sitio de
+  // los que hay, y encadenar solo abre la puerta a un bucle.
+  final destino = _destinoDelEnvoltorio(url);
+  if (destino != null && (isDirectStream(destino) || _esHostNativo(destino))) {
+    return true;
+  }
   final n = serverName.toLowerCase();
   return _knownReliableServerNames.any((known) => n.contains(known));
 }
@@ -184,23 +250,172 @@ bool isKnownNativeServer(String serverName, String url) {
 // caller pueda saber cuándo esta pantalla se cerró — VideoPlayerConten lo usa
 // para reponer el widget Video recién ahí (ver isWebViewActive en
 // video_controller.dart).
+/// Pregunta antes de abrir un servidor que está fichado como peligroso.
+///
+/// **No bloquea nada**: avisa y deja seguir. La app no puede saber si un
+/// servidor de vídeo está infectado de verdad o si la lista lo fichó por algo
+/// que pasó hace meses, y cortarle el acceso al usuario a un servidor que
+/// quizás sea el único que le anda sería peor que el riesgo.
+///
+/// Se apoya en las listas que ya están cargadas —no sale a la red, no consulta
+/// a nadie, no hay clave de nadie de por medio— así que preguntar cuesta lo
+/// mismo que un par de consultas a un conjunto y no demora la reproducción.
+///
+/// Solo cuentan las listas de seguridad del catálogo. Un dominio que está en
+/// EasyList es un servidor de anuncios: eso ya lo corta el bloqueador y no hay
+/// nada que avisar.
+Future<bool> _confirmarServidorFichado(
+  BuildContext context,
+  String url,
+) async {
+  if (!BloqueadorAnuncios.esPeligroso(url)) return true;
+
+  final quienes = await BloqueadorAnuncios.quienLoMarca(url);
+  final host = Uri.tryParse(url)?.host ?? url;
+  if (!context.mounted) return true;
+
+  final r = await showDialog<bool>(
+    context: context,
+    builder: (ctx) => AlertDialog(
+      backgroundColor: const Color(0xFF1B1F24),
+      icon: const Icon(Icons.gpp_bad_outlined,
+          color: Color(0xFFFF8A80), size: 34),
+      title: const Text('Este servidor no es seguro'),
+      content: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            host,
+            style: const TextStyle(
+                fontSize: 13.5, fontWeight: FontWeight.w700, height: 1.4),
+          ),
+          const SizedBox(height: 12),
+          Text(
+            quienes.isEmpty
+                ? 'Está fichado en las listas de seguridad que tenés '
+                    'instaladas.'
+                : 'Está fichado en:',
+            style: const TextStyle(fontSize: 13, height: 1.45),
+          ),
+          for (final q in quienes)
+            Padding(
+              padding: const EdgeInsets.only(top: 5, left: 2),
+              child: Text('·  $q',
+                  style: const TextStyle(fontSize: 13, height: 1.35)),
+            ),
+          const SizedBox(height: 14),
+          const Text(
+            'Puede intentar instalarte algo o pedirte datos haciéndose pasar '
+            'por otro sitio. Si tenés otro servidor en la lista, conviene '
+            'probar ese.',
+            style: TextStyle(fontSize: 12.5, height: 1.45),
+          ),
+        ],
+      ),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.pop(ctx, false),
+          style: ButtonStyle(
+            foregroundColor: const WidgetStatePropertyAll(Color(0xFF69F0AE)),
+            overlayColor: WidgetStatePropertyAll(
+                const Color(0xFF69F0AE).withValues(alpha: 0.14)),
+            shape: WidgetStatePropertyAll(
+              RoundedRectangleBorder(borderRadius: BorderRadius.circular(9)),
+            ),
+          ),
+          child: const Text('Volver',
+              style: TextStyle(fontWeight: FontWeight.w700)),
+        ),
+        TextButton(
+          onPressed: () => Navigator.pop(ctx, true),
+          style: ButtonStyle(
+            foregroundColor: const WidgetStatePropertyAll(Color(0xFFFF8A80)),
+            overlayColor: WidgetStatePropertyAll(
+                const Color(0xFFFF8A80).withValues(alpha: 0.14)),
+            shape: WidgetStatePropertyAll(
+              RoundedRectangleBorder(borderRadius: BorderRadius.circular(9)),
+            ),
+          ),
+          child: const Text('Abrir igual'),
+        ),
+      ],
+    ),
+  );
+  return r == true;
+}
+
 Future<void> openWebViewPlayer(
   BuildContext context,
   String url, {
   String? referer,
   String title = '',
   void Function(Uint8List? screenshot, {bool isFinal})? onProgress,
-}) {
-  return Navigator.of(context).push(
-    MaterialPageRoute(
-      builder: (_) => WebViewPlayerPage(
+}) async {
+  // **Se comprueba SIEMPRE, y no se recuerda nunca.**
+  //
+  // Antes, un servidor que una vez había cargado sin reproductor quedaba
+  // marcado por host y no se volvía a abrir jamás. La idea era ahorrarle al
+  // usuario una pantalla inútil, pero salía mucho más caro de lo que ahorraba:
+  //
+  //  - Un servidor que no anda un rato —o un título roto suelto— dejaba
+  //    marcado a ese servidor en TODAS las extensiones, para siempre.
+  //  - No había forma de deshacerlo. El comentario decía que se podía limpiar
+  //    desde la pantalla del bloqueador, y esa pantalla nunca existió:
+  //    `olvidarSinReproductor` estaba escrita y no la llamaba nadie.
+  //  - Y se marcaba por cosas que no eran del servidor. Medido en Android el
+  //    2026-08-06: con el bloqueador armando una expresión regular de 6,9 MB,
+  //    cada recurso de la página tardaba medio segundo, así que Mega no llegaba
+  //    a mostrar su reproductor en los ocho segundos de la comprobación.
+  //    Resultado: mega.nz marcado y muerto para siempre, cuando en la
+  //    computadora abría perfecto.
+  //
+  // Ahora se abre siempre, se comprueba siempre, y si no hay reproductor se
+  // cierra avisando por qué. La próxima vez se vuelve a intentar: si el
+  // servidor se recuperó, funciona solo y nadie tiene que ir a destildar nada.
+  if (!await _confirmarServidorFichado(context, url)) return;
+  if (!context.mounted) return;
+  // ── La transición: un cruce, no un deslizamiento ──────────────────────────
+  //
+  // MaterialPageRoute trae la animación de la plataforma —desliza en Android,
+  // zoom en escritorio— y acá eso es justo lo que se veía como un parpadeo: la
+  // pantalla nueva entra en NEGRO por arriba del vídeo que todavía se está
+  // viendo, se desplaza, y recién después aparece el navegador.
+  //
+  // Las dos pantallas son negras de fondo, así que un cruce simple entre ellas
+  // es imperceptible: no hay nada que se desplace ni que salte. Y corto, porque
+  // acá no se está navegando a otra sección — es el mismo vídeo cambiando de
+  // reproductor, y la animación solo tiene que tapar el cambio.
+  //
+  // Va en las dos direcciones: entrar y volver se sienten igual.
+  const cruce = Duration(milliseconds: 180);
+  final hubo = await Navigator.of(context).push<bool>(
+    PageRouteBuilder<bool>(
+      transitionDuration: cruce,
+      reverseTransitionDuration: cruce,
+      pageBuilder: (_, __, ___) => WebViewPlayerPage(
         url: url,
         referer: referer,
         title: title,
         onProgress: onProgress,
       ),
+      transitionsBuilder: (_, animation, __, child) =>
+          FadeTransition(opacity: animation, child: child),
     ),
   );
+  // Se cerró solo porque adentro no había nada que reproducir.
+  if (hubo == false && context.mounted) {
+    final donde = Uri.tryParse(url)?.host ?? '';
+    showPlatformSnackbar(
+      context: context,
+      content: FlutterI18n.translate(
+        context,
+        'video.webview-sin-reproductor',
+        translationParams: {'s': donde},
+      ),
+      severity: InfoBarSeverity.warning,
+    );
+  }
 }
 
 /// Fullscreen WebView player. Loads an embed/player page (mega, voe, mixdrop,
@@ -330,6 +545,117 @@ class _WebViewPlayerPageState extends State<WebViewPlayerPage>
   static bool get _cachesCoverShot => Platform.isAndroid;
 
   /// Le pregunta a la página si el bloqueador llegó a ponerse y qué cortó.
+  /// Si ya se cerró solo por no haber reproductor, para no repetir el aviso.
+  bool _yaSeCerroSinReproductor = false;
+
+  /// Comprueba que la página tenga de verdad un reproductor, y si no, cierra.
+  ///
+  /// Hay servidores que abren, cargan una página entera y adentro no hay ningún
+  /// vídeo: un cartel de "no disponible", una pantalla de anuncios, o
+  /// directamente otra cosa. El usuario terminaba mirando algo que no pidió y
+  /// tenía que darse cuenta solo de que ahí no iba a pasar nada.
+  ///
+  /// Se le dan ocho segundos: muchos reproductores se arman con JS y no existen
+  /// en el instante en que la página termina de cargar. Se busca un `<video>`,
+  /// un `<audio>` o un marco adentro —que es donde estos sitios meten el
+  /// reproductor de verdad— y también si algo empezó a sonar.
+  ///
+  /// Si no hay nada, se cierra avisando — y **no se recuerda**. La próxima vez
+  /// se vuelve a intentar de cero: ver el porqué en [openWebViewPlayer].
+  ///
+  /// Cuánto se espera, por plataforma:
+  ///
+  ///   WINDOWS y LINUX   8 s — el reproductor aparece enseguida.
+  ///   ANDROID          20 s — el mismo reproductor puede tardar bastante más
+  ///                    en un teléfono, y cerrar antes de tiempo es acusar al
+  ///                    servidor de algo que no hizo. Fue justo lo que le pasó
+  ///                    a Mega: quedó marcado por no llegar a los 8 s.
+  Future<void> _vigilarQueHayaReproductor(
+      InAppWebViewController controller) async {
+    if (_yaSeCerroSinReproductor) return;
+    await Future<void>.delayed(Platform.isAndroid
+        ? const Duration(seconds: 20)
+        : const Duration(seconds: 8));
+    if (!mounted || _yaSeCerroSinReproductor) return;
+    try {
+      final r = await controller.evaluateJavascript(source: '''
+(function () {
+  try {
+    if (document.querySelector('video, audio')) return true;
+    // Los marcos cuentan: casi todos estos sitios meten el reproductor
+    // adentro de uno, y desde afuera no se puede mirar qué tienen.
+    var m = document.querySelectorAll('iframe, embed, object');
+    for (var i = 0; i < m.length; i++) {
+      var s = (m[i].src || '') + '';
+      if (s && s.indexOf('about:blank') !== 0) return true;
+    }
+    // Hay páginas donde el reproductor aparece DESPUÉS de que el usuario elija
+    // algo: UA multi de FuegoCine es un elegí-tu-servidor con su propio botón
+    // de reproducir, y a los 8 segundos todavía no existe ningún <video>.
+    // Cerrarla ahí era sacar al usuario de una pantalla perfectamente usable
+    // antes de que llegara a tocarla — reportado en vivo.
+    //
+    // Con que haya ALGO para tocar alcanza. Esto no afloja el control: lo que
+    // se busca cazar es una página muerta, y una página muerta no tiene con
+    // qué interactuar. Los muros que sí hay que cerrar —SmartScreen y
+    // compañía— ni siquiera dejan correr este guion, y se manejan aparte por
+    // el aviso de fallo de navegación.
+    if (document.querySelector(
+      'button, [onclick], a[href], input, select, [role="button"]'
+    )) return true;
+    return false;
+  } catch (e) {
+    // Ante la duda, que siga: cerrar por un error nuestro sería peor.
+    return true;
+  }
+})()
+''');
+      final hay = r == true || r == 'true' || r == 1;
+      if (hay || !mounted) return;
+
+      _cerrarPorqueNoHayReproductor('cargó sin ningún reproductor adentro');
+    } catch (e) {
+      // Si no se pudo preguntar, se deja abierto. Cerrar la pantalla del
+      // usuario porque una comprobación nuestra falló sería lo peor de los dos
+      // mundos.
+      logger.info('no se pudo comprobar si hay reproductor: \$e');
+    }
+  }
+
+  /// Si alguna vez llegó a cargar bien.
+  ///
+  /// A partir de ahí, un fallo de navegación **no cierra nada**. En una página
+  /// que ya está andando siguen pasando navegaciones que fallan y son normales:
+  /// el usuario elige otro servidor y ese no responde, un anuncio que el
+  /// bloqueador corta, una redirección que muere. Cerrarle la pantalla por eso
+  /// es sacarlo de algo que estaba usando.
+  ///
+  /// Lo que sí interesa es el fallo de la PRIMERA carga: ahí no hay nada que
+  /// perder porque nunca hubo nada.
+  bool _yaCargoAlgunaVez = false;
+
+  /// Cierra el navegador interno avisando de que acá no hay nada que ver.
+  ///
+  /// Un solo camino de salida para los dos motivos —la página no cargó, o cargó
+  /// y no tiene reproductor adentro— así los dos avisan igual, cierran igual y
+  /// **no se recuerdan**: la próxima vez se vuelve a intentar de cero (ver el
+  /// porqué en [openWebViewPlayer]).
+  void _cerrarPorqueNoHayReproductor(String motivo) {
+    if (_yaSeCerroSinReproductor || !mounted) return;
+    _yaSeCerroSinReproductor = true;
+    logger.info('"${Uri.tryParse(widget.url)?.host}" $motivo: se cierra y se '
+        'avisa (la próxima vez se vuelve a intentar)');
+    // El `false` es lo que le dice a quien abrió que muestre el aviso.
+    Navigator.of(context).pop(false);
+  }
+
+  /// Cuántos pedidos cortó el interceptor nativo de Windows.
+  ///
+  /// Se registra junto con lo que dice el guion. Sin esto no había forma de
+  /// saber si el corte nativo estaba haciendo algo: el guion puede decir «no
+  /// cortó nada» y estar todo bien, porque el que cortó fue el otro.
+  int _cortadosPorElBloqueador = 0;
+
   Future<void> _comprobarBloqueador(InAppWebViewController controller) async {
     if (!BloqueadorAnuncios.activo) return;
     try {
@@ -342,8 +668,17 @@ class _WebViewPlayerPageState extends State<WebViewPlayerPage>
       final queCorto = (cortados is String && cortados.isNotEmpty)
           ? 'cortados: $cortados'
           : 'no cortó nada';
+      // Las DOS vías, en la misma línea: el guion y el corte del motor. Cada
+      // una ataja cosas distintas —el guion no llega a un <script src> que ya
+      // venía en el HTML, y el del motor no ve lo que el JS arma después— así
+      // que mirarlas por separado es lo único que dice cuál faltó.
+      final nativo = Platform.isAndroid
+          ? 'nativo: ${BloqueadorAnuncios.reglasNativas(widget.url).length} reglas'
+          : BloqueadorAnuncios.interceptarEnWindows(widget.url)
+              ? 'nativo: cortó $_cortadosPorElBloqueador'
+              : 'nativo: apagado acá';
       logger.info('[bloqueador] en la página: '
-          '${puesto == true ? 'SÍ' : 'NO ($puesto)'} · $queCorto');
+          '${puesto == true ? 'SÍ' : 'NO ($puesto)'} · $queCorto · $nativo');
     } catch (e) {
       logger.info('[bloqueador] no se pudo comprobar: $e');
     }
@@ -432,11 +767,19 @@ class _WebViewPlayerPageState extends State<WebViewPlayerPage>
     _installCreationFailureDetector();
     _prepareMount();
     _resetHideTimer();
-    SystemChrome.setEnabledSystemUIMode(SystemUiMode.immersiveSticky);
-    SystemChrome.setPreferredOrientations([
-      DeviceOrientation.landscapeLeft,
-      DeviceOrientation.landscapeRight,
-    ]);
+    // ── Ya no se BLOQUEA la horizontal ─────────────────────────────────
+    //
+    // Acá se clavaba la pantalla en horizontal. Cuando el reproductor nativo
+    // hacía lo mismo daba igual, pero ahora ese abre como esté el teléfono y
+    // se puede girar: pasar al respaldo por navegador te tironeaba a
+    // horizontal a la fuerza y, al volver, el vertical quedaba trabado —
+    // reportado en vivo, «no deja volver en vertical el app».
+    //
+    // Mismo criterio que el nativo: no se fuerza nada y manda el sensor. Es la
+    // misma página web en los dos casos, y las webs de vídeo se ven bien de
+    // pie; el que quiera acostado gira el teléfono, que ahora sí responde.
+    SystemChrome.setPreferredOrientations(DeviceOrientation.values);
+    _barrasSegunOrientacion();
     // Si se llega acá desde el reproductor nativo ya en pantalla completa,
     // sincronizar el estado real para que el botón no crea que hace falta
     // "entrar" cuando ya está.
@@ -513,8 +856,20 @@ class _WebViewPlayerPageState extends State<WebViewPlayerPage>
   // que se abre (el caso más común del fallback automático) no tenía nada
   // que lo protegiera.
   Future<void> _prepareMount() async {
+    // La espera es SOLO para la primera vez.
+    //
+    // Los 700 ms están para darle aire a WebView2 recién creado: montar la
+    // vista encima del entorno a medio asentar es lo que sale como «Cannot
+    // create the InAppWebView instance!». Pero el entorno se crea UNA vez y
+    // queda guardado (ver ensureWebViewEnvironment), así que a partir de la
+    // segunda apertura no había nada que esperar y se esperaba igual.
+    //
+    // Eran 700 ms de pantalla negra regalados en cada entrada, y se notaban
+    // justo en lo que más se hace: entrar al navegador, volver, entrar de
+    // nuevo. Ahora la primera vez espera y las demás entran de una.
+    final entornoYaEstaba = _sharedEnvironment != null;
     final env = await ensureWebViewEnvironment();
-    if (Platform.isWindows) {
+    if (Platform.isWindows && !entornoYaEstaba) {
       await Future.delayed(const Duration(milliseconds: 700));
     }
     if (!mounted || _webViewShuttingDown) return;
@@ -669,6 +1024,15 @@ class _WebViewPlayerPageState extends State<WebViewPlayerPage>
   }
 
   @override
+  void didChangeMetrics() {
+    super.didChangeMetrics();
+    // Girar el teléfono cambia si las barras tienen que verse o no. Sin esto,
+    // al pasar a vertical se quedaban escondidas y la pantalla se veía sin
+    // ninguna salida.
+    _barrasSegunOrientacion();
+  }
+
+  @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
     // paused/hidden: la app se va a segundo plano o se está cerrando — mejor
     // esfuerzo, no hay garantía de que el proceso siga vivo el tiempo
@@ -695,7 +1059,46 @@ class _WebViewPlayerPageState extends State<WebViewPlayerPage>
       // había nada visible y parecía que el reproductor se había colgado.
       if (mounted) setState(() => _showControls = true);
       _resetHideTimer();
+      _ocultarBarrasDelSistema();
     }
+  }
+
+  /// Vuelve a esconder la hora y la batería (Android).
+  ///
+  /// El modo inmersivo se pedía UNA sola vez, en initState, y Android lo suelta
+  /// solo en dos momentos que acá pasan siempre: al **rotar** —y justo después
+  /// de initState se fuerza el horizontal— y al **volver de segundo plano**,
+  /// que en un teléfono es tan simple como apagar y encender la pantalla.
+  /// Cuando lo suelta, la barra de estado se queda puesta arriba del vídeo y no
+  /// hay forma de sacarla sin salir y volver a entrar (reportado en vivo).
+  ///
+  /// Volver a pedirlo no puede romper nada: si ya está puesto, no cambia nada.
+  void _ocultarBarrasDelSistema() {
+    if (!Platform.isAndroid) return;
+    _barrasSegunOrientacion();
+  }
+
+  /// Esconde las barras del sistema solo acostado.
+  ///
+  /// De pie tienen que verse: la de navegación es la única salida —esta
+  /// pantalla no tiene barra propia— y la de estado hace falta para ver la hora
+  /// y la batería. Acostado el vídeo ocupa todo y las barras estorban.
+  ///
+  /// Es el mismo criterio que el reproductor nativo (ver
+  /// VideoPlayerController.pantallaSegunOrientacion) y por el mismo motivo:
+  /// desde que se puede girar, dejarlas escondidas de pie deja al usuario sin
+  /// forma de salir salvo el gesto.
+  void _barrasSegunOrientacion() {
+    if (!Platform.isAndroid || !mounted) return;
+    final acostado = MediaQuery.orientationOf(context) == Orientation.landscape;
+    if (acostado) {
+      SystemChrome.setEnabledSystemUIMode(SystemUiMode.immersiveSticky);
+      return;
+    }
+    SystemChrome.setEnabledSystemUIMode(
+      SystemUiMode.manual,
+      overlays: SystemUiOverlay.values,
+    );
   }
 
   // Pausa el vídeo/audio del sitio sin tocar nada más: no descarga la fuente, no
@@ -727,7 +1130,57 @@ class _WebViewPlayerPageState extends State<WebViewPlayerPage>
     if (!Platform.isWindows) return;
     _isFullScreen = !_isFullScreen;
     await WindowManager.instance.setFullScreen(_isFullScreen);
+    // La ventana sola no alcanza: el vídeo sigue del tamaño que la página le
+    // dio, así que quedaba una ventana enorme con el reproductor chiquito en el
+    // medio. Se le pide TAMBIÉN a la página que ponga su vídeo en pantalla
+    // completa, que es lo que uno espera al tocar ese botón.
+    await _pantallaCompletaEnLaPagina(_isFullScreen);
     if (mounted) setState(() {});
+  }
+
+  /// Le pide a la página que ponga (o saque) su vídeo en pantalla completa.
+  ///
+  /// Se intenta en tres pasos, del más limpio al más bruto:
+  ///
+  ///   1. El `<video>`, que es lo que corresponde
+  ///   2. Su contenedor, para los reproductores que dibujan controles encima y
+  ///      se romperían si solo se agranda el vídeo
+  ///   3. El botón de pantalla completa del propio sitio, tocándolo — es el
+  ///      camino para los que no exponen el vídeo (JW Player, fluidplayer)
+  ///
+  /// Si el vídeo vive en un iframe de OTRO dominio no hay nada que hacer: el
+  /// navegador no deja tocarlo desde afuera. Ahí queda la ventana en pantalla
+  /// completa, que ya es mejor que nada, y el usuario usa el botón del sitio.
+  Future<void> _pantallaCompletaEnLaPagina(bool entrar) async {
+    final c = _webViewController;
+    if (c == null) return;
+    try {
+      await c.evaluateJavascript(source: """
+(function () {
+  try {
+    if (!$entrar) {
+      if (document.fullscreenElement && document.exitFullscreen) document.exitFullscreen();
+      return 'salio';
+    }
+    var v = document.querySelector('video');
+    if (v) {
+      var destino = v.closest('.jw-wrapper, .plyr, .video-js, .fluid_video_wrapper') || v;
+      if (destino.requestFullscreen) { destino.requestFullscreen(); return 'video'; }
+      if (destino.webkitRequestFullscreen) { destino.webkitRequestFullscreen(); return 'video'; }
+    }
+    // Sin video a la vista: se toca el boton del propio sitio.
+    var b = document.querySelector(
+      '.jw-icon-fullscreen, .vjs-fullscreen-control, .plyr__control[data-plyr="fullscreen"],' +
+      '[class*="fullscreen"], [aria-label*="ull screen"], [title*="antalla completa"]');
+    if (b && b.click) { b.click(); return 'boton del sitio'; }
+    return 'no se encontro nada';
+  } catch (e) { return 'error: ' + e; }
+})();
+""");
+    } catch (e) {
+      // Que la página no colabore no puede impedir agrandar la ventana.
+      logger.info('pantalla completa en la página: no se pudo · $e');
+    }
   }
 
   @override
@@ -794,10 +1247,41 @@ class _WebViewPlayerPageState extends State<WebViewPlayerPage>
     if (!Platform.isAndroid) return;
     // Mismo criterio que el reproductor nativo: en tablet no se toca la
     // orientación (nunca se la forzó).
-    if (!LayoutUtils.isTablet) {
+    //
+    // esTablet mira el lado corto de la pantalla, que no cambia al girar. Con
+    // el isTablet de antes —ancho medido una vez y guardado— acá se preguntaba
+    // estando acostado, así que un teléfono podía quedar marcado como tablet y
+    // este bloque no soltaba nunca el bloqueo de orientación.
+    if (!LayoutUtils.esTablet) {
       unawaited(AutoOrientation.fullAutoMode());
       SystemChrome.setPreferredOrientations(DeviceOrientation.values);
     }
+  }
+
+  /// Un botón redondo con fondo sólido, para que se vea sobre cualquier vídeo.
+  ///
+  /// Van sueltos y no en una barra: la franja de arriba es del SITIO. unlimplay,
+  /// por ejemplo, pone ahí su idioma y su propio selector de servidores —Direct,
+  /// Goodstream, Streamhg, Filemoon, Voe, Streamwish, Vidhide, Netu—, o sea ocho
+  /// opciones más que el usuario perdía si se la tapábamos.
+  Widget _botonSolido({
+    required IconData icono,
+    required VoidCallback alTocar,
+    required double tamano,
+  }) {
+    return Material(
+      color: Colors.black.withValues(alpha: 0.72),
+      shape: const CircleBorder(),
+      clipBehavior: Clip.antiAlias,
+      child: InkWell(
+        onTap: alTocar,
+        child: SizedBox(
+          width: tamano,
+          height: tamano,
+          child: Icon(icono, color: Colors.white, size: tamano * 0.5),
+        ),
+      ),
+    );
   }
 
   @override
@@ -847,12 +1331,32 @@ class _WebViewPlayerPageState extends State<WebViewPlayerPage>
                       transparentBackground: true,
                       // Bloquea ventanas/popups de anuncios de los hosts.
                       javaScriptCanOpenWindowsAutomatically: false,
-                      supportMultipleWindows: false,
+                      // En true a propósito, aunque suene al revés.
+                      //
+                      // Con false, el motor mete la ventana emergente en la
+                      // MISMA pestaña: la página del vídeo se reemplaza por el
+                      // anuncio y `onCreateWindow` no llega a dispararse. Con
+                      // true, cada intento pasa por ese callback y ahí se
+                      // corta sin abrir nada — el vídeo se queda donde estaba.
+                      supportMultipleWindows: true,
                       // Las listas del usuario, en la vía nativa: el pedido ni
                       // se hace. Soportado en Android (y iOS/macOS); en Windows
                       // llega vacío y el bloqueo lo hacen shouldOverrideUrlLoading
                       // y el guion que se inyecta más abajo.
-                      contentBlockers: BloqueadorAnuncios.reglasNativas(),
+                      // Con la dirección: hay servidores que se abren sin
+                      // bloqueo nativo porque su reproductor no lo tolera. Ver
+                      // reglasNativas y _sinBloqueoNativo.
+                      contentBlockers:
+                          BloqueadorAnuncios.reglasNativas(widget.url),
+                      // Windows: el equivalente al bloqueo nativo de Android.
+                      // Allá lo hacen los contentBlockers de arriba, que acá
+                      // llegan vacíos; acá lo hace shouldInterceptRequest, más
+                      // abajo. Ver interceptarEnWindows — se enciende solo en
+                      // Windows, solo con el bloqueador activo y respetando la
+                      // misma excepción de servidores que no toleran que se les
+                      // intercepte cada pedido.
+                      useShouldInterceptRequest:
+                          BloqueadorAnuncios.interceptarEnWindows(widget.url),
                     ),
                     onWebViewCreated: (controller) {
                       _webViewController = controller;
@@ -876,13 +1380,26 @@ class _WebViewPlayerPageState extends State<WebViewPlayerPage>
                         logger.info('[bloqueador] apagado: no se inyecta nada');
                       }
                     },
-                    // Segunda vía, a propósito repetida.
+                    // Segunda vía, a propósito repetida. **Va en las dos
+                    // plataformas, y hay que dejarla.**
                     //
-                    // El guion de arriba se registra con addUserScript, que en
-                    // Windows no está confirmado que llegue a correr. Éste va
-                    // por evaluateJavascript, que sí. El guion se protege solo
-                    // contra ejecutarse dos veces (mira window.__prismBloqueador),
-                    // así que si los dos funcionan, el segundo no hace nada.
+                    // `addUserScript` se registra en `onWebViewCreated`, que
+                    // ocurre DESPUÉS de que la página empezó a cargar, así que
+                    // puede no alcanzar a la primera. Ésta va por
+                    // `evaluateJavascript` en `onLoadStart` y tapa ese hueco. El
+                    // guion se protege solo contra ejecutarse dos veces (mira
+                    // `window.__prismBloqueador`), así que si corren las dos, la
+                    // segunda no hace nada.
+                    //
+                    // **Se intentó sacarla en Android el 2026-08-06 y fue peor.**
+                    // La idea era ahorrarse la segunda pasada, que con las listas
+                    // de fábrica son unos 7 MB de texto por el puente. Pero al
+                    // sacarla dejaron de aparecer las líneas que manda la propia
+                    // página (`[bloqueador] activo con N dominios`), o sea que el
+                    // guion no estaba corriendo: el bloqueador quedó apagado en
+                    // el teléfono sin que nada lo dijera. Si algún día hay que
+                    // optimizar esto, el camino es achicar el guion, no sacar la
+                    // pasada que lo hace llegar.
                     onLoadStart: (controller, url) async {
                       final guion = BloqueadorAnuncios.guionParaInyectar();
                       if (guion.isEmpty) return;
@@ -895,10 +1412,30 @@ class _WebViewPlayerPageState extends State<WebViewPlayerPage>
                     // Los avisos del propio guion, para poder ver en el
                     // registro si está bloqueando algo de verdad en vez de
                     // suponerlo.
+                    //
+                    // Y los ERRORES de la página, que antes se tiraban.
+                    //
+                    // Cuando un servidor abre y adentro no aparece el
+                    // reproductor, lo único que se veía desde afuera era eso:
+                    // que no aparecía. Si su JavaScript reventó —solo, o porque
+                    // algo que inyectamos le cambió el piso— el motivo estaba en
+                    // la consola y se perdía. Puesto en vivo con Mega en Android
+                    // el 2026-08-06, que abre bien en la computadora con el
+                    // mismo bloqueador puesto.
+                    //
+                    // Se recortan a 300 caracteres: algunos sitios tiran errores
+                    // enormes y no vale la pena llenar el archivo.
                     onConsoleMessage: (controller, mensaje) {
                       final texto = mensaje.message;
                       if (texto.startsWith('[bloqueador]')) {
                         logger.info(texto);
+                        return;
+                      }
+                      if (mensaje.messageLevel == ConsoleMessageLevel.ERROR) {
+                        final corto = texto.length > 300
+                            ? '${texto.substring(0, 300)}…'
+                            : texto;
+                        logger.info('[navegador] error en la página: $corto');
                       }
                     },
                     // Se le PREGUNTA a la página si el guion quedó puesto.
@@ -925,9 +1462,54 @@ class _WebViewPlayerPageState extends State<WebViewPlayerPage>
                         WindowManager.instance.setFullScreen(false);
                       }
                     },
+                    // El corte de verdad en Windows: el pedido no llega a
+                    // salir. Solo se llama si useShouldInterceptRequest quedó
+                    // en true (ver arriba), así que en Android ni existe — allá
+                    // el trabajo lo hacen los contentBlockers, que ya andan y
+                    // no se tocan.
+                    //
+                    // Devolver null es "seguí normal". Para lo bloqueado se
+                    // devuelve una respuesta vacía: cortar de esta forma es lo
+                    // que el motor entiende como "no hay nada acá", y el sitio
+                    // sigue funcionando igual que cuando el bloqueo nativo de
+                    // Android corta ese mismo pedido.
+                    shouldInterceptRequest: (controller, request) async {
+                      final url = request.url.toString();
+                      if (!BloqueadorAnuncios.bloquea(url)) return null;
+                      _cortadosPorElBloqueador++;
+                      return WebResourceResponse(
+                        contentType: 'text/plain',
+                        contentEncoding: 'utf-8',
+                        data: Uint8List(0),
+                      );
+                    },
+                    // Los avisos de fallo del motor. Acá solo se pasan al
+                    // bloqueador, que es quien decide si vale la pena seguir
+                    // (ver BloqueadorAnuncios.motivoParaNoSeguir). El cable
+                    // tiene que estar acá porque es donde llegan; la regla, no.
+                    onReceivedError: (controller, request, error) {
+                      if (_yaCargoAlgunaVez) return;
+                      final motivo = BloqueadorAnuncios.motivoParaNoSeguir(
+                        esMarcoPrincipal: request.isForMainFrame == true,
+                        errorDeCarga: error.description,
+                      );
+                      if (motivo != null) _cerrarPorqueNoHayReproductor(motivo);
+                    },
+                    onReceivedHttpError: (controller, request, response) {
+                      if (_yaCargoAlgunaVez) return;
+                      final motivo = BloqueadorAnuncios.motivoParaNoSeguir(
+                        esMarcoPrincipal: request.isForMainFrame == true,
+                        httpStatus: response.statusCode,
+                      );
+                      if (motivo != null) _cerrarPorqueNoHayReproductor(motivo);
+                    },
                     onLoadStop: (controller, url) {
                       _loadTimeoutTimer?.cancel();
+                      _yaCargoAlgunaVez = true;
                       if (mounted) setState(() => _loading = false);
+                      // Para cuando la rotación a horizontal se llevó puesto el
+                      // modo inmersivo — ver _ocultarBarrasDelSistema.
+                      _ocultarBarrasDelSistema();
                       // Se le PREGUNTA a la página si el guion quedó puesto.
                       //
                       // Con los mensajes de consola no alcanza: que no
@@ -937,6 +1519,7 @@ class _WebViewPlayerPageState extends State<WebViewPlayerPage>
                       // responde sin ambigüedad, por el mismo camino que ya
                       // sabemos que funciona.
                       _comprobarBloqueador(controller);
+                      _vigilarQueHayaReproductor(controller);
                       // El aviso de por qué se llegó acá va DESPUÉS de que
                       // el navegador interno ya cargó y se ve — mostrarlo
                       // antes (en la pantalla del reproductor nativo, previo
@@ -964,6 +1547,26 @@ class _WebViewPlayerPageState extends State<WebViewPlayerPage>
                     // nunca debe abrir el navegador externo, solo el WebView interno.
                     // Se cancela la navegación sin más — el usuario sigue viendo el
                     // video/embed original sin interrupciones.
+                    // La ventana emergente que ni el guion ni la navegación
+                    // llegan a ver.
+                    //
+                    // El guion tapa `window.open`, y `shouldOverrideUrlLoading`
+                    // ataja las navegaciones. Pero un `<a target="_blank">` no
+                    // es ninguna de las dos: el motor pide una VENTANA NUEVA, y
+                    // eso solo llega acá. Sin este callback, en Android quedaba
+                    // en manos del motor y en escritorio se abría el navegador
+                    // del sistema — el usuario tocaba "reproducir" y le
+                    // aparecía una pestaña de casino fuera de la app.
+                    //
+                    // Devolver false es "no, no abras nada". Se avisa al
+                    // registro para que quede medido cuántas se cortan, en vez
+                    // de suponer que el bloqueador está haciendo algo.
+                    onCreateWindow: (controller, accion) async {
+                      final u = accion.request.url;
+                      logger.info(
+                          '[bloqueador] ventana emergente cortada: ${u?.host ?? 'sin dirección'}');
+                      return false;
+                    },
                     shouldOverrideUrlLoading: (controller, action) async {
                       final u = action.request.url;
                       if (u == null) return NavigationActionPolicy.ALLOW;
@@ -982,6 +1585,30 @@ class _WebViewPlayerPageState extends State<WebViewPlayerPage>
                           u.host.isNotEmpty &&
                           u.host != host) {
                         return NavigationActionPolicy.CANCEL;
+                      }
+                      // ── El secuestro del sub-marco ────────────────────────
+                      //
+                      // La regla de arriba solo mira el marco PRINCIPAL, y hay
+                      // un anuncio que no lo toca: se mete en el iframe del
+                      // reproductor y lo reemplaza. Desde afuera la página
+                      // sigue siendo la misma, pero el reproductor ya no está
+                      // — reportado en vivo con UA Multi: al tocar dos veces un
+                      // servidor la pantalla se iba a un sitio que no tiene
+                      // nada que ver y el menú dejaba de funcionar.
+                      //
+                      // Acá NO se puede pinchar el host como arriba: los
+                      // sub-marcos legítimos son justamente de otros dominios
+                      // (voe.sx, streamwish, filemoon…). Así que lo único
+                      // honesto es dejar anotado a dónde se fue cada uno, para
+                      // que la próxima vez que pase el registro diga QUIÉN lo
+                      // hizo y se pueda cortar esa red por su dominio.
+                      //
+                      // Bloquear el destino sería equivocarse de culpable: el
+                      // sitio al que te manda suele ser inocente — lo eligió la
+                      // red de anuncios justamente para parecer legítimo.
+                      if (!action.isForMainFrame && u.host.isNotEmpty) {
+                        logger.info('[bloqueador] sub-marco navega a ${u.host}'
+                            '${action.hasGesture == false ? ' (sin toque del usuario)' : ''}');
                       }
                       return NavigationActionPolicy.ALLOW;
                     },
@@ -1080,47 +1707,73 @@ class _WebViewPlayerPageState extends State<WebViewPlayerPage>
                 // planos sueltos — esos se veían fuera de lugar/inconsistentes
                 // con el resto de la app (reportado en vivo: "el contorno se ve
                 // mal").
+                // Los controles de la app, corridos para no taparle los suyos
+                // al sitio.
+                //
+                // Antes esto era UNA barra a todo el ancho, con degradado,
+                // pegada arriba de todo. El problema: varios servidores ponen
+                // ahí SUS propios controles —unlimplay tiene el idioma
+                // ("LATINO") y el servidor ("Direct") justo en esa franja— y la
+                // barra se los comía. No es solo que no se vieran: al ser una
+                // capa por encima, tampoco se podían tocar.
+                //
+                // Ahora son dos botones sueltos y en las esquinas que el sitio
+                // no usa: volver abajo del borde de arriba, y pantalla completa
+                // abajo a la derecha. Sin degradado, así que la franja de
+                // arriba queda libre para el sitio.
+                //
+                // Y con fondo SÓLIDO: sobre un vídeo claro, un icono blanco sin
+                // nada detrás se pierde.
+                //
+                // OJO: esto vale para TODOS los sitios, y se decidió mirando
+                // uno solo (unlimplay). Otros pueden tener sus controles en
+                // otro lado y estas posiciones taparles algo distinto. Queda
+                // pendiente ir probándolos: si aparece un choque, lo que
+                // corresponde es ajustar por sitio y no volver a la barra de
+                // antes, que tapaba una franja entera.
                 IgnorePointer(
                   ignoring: !_showControls,
                   child: AnimatedOpacity(
                     opacity: _showControls ? 1 : 0,
                     duration: const Duration(milliseconds: 200),
-                    child: Container(
-                      decoration: BoxDecoration(
-                        gradient: LinearGradient(
-                          begin: Alignment.topCenter,
-                          end: Alignment.bottomCenter,
-                          colors: [
-                            Colors.black.withValues(alpha: 0.85),
-                            Colors.transparent,
-                          ],
-                        ),
-                      ),
-                      child: SafeArea(
-                        child: Padding(
-                          padding: const EdgeInsets.symmetric(
-                              horizontal: 12, vertical: 4),
-                          child: Row(
-                            children: [
-                              IconButton(
-                                icon: const Icon(Icons.arrow_back,
-                                    color: Colors.white),
-                                onPressed: _exitAndCaptureProgress,
-                              ),
-                              const Spacer(),
-                              if (Platform.isWindows)
-                                IconButton(
-                                  icon: Icon(
-                                    _isFullScreen
-                                        ? Icons.fullscreen_exit
-                                        : Icons.fullscreen,
-                                    color: Colors.white,
-                                  ),
-                                  onPressed: _toggleFullScreen,
-                                ),
-                            ],
+                    child: SafeArea(
+                      child: Stack(
+                        children: [
+                          // Volver: bajado para dejar libre la franja de arriba.
+                          Positioned(
+                            top: 56,
+                            left: 12,
+                            child: _botonSolido(
+                              icono: Icons.arrow_back,
+                              alTocar: _exitAndCaptureProgress,
+                              tamano: 44,
+                            ),
                           ),
-                        ),
+                          // Pantalla completa: JUSTO DEBAJO del de volver, en
+                          // la misma columna.
+                          //
+                          // Estaba abajo a la derecha y ahí es donde el sitio
+                          // pone el suyo —jwplayer, fluidplayer y video.js, los
+                          // tres—, así que quedaba un botón tapando al otro.
+                          //
+                          // El borde izquierdo, en cambio, no lo usa ninguno:
+                          // sus barras van arriba y abajo, a lo ancho. Los dos
+                          // nuestros apilados ahí no chocan con nada y quedan
+                          // juntos, que además es más fácil de encontrar que
+                          // uno en cada esquina.
+                          if (Platform.isWindows)
+                            Positioned(
+                              top: 108,
+                              left: 12,
+                              child: _botonSolido(
+                                icono: _isFullScreen
+                                    ? Icons.fullscreen_exit
+                                    : Icons.fullscreen,
+                                alTocar: _toggleFullScreen,
+                                tamano: 44,
+                              ),
+                            ),
+                        ],
                       ),
                     ),
                   ),

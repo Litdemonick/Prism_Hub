@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:prismhub/views/widgets/home/home_theme.dart';
 
 class SearchAppBar extends StatefulWidget implements PreferredSizeWidget {
   SearchAppBar({
@@ -84,7 +85,23 @@ class _SearchAppBarState extends State<SearchAppBar> {
                 onSubmitted: widget.onSubmitted,
               ),
             )
-          : Text(widget.title),
+          : Text(
+              widget.title,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              // El mismo título que el resto de las zonas.
+              //
+              // Acá iba un Text pelado, así que Buscar y Extensiones —las dos
+              // que usan esta barra— caían al estilo por defecto del tema:
+              // más chico, más finito y gris, al lado de Inicio o Biblioteca
+              // que ya estaban en blanco y a 25. Se notaba al cambiar de
+              // pestaña.
+              style: HomeTheme.tituloDeZona(
+                // Acostado en un teléfono, 25 en la barra se come alto que le
+                // hace falta al contenido.
+                bajo: MediaQuery.sizeOf(context).height < 520,
+              ),
+            ),
       actions: [
         IconButton(
           onPressed: () {

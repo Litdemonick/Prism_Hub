@@ -1,4 +1,5 @@
 import 'package:fluent_ui/fluent_ui.dart' as fluent;
+import 'package:prismhub/views/widgets/home/home_theme.dart';
 import 'package:flutter/material.dart';
 import 'package:prismhub/utils/i18n.dart';
 import 'package:prismhub/views/widgets/horizontal_scroll_fade.dart';
@@ -42,7 +43,17 @@ class _HorizontalListState extends State<HorizontalList> {
       children: [
         Row(
           children: [
-            Text(widget.title),
+            // Con estilo explícito y no heredado del tema: en escritorio la
+            // raíz es FluentApp, y ahí un Text sin estilo cae en la tipografía
+            // de Fluent, que traía el color de su tema oscuro. Sobre el fondo
+            // claro el nombre de la extensión quedaba invisible.
+            Text(
+              widget.title,
+              style: TextStyle(
+                color: HomeTheme.textPrimary,
+                fontWeight: FontWeight.w700,
+              ),
+            ),
             const Spacer(),
             TextButton(
               onPressed: widget.onClickMore,
@@ -184,17 +195,26 @@ class _HorizontalTitleState extends State<HorizontalTitle> {
           ),
           child: Row(
             children: [
+              // Con el color puesto, no heredado.
+              //
+              // Este es el título de la fila en escritorio, y era un TextStyle
+              // sin color: caía en la tipografía de Fluent, que trae la suya
+              // según SU tema. El nombre de la extensión quedaba invisible
+              // sobre el fondo claro — la flecha de al lado sí se veía, porque
+              // los iconos de Fluent sí toman el color del tema.
               Text(
                 widget.text,
-                style: const TextStyle(
+                style: TextStyle(
                   fontSize: 16,
                   fontWeight: FontWeight.bold,
+                  color: HomeTheme.textPrimary,
                 ),
               ),
               const SizedBox(width: 8),
-              const Icon(
+              Icon(
                 fluent.FluentIcons.chevron_right_med,
                 size: 14,
+                color: HomeTheme.textPrimary,
               )
             ],
           ),

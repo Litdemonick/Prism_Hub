@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:io';
 
 import 'package:fluent_ui/fluent_ui.dart' as fluent;
@@ -31,13 +32,79 @@ showPlatformSnackbar({
       ),
     );
   }
-  return fluent.displayInfoBar(context, builder: (context, close) {
-    return fluent.InfoBar(
-      title: Text(title),
-      content: Text(content),
-      action: action,
-      severity: severity,
-    );
+  return _avisoDeEscritorio(
+    context: context,
+    title: title,
+    content: content,
+    action: action,
+    severity: severity,
+  );
+}
+
+/// El aviso de escritorio que está en pantalla ahora, si hay alguno.
+///
+/// ── Por qué no se usa `displayInfoBar` ──────────────────────────────────────
+///
+/// Porque **no sabe que ya hay uno puesto**: cada llamada crea su propia capa
+/// en la misma posición, así que dos avisos seguidos se dibujan UNO ENCIMA DEL
+/// OTRO y no se lee ninguno de los dos. Se ve al activar o desactivar varias
+/// extensiones, que es justo cuando más avisos salen (reportado en vivo).
+///
+/// Con la capa propia se puede sacar el anterior antes de poner el nuevo, que
+/// es exactamente la misma regla que ya seguía Android con
+/// `removeCurrentSnackBar`: **siempre se ve el ÚLTIMO**, que es el que importa.
+OverlayEntry? _avisoActual;
+Timer? _relojDelAviso;
+
+void _sacarAviso() {
+  _relojDelAviso?.cancel();
+  _relojDelAviso = null;
+  _avisoActual?.remove();
+  _avisoActual = null;
+}
+
+Future<void> _avisoDeEscritorio({
+  required BuildContext context,
+  required String title,
+  required String content,
+  dynamic action,
+  required fluent.InfoBarSeverity severity,
+}) async {
+  final capa = Overlay.maybeOf(context, rootOverlay: true);
+  // Sin capa no hay dónde dibujarlo. Pasa en pantallas que todavía se están
+  // montando; callarse es mejor que tumbar la pantalla por un aviso.
+  if (capa == null) return;
+
+  _sacarAviso();
+
+  // Arriba y no abajo: abajo viven los controles, y en Extensiones instaladas
+  // el aviso tapaba la paginación —«1/4 ‹ ›»— y no dejaba cambiar de página.
+  final entrada = OverlayEntry(
+    builder: (context) => Positioned(
+      top: 16,
+      left: 0,
+      right: 0,
+      child: Align(
+        child: ConstrainedBox(
+          constraints: const BoxConstraints(maxWidth: 520),
+          child: fluent.InfoBar(
+            title: Text(title),
+            content: Text(content),
+            action: action,
+            severity: severity,
+            onClose: _sacarAviso,
+          ),
+        ),
+      ),
+    ),
+  );
+
+  _avisoActual = entrada;
+  capa.insert(entrada);
+  _relojDelAviso = Timer(const Duration(seconds: 3), () {
+    // Solo si sigue siendo ESTE: si mientras tanto entró otro, el reloj viejo
+    // no puede sacarle el suyo al nuevo.
+    if (_avisoActual == entrada) _sacarAviso();
   });
 }
 

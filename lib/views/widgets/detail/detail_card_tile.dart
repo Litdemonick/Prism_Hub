@@ -37,7 +37,7 @@ class DetailCardTile extends StatelessWidget {
               children: [
                 Text(
                   title,
-                  style: const TextStyle(
+                  style: TextStyle(
                     fontSize: 16,
                     fontWeight: FontWeight.w800,
                     color: HomeTheme.textPrimary,
@@ -50,7 +50,7 @@ class DetailCardTile extends StatelessWidget {
               ],
             ),
           ),
-          const Padding(
+          Padding(
             padding: EdgeInsets.symmetric(vertical: 13),
             child: Divider(height: 1, color: HomeTheme.border),
           ),

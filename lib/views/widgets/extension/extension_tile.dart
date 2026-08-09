@@ -12,6 +12,7 @@ import 'package:prismhub/utils/i18n.dart';
 import 'package:prismhub/utils/prismhub_storage.dart';
 import 'package:prismhub/utils/request.dart';
 import 'package:prismhub/utils/router.dart';
+import 'package:prismhub/views/widgets/texto_que_no_cabe.dart';
 import 'package:prismhub/views/widgets/button.dart';
 import 'package:prismhub/views/widgets/cache_network_image.dart';
 import 'package:prismhub/views/widgets/home/home_theme.dart';
@@ -172,7 +173,29 @@ class _ExtensionTileState extends State<ExtensionTile> {
     return result == true;
   }
 
+  /// Este interruptor está trabajando.
+  ///
+  /// Prender o apagar escribe en disco y toca la lista de motores, y el
+  /// interruptor de Flutter deja darle mil veces por segundo. Sin esta guarda,
+  /// castigarlo encadenaba escrituras contradictorias sobre el mismo paquete y
+  /// el estado terminaba siendo el de la que ganara la carrera, no el último que
+  /// pidió el usuario.
+  bool _cambiandoEstado = false;
+
   Future<void> _toggleEnabled(bool value) async {
+    if (_cambiandoEstado) return;
+    _cambiandoEstado = true;
+    try {
+      await _toggleEnabledDeVerdad(value);
+    } finally {
+      if (mounted) setState(() => _cambiandoEstado = false);
+      // Sin `mounted` no hay setState, pero la marca se libera igual: si el
+      // widget volviera, tiene que poder cambiarse de nuevo.
+      _cambiandoEstado = false;
+    }
+  }
+
+  Future<void> _toggleEnabledDeVerdad(bool value) async {
     // Una extension marcada inestable no se puede ACTIVAR. Antes se podia:
     // el interruptor la prendia igual y recien al tocar su contenido saltaba
     // el aviso, asi que quedaba encendida en la lista y aportando resultados
@@ -314,6 +337,16 @@ class _ExtensionTileState extends State<ExtensionTile> {
         widget.extension.icon ?? '',
         key: ValueKey(widget.extension.icon),
         fit: BoxFit.contain,
+        // Se decodifica al tamaño en que se DIBUJA, no al del archivo.
+        //
+        // Sin esto, un icono de 512 píxeles se decodifica entero y se sube a
+        // la GPU entero para pintarse en una caja de 40. Con diecisiete
+        // extensiones eso es una ráfaga de subidas de textura justo al abrir
+        // la pantalla, y sale en el registro como cuadros lentos con
+        // `build=0ms` y el raster por las nubes — reportado en vivo en
+        // Android. Las tarjetas del Home ya lo hacían; estas se habían
+        // quedado afuera.
+        cacheWidth: (size * MediaQuery.devicePixelRatioOf(context)).round(),
         fallback: Icon(
           fluent.FluentIcons.puzzle,
           size: iconSize,
@@ -346,11 +379,12 @@ class _ExtensionTileState extends State<ExtensionTile> {
   Widget _buildAndroidTile(BuildContext context) {
     return ListTile(
       leading: _iconBox(size: 40, iconSize: 20),
-      title: Text(
+      // Si el nombre no entra, al lado sale el botón para verlo completo. En
+      // una lista de diecisiete, dos que empiezan igual y se cortan en el
+      // mismo punto se ven idénticas.
+      title: TextoQueNoCabe(
         widget.extension.name,
-        maxLines: 1,
-        overflow: TextOverflow.ellipsis,
-        style: const TextStyle(fontWeight: FontWeight.w600),
+        estilo: const TextStyle(fontWeight: FontWeight.w600),
       ),
       subtitle: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -467,7 +501,10 @@ class _ExtensionTileState extends State<ExtensionTile> {
       trailing: Row(
         mainAxisSize: MainAxisSize.min,
         children: [
-          Switch(value: _enabled, onChanged: _toggleEnabled),
+          Switch(
+            value: _enabled,
+            onChanged: _cambiandoEstado ? null : _toggleEnabled,
+          ),
           IconButton(
             onPressed: () {
               // 弹出菜单 — solo desinstalar (ajustes/editar código quitados a
@@ -551,7 +588,7 @@ class _ExtensionTileState extends State<ExtensionTile> {
                   padding: const EdgeInsets.only(top: 2),
                   child: Text(
                     'common.see-more'.i18n,
-                    style: const TextStyle(
+                    style: TextStyle(
                       fontSize: 10,
                       color: HomeTheme.accentPink,
                       fontWeight: FontWeight.w700,
@@ -617,12 +654,12 @@ class _ExtensionTileState extends State<ExtensionTile> {
                   children: [
                     _iconBox(size: 40, iconSize: 20),
                     const SizedBox(height: 10),
-                    Text(
+                    // Cortado, al lado sale el botón para verlo completo:
+                    // acá el nombre es lo único que distingue una tarjeta de
+                    // otra.
+                    TextoQueNoCabe(
                       widget.extension.name,
-                      textAlign: TextAlign.center,
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: const TextStyle(
+                      estilo: const TextStyle(
                         fontSize: 15,
                         fontWeight: FontWeight.w700,
                       ),
@@ -633,7 +670,7 @@ class _ExtensionTileState extends State<ExtensionTile> {
                       textAlign: TextAlign.center,
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
-                      style: const TextStyle(
+                      style: TextStyle(
                         fontSize: 11,
                         color: HomeTheme.textMuted,
                       ),
@@ -653,7 +690,7 @@ class _ExtensionTileState extends State<ExtensionTile> {
                 context,
                 text: widget.extension.description!,
                 maxLines: 2,
-                style: const TextStyle(
+                style: TextStyle(
                   fontSize: 11,
                   color: HomeTheme.textMuted,
                 ),
@@ -676,8 +713,9 @@ class _ExtensionTileState extends State<ExtensionTile> {
                 if (widget.extension.nsfw)
                   _badge('18+', color: Colors.redAccent),
                 if (_unstable)
-                  _badge(ExtensionUtils.etiquetaCortaInestable(_motivoInestable),
-                    color: Colors.orange),
+                  _badge(
+                      ExtensionUtils.etiquetaCortaInestable(_motivoInestable),
+                      color: Colors.orange),
                 if (_updateRequired)
                   _badge('extension.update-required'.i18n,
                       color: Colors.redAccent),
@@ -714,7 +752,7 @@ class _ExtensionTileState extends State<ExtensionTile> {
               children: [
                 fluent.ToggleSwitch(
                   checked: _enabled,
-                  onChanged: _toggleEnabled,
+                  onChanged: _cambiandoEstado ? null : _toggleEnabled,
                 ),
                 Row(
                   mainAxisSize: MainAxisSize.min,

@@ -4,6 +4,7 @@ import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 import 'package:media_kit_video/media_kit_video.dart';
+import 'package:prismhub/views/widgets/home/home_theme.dart';
 import 'package:prismhub/controllers/watch/video_controller.dart';
 import 'package:prismhub/views/pages/watch/video/video_player_desktop_controls.dart';
 import 'package:prismhub/views/pages/watch/video/video_player_mobile_controls.dart';
@@ -121,6 +122,20 @@ class _VideoPlayerContenState extends State<VideoPlayerConten> {
         c,
         Video(
           controller: c.videoController,
+          // ── De pie, el hueco NO es negro ──────────────────────────────
+          //
+          // El vídeo es una franja 16:9 anclada arriba, así que debajo queda
+          // media pantalla libre. En negro plano eso se lee como que la app se
+          // rompió o se quedó colgada: no hay nada que diga que ese hueco es
+          // parte del reproductor. Con el fondo de la app se entiende que es la
+          // misma pantalla y que ahí es donde caen los controles.
+          //
+          // Acostado se queda en negro, que es lo correcto: ahí el hueco son
+          // las franjas de un vídeo que no llena, y cualquier color que no sea
+          // negro compite con la imagen.
+          fill: MediaQuery.orientationOf(context) == Orientation.portrait
+              ? HomeTheme.oscuroFondo
+              : Colors.black,
           // Con el modo VR puesto, la imagen LLENA la pantalla.
           //
           // Al recortar un VR a la mitad izquierda queda un cuadro con otra
@@ -151,6 +166,18 @@ class _VideoPlayerContenState extends State<VideoPlayerConten> {
           // En VR no: ahi el recorte ya lo hace el propio reproductor con las
           // medidas reales (ver _aplicarRecorteVr), y mover el anclaje
           // descuadraria esa cuenta.
+          //
+          // ── De pie va CENTRADA ───────────────────────────────────────────
+          //
+          // Se probó anclada arriba, pensando en «vídeo arriba y controles
+          // abajo». No es lo que hace un reproductor de pie: pegada al techo, la
+          // imagen queda contra la barra de estado y el título se le monta
+          // encima, y todo el aire sobra abajo de golpe.
+          //
+          // Centrada queda con aire arriba y abajo repartido: el título respira
+          // en la franja de arriba, los controles en la de abajo, y la imagen —
+          // que es lo que uno mira— queda a la altura de los ojos. Es lo que
+          // hace YouTube de pie a pantalla completa.
           alignment: (c.llenarPantalla.value && !c.vrUnaPantalla.value)
               ? Alignment.bottomCenter
               : Alignment.center,

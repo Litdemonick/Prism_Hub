@@ -124,13 +124,13 @@ class _Nsfw18SearchGateState extends State<Nsfw18SearchGate> {
       // pero si se llega —por ejemplo apagándolo en otra pestaña— se sale sola
       // en vez de mostrar una pantalla vacía.
       WidgetsBinding.instance.addPostFrameCallback((_) => _close());
-      return const Scaffold(
+      return Scaffold(
           backgroundColor: HomeTheme.bg, body: SizedBox.shrink());
     }
     // Mientras el diálogo de confirmación está arriba, el fondo va en negro y
     // sin contenido: nada de contenido +18 antes de que confirme y ponga el PIN.
     if (!_confirmed) {
-      return const Scaffold(
+      return Scaffold(
           backgroundColor: HomeTheme.bg, body: SizedBox.shrink());
     }
     if (!_unlocked) {
@@ -163,7 +163,7 @@ class _Nsfw18SearchScaffold extends StatelessWidget {
           Container(
             width: double.infinity,
             padding: const EdgeInsets.fromLTRB(16, 14, 16, 14),
-            decoration: const BoxDecoration(
+            decoration: BoxDecoration(
               gradient: HomeTheme.heroGradientRed,
             ),
             child: Row(
@@ -176,20 +176,20 @@ class _Nsfw18SearchScaffold extends StatelessWidget {
                         Navigator.of(context).pop();
                       }
                     },
-                    child: const Padding(
+                    child: Padding(
                       padding: EdgeInsets.only(right: 12),
                       child: Icon(Icons.arrow_back,
                           color: HomeTheme.textPrimary, size: 20),
                     ),
                   ),
                 ),
-                const Icon(Icons.warning_amber_rounded,
+                Icon(Icons.warning_amber_rounded,
                     color: HomeTheme.textPrimary, size: 20),
                 const SizedBox(width: 8),
                 Expanded(
                   child: Text(
                     'nsfw18.search-zone-title'.i18n,
-                    style: const TextStyle(
+                    style: TextStyle(
                       color: HomeTheme.textPrimary,
                       fontSize: 16,
                       fontWeight: FontWeight.w700,

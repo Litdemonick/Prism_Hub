@@ -1,5 +1,6 @@
-﻿import 'package:fluent_ui/fluent_ui.dart' as fluent;
+import 'package:fluent_ui/fluent_ui.dart' as fluent;
 import 'package:flutter/material.dart';
+import 'package:prismhub/views/widgets/home/home_theme.dart';
 import 'package:prismhub/views/widgets/platform_widget.dart';
 import 'package:scrollable_positioned_list/scrollable_positioned_list.dart';
 
@@ -17,39 +18,92 @@ class PlayList extends fluent.StatelessWidget {
   final Function(int) onChange;
 
   Widget _buildAndroid(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.all(8),
-      color: Theme.of(context).colorScheme.surface,
-      child: ScrollablePositionedList.builder(
-        itemCount: list.length,
-        initialScrollIndex: selectIndex,
-        itemBuilder: (context, index) {
-          final contact = list[index];
-          return PlaylistAndroidTile(
-            title: contact,
-            selected: list[selectIndex] == contact,
-            onTap: () {
-              onChange(index);
-            },
-          );
-        },
+    // Fuera de rango la lista arranca en la primera, que es mejor que
+    // reventar: pasa si la extensión devuelve menos capítulos que la última
+    // vez y el índice guardado apunta a uno que ya no está.
+    final actual = list.isEmpty ? 0 : selectIndex.clamp(0, list.length - 1);
+
+    return Material(
+      color: HomeTheme.cardSurface,
+      child: SafeArea(
+        top: false,
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            // El título arriba, igual que en la hoja de ajustes del lector.
+            // Antes la lista abría sin nada: una tira de nombres sueltos, sin
+            // decir de qué obra son ni qué es lo que se está eligiendo.
+            Padding(
+              padding: const EdgeInsets.fromLTRB(20, 4, 20, 12),
+              child: Text(
+                title,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: TextStyle(
+                  fontSize: 17,
+                  fontWeight: FontWeight.bold,
+                  color: HomeTheme.textPrimary,
+                ),
+              ),
+            ),
+            Flexible(
+              child: ScrollablePositionedList.builder(
+                itemCount: list.length,
+                initialScrollIndex: actual,
+                padding: const EdgeInsets.only(bottom: 12),
+                itemBuilder: (context, index) {
+                  return PlaylistAndroidTile(
+                    title: list[index],
+                    // Por índice y no por nombre.
+                    //
+                    // Comparaba `list[selectIndex] == contact`, o sea el TEXTO.
+                    // Con dos capítulos que se llaman igual —pasa seguido: dos
+                    // partes de un especial, o una extensión que devuelve el
+                    // nombre vacío— se encendían los dos a la vez, y ninguno de
+                    // los dos era necesariamente el que estabas leyendo.
+                    selected: index == actual,
+                    onTap: () => onChange(index),
+                  );
+                },
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }
 
   Widget _buildDesktop(BuildContext context) {
+    final actual = list.isEmpty ? 0 : selectIndex.clamp(0, list.length - 1);
     return ScrollablePositionedList.builder(
       itemCount: list.length,
-      initialScrollIndex: selectIndex,
+      initialScrollIndex: actual,
       padding: const EdgeInsets.all(8),
       itemBuilder: (context, index) {
-        final contact = list[index];
+        final elegido = index == actual;
         return fluent.ListTile.selectable(
-          title: Text(contact),
+          // Con el color puesto, del modo.
+          //
+          // Era un Text sin estilo: sin color cae en la tipografía de Fluent,
+          // que trae la suya según SU tema, y no según el modo de la app. El
+          // panel de capítulos se abre sobre la página de manga, así que
+          // acertar acá es la diferencia entre leer la lista y no verla.
+          //
+          // El elegido va en el acento, igual que en el teléfono, para que las
+          // dos plataformas marquen lo mismo de la misma forma.
+          title: Text(
+            list[index],
+            style: TextStyle(
+              color: elegido ? HomeTheme.accentPink : HomeTheme.textPrimary,
+              fontWeight: elegido ? FontWeight.w700 : FontWeight.w400,
+            ),
+          ),
           onPressed: () {
             onChange(index);
           },
-          selected: list[selectIndex] == contact,
+          // Por índice, mismo motivo que en Android.
+          selected: elegido,
         );
       },
     );
@@ -64,6 +118,20 @@ class PlayList extends fluent.StatelessWidget {
   }
 }
 
+/// Una fila de la lista de capítulos.
+///
+/// ── Por qué se rehizo ───────────────────────────────────────────────────
+///
+/// Era un `Card` que, al estar elegido, se pintaba entero del rosa del tema:
+/// una pastilla maciza y saturada cruzando la pantalla, con el texto en
+/// negativo. No se parecía a nada más de la app —la hoja de ajustes del propio
+/// lector, que está a un botón de distancia, usa el rosa apenas insinuado de
+/// fondo y el texto en rosa— así que las dos hojas del mismo lector se veían
+/// como de dos apps distintas.
+///
+/// Ahora es la misma fila que allá: redondeada, con el fondo apenas teñido, el
+/// texto en rosa y la tilde a la derecha. Y las que no están elegidas no pintan
+/// nada, así que la lista se lee como una lista y no como una pila de cajas.
 class PlaylistAndroidTile extends StatelessWidget {
   const PlaylistAndroidTile({
     super.key,
@@ -77,20 +145,44 @@ class PlaylistAndroidTile extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return InkWell(
-      onTap: onTap,
-      child: Card(
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 3),
+      child: Material(
         color: selected
-            ? Theme.of(context).colorScheme.primary
-            : Theme.of(context).colorScheme.surface,
-        child: Container(
-          padding: const EdgeInsets.all(16),
-          child: Text(
-            title,
-            style: TextStyle(
-              color: selected
-                  ? Theme.of(context).colorScheme.onPrimary
-                  : Theme.of(context).colorScheme.onSurface,
+            ? HomeTheme.accentPink.withValues(alpha: 0.14)
+            : Colors.transparent,
+        borderRadius: BorderRadius.circular(12),
+        child: InkWell(
+          borderRadius: BorderRadius.circular(12),
+          onTap: onTap,
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 14),
+            child: Row(
+              children: [
+                Expanded(
+                  child: Text(
+                    title,
+                    maxLines: 2,
+                    overflow: TextOverflow.ellipsis,
+                    style: TextStyle(
+                      fontSize: 14,
+                      color: selected
+                          ? HomeTheme.accentPink
+                          : HomeTheme.textPrimary,
+                      fontWeight: selected ? FontWeight.w700 : FontWeight.w500,
+                    ),
+                  ),
+                ),
+                if (selected)
+                  Padding(
+                    padding: EdgeInsets.only(left: 10),
+                    child: Icon(
+                      Icons.check_circle,
+                      size: 20,
+                      color: HomeTheme.accentPink,
+                    ),
+                  ),
+              ],
             ),
           ),
         ),

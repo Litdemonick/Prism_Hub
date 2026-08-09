@@ -2,11 +2,16 @@
     xmlns:tools="http://schemas.android.com/tools">
     <!-- Huella/rostro para la Zona +18 (local_auth). -->
     <uses-permission android:name="android.permission.USE_BIOMETRIC" />
+    <!-- enableOnBackInvokedCallback: el gesto de atras predictivo de Android
+         13+. Sin el, el sistema avisa en cada arranque que no esta habilitado
+         y no se ve la animacion de vuelta que el usuario ya espera del resto
+         del telefono. -->
     <application
         android:label="${appLabel}"
         android:name="${applicationName}"
         android:requestLegacyExternalStorage="true"
         android:usesCleartextTraffic="true"
+        android:enableOnBackInvokedCallback="true"
         android:icon="@mipmap/ic_launcher">
         <activity
             android:name=".MainActivity"

@@ -29,6 +29,7 @@ import 'package:prismhub/views/widgets/platform_widget.dart';
 import 'package:prismhub/utils/compartir.dart';
 import 'package:prismhub/utils/notificacion_reproductor.dart';
 import 'package:prismhub/utils/instancia_unica.dart';
+import 'package:screen_retriever/screen_retriever.dart';
 import 'package:window_manager/window_manager.dart';
 import 'package:package_info_plus/package_info_plus.dart';
 
@@ -73,6 +74,34 @@ void main(List<String> args) async {
     };
 
     WidgetsFlutterBinding.ensureInitialized();
+
+    // ── La caché de imágenes, más grande que la de fábrica ────────────────
+    //
+    // Flutter guarda hasta 100 MB de imágenes YA DECODIFICADAS. Suena mucho y
+    // no lo es, porque lo que se guarda son píxeles crudos, no el archivo:
+    // cuatro bytes por píxel, sin comprimir.
+    //
+    // Las cuentas de esta app, en un teléfono de tres píxeles por punto:
+    //
+    //   · una portada del acordeón, de unos 300 puntos de ancho, ocupa
+    //     900 × 1350 × 4 = 4,8 MB. Seis en pantalla son 29 MB.
+    //   · una portada de fila, de 150 puntos, ocupa 1,2 MB. Dos filas ya son
+    //     otros 20 MB.
+    //   · el fondo de una ficha ocupa la pantalla entera: 1080 × 2400 × 4,
+    //     casi 10 MB él solo.
+    //   · y una página de manga a resolución completa se va a diez o quince.
+    //
+    // O sea que abrir una ficha —y peor, leer tres páginas— se lleva los 100 MB
+    // por delante y echa TODO lo del Inicio. Al volver, las portadas ya no
+    // están: cada tarjeta vuelve a mostrar el arte de respaldo y a
+    // decodificarse de cero. Eso es lo que se veía como «el Inicio se recarga
+    // solo al volver de una ficha», con el acordeón en bloques grises otra vez.
+    //
+    // Con 220 MB entran el Inicio entero y una ficha encima sin echar nada. No
+    // es memoria reservada: es un techo, y se llena solo con lo que de verdad
+    // se mostró. Y si el sistema avisa que falta memoria, Flutter vacía la
+    // caché él solo, así que el techo alto no deja a la app sin salida.
+    PaintingBinding.instance.imageCache.maximumSizeBytes = 220 << 20;
 
     // Instrumentación temporal de frames — para diagnosticar tirones reales.
     // En Windows debug, totalSpan también sube cuando hay huecos entre frames
@@ -168,6 +197,14 @@ void main(List<String> args) async {
     }
     try {
       await PrismHubStorage.ensureInitialized();
+      // El modo de color, apenas hay almacenamiento y ANTES de dibujar nada:
+      // leerlo después haría que la app apareciera un instante en oscuro y
+      // cambiara sola a claro delante del usuario.
+      ModoDeColor.notificador.value =
+          PrismHubStorage.getSetting(SettingKey.modoClaro) == true;
+      // Y se le avisa al sistema de qué color pintar la hora y la batería: la
+      // preferencia puede venir en claro desde el primer cuadro.
+      ModoDeColor.aplicarBarrasDelSistema();
     } catch (e, st) {
       // Antes esto solo se logueaba y se seguía como si nada. No se puede:
       // con el almacenamiento caído, TODOS los getSetting() devuelven null, y
@@ -181,14 +218,28 @@ void main(List<String> args) async {
       return;
     }
 
-    // Las listas de bloqueo, ya juntas y listas para cuando se abra el
-    // navegador interno. Va con su propio try: quedarse sin bloqueador es
-    // molesto, pero no arrancar la app por eso sería peor.
-    try {
-      await BloqueadorAnuncios.cargar();
-    } catch (e) {
-      logger.warning('No se pudieron cargar las listas de bloqueo: $e');
-    }
+    // Las listas de bloqueo, para cuando se abra el navegador interno.
+    //
+    // ── SIN await: esto no puede atrasar el primer cuadro ────────────────
+    //
+    // Estaba esperándose acá, antes de runApp, y son varios archivos de listas
+    // que hay que leer y parsear. En Windows no se notaba porque la ventana ni
+    // se muestra hasta después de dibujar; en Android la pantalla está a la
+    // vista desde el primer instante, así que todo ese rato se veía el fondo
+    // oscuro vacío en vez del logo. Reportado en vivo: «una pantalla toda
+    // negra al abrir».
+    //
+    // El bloqueador recién hace falta cuando se abre el navegador interno, que
+    // es mucho después. Y el criterio ya estaba escrito unas líneas más
+    // arriba: lo pesado se carga DURANTE el splash, con algo en pantalla.
+    // Esta llamada se había quedado del lado equivocado.
+    unawaited(() async {
+      try {
+        await BloqueadorAnuncios.cargar();
+      } catch (e) {
+        logger.warning('No se pudieron cargar las listas de bloqueo: $e');
+      }
+    }());
 
     // Crea el entorno de WebView2 ya al arrancar, mientras COM del proceso
     // está recién inicializado y sano (ver el comentario largo en
@@ -202,7 +253,19 @@ void main(List<String> args) async {
 
     if (!Platform.isAndroid) {
       await windowManager.ensureInitialized();
-      const minWindowSize = Size(900, 600);
+      // ── Hasta dónde se puede achicar la ventana ─────────────────────────
+      //
+      // 900×600 es lo mínimo con lo que la app se sigue leyendo bien. Pero era
+      // un número FIJO, y ahí está el problema: en una pantalla chica —una
+      // laptop de 1366×768 con el escalado de Windows al 125%, que deja menos
+      // de 600 de alto útil— ese mínimo es MÁS GRANDE que el escritorio. La
+      // ventana no entra y el usuario no la puede achicar hasta que entre.
+      //
+      // Con laptops y televisores en la lista de destinos eso deja de ser un
+      // caso raro. Así que el mínimo se acota a lo que la pantalla de verdad
+      // permite: se toma el área visible (sin la barra de tareas) y se deja un
+      // respiro. Si la pantalla es grande, no cambia nada.
+      final minWindowSize = await _minimoQueEntraEnLaPantalla();
       const defaultWindowSize = Size(1280, 720);
       var size = defaultWindowSize;
       final windowSize = PrismHubStorage.getSetting(SettingKey.windowSize);
@@ -270,13 +333,10 @@ void main(List<String> args) async {
       });
     }
 
-    if (Platform.isAndroid) {
-      SystemUiOverlayStyle style = const SystemUiOverlayStyle(
-        statusBarColor: Colors.transparent,
-        statusBarIconBrightness: Brightness.dark,
-      );
-      SystemChrome.setSystemUIOverlayStyle(style);
-    }
+    // Las barras del sistema ya se pidieron más arriba, con el modo real
+    // (ModoDeColor.aplicarBarrasDelSistema). Acá había una segunda llamada que
+    // volvía a pedirlas con `Brightness.dark` FIJO, o sea sin mirar el modo, y
+    // se ejecutaba después: pisaba a la buena en cada arranque.
 
     // Si la app se abrió por un enlace compartido, se anota para navegar
     // cuando el árbol ya exista. No se usa como ruta inicial a propósito: así
@@ -466,6 +526,39 @@ Future<void> _restaurarGeometria(Size size, Offset? posicion) async {
 /// existe, y restaurarla abre la ventana fuera de la pantalla. El límite de
 /// ±32000 es el rango de coordenadas que maneja Windows; cualquier cosa afuera
 /// de eso es basura, no una pantalla.
+/// El tamaño mínimo al que se puede achicar la ventana, acotado a la pantalla.
+///
+/// Devuelve 900×600 —lo mínimo con lo que la app se lee bien— salvo que la
+/// pantalla no dé para tanto. En ese caso baja hasta lo que entre, dejando un
+/// respiro para el marco y la barra de tareas: más vale una ventana chica y
+/// apretada que una que el usuario no puede achicar.
+///
+/// Nunca baja de 480×360: por debajo de eso no hay diseño que aguante, y una
+/// pantalla así de chica no existe en las plataformas de escritorio.
+///
+/// Si no se puede averiguar el tamaño de la pantalla —el complemento falla, o
+/// es un entorno raro— se devuelve el de siempre. Es exactamente lo que había
+/// antes, así que el peor caso es no mejorar nada.
+Future<Size> _minimoQueEntraEnLaPantalla() async {
+  const deseado = Size(900, 600);
+  const piso = Size(480, 360);
+  try {
+    final pantalla = await screenRetriever.getPrimaryDisplay();
+    // `visibleSize` es el área SIN la barra de tareas; `size` es la pantalla
+    // entera. Se prefiere la primera porque es donde la ventana puede vivir.
+    final util = pantalla.visibleSize ?? pantalla.size;
+    if (!util.width.isFinite || !util.height.isFinite) return deseado;
+    return Size(
+      util.width.clamp(piso.width, deseado.width).toDouble(),
+      util.height.clamp(piso.height, deseado.height).toDouble(),
+    );
+  } catch (e) {
+    logger.info('No se pudo leer el tamaño de la pantalla, se usa el mínimo '
+        'de siempre: $e');
+    return deseado;
+  }
+}
+
 Offset? _leerPosicionGuardada() {
   final crudo = PrismHubStorage.getSetting(SettingKey.windowPosition);
   if (crudo is! String || crudo.isEmpty) return null;
@@ -493,13 +586,69 @@ class _AppRoot extends StatefulWidget {
   State<_AppRoot> createState() => _AppRootState();
 }
 
-class _AppRootState extends State<_AppRoot> {
+class _AppRootState extends State<_AppRoot> with WidgetsBindingObserver {
   bool _ready = false;
+
+  /// Si este arranque viene de una app que estaba en segundo plano hace nada.
+  ///
+  /// ── El problema ───────────────────────────────────────────────────────
+  ///
+  /// Mientras el proceso vive, volver a la app no pasa por acá y no hay
+  /// animación de arranque. Pero Android MATA procesos en segundo plano
+  /// cuando le falta memoria, y también cuando el usuario sale con el botón
+  /// de atrás. Entonces «volver» es en realidad un arranque en frío completo,
+  /// con su animación y su espera mínima — y desde afuera se ve como que la
+  /// app se reinicia sola cada vez que la dejás un rato.
+  ///
+  /// ── Qué se puede y qué no ─────────────────────────────────────────────
+  ///
+  /// La inicialización de verdad —base de datos, extensiones, media_kit— hay
+  /// que hacerla igual: el proceso murió y no hay nada cargado. Eso no se
+  /// puede saltear sin romper la app.
+  ///
+  /// Lo que SÍ se saltea es la espera **artificial** de 1,4 segundos, que está
+  /// para que la animación se alcance a ver. Si el usuario estuvo acá hace un
+  /// minuto, esa animación no le dice nada nuevo: solo le cuesta un segundo y
+  /// medio. Sin ella, un arranque con todo cacheado es casi instantáneo.
+  bool _volviendo = false;
+
+  /// Cuándo se fue la app a segundo plano por última vez, en milisegundos.
+  static const _claveUltimoUso = 'ultimo-uso-ms';
+
+  /// Cuánto vale considerar que «se estaba usando». Cinco minutos: más que eso
+  /// y volver ya se siente como abrir la app, no como retomarla.
+  static const _ventanaEnCaliente = Duration(minutes: 5);
 
   @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addObserver(this);
     _init();
+  }
+
+  @override
+  void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
+    super.dispose();
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState estado) {
+    super.didChangeAppLifecycleState(estado);
+    // Se anota al IRSE, no al volver: cuando Android decide matar el proceso ya
+    // no corre nada nuestro, así que la última marca tiene que estar puesta de
+    // antes. `paused` es el último aviso garantizado.
+    if (estado != AppLifecycleState.paused) return;
+    unawaited(
+      PrismHubStorage.setSetting(
+        _claveUltimoUso,
+        DateTime.now().millisecondsSinceEpoch,
+      ).catchError((Object e) {
+        // Que no se pueda anotar solo significa un arranque con animación de
+        // más. No vale tumbar nada por eso.
+        logger.info('No se pudo anotar el último uso: $e');
+      }),
+    );
   }
 
   Future<void> _init() async {
@@ -514,6 +663,10 @@ class _AppRootState extends State<_AppRoot> {
     } catch (e) {
       debugPrint('ERROR: ApplicationUtils.ensureInitialized falló: $e');
     }
+    // Recién acá se puede preguntar: el almacenamiento lo abre la línea de
+    // arriba. Para entonces la animación ya empezó, y está bien — lo que se
+    // gana es no ESPERARLA.
+    _mirarSiVolvemos();
     try {
       await ConnectivityUtils.ensureInitialized();
     } catch (e) {
@@ -524,6 +677,20 @@ class _AppRootState extends State<_AppRoot> {
     } catch (e) {
       debugPrint('ERROR: PrismRequest.ensureInitialized falló: $e');
     }
+    // Las listas que vienen puestas se bajan ACÁ, y no más arriba junto con
+    // `cargar()`.
+    //
+    // Bajar necesita `dio`, y `dio` lo crea PrismRequest justo en la línea de
+    // arriba. Lanzado antes, cada intento moría con "Field 'dio' has not been
+    // initialized" y se gastaban los tres que tiene cada lista: la app decía
+    // que traía cuatro protecciones y no bajaba ninguna.
+    //
+    // Va sin esperarlo: son varios megas y la app tiene que estar usable ya.
+    // Mientras tanto la base de fábrica del código ya está protegiendo, así que
+    // no hay un rato sin protección — hay un rato con menos.
+    unawaited(BloqueadorAnuncios.asegurarDeFabrica().catchError((Object e) {
+      logger.warning('No se pudieron poner las listas de fábrica: $e');
+    }));
     try {
       await ExtensionUtils.ensureInitialized();
     } catch (e) {
@@ -543,12 +710,33 @@ class _AppRootState extends State<_AppRoot> {
     if (Platform.isAndroid) {
       await NotificacionReproductor.encender();
     }
-    await minDuration;
+    // Solo se espera la duración mínima en un arranque de verdad. Volviendo,
+    // se entra en cuanto lo de arriba terminó.
+    if (!_volviendo) await minDuration;
     if (mounted) setState(() => _ready = true);
     _abrirEnlacePendiente();
     // Android entrega los enlaces por su propio canal, no por argumentos: el
     // que abrio la app y tambien los que llegan con la app ya abierta.
     unawaited(Compartir.escucharAndroid(_irAlEnlace));
+  }
+
+  /// Decide si este arranque es «volver» o «abrir».
+  void _mirarSiVolvemos() {
+    try {
+      final ultimo = PrismHubStorage.getSetting(_claveUltimoUso);
+      if (ultimo is! int) return;
+      final pasado = DateTime.now().millisecondsSinceEpoch - ultimo;
+      // El negativo cubre un reloj movido hacia atrás: ahí no se sabe cuánto
+      // pasó, y ante la duda se trata como arranque normal.
+      if (pasado < 0 || pasado > _ventanaEnCaliente.inMilliseconds) return;
+      _volviendo = true;
+      // Se corta la animación en el acto, sin esperar a que termine de
+      // cargar: si igual quedan unos cuadros de espera, que sean sobre el
+      // fondo y no sobre un logo latiendo que ya se vio hace un minuto.
+      if (mounted) setState(() {});
+    } catch (e) {
+      logger.info('No se pudo leer el último uso: $e');
+    }
   }
 
   /// Abre la ficha del enlace con el que se arrancó, si hubo uno.
@@ -633,9 +821,22 @@ class _AppRootState extends State<_AppRoot> {
   @override
   Widget build(BuildContext context) {
     if (!_ready) {
-      return const MaterialApp(
+      return MaterialApp(
         debugShowCheckedModeBanner: false,
-        home: SplashScreen(),
+        // Volviendo, el MISMO logo que acaba de mostrar el sistema — sin la
+        // presentación, pero sin hueco.
+        //
+        // Acá había un rectángulo del color de fondo y nada más. La idea era
+        // no presentarse dos veces, pero el efecto era el contrario: el
+        // sistema dibuja su splash con el logo, Flutter entraba con el
+        // rectángulo, y el logo se APAGABA dejando la pantalla en negro
+        // mientras terminaba de cargar. Reportado en vivo: «sale el logo,
+        // luego pantalla negra, luego carga».
+        //
+        // Con el logo puesto el relevo es continuo, que es lo que hacen las
+        // demás apps. Y no cuesta tiempo: la espera artificial se saltea igual
+        // (ver `_volviendo`), así que dura lo que tarde la carga real.
+        home: SplashScreen(soloLogo: _volviendo),
       );
     }
     return const MainApp();
@@ -668,24 +869,72 @@ class _MainAppState extends State<MainApp> {
       "SimSun",
       "Arial Unicode MS",
     ];
-    return GetMaterialApp(
-      title: "PrismHub",
-      debugShowCheckedModeBanner: false,
-      themeMode: c.theme,
-      theme: _buildTheme(Brightness.light, cjkFontFallback),
-      darkTheme: _buildTheme(Brightness.dark, cjkFontFallback),
-      home: const AndroidMainPage(),
-      localizationsDelegates: [
-        I18nUtils.flutterI18nDelegate,
-        GlobalMaterialLocalizations.delegate,
-        GlobalWidgetsLocalizations.delegate,
-        GlobalCupertinoLocalizations.delegate,
-      ],
-      // Sin supportedLocales, el resolvedor cae a inglés aunque los delegados
-      // estén puestos — por eso el selector de fecha salía en inglés con la
-      // app en español.
-      supportedLocales: const [Locale('es'), Locale('en')],
-      locale: Locale(I18nUtils.currentLanguageCode),
+    // ── Redibuja al cambiar de modo claro/oscuro ────────────────────────
+    //
+    // Los colores de la app son getters estáticos (ver HomeTheme), no un
+    // InheritedWidget: cambiar el modo NO avisa a nadie por su cuenta. Este
+    // oyente es el que le dice al árbol que se rehaga, y como envuelve la raíz,
+    // el cambio llega a todas las pantallas de una.
+    //
+    // El cambio es INSTANTÁNEO y no un fundido, a propósito. Se probó envolver
+    // esto en un AnimatedSwitcher: para cruzar dos imágenes necesita que el
+    // hijo sea «otro» widget, y con la raíz eso significa destruir y recrear la
+    // app entera — se pierde dónde estabas y se tiran todos los controladores.
+    // Un cambio de color no puede costar eso.
+    return ValueListenableBuilder<bool>(
+      valueListenable: ModoDeColor.notificador,
+      builder: (context, _, __) => GetMaterialApp(
+        title: "PrismHub",
+        // Le avisa a la barra flotante cuándo hay una pantalla encima, para que
+        // se esconda deslizándose en vez de desaparecer de golpe. Ver
+        // ObservadorDePila en main_page.dart.
+        navigatorObservers: [ObservadorDePila()],
+        debugShowCheckedModeBanner: false,
+        // ── El tema de Material/Fluent sigue al modo ──────────────────────
+        //
+        // Esto era `c.theme`, o sea el ajuste viejo, y se quedaba en oscuro. Es
+        // la causa de fondo de casi todo lo que «no se veía» en modo claro: la
+        // paleta propia de la app (HomeTheme) cambiaba, pero TODO lo que no
+        // fija un color a mano —el texto de un Text sin estilo, la etiqueta de
+        // un botón, un ListTile, los widgets de Fluent en escritorio— cae en el
+        // tema, y el tema seguía diciendo «fondo oscuro, texto claro». De ahí
+        // el texto blanco sobre blanco en Buscar, en el repositorio y en los
+        // botones de las tarjetas de extensión.
+        //
+        // Atándolo al modo se arreglan todos de una, sin tocarlos uno por uno.
+        themeMode: ModoDeColor.claro ? ThemeMode.light : ThemeMode.dark,
+        theme: _buildTheme(Brightness.light, cjkFontFallback),
+        darkTheme: _buildTheme(Brightness.dark, cjkFontFallback),
+        // ── Sin `const`, y NO es un descuido ──────────────────────────────
+        //
+        // Un widget const es siempre LA MISMA instancia. Cuando el oyente de
+        // arriba rehace el árbol por un cambio de modo, Flutter compara el
+        // widget viejo con el nuevo, ve que son idénticos y se saltea todo su
+        // subárbol: o sea la app entera de Android.
+        //
+        // Ese era el bug: en escritorio el modo cambiaba al instante —ahí la
+        // raíz arma sus pantallas por rutas, que sí se rehacen— y en Android
+        // había que salir de la pestaña y volver para verlo. No era lentitud ni
+        // un problema del interruptor: la pantalla directamente no se enteraba.
+        //
+        // Sin const se crea una instancia nueva en cada reconstrucción de la
+        // raíz, que pasa solo al cambiar el modo. El estado no se pierde: es el
+        // mismo tipo de widget en la misma posición, así que Flutter reusa su
+        // Element y su State.
+        // ignore: prefer_const_constructors
+        home: AndroidMainPage(),
+        localizationsDelegates: [
+          I18nUtils.flutterI18nDelegate,
+          GlobalMaterialLocalizations.delegate,
+          GlobalWidgetsLocalizations.delegate,
+          GlobalCupertinoLocalizations.delegate,
+        ],
+        // Sin supportedLocales, el resolvedor cae a inglés aunque los delegados
+        // estén puestos — por eso el selector de fecha salía en inglés con la
+        // app en español.
+        supportedLocales: const [Locale('es'), Locale('en')],
+        locale: Locale(I18nUtils.currentLanguageCode),
+      ),
     );
   }
 
@@ -693,7 +942,7 @@ class _MainAppState extends State<MainApp> {
   // queda como color secundario/terciario; el sistema de temas actual solo
   // da para esto, personalización de verdad queda para más adelante.
   static const _brandGold = Color(0xFFC9A227);
-  static final _fluentAccent = fluent.AccentColor.swatch(const {
+  static final _fluentAccent = fluent.AccentColor.swatch({
     'normal': HomeTheme.accentPink,
   });
 
@@ -711,6 +960,60 @@ class _MainAppState extends State<MainApp> {
     return base.copyWith(
       colorScheme: scheme,
       textTheme: _buildTextTheme(brightness, fallback),
+      // ── La franja gris que aparecía al desplazarse ────────────────────
+      //
+      // Es de Material 3: cuando el contenido pasa POR DEBAJO de una AppBar,
+      // Flutter le pinta encima un tinte del color primario y le sube la
+      // elevación, para despegarla. Sobre nuestro fondo —negro con un brillo
+      // animado— eso se ve como una barra clara y sucia cruzando la pantalla,
+      // que aparece y desaparece según cuánto se desplazó.
+      //
+      // Se apaga acá y no zona por zona: son cinco pantallas más las que se
+      // abren encima, y cualquiera que se agregue después heredaría el mismo
+      // problema.
+      appBarTheme: AppBarTheme(
+        backgroundColor: Colors.transparent,
+        surfaceTintColor: Colors.transparent,
+        scrolledUnderElevation: 0,
+        elevation: 0,
+        // ── Y de acá salen los iconos del sistema ──────────────────────────
+        //
+        // La hora, la batería y la señal las dibuja Android del color que la
+        // app le pida, y quien tiene la última palabra NO es la llamada suelta
+        // a SystemChrome: cada AppBar de Material anota su propio estilo en
+        // cada cuadro, y esa anotación pisa lo que se haya pedido antes.
+        //
+        // Sin decírselo, ese estilo lo DEDUCE del fondo de la barra. Y el fondo
+        // acá arriba es transparente, que al medirle el brillo da «oscuro» —así
+        // que todas las AppBar de la app venían pidiendo iconos CLAROS, siempre.
+        // En modo oscuro acertaba de casualidad; en claro dejaba la hora y la
+        // señal blancas sobre fondo casi blanco: la barra de arriba se veía
+        // vacía, y lo único que se distinguía era la batería por su contorno.
+        //
+        // Puesto acá vale para las cinco zonas y para todo lo que se abra
+        // encima, sin tener que acordarse pantalla por pantalla.
+        systemOverlayStyle: SystemUiOverlayStyle(
+          statusBarColor: Colors.transparent,
+          // Brightness.dark = iconos OSCUROS. El nombre confunde: habla del
+          // contenido que hay DETRÁS, no del color de los iconos.
+          statusBarIconBrightness:
+              brightness == Brightness.dark ? Brightness.light : Brightness.dark,
+          statusBarBrightness:
+              brightness == Brightness.dark ? Brightness.dark : Brightness.light,
+          systemNavigationBarColor: Colors.transparent,
+          systemNavigationBarIconBrightness:
+              brightness == Brightness.dark ? Brightness.light : Brightness.dark,
+        ),
+      ),
+      // Mismo motivo, para las hojas y tarjetas que también se tiñen solas.
+      bottomSheetTheme: const BottomSheetThemeData(
+        surfaceTintColor: Colors.transparent,
+      ),
+      // El fondo de todas las zonas, uno solo. Cada Scaffold que no diga otra
+      // cosa arranca del mismo negro que usa el Home, así que al cambiar de
+      // zona no hay un salto de tono.
+      scaffoldBackgroundColor:
+          brightness == Brightness.dark ? HomeTheme.bg : null,
     );
   }
 
@@ -781,60 +1084,66 @@ class _MainAppState extends State<MainApp> {
   }
 
   Widget _buildDesktopMain(BuildContext context) {
-    return fluent.FluentApp.router(
-      title: 'PrismHub',
-      debugShowCheckedModeBanner: false,
-      routerConfig: router,
-      themeMode: c.theme,
-      darkTheme: fluent.FluentThemeData(
-        brightness: Brightness.dark,
-        visualDensity: VisualDensity.standard,
-        accentColor: _fluentAccent,
-      ),
-      theme: fluent.FluentThemeData(
-        visualDensity: VisualDensity.standard,
-        accentColor: _fluentAccent,
-      ),
-      localizationsDelegates: [
-        I18nUtils.flutterI18nDelegate,
-        GlobalMaterialLocalizations.delegate,
-        GlobalWidgetsLocalizations.delegate,
-        GlobalCupertinoLocalizations.delegate,
-      ],
-      supportedLocales: const [Locale('es'), Locale('en')],
-      locale: Locale(I18nUtils.currentLanguageCode),
-      builder: (context, child) {
-        return MediaQuery(
-          data: MediaQuery.of(context).copyWith(
-            textScaler: TextScaler.noScaling,
-          ),
-          child: Directionality(
-            textDirection: TextDirection.ltr,
-            child: DefaultTextStyle(
-              style: const TextStyle(
-                fontFamily: "Noto Sans CJK SC",
-                fontFamilyFallback: [
-                  "Noto Sans CJK JP",
-                  "Noto Sans CJK KR",
-                  "Noto Sans CJK TC",
-                  "Noto Sans CJK HK",
-                  "Microsoft Yahei",
-                  "SimSun",
-                  "Arial Unicode MS",
-                ],
-              ),
-              // El embedder de Windows spamea "Failed to update ui::AXTree"
-              // en cualquier página con rebuilds frecuentes (Obx, streams de
-              // posición/progreso, listas reactivas) — es ruido del engine,
-              // no un bug de la app. Se excluye semántica en toda la app de
-              // escritorio (ya se hacía puntualmente en el reproductor).
-              child: ExcludeSemantics(
-                child: child ?? const SizedBox(),
+    // Ver el comentario del mismo envoltorio en la raíz de Android.
+    return ValueListenableBuilder<bool>(
+      valueListenable: ModoDeColor.notificador,
+      builder: (context, _, __) => fluent.FluentApp.router(
+        title: 'PrismHub',
+        debugShowCheckedModeBanner: false,
+        routerConfig: router,
+        // Ver el comentario del mismo cambio en la raíz de Android.
+        themeMode:
+            ModoDeColor.claro ? fluent.ThemeMode.light : fluent.ThemeMode.dark,
+        darkTheme: fluent.FluentThemeData(
+          brightness: Brightness.dark,
+          visualDensity: VisualDensity.standard,
+          accentColor: _fluentAccent,
+        ),
+        theme: fluent.FluentThemeData(
+          visualDensity: VisualDensity.standard,
+          accentColor: _fluentAccent,
+        ),
+        localizationsDelegates: [
+          I18nUtils.flutterI18nDelegate,
+          GlobalMaterialLocalizations.delegate,
+          GlobalWidgetsLocalizations.delegate,
+          GlobalCupertinoLocalizations.delegate,
+        ],
+        supportedLocales: const [Locale('es'), Locale('en')],
+        locale: Locale(I18nUtils.currentLanguageCode),
+        builder: (context, child) {
+          return MediaQuery(
+            data: MediaQuery.of(context).copyWith(
+              textScaler: TextScaler.noScaling,
+            ),
+            child: Directionality(
+              textDirection: TextDirection.ltr,
+              child: DefaultTextStyle(
+                style: const TextStyle(
+                  fontFamily: "Noto Sans CJK SC",
+                  fontFamilyFallback: [
+                    "Noto Sans CJK JP",
+                    "Noto Sans CJK KR",
+                    "Noto Sans CJK TC",
+                    "Noto Sans CJK HK",
+                    "Microsoft Yahei",
+                    "SimSun",
+                    "Arial Unicode MS",
+                  ],
+                ),
+                // El embedder de Windows spamea "Failed to update ui::AXTree"
+                // en cualquier página con rebuilds frecuentes (Obx, streams de
+                // posición/progreso, listas reactivas) — es ruido del engine,
+                // no un bug de la app. Se excluye semántica en toda la app de
+                // escritorio (ya se hacía puntualmente en el reproductor).
+                child: ExcludeSemantics(
+                  child: child ?? const SizedBox(),
+                ),
               ),
             ),
-          ),
-        );
-      },
+          );
+        },
+      ),
     );
   }
 

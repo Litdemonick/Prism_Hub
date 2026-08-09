@@ -73,7 +73,11 @@ class _NovelReaderContentState extends State<NovelReaderContent> {
           return Center(
             child: ScrollablePositionedList.builder(
               itemPositionsListener: _c.itemPositionsListener,
-              initialScrollIndex: _c.positions.value,
+              // Acotado a este capítulo: si quedara apuntando a un párrafo que
+              // no existe acá, el paquete ancla la lista al último ítem y el
+              // capítulo abre al fondo (ver comic_reader_content).
+              initialScrollIndex:
+                  _c.positions.value.clamp(0, watchData.content.length + 1),
               padding: EdgeInsets.symmetric(
                 horizontal: listviewPadding,
                 vertical: 16,

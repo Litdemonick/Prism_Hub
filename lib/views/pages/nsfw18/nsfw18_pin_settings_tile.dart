@@ -155,14 +155,14 @@ class _Nsfw18PinSettingsTileState extends State<Nsfw18PinSettingsTile> {
     return Column(
       children: [
         SettingsTile(
-          icon: const Icon(Icons.pin_outlined, color: HomeTheme.accentRed),
+          icon: Icon(Icons.pin_outlined, color: HomeTheme.accentRed),
           title: 'nsfw18.settings-pin'.i18n,
           buildSubtitle: () => 'nsfw18.settings-pin-subtitle'.i18n,
           trailing: Text(
             _configured
                 ? 'nsfw18.settings-pin-change'.i18n
                 : 'nsfw18.settings-pin-set'.i18n,
-            style: const TextStyle(color: HomeTheme.accentRed),
+            style: TextStyle(color: HomeTheme.accentRed),
           ),
           onTap: _openSetPinDialog,
         ),
@@ -314,7 +314,7 @@ class _PinDialogState extends State<_PinDialog> {
               if (!compact) ...[
                 Row(
                   children: [
-                    const Icon(Icons.pin_outlined,
+                    Icon(Icons.pin_outlined,
                         color: HomeTheme.accentRed, size: 20),
                     const SizedBox(width: 8),
                     Expanded(

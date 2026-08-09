@@ -62,8 +62,12 @@ class DetailShareButton extends StatelessWidget {
 
   Widget _buildAndroid(BuildContext context) {
     if (compacto) {
+      // Mismo molde que el compacto de favorito: los dos viven en la barra de
+      // arriba y tienen que medir igual.
       return IconButton(
         tooltip: 'detail.share'.i18n,
+        // Encima de la portada. Ver HomeTheme.sobrePortada.
+        color: HomeTheme.sobrePortada,
         icon: const Icon(Icons.share_outlined),
         onPressed: () => _compartir(context),
       );
@@ -79,16 +83,22 @@ class DetailShareButton extends StatelessWidget {
   }
 
   Widget _buildDesktop(BuildContext context) {
+    // Compacto: solo el icono, para la barra de arriba de la ficha. Ver el
+    // mismo caso en DetailFavoriteButton.
+    if (compacto) {
+      return fluent.IconButton(
+        icon: const Icon(fluent.FluentIcons.share, size: 18),
+        onPressed: () => _compartir(context),
+      );
+    }
     return fluent.Button(
       style: fluent.ButtonStyle(
-        backgroundColor:
-            fluent.WidgetStateProperty.all(HomeTheme.cardSurface),
-        foregroundColor:
-            fluent.WidgetStateProperty.all(HomeTheme.textPrimary),
+        backgroundColor: fluent.WidgetStateProperty.all(HomeTheme.cardSurface),
+        foregroundColor: fluent.WidgetStateProperty.all(HomeTheme.textPrimary),
         shape: fluent.WidgetStateProperty.all(
           RoundedRectangleBorder(
             borderRadius: BorderRadius.circular(999),
-            side: const BorderSide(color: HomeTheme.border),
+            side: BorderSide(color: HomeTheme.border),
           ),
         ),
       ),

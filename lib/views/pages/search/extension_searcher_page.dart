@@ -20,6 +20,7 @@ import 'package:prismhub/data/services/extension_service.dart';
 import 'package:prismhub/utils/error.dart';
 import 'package:prismhub/utils/i18n.dart';
 import 'package:prismhub/views/widgets/extension_item_card.dart';
+import 'package:prismhub/views/widgets/home/esqueleto.dart';
 import 'package:prismhub/views/widgets/home/animated_background_glow.dart';
 import 'package:prismhub/views/widgets/home/home_theme.dart';
 import 'package:prismhub/views/widgets/home/refresh_button.dart';
@@ -33,9 +34,26 @@ class ExtensionSearcherPage extends fluent.StatefulWidget {
     super.key,
     required this.package,
     this.keyWord,
+    this.soloAdulto = false,
   });
   final String package;
   final String? keyWord;
+
+  /// Se entró desde la Zona +18.
+  ///
+  /// ── Qué cambia ──────────────────────────────────────────────────────────
+  ///
+  /// En una extensión MIXTA —ShadeManga y ManhwaWeb son las dos que hay— el
+  /// contenido para adultos vive detrás de un filtro propio del sitio, y ese
+  /// filtro viene apagado por defecto. Así que entrando desde la Zona +18 se
+  /// veía el catálogo general: exactamente lo que esa zona no es.
+  ///
+  /// Con esto, al abrirla desde la zona el filtro de adultos arranca ENCENDIDO.
+  /// Lo de siempre sigue igual: desde el buscador normal entra apagado.
+  ///
+  /// Es el espejo de lo que hace el Home, que manda el valor seguro a la fuerza
+  /// (ver `_segurosPorExtension` en catalogo_extensiones_controller).
+  final bool soloAdulto;
 
   @override
   fluent.State<ExtensionSearcherPage> createState() =>
@@ -340,6 +358,13 @@ class _ExtensionSearcherPageState extends fluent.State<ExtensionSearcherPage> {
     try {
       _filters = await _runtime.createFilter();
       _filters!.forEach((key, value) {
+        // Desde la Zona +18, el filtro de adultos arranca encendido. Ver
+        // `soloAdulto`.
+        final adulto = value.adultOption;
+        if (widget.soloAdulto && adulto != null && adulto.isNotEmpty) {
+          _selectedFilters[key] = [adulto];
+          return;
+        }
         _selectedFilters[key] = [value.defaultOption];
       });
     } catch (e, st) {
@@ -638,10 +663,31 @@ class _ExtensionSearcherPageState extends fluent.State<ExtensionSearcherPage> {
     }
   }
 
+  /// ¿Hay algún filtro cambiado respecto de como viene?
+  ///
+  /// Para el puntito del botón: metido dentro de la hoja, uno se olvida de que
+  /// filtró y una lista corta parece un error. Se compara contra la opción por
+  /// defecto de cada filtro, no contra «vacío»: `_initFilters` los deja a todos
+  /// con la suya puesta, así que vacío no existe nunca.
+  bool get _hayFiltroPuesto {
+    final filtros = _filters;
+    if (filtros == null) return false;
+    for (final entrada in filtros.entries) {
+      final elegido = _selectedFilters[entrada.key];
+      if (elegido == null) continue;
+      if (elegido.length != 1 || elegido.first != entrada.value.defaultOption) {
+        return true;
+      }
+    }
+    return false;
+  }
+
   _onFilter(BuildContext context) {
     final fiterWidget = _ExtensionFilterWidget(
       runtime: _runtime,
       filters: _filters!,
+      // Fuera de la Zona +18 la puerta a adultos ni se ofrece.
+      desdeLaZona18: widget.soloAdulto,
       selectedFilters: _selectedFilters,
       onSelectFilter: (selectedFilters, filters) {
         _selectedFilters = selectedFilters;
@@ -652,7 +698,15 @@ class _ExtensionSearcherPageState extends fluent.State<ExtensionSearcherPage> {
     if (Platform.isAndroid) {
       showModalBottomSheet(
         context: context,
-        backgroundColor: HomeTheme.bg,
+        // Como el resto de las hojas de la app: la superficie de tarjeta y las
+        // esquinas redondeadas. Esta era la única que salía con el fondo de la
+        // pantalla y en escuadra, así que se leía como otra pantalla en vez de
+        // como una hoja.
+        backgroundColor: HomeTheme.cardSurface,
+        constraints: const BoxConstraints(maxWidth: 640),
+        shape: const RoundedRectangleBorder(
+          borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+        ),
         // Sin isScrollControlled/DraggableScrollableSheet, el sheet quedaba
         // con una altura fija chica (no la real disponible) — en horizontal
         // (poca altura vertical) apenas entraban 1-2 filas de chips.
@@ -677,7 +731,7 @@ class _ExtensionSearcherPageState extends fluent.State<ExtensionSearcherPage> {
                       onPressed: () => Get.back(),
                       child: Text(
                         "common.cancel".i18n,
-                        style: const TextStyle(color: HomeTheme.textMuted),
+                        style: TextStyle(color: HomeTheme.textMuted),
                       ),
                     ),
                     const Spacer(),
@@ -695,7 +749,7 @@ class _ExtensionSearcherPageState extends fluent.State<ExtensionSearcherPage> {
                   ],
                 ),
               ),
-              const Divider(color: HomeTheme.border),
+              Divider(color: HomeTheme.border),
               Expanded(
                 child: Padding(
                   padding: const EdgeInsets.only(left: 16, right: 16, top: 16),
@@ -714,7 +768,7 @@ class _ExtensionSearcherPageState extends fluent.State<ExtensionSearcherPage> {
       builder: (context) {
         return fluent.ContentDialog(
           constraints: const BoxConstraints(maxWidth: 580, maxHeight: 680),
-          style: const fluent.ContentDialogThemeData(
+          style: fluent.ContentDialogThemeData(
             decoration: BoxDecoration(
               color: HomeTheme.cardSurface,
               borderRadius: BorderRadius.all(Radius.circular(14)),
@@ -722,7 +776,7 @@ class _ExtensionSearcherPageState extends fluent.State<ExtensionSearcherPage> {
           ),
           title: Text(
             'search.filter'.i18n,
-            style: const TextStyle(
+            style: TextStyle(
                 color: HomeTheme.textPrimary, fontWeight: FontWeight.w800),
           ),
           content: fiterWidget,
@@ -735,7 +789,7 @@ class _ExtensionSearcherPageState extends fluent.State<ExtensionSearcherPage> {
                 shape: fluent.WidgetStateProperty.all(
                   RoundedRectangleBorder(
                     borderRadius: BorderRadius.circular(999),
-                    side: const BorderSide(color: HomeTheme.border),
+                    side: BorderSide(color: HomeTheme.border),
                   ),
                 ),
               ),
@@ -777,13 +831,13 @@ class _ExtensionSearcherPageState extends fluent.State<ExtensionSearcherPage> {
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            const Icon(Icons.no_adult_content,
+            Icon(Icons.no_adult_content,
                 color: HomeTheme.accentPink, size: 40),
             const SizedBox(height: 12),
             Text(
               'extension-searcher.nsfw-blocked'.i18n,
               textAlign: TextAlign.center,
-              style: const TextStyle(color: HomeTheme.textMuted, fontSize: 14),
+              style: TextStyle(color: HomeTheme.textMuted, fontSize: 14),
             ),
           ],
         ),
@@ -909,12 +963,12 @@ class _ExtensionSearcherPageState extends fluent.State<ExtensionSearcherPage> {
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            const Icon(Icons.search_off, color: HomeTheme.textMuted, size: 40),
+            Icon(Icons.search_off, color: HomeTheme.textMuted, size: 40),
             const SizedBox(height: 12),
             Text(
               'extension-searcher.no-results'.i18n,
               textAlign: TextAlign.center,
-              style: const TextStyle(color: HomeTheme.textMuted, fontSize: 14),
+              style: TextStyle(color: HomeTheme.textMuted, fontSize: 14),
             ),
             if (showAlternateButton) ...[
               const SizedBox(height: 16),
@@ -964,7 +1018,22 @@ class _ExtensionSearcherPageState extends fluent.State<ExtensionSearcherPage> {
         actions: [
           if (_filters != null)
             IconButton(
-              icon: const Icon(Icons.filter_alt_rounded),
+              tooltip: 'search.filter'.i18n,
+              // tune_rounded y no filter_alt: es el que usan Buscar,
+              // Extensiones, el repositorio y el Historial. Dos íconos para lo
+              // mismo hacen dudar de si hacen lo mismo.
+              icon: Stack(
+                clipBehavior: Clip.none,
+                children: [
+                  const Icon(Icons.tune_rounded),
+                  if (_hayFiltroPuesto)
+                    const Positioned(
+                      right: -1,
+                      top: -1,
+                      child: _PuntoDeFiltro(),
+                    ),
+                ],
+              ),
               onPressed: () => _onFilter(context),
             ),
         ],
@@ -973,14 +1042,14 @@ class _ExtensionSearcherPageState extends fluent.State<ExtensionSearcherPage> {
         color: HomeTheme.bg,
         child: Stack(
           children: [
-            const Positioned.fill(child: AnimatedBackgroundGlow()),
+            Positioned.fill(child: AnimatedBackgroundGlow()),
             // Mientras no se sepa si hace falta actualizar (null) o si SÍ
             // hace falta (true), ni se pide ni se muestra ninguna card —
             // antes esto era solo un banner arriba con la grilla
             // funcionando debajo igual, así que se podía seguir buscando
             // en una extensión desactualizada sin problema.
             if (_hasUpdate == null)
-              const Center(
+              Center(
                 child: CircularProgressIndicator(color: HomeTheme.accentPink),
               )
             else if (_hasUpdate == true)
@@ -1209,14 +1278,14 @@ class _ExtensionSearcherPageState extends fluent.State<ExtensionSearcherPage> {
       color: HomeTheme.bg,
       child: Stack(
         children: [
-          const Positioned.fill(child: AnimatedBackgroundGlow()),
+          Positioned.fill(child: AnimatedBackgroundGlow()),
           Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               if (_isLoading)
                 ClipRRect(
                   borderRadius: BorderRadius.circular(999),
-                  child: const SizedBox(
+                  child: SizedBox(
                     height: 3,
                     width: double.infinity,
                     child: LinearProgressIndicator(
@@ -1251,7 +1320,7 @@ class _ExtensionSearcherPageState extends fluent.State<ExtensionSearcherPage> {
                             child: Text(
                               _runtime.extension.name,
                               overflow: TextOverflow.ellipsis,
-                              style: const TextStyle(
+                              style: TextStyle(
                                 fontSize: 20,
                                 fontWeight: FontWeight.w800,
                                 color: HomeTheme.textPrimary,
@@ -1265,7 +1334,7 @@ class _ExtensionSearcherPageState extends fluent.State<ExtensionSearcherPage> {
                             const SizedBox(width: 10),
                             Text(
                               _cargadosTexto,
-                              style: const TextStyle(
+                              style: TextStyle(
                                 fontSize: 14,
                                 fontWeight: FontWeight.w600,
                                 color: HomeTheme.textMuted,
@@ -1297,7 +1366,7 @@ class _ExtensionSearcherPageState extends fluent.State<ExtensionSearcherPage> {
                                 borderRadius: BorderRadius.circular(10),
                                 border: Border.all(color: HomeTheme.border),
                               ),
-                              child: const Icon(Icons.filter_alt_rounded,
+                              child: Icon(Icons.filter_alt_rounded,
                                   size: 18, color: HomeTheme.textPrimary),
                             ),
                           ),
@@ -1316,7 +1385,7 @@ class _ExtensionSearcherPageState extends fluent.State<ExtensionSearcherPage> {
                         ),
                         child: Row(
                           children: [
-                            const Icon(Icons.search,
+                            Icon(Icons.search,
                                 size: 18, color: HomeTheme.textMuted),
                             const SizedBox(width: 8),
                             Expanded(
@@ -1324,10 +1393,10 @@ class _ExtensionSearcherPageState extends fluent.State<ExtensionSearcherPage> {
                                 controller: _textEditingController,
                                 decoration: const WidgetStatePropertyAll(
                                     BoxDecoration()),
-                                style: const TextStyle(
+                                style: TextStyle(
                                     color: HomeTheme.textPrimary, fontSize: 14),
                                 placeholderStyle:
-                                    const TextStyle(color: HomeTheme.textMuted),
+                                    TextStyle(color: HomeTheme.textMuted),
                                 onChanged: _onSearchFieldChanged,
                                 suffix: suffix,
                                 suffixMode:
@@ -1353,7 +1422,7 @@ class _ExtensionSearcherPageState extends fluent.State<ExtensionSearcherPage> {
               // tarjeta, sea cual sea el ancho de la ventana.
               Expanded(
                 child: _hasUpdate == null
-                    ? const Center(
+                    ? Center(
                         child: CircularProgressIndicator(
                             color: HomeTheme.accentPink),
                       )
@@ -1379,10 +1448,26 @@ class _ExtensionSearcherPageState extends fluent.State<ExtensionSearcherPage> {
                               Expanded(
                                 child: _nsfwBlocked
                                     ? _buildNsfwBlockedMessage()
+                                    // Bloques con la forma de la grilla, no
+                                    // una rueda: al llegar las portadas no se
+                                    // corre nada. Los mismos números que
+                                    // _grillaEscritorio.
                                     : _isLoading && _browseData.isEmpty
-                                        ? const Center(
-                                            child: CircularProgressIndicator(
-                                                color: HomeTheme.accentPink),
+                                        ? LayoutBuilder(
+                                            builder: (ctx, restricciones) {
+                                              final rejilla = _rejilla(
+                                                restricciones.maxWidth,
+                                                relleno: 32,
+                                                separacion: 16,
+                                                altoDelTexto: 44,
+                                              );
+                                              return EsqueletoDeGrilla(
+                                                columnas: rejilla.columnas,
+                                                proporcion: rejilla.proporcion,
+                                                padding:
+                                                    const EdgeInsets.all(16),
+                                              );
+                                            },
                                           )
                                         : (!_isLoading && _browseData.isEmpty)
                                             ? _buildNoResultsMessage()
@@ -1422,7 +1507,7 @@ class _ExtensionSearcherPageState extends fluent.State<ExtensionSearcherPage> {
         FlutterI18n.translate(
           context,
           disabled ? 'common.extension-disabled' : 'common.extension-missing',
-          translationParams: {'package': widget.package},
+          translationParams: {'package': ExtensionUtils.nombreDe(widget.package)},
         ),
       );
       return PlatformWidget(
@@ -1444,7 +1529,26 @@ class _ExtensionFilterWidget extends StatefulWidget {
     required this.selectedFilters,
     required this.onSelectFilter,
     required this.filters,
+    required this.desdeLaZona18,
   });
+
+  /// Si esta pantalla se abrió desde la Zona +18.
+  ///
+  /// ── Para qué ────────────────────────────────────────────────────────────
+  ///
+  /// La puerta a contenido para adultos de una extensión es un filtro más del
+  /// sitio, así que salía en el panel como cualquier otro: dos opciones y a
+  /// elegir. O sea que desde el buscador normal alcanzaba con tocar una para
+  /// traer justo lo que esa zona no muestra.
+  ///
+  /// Que arranque cerrado no basta: lo que hace falta es que ahí no se pueda
+  /// abrir. Fuera de la zona, ese filtro no se dibuja y su valor se queda en el
+  /// seguro, que es el que la propia extensión declara por defecto.
+  ///
+  /// Dentro de la zona sí aparece, porque ahí es justamente lo que se fue a
+  /// buscar — y esa puerta ya tiene la suya: el PIN y el ajuste general.
+  final bool desdeLaZona18;
+
   final ExtensionService runtime;
   final Map<String, ExtensionFilter> filters;
   final Map<String, List<String>> selectedFilters;
@@ -1460,6 +1564,72 @@ class _ExtensionFilterWidget extends StatefulWidget {
 class _ExtensionFilterWidgetState extends State<_ExtensionFilterWidget> {
   late final ExtensionService _runtime = widget.runtime;
   late Map<String, ExtensionFilter> _filters = widget.filters;
+
+  /// Los filtros que se dibujan. Ver [_ExtensionFilterWidget.desdeLaZona18].
+  ///
+  /// Se saca el que abre la puerta a contenido para adultos cuando no se entró
+  /// por la Zona +18. Su valor no se toca: queda con el que trae puesto, que es
+  /// el seguro.
+  /// Una extensión que YA es de adultos de punta a punta.
+  ///
+  /// Ahí el filtro no es ninguna puerta: todo su catálogo lo es, y esconderlo
+  /// solo le saca al usuario una opción legítima —el de censura de HentaiLA,
+  /// por ejemplo— sin proteger nada. A esta pantalla no se llega sin haber
+  /// pasado antes por la confirmación y el PIN.
+  bool get _extensionDeAdultos => _runtime.extension.nsfw;
+
+  List<MapEntry<String, ExtensionFilter>> get _visibles => _filters.entries
+      .where((e) =>
+          widget.desdeLaZona18 ||
+          _extensionDeAdultos ||
+          e.value.adultOption == null ||
+          e.value.adultOption!.isEmpty)
+      .toList();
+
+  /// Si esta OPCIÓN suelta de un filtro es una puerta a contenido adulto.
+  ///
+  /// ── Por qué no alcanza con esconder el filtro entero ────────────────────
+  ///
+  /// Porque no todos los sitios tienen un interruptor dedicado. Varios lo
+  /// marcan con GÉNEROS: en la lista de TuMangaOnline conviven «Romance» y
+  /// «Acción» con «+18», «Adulto», «Erotica» y «Smut», todos como opciones del
+  /// mismo filtro. Esconder ese filtro dejaría a la extensión sin géneros; no
+  /// esconder nada deja la puerta abierta a un toque de distancia.
+  ///
+  /// Así que se mira opción por opción, por su ETIQUETA, en español y en
+  /// inglés — que es lo que se puede hacer de forma general, sin una lista por
+  /// extensión que habría que mantener cada vez que se agrega una.
+  ///
+  /// Ecchi queda afuera a propósito: es sugerente y no explícito. Es el techo
+  /// de lo que puede aparecer fuera de la zona.
+  static bool _esOpcionDeAdultos(String etiqueta) {
+    final n = etiqueta.toLowerCase().trim();
+    const marcas = [
+      '+18',
+      '18+',
+      'adulto',
+      'adult',
+      'erotic',
+      'erótic',
+      'smut',
+      'hentai',
+      'porn',
+      'nsfw',
+      'explicit',
+      'explícit',
+      'pornogr',
+    ];
+    return marcas.any(n.contains);
+  }
+
+  /// Las opciones de un filtro que se pueden mostrar acá.
+  Map<String, String> _opcionesDe(ExtensionFilter f) {
+    if (widget.desdeLaZona18 || _extensionDeAdultos) return f.options;
+    return {
+      for (final o in f.options.entries)
+        if (!_esOpcionDeAdultos(o.value)) o.key: o.value,
+    };
+  }
   late Map<String, List<String>> _selectedFilters = widget.selectedFilters;
   final _scrollController = ScrollController();
 
@@ -1577,7 +1747,7 @@ class _ExtensionFilterWidgetState extends State<_ExtensionFilterWidget> {
               cursor: SystemMouseCursors.click,
               child: Text(
                 'search.reset-filters'.i18n,
-                style: const TextStyle(
+                style: TextStyle(
                   color: HomeTheme.textMuted,
                   fontSize: 12.5,
                   fontWeight: FontWeight.w600,
@@ -1601,10 +1771,10 @@ class _ExtensionFilterWidgetState extends State<_ExtensionFilterWidget> {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  for (final filter in _filters.entries) ...[
+                  for (final filter in _visibles) ...[
                     Text(
                       filter.value.title,
-                      style: const TextStyle(
+                      style: TextStyle(
                         color: HomeTheme.textPrimary,
                         fontSize: 15,
                         fontWeight: FontWeight.w800,
@@ -1615,8 +1785,11 @@ class _ExtensionFilterWidgetState extends State<_ExtensionFilterWidget> {
                       spacing: 10,
                       runSpacing: 10,
                       children: [
+                        // _opcionesDe y no las opciones crudas: fuera de la
+                        // Zona +18 se sacan las que abren contenido para
+                        // adultos, aunque vivan mezcladas entre los géneros.
                         for (final entry
-                            in _sortedOptions(filter.value.options)) ...[
+                            in _sortedOptions(_opcionesDe(filter.value))) ...[
                           _chip(
                             label: entry.value,
                             // _selectedFilters (el estado local, que sí se
@@ -1635,8 +1808,8 @@ class _ExtensionFilterWidgetState extends State<_ExtensionFilterWidget> {
                       ],
                     ),
                     const SizedBox(height: 16),
-                    if (filter.key != _filters.keys.last)
-                      const Divider(color: HomeTheme.border, height: 1),
+                    if (filter.key != _visibles.last.key)
+                      Divider(color: HomeTheme.border, height: 1),
                     const SizedBox(height: 16),
                   ],
                   // Al pie y no arriba: es contexto util, no algo que haga
@@ -1673,13 +1846,13 @@ class _NotaDeFiltros extends StatelessWidget {
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          const Icon(Icons.info_outline_rounded,
+          Icon(Icons.info_outline_rounded,
               size: 16, color: HomeTheme.textMuted),
           const SizedBox(width: 10),
           Expanded(
             child: Text(
               'search.filters-note'.i18n,
-              style: const TextStyle(
+              style: TextStyle(
                 color: HomeTheme.textMuted,
                 fontSize: 12,
                 height: 1.45,
@@ -1687,6 +1860,26 @@ class _NotaDeFiltros extends StatelessWidget {
             ),
           ),
         ],
+      ),
+    );
+  }
+}
+
+/// El puntito que avisa que hay un filtro puesto.
+///
+/// Con nombre y acá porque es el mismo en todas las zonas: nueve puntos, del
+/// color de acento, en la esquina del botón.
+class _PuntoDeFiltro extends StatelessWidget {
+  const _PuntoDeFiltro();
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: 9,
+      height: 9,
+      decoration: BoxDecoration(
+        color: HomeTheme.accentPink,
+        shape: BoxShape.circle,
       ),
     );
   }

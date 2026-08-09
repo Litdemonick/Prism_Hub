@@ -54,12 +54,12 @@ class _StatusBadge extends StatelessWidget {
       decoration: BoxDecoration(
         color: color,
         borderRadius: BorderRadius.circular(999),
-        border: Border.all(color: Colors.white.withValues(alpha: 0.55)),
+        border: Border.all(color: HomeTheme.contraste.withValues(alpha: 0.55)),
       ),
       child: Text(
         _statusLabel(status)!,
-        style: const TextStyle(
-          color: Colors.white,
+        style: TextStyle(
+          color: HomeTheme.contraste,
           fontSize: 12,
           fontWeight: FontWeight.w600,
         ),
@@ -114,7 +114,7 @@ class _UnstableNotice extends StatelessWidget {
                   Expanded(
                     child: Text(
                       _texto(context, motivo.data),
-                      style: const TextStyle(
+                      style: TextStyle(
                         color: HomeTheme.textMuted,
                         fontSize: 12.5,
                         height: 1.4,
@@ -148,11 +148,9 @@ class DetailExtensionTile extends StatelessWidget {
           FlutterI18n.translate(
             context,
             'common.extension-missing',
-            translationParams: {
-              'package': c.package,
-            },
+            translationParams: {'package': ExtensionUtils.nombreDe(c.package)},
           ),
-          style: const TextStyle(color: HomeTheme.textMuted),
+          style: TextStyle(color: HomeTheme.textMuted),
         );
       }
       // Para una extensión "mixed" (ej. ShadeManga), c.type solo se sabe con
@@ -194,14 +192,14 @@ class DetailExtensionTile extends StatelessWidget {
                 ),
               Text(
                 c.extension!.name,
-                style: const TextStyle(
+                style: TextStyle(
                   color: HomeTheme.textPrimary,
                   fontWeight: FontWeight.w600,
                 ),
               ),
               if (typeKnown) ...[
                 const SizedBox(width: 8),
-                const DecoratedBox(
+                DecoratedBox(
                   decoration: BoxDecoration(
                     shape: BoxShape.circle,
                     color: HomeTheme.textMuted,

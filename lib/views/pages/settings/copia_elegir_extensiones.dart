@@ -224,11 +224,11 @@ class _CopiaElegirExtensionesState extends State<CopiaElegirExtensiones> {
           borderRadius: BorderRadius.circular(10),
           color: marcada
               ? HomeTheme.accentPink.withValues(alpha: 0.10)
-              : Colors.white.withValues(alpha: 0.03),
+              : HomeTheme.contraste.withValues(alpha: 0.03),
           border: Border.all(
             color: marcada
                 ? HomeTheme.accentPink.withValues(alpha: 0.45)
-                : Colors.white.withValues(alpha: 0.10),
+                : HomeTheme.contraste.withValues(alpha: 0.10),
           ),
         ),
         child: Row(
@@ -315,24 +315,24 @@ class _CopiaElegirExtensionesState extends State<CopiaElegirExtensiones> {
               value: marcada,
               thumbColor: WidgetStateProperty.resolveWith((estados) {
                 if (estados.contains(WidgetState.disabled)) {
-                  return Colors.white.withValues(alpha: 0.35);
+                  return HomeTheme.contraste.withValues(alpha: 0.35);
                 }
                 return estados.contains(WidgetState.selected)
                     ? Colors.white
-                    : Colors.white.withValues(alpha: 0.75);
+                    : HomeTheme.contraste.withValues(alpha: 0.75);
               }),
               trackColor: WidgetStateProperty.resolveWith((estados) {
                 if (estados.contains(WidgetState.disabled)) {
-                  return Colors.white.withValues(alpha: 0.08);
+                  return HomeTheme.contraste.withValues(alpha: 0.08);
                 }
                 return estados.contains(WidgetState.selected)
                     ? HomeTheme.accentPink
-                    : Colors.white.withValues(alpha: 0.16);
+                    : HomeTheme.contraste.withValues(alpha: 0.16);
               }),
               trackOutlineColor: WidgetStateProperty.resolveWith((estados) {
                 return estados.contains(WidgetState.selected)
                     ? Colors.transparent
-                    : Colors.white.withValues(alpha: 0.28);
+                    : HomeTheme.contraste.withValues(alpha: 0.28);
               }),
               overlayColor: WidgetStateProperty.resolveWith((estados) {
                 if (estados.contains(WidgetState.hovered) ||
@@ -396,8 +396,11 @@ class _CopiaElegirExtensionesState extends State<CopiaElegirExtensiones> {
 
   /// Dónde está Extensiones en la barra de abajo del teléfono.
   ///
-  /// Inicio, Buscar, Extensiones, Ajustes (ver la lista `pages` de MainPage).
-  static const _pestanaDeExtensiones = 2;
+  /// Ya no se lleva acá: el índice vive con las demás pestañas, en
+  /// MainController. Tenerlo repetido fue lo que se rompió al sumar Biblioteca
+  /// —el número quedó viejo en cinco archivos a la vez— y una copia con nombre
+  /// se desactualiza igual que una sin nombre.
+  static const _pestanaDeExtensiones = MainController.tabExtensiones;
 
   String _queFalta(EstadoExt estado) {
     switch (estado) {

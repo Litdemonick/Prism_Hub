@@ -1,0 +1,19 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+    Lo mismo que values-v31, para cuando el sistema está en modo oscuro.
+
+    Hace falta la copia porque values-night/styles.xml define LaunchTheme con
+    otro padre (Theme.Black), y sin esta variante el modo oscuro caería en ese
+    archivo — que no declara los atributos del splash de Android 12 y volvería
+    a dejar la pantalla de arranque sin el logo.
+-->
+<resources>
+    <style name="LaunchTheme" parent="@android:style/Theme.Black.NoTitleBar">
+        <item name="android:windowSplashScreenBackground">@color/launch_background</item>
+        <item name="android:windowSplashScreenAnimatedIcon">@drawable/launch_logo_splash</item>
+        <item name="android:windowBackground">@drawable/launch_background</item>
+    </style>
+    <style name="NormalTheme" parent="@android:style/Theme.Black.NoTitleBar">
+        <item name="android:windowBackground">@color/launch_background</item>
+    </style>
+</resources>

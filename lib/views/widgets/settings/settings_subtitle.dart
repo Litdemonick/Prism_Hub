@@ -25,7 +25,7 @@ class SettingsSubtitle extends StatelessWidget {
         children: [
           for (var i = 0; i < partes.length; i++) ...[
             if (i > 0)
-              const TextSpan(
+              TextSpan(
                 text: _marca,
                 style: TextStyle(
                   color: HomeTheme.accentRed,

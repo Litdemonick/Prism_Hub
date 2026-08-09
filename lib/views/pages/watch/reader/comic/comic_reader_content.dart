@@ -161,6 +161,20 @@ class _ComicReaderContentState extends State<ComicReaderContent> {
   // the view appears to jump. Re-jump to the page you were on once the
   // resized layout has been painted.
   void _onCascadeDoubleTap() {
+    // Android: si quedó pellizcado o corrido, el doble toque PRIMERO endereza
+    // —vuelve a 1x y centrado— y no hace nada más. El siguiente doble toque
+    // ya alterna el alejado de siempre.
+    //
+    // Antes no había forma de enderezarlo: el pellizco de la cascada usa este
+    // TransformationController y nadie lo devolvía nunca a la identidad, así
+    // que una vez movido el manhwa quedaba corrido hasta salir del capítulo
+    // (reportado en vivo: "a veces el usuario lo mueve y no queda centrado").
+    if (Platform.isAndroid &&
+        _androidPinchTransform.value != Matrix4.identity()) {
+      setState(() => _androidPinchTransform.value = Matrix4.identity());
+      return;
+    }
+
     final page = _c.currentPage.value;
     setState(() => _cascadeZoomed = !_cascadeZoomed);
     WidgetsBinding.instance.addPostFrameCallback((_) {
@@ -198,7 +212,14 @@ class _ComicReaderContentState extends State<ComicReaderContent> {
   static const _cascadeScrollbarTopInset = 40.0;
   static const _cascadeScrollbarBottomInset = 8.0;
 
-  Widget _buildCascadeScrollbar(int itemCount) {
+  /// [aLaIzquierda] pone la barra en el borde izquierdo en vez del derecho.
+  ///
+  /// Va al hueco que deja la franja, del lado contrario a donde esté pegada.
+  /// Con la franja a la derecha la barra tocaba el manga: quedaba encima del
+  /// contenido y encima se agarraba mal, porque el propio manga está debajo.
+  /// Centrada o pegada a la izquierda el hueco cae a la derecha, así que la
+  /// barra se queda donde estuvo siempre.
+  Widget _buildCascadeScrollbar(int itemCount, {required bool aLaIzquierda}) {
     if (itemCount <= 1) return const SizedBox.shrink();
 
     double thumbHeightFor(double trackHeight) =>
@@ -234,7 +255,8 @@ class _ComicReaderContentState extends State<ComicReaderContent> {
     }
 
     return Positioned(
-      right: 2,
+      left: aLaIzquierda ? 2 : null,
+      right: aLaIzquierda ? null : 2,
       top: _cascadeScrollbarTopInset,
       bottom: _cascadeScrollbarBottomInset,
       width: _cascadeScrollbarWidth,
@@ -462,11 +484,16 @@ class _ComicReaderContentState extends State<ComicReaderContent> {
   // ── Full display overlay (wraps content) ─────────────────────────────────
 
   Widget _buildDisplay(Widget child) {
-    final isAndroid = Platform.isAndroid;
-    // On Android, overlays fade in/out with isShowControlPanel so reading is
-    // immersive (scrolling hides them; single tap brings them back).
+    // Los dos overlays se desvanecen con isShowControlPanel, igual que el
+    // encabezado y el pie: lectura sin nada encima.
+    //
+    //   ANDROID   el panel va y viene con un toque, y scrollear lo esconde.
+    //   WINDOWS   lo levanta pasar el mouse por los 60px de arriba o de abajo
+    //             (ver reader_view) y se esconde solo a los 3 segundos.
+    //
+    // Antes el contador de páginas era la única cosa que en escritorio se
+    // quedaba fija en pantalla mientras todo lo demás desaparecía.
     Widget overlay(Widget w) {
-      if (!isAndroid) return w;
       return Obx(() {
         final visible = _c.isShowControlPanel.value;
         return AnimatedOpacity(
@@ -496,7 +523,17 @@ class _ComicReaderContentState extends State<ComicReaderContent> {
     // Mismo negro que Home/Historial/Buscar (antes: colorScheme.surface /
     // micaBackgroundColor, un gris bastante más claro que no hacía juego
     // con el brillo animado de abajo, pensado para ese tono específico).
-    const backgroundColor = HomeTheme.bg;
+    // ── La zona de lectura también sigue al modo ────────────────────────
+    //
+    // Estaba clavada en el negro de la app, con el criterio de que una página
+    // se mira sobre oscuro. Pero una página de manga o de manhwa es en su
+    // mayoría BLANCA, así que sobre negro lo que queda es un marco oscuro
+    // rodeando una franja clara — y con el modo claro puesto encima, la barra
+    // de arriba quedaba blanca y el resto negro, que es lo peor de los dos.
+    //
+    // Siguiendo al modo, en claro la página se funde con el fondo y en oscuro
+    // queda exactamente como estaba.
+    final backgroundColor = HomeTheme.bg;
 
     // Outermost catch-all for wheel scroll in cascade mode: wraps literally
     // everything this widget returns, so it's guaranteed shallower than the
@@ -528,7 +565,7 @@ class _ComicReaderContentState extends State<ComicReaderContent> {
             // venir de este Stack en realidad era una carrera aparte en
             // ComicController._jumpPage, ya arreglada — este Stack nunca
             // fue la causa real.)
-            const Positioned.fill(child: AnimatedBackgroundGlow()),
+            Positioned.fill(child: AnimatedBackgroundGlow()),
             LayoutBuilder(
               builder: (context, constraints) {
                 final maxWidth = constraints.maxWidth;
@@ -596,6 +633,10 @@ class _ComicReaderContentState extends State<ComicReaderContent> {
 
                   final images = _c.watchData.value!.urls;
 
+                  // Dónde está pegada la franja. Lo usan los dos modos, así
+                  // que se lee una sola vez acá arriba.
+                  final alineacion = _c.stripAlign.value;
+
                   // OJO: currentPage NO se lee acá. Este Obx envuelve todo el
                   // contenido, y onPageChanged actualiza currentPage MIENTRAS
                   // corre la animación de cambio de página — leerlo acá hacía
@@ -613,6 +654,41 @@ class _ComicReaderContentState extends State<ComicReaderContent> {
                   // aplica a un lector paginado, y mezclarlos era justo el
                   // riesgo de romper la cascada, que funciona bien.
                   if (_c.isPaged) {
+                    // ── Dónde se dibujan las flechas ────────────────────────
+                    //
+                    // La izquierda SIEMPRE es "anterior" y la derecha
+                    // "siguiente" (ver _PageArrow): lo único que cambia acá es
+                    // en qué parte de la pantalla se dibujan, no cuál hace qué.
+                    //
+                    // Con la franja centrada quedan en los dos bordes, como
+                    // siempre. Pegada a un costado, las dos se van juntas al
+                    // hueco del otro lado y quedan centradas ahí — si no, la
+                    // del lado de la franja se dibujaba ENCIMA del manga.
+                    //
+                    // El ancho se calcula con la franja sin alejar: el alejado
+                    // es por página y acá todavía no se sabe. Si el hueco no da
+                    // para las dos flechas, se quedan en los bordes.
+                    final anchoFranja = maxWidth < 900.0 ? maxWidth : 900.0;
+                    final huecoPaginado = maxWidth - anchoFranja;
+                    final cabenLasDos = huecoPaginado >= _PageArrow.ancho * 2;
+                    final enUnCostado =
+                        alineacion != ComicController.alineacionCentro;
+
+                    double? izqDe(bool esAnterior) {
+                      if (!enUnCostado || !cabenLasDos) {
+                        return esAnterior ? 0.0 : null;
+                      }
+                      // Centro del hueco: a la derecha de la franja si está
+                      // pegada a la izquierda, y al revés.
+                      final centroHueco =
+                          alineacion == ComicController.alineacionIzquierda
+                              ? maxWidth - huecoPaginado / 2
+                              : huecoPaginado / 2;
+                      return esAnterior
+                          ? centroHueco - _PageArrow.ancho
+                          : centroHueco;
+                    }
+
                     return Listener(
                       // Mismo mecanismo que usa la cascada en Android: contar
                       // dedos para saber cuándo hay un pellizco en curso. Sin
@@ -666,6 +742,16 @@ class _ComicReaderContentState extends State<ComicReaderContent> {
                               key: ValueKey('$index-${images[index]}'),
                               url: images[index],
                               headers: _c.watchData.value?.headers,
+                              // Solo cambia el reparto horizontal: la parte
+                              // vertical queda en `center`, igual que el
+                              // Center que había antes acá.
+                              stripAlign: switch (_c.stripAlign.value) {
+                                ComicController.alineacionIzquierda =>
+                                  Alignment.centerLeft,
+                                ComicController.alineacionDerecha =>
+                                  Alignment.centerRight,
+                                _ => Alignment.center,
+                              },
                               // Placeholder discreto (no el logo a pantalla
                               // completa que usa la cascada): en paginado ese
                               // logo ocupa toda la pantalla y se confunde con
@@ -682,10 +768,12 @@ class _ComicReaderContentState extends State<ComicReaderContent> {
                           if (!Platform.isAndroid) ...[
                             Obx(() => _PageArrow(
                                   left: true,
+                                  desdeIzquierda: izqDe(true),
                                   enabled: _c.currentPage.value > 0,
                                 )),
                             Obx(() => _PageArrow(
                                   left: false,
+                                  desdeIzquierda: izqDe(false),
                                   enabled:
                                       _c.currentPage.value < images.length - 1,
                                 )),
@@ -698,16 +786,36 @@ class _ComicReaderContentState extends State<ComicReaderContent> {
                   // La cascada sí necesita la página actual (initialScrollIndex)
                   // y acá leerla no molesta: no hay una animación de PageView
                   // que se pueda cortar por el rebuild.
-                  final currentPage = _c.currentPage.value;
+                  //
+                  // Acotado al capítulo que se está mostrando: si quedara
+                  // apuntando a una página que este capítulo no tiene,
+                  // scrollable_positioned_list ancla la lista al ÚLTIMO ítem
+                  // (ver su didUpdateWidget) y el capítulo abre al fondo. Es la
+                  // segunda red: la primera está en ComicController, donde se
+                  // deja de escuchar posiciones mientras se cambia de capítulo.
+                  final ultimaPagina =
+                      images.isEmpty ? 0 : images.length - 1;
+                  final currentPage =
+                      _c.currentPage.value.clamp(0, ultimaPagina);
 
                   // Cascade: cap content at 900 px normally; narrow to ~55% when
                   // zoomed out so images shrink but still fill edge-to-edge (no box).
                   final normalWidth = maxWidth < 900.0 ? maxWidth : 900.0;
                   final effectiveWidth =
                       _cascadeZoomed ? normalWidth * 0.55 : normalWidth;
-                  final cascadePadding = maxWidth > effectiveWidth
-                      ? (maxWidth - effectiveWidth) / 2
-                      : 0.0;
+                  // El ancho que sobra se reparte según la alineación elegida:
+                  // todo a la derecha (franja pegada a la izquierda), todo a la
+                  // izquierda (franja pegada a la derecha), o mitad y mitad
+                  // (centrada, que es como venía siendo y sigue siendo el
+                  // default). Ver ComicController.stripAlign.
+                  final sobraDeAncho =
+                      maxWidth > effectiveWidth ? maxWidth - effectiveWidth : 0.0;
+                  final margenIzq = switch (alineacion) {
+                    ComicController.alineacionIzquierda => 0.0,
+                    ComicController.alineacionDerecha => sobraDeAncho,
+                    _ => sobraDeAncho / 2,
+                  };
+                  final margenDer = sobraDeAncho - margenIzq;
 
                   // Use the LayoutBuilder's own constraints, not MediaQuery's
                   // full window size — they can differ (e.g. a custom title
@@ -757,7 +865,8 @@ class _ComicReaderContentState extends State<ComicReaderContent> {
                       physics: (_c.isZoom.value || _androidPinching)
                           ? const NeverScrollableScrollPhysics()
                           : null,
-                      padding: EdgeInsets.symmetric(horizontal: cascadePadding),
+                      padding:
+                          EdgeInsets.only(left: margenIzq, right: margenDer),
                       initialScrollIndex: currentPage,
                       itemScrollController: _c.itemScrollController,
                       itemPositionsListener: _c.itemPositionsListener,
@@ -809,10 +918,21 @@ class _ComicReaderContentState extends State<ComicReaderContent> {
                           onPointerSignal: _forwardBorderWheelScroll,
                         );
 
-                    // Space reserved on the right so the opaque border-absorber
-                    // doesn't sit on top of (and swallow every click meant for)
-                    // the custom scrollbar's own hit area.
+                    // Franja reservada para que el absorbedor opaco no se monte
+                    // encima del área de agarre de la barra (y se coma todos
+                    // los clics que iban para ella).
                     const scrollbarStrip = _cascadeScrollbarWidth + 6;
+
+                    // La barra vive en el hueco que deja la franja, del lado
+                    // contrario a donde esté pegada. Solo se muda cuando la
+                    // franja va pegada a la DERECHA: ahí el hueco es el de la
+                    // izquierda, y dejarla a la derecha la ponía encima del
+                    // manga. Centrada o a la izquierda no cambia nada.
+                    final barraALaIzquierda =
+                        alineacion == ComicController.alineacionDerecha;
+                    // Y la reserva acompaña a la barra, no al borde derecho.
+                    final reservaIzq = barraALaIzquierda ? scrollbarStrip : 0.0;
+                    final reservaDer = barraALaIzquierda ? 0.0 : scrollbarStrip;
 
                     return Listener(
                       // Outer catch-all: forwards wheel scroll for any point in
@@ -836,24 +956,31 @@ class _ComicReaderContentState extends State<ComicReaderContent> {
                                 child: scrollList,
                               ),
                             ),
-                            if (cascadePadding > 0) ...[
+                            // Cada absorbedor cubre SU margen real, no la mitad
+                            // del sobrante: con la franja pegada a un costado
+                            // los dos márgenes son distintos, y uno del tamaño
+                            // equivocado se montaría encima del manga y se
+                            // comería los clics de esa zona.
+                            if (margenIzq > reservaIzq)
                               Positioned(
-                                left: 0,
+                                left: reservaIzq,
                                 top: 0,
                                 bottom: 0,
-                                width: cascadePadding,
+                                width: margenIzq - reservaIzq,
                                 child: borderAbsorber(),
                               ),
+                            if (margenDer > reservaDer)
                               Positioned(
-                                right: scrollbarStrip,
+                                right: reservaDer,
                                 top: 0,
                                 bottom: 0,
-                                width: (cascadePadding - scrollbarStrip)
-                                    .clamp(0.0, double.infinity),
+                                width: margenDer - reservaDer,
                                 child: borderAbsorber(),
                               ),
-                            ],
-                            _buildCascadeScrollbar(images.length),
+                            _buildCascadeScrollbar(
+                              images.length,
+                              aLaIzquierda: barraALaIzquierda,
+                            ),
                           ],
                         ),
                       ),
@@ -919,19 +1046,29 @@ class _PageArrow extends StatelessWidget {
   const _PageArrow({
     required this.left,
     required this.enabled,
+    this.desdeIzquierda,
   });
+
+  /// Cuánto mide de ancho. Lo necesita quien la coloca para repartir el hueco.
+  static const ancho = 64.0;
 
   final bool left;
   final bool enabled;
+
+  /// Posición exacta desde el borde izquierdo, cuando la franja está pegada a
+  /// un costado y las dos flechas se van juntas al hueco del otro lado. En
+  /// null vuelve a lo de siempre: cada una en su borde.
+  final double? desdeIzquierda;
 
   @override
   Widget build(BuildContext context) {
     // Deshabilitada (primera/última página): no se dibuja nada, así no queda
     // una flecha sugiriendo que hay algo más.
     if (!enabled) return const SizedBox.shrink();
+    final fijada = desdeIzquierda != null;
     return Positioned(
-      left: left ? 0 : null,
-      right: left ? null : 0,
+      left: fijada ? desdeIzquierda : (left ? 0 : null),
+      right: fijada ? null : (left ? null : 0),
       top: 0,
       bottom: 0,
       // IgnorePointer a propósito: esto es SOLO el indicador visual de que
@@ -942,7 +1079,7 @@ class _PageArrow extends StatelessWidget {
       // vivo. Una sola capa manejando el clic evita las dos.
       child: IgnorePointer(
         child: Container(
-          width: 64,
+          width: ancho,
           alignment: Alignment.center,
           child: Opacity(
             opacity: 0.45,
@@ -979,11 +1116,17 @@ class _PagedPage extends StatefulWidget {
     required this.url,
     required this.headers,
     required this.placeholder,
+    required this.stripAlign,
   });
 
   final String url;
   final Map<String, String>? headers;
   final Widget placeholder;
+
+  /// Dónde se pega la tira de manhwa cuando sobra ancho. Solo aplica a las
+  /// páginas que resultan ser tira: una página de manga entra entera y no
+  /// tiene sobrante que repartir.
+  final Alignment stripAlign;
 
   @override
   State<_PagedPage> createState() => _PagedPageState();
@@ -1036,13 +1179,19 @@ class _PagedPageState extends State<_PagedPage> {
 
   void _toggleZoomOut() {
     setState(() {
-      _zoomedOut = !_zoomedOut;
-      // Página de manga: el "alejar" no aplica (ya entra entera), así que el
-      // doble toque sirve para volver a 1x si se había acercado con pinza.
-      if (_zoomed) {
+      // Cualquier cosa que no sea la identidad se deshace primero: vuelve a 1x
+      // Y centrado. El chequeo de antes era `_zoomed`, que sale de comparar la
+      // ESCALA contra 1.01 — si el usuario pellizcaba, arrastraba y volvía a
+      // achicar hasta más o menos 1x, la escala ya no contaba como zoom pero
+      // quedaba una traslación pegada: la página se veía corrida y no había
+      // manera de enderezarla. Ahora sí.
+      if (_zoomController.value != Matrix4.identity()) {
         _zoomController.value = Matrix4.identity();
         _zoomed = false;
+        return;
       }
+      // Ya estaba derecha: el doble toque hace lo de siempre, alejar/acercar.
+      _zoomedOut = !_zoomedOut;
     });
   }
 
@@ -1102,8 +1251,13 @@ class _PagedPageState extends State<_PagedPage> {
       position.jumpTo(position.maxScrollExtent * fraction);
     }
 
+    // Mismo criterio que en la cascada: la barra va al hueco, del lado
+    // contrario a donde esté pegada la franja. Con la franja a la derecha,
+    // dejarla acá la ponía justo encima del manga.
+    final aLaIzquierda = widget.stripAlign == Alignment.centerRight;
     return Positioned(
-      right: 2,
+      left: aLaIzquierda ? 2 : null,
+      right: aLaIzquierda ? null : 2,
       top: 0,
       bottom: 0,
       width: _pagedScrollbarHitWidth,
@@ -1142,7 +1296,10 @@ class _PagedPageState extends State<_PagedPage> {
                     children: [
                       Positioned(
                         top: top,
-                        right: 0,
+                        // El pulgar se arrima al borde exterior, que cambia
+                        // con el lado en el que quedó la barra.
+                        left: aLaIzquierda ? 0 : null,
+                        right: aLaIzquierda ? null : 0,
                         width: _pagedScrollbarVisibleWidth,
                         height: thumbHeight,
                         child: Container(
@@ -1347,7 +1504,8 @@ class _PagedPageState extends State<_PagedPage> {
                       .copyWith(scrollbars: false),
                   child: SingleChildScrollView(
                     controller: _stripScrollController,
-                    child: Center(
+                    child: Align(
+                      alignment: widget.stripAlign,
                       child: Column(
                         mainAxisSize: MainAxisSize.min,
                         children: [
@@ -1439,8 +1597,10 @@ class _PagedLoadError extends StatelessWidget {
               const SizedBox(height: 12),
               Text(
                 'reader.page-load-failed'.i18n,
-                style:
-                    const TextStyle(color: HomeTheme.textMuted, fontSize: 13),
+                // Va sobre el fondo de la zona de lectura, que ahora sigue al
+                // modo: si se quedaba en el gris claro, en modo claro no se
+                // leía el aviso de que la página no cargó.
+                style: TextStyle(color: HomeTheme.textMuted, fontSize: 13),
               ),
             ],
           ),

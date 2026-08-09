@@ -168,7 +168,45 @@ class NotificacionReproductor extends BaseAudioHandler {
     return uri;
   }
 
+  /// Cuándo se avisó por última vez, y con qué estado.
+  DateTime? _ultimoAviso;
+  bool? _ultimoReproduciendo;
+
+  /// Cada cuánto, como mucho, se toca la notificación.
+  ///
+  /// ── El número sale del propio Android ───────────────────────────────────
+  ///
+  /// En el registro de un teléfono real:
+  ///
+  ///   W/NotificationManager: Shedding notify … rate limit (5.0) exceeded:
+  ///   input 8.518731, output would be 5.970741
+  ///
+  /// O sea que se estaba avisando **8,5 veces por segundo**, Android permite 5 y
+  /// estaba DESCARTANDO las que sobraban. Todo ese trabajo —armar el estado,
+  /// cruzar al lado nativo, redibujar la notificación— se pagaba entero para que
+  /// el sistema tirara la mitad, y se pagaba durante toda la reproducción.
+  ///
+  /// Una vez por segundo alcanza de sobra: lo único que cambia seguido es la
+  /// posición, y la notificación la interpola sola entre avisos —para eso existe
+  /// `updatePosition`—. Así que se ve igual de fluida costando ocho veces menos.
+  static const _cadaCuanto = Duration(seconds: 1);
+
   void _refrescar({required bool reproduciendo, required Duration posicion}) {
+    // ── Pero un cambio de play/pausa va SIEMPRE ──────────────────────────
+    //
+    // Ahí no se puede esperar: si alguien pausa desde la notificación y el botón
+    // tarda un segundo en cambiar, parece que no hubiera funcionado y lo toca de
+    // nuevo. Lo que se agrupa es el avance de la posición, que no lo mira nadie
+    // al milisegundo.
+    final ahora = DateTime.now();
+    final cambioElEstado = _ultimoReproduciendo != reproduciendo;
+    if (!cambioElEstado &&
+        _ultimoAviso != null &&
+        ahora.difference(_ultimoAviso!) < _cadaCuanto) {
+      return;
+    }
+    _ultimoAviso = ahora;
+    _ultimoReproduciendo = reproduciendo;
     playbackState.add(PlaybackState(
       // El orden es el que se ve en la notificación.
       controls: [

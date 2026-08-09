@@ -30,7 +30,7 @@ class _SettingsTileState extends State<SettingsTile> {
       leading: widget.icon,
       title: Text(
         widget.title,
-        style: const TextStyle(color: HomeTheme.textPrimary),
+        style: TextStyle(color: HomeTheme.textPrimary),
       ),
       // SettingsSubtitle y no un Text pelado: es el que resalta "+18" en
       // rojo. Este camino (el ListTile de Android) se me había quedado sin
@@ -64,7 +64,7 @@ class _SettingsTileState extends State<SettingsTile> {
             children: [
               Text(
                 widget.title,
-                style: const TextStyle(color: HomeTheme.textPrimary),
+                style: TextStyle(color: HomeTheme.textPrimary),
               ),
               if (widget.buildSubtitle != null)
                 SettingsSubtitle(widget.buildSubtitle!.call())

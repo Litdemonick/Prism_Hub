@@ -30,7 +30,9 @@ import 'package:prismhub/views/widgets/platform_widget.dart';
 // Card ancha estilo Crunchyroll: solo en escritorio (Windows/Linux). En
 // Android se mantiene la vertical, que es la que entra bien en pantallas
 // chicas tanto en vertical como en horizontal.
-final bool _wideCards = !Platform.isAndroid;
+// La ancha va en las dos plataformas, igual que en la Biblioteca: es un marco
+// 16:9 para una captura 16:9. Ver el comentario en library_page.dart.
+const bool _wideCards = true;
 
 // true en horizontal de celular, donde el alto útil es ~300-390 y cada bloque
 // de aire vertical se nota muchísimo más que en vertical o en escritorio.
@@ -123,8 +125,7 @@ class _Nsfw18ZoneGateState extends State<Nsfw18ZoneGate> {
       return const _Nsfw18DisabledPage();
     }
     if (!_confirmed) {
-      return const Scaffold(
-          backgroundColor: HomeTheme.bg, body: SizedBox.shrink());
+      return Scaffold(backgroundColor: HomeTheme.bg, body: SizedBox.shrink());
     }
     if (!_unlocked) {
       return Nsfw18LockPage(
@@ -147,10 +148,10 @@ class _Nsfw18DisabledPage extends StatelessWidget {
       backgroundColor: HomeTheme.bg,
       appBar: AppBar(
         backgroundColor: HomeTheme.bg,
-        iconTheme: const IconThemeData(color: HomeTheme.textPrimary),
+        iconTheme: IconThemeData(color: HomeTheme.textPrimary),
         title: Text(
           'nsfw18.title'.i18n,
-          style: const TextStyle(color: HomeTheme.textPrimary),
+          style: TextStyle(color: HomeTheme.textPrimary),
         ),
       ),
       body: Center(
@@ -161,13 +162,12 @@ class _Nsfw18DisabledPage extends StatelessWidget {
             child: Column(
               mainAxisSize: MainAxisSize.min,
               children: [
-                const Icon(Icons.lock_outline,
-                    color: HomeTheme.textMuted, size: 40),
+                Icon(Icons.lock_outline, color: HomeTheme.textMuted, size: 40),
                 const SizedBox(height: 16),
                 Text(
                   'nsfw18.disabled-title'.i18n,
                   textAlign: TextAlign.center,
-                  style: const TextStyle(
+                  style: TextStyle(
                     color: HomeTheme.textPrimary,
                     fontSize: 16,
                     fontWeight: FontWeight.w700,
@@ -177,8 +177,7 @@ class _Nsfw18DisabledPage extends StatelessWidget {
                 Text(
                   'nsfw18.disabled-subtitle'.i18n,
                   textAlign: TextAlign.center,
-                  style:
-                      const TextStyle(color: HomeTheme.textMuted, fontSize: 13),
+                  style: TextStyle(color: HomeTheme.textMuted, fontSize: 13),
                 ),
                 const SizedBox(height: 20),
                 SizedBox(
@@ -199,7 +198,8 @@ class _Nsfw18DisabledPage extends StatelessWidget {
                         // confirmado en vivo). El isRegistered es para que el
                         // pop pase igual si el controller no estuviera.
                         if (Get.isRegistered<MainController>()) {
-                          Get.find<MainController>().changeTab(3);
+                          Get.find<MainController>()
+                              .changeTab(MainController.tabAjustes);
                         }
                         // Mismo criterio que "Explorar catálogo": hasta el
                         // shell, no una sola capa (ver el comentario ahí).
@@ -264,7 +264,13 @@ class _Nsfw18ZonePageState extends State<Nsfw18ZonePage> {
 
   void _openHistoryTab(int tab) {
     if (Platform.isAndroid) {
-      Get.to(HistoryPage(initialTab: tab, zone: true));
+      // Las pestañas 3 y 4 son favoritos, y eso es SU zona, no una
+      // pestaña del Historial. Ver HistoryPage.soloFavoritos.
+      Get.to(HistoryPage(
+        initialTab: tab,
+        zone: true,
+        soloFavoritos: tab >= 3,
+      ));
       return;
     }
     router.push(
@@ -300,10 +306,18 @@ class _Nsfw18ZonePageState extends State<Nsfw18ZonePage> {
       required int tab,
     }) {
       return HomeSection(
-        itemWidth: ancha ? HomeMediaCard.wideWidth : null,
-        itemHeight: ancha ? HomeMediaCard.wideTotalHeight : null,
-        itemCoverHeight: ancha ? HomeMediaCard.wideImageHeight : null,
-        boxed: true,
+        itemWidth: ancha ? HomeMediaCard.anchoAncha : null,
+        itemHeight: ancha ? HomeMediaCard.altoTotalAncha : null,
+        itemCoverHeight: ancha ? HomeMediaCard.altoImagenAncha : null,
+        // Sin caja alrededor de la sección.
+        //
+        // Era un panel apenas más claro que el fondo con su borde, y con dos o
+        // tres secciones seguidas la pantalla quedaba llena de recuadros
+        // anidados: el recuadro de la sección, adentro el de cada tarjeta, y
+        // dentro de ese la portada. El título de la sección y el aire entre
+        // una y otra ya alcanzan para separarlas, y sin la caja las portadas
+        // ganan el ancho que se llevaba su relleno.
+        boxed: false,
         accent: HomeTheme.accentRed,
         title: titulo,
         onClickMore: () => _openHistoryTab(tab),
@@ -374,10 +388,18 @@ class _Nsfw18ZonePageState extends State<Nsfw18ZonePage> {
       return HomeSection(
         // La ancha usa su propio tamaño; la vertical deja los valores por
         // defecto, que ya se adaptan a cada plataforma y orientación.
-        itemWidth: ancha ? HomeMediaCard.wideWidth : null,
-        itemHeight: ancha ? HomeMediaCard.wideTotalHeight : null,
-        itemCoverHeight: ancha ? HomeMediaCard.wideImageHeight : null,
-        boxed: true,
+        itemWidth: ancha ? HomeMediaCard.anchoAncha : null,
+        itemHeight: ancha ? HomeMediaCard.altoTotalAncha : null,
+        itemCoverHeight: ancha ? HomeMediaCard.altoImagenAncha : null,
+        // Sin caja alrededor de la sección.
+        //
+        // Era un panel apenas más claro que el fondo con su borde, y con dos o
+        // tres secciones seguidas la pantalla quedaba llena de recuadros
+        // anidados: el recuadro de la sección, adentro el de cada tarjeta, y
+        // dentro de ese la portada. El título de la sección y el aire entre
+        // una y otra ya alcanzan para separarlas, y sin la caja las portadas
+        // ganan el ancho que se llevaba su relleno.
+        boxed: false,
         accent: HomeTheme.accentRed,
         title: titulo,
         onClickMore: () => _openHistoryTab(tab),
@@ -470,7 +492,7 @@ class _Nsfw18ZonePageState extends State<Nsfw18ZonePage> {
           color: HomeTheme.bg,
           child: Stack(
             children: [
-              const Positioned.fill(
+              Positioned.fill(
                 child: AnimatedBackgroundGlow(accent: HomeTheme.accentRed),
               ),
               LayoutBuilder(
@@ -540,6 +562,22 @@ class _Nsfw18ZonePageState extends State<Nsfw18ZonePage> {
     );
   }
 
+  /// Los favoritos DE ESTA ZONA.
+  ///
+  /// Con `zone: true`, que es lo que hace que mire la otra instancia del
+  /// controlador. Sin eso se abrían los favoritos normales, o sea que lo
+  /// guardado acá no tenía dónde verse junto y aparecía mezclado del otro lado.
+  void _favoritos() {
+    if (Platform.isAndroid) {
+      Get.to(const HistoryPage(soloFavoritos: true, zone: true));
+      return;
+    }
+    router.push(
+      Uri(path: '/history', queryParameters: {'tab': '5', 'zone': '1'})
+          .toString(),
+    );
+  }
+
   Widget _buildAndroid(BuildContext context) {
     return Scaffold(
       backgroundColor: HomeTheme.bg,
@@ -547,8 +585,22 @@ class _Nsfw18ZonePageState extends State<Nsfw18ZonePage> {
         backgroundColor: HomeTheme.bg,
         title: Text(
           'nsfw18.title'.i18n,
-          style: const TextStyle(color: HomeTheme.textPrimary),
+          style: TextStyle(color: HomeTheme.textPrimary),
         ),
+        actions: [
+          IconButton(
+            tooltip: 'home.favorite'.i18n,
+            onPressed: _favoritos,
+            icon: Icon(Icons.favorite_border_rounded,
+                color: HomeTheme.textPrimary),
+          ),
+          // Y el historial DE ESTA ZONA al lado, con el mismo criterio.
+          IconButton(
+            tooltip: 'home.history'.i18n,
+            onPressed: () => _openHistoryTab(0),
+            icon: Icon(Icons.history_rounded, color: HomeTheme.textPrimary),
+          ),
+        ],
       ),
       body: RefreshIndicator(
         onRefresh: () => c.onRefresh(),
@@ -560,7 +612,49 @@ class _Nsfw18ZonePageState extends State<Nsfw18ZonePage> {
   }
 
   Widget _buildDesktop(BuildContext context) {
-    return _buildContent();
+    // ── Los atajos también en escritorio ──────────────────────────────────
+    //
+    // En Android van en la barra de arriba de esta zona; acá no había barra, y
+    // los favoritos y el historial DE ESTA ZONA se quedaron sin puerta: había
+    // que abrir los de la zona normal y no estaban ahí, porque cada una guarda
+    // los suyos.
+    //
+    // Flotan arriba a la derecha, sobre el contenido, en vez de meter una barra
+    // entera por dos botones.
+    return Stack(
+      children: [
+        Positioned.fill(child: _buildContent()),
+        Positioned(
+          top: 12,
+          right: 16,
+          child: Container(
+            padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 2),
+            decoration: BoxDecoration(
+              color: HomeTheme.cardSurface.withValues(alpha: 0.92),
+              borderRadius: BorderRadius.circular(999),
+              border: Border.all(color: HomeTheme.border),
+            ),
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                IconButton(
+                  tooltip: 'home.favorite'.i18n,
+                  onPressed: _favoritos,
+                  icon: Icon(Icons.favorite_border_rounded,
+                      size: 20, color: HomeTheme.textPrimary),
+                ),
+                IconButton(
+                  tooltip: 'home.history'.i18n,
+                  onPressed: () => _openHistoryTab(0),
+                  icon: Icon(Icons.history_rounded,
+                      size: 20, color: HomeTheme.textPrimary),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ],
+    );
   }
 
   @override
@@ -587,7 +681,7 @@ void _abrirHistorialZona(BuildContext context) {
 }
 
 /// Botón al Historial cuando la zona está vacía. Ver el mismo widget en
-/// home_page.dart: se repite acá porque los dos son privados de su archivo y
+/// library_page.dart: se repite acá porque los dos son privados de su archivo y
 /// compartirlo obligaría a exponerlo solo por esto.
 class _VerHistorialBoton extends StatelessWidget {
   const _VerHistorialBoton({required this.accent, required this.onTap});
@@ -689,7 +783,7 @@ class _Nsfw18EmptyStateState extends State<_Nsfw18EmptyState>
                       width: 1.5,
                     ),
                   ),
-                  child: const Icon(
+                  child: Icon(
                     Icons.lock_outline,
                     color: HomeTheme.accentRed,
                     size: 26,
@@ -700,8 +794,7 @@ class _Nsfw18EmptyStateState extends State<_Nsfw18EmptyState>
               Text(
                 'nsfw18.no-record'.i18n,
                 textAlign: TextAlign.center,
-                style:
-                    const TextStyle(color: HomeTheme.textMuted, fontSize: 13.5),
+                style: TextStyle(color: HomeTheme.textMuted, fontSize: 13.5),
               ),
               const SizedBox(height: 18),
               // Mismo botón que el Home normal, con el acento de esta zona y

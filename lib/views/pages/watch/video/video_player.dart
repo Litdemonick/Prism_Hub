@@ -1,3 +1,5 @@
+import 'dart:math' as math;
+import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 import 'package:prismhub/models/extension.dart';
@@ -6,6 +8,7 @@ import 'package:prismhub/views/pages/watch/video/video_player_sidebar.dart';
 import 'package:prismhub/views/pages/watch/video/video_player_content.dart';
 import 'package:prismhub/data/services/extension_service.dart';
 import 'package:prismhub/views/widgets/platform_widget.dart';
+import 'package:prismhub/views/widgets/home/home_theme.dart';
 import 'package:prismhub/views/widgets/progress.dart';
 
 class VideoPlayer extends StatefulWidget {
@@ -70,6 +73,9 @@ class _VideoPlayerState extends State<VideoPlayer> {
           .timeout(const Duration(seconds: 4));
     } catch (_) {}
     if (!mounted) return;
+    // Y se espera a que TERMINE de entrar la pantalla. Ver _esperarLaEntrada.
+    await _esperarLaEntrada();
+    if (!mounted) return;
     // Sin lógica de "borrar el controller anterior de este tag": el tag ahora
     // es único por sesión (ver _tag), así que nunca hay uno previo que pisar.
     _c = Get.put(
@@ -104,6 +110,48 @@ class _VideoPlayerState extends State<VideoPlayer> {
       Get.delete<VideoPlayerController>(tag: _tag);
     }
     super.dispose();
+  }
+
+  /// Espera a que la animación de entrada de esta pantalla termine.
+  ///
+  /// ── Por qué, y qué se veía ──────────────────────────────────────────────
+  ///
+  /// Crear el controlador arranca mpv: abrir el motor, montar la textura,
+  /// resolver el servidor. Es lo más caro que hace la app, y estaba corriendo
+  /// EN MEDIO de la animación con la que esta pantalla entra. Los dos se pelean
+  /// el mismo hilo, así que la transición perdía cuadros justo al abrir — se
+  /// sentía como un tirón, y en la primera apertura de la app, cuando además
+  /// hay que cargar las bibliotecas nativas, mucho peor.
+  ///
+  /// Esperando a que la entrada termine, la animación corre sola y limpia, y el
+  /// arranque del reproductor empieza cuando ya no compite con nadie. No se
+  /// pierde tiempo real: lo que se demora es el arranque unos 250 ms, que es
+  /// exactamente lo que la animación tapa con la rueda que ya se muestra.
+  ///
+  /// Con tope, y no es de adorno: si algo deja la animación a medio camino —o
+  /// si la ruta no tiene animación, como puede pasar en escritorio— sin el tope
+  /// el reproductor no arrancaría nunca.
+  Future<void> _esperarLaEntrada() async {
+    final animacion = ModalRoute.of(context)?.animation;
+    if (animacion == null || animacion.status == AnimationStatus.completed) {
+      return;
+    }
+    final listo = Completer<void>();
+    void alCambiar(AnimationStatus estado) {
+      if (estado == AnimationStatus.completed ||
+          estado == AnimationStatus.dismissed) {
+        if (!listo.isCompleted) listo.complete();
+      }
+    }
+
+    animacion.addStatusListener(alCambiar);
+    try {
+      await listo.future.timeout(const Duration(milliseconds: 700));
+    } catch (_) {
+      // Se agotó el tope: se sigue igual, que es mejor que no abrir.
+    } finally {
+      animacion.removeStatusListener(alCambiar);
+    }
   }
 
   _buildContent() {
@@ -168,9 +216,21 @@ class _VideoPlayerState extends State<VideoPlayer> {
                               ),
                             ],
                           ),
+                          // ── El aviso no se achica de pie ──────────────
+                          //
+                          // El ancho salía de una fracción del ancho de la
+                          // pantalla, y de pie ese ancho es la mitad: el aviso
+                          // —«no se pudo reproducir», el panel de ajustes—
+                          // quedaba en una columna angosta con las palabras
+                          // partidas, mientras que acostado se veía bien. El
+                          // texto no cambia de largo porque el teléfono gire.
+                          //
+                          // Ahora usa casi todo el ancho que hay, con un techo
+                          // para que en una tablet o acostado no se estire de
+                          // lado a lado, que ahí sí se lee peor.
                           constraints: BoxConstraints(
-                            maxHeight: 200,
-                            maxWidth: maxWidth * 0.8,
+                            maxHeight: 260,
+                            maxWidth: math.min(maxWidth - 48, 420),
                           ),
                           child: DefaultTextStyle(
                             style: const TextStyle(
@@ -212,6 +272,56 @@ class _VideoPlayerState extends State<VideoPlayer> {
     });
   }
 
+  /// El reproductor de pie, estilo YouTube: el vídeo arriba y el resto debajo.
+  ///
+  /// ── Por qué existe esta rama ────────────────────────────────────────────
+  ///
+  /// Hasta ahora el reproductor BLOQUEABA la pantalla en horizontal: girar el
+  /// teléfono no hacía nada. Está bien para mirar, pero deja afuera lo que uno
+  /// hace la mitad del tiempo — dejar algo sonando y seguir con otra cosa, o
+  /// simplemente sostener el teléfono de una mano.
+  ///
+  /// Acostado NO CAMBIA NADA: se devuelve exactamente lo mismo que antes, el
+  /// contenido ocupando la pantalla entera. Esta rama es aditiva a propósito,
+  /// porque el reproductor es la parte más delicada de la app y no vale la pena
+  /// tocar el camino que ya funciona para agregar uno nuevo.
+  ///
+  /// De pie, el vídeo va en una caja 16:9 arriba de todo —la forma real del
+  /// contenido, así que no se recorta ni deja franjas— con sus controles
+  /// adentro, y debajo queda el resto de la pantalla. Las barras del sistema
+  /// vuelven a verse: acá el vídeo no es todo, y esconder la de navegación
+  /// dejaría sin salida.
+  Widget _androidSegunOrientacion(BuildContext context) {
+    final acostado = MediaQuery.orientationOf(context) == Orientation.landscape;
+
+    // Se pide en cada construcción y no una sola vez: la orientación cambia
+    // sin avisar por ningún otro lado, y esto es idempotente.
+    VideoPlayerController.pantallaSegunOrientacion(acostado: acostado);
+
+    if (acostado) return Scaffold(body: _buildContent());
+
+    // De pie el contenido usa la pantalla ENTERA igual que acostado.
+    //
+    // El primer intento fue encerrar el vídeo en una caja 16:9 arriba y dejar
+    // negro debajo. Se veía mal y por un motivo claro: los controles viven
+    // DENTRO del reproductor, así que encogiendo la caja se encogían con él —
+    // los botones quedaban apretados sobre la imagen, pisándola, y los de la
+    // derecha directamente cortados.
+    //
+    // Ahora la caja es toda la pantalla y lo que se mueve es la IMAGEN: se
+    // ancla arriba (ver VideoPlayerConten). El resultado es el que se buscaba
+    // —vídeo arriba, espacio libre debajo— y los controles se reparten en esa
+    // pantalla entera, con la barra de abajo en el hueco en vez de encima del
+    // vídeo. Y sin tocar una línea de los controles, que es lo más delicado.
+    return Scaffold(
+      // Un fondo con algo de color en vez de negro puro. El hueco de abajo es
+      // media pantalla: en negro plano se lee como que la app se colgó, y con
+      // el mismo fondo del resto de la app se lee como parte del reproductor.
+      backgroundColor: HomeTheme.oscuroFondo,
+      body: _buildContent(),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     // ExcludeSemantics: el reproductor reconstruye sus controles cada frame
@@ -224,7 +334,7 @@ class _VideoPlayerState extends State<VideoPlayer> {
       child: PlatformBuildWidget(
         androidBuilder: (context) => Theme(
           data: ThemeData.dark(useMaterial3: true),
-          child: Scaffold(body: _buildContent()),
+          child: _androidSegunOrientacion(context),
         ),
         desktopBuilder: ((context) => _buildContent()),
       ),
