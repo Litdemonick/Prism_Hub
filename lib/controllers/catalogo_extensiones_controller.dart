@@ -530,7 +530,29 @@ class CatalogoExtensionesController extends GetxController {
 
   final _ejesPorExtension =
       <String, Map<String, ({String clave, String valor})>>{};
-  bool _generosLeidos = false;
+  /// Qué extensiones ya dieron sus filtros, y en qué condiciones.
+  ///
+  /// ── Por qué no un simple «ya se leyeron» ───────────────────────────────
+  ///
+  /// Era un booleano de una sola vez por sesión. Con eso, una extensión
+  /// instalada o actualizada con la app abierta aparecía en el Inicio pero
+  /// **sorda a los filtros de arriba**: nunca se le preguntaban los suyos, así
+  /// que filtrar por «Romance» la dejaba fuera como si no supiera filtrar.
+  ///
+  /// La marca guarda la VERSIÓN, así que una actualización se vuelve a leer
+  /// sola —puede traer filtros nuevos— y una que no cambió se saltea sin
+  /// tocarle el motor. Guarda además si en ese momento contaba como una de las
+  /// que tienen las dos cosas, porque de eso depende si se la consulta: cuando
+  /// esa clasificación llega más tarde, la marca cambia y se la vuelve a mirar.
+  final _generosVistos = <String, String>{};
+
+  /// La marca de esta vuelta para una extensión.
+  static String _marcaDeGeneros(ExtensionService r) =>
+      '${r.extension.version}|${ExtensionUtils.esMixta(r.extension.package)}';
+
+  /// ¿Queda alguna a la que todavía no se le preguntó?
+  bool get _faltanGeneros => _motoresDelHome.entries
+      .any((e) => _generosVistos[e.key] != _marcaDeGeneros(e.value));
 
   /// Minúsculas, sin tildes y sin espacios de más.
   ///
@@ -581,7 +603,7 @@ class CatalogoExtensionesController extends GetxController {
     //
     // Ahora la marca definitiva se pone solo cuando de verdad se leyó algo. Si
     // falló, la próxima vez que alguien pida los géneros se vuelve a intentar.
-    if (_generosLeidos || _leyendoGeneros) return;
+    if (!_faltanGeneros || _leyendoGeneros) return;
     _leyendoGeneros = true;
     try {
       await _leerGeneros();
@@ -626,6 +648,14 @@ class CatalogoExtensionesController extends GetxController {
     // Lo guardado ya está en pantalla; esto lo confirma o lo corrige. Si el
     // escaneo no encuentra nada —sin extensiones activas, todas fallando— se
     // deja lo anterior en vez de vaciar la barra.
+    // Una desinstalada no puede seguir aportando ejes ni contando para el
+    // mínimo de la barra.
+    final vivas = _motoresDelHome.keys.toSet();
+    _generosVistos.removeWhere((p, _) => !vivas.contains(p));
+    _ejesPorExtension.removeWhere((p, _) => !vivas.contains(p));
+    _popularPorExtension.removeWhere((p, _) => !vivas.contains(p));
+    _segurosPorExtension.removeWhere((p, _) => !vivas.contains(p));
+
     final cuantas = <String, int>{};
     var alguna = false;
     var salteadas = 0;
@@ -644,6 +674,13 @@ class CatalogoExtensionesController extends GetxController {
         salteadas++;
         continue;
       }
+      // Ya se le preguntó a ESTA versión: no se le vuelve a tocar el motor.
+      //
+      // Es lo que permite que instalar o actualizar una extensión con la app
+      // abierta la sume a los filtros de arriba sin volver a interrogar a las
+      // otras once, que es lo que costaba caro.
+      final marca = _marcaDeGeneros(runtime);
+      if (_generosVistos[e.key] == marca) continue;
       // ── Las mixtas SÍ aportan sus filtros ─────────────────────────────
       //
       // Acá se descartaba toda extensión marcada `nsfw`, con el criterio viejo
@@ -665,6 +702,11 @@ class CatalogoExtensionesController extends GetxController {
       // nada normal que filtrar.
       if (runtime.extension.nsfw &&
           !ExtensionUtils.esMixta(runtime.extension.package)) {
+        // Se anota igual, para que no quede pendiente para siempre y la barra
+        // siga pidiendo los géneros en cada vuelta. Como la marca incluye si
+        // contaba como mixta, el día que esa clasificación llegue la marca
+        // cambia y esta se vuelve a mirar.
+        _generosVistos[e.key] = marca;
         continue;
       }
       try {
@@ -710,24 +752,41 @@ class CatalogoExtensionesController extends GetxController {
           });
         }
 
+        // Contestó: queda anotada, aunque no aporte ningún eje de los
+        // curados. Preguntarle de nuevo daría lo mismo.
+        _generosVistos[e.key] = marca;
         if (deEsta.isNotEmpty) {
           alguna = true;
           _ejesPorExtension[e.key] = deEsta;
-          for (final id in deEsta.keys) {
-            cuantas[id] = (cuantas[id] ?? 0) + 1;
-          }
+        } else {
+          _ejesPorExtension.remove(e.key);
         }
       } catch (err) {
+        // No se anota: la próxima vuelta la vuelve a intentar. Un tiempo
+        // agotado o un motor ocupado no puede dejarla sorda para siempre.
         logger
             .info('[home] ${runtime.extension.name} no dio sus filtros: $err');
       }
     }
 
-    // Sin nada leído no se marca como hecho: se reintenta la próxima.
-    if (!alguna) return;
-    // Y tampoco se cierra si quedó alguna sin consultar: sus géneros faltarían
-    // para siempre. Se muestran los que ya hay y el próximo intento completa.
-    if (salteadas == 0) _generosLeidos = true;
+    // Sin nada leído no se toca la barra: se deja lo que ya había y se
+    // reintenta la próxima. `salteadas` ya no cierra nada — cada extensión
+    // lleva su propia marca, así que la que quedó ocupada vuelve sola.
+    if (!alguna && salteadas > 0) return;
+
+    // ── Se cuenta sobre TODO lo acumulado, no sobre esta vuelta ──────────
+    //
+    // Antes se contaba con lo leído en la pasada, que servía cuando la pasada
+    // era siempre todas. Ahora las que ya se conocen se saltean, así que
+    // contar solo lo de esta vuelta dejaría la barra con los ejes de la última
+    // extensión instalada y nada más.
+    cuantas.clear();
+    for (final entrada in _ejesPorExtension.entries) {
+      if (!_motoresDelHome.containsKey(entrada.key)) continue;
+      for (final id in entrada.value.keys) {
+        cuantas[id] = (cuantas[id] ?? 0) + 1;
+      }
+    }
 
     bool ofrecible(String id) => (cuantas[id] ?? 0) >= _minimoParaOfrecer;
 
@@ -1706,6 +1765,22 @@ class CatalogoExtensionesController extends GetxController {
       logger.info('[home] no se pudo completar en segundo plano: $e');
       return;
     }
+    // ── Y se le piden los filtros a la que sea nueva ────────────────────
+    //
+    // Este es el punto donde ya se sabe que la lista de extensiones cambió, así
+    // que es donde corresponde. Sin esto, una extensión instalada o actualizada
+    // con la app abierta salía en el Inicio pero sorda a los filtros de arriba:
+    // filtrar por «Romance» la dejaba fuera como si no supiera filtrar, y la
+    // única forma de arreglarlo era reiniciar.
+    //
+    // Va DESPUÉS de detectarMixtas a propósito: de esa clasificación depende si
+    // a una extensión se le preguntan sus filtros o no.
+    //
+    // No se espera: la barra de arriba se completa sola cuando termine, y el
+    // resto del Home no tiene por qué quedarse esperando a que doce motores
+    // contesten. Y `cargarGeneros` se saltea sola las que ya conoce, así que
+    // cuando no cambió nada esto no cuesta nada.
+    unawaited(cargarGeneros());
     // Solo si apareció algo nuevo que mostrar.
     if (ExtensionUtils.vistaPrevia.isEmpty && ExtensionUtils.mixtas.isEmpty) {
       return;
