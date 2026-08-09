@@ -383,13 +383,54 @@ class _AndroidMainPageState extends fluent.State<AndroidMainPage> {
   /// Si los tres puntos están desplegados.
   bool _masAbierto = false;
 
-  final pages = const [
-    HomePage(),
-    LibraryPage(),
-    SearchPage(),
-    ExtensionPage(),
-    SettingsPage(),
-  ];
+  /// Las cinco zonas, ya armadas.
+  ///
+  /// ── Por qué NO es `const`, que es como estaba ──────────────────────────
+  ///
+  /// Era `final pages = const [HomePage(), ...]`: widgets const guardados en un
+  /// campo, o sea SIEMPRE los mismos cinco objetos. Y cuando el widget nuevo es
+  /// el MISMO objeto que el viejo, Flutter no actualiza el elemento ni baja al
+  /// subárbol — se lo saltea entero (`updateChild` en framework.dart:
+  /// `if (hasSameSuperclass && child.widget == newWidget)`).
+  ///
+  /// Con eso, cambiar de claro a oscuro no llegaba a ninguna de las cinco
+  /// pestañas: la raíz se rehacía, esta pantalla se rehacía, y acá se cortaba
+  /// el camino. Es el mismo bug que ya se había arreglado un piso más arriba
+  /// con el `const AndroidMainPage()` de main.dart, escondido un nivel abajo.
+  ///
+  /// ── Y por qué se guardan igual, en vez de armarlas en cada dibujado ────
+  ///
+  /// Porque esta pantalla se rehace bastante seguido —al cambiar de pestaña, al
+  /// abrir los tres puntos, al entrar y salir de una ficha—, y con instancias
+  /// nuevas cada vez las CINCO zonas volverían a construirse en cada uno de
+  /// esos toques, no solo la que se ve. Guardándolas se conserva el atajo de
+  /// Flutter para todo eso, que es lo que había antes.
+  ///
+  /// Se rehacen en un solo caso: cuando cambia el modo de color. Ver
+  /// [_pilaDePaginas].
+  List<Widget> _zonas = _crearZonas();
+
+  /// El modo con el que se armaron las zonas que hay guardadas.
+  bool _modoDeLasZonas = ModoDeColor.claro;
+
+  /// Sin un solo `const` acá, y no es un descuido: un widget const está
+  /// canonizado, o sea que `const HomePage()` devuelve SIEMPRE el mismo objeto
+  /// y rehacer la lista no cambiaría nada. Es justamente lo que hay que evitar.
+  ///
+  /// De ahí los cinco `ignore`: el analizador ve constructores que podrían ser
+  /// const y avisa, sin saber que acá eso rompe la función.
+  static List<Widget> _crearZonas() => [
+        // ignore: prefer_const_constructors
+        HomePage(),
+        // ignore: prefer_const_constructors
+        LibraryPage(),
+        // ignore: prefer_const_constructors
+        SearchPage(),
+        // ignore: prefer_const_constructors
+        ExtensionPage(),
+        // ignore: prefer_const_constructors
+        SettingsPage(),
+      ];
 
   @override
   void initState() {
@@ -978,10 +1019,25 @@ class _AndroidMainPageState extends fluent.State<AndroidMainPage> {
   }
 
   Widget _pilaDePaginas() {
+    // ── Las zonas se rehacen SOLO al cambiar el modo ─────────────────────
+    //
+    // Objetos nuevos es lo único que obliga a Flutter a bajar al subárbol de
+    // cada pestaña (ver [_zonas]). Fuera de eso se reusan los de antes, así que
+    // cambiar de pestaña sigue costando lo mismo que costaba.
+    //
+    // Es un campo suelto que se toca durante el dibujado, como
+    // `_habiaPantallaEncima` acá abajo: no dispara ningún redibujado por su
+    // cuenta —el del cambio de modo ya viene bajando desde la raíz— así que no
+    // es un setState escondido.
+    if (_modoDeLasZonas != ModoDeColor.claro) {
+      _modoDeLasZonas = ModoDeColor.claro;
+      _zonas = _crearZonas();
+    }
+    final zonas = _zonas;
     return IndexedStack(
       index: c.selectedTab.value,
       children: [
-        for (var i = 0; i < pages.length; i++)
+        for (var i = 0; i < zonas.length; i++)
           RepaintBoundary(
             child: TickerMode(
               enabled: i == c.selectedTab.value,
@@ -997,7 +1053,7 @@ class _AndroidMainPageState extends fluent.State<AndroidMainPage> {
               // que con `extendBody` ya vale exactamente el alto de la barra).
               // Así el fondo llega hasta el borde y lo que se desplaza igual
               // termina por encima de la barra.
-              child: pages[i],
+              child: zonas[i],
             ),
           ),
       ],
