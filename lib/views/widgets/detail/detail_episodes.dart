@@ -44,7 +44,7 @@ class GeometriaCapitulos {
   static const tarjetaRelleno = 28.0; // 14 arriba + 14 abajo
   static const tarjetaAire = 8.0; // entre el título y la caja
   static const tarjetaCaja = 30.0; // la caja del idioma
-  static const tituloTarjeta = TextStyle(
+  static TextStyle get tituloTarjeta => TextStyle(
     fontSize: 16,
     height: 1.25,
     fontWeight: FontWeight.w700,
@@ -220,14 +220,14 @@ class _TarjetaDeCapitulo extends StatelessWidget {
                     child: Row(
                       mainAxisSize: MainAxisSize.min,
                       children: [
-                        const Icon(Icons.translate_rounded,
+                        Icon(Icons.translate_rounded,
                             size: 14, color: HomeTheme.textMuted),
                         const SizedBox(width: 7),
                         Text(
                           // Sin idioma declarado no se inventa ninguno: se
                           // deja el guion largo, que se lee como "no se sabe".
                           idioma ?? '—',
-                          style: const TextStyle(
+                          style: TextStyle(
                             fontSize: 12.5,
                             color: HomeTheme.textMuted,
                           ),
@@ -408,7 +408,7 @@ class _DetailEpisodesState extends State<DetailEpisodes> {
               dropdownColor: HomeTheme.cardSurface,
               iconEnabledColor: HomeTheme.textMuted,
               borderRadius: BorderRadius.circular(10),
-              style: const TextStyle(
+              style: TextStyle(
                 color: HomeTheme.textPrimary,
                 fontSize: 14,
                 fontWeight: FontWeight.w600,
@@ -435,7 +435,7 @@ class _DetailEpisodesState extends State<DetailEpisodes> {
                   ),
                   // 14 y apagado, no 18: es un dato de referencia, no un
                   // título. Con 18 pesaba más que los propios capítulos.
-                  style: const TextStyle(
+                  style: TextStyle(
                     fontSize: 14,
                     fontWeight: FontWeight.w600,
                     color: HomeTheme.textMuted,
@@ -465,7 +465,7 @@ class _DetailEpisodesState extends State<DetailEpisodes> {
                 c.type == ExtensionType.bangumi
                     ? 'video.no-episodes-yet'.i18n
                     : 'reader.no-chapters-yet'.i18n,
-                style: const TextStyle(color: HomeTheme.textMuted),
+                style: TextStyle(color: HomeTheme.textMuted),
               ),
             ),
           )
@@ -700,7 +700,7 @@ class _DetailEpisodesState extends State<DetailEpisodes> {
           child: Center(
             child: Text(
               noEpisodesYetString,
-              style: const TextStyle(color: HomeTheme.textMuted),
+              style: TextStyle(color: HomeTheme.textMuted),
             ),
           ),
         ),
@@ -774,7 +774,7 @@ class _DetailEpisodesState extends State<DetailEpisodes> {
               _episodeLabel(name),
               maxLines: 1,
               overflow: TextOverflow.ellipsis,
-              style: const TextStyle(color: HomeTheme.textPrimary),
+              style: TextStyle(color: HomeTheme.textPrimary),
             ),
             onPressed: () {
               c.goWatch(

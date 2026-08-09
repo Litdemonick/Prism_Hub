@@ -512,7 +512,7 @@ class _ExtensionPageState extends State<ExtensionPage> {
                 children: [
                   Text(
                     'search.filter'.i18n,
-                    style: const TextStyle(
+                    style: TextStyle(
                       color: HomeTheme.textMuted,
                       fontSize: 12,
                       fontWeight: FontWeight.w600,
@@ -544,11 +544,11 @@ class _ExtensionPageState extends State<ExtensionPage> {
                     ],
                   ),
                   const SizedBox(height: 20),
-                  const Divider(height: 1, color: HomeTheme.border),
+                  Divider(height: 1, color: HomeTheme.border),
                   const SizedBox(height: 12),
                   Text(
                     'extension.acciones'.i18n,
-                    style: const TextStyle(
+                    style: TextStyle(
                       color: HomeTheme.textMuted,
                       fontSize: 12,
                       fontWeight: FontWeight.w600,
@@ -858,7 +858,7 @@ class _ExtensionPageState extends State<ExtensionPage> {
         // la Biblioteca, y acostado eso es media fila de tarjetas.
         body: Stack(
           children: [
-            const Positioned.fill(child: AnimatedBackgroundGlow()),
+            Positioned.fill(child: AnimatedBackgroundGlow()),
             // ── Acá la franja se queda fija ─────────────────────────────
             //
             // Es la única zona que no la puede meter dentro de su área
@@ -914,7 +914,7 @@ class _ExtensionPageState extends State<ExtensionPage> {
                               child: Container(
                                 width: 9,
                                 height: 9,
-                                decoration: const BoxDecoration(
+                                decoration: BoxDecoration(
                                   color: HomeTheme.accentPink,
                                   shape: BoxShape.circle,
                                 ),
@@ -1084,7 +1084,7 @@ class _ExtensionPageState extends State<ExtensionPage> {
       color: HomeTheme.bg,
       child: Stack(
         children: [
-          const Positioned.fill(child: AnimatedBackgroundGlow()),
+          Positioned.fill(child: AnimatedBackgroundGlow()),
           Column(
             children: [
               // Encabezado (título + cuántas tiene instaladas + buscador)
@@ -1104,7 +1104,7 @@ class _ExtensionPageState extends State<ExtensionPage> {
                         Text(
                           'common.extension-installed'.i18n,
                           textAlign: TextAlign.center,
-                          style: const TextStyle(
+                          style: TextStyle(
                             fontSize: 22,
                             fontWeight: FontWeight.bold,
                             color: HomeTheme.textPrimary,
@@ -1136,7 +1136,7 @@ class _ExtensionPageState extends State<ExtensionPage> {
                                 'extension-repo.stats-badge',
                                 translationParams: {'installed': '$total'},
                               ),
-                              style: const TextStyle(
+                              style: TextStyle(
                                 fontSize: 12,
                                 fontWeight: FontWeight.w700,
                                 color: HomeTheme.accentPink,
@@ -1403,7 +1403,7 @@ class _BotonMasivo extends StatelessWidget {
               const SizedBox(width: 7),
               Text(
                 label,
-                style: const TextStyle(
+                style: TextStyle(
                   fontSize: 12.5,
                   fontWeight: FontWeight.w600,
                   color: HomeTheme.textPrimary,

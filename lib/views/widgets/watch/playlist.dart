@@ -40,7 +40,7 @@ class PlayList extends fluent.StatelessWidget {
                 title,
                 maxLines: 1,
                 overflow: TextOverflow.ellipsis,
-                style: const TextStyle(
+                style: TextStyle(
                   fontSize: 17,
                   fontWeight: FontWeight.bold,
                   color: HomeTheme.textPrimary,
@@ -158,7 +158,7 @@ class PlaylistAndroidTile extends StatelessWidget {
                   ),
                 ),
                 if (selected)
-                  const Padding(
+                  Padding(
                     padding: EdgeInsets.only(left: 10),
                     child: Icon(
                       Icons.check_circle,

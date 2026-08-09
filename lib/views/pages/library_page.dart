@@ -336,7 +336,7 @@ class _LibraryPageState extends State<LibraryPage> {
           color: HomeTheme.bg,
           child: Stack(
             children: [
-              const Positioned.fill(child: AnimatedBackgroundGlow()),
+              Positioned.fill(child: AnimatedBackgroundGlow()),
               LayoutBuilder(
                 builder: (context, outerConstraints) {
                   return SingleChildScrollView(
@@ -403,7 +403,7 @@ class _LibraryPageState extends State<LibraryPage> {
                                   IconButton(
                                     tooltip: 'home.favorite'.i18n,
                                     onPressed: _favoritos,
-                                    icon: const Icon(
+                                    icon: Icon(
                                       Icons.favorite_border_rounded,
                                       color: HomeTheme.textPrimary,
                                     ),
@@ -414,7 +414,7 @@ class _LibraryPageState extends State<LibraryPage> {
                                   IconButton(
                                     tooltip: 'home.history'.i18n,
                                     onPressed: () => _openHistoryTab(0),
-                                    icon: const Icon(
+                                    icon: Icon(
                                       Icons.history_rounded,
                                       color: HomeTheme.textPrimary,
                                     ),
@@ -617,7 +617,7 @@ class _BibliotecaVaciaState extends State<_BibliotecaVacia>
                       width: 1.5,
                     ),
                   ),
-                  child: const Icon(
+                  child: Icon(
                     Icons.movie_filter_outlined,
                     color: HomeTheme.accentPink,
                     size: 26,
@@ -629,7 +629,7 @@ class _BibliotecaVaciaState extends State<_BibliotecaVacia>
                 'home.no-record'.i18n,
                 textAlign: TextAlign.center,
                 style:
-                    const TextStyle(color: HomeTheme.textMuted, fontSize: 13.5),
+                    TextStyle(color: HomeTheme.textMuted, fontSize: 13.5),
               ),
               const SizedBox(height: 18),
               // Botón al Historial: con los estados de seguimiento, terminar

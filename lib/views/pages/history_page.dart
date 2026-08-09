@@ -355,7 +355,7 @@ class _HistoryPageState extends State<HistoryPage> {
         backgroundColor: HomeTheme.cardSurface,
         content: Text(
           'home.clear-history-confirm'.i18n,
-          style: const TextStyle(color: HomeTheme.textPrimary),
+          style: TextStyle(color: HomeTheme.textPrimary),
         ),
         actions: [
           TextButton(
@@ -474,7 +474,7 @@ class _HistoryPageState extends State<HistoryPage> {
                       ? 'nsfw18.no-record'.i18n
                       : 'home.no-record'.i18n)
                   : 'common.no-result'.i18n,
-              style: const TextStyle(color: HomeTheme.textMuted),
+              style: TextStyle(color: HomeTheme.textMuted),
             ),
           ),
         ),
@@ -771,7 +771,7 @@ class _HistoryPageState extends State<HistoryPage> {
           // En Favoritos no, mismo motivo que en la hoja: ahí la fecha es la de
           // guardado y filtrar por ella no contesta nada.
           if (!_onFavoritesTab) ...[
-            const Icon(Icons.schedule_rounded,
+            Icon(Icons.schedule_rounded,
                 size: 16, color: HomeTheme.textMuted),
             for (final r in _Rango.values)
               _chip(
@@ -851,7 +851,7 @@ class _HistoryPageState extends State<HistoryPage> {
                   padding: const EdgeInsets.fromLTRB(0, 12, 0, 10),
                   child: Text(
                     texto,
-                    style: const TextStyle(
+                    style: TextStyle(
                       fontSize: 15,
                       fontWeight: FontWeight.w700,
                       color: HomeTheme.textPrimary,
@@ -949,24 +949,24 @@ class _HistoryPageState extends State<HistoryPage> {
         ),
         child: Row(
           children: [
-            const Icon(Icons.search, size: 18, color: HomeTheme.textMuted),
+            Icon(Icons.search, size: 18, color: HomeTheme.textMuted),
             const SizedBox(width: 8),
             Expanded(
               child: TextField(
                 controller: _searchController,
                 style:
-                    const TextStyle(color: HomeTheme.textPrimary, fontSize: 14),
+                    TextStyle(color: HomeTheme.textPrimary, fontSize: 14),
                 decoration: InputDecoration(
                   isDense: true,
                   border: InputBorder.none,
                   hintText: 'common.search'.i18n,
-                  hintStyle: const TextStyle(color: HomeTheme.textMuted),
+                  hintStyle: TextStyle(color: HomeTheme.textMuted),
                   // Solo visible con texto — antes no había forma de
                   // limpiar la búsqueda salvo borrar a mano.
                   suffixIcon: _query.isEmpty
                       ? null
                       : IconButton(
-                          icon: const Icon(Icons.close,
+                          icon: Icon(Icons.close,
                               size: 18, color: HomeTheme.textMuted),
                           onPressed: () => setState(() {
                             _searchController.clear();
@@ -1028,7 +1028,7 @@ class _HistoryPageState extends State<HistoryPage> {
                 ),
                 child: Text(
                   'common.delete-all'.i18n,
-                  style: const TextStyle(
+                  style: TextStyle(
                     color: HomeTheme.textPrimary,
                     fontSize: 13,
                     fontWeight: FontWeight.w600,

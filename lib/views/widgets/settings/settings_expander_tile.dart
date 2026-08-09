@@ -62,12 +62,12 @@ class _SettingsExpanderTileState extends State<SettingsExpanderTile> {
             Text(
               widget.title,
               style:
-                  const TextStyle(fontSize: 20, color: HomeTheme.textPrimary),
+                  TextStyle(fontSize: 20, color: HomeTheme.textPrimary),
             ),
             const SizedBox(height: 2),
             Text(
               widget.subTitle,
-              style: const TextStyle(fontSize: 12, color: HomeTheme.textMuted),
+              style: TextStyle(fontSize: 12, color: HomeTheme.textMuted),
             ),
             const SizedBox(height: 15),
             widget.content,
@@ -112,7 +112,7 @@ class _SettingsExpanderTileState extends State<SettingsExpanderTile> {
                 appBar: AppBar(
                   backgroundColor: HomeTheme.bg,
                   title: Text(widget.title,
-                      style: const TextStyle(color: HomeTheme.textPrimary)),
+                      style: TextStyle(color: HomeTheme.textPrimary)),
                 ),
                 // SingleChildScrollView: en horizontal el alto útil es la
                 // mitad y este contenido (varias opciones apiladas) no entra
@@ -156,9 +156,9 @@ class _SettingsExpanderTileState extends State<SettingsExpanderTile> {
           top: const Radius.circular(10),
           bottom: open ? Radius.zero : const Radius.circular(10),
         ),
-        side: const BorderSide(color: HomeTheme.border),
+        side: BorderSide(color: HomeTheme.border),
       ),
-      contentShape: (open) => const RoundedRectangleBorder(
+      contentShape: (open) => RoundedRectangleBorder(
         borderRadius: BorderRadius.vertical(bottom: Radius.circular(10)),
         side: BorderSide(color: HomeTheme.border),
       ),
@@ -170,7 +170,7 @@ class _SettingsExpanderTileState extends State<SettingsExpanderTile> {
         children: [
           const SizedBox(height: 10),
           Text(widget.title,
-              style: const TextStyle(color: HomeTheme.textPrimary)),
+              style: TextStyle(color: HomeTheme.textPrimary)),
           const SizedBox(height: 2),
           SettingsSubtitle(widget.subTitle),
           const SizedBox(height: 15)

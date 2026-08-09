@@ -111,7 +111,7 @@ class _Nsfw18LockPageState extends State<Nsfw18LockPage> {
 
   InputDecoration _decoration(String label) => InputDecoration(
         labelText: label,
-        labelStyle: const TextStyle(color: HomeTheme.textMuted),
+        labelStyle: TextStyle(color: HomeTheme.textMuted),
         filled: true,
         fillColor: HomeTheme.cardSurface,
         errorText: null,
@@ -121,7 +121,7 @@ class _Nsfw18LockPageState extends State<Nsfw18LockPage> {
         ),
         focusedBorder: OutlineInputBorder(
           borderRadius: BorderRadius.circular(10),
-          borderSide: const BorderSide(color: HomeTheme.accentRed, width: 1.5),
+          borderSide: BorderSide(color: HomeTheme.accentRed, width: 1.5),
         ),
       );
 
@@ -147,7 +147,7 @@ class _Nsfw18LockPageState extends State<Nsfw18LockPage> {
                       ? 'nsfw18.biometric-denied'.i18n
                       : 'nsfw18.biometric-checking'.i18n,
                   textAlign: TextAlign.center,
-                  style: const TextStyle(
+                  style: TextStyle(
                       color: HomeTheme.textPrimary, fontSize: 14, height: 1.4),
                 ),
                 if (_identidadRechazada) ...[
@@ -176,10 +176,10 @@ class _Nsfw18LockPageState extends State<Nsfw18LockPage> {
       backgroundColor: HomeTheme.bg,
       appBar: AppBar(
         backgroundColor: HomeTheme.bg,
-        iconTheme: const IconThemeData(color: HomeTheme.textPrimary),
+        iconTheme: IconThemeData(color: HomeTheme.textPrimary),
         title: Text(
           'nsfw18.title'.i18n,
-          style: const TextStyle(color: HomeTheme.textPrimary),
+          style: TextStyle(color: HomeTheme.textPrimary),
         ),
       ),
       // Antes: Center directo, sin SingleChildScrollView — en horizontal en
@@ -213,7 +213,7 @@ class _Nsfw18LockPageState extends State<Nsfw18LockPage> {
                               width: 1.5,
                             ),
                           ),
-                          child: const Icon(
+                          child: Icon(
                             Icons.lock_outline,
                             color: HomeTheme.accentRed,
                             size: 28,
@@ -225,7 +225,7 @@ class _Nsfw18LockPageState extends State<Nsfw18LockPage> {
                               ? 'nsfw18.setup-title'.i18n
                               : 'nsfw18.enter-title'.i18n,
                           textAlign: TextAlign.center,
-                          style: const TextStyle(
+                          style: TextStyle(
                             color: HomeTheme.textPrimary,
                             fontSize: 17,
                             fontWeight: FontWeight.w700,
@@ -237,7 +237,7 @@ class _Nsfw18LockPageState extends State<Nsfw18LockPage> {
                               ? 'nsfw18.setup-subtitle'.i18n
                               : 'nsfw18.enter-subtitle'.i18n,
                           textAlign: TextAlign.center,
-                          style: const TextStyle(
+                          style: TextStyle(
                               color: HomeTheme.textMuted, fontSize: 13),
                         ),
                         const SizedBox(height: 24),
@@ -250,7 +250,7 @@ class _Nsfw18LockPageState extends State<Nsfw18LockPage> {
                             FilteringTextInputFormatter.digitsOnly
                           ],
                           maxLength: 8,
-                          style: const TextStyle(color: HomeTheme.textPrimary),
+                          style: TextStyle(color: HomeTheme.textPrimary),
                           decoration: _decoration('nsfw18.pin-label'.i18n),
                           onSubmitted: (_) {
                             if (!_isSetup) _submit();
@@ -267,7 +267,7 @@ class _Nsfw18LockPageState extends State<Nsfw18LockPage> {
                             ],
                             maxLength: 8,
                             style:
-                                const TextStyle(color: HomeTheme.textPrimary),
+                                TextStyle(color: HomeTheme.textPrimary),
                             decoration:
                                 _decoration('nsfw18.pin-confirm-label'.i18n),
                             onSubmitted: (_) => _submit(),

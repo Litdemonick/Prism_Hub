@@ -80,7 +80,7 @@ class _HomePageState extends State<HomePage> {
       color: HomeTheme.bg,
       child: Stack(
         children: [
-          const Positioned.fill(child: AnimatedBackgroundGlow()),
+          Positioned.fill(child: AnimatedBackgroundGlow()),
           // El fondo animado es el mismo para los dos. De acá para abajo, cada
           // plataforma arma su Home entero.
           _esTactil ? HomeAndroid(c: c) : HomeWindows(c: c),
@@ -115,13 +115,13 @@ class _SinExtensiones extends StatelessWidget {
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            const Icon(Icons.extension_outlined,
+            Icon(Icons.extension_outlined,
                 size: 44, color: HomeTheme.textMuted),
             const SizedBox(height: 14),
             Text(
               'home.sin-extensiones'.i18n,
               textAlign: TextAlign.center,
-              style: const TextStyle(
+              style: TextStyle(
                 fontSize: 14,
                 height: 1.45,
                 color: HomeTheme.textMuted,
@@ -188,7 +188,7 @@ class _FilaInactiva extends StatelessWidget {
               fila.nombre,
               maxLines: 1,
               overflow: TextOverflow.ellipsis,
-              style: const TextStyle(
+              style: TextStyle(
                 fontSize: 14,
                 fontWeight: FontWeight.w600,
                 color: HomeTheme.textMuted,
@@ -223,7 +223,7 @@ class _SinRespuesta extends StatelessWidget {
       padding: EdgeInsets.fromLTRB(_margen(context), 22, _margen(context), 0),
       child: Row(
         children: [
-          const Icon(Icons.cloud_off_rounded,
+          Icon(Icons.cloud_off_rounded,
               size: 16, color: HomeTheme.textMuted),
           const SizedBox(width: 8),
           Expanded(
@@ -232,7 +232,7 @@ class _SinRespuesta extends StatelessWidget {
               maxLines: 1,
               overflow: TextOverflow.ellipsis,
               style:
-                  const TextStyle(fontSize: 12.5, color: HomeTheme.textMuted),
+                  TextStyle(fontSize: 12.5, color: HomeTheme.textMuted),
             ),
           ),
           TextButton(

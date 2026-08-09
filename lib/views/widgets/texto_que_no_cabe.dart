@@ -51,7 +51,7 @@ class TextoQueNoCabe extends StatelessWidget {
         child: SelectableText(
           texto,
           textAlign: TextAlign.center,
-          style: const TextStyle(
+          style: TextStyle(
             color: HomeTheme.textPrimary,
             fontSize: 19,
             height: 1.35,

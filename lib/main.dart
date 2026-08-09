@@ -197,6 +197,11 @@ void main(List<String> args) async {
     }
     try {
       await PrismHubStorage.ensureInitialized();
+      // El modo de color, apenas hay almacenamiento y ANTES de dibujar nada:
+      // leerlo después haría que la app apareciera un instante en oscuro y
+      // cambiara sola a claro delante del usuario.
+      ModoDeColor.notificador.value =
+          PrismHubStorage.getSetting(SettingKey.modoClaro) == true;
     } catch (e, st) {
       // Antes esto solo se logueaba y se seguía como si nada. No se puede:
       // con el almacenamiento caído, TODOS los getSetting() devuelven null, y
@@ -864,7 +869,15 @@ class _MainAppState extends State<MainApp> {
       "SimSun",
       "Arial Unicode MS",
     ];
-    return GetMaterialApp(
+    // ── Redibuja al cambiar de modo claro/oscuro ────────────────────────
+    //
+    // Los colores de la app son getters estáticos (ver HomeTheme), no un
+    // InheritedWidget: cambiar el modo NO avisa a nadie por su cuenta. Este
+    // oyente es el que le dice al árbol que se rehaga, y como envuelve la raíz,
+    // el cambio llega a todas las pantallas de una.
+    return ValueListenableBuilder<bool>(
+      valueListenable: ModoDeColor.notificador,
+      builder: (context, _, __) => GetMaterialApp(
       title: "PrismHub",
       // Le avisa a la barra flotante cuándo hay una pantalla encima, para que
       // se esconda deslizándose en vez de desaparecer de golpe. Ver
@@ -886,6 +899,7 @@ class _MainAppState extends State<MainApp> {
       // app en español.
       supportedLocales: const [Locale('es'), Locale('en')],
       locale: Locale(I18nUtils.currentLanguageCode),
+      ),
     );
   }
 
@@ -893,7 +907,7 @@ class _MainAppState extends State<MainApp> {
   // queda como color secundario/terciario; el sistema de temas actual solo
   // da para esto, personalización de verdad queda para más adelante.
   static const _brandGold = Color(0xFFC9A227);
-  static final _fluentAccent = fluent.AccentColor.swatch(const {
+  static final _fluentAccent = fluent.AccentColor.swatch({
     'normal': HomeTheme.accentPink,
   });
 
@@ -1007,7 +1021,10 @@ class _MainAppState extends State<MainApp> {
   }
 
   Widget _buildDesktopMain(BuildContext context) {
-    return fluent.FluentApp.router(
+    // Ver el comentario del mismo envoltorio en la raíz de Android.
+    return ValueListenableBuilder<bool>(
+      valueListenable: ModoDeColor.notificador,
+      builder: (context, _, __) => fluent.FluentApp.router(
       title: 'PrismHub',
       debugShowCheckedModeBanner: false,
       routerConfig: router,
@@ -1061,6 +1078,7 @@ class _MainAppState extends State<MainApp> {
           ),
         );
       },
+      ),
     );
   }
 

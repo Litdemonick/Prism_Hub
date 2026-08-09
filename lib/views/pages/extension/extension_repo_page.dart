@@ -121,7 +121,7 @@ class _ExtensionRepoPageState extends State<ExtensionRepoPage> {
                 children: [
                   Text(
                     titulo,
-                    style: const TextStyle(
+                    style: TextStyle(
                       color: HomeTheme.textMuted,
                       fontSize: 12,
                       fontWeight: FontWeight.w600,
@@ -279,18 +279,18 @@ class _ExtensionRepoPageState extends State<ExtensionRepoPage> {
                 Text(
                   '$label: ',
                   style:
-                      const TextStyle(color: HomeTheme.textMuted, fontSize: 13),
+                      TextStyle(color: HomeTheme.textMuted, fontSize: 13),
                 ),
                 Text(
                   value,
-                  style: const TextStyle(
+                  style: TextStyle(
                     color: HomeTheme.textPrimary,
                     fontSize: 13,
                     fontWeight: FontWeight.w600,
                   ),
                 ),
                 const SizedBox(width: 6),
-                const Icon(
+                Icon(
                   fluent.FluentIcons.chevron_down,
                   size: 10,
                   color: HomeTheme.textMuted,
@@ -316,7 +316,7 @@ class _ExtensionRepoPageState extends State<ExtensionRepoPage> {
         children: [
           Text(
             text.toUpperCase(),
-            style: const TextStyle(
+            style: TextStyle(
               fontSize: 12,
               fontWeight: FontWeight.w700,
               color: HomeTheme.textMuted,
@@ -351,7 +351,7 @@ class _ExtensionRepoPageState extends State<ExtensionRepoPage> {
     final label = '${page + 1}/$totalPages';
     final prevEnabled = page > 0;
     final nextEnabled = page < totalPages - 1;
-    const textStyle = TextStyle(fontSize: 11, color: HomeTheme.textMuted);
+    final textStyle = TextStyle(fontSize: 11, color: HomeTheme.textMuted);
     // En Android el tap target de antes (icono de 14px + 3px de padding,
     // ~20x20 en total) era muy chico para tocar con el dedo — 44x44 es el
     // mínimo recomendado. Desktop se queda compacto (usa mouse, no dedo).
@@ -513,7 +513,7 @@ class _ExtensionRepoPageState extends State<ExtensionRepoPage> {
               child: Text(
                 c.errorDetalle.value,
                 textAlign: TextAlign.center,
-                style: const TextStyle(
+                style: TextStyle(
                   color: HomeTheme.textMuted,
                   fontSize: 12.5,
                   height: 1.4,
@@ -879,7 +879,7 @@ class _ExtensionRepoPageState extends State<ExtensionRepoPage> {
         ),
         body: Stack(
           children: [
-            const Positioned.fill(child: AnimatedBackgroundGlow()),
+            Positioned.fill(child: AnimatedBackgroundGlow()),
             EasyRefresh(
               onRefresh: c.onRefresh,
               header: const ClassicHeader(
@@ -899,7 +899,7 @@ class _ExtensionRepoPageState extends State<ExtensionRepoPage> {
       color: HomeTheme.bg,
       child: Stack(
         children: [
-          const Positioned.fill(child: AnimatedBackgroundGlow()),
+          Positioned.fill(child: AnimatedBackgroundGlow()),
           Column(
             children: [
               // Encabezado + filtros: centrados con ancho máximo, fijos
@@ -923,7 +923,7 @@ class _ExtensionRepoPageState extends State<ExtensionRepoPage> {
                         Text(
                           'common.extension-repo'.i18n,
                           textAlign: TextAlign.center,
-                          style: const TextStyle(
+                          style: TextStyle(
                             fontSize: 22,
                             fontWeight: FontWeight.bold,
                             color: HomeTheme.textPrimary,
@@ -952,7 +952,7 @@ class _ExtensionRepoPageState extends State<ExtensionRepoPage> {
                               },
                             ),
                             textAlign: TextAlign.center,
-                            style: const TextStyle(
+                            style: TextStyle(
                               fontSize: 13,
                               color: HomeTheme.textMuted,
                             ),

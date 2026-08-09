@@ -188,7 +188,7 @@ class _SearchPageState extends State<SearchPage> {
                 children: [
                   Text(
                     'search.filter'.i18n,
-                    style: const TextStyle(
+                    style: TextStyle(
                       color: HomeTheme.textMuted,
                       fontSize: 12,
                       fontWeight: FontWeight.w600,
@@ -213,7 +213,7 @@ class _SearchPageState extends State<SearchPage> {
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          const Divider(height: 1, color: HomeTheme.border),
+                          Divider(height: 1, color: HomeTheme.border),
                           const SizedBox(height: 16),
                           boton,
                         ],
@@ -379,7 +379,7 @@ class _SearchPageState extends State<SearchPage> {
           color: HomeTheme.bg,
           child: Stack(
             children: [
-              const Positioned.fill(child: AnimatedBackgroundGlow()),
+              Positioned.fill(child: AnimatedBackgroundGlow()),
               // La franja va DENTRO del área desplazable, como primer
               // elemento: se va con los resultados al bajar y vuelve al subir,
               // igual que el nombre de la app en el Inicio. Ver la nota en
@@ -441,7 +441,7 @@ class _SearchPageState extends State<SearchPage> {
       color: HomeTheme.bg,
       child: Stack(
         children: [
-          const Positioned.fill(child: AnimatedBackgroundGlow()),
+          Positioned.fill(child: AnimatedBackgroundGlow()),
           Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
@@ -476,7 +476,7 @@ class _SearchPageState extends State<SearchPage> {
                       final acciones = <Widget>[
                         _buildNsfwButton(context),
                         const SizedBox(width: 16),
-                        const SizedBox(
+                        SizedBox(
                           height: 32,
                           child: VerticalDivider(
                             width: 1,
@@ -504,7 +504,7 @@ class _SearchPageState extends State<SearchPage> {
                           ),
                           child: Row(
                             children: [
-                              const Icon(Icons.search,
+                              Icon(Icons.search,
                                   size: 18, color: HomeTheme.textMuted),
                               const SizedBox(width: 8),
                               Expanded(
@@ -513,10 +513,10 @@ class _SearchPageState extends State<SearchPage> {
                                   placeholder: "search.hint-text".i18n,
                                   decoration: const WidgetStatePropertyAll(
                                       BoxDecoration()),
-                                  style: const TextStyle(
+                                  style: TextStyle(
                                       color: HomeTheme.textPrimary,
                                       fontSize: 14),
-                                  placeholderStyle: const TextStyle(
+                                  placeholderStyle: TextStyle(
                                       color: HomeTheme.textMuted),
                                   onChanged: (value) {
                                     if (value.isEmpty) c.search.value = '';
@@ -627,12 +627,12 @@ class _Nsfw18SearchButtonState extends State<_Nsfw18SearchButton> {
           child: Row(
             mainAxisSize: MainAxisSize.min,
             children: [
-              const Icon(Icons.warning_amber_rounded,
+              Icon(Icons.warning_amber_rounded,
                   size: 15, color: HomeTheme.accentRed),
               const SizedBox(width: 6),
               Text(
                 'nsfw18.search-button'.i18n,
-                style: const TextStyle(
+                style: TextStyle(
                   color: HomeTheme.accentRed,
                   fontSize: 13,
                   fontWeight: FontWeight.w700,

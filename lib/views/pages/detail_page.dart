@@ -129,7 +129,7 @@ class _DetailPageState extends State<DetailPage> {
             child: Column(
               mainAxisSize: MainAxisSize.min,
               children: [
-                const SizedBox(
+                SizedBox(
                   width: 38,
                   height: 38,
                   child: CircularProgressIndicator(
@@ -155,7 +155,7 @@ class _DetailPageState extends State<DetailPage> {
                             },
                           ),
                           textAlign: TextAlign.center,
-                          style: const TextStyle(
+                          style: TextStyle(
                             color: HomeTheme.textMuted,
                             fontSize: 13,
                             height: 1.35,
@@ -174,7 +174,7 @@ class _DetailPageState extends State<DetailPage> {
               child: Align(
                 alignment: Alignment.topLeft,
                 child: IconButton(
-                  icon: const Icon(Icons.arrow_back,
+                  icon: Icon(Icons.arrow_back,
                       color: HomeTheme.textPrimary),
                   // Navigator directo, no RouterUtils: esta rama es solo
                   // Android, donde la página se empuja con Get.to sobre el
@@ -222,7 +222,7 @@ class _DetailPageState extends State<DetailPage> {
                   Obx(() => Text(
                         c.error.value,
                         textAlign: TextAlign.center,
-                        style: const TextStyle(
+                        style: TextStyle(
                           color: HomeTheme.textPrimary,
                           fontSize: 15,
                           height: 1.4,
@@ -245,7 +245,7 @@ class _DetailPageState extends State<DetailPage> {
               child: Align(
                 alignment: Alignment.topLeft,
                 child: IconButton(
-                  icon: const Icon(Icons.arrow_back,
+                  icon: Icon(Icons.arrow_back,
                       color: HomeTheme.textPrimary),
                   onPressed: () => Navigator.of(context).maybePop(),
                 ),
@@ -523,7 +523,7 @@ class _DetailPageState extends State<DetailPage> {
     return Row(
       children: [
         SizedBox(width: anchoFicha, child: _conRefresco(ficha)),
-        const VerticalDivider(width: 1, thickness: 1, color: HomeTheme.border),
+        VerticalDivider(width: 1, thickness: 1, color: HomeTheme.border),
         // El panel de capítulos se queda con todo el alto, incluida la franja
         // de la barra de estado — de ahí el SafeArea, que antes no estaba y
         // dejaba el primer capítulo debajo del reloj.
@@ -686,7 +686,7 @@ class _DetailPageState extends State<DetailPage> {
                   Text(
                     'detail.no-tmdb-data'.i18n,
                     textAlign: TextAlign.center,
-                    style: const TextStyle(
+                    style: TextStyle(
                       color: HomeTheme.textMuted,
                       height: 1.4,
                     ),
@@ -956,7 +956,7 @@ class _DetailPageState extends State<DetailPage> {
                                           RoundedRectangleBorder(
                                             borderRadius:
                                                 BorderRadius.circular(999),
-                                            side: const BorderSide(
+                                            side: BorderSide(
                                                 color: HomeTheme.border),
                                           ),
                                         ),
@@ -1091,7 +1091,7 @@ class _DetailPageState extends State<DetailPage> {
                                             const SizedBox(height: 8),
                                             Text(
                                               cast.name,
-                                              style: const TextStyle(
+                                              style: TextStyle(
                                                 fontWeight: FontWeight.bold,
                                                 color: HomeTheme.textPrimary,
                                               ),
@@ -1099,7 +1099,7 @@ class _DetailPageState extends State<DetailPage> {
                                             Text(
                                               cast.character,
                                               overflow: TextOverflow.ellipsis,
-                                              style: const TextStyle(
+                                              style: TextStyle(
                                                   color: HomeTheme.textMuted),
                                             ),
                                           ],
@@ -1277,7 +1277,7 @@ _buildInfoTile(BuildContext context, String title, String value) {
     children: [
       Text(
         title,
-        style: const TextStyle(
+        style: TextStyle(
           fontWeight: FontWeight.bold,
           color: HomeTheme.textPrimary,
         ),
@@ -1285,7 +1285,7 @@ _buildInfoTile(BuildContext context, String title, String value) {
       const SizedBox(height: 8),
       SelectableText(
         value,
-        style: const TextStyle(color: HomeTheme.textMuted),
+        style: TextStyle(color: HomeTheme.textMuted),
       ),
       const SizedBox(height: 16)
     ],

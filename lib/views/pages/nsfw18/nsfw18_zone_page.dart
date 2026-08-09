@@ -125,7 +125,7 @@ class _Nsfw18ZoneGateState extends State<Nsfw18ZoneGate> {
       return const _Nsfw18DisabledPage();
     }
     if (!_confirmed) {
-      return const Scaffold(
+      return Scaffold(
           backgroundColor: HomeTheme.bg, body: SizedBox.shrink());
     }
     if (!_unlocked) {
@@ -149,10 +149,10 @@ class _Nsfw18DisabledPage extends StatelessWidget {
       backgroundColor: HomeTheme.bg,
       appBar: AppBar(
         backgroundColor: HomeTheme.bg,
-        iconTheme: const IconThemeData(color: HomeTheme.textPrimary),
+        iconTheme: IconThemeData(color: HomeTheme.textPrimary),
         title: Text(
           'nsfw18.title'.i18n,
-          style: const TextStyle(color: HomeTheme.textPrimary),
+          style: TextStyle(color: HomeTheme.textPrimary),
         ),
       ),
       body: Center(
@@ -163,13 +163,13 @@ class _Nsfw18DisabledPage extends StatelessWidget {
             child: Column(
               mainAxisSize: MainAxisSize.min,
               children: [
-                const Icon(Icons.lock_outline,
+                Icon(Icons.lock_outline,
                     color: HomeTheme.textMuted, size: 40),
                 const SizedBox(height: 16),
                 Text(
                   'nsfw18.disabled-title'.i18n,
                   textAlign: TextAlign.center,
-                  style: const TextStyle(
+                  style: TextStyle(
                     color: HomeTheme.textPrimary,
                     fontSize: 16,
                     fontWeight: FontWeight.w700,
@@ -180,7 +180,7 @@ class _Nsfw18DisabledPage extends StatelessWidget {
                   'nsfw18.disabled-subtitle'.i18n,
                   textAlign: TextAlign.center,
                   style:
-                      const TextStyle(color: HomeTheme.textMuted, fontSize: 13),
+                      TextStyle(color: HomeTheme.textMuted, fontSize: 13),
                 ),
                 const SizedBox(height: 20),
                 SizedBox(
@@ -495,7 +495,7 @@ class _Nsfw18ZonePageState extends State<Nsfw18ZonePage> {
           color: HomeTheme.bg,
           child: Stack(
             children: [
-              const Positioned.fill(
+              Positioned.fill(
                 child: AnimatedBackgroundGlow(accent: HomeTheme.accentRed),
               ),
               LayoutBuilder(
@@ -588,13 +588,13 @@ class _Nsfw18ZonePageState extends State<Nsfw18ZonePage> {
         backgroundColor: HomeTheme.bg,
         title: Text(
           'nsfw18.title'.i18n,
-          style: const TextStyle(color: HomeTheme.textPrimary),
+          style: TextStyle(color: HomeTheme.textPrimary),
         ),
         actions: [
           IconButton(
             tooltip: 'home.favorite'.i18n,
             onPressed: _favoritos,
-            icon: const Icon(Icons.favorite_border_rounded,
+            icon: Icon(Icons.favorite_border_rounded,
                 color: HomeTheme.textPrimary),
           ),
           // Y el historial DE ESTA ZONA al lado, con el mismo criterio.
@@ -602,7 +602,7 @@ class _Nsfw18ZonePageState extends State<Nsfw18ZonePage> {
             tooltip: 'home.history'.i18n,
             onPressed: () => _openHistoryTab(0),
             icon:
-                const Icon(Icons.history_rounded, color: HomeTheme.textPrimary),
+                Icon(Icons.history_rounded, color: HomeTheme.textPrimary),
           ),
         ],
       ),
@@ -745,7 +745,7 @@ class _Nsfw18EmptyStateState extends State<_Nsfw18EmptyState>
                       width: 1.5,
                     ),
                   ),
-                  child: const Icon(
+                  child: Icon(
                     Icons.lock_outline,
                     color: HomeTheme.accentRed,
                     size: 26,
@@ -757,7 +757,7 @@ class _Nsfw18EmptyStateState extends State<_Nsfw18EmptyState>
                 'nsfw18.no-record'.i18n,
                 textAlign: TextAlign.center,
                 style:
-                    const TextStyle(color: HomeTheme.textMuted, fontSize: 13.5),
+                    TextStyle(color: HomeTheme.textMuted, fontSize: 13.5),
               ),
               const SizedBox(height: 18),
               // Mismo botón que el Home normal, con el acento de esta zona y

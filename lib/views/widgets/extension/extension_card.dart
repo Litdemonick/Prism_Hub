@@ -351,7 +351,7 @@ class _ExtensionCardState extends State<ExtensionCard> {
                   padding: const EdgeInsets.only(top: 2),
                   child: Text(
                     'common.see-more'.i18n,
-                    style: const TextStyle(
+                    style: TextStyle(
                       fontSize: 10,
                       color: HomeTheme.accentPink,
                       fontWeight: FontWeight.w700,
@@ -433,7 +433,7 @@ class _ExtensionCardState extends State<ExtensionCard> {
         shape: BoxShape.circle,
         border: Border.all(color: HomeTheme.accentPink, width: 1.4),
       ),
-      child: const Icon(Icons.check, size: 11, color: HomeTheme.accentPink),
+      child: Icon(Icons.check, size: 11, color: HomeTheme.accentPink),
     );
   }
 
@@ -674,7 +674,7 @@ class _ExtensionCardState extends State<ExtensionCard> {
                   context,
                   text: widget.description!,
                   maxLines: 2,
-                  style: const TextStyle(
+                  style: TextStyle(
                     fontSize: 11,
                     color: HomeTheme.textMuted,
                   ),
@@ -791,7 +791,7 @@ class _ExtensionCardState extends State<ExtensionCard> {
                                         ),
                                         child: Text(
                                           'common.uninstall'.i18n,
-                                          style: const TextStyle(
+                                          style: TextStyle(
                                             fontSize: 12,
                                             color: HomeTheme.accentPink,
                                             fontWeight: FontWeight.w600,

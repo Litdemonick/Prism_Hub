@@ -151,7 +151,7 @@ class _SearchAllTileState extends State<SearchAllTile> {
                   child: Column(
                     mainAxisSize: MainAxisSize.min,
                     children: [
-                      const Icon(Icons.hourglass_top_rounded,
+                      Icon(Icons.hourglass_top_rounded,
                           size: 20, color: HomeTheme.textMuted),
                       const SizedBox(height: 10),
                       // Ver _tardaDemasiado: unos bloques que brillan sin fin
@@ -167,7 +167,7 @@ class _SearchAllTileState extends State<SearchAllTile> {
                             },
                           ),
                           textAlign: TextAlign.center,
-                          style: const TextStyle(
+                          style: TextStyle(
                             color: HomeTheme.textMuted,
                             fontSize: 13,
                             height: 1.35,
@@ -267,7 +267,7 @@ class _SearchAllTileState extends State<SearchAllTile> {
                   },
                 ),
                 textAlign: TextAlign.center,
-                style: const TextStyle(color: HomeTheme.textMuted),
+                style: TextStyle(color: HomeTheme.textMuted),
               ),
             ),
           );

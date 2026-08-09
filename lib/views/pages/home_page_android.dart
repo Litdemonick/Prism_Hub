@@ -509,13 +509,13 @@ class _BarraDeFiltrosState extends State<_BarraDeFiltros> {
                           // existe —nadie tira de una ventana con el mouse— así que
                           // ahí va un botón, que es lo que se busca.
                           if (c.hayCambiosSinAplicar && _esTactil) ...[
-                            const Icon(Icons.arrow_downward_rounded,
+                            Icon(Icons.arrow_downward_rounded,
                                 size: 15, color: HomeTheme.accentPink),
                             const SizedBox(width: 6),
                             Expanded(
                               child: Text(
                                 'home.filtros-desliza'.i18n,
-                                style: const TextStyle(
+                                style: TextStyle(
                                   fontSize: 12.5,
                                   color: HomeTheme.accentPink,
                                   fontWeight: FontWeight.w600,
@@ -673,7 +673,7 @@ class _Chip extends StatelessWidget {
             // Va como capa y con desplazamiento negativo: se mete en el relleno
             // de 24 que ya está reservado, sin ocupar lugar en el flujo.
             if (marcado)
-              const Positioned(
+              Positioned(
                 left: -19,
                 child: Icon(Icons.check_rounded,
                     size: 15, color: HomeTheme.accentPink),
@@ -1971,7 +1971,7 @@ class _TarjetaGrande extends StatelessWidget {
                 // cargar se ve igual que una rota; con el brillo se entiende
                 // que está en camino.
                 placeholder: const Esqueleto(radio: 20),
-                fallback: const ColoredBox(color: HomeTheme.cardSurface),
+                fallback: ColoredBox(color: HomeTheme.cardSurface),
               ),
               // Translúcido de punta a punta: si terminara en un color opaco
               // cortaría la portada con una línea recta.
@@ -2027,7 +2027,7 @@ class _TarjetaGrande extends StatelessWidget {
                             fuente,
                             maxLines: 1,
                             overflow: TextOverflow.ellipsis,
-                            style: const TextStyle(
+                            style: TextStyle(
                               fontSize: 12.5,
                               fontWeight: FontWeight.w500,
                               color: HomeTheme.textMuted,
@@ -2174,7 +2174,7 @@ class _FilaAndroidState extends State<_FilaAndroid> {
                     },
             maxLines: 1,
             overflow: TextOverflow.ellipsis,
-            style: const TextStyle(
+            style: TextStyle(
               fontSize: 12,
               fontWeight: FontWeight.w500,
               color: HomeTheme.textMuted,

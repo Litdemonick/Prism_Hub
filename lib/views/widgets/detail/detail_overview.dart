@@ -36,7 +36,7 @@ class DetailOverView extends StatefulWidget {
   /// Antes salía del tema por herencia. Se fija acá porque [altoEstimado] lo
   /// necesita para medir el texto, y un estilo que dependa de dónde esté
   /// colgado el widget haría que la medición y lo dibujado no coincidan.
-  static const estiloSinopsis = TextStyle(
+  static TextStyle get estiloSinopsis => TextStyle(
     height: 2,
     fontSize: 14,
     color: HomeTheme.textPrimary,

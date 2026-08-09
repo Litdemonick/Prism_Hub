@@ -71,7 +71,7 @@ class ComicReaderSettings extends StatelessWidget {
           padding: const EdgeInsets.fromLTRB(20, 18, 20, 12),
           child: Text(
             'reader.reading-mode'.i18n,
-            style: const TextStyle(
+            style: TextStyle(
               fontSize: 17,
               fontWeight: FontWeight.bold,
               color: HomeTheme.textPrimary,
@@ -109,12 +109,12 @@ class ComicReaderSettings extends StatelessWidget {
             ],
           ),
         ),
-        const Divider(height: 24, color: HomeTheme.border),
+        Divider(height: 24, color: HomeTheme.border),
         Padding(
           padding: const EdgeInsets.fromLTRB(20, 4, 20, 12),
           child: Text(
             'reader.strip-align'.i18n,
-            style: const TextStyle(
+            style: TextStyle(
               fontSize: 17,
               fontWeight: FontWeight.bold,
               color: HomeTheme.textPrimary,
@@ -211,7 +211,7 @@ class _AlignTile extends StatelessWidget {
                   ),
                 ),
                 if (selected)
-                  const Icon(
+                  Icon(
                     Icons.check_circle,
                     size: 20,
                     color: HomeTheme.accentPink,
@@ -287,7 +287,7 @@ class _ModeTile extends StatelessWidget {
                       const SizedBox(height: 2),
                       Text(
                         subtitle,
-                        style: const TextStyle(
+                        style: TextStyle(
                           color: HomeTheme.textMuted,
                           fontSize: 12,
                         ),
@@ -296,7 +296,7 @@ class _ModeTile extends StatelessWidget {
                   ),
                 ),
                 if (selected)
-                  const Icon(
+                  Icon(
                     Icons.check_circle,
                     size: 20,
                     color: HomeTheme.accentPink,

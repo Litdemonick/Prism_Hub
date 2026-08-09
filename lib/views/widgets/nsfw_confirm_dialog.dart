@@ -301,7 +301,7 @@ class _NsfwConfirmContent extends StatelessWidget {
             Expanded(
               child: Text(
                 actionLine,
-                style: const TextStyle(
+                style: TextStyle(
                   fontSize: 13,
                   color: HomeTheme.textMuted,
                 ),
@@ -334,13 +334,13 @@ class _NsfwConfirmContent extends StatelessWidget {
             ),
             child: Row(
               children: [
-                const Icon(Icons.warning_amber_rounded,
+                Icon(Icons.warning_amber_rounded,
                     size: 16, color: HomeTheme.accentRed),
                 const SizedBox(width: 8),
                 Expanded(
                   child: Text(
                     'nsfw18.is-adult-ext-warning'.i18n,
-                    style: const TextStyle(
+                    style: TextStyle(
                       fontSize: 12,
                       color: HomeTheme.accentRed,
                       fontWeight: FontWeight.w600,
@@ -512,7 +512,7 @@ class _OptionCardState extends State<_OptionCard> {
                   children: [
                     Text(
                       widget.label,
-                      style: const TextStyle(
+                      style: TextStyle(
                         fontSize: 14,
                         fontWeight: FontWeight.w700,
                         color: HomeTheme.textPrimary,
@@ -527,7 +527,7 @@ class _OptionCardState extends State<_OptionCard> {
                       const SizedBox(height: 2),
                       Text(
                         widget.hint,
-                        style: const TextStyle(
+                        style: TextStyle(
                           fontSize: 11.5,
                           color: HomeTheme.textMuted,
                         ),
@@ -536,7 +536,7 @@ class _OptionCardState extends State<_OptionCard> {
                   ],
                 ),
               ),
-              const Icon(Icons.chevron_right,
+              Icon(Icons.chevron_right,
                   size: 18, color: HomeTheme.textMuted),
             ],
           ),
@@ -561,7 +561,7 @@ class _CancelButton extends StatelessWidget {
           padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
           child: Text(
             'common.cancel'.i18n,
-            style: const TextStyle(color: HomeTheme.textMuted, fontSize: 13),
+            style: TextStyle(color: HomeTheme.textMuted, fontSize: 13),
           ),
         ),
       ),

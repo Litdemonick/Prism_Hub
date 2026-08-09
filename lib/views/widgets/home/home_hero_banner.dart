@@ -22,16 +22,19 @@ import 'package:prismhub/views/widgets/home/home_theme.dart';
 // reconocible — y se difumina con una máscara hacia el degradado de la
 // izquierda, donde va el texto.
 class HomeHeroBanner extends StatelessWidget {
-  const HomeHeroBanner({
+  HomeHeroBanner({
     super.key,
     this.background,
-    this.gradient = HomeTheme.heroGradient,
+    this.gradient,
     this.onExploreCatalog,
   });
   final HeroBackground? background;
   // Zona +18: se pasa HomeTheme.heroGradientRed para diferenciar esa
   // pantalla del Home normal.
-  final Gradient gradient;
+  /// En null usa el degradado del tema. No puede tener valor por defecto:
+  /// ahora es un getter —cambia con el modo claro/oscuro— y un valor por
+  /// defecto tiene que ser constante.
+  final Gradient? gradient;
   // Zona +18 en Android se llega empujándola ENCIMA del shell principal
   // (Get.to, no es una tab del bottom-nav) — el default de acá
   // (Get.find<MainController>().changeTab) cambiaba la tab del shell que
@@ -82,7 +85,9 @@ class HomeHeroBanner extends StatelessWidget {
             children: [
               Positioned.fill(
                 child: DecoratedBox(
-                  decoration: BoxDecoration(gradient: gradient),
+                  decoration: BoxDecoration(
+                    gradient: gradient ?? HomeTheme.heroGradient,
+                  ),
                 ),
               ),
               if (background != null)
@@ -127,7 +132,7 @@ class HomeHeroBanner extends StatelessWidget {
                                 HomeTheme.textPrimary.withValues(alpha: 0.12),
                             borderRadius: BorderRadius.circular(6),
                           ),
-                          child: const Text(
+                          child: Text(
                             'Destacado',
                             style: TextStyle(
                               color: HomeTheme.textPrimary,

@@ -73,11 +73,11 @@ class _SettingsIntpuTileState extends fluent.State<SettingsIntpuTile> {
       leading: widget.icon,
       title: Text(
         widget.title,
-        style: const TextStyle(color: HomeTheme.textPrimary),
+        style: TextStyle(color: HomeTheme.textPrimary),
       ),
       subtitle: Text(
         widget.buildSubtitle(),
-        style: const TextStyle(color: HomeTheme.textMuted),
+        style: TextStyle(color: HomeTheme.textMuted),
       ),
       trailing: widget.trailing,
       onTap: !widget.enabled
@@ -106,7 +106,7 @@ class _SettingsIntpuTileState extends fluent.State<SettingsIntpuTile> {
                         horizontal: 24, vertical: 12),
                     title: Text(
                       widget.title,
-                      style: const TextStyle(color: HomeTheme.textPrimary),
+                      style: TextStyle(color: HomeTheme.textPrimary),
                     ),
                     content: TextField(
                       controller: _controller,
@@ -114,7 +114,7 @@ class _SettingsIntpuTileState extends fluent.State<SettingsIntpuTile> {
                       // en que el diálogo todavía está entrando (animación)
                       // empeoraba el overflow — con un toque manual del
                       // usuario el diálogo ya está asentado.
-                      style: const TextStyle(color: HomeTheme.textPrimary),
+                      style: TextStyle(color: HomeTheme.textPrimary),
                       cursorColor: HomeTheme.accentPink,
                       onSubmitted: (_) {
                         _commit();
@@ -131,7 +131,7 @@ class _SettingsIntpuTileState extends fluent.State<SettingsIntpuTile> {
                         },
                         child: Text(
                           'common.confirm'.i18n,
-                          style: const TextStyle(color: HomeTheme.accentPink),
+                          style: TextStyle(color: HomeTheme.accentPink),
                         ),
                       ),
                     ],

@@ -84,14 +84,14 @@ class _AvisoCentrado extends StatelessWidget {
               child: Row(
                 mainAxisSize: MainAxisSize.min,
                 children: [
-                  const Icon(Icons.school_outlined,
+                  Icon(Icons.school_outlined,
                       color: HomeTheme.accentPink, size: 20),
                   const SizedBox(width: 12),
                   Flexible(
                     child: Text(
                       controlador.texto,
                       textAlign: TextAlign.center,
-                      style: const TextStyle(
+                      style: TextStyle(
                         color: HomeTheme.textPrimary,
                         fontSize: 14,
                         fontWeight: FontWeight.w600,
@@ -432,7 +432,7 @@ class _TutorialReproductorState extends State<TutorialReproductor>
                 Text(
                   paso.titulo,
                   textAlign: TextAlign.center,
-                  style: const TextStyle(
+                  style: TextStyle(
                     color: HomeTheme.textPrimary,
                     fontSize: 19,
                     fontWeight: FontWeight.w800,
@@ -442,7 +442,7 @@ class _TutorialReproductorState extends State<TutorialReproductor>
                 Text(
                   paso.detalle,
                   textAlign: TextAlign.center,
-                  style: const TextStyle(
+                  style: TextStyle(
                     color: HomeTheme.textMuted,
                     fontSize: 14,
                     height: 1.4,
@@ -475,7 +475,7 @@ class _TutorialReproductorState extends State<TutorialReproductor>
                       onPressed: _terminar,
                       child: Text(
                         'video.tutorial.skip'.i18n,
-                        style: const TextStyle(color: HomeTheme.textMuted),
+                        style: TextStyle(color: HomeTheme.textMuted),
                       ),
                     ),
                     // Volver atras: los pasos traen el numero de segundos que
@@ -488,7 +488,7 @@ class _TutorialReproductorState extends State<TutorialReproductor>
                         onPressed: () => setState(() => _indice = i - 1),
                         child: Text(
                           'video.tutorial.back'.i18n,
-                          style: const TextStyle(color: HomeTheme.textPrimary),
+                          style: TextStyle(color: HomeTheme.textPrimary),
                         ),
                       ),
                     ],

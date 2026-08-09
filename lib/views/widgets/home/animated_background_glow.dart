@@ -7,11 +7,16 @@ import 'package:prismhub/views/widgets/home/home_theme.dart';
 // Fondo ambiental animado. Usa gradientes radiales en vez de blur gaussiano:
 // el look sigue siendo suave, pero evita un ImageFilter.blur por frame.
 class AnimatedBackgroundGlow extends StatefulWidget {
-  const AnimatedBackgroundGlow({super.key, this.accent = HomeTheme.accentPink});
+  AnimatedBackgroundGlow({super.key, this.accent});
 
   // Zona +18: se pasa HomeTheme.accentRed para diferenciarla visualmente del
   // Home normal, reusando este mismo widget en vez de duplicarlo.
-  final Color accent;
+  /// En null usa el acento del tema. No puede tener valor por defecto:
+  /// los colores son getters —cambian con el modo claro/oscuro— y un valor por
+  /// defecto tiene que ser constante.
+  final Color? accent;
+
+  Color get acento => accent ?? HomeTheme.accentPink;
 
   @override
   State<AnimatedBackgroundGlow> createState() => _AnimatedBackgroundGlowState();
@@ -125,7 +130,7 @@ class _AnimatedBackgroundGlowState extends State<AnimatedBackgroundGlow>
                 return Stack(
                   children: [
                     _blob(
-                      color: widget.accent.withValues(alpha: 0.12),
+                      color: widget.acento.withValues(alpha: 0.12),
                       alignment: const Alignment(0.72, 0.42),
                       size: blobSize,
                     ),
@@ -148,7 +153,7 @@ class _AnimatedBackgroundGlowState extends State<AnimatedBackgroundGlow>
               return Stack(
                 children: [
                   _blobMovil(
-                    color: widget.accent.withValues(alpha: 0.16),
+                    color: widget.acento.withValues(alpha: 0.16),
                     size: blobSize,
                     hacia: Alignment(0.7 * math.cos(t), 0.6 * math.sin(t)),
                   ),

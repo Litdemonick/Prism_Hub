@@ -12,7 +12,7 @@ class ListTitle extends StatelessWidget {
       padding: const EdgeInsets.only(left: 16, right: 16),
       child: Text(
         title,
-        style: const TextStyle(
+        style: TextStyle(
           color: HomeTheme.accentPink,
           fontWeight: FontWeight.w700,
         ),
@@ -23,7 +23,7 @@ class ListTitle extends StatelessWidget {
   Widget _buildDesktop(BuildContext context) {
     return Text(
       title,
-      style: const TextStyle(
+      style: TextStyle(
         fontWeight: FontWeight.bold,
         color: HomeTheme.textPrimary,
       ),

@@ -729,7 +729,7 @@ class _ExtensionSearcherPageState extends fluent.State<ExtensionSearcherPage> {
                       onPressed: () => Get.back(),
                       child: Text(
                         "common.cancel".i18n,
-                        style: const TextStyle(color: HomeTheme.textMuted),
+                        style: TextStyle(color: HomeTheme.textMuted),
                       ),
                     ),
                     const Spacer(),
@@ -747,7 +747,7 @@ class _ExtensionSearcherPageState extends fluent.State<ExtensionSearcherPage> {
                   ],
                 ),
               ),
-              const Divider(color: HomeTheme.border),
+              Divider(color: HomeTheme.border),
               Expanded(
                 child: Padding(
                   padding: const EdgeInsets.only(left: 16, right: 16, top: 16),
@@ -766,7 +766,7 @@ class _ExtensionSearcherPageState extends fluent.State<ExtensionSearcherPage> {
       builder: (context) {
         return fluent.ContentDialog(
           constraints: const BoxConstraints(maxWidth: 580, maxHeight: 680),
-          style: const fluent.ContentDialogThemeData(
+          style: fluent.ContentDialogThemeData(
             decoration: BoxDecoration(
               color: HomeTheme.cardSurface,
               borderRadius: BorderRadius.all(Radius.circular(14)),
@@ -774,7 +774,7 @@ class _ExtensionSearcherPageState extends fluent.State<ExtensionSearcherPage> {
           ),
           title: Text(
             'search.filter'.i18n,
-            style: const TextStyle(
+            style: TextStyle(
                 color: HomeTheme.textPrimary, fontWeight: FontWeight.w800),
           ),
           content: fiterWidget,
@@ -787,7 +787,7 @@ class _ExtensionSearcherPageState extends fluent.State<ExtensionSearcherPage> {
                 shape: fluent.WidgetStateProperty.all(
                   RoundedRectangleBorder(
                     borderRadius: BorderRadius.circular(999),
-                    side: const BorderSide(color: HomeTheme.border),
+                    side: BorderSide(color: HomeTheme.border),
                   ),
                 ),
               ),
@@ -829,13 +829,13 @@ class _ExtensionSearcherPageState extends fluent.State<ExtensionSearcherPage> {
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            const Icon(Icons.no_adult_content,
+            Icon(Icons.no_adult_content,
                 color: HomeTheme.accentPink, size: 40),
             const SizedBox(height: 12),
             Text(
               'extension-searcher.nsfw-blocked'.i18n,
               textAlign: TextAlign.center,
-              style: const TextStyle(color: HomeTheme.textMuted, fontSize: 14),
+              style: TextStyle(color: HomeTheme.textMuted, fontSize: 14),
             ),
           ],
         ),
@@ -961,12 +961,12 @@ class _ExtensionSearcherPageState extends fluent.State<ExtensionSearcherPage> {
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            const Icon(Icons.search_off, color: HomeTheme.textMuted, size: 40),
+            Icon(Icons.search_off, color: HomeTheme.textMuted, size: 40),
             const SizedBox(height: 12),
             Text(
               'extension-searcher.no-results'.i18n,
               textAlign: TextAlign.center,
-              style: const TextStyle(color: HomeTheme.textMuted, fontSize: 14),
+              style: TextStyle(color: HomeTheme.textMuted, fontSize: 14),
             ),
             if (showAlternateButton) ...[
               const SizedBox(height: 16),
@@ -1040,14 +1040,14 @@ class _ExtensionSearcherPageState extends fluent.State<ExtensionSearcherPage> {
         color: HomeTheme.bg,
         child: Stack(
           children: [
-            const Positioned.fill(child: AnimatedBackgroundGlow()),
+            Positioned.fill(child: AnimatedBackgroundGlow()),
             // Mientras no se sepa si hace falta actualizar (null) o si SÍ
             // hace falta (true), ni se pide ni se muestra ninguna card —
             // antes esto era solo un banner arriba con la grilla
             // funcionando debajo igual, así que se podía seguir buscando
             // en una extensión desactualizada sin problema.
             if (_hasUpdate == null)
-              const Center(
+              Center(
                 child: CircularProgressIndicator(color: HomeTheme.accentPink),
               )
             else if (_hasUpdate == true)
@@ -1276,14 +1276,14 @@ class _ExtensionSearcherPageState extends fluent.State<ExtensionSearcherPage> {
       color: HomeTheme.bg,
       child: Stack(
         children: [
-          const Positioned.fill(child: AnimatedBackgroundGlow()),
+          Positioned.fill(child: AnimatedBackgroundGlow()),
           Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               if (_isLoading)
                 ClipRRect(
                   borderRadius: BorderRadius.circular(999),
-                  child: const SizedBox(
+                  child: SizedBox(
                     height: 3,
                     width: double.infinity,
                     child: LinearProgressIndicator(
@@ -1318,7 +1318,7 @@ class _ExtensionSearcherPageState extends fluent.State<ExtensionSearcherPage> {
                             child: Text(
                               _runtime.extension.name,
                               overflow: TextOverflow.ellipsis,
-                              style: const TextStyle(
+                              style: TextStyle(
                                 fontSize: 20,
                                 fontWeight: FontWeight.w800,
                                 color: HomeTheme.textPrimary,
@@ -1332,7 +1332,7 @@ class _ExtensionSearcherPageState extends fluent.State<ExtensionSearcherPage> {
                             const SizedBox(width: 10),
                             Text(
                               _cargadosTexto,
-                              style: const TextStyle(
+                              style: TextStyle(
                                 fontSize: 14,
                                 fontWeight: FontWeight.w600,
                                 color: HomeTheme.textMuted,
@@ -1364,7 +1364,7 @@ class _ExtensionSearcherPageState extends fluent.State<ExtensionSearcherPage> {
                                 borderRadius: BorderRadius.circular(10),
                                 border: Border.all(color: HomeTheme.border),
                               ),
-                              child: const Icon(Icons.filter_alt_rounded,
+                              child: Icon(Icons.filter_alt_rounded,
                                   size: 18, color: HomeTheme.textPrimary),
                             ),
                           ),
@@ -1383,7 +1383,7 @@ class _ExtensionSearcherPageState extends fluent.State<ExtensionSearcherPage> {
                         ),
                         child: Row(
                           children: [
-                            const Icon(Icons.search,
+                            Icon(Icons.search,
                                 size: 18, color: HomeTheme.textMuted),
                             const SizedBox(width: 8),
                             Expanded(
@@ -1391,10 +1391,10 @@ class _ExtensionSearcherPageState extends fluent.State<ExtensionSearcherPage> {
                                 controller: _textEditingController,
                                 decoration: const WidgetStatePropertyAll(
                                     BoxDecoration()),
-                                style: const TextStyle(
+                                style: TextStyle(
                                     color: HomeTheme.textPrimary, fontSize: 14),
                                 placeholderStyle:
-                                    const TextStyle(color: HomeTheme.textMuted),
+                                    TextStyle(color: HomeTheme.textMuted),
                                 onChanged: _onSearchFieldChanged,
                                 suffix: suffix,
                                 suffixMode:
@@ -1420,7 +1420,7 @@ class _ExtensionSearcherPageState extends fluent.State<ExtensionSearcherPage> {
               // tarjeta, sea cual sea el ancho de la ventana.
               Expanded(
                 child: _hasUpdate == null
-                    ? const Center(
+                    ? Center(
                         child: CircularProgressIndicator(
                             color: HomeTheme.accentPink),
                       )
@@ -1660,7 +1660,7 @@ class _ExtensionFilterWidgetState extends State<_ExtensionFilterWidget> {
               cursor: SystemMouseCursors.click,
               child: Text(
                 'search.reset-filters'.i18n,
-                style: const TextStyle(
+                style: TextStyle(
                   color: HomeTheme.textMuted,
                   fontSize: 12.5,
                   fontWeight: FontWeight.w600,
@@ -1687,7 +1687,7 @@ class _ExtensionFilterWidgetState extends State<_ExtensionFilterWidget> {
                   for (final filter in _filters.entries) ...[
                     Text(
                       filter.value.title,
-                      style: const TextStyle(
+                      style: TextStyle(
                         color: HomeTheme.textPrimary,
                         fontSize: 15,
                         fontWeight: FontWeight.w800,
@@ -1719,7 +1719,7 @@ class _ExtensionFilterWidgetState extends State<_ExtensionFilterWidget> {
                     ),
                     const SizedBox(height: 16),
                     if (filter.key != _filters.keys.last)
-                      const Divider(color: HomeTheme.border, height: 1),
+                      Divider(color: HomeTheme.border, height: 1),
                     const SizedBox(height: 16),
                   ],
                   // Al pie y no arriba: es contexto util, no algo que haga
@@ -1756,13 +1756,13 @@ class _NotaDeFiltros extends StatelessWidget {
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          const Icon(Icons.info_outline_rounded,
+          Icon(Icons.info_outline_rounded,
               size: 16, color: HomeTheme.textMuted),
           const SizedBox(width: 10),
           Expanded(
             child: Text(
               'search.filters-note'.i18n,
-              style: const TextStyle(
+              style: TextStyle(
                 color: HomeTheme.textMuted,
                 fontSize: 12,
                 height: 1.45,
@@ -1787,7 +1787,7 @@ class _PuntoDeFiltro extends StatelessWidget {
     return Container(
       width: 9,
       height: 9,
-      decoration: const BoxDecoration(
+      decoration: BoxDecoration(
         color: HomeTheme.accentPink,
         shape: BoxShape.circle,
       ),

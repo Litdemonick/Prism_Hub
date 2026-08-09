@@ -58,7 +58,7 @@ Future<void> showBetaNoticeIfNeeded(BuildContext context) async {
                 maxWidth: 420,
                 content: Text(
                   'beta.confirm-body'.i18n,
-                  style: const TextStyle(
+                  style: TextStyle(
                     color: HomeTheme.textMuted,
                     fontSize: 13,
                     height: 1.45,
@@ -131,7 +131,7 @@ class _BetaContentState extends State<_BetaContent> {
           Expanded(
             child: Text(
               texto,
-              style: const TextStyle(
+              style: TextStyle(
                 color: HomeTheme.textMuted,
                 fontSize: 13,
                 height: 1.45,
@@ -178,7 +178,7 @@ class _BetaContentState extends State<_BetaContent> {
               ),
               child: Text(
                 'BETA · v${widget.version}',
-                style: const TextStyle(
+                style: TextStyle(
                   color: HomeTheme.accentPink,
                   fontSize: 12,
                   fontWeight: FontWeight.w700,
@@ -192,7 +192,7 @@ class _BetaContentState extends State<_BetaContent> {
         const SizedBox(height: 14),
         Text(
           'beta.intro'.i18n,
-          style: const TextStyle(
+          style: TextStyle(
             color: HomeTheme.textPrimary,
             fontSize: 13.5,
             height: 1.45,
@@ -230,13 +230,13 @@ class _BetaContentState extends State<_BetaContent> {
           child: Row(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              const Icon(Icons.gavel_rounded,
+              Icon(Icons.gavel_rounded,
                   size: 18, color: HomeTheme.textMuted),
               const SizedBox(width: 10),
               Expanded(
                 child: Text(
                   'beta.legal'.i18n,
-                  style: const TextStyle(
+                  style: TextStyle(
                     color: HomeTheme.textMuted,
                     fontSize: 12,
                     height: 1.45,

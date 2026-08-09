@@ -314,6 +314,8 @@
     "upgrade": "Actualizar aplicación",
     "upgrade-subtitle": "versión: {version}",
     "upgrade-training": "Comprobar",
+    "light-mode": "Modo claro",
+    "light-mode-subtitle": "Cambia los colores de toda la app a una paleta clara. Por defecto va en oscuro.",
     "auto-check-update": "Buscar actualizaciones automáticamente",
     "auto-check-update-subtitle": "Buscar actualizaciones cada vez que se abra la aplicación",
     "language": "Idioma",

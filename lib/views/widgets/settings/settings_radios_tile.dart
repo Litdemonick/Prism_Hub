@@ -52,7 +52,7 @@ class _SettingsRadiosTileState<T> extends State<SettingsRadiosTile<T>> {
                   backgroundColor: HomeTheme.cardSurface,
                   title: Text(
                     widget.title,
-                    style: const TextStyle(color: HomeTheme.textPrimary),
+                    style: TextStyle(color: HomeTheme.textPrimary),
                   ),
                   scrollable: true,
                   // En horizontal el alto útil es poco y el margen por
@@ -67,7 +67,7 @@ class _SettingsRadiosTileState<T> extends State<SettingsRadiosTile<T>> {
                           title: Text(
                             item.key,
                             style:
-                                const TextStyle(color: HomeTheme.textPrimary),
+                                TextStyle(color: HomeTheme.textPrimary),
                           ),
                           activeColor: HomeTheme.accentPink,
                           value: item.value,

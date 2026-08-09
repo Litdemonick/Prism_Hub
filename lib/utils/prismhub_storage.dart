@@ -320,6 +320,7 @@ class PrismHubStorage {
     await _initSetting(SettingKey.aniListToken, '');
     await _initSetting(SettingKey.aniListUserId, '');
     await _initSetting(SettingKey.autoTracking, true);
+    await _initSetting(SettingKey.modoClaro, false);
     await _initSetting(SettingKey.checkNewEpisodes, true);
     await _initSetting(SettingKey.windowSize, "1280,720");
     await _initSetting(SettingKey.androidWebviewUA, _defaultAndroidUA);
@@ -527,6 +528,10 @@ class SettingKey {
   static const aniListToken = 'AniListToken';
   static const aniListUserId = 'AniListUserId';
   static const autoTracking = 'AutoTracking';
+
+  /// Modo claro encendido. Por defecto apagado: la app nació oscura y así la
+  /// vio siempre todo el mundo; el claro es una elección, no el arranque.
+  static const modoClaro = 'ModoClaro';
   static const windowSize = 'WindowsSize';
   static const windowPosition = 'WindowsPosition';
   static const androidWebviewUA = "AndroidWebviewUA";

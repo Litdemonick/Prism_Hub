@@ -13,7 +13,7 @@ import 'package:prismhub/views/widgets/home/home_theme.dart';
 // debajo en una sola línea con ellipsis.
 // Margen entre la portada mostrada entera y el borde del marco. Ver el
 // comentario donde se usa: sin él la imagen toca los bordes y parece cortada.
-const double _coverInset = 8;
+double _coverInset = 8;
 
 // Borde dibujado ENCIMA del contenido, como última capa del Stack. Puesto en
 // la decoración del Container que recorta la portada, el propio recorte lo
@@ -81,10 +81,10 @@ class HomeMediaCard extends StatefulWidget {
   //
   // La proporción de cada una se conserva exacta, así que ninguna portada se
   // deforma ni se recorta distinto que antes.
-  static const double androidWidth = 168;
-  static const double androidHeight = 233;
-  static const double desktopWidth = 236;
-  static const double desktopHeight = 328;
+  static double androidWidth = 168;
+  static double androidHeight = 233;
+  static double desktopWidth = 236;
+  static double desktopHeight = 328;
   // Android landscape: la tarjeta a tamaño "vertical" (208 de alto) no
   // entraba entera en el poco alto disponible (confirmado en vivo, sobre
   // todo en Historial) — más chica en horizontal, mismo aspecto ~0.72:1.
@@ -131,10 +131,10 @@ class HomeMediaCard extends StatefulWidget {
   // Se mantiene el mismo aspecto ~0.72:1 que las otras dos variantes.
   // Acostado sube menos: ahí el alto es lo único que escasea, y cada punto que
   // gana la tarjeta se lo saca a la fila entera, que ya entra justa.
-  static const double androidLandscapeWidth = 144;
-  static const double androidLandscapeHeight = 200;
+  static double androidLandscapeWidth = 144;
+  static double androidLandscapeHeight = 200;
 
-  const HomeMediaCard({
+  HomeMediaCard({
     super.key,
     required this.title,
     this.subtitle,
@@ -157,7 +157,7 @@ class HomeMediaCard extends StatefulWidget {
     this.gradientSeed,
     this.hidden = false,
     this.onToggleHide,
-    this.accent = HomeTheme.accentPink,
+    this.accent,
     this.horizontal = false,
     this.ancho,
   });
@@ -233,7 +233,10 @@ class HomeMediaCard extends StatefulWidget {
   final VoidCallback? onToggleHide;
   // Zona +18: se pasa HomeTheme.accentRed para diferenciar la barra de
   // progreso en esa pantalla.
-  final Color accent;
+  /// En null usa el acento del tema. Ver AnimatedBackgroundGlow.accent.
+  final Color? accent;
+
+  Color get acento => accent ?? HomeTheme.accentPink;
   // true = variante horizontal 16:9 (solo Home de escritorio). La vertical
   // sigue siendo el default en todos los demás lugares.
   final bool horizontal;
@@ -260,7 +263,7 @@ class _HomeMediaCardState extends State<HomeMediaCard> {
         widget.extensionName!,
         maxLines: 1,
         overflow: TextOverflow.ellipsis,
-        style: const TextStyle(
+        style: TextStyle(
           color: HomeTheme.textPrimary,
           fontSize: 11,
           fontWeight: FontWeight.w600,
@@ -431,7 +434,7 @@ class _HomeMediaCardState extends State<HomeMediaCard> {
                                 // Sólido y con contorno, mismo criterio que el
                                 // resto de los distintivos: sobre una portada
                                 // clara uno translúcido no se lee.
-                                color: widget.accent,
+                                color: widget.acento,
                                 borderRadius: BorderRadius.circular(999),
                                 border:
                                     Border.all(color: const Color(0x8CFFFFFF)),
@@ -458,7 +461,7 @@ class _HomeMediaCardState extends State<HomeMediaCard> {
                               minHeight: 3,
                               backgroundColor:
                                   Colors.white.withValues(alpha: 0.25),
-                              valueColor: AlwaysStoppedAnimation(widget.accent),
+                              valueColor: AlwaysStoppedAnimation(widget.acento),
                             ),
                           ),
                         _bordeCard(8),
@@ -486,7 +489,7 @@ class _HomeMediaCardState extends State<HomeMediaCard> {
                                     widget.subtitle!.toUpperCase(),
                                     maxLines: 1,
                                     overflow: TextOverflow.ellipsis,
-                                    style: const TextStyle(
+                                    style: TextStyle(
                                       color: HomeTheme.textMuted,
                                       fontSize: 10.5,
                                       fontWeight: FontWeight.w700,
@@ -506,7 +509,7 @@ class _HomeMediaCardState extends State<HomeMediaCard> {
                             // panel.
                             maxLines: 1,
                             overflow: TextOverflow.ellipsis,
-                            style: const TextStyle(
+                            style: TextStyle(
                               color: HomeTheme.textPrimary,
                               fontSize: 14,
                               fontWeight: FontWeight.w700,
@@ -711,7 +714,7 @@ class _HomeMediaCardState extends State<HomeMediaCard> {
                               // adelante resalte y el texto de abajo siga legible.
                               const ColoredBox(color: Color(0x66000000)),
                               Padding(
-                                padding: const EdgeInsets.all(_coverInset),
+                                padding: EdgeInsets.all(_coverInset),
                                 child: Image.file(
                                   widget.coverFile!,
                                   fit: BoxFit.contain,
@@ -762,7 +765,7 @@ class _HomeMediaCardState extends State<HomeMediaCard> {
                               alignment: Alignment.centerLeft,
                               child: FractionallySizedBox(
                                 widthFactor: widget.progress!.clamp(0, 1),
-                                child: Container(color: widget.accent),
+                                child: Container(color: widget.acento),
                               ),
                             ),
                           ),
@@ -787,7 +790,7 @@ class _HomeMediaCardState extends State<HomeMediaCard> {
                               widget.title,
                               maxLines: 1,
                               overflow: TextOverflow.ellipsis,
-                              style: const TextStyle(
+                              style: TextStyle(
                                 color: HomeTheme.textPrimary,
                                 fontSize: 13.5,
                                 fontWeight: FontWeight.w600,
@@ -805,7 +808,7 @@ class _HomeMediaCardState extends State<HomeMediaCard> {
                                 widget.subtitle!,
                                 maxLines: 1,
                                 overflow: TextOverflow.ellipsis,
-                                style: const TextStyle(
+                                style: TextStyle(
                                   color: HomeTheme.textMuted,
                                   fontSize: 12,
                                 ),
@@ -859,7 +862,7 @@ class _WideMenuButton extends StatelessWidget {
 
   // Eran parámetros, con estos mismos valores por defecto. El único que los
   // pasaba distinto era el menú de encima de la portada, que ya no existe.
-  static const Color _iconColor = HomeTheme.textMuted;
+  static Color _iconColor = HomeTheme.textMuted;
   static const double _size = 28;
 
   final bool hidden;
@@ -893,14 +896,14 @@ class _WideMenuButton extends StatelessWidget {
           color: HomeTheme.cardSurface,
           shape: RoundedRectangleBorder(
             borderRadius: BorderRadius.circular(10),
-            side: const BorderSide(color: HomeTheme.border),
+            side: BorderSide(color: HomeTheme.border),
           ),
           // OJO: `constraints` acá es el tamaño del MENÚ desplegado, no el del
           // botón. Ponerle el tamaño del botón (30x30) abría un menú de 30px,
           // que se ve como "no abre nada". El tamaño del botón se controla con
           // el SizedBox de abajo.
           constraints: const BoxConstraints(minWidth: 170),
-          icon: const Icon(Icons.more_vert, color: _iconColor, size: 18),
+          icon: Icon(Icons.more_vert, color: _iconColor, size: 18),
           onSelected: (v) {
             if (v == 0) onToggleHide?.call();
             if (v == 1) onDelete?.call();
@@ -918,12 +921,12 @@ class _WideMenuButton extends StatelessWidget {
                 height: 40,
                 child: Row(
                   children: [
-                    const Icon(Icons.info_outline,
+                    Icon(Icons.info_outline,
                         size: 17, color: HomeTheme.textMuted),
                     const SizedBox(width: 10),
                     Text(
                       'home.view-detail'.i18n,
-                      style: const TextStyle(
+                      style: TextStyle(
                           color: HomeTheme.textPrimary, fontSize: 13),
                     ),
                   ],
@@ -950,7 +953,7 @@ class _WideMenuButton extends StatelessWidget {
                       esFavorito!
                           ? 'home.remove-favorite'.i18n
                           : 'home.add-favorite'.i18n,
-                      style: const TextStyle(
+                      style: TextStyle(
                           color: HomeTheme.textPrimary, fontSize: 13),
                     ),
                   ],
@@ -983,7 +986,7 @@ class _WideMenuButton extends StatelessWidget {
                       child: Text(
                         extraLabel!,
                         overflow: TextOverflow.ellipsis,
-                        style: const TextStyle(
+                        style: TextStyle(
                             color: HomeTheme.textPrimary, fontSize: 13),
                       ),
                     ),
@@ -1006,7 +1009,7 @@ class _WideMenuButton extends StatelessWidget {
                     const SizedBox(width: 10),
                     Text(
                       hidden ? 'home.show-card'.i18n : 'home.hide-card'.i18n,
-                      style: const TextStyle(
+                      style: TextStyle(
                           color: HomeTheme.textPrimary, fontSize: 13),
                     ),
                   ],

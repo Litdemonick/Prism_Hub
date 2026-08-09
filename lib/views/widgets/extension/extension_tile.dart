@@ -588,7 +588,7 @@ class _ExtensionTileState extends State<ExtensionTile> {
                   padding: const EdgeInsets.only(top: 2),
                   child: Text(
                     'common.see-more'.i18n,
-                    style: const TextStyle(
+                    style: TextStyle(
                       fontSize: 10,
                       color: HomeTheme.accentPink,
                       fontWeight: FontWeight.w700,
@@ -670,7 +670,7 @@ class _ExtensionTileState extends State<ExtensionTile> {
                       textAlign: TextAlign.center,
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
-                      style: const TextStyle(
+                      style: TextStyle(
                         fontSize: 11,
                         color: HomeTheme.textMuted,
                       ),
@@ -690,7 +690,7 @@ class _ExtensionTileState extends State<ExtensionTile> {
                 context,
                 text: widget.extension.description!,
                 maxLines: 2,
-                style: const TextStyle(
+                style: TextStyle(
                   fontSize: 11,
                   color: HomeTheme.textMuted,
                 ),

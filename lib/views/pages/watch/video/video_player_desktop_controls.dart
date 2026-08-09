@@ -164,7 +164,7 @@ class _VideoPlayerDesktopControlsState
         // vez del oscuro+morado del reproductor.
         data: FluentTheme.of(context).copyWith(
           accentColor:
-              AccentColor.swatch(const {'normal': HomeTheme.accentPink}),
+              AccentColor.swatch({'normal': HomeTheme.accentPink}),
         ),
         child: ContentDialog(
           title: const Text('¡Un momento!'),
@@ -315,7 +315,7 @@ class _VideoPlayerDesktopControlsState
                             child: Row(
                               mainAxisSize: MainAxisSize.min,
                               children: [
-                                const material.Icon(
+                                material.Icon(
                                   material.Icons.volume_up,
                                   color: HomeTheme.accentPink,
                                   size: 20,
@@ -408,7 +408,7 @@ class _VideoPlayerDesktopControlsState
                                                     .value)))))
                             ? 1
                             : 0,
-                        child: const Center(
+                        child: Center(
                           child: DecoratedBox(
                             decoration: BoxDecoration(
                               // Disco oscuro detrás: sobre un fotograma claro
@@ -527,7 +527,7 @@ class _VideoPlayerDesktopControlsState
                                 children: [
                                   Container(
                                     padding: const EdgeInsets.all(18),
-                                    decoration: const BoxDecoration(
+                                    decoration: BoxDecoration(
                                       shape: BoxShape.circle,
                                       color: HomeTheme.accentPink,
                                     ),
@@ -1030,7 +1030,7 @@ class _Footer extends StatelessWidget {
                           // Resolviendo el servidor elegido — bloquear el
                           // botón para no permitir otro toque mientras carga.
                           if (controller.isGettingWatchData.value) {
-                            return const SizedBox(
+                            return SizedBox(
                               width: 30,
                               height: 30,
                               child: Padding(
@@ -1272,7 +1272,7 @@ class _VolumeState extends State<_Volume> {
               return FluentTheme(
                 data: FluentThemeData.dark().copyWith(
                   accentColor: AccentColor.swatch(
-                      const {'normal': HomeTheme.accentPink}),
+                      {'normal': HomeTheme.accentPink}),
                 ),
                 child: FlyoutContent(
                   useAcrylic: true,
@@ -1374,7 +1374,7 @@ class _EpisodeState extends State<_Episode> {
                 return FluentTheme(
                   data: FluentThemeData.dark().copyWith(
                     accentColor: AccentColor.swatch(
-                        const {'normal': HomeTheme.accentPink}),
+                        {'normal': HomeTheme.accentPink}),
                   ),
                   child: FlyoutContent(
                     padding: const EdgeInsets.all(0),
@@ -1479,7 +1479,7 @@ class _QualityState extends State<_Quality> {
                               title: Text(quality.key),
                               trailing: quality.key ==
                                       widget.controller.currentQuality.value
-                                  ? const Icon(FluentIcons.check_mark,
+                                  ? Icon(FluentIcons.check_mark,
                                       size: 12, color: HomeTheme.accentPink)
                                   : null,
                               onPressed: () {
@@ -1496,7 +1496,7 @@ class _QualityState extends State<_Quality> {
                               title: Text(servidor),
                               trailing: servidor ==
                                       widget.controller.currentServerName.value
-                                  ? const Icon(FluentIcons.check_mark,
+                                  ? Icon(FluentIcons.check_mark,
                                       size: 12, color: HomeTheme.accentPink)
                                   : null,
                               onPressed: () {
@@ -1551,7 +1551,7 @@ class _TrackState extends State<_Track> {
               return FluentTheme(
                 data: FluentThemeData.dark().copyWith(
                   accentColor: AccentColor.swatch(
-                      const {'normal': HomeTheme.accentPink}),
+                      {'normal': HomeTheme.accentPink}),
                 ),
                 child: FlyoutContent(
                   useAcrylic: true,
@@ -1818,7 +1818,7 @@ class _PanelCasteandoState extends State<_PanelCasteando>
                   child: ScaleTransition(scale: anim, child: hijo),
                 ),
                 child: conectando
-                    ? const SizedBox(
+                    ? SizedBox(
                         key: ValueKey('rueda'),
                         width: 46,
                         height: 46,
@@ -2135,7 +2135,7 @@ class _CastState extends State<_Cast> {
                 return FluentTheme(
                   data: FluentThemeData.dark().copyWith(
                     accentColor: AccentColor.swatch(
-                        const {'normal': HomeTheme.accentPink}),
+                        {'normal': HomeTheme.accentPink}),
                   ),
                   child: FlyoutContent(
                     useAcrylic: true,
@@ -2270,7 +2270,7 @@ class _TorrentFilesState extends State<_TorrentFiles> {
               return FluentTheme(
                 data: FluentThemeData.dark().copyWith(
                   accentColor: AccentColor.swatch(
-                      const {'normal': HomeTheme.accentPink}),
+                      {'normal': HomeTheme.accentPink}),
                 ),
                 child: FlyoutContent(
                   useAcrylic: true,
@@ -2345,7 +2345,7 @@ class _SpeedState extends State<_Speed> {
               return FluentTheme(
                 data: FluentThemeData.dark().copyWith(
                   accentColor: AccentColor.swatch(
-                      const {'normal': HomeTheme.accentPink}),
+                      {'normal': HomeTheme.accentPink}),
                 ),
                 child: FlyoutContent(
                   useAcrylic: true,
@@ -2472,7 +2472,7 @@ class _SeekBarState extends State<_SeekBar> {
 
     return FluentTheme(
       data: FluentTheme.of(context).copyWith(
-        accentColor: AccentColor.swatch(const {'normal': HomeTheme.accentPink}),
+        accentColor: AccentColor.swatch({'normal': HomeTheme.accentPink}),
       ),
       // Sin altura fija: el Stack se ajusta solo a la altura natural del
       // Slider (el hijo más alto, sin posicionar).

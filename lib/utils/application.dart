@@ -1457,7 +1457,7 @@ class _ForcedUpdatePageState extends State<_ForcedUpdatePage> {
                     surfaceTintColor: Colors.transparent,
                     shape: RoundedRectangleBorder(
                         borderRadius: BorderRadius.circular(12),
-                        side: const BorderSide(color: HomeTheme.border)),
+                        side: BorderSide(color: HomeTheme.border)),
                     child: Container(
                       constraints: const BoxConstraints(
                         maxWidth: 600,
@@ -1480,7 +1480,7 @@ class _ForcedUpdatePageState extends State<_ForcedUpdatePage> {
                             ),
                             child: Row(
                               children: [
-                                const Icon(Icons.system_update,
+                                Icon(Icons.system_update,
                                     size: 24, color: HomeTheme.accentPink),
                                 const SizedBox(width: 12),
                                 Expanded(
@@ -1492,7 +1492,7 @@ class _ForcedUpdatePageState extends State<_ForcedUpdatePage> {
                                         'version': widget.remoteVersion
                                       },
                                     ),
-                                    style: const TextStyle(
+                                    style: TextStyle(
                                       fontSize: 16,
                                       fontWeight: FontWeight.bold,
                                       color: HomeTheme.accentPink,
@@ -1527,7 +1527,7 @@ class _ForcedUpdatePageState extends State<_ForcedUpdatePage> {
                                           'actual': packageInfo.version
                                         },
                                       ),
-                                      style: const TextStyle(
+                                      style: TextStyle(
                                           color: HomeTheme.textPrimary),
                                     ),
                                     const SizedBox(height: 16),
@@ -1593,7 +1593,7 @@ class _ForcedUpdatePageState extends State<_ForcedUpdatePage> {
               surfaceTintColor: Colors.transparent,
               shape: RoundedRectangleBorder(
                   borderRadius: BorderRadius.circular(12),
-                  side: const BorderSide(color: HomeTheme.border)),
+                  side: BorderSide(color: HomeTheme.border)),
               child: Container(
                 constraints: BoxConstraints(
                   // Tope de ancho: en horizontal, con el telefono acostado, la
@@ -1624,7 +1624,7 @@ class _ForcedUpdatePageState extends State<_ForcedUpdatePage> {
                           child: Column(
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
-                              const Icon(Icons.system_update,
+                              Icon(Icons.system_update,
                                   size: 48, color: HomeTheme.accentPink),
                               const SizedBox(height: 16),
                               Text(
@@ -1635,7 +1635,7 @@ class _ForcedUpdatePageState extends State<_ForcedUpdatePage> {
                                     'version': widget.remoteVersion
                                   },
                                 ),
-                                style: const TextStyle(
+                                style: TextStyle(
                                   fontSize: 20,
                                   fontWeight: FontWeight.bold,
                                   color: HomeTheme.textPrimary,
@@ -1650,7 +1650,7 @@ class _ForcedUpdatePageState extends State<_ForcedUpdatePage> {
                                           'actual': packageInfo.version
                                         },
                                       ),
-                                style: const TextStyle(
+                                style: TextStyle(
                                     color: HomeTheme.textPrimary),
                               ),
                               const SizedBox(height: 16),
@@ -1799,12 +1799,12 @@ class _NotasDeVersionState extends State<_NotasDeVersion> {
 /// no pegar con nada se leia mal. La usan el dialogo de "hay version nueva"
 /// y la pantalla de actualizacion obligatoria, que muestran lo mismo.
 MarkdownStyleSheet estiloNotasVersion() {
-  const cuerpo = TextStyle(
+  final cuerpo = TextStyle(
     color: HomeTheme.textPrimary,
     fontSize: 13.5,
     height: 1.5,
   );
-  const titulo = TextStyle(
+  final titulo = TextStyle(
     color: HomeTheme.textPrimary,
     fontWeight: FontWeight.w700,
     height: 1.35,
@@ -1831,11 +1831,11 @@ MarkdownStyleSheet estiloNotasVersion() {
     blockquoteDecoration: BoxDecoration(
       color: HomeTheme.cardSurface,
       borderRadius: BorderRadius.circular(8),
-      border: const Border(
+      border: Border(
         left: BorderSide(color: HomeTheme.accentPink, width: 3),
       ),
     ),
-    code: const TextStyle(
+    code: TextStyle(
       color: HomeTheme.accentPink,
       fontSize: 12.5,
       fontFamily: 'monospace',
@@ -1847,7 +1847,7 @@ MarkdownStyleSheet estiloNotasVersion() {
       borderRadius: BorderRadius.circular(8),
       border: Border.all(color: HomeTheme.border),
     ),
-    horizontalRuleDecoration: const BoxDecoration(
+    horizontalRuleDecoration: BoxDecoration(
       border: Border(top: BorderSide(color: HomeTheme.border)),
     ),
     tableHead: cuerpo.copyWith(fontWeight: FontWeight.w700),
@@ -1876,7 +1876,7 @@ class _BarraVentanaActualizacion extends StatelessWidget {
   Widget build(BuildContext context) {
     return Container(
       height: 40,
-      decoration: const BoxDecoration(
+      decoration: BoxDecoration(
         color: HomeTheme.cardSurface,
         border: Border(bottom: BorderSide(color: HomeTheme.border)),
       ),
@@ -1891,10 +1891,10 @@ class _BarraVentanaActualizacion extends StatelessWidget {
                 padding: const EdgeInsets.symmetric(horizontal: 14),
                 child: Row(
                   children: [
-                    const Icon(Icons.system_update,
+                    Icon(Icons.system_update,
                         size: 16, color: HomeTheme.accentPink),
                     const SizedBox(width: 10),
-                    const Text(
+                    Text(
                       'PrismHub',
                       style: TextStyle(
                         color: HomeTheme.textPrimary,
@@ -1905,7 +1905,7 @@ class _BarraVentanaActualizacion extends StatelessWidget {
                     const SizedBox(width: 8),
                     Text(
                       'v${packageInfo.version}',
-                      style: const TextStyle(
+                      style: TextStyle(
                         color: HomeTheme.textMuted,
                         fontSize: 12,
                       ),
@@ -2111,7 +2111,7 @@ class _BarraDeDescarga extends StatelessWidget {
                 minHeight: 6,
                 backgroundColor: HomeTheme.accentPink.withValues(alpha: 0.18),
                 valueColor:
-                    const AlwaysStoppedAnimation<Color>(HomeTheme.accentPink),
+                    AlwaysStoppedAnimation<Color>(HomeTheme.accentPink),
               ),
             ),
             const SizedBox(height: 8),
@@ -2131,7 +2131,7 @@ class _BarraDeDescarga extends StatelessWidget {
                 if (valor.parte != null)
                   Text(
                     '${(valor.parte! * 100).round()}%',
-                    style: const TextStyle(
+                    style: TextStyle(
                       fontSize: 12,
                       fontWeight: FontWeight.w700,
                       color: HomeTheme.accentPink,

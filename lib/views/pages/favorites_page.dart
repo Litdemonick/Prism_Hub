@@ -218,22 +218,22 @@ class _FavoritesPageState extends fluent.State<FavoritesPage> {
         ),
         child: Row(
           children: [
-            const Icon(Icons.search, size: 18, color: HomeTheme.textMuted),
+            Icon(Icons.search, size: 18, color: HomeTheme.textMuted),
             const SizedBox(width: 8),
             Expanded(
               child: TextField(
                 controller: _searchController,
                 style:
-                    const TextStyle(color: HomeTheme.textPrimary, fontSize: 14),
+                    TextStyle(color: HomeTheme.textPrimary, fontSize: 14),
                 decoration: InputDecoration(
                   isDense: true,
                   border: InputBorder.none,
                   hintText: 'common.search'.i18n,
-                  hintStyle: const TextStyle(color: HomeTheme.textMuted),
+                  hintStyle: TextStyle(color: HomeTheme.textMuted),
                   suffixIcon: _query.isEmpty
                       ? null
                       : IconButton(
-                          icon: const Icon(Icons.close,
+                          icon: Icon(Icons.close,
                               size: 18, color: HomeTheme.textMuted),
                           onPressed: () => setState(() {
                             _searchController.clear();
@@ -329,7 +329,7 @@ class _FavoritesPageState extends fluent.State<FavoritesPage> {
                   child: Center(
                     child: Text(
                       "common.no-result".i18n,
-                      style: const TextStyle(color: HomeTheme.textMuted),
+                      style: TextStyle(color: HomeTheme.textMuted),
                     ),
                   ),
                 ),
@@ -382,7 +382,7 @@ class _FavoritesPageState extends fluent.State<FavoritesPage> {
                 return Center(
                   child: Text(
                     "common.no-result".i18n,
-                    style: const TextStyle(color: HomeTheme.textMuted),
+                    style: TextStyle(color: HomeTheme.textMuted),
                   ),
                 );
               }

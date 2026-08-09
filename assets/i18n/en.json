@@ -318,6 +318,8 @@
     "upgrade": "Update Software",
     "upgrade-subtitle": "version: {version}",
     "upgrade-training": "Check",
+    "light-mode": "Light mode",
+    "light-mode-subtitle": "Switches the whole app to a light palette. Dark is the default.",
     "auto-check-update": "Automatically Check for Updates",
     "auto-check-update-subtitle": "Check for updates on each startup",
     "language": "Language",

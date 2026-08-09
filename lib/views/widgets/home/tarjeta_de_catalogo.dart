@@ -31,14 +31,14 @@ import 'package:prismhub/views/widgets/home/home_theme.dart';
 /// duración no siempre vienen. Cada uno se dibuja solo si está, y el panel se
 /// acomoda: nunca queda un hueco reservado para algo que no llegó.
 class TarjetaDeCatalogo extends StatefulWidget {
-  const TarjetaDeCatalogo({
+  TarjetaDeCatalogo({
     super.key,
     required this.titulo,
     this.subtitulo,
     this.portada,
     this.cabeceras,
     this.onTap,
-    this.acento = HomeTheme.accentPink,
+    this.acento,
     this.encabezado,
     this.fecha,
     this.descripcion,
@@ -51,7 +51,8 @@ class TarjetaDeCatalogo extends StatefulWidget {
   final String? portada;
   final Map<String, String>? cabeceras;
   final VoidCallback? onTap;
-  final Color acento;
+  /// En null usa el acento del tema. Ver HomeHeroBanner.gradient.
+  final Color? acento;
 
   /// Arriba de todo en el panel, chiquito: de dónde viene (la extensión, la
   /// serie a la que pertenece el episodio).
@@ -106,6 +107,8 @@ class TarjetaDeCatalogo extends StatefulWidget {
 }
 
 class _TarjetaDeCatalogoState extends State<TarjetaDeCatalogo> {
+  Color get _acento => widget.acento ?? HomeTheme.accentPink;
+
   bool _encima = false;
 
   /// En pantalla táctil no hay «pasar por encima», así que el primer toque
@@ -197,7 +200,7 @@ class _TarjetaDeCatalogoState extends State<TarjetaDeCatalogo> {
                               offset: Offset(0, 4),
                             ),
                             BoxShadow(
-                              color: widget.acento.withValues(alpha: 0.22),
+                              color: _acento.withValues(alpha: 0.22),
                               blurRadius: 40,
                               spreadRadius: 6,
                             ),
@@ -243,7 +246,7 @@ class _TarjetaDeCatalogoState extends State<TarjetaDeCatalogo> {
                     fontSize: 13,
                     height: 1.32,
                     fontWeight: FontWeight.w600,
-                    color: resaltada ? widget.acento : HomeTheme.textPrimary,
+                    color: resaltada ? _acento : HomeTheme.textPrimary,
                   ),
                 ),
               ),
@@ -255,7 +258,7 @@ class _TarjetaDeCatalogoState extends State<TarjetaDeCatalogo> {
                         widget.subtitulo!,
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
-                        style: const TextStyle(
+                        style: TextStyle(
                           fontSize: 11.5,
                           color: HomeTheme.textMuted,
                         ),
@@ -322,7 +325,7 @@ class _TarjetaDeCatalogoState extends State<TarjetaDeCatalogo> {
                 widget.encabezado!.toUpperCase(),
                 maxLines: 1,
                 overflow: TextOverflow.ellipsis,
-                style: const TextStyle(
+                style: TextStyle(
                   fontSize: 9.5,
                   letterSpacing: 0.9,
                   fontWeight: FontWeight.w700,
@@ -346,7 +349,7 @@ class _TarjetaDeCatalogoState extends State<TarjetaDeCatalogo> {
               const SizedBox(height: 5),
               Row(
                 children: [
-                  const Icon(Icons.calendar_today_rounded,
+                  Icon(Icons.calendar_today_rounded,
                       size: 11, color: HomeTheme.textMuted),
                   const SizedBox(width: 5),
                   Expanded(
@@ -354,7 +357,7 @@ class _TarjetaDeCatalogoState extends State<TarjetaDeCatalogo> {
                       widget.fecha!,
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
-                      style: const TextStyle(
+                      style: TextStyle(
                         fontSize: 11,
                         color: HomeTheme.textMuted,
                       ),
@@ -398,7 +401,7 @@ class _TarjetaDeCatalogoState extends State<TarjetaDeCatalogo> {
                 child: Row(
                   children: [
                     Icon(Icons.play_arrow_rounded,
-                        size: 17, color: widget.acento),
+                        size: 17, color: _acento),
                     const SizedBox(width: 4),
                     Expanded(
                       child: Text(
@@ -409,7 +412,7 @@ class _TarjetaDeCatalogoState extends State<TarjetaDeCatalogo> {
                           fontSize: 10.5,
                           letterSpacing: 0.6,
                           fontWeight: FontWeight.w800,
-                          color: widget.acento,
+                          color: _acento,
                         ),
                       ),
                     ),
@@ -471,7 +474,7 @@ class _TarjetaDeCatalogoState extends State<TarjetaDeCatalogo> {
   /// `cover` a propósito: la carta tiene su propia forma y acá tiene que llenar
   /// el marco sin dejar franjas — es un relleno, no contenido que haya que ver
   /// entero.
-  Widget _mientrasCarga() => const DecoratedBox(
+  Widget _mientrasCarga() => DecoratedBox(
         decoration: BoxDecoration(color: HomeTheme.cardSurface),
         child: Opacity(
           opacity: 0.55,
@@ -495,7 +498,7 @@ class _TarjetaDeCatalogoState extends State<TarjetaDeCatalogo> {
           begin: Alignment.topLeft,
           end: Alignment.bottomRight,
           colors: [
-            widget.acento.withValues(alpha: 0.30),
+            _acento.withValues(alpha: 0.30),
             HomeTheme.cardSurface,
           ],
         ),

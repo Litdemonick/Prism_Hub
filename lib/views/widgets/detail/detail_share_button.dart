@@ -97,7 +97,7 @@ class DetailShareButton extends StatelessWidget {
         shape: fluent.WidgetStateProperty.all(
           RoundedRectangleBorder(
             borderRadius: BorderRadius.circular(999),
-            side: const BorderSide(color: HomeTheme.border),
+            side: BorderSide(color: HomeTheme.border),
           ),
         ),
       ),

@@ -398,7 +398,7 @@ class _FilaWindowsState extends State<_FilaWindows> {
                           },
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
-                  style: const TextStyle(
+                  style: TextStyle(
                     fontSize: 12,
                     fontWeight: FontWeight.w500,
                     color: HomeTheme.textMuted,

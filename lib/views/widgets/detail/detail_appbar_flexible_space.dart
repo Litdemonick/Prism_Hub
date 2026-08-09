@@ -234,7 +234,7 @@ class _DetailAppbarflexibleSpaceState extends State<DetailAppbarflexibleSpace> {
           // esa zona en vez de sesgar hacia el centro/abajo.
           alignment: const Alignment(0, 0),
         ),
-        const DecoratedBox(
+        DecoratedBox(
           decoration: BoxDecoration(
             gradient: LinearGradient(
               begin: Alignment.topCenter,
@@ -481,7 +481,7 @@ class _TituloDeLaFicha extends StatelessWidget {
         padding: const EdgeInsets.fromLTRB(24, 4, 24, 40),
         child: SelectableText(
           texto,
-          style: const TextStyle(
+          style: TextStyle(
             color: HomeTheme.textPrimary,
             fontSize: 20,
             height: 1.35,
@@ -576,7 +576,7 @@ class _RuedaChica extends StatelessWidget {
         color: Colors.black.withValues(alpha: 0.55),
         borderRadius: BorderRadius.circular(999),
       ),
-      child: const SizedBox(
+      child: SizedBox(
         width: 14,
         height: 14,
         child: CircularProgressIndicator(
