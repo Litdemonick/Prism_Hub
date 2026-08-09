@@ -1585,6 +1585,51 @@ class _ExtensionFilterWidgetState extends State<_ExtensionFilterWidget> {
           e.value.adultOption == null ||
           e.value.adultOption!.isEmpty)
       .toList();
+
+  /// Si esta OPCIÓN suelta de un filtro es una puerta a contenido adulto.
+  ///
+  /// ── Por qué no alcanza con esconder el filtro entero ────────────────────
+  ///
+  /// Porque no todos los sitios tienen un interruptor dedicado. Varios lo
+  /// marcan con GÉNEROS: en la lista de TuMangaOnline conviven «Romance» y
+  /// «Acción» con «+18», «Adulto», «Erotica» y «Smut», todos como opciones del
+  /// mismo filtro. Esconder ese filtro dejaría a la extensión sin géneros; no
+  /// esconder nada deja la puerta abierta a un toque de distancia.
+  ///
+  /// Así que se mira opción por opción, por su ETIQUETA, en español y en
+  /// inglés — que es lo que se puede hacer de forma general, sin una lista por
+  /// extensión que habría que mantener cada vez que se agrega una.
+  ///
+  /// Ecchi queda afuera a propósito: es sugerente y no explícito. Es el techo
+  /// de lo que puede aparecer fuera de la zona.
+  static bool _esOpcionDeAdultos(String etiqueta) {
+    final n = etiqueta.toLowerCase().trim();
+    const marcas = [
+      '+18',
+      '18+',
+      'adulto',
+      'adult',
+      'erotic',
+      'erótic',
+      'smut',
+      'hentai',
+      'porn',
+      'nsfw',
+      'explicit',
+      'explícit',
+      'pornogr',
+    ];
+    return marcas.any(n.contains);
+  }
+
+  /// Las opciones de un filtro que se pueden mostrar acá.
+  Map<String, String> _opcionesDe(ExtensionFilter f) {
+    if (widget.desdeLaZona18 || _extensionDeAdultos) return f.options;
+    return {
+      for (final o in f.options.entries)
+        if (!_esOpcionDeAdultos(o.value)) o.key: o.value,
+    };
+  }
   late Map<String, List<String>> _selectedFilters = widget.selectedFilters;
   final _scrollController = ScrollController();
 
@@ -1740,8 +1785,11 @@ class _ExtensionFilterWidgetState extends State<_ExtensionFilterWidget> {
                       spacing: 10,
                       runSpacing: 10,
                       children: [
+                        // _opcionesDe y no las opciones crudas: fuera de la
+                        // Zona +18 se sacan las que abren contenido para
+                        // adultos, aunque vivan mezcladas entre los géneros.
                         for (final entry
-                            in _sortedOptions(filter.value.options)) ...[
+                            in _sortedOptions(_opcionesDe(filter.value))) ...[
                           _chip(
                             label: entry.value,
                             // _selectedFilters (el estado local, que sí se
