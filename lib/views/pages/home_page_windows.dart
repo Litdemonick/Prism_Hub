@@ -403,6 +403,25 @@ class _FilaWindowsState extends State<_FilaWindows> {
               ],
             ),
           ),
+          // «Ver todo»: la sección entera, en su propia pantalla.
+          //
+          // Solo donde existe (ver UltimasActualizacionesPage.disponiblePara) y
+          // solo cuando la fila está mostrando esa sección — con un filtro
+          // puesto, o mostrando lo más visto, la flecha llevaría a otra cosa
+          // que la que se está viendo.
+          if (UltimasActualizacionesPage.disponiblePara(widget.fila.package) &&
+              widget.c.etiquetaDe(widget.fila) != null) ...[
+            _FlechaDeFila(
+              icono: Icons.arrow_forward_rounded,
+              onTap: () => UltimasActualizacionesPage.abrir(
+                context,
+                package: widget.fila.package,
+                titulo: widget.fila.nombre,
+                etiqueta: widget.c.etiquetaDe(widget.fila),
+              ),
+            ),
+            const SizedBox(width: 10),
+          ],
           // Flechas para recorrer la fila.
           //
           // El botón de actualizar se sacó: la fila ya se refresca sola cuando

@@ -2213,16 +2213,53 @@ class _FilaAndroidState extends State<_FilaAndroid> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text(
-            widget.fila.nombre,
-            maxLines: 1,
-            overflow: TextOverflow.ellipsis,
-            style: TextStyle(
-              fontSize: Ancho.de(context).elegir(compacto: 18, medio: 20),
-              fontWeight: FontWeight.w800,
-              color: HomeTheme.textPrimary,
-              letterSpacing: -0.2,
-            ),
+          Row(
+            children: [
+              Flexible(
+                child: Text(
+                  widget.fila.nombre,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: TextStyle(
+                    fontSize: Ancho.de(context).elegir(compacto: 18, medio: 20),
+                    fontWeight: FontWeight.w800,
+                    color: HomeTheme.textPrimary,
+                    letterSpacing: -0.2,
+                  ),
+                ),
+              ),
+              // «Ver todo»: la sección entera, en su propia pantalla.
+              //
+              // Pegada al nombre y no al borde de la pantalla: así se lee como
+              // parte del título —«MangaDex ›»— que es lo que hace el propio
+              // sitio. Suelta a la derecha parecería un control de la fila,
+              // como las flechas de escritorio.
+              //
+              // Solo donde existe esa pantalla y solo cuando la fila está
+              // mostrando esa sección: con un filtro puesto llevaría a otra
+              // cosa que la que se está viendo.
+              if (UltimasActualizacionesPage.disponiblePara(
+                      widget.fila.package) &&
+                  widget.c.etiquetaDe(widget.fila) != null)
+                InkWell(
+                  borderRadius: BorderRadius.circular(20),
+                  onTap: () => UltimasActualizacionesPage.abrir(
+                    context,
+                    package: widget.fila.package,
+                    titulo: widget.fila.nombre,
+                    etiqueta: widget.c.etiquetaDe(widget.fila),
+                  ),
+                  child: Padding(
+                    padding: const EdgeInsets.symmetric(
+                        horizontal: 4, vertical: 2),
+                    child: Icon(
+                      Icons.chevron_right_rounded,
+                      size: 22,
+                      color: HomeTheme.textMuted,
+                    ),
+                  ),
+                ),
+            ],
           ),
           Text(
             // Su propio estado, no el global: ver `refrescando`.
