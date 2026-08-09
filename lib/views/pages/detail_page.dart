@@ -11,6 +11,7 @@ import 'package:prismhub/data/providers/tmdb_provider.dart';
 import 'package:prismhub/models/extension.dart';
 import 'package:prismhub/controllers/detail_controller.dart';
 import 'package:prismhub/views/widgets/detail/detail_appbar_flexible_space.dart';
+import 'package:prismhub/views/widgets/detail/detail_appbar_back.dart';
 import 'package:prismhub/views/widgets/detail/detail_appbar_title.dart';
 import 'package:prismhub/views/widgets/detail/detail_continue_play.dart';
 import 'package:prismhub/views/widgets/detail/detail_background_color.dart';
@@ -174,8 +175,18 @@ class _DetailPageState extends State<DetailPage> {
               child: Align(
                 alignment: Alignment.topLeft,
                 child: IconButton(
-                  icon: Icon(Icons.arrow_back,
-                      color: HomeTheme.textPrimary),
+                  // Con la portada previa detrás, el fondo es el velo oscuro
+                  // de arriba y no el de la app: ahí va blanca en los dos
+                  // modos. Sin portada el fondo sí es el de la app y sigue al
+                  // modo. Con textPrimary a secas, en modo claro la flecha
+                  // quedaba casi negra sobre el velo — invisible, y es la
+                  // única salida mientras carga.
+                  icon: Icon(
+                    Icons.arrow_back,
+                    color: previa != null
+                        ? HomeTheme.sobrePortada
+                        : HomeTheme.textPrimary,
+                  ),
                   // Navigator directo, no RouterUtils: esta rama es solo
                   // Android, donde la página se empuja con Get.to sobre el
                   // navegador de GetMaterialApp.
@@ -434,6 +445,15 @@ class _DetailPageState extends State<DetailPage> {
                 // atrás. Con el fondo puesto, la barra tapa lo que pasa debajo.
                 backgroundColor: HomeTheme.bg,
                 surfaceTintColor: Colors.transparent,
+                // Flecha propia: la automática toma el color del tema, o sea
+                // el de la barra PLEGADA, y desplegada queda sobre la portada.
+                // En modo claro eso daba una flecha casi negra encima de una
+                // imagen oscura. Ver DetailAppbarBack.
+                leading: DetailAppbarBack(
+                  controller: c.scrollController,
+                  desde: medidas.relevoDelTitulo,
+                  onVolver: () => Navigator.of(context).maybePop(),
+                ),
                 title: DetailAppbarTitle(
                   c.detail?.title ?? '',
                   controller: c.scrollController,
