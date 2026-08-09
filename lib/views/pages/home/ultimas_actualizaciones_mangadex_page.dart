@@ -75,80 +75,82 @@ class UltimasActualizacionesMangaDexPage extends StatefulWidget {
 class _UltimasActualizacionesMangaDexPageState
     extends State<UltimasActualizacionesMangaDexPage> {
   final _scroll = ScrollController();
+
+  /// Lo que se muestra: SOLO la página en la que se está.
   final _items = <ExtensionListItem>[];
 
-  /// Las direcciones que ya están, para no repetir una obra.
-  final _vistas = <String>{};
+  /// En qué página está. Empieza en 1, como la numera el sitio.
+  int _pagina = 1;
 
-  int _pagina = 0;
+  /// La página más alta que se comprobó que trae contenido.
+  ///
+  /// El paginador no puede dibujar «313» como el sitio: la extensión devuelve
+  /// una tanda, no cuántas hay en total. Así que los números crecen a medida
+  /// que se descubren, y la flecha de avanzar se apaga cuando una página
+  /// vuelve vacía. Es menos vistoso que un total, pero es lo que se sabe de
+  /// verdad — inventar un número sería peor.
+  int _ultimaConocida = 1;
+
   bool _trayendo = false;
-  bool _sinMas = false;
   Object? _error;
 
   @override
   void initState() {
     super.initState();
-    _scroll.addListener(_alDesplazar);
-    _traer();
+    _traer(1);
   }
 
   @override
   void dispose() {
-    _scroll.removeListener(_alDesplazar);
     _scroll.dispose();
     super.dispose();
   }
 
-  /// Pide la siguiente tanda antes de llegar al fondo.
-  ///
-  /// Con un margen de una pantalla: esperando a tocar el final, el usuario ve
-  /// el vacío y recién ahí empieza la espera. Pidiendo antes, lo nuevo suele
-  /// estar puesto para cuando llega.
-  void _alDesplazar() {
-    if (!_scroll.hasClients || _trayendo || _sinMas) return;
-    final falta = _scroll.position.maxScrollExtent - _scroll.offset;
-    if (falta < _scroll.position.viewportDimension) _traer();
-  }
-
-  Future<void> _traer() async {
-    if (_trayendo || _sinMas) return;
+  Future<void> _traer(int pagina) async {
+    if (_trayendo || pagina < 1) return;
     setState(() {
       _trayendo = true;
       _error = null;
+      _pagina = pagina;
     });
-    final siguiente = _pagina + 1;
     try {
       final runtime =
           ExtensionUtils.runtimes[UltimasActualizacionesMangaDexPage.paquete];
       if (runtime == null) throw Exception('extension.gone-uninstalled');
       final tanda =
-          await runtime.latest(siguiente).timeout(const Duration(seconds: 20));
+          await runtime.latest(pagina).timeout(const Duration(seconds: 20));
       if (!mounted) return;
-      // Sin repetidos: varias extensiones devuelven alguna obra que ya estaba
-      // en la página anterior, y dos tarjetas con la misma clave además rompen
-      // la grilla.
-      final nuevos =
-          tanda.where((e) => !_vistas.contains(e.url)).toList(growable: false);
+      // Sin repetidos DENTRO de la tanda: la extensión puede devolver la misma
+      // obra dos veces, y dos tarjetas con la misma clave rompen la grilla.
+      final vistas = <String>{};
+      final limpios =
+          tanda.where((e) => vistas.add(e.url)).toList(growable: false);
       setState(() {
-        _pagina = siguiente;
         _trayendo = false;
-        if (nuevos.isEmpty) {
-          // Se acabó. Sin esta marca, una extensión que al pasarse del final
-          // devuelve siempre lo mismo pediría para siempre.
-          _sinMas = true;
-        } else {
-          _vistas.addAll(nuevos.map((e) => e.url));
-          _items.addAll(nuevos);
+        _items
+          ..clear()
+          ..addAll(limpios);
+        if (limpios.isNotEmpty && pagina > _ultimaConocida) {
+          _ultimaConocida = pagina;
+        }
+        // Una página vacía es el final: se vuelve a la anterior y ahí se corta
+        // el avance. Sin esto se quedaría una pantalla en blanco con el
+        // paginador ofreciendo seguir.
+        if (limpios.isEmpty && pagina > 1) {
+          _ultimaConocida = pagina - 1;
+          _pagina = pagina - 1;
+          // Y se recupera lo que había, que es lo que el usuario estaba
+          // mirando antes de tocar «siguiente».
+          _traer(_pagina);
         }
       });
+      // Arriba de todo: cambiar de página y quedar a media pantalla se lee
+      // como que no pasó nada.
+      if (_scroll.hasClients) _scroll.jumpTo(0);
     } catch (e) {
       if (!mounted) return;
       setState(() {
         _trayendo = false;
-        // El error solo corta si NO hay nada que mostrar. Con contenido en
-        // pantalla se deja lo que hay y el próximo desplazamiento reintenta:
-        // borrar lo que el usuario ya estaba mirando porque falló la página
-        // seis es peor que no traer la seis.
         _error = e;
       });
     }
@@ -220,10 +222,11 @@ class _UltimasActualizacionesMangaDexPageState
             // tarjetas cambiarían de forma respecto a los bloques que esperan.
             final alto = TarjetaDeCatalogo.altoTotalDeAncho(rejilla.ancho);
 
-            // Primera carga: la grilla entera de bloques que brillan. No una
-            // rueda: así la pantalla ya tiene la forma que va a tener y al
-            // llegar las portadas nada salta de lugar.
-            if (_items.isEmpty && _trayendo) {
+            // Cargando: la grilla entera de bloques que brillan. No una rueda:
+            // así la pantalla ya tiene la forma que va a tener y al llegar las
+            // portadas nada salta de lugar. Va también al CAMBIAR de página,
+            // no solo la primera vez — es una tanda nueva entera.
+            if (_trayendo) {
               return EsqueletoDeGrilla(
                 columnas: rejilla.columnas,
                 proporcion: rejilla.ancho / alto,
@@ -233,36 +236,143 @@ class _UltimasActualizacionesMangaDexPageState
 
             if (_items.isEmpty) return _sinNada();
 
-            // Una fila más de bloques mientras se trae: dice que hay más en
-            // camino sin mover ninguna de las tarjetas que ya están.
-            final extra = _trayendo ? rejilla.columnas : 0;
-            return GridView.builder(
-              controller: _scroll,
-              padding: const EdgeInsets.fromLTRB(margen, 8, margen, 24),
-              gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
-                crossAxisCount: rejilla.columnas,
-                childAspectRatio: rejilla.ancho / alto,
-                crossAxisSpacing: 16,
-                mainAxisSpacing: 16,
-              ),
-              itemCount: _items.length + extra,
-              itemBuilder: (context, i) {
-                if (i >= _items.length) {
-                  return EsqueletoTarjeta(ancho: rejilla.ancho);
-                }
-                final item = _items[i];
-                return ExtensionItemCard(
-                  key: ValueKey(item.url),
-                  title: item.title,
-                  url: item.url,
-                  package: UltimasActualizacionesMangaDexPage.paquete,
-                  cover: item.cover,
-                  update: item.update,
-                  headers: item.headers,
-                );
-              },
+            return Column(
+              children: [
+                Expanded(
+                  child: GridView.builder(
+                    controller: _scroll,
+                    padding: const EdgeInsets.fromLTRB(margen, 8, margen, 8),
+                    gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
+                      crossAxisCount: rejilla.columnas,
+                      childAspectRatio: rejilla.ancho / alto,
+                      crossAxisSpacing: 16,
+                      mainAxisSpacing: 16,
+                    ),
+                    itemCount: _items.length,
+                    itemBuilder: (context, i) {
+                      final item = _items[i];
+                      return ExtensionItemCard(
+                        key: ValueKey(item.url),
+                        title: item.title,
+                        url: item.url,
+                        package: UltimasActualizacionesMangaDexPage.paquete,
+                        cover: item.cover,
+                        update: item.update,
+                        headers: item.headers,
+                      );
+                    },
+                  ),
+                ),
+                _paginador(),
+              ],
             );
           },
+        ),
+      ),
+    );
+  }
+
+  /// La tira de páginas de abajo: `←  1  2  3  …  →`.
+  ///
+  /// ── Por qué no dice cuántas hay ─────────────────────────────────────────
+  ///
+  /// El sitio pone «313» porque su API le dice el total. Acá no llega: la
+  /// extensión devuelve una tanda y punto. Así que los números crecen a medida
+  /// que se descubren páginas, y el avance se corta cuando una vuelve vacía.
+  /// Inventar un total sería peor que no mostrarlo.
+  ///
+  /// Se muestra una ventana alrededor de la página actual y no todas: con
+  /// treinta páginas, treinta números no entran en un teléfono y no ayudan a
+  /// nadie.
+  Widget _paginador() {
+    const ventana = 2;
+    final desde = (_pagina - ventana).clamp(1, 1 << 30);
+    final hasta = (_pagina + ventana).clamp(1, _ultimaConocida + 1);
+    final numeros = [for (var p = desde; p <= hasta; p++) p];
+
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.fromLTRB(12, 8, 12, 12),
+      decoration: BoxDecoration(
+        color: HomeTheme.bg,
+        border: Border(top: BorderSide(color: HomeTheme.border)),
+      ),
+      child: SingleChildScrollView(
+        scrollDirection: Axis.horizontal,
+        // Centrado mientras entre; si son muchas páginas, se desplaza. Sin
+        // esto, en un teléfono angosto los números se desbordan.
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            _flecha(Icons.arrow_back_rounded,
+                _pagina > 1 ? () => _traer(_pagina - 1) : null),
+            const SizedBox(width: 4),
+            // La primera siempre a mano, aunque se esté en la doce.
+            if (desde > 1) ...[
+              _numero(1),
+              if (desde > 2) _puntos(),
+            ],
+            for (final p in numeros) _numero(p),
+            const SizedBox(width: 4),
+            _flecha(Icons.arrow_forward_rounded, () => _traer(_pagina + 1)),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _puntos() => Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 6),
+        child: Text('…', style: TextStyle(color: HomeTheme.textMuted)),
+      );
+
+  Widget _numero(int p) {
+    final actual = p == _pagina;
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 3),
+      child: Material(
+        color: actual ? HomeTheme.accentPink : Colors.transparent,
+        borderRadius: BorderRadius.circular(8),
+        child: InkWell(
+          borderRadius: BorderRadius.circular(8),
+          onTap: actual ? null : () => _traer(p),
+          child: Container(
+            constraints: const BoxConstraints(minWidth: 34, minHeight: 34),
+            alignment: Alignment.center,
+            padding: const EdgeInsets.symmetric(horizontal: 8),
+            child: Text(
+              '$p',
+              style: TextStyle(
+                fontSize: 14,
+                fontWeight: actual ? FontWeight.w800 : FontWeight.w600,
+                color:
+                    actual ? HomeTheme.sobreContraste : HomeTheme.textPrimary,
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _flecha(IconData icono, VoidCallback? alTocar) {
+    final apagada = alTocar == null;
+    return Material(
+      color: Colors.transparent,
+      borderRadius: BorderRadius.circular(8),
+      child: InkWell(
+        borderRadius: BorderRadius.circular(8),
+        onTap: alTocar,
+        child: Container(
+          constraints: const BoxConstraints(minWidth: 34, minHeight: 34),
+          alignment: Alignment.center,
+          child: Icon(
+            icono,
+            size: 18,
+            color: apagada
+                ? HomeTheme.textMuted.withValues(alpha: 0.4)
+                : HomeTheme.textPrimary,
+          ),
         ),
       ),
     );
@@ -293,12 +403,9 @@ class _UltimasActualizacionesMangaDexPageState
             if (fallo) ...[
               const SizedBox(height: 16),
               TextButton(
-                onPressed: () {
-                  // La página que falló se vuelve a pedir, no la siguiente: si
-                  // no, ese tramo del catálogo se saltearía para siempre.
-                  setState(() => _sinMas = false);
-                  _traer();
-                },
+                // La página que falló se vuelve a pedir, no la siguiente: si
+                // no, ese tramo del catálogo se saltearía para siempre.
+                onPressed: () => _traer(_pagina),
                 child: const Text('Reintentar'),
               ),
             ],

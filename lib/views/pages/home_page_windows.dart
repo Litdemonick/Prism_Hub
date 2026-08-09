@@ -370,17 +370,40 @@ class _FilaWindowsState extends State<_FilaWindows> {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(
-                  widget.fila.nombre,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: TextStyle(
-                    fontSize: Ancho.de(context)
-                        .elegir(compacto: 17, medio: 19, amplio: 22),
-                    fontWeight: FontWeight.w800,
-                    color: HomeTheme.textPrimary,
-                    letterSpacing: -0.2,
-                  ),
+                Row(
+                  children: [
+                    Flexible(
+                      child: Text(
+                        widget.fila.nombre,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: TextStyle(
+                          fontSize: Ancho.de(context)
+                              .elegir(compacto: 17, medio: 19, amplio: 22),
+                          fontWeight: FontWeight.w800,
+                          color: HomeTheme.textPrimary,
+                          letterSpacing: -0.2,
+                        ),
+                      ),
+                    ),
+                    // «Ver todo», PEGADA al nombre.
+                    //
+                    // Estaba al otro extremo, junto a las flechas de recorrer
+                    // la fila, y ahí se leía como una tercera flecha de mover
+                    // — tres iconos parecidos seguidos, y el que hace algo
+                    // distinto era el primero. Al lado del título se entiende
+                    // sola: «MangaDex ›» es entrar a MangaDex.
+                    if (UltimasActualizacionesMangaDexPage.disponiblePara(
+                            widget.fila.package) &&
+                        widget.c.etiquetaDe(widget.fila) != null)
+                      _VerTodo(
+                        onTap: () => UltimasActualizacionesMangaDexPage.abrir(
+                          context,
+                          titulo: widget.fila.nombre,
+                          etiqueta: widget.c.etiquetaDe(widget.fila),
+                        ),
+                      ),
+                  ],
                 ),
                 Text(
                   // Su propio estado, no el global: ver `refrescando`.
@@ -403,25 +426,6 @@ class _FilaWindowsState extends State<_FilaWindows> {
               ],
             ),
           ),
-          // «Ver todo»: la sección entera, en su propia pantalla.
-          //
-          // Solo donde existe (ver UltimasActualizacionesPage.disponiblePara) y
-          // solo cuando la fila está mostrando esa sección — con un filtro
-          // puesto, o mostrando lo más visto, la flecha llevaría a otra cosa
-          // que la que se está viendo.
-          if (UltimasActualizacionesMangaDexPage.disponiblePara(
-                  widget.fila.package) &&
-              widget.c.etiquetaDe(widget.fila) != null) ...[
-            _FlechaDeFila(
-              icono: Icons.arrow_forward_rounded,
-              onTap: () => UltimasActualizacionesMangaDexPage.abrir(
-                context,
-                titulo: widget.fila.nombre,
-                etiqueta: widget.c.etiquetaDe(widget.fila),
-              ),
-            ),
-            const SizedBox(width: 10),
-          ],
           // Flechas para recorrer la fila.
           //
           // El botón de actualizar se sacó: la fila ya se refresca sola cuando
@@ -433,6 +437,45 @@ class _FilaWindowsState extends State<_FilaWindows> {
           _FlechaDeFila(
               icono: Icons.chevron_right_rounded, onTap: () => _correr(1)),
         ],
+      ),
+    );
+  }
+}
+
+/// El «ver todo» que va pegado al nombre de la fila.
+///
+/// Aparte de [_FlechaDeFila] a propósito, aunque las dos sean una flecha: esta
+/// no recorre nada, ABRE otra pantalla. Que se vea distinta —más chica, en el
+/// tono del subtítulo, encendiéndose al pasar por encima— es lo que evita que
+/// se confunda con las de mover.
+class _VerTodo extends StatefulWidget {
+  const _VerTodo({required this.onTap});
+  final VoidCallback onTap;
+
+  @override
+  State<_VerTodo> createState() => _VerTodoState();
+}
+
+class _VerTodoState extends State<_VerTodo> {
+  bool _encima = false;
+
+  @override
+  Widget build(BuildContext context) {
+    return MouseRegion(
+      cursor: SystemMouseCursors.click,
+      onEnter: (_) => setState(() => _encima = true),
+      onExit: (_) => setState(() => _encima = false),
+      child: GestureDetector(
+        onTap: widget.onTap,
+        behavior: HitTestBehavior.opaque,
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 2),
+          child: Icon(
+            Icons.chevron_right_rounded,
+            size: 24,
+            color: _encima ? HomeTheme.textPrimary : HomeTheme.textMuted,
+          ),
+        ),
       ),
     );
   }

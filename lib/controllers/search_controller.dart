@@ -67,14 +67,33 @@ class SearchPageController extends GetxController {
     // ninguna, sin excepción — antes bastaba con tener el switch de NSFW
     // prendido para que apareciesen acá mezcladas con el resto.
     if (nsfwOnly) {
-      // Las +18 enteras, MÁS las mixtas: ShadeManga y ManhwaWeb tienen una
-      // sección de adultos detrás de un filtro propio, y sin esto quedaban
-      // fuera de su propia zona. Al abrirlas desde acá, el buscador por
-      // extensión les pone ese filtro puesto de entrada (ver `soloAdulto` en
-      // ExtensionSearcherPage).
-      exts.removeWhere((element) =>
-          !element.extension.nsfw &&
-          !ExtensionUtils.esMixta(element.extension.package));
+      // ── Acá están TODAS, con las +18 primero ─────────────────────────────
+      //
+      // Antes se descartaba todo lo que no fuera +18 o mixta. La idea era que
+      // la zona mostrara solo lo suyo, pero en la práctica dejaba a alguien que
+      // entró a buscar sin poder buscar en el resto de sus extensiones: tenía
+      // que salir de la zona, buscar, y volver.
+      //
+      // Ahora no se saca ninguna y manda el ORDEN: las de adultos enteras
+      // primero, después las que tienen las dos cosas, y al final las normales.
+      // Lo que se vino a buscar queda arriba, y lo demás está si hace falta.
+      //
+      // Al abrir una desde acá, el buscador por extensión le pone su filtro de
+      // adultos de entrada (ver `soloAdulto` en ExtensionSearcherPage); a una
+      // normal no hay nada que ponerle y se comporta como siempre.
+      int rango(ExtensionService e) {
+        if (e.extension.nsfw) return 0;
+        if (ExtensionUtils.esMixta(e.extension.package)) return 1;
+        return 2;
+      }
+
+      // Estable dentro de cada grupo: sin esto, dos extensiones del mismo
+      // rango podrían bailar de posición entre búsquedas.
+      final orden = {for (var i = 0; i < exts.length; i++) exts[i]: i};
+      exts.sort((a, b) {
+        final r = rango(a).compareTo(rango(b));
+        return r != 0 ? r : orden[a]!.compareTo(orden[b]!);
+      });
     } else {
       // Y acá al revés: fuera las +18 enteras. Una mixta SÍ se queda, con su
       // contenido normal — el filtro de adultos va cerrado por defecto y el
