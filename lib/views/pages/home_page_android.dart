@@ -2002,14 +2002,33 @@ class _TarjetaGrande extends StatelessWidget {
               // la línea de la extensión uno, y el velo tiene que cubrir eso y
               // nada más. La portada se ve casi entera y el texto sigue
               // legible sobre cualquier imagen.
+              //
+              // ── Pero acortarlo a dos paradas marcaba una línea ───────────
+              //
+              // De 0,6 a 0,32 sin tocar nada más deja la MISMA caída de opacidad
+              // en la mitad de recorrido, o sea el doble de empinada. Y con dos
+              // paradas el desvanecido termina de golpe: la opacidad viene
+              // bajando parejo y en el 32% se corta seco. Ese quiebre el ojo lo
+              // ve como una raya cruzando la portada, aunque no haya ningún
+              // borde dibujado — es el mismo efecto que hace ver bandas en un
+              // degradado.
+              //
+              // Con paradas intermedias la caída se va frenando en vez de
+              // cortarse: el grueso del velo sigue abajo, pegado al texto, y lo
+              // que sobra se apaga de a poco hasta el 46%. Ni línea ni mancha.
               if (conTexto)
                 const DecoratedBox(
                   decoration: BoxDecoration(
                     gradient: LinearGradient(
                       begin: Alignment.bottomCenter,
                       end: Alignment.topCenter,
-                      colors: [Color(0xD9000000), Color(0x00000000)],
-                      stops: [0.0, 0.32],
+                      colors: [
+                        Color(0xD9000000),
+                        Color(0x8A000000),
+                        Color(0x33000000),
+                        Color(0x00000000),
+                      ],
+                      stops: [0.0, 0.12, 0.27, 0.46],
                     ),
                   ),
                 ),
