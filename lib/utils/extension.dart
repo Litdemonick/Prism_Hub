@@ -725,7 +725,24 @@ class ExtensionUtils {
   // marcada `nsfw: true` no se consulta nunca, así que no hay forma de que se
   // filtre a la zona normal por un `adultOption` usado para otra cosa.
   static final Set<String> _mixtas = {};
-  static bool _mixtasLeidas = false;
+
+  /// Qué paquetes ya se consultaron, y con qué VERSIÓN.
+  ///
+  /// ── Por qué la versión y no un simple «ya se hizo» ──────────────────────
+  ///
+  /// Era un booleano de una sola vez por sesión, y nunca se invalidaba. Con eso,
+  /// instalar o actualizar una extensión con la app abierta la dejaba sin
+  /// clasificar hasta reiniciar — y «sin clasificar» es el peor de los estados
+  /// para una que trae las dos cosas: no entra a la zona normal por no estar
+  /// reconocida, y tampoco a la Zona +18 por no ser de adultos entera. Se cae de
+  /// las dos, y desde afuera parece que la extensión desapareció.
+  ///
+  /// Pasó en vivo con ManhwaWeb al corregir su manifiesto: la versión nueva ya
+  /// venía bien declarada y el app seguía con la respuesta de la anterior.
+  ///
+  /// Guardando la versión, cada actualización se vuelve a mirar sola y una que
+  /// no cambió no cuesta nada: se saltea sin tocar su motor.
+  static final Map<String, String> _mixtasVistas = {};
 
   /// Las que tienen contenido normal y +18 a la vez.
   ///
@@ -742,9 +759,18 @@ class ExtensionUtils {
   /// motor no es reentrante, así que esto NO se llama al arrancar: lo llama la
   /// pantalla que lo necesita, cuando ya no hay nada más pidiéndole cosas.
   static Future<void> detectarMixtas() async {
-    if (_mixtasLeidas) return;
-    _mixtasLeidas = true;
+    // Una desinstalada no puede seguir contando como nada.
+    _mixtas.removeWhere((p) => !runtimes.containsKey(p));
+    _mixtasVistas.removeWhere((p, _) => !runtimes.containsKey(p));
     for (final e in runtimes.entries) {
+      final version = e.value.extension.version;
+      // Ya se miró ESTA versión: no se le vuelve a pedir nada al motor.
+      if (_mixtasVistas[e.key] == version) continue;
+      _mixtasVistas[e.key] = version;
+      // Se borra lo que se supiera de la versión anterior: una actualización
+      // puede sacar o agregar la puerta, y arrastrar la respuesta vieja sería
+      // exactamente el error que esto viene a corregir.
+      _mixtas.remove(e.key);
       // Las +18 enteras no se consultan: ver el comentario de arriba.
       if (e.value.extension.nsfw) continue;
       try {
@@ -757,6 +783,11 @@ class ExtensionUtils {
         // Si no se pudo saber, se la deja fuera. Una mixta que no aparece en
         // la Zona +18 es un contenido menos; una +18 que aparece en la zona
         // normal es un problema.
+        //
+        // Y se olvida que se la miró, así que el próximo intento la vuelve a
+        // consultar: si falló por un tropiezo puntual —el motor ocupado, un
+        // tiempo agotado— no queda mal clasificada para toda la sesión.
+        _mixtasVistas.remove(e.key);
         logger.info('[mixtas] ${e.value.extension.name}: $err');
       }
     }

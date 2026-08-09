@@ -1489,8 +1489,17 @@ class CatalogoExtensionesController extends GetxController {
       final filtro = genero ??
           (popular == null
               ? null
+              // ── Con lo seguro puesto TAMBIÉN acá ──────────────────────
+              //
+              // Esta rama armaba el filtro con el orden y nada más. Hasta
+              // ahora no se notaba: para una extensión con puerta a adultos,
+              // `_generoPara` nunca devolvía null, así que a este `??` no se
+              // llegaba jamás. Con la excepción de `_loUltimoYaEsSeguro` sí se
+              // llega, y sin esto pedir «lo más visto» habría salido sin la
+              // puerta cerrada.
               : {
-                  popular.clave: [popular.valor]
+                  ...?_segurosPorExtension[fila.package],
+                  popular.clave: [popular.valor],
                 });
       // La página que toca. Empieza en 1 y sube cuando el usuario pide más.
       final pagina = fila.pagina;
@@ -1543,26 +1552,55 @@ class CatalogoExtensionesController extends GetxController {
     final filtro = <String, List<String>>{
       ...?_segurosPorExtension[package],
     };
+    var eligioAlgo = false;
     for (final id in [generoAplicado, estadoAplicado, formatoAplicado]) {
       if (id == null) continue;
       // Si la extensión entera ya es de ese formato, no hay nada que pedirle:
       // todo lo que devuelva sirve. Ver `_yaEsDeEseFormato`.
       final donde = ejes[id];
       if (donde == null) continue;
+      eligioAlgo = true;
       // Dos ejes pueden caer en el mismo filtro del sitio; ahí se acumulan.
       (filtro[donde.clave] ??= <String>[]).add(donde.valor);
     }
     // ── Con lo seguro puesto SIEMPRE se usa search ────────────────────
     //
     // Aunque el usuario no haya elegido nada. `latest()` no acepta filtros, así
-    // que por ese camino no hay forma de decirle «sin contenido para adultos» —
-    // y en ManhwaWeb `latest()` va a otro endpoint del sitio, uno que no toma
-    // ese parámetro.
+    // que por ese camino no hay forma de decirle «sin contenido para adultos»,
+    // y encima suele pegarle a OTRO endpoint del sitio, uno que ni siquiera
+    // conoce ese parámetro.
     //
-    // Costar un `search(''')` en vez de un `latest()` para dos extensiones es
+    // Costar un `search('')` en vez de un `latest()` para dos extensiones es
     // barato. Que se cuele una portada +18 en el Home no lo es.
+    //
+    // ── La excepción: cuando su «lo último» ya es seguro de por sí ────────
+    //
+    // Y hace falta, porque el precio de esa regla no era solo un pedido de
+    // más: cambia QUÉ se muestra. `search('')` lista el catálogo; `latest()`
+    // trae los capítulos nuevos, que es lo que la fila del Inicio promete.
+    //
+    // Solo para las que se comprobó una por una, y solo mientras el usuario
+    // no haya elegido nada: apenas toca un filtro se vuelve al camino de
+    // search con lo seguro puesto, igual que antes.
+    if (!eligioAlgo && _loUltimoYaEsSeguro.contains(package)) return null;
     return filtro.isEmpty ? null : filtro;
   }
+
+  /// Extensiones cuyo `latest()` devuelve **solo** contenido normal.
+  ///
+  /// Se comprueba mirando qué pide la extensión y qué contesta el sitio, no
+  /// confiando en el nombre del endpoint:
+  ///
+  ///   · **ManhwaWeb** (medido el 2026-08-08) — su portada tiene «Nuevos
+  ///     Capítulos» partido en dos solapas y el endpoint manda las dos juntas,
+  ///     en listas separadas. Desde la v1.4.1 la extensión devuelve solo la
+  ///     lista de la solapa principal, comparada título por título contra la
+  ///     web. La otra sigue estando, detrás de su filtro.
+  ///
+  /// Lo correcto a futuro es que esto lo declare cada extensión en su
+  /// manifiesto, como ya hace con `latestLabel`, en vez de vivir acá. Mientras
+  /// tanto, una lista corta y medida es mejor que aflojar la regla para todas.
+  static const _loUltimoYaEsSeguro = {'io.prismhub.manhwaweb'};
 
   /// Alimenta el carrusel con la tanda de esta extensión.
   ///
@@ -1627,21 +1665,40 @@ class CatalogoExtensionesController extends GetxController {
   /// Si algo de esto falla —sin conexión, catálogo caído, una extensión que no
   /// contesta— el Home se queda con lo que ya mostró. Ninguna de las dos cosas
   /// es imprescindible.
-  bool _completado = false;
+  /// Con qué lista de extensiones se completó la última vez.
+  ///
+  /// Paquete y versión de cada una: si alguna se instala, se actualiza o se
+  /// va, esto cambia y hay que volver a mirar.
+  String _completadoCon = '';
+
+  static String get _firmaDeInstaladas {
+    final partes = ExtensionUtils.runtimes.entries
+        .map((e) => '${e.key}@${e.value.extension.version}')
+        .toList()
+      ..sort();
+    return partes.join(',');
+  }
 
   Future<void> _completarPorDetras() async {
-    // ── Una sola vez, y esto NO es opcional ────────────────────────────
+    // ── Una sola vez POR LISTA DE EXTENSIONES ──────────────────────────
     //
-    // Sin este candado hay un bucle infinito: al terminar, esto llama a
-    // `recargar()`, que llama a `_armar()`, que vuelve a lanzar esto. Los
-    // candados de `detectarMixtas` y `prepararVistaPrevia` no alcanzan —
-    // devuelven al toque, pero la llamada a `recargar()` de abajo sigue
-    // ocurriendo igual.
+    // El candado es imprescindible: al terminar, esto llama a `recargar()`,
+    // que llama a `_armar()`, que vuelve a lanzar esto. Sin él hay bucle
+    // infinito, y en pantalla se veía como el Home rearmándose sin parar,
+    // todo parpadeando y moviéndose solo. Los candados de `detectarMixtas` y
+    // `prepararVistaPrevia` no alcanzan: devuelven al toque, pero la llamada a
+    // `recargar()` de abajo sigue ocurriendo igual.
     //
-    // En pantalla se veía como el Home rearmándose sin parar: todo
-    // parpadeando y moviéndose solo.
-    if (_completado) return;
-    _completado = true;
+    // Pero era un booleano, o sea una vez y nunca más. Con eso, instalar o
+    // actualizar una extensión con la app abierta no volvía a clasificarla, y
+    // hasta reiniciar podía quedar fuera del Inicio y de la Zona +18 a la vez.
+    //
+    // La firma incluye la VERSIÓN de cada una, así que una actualización
+    // cuenta como cambio. Entre dos vueltas del bucle la firma es la misma, que
+    // es lo que sigue cortándolo.
+    final firma = _firmaDeInstaladas;
+    if (_completadoCon == firma) return;
+    _completadoCon = firma;
     try {
       await ExtensionUtils.detectarMixtas();
       await ExtensionUtils.prepararVistaPrevia();
