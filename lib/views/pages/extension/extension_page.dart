@@ -1015,10 +1015,12 @@ class _ExtensionPageState extends State<ExtensionPage> {
                                     16,
                                     0,
                                     16,
-                                    _huecoDeLaBarra(context) +
-                                        (totalPages > 1 ? 34 : 8),
+                                    _huecoDeLaBarra(context) + 8,
                                   ),
-                                  itemCount: dePagina.length,
+                                  // El último elemento son las rayitas. Ver
+                                  // abajo por qué van DENTRO de la lista.
+                                  itemCount: dePagina.length +
+                                      (totalPages > 1 ? 1 : 0),
                                   // Sin RepaintBoundary a mano: ListView.builder
                                   // ya envuelve cada ítem en uno
                                   // (SliverChildBuilderDelegate
@@ -1027,48 +1029,49 @@ class _ExtensionPageState extends State<ExtensionPage> {
                                   // grilla de más abajo SÍ lo necesita, porque
                                   // ahí las tarjetas se arman con un for suelto y
                                   // no pasan por ese delegate.
-                                  itemBuilder: (_, i) =>
-                                      ExtensionTile(dePagina[i].extension),
+                                  itemBuilder: (_, i) {
+                                    // ── Las rayitas van DENTRO de la lista ──
+                                    //
+                                    // Estaban flotando encima, ancladas al
+                                    // borde de abajo de la pantalla. Eso las
+                                    // dejaba QUIETAS mientras el contenido se
+                                    // movía por detrás: al desplazarse parecían
+                                    // perseguir al dedo, y encima quedaban
+                                    // pegadas a la barra de navegación, como si
+                                    // fueran parte de ella.
+                                    //
+                                    // Siendo el último elemento pertenecen a la
+                                    // lista: aparecen donde termina la última
+                                    // tarjeta y se desplazan con ella, que es
+                                    // lo que se espera de un indicador de en
+                                    // qué página va ESA lista.
+                                    if (i >= dePagina.length) {
+                                      return Padding(
+                                        padding: const EdgeInsets.only(
+                                            top: 14, bottom: 6),
+                                        child: Center(
+                                          child: _rayitas(page, totalPages),
+                                        ),
+                                      );
+                                    }
+                                    return ExtensionTile(
+                                        dePagina[i].extension);
+                                  },
                                 ),
                               );
                             },
                           ),
-                    // ── Rayitas abajo, ENCIMA de la lista ─────────────────
+                    // Las rayitas ya NO van acá flotando: son el último
+                    // elemento de cada lista. Ver el itemBuilder de arriba.
                     //
-                    // Antes iban en la columna, debajo de la lista, y por eso le
-                    // comían su alto: la lista terminaba justo arriba de la barra
-                    // de navegación y detrás de la barra no pasaba nada. Con el
-                    // fondo liso ahí, la barra flotante parecía tener un fondo
-                    // propio en vez de dejar ver lo de atrás.
-                    //
-                    // Ahora la lista usa la pantalla entera y pasa por debajo de
-                    // la barra —el cuerpo ya lo hace, `extendBody` en main_page—
-                    // así que se ven las tarjetas moviéndose detrás de ella. Las
-                    // rayitas flotan encima, en su sitio de siempre.
+                    // La lista sigue usando la pantalla entera y pasando por
+                    // debajo de la barra flotante —el cuerpo ya lo hace,
+                    // `extendBody` en main_page—, así que se ven las tarjetas
+                    // moviéndose detrás de ella.
                     //
                     // Y son rayitas, no flechas: con el dedo la página se cambia
                     // deslizando, así que abajo solo hace falta decir en cuál
                     // vas. Las mismas del acordeón del Inicio.
-                    if (totalPages > 1)
-                      Positioned(
-                        left: 0,
-                        right: 0,
-                        // ── Quietas, no atadas a la barra ────────────────
-                        //
-                        // Salía de `paddingOf(context).bottom`, que con
-                        // `extendBody` incluye el alto de la barra flotante. Y
-                        // ese número CAMBIA: cuando la barra se esconde, el
-                        // relleno se va con ella y las rayitas pegaban un
-                        // salto hacia abajo, como si estuvieran colgadas de la
-                        // barra en vez de pertenecer a la lista.
-                        //
-                        // Ahora salen de lo que ocupa la barra del SISTEMA
-                        // —que no cambia— más el alto de la flotante, que es
-                        // fijo. Quedan siempre en el mismo sitio, justo debajo
-                        // de la última tarjeta.
-                        bottom: _huecoDeLaBarra(context) + 6,
-                        child: Center(child: _rayitas(page, totalPages)),
-                      ),
                   ],
                 )),
               ],
