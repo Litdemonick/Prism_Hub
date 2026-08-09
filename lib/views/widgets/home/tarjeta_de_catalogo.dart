@@ -1,8 +1,16 @@
+import 'dart:io';
+
 import 'package:flutter/material.dart';
 import 'package:prismhub/utils/breakpoints.dart';
 import 'package:prismhub/utils/i18n.dart';
 import 'package:prismhub/views/widgets/cache_network_image.dart';
 import 'package:prismhub/views/widgets/home/home_theme.dart';
+
+/// Si el aparato se maneja con el dedo.
+///
+/// Es lo mismo que mira el Inicio (`home_page.dart`), y va por sistema
+/// operativo a propósito: el ancho de la ventana no dice si hay mouse.
+bool get _esTactil => Platform.isAndroid || Platform.isIOS;
 
 /// La tarjeta del catálogo: **póster limpio, sin marco**.
 ///
@@ -129,7 +137,18 @@ class _TarjetaDeCatalogoState extends State<TarjetaDeCatalogo> {
     final altoPortada = ancho * 3 / 2;
     final radio = BorderRadius.circular(8);
 
-    final conMouse = a.alMenosAmplio;
+    // ── Si hay mouse lo decide el APARATO, no el ancho de la ventana ──────
+    //
+    // Estaba en `a.alMenosAmplio`, o sea que se preguntaba por el tamaño. En
+    // PC con la ventana achicada eso daba «no hay mouse», y la tarjeta pasaba
+    // al comportamiento de pantalla táctil: el primer clic abría el panel y
+    // había que dar un segundo clic en «Ver detalles» para entrar a la ficha.
+    // A pantalla completa abría de una. La misma tarjeta, el mismo mouse, dos
+    // comportamientos según cómo estuviera la ventana.
+    //
+    // El ancho sirve para decidir cuántas tarjetas entran; para saber si hay
+    // con qué «pasar por encima» hay que preguntar por el aparato.
+    final conMouse = !_esTactil;
     // Se muestra por mouse en escritorio y por toque en celular.
     final panelVisible = _hayPanel && (conMouse ? _encima : _abierto);
     final resaltada = _encima || _abierto;
