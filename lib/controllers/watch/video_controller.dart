@@ -1659,6 +1659,24 @@ class VideoPlayerController extends GetxController with WidgetsBindingObserver {
       // juntas en el mismo aviso, asi que no hay nada que se pueda cruzar.
       if ((p.w ?? 0) > 0 && (p.h ?? 0) > 0) {
         esVideoVr.value = _pareceVr(p.w, p.h, _pistasDeVr);
+        // Y aca se decide que pasa con el recorte que traia el video ANTERIOR.
+        //
+        // Al abrir contenido nuevo el recorte se quita siempre (ver
+        // _olvidarRecorteVr), asi que este es el momento en que se sabe si
+        // corresponde volver a ponerlo: recien ahora se conocen las medidas del
+        // video nuevo, que son las que necesita el recorte.
+        //
+        // Una sola vez por video. Este aviso llega mas de una vez, y reaplicar
+        // el recorte en cada uno seria pelearle al usuario que lo apago a mano.
+        if (_vrPorReaplicar) {
+          _vrPorReaplicar = false;
+          // Transmitiendo no: el recorte lo hace mpv y el televisor decodifica
+          // por su cuenta, asi que no le llega. Igual que el interruptor, que
+          // queda deshabilitado mientras se castea.
+          if (esVideoVr.value && dlnaDevice.value == null) {
+            unawaited(alternarVrUnaPantalla());
+          }
+        }
       }
     }));
 
@@ -2076,6 +2094,14 @@ class VideoPlayerController extends GetxController with WidgetsBindingObserver {
     qualityMap.clear();
     // Contenido nuevo: el reintento por software vuelve a estar disponible.
     _reintentoPorSoftware = false;
+    // El recorte de VR es del REPRODUCTOR, no del archivo.
+    //
+    // Abrir otro video no lo saca, y las medidas con las que se calculo son las
+    // del anterior: en uno de otra resolucion recorta cualquier cosa. Lo grave
+    // es el caso en que el video nuevo NO es VR — ahi el interruptor desaparece
+    // del panel, porque solo sale en videos VR, y el recorte se queda puesto
+    // sin ninguna forma de apagarlo salvo saliendo del reproductor.
+    await _olvidarRecorteVr();
     // No arrastrar el "avanzó hace poco" del video/servidor ANTERIOR — sin
     // esto, un corte real justo al cambiar de contenido podía quedar sin
     // spinner un instante porque todavía valía el timestamp viejo.
@@ -4447,6 +4473,36 @@ class VideoPlayerController extends GetxController with WidgetsBindingObserver {
         ((w - mitad) * vrDesplazamiento.value).round().clamp(0, w - mitad);
     await np.setProperty('video-crop', '${mitad}x$h+$x+0');
     return (await np.getProperty('video-crop')).trim().isNotEmpty;
+  }
+
+  /// El recorte de VR quedo pendiente de volver a ponerse en el video nuevo.
+  ///
+  /// Lo pone _olvidarRecorteVr y lo consume el aviso de medidas, que es donde
+  /// se sabe si el video nuevo tambien es VR. Ver el listener de videoParams.
+  bool _vrPorReaplicar = false;
+
+  /// Quita el recorte de VR antes de abrir otro video.
+  ///
+  /// Deja anotado si estaba puesto, para que el video nuevo lo recupere si
+  /// tambien es VR: pasar de un episodio VR al siguiente no tiene por que
+  /// obligar a volver a encender el interruptor.
+  Future<void> _olvidarRecorteVr() async {
+    _vrPorReaplicar = vrUnaPantalla.value;
+    if (!vrUnaPantalla.value) return;
+    vrUnaPantalla.value = false;
+    if (player.platform is! NativePlayer) return;
+    final np = player.platform as NativePlayer;
+    try {
+      await _aplicarRecorteVr(np, false);
+      // Y el filtro, que es el camino de respaldo cuando esta version de mpv no
+      // tiene video-crop. Solo si hay algo puesto: nadie mas escribe vf, pero
+      // borrarlo a ciegas seria pisar lo que pusiera otro.
+      if ((await np.getProperty('vf')).trim().isNotEmpty) {
+        await np.setProperty('vf', '');
+      }
+    } catch (e) {
+      logger.warning('No se pudo quitar el recorte de VR del vídeo anterior', e);
+    }
   }
 
   Future<void> alternarVrUnaPantalla() async {
