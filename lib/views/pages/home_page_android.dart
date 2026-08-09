@@ -2016,22 +2016,19 @@ class _TarjetaGrande extends StatelessWidget {
               // Con paradas intermedias la caída se va frenando en vez de
               // cortarse: el grueso del velo sigue abajo, pegado al texto, y lo
               // que sobra se apaga de a poco hasta el 46%. Ni línea ni mancha.
-              if (conTexto)
-                const DecoratedBox(
-                  decoration: BoxDecoration(
-                    gradient: LinearGradient(
-                      begin: Alignment.bottomCenter,
-                      end: Alignment.topCenter,
-                      colors: [
-                        Color(0xD9000000),
-                        Color(0x8A000000),
-                        Color(0x33000000),
-                        Color(0x00000000),
-                      ],
-                      stops: [0.0, 0.12, 0.27, 0.46],
-                    ),
-                  ),
-                ),
+              // ── Y al final se saca del todo ─────────────────────────────
+              //
+              // Después de tres intentos —60%, 32%, y cuatro paradas— seguía
+              // leyéndose como una mancha en la única tarjeta que lo lleva. Y
+              // ahí está el problema de fondo: es la ÚNICA. Sus vecinas no
+              // tienen texto, así que no tienen velo, y la del centro queda
+              // con un manchón que ninguna otra tiene. No importa cuán suave
+              // sea el degradado: lo que se nota es la diferencia.
+              //
+              // El velo estaba para que el título se lea sobre cualquier
+              // portada. Eso lo resuelve igual de bien una sombra pegada a las
+              // letras (ver el `shadows` de abajo), que va con el texto en vez
+              // de pintar un cuarto de la imagen.
               if (conTexto)
                 Align(
                   alignment: Alignment.bottomLeft,
@@ -2066,11 +2063,20 @@ class _TarjetaGrande extends StatelessWidget {
                               fontSize: 16,
                               height: 1.2,
                               fontWeight: FontWeight.w800,
-                              // Va ENCIMA de la portada, con su velo debajo:
-                              // blanco en los dos modos. Con el color del tema
-                              // pasaba a casi negro en claro y desaparecía
-                              // contra la imagen. Ver HomeTheme.sobrePortada.
+                              // Va ENCIMA de la portada: blanco en los dos
+                              // modos. Con el color del tema pasaba a casi
+                              // negro en claro y desaparecía contra la imagen.
+                              // Ver HomeTheme.sobrePortada.
                               color: HomeTheme.sobrePortada,
+                              // La sombra reemplaza al velo que había debajo.
+                              // Dos capas: una cerrada y opaca que despega las
+                              // letras del fondo, y otra abierta y suave que
+                              // hace de halo sobre una portada clara. Cuesta
+                              // solo donde hay letras.
+                              shadows: const [
+                                Shadow(blurRadius: 3, color: Color(0xE6000000)),
+                                Shadow(blurRadius: 12, color: Color(0xB3000000)),
+                              ],
                             ),
                           ),
                           const SizedBox(height: 2),
@@ -2082,7 +2088,11 @@ class _TarjetaGrande extends StatelessWidget {
                               fontSize: 12.5,
                               fontWeight: FontWeight.w500,
                               color: HomeTheme.sobrePortada
-                                  .withValues(alpha: 0.78),
+                                  .withValues(alpha: 0.88),
+                              shadows: const [
+                                Shadow(blurRadius: 3, color: Color(0xE6000000)),
+                                Shadow(blurRadius: 10, color: Color(0x99000000)),
+                              ],
                             ),
                           ),
                         ],
