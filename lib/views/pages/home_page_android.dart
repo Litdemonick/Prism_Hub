@@ -2238,14 +2238,13 @@ class _FilaAndroidState extends State<_FilaAndroid> {
               // Solo donde existe esa pantalla y solo cuando la fila está
               // mostrando esa sección: con un filtro puesto llevaría a otra
               // cosa que la que se está viendo.
-              if (UltimasActualizacionesPage.disponiblePara(
+              if (UltimasActualizacionesMangaDexPage.disponiblePara(
                       widget.fila.package) &&
                   widget.c.etiquetaDe(widget.fila) != null)
                 InkWell(
                   borderRadius: BorderRadius.circular(20),
-                  onTap: () => UltimasActualizacionesPage.abrir(
+                  onTap: () => UltimasActualizacionesMangaDexPage.abrir(
                     context,
-                    package: widget.fila.package,
                     titulo: widget.fila.nombre,
                     etiqueta: widget.c.etiquetaDe(widget.fila),
                   ),

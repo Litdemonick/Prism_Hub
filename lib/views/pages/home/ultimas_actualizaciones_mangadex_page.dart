@@ -9,56 +9,47 @@ import 'package:prismhub/views/widgets/home/esqueleto.dart';
 import 'package:prismhub/views/widgets/home/home_theme.dart';
 import 'package:prismhub/views/widgets/home/tarjeta_de_catalogo.dart';
 
-/// La sección de novedades de UNA extensión, a pantalla completa.
+/// «Últimas actualizaciones» de MangaDex, a pantalla completa.
 ///
 /// ── Para qué, si la fila del Inicio ya la muestra ────────────────────────
 ///
 /// Porque la fila muestra una tanda y se acaba. Esta pantalla es el «ver todo»:
 /// la misma sección, en grilla, y siguiendo hacia abajo mientras haya. Es lo
-/// que hace el propio sitio cuando tocás el título de su sección.
+/// que hace el propio sitio cuando se toca el título de su sección.
 ///
-/// ── Por qué recibe el paquete y no está escrita para una sola ────────────
+/// ── Por qué de MangaDex y no de cualquiera ───────────────────────────────
 ///
-/// Hoy la usa MangaDex y nada más, a pedido. Pero está armada alrededor de
-/// `latest(pagina)`, que es la misma función que ya tienen TODAS las
-/// extensiones: enchufar la segunda es agregar la flecha en su fila, sin
-/// copiar esta pantalla ni tocarla.
-class UltimasActualizacionesPage extends StatefulWidget {
-  const UltimasActualizacionesPage({
+/// Porque la sección es SUYA: «Últimas actualizaciones» es como MangaDex llama
+/// a lo suyo, y cada sitio le dice de otra forma. Las demás van a tener la
+/// propia cuando se sumen — a pedido, de a una.
+///
+/// Y hay un motivo técnico además del nombre: no todas paginan bien su sección
+/// de novedades, y una flecha que lleva a una pantalla que se queda en la
+/// primera tanda es peor que no tenerla. De MangaDex está medido que la página
+/// 2 trae obras distintas de la 1.
+class UltimasActualizacionesMangaDexPage extends StatefulWidget {
+  const UltimasActualizacionesMangaDexPage({
     super.key,
-    required this.package,
     required this.titulo,
     this.etiqueta,
   });
 
-  /// Qué extensión.
-  final String package;
-
-  /// Su nombre, para el encabezado.
+  /// El nombre de la extensión, para el encabezado. Llega de la fila en vez de
+  /// escribirse acá: si algún día cambia, cambia en un solo lugar.
   final String titulo;
 
-  /// Cómo llama ESA extensión a su sección («Últimas actualizaciones»). El
-  /// nombre lo declara la extensión y lo traduce el Inicio; acá llega ya
-  /// resuelto para no repetir esa lógica.
+  /// Cómo llama MangaDex a su sección. El nombre lo declara la extensión y lo
+  /// traduce el Inicio; acá llega ya resuelto para no repetir esa lógica.
   final String? etiqueta;
 
-  /// Qué extensiones tienen esta pantalla.
-  ///
-  /// Una lista corta y a propósito: la pantalla sirve para cualquiera —se apoya
-  /// en `latest(pagina)`, que todas tienen— pero no todas paginan bien su
-  /// sección de novedades, y una flecha que lleva a una pantalla que se queda
-  /// en la primera tanda es peor que no tenerla. Se suman de a una, después de
-  /// comprobar que la segunda página trae contenido distinto.
-  ///
-  /// MangaDex está medida: página 1 y página 2 devuelven obras distintas.
-  static const _conPagina = {'io.prismhub.mangadex'};
+  static const paquete = 'io.prismhub.mangadex';
 
-  static bool disponiblePara(String package) => _conPagina.contains(package);
+  /// Si ESTA fila es la que tiene esta pantalla.
+  static bool disponiblePara(String package) => package == paquete;
 
   /// Abre la pantalla. Navigator y no Get.to: Get.to no navega en escritorio.
   static void abrir(
     BuildContext context, {
-    required String package,
     required String titulo,
     String? etiqueta,
   }) {
@@ -67,8 +58,7 @@ class UltimasActualizacionesPage extends StatefulWidget {
         // SigueElModo: es una pantalla empujada, así que sus colores se leen
         // una sola vez al abrirla. Ver el comentario de home_theme.
         builder: (_) => SigueElModo(
-          builder: (_) => UltimasActualizacionesPage(
-            package: package,
+          builder: (_) => UltimasActualizacionesMangaDexPage(
             titulo: titulo,
             etiqueta: etiqueta,
           ),
@@ -78,14 +68,15 @@ class UltimasActualizacionesPage extends StatefulWidget {
   }
 
   @override
-  State<UltimasActualizacionesPage> createState() =>
-      _UltimasActualizacionesPageState();
+  State<UltimasActualizacionesMangaDexPage> createState() =>
+      _UltimasActualizacionesMangaDexPageState();
 }
 
-class _UltimasActualizacionesPageState
-    extends State<UltimasActualizacionesPage> {
+class _UltimasActualizacionesMangaDexPageState
+    extends State<UltimasActualizacionesMangaDexPage> {
   final _scroll = ScrollController();
   final _items = <ExtensionListItem>[];
+
   /// Las direcciones que ya están, para no repetir una obra.
   final _vistas = <String>{};
 
@@ -127,11 +118,11 @@ class _UltimasActualizacionesPageState
     });
     final siguiente = _pagina + 1;
     try {
-      final runtime = ExtensionUtils.runtimes[widget.package];
+      final runtime =
+          ExtensionUtils.runtimes[UltimasActualizacionesMangaDexPage.paquete];
       if (runtime == null) throw Exception('extension.gone-uninstalled');
-      final tanda = await runtime
-          .latest(siguiente)
-          .timeout(const Duration(seconds: 20));
+      final tanda =
+          await runtime.latest(siguiente).timeout(const Duration(seconds: 20));
       if (!mounted) return;
       // Sin repetidos: varias extensiones devuelven alguna obra que ya estaba
       // en la página anterior, y dos tarjetas con la misma clave además rompen
@@ -264,7 +255,7 @@ class _UltimasActualizacionesPageState
                   key: ValueKey(item.url),
                   title: item.title,
                   url: item.url,
-                  package: widget.package,
+                  package: UltimasActualizacionesMangaDexPage.paquete,
                   cover: item.cover,
                   update: item.update,
                   headers: item.headers,

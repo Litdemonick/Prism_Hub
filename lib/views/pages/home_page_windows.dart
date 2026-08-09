@@ -409,13 +409,13 @@ class _FilaWindowsState extends State<_FilaWindows> {
           // solo cuando la fila está mostrando esa sección — con un filtro
           // puesto, o mostrando lo más visto, la flecha llevaría a otra cosa
           // que la que se está viendo.
-          if (UltimasActualizacionesPage.disponiblePara(widget.fila.package) &&
+          if (UltimasActualizacionesMangaDexPage.disponiblePara(
+                  widget.fila.package) &&
               widget.c.etiquetaDe(widget.fila) != null) ...[
             _FlechaDeFila(
               icono: Icons.arrow_forward_rounded,
-              onTap: () => UltimasActualizacionesPage.abrir(
+              onTap: () => UltimasActualizacionesMangaDexPage.abrir(
                 context,
-                package: widget.fila.package,
                 titulo: widget.fila.nombre,
                 etiqueta: widget.c.etiquetaDe(widget.fila),
               ),
