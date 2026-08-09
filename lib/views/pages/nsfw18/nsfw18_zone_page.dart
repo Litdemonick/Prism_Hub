@@ -125,8 +125,7 @@ class _Nsfw18ZoneGateState extends State<Nsfw18ZoneGate> {
       return const _Nsfw18DisabledPage();
     }
     if (!_confirmed) {
-      return Scaffold(
-          backgroundColor: HomeTheme.bg, body: SizedBox.shrink());
+      return Scaffold(backgroundColor: HomeTheme.bg, body: SizedBox.shrink());
     }
     if (!_unlocked) {
       return Nsfw18LockPage(
@@ -163,8 +162,7 @@ class _Nsfw18DisabledPage extends StatelessWidget {
             child: Column(
               mainAxisSize: MainAxisSize.min,
               children: [
-                Icon(Icons.lock_outline,
-                    color: HomeTheme.textMuted, size: 40),
+                Icon(Icons.lock_outline, color: HomeTheme.textMuted, size: 40),
                 const SizedBox(height: 16),
                 Text(
                   'nsfw18.disabled-title'.i18n,
@@ -179,8 +177,7 @@ class _Nsfw18DisabledPage extends StatelessWidget {
                 Text(
                   'nsfw18.disabled-subtitle'.i18n,
                   textAlign: TextAlign.center,
-                  style:
-                      TextStyle(color: HomeTheme.textMuted, fontSize: 13),
+                  style: TextStyle(color: HomeTheme.textMuted, fontSize: 13),
                 ),
                 const SizedBox(height: 20),
                 SizedBox(
@@ -601,8 +598,7 @@ class _Nsfw18ZonePageState extends State<Nsfw18ZonePage> {
           IconButton(
             tooltip: 'home.history'.i18n,
             onPressed: () => _openHistoryTab(0),
-            icon:
-                Icon(Icons.history_rounded, color: HomeTheme.textPrimary),
+            icon: Icon(Icons.history_rounded, color: HomeTheme.textPrimary),
           ),
         ],
       ),
@@ -616,7 +612,49 @@ class _Nsfw18ZonePageState extends State<Nsfw18ZonePage> {
   }
 
   Widget _buildDesktop(BuildContext context) {
-    return _buildContent();
+    // ── Los atajos también en escritorio ──────────────────────────────────
+    //
+    // En Android van en la barra de arriba de esta zona; acá no había barra, y
+    // los favoritos y el historial DE ESTA ZONA se quedaron sin puerta: había
+    // que abrir los de la zona normal y no estaban ahí, porque cada una guarda
+    // los suyos.
+    //
+    // Flotan arriba a la derecha, sobre el contenido, en vez de meter una barra
+    // entera por dos botones.
+    return Stack(
+      children: [
+        Positioned.fill(child: _buildContent()),
+        Positioned(
+          top: 12,
+          right: 16,
+          child: Container(
+            padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 2),
+            decoration: BoxDecoration(
+              color: HomeTheme.cardSurface.withValues(alpha: 0.92),
+              borderRadius: BorderRadius.circular(999),
+              border: Border.all(color: HomeTheme.border),
+            ),
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                IconButton(
+                  tooltip: 'home.favorite'.i18n,
+                  onPressed: _favoritos,
+                  icon: Icon(Icons.favorite_border_rounded,
+                      size: 20, color: HomeTheme.textPrimary),
+                ),
+                IconButton(
+                  tooltip: 'home.history'.i18n,
+                  onPressed: () => _openHistoryTab(0),
+                  icon: Icon(Icons.history_rounded,
+                      size: 20, color: HomeTheme.textPrimary),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ],
+    );
   }
 
   @override
@@ -756,8 +794,7 @@ class _Nsfw18EmptyStateState extends State<_Nsfw18EmptyState>
               Text(
                 'nsfw18.no-record'.i18n,
                 textAlign: TextAlign.center,
-                style:
-                    TextStyle(color: HomeTheme.textMuted, fontSize: 13.5),
+                style: TextStyle(color: HomeTheme.textMuted, fontSize: 13.5),
               ),
               const SizedBox(height: 18),
               // Mismo botón que el Home normal, con el acento de esta zona y

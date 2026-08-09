@@ -125,7 +125,7 @@ class _DesktopMainPageState extends State<DesktopMainPage> with WindowListener {
               Container(
                 width: 1,
                 height: 16,
-                color: HomeTheme.contraste.withValues(alpha: 0.22),
+                color: Colors.white.withValues(alpha: 0.22),
               ),
               const SizedBox(width: 10),
               Text(
@@ -133,7 +133,7 @@ class _DesktopMainPageState extends State<DesktopMainPage> with WindowListener {
                 style: TextStyle(
                   fontSize: 15.5,
                   fontWeight: FontWeight.w500,
-                  color: HomeTheme.contraste.withValues(alpha: 0.72),
+                  color: Colors.white.withValues(alpha: 0.72),
                 ),
               ),
             ],
@@ -799,43 +799,33 @@ class _AndroidMainPageState extends fluent.State<AndroidMainPage> {
       ];
 
   /// El fondo de la pastilla, igual acostado que de pie.
-  /// El fondo de la pastilla, distinto en cada modo.
+  /// El fondo de la pastilla de navegación.
   ///
-  /// ── Ya no es una constante ──────────────────────────────────────────────
+  /// ── Oscura SIEMPRE, también en modo claro ───────────────────────────────
   ///
-  /// Era un `static final` con el color fijo, o sea que se calculaba UNA vez al
-  /// arrancar y se quedaba con ese: en modo claro la barra seguía siendo una
-  /// pastilla casi negra sobre un fondo casi blanco. Y aunque el color hubiera
-  /// cambiado, un `static final` no se recalcula nunca.
+  /// Se probó clara —la superficie de tarjeta con su borde— y no funciona: la
+  /// barra flota ENCIMA del contenido, y el contenido son portadas de
+  /// cualquier color. Clara sobre una portada clara desaparece, y los iconos
+  /// oscuros de adentro con ella.
   ///
-  /// Ahora es un getter, y en claro usa la superficie de tarjeta con un borde
-  /// más marcado. Casi opaca en los dos: un desenfoque de fondo se vería mejor
-  /// pero hay que recalcularlo en cada cuadro mientras uno se desplaza, y
-  /// encima de una lista de portadas es justo donde no sobran milisegundos.
+  /// Oscura con los iconos en blanco se lee sobre cualquier cosa, en los dos
+  /// modos, que es lo único que se le pide a una barra que flota. Es lo que
+  /// hacen las barras flotantes de cualquier app, tengan el tema que tengan.
+  ///
+  /// Casi opaca y no con desenfoque: el desenfoque hay que recalcularlo en cada
+  /// cuadro mientras uno se desplaza, y encima de una lista de portadas es
+  /// justo donde no sobran milisegundos.
   static BoxDecoration get _pastilla => BoxDecoration(
-        color: ModoDeColor.claro
-            ? HomeTheme.cardSurface.withValues(alpha: 0.97)
-            : const Color(0xF20E0E14),
+        color: const Color(0xF20E0E14),
         borderRadius: BorderRadius.circular(34),
-        // El aro es lo que la despega del contenido: sin él la pastilla se
-        // funde con el fondo y los íconos vuelven a verse sueltos. En claro
-        // tiene que marcarse bastante más — un borde al 9% sobre blanco no
-        // existe.
-        border: Border.all(
-          color: ModoDeColor.claro
-              ? HomeTheme.border
-              : HomeTheme.contraste.withValues(alpha: 0.09),
-          width: ModoDeColor.claro ? 1.2 : 1,
-        ),
-        boxShadow: [
+        // El aro la despega del contenido: sin él, sobre una zona oscura se
+        // funde con el fondo y los iconos vuelven a verse sueltos.
+        border: Border.all(color: Colors.white.withValues(alpha: 0.12)),
+        boxShadow: const [
           BoxShadow(
-            // La sombra negra al 60% sobre un fondo claro es una mancha. Muy
-            // suave y más cerrada: alcanza para separarla del contenido.
-            color: ModoDeColor.claro
-                ? const Color(0x22000000)
-                : const Color(0x99000000),
-            blurRadius: ModoDeColor.claro ? 14 : 20,
-            offset: const Offset(0, 8),
+            color: Color(0x99000000),
+            blurRadius: 20,
+            offset: Offset(0, 8),
           ),
         ],
       );
@@ -1054,9 +1044,10 @@ class _IconoDeBarra extends StatelessWidget {
             elegido ? destino.selectedIcon : destino.icon,
             // Sigue al botón, para que la proporción sea la misma en los dos.
             size: 46.0 * 0.5,
-            color: elegido
-                ? Colors.white
-                : HomeTheme.contraste.withValues(alpha: 0.6),
+            // La pastilla es oscura en los dos modos (ver _pastilla), así
+            // que sus iconos van en blanco siempre. Con el color del tema se
+            // volvían casi negros en claro: iconos negros sobre negro.
+            color: elegido ? Colors.white : Colors.white.withValues(alpha: 0.6),
           ),
         ),
       ),
@@ -1095,7 +1086,8 @@ class _BotonRedondo extends StatelessWidget {
         child: SizedBox(
           width: tamano,
           height: tamano,
-          child: Icon(icono, size: 25, color: HomeTheme.contraste),
+          // Mismo caso: fondo oscuro fijo, icono blanco fijo.
+          child: Icon(icono, size: 25, color: Colors.white),
         ),
       ),
     );
@@ -1136,7 +1128,10 @@ class _OpcionFlotante extends StatelessWidget {
       child: Text(
         texto,
         style: TextStyle(
-          color: HomeTheme.contraste,
+          // La etiqueta va sobre una pastilla oscura: blanca siempre. Con el
+          // color del tema quedaba negra sobre negro y las tres opciones
+          // —Ajustes, Historial, Favoritos— se veían como cajas vacías.
+          color: Colors.white,
           fontSize: 14.5,
           fontWeight: FontWeight.w600,
         ),

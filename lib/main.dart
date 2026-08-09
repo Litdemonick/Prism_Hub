@@ -893,7 +893,19 @@ class _MainAppState extends State<MainApp> {
         // ObservadorDePila en main_page.dart.
         navigatorObservers: [ObservadorDePila()],
         debugShowCheckedModeBanner: false,
-        themeMode: c.theme,
+        // ── El tema de Material/Fluent sigue al modo ──────────────────────
+        //
+        // Esto era `c.theme`, o sea el ajuste viejo, y se quedaba en oscuro. Es
+        // la causa de fondo de casi todo lo que «no se veía» en modo claro: la
+        // paleta propia de la app (HomeTheme) cambiaba, pero TODO lo que no
+        // fija un color a mano —el texto de un Text sin estilo, la etiqueta de
+        // un botón, un ListTile, los widgets de Fluent en escritorio— cae en el
+        // tema, y el tema seguía diciendo «fondo oscuro, texto claro». De ahí
+        // el texto blanco sobre blanco en Buscar, en el repositorio y en los
+        // botones de las tarjetas de extensión.
+        //
+        // Atándolo al modo se arreglan todos de una, sin tocarlos uno por uno.
+        themeMode: ModoDeColor.claro ? ThemeMode.light : ThemeMode.dark,
         theme: _buildTheme(Brightness.light, cjkFontFallback),
         darkTheme: _buildTheme(Brightness.dark, cjkFontFallback),
         home: const AndroidMainPage(),
@@ -1037,7 +1049,9 @@ class _MainAppState extends State<MainApp> {
         title: 'PrismHub',
         debugShowCheckedModeBanner: false,
         routerConfig: router,
-        themeMode: c.theme,
+        // Ver el comentario del mismo cambio en la raíz de Android.
+        themeMode:
+            ModoDeColor.claro ? fluent.ThemeMode.light : fluent.ThemeMode.dark,
         darkTheme: fluent.FluentThemeData(
           brightness: Brightness.dark,
           visualDensity: VisualDensity.standard,
