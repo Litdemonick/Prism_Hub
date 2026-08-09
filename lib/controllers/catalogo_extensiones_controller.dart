@@ -1815,13 +1815,23 @@ class CatalogoExtensionesController extends GetxController {
   /// no cambia qué paquetes hay, solo su estado. Activar una y refrescar no la
   /// traía.
   ///
-  /// La firma lleva el paquete Y si está encendida, más las de vidriera. Con
-  /// eso los cuatro casos quedan cubiertos: instalar, desinstalar, prender y
-  /// apagar.
+  /// La firma lleva el paquete, si está encendida Y su VERSIÓN, más las de
+  /// vidriera. Con eso quedan cubiertos los cinco casos: instalar,
+  /// desinstalar, prender, apagar y actualizar.
+  ///
+  /// ── Por qué hace falta la versión ───────────────────────────────────────
+  ///
+  /// Porque una actualización puede cambiar si esa extensión CORRESPONDE al
+  /// Inicio. Pasó en vivo con ManhwaWeb: su versión nueva se declara distinto y
+  /// pasa a tener sitio acá, pero el paquete y el estado son los mismos, así
+  /// que la firma no se movía y refrescar no rehacía la lista. La extensión
+  /// quedaba fuera del Inicio hasta reiniciar la app, incluso tirando de la
+  /// pantalla — que es justo el gesto con el que uno pide que se ponga al día.
   String _firmaDeExtensiones() {
     final partes = <String>[
       for (final e in ExtensionUtils.runtimes.entries)
-        '${e.key}:${ExtensionUtils.isEnabled(e.key) ? 1 : 0}',
+        '${e.key}:${ExtensionUtils.isEnabled(e.key) ? 1 : 0}'
+            ':${e.value.extension.version}',
       for (final p in ExtensionUtils.vistaPrevia.keys) 'v:$p',
     ]..sort();
     return partes.join(',');
