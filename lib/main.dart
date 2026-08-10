@@ -993,16 +993,25 @@ class _MainAppState extends State<MainApp> {
         // Puesto acá vale para las cinco zonas y para todo lo que se abra
         // encima, sin tener que acordarse pantalla por pantalla.
         systemOverlayStyle: SystemUiOverlayStyle(
-          statusBarColor: Colors.transparent,
+          // Con color propio y no transparente: transparente deja el fondo de
+          // la barra a merced de lo que haya pintado abajo, y con el modo
+          // claro puesto arriba seguía asomando algo oscuro — con los iconos
+          // ya en oscuro encima, la barra de estado se veía vacía (reportado
+          // en vivo con captura). Mismo criterio que en
+          // ModoDeColor.aplicarBarrasDelSistema.
+          statusBarColor: HomeTheme.bg,
           // Brightness.dark = iconos OSCUROS. El nombre confunde: habla del
           // contenido que hay DETRÁS, no del color de los iconos.
-          statusBarIconBrightness:
-              brightness == Brightness.dark ? Brightness.light : Brightness.dark,
-          statusBarBrightness:
-              brightness == Brightness.dark ? Brightness.dark : Brightness.light,
-          systemNavigationBarColor: Colors.transparent,
-          systemNavigationBarIconBrightness:
-              brightness == Brightness.dark ? Brightness.light : Brightness.dark,
+          statusBarIconBrightness: brightness == Brightness.dark
+              ? Brightness.light
+              : Brightness.dark,
+          statusBarBrightness: brightness == Brightness.dark
+              ? Brightness.dark
+              : Brightness.light,
+          systemNavigationBarColor: HomeTheme.bg,
+          systemNavigationBarIconBrightness: brightness == Brightness.dark
+              ? Brightness.light
+              : Brightness.dark,
         ),
       ),
       // Mismo motivo, para las hojas y tarjetas que también se tiñen solas.

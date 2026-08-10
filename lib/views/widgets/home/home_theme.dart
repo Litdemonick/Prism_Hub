@@ -69,11 +69,26 @@ class ModoDeColor {
     // Brightness.dark = iconos OSCUROS. El nombre confunde: se refiere al
     // contenido que hay DETRÁS, no al color de los iconos.
     final iconos = claro ? Brightness.dark : Brightness.light;
+    // ── Color PROPIO, no `transparent` ──────────────────────────────────────
+    //
+    // Estaban las dos en transparente, y eso deja el fondo de las barras a
+    // merced de lo que haya pintado abajo. Con el modo claro puesto, arriba
+    // seguía asomando algo oscuro y encima los iconos ya iban en oscuro (que
+    // es lo correcto sobre claro): quedaban negros sobre negro y la barra de
+    // estado se veía vacía — reportado en vivo con captura, en oscuro no se
+    // notaba porque ahí ese fondo oscuro es justo el que va.
+    //
+    // Pidiendo el color de la app deja de depender de quién pinte atrás: en
+    // claro queda clara con iconos oscuros y en oscuro como estaba.
+    //
+    // Android lo respeta porque el targetSdk es 28 (ver android/app/
+    // build.gradle). De subirlo a 35 o más, statusBarColor deja de tener
+    // efecto y esto hay que resolverlo pintando la app detrás de la barra.
     SystemChrome.setSystemUIOverlayStyle(SystemUiOverlayStyle(
-      statusBarColor: Colors.transparent,
+      statusBarColor: HomeTheme.bg,
       statusBarIconBrightness: iconos,
       statusBarBrightness: claro ? Brightness.light : Brightness.dark,
-      systemNavigationBarColor: Colors.transparent,
+      systemNavigationBarColor: HomeTheme.bg,
       systemNavigationBarIconBrightness: iconos,
     ));
   }

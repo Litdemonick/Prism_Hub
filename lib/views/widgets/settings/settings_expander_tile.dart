@@ -124,14 +124,18 @@ class _SettingsExpanderTileState extends State<SettingsExpanderTile> {
                     // siempre —los del modo oscuro— aunque el fondo de esta
                     // subpágina sí pasara a blanco en modo claro.
                     systemOverlayStyle: SystemUiOverlayStyle(
-                      statusBarColor: Colors.transparent,
+                      // Color propio y no transparente, por lo mismo que en
+                      // ModoDeColor.aplicarBarrasDelSistema: transparente
+                      // dejaba asomar algo oscuro arriba con el modo claro
+                      // puesto, y los iconos oscuros encima no se veían.
+                      statusBarColor: HomeTheme.bg,
                       statusBarIconBrightness: ModoDeColor.claro
                           ? Brightness.dark
                           : Brightness.light,
                       statusBarBrightness: ModoDeColor.claro
                           ? Brightness.light
                           : Brightness.dark,
-                      systemNavigationBarColor: Colors.transparent,
+                      systemNavigationBarColor: HomeTheme.bg,
                       systemNavigationBarIconBrightness: ModoDeColor.claro
                           ? Brightness.dark
                           : Brightness.light,
