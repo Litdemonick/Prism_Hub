@@ -1052,8 +1052,19 @@ class _VideoPlayerMobileControlsState extends State<VideoPlayerMobileControls> {
                   // cuando de verdad hace falta (viewPadding.bottom vale 0
                   // en el modo reservado de siempre, así que acá no cambia
                   // nada).
+                  //
+                  // left:false, right:false EXPLÍCITO: sin esto, SafeArea
+                  // los deja en true por defecto y en horizontal —donde la
+                  // cámara mete un relleno de MediaQuery.padding a un
+                  // costado— el pie quedaba angosto por ese lado, con la
+                  // barra de progreso y su sombra cortadas antes de llegar
+                  // al borde de verdad. Este Positioned ya está en
+                  // left:0/right:0 a propósito (ver arriba): es el ancho
+                  // completo que se busca, sin que SafeArea se lo achique.
                   child: SafeArea(
                     top: false,
+                    left: false,
+                    right: false,
                     child: _Footer(controller: _c),
                   ),
                 ),
