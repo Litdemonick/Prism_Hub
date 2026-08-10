@@ -85,12 +85,17 @@ class ComicReaderSettings extends StatelessWidget {
               // página, en cascada saca el tope de 900px de ancho (solo se
               // nota en pantallas anchas — en un teléfono ya usaba todo el
               // ancho de por sí).
-              Obx(
-                () => _BotonLlenarPantalla(
-                  activo: c.llenarPantalla.value,
-                  onTap: () => c.llenarPantalla.value = !c.llenarPantalla.value,
+              //
+              // Solo Android, a pedido explícito — en escritorio no va este
+              // botón.
+              if (Platform.isAndroid)
+                Obx(
+                  () => _BotonLlenarPantalla(
+                    activo: c.llenarPantalla.value,
+                    onTap: () =>
+                        c.llenarPantalla.value = !c.llenarPantalla.value,
+                  ),
                 ),
-              ),
             ],
           ),
         ),
