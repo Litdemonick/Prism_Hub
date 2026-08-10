@@ -484,7 +484,11 @@ class _Nsfw18ZonePageState extends State<Nsfw18ZonePage> {
     ];
   }
 
-  Widget _buildContent() {
+  /// [conCabecera] agrega arriba el título de la zona con sus dos atajos.
+  ///
+  /// Solo en escritorio. En el teléfono eso ya lo pone la barra del Scaffold
+  /// (ver `_buildAndroid`), y ponerlo dos veces daría el título repetido.
+  Widget _buildContent({bool conCabecera = false}) {
     return Obx(
       () {
         final isEmpty = c.resents.isEmpty && c.favorites.isEmpty;
@@ -507,6 +511,48 @@ class _Nsfw18ZonePageState extends State<Nsfw18ZonePage> {
                         child: Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
+                            // ── La cabecera, igual que en Biblioteca ────────
+                            //
+                            // En escritorio esta zona no tenía título y sus dos
+                            // atajos flotaban en una pastilla ENCIMA del
+                            // contenido, pegados al borde. Al lado de
+                            // Biblioteca —que tiene su título con los iconos
+                            // alineados y el banner dentro de su caja— se veía
+                            // como otra pantalla, hecha por otro.
+                            //
+                            // Misma estructura que allá: título a la izquierda,
+                            // atajos a la derecha, y debajo el banner.
+                            if (conCabecera) ...[
+                              Padding(
+                                padding: const EdgeInsets.only(bottom: 10),
+                                child: Row(
+                                  children: [
+                                    Expanded(
+                                      child: Text(
+                                        'nsfw18.title'.i18n,
+                                        style: HomeTheme.tituloDeZona(),
+                                      ),
+                                    ),
+                                    IconButton(
+                                      tooltip: 'home.favorite'.i18n,
+                                      onPressed: _favoritos,
+                                      icon: Icon(
+                                        Icons.favorite_border_rounded,
+                                        color: HomeTheme.textPrimary,
+                                      ),
+                                    ),
+                                    IconButton(
+                                      tooltip: 'home.history'.i18n,
+                                      onPressed: () => _openHistoryTab(0),
+                                      icon: Icon(
+                                        Icons.history_rounded,
+                                        color: HomeTheme.textPrimary,
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                            ],
                             Obx(() => HomeHeroBanner(
                                   background: c.heroBackground.value,
                                   gradient: HomeTheme.heroGradientRed,
@@ -621,40 +667,9 @@ class _Nsfw18ZonePageState extends State<Nsfw18ZonePage> {
     //
     // Flotan arriba a la derecha, sobre el contenido, en vez de meter una barra
     // entera por dos botones.
-    return Stack(
-      children: [
-        Positioned.fill(child: _buildContent()),
-        Positioned(
-          top: 12,
-          right: 16,
-          child: Container(
-            padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 2),
-            decoration: BoxDecoration(
-              color: HomeTheme.cardSurface.withValues(alpha: 0.92),
-              borderRadius: BorderRadius.circular(999),
-              border: Border.all(color: HomeTheme.border),
-            ),
-            child: Row(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                IconButton(
-                  tooltip: 'home.favorite'.i18n,
-                  onPressed: _favoritos,
-                  icon: Icon(Icons.favorite_border_rounded,
-                      size: 20, color: HomeTheme.textPrimary),
-                ),
-                IconButton(
-                  tooltip: 'home.history'.i18n,
-                  onPressed: () => _openHistoryTab(0),
-                  icon: Icon(Icons.history_rounded,
-                      size: 20, color: HomeTheme.textPrimary),
-                ),
-              ],
-            ),
-          ),
-        ),
-      ],
-    );
+    // Sin la pastilla flotante: los dos atajos pasaron a la cabecera, alineados
+    // con el título, como en Biblioteca. Ver `_buildContent(conCabecera: true)`.
+    return _buildContent(conCabecera: true);
   }
 
   @override
