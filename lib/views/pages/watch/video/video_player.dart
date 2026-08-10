@@ -296,7 +296,10 @@ class _VideoPlayerState extends State<VideoPlayer> {
 
     // Se pide en cada construcción y no una sola vez: la orientación cambia
     // sin avisar por ningún otro lado, y esto es idempotente.
-    VideoPlayerController.pantallaSegunOrientacion(acostado: acostado);
+    //
+    // Instancia y no estático: necesita mirar `pantallaCompletaAndroid`, que es
+    // por-reproductor (el botón manual de pantalla completa).
+    _c?.pantallaSegunOrientacion(acostado: acostado);
 
     if (acostado) return Scaffold(body: _buildContent());
 

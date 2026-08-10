@@ -1877,6 +1877,26 @@ class _Footer extends StatelessWidget {
                     controller.toggleSideBar(SidebarTab.episodes);
                   },
                 ),
+                // ── Pantalla completa manual ─────────────────────────────
+                //
+                // Las barras del sistema se dejan siempre visibles por
+                // defecto (ver pantallaSegunOrientacion). Este botón es la
+                // excepción a propósito: quien quiere inmersión total —sin
+                // hora ni batería— la pide tocando acá, en vez de que la app
+                // se la imponga.
+                Obx(
+                  () => IconButton(
+                    tooltip: controller.pantallaCompletaAndroid.value
+                        ? 'video.exit-fullscreen'.i18n
+                        : 'video.fullscreen'.i18n,
+                    icon: Icon(
+                      controller.pantallaCompletaAndroid.value
+                          ? Icons.fullscreen_exit
+                          : Icons.fullscreen,
+                    ),
+                    onPressed: controller.alternarPantallaCompletaAndroid,
+                  ),
+                ),
               ],
             ),
           ),

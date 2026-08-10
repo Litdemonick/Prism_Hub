@@ -529,6 +529,8 @@
       "volume": "Volume",
       "torrent-file-list": "Torrent file list"
     },
+    "fullscreen": "Fullscreen",
+    "exit-fullscreen": "Exit fullscreen",
     "cast": "Cast to device",
     "cast-device": "playing on {device}",
     "cast-disconnect": "Disconnect",

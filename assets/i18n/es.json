@@ -508,6 +508,8 @@
     "subtitle-change": "Cambiar subtítulos {title}",
     "subtitle-file": "Archivo de subtítulos",
     "torrent-downloading": "Descargando torrent",
+    "fullscreen": "Pantalla completa",
+    "exit-fullscreen": "Salir de pantalla completa",
     "cast": "Castear a un dispositivo",
     "cast-device": "Reproduciendo en {device}",
     "cast-disconnect": "Desconectar",

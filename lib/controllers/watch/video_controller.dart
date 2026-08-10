@@ -3516,6 +3516,23 @@ class VideoPlayerController extends GetxController with WidgetsBindingObserver {
     isFullScreen.value = !isFullScreen.value;
   }
 
+  /// El botón manual de pantalla completa en Android. Ver
+  /// [pantallaCompletaAndroid].
+  void alternarPantallaCompletaAndroid() {
+    if (!Platform.isAndroid) return;
+    pantallaCompletaAndroid.value = !pantallaCompletaAndroid.value;
+    // Se aplica ACÁ mismo y no se espera al próximo cambio de orientación:
+    // `pantallaSegunOrientacion` ya respeta este valor, pero solo se llama
+    // desde la página en cada reconstrucción — tocar el botón tiene que
+    // esconder o mostrar las barras EN EL ACTO, no en el próximo cuadro que
+    // decida redibujarse por otro motivo.
+    if (pantallaCompletaAndroid.value) {
+      SystemChrome.setEnabledSystemUIMode(SystemUiMode.immersiveSticky);
+    } else {
+      _barrasDelSistemaVisibles();
+    }
+  }
+
   /// Si ya se eligio la calidad de arranque para ESTE video.
   ///
   /// Una sola vez: sin esto, cualquier recarga de la lista de calidades
