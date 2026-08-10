@@ -197,7 +197,9 @@ class _VideoPlayerMobileControlsState extends State<VideoPlayerMobileControls> {
     // decodificar, pero no libera la textura nativa) — isWebViewActive saca
     // el widget Video del árbol entero mientras el WebView esté arriba (ver
     // VideoPlayerConten).
-    unawaited(_c.player.stop());
+    // Misma guarda que en escritorio: sin ella, si el reproductor ya se soltó
+    // esto tira "[Player] has been disposed" y corta el método a la mitad.
+    if (_c.reproductorVivo) unawaited(_c.player.stop());
     _c.isWebViewActive.value = true;
     final referer = fallback['referer'];
     await openWebViewPlayer(
@@ -572,7 +574,9 @@ class _VideoPlayerMobileControlsState extends State<VideoPlayerMobileControls> {
                       setState(() {});
                       return;
                     }
-                    _c.player.setRate(_velocidadSostenida);
+                    if (_c.reproductorVivo) {
+                      _c.player.setRate(_velocidadSostenida);
+                    }
                     setState(() {});
                   },
                   onLongPressEnd: (details) {
@@ -583,7 +587,9 @@ class _VideoPlayerMobileControlsState extends State<VideoPlayerMobileControls> {
                       setState(() {});
                       return;
                     }
-                    _c.player.setRate(_c.currentSpeed.value);
+                    if (_c.reproductorVivo) {
+                      _c.player.setRate(_c.currentSpeed.value);
+                    }
                     setState(() {});
                   },
                   child: const SizedBox.expand(),
@@ -1696,7 +1702,9 @@ class _VolumeButtonMobileState extends State<_VolumeButtonMobile> {
         if (casteando) {
           widget.controller.ajustarVolumenCast((nuevo - valor) / 100);
         } else {
-          widget.controller.player.setVolume(nuevo);
+          if (widget.controller.reproductorVivo) {
+            widget.controller.player.setVolume(nuevo);
+          }
           setState(() => _volumen = nuevo);
         }
       }

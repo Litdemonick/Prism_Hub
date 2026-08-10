@@ -130,7 +130,11 @@ class _VideoPlayerDesktopControlsState
     // alcanza (para de decodificar, pero no libera la textura nativa) —
     // isWebViewActive saca el widget Video del árbol entero mientras el
     // WebView esté arriba (ver VideoPlayerConten).
-    unawaited(_c.player.stop());
+    // Con la guarda: si el reproductor ya se soltó, esta llamada tiraba
+    // "[Player] has been disposed" y cortaba el resto del método, así que la
+    // pantalla quedaba tomando toques sin obedecer ninguno — ni cerrar ni
+    // cambiar de servidor. Ver VideoController.reproductorVivo.
+    if (_c.reproductorVivo) unawaited(_c.player.stop());
     _c.isWebViewActive.value = true;
     final referer = fallback['referer'];
     await openWebViewPlayer(
@@ -1252,7 +1256,15 @@ class _VolumeState extends State<_Volume> {
 
   void _onVolumeChanged(double value) {
     _volume.value = value;
-    widget.player.setVolume(value);
+    // La barra de volumen sigue viva un instante después de soltarse el
+    // reproductor, y cada arrastre tiraba "[Player] has been disposed" — en el
+    // registro salían decenas seguidas. Ver VideoController.reproductorVivo.
+    try {
+      widget.player.setVolume(value);
+    } catch (_) {
+      // El reproductor ya no está: el valor de la barra ya se actualizó y no
+      // hay nada más que hacer.
+    }
   }
 
   /// A cuánto volver al des-silenciar. Se guarda al silenciar en vez de

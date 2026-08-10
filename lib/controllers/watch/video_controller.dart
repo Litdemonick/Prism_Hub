@@ -2677,6 +2677,24 @@ class VideoPlayerController extends GetxController with WidgetsBindingObserver {
 
   bool _disposed = false;
   bool get disposed => _disposed;
+
+  /// ¿Se le puede hablar al reproductor?
+  ///
+  /// Los controles viven en su propia pantalla y siguen en pie un rato después
+  /// de que el reproductor se soltó —al volver del navegador interno, al cerrar
+  /// la ruta—, así que un toque puede llegar cuando ya no hay a quién
+  /// hablarle. `media_kit` no lo perdona: cualquier llamada tira
+  /// `Assertion failed: "[Player] has been disposed"`.
+  ///
+  /// **Y esa excepción es la que dejaba la pantalla trabada.** Reportado en
+  /// vivo el 2026-08-10 en Windows: al entrar y salir del navegador interno la
+  /// pantalla quedaba tomando toques pero sin obedecer ninguno —no se podía
+  /// cerrar el reproductor ni cambiar de servidor— y había que reiniciar la
+  /// app entera. En el registro se ve por qué: la excepción cortaba el
+  /// manejador ANTES de hacer nada, así que el toque llegaba, reventaba y no
+  /// pasaba nada. Salía por `player.stop()` al abrir el navegador y por
+  /// `player.setVolume()` al tocar la barra de volumen.
+  bool get reproductorVivo => !_disposed && !_playerDisposed && !_shutdownStarted;
   final Completer<void> _shutdownCompleter = Completer<void>();
   Future<void>? _shutdownFuture;
   bool _playerDisposed = false;
