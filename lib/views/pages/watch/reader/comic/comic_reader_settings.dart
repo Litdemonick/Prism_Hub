@@ -6,6 +6,7 @@ import 'package:prismhub/controllers/watch/comic_controller.dart';
 import 'package:prismhub/models/index.dart';
 import 'package:prismhub/utils/i18n.dart';
 import 'package:prismhub/views/widgets/home/home_theme.dart';
+import 'package:prismhub/views/widgets/watch/boton_llenar_pantalla.dart';
 
 class ComicReaderSettings extends StatelessWidget {
   const ComicReaderSettings(this.tag, {super.key});
@@ -90,7 +91,7 @@ class ComicReaderSettings extends StatelessWidget {
               // botón.
               if (Platform.isAndroid)
                 Obx(
-                  () => _BotonLlenarPantalla(
+                  () => BotonLlenarPantalla(
                     activo: c.llenarPantalla.value,
                     onTap: () =>
                         c.llenarPantalla.value = !c.llenarPantalla.value,
@@ -240,57 +241,6 @@ class _AlignTile extends StatelessWidget {
               ],
             ),
           ),
-        ),
-      ),
-    );
-  }
-}
-
-/// El botón de "llenar pantalla" del lector — con su nombre al lado del
-/// ícono, a pedido explícito, no solo un ícono suelto.
-class _BotonLlenarPantalla extends StatelessWidget {
-  const _BotonLlenarPantalla({
-    required this.activo,
-    required this.onTap,
-  });
-
-  final bool activo;
-  final VoidCallback onTap;
-
-  @override
-  Widget build(BuildContext context) {
-    return InkWell(
-      onTap: onTap,
-      borderRadius: BorderRadius.circular(8),
-      child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-        decoration: BoxDecoration(
-          borderRadius: BorderRadius.circular(8),
-          color: activo
-              ? HomeTheme.accentPink.withValues(alpha: 0.18)
-              : Colors.transparent,
-          border: Border.all(
-            color: activo ? HomeTheme.accentPink : HomeTheme.border,
-          ),
-        ),
-        child: Row(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Icon(
-              activo ? Icons.fullscreen_exit : Icons.fullscreen,
-              size: 18,
-              color: activo ? HomeTheme.accentPink : HomeTheme.textMuted,
-            ),
-            const SizedBox(width: 6),
-            Text(
-              'reader.fill-screen'.i18n,
-              style: TextStyle(
-                fontSize: 13,
-                fontWeight: FontWeight.w600,
-                color: activo ? HomeTheme.accentPink : HomeTheme.textMuted,
-              ),
-            ),
-          ],
         ),
       ),
     );
