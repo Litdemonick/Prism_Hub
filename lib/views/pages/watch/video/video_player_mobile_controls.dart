@@ -1744,70 +1744,6 @@ class _VolumeButtonMobileState extends State<_VolumeButtonMobile> {
   }
 }
 
-/// Envuelve una fila larga en un scroll horizontal, con un desvanecido en
-/// el borde derecho que aparece SOLO cuando de verdad hay más para
-/// deslizar — a pedido explícito: de pie no entran todos los botones del
-/// pie y no había ninguna pista de que se podía correr la fila para ver
-/// el resto. Acostado (o en cualquier ancho donde ya entra todo) no se
-/// dibuja nada distinto: no hay nada que insinuar.
-class _FilaConDesvanecido extends StatefulWidget {
-  const _FilaConDesvanecido({required this.child});
-  final Widget child;
-
-  @override
-  State<_FilaConDesvanecido> createState() => _FilaConDesvanecidoState();
-}
-
-class _FilaConDesvanecidoState extends State<_FilaConDesvanecido> {
-  final _scroll = ScrollController();
-
-  @override
-  void initState() {
-    super.initState();
-    // Se repinta con cada cambio de scroll (para esconder el desvanecido
-    // apenas se llega al final) y una vez más después del primer cuadro,
-    // que es cuando recién se sabe si esta fila desborda o no.
-    _scroll.addListener(_repintar);
-    WidgetsBinding.instance.addPostFrameCallback((_) => _repintar());
-  }
-
-  void _repintar() {
-    if (mounted) setState(() {});
-  }
-
-  @override
-  void dispose() {
-    _scroll.removeListener(_repintar);
-    _scroll.dispose();
-    super.dispose();
-  }
-
-  bool get _quedaMasADerecha =>
-      _scroll.hasClients &&
-      _scroll.position.maxScrollExtent > 0 &&
-      _scroll.offset < _scroll.position.maxScrollExtent - 4;
-
-  @override
-  Widget build(BuildContext context) {
-    final scrolleable = SingleChildScrollView(
-      controller: _scroll,
-      scrollDirection: Axis.horizontal,
-      child: widget.child,
-    );
-    if (!_quedaMasADerecha) return scrolleable;
-    return ShaderMask(
-      blendMode: BlendMode.dstIn,
-      shaderCallback: (rect) => const LinearGradient(
-        begin: Alignment.centerRight,
-        end: Alignment.centerLeft,
-        colors: [Colors.transparent, Colors.white],
-        stops: [0.0, 0.12],
-      ).createShader(rect),
-      child: scrolleable,
-    );
-  }
-}
-
 class _Footer extends StatelessWidget {
   const _Footer({required this.controller});
   final VideoPlayerController controller;
@@ -1838,14 +1774,8 @@ class _Footer extends StatelessWidget {
           // fila (que no tiene ningún hijo flexible salvo el Spacer) podía
           // desbordar por unos pixeles en vez de simplemente dejar scrollear
           // hasta los botones de la derecha.
-          //
-          // _FilaConDesvanecido y no un SingleChildScrollView a secas: de
-          // pie no entran todos los botones y no había ninguna pista de
-          // que se podía correr la fila para ver el resto — a pedido
-          // explícito, ahora se desvanece el borde derecho SOLO cuando de
-          // verdad queda algo más para el costado (acostado, si ya entra
-          // todo, no se dibuja nada distinto).
-          _FilaConDesvanecido(
+          SingleChildScrollView(
+            scrollDirection: Axis.horizontal,
             child: Row(
               mainAxisSize: MainAxisSize.min,
               children: [
