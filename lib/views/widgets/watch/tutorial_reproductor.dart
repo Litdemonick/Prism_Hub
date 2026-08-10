@@ -130,7 +130,6 @@ enum _Gesto {
   ninguno,
   tocarCentro,
   tocarLados,
-  deslizarVertical,
   arrastrarLateral,
   tecla,
 }
@@ -232,7 +231,6 @@ class _TutorialReproductorState extends State<TutorialReproductor>
           titulo: t('volume-title'),
           detalle: t('volume-body'),
           icono: Icons.volume_up_rounded,
-          gesto: _Gesto.deslizarVertical,
         ),
         if (widget.esVr)
           _Paso(
@@ -573,8 +571,6 @@ class _DemoGesto extends StatelessWidget {
                     ? Icons.fast_forward_rounded
                     : Icons.fast_rewind_rounded,
               );
-            case _Gesto.deslizarVertical:
-              return _punto(x: 0.5, y: 0.78 - vaiven * 0.56, escala: 1);
             case _Gesto.arrastrarLateral:
               return _punto(x: 0.22 + vaiven * 0.56, y: 0.5, escala: 1);
             case _Gesto.tecla:
