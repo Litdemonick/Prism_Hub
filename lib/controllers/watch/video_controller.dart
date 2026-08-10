@@ -3520,6 +3520,14 @@ class VideoPlayerController extends GetxController with WidgetsBindingObserver {
   /// [pantallaCompletaAndroid].
   void alternarPantallaCompletaAndroid() {
     if (!Platform.isAndroid) return;
+    // Cambiar el modo del sistema mientras se está abriendo una fuente
+    // nueva (isGettingWatchData) le mueve la superficie al reproductor justo
+    // en medio de esa apertura — reportado en vivo un cierre de la app
+    // entero al tocar este botón apenas arrancaba a cargar un servidor.
+    // Bloqueado mientras carga, igual que el resto de los controles que
+    // tocan la fuente (elegir capítulo, servidor): apenas termina, el botón
+    // vuelve a responder solo.
+    if (isGettingWatchData.value) return;
     pantallaCompletaAndroid.value = !pantallaCompletaAndroid.value;
     // Se aplica ACÁ mismo y no se espera al próximo cambio de orientación:
     // `pantallaSegunOrientacion` ya respeta este valor, pero solo se llama
