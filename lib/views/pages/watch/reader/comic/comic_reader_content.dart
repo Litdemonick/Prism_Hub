@@ -797,6 +797,7 @@ class _ComicReaderContentState extends State<ComicReaderContent> {
                               // una página de verdad, dando la sensación de
                               // haber saltado varias.
                               placeholder: const Center(child: ProgressRing()),
+                              llenarPantalla: _c.llenarPantalla.value,
                             ),
                           ),
                           // Solo escritorio (ver arriba): en celular se desliza
@@ -838,7 +839,16 @@ class _ComicReaderContentState extends State<ComicReaderContent> {
 
                   // Cascade: cap content at 900 px normally; narrow to ~55% when
                   // zoomed out so images shrink but still fill edge-to-edge (no box).
-                  final normalWidth = maxWidth < 900.0 ? maxWidth : 900.0;
+                  //
+                  // Con "llenar pantalla" (ComicController.llenarPantalla) el
+                  // tope de 900 se saca: en un teléfono maxWidth casi nunca
+                  // llega a 900, así que ahí esto no cambiaba nada — donde SÍ
+                  // se nota es en escritorio con la ventana ancha, que
+                  // quedaba con márgenes a los costados aunque se pidiera
+                  // llenar la pantalla.
+                  final normalWidth = _c.llenarPantalla.value
+                      ? maxWidth
+                      : (maxWidth < 900.0 ? maxWidth : 900.0);
                   final effectiveWidth =
                       _cascadeZoomed ? normalWidth * 0.55 : normalWidth;
                   // El ancho que sobra se reparte según la alineación elegida:
@@ -1156,6 +1166,7 @@ class _PagedPage extends StatefulWidget {
     required this.headers,
     required this.placeholder,
     required this.stripAlign,
+    required this.llenarPantalla,
   });
 
   final String url;
@@ -1166,6 +1177,10 @@ class _PagedPage extends StatefulWidget {
   /// páginas que resultan ser tira: una página de manga entra entera y no
   /// tiene sobrante que repartir.
   final Alignment stripAlign;
+
+  /// Recortar la página para llenar la pantalla, en vez de mostrarla
+  /// entera con franjas — ver ComicController.llenarPantalla.
+  final bool llenarPantalla;
 
   @override
   State<_PagedPage> createState() => _PagedPageState();
@@ -1485,7 +1500,11 @@ class _PagedPageState extends State<_PagedPage> {
                       widget.url,
                       width: double.infinity,
                       height: double.infinity,
-                      fit: BoxFit.contain,
+                      // Llenar pantalla recorta lo que sobre en vez de
+                      // dejar la página entera con franjas — ver
+                      // ComicController.llenarPantalla.
+                      fit:
+                          widget.llenarPantalla ? BoxFit.cover : BoxFit.contain,
                       placeholder: widget.placeholder,
                       fallback: const _PagedLoadError(),
                       headers: widget.headers,

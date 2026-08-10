@@ -34,6 +34,18 @@ class ComicController extends ReaderController<ExtensionMangaWatch> {
 
   bool get isPaged => readType.value != MangaReadMode.webTonn;
 
+  /// Llenar la pantalla con la página, recortando lo que sobre en vez de
+  /// dejarla entera con franjas — mismo concepto que
+  /// VideoPlayerController.llenarPantalla, para el lector.
+  ///
+  /// Solo cambia algo en modo paginado (manga/manhwa página a página): en
+  /// la cascada las imágenes ya llenan el ancho por diseño (BoxFit.fitWidth,
+  /// ver ComicReaderContent), así que no hay franjas que recortar ahí.
+  ///
+  /// Por sesión y no guardado por título, mismo criterio que el video: es
+  /// una decisión de "esta página puntual", no una preferencia permanente.
+  final llenarPantalla = false.obs;
+
   // UNO solo para toda la vida del lector. Antes se recreaba en cada cambio
   // de modo/capítulo para poder fijar initialPage, y eso traía un bug feo:
   // el controller nuevo se creaba FUERA del ciclo de construcción, así que

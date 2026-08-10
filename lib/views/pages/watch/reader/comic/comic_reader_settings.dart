@@ -69,13 +69,29 @@ class ComicReaderSettings extends StatelessWidget {
       children: [
         Padding(
           padding: const EdgeInsets.fromLTRB(20, 18, 20, 12),
-          child: Text(
-            'reader.reading-mode'.i18n,
-            style: TextStyle(
-              fontSize: 17,
-              fontWeight: FontWeight.bold,
-              color: HomeTheme.textPrimary,
-            ),
+          child: Row(
+            children: [
+              Expanded(
+                child: Text(
+                  'reader.reading-mode'.i18n,
+                  style: TextStyle(
+                    fontSize: 17,
+                    fontWeight: FontWeight.bold,
+                    color: HomeTheme.textPrimary,
+                  ),
+                ),
+              ),
+              // ComicController.llenarPantalla: en paginado recorta la
+              // página, en cascada saca el tope de 900px de ancho (solo se
+              // nota en pantallas anchas — en un teléfono ya usaba todo el
+              // ancho de por sí).
+              Obx(
+                () => _BotonLlenarPantalla(
+                  activo: c.llenarPantalla.value,
+                  onTap: () => c.llenarPantalla.value = !c.llenarPantalla.value,
+                ),
+              ),
+            ],
           ),
         ),
         Obx(
@@ -219,6 +235,57 @@ class _AlignTile extends StatelessWidget {
               ],
             ),
           ),
+        ),
+      ),
+    );
+  }
+}
+
+/// El botón de "llenar pantalla" del lector — con su nombre al lado del
+/// ícono, a pedido explícito, no solo un ícono suelto.
+class _BotonLlenarPantalla extends StatelessWidget {
+  const _BotonLlenarPantalla({
+    required this.activo,
+    required this.onTap,
+  });
+
+  final bool activo;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return InkWell(
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(8),
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+        decoration: BoxDecoration(
+          borderRadius: BorderRadius.circular(8),
+          color: activo
+              ? HomeTheme.accentPink.withValues(alpha: 0.18)
+              : Colors.transparent,
+          border: Border.all(
+            color: activo ? HomeTheme.accentPink : HomeTheme.border,
+          ),
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(
+              activo ? Icons.fullscreen_exit : Icons.fullscreen,
+              size: 18,
+              color: activo ? HomeTheme.accentPink : HomeTheme.textMuted,
+            ),
+            const SizedBox(width: 6),
+            Text(
+              'reader.fill-screen'.i18n,
+              style: TextStyle(
+                fontSize: 13,
+                fontWeight: FontWeight.w600,
+                color: activo ? HomeTheme.accentPink : HomeTheme.textMuted,
+              ),
+            ),
+          ],
         ),
       ),
     );

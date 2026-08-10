@@ -673,6 +673,8 @@
   },
   "reader": {
     "reading-mode": "Modo de lectura",
+    "fill-screen": "Llenar pantalla",
+    "fill-screen-subtitle": "En paginado recorta la página para que ocupe todo. En cascada saca el margen de los costados en pantallas anchas.",
     "mode-webtoon": "Cascada (webtoon)",
     "mode-webtoon-subtitle": "Desplazamiento vertical continuo",
     "mode-ltr": "Páginas — izquierda a derecha",

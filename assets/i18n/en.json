@@ -677,6 +677,8 @@
   },
   "reader": {
     "reading-mode": "Reading mode",
+    "fill-screen": "Fill screen",
+    "fill-screen-subtitle": "In paged mode it crops the page to fill it. In cascade it drops the side margins on wide screens.",
     "mode-webtoon": "Cascade (webtoon)",
     "mode-webtoon-subtitle": "Continuous vertical scrolling",
     "mode-ltr": "Pages — left to right",
