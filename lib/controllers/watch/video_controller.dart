@@ -2677,24 +2677,6 @@ class VideoPlayerController extends GetxController with WidgetsBindingObserver {
 
   bool _disposed = false;
   bool get disposed => _disposed;
-
-  /// ¿Se le puede hablar al reproductor?
-  ///
-  /// Los controles viven en su propia pantalla y siguen en pie un rato después
-  /// de que el reproductor se soltó —al volver del navegador interno, al cerrar
-  /// la ruta—, así que un toque puede llegar cuando ya no hay a quién
-  /// hablarle. `media_kit` no lo perdona: cualquier llamada tira
-  /// `Assertion failed: "[Player] has been disposed"`.
-  ///
-  /// **Y esa excepción es la que dejaba la pantalla trabada.** Reportado en
-  /// vivo el 2026-08-10 en Windows: al entrar y salir del navegador interno la
-  /// pantalla quedaba tomando toques pero sin obedecer ninguno —no se podía
-  /// cerrar el reproductor ni cambiar de servidor— y había que reiniciar la
-  /// app entera. En el registro se ve por qué: la excepción cortaba el
-  /// manejador ANTES de hacer nada, así que el toque llegaba, reventaba y no
-  /// pasaba nada. Salía por `player.stop()` al abrir el navegador y por
-  /// `player.setVolume()` al tocar la barra de volumen.
-  bool get reproductorVivo => !_disposed && !_playerDisposed && !_shutdownStarted;
   final Completer<void> _shutdownCompleter = Completer<void>();
   Future<void>? _shutdownFuture;
   bool _playerDisposed = false;
@@ -3301,10 +3283,7 @@ class VideoPlayerController extends GetxController with WidgetsBindingObserver {
     // _tryOpenPlayer).
     if (newWatch.headers != null) {
       for (final e in newWatch.headers!.entries) {
-        if (!e.key.startsWith('X-') ||
-            e.key == _lecturaContinua ||
-            e.key == _listaDePedacitos ||
-            e.key == _porElRelay) {
+        if (!e.key.startsWith('X-') || e.key == _lecturaContinua) {
           headers[e.key] = e.value;
         }
       }
@@ -5613,86 +5592,6 @@ class VideoPlayerController extends GetxController with WidgetsBindingObserver {
   /// no le cambia el camino a ningún otro. Ver BombaDeDatos.
   static const _lecturaContinua = 'X-Lectura-Continua';
 
-  /// La extensión declara que esta dirección es una LISTA de pedacitos, aunque
-  /// no lo parezca por la dirección.
-  ///
-  /// **No es una cabecera HTTP**: es una declaración, igual que
-  /// [_lecturaContinua], y se saca antes de pedirle nada a la fuente.
-  ///
-  /// ── Por qué hace falta ──────────────────────────────────────────────────
-  ///
-  /// Para saber si algo es una lista HLS o un archivo entero se mira si la
-  /// dirección termina en `.m3u8`. Funciona para casi todo, y **no se puede dar
-  /// vuelta**: cambiarlo por "todo lo que no sea .mp4 es lista" mandaría al
-  /// camino de HLS a cualquier MP4 servido sin extensión en la ruta, que es
-  /// justo lo que se arregló en `5a2e1e9` (FuegoCine sirve MP4 con `?link=`, y
-  /// UPNShare con `/download?title=`).
-  ///
-  /// Pero hay listas HLS de verdad cuya dirección no termina en `.m3u8`.
-  /// Medido el 2026-08-10 con el servidor HLS de AnimeAV1:
-  ///
-  ///   https://player.zilla-networks.com/m3u8/{hash}
-  ///     → 200 application/x-mpegURL, `#EXTM3U`, VOD con 143 pedacitos
-  ///
-  /// Esa se estaba abriendo como archivo entero: se le ponía
-  /// `multiple_requests=1`, se le quitaba `reconnect_streamed` y se salteaba
-  /// todo el camino de HLS (seguir el maestro, esquivar nodos caídos). De
-  /// corrido reproduce igual —mpv reconoce el formato por el contenido—, pero
-  /// **al tocar la barra para adelantar se quedaba cargando sin parar**, y a
-  /// veces volvía al principio solo. Reportado en vivo, en SUB y en DUB.
-  ///
-  /// Se probó primero la salida que no tocaba la app: pedirle al servidor la
-  /// misma lista con un nombre que terminara en `.m3u8`. No se puede —
-  /// `/m3u8/{hash}.m3u8`, `/index.m3u8` y `/master.m3u8` dan 404— y la query no
-  /// sirve porque acá se mira la dirección sin ella.
-  ///
-  /// ── Por qué es seguro ───────────────────────────────────────────────────
-  ///
-  /// Solo puede AGREGAR fuentes al camino de HLS, nunca sacar ninguna: si la
-  /// extensión no la declara, todo se comporta exactamente igual que antes. Y
-  /// la declara el resolver del servidor, en su carpeta dentro de la extensión,
-  /// que es el único que lo midió — la app no tiene por qué saber qué
-  /// servidores la necesitan.
-  static const _listaDePedacitos = 'X-Lista-De-Pedacitos';
-
-  /// La extensión pide que los pedacitos los baje la app y no mpv.
-  ///
-  /// **No es una cabecera HTTP**: es una declaración, igual que las dos de
-  /// arriba, y se saca antes de pedirle nada a la fuente.
-  ///
-  /// ── Qué se midió ────────────────────────────────────────────────────────
-  ///
-  /// Reportado en vivo el 2026-08-10 con AnimeAV1: el vídeo arranca, avanza
-  /// 708 ms y se queda cargando para siempre; al adelantar, igual. En el
-  /// registro se ve lo que de verdad pasa:
-  ///
-  ///   colchón: 0,00 s · entrando: 172309 B/s · posición clavada
-  ///   media_kit error: tcp: ffurl_read returned 0xffffff76   (cada ~31 s)
-  ///
-  /// Está entrando data y el vídeo no avanza. Y el mismo origen, pedido desde
-  /// afuera, entrega **7,65 MB/s sin un solo fallo** sobre doce pedacitos
-  /// seguidos, y deja saltar al pedacito 71 o al 142 sin haber pedido los
-  /// anteriores. O sea que el servidor está perfecto: lo que no funciona es
-  /// cómo le llegan los pedidos cuando los hace mpv.
-  ///
-  /// Le pasa a los DOS servidores de listas de esta extensión, y solo uno de
-  /// ellos manda una cabecera fuera de lo común, así que no alcanza con
-  /// culpar a la cabecera. El MP4 directo del mismo episodio anda perfecto.
-  ///
-  /// ── Qué hace ────────────────────────────────────────────────────────────
-  ///
-  /// Manda la fuente por el relay local aunque haya un solo nodo. El relay ya
-  /// existe y se usaba solo para esquivar nodos caídos; pidiendo él los
-  /// pedacitos, salen con las cabeceras exactas y por conexiones que se
-  /// reutilizan, y mpv lee de `localhost` sin cabeceras de por medio.
-  ///
-  /// ── Por qué es seguro ───────────────────────────────────────────────────
-  ///
-  /// Solo se enciende para quien lo declare. Ninguna otra extensión del repo
-  /// lo hace, así que para todas las demás fuentes esto no existe. Y si el
-  /// relay no se puede levantar, se sigue como siempre.
-  static const _porElRelay = 'X-Por-El-Relay';
-
   /// La dirección local que está sirviendo la bomba, si hay alguna andando.
   String? _bombaUrl;
 
@@ -5740,14 +5639,9 @@ class VideoPlayerController extends GetxController with WidgetsBindingObserver {
     // copia de las de la extensión, que es lo que sigue viaje. Copia y no el
     // mapa original: ese es de `watchData` y lo comparten otros.
     final lecturaContinua = hdrs.remove(_lecturaContinua) == '1';
-    final listaDePedacitos = hdrs.remove(_listaDePedacitos) == '1';
-    final porElRelay = hdrs.remove(_porElRelay) == '1';
     final headersLimpias = headers == null
         ? null
-        : (Map<String, String>.of(headers)
-          ..remove(_lecturaContinua)
-          ..remove(_listaDePedacitos)
-          ..remove(_porElRelay));
+        : (Map<String, String>.of(headers)..remove(_lecturaContinua));
     // La bomba anterior se suelta ANTES de abrir otra fuente: cada una deja
     // lecturas abiertas contra el servidor y nadie más las va a cerrar.
     _soltarLaBomba();
@@ -5759,14 +5653,7 @@ class VideoPlayerController extends GetxController with WidgetsBindingObserver {
     // `clear()` tira una excepción y corta la reproducción antes de empezar.
     audiosHls.value = <PistaDeAudio>[];
     audioHlsElegido.value = -1;
-    final plan =
-        await _comoAbrir(
-      url,
-      headersLimpias,
-      lecturaContinua,
-      listaDePedacitos,
-      porElRelay,
-    );
+    final plan = await _comoAbrir(url, headersLimpias, lecturaContinua);
     if (_isPlaybackClosed()) return false;
     _fuenteUrl = plan.url ?? url;
     _fuenteHeaders = hdrs;
@@ -5983,9 +5870,8 @@ class VideoPlayerController extends GetxController with WidgetsBindingObserver {
   Future<void> _dejarSaltarDentroDelArchivo(
     bool archivoEntero,
     String url,
-    Map<String, String>? headers, {
-    bool listaQueSeRecorre = false,
-  }) async {
+    Map<String, String>? headers,
+  ) async {
     final np = player.platform;
     if (np is! NativePlayer) return;
     // En Linux reconnect va apagado a propósito (ver dónde se ponen estas
@@ -6045,39 +5931,11 @@ class VideoPlayerController extends GetxController with WidgetsBindingObserver {
     // —poner las pistas de vídeo en automático antes de cada apertura— que era
     // el que dejaba la pantalla en negro. Con los dos encima ninguna prueba
     // decía nada. Si hay que volver a evaluarla, que sea sola.
-    // ── El tercer caso: la lista que HAY que poder recorrer ────────────────
-    //
-    // `reconnect_streamed` va bien en una lista de pedacitos sueltos (cada
-    // `.ts` se decodifica solo, así que no hace falta volver atrás nunca). Pero
-    // hay listas cuyos pedacitos son **fMP4/CMAF**: llevan un `#EXT-X-MAP` con
-    // su cabecera aparte y cada pedacito es un fragmento de UN mismo MP4. Ahí
-    // decirle a ffmpeg que la fuente no se puede recorrer es exactamente el
-    // mismo desastre que en un archivo entero.
-    //
-    // Y se ve igual que allá: reproduce perfecto de corrido, y **al tocar la
-    // barra para adelantar se queda cargando para siempre**. En el registro,
-    // con la posición ya movida al minuto nuevo:
-    //
-    //   colchón: 0,00 s · entrando: 223329 B/s · core-idle: yes
-    //   paused-for-cache: **no**
-    //
-    // O sea: está bajando y no es que espere datos — es que no puede producir
-    // un cuadro desde donde le pidieron. Reportado en vivo el 2026-08-10 con
-    // AnimeAV1, saltando a mano.
-    //
-    // Que el origen no tiene nada que ver está medido sobre **25 títulos, 32
-    // combinaciones de idioma**: pedir el ÚLTIMO pedacito sin haber pedido los
-    // anteriores devuelve 200 con vídeo en **32 de 32**.
-    //
-    // Solo se aplica a las listas que la extensión declara (ver
-    // _listaDePedacitos). Las demás siguen exactamente como estaban.
     final opciones = archivoEntero
         ? 'reconnect=1,reconnect_delay_max=5,seg_max_retry=3,'
             'multiple_requests=1'
-        : listaQueSeRecorre
-            ? 'reconnect=1,reconnect_delay_max=5,seg_max_retry=3'
-            : 'reconnect=1,reconnect_streamed=1,reconnect_delay_max=5,'
-                'seg_max_retry=3';
+        : 'reconnect=1,reconnect_streamed=1,reconnect_delay_max=5,'
+            'seg_max_retry=3';
     try {
       await np.setProperty('demuxer-lavf-o', opciones);
       // Se relee lo que quedó puesto de verdad, no lo que se pidió: si mpv
@@ -6089,9 +5947,7 @@ class VideoPlayerController extends GetxController with WidgetsBindingObserver {
       // que mirar cuando un archivo mal entrelazado sigue cortándose: si acá
       // dice "no", el problema es que la opción no llegó, no el archivo.
       logger.info('saltar dentro del archivo: '
-          '${archivoEntero ? 'SÍ (archivo entero)' : listaQueSeRecorre
-              ? 'SÍ (lista de pedacitos que se recorre)'
-              : 'no (lista de pedacitos)'}'
+          '${archivoEntero ? 'SÍ (archivo entero)' : 'no (lista de pedacitos)'}'
           ' · quedó: $quedo');
       _anotarDondeEstaElIndice(url, headers);
     } catch (e) {
@@ -6193,8 +6049,6 @@ class VideoPlayerController extends GetxController with WidgetsBindingObserver {
     String url,
     Map<String, String>? headers,
     bool lecturaContinua,
-    bool listaDePedacitos,
-    bool porElRelay,
   ) async {
     // La ficha del servidor, SIEMPRE, aunque no haya nada que hacer. Sirve para
     // revisar extensión por extensión sin cruzar líneas a mano.
@@ -6203,20 +6057,7 @@ class VideoPlayerController extends GetxController with WidgetsBindingObserver {
         ? 'servidor sin nombre'
         : currentServerName.value;
     final donde = Uri.tryParse(url)?.host ?? '?';
-    // Una lista es la que TERMINA en .m3u8, como siempre, o la que la extensión
-    // declaró como lista aunque no lo parezca (ver _listaDePedacitos). Lo
-    // segundo solo suma casos: sin la declaración, esta línea vale exactamente
-    // lo mismo que antes para todas las demás fuentes del repo.
-    final esLista = sinParametros.endsWith('.m3u8') || listaDePedacitos;
-    // `isDirectStream` también mira cómo termina la ruta, así que una lista sin
-    // `.m3u8` al final tampoco pasaba por ahí. La declaración vale para las dos
-    // preguntas: es reproducible directo Y es una lista.
-    final directo = isDirectStream(url) || listaDePedacitos;
-    if (listaDePedacitos) {
-      logger.info('ficha · $servidor · $donde · la extensión la declara LISTA '
-          'de pedacitos aunque la dirección no termine en .m3u8');
-    }
-    if (!directo || !esLista) {
+    if (!isDirectStream(url) || !sinParametros.endsWith('.m3u8')) {
       logger.info('ficha · $servidor · ${sinParametros.endsWith('.mp4') ? 'MP4 '
               'directo' : 'no es una lista HLS'} · $donde · va directo a mpv, no '
           'hay pedacitos que repartir');
@@ -6247,8 +6088,7 @@ class VideoPlayerController extends GetxController with WidgetsBindingObserver {
       }
       return const _ComoAbrir.talCual();
     }
-    await _dejarSaltarDentroDelArchivo(false, url, headers,
-        listaQueSeRecorre: listaDePedacitos);
+    await _dejarSaltarDentroDelArchivo(false, url, headers);
 
     final hdrs = <String, String>{'User-Agent': _browserUA};
     if (headers != null) hdrs.addAll(headers);
@@ -6322,8 +6162,7 @@ class VideoPlayerController extends GetxController with WidgetsBindingObserver {
                 'cambiar de idioma por la dirección (no lleva -aN), se abre en '
                 '${delMaestro.pistas[delMaestro.sonando].nombre} y el selector '
                 'lo dice'}');
-        await _dejarSaltarDentroDelArchivo(false, url, headers,
-            listaQueSeRecorre: listaDePedacitos);
+        await _dejarSaltarDentroDelArchivo(false, url, headers);
         return _ComoAbrir.con(conIdioma);
       }
     }
@@ -6404,31 +6243,6 @@ class VideoPlayerController extends GetxController with WidgetsBindingObserver {
     // Así que cuando hay algo que elegir se le da el maestro y lo resuelve mpv,
     // que para eso está. El viaje de más se paga una vez; perder el audio en
     // inglés se paga toda la película.
-    // La extensión midió que a mpv no le funciona pedir estos pedacitos, así
-    // que se los baja la app aunque haya un solo nodo y no haya nodo al que
-    // cambiarle. Ver _porElRelay: no es una suposición, está medido contra el
-    // origen, que entrega 7,65 MB/s a quien le pide de esta otra forma.
-    if (nodos.length < 2 && porElRelay) {
-      try {
-        final relay = await CastRelayServer.registerAndGetUrl(
-          targetUrl: direccion,
-          headers: hdrs,
-          // En true aunque haya un solo nodo y no haya a quién esquivar, y es
-          // a propósito: con `false`, el relay PRUEBA si los pedacitos se
-          // pueden bajar sin nuestras cabeceras y, si puede, **se saca del
-          // camino** y se los deja pedir a mpv. Eso es justo lo que no
-          // queremos acá — lo que la extensión está pidiendo es que los pida
-          // la app. Con `true` la prueba se saltea y todos pasan por el relay.
-          esquivarNodosCaidos: true,
-        );
-        logger.info('ficha · $servidor · PASA POR EL RELAY porque la extensión '
-            'lo pide: los pedacitos los baja la app · ${nodos.first}');
-        return _ComoAbrir.con(relay);
-      } catch (e) {
-        logger.info('ficha · $servidor · el relay no se pudo levantar · va '
-            'directo a mpv como siempre: $e');
-      }
-    }
     if (nodos.length < 2) {
       final conVariante = direccion != url;
       final hayPistas = maestro.contains('#EXT-X-MEDIA');
