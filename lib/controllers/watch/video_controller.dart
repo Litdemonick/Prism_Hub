@@ -49,6 +49,7 @@ import 'package:path/path.dart' as path;
 import 'package:fluent_ui/fluent_ui.dart' as fluent;
 import 'package:crypto/crypto.dart';
 import 'package:prismhub/utils/prismhub_storage.dart';
+import 'package:prismhub/views/widgets/home/home_theme.dart';
 import 'package:prismhub/utils/extension.dart';
 import 'package:flutter_hls_parser/flutter_hls_parser.dart';
 
@@ -7022,6 +7023,10 @@ class VideoPlayerController extends GetxController with WidgetsBindingObserver {
       SystemUiMode.manual,
       overlays: SystemUiOverlay.values,
     );
+    // Y los colores, por lo mismo que en _barrasDelSistemaVisibles: pedir el
+    // modo reinicia el estilo, así que salir del reproductor dejaba la app con
+    // los iconos del sistema en claro — invisibles con el modo claro puesto.
+    ModoDeColor.aplicarBarrasDelSistema();
     // 如果是平板则不改变
     // Libera el bloqueo nativo que dejó landscapeAutoMode(forceSensor: true)
     // en onInit — pedir portraitUp/portraitDown acá bloqueaba la rotación
@@ -7100,6 +7105,16 @@ class VideoPlayerController extends GetxController with WidgetsBindingObserver {
       SystemUiMode.manual,
       overlays: SystemUiOverlay.values,
     );
+    // ── Y SUS COLORES, que el cambio de modo se lleva puestos ──────────────
+    //
+    // `setEnabledSystemUIMode` reinicia el estilo de las barras a los valores
+    // por defecto de Android, que son iconos CLAROS. En modo oscuro no se
+    // notaba; en claro dejaba la hora y la batería blancas sobre fondo casi
+    // blanco, o sea invisibles, y la barra de abajo cambiada de color.
+    //
+    // Pedir el modo y no volver a pedir el estilo era el agujero: son dos
+    // cosas separadas y la primera pisa a la segunda.
+    ModoDeColor.aplicarBarrasDelSistema();
   }
 
   @override
