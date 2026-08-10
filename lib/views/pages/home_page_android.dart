@@ -875,16 +875,17 @@ class _CarruselAndroidState extends State<_CarruselAndroid>
   /// principio de la fila— pero se lee como un hueco, y nada dice que eso se
   /// mueve con el dedo (o, en escritorio, que se arrastra con el mouse).
   ///
-  /// Una flecha con un vaivén corto, en ese hueco. Se queda ahí hasta el
-  /// primer arrastre real —no hay reloj que la apague sola—: recién cuando
-  /// alguien mueve el acordeón queda claro que ya se entendió.
+  /// Una flecha con un vaivén corto, CENTRADA sobre la tarjeta en foco. Se
+  /// queda ahí hasta el primer arrastre real —no hay reloj que la apague
+  /// sola—: recién cuando alguien mueve el acordeón queda claro que ya se
+  /// entendió.
   ///
-  /// En escritorio ocupa el mismo lugar que la flecha de clic hacia la
-  /// izquierda, y la reemplaza mientras está puesta: al principio esa
-  /// flecha no tiene adónde volver (no hay nada a la izquierda de la
-  /// primera tarjeta), así que mostrarla ahí era un botón que no hacía
-  /// nada. Apenas hay un primer arrastre, la pista se va y la flecha de
-  /// clic vuelve a su lugar de siempre.
+  /// En escritorio, mientras está puesta, tampoco se dibuja la flecha de
+  /// clic hacia la izquierda: al principio esa flecha no tiene adónde
+  /// volver (no hay nada a la izquierda de la primera tarjeta), así que
+  /// mostrarla ahí era un botón que no hacía nada. Apenas hay un primer
+  /// arrastre, la pista se va y la flecha de clic vuelve a su lugar de
+  /// siempre.
   late final AnimationController _pista = AnimationController(
     vsync: this,
     duration: const Duration(milliseconds: 1100),
@@ -1593,19 +1594,19 @@ class _CarruselAndroidState extends State<_CarruselAndroid>
                     ],
                     // ── La pista de «esto se desliza» ──────────────────────
                     //
-                    // En escritorio ocupa el mismo lugar que la flecha de
-                    // clic hacia la izquierda (ver arriba: esa no se dibuja
-                    // mientras esta está puesta), así que las dos nunca
-                    // compiten por el mismo hueco.
+                    // Centrada en todo el acordeón, no pegada a un borde: es
+                    // sobre la tarjeta en foco donde cae la mirada al abrir.
+                    //
+                    // En escritorio, mientras está puesta, tampoco se dibuja
+                    // la flecha de clic hacia la izquierda (ver arriba) — las
+                    // dos a la vez serían dos avisos distintos diciendo lo
+                    // mismo.
                     //
                     // Se queda montada siempre (no solo mientras
                     // _pistaVisible) para que el desvanecido de
                     // AnimatedOpacity tenga algo que animar en vez de
                     // desaparecer de un salto.
-                    Positioned(
-                      left: 6,
-                      top: 0,
-                      bottom: 0,
+                    Positioned.fill(
                       child: IgnorePointer(
                         child: Center(
                           child: AnimatedOpacity(
