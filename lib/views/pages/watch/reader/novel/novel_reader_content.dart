@@ -218,8 +218,18 @@ class _NovelReaderContentState extends State<NovelReaderContent> {
   }
 
   Widget _buildAndroid(BuildContext context) {
+    // "Llenar pantalla" también saca el SafeArea de arriba y de abajo (ver el
+    // worker en NovelController, que además esconde las barras del sistema),
+    // para que el texto use todo el alto. La barra del lector es un widget
+    // aparte flotando por encima y se queda con su propio SafeArea.
     return Scaffold(
-      body: SafeArea(child: _buildContent()),
+      body: Obx(
+        () => SafeArea(
+          top: !_c.llenarPantalla.value,
+          bottom: !_c.llenarPantalla.value,
+          child: _buildContent(),
+        ),
+      ),
     );
   }
 

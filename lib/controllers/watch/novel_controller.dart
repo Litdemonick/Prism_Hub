@@ -1,4 +1,7 @@
+import 'dart:io';
+
 import 'package:flutter/scheduler.dart';
+import 'package:flutter/services.dart';
 import 'package:get/get.dart';
 import 'package:prismhub/models/index.dart';
 import 'package:prismhub/controllers/watch/reader_controller.dart';
@@ -22,6 +25,36 @@ class NovelController extends ReaderController<ExtensionFikushonWatch> {
 
   // 字体大小
   final fontSize = (18.0).obs;
+
+  /// Leer sin la barra de estado ni la de navegación del teléfono, para que
+  /// el texto use todo el alto — mismo botón y mismo comportamiento que en el
+  /// lector de cómics (ver ComicController.llenarPantalla).
+  ///
+  /// Acá no recorta ni reescala nada: el texto ya usa todo el ancho y el
+  /// tamaño lo maneja su propio deslizador. Lo único que hace es ganar el
+  /// alto de las dos barras.
+  ///
+  /// Por sesión y no guardado por título, mismo criterio que en cómics.
+  final llenarPantalla = false.obs;
+
+  /// Barras del sistema según "llenar pantalla".
+  ///
+  /// `immersiveSticky` y NO `edgeToEdge`: con edgeToEdge el contenido llega a
+  /// los bordes pero las dos barras SIGUEN VISIBLES encima — se reportó en
+  /// vivo con captura en el lector de cómics, donde este mismo método ya está
+  /// funcionando bien. Vuelven solas si se desliza desde el borde, sin sacar
+  /// al lector del modo.
+  void _actualizarPantallaCompletaAndroid(bool activo) {
+    if (activo) {
+      SystemChrome.setEnabledSystemUIMode(SystemUiMode.immersiveSticky);
+    } else {
+      SystemChrome.setEnabledSystemUIMode(
+        SystemUiMode.manual,
+        overlays: SystemUiOverlay.values,
+      );
+    }
+  }
+
   final itemPositionsListener = ItemPositionsListener.create();
   final isRecover = false.obs;
   final positions = 0.obs;
@@ -63,6 +96,10 @@ class NovelController extends ReaderController<ExtensionFikushonWatch> {
       (callback) =>
           PrismHubStorage.setSetting(SettingKey.novelFontSize, callback),
     ));
+
+    if (Platform.isAndroid) {
+      addWorker(ever(llenarPantalla, _actualizarPantallaCompletaAndroid));
+    }
 
     // 切换章节时重置页码
     addWorker(ever(index, (callback) {
@@ -112,6 +149,15 @@ class NovelController extends ReaderController<ExtensionFikushonWatch> {
 
   @override
   void onClose() {
+    // Si se salió con "llenar pantalla" prendido, las barras quedaron
+    // escondidas — sin esto la pantalla de atrás se quedaba sin hora ni
+    // barra de navegación hasta reiniciar la app.
+    if (Platform.isAndroid && llenarPantalla.value) {
+      SystemChrome.setEnabledSystemUIMode(
+        SystemUiMode.manual,
+        overlays: SystemUiOverlay.values,
+      );
+    }
     saveProgressNow();
     super.onClose();
   }
