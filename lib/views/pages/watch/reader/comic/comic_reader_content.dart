@@ -563,12 +563,25 @@ class _ComicReaderContentState extends State<ComicReaderContent> {
       final total = _c.watchData.value?.urls.length ?? 0;
       final page = _c.currentPage.value;
 
+      // Antes era un rectángulo de esquinas vivas pegado al vértice de abajo
+      // a la izquierda: tocaba los dos bordes de la pantalla y parecía más un
+      // recorte mal cortado que una etiqueta (reportado en vivo con captura).
+      // Ahora flota, separado de los bordes y con las puntas redondeadas,
+      // como el resto de las etiquetas de la app.
       return Container(
-        color: Colors.black.withAlpha(200),
-        padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 4),
+        margin: const EdgeInsets.only(left: 12, bottom: 12),
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
+        decoration: BoxDecoration(
+          color: Colors.black.withAlpha(200),
+          borderRadius: BorderRadius.circular(20),
+        ),
         child: Text(
           '${page + 1}/$total',
-          style: const TextStyle(color: Colors.white, fontSize: 15),
+          style: const TextStyle(
+            color: Colors.white,
+            fontSize: 15,
+            fontWeight: FontWeight.w600,
+          ),
         ),
       );
     });
