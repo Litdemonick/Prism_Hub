@@ -895,17 +895,17 @@ class _CarruselAndroidState extends State<_CarruselAndroid>
     duration: const Duration(seconds: 2),
   );
 
-  /// Si hay un gesto de arrastre en curso ahora mismo. La pista se apaga
-  /// apenas arranca, aunque el arrastre empiece justo en el principio —sin
-  /// esto quedaría un cuadro con la pista puesta mientras el dedo ya se
-  /// está moviendo.
-  bool _arrastrando = false;
-
   /// Se recalcula sola con la posición: no hay "ya se mostró, no vuelve
   /// más". _p < 0.5 en vez de == 0 porque _p es continuo mientras arrastra
   /// o anima — sin el margen, la pista parpadearía prendida y apagada en
   /// cada cuadro de vuelta al principio.
-  bool get _pistaVisible => !_arrastrando && _p < 0.5;
+  ///
+  /// Atada a _p y nada más —ni a "hay un click en curso"—: en escritorio,
+  /// un click sobre la tarjeta (sin llegar a arrastrar de verdad) también
+  /// dispara onHorizontalDragStart, y con un flag propio de "arrastrando"
+  /// la pista se apagaba con solo tocar, aunque _p no se hubiera movido un
+  /// píxel. Solo cuando la posición cambia de verdad hay algo que ocultar.
+  bool get _pistaVisible => _p < 0.5;
 
   /// Prende o apaga el vaivén según corresponda ahora. Se llama después de
   /// cualquier cambio que pueda mover _pistaVisible (posición o arrastre):
@@ -1488,8 +1488,6 @@ class _CarruselAndroidState extends State<_CarruselAndroid>
                 behavior: HitTestBehavior.opaque,
                 onHorizontalDragStart: (_) {
                   _anim.stop();
-                  setState(() => _arrastrando = true);
-                  _actualizarPista();
                 },
                 onHorizontalDragUpdate: (d) {
                   final paso = (m.ancho + m.anchoChico) / 2 + _aire;
@@ -1499,8 +1497,6 @@ class _CarruselAndroidState extends State<_CarruselAndroid>
                   _actualizarPista();
                 },
                 onHorizontalDragEnd: (d) {
-                  setState(() => _arrastrando = false);
-                  _actualizarPista();
                   final v = d.primaryVelocity ?? 0;
                   // Con impulso se salta a la siguiente aunque el dedo no haya
                   // llegado a la mitad: es lo que espera un deslizar rápido.
@@ -1633,22 +1629,33 @@ class _CarruselAndroidState extends State<_CarruselAndroid>
                           .clamp(0.0, caja.maxWidth);
                       final centroHueco =
                           (huecoAncho / 2).clamp(16.0, caja.maxWidth - 16);
-                      const anchoLinea = 26.0;
+                      // Adaptable al hueco, pero con techo: sin él, en una
+                      // ventana de escritorio grande (donde el hueco puede
+                      // ser enorme) la culebra se estiraba flaca y sucia en
+                      // vez de leerse como una ondulación prolija.
+                      final anchoOnda = (huecoAncho * 0.7).clamp(46.0, 110.0);
+                      const altoOnda = 30.0;
                       return Positioned(
-                        left: centroHueco - anchoLinea / 2,
-                        top: 22,
-                        bottom: 22,
-                        width: anchoLinea,
+                        left: centroHueco - anchoOnda / 2,
+                        top: 0,
+                        bottom: 0,
+                        width: anchoOnda,
                         child: IgnorePointer(
-                          child: AnimatedOpacity(
-                            opacity: _pistaVisible ? 1 : 0,
-                            duration: const Duration(milliseconds: 450),
-                            curve: Curves.easeOut,
-                            child: AnimatedBuilder(
-                              animation: _pista,
-                              builder: (context, child) => CustomPaint(
-                                painter: _PintorCulebra(_pista.value),
-                                child: const SizedBox.expand(),
+                          child: Center(
+                            child: SizedBox(
+                              width: anchoOnda,
+                              height: altoOnda,
+                              child: AnimatedOpacity(
+                                opacity: _pistaVisible ? 1 : 0,
+                                duration: const Duration(milliseconds: 450),
+                                curve: Curves.easeOut,
+                                child: AnimatedBuilder(
+                                  animation: _pista,
+                                  builder: (context, child) => CustomPaint(
+                                    painter: _PintorCulebra(_pista.value),
+                                    child: const SizedBox.expand(),
+                                  ),
+                                ),
                               ),
                             ),
                           ),
@@ -1981,50 +1988,29 @@ class _CarruselAndroidState extends State<_CarruselAndroid>
   }
 }
 
-/// Dibuja la «culebra» de la pista: una línea ondulada, vertical, que viaja
-/// hacia arriba con el tiempo (la fase avanza sola). Larga como el espacio
-/// que tenga —se estira al alto real que le da el Positioned, nunca un
-/// tamaño fijo— así entra igual de bien en un teléfono chico que en uno
-/// grande o en la ventana de escritorio.
+/// Dibuja la «culebra» de la pista: una línea ondulada HORIZONTAL, con una
+/// puntita de flecha en el extremo izquierdo — la dirección en la que hay
+/// que deslizar es lo que esto tiene que decir, y una onda vertical no lo
+/// decía. Viaja sola hacia la izquierda (la fase avanza con el tiempo).
 ///
-/// Dos trazos, no uno: uno oscuro y grueso atrás como halo, y uno claro y
-/// fino encima. Mismo criterio que _discoDeFlecha con los íconos — sin el
-/// halo, una línea blanca sola se pierde contra una portada clara.
+/// Dos trazos por figura, no uno: uno oscuro y grueso atrás como halo, y
+/// uno claro y fino encima. Mismo criterio que _discoDeFlecha con los
+/// íconos — sin el halo, una línea blanca sola se pierde contra una
+/// portada clara.
 class _PintorCulebra extends CustomPainter {
   const _PintorCulebra(this.fase);
 
   /// 0..1, en bucle. De acá sale por dónde va la onda en este cuadro.
   final double fase;
 
-  @override
-  void paint(Canvas canvas, Size size) {
-    if (size.width <= 0 || size.height <= 0) return;
-    final centroX = size.width / 2;
-    final amplitud = size.width / 2 - 3;
-    // Una onda completa cada ~46 de alto: ni un garabato apretado en una
-    // pista corta ni una curva única y chata en una larga.
-    final ciclos = size.height / 46;
-
-    final path = Path();
-    const pasos = 48;
-    for (var i = 0; i <= pasos; i++) {
-      final t = i / pasos;
-      final y = t * size.height;
-      final x =
-          centroX + amplitud * math.sin(2 * math.pi * (ciclos * t - fase));
-      if (i == 0) {
-        path.moveTo(x, y);
-      } else {
-        path.lineTo(x, y);
-      }
-    }
-
+  void _trazar(Canvas canvas, Path path) {
     canvas.drawPath(
       path,
       Paint()
         ..style = PaintingStyle.stroke
         ..strokeWidth = 6
         ..strokeCap = StrokeCap.round
+        ..strokeJoin = StrokeJoin.round
         ..color = const Color(0x99000000),
     );
     canvas.drawPath(
@@ -2033,8 +2019,45 @@ class _PintorCulebra extends CustomPainter {
         ..style = PaintingStyle.stroke
         ..strokeWidth = 2.5
         ..strokeCap = StrokeCap.round
+        ..strokeJoin = StrokeJoin.round
         ..color = Colors.white,
     );
+  }
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    if (size.width <= 0 || size.height <= 0) return;
+    final centroY = size.height / 2;
+    final amplitud = size.height / 2 - 5;
+    // Ancho fijo de ondas y no uno atado al tamaño: el ancho de esta pista
+    // ya viene acotado por el llamador (ver anchoOnda), así que dos ondas
+    // enteras se leen bien en cualquiera de esos anchos.
+    const ciclos = 2.0;
+
+    final onda = Path();
+    const pasos = 48;
+    for (var i = 0; i <= pasos; i++) {
+      final t = i / pasos;
+      final x = t * size.width;
+      final y =
+          centroY + amplitud * math.sin(2 * math.pi * (ciclos * t + fase));
+      if (i == 0) {
+        onda.moveTo(x, y);
+      } else {
+        onda.lineTo(x, y);
+      }
+    }
+    _trazar(canvas, onda);
+
+    // La puntita, pegada al extremo izquierdo de la onda (mismo Y que ahí
+    // arranca) — sin ella, la ondulación sola se lee como «algo se mueve»
+    // pero no como «deslizá para ESTE lado».
+    final yPunta = centroY + amplitud * math.sin(2 * math.pi * fase);
+    final flecha = Path()
+      ..moveTo(9, yPunta - 6)
+      ..lineTo(0, yPunta)
+      ..lineTo(9, yPunta + 6);
+    _trazar(canvas, flecha);
   }
 
   @override
