@@ -910,7 +910,13 @@ class _CarruselAndroidState extends State<_CarruselAndroid>
   /// es barato de llamar de más.
   void _actualizarPista() {
     if (_pistaVisible) {
-      if (!_pista.isAnimating) _pista.repeat();
+      // reverse:true, no un repeat a secas: sin reverse, _pista.value pasa
+      // de 1.0 a 0.0 de un salto al cerrar cada vuelta, y con eso el ícono
+      // (que sigue ese valor con Curves.easeInOut) saltaba en seco de
+      // vuelta al centro en vez de volver suave. Con reverse la MISMA
+      // curva de ida se recorre de vuelta, así que la animación entera
+      // queda fluida en las dos direcciones.
+      if (!_pista.isAnimating) _pista.repeat(reverse: true);
     } else {
       _pista.stop();
     }
