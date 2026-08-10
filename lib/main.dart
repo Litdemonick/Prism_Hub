@@ -1019,10 +1019,19 @@ class _MainAppState extends State<MainApp> {
         surfaceTintColor: Colors.transparent,
       ),
       // El fondo de todas las zonas, uno solo. Cada Scaffold que no diga otra
-      // cosa arranca del mismo negro que usa el Home, así que al cambiar de
+      // cosa arranca del mismo fondo que usa el Home, así que al cambiar de
       // zona no hay un salto de tono.
-      scaffoldBackgroundColor:
-          brightness == Brightness.dark ? HomeTheme.bg : null,
+      //
+      // ── Y en claro TAMBIÉN ────────────────────────────────────────────────
+      //
+      // Estaba solo para el modo oscuro; en claro quedaba en null y caía en el
+      // ColorScheme, que se siembra con el rosa de la marca
+      // (ColorScheme.fromSeed más arriba) y devuelve un blanco TEÑIDO DE ROSA.
+      // Donde se veía era acostado: el riel de la izquierda es hermano de las
+      // páginas, no va por encima, así que no lo tapa el fondo propio de cada
+      // zona y esa franja salía rosada al lado del contenido. Reportado en
+      // vivo con captura.
+      scaffoldBackgroundColor: HomeTheme.bg,
     );
   }
 
