@@ -2683,8 +2683,20 @@ class VideoPlayerController extends GetxController with WidgetsBindingObserver {
   bool _shutdownStarted = false;
   bool _routeClosing = false;
 
+  // _routeClosing entra acá y no solo _disposed: closeRoute() lo marca
+  // SINCRÓNICO, como lo primero de todo, antes de esperar la captura del
+  // fotograma y el pausado (hasta 2s cada uno) — _disposed recién se pone
+  // en true bastante después, cuando ese cierre asíncrono termina de
+  // llegar a _beginPlaybackShutdown(). En esa ventana, una resolución
+  // lenta que ya estaba en camino (getWatchData, switchServer) todavía
+  // veía _disposed en false y podía terminar llamando a player.open() —
+  // en el reproductor que se estaba cerrando. Reportado en vivo: se salió
+  // de un episodio que tardaba en cargar, se entró a otro, y el audio del
+  // primero empezó a sonar encima del segundo.
   bool _isPlaybackClosed([int? generation]) =>
-      _disposed || (generation != null && generation != _switchServerGen);
+      _disposed ||
+      _routeClosing ||
+      (generation != null && generation != _switchServerGen);
 
   // Reintento automático antes de rendirse: confirmado en vivo (Streamwish)
   // que algunos hosts asignan un servidor de backend al azar en CADA
@@ -3524,7 +3536,10 @@ class VideoPlayerController extends GetxController with WidgetsBindingObserver {
     currentTorrentFile.value = file;
     (player.platform as NativePlayer).setProperty("network-timeout", "60");
     await _ensureVideoSurfaceMounted();
-    if (_disposed) return;
+    // _isPlaybackClosed() y no _disposed a secas: este es otro punto que
+    // abre audio directo (no pasa por _tryOpenPlayer), así que necesita la
+    // misma protección contra _routeClosing. Ver el comentario largo ahí.
+    if (_isPlaybackClosed()) return;
     player.open(Media('${BTServerApi.baseApi}/torrent/$_torrenHash/$file'));
   }
 
@@ -5588,7 +5603,12 @@ class VideoPlayerController extends GetxController with WidgetsBindingObserver {
   }
 
   Future<bool> _tryOpenPlayer(String url, Map<String, String>? headers) async {
-    if (_disposed) return false;
+    // _isPlaybackClosed() y no _disposed a secas en toda esta función: acá
+    // es donde de verdad se abre el audio, así que es el lugar que más le
+    // importa enterarse de un cierre de ruta en curso (_routeClosing) y no
+    // solo de un dispose ya terminado. Ver el comentario largo en
+    // _isPlaybackClosed.
+    if (_isPlaybackClosed()) return false;
     if (url.startsWith('error://')) {
       logger.severe('URL de error recibida: $url');
       return false;
@@ -5596,7 +5616,7 @@ class VideoPlayerController extends GetxController with WidgetsBindingObserver {
     if (!await _isHostReachable(url)) {
       return false;
     }
-    if (_disposed) return false;
+    if (_isPlaybackClosed()) return false;
     // Montar el widget Video ANTES de abrir la fuente — sin esto mpv nunca
     // tiene una superficie real donde pintar (pantalla negra pese a que
     // audio/progreso sí avanzan) y su pipeline de render queda a medio
@@ -5606,7 +5626,7 @@ class VideoPlayerController extends GetxController with WidgetsBindingObserver {
     // reproducción de servidores (primario, switchServer, fallback directo,
     // sniffer), así que faltaba justo acá.
     await _ensureVideoSurfaceMounted();
-    if (_disposed) return false;
+    if (_isPlaybackClosed()) return false;
     // Inyectar User-Agent de browser si no viene en los headers.
     // libmpv por defecto envía "Lavf/X.X.X" que los CDNs de streaming bloquean.
     final hdrs = <String, String>{'User-Agent': _browserUA};
@@ -5633,7 +5653,7 @@ class VideoPlayerController extends GetxController with WidgetsBindingObserver {
     audiosHls.value = <PistaDeAudio>[];
     audioHlsElegido.value = -1;
     final plan = await _comoAbrir(url, headersLimpias, lecturaContinua);
-    if (_disposed) return false;
+    if (_isPlaybackClosed()) return false;
     _fuenteUrl = plan.url ?? url;
     _fuenteHeaders = hdrs;
     // ── Se para lo anterior ANTES de abrir lo nuevo, siempre ────────────
@@ -5658,10 +5678,10 @@ class VideoPlayerController extends GetxController with WidgetsBindingObserver {
     try {
       await player.stop().timeout(const Duration(seconds: 2));
     } catch (_) {}
-    if (_disposed) return false;
+    if (_isPlaybackClosed()) return false;
     await player.open(Media(plan.url ?? url, httpHeaders: hdrs));
 
-    if (_disposed) {
+    if (_isPlaybackClosed()) {
       try {
         unawaited(player.stop());
       } catch (_) {}
