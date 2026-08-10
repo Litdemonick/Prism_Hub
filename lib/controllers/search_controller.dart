@@ -297,8 +297,21 @@ class SearchPageController extends GetxController {
           resultFuture = element.runitme.searchFirstPageWithBroadening(
               SearchText.sanitizeForRemoteQuery(search.value));
         }
+        // El catálogo es UN solo pedido — quince de sobra. La cascada de
+        // reintentos (searchFirstPageWithBroadening) puede encadenar varios
+        // — cada uno ya acotado por su cuenta ahí adentro (ver
+        // _searchAcotado en extension_service.dart) — así que acá afuera
+        // necesita más margen para el total: quince fijos para los dos
+        // casos hacía que la búsqueda general se rindiera con "no encontró
+        // resultados" en una extensión donde buscar directo (sin este
+        // límite, ver extension_searcher_page.dart) sí encontraba, porque
+        // ahí ni el primer intento de la cascada llegaba a responder antes
+        // de cortarse. Sesenta cubre unos tres intentos de la cascada sin
+        // dejar que una sola extensión colgada estire la búsqueda general
+        // por minutos enteros.
+        final esCascada = search.value.isNotEmpty && !esNombreDeLaExtension;
         final result = await resultFuture.timeout(
-          const Duration(seconds: 15),
+          esCascada ? const Duration(seconds: 60) : const Duration(seconds: 15),
           onTimeout: () => throw TimeoutException('Tiempo de espera agotado'),
         );
         // Un fetch VIEJO (de un filtro/búsqueda anterior, todavía en vuelo
@@ -420,25 +433,38 @@ class SearchPageController extends GetxController {
       // priorizar, así que se deja el orden de siempre.
       final query = search.value.trim();
       if (query.isNotEmpty) {
-        // Se tokeniza UNA sola vez acá afuera — bucket() se llama por cada
-        // extensión Y por cada ítem de su resultado, así que renormalizar
-        // la misma query adentro del loop sería trabajo repetido de sobra.
+        // Se tokeniza/normaliza UNA sola vez acá afuera — bucket() se llama
+        // por cada extensión Y por cada ítem de su resultado, así que
+        // rehacer lo mismo con la misma query adentro del loop sería
+        // trabajo repetido de sobra.
         final tokens = SearchText.queryTokens(query);
-        // Cuatro grupos, no tres. Antes "sin resultados" y "con resultados
-        // pero sin coincidencia en el título" caían los DOS en el 1, así que
-        // una extensión que no encontró nada quedaba mezclada entre las que sí
-        // — justo lo contrario de lo que este orden busca. Ahora lo vacío baja
-        // siempre por debajo de cualquier cosa que haya traído algo.
+        final queryNormalizada = SearchText.normalize(query);
+        // Cinco grupos, no cuatro. Antes un título EXACTO y uno que solo
+        // traía la palabra suelta en cualquier parte quedaban en el mismo
+        // grupo (0) — la extensión que de verdad tiene lo buscado se veía
+        // mezclada con otra que apareció por una coincidencia parcial de la
+        // cascada (ver SearchText.broadenedRemoteQueries), sin ningún orden
+        // entre ellas. Ahora el título que coincide PALABRA POR PALABRA con
+        // lo escrito (sin importar tildes/mayúsculas) sube primero, y recién
+        // detrás el que solo trae un fragmento.
+        //
+        // Y "sin resultados" y "con resultados pero sin coincidencia en el
+        // título" siguen sin mezclarse entre sí — una extensión que no
+        // encontró nada queda siempre por debajo de cualquiera que sí trajo
+        // algo, sea cual sea el motivo.
         int bucket(SearchResult r) {
           final tieneResultados = r.result != null && r.result!.isNotEmpty;
           if (tieneResultados) {
+            final coincideExacto = r.result!.any(
+                (item) => SearchText.normalize(item.title) == queryNormalizada);
+            if (coincideExacto) return 0;
             final coincideTitulo = r.result!
                 .any((item) => SearchText.matchesTokens(item.title, tokens));
-            return coincideTitulo ? 0 : 1;
+            return coincideTitulo ? 1 : 2;
           }
           // El error va último: no es que no haya nada, es que no se pudo
           // preguntar, y eso el usuario ya lo ve en el aviso de la tarjeta.
-          return r.error != null ? 3 : 2;
+          return r.error != null ? 4 : 3;
         }
 
         // List.sort de Dart es estable: dentro de cada bucket, el orden

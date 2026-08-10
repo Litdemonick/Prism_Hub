@@ -49,6 +49,7 @@ import 'package:path/path.dart' as path;
 import 'package:fluent_ui/fluent_ui.dart' as fluent;
 import 'package:crypto/crypto.dart';
 import 'package:prismhub/utils/prismhub_storage.dart';
+import 'package:prismhub/views/widgets/home/home_theme.dart';
 import 'package:prismhub/utils/extension.dart';
 import 'package:flutter_hls_parser/flutter_hls_parser.dart';
 
@@ -105,6 +106,32 @@ class VideoPlayerController extends GetxController with WidgetsBindingObserver {
   final showSidebar = false.obs;
   final isOpenSidebar = false.obs;
   final isFullScreen = false.obs;
+
+  /// Pantalla completa en Android: el vídeo solo, sin la hora ni la batería.
+  ///
+  /// ── Por qué es un botón APARTE de "llenar pantalla" ─────────────────────
+  ///
+  /// "Llenar pantalla" cambia cómo encaja la IMAGEN en el marco (BoxFit). Esto
+  /// cambia el marco en sí, escondiendo las barras del sistema para que el
+  /// vídeo ocupe hasta donde ellas estaban. Las dos cosas se pueden combinar.
+  ///
+  /// ── Por qué es MANUAL, y no automático como antes ────────────────────────
+  ///
+  /// Las barras del sistema se dejaron SIEMPRE visibles por defecto —a pedido,
+  /// porque escondidas dejaban la única salida en una flecha fija encima del
+  /// vídeo—. Este interruptor es la excepción: el usuario que sí quiere
+  /// inmersión total la pide a propósito, tocando el botón, en vez de que la
+  /// app se la imponga.
+  final pantallaCompletaAndroid = false.obs;
+
+  /// La orientación de la última vez que se llamó a pantallaSegunOrientacion.
+  ///
+  /// Esa función solo la llama la página en cada reconstrucción (ver
+  /// _androidSegunOrientacion), así que no reacciona sola a que cambien
+  /// OTRAS cosas de las que depende (ver el worker de llenarPantalla en
+  /// onInit). Guardada acá, ese worker puede volver a pedir el modo correcto
+  /// sin necesitar que la orientación haya cambiado también.
+  bool _acostadoActual = false;
   late final index = playIndex.obs;
 
   // 快捷键
@@ -1566,6 +1593,15 @@ class VideoPlayerController extends GetxController with WidgetsBindingObserver {
       }
     }));
 
+    // Prender/apagar "llenar pantalla" de pie cambia si el video puede
+    // pintar debajo de la barra de estado (ver pantallaSegunOrientacion) —
+    // sin este worker, tocar el interruptor en el panel no volvía a pedir
+    // el modo del sistema hasta el próximo cambio de orientación.
+    _addWorker(ever(llenarPantalla, (_) {
+      if (_disposed) return;
+      pantallaSegunOrientacion(acostado: _acostadoActual);
+    }));
+
     // 自动切换下一集
     _addSubscription(player.stream.completed.listen((event) {
       // Cerrando: no se toca nada.
@@ -1888,6 +1924,16 @@ class VideoPlayerController extends GetxController with WidgetsBindingObserver {
       Timer(const Duration(milliseconds: 1200), () {
         if (_disposed || dlnaDevice.value != null) return;
         if (!imagenCongelada.value && serverFailedMessage.value.isEmpty) return;
+        // ── Se vuelve a chequear, no solo al entrar al Timer ────────────
+        //
+        // Este chequeo YA se hacía antes de programar el Timer, pero no
+        // DESPUÉS de esperarlo. En esos 1,2 s puede haber arrancado otra
+        // resolución del mismo servidor —el usuario tocó "reintentar" a
+        // mano, o el vigilante de atasco disparó la suya— y sin volver a
+        // mirar acá, este Timer abría una SEGUNDA fuente por encima de la que
+        // ya estaba en camino: dos `player.open()` casi a la vez, y un
+        // instante con el audio de las dos sonando junto. Reportado en vivo.
+        if (isWebViewActive.value || isGettingWatchData.value) return;
         logger.info('Cambio de red: se vuelve a resolver el video');
         _midStreamResumeAt = position.value;
         // El contador de reintentos se reinicia: los fallos anteriores fueron
@@ -2637,8 +2683,20 @@ class VideoPlayerController extends GetxController with WidgetsBindingObserver {
   bool _shutdownStarted = false;
   bool _routeClosing = false;
 
+  // _routeClosing entra acá y no solo _disposed: closeRoute() lo marca
+  // SINCRÓNICO, como lo primero de todo, antes de esperar la captura del
+  // fotograma y el pausado (hasta 2s cada uno) — _disposed recién se pone
+  // en true bastante después, cuando ese cierre asíncrono termina de
+  // llegar a _beginPlaybackShutdown(). En esa ventana, una resolución
+  // lenta que ya estaba en camino (getWatchData, switchServer) todavía
+  // veía _disposed en false y podía terminar llamando a player.open() —
+  // en el reproductor que se estaba cerrando. Reportado en vivo: se salió
+  // de un episodio que tardaba en cargar, se entró a otro, y el audio del
+  // primero empezó a sonar encima del segundo.
   bool _isPlaybackClosed([int? generation]) =>
-      _disposed || (generation != null && generation != _switchServerGen);
+      _disposed ||
+      _routeClosing ||
+      (generation != null && generation != _switchServerGen);
 
   // Reintento automático antes de rendirse: confirmado en vivo (Streamwish)
   // que algunos hosts asignan un servidor de backend al azar en CADA
@@ -3478,7 +3536,10 @@ class VideoPlayerController extends GetxController with WidgetsBindingObserver {
     currentTorrentFile.value = file;
     (player.platform as NativePlayer).setProperty("network-timeout", "60");
     await _ensureVideoSurfaceMounted();
-    if (_disposed) return;
+    // _isPlaybackClosed() y no _disposed a secas: este es otro punto que
+    // abre audio directo (no pasa por _tryOpenPlayer), así que necesita la
+    // misma protección contra _routeClosing. Ver el comentario largo ahí.
+    if (_isPlaybackClosed()) return;
     player.open(Media('${BTServerApi.baseApi}/torrent/$_torrenHash/$file'));
   }
 
@@ -3486,6 +3547,31 @@ class VideoPlayerController extends GetxController with WidgetsBindingObserver {
   toggleFullscreen() async {
     await WindowManager.instance.setFullScreen(!isFullScreen.value);
     isFullScreen.value = !isFullScreen.value;
+  }
+
+  /// El botón manual de pantalla completa en Android. Ver
+  /// [pantallaCompletaAndroid].
+  void alternarPantallaCompletaAndroid() {
+    if (!Platform.isAndroid) return;
+    // Cambiar el modo del sistema mientras se está abriendo una fuente
+    // nueva (isGettingWatchData) le mueve la superficie al reproductor justo
+    // en medio de esa apertura — reportado en vivo un cierre de la app
+    // entero al tocar este botón apenas arrancaba a cargar un servidor.
+    // Bloqueado mientras carga, igual que el resto de los controles que
+    // tocan la fuente (elegir capítulo, servidor): apenas termina, el botón
+    // vuelve a responder solo.
+    if (isGettingWatchData.value) return;
+    pantallaCompletaAndroid.value = !pantallaCompletaAndroid.value;
+    // Se aplica ACÁ mismo y no se espera al próximo cambio de orientación:
+    // `pantallaSegunOrientacion` ya respeta este valor, pero solo se llama
+    // desde la página en cada reconstrucción — tocar el botón tiene que
+    // esconder o mostrar las barras EN EL ACTO, no en el próximo cuadro que
+    // decida redibujarse por otro motivo.
+    if (pantallaCompletaAndroid.value) {
+      SystemChrome.setEnabledSystemUIMode(SystemUiMode.immersiveSticky);
+    } else {
+      _barrasDelSistemaVisibles();
+    }
   }
 
   /// Si ya se eligio la calidad de arranque para ESTE video.
@@ -4421,9 +4507,24 @@ class VideoPlayerController extends GetxController with WidgetsBindingObserver {
     if (proporcion >= 2.9) return true;
     // De 1:1 en adelante, con el nombre diciendolo.
     if (proporcion < 0.9) return false;
-    return RegExp(r'(^|[^a-z])vr([^a-z]|$)|180|360|sbs|3d|over.?under',
-            caseSensitive: false)
-        .hasMatch(pistas);
+    // ── Las pistas tienen que ser PALABRAS, no trozos ────────────────────
+    //
+    // Antes esto buscaba `180|360|sbs|3d` en cualquier parte del texto, y en
+    // las pistas entra la DIRECCION del video. Casi todas llevan la calidad
+    // ahi —`360p`, `720p`— y `360p` contiene `360`: el interruptor de VR
+    // aparecia en practicamente todos los videos. Reportado en Android.
+    //
+    // Lo mismo con `3d` y `sbs` dentro de un hash cualquiera: `a3d9f2` traia
+    // `3d`, y esos identificadores estan en casi todas las direcciones.
+    //
+    // Ahora cada marca tiene que ir suelta: sin letra ni numero pegado de
+    // ningun lado. Asi `360p` NO cuenta (le sigue una p) y `1360` tampoco (le
+    // precede un numero), pero `vr 360`, `_360_` o `360°` si.
+    return RegExp(
+      r'(^|[^a-z0-9])(vr|sbs|3d|180|360)([^a-z0-9]|$)'
+      r'|over.?under',
+      caseSensitive: false,
+    ).hasMatch(pistas);
   }
 
   /// El texto donde buscar esas pistas: como se llama el video y de donde sale.
@@ -4539,7 +4640,8 @@ class VideoPlayerController extends GetxController with WidgetsBindingObserver {
         await np.setProperty('vf', '');
       }
     } catch (e) {
-      logger.warning('No se pudo quitar el recorte de VR del vídeo anterior', e);
+      logger.warning(
+          'No se pudo quitar el recorte de VR del vídeo anterior', e);
     }
   }
 
@@ -5502,7 +5604,12 @@ class VideoPlayerController extends GetxController with WidgetsBindingObserver {
   }
 
   Future<bool> _tryOpenPlayer(String url, Map<String, String>? headers) async {
-    if (_disposed) return false;
+    // _isPlaybackClosed() y no _disposed a secas en toda esta función: acá
+    // es donde de verdad se abre el audio, así que es el lugar que más le
+    // importa enterarse de un cierre de ruta en curso (_routeClosing) y no
+    // solo de un dispose ya terminado. Ver el comentario largo en
+    // _isPlaybackClosed.
+    if (_isPlaybackClosed()) return false;
     if (url.startsWith('error://')) {
       logger.severe('URL de error recibida: $url');
       return false;
@@ -5510,7 +5617,7 @@ class VideoPlayerController extends GetxController with WidgetsBindingObserver {
     if (!await _isHostReachable(url)) {
       return false;
     }
-    if (_disposed) return false;
+    if (_isPlaybackClosed()) return false;
     // Montar el widget Video ANTES de abrir la fuente — sin esto mpv nunca
     // tiene una superficie real donde pintar (pantalla negra pese a que
     // audio/progreso sí avanzan) y su pipeline de render queda a medio
@@ -5520,7 +5627,7 @@ class VideoPlayerController extends GetxController with WidgetsBindingObserver {
     // reproducción de servidores (primario, switchServer, fallback directo,
     // sniffer), así que faltaba justo acá.
     await _ensureVideoSurfaceMounted();
-    if (_disposed) return false;
+    if (_isPlaybackClosed()) return false;
     // Inyectar User-Agent de browser si no viene en los headers.
     // libmpv por defecto envía "Lavf/X.X.X" que los CDNs de streaming bloquean.
     final hdrs = <String, String>{'User-Agent': _browserUA};
@@ -5547,12 +5654,35 @@ class VideoPlayerController extends GetxController with WidgetsBindingObserver {
     audiosHls.value = <PistaDeAudio>[];
     audioHlsElegido.value = -1;
     final plan = await _comoAbrir(url, headersLimpias, lecturaContinua);
-    if (_disposed) return false;
+    if (_isPlaybackClosed()) return false;
     _fuenteUrl = plan.url ?? url;
     _fuenteHeaders = hdrs;
+    // ── Se para lo anterior ANTES de abrir lo nuevo, siempre ────────────
+    //
+    // Este es el chokepoint por el que pasa TODA apertura (primaria,
+    // switchServer, fallback directo, sniffer, calidad) — así que es el
+    // lugar correcto para una red de seguridad contra el audio duplicado
+    // reportado en vivo: al perder la conexión y recuperarla (o al confirmar
+    // "continuar donde ibas" justo cuando otra resolución ya estaba en
+    // camino), dos caminos podían terminar pidiendo abrir una fuente casi a
+    // la vez, y por un instante sonaban las dos superpuestas.
+    //
+    // `player.open()` en teoría ya reemplaza la fuente anterior, pero eso pasa
+    // DEL LADO NATIVO (mpv) y de forma asíncrona; si un segundo `open()`
+    // llega antes de que el primero terminó de soltar su audio, la ventana
+    // quedaba abierta. Parar y ESPERARLO acá, del lado Dart, antes de cada
+    // apertura, cierra esa ventana pase lo que pase del otro lado.
+    //
+    // Con tope: si el reproductor está en un estado raro (la misma
+    // condición documentada en shutdownPlayback), no puede trabar la
+    // apertura siguiente por un stop() que nunca vuelve.
+    try {
+      await player.stop().timeout(const Duration(seconds: 2));
+    } catch (_) {}
+    if (_isPlaybackClosed()) return false;
     await player.open(Media(plan.url ?? url, httpHeaders: hdrs));
 
-    if (_disposed) {
+    if (_isPlaybackClosed()) {
       try {
         unawaited(player.stop());
       } catch (_) {}
@@ -7011,6 +7141,10 @@ class VideoPlayerController extends GetxController with WidgetsBindingObserver {
   // vivo. Llamarlo dos veces no molesta; no llamarlo nunca sí.
   Future<void> restoreSystemUiOnExit() async {
     if (!Platform.isAndroid) return;
+    // El botón manual no puede sobrevivir al reproductor: si quedara en true,
+    // la próxima vez que se abra otro vídeo arrancaría en pantalla completa sin
+    // que nadie lo haya tocado.
+    pantallaCompletaAndroid.value = false;
     // manual + overlays completos (no edgeToEdge): confirmado en vivo que
     // volver a edgeToEdge al salir dejaba la hora/batería "comidas" por el
     // SafeArea de la página de destino — MediaQuery no llegaba a refrescar el
@@ -7022,6 +7156,31 @@ class VideoPlayerController extends GetxController with WidgetsBindingObserver {
       SystemUiMode.manual,
       overlays: SystemUiOverlay.values,
     );
+    // Y los colores, por lo mismo que en _barrasDelSistemaVisibles: pedir el
+    // modo reinicia el estilo, así que salir del reproductor dejaba la app con
+    // los iconos del sistema en claro — invisibles con el modo claro puesto.
+    ModoDeColor.aplicarBarrasDelSistema();
+    // ── Se vuelve a pedir, más tarde ──────────────────────────────────────
+    //
+    // Reportado en vivo: al volver de un episodio, la barra flotante de
+    // Inicio/Buscar/etc quedaba tapada por la barra de navegación del
+    // teléfono —como si no supiera cuánto mide—, y se acomodaba sola apenas
+    // se mandaba el app a segundo plano y se volvía (sin reiniciarla). Eso
+    // encaja con MediaQuery quedándose con el relleno inferior viejo un
+    // rato después de este cambio de modo, igual que ya pasaba con el
+    // superior (ver el comentario de arriba) — y sin edgeToEdge de por
+    // medio para poder evitarlo del todo esta vez, porque el pedido ya es
+    // `manual`. Repetirlo una vez que la transición de salida terminó de
+    // asentarse le da a Android una segunda oportunidad de entregar el
+    // relleno real; no cuesta nada si ya estaba bien.
+    Future<void>.delayed(const Duration(milliseconds: 400), () {
+      if (!Platform.isAndroid) return;
+      SystemChrome.setEnabledSystemUIMode(
+        SystemUiMode.manual,
+        overlays: SystemUiOverlay.values,
+      );
+      ModoDeColor.aplicarBarrasDelSistema();
+    });
     // 如果是平板则不改变
     // Libera el bloqueo nativo que dejó landscapeAutoMode(forceSensor: true)
     // en onInit — pedir portraitUp/portraitDown acá bloqueaba la rotación
@@ -7049,8 +7208,27 @@ class VideoPlayerController extends GetxController with WidgetsBindingObserver {
   ///
   /// La llama la página cada vez que cambia la orientación. Es idempotente: si
   /// ya está en el modo que corresponde, pedirlo de nuevo no cuesta nada.
-  static void pantallaSegunOrientacion({required bool acostado}) {
+  void pantallaSegunOrientacion({required bool acostado}) {
     if (!Platform.isAndroid) return;
+    _acostadoActual = acostado;
+    // Reportado en vivo: girar el teléfono adentro del reproductor abría el
+    // teclado en pantalla solo, sin que nadie tocara ningún campo de texto.
+    // Acá no hay ningún TextField —los controles del reproductor son solo
+    // botones y sliders— así que no debería haber nada que lo pida nunca.
+    // El sospechoso es el propio cambio de SystemUiMode de acá abajo: en
+    // algunos aparatos, tocar el WindowInsetsController para las barras del
+    // sistema arrastra consigo el estado del teclado. Se lo esconde a
+    // mano en cada llamada —no cuesta nada si ya estaba escondido— en vez
+    // de intentar adivinar en qué aparato puntual pasa.
+    SystemChannels.textInput.invokeMethod('TextInput.hide');
+    // El botón manual de pantalla completa manda por encima de la orientación:
+    // sin esto, la página llama a este método en cada rebuild (ver
+    // `_androidSegunOrientacion`) y le pisaba el modo inmersivo apenas volvía a
+    // dibujarse un cuadro.
+    if (pantallaCompletaAndroid.value) {
+      SystemChrome.setEnabledSystemUIMode(SystemUiMode.immersiveSticky);
+      return;
+    }
     // ── Las barras del sistema NO se esconden nunca ─────────────────────────
     //
     // Acostado se pedía modo inmersivo: el vídeo ocupaba todo y desaparecían la
@@ -7069,6 +7247,25 @@ class VideoPlayerController extends GetxController with WidgetsBindingObserver {
     // diferenciar, pero hoy las dos ramas piden lo mismo.
     if (acostado) {
       _barrasDelSistemaVisibles();
+      return;
+    }
+    // ── De pie CON "llenar pantalla": el vídeo pinta hasta la cámara ──────
+    //
+    // Pedido a propósito, sabiendo el riesgo: `edgeToEdge` es lo que se sacó
+    // en su momento porque el vídeo tapaba la hora y la batería (ver el
+    // comentario de la rama de abajo). Acá se vuelve a pedir, pero SOLO
+    // mientras "llenar pantalla" está prendido — es una decisión explícita
+    // de quien la activa, no el comportamiento por defecto. Apagar el
+    // interruptor, cambiar a acostado o salir del reproductor vuelven todos
+    // al modo de siempre (ver el worker de llenarPantalla en onInit y
+    // restoreSystemUiOnExit), así que el riesgo viejo queda acotado a este
+    // interruptor puntual.
+    if (llenarPantalla.value) {
+      SystemChrome.setEnabledSystemUIMode(SystemUiMode.edgeToEdge);
+      // El cambio de modo reinicia el estilo de las barras — mismo motivo
+      // que en _barrasDelSistemaVisibles, con los iconos fijos en claros
+      // (ver _iconosDelSistemaParaVideo) y no según el modo de la app.
+      _iconosDelSistemaParaVideo();
       return;
     }
     // ── De pie: `manual` con las dos barras, NO `edgeToEdge` ──────────────
@@ -7100,6 +7297,35 @@ class VideoPlayerController extends GetxController with WidgetsBindingObserver {
       SystemUiMode.manual,
       overlays: SystemUiOverlay.values,
     );
+    // ── Y SUS COLORES, que el cambio de modo se lleva puestos ──────────────
+    //
+    // `setEnabledSystemUIMode` reinicia el estilo de las barras a los valores
+    // por defecto de Android, que son iconos CLAROS.
+    //
+    // Pedir el modo y no volver a pedir el estilo era el agujero: son dos
+    // cosas separadas y la primera pisa a la segunda.
+    _iconosDelSistemaParaVideo();
+  }
+
+  /// Los iconos del sistema, siempre CLAROS mientras se está en el
+  /// reproductor — no según el modo claro/oscuro de la app
+  /// (ModoDeColor.aplicarBarrasDelSistema, que usa el resto de la app).
+  ///
+  /// Ese otro tiene sentido en una pantalla con un fondo fijo: elige iconos
+  /// oscuros si el fondo de la app es claro. Acá el fondo real es el VIDEO,
+  /// que no tiene nada que ver con si la app está en modo claro u oscuro —
+  /// con modo claro puesto y una escena oscura (lo más común), los iconos
+  /// oscuros que elegiría el otro quedaban invisibles contra el video.
+  /// Reportado en vivo. Claros siempre es lo seguro acá, y es lo mismo que
+  /// hace cualquier reproductor de video conocido.
+  static void _iconosDelSistemaParaVideo() {
+    SystemChrome.setSystemUIOverlayStyle(const SystemUiOverlayStyle(
+      statusBarColor: Colors.transparent,
+      statusBarIconBrightness: Brightness.light,
+      statusBarBrightness: Brightness.dark,
+      systemNavigationBarColor: Colors.transparent,
+      systemNavigationBarIconBrightness: Brightness.light,
+    ));
   }
 
   @override

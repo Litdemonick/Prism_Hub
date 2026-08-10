@@ -827,7 +827,7 @@ class _CarruselAndroid extends StatefulWidget {
 }
 
 class _CarruselAndroidState extends State<_CarruselAndroid>
-    with SingleTickerProviderStateMixin {
+    with TickerProviderStateMixin {
   /// Dónde está el carrusel, en índices y con decimales.
   ///
   /// 3.0 es «la cuarta, centrada y grande»; 3.5 es «a mitad de camino entre la
@@ -868,9 +868,64 @@ class _CarruselAndroidState extends State<_CarruselAndroid>
 
   static const _aire = 9.0;
 
+  /// ── La pista de «esto se desliza» ────────────────────────────────────
+  ///
+  /// Al abrir el Home, el acordeón arranca en la primera tarjeta: a su
+  /// izquierda no hay nada, media pantalla en negro. No está roto —es el
+  /// principio de la fila— pero se lee como un hueco, y nada dice que eso se
+  /// mueve con el dedo (o, en escritorio, que se arrastra con el mouse).
+  ///
+  /// Una flecha con un vaivén corto, en ESE hueco (no centrada sobre la
+  /// tarjeta: ahí no hay nada vacío que señalar). No es un aviso de una
+  /// sola vez — vuelve a aparecer cada vez que se está de nuevo en el
+  /// principio, y se apaga apenas se empieza a mover, sea cual sea la
+  /// dirección. Así alguien que entra, mira, se va y vuelve al principio
+  /// (el gesto más común) la sigue viendo, en vez de que se acuerde para
+  /// siempre después del primer arrastre de toda la sesión.
+  ///
+  /// En escritorio, mientras está puesta, tampoco se dibuja la flecha de
+  /// clic hacia la izquierda: al principio esa flecha no tiene adónde
+  /// volver (no hay nada a la izquierda de la primera tarjeta), así que
+  /// mostrarla ahí era un botón que no hacía nada.
+  late final AnimationController _pista = AnimationController(
+    vsync: this,
+    duration: const Duration(milliseconds: 1100),
+  );
+
+  /// Se recalcula sola con la posición: no hay "ya se mostró, no vuelve
+  /// más". _p < 0.5 en vez de == 0 porque _p es continuo mientras arrastra
+  /// o anima — sin el margen, la pista parpadearía prendida y apagada en
+  /// cada cuadro de vuelta al principio.
+  ///
+  /// Atada a _p y nada más —ni a "hay un click en curso"—: en escritorio,
+  /// un click sobre la tarjeta (sin llegar a arrastrar de verdad) también
+  /// dispara onHorizontalDragStart, y con un flag propio de "arrastrando"
+  /// la pista se apagaba con solo tocar, aunque _p no se hubiera movido un
+  /// píxel. Solo cuando la posición cambia de verdad hay algo que ocultar.
+  bool get _pistaVisible => _p < 0.5;
+
+  /// Prende o apaga el vaivén según corresponda ahora. Se llama después de
+  /// cualquier cambio que pueda mover _pistaVisible (posición o arrastre):
+  /// no tickear de más cuando nadie la ve es lo que importa, así que esto
+  /// es barato de llamar de más.
+  void _actualizarPista() {
+    if (_pistaVisible) {
+      // reverse:true, no un repeat a secas: sin reverse, _pista.value pasa
+      // de 1.0 a 0.0 de un salto al cerrar cada vuelta, y con eso el ícono
+      // (que sigue ese valor con Curves.easeInOut) saltaba en seco de
+      // vuelta al centro en vez de volver suave. Con reverse la MISMA
+      // curva de ida se recorre de vuelta, así que la animación entera
+      // queda fluida en las dos direcciones.
+      if (!_pista.isAnimating) _pista.repeat(reverse: true);
+    } else {
+      _pista.stop();
+    }
+  }
+
   @override
   void initState() {
     super.initState();
+    _actualizarPista();
     _anim.addListener(() {
       // Tocar otra zona mientras el acordeón se está acomodando desmonta este
       // widget con la animación en curso. Sin esta guarda, el oyente llama a
@@ -879,12 +934,14 @@ class _CarruselAndroidState extends State<_CarruselAndroid>
       final v = _viaje;
       if (v == null) return;
       setState(() => _p = v.value);
+      _actualizarPista();
     });
   }
 
   @override
   void dispose() {
     _anim.dispose();
+    _pista.dispose();
     super.dispose();
   }
 
@@ -1432,12 +1489,15 @@ class _CarruselAndroidState extends State<_CarruselAndroid>
               height: m.alto,
               child: GestureDetector(
                 behavior: HitTestBehavior.opaque,
-                onHorizontalDragStart: (_) => _anim.stop(),
+                onHorizontalDragStart: (_) {
+                  _anim.stop();
+                },
                 onHorizontalDragUpdate: (d) {
                   final paso = (m.ancho + m.anchoChico) / 2 + _aire;
                   setState(() {
                     _p = (_p - (d.primaryDelta ?? 0) / paso).clamp(0.0, ultimo);
                   });
+                  _actualizarPista();
                 },
                 onHorizontalDragEnd: (d) {
                   final v = d.primaryVelocity ?? 0;
@@ -1501,21 +1561,27 @@ class _CarruselAndroidState extends State<_CarruselAndroid>
                     // oscura desaparece y sobre una clara tampoco se lee. El
                     // disco la separa del fondo sea cual sea la portada.
                     if (!_esTactil) ...[
-                      Positioned(
-                        left: 8,
-                        top: 0,
-                        bottom: 0,
-                        child: Center(
-                          child: _discoDeFlecha(
-                            _FlechaDeFila(
-                              icono: Icons.chevron_left_rounded,
-                              onTap: () => _irA(
-                                  (_p.roundToDouble() - 1).clamp(0.0, ultimo),
-                                  grupos),
+                      // Mientras la pista está puesta, esta flecha no va: al
+                      // principio no hay nada a la izquierda de la primera
+                      // tarjeta, así que un botón "volver" ahí no hacía nada.
+                      // La pista ocupa este mismo lugar hasta el primer
+                      // arrastre (ver más abajo); recién ahí vuelve.
+                      if (!_pistaVisible)
+                        Positioned(
+                          left: 8,
+                          top: 0,
+                          bottom: 0,
+                          child: Center(
+                            child: _discoDeFlecha(
+                              _FlechaDeFila(
+                                icono: Icons.chevron_left_rounded,
+                                onTap: () => _irA(
+                                    (_p.roundToDouble() - 1).clamp(0.0, ultimo),
+                                    grupos),
+                              ),
                             ),
                           ),
                         ),
-                      ),
                       Positioned(
                         right: 8,
                         top: 0,
@@ -1541,6 +1607,79 @@ class _CarruselAndroidState extends State<_CarruselAndroid>
                         ),
                       ),
                     ],
+                    // ── La pista de «esto se desliza» ──────────────────────
+                    //
+                    // En el HUECO vacío a la izquierda de la tarjeta en
+                    // foco, centrada en ESE espacio y no en el acordeón
+                    // entero —ahí, sobre la tarjeta, no hay nada vacío que
+                    // señalar—. Se calcula del ancho real del hueco
+                    // (caja.maxWidth - m.ancho, la tarjeta grande), no de
+                    // una fracción fija: así cae en el lugar correcto sea
+                    // cual sea el tamaño de pantalla o la proporción de la
+                    // tarjeta en ese aparato.
+                    //
+                    // En escritorio, mientras está puesta, tampoco se dibuja
+                    // la flecha de clic hacia la izquierda (ver arriba) — las
+                    // dos a la vez serían dos avisos distintos diciendo lo
+                    // mismo.
+                    //
+                    // Se queda montada siempre (no solo mientras
+                    // _pistaVisible) para que el desvanecido de
+                    // AnimatedOpacity tenga algo que animar en vez de
+                    // desaparecer de un salto.
+                    Builder(builder: (context) {
+                      final huecoAncho = ((caja.maxWidth - m.ancho) / 2)
+                          .clamp(0.0, caja.maxWidth);
+                      final centroHueco =
+                          (huecoAncho / 2).clamp(16.0, caja.maxWidth - 16);
+                      // Un poco más grande que antes, y por tramo de ancho:
+                      // lo mismo que ya usa _proporcionChicaDe más arriba,
+                      // así el ícono se nota en un teléfono de pie, en uno
+                      // acostado, en una tablet y en escritorio, sin quedar
+                      // ni diminuto ni fuera de proporción en ninguno.
+                      final tamIcono = Ancho.de(context).elegir(
+                        compacto: 26.0,
+                        medio: 30.0,
+                        amplio: 34.0,
+                        enorme: 36.0,
+                      );
+                      return Positioned(
+                        left: centroHueco - (tamIcono + 12) / 2,
+                        top: 0,
+                        bottom: 0,
+                        child: IgnorePointer(
+                          child: Center(
+                            child: AnimatedOpacity(
+                              opacity: _pistaVisible ? 1 : 0,
+                              duration: const Duration(milliseconds: 450),
+                              curve: Curves.easeOut,
+                              child: AnimatedBuilder(
+                                animation: _pista,
+                                builder: (context, child) =>
+                                    Transform.translate(
+                                  // El vaivén: como una manito empujando la
+                                  // tarjeta hacia la izquierda y volviendo,
+                                  // invitando a seguirla.
+                                  offset: Offset(
+                                    -Curves.easeInOut.transform(_pista.value) *
+                                        8,
+                                    0,
+                                  ),
+                                  child: child,
+                                ),
+                                child: _discoDeFlecha(
+                                  Icon(
+                                    Icons.swipe_left_alt_rounded,
+                                    color: Colors.white,
+                                    size: tamIcono,
+                                  ),
+                                ),
+                              ),
+                            ),
+                          ),
+                        ),
+                      );
+                    }),
                   ],
                 ),
               ),
@@ -1952,7 +2091,15 @@ class _TarjetaGrande extends StatelessWidget {
               ? Border.all(
                   color: HomeTheme.sobrePortada.withValues(alpha: 0.11))
               : null,
-          boxShadow: _esTactil
+          // ── Y la sombra, tampoco con el modo claro puesto ────────────────
+          //
+          // Es negra al 45% con 20 de desenfoque: sobre el fondo oscuro
+          // cumple —despega la portada del fondo— pero sobre uno claro no se
+          // lee como profundidad sino como un halo gris alrededor de cada
+          // tarjeta, más marcado abajo por el corrimiento de 8px. Reportado
+          // en vivo con captura: "atrás de las cards". En claro la portada ya
+          // resalta sola contra el fondo, así que no hace falta nada.
+          boxShadow: _esTactil && !ModoDeColor.claro
               ? const [
                   BoxShadow(
                     color: Color(0x73000000),
@@ -1979,7 +2126,12 @@ class _TarjetaGrande extends StatelessWidget {
                 // cargar se ve igual que una rota; con el brillo se entiende
                 // que está en camino.
                 placeholder: const Esqueleto(radio: 20),
-                fallback: ColoredBox(color: HomeTheme.cardSurface),
+                // Sin fallback propio: sin portada, CacheNetWorkImagePic ya
+                // cae sola en el arte de marca (carddefaultoffline.png). Acá
+                // había una caja lisa del color de fondo que la tapaba —la
+                // tarjeta grande del acordeón quedaba en un rectángulo oscuro
+                // sin nada, como cualquier otra tarjeta rota, en vez de la
+                // misma imagen de respaldo que ya usa el resto del app.
               ),
               // ── El velo va SOLO donde hay texto ────────────────────────
               //
@@ -2082,7 +2234,8 @@ class _TarjetaGrande extends StatelessWidget {
                               // solo donde hay letras.
                               shadows: const [
                                 Shadow(blurRadius: 3, color: Color(0xE6000000)),
-                                Shadow(blurRadius: 12, color: Color(0xB3000000)),
+                                Shadow(
+                                    blurRadius: 12, color: Color(0xB3000000)),
                               ],
                             ),
                           ),
@@ -2098,7 +2251,8 @@ class _TarjetaGrande extends StatelessWidget {
                                   .withValues(alpha: 0.88),
                               shadows: const [
                                 Shadow(blurRadius: 3, color: Color(0xE6000000)),
-                                Shadow(blurRadius: 10, color: Color(0x99000000)),
+                                Shadow(
+                                    blurRadius: 10, color: Color(0x99000000)),
                               ],
                             ),
                           ),
@@ -2256,8 +2410,8 @@ class _FilaAndroidState extends State<_FilaAndroid> {
                     etiqueta: widget.c.etiquetaDe(widget.fila),
                   ),
                   child: Padding(
-                    padding: const EdgeInsets.symmetric(
-                        horizontal: 4, vertical: 2),
+                    padding:
+                        const EdgeInsets.symmetric(horizontal: 4, vertical: 2),
                     child: Icon(
                       Icons.chevron_right_rounded,
                       size: 22,

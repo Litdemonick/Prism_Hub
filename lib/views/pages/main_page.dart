@@ -16,6 +16,7 @@ import 'package:prismhub/views/pages/settings/settings_page.dart';
 import 'package:prismhub/router/router.dart';
 import 'package:prismhub/utils/application.dart';
 import 'package:prismhub/utils/i18n.dart';
+import 'package:prismhub/utils/modo_app.dart';
 import 'package:prismhub/utils/prismhub_storage.dart';
 import 'package:prismhub/views/widgets/window_caption_buttons.dart';
 import 'package:window_manager/window_manager.dart';
@@ -112,9 +113,17 @@ class _DesktopMainPageState extends State<DesktopMainPage> with WindowListener {
         child: Row(
           mainAxisSize: MainAxisSize.min,
           children: [
-            const Text(
+            // Con el color puesto, no heredado.
+            //
+            // Sin color caía en la tipografía de Fluent, que trae la suya según
+            // SU tema. Con el modo claro quedaba blanco sobre la barra clara.
+            Text(
               'PrismHub',
-              style: TextStyle(fontSize: 20.0, fontWeight: FontWeight.bold),
+              style: TextStyle(
+                fontSize: 20.0,
+                fontWeight: FontWeight.bold,
+                color: HomeTheme.textPrimary,
+              ),
             ),
             // El nombre de la app se queda: es lo que identifica la ventana en
             // la barra de tareas y en la captura. La zona va al lado, más
@@ -122,10 +131,12 @@ class _DesktopMainPageState extends State<DesktopMainPage> with WindowListener {
             // título compitiendo con el primero.
             if (zona.isNotEmpty) ...[
               const SizedBox(width: 10),
+              // Los dos con la paleta del modo, no con blanco a mano: en claro
+              // el separador desaparecía y la zona quedaba ilegible.
               Container(
                 width: 1,
                 height: 16,
-                color: Colors.white.withValues(alpha: 0.22),
+                color: HomeTheme.border,
               ),
               const SizedBox(width: 10),
               Text(
@@ -133,7 +144,7 @@ class _DesktopMainPageState extends State<DesktopMainPage> with WindowListener {
                 style: TextStyle(
                   fontSize: 15.5,
                   fontWeight: FontWeight.w500,
-                  color: Colors.white.withValues(alpha: 0.72),
+                  color: HomeTheme.textMuted,
                 ),
               ),
             ],
@@ -231,6 +242,28 @@ class _DesktopMainPageState extends State<DesktopMainPage> with WindowListener {
             onTap: () {
               router.go('/settings');
             },
+          ),
+          // La versión, al pie de todo. Ver DistintivoDeVersion.
+          //
+          // Con el riel plegado —que es como arranca— no entra una pastilla con
+          // texto, así que ahí no se dibuja: quedaría cortada contra el borde.
+          // Al abrirlo aparece.
+          fluent.PaneItemWidgetAdapter(
+            child: Builder(
+              builder: (context) {
+                final abierto = fluent.NavigationView.of(context)
+                        .displayMode ==
+                    fluent.PaneDisplayMode.open;
+                if (!abierto) return const SizedBox.shrink();
+                return const Padding(
+                  padding: EdgeInsets.fromLTRB(12, 10, 12, 6),
+                  child: Align(
+                    alignment: Alignment.centerLeft,
+                    child: DistintivoDeVersion(),
+                  ),
+                );
+              },
+            ),
           ),
         ],
         items: [
@@ -1326,6 +1359,55 @@ class _TransicionDeZonaState extends State<_TransicionDeZona>
           child: hijo,
         );
       },
+    );
+  }
+}
+
+/// La versión instalada, en una pastilla chica que dice «beta».
+///
+/// ── Por qué a la vista y no escondida en Ajustes ────────────────────────
+///
+/// Porque el app todavía es beta y se publica seguido: saber qué versión se
+/// está usando es lo primero que hace falta para reportar algo, y hasta ahora
+/// había que ir a buscarla adentro de Ajustes.
+///
+/// Va ABAJO y chica a propósito: es un dato de referencia, no algo que haya que
+/// leer todo el tiempo. Arriba, al lado del nombre, competía con el título.
+///
+/// La misma pieza en las dos plataformas: en escritorio al pie del riel, en el
+/// teléfono al pie de Ajustes.
+///
+/// En compilaciones de prueba suma su distintivo (`dev`, `debug`), que ya
+/// resuelve [ModoApp.versionConModo] — así se distingue la copia instalada de
+/// la de pruebas, que conviven en el mismo equipo.
+class DistintivoDeVersion extends StatelessWidget {
+  const DistintivoDeVersion({super.key});
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+      decoration: BoxDecoration(
+        // Apenas teñida con el acento: se lee como una etiqueta y no como un
+        // botón. Un relleno macizo acá abajo llamaría más la atención que el
+        // contenido.
+        color: HomeTheme.accentPink.withValues(alpha: 0.14),
+        borderRadius: BorderRadius.circular(999),
+        border: Border.all(color: HomeTheme.accentPink.withValues(alpha: 0.32)),
+      ),
+      child: Text(
+        // La versión sale del paquete instalado, no de una constante escrita a
+        // mano: así no se puede desincronizar de lo que el usuario tiene.
+        'beta · ${ModoApp.versionConModo(packageInfo.version)}',
+        maxLines: 1,
+        overflow: TextOverflow.ellipsis,
+        style: TextStyle(
+          fontSize: 10.5,
+          fontWeight: FontWeight.w700,
+          letterSpacing: 0.2,
+          color: HomeTheme.accentPink,
+        ),
+      ),
     );
   }
 }

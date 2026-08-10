@@ -672,13 +672,21 @@ class _HomeMediaCardState extends State<HomeMediaCard> {
                               end: Alignment.bottomRight,
                               colors: gradient,
                             ),
-                      boxShadow: const [
-                        BoxShadow(
-                          color: Color(0x40000000),
-                          blurRadius: 8,
-                          offset: Offset(0, 4),
-                        ),
-                      ],
+                      // Sin sombra con el modo claro puesto, por lo mismo que
+                      // en las tarjetas del acordeón (ver _TarjetaGrande en
+                      // home_page_android.dart): es negra y sobre un fondo
+                      // claro no se lee como profundidad sino como un halo
+                      // gris alrededor de cada portada. Sobre el fondo oscuro
+                      // sí cumple, así que ahí se queda igual.
+                      boxShadow: ModoDeColor.claro
+                          ? null
+                          : const [
+                              BoxShadow(
+                                color: Color(0x40000000),
+                                blurRadius: 8,
+                                offset: Offset(0, 4),
+                              ),
+                            ],
                     ),
                     child: Stack(
                       fit: StackFit.expand,
@@ -935,8 +943,8 @@ class _WideMenuButton extends StatelessWidget {
                     const SizedBox(width: 10),
                     Text(
                       'home.view-detail'.i18n,
-                      style: TextStyle(
-                          color: HomeTheme.textPrimary, fontSize: 13),
+                      style:
+                          TextStyle(color: HomeTheme.textPrimary, fontSize: 13),
                     ),
                   ],
                 ),
@@ -962,8 +970,8 @@ class _WideMenuButton extends StatelessWidget {
                       esFavorito!
                           ? 'home.remove-favorite'.i18n
                           : 'home.add-favorite'.i18n,
-                      style: TextStyle(
-                          color: HomeTheme.textPrimary, fontSize: 13),
+                      style:
+                          TextStyle(color: HomeTheme.textPrimary, fontSize: 13),
                     ),
                   ],
                 ),
@@ -1018,8 +1026,8 @@ class _WideMenuButton extends StatelessWidget {
                     const SizedBox(width: 10),
                     Text(
                       hidden ? 'home.show-card'.i18n : 'home.hide-card'.i18n,
-                      style: TextStyle(
-                          color: HomeTheme.textPrimary, fontSize: 13),
+                      style:
+                          TextStyle(color: HomeTheme.textPrimary, fontSize: 13),
                     ),
                   ],
                 ),

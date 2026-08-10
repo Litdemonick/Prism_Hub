@@ -1,3 +1,5 @@
+import 'dart:io';
+
 import 'package:fluent_ui/fluent_ui.dart';
 import 'package:flutter/scheduler.dart';
 import 'package:flutter/services.dart';
@@ -9,6 +11,7 @@ import 'package:prismhub/data/services/database_service.dart';
 import 'package:scrollable_positioned_list/scrollable_positioned_list.dart';
 import 'package:prismhub/utils/log.dart';
 import 'package:prismhub/utils/prismhub_storage.dart';
+import 'package:prismhub/views/widgets/home/home_theme.dart';
 
 class ComicController extends ReaderController<ExtensionMangaWatch> {
   ComicController({
@@ -33,6 +36,68 @@ class ComicController extends ReaderController<ExtensionMangaWatch> {
   final readType = MangaReadMode.webTonn.obs;
 
   bool get isPaged => readType.value != MangaReadMode.webTonn;
+
+  /// Llenar la pantalla con la página, recortando lo que sobre en vez de
+  /// dejarla entera con franjas — mismo concepto que
+  /// VideoPlayerController.llenarPantalla, para el lector.
+  ///
+  /// Solo cambia algo en modo paginado (manga/manhwa página a página): en
+  /// la cascada las imágenes ya llenan el ancho por diseño (BoxFit.fitWidth,
+  /// ver ComicReaderContent), así que no hay franjas que recortar ahí.
+  ///
+  /// Por sesión y no guardado por título, mismo criterio que el video: es
+  /// una decisión de "esta página puntual", no una preferencia permanente.
+  final llenarPantalla = false.obs;
+
+  /// Si se está leyendo "alejado" (la columna angostada, que hace las
+  /// páginas más chicas para ver más de un vistazo). Lo alterna el doble
+  /// toque.
+  ///
+  /// Vive ACÁ y no adentro de cada página a propósito. Antes cada página del
+  /// modo paginado se guardaba el suyo, así que alejabas en la página 20 y
+  /// la 21 aparecía otra vez grande — un salto raro de tamaño con solo pasar
+  /// de página, reportado en vivo. Siendo uno solo para todo el lector, el
+  /// tamaño con el que venías leyendo se mantiene al cambiar de página, al
+  /// cambiar de capítulo y al pasar de cascada a paginado.
+  ///
+  /// Por sesión, igual que llenarPantalla: no se guarda por título.
+  final alejado = false.obs;
+
+  /// Barras del sistema según "llenar pantalla".
+  ///
+  /// `immersiveSticky` y NO `edgeToEdge`: con edgeToEdge la página sí dibuja
+  /// hasta los bordes, pero la barra de estado y la de navegación SIGUEN
+  /// VISIBLES encima — reportado en vivo con captura, arriba y abajo se
+  /// seguían viendo. immersiveSticky es lo que usa el botón de pantalla
+  /// completa del reproductor de vídeo (ver
+  /// VideoPlayerController.alternarPantallaCompletaAndroid), donde esto ya
+  /// está funcionando bien: las esconde de verdad y vuelven solas si se
+  /// desliza desde el borde, sin sacar al lector del modo.
+  ///
+  /// Apagado vuelve a `manual` con las dos barras reservando su espacio, que
+  /// es como está siempre el resto de la app.
+  /// ── Y SUS COLORES, que el cambio de modo se lleva puestos ──────────────
+  ///
+  /// `setEnabledSystemUIMode` reinicia el estilo de las barras a los valores
+  /// por defecto de Android, que son iconos CLAROS. Pedir el modo y no volver
+  /// a pedir el estilo era el agujero: con el modo claro puesto, los iconos
+  /// quedaban blancos sobre una barra casi blanca y la de arriba se veía
+  /// vacía, como si el lector se hubiera comido esa franja. En oscuro no se
+  /// notaba porque ahí los iconos claros son justo los que van.
+  ///
+  /// Es la misma trampa que ya estaba resuelta en el reproductor de vídeo
+  /// (ver VideoPlayerController._barrasDelSistemaVisibles); acá faltaba.
+  void _actualizarPantallaCompletaAndroid(bool activo) {
+    if (activo) {
+      SystemChrome.setEnabledSystemUIMode(SystemUiMode.immersiveSticky);
+    } else {
+      SystemChrome.setEnabledSystemUIMode(
+        SystemUiMode.manual,
+        overlays: SystemUiOverlay.values,
+      );
+    }
+    ModoDeColor.aplicarBarrasDelSistema();
+  }
 
   // UNO solo para toda la vida del lector. Antes se recreaba en cada cambio
   // de modo/capítulo para poder fijar initialPage, y eso traía un bug feo:
@@ -173,6 +238,13 @@ class ComicController extends ReaderController<ExtensionMangaWatch> {
     if (alineacionGuardada == alineacionIzquierda ||
         alineacionGuardada == alineacionDerecha) {
       stripAlign.value = alineacionGuardada as String;
+    }
+
+    // Prender/apagar "llenar pantalla" también decide si la página puede
+    // pintar debajo de la barra de estado y la de navegación — mismo
+    // concepto que el worker de llenarPantalla en VideoPlayerController.
+    if (Platform.isAndroid) {
+      addWorker(ever(llenarPantalla, _actualizarPantallaCompletaAndroid));
     }
 
     // 如果切换章节，重置当前页码
@@ -360,6 +432,21 @@ class ComicController extends ReaderController<ExtensionMangaWatch> {
 
   @override
   void onClose() {
+    // Si se salió con "llenar pantalla" prendido, las barras quedaron en
+    // edgeToEdge — sin esto, la pantalla de atrás se quedaba con la hora y
+    // la batería comidas hasta reiniciar la app (mismo síntoma que ya se
+    // vio y resolvió en el reproductor de video).
+    if (Platform.isAndroid && llenarPantalla.value) {
+      SystemChrome.setEnabledSystemUIMode(
+        SystemUiMode.manual,
+        overlays: SystemUiOverlay.values,
+      );
+      // Y el estilo, por lo mismo que en
+      // _actualizarPantallaCompletaAndroid: pedir el modo lo reinicia, y sin
+      // esto se salía del lector con los iconos del sistema en claro —
+      // invisibles con el modo claro puesto.
+      ModoDeColor.aplicarBarrasDelSistema();
+    }
     pageController.dispose();
     saveProgressNow();
     if (PrismHubStorage.getSetting(SettingKey.autoTracking) == true &&

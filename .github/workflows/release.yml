@@ -489,3 +489,37 @@ jobs:
           # "What's Changed" real a partir de los commits desde el tag
           # anterior, que al menos es especifico de esta version; las notas
           # redactadas se publican encima despues (gh release edit).
+
+  # ── Las notas redactadas, publicadas por la propia CI ────────────────────
+  #
+  # Antes este paso se hacia A MANO con `gh release edit` DESPUES de que
+  # terminara todo, y habia que hacerlo si o si: los tres jobs de arriba
+  # publican con generateReleaseNotes, o sea que el cuerpo del release queda
+  # con el "What's Changed" automatico de GitHub y NADA escrito. Y el aviso de
+  # actualizacion dentro de la app descuenta lo que GitHub agrega solo: si no
+  # quedan al menos 15 caracteres escritos a mano, NO le avisa a nadie que hay
+  # version nueva (ver checkUpdate en lib/utils/application.dart).
+  #
+  # O sea que entre que terminaba la CI y que alguien se acordaba de correr el
+  # comando, el release estaba publicado y mudo. Ahora lo hace la CI sola, al
+  # final, leyendo RELEASE_NOTES.md del propio repo.
+  #
+  # needs: espera a los tres, asi el cuerpo se escribe DESPUES de que cada job
+  # haya subido lo suyo y ninguno lo pise despues.
+  publicar-notas:
+    needs:
+      - build-and-release-android
+      - build-and-release-linux
+      - build-and-release-windows
+    if: github.event_name == 'push'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: main
+      - name: Publicar las notas escritas
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: gh release edit "${{ github.ref_name }}" --notes-file RELEASE_NOTES.md

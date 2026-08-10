@@ -4,6 +4,7 @@ import 'package:get/get.dart';
 import 'package:prismhub/controllers/watch/novel_controller.dart';
 import 'package:prismhub/utils/i18n.dart';
 import 'package:prismhub/views/widgets/platform_widget.dart';
+import 'package:prismhub/views/widgets/watch/boton_llenar_pantalla.dart';
 
 class NovelReaderSettings extends StatefulWidget {
   const NovelReaderSettings(this.tag, {super.key});
@@ -23,7 +24,20 @@ class _NovelReaderSettingsState extends State<NovelReaderSettings> {
         crossAxisAlignment: CrossAxisAlignment.start,
         mainAxisSize: MainAxisSize.min,
         children: [
-          Text("novel-settings.font-size".i18n),
+          Row(
+            children: [
+              Expanded(child: Text("novel-settings.font-size".i18n)),
+              // Solo Android, igual que en el lector de cómics: en
+              // escritorio no va este botón.
+              Obx(
+                () => BotonLlenarPantalla(
+                  activo: _c.llenarPantalla.value,
+                  onTap: () =>
+                      _c.llenarPantalla.value = !_c.llenarPantalla.value,
+                ),
+              ),
+            ],
+          ),
           const SizedBox(height: 16),
           Obx(
             () => Slider(

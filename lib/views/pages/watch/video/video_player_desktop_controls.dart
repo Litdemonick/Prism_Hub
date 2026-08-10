@@ -163,8 +163,7 @@ class _VideoPlayerDesktopControlsState
         // quedaba con el tema claro/celeste por defecto de toda la app en
         // vez del oscuro+morado del reproductor.
         data: FluentTheme.of(context).copyWith(
-          accentColor:
-              AccentColor.swatch({'normal': HomeTheme.oscuroAcento}),
+          accentColor: AccentColor.swatch({'normal': HomeTheme.oscuroAcento}),
         ),
         child: ContentDialog(
           title: const Text('¡Un momento!'),
@@ -520,7 +519,8 @@ class _VideoPlayerDesktopControlsState
                                 color: HomeTheme.oscuroSuperficie
                                     .withValues(alpha: 0.92),
                                 borderRadius: BorderRadius.circular(16),
-                                border: Border.all(color: HomeTheme.oscuroBorde),
+                                border:
+                                    Border.all(color: HomeTheme.oscuroBorde),
                               ),
                               child: Column(
                                 mainAxisSize: MainAxisSize.min,
@@ -640,37 +640,42 @@ class _VideoPlayerDesktopControlsState
                       child: AnimatedOpacity(
                         opacity: _showControls ? 1 : 0,
                         duration: const Duration(milliseconds: 200),
-                        child: Column(
-                          children: [
-                            // Obx acá: _c.index.value se leía suelto en el
-                            // build de este State (no reactivo), así que el
-                            // título arriba solo se actualizaba cuando algo
-                            // más disparaba un rebuild — se sentía "atrasado"
-                            // al cambiar de capítulo. Envuelto en Obx, sigue
-                            // a index.value al toque.
-                            // Con el indice comprobado: una ficha sin episodios
-                            // —una entrada del historial cuya pagina ya no
-                            // existe— abre el reproductor con la lista vacia, y
-                            // sin esto reventaba con un RangeError encima del
-                            // video, tapando el aviso de que habia pasado.
-                            Obx(() {
-                              final lista = _c.playList;
-                              final i = _c.index.value;
-                              return _Header(
-                                title: _c.title,
-                                episode: (i >= 0 && i < lista.length)
-                                    ? lista[i].name
-                                    : '',
-                                onClose: () =>
-                                    unawaited(_c.closeRoute(context)),
-                              );
-                            }),
-                            // selector de servidores — pestañas arriba, no un
-                            // botón escondido abajo (a pedido del usuario, y
-                            // para que se vea de una cuál es el
-                            // recomendado/nativo).
-                            _ServerTabBar(controller: _c),
-                          ],
+                        // Mismo Listener transparente que el footer.
+                        child: Listener(
+                          onPointerDown: (_) => _resetHideTimer(),
+                          onPointerMove: (_) => _resetHideTimer(),
+                          child: Column(
+                            children: [
+                              // Obx acá: _c.index.value se leía suelto en el
+                              // build de este State (no reactivo), así que el
+                              // título arriba solo se actualizaba cuando algo
+                              // más disparaba un rebuild — se sentía "atrasado"
+                              // al cambiar de capítulo. Envuelto en Obx, sigue
+                              // a index.value al toque.
+                              // Con el indice comprobado: una ficha sin episodios
+                              // —una entrada del historial cuya pagina ya no
+                              // existe— abre el reproductor con la lista vacia, y
+                              // sin esto reventaba con un RangeError encima del
+                              // video, tapando el aviso de que habia pasado.
+                              Obx(() {
+                                final lista = _c.playList;
+                                final i = _c.index.value;
+                                return _Header(
+                                  title: _c.title,
+                                  episode: (i >= 0 && i < lista.length)
+                                      ? lista[i].name
+                                      : '',
+                                  onClose: () =>
+                                      unawaited(_c.closeRoute(context)),
+                                );
+                              }),
+                              // selector de servidores — pestañas arriba, no un
+                              // botón escondido abajo (a pedido del usuario, y
+                              // para que se vea de una cuál es el
+                              // recomendado/nativo).
+                              _ServerTabBar(controller: _c),
+                            ],
+                          ),
                         ),
                       ),
                     ),
@@ -802,7 +807,17 @@ class _VideoPlayerDesktopControlsState
                       child: AnimatedOpacity(
                         opacity: _showControls ? 1 : 0,
                         duration: const Duration(milliseconds: 200),
-                        child: _Footer(controller: _c),
+                        // Listener transparente (deferToChild por defecto:
+                        // no compite por el gesto, solo escucha) — arrastrar
+                        // la barra de progreso o la de volumen no genera
+                        // eventos de hover (el mouse tiene el botón
+                        // apretado), así que sin esto el timer de 2s podía
+                        // esconder el footer a mitad de un arrastre.
+                        child: Listener(
+                          onPointerDown: (_) => _resetHideTimer(),
+                          onPointerMove: (_) => _resetHideTimer(),
+                          child: _Footer(controller: _c),
+                        ),
                       ),
                     ),
                   ],
@@ -1219,7 +1234,6 @@ class _Volume extends StatefulWidget {
 }
 
 class _VolumeState extends State<_Volume> {
-  final _controller = FlyoutController();
   final _volume = 0.0.obs;
   StreamSubscription<double>? _volumeSub;
 
@@ -1229,8 +1243,8 @@ class _VolumeState extends State<_Volume> {
     _volume.value = widget.player.state.volume;
     // Antes el valor se leía una sola vez al crear el widget y quedaba
     // pegado — si el volumen cambiaba por otro lado (atajo de teclado, DLNA,
-    // etc.) el ícono y el slider del flyout seguían mostrando el valor
-    // viejo. Escuchar el stream real lo mantiene siempre sincronizado.
+    // etc.) el ícono y el slider seguían mostrando el valor viejo. Escuchar
+    // el stream real lo mantiene siempre sincronizado.
     _volumeSub = widget.player.stream.volume.listen((v) {
       _volume.value = v;
     });
@@ -1241,95 +1255,91 @@ class _VolumeState extends State<_Volume> {
     widget.player.setVolume(value);
   }
 
-  @override
-  void dispose() {
-    _volumeSub?.cancel();
-    _controller.dispose();
-    super.dispose();
+  /// A cuánto volver al des-silenciar. Se guarda al silenciar en vez de
+  /// mirar el valor actual —que ya es 0— para devolver exactamente el que
+  /// había, incluso si estaba amplificado por encima de 100.
+  double _volumenAntesDeSilenciar = 100;
+
+  /// Silencia y des-silencia con un clic en la bocina, a pedido explícito:
+  /// antes el ícono era decorativo y bajar el volumen a cero obligaba a
+  /// arrastrar la barra hasta el fondo y después volver a buscar el punto
+  /// donde estaba.
+  void _alternarSilencio() {
+    if (_volume.value > 0) {
+      _volumenAntesDeSilenciar = _volume.value;
+      _onVolumeChanged(0);
+      return;
+    }
+    // Si se llegó a 0 arrastrando la barra (no por este botón), no hay un
+    // valor previo que devolver: 100 es el volumen original del vídeo.
+    _onVolumeChanged(
+      _volumenAntesDeSilenciar > 0 ? _volumenAntesDeSilenciar : 100,
+    );
   }
 
   @override
+  void dispose() {
+    _volumeSub?.cancel();
+    super.dispose();
+  }
+
+  IconData _iconoDe(double v) => v == 0
+      ? FluentIcons.volume0
+      : v < 50
+          ? FluentIcons.volume1
+          : v < 100
+              ? FluentIcons.volume2
+              : FluentIcons.volume3;
+
+  // Barra SIEMPRE visible, no escondida atrás de un botón — a pedido
+  // explícito: con el flyout de antes, había que abrirlo para ver o
+  // cambiar el volumen, y un vistazo rápido no alcanzaba.
+  //
+  // FluentTheme propio con el acento rosa de la marca — a pedido
+  // explícito ("como en Android"), donde el Slider de Material ya sale
+  // así solo porque hereda el ColorScheme de la app. El de Fluent no: sin
+  // este envoltorio usa el celeste por defecto del paquete.
+  @override
   Widget build(BuildContext context) {
-    return FlyoutTarget(
-      controller: _controller,
-      child: IconButton(
-        icon: Obx(
-          () => Icon(
-            _volume.value == 0
-                ? FluentIcons.volume0
-                : _volume.value < 50
-                    ? FluentIcons.volume1
-                    : _volume.value < 100
-                        ? FluentIcons.volume2
-                        : FluentIcons.volume3,
-          ),
+    return FluentTheme(
+      data: FluentThemeData.dark().copyWith(
+        accentColor: AccentColor.swatch({'normal': HomeTheme.oscuroAcento}),
+      ),
+      child: Obx(
+        () => Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            IconButton(
+              onPressed: _alternarSilencio,
+              icon: Icon(_iconoDe(_volume.value)),
+            ),
+            const SizedBox(width: 6),
+            SizedBox(
+              width: 90,
+              height: 30,
+              child: Slider(
+                value: _volume.value,
+                // Pasa de 100 —el volumen original— para poder levantar
+                // material grabado bajo. Ver VideoPlayerController.volumenMaximo.
+                max: VideoPlayerController.volumenMaximo,
+                // El 100 marcado: es el punto donde deja de subirse el
+                // volumen y empieza a amplificarse, así que conviene verlo.
+                divisions: VideoPlayerController.volumenMaximo ~/ 5,
+                label: '${_volume.value.round()}%',
+                onChanged: _onVolumeChanged,
+              ),
+            ),
+            const SizedBox(width: 6),
+            SizedBox(
+              width: 32,
+              child: Text(
+                '${_volume.value.round()}%',
+                style:
+                    const TextStyle(fontSize: 12, fontWeight: FontWeight.w300),
+              ),
+            ),
+          ],
         ),
-        onPressed: () {
-          _controller.showFlyout(
-            barrierDismissible: true,
-            dismissOnPointerMoveAway: false,
-            builder: (context) {
-              return FluentTheme(
-                data: FluentThemeData.dark().copyWith(
-                  accentColor: AccentColor.swatch(
-                      {'normal': HomeTheme.oscuroAcento}),
-                ),
-                child: FlyoutContent(
-                  useAcrylic: true,
-                  child: Padding(
-                    padding: const EdgeInsets.all(8.0),
-                    child: Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        Obx(
-                          () => Icon(
-                            _volume.value == 0
-                                ? FluentIcons.volume0
-                                : _volume.value < 50
-                                    ? FluentIcons.volume1
-                                    : _volume.value < 100
-                                        ? FluentIcons.volume2
-                                        : FluentIcons.volume3,
-                          ),
-                        ),
-                        const SizedBox(width: 10),
-                        Obx(
-                          () => SizedBox(
-                            height: 30,
-                            child: Slider(
-                              value: _volume.value,
-                              // Pasa de 100 —el volumen original— para poder
-                              // levantar material grabado bajo. Ver
-                              // VideoPlayerController.volumenMaximo.
-                              max: VideoPlayerController.volumenMaximo,
-                              // El 100 marcado: es el punto donde deja de
-                              // subirse el volumen y empieza a amplificarse,
-                              // asi que conviene verlo.
-                              divisions:
-                                  VideoPlayerController.volumenMaximo ~/ 5,
-                              label: '${_volume.value.round()}%',
-                              onChanged: _onVolumeChanged,
-                            ),
-                          ),
-                        ),
-                        const SizedBox(width: 10),
-                        Obx(
-                          () => Text(
-                            _volume.value.toStringAsFixed(1),
-                            style: const TextStyle(
-                              fontSize: 14,
-                              fontWeight: FontWeight.w300,
-                            ),
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                ),
-              );
-            },
-          );
-        },
       ),
     );
   }
@@ -1373,8 +1383,8 @@ class _EpisodeState extends State<_Episode> {
               builder: (context) {
                 return FluentTheme(
                   data: FluentThemeData.dark().copyWith(
-                    accentColor: AccentColor.swatch(
-                        {'normal': HomeTheme.oscuroAcento}),
+                    accentColor:
+                        AccentColor.swatch({'normal': HomeTheme.oscuroAcento}),
                   ),
                   child: FlyoutContent(
                     padding: const EdgeInsets.all(0),
@@ -1550,8 +1560,8 @@ class _TrackState extends State<_Track> {
             builder: (context) {
               return FluentTheme(
                 data: FluentThemeData.dark().copyWith(
-                  accentColor: AccentColor.swatch(
-                      {'normal': HomeTheme.oscuroAcento}),
+                  accentColor:
+                      AccentColor.swatch({'normal': HomeTheme.oscuroAcento}),
                 ),
                 child: FlyoutContent(
                   useAcrylic: true,
@@ -1657,7 +1667,9 @@ class _TrackState extends State<_Track> {
                             selected:
                                 widget.controller.audioHlsElegido.value == i,
                             title: Text(audio.nombre),
-                            subtitle: audio.idioma != null ? Text(audio.idioma!) : null,
+                            subtitle: audio.idioma != null
+                                ? Text(audio.idioma!)
+                                : null,
                             onPressed: () {
                               widget.controller.elegirAudioHls(i);
                               Flyout.of(context).close();
@@ -2134,8 +2146,8 @@ class _CastState extends State<_Cast> {
               builder: (context) {
                 return FluentTheme(
                   data: FluentThemeData.dark().copyWith(
-                    accentColor: AccentColor.swatch(
-                        {'normal': HomeTheme.oscuroAcento}),
+                    accentColor:
+                        AccentColor.swatch({'normal': HomeTheme.oscuroAcento}),
                   ),
                   child: FlyoutContent(
                     useAcrylic: true,
@@ -2269,8 +2281,8 @@ class _TorrentFilesState extends State<_TorrentFiles> {
             builder: (context) {
               return FluentTheme(
                 data: FluentThemeData.dark().copyWith(
-                  accentColor: AccentColor.swatch(
-                      {'normal': HomeTheme.oscuroAcento}),
+                  accentColor:
+                      AccentColor.swatch({'normal': HomeTheme.oscuroAcento}),
                 ),
                 child: FlyoutContent(
                   useAcrylic: true,
@@ -2344,8 +2356,8 @@ class _SpeedState extends State<_Speed> {
             builder: (context) {
               return FluentTheme(
                 data: FluentThemeData.dark().copyWith(
-                  accentColor: AccentColor.swatch(
-                      {'normal': HomeTheme.oscuroAcento}),
+                  accentColor:
+                      AccentColor.swatch({'normal': HomeTheme.oscuroAcento}),
                 ),
                 child: FlyoutContent(
                   useAcrylic: true,
@@ -2524,7 +2536,8 @@ class _SeekBarState extends State<_SeekBar> {
                             // contra eso. Con esto queda una gradación
                             // clara: rosa sólido (reproducido) → rosa
                             // (bufferizado) → blanco (nada aún).
-                            color: HomeTheme.oscuroAcento.withValues(alpha: 0.7),
+                            color:
+                                HomeTheme.oscuroAcento.withValues(alpha: 0.7),
                             borderRadius: BorderRadius.circular(999),
                           ),
                         ),
@@ -2699,7 +2712,8 @@ class _ServerTab extends StatelessWidget {
             // detrás, el texto se volvía ilegible. selected pasa a violeta
             // sólido de verdad, así que el texto ahí va blanco (violeta
             // sobre violeta era invisible).
-            color: selected ? HomeTheme.oscuroAcento : HomeTheme.oscuroSuperficie,
+            color:
+                selected ? HomeTheme.oscuroAcento : HomeTheme.oscuroSuperficie,
             borderRadius: BorderRadius.circular(999),
             border: Border.all(
               color: selected ? HomeTheme.oscuroAcento : HomeTheme.oscuroBorde,

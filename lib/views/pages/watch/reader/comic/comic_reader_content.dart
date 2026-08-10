@@ -146,13 +146,78 @@ class _ComicReaderContentState extends State<ComicReaderContent> {
     setState(() => _androidPointers.add(event.pointer));
   }
 
+  /// Si el PageView venía asentándose de un cambio de página, se lo termina
+  /// AHORA en vez de dejarlo a mitad de camino.
+  ///
+  /// ── Por qué hace falta ──────────────────────────────────────────────────
+  ///
+  /// Reportado en vivo: "cuando voy cambiando y paso a scroll vertical, como
+  /// que cambia". No era el umbral. Al apoyar el dedo, todo Scrollable llama
+  /// a `position.hold()` desde el `onDown` de su reconocedor — o sea en el
+  /// pointer down, ANTES de que se decida ninguna dirección (ver
+  /// Scrollable._handleDragDown). Si en ese momento la página venía
+  /// deslizándose para asentarse, ese hold la deja congelada entre dos
+  /// páginas. Después, cuando el gesto se resuelve como vertical, el hold se
+  /// suelta y la página salta sola a la más cercana — que según dónde haya
+  /// quedado congelada puede ser la otra.
+  ///
+  /// Terminando el asentamiento en el acto no queda ningún estado "entre dos
+  /// páginas" que pueda saltar solo, y el deslizamiento vertical arranca
+  /// sobre una página quieta. Tocar durante un envión sigue cortándolo, que
+  /// es lo que uno espera de cualquier lista.
+  void _asentarPaginaSiViajaba() {
+    if (!Platform.isAndroid) return;
+    final controlador = _c.pageController;
+    if (!controlador.hasClients) return;
+    final pagina = controlador.page;
+    if (pagina == null) return;
+    final destino = pagina.round();
+    // Ya está en su lugar: no hay nada que asentar y jumpToPage acá sería
+    // meterse en un scroll que quizá está empezando a mano.
+    if ((pagina - destino).abs() < 0.001) return;
+    controlador.jumpToPage(destino);
+  }
+
   void _onAndroidPointerUp(PointerEvent event) {
     if (_androidPointers.remove(event.pointer)) setState(() {});
   }
 
   // Padding-based zoom: narrows the content column so images appear smaller
   // but still fill top-to-bottom with no centering box. Toggled by double-tap.
-  bool _cascadeZoomed = false;
+  //
+  // El estado vive en el controller (ComicController.alejado) y no acá: es
+  // el mismo para la cascada y para el paginado, así el tamaño con el que
+  // venías leyendo no cambia solo al pasar de página o de capítulo.
+  bool get _cascadeZoomed => _c.alejado.value;
+
+  /// Cuánto hay que arrastrar hacia abajo, dentro de una página del modo
+  /// paginado, para que se entienda como "quiero bajar" y no como "quiero
+  /// cambiar de página". El de siempre es kTouchSlop (18 px), el MISMO que
+  /// usa el cambio de página, y con los dos iguales el reparto caía justo en
+  /// la diagonal. Bajando este —y solo este— cambiar de página sigue
+  /// costando lo mismo de siempre. Ver el comentario largo donde se arma el
+  /// PageView.
+  static const _umbralDelScrollDeLaPagina = 12.0;
+
+  /// Cuánto se angosta la columna al alejar. Con nombre porque la cuenta que
+  /// mantiene el punto tocado en su lugar (ver _onCascadeDoubleTap) necesita
+  /// EXACTAMENTE el mismo número que el ancho de la columna: las imágenes van
+  /// con BoxFit.fitWidth, así que su alto escala igual que su ancho, y de ahí
+  /// sale el factor con el que se corrige la posición.
+  static const _factorAlejado = 0.55;
+
+  /// Dónde cayó el último doble toque, como fracción del alto de la vista
+  /// (0 = arriba del todo, 1 = abajo del todo).
+  ///
+  /// Se guarda en `onDoubleTapDown`, que siempre llega antes que
+  /// `onDoubleTap`. Arranca en el centro por si el zoom se dispara por algún
+  /// camino que no sea un toque.
+  double _fraccionDelDobleToque = 0.5;
+
+  void _registrarDobleToque(double dy, double altoDeLaVista) {
+    if (altoDeLaVista <= 0) return;
+    _fraccionDelDobleToque = (dy / altoDeLaVista).clamp(0.0, 1.0);
+  }
 
   // Desktop-only: double-click narrows the content column for an overview.
   // Narrowing/widening resizes every image (BoxFit.fitWidth recalculates
@@ -171,15 +236,88 @@ class _ComicReaderContentState extends State<ComicReaderContent> {
     // (reportado en vivo: "a veces el usuario lo mueve y no queda centrado").
     if (Platform.isAndroid &&
         _androidPinchTransform.value != Matrix4.identity()) {
+      // Mismo remedio que más abajo (alignment de itemLeadingEdge), pero
+      // acá es una red de seguridad y no la cura completa: el pellizco es
+      // un transform VISUAL (InteractiveViewer, panEnabled:false) que no
+      // mueve el scroll de la lista de abajo, así que en teoría enderezar
+      // no debería moverla. Pero se puede seguir scrolleando mientras se
+      // está pellizcado, y ahí sí el scroll de la lista cambió de verdad
+      // — este jumpTo lo vuelve a poner en la MISMA página y fracción de
+      // justo antes de enderezar, en vez de dejarlo donde sea que haya
+      // quedado el scroll subyacente.
+      final page = _c.currentPage.value;
+      double alignment = 0;
+      for (final p in _c.itemPositionsListener.itemPositions.value) {
+        if (p.index == page) {
+          alignment = p.itemLeadingEdge;
+          break;
+        }
+      }
       setState(() => _androidPinchTransform.value = Matrix4.identity());
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted && _c.itemScrollController.isAttached) {
+          _c.itemScrollController.jumpTo(index: page, alignment: alignment);
+        }
+      });
       return;
     }
 
-    final page = _c.currentPage.value;
-    setState(() => _cascadeZoomed = !_cascadeZoomed);
+    // ── El punto que se tocó se queda donde está ──────────────────────────
+    //
+    // Antes esto anclaba el BORDE DE ARRIBA de la página actual: se
+    // conservaba la página y cuánto de ella ya se había pasado, pero al
+    // cambiar el ancho la página entera cambia de alto, así que lo que
+    // estabas mirando se corría igual — se veía "lo mismo pero movido", no
+    // "lo mismo más cerca o más lejos". A pedido explícito ahora el ancla es
+    // el punto exacto donde cayó el doble toque.
+    //
+    // La cuenta, todo en fracciones del alto de la vista (que es la unidad
+    // en la que vienen itemLeadingEdge/itemTrailingEdge y la que espera
+    // jumpTo como alignment):
+    //
+    //   t  = dónde se tocó
+    //   L0 = borde de arriba de la página tocada, ahora
+    //   h0 = alto de esa página, ahora
+    //   f  = cuánto se agranda/achica la columna
+    //
+    // El punto tocado está a (t - L0) de arriba de la página, o sea a la
+    // altura (t - L0) / h0 de ella. Después del cambio esa misma altura de
+    // la página mide (t - L0) * f, porque el alto escala igual que el ancho
+    // (BoxFit.fitWidth). Para que ese punto siga cayendo en t, el borde de
+    // arriba tiene que quedar en:
+    //
+    //   L1 = t - (t - L0) * f
+    //
+    // Se lee ANTES de tocar el zoom: después de setState las posiciones
+    // viejas ya no valen.
+    final t = _fraccionDelDobleToque;
+    // Alejando la columna se angosta (f = 0.55); acercando vuelve a lo ancho
+    // (f = 1 / 0.55). El estado todavía no cambió, así que _cascadeZoomed es
+    // el de ANTES del toque.
+    final f = _cascadeZoomed ? 1 / _factorAlejado : _factorAlejado;
+
+    // La página que está debajo del dedo, no la que el contador marca como
+    // "actual": son distintas si se tocó arriba o abajo de la pantalla, y la
+    // que importa acá es la que se está mirando en ese punto.
+    var page = _c.currentPage.value;
+    double leadingEdge = 0;
+    for (final p in _c.itemPositionsListener.itemPositions.value) {
+      if (t >= p.itemLeadingEdge && t < p.itemTrailingEdge) {
+        page = p.index;
+        leadingEdge = p.itemLeadingEdge;
+        break;
+      }
+      // Respaldo por si el toque cae en un hueco entre páginas (un borde
+      // justo, o una imagen que todavía no midió): la página del contador,
+      // con su borde real.
+      if (p.index == page) leadingEdge = p.itemLeadingEdge;
+    }
+    final alignment = t - (t - leadingEdge) * f;
+
+    _c.alejado.toggle();
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (mounted && _c.itemScrollController.isAttached) {
-        _c.itemScrollController.jumpTo(index: page);
+        _c.itemScrollController.jumpTo(index: page, alignment: alignment);
       }
     });
   }
@@ -340,6 +478,26 @@ class _ComicReaderContentState extends State<ComicReaderContent> {
   static const _keyScrollStep = 48.0;
   static const _keyPageStepFactor = 0.9;
 
+  /// Cómo bajar dentro de cada página viva del modo paginado. Las páginas se
+  /// anotan solas al montarse (ver _PagedPage.registrarScroll); hay más de
+  /// una porque el PageView mantiene también las de los costados.
+  final Map<int, void Function(double)> _scrollDeCadaPagina = {};
+
+  void _registrarScrollDePagina(int indice, void Function(double) desplazar) {
+    _scrollDeCadaPagina[indice] = desplazar;
+  }
+
+  /// Se comprueba que lo anotado siga siendo el de ESTA página antes de
+  /// borrarlo. Al cambiar de capítulo, Flutter puede montar la página nueva
+  /// del mismo índice ANTES de desmontar la vieja, y sin esta comprobación
+  /// el dispose de la vieja se llevaba puesto el registro recién hecho por
+  /// la nueva — las flechas dejaban de bajar hasta el próximo redibujado.
+  void _olvidarScrollDePagina(int indice, void Function(double) desplazar) {
+    if (_scrollDeCadaPagina[indice] == desplazar) {
+      _scrollDeCadaPagina.remove(indice);
+    }
+  }
+
   void _onKeyEvent(KeyEvent event) {
     // Escape cierra el lector, como el botón de atrás. Va PRIMERO y para
     // cualquier modo (paginado o cascada): es lo que espera cualquiera al
@@ -350,6 +508,32 @@ class _ComicReaderContentState extends State<ComicReaderContent> {
         event.logicalKey == LogicalKeyboardKey.escape) {
       RouterUtils.closeReader(context);
       return;
+    }
+    // ── Paginado en escritorio: arriba/abajo BAJAN, no pasan de página ────
+    //
+    // A pedido explícito: en paginado las flechas de arriba y abajo hacían
+    // lo mismo que las de los costados —cambiar de página— y en una tira
+    // alta, que se lee bajando, eso era lo contrario de lo que uno espera.
+    // Ahora bajan dentro de la página, igual que en cascada, y pasar de
+    // página queda solo para izquierda/derecha.
+    //
+    // Si la página entra entera no hay nada que bajar y no pasa nada: lo
+    // correcto, porque tampoco tiene que cambiar de página.
+    if (_c.isPaged &&
+        !Platform.isAndroid &&
+        (event is KeyDownEvent || event is KeyRepeatEvent)) {
+      final tecla = event.logicalKey;
+      final paso = switch (tecla) {
+        LogicalKeyboardKey.arrowDown => _keyScrollStep,
+        LogicalKeyboardKey.arrowUp => -_keyScrollStep,
+        LogicalKeyboardKey.pageDown => _keyScrollStep * 6,
+        LogicalKeyboardKey.pageUp => -_keyScrollStep * 6,
+        _ => null,
+      };
+      if (paso != null) {
+        _scrollDeCadaPagina[_c.currentPage.value]?.call(paso);
+        return;
+      }
     }
     // El controller mantiene el estado de zoom (Ctrl) y el modo paginado.
     if (_c.isPaged || Platform.isAndroid) {
@@ -470,12 +654,25 @@ class _ComicReaderContentState extends State<ComicReaderContent> {
       final total = _c.watchData.value?.urls.length ?? 0;
       final page = _c.currentPage.value;
 
+      // Antes era un rectángulo de esquinas vivas pegado al vértice de abajo
+      // a la izquierda: tocaba los dos bordes de la pantalla y parecía más un
+      // recorte mal cortado que una etiqueta (reportado en vivo con captura).
+      // Ahora flota, separado de los bordes y con las puntas redondeadas,
+      // como el resto de las etiquetas de la app.
       return Container(
-        color: Colors.black.withAlpha(200),
-        padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 4),
+        margin: const EdgeInsets.only(left: 12, bottom: 12),
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
+        decoration: BoxDecoration(
+          color: Colors.black.withAlpha(200),
+          borderRadius: BorderRadius.circular(20),
+        ),
         child: Text(
           '${page + 1}/$total',
-          style: const TextStyle(color: Colors.white, fontSize: 15),
+          style: const TextStyle(
+            color: Colors.white,
+            fontSize: 15,
+            fontWeight: FontWeight.w600,
+          ),
         ),
       );
     });
@@ -689,6 +886,61 @@ class _ComicReaderContentState extends State<ComicReaderContent> {
                           : centroHueco;
                     }
 
+                    // ── Que el dedo vertical no se lea como horizontal ──────
+                    //
+                    // Reportado en vivo: al querer bajar dentro de una página
+                    // alta, el gesto se tomaba como "quiere cambiar de
+                    // página" y el scroll salía tosco.
+                    //
+                    // Los dos gestos compiten y gana el PRIMERO que se pasa
+                    // de su umbral, y los dos usaban el mismo (kTouchSlop, 18
+                    // px): el del PageView cuenta lo que se movió en
+                    // horizontal y el del scroll lo que se movió en vertical.
+                    // Con los dos iguales, el reparto queda en la diagonal
+                    // exacta: cualquier deslizamiento a menos de 45° de la
+                    // horizontal se lo quedaba el cambio de página, y un
+                    // pulgar bajando describe un arco que se mete ahí.
+                    //
+                    // Se le baja el umbral SOLO al scroll de adentro, y NO se
+                    // le sube al PageView. Ese fue el primer intento y quedó
+                    // peor: subirlo a 40 px pedía un gesto tan derecho que el
+                    // arco del pulgar cruzaba antes el umbral vertical y ya
+                    // no se podía cambiar de página (reportado en vivo).
+                    // Bajando el de abajo, cambiar de página sigue costando
+                    // exactamente lo mismo que siempre —los mismos 18 px— y
+                    // lo único que se mueve es el reparto: ahora alcanza con
+                    // ir a más de ~34° de la horizontal para que se entienda
+                    // como bajar, en vez de los 45° de antes.
+                    //
+                    // Scrollable toma este valor del MediaQuery — ver
+                    // Scrollable.didChangeDependencies y computeHitSlop.
+                    //
+                    // Solo Android: en escritorio el PageView va con
+                    // NeverScrollableScrollPhysics (se pasa de página con las
+                    // flechas o el teclado), así que no hay ningún gesto
+                    // horizontal con el que competir.
+                    Widget conScrollMasAtento(Widget hijo) {
+                      if (!Platform.isAndroid) return hijo;
+                      return MediaQuery(
+                        data: MediaQuery.of(context).copyWith(
+                          gestureSettings: const DeviceGestureSettings(
+                            touchSlop: _umbralDelScrollDeLaPagina,
+                          ),
+                        ),
+                        child: hijo,
+                      );
+                    }
+
+                    // Leídos ACÁ y no adentro del itemBuilder: ese se ejecuta
+                    // más tarde, durante el armado perezoso del PageView, y
+                    // para entonces el Obx ya cerró su ronda de escuchas — un
+                    // valor leído ahí adentro no lo despierta cuando cambia.
+                    // Leerlos en el cuerpo del Obx y pasarlos por la clausura
+                    // es lo que hace que alejar/acercar y llenar pantalla se
+                    // vean al toque también en paginado.
+                    final alejado = _c.alejado.value;
+                    final llenarPantalla = _c.llenarPantalla.value;
+
                     return Listener(
                       // Mismo mecanismo que usa la cascada en Android: contar
                       // dedos para saber cuándo hay un pellizco en curso. Sin
@@ -696,7 +948,14 @@ class _ComicReaderContentState extends State<ComicReaderContent> {
                       // peleaban y ganaba el del PageView — por eso en
                       // celular el pellizco no hacía nada en modo paginado.
                       behavior: HitTestBehavior.translucent,
-                      onPointerDown: _onAndroidPointerDown,
+                      onPointerDown: (event) {
+                        _onAndroidPointerDown(event);
+                        // Va DESPUÉS: el reconocedor del PageView (que está
+                        // más adentro y por eso recibe el evento antes) ya
+                        // dejó la página congelada con su hold; esto la
+                        // termina de asentar. Ver _asentarPaginaSiViajaba.
+                        _asentarPaginaSiViajaba();
+                      },
                       onPointerUp: _onAndroidPointerUp,
                       onPointerCancel: _onAndroidPointerUp,
                       child: Stack(
@@ -734,7 +993,8 @@ class _ComicReaderContentState extends State<ComicReaderContent> {
                             allowImplicitScrolling: true,
                             onPageChanged: (i) => _c.currentPage.value = i,
                             itemCount: images.length,
-                            itemBuilder: (context, index) => _PagedPage(
+                            itemBuilder: (context, index) =>
+                                conScrollMasAtento(_PagedPage(
                               // Clave por índice+url: sin esto el PageView
                               // podía reciclar el State de una página en
                               // otra (mismo slot) y el zoom/achicado
@@ -758,7 +1018,13 @@ class _ComicReaderContentState extends State<ComicReaderContent> {
                               // una página de verdad, dando la sensación de
                               // haber saltado varias.
                               placeholder: const Center(child: ProgressRing()),
-                            ),
+                              llenarPantalla: llenarPantalla,
+                              alejado: alejado,
+                              alternarAlejado: _c.alejado.toggle,
+                              indice: index,
+                              registrarScroll: _registrarScrollDePagina,
+                              olvidarScroll: _olvidarScrollDePagina,
+                            )),
                           ),
                           // Solo escritorio (ver arriba): en celular se desliza
                           // y las flechas solo taparían el manga.
@@ -793,23 +1059,33 @@ class _ComicReaderContentState extends State<ComicReaderContent> {
                   // (ver su didUpdateWidget) y el capítulo abre al fondo. Es la
                   // segunda red: la primera está en ComicController, donde se
                   // deja de escuchar posiciones mientras se cambia de capítulo.
-                  final ultimaPagina =
-                      images.isEmpty ? 0 : images.length - 1;
+                  final ultimaPagina = images.isEmpty ? 0 : images.length - 1;
                   final currentPage =
                       _c.currentPage.value.clamp(0, ultimaPagina);
 
                   // Cascade: cap content at 900 px normally; narrow to ~55% when
                   // zoomed out so images shrink but still fill edge-to-edge (no box).
-                  final normalWidth = maxWidth < 900.0 ? maxWidth : 900.0;
-                  final effectiveWidth =
-                      _cascadeZoomed ? normalWidth * 0.55 : normalWidth;
+                  //
+                  // Con "llenar pantalla" (ComicController.llenarPantalla) el
+                  // tope de 900 se saca: en un teléfono maxWidth casi nunca
+                  // llega a 900, así que ahí esto no cambiaba nada — donde SÍ
+                  // se nota es en escritorio con la ventana ancha, que
+                  // quedaba con márgenes a los costados aunque se pidiera
+                  // llenar la pantalla.
+                  final normalWidth = _c.llenarPantalla.value
+                      ? maxWidth
+                      : (maxWidth < 900.0 ? maxWidth : 900.0);
+                  final effectiveWidth = _cascadeZoomed
+                      ? normalWidth * _factorAlejado
+                      : normalWidth;
                   // El ancho que sobra se reparte según la alineación elegida:
                   // todo a la derecha (franja pegada a la izquierda), todo a la
                   // izquierda (franja pegada a la derecha), o mitad y mitad
                   // (centrada, que es como venía siendo y sigue siendo el
                   // default). Ver ComicController.stripAlign.
-                  final sobraDeAncho =
-                      maxWidth > effectiveWidth ? maxWidth - effectiveWidth : 0.0;
+                  final sobraDeAncho = maxWidth > effectiveWidth
+                      ? maxWidth - effectiveWidth
+                      : 0.0;
                   final margenIzq = switch (alineacion) {
                     ComicController.alineacionIzquierda => 0.0,
                     ComicController.alineacionDerecha => sobraDeAncho,
@@ -949,6 +1225,13 @@ class _ComicReaderContentState extends State<ComicReaderContent> {
                         child: Stack(
                           children: [
                             GestureDetector(
+                              // onDoubleTapDown llega siempre antes que
+                              // onDoubleTap: es de donde sale el punto que
+                              // el zoom tiene que dejar quieto.
+                              onDoubleTapDown: (d) => _registrarDobleToque(
+                                d.localPosition.dy,
+                                sh,
+                              ),
                               onDoubleTap: _onCascadeDoubleTap,
                               child: ScrollConfiguration(
                                 behavior: ScrollConfiguration.of(context)
@@ -1001,6 +1284,12 @@ class _ComicReaderContentState extends State<ComicReaderContent> {
                       onPointerCancel: _onAndroidPointerUp,
                       child: GestureDetector(
                         behavior: HitTestBehavior.opaque,
+                        // Mismo registro que en escritorio — ver el otro
+                        // GestureDetector de esta misma cascada.
+                        onDoubleTapDown: (d) => _registrarDobleToque(
+                          d.localPosition.dy,
+                          sh,
+                        ),
                         onDoubleTap: _onCascadeDoubleTap,
                         onTap: () {
                           _c.isShowControlPanel.value =
@@ -1030,8 +1319,19 @@ class _ComicReaderContentState extends State<ComicReaderContent> {
   @override
   Widget build(BuildContext context) {
     return PlatformBuildWidget(
+      // "Llenar pantalla" también saca el SafeArea de arriba y de abajo acá
+      // adentro (ver el worker en ComicController que pone edgeToEdge), para
+      // que la página dibuje hasta la cámara y hasta donde está la barra de
+      // navegación — el header de ReaderView es un widget aparte, flotando
+      // por encima, y se queda con su propio SafeArea de siempre.
       androidBuilder: (context) => Scaffold(
-        body: SafeArea(child: _buildDisplay(_buildContent())),
+        body: Obx(
+          () => SafeArea(
+            top: !_c.llenarPantalla.value,
+            bottom: !_c.llenarPantalla.value,
+            child: _buildDisplay(_buildContent()),
+          ),
+        ),
       ),
       desktopBuilder: (context) => _buildDisplay(_buildContent()),
     );
@@ -1117,16 +1417,45 @@ class _PagedPage extends StatefulWidget {
     required this.headers,
     required this.placeholder,
     required this.stripAlign,
+    required this.llenarPantalla,
+    required this.alejado,
+    required this.alternarAlejado,
+    required this.indice,
+    required this.registrarScroll,
+    required this.olvidarScroll,
   });
 
   final String url;
   final Map<String, String>? headers;
   final Widget placeholder;
 
+  /// Qué página es, para que quien escucha el teclado sepa a cuál de las
+  /// vivas mandarle el desplazamiento (el PageView mantiene también las de
+  /// los costados, ver allowImplicitScrolling).
+  final int indice;
+
+  /// Se anuncia al montarse con la función que baja o sube DENTRO de esta
+  /// página, y se da de baja al desmontarse. Así las flechas de arriba y
+  /// abajo pueden desplazar la tira sin que el padre tenga que conocer el
+  /// ScrollController de cada página.
+  final void Function(int indice, void Function(double) desplazar)
+      registrarScroll;
+  final void Function(int indice, void Function(double) desplazar)
+      olvidarScroll;
+
   /// Dónde se pega la tira de manhwa cuando sobra ancho. Solo aplica a las
   /// páginas que resultan ser tira: una página de manga entra entera y no
   /// tiene sobrante que repartir.
   final Alignment stripAlign;
+
+  /// Recortar la página para llenar la pantalla, en vez de mostrarla
+  /// entera con franjas — ver ComicController.llenarPantalla.
+  final bool llenarPantalla;
+
+  /// Si se está leyendo alejado. Es de TODO el lector, no de esta página —
+  /// ver ComicController.alejado.
+  final bool alejado;
+  final VoidCallback alternarAlejado;
 
   @override
   State<_PagedPage> createState() => _PagedPageState();
@@ -1149,9 +1478,18 @@ class _PagedPageState extends State<_PagedPage> {
   // Doble toque para alejar. En tira de manhwa angosta la columna (igual que
   // la cascada); en página de manga se maneja con el zoom del
   // InteractiveViewer.
-  bool _zoomedOut = false;
+  //
+  // El "alejado" ya NO se guarda acá: es de todo el lector (widget.alejado,
+  // ver ComicController.alejado). Antes era de cada página, y alejar en la
+  // 20 dejaba la 21 otra vez grande.
+  bool get _zoomedOut => widget.alejado;
   final _zoomController = TransformationController();
   bool _zoomed = false;
+
+  /// Cuánto se angosta la tira al alejar. Con nombre por lo mismo que en la
+  /// cascada: la cuenta que mantiene quieto el punto tocado necesita
+  /// exactamente el mismo número que el ancho (ver _toggleZoomOut).
+  static const _factorAlejadoTira = 0.55;
 
   // Zona de doble-toque para alejar/acercar. En desktop deja libres los 80px
   // de cada borde (misma franja que usa el clic de paginar en
@@ -1163,7 +1501,7 @@ class _PagedPageState extends State<_PagedPage> {
   // página con clic, reportada en vivo (con teclado, que no pasa por gesture
   // arena, ya andaba instantáneo). En Android no hay flechas clickeables
   // (el paginado ahí es por deslizamiento), así que cubre todo el ancho.
-  Widget _doubleTapZoomOverlay() {
+  Widget _doubleTapZoomOverlay({required bool esTira}) {
     final inset = Platform.isAndroid ? 0.0 : 80.0;
     return Positioned(
       left: inset,
@@ -1172,26 +1510,102 @@ class _PagedPageState extends State<_PagedPage> {
       bottom: 0,
       child: GestureDetector(
         behavior: HitTestBehavior.translucent,
-        onDoubleTap: _toggleZoomOut,
+        // Dónde cayó el doble toque, que es el punto que el zoom tiene que
+        // dejar quieto. Se le suma el `inset` porque esta capa arranca
+        // corrida hacia adentro (ver arriba) y la cuenta necesita la
+        // coordenada dentro de la página, no dentro de la capa.
+        onDoubleTapDown: (d) => _puntoDelDobleToque = Offset(
+          d.localPosition.dx + inset,
+          d.localPosition.dy,
+        ),
+        onDoubleTap: () => _toggleZoomOut(esTira: esTira),
       ),
     );
   }
 
-  void _toggleZoomOut() {
-    setState(() {
-      // Cualquier cosa que no sea la identidad se deshace primero: vuelve a 1x
-      // Y centrado. El chequeo de antes era `_zoomed`, que sale de comparar la
-      // ESCALA contra 1.01 — si el usuario pellizcaba, arrastraba y volvía a
-      // achicar hasta más o menos 1x, la escala ya no contaba como zoom pero
-      // quedaba una traslación pegada: la página se veía corrida y no había
-      // manera de enderezarla. Ahora sí.
-      if (_zoomController.value != Matrix4.identity()) {
+  /// Dónde cayó el último doble toque, en píxeles y dentro de la página.
+  /// Arranca en cero por si el zoom se dispara por algún camino que no sea
+  /// un toque; `onDoubleTapDown` siempre llega antes que `onDoubleTap`.
+  Offset _puntoDelDobleToque = Offset.zero;
+
+  /// Cuánto acerca el doble toque en una página de manga.
+  static const _escalaDelAcercado = 2.5;
+
+  void _toggleZoomOut({required bool esTira}) {
+    // Cualquier cosa que no sea la identidad se deshace primero: vuelve a 1x
+    // Y centrado. El chequeo de antes era `_zoomed`, que sale de comparar la
+    // ESCALA contra 1.01 — si el usuario pellizcaba, arrastraba y volvía a
+    // achicar hasta más o menos 1x, la escala ya no contaba como zoom pero
+    // quedaba una traslación pegada: la página se veía corrida y no había
+    // manera de enderezarla. Ahora sí.
+    if (_zoomController.value != Matrix4.identity()) {
+      setState(() {
         _zoomController.value = Matrix4.identity();
         _zoomed = false;
-        return;
-      }
-      // Ya estaba derecha: el doble toque hace lo de siempre, alejar/acercar.
-      _zoomedOut = !_zoomedOut;
+      });
+      return;
+    }
+
+    // ── Página de manga: acercar en el punto tocado ───────────────────────
+    //
+    // Antes acá el doble toque daba vuelta `_zoomedOut`, que SOLO se usa
+    // para el ancho de la tira — en una página de manga no se usa en ningún
+    // lado, así que el doble toque no hacía absolutamente nada visible. Es
+    // el "aún no anda" reportado.
+    //
+    // La matriz deja quieto el punto tocado: un punto p se dibuja en
+    // (p - p·(e-1)·... ) — desarrollado, trasladar -p·(e-1) y después
+    // escalar por e manda p a -p·(e-1) + e·p = p. O sea que lo que estabas
+    // mirando queda donde estaba y el resto se agranda a su alrededor, que
+    // es justo lo pedido: lo mismo, más cerca.
+    if (!esTira) {
+      final p = _puntoDelDobleToque;
+      setState(() {
+        _zoomController.value = Matrix4.identity()
+          ..translateByDouble(
+            -p.dx * (_escalaDelAcercado - 1),
+            -p.dy * (_escalaDelAcercado - 1),
+            0,
+            1,
+          )
+          ..scaleByDouble(
+            _escalaDelAcercado,
+            _escalaDelAcercado,
+            1,
+            1,
+          );
+        // Habilita el arrastre para pasear por la página ya acercada (ver
+        // panEnabled en el InteractiveViewer).
+        _zoomed = true;
+      });
+      return;
+    }
+
+    // ── Tira de manhwa: se angosta la columna, anclando el punto tocado ───
+    //
+    // Mismo problema que tenía la cascada: cambiar el ancho cambia el alto
+    // de toda la tira, así que sin corregir el scroll lo que estabas
+    // mirando se iba a otro lado.
+    //
+    // Acá la cuenta es en píxeles porque es un ScrollController común: el
+    // punto tocado está a (scroll + y) del principio de la tira; después
+    // del cambio ese mismo punto está a (scroll + y)·f. Para que siga
+    // cayendo en la misma altura y de la pantalla, el scroll tiene que
+    // quedar en (scroll + y)·f - y.
+    final y = _puntoDelDobleToque.dy;
+    // `_zoomedOut` es todavía el estado de ANTES del toque: si estaba
+    // alejado, este toque acerca (la columna se ensancha).
+    final f = _zoomedOut ? 1 / _factorAlejadoTira : _factorAlejadoTira;
+    final scroll = _stripScrollController.hasClients
+        ? _stripScrollController.position.pixels
+        : 0.0;
+    final destino = (scroll + y) * f - y;
+
+    widget.alternarAlejado();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted || !_stripScrollController.hasClients) return;
+      final posicion = _stripScrollController.position;
+      posicion.jumpTo(destino.clamp(0.0, posicion.maxScrollExtent));
     });
   }
 
@@ -1332,12 +1746,25 @@ class _PagedPageState extends State<_PagedPage> {
   @override
   void initState() {
     super.initState();
+    widget.registrarScroll(widget.indice, _desplazar);
     final cached = _aspectCache[widget.url];
     if (cached != null) {
       _aspect = cached;
       return;
     }
     _resolveAspect();
+  }
+
+  /// Baja o sube DENTRO de esta página. Si no hay nada que desplazar (una
+  /// página de manga entra entera), no hace nada — y eso es lo correcto: las
+  /// flechas de arriba y abajo no cambian de página, para eso están las de
+  /// los costados.
+  void _desplazar(double delta) {
+    if (!_stripScrollController.hasClients) return;
+    final posicion = _stripScrollController.position;
+    posicion.jumpTo(
+      (posicion.pixels + delta).clamp(0.0, posicion.maxScrollExtent),
+    );
   }
 
   @override
@@ -1347,9 +1774,14 @@ class _PagedPageState extends State<_PagedPage> {
     // otra página (mismo slot, url distinta) sin pasar por dispose/initState,
     // el zoom/achicado de la página anterior se veía en la nueva — página
     // corta y angosta con hueco negro abajo, o de entrada agrandada,
-    // reportado en vivo. Cada página nueva arranca sin zoom aplicado.
+    // reportado en vivo. Cada página nueva arranca sin PELLIZCO aplicado.
+    //
+    // El "alejado" ya no se limpia acá: dejó de ser de esta página y pasó a
+    // ser de todo el lector (widget.alejado), que es justamente lo que hace
+    // que el tamaño no cambie solo al pasar de página. Lo que sí se limpia
+    // es el pellizco, que es una mirada puntual a ESTA página: arrastrarlo a
+    // la siguiente la abriría corrida en una esquina cualquiera.
     if (oldWidget.url != widget.url) {
-      _zoomedOut = false;
       _zoomed = false;
       _stripScrollbarReady = false;
       _zoomController.value = Matrix4.identity();
@@ -1391,6 +1823,7 @@ class _PagedPageState extends State<_PagedPage> {
 
   @override
   void dispose() {
+    widget.olvidarScroll(widget.indice, _desplazar);
     if (_listener != null) _stream?.removeListener(_listener!);
     _zoomController.dispose();
     _stripScrollController.dispose();
@@ -1446,7 +1879,11 @@ class _PagedPageState extends State<_PagedPage> {
                       widget.url,
                       width: double.infinity,
                       height: double.infinity,
-                      fit: BoxFit.contain,
+                      // Llenar pantalla recorta lo que sobre en vez de
+                      // dejar la página entera con franjas — ver
+                      // ComicController.llenarPantalla.
+                      fit:
+                          widget.llenarPantalla ? BoxFit.cover : BoxFit.contain,
                       placeholder: widget.placeholder,
                       fallback: const _PagedLoadError(),
                       headers: widget.headers,
@@ -1454,7 +1891,7 @@ class _PagedPageState extends State<_PagedPage> {
                   ),
                 ),
               ),
-              _doubleTapZoomOverlay(),
+              _doubleTapZoomOverlay(esTira: false),
             ],
           );
         }
@@ -1471,7 +1908,8 @@ class _PagedPageState extends State<_PagedPage> {
             constraints.maxWidth < 900.0 ? constraints.maxWidth : 900.0;
         // Doble toque = alejar, mismo criterio que la cascada: se angosta la
         // columna al 55% para ver más de la tira de un vistazo.
-        final stripWidth = _zoomedOut ? fullWidth * 0.55 : fullWidth;
+        final stripWidth =
+            _zoomedOut ? fullWidth * _factorAlejadoTira : fullWidth;
         // Algunas tiras, a este ancho, quedan más bajas que la pantalla
         // (panel corto clasificado igual como "tira" por su proporción) y
         // dejaban un hueco negro abajo — reportado en vivo con captura.
@@ -1547,7 +1985,7 @@ class _PagedPageState extends State<_PagedPage> {
                 ),
               ),
             ),
-            _doubleTapZoomOverlay(),
+            _doubleTapZoomOverlay(esTira: true),
             if (!Platform.isAndroid) _buildPagedStripScrollbar(),
           ],
         );

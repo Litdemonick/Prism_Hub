@@ -16,7 +16,6 @@ import 'package:prismhub/views/pages/watch/video/video_player_sidebar.dart';
 import 'package:prismhub/views/widgets/cache_network_image.dart';
 import 'package:prismhub/views/widgets/home/home_theme.dart';
 import 'package:prismhub/views/widgets/watch/aviso_extension_caida.dart';
-import 'package:volume_controller/volume_controller.dart';
 
 class VideoPlayerMobileControls extends StatefulWidget {
   const VideoPlayerMobileControls({super.key, required this.controller});
@@ -31,18 +30,6 @@ class _VideoPlayerMobileControlsState extends State<VideoPlayerMobileControls> {
   late final VideoPlayerController _c = widget.controller;
   final _subtitleViewKey = GlobalKey<SubtitleViewState>();
   bool _showControls = true;
-  double _currentVolume = 0;
-  // Amplificación por ENCIMA del volumen del sistema, en por ciento.
-  //
-  // Deslizar hacia arriba sube el volumen del teléfono, y ahí se terminaba:
-  // con el sistema al máximo y una pista grabada baja no quedaba nada por
-  // hacer. Pasado ese punto, seguir deslizando amplifica desde el reproductor
-  // —que es lo único que puede dar más de lo que se grabó—, hasta el techo de
-  // VideoPlayerController.volumenMaximo.
-  //
-  // 100 = sin amplificar, o sea el comportamiento de siempre.
-  double _boost = 100;
-  bool _isAdjusting = false;
   bool _isLongPress = false;
   // Velocidad del adelantado con el dedo apoyado.
   //
@@ -57,9 +44,9 @@ class _VideoPlayerMobileControlsState extends State<VideoPlayerMobileControls> {
   // cambiarla sea tocar un solo numero.
   static const double _velocidadSostenida = 2.0;
   // Cuenta de dedos apoyados en la pantalla — sin esto, pellizcar con 2 dedos
-  // (que el usuario espera que no haga nada, no hay zoom por pellizco, solo
-  // doble tap) igual disparaba onVerticalDragUpdate con el movimiento de uno
-  // de los 2 dedos, subiendo/bajando el volumen sin querer.
+  // (que el usuario espera que no haga nada, no hay zoom por pellizco) igual
+  // disparaba los gestos de un solo dedo (mover la cámara VR, etc.) con el
+  // movimiento de uno de los 2.
   int _activePointers = 0;
   Timer? _timer;
   Worker? _webViewWorker;
@@ -144,22 +131,6 @@ class _VideoPlayerMobileControlsState extends State<VideoPlayerMobileControls> {
 
   _init() async {
     _updateTimer();
-    VolumeController().showSystemUI = false;
-    _currentVolume = await VolumeController().getVolume();
-    // Se sigue el volumen real del telefono mientras el reproductor este
-    // abierto.
-    //
-    // Antes se leia una sola vez aca y nunca mas: si el usuario tocaba los
-    // botones fisicos, el numero que mostraba el gesto quedaba viejo y decia
-    // un volumen que no era el que sonaba.
-    VolumeController().listener((volumen) {
-      if (!mounted) return;
-      if (_currentVolume == volumen) return;
-      _currentVolume = volumen;
-      // Solo se repinta si el cartel esta a la vista; si no, alcanza con
-      // guardarlo para cuando se muestre.
-      if (_isAdjusting) setState(() {});
-    });
   }
 
   @override
@@ -204,9 +175,6 @@ class _VideoPlayerMobileControlsState extends State<VideoPlayerMobileControls> {
     _avisoTimer?.cancel();
     _saltoTimer?.cancel();
     _timer?.cancel();
-    // Sin esto queda escuchando el volumen del sistema despues de cerrar el
-    // reproductor, sobre un State que ya no existe.
-    VolumeController().removeListener();
     super.dispose();
   }
 
@@ -453,31 +421,6 @@ class _VideoPlayerMobileControlsState extends State<VideoPlayerMobileControls> {
                             ),
                           ),
                         ),
-                      if (_isAdjusting)
-                        Padding(
-                          padding: const EdgeInsets.all(8.0),
-                          child: Row(
-                            mainAxisSize: MainAxisSize.min,
-                            children: [
-                              const Icon(Icons.volume_up),
-                              const SizedBox(width: 5),
-                              // Con amplificación se muestra ESA, que es lo
-                              // que está cambiando el gesto en ese tramo. Sin
-                              // el signo, 150 y 100 se leerían igual de
-                              // "normales" y no se entendería que una está
-                              // amplificada.
-                              Text(
-                                _boost > 100
-                                    ? '+${(_boost - 100).toStringAsFixed(0)}%'
-                                    // Con % y redondeado al entero: "47" solo
-                                    // no se lee como un volumen, y sin
-                                    // redondear el numero temblaba en cada
-                                    // pixel de arrastre.
-                                    : '${(_currentVolume * 100).round()}%',
-                              ),
-                            ],
-                          ),
-                        ),
                     ],
                   ),
                 ),
@@ -614,58 +557,11 @@ class _VideoPlayerMobileControlsState extends State<VideoPlayerMobileControls> {
                     if (ancho <= 0) return;
                     _c.moverVr(-details.delta.dx / ancho);
                   },
-                  // El numero sale APENAS se apoya el dedo, con el volumen que
-                  // hay en ese momento.
-                  //
-                  // Antes se prendia en el primer onVerticalDragUpdate, y ese
-                  // no llega hasta que el dedo recorrio el umbral de arrastre
-                  // de Flutter (~18 px): para cuando aparecia el cartel el
-                  // volumen YA se habia movido, asi que nunca se llegaba a ver
-                  // de cuanto se partia ni se entendia cuanto estaba subiendo.
-                  onVerticalDragStart: (details) {
-                    if (_activePointers > 1) return;
-                    // Transmitiendo manda el aviso del aparato, que es otro.
-                    if (_c.dlnaDevice.value != null) return;
-                    _isAdjusting = true;
-                    setState(() {});
-                  },
-                  onVerticalDragUpdate: (details) {
-                    if (_activePointers > 1) return;
-                    final add = details.delta.dy / 500;
-                    // Transmitiendo, el volumen que importa es el del APARATO.
-                    // El del telefono no sale por ningun lado, porque el sonido
-                    // lo esta haciendo el televisor.
-                    if (_c.dlnaDevice.value != null) {
-                      _c.ajustarVolumenCast(-add);
-                      return;
-                    }
-                    // Dos tramos con un solo gesto: primero el volumen del
-                    // teléfono y, una vez al tope, la amplificación del
-                    // reproductor. Al bajar se recorren al revés — se baja
-                    // primero la amplificación y recién después el sistema,
-                    // porque si no bajar el volumen no haría nada audible
-                    // hasta soltar todo el aumento.
-                    if (add < 0 && _currentVolume >= 1) {
-                      // Subiendo con el sistema ya al máximo: amplificar.
-                      _boost = (_boost - add * 200)
-                          .clamp(100.0, VideoPlayerController.volumenMaximo);
-                      _c.player.setVolume(_boost);
-                    } else if (add > 0 && _boost > 100) {
-                      // Bajando y todavía amplificado: soltar el aumento.
-                      _boost = (_boost - add * 200)
-                          .clamp(100.0, VideoPlayerController.volumenMaximo);
-                      _c.player.setVolume(_boost);
-                    } else {
-                      _currentVolume = (_currentVolume - add).clamp(0, 1);
-                      VolumeController().setVolume(_currentVolume);
-                    }
-                    _isAdjusting = true;
-                    setState(() {});
-                  },
-                  onVerticalDragEnd: (details) {
-                    _isAdjusting = false;
-                    setState(() {});
-                  },
+                  // Deslizar arriba/abajo para el volumen se saca — a pedido
+                  // explícito, ahora hay un control de volumen propio (ver
+                  // _VolumeButtonMobile en el pie) que además se ve, en vez
+                  // de un gesto invisible que había que descubrir. Transmitir
+                  // sigue con lo suyo (ajustarVolumenCast) por su propio lado.
                   onLongPressStart: (details) {
                     _isLongPress = true;
                     // Transmitiendo se le pide al APARATO, que es quien esta
@@ -1043,23 +939,30 @@ class _VideoPlayerMobileControlsState extends State<VideoPlayerMobileControls> {
                   child: Column(
                     mainAxisSize: MainAxisSize.min,
                     children: [
-                      SafeArea(
-                        bottom: false,
-                        child: Padding(
-                          padding: EdgeInsets.zero,
-                          child: Row(
-                            children: [
-                              // Volver, a pedido explícito ahora se oculta
-                              // junto con el resto del header (antes estaba
-                              // marcada como "siempre visible" a pedido
-                              // anterior — se revirtió ese criterio).
-                              SizedBox.shrink(),
-                            ],
-                          ),
+                      // Acá había un SafeArea vacío haciendo de separador, que
+                      // empujaba TODO el encabezado hacia abajo: con "llenar
+                      // pantalla" el vídeo pasaba a dibujarse hasta el borde
+                      // pero la barra no, y quedaba una franja de vídeo suelta
+                      // por encima de ella (reportado en vivo con captura).
+                      //
+                      // Ahora el hueco lo reserva el propio _Header como
+                      // relleno de arriba, no un separador aparte. Es la misma
+                      // distancia, pero del lado de adentro: el degradado
+                      // arranca en el borde de la pantalla —así no queda esa
+                      // franja— y el título y los íconos siguen cayendo por
+                      // debajo de la cámara, que es lo que este SafeArea
+                      // cuidaba y sigue cuidado.
+                      // Listener transparente (deferToChild por defecto: no
+                      // compite por el gesto, solo escucha) — mientras se
+                      // toca o arrastra algo del header, se reinicia el
+                      // temporizador de auto-ocultado en cada evento, para
+                      // que no se esconda a mitad de una interacción.
+                      Listener(
+                        onPointerDown: (_) => _updateTimer(),
+                        onPointerMove: (_) => _updateTimer(),
+                        child: _Header(
+                          controller: _c,
                         ),
-                      ),
-                      _Header(
-                        controller: _c,
                       ),
                       // La tira de servidores ya no queda siempre visible
                       // tapando el video — a pedido explícito, ahora se abre
@@ -1100,6 +1003,8 @@ class _VideoPlayerMobileControlsState extends State<VideoPlayerMobileControls> {
                   // flecha sola un instante.
                   opacity: _showControls ? 1 : 0,
                   duration: const Duration(milliseconds: 200),
+                  // Misma idea que el encabezado: sin condición, para que
+                  // la flecha nunca quede tapada por la cámara.
                   child: SafeArea(
                     bottom: false,
                     child: Padding(
@@ -1136,9 +1041,75 @@ class _VideoPlayerMobileControlsState extends State<VideoPlayerMobileControls> {
                 child: AnimatedOpacity(
                   opacity: _showControls ? 1 : 0,
                   duration: const Duration(milliseconds: 200),
-                  child: _Footer(controller: _c),
+                  // Con "llenar pantalla" de pie el video pasa a edgeToEdge
+                  // (ver pantallaSegunOrientacion) y este pie, que vive a
+                  // bottom:0, pasó a caer FÍSICAMENTE atrás de los botones
+                  // de navegación del teléfono en vez de arriba de ellos —
+                  // reportado en vivo con captura, la barra de progreso
+                  // quedaba tapada. bottom:true reserva ese alto solo
+                  // cuando de verdad hace falta (viewPadding.bottom vale 0
+                  // en el modo reservado de siempre, así que acá no cambia
+                  // nada).
+                  //
+                  // left:false, right:false EXPLÍCITO: sin esto, SafeArea
+                  // los deja en true por defecto y en horizontal —donde la
+                  // cámara mete un relleno de MediaQuery.padding a un
+                  // costado— el pie quedaba angosto por ese lado, con la
+                  // barra de progreso y su sombra cortadas antes de llegar
+                  // al borde de verdad. Este Positioned ya está en
+                  // left:0/right:0 a propósito (ver arriba): es el ancho
+                  // completo que se busca, sin que SafeArea se lo achique.
+                  child: SafeArea(
+                    top: false,
+                    left: false,
+                    right: false,
+                    // Mismo Listener transparente que el header, para que
+                    // arrastrar la barra de progreso o la de volumen no se
+                    // corte por el auto-ocultado a mitad de camino.
+                    child: Listener(
+                      onPointerDown: (_) => _updateTimer(),
+                      onPointerMove: (_) => _updateTimer(),
+                      child: _Footer(controller: _c),
+                    ),
+                  ),
                 ),
               ),
+            ),
+            // ── Botón grande de pausa/play, en el centro ────────────────────
+            //
+            // Antes la única forma de pausar era doble toque en el tercio
+            // del medio — funciona, pero no hay ningún botón que lo diga: a
+            // pedido explícito, un solo toque (el mismo que muestra el resto
+            // de los controles) también deja un botón grande y visible que
+            // pausa/reanuda al tocarlo, y se esconde junto con todo lo demás.
+            // El doble toque para pausar/saltar SIGUE andando igual — esto
+            // se suma, no lo reemplaza.
+            //
+            // Nada de esto transmitiendo: casteando el centro ya lo ocupa
+            // _PanelCasteando con su propio estado de play/pausa (ver más
+            // arriba, "中间显示"), y este botón encima solo taparía eso.
+            //
+            // Tampoco mientras se está resolviendo el servidor
+            // (isGettingWatchData, el cartel "Obteniendo enlace..." con su
+            // rueda) — ahí todavía no hay nada que pausar, y el botón
+            // aparecía flotando encima de esa rueda sin hacer nada útil.
+            Positioned.fill(
+              child: Obx(() {
+                if (_c.dlnaDevice.value != null ||
+                    _c.isGettingWatchData.value) {
+                  return const SizedBox.shrink();
+                }
+                return IgnorePointer(
+                  ignoring: !_showControls,
+                  child: Center(
+                    child: AnimatedOpacity(
+                      opacity: _showControls ? 1 : 0,
+                      duration: const Duration(milliseconds: 200),
+                      child: _BotonCentralDePausa(controller: _c),
+                    ),
+                  ),
+                );
+              }),
             ),
             Positioned.fill(
               child: Obx(
@@ -1461,7 +1432,16 @@ class _Header extends StatelessWidget {
           ],
         ),
       ),
-      padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
+      // El relleno de arriba se suma al alto que reserva el sistema (barra de
+      // estado o cámara). El degradado, que es el fondo de este Container,
+      // arranca igual en el borde de la pantalla — ver el comentario del
+      // separador que se sacó en _VideoPlayerMobileControls.
+      padding: EdgeInsets.only(
+        left: 20,
+        right: 20,
+        bottom: 10,
+        top: 10 + MediaQuery.paddingOf(context).top,
+      ),
       child: Row(
         children: [
           // La flecha de volver NO va acá.
@@ -1610,6 +1590,181 @@ class _Header extends StatelessWidget {
         ],
       ),
     );
+  }
+}
+
+/// El botón grande de pausa/play del centro. Ver dónde se usa para el porqué.
+class _BotonCentralDePausa extends StatelessWidget {
+  const _BotonCentralDePausa({required this.controller});
+  final VideoPlayerController controller;
+
+  @override
+  Widget build(BuildContext context) {
+    return Obx(() {
+      final reproduciendo = controller.isPlaying.value;
+      return DecoratedBox(
+        // Mismo criterio que la flecha de volver: un fondo redondo detrás
+        // para que se lea sobre cualquier escena, clara u oscura.
+        decoration: BoxDecoration(
+          shape: BoxShape.circle,
+          color: Colors.black.withValues(alpha: 0.45),
+        ),
+        child: IconButton(
+          iconSize: 44,
+          icon: Icon(
+            reproduciendo ? Icons.pause_rounded : Icons.play_arrow_rounded,
+            color: Colors.white,
+          ),
+          onPressed: controller.playOrPause,
+        ),
+      );
+    });
+  }
+}
+
+/// El control de volumen del pie en Android — reemplaza al gesto de
+/// deslizar arriba/abajo en cualquier parte de la pantalla (invisible, sin
+/// ninguna pista de que existía).
+///
+/// SIEMPRE visible, no escondida atrás de un botón — a pedido explícito:
+/// con el menú de antes había que abrirlo para ver o cambiar el volumen, y
+/// ADEMÁS no se actualizaba mientras estaba abierto (PopupMenuButton arma
+/// su contenido una sola vez al abrirse; volver a pedirle que se repinte
+/// no alcanza porque el valor que usaba había quedado fijo en una variable
+/// capturada en ese momento — para ver el cambio de verdad había que
+/// cerrarlo y abrirlo de nuevo). Puesta siempre en el pie, como el resto
+/// de los controles, se repinta con Obx igual que cualquier otra cosa acá.
+///
+/// Mismo tope que en escritorio (VideoPlayerController.volumenMaximo, no
+/// 100): pasado el volumen original de la pista, sigue subiendo
+/// amplificando desde el reproductor. Transmitiendo controla el volumen
+/// del APARATO (castVolumen/ajustarVolumenCast) en vez del teléfono, que
+/// ahí no suena nada.
+class _VolumeButtonMobile extends StatefulWidget {
+  const _VolumeButtonMobile({required this.controller});
+  final VideoPlayerController controller;
+
+  @override
+  State<_VolumeButtonMobile> createState() => _VolumeButtonMobileState();
+}
+
+class _VolumeButtonMobileState extends State<_VolumeButtonMobile> {
+  late double _volumen = widget.controller.player.state.volume;
+  StreamSubscription<double>? _sub;
+
+  @override
+  void initState() {
+    super.initState();
+    // Sincronizado con el volumen real: si cambia por otro lado (calidad
+    // nueva que reinicia el player, etc.) el ícono no se queda mostrando
+    // un valor viejo.
+    _sub = widget.controller.player.stream.volume.listen((v) {
+      if (mounted) setState(() => _volumen = v);
+    });
+  }
+
+  @override
+  void dispose() {
+    _sub?.cancel();
+    super.dispose();
+  }
+
+  bool get _casteando => widget.controller.dlnaDevice.value != null;
+
+  IconData _iconoPara(double valor, double tope) {
+    if (valor <= 0) return Icons.volume_off_rounded;
+    if (valor < tope * 0.5) return Icons.volume_down_rounded;
+    return Icons.volume_up_rounded;
+  }
+
+  /// A cuánto volver al des-silenciar. Se guarda al silenciar en vez de
+  /// mirar el valor actual —que ya es 0— para devolver exactamente el que
+  /// había, incluso si estaba amplificado por encima de 100.
+  double _volumenAntesDeSilenciar = 100;
+
+  @override
+  Widget build(BuildContext context) {
+    return Obx(() {
+      final casteando = _casteando;
+      // Transmitiendo: 0-100, es el volumen del APARATO (castVolumen).
+      // Local: 0-volumenMaximo, el del reproductor de acá.
+      final valor =
+          casteando ? widget.controller.castVolumen.value.toDouble() : _volumen;
+      final tope = casteando ? 100.0 : VideoPlayerController.volumenMaximo;
+
+      void cambiar(double nuevo) {
+        if (casteando) {
+          widget.controller.ajustarVolumenCast((nuevo - valor) / 100);
+        } else {
+          widget.controller.player.setVolume(nuevo);
+          setState(() => _volumen = nuevo);
+        }
+      }
+
+      // Silencia y des-silencia con un toque en la bocina, a pedido
+      // explícito: antes el ícono era decorativo y bajar a cero obligaba a
+      // arrastrar la barra hasta el fondo y después volver a buscar el punto
+      // donde estaba. Va por `cambiar`, así respeta el caso de casteo (donde
+      // el volumen es el del APARATO y se manda por diferencia).
+      void alternarSilencio() {
+        if (valor > 0) {
+          _volumenAntesDeSilenciar = valor;
+          cambiar(0);
+          return;
+        }
+        // Clamp al tope de ESTE momento: se puede haber silenciado con el
+        // volumen local amplificado (hasta 200) y des-silenciar ya
+        // transmitiendo, donde el máximo del aparato es 100.
+        final volver =
+            _volumenAntesDeSilenciar > 0 ? _volumenAntesDeSilenciar : 100.0;
+        cambiar(volver.clamp(0, tope));
+      }
+
+      return Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          // InkWell y no IconButton: el botón de Material reserva 48px de
+          // ancho mínimo y esta fila ya venía justa de espacio (ver el
+          // comentario del orden de los botones en _Footer). Con este
+          // relleno el objetivo queda en 34px, cómodo de tocar, sin sumar
+          // los 26 extra que empujarían de nuevo a pantalla completa.
+          InkWell(
+            onTap: alternarSilencio,
+            customBorder: const CircleBorder(),
+            child: Padding(
+              padding: const EdgeInsets.all(6),
+              child: Icon(_iconoPara(valor, tope), size: 22),
+            ),
+          ),
+          // Más ancha y con más área de agarre que un slider de Material
+          // por defecto — a pedido explícito: en un teléfono, con el dedo
+          // encima del video, el thumb chico era difícil de acertar y de
+          // arrastrar con precisión.
+          SizedBox(
+            width: 150,
+            child: SliderTheme(
+              data: SliderTheme.of(context).copyWith(
+                thumbShape: const RoundSliderThumbShape(enabledThumbRadius: 9),
+                overlayShape: const RoundSliderOverlayShape(overlayRadius: 18),
+              ),
+              child: Slider(
+                value: valor.clamp(0, tope),
+                max: tope,
+                label: '${valor.round()}%',
+                onChanged: cambiar,
+              ),
+            ),
+          ),
+          SizedBox(
+            width: 32,
+            child: Text(
+              '${valor.round()}%',
+              style: const TextStyle(fontSize: 12, color: Colors.white70),
+            ),
+          ),
+        ],
+      );
+    });
   }
 }
 
@@ -1877,6 +2032,33 @@ class _Footer extends StatelessWidget {
                     controller.toggleSideBar(SidebarTab.episodes);
                   },
                 ),
+                // ── Pantalla completa manual ─────────────────────────────
+                //
+                // Las barras del sistema se dejan siempre visibles por
+                // defecto (ver pantallaSegunOrientacion). Este botón es la
+                // excepción a propósito: quien quiere inmersión total —sin
+                // hora ni batería— la pide tocando acá, en vez de que la app
+                // se la imponga.
+                Obx(
+                  () => IconButton(
+                    tooltip: controller.pantallaCompletaAndroid.value
+                        ? 'video.exit-fullscreen'.i18n
+                        : 'video.fullscreen'.i18n,
+                    icon: Icon(
+                      controller.pantallaCompletaAndroid.value
+                          ? Icons.fullscreen_exit
+                          : Icons.fullscreen,
+                    ),
+                    onPressed: controller.alternarPantallaCompletaAndroid,
+                  ),
+                ),
+                // El volumen va ÚLTIMO, después de pantalla completa — a
+                // pedido explícito: mide unos 200px (ícono + barra + el
+                // porcentaje) y, puesto antes, empujaba a pantalla completa
+                // tan a la derecha que costaba acertarle con el dedo. Al
+                // final no molesta a nadie: es una barra ancha que se
+                // arrastra, no un ícono chico al que haya que apuntar.
+                _VolumeButtonMobile(controller: controller),
               ],
             ),
           ),

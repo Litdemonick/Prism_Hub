@@ -6,6 +6,7 @@ import 'package:prismhub/controllers/watch/comic_controller.dart';
 import 'package:prismhub/models/index.dart';
 import 'package:prismhub/utils/i18n.dart';
 import 'package:prismhub/views/widgets/home/home_theme.dart';
+import 'package:prismhub/views/widgets/watch/boton_llenar_pantalla.dart';
 
 class ComicReaderSettings extends StatelessWidget {
   const ComicReaderSettings(this.tag, {super.key});
@@ -69,13 +70,34 @@ class ComicReaderSettings extends StatelessWidget {
       children: [
         Padding(
           padding: const EdgeInsets.fromLTRB(20, 18, 20, 12),
-          child: Text(
-            'reader.reading-mode'.i18n,
-            style: TextStyle(
-              fontSize: 17,
-              fontWeight: FontWeight.bold,
-              color: HomeTheme.textPrimary,
-            ),
+          child: Row(
+            children: [
+              Expanded(
+                child: Text(
+                  'reader.reading-mode'.i18n,
+                  style: TextStyle(
+                    fontSize: 17,
+                    fontWeight: FontWeight.bold,
+                    color: HomeTheme.textPrimary,
+                  ),
+                ),
+              ),
+              // ComicController.llenarPantalla: en paginado recorta la
+              // página, en cascada saca el tope de 900px de ancho (solo se
+              // nota en pantallas anchas — en un teléfono ya usaba todo el
+              // ancho de por sí).
+              //
+              // Solo Android, a pedido explícito — en escritorio no va este
+              // botón.
+              if (Platform.isAndroid)
+                Obx(
+                  () => BotonLlenarPantalla(
+                    activo: c.llenarPantalla.value,
+                    onTap: () =>
+                        c.llenarPantalla.value = !c.llenarPantalla.value,
+                  ),
+                ),
+            ],
           ),
         ),
         Obx(

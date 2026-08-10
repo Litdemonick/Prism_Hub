@@ -1,5 +1,5 @@
 <?xml version="1.0" encoding="utf-8"?>
-<resources>
+<resources xmlns:tools="http://schemas.android.com/tools">
     <!-- Theme applied to the Android Window while the process is starting when the OS's Dark Mode setting is off -->
     <style name="LaunchTheme" parent="@android:style/Theme.Light.NoTitleBar">
         <!-- Show a splash screen on the activity. Automatically removed when
@@ -18,5 +18,33 @@
              ver launch_background) y el primer frame de Flutter. Mismo color
              oscuro que el splash para que la transición sea invisible. -->
         <item name="android:windowBackground">@color/launch_background</item>
+        <!-- El reproductor pide pantalla completa (SystemUiMode.immersiveSticky)
+             en horizontal, y sin esto Android deja el modo por defecto para el
+             recorte de esquinas/cámara (DEFAULT): más conservador y más
+             inconsistente entre marcas que "shortEdges", que es lo que Android
+             recomienda para contenido de punta a punta. Reportado en vivo un
+             hueco negro en la esquina opuesta a la cámara, en horizontal. -->
+        <item name="android:windowLayoutInDisplayCutoutMode" tools:targetApi="p">shortEdges</item>
+        <!-- ── Que el color de las barras lo mande la app ────────────────────
+             Este tema hereda de Theme.Light.NoTitleBar, que es de Android
+             viejo: ahí windowDrawsSystemBarBackgrounds viene en FALSE, y con
+             eso el sistema pinta la barra de estado ÉL, en negro opaco, e
+             ignora el color que pida la app (el statusBarColor de
+             SystemUiOverlayStyle no tenía ningún efecto).
+
+             En modo oscuro no se notaba, porque una barra negra con iconos
+             claros es justo lo que va. En modo claro sí: la app pide iconos
+             OSCUROS —lo correcto sobre un fondo claro— y quedaban negros
+             sobre esa barra negra, o sea la barra de arriba se veía vacía.
+             Reportado en vivo con captura.
+
+             Con esto en true la app dibuja detrás de las barras y el color
+             que pide ModoDeColor.aplicarBarrasDelSistema pasa a valer. Los
+             dos colores van en transparente acá para que no haya un
+             parpadeo negro entre el arranque y el primer color que pide
+             Flutter. -->
+        <item name="android:windowDrawsSystemBarBackgrounds" tools:targetApi="lollipop">true</item>
+        <item name="android:statusBarColor" tools:targetApi="lollipop">@android:color/transparent</item>
+        <item name="android:navigationBarColor" tools:targetApi="lollipop">@android:color/transparent</item>
     </style>
 </resources>

@@ -993,16 +993,25 @@ class _MainAppState extends State<MainApp> {
         // Puesto acá vale para las cinco zonas y para todo lo que se abra
         // encima, sin tener que acordarse pantalla por pantalla.
         systemOverlayStyle: SystemUiOverlayStyle(
-          statusBarColor: Colors.transparent,
+          // Con color propio y no transparente: transparente deja el fondo de
+          // la barra a merced de lo que haya pintado abajo, y con el modo
+          // claro puesto arriba seguía asomando algo oscuro — con los iconos
+          // ya en oscuro encima, la barra de estado se veía vacía (reportado
+          // en vivo con captura). Mismo criterio que en
+          // ModoDeColor.aplicarBarrasDelSistema.
+          statusBarColor: HomeTheme.bg,
           // Brightness.dark = iconos OSCUROS. El nombre confunde: habla del
           // contenido que hay DETRÁS, no del color de los iconos.
-          statusBarIconBrightness:
-              brightness == Brightness.dark ? Brightness.light : Brightness.dark,
-          statusBarBrightness:
-              brightness == Brightness.dark ? Brightness.dark : Brightness.light,
-          systemNavigationBarColor: Colors.transparent,
-          systemNavigationBarIconBrightness:
-              brightness == Brightness.dark ? Brightness.light : Brightness.dark,
+          statusBarIconBrightness: brightness == Brightness.dark
+              ? Brightness.light
+              : Brightness.dark,
+          statusBarBrightness: brightness == Brightness.dark
+              ? Brightness.dark
+              : Brightness.light,
+          systemNavigationBarColor: HomeTheme.bg,
+          systemNavigationBarIconBrightness: brightness == Brightness.dark
+              ? Brightness.light
+              : Brightness.dark,
         ),
       ),
       // Mismo motivo, para las hojas y tarjetas que también se tiñen solas.
@@ -1010,10 +1019,19 @@ class _MainAppState extends State<MainApp> {
         surfaceTintColor: Colors.transparent,
       ),
       // El fondo de todas las zonas, uno solo. Cada Scaffold que no diga otra
-      // cosa arranca del mismo negro que usa el Home, así que al cambiar de
+      // cosa arranca del mismo fondo que usa el Home, así que al cambiar de
       // zona no hay un salto de tono.
-      scaffoldBackgroundColor:
-          brightness == Brightness.dark ? HomeTheme.bg : null,
+      //
+      // ── Y en claro TAMBIÉN ────────────────────────────────────────────────
+      //
+      // Estaba solo para el modo oscuro; en claro quedaba en null y caía en el
+      // ColorScheme, que se siembra con el rosa de la marca
+      // (ColorScheme.fromSeed más arriba) y devuelve un blanco TEÑIDO DE ROSA.
+      // Donde se veía era acostado: el riel de la izquierda es hermano de las
+      // páginas, no va por encima, así que no lo tapa el fondo propio de cada
+      // zona y esa franja salía rosada al lado del contenido. Reportado en
+      // vivo con captura.
+      scaffoldBackgroundColor: HomeTheme.bg,
     );
   }
 

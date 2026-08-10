@@ -66,7 +66,12 @@ class NotificacionReproductor extends BaseAudioHandler {
           // el wakelock (ver esconder()).
           androidStopForegroundOnPause: false,
           // No fija: el usuario tiene que poder descartarla, y descartarla es lo
-          // mismo que cerrar (ver onTaskRemoved).
+          // mismo que cerrar. Eso lo resuelve solo: BaseAudioHandler llama a
+          // stop() por su cuenta al deslizarla (onNotificationDeleted, que
+          // acá no hace falta sobreescribir porque el default del paquete ya
+          // hace exactamente eso) — verificado leyendo el paquete instalado.
+          // onTaskRemoved() SÍ está sobreescrito más abajo, para el otro
+          // caso: cuando deslizan la APP entera fuera de recientes.
           androidNotificationOngoing: false,
         ),
       );
@@ -253,8 +258,12 @@ class NotificacionReproductor extends BaseAudioHandler {
     esconder();
   }
 
-  /// Si el usuario descarta la notificación, es lo mismo que cerrar: dejarla
-  /// andando sin forma de controlarla sería peor.
+  /// Si el usuario desliza la APP ENTERA fuera de recientes, es lo mismo
+  /// que cerrar: dejarla andando sin forma de controlarla sería peor.
+  ///
+  /// (Deslizar solo la NOTIFICACIÓN es otro caso, onNotificationDeleted —
+  /// no hace falta sobreescribirlo, el default de BaseAudioHandler ya llama
+  /// a stop() solo.)
   @override
   Future<void> onTaskRemoved() async => stop();
 

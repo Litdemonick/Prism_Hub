@@ -61,5 +61,35 @@ void main() {
       expect(vr(3840, 1920, 'Le vrai documentaire'), isFalse);
       expect(vr(3840, 1920, 'covr band live'), isFalse);
     });
+
+    test('la CALIDAD de la direccion no es una pista de VR', () {
+      // El fallo reportado en Android: el interruptor salia en practicamente
+      // todos los videos. En las pistas entra la direccion, y casi todas
+      // llevan la calidad ahi — "360p" contiene "360".
+      expect(vr(3840, 1920, 'https://cdn.x/video_360p.mp4'), isFalse);
+      expect(vr(1920, 1920, 'https://cdn.x/hls/180p/index.m3u8'), isFalse);
+      expect(vr(3840, 1920, 'Capitulo 12 [1080p]'), isFalse);
+    });
+
+    test('un numero pegado a otro tampoco cuenta', () {
+      expect(vr(3840, 1920, 'https://cdn.x/e1360/v.mp4'), isFalse);
+      expect(vr(3840, 1920, 'episodio 3180 final'), isFalse);
+    });
+
+    test('"3d" y "sbs" dentro de un hash no cuentan', () {
+      // Los identificadores de las direcciones traen letras y numeros
+      // mezclados; sin exigir palabra suelta, cualquiera con "3d" o "sbs"
+      // adentro prendia el recorte.
+      expect(vr(3840, 1920, 'https://cdn.x/a3d9f2e/video.mp4'), isFalse);
+      expect(vr(3840, 1920, 'https://cdn.x/xsbsq1/video.mp4'), isFalse);
+    });
+
+    test('pero sueltas siguen contando', () {
+      // La otra direccion del mismo cambio: apretar de mas dejaria sin
+      // interruptor a los VR de verdad.
+      expect(vr(3840, 1920, 'Concierto 360 VR'), isTrue);
+      expect(vr(3840, 1920, 'algo_180_sbs.mp4'), isTrue);
+      expect(vr(1920, 1920, 'pelicula 3D completa'), isTrue);
+    });
   });
 }

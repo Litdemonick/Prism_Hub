@@ -1,9 +1,13 @@
+import 'dart:io';
+
 import 'package:flutter/scheduler.dart';
+import 'package:flutter/services.dart';
 import 'package:get/get.dart';
 import 'package:prismhub/models/index.dart';
 import 'package:prismhub/controllers/watch/reader_controller.dart';
 import 'package:prismhub/data/services/database_service.dart';
 import 'package:prismhub/utils/prismhub_storage.dart';
+import 'package:prismhub/views/widgets/home/home_theme.dart';
 import 'package:scrollable_positioned_list/scrollable_positioned_list.dart';
 
 class NovelController extends ReaderController<ExtensionFikushonWatch> {
@@ -22,6 +26,42 @@ class NovelController extends ReaderController<ExtensionFikushonWatch> {
 
   // 字体大小
   final fontSize = (18.0).obs;
+
+  /// Leer sin la barra de estado ni la de navegación del teléfono, para que
+  /// el texto use todo el alto — mismo botón y mismo comportamiento que en el
+  /// lector de cómics (ver ComicController.llenarPantalla).
+  ///
+  /// Acá no recorta ni reescala nada: el texto ya usa todo el ancho y el
+  /// tamaño lo maneja su propio deslizador. Lo único que hace es ganar el
+  /// alto de las dos barras.
+  ///
+  /// Por sesión y no guardado por título, mismo criterio que en cómics.
+  final llenarPantalla = false.obs;
+
+  /// Barras del sistema según "llenar pantalla".
+  ///
+  /// `immersiveSticky` y NO `edgeToEdge`: con edgeToEdge el contenido llega a
+  /// los bordes pero las dos barras SIGUEN VISIBLES encima — se reportó en
+  /// vivo con captura en el lector de cómics, donde este mismo método ya está
+  /// funcionando bien. Vuelven solas si se desliza desde el borde, sin sacar
+  /// al lector del modo.
+  /// Y el ESTILO después del modo: `setEnabledSystemUIMode` reinicia el color
+  /// de los iconos del sistema a los de Android, que son claros. Sin volver a
+  /// pedirlo, con el modo claro puesto quedaban blancos sobre una barra casi
+  /// blanca y la de arriba se veía vacía. Misma trampa que en
+  /// ComicController._actualizarPantallaCompletaAndroid.
+  void _actualizarPantallaCompletaAndroid(bool activo) {
+    if (activo) {
+      SystemChrome.setEnabledSystemUIMode(SystemUiMode.immersiveSticky);
+    } else {
+      SystemChrome.setEnabledSystemUIMode(
+        SystemUiMode.manual,
+        overlays: SystemUiOverlay.values,
+      );
+    }
+    ModoDeColor.aplicarBarrasDelSistema();
+  }
+
   final itemPositionsListener = ItemPositionsListener.create();
   final isRecover = false.obs;
   final positions = 0.obs;
@@ -63,6 +103,10 @@ class NovelController extends ReaderController<ExtensionFikushonWatch> {
       (callback) =>
           PrismHubStorage.setSetting(SettingKey.novelFontSize, callback),
     ));
+
+    if (Platform.isAndroid) {
+      addWorker(ever(llenarPantalla, _actualizarPantallaCompletaAndroid));
+    }
 
     // 切换章节时重置页码
     addWorker(ever(index, (callback) {
@@ -112,6 +156,18 @@ class NovelController extends ReaderController<ExtensionFikushonWatch> {
 
   @override
   void onClose() {
+    // Si se salió con "llenar pantalla" prendido, las barras quedaron
+    // escondidas — sin esto la pantalla de atrás se quedaba sin hora ni
+    // barra de navegación hasta reiniciar la app.
+    if (Platform.isAndroid && llenarPantalla.value) {
+      SystemChrome.setEnabledSystemUIMode(
+        SystemUiMode.manual,
+        overlays: SystemUiOverlay.values,
+      );
+      // Y el estilo, por lo mismo de arriba: sin esto se salía del lector con
+      // los iconos del sistema en claro, invisibles con el modo claro puesto.
+      ModoDeColor.aplicarBarrasDelSistema();
+    }
     saveProgressNow();
     super.onClose();
   }
