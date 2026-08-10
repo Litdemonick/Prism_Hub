@@ -1286,6 +1286,11 @@ class _PagedPageState extends State<_PagedPage> {
   final _zoomController = TransformationController();
   bool _zoomed = false;
 
+  /// Cuánto se angosta la tira al alejar. Con nombre por lo mismo que en la
+  /// cascada: la cuenta que mantiene quieto el punto tocado necesita
+  /// exactamente el mismo número que el ancho (ver _toggleZoomOut).
+  static const _factorAlejadoTira = 0.55;
+
   // Zona de doble-toque para alejar/acercar. En desktop deja libres los 80px
   // de cada borde (misma franja que usa el clic de paginar en
   // reader_view.dart) — si el doble-toque cubriera todo el ancho, un clic en
@@ -1296,7 +1301,7 @@ class _PagedPageState extends State<_PagedPage> {
   // página con clic, reportada en vivo (con teclado, que no pasa por gesture
   // arena, ya andaba instantáneo). En Android no hay flechas clickeables
   // (el paginado ahí es por deslizamiento), así que cubre todo el ancho.
-  Widget _doubleTapZoomOverlay() {
+  Widget _doubleTapZoomOverlay({required bool esTira}) {
     final inset = Platform.isAndroid ? 0.0 : 80.0;
     return Positioned(
       left: inset,
@@ -1305,26 +1310,102 @@ class _PagedPageState extends State<_PagedPage> {
       bottom: 0,
       child: GestureDetector(
         behavior: HitTestBehavior.translucent,
-        onDoubleTap: _toggleZoomOut,
+        // Dónde cayó el doble toque, que es el punto que el zoom tiene que
+        // dejar quieto. Se le suma el `inset` porque esta capa arranca
+        // corrida hacia adentro (ver arriba) y la cuenta necesita la
+        // coordenada dentro de la página, no dentro de la capa.
+        onDoubleTapDown: (d) => _puntoDelDobleToque = Offset(
+          d.localPosition.dx + inset,
+          d.localPosition.dy,
+        ),
+        onDoubleTap: () => _toggleZoomOut(esTira: esTira),
       ),
     );
   }
 
-  void _toggleZoomOut() {
-    setState(() {
-      // Cualquier cosa que no sea la identidad se deshace primero: vuelve a 1x
-      // Y centrado. El chequeo de antes era `_zoomed`, que sale de comparar la
-      // ESCALA contra 1.01 — si el usuario pellizcaba, arrastraba y volvía a
-      // achicar hasta más o menos 1x, la escala ya no contaba como zoom pero
-      // quedaba una traslación pegada: la página se veía corrida y no había
-      // manera de enderezarla. Ahora sí.
-      if (_zoomController.value != Matrix4.identity()) {
+  /// Dónde cayó el último doble toque, en píxeles y dentro de la página.
+  /// Arranca en cero por si el zoom se dispara por algún camino que no sea
+  /// un toque; `onDoubleTapDown` siempre llega antes que `onDoubleTap`.
+  Offset _puntoDelDobleToque = Offset.zero;
+
+  /// Cuánto acerca el doble toque en una página de manga.
+  static const _escalaDelAcercado = 2.5;
+
+  void _toggleZoomOut({required bool esTira}) {
+    // Cualquier cosa que no sea la identidad se deshace primero: vuelve a 1x
+    // Y centrado. El chequeo de antes era `_zoomed`, que sale de comparar la
+    // ESCALA contra 1.01 — si el usuario pellizcaba, arrastraba y volvía a
+    // achicar hasta más o menos 1x, la escala ya no contaba como zoom pero
+    // quedaba una traslación pegada: la página se veía corrida y no había
+    // manera de enderezarla. Ahora sí.
+    if (_zoomController.value != Matrix4.identity()) {
+      setState(() {
         _zoomController.value = Matrix4.identity();
         _zoomed = false;
-        return;
-      }
-      // Ya estaba derecha: el doble toque hace lo de siempre, alejar/acercar.
-      _zoomedOut = !_zoomedOut;
+      });
+      return;
+    }
+
+    // ── Página de manga: acercar en el punto tocado ───────────────────────
+    //
+    // Antes acá el doble toque daba vuelta `_zoomedOut`, que SOLO se usa
+    // para el ancho de la tira — en una página de manga no se usa en ningún
+    // lado, así que el doble toque no hacía absolutamente nada visible. Es
+    // el "aún no anda" reportado.
+    //
+    // La matriz deja quieto el punto tocado: un punto p se dibuja en
+    // (p - p·(e-1)·... ) — desarrollado, trasladar -p·(e-1) y después
+    // escalar por e manda p a -p·(e-1) + e·p = p. O sea que lo que estabas
+    // mirando queda donde estaba y el resto se agranda a su alrededor, que
+    // es justo lo pedido: lo mismo, más cerca.
+    if (!esTira) {
+      final p = _puntoDelDobleToque;
+      setState(() {
+        _zoomController.value = Matrix4.identity()
+          ..translateByDouble(
+            -p.dx * (_escalaDelAcercado - 1),
+            -p.dy * (_escalaDelAcercado - 1),
+            0,
+            1,
+          )
+          ..scaleByDouble(
+            _escalaDelAcercado,
+            _escalaDelAcercado,
+            1,
+            1,
+          );
+        // Habilita el arrastre para pasear por la página ya acercada (ver
+        // panEnabled en el InteractiveViewer).
+        _zoomed = true;
+      });
+      return;
+    }
+
+    // ── Tira de manhwa: se angosta la columna, anclando el punto tocado ───
+    //
+    // Mismo problema que tenía la cascada: cambiar el ancho cambia el alto
+    // de toda la tira, así que sin corregir el scroll lo que estabas
+    // mirando se iba a otro lado.
+    //
+    // Acá la cuenta es en píxeles porque es un ScrollController común: el
+    // punto tocado está a (scroll + y) del principio de la tira; después
+    // del cambio ese mismo punto está a (scroll + y)·f. Para que siga
+    // cayendo en la misma altura y de la pantalla, el scroll tiene que
+    // quedar en (scroll + y)·f - y.
+    final y = _puntoDelDobleToque.dy;
+    // `_zoomedOut` es todavía el estado de ANTES del toque: si estaba
+    // alejado, este toque acerca (la columna se ensancha).
+    final f = _zoomedOut ? 1 / _factorAlejadoTira : _factorAlejadoTira;
+    final scroll = _stripScrollController.hasClients
+        ? _stripScrollController.position.pixels
+        : 0.0;
+    final destino = (scroll + y) * f - y;
+
+    setState(() => _zoomedOut = !_zoomedOut);
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted || !_stripScrollController.hasClients) return;
+      final posicion = _stripScrollController.position;
+      posicion.jumpTo(destino.clamp(0.0, posicion.maxScrollExtent));
     });
   }
 
@@ -1591,7 +1672,7 @@ class _PagedPageState extends State<_PagedPage> {
                   ),
                 ),
               ),
-              _doubleTapZoomOverlay(),
+              _doubleTapZoomOverlay(esTira: false),
             ],
           );
         }
@@ -1608,7 +1689,8 @@ class _PagedPageState extends State<_PagedPage> {
             constraints.maxWidth < 900.0 ? constraints.maxWidth : 900.0;
         // Doble toque = alejar, mismo criterio que la cascada: se angosta la
         // columna al 55% para ver más de la tira de un vistazo.
-        final stripWidth = _zoomedOut ? fullWidth * 0.55 : fullWidth;
+        final stripWidth =
+            _zoomedOut ? fullWidth * _factorAlejadoTira : fullWidth;
         // Algunas tiras, a este ancho, quedan más bajas que la pantalla
         // (panel corto clasificado igual como "tira" por su proporción) y
         // dejaban un hueco negro abajo — reportado en vivo con captura.
@@ -1684,7 +1766,7 @@ class _PagedPageState extends State<_PagedPage> {
                 ),
               ),
             ),
-            _doubleTapZoomOverlay(),
+            _doubleTapZoomOverlay(esTira: true),
             if (!Platform.isAndroid) _buildPagedStripScrollbar(),
           ],
         );
