@@ -3303,7 +3303,8 @@ class VideoPlayerController extends GetxController with WidgetsBindingObserver {
       for (final e in newWatch.headers!.entries) {
         if (!e.key.startsWith('X-') ||
             e.key == _lecturaContinua ||
-            e.key == _listaDePedacitos) {
+            e.key == _listaDePedacitos ||
+            e.key == _porElRelay) {
           headers[e.key] = e.value;
         }
       }
@@ -5654,6 +5655,44 @@ class VideoPlayerController extends GetxController with WidgetsBindingObserver {
   /// servidores la necesitan.
   static const _listaDePedacitos = 'X-Lista-De-Pedacitos';
 
+  /// La extensión pide que los pedacitos los baje la app y no mpv.
+  ///
+  /// **No es una cabecera HTTP**: es una declaración, igual que las dos de
+  /// arriba, y se saca antes de pedirle nada a la fuente.
+  ///
+  /// ── Qué se midió ────────────────────────────────────────────────────────
+  ///
+  /// Reportado en vivo el 2026-08-10 con AnimeAV1: el vídeo arranca, avanza
+  /// 708 ms y se queda cargando para siempre; al adelantar, igual. En el
+  /// registro se ve lo que de verdad pasa:
+  ///
+  ///   colchón: 0,00 s · entrando: 172309 B/s · posición clavada
+  ///   media_kit error: tcp: ffurl_read returned 0xffffff76   (cada ~31 s)
+  ///
+  /// Está entrando data y el vídeo no avanza. Y el mismo origen, pedido desde
+  /// afuera, entrega **7,65 MB/s sin un solo fallo** sobre doce pedacitos
+  /// seguidos, y deja saltar al pedacito 71 o al 142 sin haber pedido los
+  /// anteriores. O sea que el servidor está perfecto: lo que no funciona es
+  /// cómo le llegan los pedidos cuando los hace mpv.
+  ///
+  /// Le pasa a los DOS servidores de listas de esta extensión, y solo uno de
+  /// ellos manda una cabecera fuera de lo común, así que no alcanza con
+  /// culpar a la cabecera. El MP4 directo del mismo episodio anda perfecto.
+  ///
+  /// ── Qué hace ────────────────────────────────────────────────────────────
+  ///
+  /// Manda la fuente por el relay local aunque haya un solo nodo. El relay ya
+  /// existe y se usaba solo para esquivar nodos caídos; pidiendo él los
+  /// pedacitos, salen con las cabeceras exactas y por conexiones que se
+  /// reutilizan, y mpv lee de `localhost` sin cabeceras de por medio.
+  ///
+  /// ── Por qué es seguro ───────────────────────────────────────────────────
+  ///
+  /// Solo se enciende para quien lo declare. Ninguna otra extensión del repo
+  /// lo hace, así que para todas las demás fuentes esto no existe. Y si el
+  /// relay no se puede levantar, se sigue como siempre.
+  static const _porElRelay = 'X-Por-El-Relay';
+
   /// La dirección local que está sirviendo la bomba, si hay alguna andando.
   String? _bombaUrl;
 
@@ -5702,11 +5741,13 @@ class VideoPlayerController extends GetxController with WidgetsBindingObserver {
     // mapa original: ese es de `watchData` y lo comparten otros.
     final lecturaContinua = hdrs.remove(_lecturaContinua) == '1';
     final listaDePedacitos = hdrs.remove(_listaDePedacitos) == '1';
+    final porElRelay = hdrs.remove(_porElRelay) == '1';
     final headersLimpias = headers == null
         ? null
         : (Map<String, String>.of(headers)
           ..remove(_lecturaContinua)
-          ..remove(_listaDePedacitos));
+          ..remove(_listaDePedacitos)
+          ..remove(_porElRelay));
     // La bomba anterior se suelta ANTES de abrir otra fuente: cada una deja
     // lecturas abiertas contra el servidor y nadie más las va a cerrar.
     _soltarLaBomba();
@@ -5719,7 +5760,13 @@ class VideoPlayerController extends GetxController with WidgetsBindingObserver {
     audiosHls.value = <PistaDeAudio>[];
     audioHlsElegido.value = -1;
     final plan =
-        await _comoAbrir(url, headersLimpias, lecturaContinua, listaDePedacitos);
+        await _comoAbrir(
+      url,
+      headersLimpias,
+      lecturaContinua,
+      listaDePedacitos,
+      porElRelay,
+    );
     if (_isPlaybackClosed()) return false;
     _fuenteUrl = plan.url ?? url;
     _fuenteHeaders = hdrs;
@@ -6116,6 +6163,7 @@ class VideoPlayerController extends GetxController with WidgetsBindingObserver {
     Map<String, String>? headers,
     bool lecturaContinua,
     bool listaDePedacitos,
+    bool porElRelay,
   ) async {
     // La ficha del servidor, SIEMPRE, aunque no haya nada que hacer. Sirve para
     // revisar extensión por extensión sin cruzar líneas a mano.
@@ -6323,6 +6371,27 @@ class VideoPlayerController extends GetxController with WidgetsBindingObserver {
     // Así que cuando hay algo que elegir se le da el maestro y lo resuelve mpv,
     // que para eso está. El viaje de más se paga una vez; perder el audio en
     // inglés se paga toda la película.
+    // La extensión midió que a mpv no le funciona pedir estos pedacitos, así
+    // que se los baja la app aunque haya un solo nodo y no haya nodo al que
+    // cambiarle. Ver _porElRelay: no es una suposición, está medido contra el
+    // origen, que entrega 7,65 MB/s a quien le pide de esta otra forma.
+    if (nodos.length < 2 && porElRelay) {
+      try {
+        final relay = await CastRelayServer.registerAndGetUrl(
+          targetUrl: direccion,
+          headers: hdrs,
+          // No hay a quién esquivar: es un solo nodo. Lo que se busca acá es
+          // que los pedidos los haga la app y no mpv.
+          esquivarNodosCaidos: false,
+        );
+        logger.info('ficha · $servidor · PASA POR EL RELAY porque la extensión '
+            'lo pide: los pedacitos los baja la app · ${nodos.first}');
+        return _ComoAbrir.con(relay);
+      } catch (e) {
+        logger.info('ficha · $servidor · el relay no se pudo levantar · va '
+            'directo a mpv como siempre: $e');
+      }
+    }
     if (nodos.length < 2) {
       final conVariante = direccion != url;
       final hayPistas = maestro.contains('#EXT-X-MEDIA');
