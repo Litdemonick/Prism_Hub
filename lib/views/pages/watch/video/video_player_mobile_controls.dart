@@ -1176,9 +1176,17 @@ class _VideoPlayerMobileControlsState extends State<VideoPlayerMobileControls> {
             // Nada de esto transmitiendo: casteando el centro ya lo ocupa
             // _PanelCasteando con su propio estado de play/pausa (ver más
             // arriba, "中间显示"), y este botón encima solo taparía eso.
+            //
+            // Tampoco mientras se está resolviendo el servidor
+            // (isGettingWatchData, el cartel "Obteniendo enlace..." con su
+            // rueda) — ahí todavía no hay nada que pausar, y el botón
+            // aparecía flotando encima de esa rueda sin hacer nada útil.
             Positioned.fill(
               child: Obx(() {
-                if (_c.dlnaDevice.value != null) return const SizedBox.shrink();
+                if (_c.dlnaDevice.value != null ||
+                    _c.isGettingWatchData.value) {
+                  return const SizedBox.shrink();
+                }
                 return IgnorePointer(
                   ignoring: !_showControls,
                   child: Center(
