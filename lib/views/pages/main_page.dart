@@ -251,7 +251,8 @@ class _DesktopMainPageState extends State<DesktopMainPage> with WindowListener {
           fluent.PaneItemWidgetAdapter(
             child: Builder(
               builder: (context) {
-                final abierto = fluent.NavigationView.of(context).displayMode ==
+                final abierto = fluent.NavigationView.of(context)
+                        .displayMode ==
                     fluent.PaneDisplayMode.open;
                 if (!abierto) return const SizedBox.shrink();
                 return const Padding(
@@ -613,43 +614,6 @@ class _AndroidMainPageState extends fluent.State<AndroidMainPage> {
             // (sus opciones van directas en el riel), y si quedó abierto al
             // girar, no puede seguir puesto sobre la pantalla nueva.
             if (_masAbierto && !_apaisado(context)) _capaDeMas(),
-            // ── El degradado bajo la hora y la batería ────────────────────
-            //
-            // La barra de estado va con un color sólido (ver
-            // ModoDeColor.aplicarBarrasDelSistema), que es lo que hace que
-            // sus iconos se lean siempre. Pero un color plano corta contra el
-            // contenido con una línea dura y se nota. Esta franja corta lo
-            // funde: arranca en ese mismo color y se va a transparente en
-            // veinte puntos.
-            //
-            // Va acá adentro y no en la raíz del app a propósito, a pedido
-            // explícito: así queda en las cinco zonas y en lo que se abra
-            // dentro de ellas, pero NO en el reproductor ni en el lector, que
-            // son rutas aparte y manejan su propia franja de arriba (encima,
-            // ahí el fondo es el vídeo o la página, y una franja del color de
-            // la app quedaría fuera de lugar).
-            //
-            // IgnorePointer: es decoración, no puede comerse ningún toque.
-            Positioned(
-              top: MediaQuery.paddingOf(context).top,
-              left: 0,
-              right: 0,
-              height: 20,
-              child: IgnorePointer(
-                child: DecoratedBox(
-                  decoration: BoxDecoration(
-                    gradient: LinearGradient(
-                      begin: Alignment.topCenter,
-                      end: Alignment.bottomCenter,
-                      colors: [
-                        HomeTheme.bg,
-                        HomeTheme.bg.withValues(alpha: 0),
-                      ],
-                    ),
-                  ),
-                ),
-              ),
-            ),
           ]),
           // El contenido pasa POR DEBAJO de la barra.
           //
