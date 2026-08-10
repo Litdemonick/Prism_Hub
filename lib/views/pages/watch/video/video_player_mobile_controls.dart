@@ -1686,13 +1686,23 @@ class _VolumeButtonMobileState extends State<_VolumeButtonMobile> {
         mainAxisSize: MainAxisSize.min,
         children: [
           Icon(_iconoPara(valor, tope), size: 22),
+          // Más ancha y con más área de agarre que un slider de Material
+          // por defecto — a pedido explícito: en un teléfono, con el dedo
+          // encima del video, el thumb chico era difícil de acertar y de
+          // arrastrar con precisión.
           SizedBox(
-            width: 90,
-            child: Slider(
-              value: valor.clamp(0, tope),
-              max: tope,
-              label: '${valor.round()}%',
-              onChanged: cambiar,
+            width: 150,
+            child: SliderTheme(
+              data: SliderTheme.of(context).copyWith(
+                thumbShape: const RoundSliderThumbShape(enabledThumbRadius: 9),
+                overlayShape: const RoundSliderOverlayShape(overlayRadius: 18),
+              ),
+              child: Slider(
+                value: valor.clamp(0, tope),
+                max: tope,
+                label: '${valor.round()}%',
+                onChanged: cambiar,
+              ),
             ),
           ),
           SizedBox(
