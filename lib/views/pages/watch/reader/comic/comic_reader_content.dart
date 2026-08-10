@@ -176,10 +176,27 @@ class _ComicReaderContentState extends State<ComicReaderContent> {
     }
 
     final page = _c.currentPage.value;
+    // No solo el ÍNDICE de la página: también CUÁNTO de ella ya se había
+    // pasado. jumpTo(index: page) a secas siempre vuelve al borde de
+    // arriba de esa página — si el usuario venía leyendo por la mitad (o
+    // más abajo), el doble toque se sentía como que "se movía", aunque
+    // técnicamente la página era la misma. itemLeadingEdge es justo esa
+    // fracción (0 = borde de arriba a la vista, negativo = ya scrolleada
+    // por arriba), y es el MISMO valor que jumpTo espera como alignment —
+    // es lo que el propio paquete usa para restaurar posición
+    // (scrollable_positioned_list, PageStorage). Se lee ANTES de tocar el
+    // zoom: después de setState las posiciones viejas ya no valen.
+    double alignment = 0;
+    for (final p in _c.itemPositionsListener.itemPositions.value) {
+      if (p.index == page) {
+        alignment = p.itemLeadingEdge;
+        break;
+      }
+    }
     setState(() => _cascadeZoomed = !_cascadeZoomed);
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (mounted && _c.itemScrollController.isAttached) {
-        _c.itemScrollController.jumpTo(index: page);
+        _c.itemScrollController.jumpTo(index: page, alignment: alignment);
       }
     });
   }
@@ -793,8 +810,7 @@ class _ComicReaderContentState extends State<ComicReaderContent> {
                   // (ver su didUpdateWidget) y el capítulo abre al fondo. Es la
                   // segunda red: la primera está en ComicController, donde se
                   // deja de escuchar posiciones mientras se cambia de capítulo.
-                  final ultimaPagina =
-                      images.isEmpty ? 0 : images.length - 1;
+                  final ultimaPagina = images.isEmpty ? 0 : images.length - 1;
                   final currentPage =
                       _c.currentPage.value.clamp(0, ultimaPagina);
 
@@ -808,8 +824,9 @@ class _ComicReaderContentState extends State<ComicReaderContent> {
                   // izquierda (franja pegada a la derecha), o mitad y mitad
                   // (centrada, que es como venía siendo y sigue siendo el
                   // default). Ver ComicController.stripAlign.
-                  final sobraDeAncho =
-                      maxWidth > effectiveWidth ? maxWidth - effectiveWidth : 0.0;
+                  final sobraDeAncho = maxWidth > effectiveWidth
+                      ? maxWidth - effectiveWidth
+                      : 0.0;
                   final margenIzq = switch (alineacion) {
                     ComicController.alineacionIzquierda => 0.0,
                     ComicController.alineacionDerecha => sobraDeAncho,
