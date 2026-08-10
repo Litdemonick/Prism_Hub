@@ -3283,7 +3283,9 @@ class VideoPlayerController extends GetxController with WidgetsBindingObserver {
     // _tryOpenPlayer).
     if (newWatch.headers != null) {
       for (final e in newWatch.headers!.entries) {
-        if (!e.key.startsWith('X-') || e.key == _lecturaContinua) {
+        if (!e.key.startsWith('X-') ||
+            e.key == _lecturaContinua ||
+            e.key == _listaDePedacitos) {
           headers[e.key] = e.value;
         }
       }
@@ -5592,6 +5594,48 @@ class VideoPlayerController extends GetxController with WidgetsBindingObserver {
   /// no le cambia el camino a ningún otro. Ver BombaDeDatos.
   static const _lecturaContinua = 'X-Lectura-Continua';
 
+  /// La extensión declara que esta dirección es una LISTA de pedacitos, aunque
+  /// no lo parezca por la dirección.
+  ///
+  /// **No es una cabecera HTTP**: es una declaración, igual que
+  /// [_lecturaContinua], y se saca antes de pedirle nada a la fuente.
+  ///
+  /// ── Por qué hace falta ──────────────────────────────────────────────────
+  ///
+  /// Para saber si algo es una lista HLS o un archivo entero se mira si la
+  /// dirección termina en `.m3u8`. Funciona para casi todo, y **no se puede dar
+  /// vuelta**: cambiarlo por "todo lo que no sea .mp4 es lista" mandaría al
+  /// camino de HLS a cualquier MP4 servido sin extensión en la ruta, que es
+  /// justo lo que se arregló en `5a2e1e9` (FuegoCine sirve MP4 con `?link=`, y
+  /// UPNShare con `/download?title=`).
+  ///
+  /// Pero hay listas HLS de verdad cuya dirección no termina en `.m3u8`.
+  /// Medido el 2026-08-10 con el servidor HLS de AnimeAV1:
+  ///
+  ///   https://player.zilla-networks.com/m3u8/{hash}
+  ///     → 200 application/x-mpegURL, `#EXTM3U`, VOD con 143 pedacitos
+  ///
+  /// Esa se estaba abriendo como archivo entero: se le ponía
+  /// `multiple_requests=1`, se le quitaba `reconnect_streamed` y se salteaba
+  /// todo el camino de HLS (seguir el maestro, esquivar nodos caídos). De
+  /// corrido reproduce igual —mpv reconoce el formato por el contenido—, pero
+  /// **al tocar la barra para adelantar se quedaba cargando sin parar**, y a
+  /// veces volvía al principio solo. Reportado en vivo, en SUB y en DUB.
+  ///
+  /// Se probó primero la salida que no tocaba la app: pedirle al servidor la
+  /// misma lista con un nombre que terminara en `.m3u8`. No se puede —
+  /// `/m3u8/{hash}.m3u8`, `/index.m3u8` y `/master.m3u8` dan 404— y la query no
+  /// sirve porque acá se mira la dirección sin ella.
+  ///
+  /// ── Por qué es seguro ───────────────────────────────────────────────────
+  ///
+  /// Solo puede AGREGAR fuentes al camino de HLS, nunca sacar ninguna: si la
+  /// extensión no la declara, todo se comporta exactamente igual que antes. Y
+  /// la declara el resolver del servidor, en su carpeta dentro de la extensión,
+  /// que es el único que lo midió — la app no tiene por qué saber qué
+  /// servidores la necesitan.
+  static const _listaDePedacitos = 'X-Lista-De-Pedacitos';
+
   /// La dirección local que está sirviendo la bomba, si hay alguna andando.
   String? _bombaUrl;
 
@@ -5639,9 +5683,12 @@ class VideoPlayerController extends GetxController with WidgetsBindingObserver {
     // copia de las de la extensión, que es lo que sigue viaje. Copia y no el
     // mapa original: ese es de `watchData` y lo comparten otros.
     final lecturaContinua = hdrs.remove(_lecturaContinua) == '1';
+    final listaDePedacitos = hdrs.remove(_listaDePedacitos) == '1';
     final headersLimpias = headers == null
         ? null
-        : (Map<String, String>.of(headers)..remove(_lecturaContinua));
+        : (Map<String, String>.of(headers)
+          ..remove(_lecturaContinua)
+          ..remove(_listaDePedacitos));
     // La bomba anterior se suelta ANTES de abrir otra fuente: cada una deja
     // lecturas abiertas contra el servidor y nadie más las va a cerrar.
     _soltarLaBomba();
@@ -5653,7 +5700,8 @@ class VideoPlayerController extends GetxController with WidgetsBindingObserver {
     // `clear()` tira una excepción y corta la reproducción antes de empezar.
     audiosHls.value = <PistaDeAudio>[];
     audioHlsElegido.value = -1;
-    final plan = await _comoAbrir(url, headersLimpias, lecturaContinua);
+    final plan =
+        await _comoAbrir(url, headersLimpias, lecturaContinua, listaDePedacitos);
     if (_isPlaybackClosed()) return false;
     _fuenteUrl = plan.url ?? url;
     _fuenteHeaders = hdrs;
@@ -6049,6 +6097,7 @@ class VideoPlayerController extends GetxController with WidgetsBindingObserver {
     String url,
     Map<String, String>? headers,
     bool lecturaContinua,
+    bool listaDePedacitos,
   ) async {
     // La ficha del servidor, SIEMPRE, aunque no haya nada que hacer. Sirve para
     // revisar extensión por extensión sin cruzar líneas a mano.
@@ -6057,7 +6106,20 @@ class VideoPlayerController extends GetxController with WidgetsBindingObserver {
         ? 'servidor sin nombre'
         : currentServerName.value;
     final donde = Uri.tryParse(url)?.host ?? '?';
-    if (!isDirectStream(url) || !sinParametros.endsWith('.m3u8')) {
+    // Una lista es la que TERMINA en .m3u8, como siempre, o la que la extensión
+    // declaró como lista aunque no lo parezca (ver _listaDePedacitos). Lo
+    // segundo solo suma casos: sin la declaración, esta línea vale exactamente
+    // lo mismo que antes para todas las demás fuentes del repo.
+    final esLista = sinParametros.endsWith('.m3u8') || listaDePedacitos;
+    // `isDirectStream` también mira cómo termina la ruta, así que una lista sin
+    // `.m3u8` al final tampoco pasaba por ahí. La declaración vale para las dos
+    // preguntas: es reproducible directo Y es una lista.
+    final directo = isDirectStream(url) || listaDePedacitos;
+    if (listaDePedacitos) {
+      logger.info('ficha · $servidor · $donde · la extensión la declara LISTA '
+          'de pedacitos aunque la dirección no termine en .m3u8');
+    }
+    if (!directo || !esLista) {
       logger.info('ficha · $servidor · ${sinParametros.endsWith('.mp4') ? 'MP4 '
               'directo' : 'no es una lista HLS'} · $donde · va directo a mpv, no '
           'hay pedacitos que repartir');
