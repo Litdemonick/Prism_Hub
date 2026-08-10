@@ -1099,9 +1099,30 @@ class _MainAppState extends State<MainApp> {
           visualDensity: VisualDensity.standard,
           accentColor: _fluentAccent,
         ),
+        // ── El claro de Fluent, atado a la paleta de la app ─────────────────
+        //
+        // Estaba con los valores de fábrica: blanco puro de fondo y el gris
+        // clarito de Fluent para lo que no está seleccionado. Dos problemas
+        // juntos —el modo claro se veía «muy fuerte», y en el riel de la
+        // izquierda los iconos y sus etiquetas quedaban casi invisibles sobre
+        // ese blanco—.
+        //
+        // El resto de la app no usa blanco puro: su fondo claro es un gris muy
+        // suave a propósito, para que las tarjetas blancas se lean como una
+        // superficie POR ENCIMA. Con Fluent en blanco puro, el riel y el fondo
+        // se fundían y encima deslumbraba.
+        //
+        // `inactiveColor` es la clave del riel: de ahí salen el icono y el
+        // texto de cada opción NO seleccionada, que era justo lo que no se
+        // veía. Con el texto principal de la app, contrasta igual que el resto.
         theme: fluent.FluentThemeData(
           visualDensity: VisualDensity.standard,
           accentColor: _fluentAccent,
+          scaffoldBackgroundColor: HomeTheme.bg,
+          micaBackgroundColor: HomeTheme.bg,
+          cardColor: HomeTheme.cardSurface,
+          menuColor: HomeTheme.cardSurface,
+          inactiveColor: HomeTheme.textPrimary,
         ),
         localizationsDelegates: [
           I18nUtils.flutterI18nDelegate,
