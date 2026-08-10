@@ -4640,7 +4640,8 @@ class VideoPlayerController extends GetxController with WidgetsBindingObserver {
         await np.setProperty('vf', '');
       }
     } catch (e) {
-      logger.warning('No se pudo quitar el recorte de VR del vídeo anterior', e);
+      logger.warning(
+          'No se pudo quitar el recorte de VR del vídeo anterior', e);
     }
   }
 
@@ -7159,6 +7160,27 @@ class VideoPlayerController extends GetxController with WidgetsBindingObserver {
     // modo reinicia el estilo, así que salir del reproductor dejaba la app con
     // los iconos del sistema en claro — invisibles con el modo claro puesto.
     ModoDeColor.aplicarBarrasDelSistema();
+    // ── Se vuelve a pedir, más tarde ──────────────────────────────────────
+    //
+    // Reportado en vivo: al volver de un episodio, la barra flotante de
+    // Inicio/Buscar/etc quedaba tapada por la barra de navegación del
+    // teléfono —como si no supiera cuánto mide—, y se acomodaba sola apenas
+    // se mandaba el app a segundo plano y se volvía (sin reiniciarla). Eso
+    // encaja con MediaQuery quedándose con el relleno inferior viejo un
+    // rato después de este cambio de modo, igual que ya pasaba con el
+    // superior (ver el comentario de arriba) — y sin edgeToEdge de por
+    // medio para poder evitarlo del todo esta vez, porque el pedido ya es
+    // `manual`. Repetirlo una vez que la transición de salida terminó de
+    // asentarse le da a Android una segunda oportunidad de entregar el
+    // relleno real; no cuesta nada si ya estaba bien.
+    Future<void>.delayed(const Duration(milliseconds: 400), () {
+      if (!Platform.isAndroid) return;
+      SystemChrome.setEnabledSystemUIMode(
+        SystemUiMode.manual,
+        overlays: SystemUiOverlay.values,
+      );
+      ModoDeColor.aplicarBarrasDelSistema();
+    });
     // 如果是平板则不改变
     // Libera el bloqueo nativo que dejó landscapeAutoMode(forceSensor: true)
     // en onInit — pedir portraitUp/portraitDown acá bloqueaba la rotación
@@ -7189,6 +7211,16 @@ class VideoPlayerController extends GetxController with WidgetsBindingObserver {
   void pantallaSegunOrientacion({required bool acostado}) {
     if (!Platform.isAndroid) return;
     _acostadoActual = acostado;
+    // Reportado en vivo: girar el teléfono adentro del reproductor abría el
+    // teclado en pantalla solo, sin que nadie tocara ningún campo de texto.
+    // Acá no hay ningún TextField —los controles del reproductor son solo
+    // botones y sliders— así que no debería haber nada que lo pida nunca.
+    // El sospechoso es el propio cambio de SystemUiMode de acá abajo: en
+    // algunos aparatos, tocar el WindowInsetsController para las barras del
+    // sistema arrastra consigo el estado del teclado. Se lo esconde a
+    // mano en cada llamada —no cuesta nada si ya estaba escondido— en vez
+    // de intentar adivinar en qué aparato puntual pasa.
+    SystemChannels.textInput.invokeMethod('TextInput.hide');
     // El botón manual de pantalla completa manda por encima de la orientación:
     // sin esto, la página llama a este método en cada rebuild (ver
     // `_androidSegunOrientacion`) y le pisaba el modo inmersivo apenas volvía a
