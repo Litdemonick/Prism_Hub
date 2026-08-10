@@ -1154,7 +1154,19 @@ class _VideoPlayerMobileControlsState extends State<VideoPlayerMobileControls> {
                 child: AnimatedOpacity(
                   opacity: _showControls ? 1 : 0,
                   duration: const Duration(milliseconds: 200),
-                  child: _Footer(controller: _c),
+                  // Con "llenar pantalla" de pie el video pasa a edgeToEdge
+                  // (ver pantallaSegunOrientacion) y este pie, que vive a
+                  // bottom:0, pasó a caer FÍSICAMENTE atrás de los botones
+                  // de navegación del teléfono en vez de arriba de ellos —
+                  // reportado en vivo con captura, la barra de progreso
+                  // quedaba tapada. bottom:true reserva ese alto solo
+                  // cuando de verdad hace falta (viewPadding.bottom vale 0
+                  // en el modo reservado de siempre, así que acá no cambia
+                  // nada).
+                  child: SafeArea(
+                    top: false,
+                    child: _Footer(controller: _c),
+                  ),
                 ),
               ),
             ),
