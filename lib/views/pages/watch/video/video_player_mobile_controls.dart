@@ -16,7 +16,6 @@ import 'package:prismhub/views/pages/watch/video/video_player_sidebar.dart';
 import 'package:prismhub/views/widgets/cache_network_image.dart';
 import 'package:prismhub/views/widgets/home/home_theme.dart';
 import 'package:prismhub/views/widgets/watch/aviso_extension_caida.dart';
-import 'package:volume_controller/volume_controller.dart';
 
 class VideoPlayerMobileControls extends StatefulWidget {
   const VideoPlayerMobileControls({super.key, required this.controller});
@@ -31,18 +30,6 @@ class _VideoPlayerMobileControlsState extends State<VideoPlayerMobileControls> {
   late final VideoPlayerController _c = widget.controller;
   final _subtitleViewKey = GlobalKey<SubtitleViewState>();
   bool _showControls = true;
-  double _currentVolume = 0;
-  // Amplificación por ENCIMA del volumen del sistema, en por ciento.
-  //
-  // Deslizar hacia arriba sube el volumen del teléfono, y ahí se terminaba:
-  // con el sistema al máximo y una pista grabada baja no quedaba nada por
-  // hacer. Pasado ese punto, seguir deslizando amplifica desde el reproductor
-  // —que es lo único que puede dar más de lo que se grabó—, hasta el techo de
-  // VideoPlayerController.volumenMaximo.
-  //
-  // 100 = sin amplificar, o sea el comportamiento de siempre.
-  double _boost = 100;
-  bool _isAdjusting = false;
   bool _isLongPress = false;
   // Velocidad del adelantado con el dedo apoyado.
   //
@@ -57,9 +44,9 @@ class _VideoPlayerMobileControlsState extends State<VideoPlayerMobileControls> {
   // cambiarla sea tocar un solo numero.
   static const double _velocidadSostenida = 2.0;
   // Cuenta de dedos apoyados en la pantalla — sin esto, pellizcar con 2 dedos
-  // (que el usuario espera que no haga nada, no hay zoom por pellizco, solo
-  // doble tap) igual disparaba onVerticalDragUpdate con el movimiento de uno
-  // de los 2 dedos, subiendo/bajando el volumen sin querer.
+  // (que el usuario espera que no haga nada, no hay zoom por pellizco) igual
+  // disparaba los gestos de un solo dedo (mover la cámara VR, etc.) con el
+  // movimiento de uno de los 2.
   int _activePointers = 0;
   Timer? _timer;
   Worker? _webViewWorker;
@@ -144,22 +131,6 @@ class _VideoPlayerMobileControlsState extends State<VideoPlayerMobileControls> {
 
   _init() async {
     _updateTimer();
-    VolumeController().showSystemUI = false;
-    _currentVolume = await VolumeController().getVolume();
-    // Se sigue el volumen real del telefono mientras el reproductor este
-    // abierto.
-    //
-    // Antes se leia una sola vez aca y nunca mas: si el usuario tocaba los
-    // botones fisicos, el numero que mostraba el gesto quedaba viejo y decia
-    // un volumen que no era el que sonaba.
-    VolumeController().listener((volumen) {
-      if (!mounted) return;
-      if (_currentVolume == volumen) return;
-      _currentVolume = volumen;
-      // Solo se repinta si el cartel esta a la vista; si no, alcanza con
-      // guardarlo para cuando se muestre.
-      if (_isAdjusting) setState(() {});
-    });
   }
 
   @override
@@ -204,9 +175,6 @@ class _VideoPlayerMobileControlsState extends State<VideoPlayerMobileControls> {
     _avisoTimer?.cancel();
     _saltoTimer?.cancel();
     _timer?.cancel();
-    // Sin esto queda escuchando el volumen del sistema despues de cerrar el
-    // reproductor, sobre un State que ya no existe.
-    VolumeController().removeListener();
     super.dispose();
   }
 
@@ -453,31 +421,6 @@ class _VideoPlayerMobileControlsState extends State<VideoPlayerMobileControls> {
                             ),
                           ),
                         ),
-                      if (_isAdjusting)
-                        Padding(
-                          padding: const EdgeInsets.all(8.0),
-                          child: Row(
-                            mainAxisSize: MainAxisSize.min,
-                            children: [
-                              const Icon(Icons.volume_up),
-                              const SizedBox(width: 5),
-                              // Con amplificación se muestra ESA, que es lo
-                              // que está cambiando el gesto en ese tramo. Sin
-                              // el signo, 150 y 100 se leerían igual de
-                              // "normales" y no se entendería que una está
-                              // amplificada.
-                              Text(
-                                _boost > 100
-                                    ? '+${(_boost - 100).toStringAsFixed(0)}%'
-                                    // Con % y redondeado al entero: "47" solo
-                                    // no se lee como un volumen, y sin
-                                    // redondear el numero temblaba en cada
-                                    // pixel de arrastre.
-                                    : '${(_currentVolume * 100).round()}%',
-                              ),
-                            ],
-                          ),
-                        ),
                     ],
                   ),
                 ),
@@ -614,58 +557,11 @@ class _VideoPlayerMobileControlsState extends State<VideoPlayerMobileControls> {
                     if (ancho <= 0) return;
                     _c.moverVr(-details.delta.dx / ancho);
                   },
-                  // El numero sale APENAS se apoya el dedo, con el volumen que
-                  // hay en ese momento.
-                  //
-                  // Antes se prendia en el primer onVerticalDragUpdate, y ese
-                  // no llega hasta que el dedo recorrio el umbral de arrastre
-                  // de Flutter (~18 px): para cuando aparecia el cartel el
-                  // volumen YA se habia movido, asi que nunca se llegaba a ver
-                  // de cuanto se partia ni se entendia cuanto estaba subiendo.
-                  onVerticalDragStart: (details) {
-                    if (_activePointers > 1) return;
-                    // Transmitiendo manda el aviso del aparato, que es otro.
-                    if (_c.dlnaDevice.value != null) return;
-                    _isAdjusting = true;
-                    setState(() {});
-                  },
-                  onVerticalDragUpdate: (details) {
-                    if (_activePointers > 1) return;
-                    final add = details.delta.dy / 500;
-                    // Transmitiendo, el volumen que importa es el del APARATO.
-                    // El del telefono no sale por ningun lado, porque el sonido
-                    // lo esta haciendo el televisor.
-                    if (_c.dlnaDevice.value != null) {
-                      _c.ajustarVolumenCast(-add);
-                      return;
-                    }
-                    // Dos tramos con un solo gesto: primero el volumen del
-                    // teléfono y, una vez al tope, la amplificación del
-                    // reproductor. Al bajar se recorren al revés — se baja
-                    // primero la amplificación y recién después el sistema,
-                    // porque si no bajar el volumen no haría nada audible
-                    // hasta soltar todo el aumento.
-                    if (add < 0 && _currentVolume >= 1) {
-                      // Subiendo con el sistema ya al máximo: amplificar.
-                      _boost = (_boost - add * 200)
-                          .clamp(100.0, VideoPlayerController.volumenMaximo);
-                      _c.player.setVolume(_boost);
-                    } else if (add > 0 && _boost > 100) {
-                      // Bajando y todavía amplificado: soltar el aumento.
-                      _boost = (_boost - add * 200)
-                          .clamp(100.0, VideoPlayerController.volumenMaximo);
-                      _c.player.setVolume(_boost);
-                    } else {
-                      _currentVolume = (_currentVolume - add).clamp(0, 1);
-                      VolumeController().setVolume(_currentVolume);
-                    }
-                    _isAdjusting = true;
-                    setState(() {});
-                  },
-                  onVerticalDragEnd: (details) {
-                    _isAdjusting = false;
-                    setState(() {});
-                  },
+                  // Deslizar arriba/abajo para el volumen se saca — a pedido
+                  // explícito, ahora hay un control de volumen propio (ver
+                  // _VolumeButtonMobile en el pie) que además se ve, en vez
+                  // de un gesto invisible que había que descubrir. Transmitir
+                  // sigue con lo suyo (ajustarVolumenCast) por su propio lado.
                   onLongPressStart: (details) {
                     _isLongPress = true;
                     // Transmitiendo se le pide al APARATO, que es quien esta
@@ -1701,6 +1597,112 @@ class _BotonCentralDePausa extends StatelessWidget {
   }
 }
 
+/// El control de volumen del pie en Android — reemplaza al gesto de
+/// deslizar arriba/abajo en cualquier parte de la pantalla (invisible, sin
+/// ninguna pista de que existía). Toca el ícono y aparece una BARRA
+/// vertical para subir/bajar, con el número siempre a la vista — no un
+/// botón que abre un menú a ciegas.
+///
+/// Mismo tope que en escritorio (VideoPlayerController.volumenMaximo, no
+/// 100): pasado el volumen original de la pista, sigue subiendo
+/// amplificando desde el reproductor. Transmitiendo controla el volumen
+/// del APARATO (castVolumen/ajustarVolumenCast) en vez del teléfono, que
+/// ahí no suena nada.
+class _VolumeButtonMobile extends StatefulWidget {
+  const _VolumeButtonMobile({required this.controller});
+  final VideoPlayerController controller;
+
+  @override
+  State<_VolumeButtonMobile> createState() => _VolumeButtonMobileState();
+}
+
+class _VolumeButtonMobileState extends State<_VolumeButtonMobile> {
+  late double _volumen = widget.controller.player.state.volume;
+  StreamSubscription<double>? _sub;
+
+  @override
+  void initState() {
+    super.initState();
+    // Sincronizado con el volumen real: si cambia por otro lado (calidad
+    // nueva que reinicia el player, etc.) el ícono no se queda mostrando
+    // un valor viejo.
+    _sub = widget.controller.player.stream.volume.listen((v) {
+      if (mounted) setState(() => _volumen = v);
+    });
+  }
+
+  @override
+  void dispose() {
+    _sub?.cancel();
+    super.dispose();
+  }
+
+  bool get _casteando => widget.controller.dlnaDevice.value != null;
+
+  IconData _iconoPara(double valor, double tope) {
+    if (valor <= 0) return Icons.volume_off_rounded;
+    if (valor < tope * 0.5) return Icons.volume_down_rounded;
+    return Icons.volume_up_rounded;
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Obx(() {
+      final casteando = _casteando;
+      // Transmitiendo: 0-100, es el volumen del APARATO (castVolumen).
+      // Local: 0-volumenMaximo, el del reproductor de acá.
+      final valor =
+          casteando ? widget.controller.castVolumen.value.toDouble() : _volumen;
+      final tope = casteando ? 100.0 : VideoPlayerController.volumenMaximo;
+      return PopupMenuButton<void>(
+        tooltip: 'video.tooltip.volume'.i18n,
+        icon: Icon(_iconoPara(valor, tope)),
+        itemBuilder: (context) => [
+          PopupMenuItem(
+            enabled: false,
+            child: StatefulBuilder(
+              builder: (context, setMenuState) {
+                void cambiar(double nuevo) {
+                  if (casteando) {
+                    widget.controller.ajustarVolumenCast((nuevo - valor) / 100);
+                  } else {
+                    widget.controller.player.setVolume(nuevo);
+                    setState(() => _volumen = nuevo);
+                  }
+                  setMenuState(() {});
+                }
+
+                return SizedBox(
+                  height: 180,
+                  width: 56,
+                  child: Column(
+                    children: [
+                      Text('${valor.round()}%',
+                          style: const TextStyle(
+                              fontSize: 12, color: Colors.white70)),
+                      Expanded(
+                        child: RotatedBox(
+                          quarterTurns: 3,
+                          child: Slider(
+                            value: valor.clamp(0, tope),
+                            max: tope,
+                            onChanged: cambiar,
+                          ),
+                        ),
+                      ),
+                      Icon(_iconoPara(valor, tope), size: 18),
+                    ],
+                  ),
+                );
+              },
+            ),
+          ),
+        ],
+      );
+    });
+  }
+}
+
 class _Footer extends StatelessWidget {
   const _Footer({required this.controller});
   final VideoPlayerController controller;
@@ -1958,6 +1960,7 @@ class _Footer extends StatelessWidget {
                     Icons.subtitles,
                   ),
                 ),
+                _VolumeButtonMobile(controller: controller),
                 // 播放列表
                 IconButton(
                   icon: const Icon(Icons.playlist_play),
