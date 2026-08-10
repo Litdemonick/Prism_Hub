@@ -873,21 +873,28 @@ class _CarruselAndroidState extends State<_CarruselAndroid>
   /// Al abrir el Home, el acordeón arranca en la primera tarjeta: a su
   /// izquierda no hay nada, media pantalla en negro. No está roto —es el
   /// principio de la fila— pero se lee como un hueco, y nada dice que eso se
-  /// mueve con el dedo.
+  /// mueve con el dedo (o, en escritorio, que se arrastra con el mouse).
   ///
-  /// Una flecha con un vaivén corto, en ese hueco. Se va sola a los seis
-  /// segundos, y al primer arrastre desaparece de una: ya se entendió.
+  /// Una flecha con un vaivén corto, en ese hueco. Se queda ahí hasta el
+  /// primer arrastre real —no hay reloj que la apague sola—: recién cuando
+  /// alguien mueve el acordeón queda claro que ya se entendió.
+  ///
+  /// En escritorio ocupa el mismo lugar que la flecha de clic hacia la
+  /// izquierda, y la reemplaza mientras está puesta: al principio esa
+  /// flecha no tiene adónde volver (no hay nada a la izquierda de la
+  /// primera tarjeta), así que mostrarla ahí era un botón que no hacía
+  /// nada. Apenas hay un primer arrastre, la pista se va y la flecha de
+  /// clic vuelve a su lugar de siempre.
   late final AnimationController _pista = AnimationController(
     vsync: this,
     duration: const Duration(milliseconds: 1100),
   )..repeat(reverse: true);
 
   bool _pistaVisible = true;
-  Timer? _relojDeLaPista;
 
-  /// La esconde y no vuelve. Se llama al arrastrar y al vencer el reloj.
+  /// La esconde y no vuelve. Se llama al arrastrar (mouse o dedo) y al
+  /// hacer clic en una flecha de navegación.
   void _ocultarPista() {
-    _relojDeLaPista?.cancel();
     // Frena el vaivén aunque ya estuviera escondida: sin esto seguía
     // tickeando de por vida, moviendo un ícono que ya nadie ve.
     _pista.stop();
@@ -898,8 +905,6 @@ class _CarruselAndroidState extends State<_CarruselAndroid>
   @override
   void initState() {
     super.initState();
-    // Seis segundos alcanzan para leerla sin que se vuelva parte del decorado.
-    _relojDeLaPista = Timer(const Duration(seconds: 6), _ocultarPista);
     _anim.addListener(() {
       // Tocar otra zona mientras el acordeón se está acomodando desmonta este
       // widget con la animación en curso. Sin esta guarda, el oyente llama a
@@ -914,7 +919,6 @@ class _CarruselAndroidState extends State<_CarruselAndroid>
   @override
   void dispose() {
     _anim.dispose();
-    _relojDeLaPista?.cancel();
     _pista.dispose();
     super.dispose();
   }
@@ -1535,21 +1539,27 @@ class _CarruselAndroidState extends State<_CarruselAndroid>
                     // oscura desaparece y sobre una clara tampoco se lee. El
                     // disco la separa del fondo sea cual sea la portada.
                     if (!_esTactil) ...[
-                      Positioned(
-                        left: 8,
-                        top: 0,
-                        bottom: 0,
-                        child: Center(
-                          child: _discoDeFlecha(
-                            _FlechaDeFila(
-                              icono: Icons.chevron_left_rounded,
-                              onTap: () => _irA(
-                                  (_p.roundToDouble() - 1).clamp(0.0, ultimo),
-                                  grupos),
+                      // Mientras la pista está puesta, esta flecha no va: al
+                      // principio no hay nada a la izquierda de la primera
+                      // tarjeta, así que un botón "volver" ahí no hacía nada.
+                      // La pista ocupa este mismo lugar hasta el primer
+                      // arrastre (ver más abajo); recién ahí vuelve.
+                      if (!_pistaVisible)
+                        Positioned(
+                          left: 8,
+                          top: 0,
+                          bottom: 0,
+                          child: Center(
+                            child: _discoDeFlecha(
+                              _FlechaDeFila(
+                                icono: Icons.chevron_left_rounded,
+                                onTap: () => _irA(
+                                    (_p.roundToDouble() - 1).clamp(0.0, ultimo),
+                                    grupos),
+                              ),
                             ),
                           ),
                         ),
-                      ),
                       Positioned(
                         right: 8,
                         top: 0,
@@ -1559,6 +1569,12 @@ class _CarruselAndroidState extends State<_CarruselAndroid>
                             _FlechaDeFila(
                               icono: Icons.chevron_right_rounded,
                               onTap: () {
+                                // Clickear ya cuenta como "se entendió",
+                                // igual que arrastrar: sin esto, alguien que
+                                // solo hace clic (nunca arrastra con el
+                                // mouse) se quedaba sin la flecha izquierda
+                                // para siempre.
+                                _ocultarPista();
                                 _irA(
                                     (_p.roundToDouble() + 1).clamp(0.0, ultimo),
                                     grupos);
@@ -1575,53 +1591,51 @@ class _CarruselAndroidState extends State<_CarruselAndroid>
                         ),
                       ),
                     ],
-                    // ── La pista de «esto se desliza», solo en táctil ──────
+                    // ── La pista de «esto se desliza» ──────────────────────
                     //
-                    // En escritorio el mismo hueco ya lo explican las
-                    // flechas de clic de arriba (_esTactil==false) — las dos
-                    // juntas serían dos avisos diciendo lo mismo. Con el
-                    // dedo no hay ningún botón, así que acá sí hace falta.
+                    // En escritorio ocupa el mismo lugar que la flecha de
+                    // clic hacia la izquierda (ver arriba: esa no se dibuja
+                    // mientras esta está puesta), así que las dos nunca
+                    // compiten por el mismo hueco.
                     //
-                    // Se queda montada siempre que hay táctil (no solo
-                    // mientras _pistaVisible) para que el desvanecido de
+                    // Se queda montada siempre (no solo mientras
+                    // _pistaVisible) para que el desvanecido de
                     // AnimatedOpacity tenga algo que animar en vez de
                     // desaparecer de un salto.
-                    if (_esTactil)
-                      Positioned(
-                        left: 6,
-                        top: 0,
-                        bottom: 0,
-                        child: IgnorePointer(
-                          child: Center(
-                            child: AnimatedOpacity(
-                              opacity: _pistaVisible ? 1 : 0,
-                              duration: const Duration(milliseconds: 450),
-                              curve: Curves.easeOut,
-                              child: AnimatedBuilder(
-                                animation: _pista,
-                                builder: (context, child) => Transform.translate(
-                                  // El vaivén: como una manito empujando la
-                                  // tarjeta hacia la izquierda y volviendo,
-                                  // invitando a seguirla con el dedo.
-                                  offset: Offset(
-                                    -Curves.easeInOut.transform(_pista.value) *
-                                        8,
-                                    0,
-                                  ),
-                                  child: child,
+                    Positioned(
+                      left: 6,
+                      top: 0,
+                      bottom: 0,
+                      child: IgnorePointer(
+                        child: Center(
+                          child: AnimatedOpacity(
+                            opacity: _pistaVisible ? 1 : 0,
+                            duration: const Duration(milliseconds: 450),
+                            curve: Curves.easeOut,
+                            child: AnimatedBuilder(
+                              animation: _pista,
+                              builder: (context, child) => Transform.translate(
+                                // El vaivén: como una manito empujando la
+                                // tarjeta hacia la izquierda y volviendo,
+                                // invitando a seguirla con el dedo.
+                                offset: Offset(
+                                  -Curves.easeInOut.transform(_pista.value) * 8,
+                                  0,
                                 ),
-                                child: _discoDeFlecha(
-                                  const Icon(
-                                    Icons.swipe_left_alt_rounded,
-                                    color: Colors.white,
-                                    size: 22,
-                                  ),
+                                child: child,
+                              ),
+                              child: _discoDeFlecha(
+                                const Icon(
+                                  Icons.swipe_left_alt_rounded,
+                                  color: Colors.white,
+                                  size: 22,
                                 ),
                               ),
                             ),
                           ),
                         ),
                       ),
+                    ),
                   ],
                 ),
               ),
@@ -2060,7 +2074,12 @@ class _TarjetaGrande extends StatelessWidget {
                 // cargar se ve igual que una rota; con el brillo se entiende
                 // que está en camino.
                 placeholder: const Esqueleto(radio: 20),
-                fallback: ColoredBox(color: HomeTheme.cardSurface),
+                // Sin fallback propio: sin portada, CacheNetWorkImagePic ya
+                // cae sola en el arte de marca (carddefaultoffline.png). Acá
+                // había una caja lisa del color de fondo que la tapaba —la
+                // tarjeta grande del acordeón quedaba en un rectángulo oscuro
+                // sin nada, como cualquier otra tarjeta rota, en vez de la
+                // misma imagen de respaldo que ya usa el resto del app.
               ),
               // ── El velo va SOLO donde hay texto ────────────────────────
               //
@@ -2163,7 +2182,8 @@ class _TarjetaGrande extends StatelessWidget {
                               // solo donde hay letras.
                               shadows: const [
                                 Shadow(blurRadius: 3, color: Color(0xE6000000)),
-                                Shadow(blurRadius: 12, color: Color(0xB3000000)),
+                                Shadow(
+                                    blurRadius: 12, color: Color(0xB3000000)),
                               ],
                             ),
                           ),
@@ -2179,7 +2199,8 @@ class _TarjetaGrande extends StatelessWidget {
                                   .withValues(alpha: 0.88),
                               shadows: const [
                                 Shadow(blurRadius: 3, color: Color(0xE6000000)),
-                                Shadow(blurRadius: 10, color: Color(0x99000000)),
+                                Shadow(
+                                    blurRadius: 10, color: Color(0x99000000)),
                               ],
                             ),
                           ),
@@ -2337,8 +2358,8 @@ class _FilaAndroidState extends State<_FilaAndroid> {
                     etiqueta: widget.c.etiquetaDe(widget.fila),
                   ),
                   child: Padding(
-                    padding: const EdgeInsets.symmetric(
-                        horizontal: 4, vertical: 2),
+                    padding:
+                        const EdgeInsets.symmetric(horizontal: 4, vertical: 2),
                     child: Icon(
                       Icons.chevron_right_rounded,
                       size: 22,
