@@ -154,6 +154,26 @@ class _ComicReaderContentState extends State<ComicReaderContent> {
   // but still fill top-to-bottom with no centering box. Toggled by double-tap.
   bool _cascadeZoomed = false;
 
+  /// Cuánto se angosta la columna al alejar. Con nombre porque la cuenta que
+  /// mantiene el punto tocado en su lugar (ver _onCascadeDoubleTap) necesita
+  /// EXACTAMENTE el mismo número que el ancho de la columna: las imágenes van
+  /// con BoxFit.fitWidth, así que su alto escala igual que su ancho, y de ahí
+  /// sale el factor con el que se corrige la posición.
+  static const _factorAlejado = 0.55;
+
+  /// Dónde cayó el último doble toque, como fracción del alto de la vista
+  /// (0 = arriba del todo, 1 = abajo del todo).
+  ///
+  /// Se guarda en `onDoubleTapDown`, que siempre llega antes que
+  /// `onDoubleTap`. Arranca en el centro por si el zoom se dispara por algún
+  /// camino que no sea un toque.
+  double _fraccionDelDobleToque = 0.5;
+
+  void _registrarDobleToque(double dy, double altoDeLaVista) {
+    if (altoDeLaVista <= 0) return;
+    _fraccionDelDobleToque = (dy / altoDeLaVista).clamp(0.0, 1.0);
+  }
+
   // Desktop-only: double-click narrows the content column for an overview.
   // Narrowing/widening resizes every image (BoxFit.fitWidth recalculates
   // each item's height), which shifts the whole scroll extent — without
@@ -197,24 +217,58 @@ class _ComicReaderContentState extends State<ComicReaderContent> {
       return;
     }
 
-    final page = _c.currentPage.value;
-    // No solo el ÍNDICE de la página: también CUÁNTO de ella ya se había
-    // pasado. jumpTo(index: page) a secas siempre vuelve al borde de
-    // arriba de esa página — si el usuario venía leyendo por la mitad (o
-    // más abajo), el doble toque se sentía como que "se movía", aunque
-    // técnicamente la página era la misma. itemLeadingEdge es justo esa
-    // fracción (0 = borde de arriba a la vista, negativo = ya scrolleada
-    // por arriba), y es el MISMO valor que jumpTo espera como alignment —
-    // es lo que el propio paquete usa para restaurar posición
-    // (scrollable_positioned_list, PageStorage). Se lee ANTES de tocar el
-    // zoom: después de setState las posiciones viejas ya no valen.
-    double alignment = 0;
+    // ── El punto que se tocó se queda donde está ──────────────────────────
+    //
+    // Antes esto anclaba el BORDE DE ARRIBA de la página actual: se
+    // conservaba la página y cuánto de ella ya se había pasado, pero al
+    // cambiar el ancho la página entera cambia de alto, así que lo que
+    // estabas mirando se corría igual — se veía "lo mismo pero movido", no
+    // "lo mismo más cerca o más lejos". A pedido explícito ahora el ancla es
+    // el punto exacto donde cayó el doble toque.
+    //
+    // La cuenta, todo en fracciones del alto de la vista (que es la unidad
+    // en la que vienen itemLeadingEdge/itemTrailingEdge y la que espera
+    // jumpTo como alignment):
+    //
+    //   t  = dónde se tocó
+    //   L0 = borde de arriba de la página tocada, ahora
+    //   h0 = alto de esa página, ahora
+    //   f  = cuánto se agranda/achica la columna
+    //
+    // El punto tocado está a (t - L0) de arriba de la página, o sea a la
+    // altura (t - L0) / h0 de ella. Después del cambio esa misma altura de
+    // la página mide (t - L0) * f, porque el alto escala igual que el ancho
+    // (BoxFit.fitWidth). Para que ese punto siga cayendo en t, el borde de
+    // arriba tiene que quedar en:
+    //
+    //   L1 = t - (t - L0) * f
+    //
+    // Se lee ANTES de tocar el zoom: después de setState las posiciones
+    // viejas ya no valen.
+    final t = _fraccionDelDobleToque;
+    // Alejando la columna se angosta (f = 0.55); acercando vuelve a lo ancho
+    // (f = 1 / 0.55). El estado todavía no cambió, así que _cascadeZoomed es
+    // el de ANTES del toque.
+    final f = _cascadeZoomed ? 1 / _factorAlejado : _factorAlejado;
+
+    // La página que está debajo del dedo, no la que el contador marca como
+    // "actual": son distintas si se tocó arriba o abajo de la pantalla, y la
+    // que importa acá es la que se está mirando en ese punto.
+    var page = _c.currentPage.value;
+    double leadingEdge = 0;
     for (final p in _c.itemPositionsListener.itemPositions.value) {
-      if (p.index == page) {
-        alignment = p.itemLeadingEdge;
+      if (t >= p.itemLeadingEdge && t < p.itemTrailingEdge) {
+        page = p.index;
+        leadingEdge = p.itemLeadingEdge;
         break;
       }
+      // Respaldo por si el toque cae en un hueco entre páginas (un borde
+      // justo, o una imagen que todavía no midió): la página del contador,
+      // con su borde real.
+      if (p.index == page) leadingEdge = p.itemLeadingEdge;
     }
+    final alignment = t - (t - leadingEdge) * f;
+
     setState(() => _cascadeZoomed = !_cascadeZoomed);
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (mounted && _c.itemScrollController.isAttached) {
@@ -849,8 +903,9 @@ class _ComicReaderContentState extends State<ComicReaderContent> {
                   final normalWidth = _c.llenarPantalla.value
                       ? maxWidth
                       : (maxWidth < 900.0 ? maxWidth : 900.0);
-                  final effectiveWidth =
-                      _cascadeZoomed ? normalWidth * 0.55 : normalWidth;
+                  final effectiveWidth = _cascadeZoomed
+                      ? normalWidth * _factorAlejado
+                      : normalWidth;
                   // El ancho que sobra se reparte según la alineación elegida:
                   // todo a la derecha (franja pegada a la izquierda), todo a la
                   // izquierda (franja pegada a la derecha), o mitad y mitad
@@ -998,6 +1053,13 @@ class _ComicReaderContentState extends State<ComicReaderContent> {
                         child: Stack(
                           children: [
                             GestureDetector(
+                              // onDoubleTapDown llega siempre antes que
+                              // onDoubleTap: es de donde sale el punto que
+                              // el zoom tiene que dejar quieto.
+                              onDoubleTapDown: (d) => _registrarDobleToque(
+                                d.localPosition.dy,
+                                sh,
+                              ),
                               onDoubleTap: _onCascadeDoubleTap,
                               child: ScrollConfiguration(
                                 behavior: ScrollConfiguration.of(context)
@@ -1050,6 +1112,12 @@ class _ComicReaderContentState extends State<ComicReaderContent> {
                       onPointerCancel: _onAndroidPointerUp,
                       child: GestureDetector(
                         behavior: HitTestBehavior.opaque,
+                        // Mismo registro que en escritorio — ver el otro
+                        // GestureDetector de esta misma cascada.
+                        onDoubleTapDown: (d) => _registrarDobleToque(
+                          d.localPosition.dy,
+                          sh,
+                        ),
                         onDoubleTap: _onCascadeDoubleTap,
                         onTap: () {
                           _c.isShowControlPanel.value =
