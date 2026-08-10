@@ -1079,8 +1079,19 @@ class _ComicReaderContentState extends State<ComicReaderContent> {
   @override
   Widget build(BuildContext context) {
     return PlatformBuildWidget(
+      // "Llenar pantalla" también saca el SafeArea de arriba y de abajo acá
+      // adentro (ver el worker en ComicController que pone edgeToEdge), para
+      // que la página dibuje hasta la cámara y hasta donde está la barra de
+      // navegación — el header de ReaderView es un widget aparte, flotando
+      // por encima, y se queda con su propio SafeArea de siempre.
       androidBuilder: (context) => Scaffold(
-        body: SafeArea(child: _buildDisplay(_buildContent())),
+        body: Obx(
+          () => SafeArea(
+            top: !_c.llenarPantalla.value,
+            bottom: !_c.llenarPantalla.value,
+            child: _buildDisplay(_buildContent()),
+          ),
+        ),
       ),
       desktopBuilder: (context) => _buildDisplay(_buildContent()),
     );

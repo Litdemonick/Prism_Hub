@@ -1,3 +1,5 @@
+import 'dart:io';
+
 import 'package:fluent_ui/fluent_ui.dart';
 import 'package:flutter/scheduler.dart';
 import 'package:flutter/services.dart';
@@ -45,6 +47,23 @@ class ComicController extends ReaderController<ExtensionMangaWatch> {
   /// Por sesión y no guardado por título, mismo criterio que el video: es
   /// una decisión de "esta página puntual", no una preferencia permanente.
   final llenarPantalla = false.obs;
+
+  /// Barras del sistema según "llenar pantalla" — edgeToEdge deja que la
+  /// página dibuje debajo de la barra de estado y de la de navegación
+  /// (ver el SafeArea condicional en ComicReaderContent); apagado vuelve a
+  /// `manual` reservando espacio para las dos, que es como está siempre el
+  /// resto de la app. Mismo mecanismo que
+  /// VideoPlayerController.pantallaSegunOrientacion.
+  void _actualizarPantallaCompletaAndroid(bool activo) {
+    if (activo) {
+      SystemChrome.setEnabledSystemUIMode(SystemUiMode.edgeToEdge);
+    } else {
+      SystemChrome.setEnabledSystemUIMode(
+        SystemUiMode.manual,
+        overlays: SystemUiOverlay.values,
+      );
+    }
+  }
 
   // UNO solo para toda la vida del lector. Antes se recreaba en cada cambio
   // de modo/capítulo para poder fijar initialPage, y eso traía un bug feo:
@@ -185,6 +204,13 @@ class ComicController extends ReaderController<ExtensionMangaWatch> {
     if (alineacionGuardada == alineacionIzquierda ||
         alineacionGuardada == alineacionDerecha) {
       stripAlign.value = alineacionGuardada as String;
+    }
+
+    // Prender/apagar "llenar pantalla" también decide si la página puede
+    // pintar debajo de la barra de estado y la de navegación — mismo
+    // concepto que el worker de llenarPantalla en VideoPlayerController.
+    if (Platform.isAndroid) {
+      addWorker(ever(llenarPantalla, _actualizarPantallaCompletaAndroid));
     }
 
     // 如果切换章节，重置当前页码
@@ -372,6 +398,16 @@ class ComicController extends ReaderController<ExtensionMangaWatch> {
 
   @override
   void onClose() {
+    // Si se salió con "llenar pantalla" prendido, las barras quedaron en
+    // edgeToEdge — sin esto, la pantalla de atrás se quedaba con la hora y
+    // la batería comidas hasta reiniciar la app (mismo síntoma que ya se
+    // vio y resolvió en el reproductor de video).
+    if (Platform.isAndroid && llenarPantalla.value) {
+      SystemChrome.setEnabledSystemUIMode(
+        SystemUiMode.manual,
+        overlays: SystemUiOverlay.values,
+      );
+    }
     pageController.dispose();
     saveProgressNow();
     if (PrismHubStorage.getSetting(SettingKey.autoTracking) == true &&
