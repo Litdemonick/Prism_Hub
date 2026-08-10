@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:fluent_ui/fluent_ui.dart' as fluent;
 import 'package:get/get.dart';
 import 'package:prismhub/views/widgets/settings/settings_subtitle.dart';
@@ -61,8 +62,7 @@ class _SettingsExpanderTileState extends State<SettingsExpanderTile> {
             const SizedBox(height: 10),
             Text(
               widget.title,
-              style:
-                  TextStyle(fontSize: 20, color: HomeTheme.textPrimary),
+              style: TextStyle(fontSize: 20, color: HomeTheme.textPrimary),
             ),
             const SizedBox(height: 2),
             Text(
@@ -110,44 +110,63 @@ class _SettingsExpanderTileState extends State<SettingsExpanderTile> {
             Get.to(
               () => SigueElModo(
                 builder: (context) => Scaffold(
-                backgroundColor: HomeTheme.bg,
-                // El teclado se superpone en vez de encoger — los campos de
-                // esta subpágina abren diálogo propio, así que no hace falta
-                // que el body se achique (y achicándose desbordaba).
-                resizeToAvoidBottomInset: false,
-                appBar: AppBar(
                   backgroundColor: HomeTheme.bg,
-                  title: Text(widget.title,
-                      style: TextStyle(color: HomeTheme.textPrimary)),
-                ),
-                // SingleChildScrollView: en horizontal el alto útil es la
-                // mitad y este contenido (varias opciones apiladas) no entra
-                // — sin scroll desbordaba con la franja amarilla (confirmado
-                // en vivo en la subpágina "General").
-                body: SingleChildScrollView(
-                  padding: const EdgeInsets.all(16),
-                  // FluentTheme acá porque en Android NO hay ninguno: la raíz
-                  // es GetMaterialApp y FluentApp solo se monta en escritorio.
-                  // Algunas secciones usan widgets de fluent (el selector
-                  // numérico del reproductor, por ejemplo), que llaman a
-                  // FluentTheme.of(context) y revientan sin uno arriba — la
-                  // subpágina no llegaba a construirse y parecía que el botón
-                  // no hacía nada.
-                  child: fluent.FluentTheme(
-                    data: fluent.FluentThemeData(
-                      // El brillo también sale del modo. Estaba fijo en oscuro,
-                      // así que los widgets de fluent de adentro (el selector
-                      // numérico del reproductor, por ejemplo) seguían con la
-                      // paleta oscura sobre el fondo claro.
-                      brightness: ModoDeColor.claro
+                  // El teclado se superpone en vez de encoger — los campos de
+                  // esta subpágina abren diálogo propio, así que no hace falta
+                  // que el body se achique (y achicándose desbordaba).
+                  resizeToAvoidBottomInset: false,
+                  appBar: AppBar(
+                    backgroundColor: HomeTheme.bg,
+                    // Explícito, no heredado del AppBarTheme global (ver el
+                    // comentario largo en main.dart sobre por qué cada AppBar
+                    // tiene que decir el suyo): reportado en vivo que acá la
+                    // barra de estado se quedaba con los iconos claros de
+                    // siempre —los del modo oscuro— aunque el fondo de esta
+                    // subpágina sí pasara a blanco en modo claro.
+                    systemOverlayStyle: SystemUiOverlayStyle(
+                      statusBarColor: Colors.transparent,
+                      statusBarIconBrightness: ModoDeColor.claro
+                          ? Brightness.dark
+                          : Brightness.light,
+                      statusBarBrightness: ModoDeColor.claro
                           ? Brightness.light
                           : Brightness.dark,
-                      accentColor: fluent.Colors.purple,
-                      scaffoldBackgroundColor: HomeTheme.bg,
+                      systemNavigationBarColor: Colors.transparent,
+                      systemNavigationBarIconBrightness: ModoDeColor.claro
+                          ? Brightness.dark
+                          : Brightness.light,
                     ),
-                    child: widget.content,
+                    title: Text(widget.title,
+                        style: TextStyle(color: HomeTheme.textPrimary)),
                   ),
-                ),
+                  // SingleChildScrollView: en horizontal el alto útil es la
+                  // mitad y este contenido (varias opciones apiladas) no entra
+                  // — sin scroll desbordaba con la franja amarilla (confirmado
+                  // en vivo en la subpágina "General").
+                  body: SingleChildScrollView(
+                    padding: const EdgeInsets.all(16),
+                    // FluentTheme acá porque en Android NO hay ninguno: la raíz
+                    // es GetMaterialApp y FluentApp solo se monta en escritorio.
+                    // Algunas secciones usan widgets de fluent (el selector
+                    // numérico del reproductor, por ejemplo), que llaman a
+                    // FluentTheme.of(context) y revientan sin uno arriba — la
+                    // subpágina no llegaba a construirse y parecía que el botón
+                    // no hacía nada.
+                    child: fluent.FluentTheme(
+                      data: fluent.FluentThemeData(
+                        // El brillo también sale del modo. Estaba fijo en oscuro,
+                        // así que los widgets de fluent de adentro (el selector
+                        // numérico del reproductor, por ejemplo) seguían con la
+                        // paleta oscura sobre el fondo claro.
+                        brightness: ModoDeColor.claro
+                            ? Brightness.light
+                            : Brightness.dark,
+                        accentColor: fluent.Colors.purple,
+                        scaffoldBackgroundColor: HomeTheme.bg,
+                      ),
+                      child: widget.content,
+                    ),
+                  ),
                 ),
               ),
             );
@@ -182,8 +201,7 @@ class _SettingsExpanderTileState extends State<SettingsExpanderTile> {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           const SizedBox(height: 10),
-          Text(widget.title,
-              style: TextStyle(color: HomeTheme.textPrimary)),
+          Text(widget.title, style: TextStyle(color: HomeTheme.textPrimary)),
           const SizedBox(height: 2),
           SettingsSubtitle(widget.subTitle),
           const SizedBox(height: 15)
