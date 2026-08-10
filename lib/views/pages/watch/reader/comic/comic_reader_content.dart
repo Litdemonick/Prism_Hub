@@ -154,6 +154,13 @@ class _ComicReaderContentState extends State<ComicReaderContent> {
   // but still fill top-to-bottom with no centering box. Toggled by double-tap.
   bool _cascadeZoomed = false;
 
+  /// Cuánto hay que arrastrar de costado, en modo paginado, para que empiece
+  /// a cambiar de página. El de siempre es kTouchSlop (18 px) y es el mismo
+  /// que usa el scroll vertical de adentro; con los dos iguales, un
+  /// deslizamiento apenas torcido se lo quedaba el cambio de página. Ver el
+  /// comentario largo donde se arma el PageView.
+  static const _umbralParaCambiarDePagina = 40.0;
+
   /// Cuánto se angosta la columna al alejar. Con nombre porque la cuenta que
   /// mantiene el punto tocado en su lugar (ver _onCascadeDoubleTap) necesita
   /// EXACTAMENTE el mismo número que el ancho de la columna: las imágenes van
@@ -795,6 +802,64 @@ class _ComicReaderContentState extends State<ComicReaderContent> {
                           : centroHueco;
                     }
 
+                    // ── Que el dedo vertical no se lea como horizontal ──────
+                    //
+                    // Reportado en vivo: al querer bajar dentro de una página
+                    // alta, el gesto se tomaba como "quiere cambiar de
+                    // página" y el scroll salía tosco.
+                    //
+                    // Los dos gestos compiten y gana el PRIMERO que se pasa
+                    // de su umbral, y los dos usaban el mismo (kTouchSlop, 18
+                    // px): el del PageView cuenta lo que se movió en
+                    // horizontal y el del scroll lo que se movió en vertical.
+                    // O sea que un deslizamiento apenas torcido podía cruzar
+                    // los 18 px de costado antes que los 18 de altura, y ahí
+                    // el PageView ya se había quedado con el gesto.
+                    //
+                    // Subiendo SOLO el umbral del PageView (Scrollable lo
+                    // toma del MediaQuery — ver Scrollable.didChangeDependencies
+                    // y computeHitSlop), pasar de página pide un arrastre
+                    // claramente horizontal, mientras que bajar sigue
+                    // arrancando a los 18 px de siempre. Adentro de cada
+                    // página se devuelve el valor normal para no volver
+                    // perezoso el scroll vertical, que es el que se quiere
+                    // ágil.
+                    //
+                    // Solo Android: en escritorio el PageView va con
+                    // NeverScrollableScrollPhysics (se pasa de página con las
+                    // flechas o el teclado), así que no hay ningún gesto
+                    // horizontal con el que competir.
+                    final ajustesDeGesto = MediaQuery.maybeGestureSettingsOf(
+                      context,
+                    );
+                    Widget conUmbralPropio(Widget hijo) {
+                      if (!Platform.isAndroid) return hijo;
+                      return MediaQuery(
+                        data: MediaQuery.of(context).copyWith(
+                          gestureSettings: const DeviceGestureSettings(
+                            touchSlop: _umbralParaCambiarDePagina,
+                          ),
+                        ),
+                        child: hijo,
+                      );
+                    }
+
+                    Widget conUmbralNormal(Widget hijo) {
+                      if (!Platform.isAndroid) return hijo;
+                      return MediaQuery(
+                        data: MediaQuery.of(context).copyWith(
+                          // Concreto y no null: copyWith trata el null como
+                          // "dejá lo que había", que acá sería el umbral
+                          // grande de arriba.
+                          gestureSettings: ajustesDeGesto ??
+                              const DeviceGestureSettings(
+                                touchSlop: kTouchSlop,
+                              ),
+                        ),
+                        child: hijo,
+                      );
+                    }
+
                     return Listener(
                       // Mismo mecanismo que usa la cascada en Android: contar
                       // dedos para saber cuándo hay un pellizco en curso. Sin
@@ -807,7 +872,7 @@ class _ComicReaderContentState extends State<ComicReaderContent> {
                       onPointerCancel: _onAndroidPointerUp,
                       child: Stack(
                         children: [
-                          PageView.builder(
+                          conUmbralPropio(PageView.builder(
                             controller: _c.pageController,
                             // rightToLeft: se invierte el sentido del
                             // deslizamiento, como se lee un manga japonés. El
@@ -840,7 +905,8 @@ class _ComicReaderContentState extends State<ComicReaderContent> {
                             allowImplicitScrolling: true,
                             onPageChanged: (i) => _c.currentPage.value = i,
                             itemCount: images.length,
-                            itemBuilder: (context, index) => _PagedPage(
+                            itemBuilder: (context, index) =>
+                                conUmbralNormal(_PagedPage(
                               // Clave por índice+url: sin esto el PageView
                               // podía reciclar el State de una página en
                               // otra (mismo slot) y el zoom/achicado
@@ -865,8 +931,8 @@ class _ComicReaderContentState extends State<ComicReaderContent> {
                               // haber saltado varias.
                               placeholder: const Center(child: ProgressRing()),
                               llenarPantalla: _c.llenarPantalla.value,
-                            ),
-                          ),
+                            )),
+                          )),
                           // Solo escritorio (ver arriba): en celular se desliza
                           // y las flechas solo taparían el manga.
                           // Obx propio por flecha: así el cambio de página
