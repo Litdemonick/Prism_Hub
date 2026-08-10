@@ -963,8 +963,17 @@ class _VideoPlayerMobileControlsState extends State<VideoPlayerMobileControls> {
                           ),
                         ),
                       ),
-                      _Header(
-                        controller: _c,
+                      // Listener transparente (deferToChild por defecto: no
+                      // compite por el gesto, solo escucha) — mientras se
+                      // toca o arrastra algo del header, se reinicia el
+                      // temporizador de auto-ocultado en cada evento, para
+                      // que no se esconda a mitad de una interacción.
+                      Listener(
+                        onPointerDown: (_) => _updateTimer(),
+                        onPointerMove: (_) => _updateTimer(),
+                        child: _Header(
+                          controller: _c,
+                        ),
                       ),
                       // La tira de servidores ya no queda siempre visible
                       // tapando el video — a pedido explícito, ahora se abre
@@ -1065,7 +1074,14 @@ class _VideoPlayerMobileControlsState extends State<VideoPlayerMobileControls> {
                     top: false,
                     left: false,
                     right: false,
-                    child: _Footer(controller: _c),
+                    // Mismo Listener transparente que el header, para que
+                    // arrastrar la barra de progreso o la de volumen no se
+                    // corte por el auto-ocultado a mitad de camino.
+                    child: Listener(
+                      onPointerDown: (_) => _updateTimer(),
+                      onPointerMove: (_) => _updateTimer(),
+                      child: _Footer(controller: _c),
+                    ),
                   ),
                 ),
               ),

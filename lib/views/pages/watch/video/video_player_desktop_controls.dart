@@ -640,37 +640,42 @@ class _VideoPlayerDesktopControlsState
                       child: AnimatedOpacity(
                         opacity: _showControls ? 1 : 0,
                         duration: const Duration(milliseconds: 200),
-                        child: Column(
-                          children: [
-                            // Obx acá: _c.index.value se leía suelto en el
-                            // build de este State (no reactivo), así que el
-                            // título arriba solo se actualizaba cuando algo
-                            // más disparaba un rebuild — se sentía "atrasado"
-                            // al cambiar de capítulo. Envuelto en Obx, sigue
-                            // a index.value al toque.
-                            // Con el indice comprobado: una ficha sin episodios
-                            // —una entrada del historial cuya pagina ya no
-                            // existe— abre el reproductor con la lista vacia, y
-                            // sin esto reventaba con un RangeError encima del
-                            // video, tapando el aviso de que habia pasado.
-                            Obx(() {
-                              final lista = _c.playList;
-                              final i = _c.index.value;
-                              return _Header(
-                                title: _c.title,
-                                episode: (i >= 0 && i < lista.length)
-                                    ? lista[i].name
-                                    : '',
-                                onClose: () =>
-                                    unawaited(_c.closeRoute(context)),
-                              );
-                            }),
-                            // selector de servidores — pestañas arriba, no un
-                            // botón escondido abajo (a pedido del usuario, y
-                            // para que se vea de una cuál es el
-                            // recomendado/nativo).
-                            _ServerTabBar(controller: _c),
-                          ],
+                        // Mismo Listener transparente que el footer.
+                        child: Listener(
+                          onPointerDown: (_) => _resetHideTimer(),
+                          onPointerMove: (_) => _resetHideTimer(),
+                          child: Column(
+                            children: [
+                              // Obx acá: _c.index.value se leía suelto en el
+                              // build de este State (no reactivo), así que el
+                              // título arriba solo se actualizaba cuando algo
+                              // más disparaba un rebuild — se sentía "atrasado"
+                              // al cambiar de capítulo. Envuelto en Obx, sigue
+                              // a index.value al toque.
+                              // Con el indice comprobado: una ficha sin episodios
+                              // —una entrada del historial cuya pagina ya no
+                              // existe— abre el reproductor con la lista vacia, y
+                              // sin esto reventaba con un RangeError encima del
+                              // video, tapando el aviso de que habia pasado.
+                              Obx(() {
+                                final lista = _c.playList;
+                                final i = _c.index.value;
+                                return _Header(
+                                  title: _c.title,
+                                  episode: (i >= 0 && i < lista.length)
+                                      ? lista[i].name
+                                      : '',
+                                  onClose: () =>
+                                      unawaited(_c.closeRoute(context)),
+                                );
+                              }),
+                              // selector de servidores — pestañas arriba, no un
+                              // botón escondido abajo (a pedido del usuario, y
+                              // para que se vea de una cuál es el
+                              // recomendado/nativo).
+                              _ServerTabBar(controller: _c),
+                            ],
+                          ),
                         ),
                       ),
                     ),
@@ -802,7 +807,17 @@ class _VideoPlayerDesktopControlsState
                       child: AnimatedOpacity(
                         opacity: _showControls ? 1 : 0,
                         duration: const Duration(milliseconds: 200),
-                        child: _Footer(controller: _c),
+                        // Listener transparente (deferToChild por defecto:
+                        // no compite por el gesto, solo escucha) — arrastrar
+                        // la barra de progreso o la de volumen no genera
+                        // eventos de hover (el mouse tiene el botón
+                        // apretado), así que sin esto el timer de 2s podía
+                        // esconder el footer a mitad de un arrastre.
+                        child: Listener(
+                          onPointerDown: (_) => _resetHideTimer(),
+                          onPointerMove: (_) => _resetHideTimer(),
+                          child: _Footer(controller: _c),
+                        ),
                       ),
                     ),
                   ],
