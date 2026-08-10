@@ -164,109 +164,133 @@ class _VideoPlayerState extends State<VideoPlayer> {
     }
     return Obx(() {
       final maxWidth = MediaQuery.of(context).size.width;
-      // El área del video SIEMPRE usa Expanded (nunca un ancho fijo en
-      // píxeles): un ancho calculado a partir de MediaQuery queda un
+      // El área del video SIEMPRE ocupa el espacio entero disponible
+      // (Expanded en la Row, Positioned.fill en el Stack — nunca un ancho
+      // fijo en píxeles): un ancho calculado a partir de MediaQuery queda un
       // instante desincronizado del tamaño real de la ventana durante un
-      // resize (ej. entrar/salir de pantalla completa), y como esta Row
-      // tiene un segundo hijo (el sidebar), eso desborda la Row. Solo el
-      // sidebar anima con un ancho fijo (0↔300), un rango acotado que no
-      // depende del tamaño de la ventana.
-      return Row(
+      // resize (ej. entrar/salir de pantalla completa). Solo el sidebar
+      // anima con un ancho fijo (0↔300), un rango acotado que no depende del
+      // tamaño de la ventana.
+      //
+      // Pantalla angosta (celular de pie): compartir el ancho en una Row
+      // aprieta el video contra lo que sobra de los 300 fijos del panel —en
+      // un celular de pie eso es poco más de un tercio, así que el video
+      // quedaba achicado y deforme apenas se abría Ajustes (o Episodios,
+      // Servidor, cualquier pestaña del panel). Acostado o en escritorio 300
+      // es una fracción chica del ancho y compartirlo sigue andando bien, así
+      // que ahí se deja la Row de siempre.
+      //
+      // Acá el panel flota ENCIMA del video en vez de empujarlo: el video
+      // mantiene SIEMPRE el mismo tamaño, se abra o no el panel.
+      final panelFlotante = maxWidth < 700;
+
+      final video = Stack(
         children: [
-          Expanded(
-            child: Stack(
-              children: [
-                VideoPlayerConten(controller: c),
-                // 消息弹出
-                // Los avisos van CENTRADOS y con fondo solido.
-                //
-                // Estaban pegados al borde izquierdo, a media altura, con la
-                // caja recortada contra el borde y un negro al 50% que sobre
-                // una escena clara dejaba el texto ilegible. Ahi no los mira
-                // nadie: el ojo esta en el centro de la imagen.
-                if (c.cuurentMessageWidget.value != null)
-                  Positioned(
-                    left: 0,
-                    right: 0,
-                    // Transmitiendo, el aviso se va ARRIBA.
-                    //
-                    // El panel del casteo ocupa el centro y es alto, asi que un
-                    // aviso a 90 del piso le quedaba encima: dos cajas oscuras
-                    // pisandose, ilegibles las dos. Arriba, debajo del titulo,
-                    // no se cruza con nada.
-                    top: c.dlnaDevice.value != null ? 74 : null,
-                    bottom: c.dlnaDevice.value != null ? null : 90,
-                    child: IgnorePointer(
-                      child: Center(
-                        child: Container(
-                          margin: const EdgeInsets.symmetric(horizontal: 28),
-                          padding: const EdgeInsets.symmetric(
-                              horizontal: 22, vertical: 14),
-                          decoration: BoxDecoration(
-                            color: const Color(0xF01A1420),
-                            borderRadius: BorderRadius.circular(14),
-                            border: Border.all(
-                              color: Colors.white.withValues(alpha: 0.12),
-                            ),
-                            boxShadow: const [
-                              BoxShadow(
-                                color: Color(0x66000000),
-                                blurRadius: 18,
-                                offset: Offset(0, 6),
-                              ),
-                            ],
-                          ),
-                          // ── El aviso no se achica de pie ──────────────
-                          //
-                          // El ancho salía de una fracción del ancho de la
-                          // pantalla, y de pie ese ancho es la mitad: el aviso
-                          // —«no se pudo reproducir», el panel de ajustes—
-                          // quedaba en una columna angosta con las palabras
-                          // partidas, mientras que acostado se veía bien. El
-                          // texto no cambia de largo porque el teléfono gire.
-                          //
-                          // Ahora usa casi todo el ancho que hay, con un techo
-                          // para que en una tablet o acostado no se estire de
-                          // lado a lado, que ahí sí se lee peor.
-                          constraints: BoxConstraints(
-                            maxHeight: 260,
-                            maxWidth: math.min(maxWidth - 48, 420),
-                          ),
-                          child: DefaultTextStyle(
-                            style: const TextStyle(
-                              color: Colors.white,
-                              fontSize: 14,
-                              height: 1.35,
-                            ),
-                            textAlign: TextAlign.center,
-                            child: c.cuurentMessageWidget.value!,
-                          ),
-                        ),
+          VideoPlayerConten(controller: c),
+          // 消息弹出
+          // Los avisos van CENTRADOS y con fondo solido.
+          //
+          // Estaban pegados al borde izquierdo, a media altura, con la
+          // caja recortada contra el borde y un negro al 50% que sobre
+          // una escena clara dejaba el texto ilegible. Ahi no los mira
+          // nadie: el ojo esta en el centro de la imagen.
+          if (c.cuurentMessageWidget.value != null)
+            Positioned(
+              left: 0,
+              right: 0,
+              // Transmitiendo, el aviso se va ARRIBA.
+              //
+              // El panel del casteo ocupa el centro y es alto, asi que un
+              // aviso a 90 del piso le quedaba encima: dos cajas oscuras
+              // pisandose, ilegibles las dos. Arriba, debajo del titulo,
+              // no se cruza con nada.
+              top: c.dlnaDevice.value != null ? 74 : null,
+              bottom: c.dlnaDevice.value != null ? null : 90,
+              child: IgnorePointer(
+                child: Center(
+                  child: Container(
+                    margin: const EdgeInsets.symmetric(horizontal: 28),
+                    padding: const EdgeInsets.symmetric(
+                        horizontal: 22, vertical: 14),
+                    decoration: BoxDecoration(
+                      color: const Color(0xF01A1420),
+                      borderRadius: BorderRadius.circular(14),
+                      border: Border.all(
+                        color: Colors.white.withValues(alpha: 0.12),
                       ),
+                      boxShadow: const [
+                        BoxShadow(
+                          color: Color(0x66000000),
+                          blurRadius: 18,
+                          offset: Offset(0, 6),
+                        ),
+                      ],
+                    ),
+                    // ── El aviso no se achica de pie ──────────────
+                    //
+                    // El ancho salía de una fracción del ancho de la
+                    // pantalla, y de pie ese ancho es la mitad: el aviso
+                    // —«no se pudo reproducir», el panel de ajustes—
+                    // quedaba en una columna angosta con las palabras
+                    // partidas, mientras que acostado se veía bien. El
+                    // texto no cambia de largo porque el teléfono gire.
+                    //
+                    // Ahora usa casi todo el ancho que hay, con un techo
+                    // para que en una tablet o acostado no se estire de
+                    // lado a lado, que ahí sí se lee peor.
+                    constraints: BoxConstraints(
+                      maxHeight: 260,
+                      maxWidth: math.min(maxWidth - 48, 420),
+                    ),
+                    child: DefaultTextStyle(
+                      style: const TextStyle(
+                        color: Colors.white,
+                        fontSize: 14,
+                        height: 1.35,
+                      ),
+                      textAlign: TextAlign.center,
+                      child: c.cuurentMessageWidget.value!,
                     ),
                   ),
-              ],
+                ),
+              ),
             ),
-          ),
-          AnimatedContainer(
-            onEnd: () {
-              c.isOpenSidebar.value = c.showSidebar.value;
-            },
-            width: c.showSidebar.value ? 300 : 0,
-            duration: const Duration(milliseconds: 120),
-            clipBehavior: Clip.hardEdge,
-            decoration: const BoxDecoration(),
-            child: c.isOpenSidebar.value || c.showSidebar.value
-                ? OverflowBox(
-                    minWidth: 300,
-                    maxWidth: 300,
-                    alignment: Alignment.centerRight,
-                    child: VideoPlayerSidebar(
-                      controller: c,
-                    ),
-                  )
-                : null,
-          ),
+        ],
+      );
+
+      final sidebar = AnimatedContainer(
+        onEnd: () {
+          c.isOpenSidebar.value = c.showSidebar.value;
+        },
+        width: c.showSidebar.value ? 300 : 0,
+        duration: const Duration(milliseconds: 120),
+        clipBehavior: Clip.hardEdge,
+        decoration: const BoxDecoration(),
+        child: c.isOpenSidebar.value || c.showSidebar.value
+            ? OverflowBox(
+                minWidth: 300,
+                maxWidth: 300,
+                alignment: Alignment.centerRight,
+                child: VideoPlayerSidebar(
+                  controller: c,
+                ),
+              )
+            : null,
+      );
+
+      if (panelFlotante) {
+        return Stack(
+          children: [
+            Positioned.fill(child: video),
+            Positioned(top: 0, bottom: 0, right: 0, child: sidebar),
+          ],
+        );
+      }
+
+      return Row(
+        children: [
+          Expanded(child: video),
+          sidebar,
         ],
       );
     });
