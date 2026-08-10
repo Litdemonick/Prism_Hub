@@ -152,7 +152,11 @@ class _ComicReaderContentState extends State<ComicReaderContent> {
 
   // Padding-based zoom: narrows the content column so images appear smaller
   // but still fill top-to-bottom with no centering box. Toggled by double-tap.
-  bool _cascadeZoomed = false;
+  //
+  // El estado vive en el controller (ComicController.alejado) y no acá: es
+  // el mismo para la cascada y para el paginado, así el tamaño con el que
+  // venías leyendo no cambia solo al pasar de página o de capítulo.
+  bool get _cascadeZoomed => _c.alejado.value;
 
   /// Cuánto hay que arrastrar hacia abajo, dentro de una página del modo
   /// paginado, para que se entienda como "quiero bajar" y no como "quiero
@@ -278,7 +282,7 @@ class _ComicReaderContentState extends State<ComicReaderContent> {
     }
     final alignment = t - (t - leadingEdge) * f;
 
-    setState(() => _cascadeZoomed = !_cascadeZoomed);
+    _c.alejado.toggle();
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (mounted && _c.itemScrollController.isAttached) {
         _c.itemScrollController.jumpTo(index: page, alignment: alignment);
@@ -895,6 +899,16 @@ class _ComicReaderContentState extends State<ComicReaderContent> {
                       );
                     }
 
+                    // Leídos ACÁ y no adentro del itemBuilder: ese se ejecuta
+                    // más tarde, durante el armado perezoso del PageView, y
+                    // para entonces el Obx ya cerró su ronda de escuchas — un
+                    // valor leído ahí adentro no lo despierta cuando cambia.
+                    // Leerlos en el cuerpo del Obx y pasarlos por la clausura
+                    // es lo que hace que alejar/acercar y llenar pantalla se
+                    // vean al toque también en paginado.
+                    final alejado = _c.alejado.value;
+                    final llenarPantalla = _c.llenarPantalla.value;
+
                     return Listener(
                       // Mismo mecanismo que usa la cascada en Android: contar
                       // dedos para saber cuándo hay un pellizco en curso. Sin
@@ -965,7 +979,9 @@ class _ComicReaderContentState extends State<ComicReaderContent> {
                               // una página de verdad, dando la sensación de
                               // haber saltado varias.
                               placeholder: const Center(child: ProgressRing()),
-                              llenarPantalla: _c.llenarPantalla.value,
+                              llenarPantalla: llenarPantalla,
+                              alejado: alejado,
+                              alternarAlejado: _c.alejado.toggle,
                               indice: index,
                               registrarScroll: _registrarScrollDePagina,
                               olvidarScroll: _olvidarScrollDePagina,
@@ -1363,6 +1379,8 @@ class _PagedPage extends StatefulWidget {
     required this.placeholder,
     required this.stripAlign,
     required this.llenarPantalla,
+    required this.alejado,
+    required this.alternarAlejado,
     required this.indice,
     required this.registrarScroll,
     required this.olvidarScroll,
@@ -1395,6 +1413,11 @@ class _PagedPage extends StatefulWidget {
   /// entera con franjas — ver ComicController.llenarPantalla.
   final bool llenarPantalla;
 
+  /// Si se está leyendo alejado. Es de TODO el lector, no de esta página —
+  /// ver ComicController.alejado.
+  final bool alejado;
+  final VoidCallback alternarAlejado;
+
   @override
   State<_PagedPage> createState() => _PagedPageState();
 }
@@ -1416,7 +1439,11 @@ class _PagedPageState extends State<_PagedPage> {
   // Doble toque para alejar. En tira de manhwa angosta la columna (igual que
   // la cascada); en página de manga se maneja con el zoom del
   // InteractiveViewer.
-  bool _zoomedOut = false;
+  //
+  // El "alejado" ya NO se guarda acá: es de todo el lector (widget.alejado,
+  // ver ComicController.alejado). Antes era de cada página, y alejar en la
+  // 20 dejaba la 21 otra vez grande.
+  bool get _zoomedOut => widget.alejado;
   final _zoomController = TransformationController();
   bool _zoomed = false;
 
@@ -1535,7 +1562,7 @@ class _PagedPageState extends State<_PagedPage> {
         : 0.0;
     final destino = (scroll + y) * f - y;
 
-    setState(() => _zoomedOut = !_zoomedOut);
+    widget.alternarAlejado();
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (!mounted || !_stripScrollController.hasClients) return;
       final posicion = _stripScrollController.position;
@@ -1708,9 +1735,14 @@ class _PagedPageState extends State<_PagedPage> {
     // otra página (mismo slot, url distinta) sin pasar por dispose/initState,
     // el zoom/achicado de la página anterior se veía en la nueva — página
     // corta y angosta con hueco negro abajo, o de entrada agrandada,
-    // reportado en vivo. Cada página nueva arranca sin zoom aplicado.
+    // reportado en vivo. Cada página nueva arranca sin PELLIZCO aplicado.
+    //
+    // El "alejado" ya no se limpia acá: dejó de ser de esta página y pasó a
+    // ser de todo el lector (widget.alejado), que es justamente lo que hace
+    // que el tamaño no cambie solo al pasar de página. Lo que sí se limpia
+    // es el pellizco, que es una mirada puntual a ESTA página: arrastrarlo a
+    // la siguiente la abriría corrida en una esquina cualquiera.
     if (oldWidget.url != widget.url) {
-      _zoomedOut = false;
       _zoomed = false;
       _stripScrollbarReady = false;
       _zoomController.value = Matrix4.identity();

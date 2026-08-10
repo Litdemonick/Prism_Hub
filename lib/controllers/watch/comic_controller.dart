@@ -48,6 +48,20 @@ class ComicController extends ReaderController<ExtensionMangaWatch> {
   /// una decisión de "esta página puntual", no una preferencia permanente.
   final llenarPantalla = false.obs;
 
+  /// Si se está leyendo "alejado" (la columna angostada, que hace las
+  /// páginas más chicas para ver más de un vistazo). Lo alterna el doble
+  /// toque.
+  ///
+  /// Vive ACÁ y no adentro de cada página a propósito. Antes cada página del
+  /// modo paginado se guardaba el suyo, así que alejabas en la página 20 y
+  /// la 21 aparecía otra vez grande — un salto raro de tamaño con solo pasar
+  /// de página, reportado en vivo. Siendo uno solo para todo el lector, el
+  /// tamaño con el que venías leyendo se mantiene al cambiar de página, al
+  /// cambiar de capítulo y al pasar de cascada a paginado.
+  ///
+  /// Por sesión, igual que llenarPantalla: no se guarda por título.
+  final alejado = false.obs;
+
   /// Barras del sistema según "llenar pantalla".
   ///
   /// `immersiveSticky` y NO `edgeToEdge`: con edgeToEdge la página sí dibuja
