@@ -1043,18 +1043,28 @@ class _VideoPlayerMobileControlsState extends State<VideoPlayerMobileControls> {
                   child: Column(
                     mainAxisSize: MainAxisSize.min,
                     children: [
-                      SafeArea(
-                        bottom: false,
-                        child: Padding(
-                          padding: EdgeInsets.zero,
-                          child: Row(
-                            children: [
-                              // Volver, a pedido explícito ahora se oculta
-                              // junto con el resto del header (antes estaba
-                              // marcada como "siempre visible" a pedido
-                              // anterior — se revirtió ese criterio).
-                              SizedBox.shrink(),
-                            ],
+                      // Con "llenar pantalla" de pie, el video ya pinta hasta
+                      // la cámara (ver pantallaSegunOrientacion) — sin este
+                      // Obx, el encabezado se seguía reservando el alto de la
+                      // barra de estado y quedaba un hueco vacío arriba de
+                      // todo, encima de un video que ya no lo necesitaba.
+                      Obx(
+                        () => SafeArea(
+                          top: !(_c.llenarPantalla.value &&
+                              MediaQuery.orientationOf(context) ==
+                                  Orientation.portrait),
+                          bottom: false,
+                          child: Padding(
+                            padding: EdgeInsets.zero,
+                            child: Row(
+                              children: [
+                                // Volver, a pedido explícito ahora se oculta
+                                // junto con el resto del header (antes estaba
+                                // marcada como "siempre visible" a pedido
+                                // anterior — se revirtió ese criterio).
+                                SizedBox.shrink(),
+                              ],
+                            ),
                           ),
                         ),
                       ),
@@ -1100,26 +1110,34 @@ class _VideoPlayerMobileControlsState extends State<VideoPlayerMobileControls> {
                   // flecha sola un instante.
                   opacity: _showControls ? 1 : 0,
                   duration: const Duration(milliseconds: 200),
-                  child: SafeArea(
-                    bottom: false,
-                    child: Padding(
-                      padding: const EdgeInsets.only(left: 8, top: 4),
-                      child: DecoratedBox(
-                        // Un fondo redondo detrás: la flecha sola, blanca, se
-                        // pierde sobre una escena clara, y ahora que se queda
-                        // encima del vídeo todo el tiempo tiene que leerse sobre
-                        // cualquier cosa.
-                        decoration: BoxDecoration(
-                          color: Colors.black.withValues(alpha: 0.45),
-                          shape: BoxShape.circle,
-                        ),
-                        child: IconButton(
-                          tooltip: MaterialLocalizations.of(context)
-                              .backButtonTooltip,
-                          iconSize: 22,
-                          icon:
-                              const Icon(Icons.arrow_back, color: Colors.white),
-                          onPressed: () => unawaited(_c.closeRoute(context)),
+                  // Misma condición que el Obx del encabezado, para que la
+                  // flecha suba junto con el título y no se quede sola más
+                  // abajo, desalineada.
+                  child: Obx(
+                    () => SafeArea(
+                      top: !(_c.llenarPantalla.value &&
+                          MediaQuery.orientationOf(context) ==
+                              Orientation.portrait),
+                      bottom: false,
+                      child: Padding(
+                        padding: const EdgeInsets.only(left: 8, top: 4),
+                        child: DecoratedBox(
+                          // Un fondo redondo detrás: la flecha sola, blanca, se
+                          // pierde sobre una escena clara, y ahora que se queda
+                          // encima del vídeo todo el tiempo tiene que leerse sobre
+                          // cualquier cosa.
+                          decoration: BoxDecoration(
+                            color: Colors.black.withValues(alpha: 0.45),
+                            shape: BoxShape.circle,
+                          ),
+                          child: IconButton(
+                            tooltip: MaterialLocalizations.of(context)
+                                .backButtonTooltip,
+                            iconSize: 22,
+                            icon: const Icon(Icons.arrow_back,
+                                color: Colors.white),
+                            onPressed: () => unawaited(_c.closeRoute(context)),
+                          ),
                         ),
                       ),
                     ),
