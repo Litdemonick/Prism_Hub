@@ -2091,7 +2091,15 @@ class _TarjetaGrande extends StatelessWidget {
               ? Border.all(
                   color: HomeTheme.sobrePortada.withValues(alpha: 0.11))
               : null,
-          boxShadow: _esTactil
+          // ── Y la sombra, tampoco con el modo claro puesto ────────────────
+          //
+          // Es negra al 45% con 20 de desenfoque: sobre el fondo oscuro
+          // cumple —despega la portada del fondo— pero sobre uno claro no se
+          // lee como profundidad sino como un halo gris alrededor de cada
+          // tarjeta, más marcado abajo por el corrimiento de 8px. Reportado
+          // en vivo con captura: "atrás de las cards". En claro la portada ya
+          // resalta sola contra el fondo, así que no hace falta nada.
+          boxShadow: _esTactil && !ModoDeColor.claro
               ? const [
                   BoxShadow(
                     color: Color(0x73000000),
