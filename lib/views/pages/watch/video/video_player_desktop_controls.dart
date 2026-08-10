@@ -1257,38 +1257,49 @@ class _VolumeState extends State<_Volume> {
   // Barra SIEMPRE visible, no escondida atrás de un botón — a pedido
   // explícito: con el flyout de antes, había que abrirlo para ver o
   // cambiar el volumen, y un vistazo rápido no alcanzaba.
+  //
+  // FluentTheme propio con el acento rosa de la marca — a pedido
+  // explícito ("como en Android"), donde el Slider de Material ya sale
+  // así solo porque hereda el ColorScheme de la app. El de Fluent no: sin
+  // este envoltorio usa el celeste por defecto del paquete.
   @override
   Widget build(BuildContext context) {
-    return Obx(
-      () => Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Icon(_iconoDe(_volume.value)),
-          const SizedBox(width: 6),
-          SizedBox(
-            width: 90,
-            height: 30,
-            child: Slider(
-              value: _volume.value,
-              // Pasa de 100 —el volumen original— para poder levantar
-              // material grabado bajo. Ver VideoPlayerController.volumenMaximo.
-              max: VideoPlayerController.volumenMaximo,
-              // El 100 marcado: es el punto donde deja de subirse el
-              // volumen y empieza a amplificarse, así que conviene verlo.
-              divisions: VideoPlayerController.volumenMaximo ~/ 5,
-              label: '${_volume.value.round()}%',
-              onChanged: _onVolumeChanged,
+    return FluentTheme(
+      data: FluentThemeData.dark().copyWith(
+        accentColor: AccentColor.swatch({'normal': HomeTheme.oscuroAcento}),
+      ),
+      child: Obx(
+        () => Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(_iconoDe(_volume.value)),
+            const SizedBox(width: 6),
+            SizedBox(
+              width: 90,
+              height: 30,
+              child: Slider(
+                value: _volume.value,
+                // Pasa de 100 —el volumen original— para poder levantar
+                // material grabado bajo. Ver VideoPlayerController.volumenMaximo.
+                max: VideoPlayerController.volumenMaximo,
+                // El 100 marcado: es el punto donde deja de subirse el
+                // volumen y empieza a amplificarse, así que conviene verlo.
+                divisions: VideoPlayerController.volumenMaximo ~/ 5,
+                label: '${_volume.value.round()}%',
+                onChanged: _onVolumeChanged,
+              ),
             ),
-          ),
-          const SizedBox(width: 6),
-          SizedBox(
-            width: 32,
-            child: Text(
-              '${_volume.value.round()}%',
-              style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w300),
+            const SizedBox(width: 6),
+            SizedBox(
+              width: 32,
+              child: Text(
+                '${_volume.value.round()}%',
+                style:
+                    const TextStyle(fontSize: 12, fontWeight: FontWeight.w300),
+              ),
             ),
-          ),
-        ],
+          ],
+        ),
       ),
     );
   }
