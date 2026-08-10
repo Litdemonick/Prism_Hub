@@ -21,10 +21,6 @@ enum SidebarTab {
   settings,
 }
 
-_sidebarTabToString(SidebarTab tab) {
-  return "video.sidebar.tab.${tab.name}".i18n;
-}
-
 class VideoPlayerSidebar extends StatefulWidget {
   const VideoPlayerSidebar({
     super.key,
@@ -69,23 +65,13 @@ class _VideoPlayerSidebarState extends State<VideoPlayerSidebar> {
         return Column(
           children: [
             Row(
+              // Sin título de la pestaña acá — a pedido explícito: en
+              // horizontal quedaba mal ubicado (no bajaba lo que tenía que
+              // bajar) y se veía roto. El ícono de cada botón del footer ya
+              // dice qué pestaña es; entre eso y el cierre con la cruz, el
+              // título no hacía falta para usarlo.
+              mainAxisAlignment: MainAxisAlignment.end,
               children: [
-                Expanded(
-                  child: Padding(
-                    padding: const EdgeInsets.only(left: 16),
-                    child: Text(
-                      // El panel de "servidores" tambien es el que abre el
-                      // boton de calidad cuando la extension entrega una url
-                      // por resolucion (Eporner). Ahi lo que se lista son
-                      // calidades, asi que titularlo "Servidores disponibles"
-                      // era mentir sobre lo que se esta eligiendo.
-                      tab == SidebarTab.servers && !_c.servidoresSonAparte
-                          ? _sidebarTabToString(SidebarTab.qualitys)
-                          : _sidebarTabToString(tab),
-                      style: const TextStyle(fontWeight: FontWeight.bold),
-                    ),
-                  ),
-                ),
                 IconButton(
                   icon: const Icon(Icons.close),
                   onPressed: () => _c.showSidebar.value = false,
