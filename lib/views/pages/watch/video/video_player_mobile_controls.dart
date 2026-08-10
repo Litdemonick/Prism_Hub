@@ -1991,7 +1991,6 @@ class _Footer extends StatelessWidget {
                     Icons.subtitles,
                   ),
                 ),
-                _VolumeButtonMobile(controller: controller),
                 // 播放列表
                 IconButton(
                   icon: const Icon(Icons.playlist_play),
@@ -2019,6 +2018,13 @@ class _Footer extends StatelessWidget {
                     onPressed: controller.alternarPantallaCompletaAndroid,
                   ),
                 ),
+                // El volumen va ÚLTIMO, después de pantalla completa — a
+                // pedido explícito: mide unos 200px (ícono + barra + el
+                // porcentaje) y, puesto antes, empujaba a pantalla completa
+                // tan a la derecha que costaba acertarle con el dedo. Al
+                // final no molesta a nadie: es una barra ancha que se
+                // arrastra, no un ícono chico al que haya que apuntar.
+                _VolumeButtonMobile(controller: controller),
               ],
             ),
           ),
