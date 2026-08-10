@@ -1610,9 +1610,16 @@ class _BotonCentralDePausa extends StatelessWidget {
 
 /// El control de volumen del pie en Android — reemplaza al gesto de
 /// deslizar arriba/abajo en cualquier parte de la pantalla (invisible, sin
-/// ninguna pista de que existía). Toca el ícono y aparece una BARRA
-/// vertical para subir/bajar, con el número siempre a la vista — no un
-/// botón que abre un menú a ciegas.
+/// ninguna pista de que existía).
+///
+/// SIEMPRE visible, no escondida atrás de un botón — a pedido explícito:
+/// con el menú de antes había que abrirlo para ver o cambiar el volumen, y
+/// ADEMÁS no se actualizaba mientras estaba abierto (PopupMenuButton arma
+/// su contenido una sola vez al abrirse; volver a pedirle que se repinte
+/// no alcanza porque el valor que usaba había quedado fijo en una variable
+/// capturada en ese momento — para ver el cambio de verdad había que
+/// cerrarlo y abrirlo de nuevo). Puesta siempre en el pie, como el resto
+/// de los controles, se repinta con Obx igual que cualquier otra cosa acá.
 ///
 /// Mismo tope que en escritorio (VideoPlayerController.volumenMaximo, no
 /// 100): pasado el volumen original de la pista, sigue subiendo
@@ -1665,47 +1672,34 @@ class _VolumeButtonMobileState extends State<_VolumeButtonMobile> {
       final valor =
           casteando ? widget.controller.castVolumen.value.toDouble() : _volumen;
       final tope = casteando ? 100.0 : VideoPlayerController.volumenMaximo;
-      return PopupMenuButton<void>(
-        tooltip: 'video.tooltip.volume'.i18n,
-        icon: Icon(_iconoPara(valor, tope)),
-        itemBuilder: (context) => [
-          PopupMenuItem(
-            enabled: false,
-            child: StatefulBuilder(
-              builder: (context, setMenuState) {
-                void cambiar(double nuevo) {
-                  if (casteando) {
-                    widget.controller.ajustarVolumenCast((nuevo - valor) / 100);
-                  } else {
-                    widget.controller.player.setVolume(nuevo);
-                    setState(() => _volumen = nuevo);
-                  }
-                  setMenuState(() {});
-                }
 
-                return SizedBox(
-                  height: 180,
-                  width: 56,
-                  child: Column(
-                    children: [
-                      Text('${valor.round()}%',
-                          style: const TextStyle(
-                              fontSize: 12, color: Colors.white70)),
-                      Expanded(
-                        child: RotatedBox(
-                          quarterTurns: 3,
-                          child: Slider(
-                            value: valor.clamp(0, tope),
-                            max: tope,
-                            onChanged: cambiar,
-                          ),
-                        ),
-                      ),
-                      Icon(_iconoPara(valor, tope), size: 18),
-                    ],
-                  ),
-                );
-              },
+      void cambiar(double nuevo) {
+        if (casteando) {
+          widget.controller.ajustarVolumenCast((nuevo - valor) / 100);
+        } else {
+          widget.controller.player.setVolume(nuevo);
+          setState(() => _volumen = nuevo);
+        }
+      }
+
+      return Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(_iconoPara(valor, tope), size: 22),
+          SizedBox(
+            width: 90,
+            child: Slider(
+              value: valor.clamp(0, tope),
+              max: tope,
+              label: '${valor.round()}%',
+              onChanged: cambiar,
+            ),
+          ),
+          SizedBox(
+            width: 32,
+            child: Text(
+              '${valor.round()}%',
+              style: const TextStyle(fontSize: 12, color: Colors.white70),
             ),
           ),
         ],

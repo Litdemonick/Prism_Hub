@@ -163,8 +163,7 @@ class _VideoPlayerDesktopControlsState
         // quedaba con el tema claro/celeste por defecto de toda la app en
         // vez del oscuro+morado del reproductor.
         data: FluentTheme.of(context).copyWith(
-          accentColor:
-              AccentColor.swatch({'normal': HomeTheme.oscuroAcento}),
+          accentColor: AccentColor.swatch({'normal': HomeTheme.oscuroAcento}),
         ),
         child: ContentDialog(
           title: const Text('¡Un momento!'),
@@ -520,7 +519,8 @@ class _VideoPlayerDesktopControlsState
                                 color: HomeTheme.oscuroSuperficie
                                     .withValues(alpha: 0.92),
                                 borderRadius: BorderRadius.circular(16),
-                                border: Border.all(color: HomeTheme.oscuroBorde),
+                                border:
+                                    Border.all(color: HomeTheme.oscuroBorde),
                               ),
                               child: Column(
                                 mainAxisSize: MainAxisSize.min,
@@ -1219,7 +1219,6 @@ class _Volume extends StatefulWidget {
 }
 
 class _VolumeState extends State<_Volume> {
-  final _controller = FlyoutController();
   final _volume = 0.0.obs;
   StreamSubscription<double>? _volumeSub;
 
@@ -1229,8 +1228,8 @@ class _VolumeState extends State<_Volume> {
     _volume.value = widget.player.state.volume;
     // Antes el valor se leía una sola vez al crear el widget y quedaba
     // pegado — si el volumen cambiaba por otro lado (atajo de teclado, DLNA,
-    // etc.) el ícono y el slider del flyout seguían mostrando el valor
-    // viejo. Escuchar el stream real lo mantiene siempre sincronizado.
+    // etc.) el ícono y el slider seguían mostrando el valor viejo. Escuchar
+    // el stream real lo mantiene siempre sincronizado.
     _volumeSub = widget.player.stream.volume.listen((v) {
       _volume.value = v;
     });
@@ -1244,92 +1243,52 @@ class _VolumeState extends State<_Volume> {
   @override
   void dispose() {
     _volumeSub?.cancel();
-    _controller.dispose();
     super.dispose();
   }
 
+  IconData _iconoDe(double v) => v == 0
+      ? FluentIcons.volume0
+      : v < 50
+          ? FluentIcons.volume1
+          : v < 100
+              ? FluentIcons.volume2
+              : FluentIcons.volume3;
+
+  // Barra SIEMPRE visible, no escondida atrás de un botón — a pedido
+  // explícito: con el flyout de antes, había que abrirlo para ver o
+  // cambiar el volumen, y un vistazo rápido no alcanzaba.
   @override
   Widget build(BuildContext context) {
-    return FlyoutTarget(
-      controller: _controller,
-      child: IconButton(
-        icon: Obx(
-          () => Icon(
-            _volume.value == 0
-                ? FluentIcons.volume0
-                : _volume.value < 50
-                    ? FluentIcons.volume1
-                    : _volume.value < 100
-                        ? FluentIcons.volume2
-                        : FluentIcons.volume3,
+    return Obx(
+      () => Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(_iconoDe(_volume.value)),
+          const SizedBox(width: 6),
+          SizedBox(
+            width: 90,
+            height: 30,
+            child: Slider(
+              value: _volume.value,
+              // Pasa de 100 —el volumen original— para poder levantar
+              // material grabado bajo. Ver VideoPlayerController.volumenMaximo.
+              max: VideoPlayerController.volumenMaximo,
+              // El 100 marcado: es el punto donde deja de subirse el
+              // volumen y empieza a amplificarse, así que conviene verlo.
+              divisions: VideoPlayerController.volumenMaximo ~/ 5,
+              label: '${_volume.value.round()}%',
+              onChanged: _onVolumeChanged,
+            ),
           ),
-        ),
-        onPressed: () {
-          _controller.showFlyout(
-            barrierDismissible: true,
-            dismissOnPointerMoveAway: false,
-            builder: (context) {
-              return FluentTheme(
-                data: FluentThemeData.dark().copyWith(
-                  accentColor: AccentColor.swatch(
-                      {'normal': HomeTheme.oscuroAcento}),
-                ),
-                child: FlyoutContent(
-                  useAcrylic: true,
-                  child: Padding(
-                    padding: const EdgeInsets.all(8.0),
-                    child: Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        Obx(
-                          () => Icon(
-                            _volume.value == 0
-                                ? FluentIcons.volume0
-                                : _volume.value < 50
-                                    ? FluentIcons.volume1
-                                    : _volume.value < 100
-                                        ? FluentIcons.volume2
-                                        : FluentIcons.volume3,
-                          ),
-                        ),
-                        const SizedBox(width: 10),
-                        Obx(
-                          () => SizedBox(
-                            height: 30,
-                            child: Slider(
-                              value: _volume.value,
-                              // Pasa de 100 —el volumen original— para poder
-                              // levantar material grabado bajo. Ver
-                              // VideoPlayerController.volumenMaximo.
-                              max: VideoPlayerController.volumenMaximo,
-                              // El 100 marcado: es el punto donde deja de
-                              // subirse el volumen y empieza a amplificarse,
-                              // asi que conviene verlo.
-                              divisions:
-                                  VideoPlayerController.volumenMaximo ~/ 5,
-                              label: '${_volume.value.round()}%',
-                              onChanged: _onVolumeChanged,
-                            ),
-                          ),
-                        ),
-                        const SizedBox(width: 10),
-                        Obx(
-                          () => Text(
-                            _volume.value.toStringAsFixed(1),
-                            style: const TextStyle(
-                              fontSize: 14,
-                              fontWeight: FontWeight.w300,
-                            ),
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                ),
-              );
-            },
-          );
-        },
+          const SizedBox(width: 6),
+          SizedBox(
+            width: 32,
+            child: Text(
+              '${_volume.value.round()}%',
+              style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w300),
+            ),
+          ),
+        ],
       ),
     );
   }
@@ -1373,8 +1332,8 @@ class _EpisodeState extends State<_Episode> {
               builder: (context) {
                 return FluentTheme(
                   data: FluentThemeData.dark().copyWith(
-                    accentColor: AccentColor.swatch(
-                        {'normal': HomeTheme.oscuroAcento}),
+                    accentColor:
+                        AccentColor.swatch({'normal': HomeTheme.oscuroAcento}),
                   ),
                   child: FlyoutContent(
                     padding: const EdgeInsets.all(0),
@@ -1550,8 +1509,8 @@ class _TrackState extends State<_Track> {
             builder: (context) {
               return FluentTheme(
                 data: FluentThemeData.dark().copyWith(
-                  accentColor: AccentColor.swatch(
-                      {'normal': HomeTheme.oscuroAcento}),
+                  accentColor:
+                      AccentColor.swatch({'normal': HomeTheme.oscuroAcento}),
                 ),
                 child: FlyoutContent(
                   useAcrylic: true,
@@ -1657,7 +1616,9 @@ class _TrackState extends State<_Track> {
                             selected:
                                 widget.controller.audioHlsElegido.value == i,
                             title: Text(audio.nombre),
-                            subtitle: audio.idioma != null ? Text(audio.idioma!) : null,
+                            subtitle: audio.idioma != null
+                                ? Text(audio.idioma!)
+                                : null,
                             onPressed: () {
                               widget.controller.elegirAudioHls(i);
                               Flyout.of(context).close();
@@ -2134,8 +2095,8 @@ class _CastState extends State<_Cast> {
               builder: (context) {
                 return FluentTheme(
                   data: FluentThemeData.dark().copyWith(
-                    accentColor: AccentColor.swatch(
-                        {'normal': HomeTheme.oscuroAcento}),
+                    accentColor:
+                        AccentColor.swatch({'normal': HomeTheme.oscuroAcento}),
                   ),
                   child: FlyoutContent(
                     useAcrylic: true,
@@ -2269,8 +2230,8 @@ class _TorrentFilesState extends State<_TorrentFiles> {
             builder: (context) {
               return FluentTheme(
                 data: FluentThemeData.dark().copyWith(
-                  accentColor: AccentColor.swatch(
-                      {'normal': HomeTheme.oscuroAcento}),
+                  accentColor:
+                      AccentColor.swatch({'normal': HomeTheme.oscuroAcento}),
                 ),
                 child: FlyoutContent(
                   useAcrylic: true,
@@ -2344,8 +2305,8 @@ class _SpeedState extends State<_Speed> {
             builder: (context) {
               return FluentTheme(
                 data: FluentThemeData.dark().copyWith(
-                  accentColor: AccentColor.swatch(
-                      {'normal': HomeTheme.oscuroAcento}),
+                  accentColor:
+                      AccentColor.swatch({'normal': HomeTheme.oscuroAcento}),
                 ),
                 child: FlyoutContent(
                   useAcrylic: true,
@@ -2524,7 +2485,8 @@ class _SeekBarState extends State<_SeekBar> {
                             // contra eso. Con esto queda una gradación
                             // clara: rosa sólido (reproducido) → rosa
                             // (bufferizado) → blanco (nada aún).
-                            color: HomeTheme.oscuroAcento.withValues(alpha: 0.7),
+                            color:
+                                HomeTheme.oscuroAcento.withValues(alpha: 0.7),
                             borderRadius: BorderRadius.circular(999),
                           ),
                         ),
@@ -2699,7 +2661,8 @@ class _ServerTab extends StatelessWidget {
             // detrás, el texto se volvía ilegible. selected pasa a violeta
             // sólido de verdad, así que el texto ahí va blanco (violeta
             // sobre violeta era invisible).
-            color: selected ? HomeTheme.oscuroAcento : HomeTheme.oscuroSuperficie,
+            color:
+                selected ? HomeTheme.oscuroAcento : HomeTheme.oscuroSuperficie,
             borderRadius: BorderRadius.circular(999),
             border: Border.all(
               color: selected ? HomeTheme.oscuroAcento : HomeTheme.oscuroBorde,
