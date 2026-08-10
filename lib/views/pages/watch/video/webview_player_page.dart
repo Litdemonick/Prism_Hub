@@ -1357,6 +1357,21 @@ class _WebViewPlayerPageState extends State<WebViewPlayerPage>
                       // intercepte cada pedido.
                       useShouldInterceptRequest:
                           BloqueadorAnuncios.interceptarEnWindows(widget.url),
+                      // Sin menú del botón derecho en computadora.
+                      //
+                      // En el escritorio, el clic derecho abre el menú del
+                      // motor —«Guardar vídeo como…», «Copiar dirección del
+                      // vídeo», «Recargar», «Inspeccionar»—, que es el menú del
+                      // navegador y no el de un reproductor: deja ver que
+                      // adentro hay una página web, y desde ahí se puede sacar
+                      // la página del hueco donde tiene que estar el vídeo.
+                      //
+                      // Solo en computadora, a propósito. En Android este mismo
+                      // ajuste apaga el menú de selección de texto (copiar,
+                      // pegar, seleccionar), que ahí sí se usa y no tiene nada
+                      // que ver con el clic derecho.
+                      disableContextMenu:
+                          Platform.isWindows || Platform.isLinux,
                     ),
                     onWebViewCreated: (controller) {
                       _webViewController = controller;
