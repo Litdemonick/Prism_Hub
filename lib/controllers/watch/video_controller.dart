@@ -3780,8 +3780,13 @@ class VideoPlayerController extends GetxController with WidgetsBindingObserver {
       //
       // Volver a pedirlo no puede romper nada: si ya está puesto, no cambia
       // nada. Mismo arreglo que en la pantalla del navegador interno.
+      //
+      // Y lo que se vuelve a pedir son las barras VISIBLES, no el modo
+      // inmersivo: acá se escondían al volver de segundo plano, así que apagar
+      // y encender la pantalla dejaba al usuario sin hora ni barra de
+      // navegación aunque el resto del reproductor ya no las esconda.
       if (Platform.isAndroid) {
-        SystemChrome.setEnabledSystemUIMode(SystemUiMode.immersiveSticky);
+        _barrasDelSistemaVisibles();
       }
       // Cuenta limpia: los fallos de mientras no estuvo en pantalla no valen,
       // porque pudieron ser del recorte de red y no del televisor.
@@ -7046,8 +7051,24 @@ class VideoPlayerController extends GetxController with WidgetsBindingObserver {
   /// ya está en el modo que corresponde, pedirlo de nuevo no cuesta nada.
   static void pantallaSegunOrientacion({required bool acostado}) {
     if (!Platform.isAndroid) return;
+    // ── Las barras del sistema NO se esconden nunca ─────────────────────────
+    //
+    // Acostado se pedía modo inmersivo: el vídeo ocupaba todo y desaparecían la
+    // hora, la batería y la barra de navegación. A pedido, eso ya no se hace en
+    // ninguna orientación — las dos barras se quedan siempre, en el reproductor
+    // y fuera de él.
+    //
+    // No es solo estética. Escondidas, la única salida visible era la flecha
+    // del propio reproductor, y por eso esa flecha tenía que quedarse fija
+    // encima del vídeo todo el tiempo. Con las barras puestas, el gesto de
+    // atrás siempre está disponible, y recién ahí la flecha puede desvanecerse
+    // con el resto de los controles — que es lo que se pidió junto con esto.
+    // Las dos cosas van juntas: una sin la otra deja la pantalla sin salida.
+    //
+    // El `if (acostado)` queda por si algún día vuelve a hacer falta
+    // diferenciar, pero hoy las dos ramas piden lo mismo.
     if (acostado) {
-      SystemChrome.setEnabledSystemUIMode(SystemUiMode.immersiveSticky);
+      _barrasDelSistemaVisibles();
       return;
     }
     // ── De pie: `manual` con las dos barras, NO `edgeToEdge` ──────────────
@@ -7061,6 +7082,20 @@ class VideoPlayerController extends GetxController with WidgetsBindingObserver {
     // salir del reproductor (ver la restauración más abajo): fuerza que las dos
     // barras vuelvan RESERVANDO su espacio, sin depender de que el MediaQuery
     // alcance a refrescar el relleno superior a tiempo.
+    _barrasDelSistemaVisibles();
+  }
+
+  /// Las dos barras del sistema, visibles y RESERVANDO su espacio.
+  ///
+  /// `manual` con todos los overlays, y no `edgeToEdge`: con edgeToEdge las
+  /// barras se ven pero el contenido se dibuja DEBAJO, así que la hora y la
+  /// batería quedaban tapadas por el vídeo. Y peor: si esa era la última orden
+  /// antes de salir, la app entera quedaba así y no se veía la hora ni después
+  /// de cerrar el reproductor. Reportado en vivo.
+  ///
+  /// Es lo mismo que pide el resto de la app al salir del reproductor, ahora en
+  /// un solo lugar para que no se puedan separar.
+  static void _barrasDelSistemaVisibles() {
     SystemChrome.setEnabledSystemUIMode(
       SystemUiMode.manual,
       overlays: SystemUiOverlay.values,
