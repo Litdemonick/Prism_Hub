@@ -442,6 +442,26 @@ class _ComicReaderContentState extends State<ComicReaderContent> {
   static const _keyScrollStep = 48.0;
   static const _keyPageStepFactor = 0.9;
 
+  /// Cómo bajar dentro de cada página viva del modo paginado. Las páginas se
+  /// anotan solas al montarse (ver _PagedPage.registrarScroll); hay más de
+  /// una porque el PageView mantiene también las de los costados.
+  final Map<int, void Function(double)> _scrollDeCadaPagina = {};
+
+  void _registrarScrollDePagina(int indice, void Function(double) desplazar) {
+    _scrollDeCadaPagina[indice] = desplazar;
+  }
+
+  /// Se comprueba que lo anotado siga siendo el de ESTA página antes de
+  /// borrarlo. Al cambiar de capítulo, Flutter puede montar la página nueva
+  /// del mismo índice ANTES de desmontar la vieja, y sin esta comprobación
+  /// el dispose de la vieja se llevaba puesto el registro recién hecho por
+  /// la nueva — las flechas dejaban de bajar hasta el próximo redibujado.
+  void _olvidarScrollDePagina(int indice, void Function(double) desplazar) {
+    if (_scrollDeCadaPagina[indice] == desplazar) {
+      _scrollDeCadaPagina.remove(indice);
+    }
+  }
+
   void _onKeyEvent(KeyEvent event) {
     // Escape cierra el lector, como el botón de atrás. Va PRIMERO y para
     // cualquier modo (paginado o cascada): es lo que espera cualquiera al
@@ -452,6 +472,32 @@ class _ComicReaderContentState extends State<ComicReaderContent> {
         event.logicalKey == LogicalKeyboardKey.escape) {
       RouterUtils.closeReader(context);
       return;
+    }
+    // ── Paginado en escritorio: arriba/abajo BAJAN, no pasan de página ────
+    //
+    // A pedido explícito: en paginado las flechas de arriba y abajo hacían
+    // lo mismo que las de los costados —cambiar de página— y en una tira
+    // alta, que se lee bajando, eso era lo contrario de lo que uno espera.
+    // Ahora bajan dentro de la página, igual que en cascada, y pasar de
+    // página queda solo para izquierda/derecha.
+    //
+    // Si la página entra entera no hay nada que bajar y no pasa nada: lo
+    // correcto, porque tampoco tiene que cambiar de página.
+    if (_c.isPaged &&
+        !Platform.isAndroid &&
+        (event is KeyDownEvent || event is KeyRepeatEvent)) {
+      final tecla = event.logicalKey;
+      final paso = switch (tecla) {
+        LogicalKeyboardKey.arrowDown => _keyScrollStep,
+        LogicalKeyboardKey.arrowUp => -_keyScrollStep,
+        LogicalKeyboardKey.pageDown => _keyScrollStep * 6,
+        LogicalKeyboardKey.pageUp => -_keyScrollStep * 6,
+        _ => null,
+      };
+      if (paso != null) {
+        _scrollDeCadaPagina[_c.currentPage.value]?.call(paso);
+        return;
+      }
     }
     // El controller mantiene el estado de zoom (Ctrl) y el modo paginado.
     if (_c.isPaged || Platform.isAndroid) {
@@ -920,6 +966,9 @@ class _ComicReaderContentState extends State<ComicReaderContent> {
                               // haber saltado varias.
                               placeholder: const Center(child: ProgressRing()),
                               llenarPantalla: _c.llenarPantalla.value,
+                              indice: index,
+                              registrarScroll: _registrarScrollDePagina,
+                              olvidarScroll: _olvidarScrollDePagina,
                             )),
                           ),
                           // Solo escritorio (ver arriba): en celular se desliza
@@ -1314,11 +1363,28 @@ class _PagedPage extends StatefulWidget {
     required this.placeholder,
     required this.stripAlign,
     required this.llenarPantalla,
+    required this.indice,
+    required this.registrarScroll,
+    required this.olvidarScroll,
   });
 
   final String url;
   final Map<String, String>? headers;
   final Widget placeholder;
+
+  /// Qué página es, para que quien escucha el teclado sepa a cuál de las
+  /// vivas mandarle el desplazamiento (el PageView mantiene también las de
+  /// los costados, ver allowImplicitScrolling).
+  final int indice;
+
+  /// Se anuncia al montarse con la función que baja o sube DENTRO de esta
+  /// página, y se da de baja al desmontarse. Así las flechas de arriba y
+  /// abajo pueden desplazar la tira sin que el padre tenga que conocer el
+  /// ScrollController de cada página.
+  final void Function(int indice, void Function(double) desplazar)
+      registrarScroll;
+  final void Function(int indice, void Function(double) desplazar)
+      olvidarScroll;
 
   /// Dónde se pega la tira de manhwa cuando sobra ancho. Solo aplica a las
   /// páginas que resultan ser tira: una página de manga entra entera y no
@@ -1614,12 +1680,25 @@ class _PagedPageState extends State<_PagedPage> {
   @override
   void initState() {
     super.initState();
+    widget.registrarScroll(widget.indice, _desplazar);
     final cached = _aspectCache[widget.url];
     if (cached != null) {
       _aspect = cached;
       return;
     }
     _resolveAspect();
+  }
+
+  /// Baja o sube DENTRO de esta página. Si no hay nada que desplazar (una
+  /// página de manga entra entera), no hace nada — y eso es lo correcto: las
+  /// flechas de arriba y abajo no cambian de página, para eso están las de
+  /// los costados.
+  void _desplazar(double delta) {
+    if (!_stripScrollController.hasClients) return;
+    final posicion = _stripScrollController.position;
+    posicion.jumpTo(
+      (posicion.pixels + delta).clamp(0.0, posicion.maxScrollExtent),
+    );
   }
 
   @override
@@ -1673,6 +1752,7 @@ class _PagedPageState extends State<_PagedPage> {
 
   @override
   void dispose() {
+    widget.olvidarScroll(widget.indice, _desplazar);
     if (_listener != null) _stream?.removeListener(_listener!);
     _zoomController.dispose();
     _stripScrollController.dispose();
