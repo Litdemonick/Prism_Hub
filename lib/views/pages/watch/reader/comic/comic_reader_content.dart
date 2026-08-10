@@ -146,6 +146,38 @@ class _ComicReaderContentState extends State<ComicReaderContent> {
     setState(() => _androidPointers.add(event.pointer));
   }
 
+  /// Si el PageView venía asentándose de un cambio de página, se lo termina
+  /// AHORA en vez de dejarlo a mitad de camino.
+  ///
+  /// ── Por qué hace falta ──────────────────────────────────────────────────
+  ///
+  /// Reportado en vivo: "cuando voy cambiando y paso a scroll vertical, como
+  /// que cambia". No era el umbral. Al apoyar el dedo, todo Scrollable llama
+  /// a `position.hold()` desde el `onDown` de su reconocedor — o sea en el
+  /// pointer down, ANTES de que se decida ninguna dirección (ver
+  /// Scrollable._handleDragDown). Si en ese momento la página venía
+  /// deslizándose para asentarse, ese hold la deja congelada entre dos
+  /// páginas. Después, cuando el gesto se resuelve como vertical, el hold se
+  /// suelta y la página salta sola a la más cercana — que según dónde haya
+  /// quedado congelada puede ser la otra.
+  ///
+  /// Terminando el asentamiento en el acto no queda ningún estado "entre dos
+  /// páginas" que pueda saltar solo, y el deslizamiento vertical arranca
+  /// sobre una página quieta. Tocar durante un envión sigue cortándolo, que
+  /// es lo que uno espera de cualquier lista.
+  void _asentarPaginaSiViajaba() {
+    if (!Platform.isAndroid) return;
+    final controlador = _c.pageController;
+    if (!controlador.hasClients) return;
+    final pagina = controlador.page;
+    if (pagina == null) return;
+    final destino = pagina.round();
+    // Ya está en su lugar: no hay nada que asentar y jumpToPage acá sería
+    // meterse en un scroll que quizá está empezando a mano.
+    if ((pagina - destino).abs() < 0.001) return;
+    controlador.jumpToPage(destino);
+  }
+
   void _onAndroidPointerUp(PointerEvent event) {
     if (_androidPointers.remove(event.pointer)) setState(() {});
   }
@@ -916,7 +948,14 @@ class _ComicReaderContentState extends State<ComicReaderContent> {
                       // peleaban y ganaba el del PageView — por eso en
                       // celular el pellizco no hacía nada en modo paginado.
                       behavior: HitTestBehavior.translucent,
-                      onPointerDown: _onAndroidPointerDown,
+                      onPointerDown: (event) {
+                        _onAndroidPointerDown(event);
+                        // Va DESPUÉS: el reconocedor del PageView (que está
+                        // más adentro y por eso recibe el evento antes) ya
+                        // dejó la página congelada con su hold; esto la
+                        // termina de asentar. Ver _asentarPaginaSiViajaba.
+                        _asentarPaginaSiViajaba();
+                      },
                       onPointerUp: _onAndroidPointerUp,
                       onPointerCancel: _onAndroidPointerUp,
                       child: Stack(
