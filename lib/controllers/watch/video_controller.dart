@@ -106,6 +106,23 @@ class VideoPlayerController extends GetxController with WidgetsBindingObserver {
   final showSidebar = false.obs;
   final isOpenSidebar = false.obs;
   final isFullScreen = false.obs;
+
+  /// Pantalla completa en Android: el vídeo solo, sin la hora ni la batería.
+  ///
+  /// ── Por qué es un botón APARTE de "llenar pantalla" ─────────────────────
+  ///
+  /// "Llenar pantalla" cambia cómo encaja la IMAGEN en el marco (BoxFit). Esto
+  /// cambia el marco en sí, escondiendo las barras del sistema para que el
+  /// vídeo ocupe hasta donde ellas estaban. Las dos cosas se pueden combinar.
+  ///
+  /// ── Por qué es MANUAL, y no automático como antes ────────────────────────
+  ///
+  /// Las barras del sistema se dejaron SIEMPRE visibles por defecto —a pedido,
+  /// porque escondidas dejaban la única salida en una flecha fija encima del
+  /// vídeo—. Este interruptor es la excepción: el usuario que sí quiere
+  /// inmersión total la pide a propósito, tocando el botón, en vez de que la
+  /// app se la imponga.
+  final pantallaCompletaAndroid = false.obs;
   late final index = playIndex.obs;
 
   // 快捷键
@@ -1889,6 +1906,16 @@ class VideoPlayerController extends GetxController with WidgetsBindingObserver {
       Timer(const Duration(milliseconds: 1200), () {
         if (_disposed || dlnaDevice.value != null) return;
         if (!imagenCongelada.value && serverFailedMessage.value.isEmpty) return;
+        // ── Se vuelve a chequear, no solo al entrar al Timer ────────────
+        //
+        // Este chequeo YA se hacía antes de programar el Timer, pero no
+        // DESPUÉS de esperarlo. En esos 1,2 s puede haber arrancado otra
+        // resolución del mismo servidor —el usuario tocó "reintentar" a
+        // mano, o el vigilante de atasco disparó la suya— y sin volver a
+        // mirar acá, este Timer abría una SEGUNDA fuente por encima de la que
+        // ya estaba en camino: dos `player.open()` casi a la vez, y un
+        // instante con el audio de las dos sonando junto. Reportado en vivo.
+        if (isWebViewActive.value || isGettingWatchData.value) return;
         logger.info('Cambio de red: se vuelve a resolver el video');
         _midStreamResumeAt = position.value;
         // El contador de reintentos se reinicia: los fallos anteriores fueron
@@ -5566,6 +5593,29 @@ class VideoPlayerController extends GetxController with WidgetsBindingObserver {
     if (_disposed) return false;
     _fuenteUrl = plan.url ?? url;
     _fuenteHeaders = hdrs;
+    // ── Se para lo anterior ANTES de abrir lo nuevo, siempre ────────────
+    //
+    // Este es el chokepoint por el que pasa TODA apertura (primaria,
+    // switchServer, fallback directo, sniffer, calidad) — así que es el
+    // lugar correcto para una red de seguridad contra el audio duplicado
+    // reportado en vivo: al perder la conexión y recuperarla (o al confirmar
+    // "continuar donde ibas" justo cuando otra resolución ya estaba en
+    // camino), dos caminos podían terminar pidiendo abrir una fuente casi a
+    // la vez, y por un instante sonaban las dos superpuestas.
+    //
+    // `player.open()` en teoría ya reemplaza la fuente anterior, pero eso pasa
+    // DEL LADO NATIVO (mpv) y de forma asíncrona; si un segundo `open()`
+    // llega antes de que el primero terminó de soltar su audio, la ventana
+    // quedaba abierta. Parar y ESPERARLO acá, del lado Dart, antes de cada
+    // apertura, cierra esa ventana pase lo que pase del otro lado.
+    //
+    // Con tope: si el reproductor está en un estado raro (la misma
+    // condición documentada en shutdownPlayback), no puede trabar la
+    // apertura siguiente por un stop() que nunca vuelve.
+    try {
+      await player.stop().timeout(const Duration(seconds: 2));
+    } catch (_) {}
+    if (_disposed) return false;
     await player.open(Media(plan.url ?? url, httpHeaders: hdrs));
 
     if (_disposed) {
@@ -7027,6 +7077,10 @@ class VideoPlayerController extends GetxController with WidgetsBindingObserver {
   // vivo. Llamarlo dos veces no molesta; no llamarlo nunca sí.
   Future<void> restoreSystemUiOnExit() async {
     if (!Platform.isAndroid) return;
+    // El botón manual no puede sobrevivir al reproductor: si quedara en true,
+    // la próxima vez que se abra otro vídeo arrancaría en pantalla completa sin
+    // que nadie lo haya tocado.
+    pantallaCompletaAndroid.value = false;
     // manual + overlays completos (no edgeToEdge): confirmado en vivo que
     // volver a edgeToEdge al salir dejaba la hora/batería "comidas" por el
     // SafeArea de la página de destino — MediaQuery no llegaba a refrescar el
@@ -7069,8 +7123,16 @@ class VideoPlayerController extends GetxController with WidgetsBindingObserver {
   ///
   /// La llama la página cada vez que cambia la orientación. Es idempotente: si
   /// ya está en el modo que corresponde, pedirlo de nuevo no cuesta nada.
-  static void pantallaSegunOrientacion({required bool acostado}) {
+  void pantallaSegunOrientacion({required bool acostado}) {
     if (!Platform.isAndroid) return;
+    // El botón manual de pantalla completa manda por encima de la orientación:
+    // sin esto, la página llama a este método en cada rebuild (ver
+    // `_androidSegunOrientacion`) y le pisaba el modo inmersivo apenas volvía a
+    // dibujarse un cuadro.
+    if (pantallaCompletaAndroid.value) {
+      SystemChrome.setEnabledSystemUIMode(SystemUiMode.immersiveSticky);
+      return;
+    }
     // ── Las barras del sistema NO se esconden nunca ─────────────────────────
     //
     // Acostado se pedía modo inmersivo: el vídeo ocupaba todo y desaparecían la
