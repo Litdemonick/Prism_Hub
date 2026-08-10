@@ -7263,8 +7263,9 @@ class VideoPlayerController extends GetxController with WidgetsBindingObserver {
     if (llenarPantalla.value) {
       SystemChrome.setEnabledSystemUIMode(SystemUiMode.edgeToEdge);
       // El cambio de modo reinicia el estilo de las barras — mismo motivo
-      // que en _barrasDelSistemaVisibles.
-      ModoDeColor.aplicarBarrasDelSistema();
+      // que en _barrasDelSistemaVisibles, con los iconos fijos en claros
+      // (ver _iconosDelSistemaParaVideo) y no según el modo de la app.
+      _iconosDelSistemaParaVideo();
       return;
     }
     // ── De pie: `manual` con las dos barras, NO `edgeToEdge` ──────────────
@@ -7299,13 +7300,32 @@ class VideoPlayerController extends GetxController with WidgetsBindingObserver {
     // ── Y SUS COLORES, que el cambio de modo se lleva puestos ──────────────
     //
     // `setEnabledSystemUIMode` reinicia el estilo de las barras a los valores
-    // por defecto de Android, que son iconos CLAROS. En modo oscuro no se
-    // notaba; en claro dejaba la hora y la batería blancas sobre fondo casi
-    // blanco, o sea invisibles, y la barra de abajo cambiada de color.
+    // por defecto de Android, que son iconos CLAROS.
     //
     // Pedir el modo y no volver a pedir el estilo era el agujero: son dos
     // cosas separadas y la primera pisa a la segunda.
-    ModoDeColor.aplicarBarrasDelSistema();
+    _iconosDelSistemaParaVideo();
+  }
+
+  /// Los iconos del sistema, siempre CLAROS mientras se está en el
+  /// reproductor — no según el modo claro/oscuro de la app
+  /// (ModoDeColor.aplicarBarrasDelSistema, que usa el resto de la app).
+  ///
+  /// Ese otro tiene sentido en una pantalla con un fondo fijo: elige iconos
+  /// oscuros si el fondo de la app es claro. Acá el fondo real es el VIDEO,
+  /// que no tiene nada que ver con si la app está en modo claro u oscuro —
+  /// con modo claro puesto y una escena oscura (lo más común), los iconos
+  /// oscuros que elegiría el otro quedaban invisibles contra el video.
+  /// Reportado en vivo. Claros siempre es lo seguro acá, y es lo mismo que
+  /// hace cualquier reproductor de video conocido.
+  static void _iconosDelSistemaParaVideo() {
+    SystemChrome.setSystemUIOverlayStyle(const SystemUiOverlayStyle(
+      statusBarColor: Colors.transparent,
+      statusBarIconBrightness: Brightness.light,
+      statusBarBrightness: Brightness.dark,
+      systemNavigationBarColor: Colors.transparent,
+      systemNavigationBarIconBrightness: Brightness.light,
+    ));
   }
 
   @override
