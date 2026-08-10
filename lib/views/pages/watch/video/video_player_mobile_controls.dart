@@ -1679,6 +1679,11 @@ class _VolumeButtonMobileState extends State<_VolumeButtonMobile> {
     return Icons.volume_up_rounded;
   }
 
+  /// A cuánto volver al des-silenciar. Se guarda al silenciar en vez de
+  /// mirar el valor actual —que ya es 0— para devolver exactamente el que
+  /// había, incluso si estaba amplificado por encima de 100.
+  double _volumenAntesDeSilenciar = 100;
+
   @override
   Widget build(BuildContext context) {
     return Obx(() {
@@ -1698,10 +1703,41 @@ class _VolumeButtonMobileState extends State<_VolumeButtonMobile> {
         }
       }
 
+      // Silencia y des-silencia con un toque en la bocina, a pedido
+      // explícito: antes el ícono era decorativo y bajar a cero obligaba a
+      // arrastrar la barra hasta el fondo y después volver a buscar el punto
+      // donde estaba. Va por `cambiar`, así respeta el caso de casteo (donde
+      // el volumen es el del APARATO y se manda por diferencia).
+      void alternarSilencio() {
+        if (valor > 0) {
+          _volumenAntesDeSilenciar = valor;
+          cambiar(0);
+          return;
+        }
+        // Clamp al tope de ESTE momento: se puede haber silenciado con el
+        // volumen local amplificado (hasta 200) y des-silenciar ya
+        // transmitiendo, donde el máximo del aparato es 100.
+        final volver =
+            _volumenAntesDeSilenciar > 0 ? _volumenAntesDeSilenciar : 100.0;
+        cambiar(volver.clamp(0, tope));
+      }
+
       return Row(
         mainAxisSize: MainAxisSize.min,
         children: [
-          Icon(_iconoPara(valor, tope), size: 22),
+          // InkWell y no IconButton: el botón de Material reserva 48px de
+          // ancho mínimo y esta fila ya venía justa de espacio (ver el
+          // comentario del orden de los botones en _Footer). Con este
+          // relleno el objetivo queda en 34px, cómodo de tocar, sin sumar
+          // los 26 extra que empujarían de nuevo a pantalla completa.
+          InkWell(
+            onTap: alternarSilencio,
+            customBorder: const CircleBorder(),
+            child: Padding(
+              padding: const EdgeInsets.all(6),
+              child: Icon(_iconoPara(valor, tope), size: 22),
+            ),
+          ),
           // Más ancha y con más área de agarre que un slider de Material
           // por defecto — a pedido explícito: en un teléfono, con el dedo
           // encima del video, el thumb chico era difícil de acertar y de

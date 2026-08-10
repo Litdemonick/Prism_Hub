@@ -1255,6 +1255,28 @@ class _VolumeState extends State<_Volume> {
     widget.player.setVolume(value);
   }
 
+  /// A cuánto volver al des-silenciar. Se guarda al silenciar en vez de
+  /// mirar el valor actual —que ya es 0— para devolver exactamente el que
+  /// había, incluso si estaba amplificado por encima de 100.
+  double _volumenAntesDeSilenciar = 100;
+
+  /// Silencia y des-silencia con un clic en la bocina, a pedido explícito:
+  /// antes el ícono era decorativo y bajar el volumen a cero obligaba a
+  /// arrastrar la barra hasta el fondo y después volver a buscar el punto
+  /// donde estaba.
+  void _alternarSilencio() {
+    if (_volume.value > 0) {
+      _volumenAntesDeSilenciar = _volume.value;
+      _onVolumeChanged(0);
+      return;
+    }
+    // Si se llegó a 0 arrastrando la barra (no por este botón), no hay un
+    // valor previo que devolver: 100 es el volumen original del vídeo.
+    _onVolumeChanged(
+      _volumenAntesDeSilenciar > 0 ? _volumenAntesDeSilenciar : 100,
+    );
+  }
+
   @override
   void dispose() {
     _volumeSub?.cancel();
@@ -1287,7 +1309,10 @@ class _VolumeState extends State<_Volume> {
         () => Row(
           mainAxisSize: MainAxisSize.min,
           children: [
-            Icon(_iconoDe(_volume.value)),
+            IconButton(
+              onPressed: _alternarSilencio,
+              icon: Icon(_iconoDe(_volume.value)),
+            ),
             const SizedBox(width: 6),
             SizedBox(
               width: 90,
