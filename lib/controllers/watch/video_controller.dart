@@ -4422,9 +4422,24 @@ class VideoPlayerController extends GetxController with WidgetsBindingObserver {
     if (proporcion >= 2.9) return true;
     // De 1:1 en adelante, con el nombre diciendolo.
     if (proporcion < 0.9) return false;
-    return RegExp(r'(^|[^a-z])vr([^a-z]|$)|180|360|sbs|3d|over.?under',
-            caseSensitive: false)
-        .hasMatch(pistas);
+    // ── Las pistas tienen que ser PALABRAS, no trozos ────────────────────
+    //
+    // Antes esto buscaba `180|360|sbs|3d` en cualquier parte del texto, y en
+    // las pistas entra la DIRECCION del video. Casi todas llevan la calidad
+    // ahi —`360p`, `720p`— y `360p` contiene `360`: el interruptor de VR
+    // aparecia en practicamente todos los videos. Reportado en Android.
+    //
+    // Lo mismo con `3d` y `sbs` dentro de un hash cualquiera: `a3d9f2` traia
+    // `3d`, y esos identificadores estan en casi todas las direcciones.
+    //
+    // Ahora cada marca tiene que ir suelta: sin letra ni numero pegado de
+    // ningun lado. Asi `360p` NO cuenta (le sigue una p) y `1360` tampoco (le
+    // precede un numero), pero `vr 360`, `_360_` o `360°` si.
+    return RegExp(
+      r'(^|[^a-z0-9])(vr|sbs|3d|180|360)([^a-z0-9]|$)'
+      r'|over.?under',
+      caseSensitive: false,
+    ).hasMatch(pistas);
   }
 
   /// El texto donde buscar esas pistas: como se llama el video y de donde sale.
