@@ -7,6 +7,7 @@ import 'package:prismhub/models/index.dart';
 import 'package:prismhub/controllers/watch/reader_controller.dart';
 import 'package:prismhub/data/services/database_service.dart';
 import 'package:prismhub/utils/prismhub_storage.dart';
+import 'package:prismhub/views/widgets/home/home_theme.dart';
 import 'package:scrollable_positioned_list/scrollable_positioned_list.dart';
 
 class NovelController extends ReaderController<ExtensionFikushonWatch> {
@@ -44,6 +45,11 @@ class NovelController extends ReaderController<ExtensionFikushonWatch> {
   /// vivo con captura en el lector de cómics, donde este mismo método ya está
   /// funcionando bien. Vuelven solas si se desliza desde el borde, sin sacar
   /// al lector del modo.
+  /// Y el ESTILO después del modo: `setEnabledSystemUIMode` reinicia el color
+  /// de los iconos del sistema a los de Android, que son claros. Sin volver a
+  /// pedirlo, con el modo claro puesto quedaban blancos sobre una barra casi
+  /// blanca y la de arriba se veía vacía. Misma trampa que en
+  /// ComicController._actualizarPantallaCompletaAndroid.
   void _actualizarPantallaCompletaAndroid(bool activo) {
     if (activo) {
       SystemChrome.setEnabledSystemUIMode(SystemUiMode.immersiveSticky);
@@ -53,6 +59,7 @@ class NovelController extends ReaderController<ExtensionFikushonWatch> {
         overlays: SystemUiOverlay.values,
       );
     }
+    ModoDeColor.aplicarBarrasDelSistema();
   }
 
   final itemPositionsListener = ItemPositionsListener.create();
@@ -157,6 +164,9 @@ class NovelController extends ReaderController<ExtensionFikushonWatch> {
         SystemUiMode.manual,
         overlays: SystemUiOverlay.values,
       );
+      // Y el estilo, por lo mismo de arriba: sin esto se salía del lector con
+      // los iconos del sistema en claro, invisibles con el modo claro puesto.
+      ModoDeColor.aplicarBarrasDelSistema();
     }
     saveProgressNow();
     super.onClose();

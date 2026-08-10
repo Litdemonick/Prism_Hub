@@ -11,6 +11,7 @@ import 'package:prismhub/data/services/database_service.dart';
 import 'package:scrollable_positioned_list/scrollable_positioned_list.dart';
 import 'package:prismhub/utils/log.dart';
 import 'package:prismhub/utils/prismhub_storage.dart';
+import 'package:prismhub/views/widgets/home/home_theme.dart';
 
 class ComicController extends ReaderController<ExtensionMangaWatch> {
   ComicController({
@@ -75,6 +76,17 @@ class ComicController extends ReaderController<ExtensionMangaWatch> {
   ///
   /// Apagado vuelve a `manual` con las dos barras reservando su espacio, que
   /// es como está siempre el resto de la app.
+  /// ── Y SUS COLORES, que el cambio de modo se lleva puestos ──────────────
+  ///
+  /// `setEnabledSystemUIMode` reinicia el estilo de las barras a los valores
+  /// por defecto de Android, que son iconos CLAROS. Pedir el modo y no volver
+  /// a pedir el estilo era el agujero: con el modo claro puesto, los iconos
+  /// quedaban blancos sobre una barra casi blanca y la de arriba se veía
+  /// vacía, como si el lector se hubiera comido esa franja. En oscuro no se
+  /// notaba porque ahí los iconos claros son justo los que van.
+  ///
+  /// Es la misma trampa que ya estaba resuelta en el reproductor de vídeo
+  /// (ver VideoPlayerController._barrasDelSistemaVisibles); acá faltaba.
   void _actualizarPantallaCompletaAndroid(bool activo) {
     if (activo) {
       SystemChrome.setEnabledSystemUIMode(SystemUiMode.immersiveSticky);
@@ -84,6 +96,7 @@ class ComicController extends ReaderController<ExtensionMangaWatch> {
         overlays: SystemUiOverlay.values,
       );
     }
+    ModoDeColor.aplicarBarrasDelSistema();
   }
 
   // UNO solo para toda la vida del lector. Antes se recreaba en cada cambio
@@ -428,6 +441,11 @@ class ComicController extends ReaderController<ExtensionMangaWatch> {
         SystemUiMode.manual,
         overlays: SystemUiOverlay.values,
       );
+      // Y el estilo, por lo mismo que en
+      // _actualizarPantallaCompletaAndroid: pedir el modo lo reinicia, y sin
+      // esto se salía del lector con los iconos del sistema en claro —
+      // invisibles con el modo claro puesto.
+      ModoDeColor.aplicarBarrasDelSistema();
     }
     pageController.dispose();
     saveProgressNow();
