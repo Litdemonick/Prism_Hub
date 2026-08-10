@@ -635,56 +635,42 @@ class _VideoPlayerDesktopControlsState
                   children: [
                     // header + selector — se ocultan rápido si el mouse no
                     // se mueve (igual que el footer, más abajo).
-                    //
-                    // Listener acá afuera: usar un control de acá adentro
-                    // (arrastrar un slider, mover la barra de progreso) no
-                    // dispara onHover del MouseRegion de más arriba —hover
-                    // es solo para el puntero SIN botón apretado— así que
-                    // sin esto los controles podían esconderse a mitad de
-                    // un arrastre largo. onPointerMove además de down: un
-                    // arrastre que dura más de los 2s del temporizador
-                    // tiene que seguir reseteándolo mientras se mueve, no
-                    // solo al empezar.
-                    Listener(
-                      onPointerDown: (_) => _resetHideTimer(),
-                      onPointerMove: (_) => _resetHideTimer(),
-                      child: IgnorePointer(
-                        ignoring: !_showControls,
-                        child: AnimatedOpacity(
-                          opacity: _showControls ? 1 : 0,
-                          duration: const Duration(milliseconds: 200),
-                          child: Column(
-                            children: [
-                              // Obx acá: _c.index.value se leía suelto en el
-                              // build de este State (no reactivo), así que el
-                              // título arriba solo se actualizaba cuando algo
-                              // más disparaba un rebuild — se sentía "atrasado"
-                              // al cambiar de capítulo. Envuelto en Obx, sigue
-                              // a index.value al toque.
-                              // Con el indice comprobado: una ficha sin episodios
-                              // —una entrada del historial cuya pagina ya no
-                              // existe— abre el reproductor con la lista vacia, y
-                              // sin esto reventaba con un RangeError encima del
-                              // video, tapando el aviso de que habia pasado.
-                              Obx(() {
-                                final lista = _c.playList;
-                                final i = _c.index.value;
-                                return _Header(
-                                  title: _c.title,
-                                  episode: (i >= 0 && i < lista.length)
-                                      ? lista[i].name
-                                      : '',
-                                  onClose: () =>
-                                      unawaited(_c.closeRoute(context)),
-                                );
-                              }),
-                              // selector de servidores — pestañas arriba, no un
-                              // botón escondido abajo (a pedido del usuario, y
-                              // para que se vea de una cuál es el
-                              // recomendado/nativo).
-                              _ServerTabBar(controller: _c),
-                            ],
-                          ),
+                    IgnorePointer(
+                      ignoring: !_showControls,
+                      child: AnimatedOpacity(
+                        opacity: _showControls ? 1 : 0,
+                        duration: const Duration(milliseconds: 200),
+                        child: Column(
+                          children: [
+                            // Obx acá: _c.index.value se leía suelto en el
+                            // build de este State (no reactivo), así que el
+                            // título arriba solo se actualizaba cuando algo
+                            // más disparaba un rebuild — se sentía "atrasado"
+                            // al cambiar de capítulo. Envuelto en Obx, sigue
+                            // a index.value al toque.
+                            // Con el indice comprobado: una ficha sin episodios
+                            // —una entrada del historial cuya pagina ya no
+                            // existe— abre el reproductor con la lista vacia, y
+                            // sin esto reventaba con un RangeError encima del
+                            // video, tapando el aviso de que habia pasado.
+                            Obx(() {
+                              final lista = _c.playList;
+                              final i = _c.index.value;
+                              return _Header(
+                                title: _c.title,
+                                episode: (i >= 0 && i < lista.length)
+                                    ? lista[i].name
+                                    : '',
+                                onClose: () =>
+                                    unawaited(_c.closeRoute(context)),
+                              );
+                            }),
+                            // selector de servidores — pestañas arriba, no un
+                            // botón escondido abajo (a pedido del usuario, y
+                            // para que se vea de una cuál es el
+                            // recomendado/nativo).
+                            _ServerTabBar(controller: _c),
+                          ],
                         ),
                       ),
                     ),
@@ -811,19 +797,12 @@ class _VideoPlayerDesktopControlsState
                       }),
                     ),
                     // footer — se oculta rápido si el mouse no se mueve.
-                    // Mismo Listener que el header, y por el mismo motivo:
-                    // arrastrar la barra de progreso o el slider de volumen
-                    // no cuenta como "hover" para el MouseRegion de arriba.
-                    Listener(
-                      onPointerDown: (_) => _resetHideTimer(),
-                      onPointerMove: (_) => _resetHideTimer(),
-                      child: IgnorePointer(
-                        ignoring: !_showControls,
-                        child: AnimatedOpacity(
-                          opacity: _showControls ? 1 : 0,
-                          duration: const Duration(milliseconds: 200),
-                          child: _Footer(controller: _c),
-                        ),
+                    IgnorePointer(
+                      ignoring: !_showControls,
+                      child: AnimatedOpacity(
+                        opacity: _showControls ? 1 : 0,
+                        duration: const Duration(milliseconds: 200),
+                        child: _Footer(controller: _c),
                       ),
                     ),
                   ],
@@ -1278,49 +1257,38 @@ class _VolumeState extends State<_Volume> {
   // Barra SIEMPRE visible, no escondida atrás de un botón — a pedido
   // explícito: con el flyout de antes, había que abrirlo para ver o
   // cambiar el volumen, y un vistazo rápido no alcanzaba.
-  //
-  // FluentTheme propio con el acento rosa de la marca — a pedido
-  // explícito ("como en Android"), donde el Slider de Material ya sale
-  // así solo porque hereda el ColorScheme de la app. El de Fluent no: sin
-  // este envoltorio usa el celeste por defecto del paquete.
   @override
   Widget build(BuildContext context) {
-    return FluentTheme(
-      data: FluentThemeData.dark().copyWith(
-        accentColor: AccentColor.swatch({'normal': HomeTheme.oscuroAcento}),
-      ),
-      child: Obx(
-        () => Row(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Icon(_iconoDe(_volume.value)),
-            const SizedBox(width: 6),
-            SizedBox(
-              width: 90,
-              height: 30,
-              child: Slider(
-                value: _volume.value,
-                // Pasa de 100 —el volumen original— para poder levantar
-                // material grabado bajo. Ver VideoPlayerController.volumenMaximo.
-                max: VideoPlayerController.volumenMaximo,
-                // El 100 marcado: es el punto donde deja de subirse el
-                // volumen y empieza a amplificarse, así que conviene verlo.
-                divisions: VideoPlayerController.volumenMaximo ~/ 5,
-                label: '${_volume.value.round()}%',
-                onChanged: _onVolumeChanged,
-              ),
+    return Obx(
+      () => Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(_iconoDe(_volume.value)),
+          const SizedBox(width: 6),
+          SizedBox(
+            width: 90,
+            height: 30,
+            child: Slider(
+              value: _volume.value,
+              // Pasa de 100 —el volumen original— para poder levantar
+              // material grabado bajo. Ver VideoPlayerController.volumenMaximo.
+              max: VideoPlayerController.volumenMaximo,
+              // El 100 marcado: es el punto donde deja de subirse el
+              // volumen y empieza a amplificarse, así que conviene verlo.
+              divisions: VideoPlayerController.volumenMaximo ~/ 5,
+              label: '${_volume.value.round()}%',
+              onChanged: _onVolumeChanged,
             ),
-            const SizedBox(width: 6),
-            SizedBox(
-              width: 32,
-              child: Text(
-                '${_volume.value.round()}%',
-                style:
-                    const TextStyle(fontSize: 12, fontWeight: FontWeight.w300),
-              ),
+          ),
+          const SizedBox(width: 6),
+          SizedBox(
+            width: 32,
+            child: Text(
+              '${_volume.value.round()}%',
+              style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w300),
             ),
-          ],
-        ),
+          ),
+        ],
       ),
     );
   }

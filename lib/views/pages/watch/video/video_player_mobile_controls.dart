@@ -931,59 +931,46 @@ class _VideoPlayerMobileControlsState extends State<VideoPlayerMobileControls> {
               top: 0,
               left: 0,
               right: 0,
-              // Listener acá afuera: usar un control de ADENTRO (arrastrar
-              // la barra de progreso, el slider de volumen) no dispara el
-              // onTap de la zona de gestos de más abajo, así que sin esto
-              // los controles podían esconderse solos a mitad de un
-              // arrastre largo. onPointerMove además de down: un arrastre
-              // de más de 3s tiene que seguir reseteando el reloj mientras
-              // se mueve, no solo al empezar. Acotado a header/footer (no
-              // envuelve la zona de gestos del video) para no pelearse con
-              // el toque que oculta los controles.
-              child: Listener(
-                onPointerDown: (_) => _updateTimer(),
-                onPointerMove: (_) => _updateTimer(),
-                child: IgnorePointer(
-                  ignoring: !_showControls,
-                  child: AnimatedOpacity(
-                    opacity: _showControls ? 1 : 0,
-                    duration: const Duration(milliseconds: 200),
-                    child: Column(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        // Con "llenar pantalla" lo que se estira es el VIDEO,
-                        // no los controles — a propósito. Se probó que el
-                        // encabezado también subiera hasta arriba y quedaba
-                        // mal: en un teléfono con cámara al medio, el título y
-                        // la flecha de volver terminaban tapados/cortados por
-                        // la propia cámara en vez de por un hueco vacío.
-                        // SafeArea de siempre (sin condición ninguna) evita
-                        // justo eso: reserva lo que haga falta para no chocar
-                        // con la cámara, sea cual sea el modo del video.
-                        SafeArea(
-                          bottom: false,
-                          child: Padding(
-                            padding: EdgeInsets.zero,
-                            child: Row(
-                              children: [
-                                // Volver, a pedido explícito ahora se oculta
-                                // junto con el resto del header (antes estaba
-                                // marcada como "siempre visible" a pedido
-                                // anterior — se revirtió ese criterio).
-                                SizedBox.shrink(),
-                              ],
-                            ),
+              child: IgnorePointer(
+                ignoring: !_showControls,
+                child: AnimatedOpacity(
+                  opacity: _showControls ? 1 : 0,
+                  duration: const Duration(milliseconds: 200),
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      // Con "llenar pantalla" lo que se estira es el VIDEO,
+                      // no los controles — a propósito. Se probó que el
+                      // encabezado también subiera hasta arriba y quedaba
+                      // mal: en un teléfono con cámara al medio, el título y
+                      // la flecha de volver terminaban tapados/cortados por
+                      // la propia cámara en vez de por un hueco vacío.
+                      // SafeArea de siempre (sin condición ninguna) evita
+                      // justo eso: reserva lo que haga falta para no chocar
+                      // con la cámara, sea cual sea el modo del video.
+                      SafeArea(
+                        bottom: false,
+                        child: Padding(
+                          padding: EdgeInsets.zero,
+                          child: Row(
+                            children: [
+                              // Volver, a pedido explícito ahora se oculta
+                              // junto con el resto del header (antes estaba
+                              // marcada como "siempre visible" a pedido
+                              // anterior — se revirtió ese criterio).
+                              SizedBox.shrink(),
+                            ],
                           ),
                         ),
-                        _Header(
-                          controller: _c,
-                        ),
-                        // La tira de servidores ya no queda siempre visible
-                        // tapando el video — a pedido explícito, ahora se abre
-                        // bajo demanda desde el botón de servidor en el footer
-                        // (ver SidebarTab.servers).
-                      ],
-                    ),
+                      ),
+                      _Header(
+                        controller: _c,
+                      ),
+                      // La tira de servidores ya no queda siempre visible
+                      // tapando el video — a pedido explícito, ahora se abre
+                      // bajo demanda desde el botón de servidor en el footer
+                      // (ver SidebarTab.servers).
+                    ],
                   ),
                 ),
               ),
@@ -1051,41 +1038,34 @@ class _VideoPlayerMobileControlsState extends State<VideoPlayerMobileControls> {
               bottom: 0,
               left: 0,
               right: 0,
-              // Mismo Listener que el header, y por el mismo motivo:
-              // arrastrar la barra de progreso o el slider de volumen no
-              // cuenta como un toque nuevo para la zona de gestos.
-              child: Listener(
-                onPointerDown: (_) => _updateTimer(),
-                onPointerMove: (_) => _updateTimer(),
-                child: IgnorePointer(
-                  ignoring: !_showControls,
-                  child: AnimatedOpacity(
-                    opacity: _showControls ? 1 : 0,
-                    duration: const Duration(milliseconds: 200),
-                    // Con "llenar pantalla" de pie el video pasa a edgeToEdge
-                    // (ver pantallaSegunOrientacion) y este pie, que vive a
-                    // bottom:0, pasó a caer FÍSICAMENTE atrás de los botones
-                    // de navegación del teléfono en vez de arriba de ellos —
-                    // reportado en vivo con captura, la barra de progreso
-                    // quedaba tapada. bottom:true reserva ese alto solo
-                    // cuando de verdad hace falta (viewPadding.bottom vale 0
-                    // en el modo reservado de siempre, así que acá no cambia
-                    // nada).
-                    //
-                    // left:false, right:false EXPLÍCITO: sin esto, SafeArea
-                    // los deja en true por defecto y en horizontal —donde la
-                    // cámara mete un relleno de MediaQuery.padding a un
-                    // costado— el pie quedaba angosto por ese lado, con la
-                    // barra de progreso y su sombra cortadas antes de llegar
-                    // al borde de verdad. Este Positioned ya está en
-                    // left:0/right:0 a propósito (ver arriba): es el ancho
-                    // completo que se busca, sin que SafeArea se lo achique.
-                    child: SafeArea(
-                      top: false,
-                      left: false,
-                      right: false,
-                      child: _Footer(controller: _c),
-                    ),
+              child: IgnorePointer(
+                ignoring: !_showControls,
+                child: AnimatedOpacity(
+                  opacity: _showControls ? 1 : 0,
+                  duration: const Duration(milliseconds: 200),
+                  // Con "llenar pantalla" de pie el video pasa a edgeToEdge
+                  // (ver pantallaSegunOrientacion) y este pie, que vive a
+                  // bottom:0, pasó a caer FÍSICAMENTE atrás de los botones
+                  // de navegación del teléfono en vez de arriba de ellos —
+                  // reportado en vivo con captura, la barra de progreso
+                  // quedaba tapada. bottom:true reserva ese alto solo
+                  // cuando de verdad hace falta (viewPadding.bottom vale 0
+                  // en el modo reservado de siempre, así que acá no cambia
+                  // nada).
+                  //
+                  // left:false, right:false EXPLÍCITO: sin esto, SafeArea
+                  // los deja en true por defecto y en horizontal —donde la
+                  // cámara mete un relleno de MediaQuery.padding a un
+                  // costado— el pie quedaba angosto por ese lado, con la
+                  // barra de progreso y su sombra cortadas antes de llegar
+                  // al borde de verdad. Este Positioned ya está en
+                  // left:0/right:0 a propósito (ver arriba): es el ancho
+                  // completo que se busca, sin que SafeArea se lo achique.
+                  child: SafeArea(
+                    top: false,
+                    left: false,
+                    right: false,
+                    child: _Footer(controller: _c),
                   ),
                 ),
               ),
@@ -1706,33 +1686,17 @@ class _VolumeButtonMobileState extends State<_VolumeButtonMobile> {
         mainAxisSize: MainAxisSize.min,
         children: [
           Icon(_iconoPara(valor, tope), size: 22),
-          const SizedBox(width: 6),
-          // Más ancha que antes y con el pulgar agrandado — a pedido
-          // explícito, para que sea más fácil de agarrar y afinar con el
-          // dedo. El SizedBox de más height que el Slider por sí solo no
-          // pide es lo que agranda el área tocable alrededor del pulgar,
-          // no solo el dibujo.
           SizedBox(
-            width: 150,
-            height: 40,
-            child: SliderTheme(
-              data: SliderTheme.of(context).copyWith(
-                thumbShape: const RoundSliderThumbShape(
-                  enabledThumbRadius: 9,
-                ),
-                overlayShape: const RoundSliderOverlayShape(overlayRadius: 18),
-              ),
-              child: Slider(
-                value: valor.clamp(0, tope),
-                max: tope,
-                label: '${valor.round()}%',
-                onChanged: cambiar,
-              ),
+            width: 90,
+            child: Slider(
+              value: valor.clamp(0, tope),
+              max: tope,
+              label: '${valor.round()}%',
+              onChanged: cambiar,
             ),
           ),
-          const SizedBox(width: 6),
           SizedBox(
-            width: 36,
+            width: 32,
             child: Text(
               '${valor.round()}%',
               style: const TextStyle(fontSize: 12, color: Colors.white70),
