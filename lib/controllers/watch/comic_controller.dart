@@ -48,15 +48,22 @@ class ComicController extends ReaderController<ExtensionMangaWatch> {
   /// una decisión de "esta página puntual", no una preferencia permanente.
   final llenarPantalla = false.obs;
 
-  /// Barras del sistema según "llenar pantalla" — edgeToEdge deja que la
-  /// página dibuje debajo de la barra de estado y de la de navegación
-  /// (ver el SafeArea condicional en ComicReaderContent); apagado vuelve a
-  /// `manual` reservando espacio para las dos, que es como está siempre el
-  /// resto de la app. Mismo mecanismo que
-  /// VideoPlayerController.pantallaSegunOrientacion.
+  /// Barras del sistema según "llenar pantalla".
+  ///
+  /// `immersiveSticky` y NO `edgeToEdge`: con edgeToEdge la página sí dibuja
+  /// hasta los bordes, pero la barra de estado y la de navegación SIGUEN
+  /// VISIBLES encima — reportado en vivo con captura, arriba y abajo se
+  /// seguían viendo. immersiveSticky es lo que usa el botón de pantalla
+  /// completa del reproductor de vídeo (ver
+  /// VideoPlayerController.alternarPantallaCompletaAndroid), donde esto ya
+  /// está funcionando bien: las esconde de verdad y vuelven solas si se
+  /// desliza desde el borde, sin sacar al lector del modo.
+  ///
+  /// Apagado vuelve a `manual` con las dos barras reservando su espacio, que
+  /// es como está siempre el resto de la app.
   void _actualizarPantallaCompletaAndroid(bool activo) {
     if (activo) {
-      SystemChrome.setEnabledSystemUIMode(SystemUiMode.edgeToEdge);
+      SystemChrome.setEnabledSystemUIMode(SystemUiMode.immersiveSticky);
     } else {
       SystemChrome.setEnabledSystemUIMode(
         SystemUiMode.manual,
