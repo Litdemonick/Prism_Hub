@@ -939,30 +939,19 @@ class _VideoPlayerMobileControlsState extends State<VideoPlayerMobileControls> {
                   child: Column(
                     mainAxisSize: MainAxisSize.min,
                     children: [
-                      // Con "llenar pantalla" lo que se estira es el VIDEO,
-                      // no los controles — a propósito. Se probó que el
-                      // encabezado también subiera hasta arriba y quedaba
-                      // mal: en un teléfono con cámara al medio, el título y
-                      // la flecha de volver terminaban tapados/cortados por
-                      // la propia cámara en vez de por un hueco vacío.
-                      // SafeArea de siempre (sin condición ninguna) evita
-                      // justo eso: reserva lo que haga falta para no chocar
-                      // con la cámara, sea cual sea el modo del video.
-                      SafeArea(
-                        bottom: false,
-                        child: Padding(
-                          padding: EdgeInsets.zero,
-                          child: Row(
-                            children: [
-                              // Volver, a pedido explícito ahora se oculta
-                              // junto con el resto del header (antes estaba
-                              // marcada como "siempre visible" a pedido
-                              // anterior — se revirtió ese criterio).
-                              SizedBox.shrink(),
-                            ],
-                          ),
-                        ),
-                      ),
+                      // Acá había un SafeArea vacío haciendo de separador, que
+                      // empujaba TODO el encabezado hacia abajo: con "llenar
+                      // pantalla" el vídeo pasaba a dibujarse hasta el borde
+                      // pero la barra no, y quedaba una franja de vídeo suelta
+                      // por encima de ella (reportado en vivo con captura).
+                      //
+                      // Ahora el hueco lo reserva el propio _Header como
+                      // relleno de arriba, no un separador aparte. Es la misma
+                      // distancia, pero del lado de adentro: el degradado
+                      // arranca en el borde de la pantalla —así no queda esa
+                      // franja— y el título y los íconos siguen cayendo por
+                      // debajo de la cámara, que es lo que este SafeArea
+                      // cuidaba y sigue cuidado.
                       // Listener transparente (deferToChild por defecto: no
                       // compite por el gesto, solo escucha) — mientras se
                       // toca o arrastra algo del header, se reinicia el
@@ -1443,7 +1432,16 @@ class _Header extends StatelessWidget {
           ],
         ),
       ),
-      padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
+      // El relleno de arriba se suma al alto que reserva el sistema (barra de
+      // estado o cámara). El degradado, que es el fondo de este Container,
+      // arranca igual en el borde de la pantalla — ver el comentario del
+      // separador que se sacó en _VideoPlayerMobileControls.
+      padding: EdgeInsets.only(
+        left: 20,
+        right: 20,
+        bottom: 10,
+        top: 10 + MediaQuery.paddingOf(context).top,
+      ),
       child: Row(
         children: [
           // La flecha de volver NO va acá.
