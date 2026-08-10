@@ -457,7 +457,7 @@ class _TarjetaDeCatalogoState extends State<TarjetaDeCatalogo> {
   /// La gran mayoría vienen en 2:3 y entran justas.
   Widget _portada(double ancho, double alto) {
     final url = widget.portada;
-    if (url == null || url.isEmpty) return _sinPortada(ancho);
+    if (url == null || url.isEmpty) return _sinPortada();
     // ── Decodificar al tamaño que se VE, no al que vino ────────────────
     //
     // Una portada llega en 600×900 o más. Sin esto, cada una se decodifica
@@ -480,7 +480,7 @@ class _TarjetaDeCatalogoState extends State<TarjetaDeCatalogo> {
       fit: BoxFit.cover,
       headers: widget.cabeceras,
       placeholder: _mientrasCarga(),
-      fallback: _sinPortada(ancho),
+      fallback: _sinPortada(),
     );
   }
 
@@ -504,34 +504,16 @@ class _TarjetaDeCatalogoState extends State<TarjetaDeCatalogo> {
         ),
       );
 
-  /// Sin portada NO se deja un hueco negro: se dibuja un degradado con la
-  /// inicial. Un hueco en medio de una fila de pósters parece un error de
-  /// carga; esto parece una tapa sin arte, que es lo que realmente es.
-  Widget _sinPortada(double ancho) {
-    final inicial = widget.titulo.trim().isEmpty
-        ? '?'
-        : widget.titulo.trim().characters.first.toUpperCase();
-    return DecoratedBox(
-      decoration: BoxDecoration(
-        gradient: LinearGradient(
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
-          colors: [
-            _acento.withValues(alpha: 0.30),
-            HomeTheme.cardSurface,
-          ],
-        ),
-      ),
-      child: Center(
-        child: Text(
-          inicial,
-          style: TextStyle(
-            fontSize: ancho * 0.34,
-            fontWeight: FontWeight.w800,
-            color: Colors.white.withValues(alpha: 0.22),
-          ),
-        ),
-      ),
-    );
-  }
+  /// Sin portada NO se deja un hueco negro: se usa el arte de respaldo de la
+  /// app. Un hueco en medio de una fila de pósters parece un error de carga;
+  /// esto parece una tapa sin arte, que es lo que realmente es.
+  ///
+  /// Antes era un degradado con la inicial del título, propio de esta
+  /// tarjeta. Se cambia por `carddefaultoffline.png` para que sea la MISMA
+  /// imagen de respaldo en toda la app —la ficha, el lector, las tarjetas del
+  /// resto del Home— y no una variante distinta solo acá.
+  Widget _sinPortada() => const Image(
+        image: AssetImage('assets/carddefaultoffline.png'),
+        fit: BoxFit.cover,
+      );
 }
