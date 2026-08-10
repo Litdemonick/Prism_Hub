@@ -123,6 +123,15 @@ class VideoPlayerController extends GetxController with WidgetsBindingObserver {
   /// inmersión total la pide a propósito, tocando el botón, en vez de que la
   /// app se la imponga.
   final pantallaCompletaAndroid = false.obs;
+
+  /// La orientación de la última vez que se llamó a pantallaSegunOrientacion.
+  ///
+  /// Esa función solo la llama la página en cada reconstrucción (ver
+  /// _androidSegunOrientacion), así que no reacciona sola a que cambien
+  /// OTRAS cosas de las que depende (ver el worker de llenarPantalla en
+  /// onInit). Guardada acá, ese worker puede volver a pedir el modo correcto
+  /// sin necesitar que la orientación haya cambiado también.
+  bool _acostadoActual = false;
   late final index = playIndex.obs;
 
   // 快捷键
@@ -1582,6 +1591,15 @@ class VideoPlayerController extends GetxController with WidgetsBindingObserver {
       if (!showSidebar.value) {
         isOpenSidebar.value = false;
       }
+    }));
+
+    // Prender/apagar "llenar pantalla" de pie cambia si el video puede
+    // pintar debajo de la barra de estado (ver pantallaSegunOrientacion) —
+    // sin este worker, tocar el interruptor en el panel no volvía a pedir
+    // el modo del sistema hasta el próximo cambio de orientación.
+    _addWorker(ever(llenarPantalla, (_) {
+      if (_disposed) return;
+      pantallaSegunOrientacion(acostado: _acostadoActual);
     }));
 
     // 自动切换下一集
@@ -7150,6 +7168,7 @@ class VideoPlayerController extends GetxController with WidgetsBindingObserver {
   /// ya está en el modo que corresponde, pedirlo de nuevo no cuesta nada.
   void pantallaSegunOrientacion({required bool acostado}) {
     if (!Platform.isAndroid) return;
+    _acostadoActual = acostado;
     // El botón manual de pantalla completa manda por encima de la orientación:
     // sin esto, la página llama a este método en cada rebuild (ver
     // `_androidSegunOrientacion`) y le pisaba el modo inmersivo apenas volvía a
@@ -7176,6 +7195,24 @@ class VideoPlayerController extends GetxController with WidgetsBindingObserver {
     // diferenciar, pero hoy las dos ramas piden lo mismo.
     if (acostado) {
       _barrasDelSistemaVisibles();
+      return;
+    }
+    // ── De pie CON "llenar pantalla": el vídeo pinta hasta la cámara ──────
+    //
+    // Pedido a propósito, sabiendo el riesgo: `edgeToEdge` es lo que se sacó
+    // en su momento porque el vídeo tapaba la hora y la batería (ver el
+    // comentario de la rama de abajo). Acá se vuelve a pedir, pero SOLO
+    // mientras "llenar pantalla" está prendido — es una decisión explícita
+    // de quien la activa, no el comportamiento por defecto. Apagar el
+    // interruptor, cambiar a acostado o salir del reproductor vuelven todos
+    // al modo de siempre (ver el worker de llenarPantalla en onInit y
+    // restoreSystemUiOnExit), así que el riesgo viejo queda acotado a este
+    // interruptor puntual.
+    if (llenarPantalla.value) {
+      SystemChrome.setEnabledSystemUIMode(SystemUiMode.edgeToEdge);
+      // El cambio de modo reinicia el estilo de las barras — mismo motivo
+      // que en _barrasDelSistemaVisibles.
+      ModoDeColor.aplicarBarrasDelSistema();
       return;
     }
     // ── De pie: `manual` con las dos barras, NO `edgeToEdge` ──────────────
