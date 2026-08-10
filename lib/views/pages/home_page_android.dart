@@ -875,37 +875,51 @@ class _CarruselAndroidState extends State<_CarruselAndroid>
   /// principio de la fila— pero se lee como un hueco, y nada dice que eso se
   /// mueve con el dedo (o, en escritorio, que se arrastra con el mouse).
   ///
-  /// Una flecha con un vaivén corto, CENTRADA sobre la tarjeta en foco. Se
-  /// queda ahí hasta el primer arrastre real —no hay reloj que la apague
-  /// sola—: recién cuando alguien mueve el acordeón queda claro que ya se
-  /// entendió.
+  /// Una flecha con un vaivén corto, en ESE hueco (no centrada sobre la
+  /// tarjeta: ahí no hay nada vacío que señalar). No es un aviso de una
+  /// sola vez — vuelve a aparecer cada vez que se está de nuevo en el
+  /// principio, y se apaga apenas se empieza a mover, sea cual sea la
+  /// dirección. Así alguien que entra, mira, se va y vuelve al principio
+  /// (el gesto más común) la sigue viendo, en vez de que se acuerde para
+  /// siempre después del primer arrastre de toda la sesión.
   ///
   /// En escritorio, mientras está puesta, tampoco se dibuja la flecha de
   /// clic hacia la izquierda: al principio esa flecha no tiene adónde
   /// volver (no hay nada a la izquierda de la primera tarjeta), así que
-  /// mostrarla ahí era un botón que no hacía nada. Apenas hay un primer
-  /// arrastre, la pista se va y la flecha de clic vuelve a su lugar de
-  /// siempre.
+  /// mostrarla ahí era un botón que no hacía nada.
   late final AnimationController _pista = AnimationController(
     vsync: this,
     duration: const Duration(milliseconds: 1100),
-  )..repeat(reverse: true);
+  );
 
-  bool _pistaVisible = true;
+  /// Si hay un gesto de arrastre en curso ahora mismo. La pista se apaga
+  /// apenas arranca, aunque el arrastre empiece justo en el principio —sin
+  /// esto quedaría un cuadro con la pista puesta mientras el dedo ya se
+  /// está moviendo.
+  bool _arrastrando = false;
 
-  /// La esconde y no vuelve. Se llama al arrastrar (mouse o dedo) y al
-  /// hacer clic en una flecha de navegación.
-  void _ocultarPista() {
-    // Frena el vaivén aunque ya estuviera escondida: sin esto seguía
-    // tickeando de por vida, moviendo un ícono que ya nadie ve.
-    _pista.stop();
-    if (!_pistaVisible) return;
-    if (mounted) setState(() => _pistaVisible = false);
+  /// Se recalcula sola con la posición: no hay "ya se mostró, no vuelve
+  /// más". _p < 0.5 en vez de == 0 porque _p es continuo mientras arrastra
+  /// o anima — sin el margen, la pista parpadearía prendida y apagada en
+  /// cada cuadro de vuelta al principio.
+  bool get _pistaVisible => !_arrastrando && _p < 0.5;
+
+  /// Prende o apaga el vaivén según corresponda ahora. Se llama después de
+  /// cualquier cambio que pueda mover _pistaVisible (posición o arrastre):
+  /// no tickear de más cuando nadie la ve es lo que importa, así que esto
+  /// es barato de llamar de más.
+  void _actualizarPista() {
+    if (_pistaVisible) {
+      if (!_pista.isAnimating) _pista.repeat(reverse: true);
+    } else {
+      _pista.stop();
+    }
   }
 
   @override
   void initState() {
     super.initState();
+    _actualizarPista();
     _anim.addListener(() {
       // Tocar otra zona mientras el acordeón se está acomodando desmonta este
       // widget con la animación en curso. Sin esta guarda, el oyente llama a
@@ -914,6 +928,7 @@ class _CarruselAndroidState extends State<_CarruselAndroid>
       final v = _viaje;
       if (v == null) return;
       setState(() => _p = v.value);
+      _actualizarPista();
     });
   }
 
@@ -1470,15 +1485,19 @@ class _CarruselAndroidState extends State<_CarruselAndroid>
                 behavior: HitTestBehavior.opaque,
                 onHorizontalDragStart: (_) {
                   _anim.stop();
-                  _ocultarPista();
+                  setState(() => _arrastrando = true);
+                  _actualizarPista();
                 },
                 onHorizontalDragUpdate: (d) {
                   final paso = (m.ancho + m.anchoChico) / 2 + _aire;
                   setState(() {
                     _p = (_p - (d.primaryDelta ?? 0) / paso).clamp(0.0, ultimo);
                   });
+                  _actualizarPista();
                 },
                 onHorizontalDragEnd: (d) {
+                  setState(() => _arrastrando = false);
+                  _actualizarPista();
                   final v = d.primaryVelocity ?? 0;
                   // Con impulso se salta a la siguiente aunque el dedo no haya
                   // llegado a la mitad: es lo que espera un deslizar rápido.
@@ -1570,12 +1589,6 @@ class _CarruselAndroidState extends State<_CarruselAndroid>
                             _FlechaDeFila(
                               icono: Icons.chevron_right_rounded,
                               onTap: () {
-                                // Clickear ya cuenta como "se entendió",
-                                // igual que arrastrar: sin esto, alguien que
-                                // solo hace clic (nunca arrastra con el
-                                // mouse) se quedaba sin la flecha izquierda
-                                // para siempre.
-                                _ocultarPista();
                                 _irA(
                                     (_p.roundToDouble() + 1).clamp(0.0, ultimo),
                                     grupos);
@@ -1594,8 +1607,11 @@ class _CarruselAndroidState extends State<_CarruselAndroid>
                     ],
                     // ── La pista de «esto se desliza» ──────────────────────
                     //
-                    // Centrada en todo el acordeón, no pegada a un borde: es
-                    // sobre la tarjeta en foco donde cae la mirada al abrir.
+                    // En el HUECO vacío a la izquierda de la tarjeta en foco
+                    // —ni pegada al borde ni centrada sobre la tarjeta, que
+                    // ahí no hay nada vacío que señalar—. Alignment(-0.5, 0)
+                    // cae a un cuarto del ancho total, dentro del hueco sea
+                    // cual sea el tamaño real de la tarjeta.
                     //
                     // En escritorio, mientras está puesta, tampoco se dibuja
                     // la flecha de clic hacia la izquierda (ver arriba) — las
@@ -1608,7 +1624,8 @@ class _CarruselAndroidState extends State<_CarruselAndroid>
                     // desaparecer de un salto.
                     Positioned.fill(
                       child: IgnorePointer(
-                        child: Center(
+                        child: Align(
+                          alignment: const Alignment(-0.5, 0),
                           child: AnimatedOpacity(
                             opacity: _pistaVisible ? 1 : 0,
                             duration: const Duration(milliseconds: 450),
