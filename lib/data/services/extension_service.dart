@@ -879,7 +879,7 @@ async function stringify(callback) {
   }) async {
     final queries = SearchText.broadenedRemoteQueries(kw);
     for (final query in queries) {
-      final result = await search(query, 1, filter: filter);
+      final result = await _searchAcotado(query, filter);
       if (result.isNotEmpty) return result;
     }
 
@@ -888,13 +888,40 @@ async function stringify(callback) {
     if (!hayFiltros) return const [];
 
     for (final query in queries) {
-      final result = await search(query, 1);
+      final result = await _searchAcotado(query, null);
       if (result.isNotEmpty) {
         onFiltrosIgnorados?.call();
         return result;
       }
     }
     return const [];
+  }
+
+  // Cada intento de la cascada acotado por SU CUENTA, no el total.
+  //
+  // El puente de red (jsRequest, más arriba) ya corta solo a los veinte
+  // segundos. Antes nada envolvía esto acá adentro y la búsqueda general
+  // (search_controller.dart) le ponía QUINCE fijos a la cascada ENTERA —
+  // menos de lo que tarda un solo intento en cortarse por su cuenta, así
+  // que ni siquiera el primero llegaba a responder antes de que el
+  // buscador general se rindiera con "no encontró resultados". Buscando
+  // esa misma extensión de forma directa (extension_searcher_page.dart, sin
+  // ningún límite propio) sí encontraba, porque ahí el intento tenía los
+  // veinte segundos completos del puente.
+  //
+  // Con el límite acá, en cada intento: si uno se cuelga se da por vacío y
+  // la cascada sigue probando con la palabra que sigue, en vez de
+  // abortarse entera con un error. Y el buscador general ya no necesita
+  // adivinar cuántos intentos puede llegar a hacer una búsqueda para
+  // ponerle el tiempo justo por fuera (ver getResult en search_controller).
+  Future<List<ExtensionListItem>> _searchAcotado(
+    String query,
+    Map<String, List<String>>? filter,
+  ) {
+    return search(query, 1, filter: filter).timeout(
+      const Duration(seconds: 22),
+      onTimeout: () => const [],
+    );
   }
 
   Future<Map<String, ExtensionFilter>> createFilter({
