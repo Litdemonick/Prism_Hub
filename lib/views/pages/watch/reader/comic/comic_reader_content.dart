@@ -171,7 +171,29 @@ class _ComicReaderContentState extends State<ComicReaderContent> {
     // (reportado en vivo: "a veces el usuario lo mueve y no queda centrado").
     if (Platform.isAndroid &&
         _androidPinchTransform.value != Matrix4.identity()) {
+      // Mismo remedio que más abajo (alignment de itemLeadingEdge), pero
+      // acá es una red de seguridad y no la cura completa: el pellizco es
+      // un transform VISUAL (InteractiveViewer, panEnabled:false) que no
+      // mueve el scroll de la lista de abajo, así que en teoría enderezar
+      // no debería moverla. Pero se puede seguir scrolleando mientras se
+      // está pellizcado, y ahí sí el scroll de la lista cambió de verdad
+      // — este jumpTo lo vuelve a poner en la MISMA página y fracción de
+      // justo antes de enderezar, en vez de dejarlo donde sea que haya
+      // quedado el scroll subyacente.
+      final page = _c.currentPage.value;
+      double alignment = 0;
+      for (final p in _c.itemPositionsListener.itemPositions.value) {
+        if (p.index == page) {
+          alignment = p.itemLeadingEdge;
+          break;
+        }
+      }
       setState(() => _androidPinchTransform.value = Matrix4.identity());
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted && _c.itemScrollController.isAttached) {
+          _c.itemScrollController.jumpTo(index: page, alignment: alignment);
+        }
+      });
       return;
     }
 
