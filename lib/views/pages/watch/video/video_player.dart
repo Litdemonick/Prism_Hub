@@ -351,19 +351,44 @@ class _VideoPlayerState extends State<VideoPlayer> {
 
   @override
   Widget build(BuildContext context) {
-    // ExcludeSemantics: el reproductor reconstruye sus controles cada frame
-    // (posición, barra de progreso, buffering). En Windows eso satura el árbol
-    // de accesibilidad del engine y genera el spam continuo en consola:
-    //   "Failed to update ui::AXTree, error: NNN will not be in the tree..."
-    // El video no necesita semántica de lector de pantalla, así que se excluye
-    // toda la página: elimina el spam sin afectar la funcionalidad.
-    return ExcludeSemantics(
-      child: PlatformBuildWidget(
-        androidBuilder: (context) => Theme(
-          data: ThemeData.dark(useMaterial3: true),
-          child: _androidSegunOrientacion(context),
+    // PopScope, para el gesto/botón atrás del SISTEMA — no solo la flecha
+    // propia de esta pantalla.
+    //
+    // Sin esto, salir con el back de Android saltea closeRoute() entero:
+    // Flutter poppea la ruta y recién dispose()/onClose() paran el audio
+    // cuando la animación de salida TERMINA de sacar el widget del árbol,
+    // no cuando se toca el gesto. En esa ventana —cientos de milisegundos,
+    // más si el pop viene con la animación predictiva de Android— una
+    // resolución lenta que ya estaba en camino podía seguir de largo y
+    // terminar abriendo audio en un reproductor que ya se estaba yendo.
+    // Reportado en vivo: se seguía escuchando al salir con el back del
+    // sistema, aunque saliendo con la flecha propia (que sí llama a
+    // closeRoute) ya no pasaba.
+    //
+    // canPop:false + closeRoute() manual, mismo patrón que ya usa
+    // webview_player_page.dart para este mismo gesto.
+    return PopScope(
+      canPop: false,
+      onPopInvokedWithResult: (didPop, result) {
+        if (didPop) return;
+        unawaited(_c?.closeRoute());
+      },
+      // ExcludeSemantics: el reproductor reconstruye sus controles cada
+      // frame (posición, barra de progreso, buffering). En Windows eso
+      // satura el árbol de accesibilidad del engine y genera el spam
+      // continuo en consola:
+      //   "Failed to update ui::AXTree, error: NNN will not be in the tree..."
+      // El video no necesita semántica de lector de pantalla, así que se
+      // excluye toda la página: elimina el spam sin afectar la
+      // funcionalidad.
+      child: ExcludeSemantics(
+        child: PlatformBuildWidget(
+          androidBuilder: (context) => Theme(
+            data: ThemeData.dark(useMaterial3: true),
+            child: _androidSegunOrientacion(context),
+          ),
+          desktopBuilder: ((context) => _buildContent()),
         ),
-        desktopBuilder: ((context) => _buildContent()),
       ),
     );
   }
