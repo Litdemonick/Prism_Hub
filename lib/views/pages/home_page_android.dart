@@ -889,7 +889,10 @@ class _CarruselAndroidState extends State<_CarruselAndroid>
   /// mostrarla ahí era un botón que no hacía nada.
   late final AnimationController _pista = AnimationController(
     vsync: this,
-    duration: const Duration(milliseconds: 1100),
+    // Un ciclo entero de la onda viajando, no un vaivén ping-pong: con
+    // reverse:true la culebra frenaba en seco en cada punta. Dos segundos
+    // largos para que se lea como que se desliza, no que tiembla.
+    duration: const Duration(seconds: 2),
   );
 
   /// Si hay un gesto de arrastre en curso ahora mismo. La pista se apaga
@@ -910,7 +913,7 @@ class _CarruselAndroidState extends State<_CarruselAndroid>
   /// es barato de llamar de más.
   void _actualizarPista() {
     if (_pistaVisible) {
-      if (!_pista.isAnimating) _pista.repeat(reverse: true);
+      if (!_pista.isAnimating) _pista.repeat();
     } else {
       _pista.stop();
     }
@@ -1607,11 +1610,14 @@ class _CarruselAndroidState extends State<_CarruselAndroid>
                     ],
                     // ── La pista de «esto se desliza» ──────────────────────
                     //
-                    // En el HUECO vacío a la izquierda de la tarjeta en foco
-                    // —ni pegada al borde ni centrada sobre la tarjeta, que
-                    // ahí no hay nada vacío que señalar—. Alignment(-0.5, 0)
-                    // cae a un cuarto del ancho total, dentro del hueco sea
-                    // cual sea el tamaño real de la tarjeta.
+                    // En el HUECO vacío a la izquierda de la tarjeta en
+                    // foco, centrada en ESE espacio y no en el acordeón
+                    // entero —ahí, sobre la tarjeta, no hay nada vacío que
+                    // señalar—. Se calcula del ancho real del hueco
+                    // (caja.maxWidth - m.ancho, la tarjeta grande), no de
+                    // una fracción fija: así cae en el lugar correcto sea
+                    // cual sea el tamaño de pantalla o la proporción de la
+                    // tarjeta en ese aparato.
                     //
                     // En escritorio, mientras está puesta, tampoco se dibuja
                     // la flecha de clic hacia la izquierda (ver arriba) — las
@@ -1622,38 +1628,33 @@ class _CarruselAndroidState extends State<_CarruselAndroid>
                     // _pistaVisible) para que el desvanecido de
                     // AnimatedOpacity tenga algo que animar en vez de
                     // desaparecer de un salto.
-                    Positioned.fill(
-                      child: IgnorePointer(
-                        child: Align(
-                          alignment: const Alignment(-0.5, 0),
+                    Builder(builder: (context) {
+                      final huecoAncho = ((caja.maxWidth - m.ancho) / 2)
+                          .clamp(0.0, caja.maxWidth);
+                      final centroHueco =
+                          (huecoAncho / 2).clamp(16.0, caja.maxWidth - 16);
+                      const anchoLinea = 26.0;
+                      return Positioned(
+                        left: centroHueco - anchoLinea / 2,
+                        top: 22,
+                        bottom: 22,
+                        width: anchoLinea,
+                        child: IgnorePointer(
                           child: AnimatedOpacity(
                             opacity: _pistaVisible ? 1 : 0,
                             duration: const Duration(milliseconds: 450),
                             curve: Curves.easeOut,
                             child: AnimatedBuilder(
                               animation: _pista,
-                              builder: (context, child) => Transform.translate(
-                                // El vaivén: como una manito empujando la
-                                // tarjeta hacia la izquierda y volviendo,
-                                // invitando a seguirla con el dedo.
-                                offset: Offset(
-                                  -Curves.easeInOut.transform(_pista.value) * 8,
-                                  0,
-                                ),
-                                child: child,
-                              ),
-                              child: _discoDeFlecha(
-                                const Icon(
-                                  Icons.swipe_left_alt_rounded,
-                                  color: Colors.white,
-                                  size: 22,
-                                ),
+                              builder: (context, child) => CustomPaint(
+                                painter: _PintorCulebra(_pista.value),
+                                child: const SizedBox.expand(),
                               ),
                             ),
                           ),
                         ),
-                      ),
-                    ),
+                      );
+                    }),
                   ],
                 ),
               ),
@@ -1978,6 +1979,67 @@ class _CarruselAndroidState extends State<_CarruselAndroid>
       alto: alto,
     );
   }
+}
+
+/// Dibuja la «culebra» de la pista: una línea ondulada, vertical, que viaja
+/// hacia arriba con el tiempo (la fase avanza sola). Larga como el espacio
+/// que tenga —se estira al alto real que le da el Positioned, nunca un
+/// tamaño fijo— así entra igual de bien en un teléfono chico que en uno
+/// grande o en la ventana de escritorio.
+///
+/// Dos trazos, no uno: uno oscuro y grueso atrás como halo, y uno claro y
+/// fino encima. Mismo criterio que _discoDeFlecha con los íconos — sin el
+/// halo, una línea blanca sola se pierde contra una portada clara.
+class _PintorCulebra extends CustomPainter {
+  const _PintorCulebra(this.fase);
+
+  /// 0..1, en bucle. De acá sale por dónde va la onda en este cuadro.
+  final double fase;
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    if (size.width <= 0 || size.height <= 0) return;
+    final centroX = size.width / 2;
+    final amplitud = size.width / 2 - 3;
+    // Una onda completa cada ~46 de alto: ni un garabato apretado en una
+    // pista corta ni una curva única y chata en una larga.
+    final ciclos = size.height / 46;
+
+    final path = Path();
+    const pasos = 48;
+    for (var i = 0; i <= pasos; i++) {
+      final t = i / pasos;
+      final y = t * size.height;
+      final x =
+          centroX + amplitud * math.sin(2 * math.pi * (ciclos * t - fase));
+      if (i == 0) {
+        path.moveTo(x, y);
+      } else {
+        path.lineTo(x, y);
+      }
+    }
+
+    canvas.drawPath(
+      path,
+      Paint()
+        ..style = PaintingStyle.stroke
+        ..strokeWidth = 6
+        ..strokeCap = StrokeCap.round
+        ..color = const Color(0x99000000),
+    );
+    canvas.drawPath(
+      path,
+      Paint()
+        ..style = PaintingStyle.stroke
+        ..strokeWidth = 2.5
+        ..strokeCap = StrokeCap.round
+        ..color = Colors.white,
+    );
+  }
+
+  @override
+  bool shouldRepaint(covariant _PintorCulebra oldDelegate) =>
+      oldDelegate.fase != fase;
 }
 
 class _MedidasCarrusel {

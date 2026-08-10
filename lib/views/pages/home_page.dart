@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'dart:io';
+import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
@@ -224,16 +225,14 @@ class _SinRespuesta extends StatelessWidget {
       padding: EdgeInsets.fromLTRB(_margen(context), 22, _margen(context), 0),
       child: Row(
         children: [
-          Icon(Icons.cloud_off_rounded,
-              size: 16, color: HomeTheme.textMuted),
+          Icon(Icons.cloud_off_rounded, size: 16, color: HomeTheme.textMuted),
           const SizedBox(width: 8),
           Expanded(
             child: Text(
               '${fila.nombre} · ${'home.fila-sin-respuesta'.i18n}',
               maxLines: 1,
               overflow: TextOverflow.ellipsis,
-              style:
-                  TextStyle(fontSize: 12.5, color: HomeTheme.textMuted),
+              style: TextStyle(fontSize: 12.5, color: HomeTheme.textMuted),
             ),
           ),
           TextButton(
