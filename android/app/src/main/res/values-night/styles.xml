@@ -1,5 +1,5 @@
 <?xml version="1.0" encoding="utf-8"?>
-<resources>
+<resources xmlns:tools="http://schemas.android.com/tools">
     <!-- Theme applied to the Android Window while the process is starting when the OS's Dark Mode setting is on -->
     <style name="LaunchTheme" parent="@android:style/Theme.Black.NoTitleBar">
         <!-- Show a splash screen on the activity. Automatically removed when
@@ -16,5 +16,8 @@
         <!-- Mismo color que el splash (ver values/styles.xml) para que la
              transición sea invisible en ambos modos. -->
         <item name="android:windowBackground">@color/launch_background</item>
+        <!-- Ver el comentario largo en values/styles.xml — mismo motivo, esta
+             variante redefine NormalTheme entero y no hereda el item de ahí. -->
+        <item name="android:windowLayoutInDisplayCutoutMode" tools:targetApi="p">shortEdges</item>
     </style>
 </resources>

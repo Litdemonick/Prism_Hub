@@ -35,5 +35,8 @@
     </style>
     <style name="NormalTheme" parent="@android:style/Theme.Light.NoTitleBar">
         <item name="android:windowBackground">@color/launch_background</item>
+        <!-- Ver el comentario largo en values/styles.xml — mismo motivo, esta
+             variante redefine NormalTheme entero y no hereda el item de ahí. -->
+        <item name="android:windowLayoutInDisplayCutoutMode">shortEdges</item>
     </style>
 </resources>

@@ -1,5 +1,5 @@
 <?xml version="1.0" encoding="utf-8"?>
-<resources>
+<resources xmlns:tools="http://schemas.android.com/tools">
     <!-- Theme applied to the Android Window while the process is starting when the OS's Dark Mode setting is off -->
     <style name="LaunchTheme" parent="@android:style/Theme.Light.NoTitleBar">
         <!-- Show a splash screen on the activity. Automatically removed when
@@ -18,5 +18,12 @@
              ver launch_background) y el primer frame de Flutter. Mismo color
              oscuro que el splash para que la transición sea invisible. -->
         <item name="android:windowBackground">@color/launch_background</item>
+        <!-- El reproductor pide pantalla completa (SystemUiMode.immersiveSticky)
+             en horizontal, y sin esto Android deja el modo por defecto para el
+             recorte de esquinas/cámara (DEFAULT): más conservador y más
+             inconsistente entre marcas que "shortEdges", que es lo que Android
+             recomienda para contenido de punta a punta. Reportado en vivo un
+             hueco negro en la esquina opuesta a la cámara, en horizontal. -->
+        <item name="android:windowLayoutInDisplayCutoutMode" tools:targetApi="p">shortEdges</item>
     </style>
 </resources>
