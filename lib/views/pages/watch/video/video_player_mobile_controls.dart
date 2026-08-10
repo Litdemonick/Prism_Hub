@@ -1163,6 +1163,34 @@ class _VideoPlayerMobileControlsState extends State<VideoPlayerMobileControls> {
                 ),
               ),
             ),
+            // ── Botón grande de pausa/play, en el centro ────────────────────
+            //
+            // Antes la única forma de pausar era doble toque en el tercio
+            // del medio — funciona, pero no hay ningún botón que lo diga: a
+            // pedido explícito, un solo toque (el mismo que muestra el resto
+            // de los controles) también deja un botón grande y visible que
+            // pausa/reanuda al tocarlo, y se esconde junto con todo lo demás.
+            // El doble toque para pausar/saltar SIGUE andando igual — esto
+            // se suma, no lo reemplaza.
+            //
+            // Nada de esto transmitiendo: casteando el centro ya lo ocupa
+            // _PanelCasteando con su propio estado de play/pausa (ver más
+            // arriba, "中间显示"), y este botón encima solo taparía eso.
+            Positioned.fill(
+              child: Obx(() {
+                if (_c.dlnaDevice.value != null) return const SizedBox.shrink();
+                return IgnorePointer(
+                  ignoring: !_showControls,
+                  child: Center(
+                    child: AnimatedOpacity(
+                      opacity: _showControls ? 1 : 0,
+                      duration: const Duration(milliseconds: 200),
+                      child: _BotonCentralDePausa(controller: _c),
+                    ),
+                  ),
+                );
+              }),
+            ),
             Positioned.fill(
               child: Obx(
                 () {
@@ -1633,6 +1661,35 @@ class _Header extends StatelessWidget {
         ],
       ),
     );
+  }
+}
+
+/// El botón grande de pausa/play del centro. Ver dónde se usa para el porqué.
+class _BotonCentralDePausa extends StatelessWidget {
+  const _BotonCentralDePausa({required this.controller});
+  final VideoPlayerController controller;
+
+  @override
+  Widget build(BuildContext context) {
+    return Obx(() {
+      final reproduciendo = controller.isPlaying.value;
+      return DecoratedBox(
+        // Mismo criterio que la flecha de volver: un fondo redondo detrás
+        // para que se lea sobre cualquier escena, clara u oscura.
+        decoration: BoxDecoration(
+          shape: BoxShape.circle,
+          color: Colors.black.withValues(alpha: 0.45),
+        ),
+        child: IconButton(
+          iconSize: 44,
+          icon: Icon(
+            reproduciendo ? Icons.pause_rounded : Icons.play_arrow_rounded,
+            color: Colors.white,
+          ),
+          onPressed: controller.playOrPause,
+        ),
+      );
+    });
   }
 }
 
