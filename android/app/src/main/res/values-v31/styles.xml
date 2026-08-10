@@ -38,5 +38,12 @@
         <!-- Ver el comentario largo en values/styles.xml — mismo motivo, esta
              variante redefine NormalTheme entero y no hereda el item de ahí. -->
         <item name="android:windowLayoutInDisplayCutoutMode">shortEdges</item>
+        <!-- Ver el comentario largo en values/styles.xml — mismo motivo, esta
+             variante redefine NormalTheme entero y no hereda sus items. Acá
+             no hace falta tools:targetApi: este archivo ya es solo para
+             Android 12 y para arriba. -->
+        <item name="android:windowDrawsSystemBarBackgrounds">true</item>
+        <item name="android:statusBarColor">@android:color/transparent</item>
+        <item name="android:navigationBarColor">@android:color/transparent</item>
     </style>
 </resources>

@@ -19,5 +19,10 @@
         <!-- Ver el comentario largo en values/styles.xml — mismo motivo, esta
              variante redefine NormalTheme entero y no hereda el item de ahí. -->
         <item name="android:windowLayoutInDisplayCutoutMode" tools:targetApi="p">shortEdges</item>
+        <!-- Ver el comentario largo en values/styles.xml — mismo motivo, esta
+             variante redefine NormalTheme entero y no hereda sus items. -->
+        <item name="android:windowDrawsSystemBarBackgrounds" tools:targetApi="lollipop">true</item>
+        <item name="android:statusBarColor" tools:targetApi="lollipop">@android:color/transparent</item>
+        <item name="android:navigationBarColor" tools:targetApi="lollipop">@android:color/transparent</item>
     </style>
 </resources>
