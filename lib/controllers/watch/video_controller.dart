@@ -6413,9 +6413,13 @@ class VideoPlayerController extends GetxController with WidgetsBindingObserver {
         final relay = await CastRelayServer.registerAndGetUrl(
           targetUrl: direccion,
           headers: hdrs,
-          // No hay a quién esquivar: es un solo nodo. Lo que se busca acá es
-          // que los pedidos los haga la app y no mpv.
-          esquivarNodosCaidos: false,
+          // En true aunque haya un solo nodo y no haya a quién esquivar, y es
+          // a propósito: con `false`, el relay PRUEBA si los pedacitos se
+          // pueden bajar sin nuestras cabeceras y, si puede, **se saca del
+          // camino** y se los deja pedir a mpv. Eso es justo lo que no
+          // queremos acá — lo que la extensión está pidiendo es que los pida
+          // la app. Con `true` la prueba se saltea y todos pasan por el relay.
+          esquivarNodosCaidos: true,
         );
         logger.info('ficha · $servidor · PASA POR EL RELAY porque la extensión '
             'lo pide: los pedacitos los baja la app · ${nodos.first}');
