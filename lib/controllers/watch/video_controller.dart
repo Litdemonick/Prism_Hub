@@ -1568,12 +1568,19 @@ class VideoPlayerController extends GetxController with WidgetsBindingObserver {
 
     // 自动切换下一集
     _addSubscription(player.stream.completed.listen((event) {
+      // Cerrando: no se toca nada.
+      //
+      // Este aviso llega por un stream, y las suscripciones se cancelan en
+      // onClose DESPUES de varios await. En esa ventana, un video que termina
+      // justo al salir volvia a arrancar en bucle — el apagado ya habia bajado
+      // el volumen, pero esto lo reanudaba y se seguia escuchando.
+      if (_disposed) return;
       if (!event || playMode.value == PlaylistMode.single) {
         return;
       }
       if (playMode.value == PlaylistMode.loop) {
         player.seek(Duration.zero);
-        player.play();
+        safePlay();
         return;
       }
 
@@ -3730,6 +3737,32 @@ class VideoPlayerController extends GetxController with WidgetsBindingObserver {
     if (state == AppLifecycleState.paused ||
         state == AppLifecycleState.hidden) {
       _enSegundoPlano = true;
+      // ── Se PAUSA al irse de la app ────────────────────────────────────────
+      //
+      // Acá solo se anotaba el historial y se volvía. O sea que saliendo con la
+      // barra del sistema —inicio, recientes, el gesto— el vídeo se quedaba
+      // reproduciendo y se seguía escuchando con la app afuera. Reportado en
+      // vivo, y parecía intermitente («a veces se corrige solo») porque si
+      // después volvías a entrar y cerrabas bien, el apagado normal lo callaba:
+      // no era aleatorio, dependía de lo que hicieras después.
+      //
+      // Los otros dos caminos ya estaban cubiertos —`detached` (cerrar la app)
+      // calla el audio unas líneas más abajo, y `closeRoute` baja el volumen en
+      // su primera línea—; este era el único que faltaba.
+      //
+      // Solo en Android, a propósito. En escritorio `hidden` llega al
+      // minimizar, y ahí dejar la música sonando es lo que uno espera de una
+      // ventana minimizada — nadie reportó lo contrario y pausarle a alguien lo
+      // que está escuchando sería peor que el problema.
+      //
+      // Sin await ni excepción hacia afuera: callar no puede depender de que
+      // alguien conteste, y si el reproductor ya está desarmado esto tira y no
+      // importa, porque entonces tampoco está sonando.
+      if (Platform.isAndroid) {
+        try {
+          unawaited(player.pause().catchError((_) {}));
+        } catch (_) {}
+      }
       // refreshHome en false: la pantalla de Home no está visible en ese
       // momento, y refrescarla mientras la app se va es trabajo al pedo.
       unawaited(_touchHistory(refreshHome: false, force: true));
@@ -3747,8 +3780,13 @@ class VideoPlayerController extends GetxController with WidgetsBindingObserver {
       //
       // Volver a pedirlo no puede romper nada: si ya está puesto, no cambia
       // nada. Mismo arreglo que en la pantalla del navegador interno.
+      //
+      // Y lo que se vuelve a pedir son las barras VISIBLES, no el modo
+      // inmersivo: acá se escondían al volver de segundo plano, así que apagar
+      // y encender la pantalla dejaba al usuario sin hora ni barra de
+      // navegación aunque el resto del reproductor ya no las esconda.
       if (Platform.isAndroid) {
-        SystemChrome.setEnabledSystemUIMode(SystemUiMode.immersiveSticky);
+        _barrasDelSistemaVisibles();
       }
       // Cuenta limpia: los fallos de mientras no estuvo en pantalla no valen,
       // porque pudieron ser del recorte de red y no del televisor.
@@ -6227,10 +6265,16 @@ class VideoPlayerController extends GetxController with WidgetsBindingObserver {
   // llegado. Si no llegó se reintenta: con HLS el primer salto a veces cae en
   // un pedacito que todavía no se bajó y mpv vuelve solo al principio.
   Future<void> confirmResume(int seconds) async {
+    // Cerrando: no se arranca nada. El dialogo de «continuar» puede quedar
+    // contestado justo cuando el reproductor ya se esta yendo —se toca
+    // «continuar» y se sale— y esto lo hacia reproducir igual, encima del
+    // apagado. Ver safePlay.
+    if (_disposed) return;
     _isAutoSeekPosition = true;
     resumePrompt.value = null;
     final destino = Duration(seconds: seconds);
-    await player.play();
+    safePlay();
+    if (_disposed) return;
     await _saltarCuandoSePueda(destino);
   }
 
@@ -6272,9 +6316,12 @@ class VideoPlayerController extends GetxController with WidgetsBindingObserver {
 
   // Responde al diálogo "¿Continuar donde te quedaste?" — usuario canceló.
   void cancelResume() {
+    // Mismo motivo que confirmResume: contestar el dialogo mientras se sale no
+    // puede volver a arrancar el video.
+    if (_disposed) return;
     _isAutoSeekPosition = true;
     resumePrompt.value = null;
-    player.play();
+    safePlay();
   }
 
   // Antes de rendirse con este servidor, reintentar UNA vez pidiendo una
@@ -7004,8 +7051,24 @@ class VideoPlayerController extends GetxController with WidgetsBindingObserver {
   /// ya está en el modo que corresponde, pedirlo de nuevo no cuesta nada.
   static void pantallaSegunOrientacion({required bool acostado}) {
     if (!Platform.isAndroid) return;
+    // ── Las barras del sistema NO se esconden nunca ─────────────────────────
+    //
+    // Acostado se pedía modo inmersivo: el vídeo ocupaba todo y desaparecían la
+    // hora, la batería y la barra de navegación. A pedido, eso ya no se hace en
+    // ninguna orientación — las dos barras se quedan siempre, en el reproductor
+    // y fuera de él.
+    //
+    // No es solo estética. Escondidas, la única salida visible era la flecha
+    // del propio reproductor, y por eso esa flecha tenía que quedarse fija
+    // encima del vídeo todo el tiempo. Con las barras puestas, el gesto de
+    // atrás siempre está disponible, y recién ahí la flecha puede desvanecerse
+    // con el resto de los controles — que es lo que se pidió junto con esto.
+    // Las dos cosas van juntas: una sin la otra deja la pantalla sin salida.
+    //
+    // El `if (acostado)` queda por si algún día vuelve a hacer falta
+    // diferenciar, pero hoy las dos ramas piden lo mismo.
     if (acostado) {
-      SystemChrome.setEnabledSystemUIMode(SystemUiMode.immersiveSticky);
+      _barrasDelSistemaVisibles();
       return;
     }
     // ── De pie: `manual` con las dos barras, NO `edgeToEdge` ──────────────
@@ -7019,6 +7082,20 @@ class VideoPlayerController extends GetxController with WidgetsBindingObserver {
     // salir del reproductor (ver la restauración más abajo): fuerza que las dos
     // barras vuelvan RESERVANDO su espacio, sin depender de que el MediaQuery
     // alcance a refrescar el relleno superior a tiempo.
+    _barrasDelSistemaVisibles();
+  }
+
+  /// Las dos barras del sistema, visibles y RESERVANDO su espacio.
+  ///
+  /// `manual` con todos los overlays, y no `edgeToEdge`: con edgeToEdge las
+  /// barras se ven pero el contenido se dibuja DEBAJO, así que la hora y la
+  /// batería quedaban tapadas por el vídeo. Y peor: si esa era la última orden
+  /// antes de salir, la app entera quedaba así y no se veía la hora ni después
+  /// de cerrar el reproductor. Reportado en vivo.
+  ///
+  /// Es lo mismo que pide el resto de la app al salir del reproductor, ahora en
+  /// un solo lugar para que no se puedan separar.
+  static void _barrasDelSistemaVisibles() {
     SystemChrome.setEnabledSystemUIMode(
       SystemUiMode.manual,
       overlays: SystemUiOverlay.values,

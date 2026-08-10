@@ -1191,9 +1191,22 @@ class ExtensionUtils {
 
   // Extensiones que se eliminaron del catálogo y deben borrarse del dispositivo
   // incluso sin conexión. Añadir aquí cualquier package que se retire de prism+.
-  static const Set<String> _removedPackages = {
-    'io.prismhub.mangadex', // retirado antes del release v1.0.0 — no firmado
-  };
+  //
+  // ── Y sacar de acá el que VUELVA ────────────────────────────────────────
+  //
+  // Esta lista borra el archivo en CADA arranque, así que un paquete que
+  // vuelva al catálogo se sigue borrando aunque se instale bien. Pasó con
+  // MangaDex: hubo un intento viejo que se retiró por no estar firmado, quedó
+  // anotado acá, y al publicarla de nuevo —firmada y en el catálogo— el
+  // usuario la instalaba, funcionaba, cerraba la app y al volver ya no estaba.
+  //
+  // Desde afuera se ve como que «se desinstala sola», que es de los fallos más
+  // desconcertantes que puede haber: no hay error, no hay aviso, y volver a
+  // instalarla parece funcionar hasta el siguiente arranque.
+  //
+  // Vacía a propósito. Si mañana se retira alguna, se agrega — y si vuelve, lo
+  // primero es sacarla de acá.
+  static const Set<String> _removedPackages = <String>{};
 
   // Catálogo oficial vivo: se llena desde el index.json de prism+ en cada
   // arranque. Permite bloquear el sideload de CUALQUIER extensión oficial

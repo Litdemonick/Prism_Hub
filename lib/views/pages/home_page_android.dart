@@ -992,16 +992,23 @@ class _CarruselAndroidState extends State<_CarruselAndroid>
     // barata: un conjunto de direcciones ya vistas.
     // ── Por bloques: las ocho de una, después las ocho de la otra ──────
     //
-    // Se probó intercalar una de cada extensión por turnos, y no es lo que se
+    // Se probó intercalar UNA de cada extensión por turnos, y no es lo que se
     // quiere: el acordeón es la vidriera de la SECCIÓN de cada sitio —«Últimos
     // añadidos», «Programación», «Nuevos capítulos»— y esa sección se lee de
-    // corrido. Mezclada, cada tarjeta era de otro sitio y no se entendía qué se
-    // estaba mirando.
+    // corrido. Mezclada de a una, cada tarjeta era de otro sitio y no se
+    // entendía qué se estaba mirando.
     //
-    // Recorriendo extensión por extensión, las ocho primeras son la sección de
-    // una, las ocho siguientes la de otra, y el encabezado de cada tarjeta dice
-    // de dónde viene. Que no arranque siempre por la misma lo resuelve la
-    // rotación de cada apertura, no el orden de acá.
+    // Las rondas de OCHO resuelven las dos cosas a la vez: se leen ocho
+    // seguidas del mismo sitio —la sección, de corrido— y al terminar pasa a
+    // la siguiente extensión en vez de agotar una entera.
+    //
+    // ── Y ahora es SIEMPRE, no solo con filtro ──────────────────────────
+    //
+    // Antes las rondas se usaban únicamente con un filtro puesto; sin filtro se
+    // recorría extensión por extensión hasta agotarla. Con varias instaladas
+    // eso dejaba el acordeón dando decenas de portadas del mismo sitio antes de
+    // pasar al siguiente, y desde afuera se ve como que se quedó trabado en
+    // una. Reportado en vivo en el teléfono.
     final todo = <(String, ExtensionListItem)>[];
     final vistas = <String>{};
 
@@ -1257,8 +1264,7 @@ class _CarruselAndroidState extends State<_CarruselAndroid>
       // Filtrando NO se vacía: las portadas se quedan y se reemplazan cuando
       // llega lo nuevo. Vaciarlo dejaba media pantalla en gris y después todo
       // de vuelta — dos saltos para una sola espera.
-      // Con filtro, la lista se arma en rondas de ocho; sin filtro, extensión
-      // por extensión. Ver _planos.
+      // La lista se arma SIEMPRE en rondas de ocho. Ver _planos.
       final conFiltro = widget.c.hayFiltros;
 
       // ── Mientras se aplica un filtro no se deja deslizar ────────────────
@@ -1287,7 +1293,8 @@ class _CarruselAndroidState extends State<_CarruselAndroid>
 
       final planos = grupos.isEmpty
           ? const <(String, ExtensionListItem)>[]
-          : _planos(grupos, porBloques: conFiltro);
+          // Siempre en rondas: ver el comentario largo de _planos.
+          : _planos(grupos, porBloques: true);
       // Nada todavía: en vez de un hueco negro de media pantalla, las tarjetas
       // que van a venir, en gris. Así el Home ya tiene su forma desde el
       // primer cuadro y al cargar no da un salto.

@@ -745,8 +745,8 @@ class _VideoPlayerMobileControlsState extends State<VideoPlayerMobileControls> {
                             padding: const EdgeInsets.all(20),
                             decoration: BoxDecoration(
                               shape: BoxShape.circle,
-                              color:
-                                  HomeTheme.oscuroAcento.withValues(alpha: 0.18),
+                              color: HomeTheme.oscuroAcento
+                                  .withValues(alpha: 0.18),
                               border: Border.all(color: HomeTheme.oscuroAcento),
                             ),
                             child: Icon(Icons.play_arrow,
@@ -1070,44 +1070,58 @@ class _VideoPlayerMobileControlsState extends State<VideoPlayerMobileControls> {
                 ),
               ),
             ),
-            // ── La flecha de volver NO se esconde ──────────────────────────
+            // ── La flecha de volver SÍ se esconde, con el resto ────────────
             //
-            // Va aparte del encabezado, fuera de su desvanecido, para que se
-            // quede aunque los controles se oculten solos y aunque el vídeo
-            // esté a pantalla completa.
+            // Este criterio ya fue y vino: estaba siempre visible, se pidió
+            // ocultarla, se pidió que se quedara, y ahora que se oculte de
+            // nuevo. Se anota para que nadie lo lea como un descuido.
             //
-            // El criterio ya se cambió una vez en la otra dirección: la flecha
-            // estaba siempre visible, se pidió que se ocultara con el resto, y
-            // ahora se vuelve a pedir que se quede. Se anota para que la
-            // próxima vez que alguien lea esto no lo tome por un descuido.
+            // Lo que cambió NO es el gusto, es la condición. El motivo para que
+            // se quedara era sólido: con los controles ocultos —se ocultan
+            // solos a los pocos segundos— y **sin barra del sistema**, era la
+            // única salida visible de la pantalla.
             //
-            // El motivo de que se quede es sólido: es la ÚNICA salida de esta
-            // pantalla. Con los controles ocultos —que se ocultan solos a los
-            // pocos segundos— y sin barra del sistema, quedaba sin ninguna
-            // forma visible de volver: había que tocar para que aparecieran y
-            // recién ahí salir.
+            // Ahora las barras del sistema ya no se esconden nunca (ver
+            // `pantallaSegunOrientacion`), así que el gesto de atrás está
+            // siempre disponible y la pantalla nunca queda sin salida. Recién
+            // con esa condición cumplida la flecha puede desvanecerse.
+            //
+            // **Las dos cosas van juntas.** Si algún día se vuelve a esconder
+            // las barras del sistema, esta flecha tiene que volver a quedarse
+            // fija o el reproductor queda sin salida visible.
             Positioned(
               top: 0,
               left: 0,
-              child: SafeArea(
-                bottom: false,
-                child: Padding(
-                  padding: const EdgeInsets.only(left: 8, top: 4),
-                  child: DecoratedBox(
-                    // Un fondo redondo detrás: la flecha sola, blanca, se
-                    // pierde sobre una escena clara, y ahora que se queda
-                    // encima del vídeo todo el tiempo tiene que leerse sobre
-                    // cualquier cosa.
-                    decoration: BoxDecoration(
-                      color: Colors.black.withValues(alpha: 0.45),
-                      shape: BoxShape.circle,
-                    ),
-                    child: IconButton(
-                      tooltip:
-                          MaterialLocalizations.of(context).backButtonTooltip,
-                      iconSize: 22,
-                      icon: const Icon(Icons.arrow_back, color: Colors.white),
-                      onPressed: () => unawaited(_c.closeRoute(context)),
+              child: IgnorePointer(
+                ignoring: !_showControls,
+                child: AnimatedOpacity(
+                  // El mismo desvanecido que el resto de los controles, para
+                  // que se vayan juntos en vez de irse los demás y quedar la
+                  // flecha sola un instante.
+                  opacity: _showControls ? 1 : 0,
+                  duration: const Duration(milliseconds: 200),
+                  child: SafeArea(
+                    bottom: false,
+                    child: Padding(
+                      padding: const EdgeInsets.only(left: 8, top: 4),
+                      child: DecoratedBox(
+                        // Un fondo redondo detrás: la flecha sola, blanca, se
+                        // pierde sobre una escena clara, y ahora que se queda
+                        // encima del vídeo todo el tiempo tiene que leerse sobre
+                        // cualquier cosa.
+                        decoration: BoxDecoration(
+                          color: Colors.black.withValues(alpha: 0.45),
+                          shape: BoxShape.circle,
+                        ),
+                        child: IconButton(
+                          tooltip: MaterialLocalizations.of(context)
+                              .backButtonTooltip,
+                          iconSize: 22,
+                          icon:
+                              const Icon(Icons.arrow_back, color: Colors.white),
+                          onPressed: () => unawaited(_c.closeRoute(context)),
+                        ),
+                      ),
                     ),
                   ),
                 ),
