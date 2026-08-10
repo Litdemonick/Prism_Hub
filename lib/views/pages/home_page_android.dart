@@ -827,7 +827,7 @@ class _CarruselAndroid extends StatefulWidget {
 }
 
 class _CarruselAndroidState extends State<_CarruselAndroid>
-    with SingleTickerProviderStateMixin {
+    with TickerProviderStateMixin {
   /// Dónde está el carrusel, en índices y con decimales.
   ///
   /// 3.0 es «la cuarta, centrada y grande»; 3.5 es «a mitad de camino entre la
@@ -868,9 +868,38 @@ class _CarruselAndroidState extends State<_CarruselAndroid>
 
   static const _aire = 9.0;
 
+  /// ── La pista de «esto se desliza» ────────────────────────────────────
+  ///
+  /// Al abrir el Home, el acordeón arranca en la primera tarjeta: a su
+  /// izquierda no hay nada, media pantalla en negro. No está roto —es el
+  /// principio de la fila— pero se lee como un hueco, y nada dice que eso se
+  /// mueve con el dedo.
+  ///
+  /// Una flecha con un vaivén corto, en ese hueco. Se va sola a los seis
+  /// segundos, y al primer arrastre desaparece de una: ya se entendió.
+  late final AnimationController _pista = AnimationController(
+    vsync: this,
+    duration: const Duration(milliseconds: 1100),
+  )..repeat(reverse: true);
+
+  bool _pistaVisible = true;
+  Timer? _relojDeLaPista;
+
+  /// La esconde y no vuelve. Se llama al arrastrar y al vencer el reloj.
+  void _ocultarPista() {
+    _relojDeLaPista?.cancel();
+    // Frena el vaivén aunque ya estuviera escondida: sin esto seguía
+    // tickeando de por vida, moviendo un ícono que ya nadie ve.
+    _pista.stop();
+    if (!_pistaVisible) return;
+    if (mounted) setState(() => _pistaVisible = false);
+  }
+
   @override
   void initState() {
     super.initState();
+    // Seis segundos alcanzan para leerla sin que se vuelva parte del decorado.
+    _relojDeLaPista = Timer(const Duration(seconds: 6), _ocultarPista);
     _anim.addListener(() {
       // Tocar otra zona mientras el acordeón se está acomodando desmonta este
       // widget con la animación en curso. Sin esta guarda, el oyente llama a
@@ -885,6 +914,8 @@ class _CarruselAndroidState extends State<_CarruselAndroid>
   @override
   void dispose() {
     _anim.dispose();
+    _relojDeLaPista?.cancel();
+    _pista.dispose();
     super.dispose();
   }
 
@@ -1432,7 +1463,10 @@ class _CarruselAndroidState extends State<_CarruselAndroid>
               height: m.alto,
               child: GestureDetector(
                 behavior: HitTestBehavior.opaque,
-                onHorizontalDragStart: (_) => _anim.stop(),
+                onHorizontalDragStart: (_) {
+                  _anim.stop();
+                  _ocultarPista();
+                },
                 onHorizontalDragUpdate: (d) {
                   final paso = (m.ancho + m.anchoChico) / 2 + _aire;
                   setState(() {
@@ -1541,6 +1575,53 @@ class _CarruselAndroidState extends State<_CarruselAndroid>
                         ),
                       ),
                     ],
+                    // ── La pista de «esto se desliza», solo en táctil ──────
+                    //
+                    // En escritorio el mismo hueco ya lo explican las
+                    // flechas de clic de arriba (_esTactil==false) — las dos
+                    // juntas serían dos avisos diciendo lo mismo. Con el
+                    // dedo no hay ningún botón, así que acá sí hace falta.
+                    //
+                    // Se queda montada siempre que hay táctil (no solo
+                    // mientras _pistaVisible) para que el desvanecido de
+                    // AnimatedOpacity tenga algo que animar en vez de
+                    // desaparecer de un salto.
+                    if (_esTactil)
+                      Positioned(
+                        left: 6,
+                        top: 0,
+                        bottom: 0,
+                        child: IgnorePointer(
+                          child: Center(
+                            child: AnimatedOpacity(
+                              opacity: _pistaVisible ? 1 : 0,
+                              duration: const Duration(milliseconds: 450),
+                              curve: Curves.easeOut,
+                              child: AnimatedBuilder(
+                                animation: _pista,
+                                builder: (context, child) => Transform.translate(
+                                  // El vaivén: como una manito empujando la
+                                  // tarjeta hacia la izquierda y volviendo,
+                                  // invitando a seguirla con el dedo.
+                                  offset: Offset(
+                                    -Curves.easeInOut.transform(_pista.value) *
+                                        8,
+                                    0,
+                                  ),
+                                  child: child,
+                                ),
+                                child: _discoDeFlecha(
+                                  const Icon(
+                                    Icons.swipe_left_alt_rounded,
+                                    color: Colors.white,
+                                    size: 22,
+                                  ),
+                                ),
+                              ),
+                            ),
+                          ),
+                        ),
+                      ),
                   ],
                 ),
               ),
