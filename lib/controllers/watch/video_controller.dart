@@ -5983,8 +5983,9 @@ class VideoPlayerController extends GetxController with WidgetsBindingObserver {
   Future<void> _dejarSaltarDentroDelArchivo(
     bool archivoEntero,
     String url,
-    Map<String, String>? headers,
-  ) async {
+    Map<String, String>? headers, {
+    bool listaQueSeRecorre = false,
+  }) async {
     final np = player.platform;
     if (np is! NativePlayer) return;
     // En Linux reconnect va apagado a propósito (ver dónde se ponen estas
@@ -6044,11 +6045,39 @@ class VideoPlayerController extends GetxController with WidgetsBindingObserver {
     // —poner las pistas de vídeo en automático antes de cada apertura— que era
     // el que dejaba la pantalla en negro. Con los dos encima ninguna prueba
     // decía nada. Si hay que volver a evaluarla, que sea sola.
+    // ── El tercer caso: la lista que HAY que poder recorrer ────────────────
+    //
+    // `reconnect_streamed` va bien en una lista de pedacitos sueltos (cada
+    // `.ts` se decodifica solo, así que no hace falta volver atrás nunca). Pero
+    // hay listas cuyos pedacitos son **fMP4/CMAF**: llevan un `#EXT-X-MAP` con
+    // su cabecera aparte y cada pedacito es un fragmento de UN mismo MP4. Ahí
+    // decirle a ffmpeg que la fuente no se puede recorrer es exactamente el
+    // mismo desastre que en un archivo entero.
+    //
+    // Y se ve igual que allá: reproduce perfecto de corrido, y **al tocar la
+    // barra para adelantar se queda cargando para siempre**. En el registro,
+    // con la posición ya movida al minuto nuevo:
+    //
+    //   colchón: 0,00 s · entrando: 223329 B/s · core-idle: yes
+    //   paused-for-cache: **no**
+    //
+    // O sea: está bajando y no es que espere datos — es que no puede producir
+    // un cuadro desde donde le pidieron. Reportado en vivo el 2026-08-10 con
+    // AnimeAV1, saltando a mano.
+    //
+    // Que el origen no tiene nada que ver está medido sobre **25 títulos, 32
+    // combinaciones de idioma**: pedir el ÚLTIMO pedacito sin haber pedido los
+    // anteriores devuelve 200 con vídeo en **32 de 32**.
+    //
+    // Solo se aplica a las listas que la extensión declara (ver
+    // _listaDePedacitos). Las demás siguen exactamente como estaban.
     final opciones = archivoEntero
         ? 'reconnect=1,reconnect_delay_max=5,seg_max_retry=3,'
             'multiple_requests=1'
-        : 'reconnect=1,reconnect_streamed=1,reconnect_delay_max=5,'
-            'seg_max_retry=3';
+        : listaQueSeRecorre
+            ? 'reconnect=1,reconnect_delay_max=5,seg_max_retry=3'
+            : 'reconnect=1,reconnect_streamed=1,reconnect_delay_max=5,'
+                'seg_max_retry=3';
     try {
       await np.setProperty('demuxer-lavf-o', opciones);
       // Se relee lo que quedó puesto de verdad, no lo que se pidió: si mpv
@@ -6060,7 +6089,9 @@ class VideoPlayerController extends GetxController with WidgetsBindingObserver {
       // que mirar cuando un archivo mal entrelazado sigue cortándose: si acá
       // dice "no", el problema es que la opción no llegó, no el archivo.
       logger.info('saltar dentro del archivo: '
-          '${archivoEntero ? 'SÍ (archivo entero)' : 'no (lista de pedacitos)'}'
+          '${archivoEntero ? 'SÍ (archivo entero)' : listaQueSeRecorre
+              ? 'SÍ (lista de pedacitos que se recorre)'
+              : 'no (lista de pedacitos)'}'
           ' · quedó: $quedo');
       _anotarDondeEstaElIndice(url, headers);
     } catch (e) {
@@ -6216,7 +6247,8 @@ class VideoPlayerController extends GetxController with WidgetsBindingObserver {
       }
       return const _ComoAbrir.talCual();
     }
-    await _dejarSaltarDentroDelArchivo(false, url, headers);
+    await _dejarSaltarDentroDelArchivo(false, url, headers,
+        listaQueSeRecorre: listaDePedacitos);
 
     final hdrs = <String, String>{'User-Agent': _browserUA};
     if (headers != null) hdrs.addAll(headers);
@@ -6290,7 +6322,8 @@ class VideoPlayerController extends GetxController with WidgetsBindingObserver {
                 'cambiar de idioma por la dirección (no lleva -aN), se abre en '
                 '${delMaestro.pistas[delMaestro.sonando].nombre} y el selector '
                 'lo dice'}');
-        await _dejarSaltarDentroDelArchivo(false, url, headers);
+        await _dejarSaltarDentroDelArchivo(false, url, headers,
+            listaQueSeRecorre: listaDePedacitos);
         return _ComoAbrir.con(conIdioma);
       }
     }
