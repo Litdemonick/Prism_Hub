@@ -5931,36 +5931,11 @@ class VideoPlayerController extends GetxController with WidgetsBindingObserver {
     // —poner las pistas de vídeo en automático antes de cada apertura— que era
     // el que dejaba la pantalla en negro. Con los dos encima ninguna prueba
     // decía nada. Si hay que volver a evaluarla, que sea sola.
-    // ── Los servidores que sirven pedacitos en formato MP4 ──────────────────
-    //
-    // Con esos, al adelantar a una zona no cargada el vídeo se congela. Es un
-    // fallo de ffmpeg reportado contra el ejemplo oficial de Apple y cerrado
-    // sin arreglo (mpv-player/mpv#15184), y lo que se rompe adentro es la
-    // **sincronía de tiempos entre el vídeo y el audio**.
-    //
-    // De ahí sale `seek_streams_individually=0`. Esa opción del lector de MP4
-    // viene ENCENDIDA de fábrica y hace que, al saltar, busque el punto más
-    // cercano **en cada pista por su cuenta** —el vídeo por un lado, el audio
-    // por otro— en vez de uno común. Apagándola, las dos van al mismo punto.
-    //
-    // Es lo único que quedaba por probar de este lado: los parches de ffmpeg
-    // para este problema tocan justo esa parte del lector (limpiar fragmentos
-    // e índices cuando la posición se reseteó tras un salto).
-    //
-    // Va SOLO para los hosts de la lista, que son los medidos. Si no ayuda, se
-    // saca y no le cambió el camino a nadie más.
-    final pedacitosMp4 =
-        _pedacitosEnMp4.any((h) => (Uri.tryParse(url)?.host ?? '').contains(h));
-    // Se SUMA a lo que ya tenía, no se reemplaza nada. Cambiarle el resto de
-    // las opciones a estos servidores ya se probó y les achica el colchón — el
-    // usuario lo nota enseguida: «el buffering se corta, no está como antes».
-    final extra = pedacitosMp4 ? ',seek_streams_individually=0' : '';
-    final opciones = (archivoEntero
-            ? 'reconnect=1,reconnect_delay_max=5,seg_max_retry=3,'
-                'multiple_requests=1'
-            : 'reconnect=1,reconnect_streamed=1,reconnect_delay_max=5,'
-                'seg_max_retry=3') +
-        extra;
+    final opciones = archivoEntero
+        ? 'reconnect=1,reconnect_delay_max=5,seg_max_retry=3,'
+            'multiple_requests=1'
+        : 'reconnect=1,reconnect_streamed=1,reconnect_delay_max=5,'
+            'seg_max_retry=3';
     try {
       await np.setProperty('demuxer-lavf-o', opciones);
       // Se relee lo que quedó puesto de verdad, no lo que se pidió: si mpv
@@ -6005,13 +5980,6 @@ class VideoPlayerController extends GetxController with WidgetsBindingObserver {
           .info('índice del archivo: ${await _comoEstaElIndice(url, headers)}');
     }));
   }
-
-  /// Servidores que sirven los pedacitos en formato MP4 (`#EXT-X-MAP`). Ver el
-  /// porqué en _dejarSaltarDentroDelArchivo.
-  static const _pedacitosEnMp4 = <String>[
-    'player.zilla-networks.com',
-    'uns.bio',
-  ];
 
   /// Dónde tiene el índice un MP4: al principio, al final, o no se pudo ver.
   ///
