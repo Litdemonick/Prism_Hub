@@ -184,7 +184,26 @@ class _VideoPlayerContenState extends State<VideoPlayerConten> {
           subtitleViewConfiguration: const SubtitleViewConfiguration(
             visible: false,
           ),
-          controls: (state) => controls(),
+          // El cuadro congelado, tapando el hueco de la reapertura al saltar.
+          //
+          // Va DENTRO de `controls` a propósito: así queda encima de la imagen
+          // pero DEBAJO de los botones, que tienen que seguir viéndose y
+          // respondiendo mientras dura. Por fuera del Video los habría tapado.
+          //
+          // Es null salvo durante un salto, así que el resto del tiempo esto no
+          // dibuja nada.
+          controls: (state) => Stack(
+            fit: StackFit.expand,
+            children: [
+              Obx(() {
+                final foto = c.cuadroCongelado.value;
+                if (foto == null) return const SizedBox.shrink();
+                return Image.memory(foto,
+                    fit: BoxFit.contain, gaplessPlayback: true);
+              }),
+              controls(),
+            ],
+          ),
         ),
       );
     });

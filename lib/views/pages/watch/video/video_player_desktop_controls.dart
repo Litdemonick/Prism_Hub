@@ -983,45 +983,58 @@ class _Footer extends StatelessWidget {
           children: [
             Row(
               children: [
-                // 当前进度
-                StreamBuilder(
-                  stream: controller.player.stream.position,
-                  builder: (context, snapshot) {
-                    if (snapshot.hasData) {
-                      final position = snapshot.data as Duration;
-                      return Text(
-                        '${position.inMinutes}:${(position.inSeconds % 60).toString().padLeft(2, '0')}',
-                        style: const TextStyle(
-                          fontSize: 14,
-                          fontWeight: FontWeight.w300,
-                        ),
-                      );
-                    }
-                    return const SizedBox.shrink();
-                  },
-                ),
+                // ── El minuto en el que va, del CONTROLLER ─────────────────
+                //
+                // Y no de `player.stream.position`, que es lo crudo de mpv.
+                // Con el recorte de fMP4 mpv reproduce un pedazo del episodio
+                // que arranca en cero, así que su posición es la del PEDAZO:
+                // saltando al minuto 6 este contador mostraba 0:09. El
+                // controller ya le suma el desfase y sabe el minuto real.
+                Obx(() {
+                  final position = controller.position.value;
+                  return Text(
+                    '${position.inMinutes}:${(position.inSeconds % 60).toString().padLeft(2, '0')}',
+                    style: const TextStyle(
+                      fontSize: 14,
+                      fontWeight: FontWeight.w300,
+                    ),
+                  );
+                }),
                 const SizedBox(width: 20),
                 Expanded(
-                  child: _SeekBar(controller: controller),
+                  // La barra no se toca mientras el reproductor está ocupado
+                  // —cambiando de servidor, esperando el primer cuadro, en
+                  // mitad de un salto o con el diálogo de continuar abierto—.
+                  //
+                  // `seek()` ya ignoraba esos saltos, pero el usuario no lo
+                  // veía: arrastraba, la barra se movía, y el vídeo no iba a
+                  // ningún lado. Ver `barraBloqueada`, que es el mismo criterio
+                  // que usa el reproductor de celular.
+                  child: Obx(() => IgnorePointer(
+                        ignoring: controller.barraBloqueada,
+                        child: Opacity(
+                          opacity: controller.barraBloqueada ? 0.5 : 1,
+                          child: _SeekBar(controller: controller),
+                        ),
+                      )),
                 ),
                 const SizedBox(width: 20),
-                // 总时长
-                StreamBuilder(
-                  stream: controller.player.stream.duration,
-                  builder: (context, snapshot) {
-                    if (snapshot.hasData) {
-                      final duration = snapshot.data as Duration;
-                      return Text(
-                        '${duration.inMinutes}:${(duration.inSeconds % 60).toString().padLeft(2, '0')}',
-                        style: const TextStyle(
-                          fontSize: 14,
-                          fontWeight: FontWeight.w300,
-                        ),
-                      );
-                    }
-                    return const SizedBox.shrink();
-                  },
-                ),
+                // El largo del EPISODIO, no el del pedazo que abrió mpv.
+                //
+                // Mismo motivo que el contador de la izquierda: con el recorte,
+                // `player.stream.duration` es lo que dura el pedazo. Saltando
+                // al minuto 6 de un episodio de 23:24, acá salía 17:34 — el
+                // episodio parecía encogerse en cada salto.
+                Obx(() {
+                  final duration = controller.duration.value;
+                  return Text(
+                    '${duration.inMinutes}:${(duration.inSeconds % 60).toString().padLeft(2, '0')}',
+                    style: const TextStyle(
+                      fontSize: 14,
+                      fontWeight: FontWeight.w300,
+                    ),
+                  );
+                }),
               ],
             ),
             const SizedBox(height: 10),
