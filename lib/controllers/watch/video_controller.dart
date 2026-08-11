@@ -6159,6 +6159,61 @@ class VideoPlayerController extends GetxController with WidgetsBindingObserver {
         ? 'servidor sin nombre'
         : currentServerName.value;
     final donde = Uri.tryParse(url)?.host ?? '?';
+
+    // ── Los pedacitos de estos servidores los baja la app, no mpv ───────────
+    //
+    // No es una preferencia: es la única salida, y está medido. Sus pedacitos
+    // se sirven así:
+    //
+    //   Transfer-Encoding: chunked      (sin Content-Length)
+    //   sin Accept-Ranges
+    //   pedir `Range: bytes=100000-199999` → 200 con el archivo ENTERO
+    //
+    // O sea que **ignoran los rangos**: cada pedacito es un flujo que no se
+    // puede recorrer. Y el servidor corta la respuesta a mitad, que ffmpeg ve
+    // como `error=End of file`. Juntando las dos cosas, al reconectar no hay
+    // forma de retomar donde se cortó y solo puede volver al byte 0 —eso es el
+    // `Will reconnect at 0` del registro—, baja el pedacito entero otra vez, se
+    // vuelve a cortar, y así para siempre. Ese bucle era el «entrando 536 KB/s
+    // con el colchón en cero».
+    //
+    // **Ninguna opción de ffmpeg lo arregla**, y se probaron todas las que
+    // aplican: con `reconnect_streamed` reconecta desde cero (bucle), sin él no
+    // reconecta y agota la lista dándose por terminado, y `multiple_requests`
+    // solo empeora los cortes. La documentación lo confirma: esa opción sirve
+    // para reconectar flujos no recorribles, y un flujo no recorrible **solo**
+    // puede reempezar de cero.
+    //
+    // Por eso el pedacito lo baja la app, que puede reintentarlo entero por su
+    // cuenta, y se lo sirve a mpv desde `localhost` ya completo. El relay ya
+    // existía para esquivar nodos caídos; acá se usa por lo mismo de siempre:
+    // ponerse en el medio.
+    //
+    // `esquivarNodosCaidos: true` aunque haya un solo nodo y no haya a quién
+    // esquivar. Es lo que hace que TODOS los pedacitos pasen por el relay: con
+    // `false`, el relay prueba si se pueden bajar sin nuestras cabeceras y, si
+    // puede, se sale del camino y se los deja pedir a mpv — que es exactamente
+    // lo que hay que evitar. Ese detalle fue el que anuló el primer intento.
+    if (_colchonCortoPorHost.containsKey(donde.toLowerCase())) {
+      try {
+        final hdrsRelay = <String, String>{'User-Agent': _browserUA};
+        if (headers != null) hdrsRelay.addAll(headers);
+        final relay = await CastRelayServer.registerAndGetUrl(
+          targetUrl: url,
+          headers: hdrsRelay,
+          esquivarNodosCaidos: true,
+        );
+        await _dejarSaltarDentroDelArchivo(false, url, headers);
+        logger.info('ficha · $servidor · $donde · los pedacitos los baja la '
+            'app: este servidor los sirve sin longitud y sin aceptar rangos, '
+            'así que si se corta uno mpv solo puede volver a empezar de cero');
+        return _ComoAbrir.con(relay);
+      } catch (e) {
+        logger.info('ficha · $servidor · el relay no se pudo levantar · va '
+            'directo a mpv como siempre: $e');
+      }
+    }
+
     if (!isDirectStream(url) || !sinParametros.endsWith('.m3u8')) {
       logger.info('ficha · $servidor · ${sinParametros.endsWith('.mp4') ? 'MP4 '
               'directo' : 'no es una lista HLS'} · $donde · va directo a mpv, no '
