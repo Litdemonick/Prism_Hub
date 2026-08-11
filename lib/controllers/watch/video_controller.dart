@@ -5931,67 +5931,13 @@ class VideoPlayerController extends GetxController with WidgetsBindingObserver {
     // —poner las pistas de vídeo en automático antes de cada apertura— que era
     // el que dejaba la pantalla en negro. Con los dos encima ninguna prueba
     // decía nada. Si hay que volver a evaluarla, que sea sola.
-    // Los de la lista de arriba son listas de pedacitos aunque su dirección no
-    // lo parezca, así que NO llevan `multiple_requests`. Reusar la conexión
-    // solo sirve para pedir otro tramo del MISMO archivo; acá cada pedacito es
-    // una dirección distinta y, como ya avisa el comentario de arriba, no hay
-    // nada que reusar. Peor: el servidor cierra la conexión reutilizada y el
-    // pedacito llega a medias — en el registro sale como
-    // `mbedtls_ssl_read returned -0x0` y `partial file`, y el reproductor, sin
-    // poder decodificar, pide más y más hasta agotar la lista y darse por
-    // terminado. Es lo que se veía al adelantar.
-    final esListaDisfrazada =
-        _colchonCortoPorHost.containsKey(Uri.tryParse(url)?.host.toLowerCase());
-    // ── Estos servidores CORTAN los pedacitos a mitad ───────────────────────
-    //
-    // Medido con el registro de ffmpeg el 2026-08-10. Al bajar un pedacito, el
-    // servidor cierra antes de tiempo y ffmpeg lo anota así:
-    //
-    //   Will reconnect at 3270587 in 0 second(s), error=End of file.  ← bien
-    //   Will reconnect at 0 in 1 second(s), error=End of file.        ← MAL
-    //   Will reconnect at 0 in 3 second(s), error=End of file.
-    //   … y sigue, sin salir nunca
-    //
-    // La primera línea es la correcta: retoma en el byte donde se cortó. Las
-    // que siguen vuelven al **byte 0** y bajan el pedacito entero de nuevo, que
-    // se vuelve a cortar, y otra vez desde cero. Ese bucle es el
-    // «entrando 536 KB/s con el colchón en cero» que se veía: baja siempre lo
-    // mismo y nunca completa un pedacito.
-    //
-    // Lo provoca `reconnect_streamed`, que trata la fuente como no recorrible
-    // y por eso solo sabe volver al principio. Se le saca, y en su lugar va
-    // `reconnect_at_eof`, que es lo que hace falta acá: que un fin de archivo
-    // prematuro cuente como error y dispare la reconexión —sin eso, ffmpeg da
-    // el pedacito por terminado, sigue al siguiente y termina agotando la
-    // lista—, pero retomando en el offset correcto en vez de en cero.
-    //
-    // Las tres combinaciones anteriores, todas probadas en vivo y todas mal:
-    //   reconnect_streamed          → bucle desde el byte 0 (se queda cargando)
-    //   sin reconnect_streamed      → no reintenta, agota la lista y "termina"
-    //   multiple_requests           → reusa conexión y los cortes empeoran
-    final opciones = esListaDisfrazada
-        ? 'reconnect=1,reconnect_at_eof=1,reconnect_delay_max=5,'
-            'seg_max_retry=3'
-        : archivoEntero
-            ? 'reconnect=1,reconnect_delay_max=5,seg_max_retry=3,'
-                'multiple_requests=1'
-            : 'reconnect=1,reconnect_streamed=1,reconnect_delay_max=5,'
-                'seg_max_retry=3';
+    final opciones = archivoEntero
+        ? 'reconnect=1,reconnect_delay_max=5,seg_max_retry=3,'
+            'multiple_requests=1'
+        : 'reconnect=1,reconnect_streamed=1,reconnect_delay_max=5,'
+            'seg_max_retry=3';
     try {
       await np.setProperty('demuxer-lavf-o', opciones);
-      // El colchón: corto para los servidores que cortan si se les pide de
-      // golpe, y el de siempre para todos los demás. Se pone SIEMPRE, en los
-      // dos casos, para que el valor de una fuente no se le quede pegado a la
-      // siguiente.
-      final host = Uri.tryParse(url)?.host.toLowerCase() ?? '';
-      final corto = _colchonCortoPorHost[host];
-      final colchon =
-          corto ?? (Platform.isAndroid ? '96MiB' : '192MiB');
-      await np.setProperty('demuxer-max-bytes', colchon);
-      if (corto != null) {
-        logger.info('colchón corto para $host: $colchon — este servidor corta '
-            'si se le piden muchos pedacitos de golpe al adelantar');
-      }
       // Se relee lo que quedó puesto de verdad, no lo que se pidió: si mpv
       // ignora el cambio, en el registro se ve la diferencia en vez de tener
       // que suponerlo.
@@ -6034,54 +5980,6 @@ class VideoPlayerController extends GetxController with WidgetsBindingObserver {
           .info('índice del archivo: ${await _comoEstaElIndice(url, headers)}');
     }));
   }
-
-  /// Servidores que **cortan si se les pide de golpe**, con cuánto colchón se
-  /// les deja pedir.
-  ///
-  /// Lista corta y por host a propósito: nace de UN servidor medido y tiene que
-  /// quedar encendida solo para ese, sin rozar el camino que comparten todas
-  /// las demás fuentes.
-  ///
-  /// ── Qué se midió (2026-08-10, AnimeAV1) ─────────────────────────────────
-  ///
-  /// El vídeo carga rapidísimo y reproduce perfecto de corrido. Pero al tocar
-  /// la barra para adelantar se cae y se da por terminado. En el registro de
-  /// ffmpeg se ve exactamente qué hace:
-  ///
-  ///   [hls] Opening '.../init.html'     ← re-pide la cabecera, correcto
-  ///   [hls] Opening '.../054.html'      ← SALTA al pedacito correcto
-  ///   [https] Opening '.../055.html'
-  ///   [https] Opening '.../056.html'
-  ///   … del 057 al 141 seguidos, dos conexiones en paralelo
-  ///
-  /// **El salto funciona.** Lo que falla es lo de después: al saltar, el
-  /// reproductor intenta llenar su colchón de golpe y dispara decenas de
-  /// pedidos por segundo. El usuario abrió esa misma dirección en el navegador
-  /// y el CDN le contestó **«Sorry, you have been blocked»** — Cloudflare lo
-  /// toma por abuso y corta. De ahí los `partial file` y los
-  /// `mbedtls_ssl_read returned -0x0` del registro: son las conexiones
-  /// cortadas. Y como los pedacitos llegan a medias, el reproductor no puede
-  /// decodificar y **pide más**, que es echarle nafta al fuego hasta agotar la
-  /// lista y darse por terminado.
-  ///
-  /// Por eso de corrido va perfecto —ahí pide al ritmo de la reproducción— y
-  /// por eso pedirlos desde afuera nunca falló: en el banco se piden doce, no
-  /// ochenta y siete.
-  ///
-  /// ── Por qué el colchón y no otra cosa ───────────────────────────────────
-  ///
-  /// Cuántos pedacitos pide de golpe lo manda `demuxer-max-bytes`, que está en
-  /// 192 MiB. Con pedacitos de 0,7 a 3,8 MB, eso son decenas. Bajándolo a 24
-  /// MiB pide un puñado y sigue teniendo colchón de sobra: son ~60 s de vídeo,
-  /// y este servidor entrega 7-10 MB/s medidos, así que no hay riesgo de que
-  /// se quede corto.
-  ///
-  /// **No toca nada del ciclo de vida del reproductor** —ni el parar, ni el
-  /// soltar, ni los controles—, que es donde un cambio puede dejar al usuario
-  /// sin poder salir. Es un número de colchón y nada más.
-  static const _colchonCortoPorHost = <String, String>{
-    'player.zilla-networks.com': '24MiB',
-  };
 
   /// Dónde tiene el índice un MP4: al principio, al final, o no se pudo ver.
   ///
@@ -6159,61 +6057,6 @@ class VideoPlayerController extends GetxController with WidgetsBindingObserver {
         ? 'servidor sin nombre'
         : currentServerName.value;
     final donde = Uri.tryParse(url)?.host ?? '?';
-
-    // ── Los pedacitos de estos servidores los baja la app, no mpv ───────────
-    //
-    // No es una preferencia: es la única salida, y está medido. Sus pedacitos
-    // se sirven así:
-    //
-    //   Transfer-Encoding: chunked      (sin Content-Length)
-    //   sin Accept-Ranges
-    //   pedir `Range: bytes=100000-199999` → 200 con el archivo ENTERO
-    //
-    // O sea que **ignoran los rangos**: cada pedacito es un flujo que no se
-    // puede recorrer. Y el servidor corta la respuesta a mitad, que ffmpeg ve
-    // como `error=End of file`. Juntando las dos cosas, al reconectar no hay
-    // forma de retomar donde se cortó y solo puede volver al byte 0 —eso es el
-    // `Will reconnect at 0` del registro—, baja el pedacito entero otra vez, se
-    // vuelve a cortar, y así para siempre. Ese bucle era el «entrando 536 KB/s
-    // con el colchón en cero».
-    //
-    // **Ninguna opción de ffmpeg lo arregla**, y se probaron todas las que
-    // aplican: con `reconnect_streamed` reconecta desde cero (bucle), sin él no
-    // reconecta y agota la lista dándose por terminado, y `multiple_requests`
-    // solo empeora los cortes. La documentación lo confirma: esa opción sirve
-    // para reconectar flujos no recorribles, y un flujo no recorrible **solo**
-    // puede reempezar de cero.
-    //
-    // Por eso el pedacito lo baja la app, que puede reintentarlo entero por su
-    // cuenta, y se lo sirve a mpv desde `localhost` ya completo. El relay ya
-    // existía para esquivar nodos caídos; acá se usa por lo mismo de siempre:
-    // ponerse en el medio.
-    //
-    // `esquivarNodosCaidos: true` aunque haya un solo nodo y no haya a quién
-    // esquivar. Es lo que hace que TODOS los pedacitos pasen por el relay: con
-    // `false`, el relay prueba si se pueden bajar sin nuestras cabeceras y, si
-    // puede, se sale del camino y se los deja pedir a mpv — que es exactamente
-    // lo que hay que evitar. Ese detalle fue el que anuló el primer intento.
-    if (_colchonCortoPorHost.containsKey(donde.toLowerCase())) {
-      try {
-        final hdrsRelay = <String, String>{'User-Agent': _browserUA};
-        if (headers != null) hdrsRelay.addAll(headers);
-        final relay = await CastRelayServer.registerAndGetUrl(
-          targetUrl: url,
-          headers: hdrsRelay,
-          esquivarNodosCaidos: true,
-        );
-        await _dejarSaltarDentroDelArchivo(false, url, headers);
-        logger.info('ficha · $servidor · $donde · los pedacitos los baja la '
-            'app: este servidor los sirve sin longitud y sin aceptar rangos, '
-            'así que si se corta uno mpv solo puede volver a empezar de cero');
-        return _ComoAbrir.con(relay);
-      } catch (e) {
-        logger.info('ficha · $servidor · el relay no se pudo levantar · va '
-            'directo a mpv como siempre: $e');
-      }
-    }
-
     if (!isDirectStream(url) || !sinParametros.endsWith('.m3u8')) {
       logger.info('ficha · $servidor · ${sinParametros.endsWith('.mp4') ? 'MP4 '
               'directo' : 'no es una lista HLS'} · $donde · va directo a mpv, no '
