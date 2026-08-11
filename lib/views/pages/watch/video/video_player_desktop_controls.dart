@@ -222,6 +222,35 @@ class _VideoPlayerDesktopControlsState
             if (value is! KeyDownEvent || _c.disposed) {
               return KeyEventResult.ignored;
             }
+            // ── ESC se maneja ACÁ, y no por la tabla de atajos ─────────
+            //
+            // Porque cerrar necesita un `context`, y la tabla de atajos vive
+            // en el controlador, que no tiene ninguno.
+            //
+            // Sin context, `closeRoute` no puede usar `Navigator.maybeOf` —la
+            // única vía que encuentra esta ruta— y cae a los tres respaldos,
+            // que ya están documentados como que NO la encuentran. Resultado:
+            // el reproductor ya quedó apagado (eso pasa antes de intentar
+            // cerrar) pero la pantalla no se va. Se ve como que se muteó, la
+            // barra en 0:00, todo en negro y sin poder cerrar ni cambiar de
+            // servidor — había que matar la app entera. Reportado en vivo el
+            // 2026-08-10, y es exactamente el cuadro que describe el
+            // comentario largo de `closeRoute`.
+            //
+            // En pantalla completa no se notaba: ahí el primer ESC solo sale
+            // de pantalla completa y ni llama a cerrar.
+            //
+            // Este es el MISMO camino que usa el botón de cerrar, que siempre
+            // funcionó. No cambia nada más: el resto de los atajos sigue
+            // saliendo por la tabla de siempre.
+            if (value.logicalKey == LogicalKeyboardKey.escape) {
+              if (_c.isFullScreen.value) {
+                unawaited(_c.toggleFullscreen());
+              } else {
+                unawaited(_c.closeRoute(context));
+              }
+              return KeyEventResult.handled;
+            }
             final atajo = _c.keyboardShortcuts[value.logicalKey];
             if (atajo == null) return KeyEventResult.ignored;
             atajo();
