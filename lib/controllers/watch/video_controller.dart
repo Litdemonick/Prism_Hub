@@ -5931,7 +5931,18 @@ class VideoPlayerController extends GetxController with WidgetsBindingObserver {
     // —poner las pistas de vídeo en automático antes de cada apertura— que era
     // el que dejaba la pantalla en negro. Con los dos encima ninguna prueba
     // decía nada. Si hay que volver a evaluarla, que sea sola.
-    final opciones = archivoEntero
+    // Los de la lista de arriba son listas de pedacitos aunque su dirección no
+    // lo parezca, así que NO llevan `multiple_requests`. Reusar la conexión
+    // solo sirve para pedir otro tramo del MISMO archivo; acá cada pedacito es
+    // una dirección distinta y, como ya avisa el comentario de arriba, no hay
+    // nada que reusar. Peor: el servidor cierra la conexión reutilizada y el
+    // pedacito llega a medias — en el registro sale como
+    // `mbedtls_ssl_read returned -0x0` y `partial file`, y el reproductor, sin
+    // poder decodificar, pide más y más hasta agotar la lista y darse por
+    // terminado. Es lo que se veía al adelantar.
+    final esListaDisfrazada =
+        _colchonCortoPorHost.containsKey(Uri.tryParse(url)?.host.toLowerCase());
+    final opciones = archivoEntero && !esListaDisfrazada
         ? 'reconnect=1,reconnect_delay_max=5,seg_max_retry=3,'
             'multiple_requests=1'
         : 'reconnect=1,reconnect_streamed=1,reconnect_delay_max=5,'
