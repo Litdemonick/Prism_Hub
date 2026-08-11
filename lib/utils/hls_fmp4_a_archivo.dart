@@ -181,8 +181,7 @@ class HlsFmp4AArchivo {
         buf.add(trozo);
         if (buf.length >= 8192) break;
       }
-      final tam = _tamanoDelSidx(buf.toBytes());
-      return tam;
+      return _tamanoDelPedacito(buf.toBytes());
     } catch (_) {
       return 0;
     } finally {
@@ -191,30 +190,51 @@ class HlsFmp4AArchivo {
     }
   }
 
-  /// El `referenced_size` del primer `sidx`: cuánto ocupa el fragmento entero.
-  static int _tamanoDelSidx(Uint8List b) {
+  /// Cuánto ocupa el pedacito entero, leyendo solo su cabeza.
+  ///
+  /// Un pedacito de estos viene así: `styp` · `sidx` · `sidx` · `moof` · `mdat`.
+  /// El primer `sidx` declara en `referenced_size` cuánto ocupa el contenido,
+  /// **pero medido desde el final del ÚLTIMO índice**, no desde el principio
+  /// del archivo. Por eso hay que sumarle todo lo que va antes.
+  ///
+  /// Comprobado contra el tamaño real de tres pedacitos, y da EXACTO:
+  ///
+  ///   fin del último sidx (128) + referenced_size (3.270.459) = 3.270.587
+  ///
+  /// **Ojo con quedarse en el primer índice**: son dos, y el segundo ocupa 52
+  /// bytes. Contando solo hasta el primero, cada pedacito sale 52 bytes corto y
+  /// el archivo entero queda mal armado — pasó, y el vídeo salía con una
+  /// duración de diez segundos.
+  static int _tamanoDelPedacito(Uint8List b) {
     final d = ByteData.sublistView(b);
     var off = 0;
+    var refPrimero = 0;
+    var finDeIndices = 0;
     while (off + 8 <= b.length) {
       final sz = d.getUint32(off);
+      if (sz < 8 || off + sz > b.length) break;
       final tipo = String.fromCharCodes(b.sublist(off + 4, off + 8));
       if (tipo == 'sidx') {
-        final version = b[off + 8];
-        var p = off + 20; // tamaño+tipo+version/flags+referenceID+timescale
-        p += version == 0 ? 8 : 16; // earliest_presentation_time + first_offset
-        p += 2; // reservado
-        if (p + 6 > b.length) return 0;
-        p += 2; // cuántas referencias
-        // El tramo entero del fragmento: el bit de arriba es un indicador.
-        final ref = d.getUint32(p) & 0x7fffffff;
-        // El `sidx` mide desde el final de la última caja de índice, así que se
-        // le suma lo que va antes (styp + los sidx).
-        return ref + p + 12;
+        if (refPrimero == 0) {
+          final version = b[off + 8];
+          var p = off + 20; // tamaño+tipo+version/flags+referenceID+timescale
+          p += version == 0 ? 8 : 16; // earliest_presentation_time+first_offset
+          p += 2; // reservado
+          p += 2; // cuántas referencias
+          if (p + 4 > b.length) return 0;
+          // El bit de arriba dice si la referencia es a otro índice; el resto
+          // es el tamaño.
+          refPrimero = d.getUint32(p) & 0x7fffffff;
+        }
+        finDeIndices = off + sz;
+      } else if (finDeIndices > 0) {
+        // Ya pasaron los índices: acá empieza el contenido.
+        break;
       }
-      if (sz < 8) return 0;
       off += sz;
     }
-    return 0;
+    if (refPrimero == 0 || finDeIndices == 0) return 0;
+    return finDeIndices + refPrimero;
   }
 
   static Future<Uint8List?> _bajarEntero(
