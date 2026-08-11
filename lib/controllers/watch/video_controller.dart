@@ -5938,6 +5938,19 @@ class VideoPlayerController extends GetxController with WidgetsBindingObserver {
             'seg_max_retry=3';
     try {
       await np.setProperty('demuxer-lavf-o', opciones);
+      // El colchón: corto para los servidores que cortan si se les pide de
+      // golpe, y el de siempre para todos los demás. Se pone SIEMPRE, en los
+      // dos casos, para que el valor de una fuente no se le quede pegado a la
+      // siguiente.
+      final host = Uri.tryParse(url)?.host.toLowerCase() ?? '';
+      final corto = _colchonCortoPorHost[host];
+      final colchon =
+          corto ?? (Platform.isAndroid ? '96MiB' : '192MiB');
+      await np.setProperty('demuxer-max-bytes', colchon);
+      if (corto != null) {
+        logger.info('colchón corto para $host: $colchon — este servidor corta '
+            'si se le piden muchos pedacitos de golpe al adelantar');
+      }
       // Se relee lo que quedó puesto de verdad, no lo que se pidió: si mpv
       // ignora el cambio, en el registro se ve la diferencia en vez de tener
       // que suponerlo.
@@ -5980,6 +5993,54 @@ class VideoPlayerController extends GetxController with WidgetsBindingObserver {
           .info('índice del archivo: ${await _comoEstaElIndice(url, headers)}');
     }));
   }
+
+  /// Servidores que **cortan si se les pide de golpe**, con cuánto colchón se
+  /// les deja pedir.
+  ///
+  /// Lista corta y por host a propósito: nace de UN servidor medido y tiene que
+  /// quedar encendida solo para ese, sin rozar el camino que comparten todas
+  /// las demás fuentes.
+  ///
+  /// ── Qué se midió (2026-08-10, AnimeAV1) ─────────────────────────────────
+  ///
+  /// El vídeo carga rapidísimo y reproduce perfecto de corrido. Pero al tocar
+  /// la barra para adelantar se cae y se da por terminado. En el registro de
+  /// ffmpeg se ve exactamente qué hace:
+  ///
+  ///   [hls] Opening '.../init.html'     ← re-pide la cabecera, correcto
+  ///   [hls] Opening '.../054.html'      ← SALTA al pedacito correcto
+  ///   [https] Opening '.../055.html'
+  ///   [https] Opening '.../056.html'
+  ///   … del 057 al 141 seguidos, dos conexiones en paralelo
+  ///
+  /// **El salto funciona.** Lo que falla es lo de después: al saltar, el
+  /// reproductor intenta llenar su colchón de golpe y dispara decenas de
+  /// pedidos por segundo. El usuario abrió esa misma dirección en el navegador
+  /// y el CDN le contestó **«Sorry, you have been blocked»** — Cloudflare lo
+  /// toma por abuso y corta. De ahí los `partial file` y los
+  /// `mbedtls_ssl_read returned -0x0` del registro: son las conexiones
+  /// cortadas. Y como los pedacitos llegan a medias, el reproductor no puede
+  /// decodificar y **pide más**, que es echarle nafta al fuego hasta agotar la
+  /// lista y darse por terminado.
+  ///
+  /// Por eso de corrido va perfecto —ahí pide al ritmo de la reproducción— y
+  /// por eso pedirlos desde afuera nunca falló: en el banco se piden doce, no
+  /// ochenta y siete.
+  ///
+  /// ── Por qué el colchón y no otra cosa ───────────────────────────────────
+  ///
+  /// Cuántos pedacitos pide de golpe lo manda `demuxer-max-bytes`, que está en
+  /// 192 MiB. Con pedacitos de 0,7 a 3,8 MB, eso son decenas. Bajándolo a 24
+  /// MiB pide un puñado y sigue teniendo colchón de sobra: son ~60 s de vídeo,
+  /// y este servidor entrega 7-10 MB/s medidos, así que no hay riesgo de que
+  /// se quede corto.
+  ///
+  /// **No toca nada del ciclo de vida del reproductor** —ni el parar, ni el
+  /// soltar, ni los controles—, que es donde un cambio puede dejar al usuario
+  /// sin poder salir. Es un número de colchón y nada más.
+  static const _colchonCortoPorHost = <String, String>{
+    'player.zilla-networks.com': '24MiB',
+  };
 
   /// Dónde tiene el índice un MP4: al principio, al final, o no se pudo ver.
   ///
