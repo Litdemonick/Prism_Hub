@@ -162,6 +162,28 @@ class RecorteFmp4 {
     required String paquete,
     Map<String, String>? cabeceras,
   }) async {
+    // ── Apagado en Android, a propósito (2026-08-11) ───────────────────────
+    //
+    // En el teléfono el recorte funciona a medias y deja el reproductor PEOR
+    // que sin él: el vídeo arranca en un minuto que nadie pidió —19, 28, 35,
+    // distinto en cada episodio— y desde ahí no hay forma de volver al
+    // principio.
+    //
+    // Medido: no es la lista (se verificó servida, con VOD, MEDIA-SEQUENCE 0 y
+    // EXT-X-MAP), no es la app (un detector de saltos mostró que ningún código
+    // propio lo pide), no es mpv recordando posiciones (`resume-playback=no`
+    // puesto), y no lo arregla `EXT-X-START:TIME-OFFSET=0`. Es un salto
+    // instantáneo —0,27 s después de informar 0— así que viene de dentro del
+    // fMP4: la marca de tiempo base de los fragmentos, que la versión de
+    // ffmpeg de Android aplica y la de Windows no.
+    //
+    // Sin recorte, Android queda como estaba: no se puede adelantar en fMP4,
+    // que es una limitación conocida, pero el vídeo abre donde tiene que abrir.
+    // Peor es lo otro.
+    //
+    // Para volver a probarlo, sacar estas dos líneas.
+    if (Platform.isAndroid) return null;
+
     // Primera llave: la extensión.
     if (paquete != paqueteHabilitado) return null;
     // Sin esto, cualquier MP4 directo entraría a bajarse una lista que no
