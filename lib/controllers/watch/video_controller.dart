@@ -34,7 +34,6 @@ import 'package:prismhub/utils/notificacion_reproductor.dart';
 import 'package:prismhub/utils/audio_hls.dart';
 import 'package:prismhub/utils/bomba_de_datos.dart';
 import 'package:prismhub/utils/cast_relay_server.dart';
-import 'package:prismhub/utils/hls_fmp4_a_archivo.dart';
 import 'package:prismhub/utils/watch_state.dart';
 import 'package:prismhub/data/services/database_service.dart';
 import 'package:prismhub/data/services/extension_service.dart';
@@ -2766,7 +2765,6 @@ class VideoPlayerController extends GetxController with WidgetsBindingObserver {
     // Cada lectura abierta es un socket contra el servidor: al cerrar el
     // reproductor hay que soltarlas o quedan colgadas hasta reiniciar la app.
     _soltarLaBomba();
-    _soltarArchivoFmp4();
     // Estos dos son de un solo disparo, asi que no dejan nada dando vueltas,
     // pero si el reproductor se cierra en el medio saltan despues y escriben
     // sobre observables de un controlador ya destruido.
@@ -5983,55 +5981,6 @@ class VideoPlayerController extends GetxController with WidgetsBindingObserver {
     }));
   }
 
-  /// Servidores cuyas listas traen los pedacitos en formato MP4 y por eso no
-  /// dejan adelantar. Ver el bloque en _comoAbrir y HlsFmp4AArchivo.
-  static const _listasQueNoSaltan = <String>[
-    'player.zilla-networks.com',
-    'uns.bio',
-  ];
-
-  /// Arma la lista como un archivo y devuelve cómo abrirlo, o null para seguir
-  /// como siempre.
-  Future<_ComoAbrir?> _servirComoArchivo(
-    String url,
-    Map<String, String>? headers,
-    String servidor,
-    String donde,
-  ) async {
-    try {
-      final hdrs = <String, String>{'User-Agent': _browserUA};
-      if (headers != null) hdrs.addAll(headers);
-      final lista = await _bajarLista(url, hdrs);
-      if (lista == null || !HlsFmp4AArchivo.esDeLasQueNoSaltan(lista)) return null;
-      final local = await HlsFmp4AArchivo.preparar(
-        listaUrl: url,
-        lista: lista,
-        cabeceras: hdrs,
-      );
-      if (local == null) return null;
-      _soltarArchivoFmp4();
-      _archivoFmp4 = local;
-      await _dejarSaltarDentroDelArchivo(true, url, headers);
-      logger.info('ficha · $servidor · $donde · sus pedacitos son MP4 y así no '
-          'se puede adelantar: se le sirve el episodio como UN archivo');
-      return _ComoAbrir.con(local);
-    } catch (e) {
-      logger.info('ficha · $servidor · no se pudo servir como archivo, se abre '
-          'como siempre: $e');
-      return null;
-    }
-  }
-
-  /// La dirección local del archivo armado, si hay alguno.
-  String? _archivoFmp4;
-
-  void _soltarArchivoFmp4() {
-    final vieja = _archivoFmp4;
-    if (vieja == null) return;
-    _archivoFmp4 = null;
-    HlsFmp4AArchivo.soltar(vieja);
-  }
-
   /// Dónde tiene el índice un MP4: al principio, al final, o no se pudo ver.
   ///
   /// El índice (`moov`) es la tabla que dice en qué byte está cada segundo de
@@ -6108,30 +6057,6 @@ class VideoPlayerController extends GetxController with WidgetsBindingObserver {
         ? 'servidor sin nombre'
         : currentServerName.value;
     final donde = Uri.tryParse(url)?.host ?? '?';
-
-    // ── Las listas que no dejan adelantar: se sirven como UN archivo ────────
-    //
-    // Estos servidores mandan sus pedacitos en formato MP4 (`#EXT-X-MAP`), y
-    // con eso el reproductor **no puede adelantar**: reproduce impecable de
-    // corrido y al saltar a una zona no cargada se congela. No es un ajuste
-    // que falte — es un fallo de ffmpeg reportado contra el ejemplo oficial de
-    // Apple y cerrado sin arreglo (mpv-player/mpv#15184). Se probaron nueve
-    // caminos por el lado de las opciones y ninguno sirvió.
-    //
-    // La salida es que el reproductor **nunca lo abra como lista**: se le da un
-    // archivo, y adelantar pasa a ser pedir un tramo, que hace perfecto. Ver
-    // HlsFmp4AArchivo, que explica cómo se arma y cómo se sabe cuánto pesa sin
-    // bajarlo entero.
-    //
-    // Va por lista corta de hosts, que es lo medido, y **ante cualquier
-    // problema se sigue como siempre**: si no se puede armar, si tarda de más o
-    // si el servidor local no levanta, esto devuelve null y la fuente se abre
-    // como venía abriéndose.
-    if (_listasQueNoSaltan.any(donde.toLowerCase().contains)) {
-      final comoArchivo = await _servirComoArchivo(url, headers, servidor, donde);
-      if (comoArchivo != null) return comoArchivo;
-    }
-
     if (!isDirectStream(url) || !sinParametros.endsWith('.m3u8')) {
       logger.info('ficha · $servidor · ${sinParametros.endsWith('.mp4') ? 'MP4 '
               'directo' : 'no es una lista HLS'} · $donde · va directo a mpv, no '
