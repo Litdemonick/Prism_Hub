@@ -5942,11 +5942,41 @@ class VideoPlayerController extends GetxController with WidgetsBindingObserver {
     // terminado. Es lo que se veía al adelantar.
     final esListaDisfrazada =
         _colchonCortoPorHost.containsKey(Uri.tryParse(url)?.host.toLowerCase());
-    final opciones = archivoEntero && !esListaDisfrazada
-        ? 'reconnect=1,reconnect_delay_max=5,seg_max_retry=3,'
-            'multiple_requests=1'
-        : 'reconnect=1,reconnect_streamed=1,reconnect_delay_max=5,'
-            'seg_max_retry=3';
+    // ── Estos servidores CORTAN los pedacitos a mitad ───────────────────────
+    //
+    // Medido con el registro de ffmpeg el 2026-08-10. Al bajar un pedacito, el
+    // servidor cierra antes de tiempo y ffmpeg lo anota así:
+    //
+    //   Will reconnect at 3270587 in 0 second(s), error=End of file.  ← bien
+    //   Will reconnect at 0 in 1 second(s), error=End of file.        ← MAL
+    //   Will reconnect at 0 in 3 second(s), error=End of file.
+    //   … y sigue, sin salir nunca
+    //
+    // La primera línea es la correcta: retoma en el byte donde se cortó. Las
+    // que siguen vuelven al **byte 0** y bajan el pedacito entero de nuevo, que
+    // se vuelve a cortar, y otra vez desde cero. Ese bucle es el
+    // «entrando 536 KB/s con el colchón en cero» que se veía: baja siempre lo
+    // mismo y nunca completa un pedacito.
+    //
+    // Lo provoca `reconnect_streamed`, que trata la fuente como no recorrible
+    // y por eso solo sabe volver al principio. Se le saca, y en su lugar va
+    // `reconnect_at_eof`, que es lo que hace falta acá: que un fin de archivo
+    // prematuro cuente como error y dispare la reconexión —sin eso, ffmpeg da
+    // el pedacito por terminado, sigue al siguiente y termina agotando la
+    // lista—, pero retomando en el offset correcto en vez de en cero.
+    //
+    // Las tres combinaciones anteriores, todas probadas en vivo y todas mal:
+    //   reconnect_streamed          → bucle desde el byte 0 (se queda cargando)
+    //   sin reconnect_streamed      → no reintenta, agota la lista y "termina"
+    //   multiple_requests           → reusa conexión y los cortes empeoran
+    final opciones = esListaDisfrazada
+        ? 'reconnect=1,reconnect_at_eof=1,reconnect_delay_max=5,'
+            'seg_max_retry=3'
+        : archivoEntero
+            ? 'reconnect=1,reconnect_delay_max=5,seg_max_retry=3,'
+                'multiple_requests=1'
+            : 'reconnect=1,reconnect_streamed=1,reconnect_delay_max=5,'
+                'seg_max_retry=3';
     try {
       await np.setProperty('demuxer-lavf-o', opciones);
       // El colchón: corto para los servidores que cortan si se les pide de
