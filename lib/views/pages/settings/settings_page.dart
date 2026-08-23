@@ -1518,20 +1518,6 @@ class _SettingsPageState extends State<SettingsPage> {
               },
             ),
             const SizedBox(height: 10),
-            // Apagado por defecto a propósito: manda datos a un tercero
-            // (Sentry), y acá se ve contenido +18 — que el usuario decida,
-            // nunca solo. El subtítulo dice esto mismo, sin vueltas.
-            SettingsSwitchTile(
-              title: 'settings.error-telemetry'.i18n,
-              buildSubtitle: () => 'settings.error-telemetry-subtitle'.i18n,
-              buildValue: () {
-                return PrismHubStorage.getSetting(SettingKey.errorTelemetry);
-              },
-              onChanged: (value) {
-                PrismHubStorage.setSetting(SettingKey.errorTelemetry, value);
-              },
-            ),
-            const SizedBox(height: 10),
             // Ver el registro sin salir de la app. Va ANTES de exportar: mirar
             // qué está pasando es lo que uno intenta primero; exportar es el
             // paso siguiente, y solo si hay algo que mandar.

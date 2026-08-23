@@ -356,8 +356,6 @@
     "log-subtitle": "Mirar lo que hace la app por dentro, guardarlo y exportarlo para reportar un fallo",
     "save-log": "Guardar registros",
     "save-log-subtitle": "Guardar automáticamente el archivo de registros",
-    "error-telemetry": "Reportar errores",
-    "error-telemetry-subtitle": "Manda automáticamente los fallos de la app a un servidor externo para poder corregirlos. Apagado por defecto.",
     "view-log": "Ver registro",
     "view-log-subtitle": "Mirá lo que hace la app por dentro, en el momento",
     "log-lines": "{n} líneas",

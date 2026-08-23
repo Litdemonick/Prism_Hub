@@ -360,8 +360,6 @@
     "log-subtitle": "Watch what the app is doing, save it and export it to report a problem",
     "save-log": "Save Log",
     "save-log-subtitle": "Auto save log file",
-    "error-telemetry": "Report errors",
-    "error-telemetry-subtitle": "Automatically send app crashes to an external server so they can be fixed. Off by default.",
     "view-log": "View log",
     "view-log-subtitle": "Watch what the app is doing, as it happens",
     "log-lines": "{n} lines",

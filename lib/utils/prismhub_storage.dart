@@ -359,10 +359,6 @@ class PrismHubStorage {
       await settings.put(SettingKey.videoPlayer, 'built-in');
     }
     await _initSetting(SettingKey.saveLog, true);
-    // Apagado por defecto: reportar errores manda datos a un tercero
-    // (Sentry), y la app se usa también para contenido +18 — eso lo prende
-    // el usuario a mano si quiere, nunca solo.
-    await _initSetting(SettingKey.errorTelemetry, false);
     await _initSetting(SettingKey.subtitleFontSize, 46.0);
     await _initSetting(SettingKey.subtitleFontColor, Colors.white.toARGB32());
     await _initSetting(SettingKey.subtitleFontWeight, 'bold');
@@ -543,7 +539,6 @@ class SettingKey {
   static const proxy = "Proxy";
   static const proxyType = "ProxyType";
   static const saveLog = "SaveLog";
-  static const errorTelemetry = "ErrorTelemetry";
   static const subtitleFontSize = "SubtitleFontSize";
   static const subtitleFontWeight = "SubtitleFontWeight";
   static const subtitleFontColor = "SubtitleFontColor";
