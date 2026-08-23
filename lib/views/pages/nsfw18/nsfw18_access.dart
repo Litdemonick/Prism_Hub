@@ -18,7 +18,14 @@ import 'package:prismhub/views/widgets/messenger.dart';
 // Usa Navigator y no Get.to a propósito: Get.to NO navega en escritorio (el
 // navegador de GetX solo está activo en Android, ver main.dart), y esta función
 // tiene que funcionar igual en Windows, Linux y Android.
-Future<bool> confirmNsfw18Access(BuildContext context) async {
+Future<bool> confirmNsfw18Access(
+  BuildContext context, {
+  // El texto por defecto habla de "esta extensión" (pensado para el toque
+  // sobre una tarjeta puntual). Filtrar una LISTA para revelar varias +18 de
+  // golpe (Instaladas, Repositorio) es otra situación y pide su propio
+  // texto — quien llama pasa el que corresponda.
+  String? contentText,
+}) async {
   if (PrismHubStorage.getSetting(SettingKey.enableNSFW) != true) {
     showPlatformSnackbar(
       context: context,
@@ -34,7 +41,7 @@ Future<bool> confirmNsfw18Access(BuildContext context) async {
   final confirmed = await showPlatformDialog(
     context: context,
     title: 'nsfw18.confirm-enter-title'.i18n,
-    content: Text('nsfw18.extension-enter-content'.i18n),
+    content: Text(contentText ?? 'nsfw18.extension-enter-content'.i18n),
     actions: [
       PlatformTextButton(
         onPressed: () => RouterUtils.pop(false),

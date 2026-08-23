@@ -379,7 +379,7 @@ class _SearchPageState extends State<SearchPage> {
           color: HomeTheme.bg,
           child: Stack(
             children: [
-              Positioned.fill(child: AnimatedBackgroundGlow()),
+              const Positioned.fill(child: AnimatedBackgroundGlow()),
               // La franja va DENTRO del área desplazable, como primer
               // elemento: se va con los resultados al bajar y vuelve al subir,
               // igual que el nombre de la app en el Inicio. Ver la nota en
@@ -441,7 +441,7 @@ class _SearchPageState extends State<SearchPage> {
       color: HomeTheme.bg,
       child: Stack(
         children: [
-          Positioned.fill(child: AnimatedBackgroundGlow()),
+          const Positioned.fill(child: AnimatedBackgroundGlow()),
           Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
@@ -473,9 +473,11 @@ class _SearchPageState extends State<SearchPage> {
                     // ancho, los filtros bajan a su propia línea en vez de
                     // pelear por el que queda.
                     LayoutBuilder(builder: (context, constraints) {
+                      // El botón de entrada a la Zona +18 se sacó de acá: un
+                      // acento rojo en la barra de Buscar es lo contrario de
+                      // discreto. Ahora entra por Ajustes (ver
+                      // settings_page.dart), igual que la Zona +18 entera.
                       final acciones = <Widget>[
-                        _buildNsfwButton(context),
-                        const SizedBox(width: 16),
                         SizedBox(
                           height: 32,
                           child: VerticalDivider(

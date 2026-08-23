@@ -9,7 +9,6 @@ import 'package:prismhub/controllers/watch/video_controller.dart';
 import 'package:prismhub/views/pages/home_page.dart';
 import 'package:prismhub/views/pages/library_page.dart';
 import 'package:prismhub/views/pages/history_page.dart';
-import 'package:prismhub/views/pages/nsfw18/nsfw18_zone_page.dart';
 import 'package:prismhub/controllers/main_controller.dart';
 import 'package:prismhub/views/pages/search/search_page.dart';
 import 'package:prismhub/views/pages/settings/settings_page.dart';
@@ -204,29 +203,11 @@ class _DesktopMainPageState extends State<DesktopMainPage> with WindowListener {
         displayMode: fluent.PaneDisplayMode.compact,
         footerItems: [
           fluent.PaneItemSeparator(),
-          fluent.PaneItem(
-            icon: const Icon(fluent.FluentIcons.warning,
-                color: Color(0xFFE5484D)),
-            title: Text('nsfw18.menu-label'.i18n),
-            body: const Nsfw18ZoneGate(),
-            onTap: () {
-              // Se manda la ruta actual (antes de entrar) como "from" — así,
-              // si se cancela/dice "no entrar" en la Zona +18, se vuelve
-              // ahí en vez de siempre a Home (ver Nsfw18ZoneGate/router.go
-              // reemplaza todo el stack, no hay "atrás" al que hacer pop).
-              // Si ya se estaba en /adult-zone (re-tocar el mismo item), no
-              // se manda from — evita un bucle donde cancelar reabre la
-              // misma Zona +18 y vuelve a preguntar.
-              final current = widget.state.uri.toString();
-              final from = current == '/adult-zone' ? null : current;
-              router.go(
-                Uri(
-                  path: '/adult-zone',
-                  queryParameters: from == null ? null : {'from': from},
-                ).toString(),
-              );
-            },
-          ),
+          // La entrada a la Zona +18 se sacó de acá: un ícono de advertencia
+          // rojo siempre visible en el panel lateral es lo contrario de
+          // discreto — cualquiera que mire la pantalla de reojo lo ve. Ahora
+          // vive dentro de Ajustes, junto al switch de NSFW (ver
+          // settings_page.dart), igual que ya estaba en Android.
           fluent.PaneItem(
             icon: const Icon(fluent.FluentIcons.repo),
             title: Text('common.extension-repo'.i18n),
@@ -1230,7 +1211,7 @@ class _OpcionFlotante extends StatelessWidget {
       ),
       child: Text(
         texto,
-        style: TextStyle(
+        style: const TextStyle(
           // La etiqueta va sobre una pastilla oscura: blanca siempre. Con el
           // color del tema quedaba negra sobre negro y las tres opciones
           // —Ajustes, Historial, Favoritos— se veían como cajas vacías.

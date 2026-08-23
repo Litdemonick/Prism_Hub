@@ -9,6 +9,7 @@ import 'package:prismhub/controllers/extension/extension_controller.dart';
 import 'package:prismhub/views/widgets/franja_de_zona.dart';
 import 'package:prismhub/views/widgets/extension/extension_tile.dart';
 import 'package:prismhub/views/pages/extension/extension_repo_page.dart';
+import 'package:prismhub/views/pages/nsfw18/nsfw18_access.dart';
 import 'package:prismhub/views/widgets/home/animated_background_glow.dart';
 import 'package:prismhub/views/widgets/home/home_theme.dart';
 import 'package:prismhub/views/widgets/home/indicadores_de_pagina.dart';
@@ -102,6 +103,32 @@ class _ExtensionPageState extends State<ExtensionPage> {
   // adentro de la propia AppBar, no en un diálogo aparte).
   final _androidSearchController = TextEditingController();
 
+  // Se pide el PIN para ver el filtro +18 de esta pantalla — por visita, no
+  // se guarda en disco ni se comparte con la Zona +18 ni con el Repositorio.
+  // Mientras esté en false, las +18 quedan afuera de CUALQUIER filtro (ver
+  // _applyFilters).
+  bool _nsfwDesbloqueado = false;
+
+  /// Cambia de filtro. Elegir _ExtFilter.nsfw dispara la compuerta
+  /// (confirmación + PIN) una sola vez por visita; el resto no pide nada.
+  Future<void> _elegirFiltro(_ExtFilter f) async {
+    if (f == _ExtFilter.nsfw && !_nsfwDesbloqueado) {
+      final ok = await confirmNsfw18Access(
+        context,
+        contentText: 'nsfw18.installed-enter-content'.i18n,
+      );
+      if (!mounted) return;
+      if (!ok) return;
+      setState(() => _nsfwDesbloqueado = true);
+    }
+    setState(() {
+      _filter = f;
+      // Vuelve a la página 0: con menos resultados, quedarse en una página
+      // más alta mostraba una lista vacía sin explicación.
+      _page = 0;
+    });
+  }
+
   // Explícito (en vez de dejar que Scrollbar/SingleChildScrollView se
   // adivinen entre sí) — sin esto el scrollbar no se puede arrastrar con el
   // mouse, mismo bug ya visto y arreglado en el repositorio de extensiones.
@@ -113,6 +140,11 @@ class _ExtensionPageState extends State<ExtensionPage> {
   List<T> _applyFilters<T extends dynamic>(List<T> all) {
     return all.where((e) {
       final ext = e.extension;
+      // Discreción: sin el PIN de esta visita, las +18 no aparecen en NINGÚN
+      // filtro (ni siquiera "Video" o "Todas") aunque el interruptor general
+      // esté prendido. El propio filtro "+18" es quien pide el PIN — ver
+      // dónde se elige _ExtFilter.nsfw, más abajo.
+      if (ext.nsfw && !_nsfwDesbloqueado) return false;
       if (_search.isNotEmpty && !SearchText.matchesQuery(ext.name, _search)) {
         return false;
       }
@@ -523,25 +555,36 @@ class _ExtensionPageState extends State<ExtensionPage> {
                     spacing: 8,
                     runSpacing: 8,
                     children: [
+                      // La Zona +18 no es un filtro más: va aparte, debajo,
+                      // separada por su propia línea — mismo criterio que la
+                      // pantalla de Buscar (ver search_page.dart).
                       for (final f in _ExtFilter.values)
-                        _ExtFilterChip(
-                          label: f.label,
-                          selected: _filter == f,
-                          onTap: () {
-                            // Las dos pantallas a la vez: la hoja para que el
-                            // chip se marque, y la página para que la lista se
-                            // rearme detrás mientras la hoja sigue abierta.
-                            setHoja(() {});
-                            setState(() {
-                              _filter = f;
-                              // Vuelve a la página 0: con menos resultados,
-                              // quedarse en la 3 mostraba una lista vacía sin
-                              // explicación.
-                              _page = 0;
-                            });
-                          },
-                        ),
+                        if (f != _ExtFilter.nsfw)
+                          _ExtFilterChip(
+                            label: f.label,
+                            selected: _filter == f,
+                            onTap: () async {
+                              await _elegirFiltro(f);
+                              // Las dos pantallas a la vez: la hoja para que
+                              // el chip se marque, y la página para que la
+                              // lista se rearme detrás mientras la hoja
+                              // sigue abierta.
+                              setHoja(() {});
+                            },
+                          ),
                     ],
+                  ),
+                  const SizedBox(height: 16),
+                  Divider(height: 1, color: HomeTheme.border),
+                  const SizedBox(height: 16),
+                  _ExtFilterChip(
+                    label: _ExtFilter.nsfw.label,
+                    selected: _filter == _ExtFilter.nsfw,
+                    accent: HomeTheme.accentRed,
+                    onTap: () async {
+                      await _elegirFiltro(_ExtFilter.nsfw);
+                      setHoja(() {});
+                    },
                   ),
                   const SizedBox(height: 20),
                   Divider(height: 1, color: HomeTheme.border),
@@ -601,19 +644,29 @@ class _ExtensionPageState extends State<ExtensionPage> {
       child: Row(
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
-          for (final f in _ExtFilter.values) ...[
-            if (f != _ExtFilter.todas) const SizedBox(width: 8),
-            _ExtFilterChip(
-              label: f.label,
-              selected: _filter == f,
-              onTap: () => setState(() {
-                _filter = f;
-                // La página vuelve a 0: con menos resultados, quedarse en la
-                // página 3 mostraba una lista vacía sin explicación.
-                _page = 0;
-              }),
-            ),
-          ],
+          for (final f in _ExtFilter.values)
+            if (f != _ExtFilter.nsfw) ...[
+              if (f != _ExtFilter.todas) const SizedBox(width: 8),
+              _ExtFilterChip(
+                label: f.label,
+                selected: _filter == f,
+                onTap: () => _elegirFiltro(f),
+              ),
+            ],
+          // La Zona +18 no es un filtro más: separada por una línea vertical,
+          // en rojo — mismo criterio que la pantalla de Buscar.
+          const SizedBox(width: 12),
+          SizedBox(
+            height: 24,
+            child: VerticalDivider(width: 1, color: HomeTheme.border),
+          ),
+          const SizedBox(width: 12),
+          _ExtFilterChip(
+            label: _ExtFilter.nsfw.label,
+            selected: _filter == _ExtFilter.nsfw,
+            accent: HomeTheme.accentRed,
+            onTap: () => _elegirFiltro(_ExtFilter.nsfw),
+          ),
         ],
       ),
     );
@@ -858,7 +911,7 @@ class _ExtensionPageState extends State<ExtensionPage> {
         // la Biblioteca, y acostado eso es media fila de tarjetas.
         body: Stack(
           children: [
-            Positioned.fill(child: AnimatedBackgroundGlow()),
+            const Positioned.fill(child: AnimatedBackgroundGlow()),
             // ── Acá la franja se queda fija ─────────────────────────────
             //
             // Es la única zona que no la puede meter dentro de su área
@@ -1087,7 +1140,7 @@ class _ExtensionPageState extends State<ExtensionPage> {
       color: HomeTheme.bg,
       child: Stack(
         children: [
-          Positioned.fill(child: AnimatedBackgroundGlow()),
+          const Positioned.fill(child: AnimatedBackgroundGlow()),
           Column(
             children: [
               // Encabezado (título + cuántas tiene instaladas + buscador)
@@ -1425,14 +1478,20 @@ class _ExtFilterChip extends StatelessWidget {
     required this.label,
     required this.selected,
     required this.onTap,
+    this.accent,
   });
 
   final String label;
   final bool selected;
   final VoidCallback onTap;
+  // Rosa de siempre (null), salvo el chip de la Zona +18 — mismo criterio
+  // que el resto de la app: "todo lo que en el buscador normal es rosa, en
+  // la zona +18 va en rojo" (ver search_page.dart).
+  final Color? accent;
 
   @override
   Widget build(BuildContext context) {
+    final color = accent ?? HomeTheme.accentPink;
     return GestureDetector(
       onTap: onTap,
       child: MouseRegion(
@@ -1442,17 +1501,17 @@ class _ExtFilterChip extends StatelessWidget {
           padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 7),
           decoration: BoxDecoration(
             color: selected
-                ? HomeTheme.accentPink.withValues(alpha: 0.18)
+                ? color.withValues(alpha: 0.18)
                 : HomeTheme.cardSurface,
             borderRadius: BorderRadius.circular(999),
             border: Border.all(
-              color: selected ? HomeTheme.accentPink : HomeTheme.border,
+              color: selected ? color : HomeTheme.border,
             ),
           ),
           child: Text(
             label,
             style: TextStyle(
-              color: selected ? HomeTheme.accentPink : HomeTheme.textMuted,
+              color: selected ? color : HomeTheme.textMuted,
               fontSize: 12.5,
               fontWeight: selected ? FontWeight.w700 : FontWeight.w500,
             ),
