@@ -771,7 +771,7 @@ class _ExtensionSearcherPageState extends fluent.State<ExtensionSearcherPage> {
           style: fluent.ContentDialogThemeData(
             decoration: BoxDecoration(
               color: HomeTheme.cardSurface,
-              borderRadius: BorderRadius.all(Radius.circular(14)),
+              borderRadius: const BorderRadius.all(Radius.circular(14)),
             ),
           ),
           title: Text(
@@ -1042,7 +1042,7 @@ class _ExtensionSearcherPageState extends fluent.State<ExtensionSearcherPage> {
         color: HomeTheme.bg,
         child: Stack(
           children: [
-            Positioned.fill(child: AnimatedBackgroundGlow()),
+            const Positioned.fill(child: AnimatedBackgroundGlow()),
             // Mientras no se sepa si hace falta actualizar (null) o si SÍ
             // hace falta (true), ni se pide ni se muestra ninguna card —
             // antes esto era solo un banner arriba con la grilla
@@ -1278,7 +1278,7 @@ class _ExtensionSearcherPageState extends fluent.State<ExtensionSearcherPage> {
       color: HomeTheme.bg,
       child: Stack(
         children: [
-          Positioned.fill(child: AnimatedBackgroundGlow()),
+          const Positioned.fill(child: AnimatedBackgroundGlow()),
           Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [

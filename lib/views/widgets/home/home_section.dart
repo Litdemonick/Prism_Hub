@@ -9,7 +9,7 @@ import 'package:prismhub/views/widgets/horizontal_scroll_fade.dart';
 // prev/next redondeados) sin tocar HorizontalList, que es compartido con
 // Búsqueda/otras páginas y no debía cambiar.
 class HomeSection extends StatefulWidget {
-  HomeSection({
+  const HomeSection({
     super.key,
     required this.title,
     required this.onClickMore,

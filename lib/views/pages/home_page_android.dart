@@ -2218,7 +2218,7 @@ class _TarjetaGrande extends StatelessWidget {
                             item.title,
                             maxLines: 2,
                             overflow: TextOverflow.ellipsis,
-                            style: TextStyle(
+                            style: const TextStyle(
                               fontSize: 16,
                               height: 1.2,
                               fontWeight: FontWeight.w800,
@@ -2232,7 +2232,7 @@ class _TarjetaGrande extends StatelessWidget {
                               // letras del fondo, y otra abierta y suave que
                               // hace de halo sobre una portada clara. Cuesta
                               // solo donde hay letras.
-                              shadows: const [
+                              shadows: [
                                 Shadow(blurRadius: 3, color: Color(0xE6000000)),
                                 Shadow(
                                     blurRadius: 12, color: Color(0xB3000000)),

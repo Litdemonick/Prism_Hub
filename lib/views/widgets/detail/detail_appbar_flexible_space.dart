@@ -240,8 +240,8 @@ class _DetailAppbarflexibleSpaceState extends State<DetailAppbarflexibleSpace> {
               begin: Alignment.topCenter,
               end: Alignment.bottomCenter,
               colors: [
-                Color(0x3308090D),
-                Color(0xE608090D),
+                const Color(0x3308090D),
+                const Color(0xE608090D),
                 HomeTheme.bg,
               ],
             ),
@@ -481,7 +481,7 @@ class _TituloDeLaFicha extends StatelessWidget {
         padding: const EdgeInsets.fromLTRB(24, 4, 24, 40),
         child: SelectableText(
           texto,
-          style: TextStyle(
+          style: const TextStyle(
             color: HomeTheme.sobrePortada,
             fontSize: 20,
             height: 1.35,

@@ -3,7 +3,6 @@ import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:flutter_i18n/flutter_i18n.dart';
 import 'package:get/get.dart';
-import 'package:prismhub/models/favorite.dart';
 import 'package:prismhub/controllers/home_controller.dart';
 import 'package:prismhub/models/index.dart';
 import 'package:prismhub/router/router.dart';
@@ -336,7 +335,7 @@ class _LibraryPageState extends State<LibraryPage> {
           color: HomeTheme.bg,
           child: Stack(
             children: [
-              Positioned.fill(child: AnimatedBackgroundGlow()),
+              const Positioned.fill(child: AnimatedBackgroundGlow()),
               LayoutBuilder(
                 builder: (context, outerConstraints) {
                   return SingleChildScrollView(

@@ -125,13 +125,13 @@ class _Nsfw18SearchGateState extends State<Nsfw18SearchGate> {
       // en vez de mostrar una pantalla vacía.
       WidgetsBinding.instance.addPostFrameCallback((_) => _close());
       return Scaffold(
-          backgroundColor: HomeTheme.bg, body: SizedBox.shrink());
+          backgroundColor: HomeTheme.bg, body: const SizedBox.shrink());
     }
     // Mientras el diálogo de confirmación está arriba, el fondo va en negro y
     // sin contenido: nada de contenido +18 antes de que confirme y ponga el PIN.
     if (!_confirmed) {
       return Scaffold(
-          backgroundColor: HomeTheme.bg, body: SizedBox.shrink());
+          backgroundColor: HomeTheme.bg, body: const SizedBox.shrink());
     }
     if (!_unlocked) {
       return Nsfw18LockPage(
@@ -177,7 +177,7 @@ class _Nsfw18SearchScaffold extends StatelessWidget {
                       }
                     },
                     child: Padding(
-                      padding: EdgeInsets.only(right: 12),
+                      padding: const EdgeInsets.only(right: 12),
                       child: Icon(Icons.arrow_back,
                           color: HomeTheme.textPrimary, size: 20),
                     ),

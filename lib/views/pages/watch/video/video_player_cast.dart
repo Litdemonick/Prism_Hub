@@ -161,13 +161,13 @@ class _VideoPlayerCastState extends State<VideoPlayerCast> {
             ),
             title: Text(
               descartado.nombre,
-              style: TextStyle(color: HomeTheme.oscuroTextoTenue),
+              style: const TextStyle(color: HomeTheme.oscuroTextoTenue),
             ),
             subtitle: Text(
               descartado.motivo,
               maxLines: 1,
               overflow: TextOverflow.ellipsis,
-              style: TextStyle(color: HomeTheme.oscuroTextoTenue),
+              style: const TextStyle(color: HomeTheme.oscuroTextoTenue),
             ),
           ),
         Padding(

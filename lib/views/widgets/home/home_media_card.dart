@@ -134,7 +134,7 @@ class HomeMediaCard extends StatefulWidget {
   static double androidLandscapeWidth = 144;
   static double androidLandscapeHeight = 200;
 
-  HomeMediaCard({
+  const HomeMediaCard({
     super.key,
     required this.title,
     this.subtitle,
@@ -879,7 +879,7 @@ class _WideMenuButton extends StatelessWidget {
 
   // Eran parámetros, con estos mismos valores por defecto. El único que los
   // pasaba distinto era el menú de encima de la portada, que ya no existe.
-  static Color _iconColor = HomeTheme.textMuted;
+  static final Color _iconColor = HomeTheme.textMuted;
   static const double _size = 28;
 
   final bool hidden;

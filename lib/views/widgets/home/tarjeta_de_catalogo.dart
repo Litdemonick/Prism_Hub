@@ -39,7 +39,7 @@ bool get _esTactil => Platform.isAndroid || Platform.isIOS;
 /// duración no siempre vienen. Cada uno se dibuja solo si está, y el panel se
 /// acomoda: nunca queda un hueco reservado para algo que no llegó.
 class TarjetaDeCatalogo extends StatefulWidget {
-  TarjetaDeCatalogo({
+  const TarjetaDeCatalogo({
     super.key,
     required this.titulo,
     this.subtitulo,
@@ -495,7 +495,7 @@ class _TarjetaDeCatalogoState extends State<TarjetaDeCatalogo> {
   /// entero.
   Widget _mientrasCarga() => DecoratedBox(
         decoration: BoxDecoration(color: HomeTheme.cardSurface),
-        child: Opacity(
+        child: const Opacity(
           opacity: 0.55,
           child: Image(
             image: AssetImage('assets/carddefaultoffline.png'),

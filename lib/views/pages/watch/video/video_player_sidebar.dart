@@ -1053,7 +1053,7 @@ class _FilaSeleccionable extends StatelessWidget {
             ),
           ),
           trailing: activo
-              ? Icon(Icons.check_rounded,
+              ? const Icon(Icons.check_rounded,
                   size: 18, color: HomeTheme.oscuroAcento)
               : null,
           onTap: onTap,
@@ -1085,7 +1085,7 @@ class _PanelVacio extends StatelessWidget {
             Text(
               texto,
               textAlign: TextAlign.center,
-              style: TextStyle(color: HomeTheme.oscuroTextoTenue, fontSize: 13),
+              style: const TextStyle(color: HomeTheme.oscuroTextoTenue, fontSize: 13),
             ),
           ],
         ),

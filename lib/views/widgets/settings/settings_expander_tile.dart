@@ -195,7 +195,7 @@ class _SettingsExpanderTileState extends State<SettingsExpanderTile> {
         side: BorderSide(color: HomeTheme.border),
       ),
       contentShape: (open) => RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(bottom: Radius.circular(10)),
+        borderRadius: const BorderRadius.vertical(bottom: Radius.circular(10)),
         side: BorderSide(color: HomeTheme.border),
       ),
       leading: widget.icon != null

@@ -51,7 +51,7 @@ class DetailCardTile extends StatelessWidget {
             ),
           ),
           Padding(
-            padding: EdgeInsets.symmetric(vertical: 13),
+            padding: const EdgeInsets.symmetric(vertical: 13),
             child: Divider(height: 1, color: HomeTheme.border),
           ),
           Padding(

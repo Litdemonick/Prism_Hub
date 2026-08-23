@@ -351,7 +351,7 @@ class _VideoPlayerMobileControlsState extends State<VideoPlayerMobileControls> {
                                               _c.isActuallyBuffering.value)))))
                           ? 1
                           : 0,
-                      child: Center(
+                      child: const Center(
                         child: DecoratedBox(
                           decoration: BoxDecoration(
                             // Disco oscuro detrás: sobre un fotograma claro
@@ -659,7 +659,7 @@ class _VideoPlayerMobileControlsState extends State<VideoPlayerMobileControls> {
                                   .withValues(alpha: 0.18),
                               border: Border.all(color: HomeTheme.oscuroAcento),
                             ),
-                            child: Icon(Icons.play_arrow,
+                            child: const Icon(Icons.play_arrow,
                                 color: HomeTheme.oscuroAcento, size: 36),
                           ),
                           const SizedBox(height: 10),
@@ -1226,7 +1226,7 @@ class _PanelCasteandoState extends State<_PanelCasteando>
           mainAxisSize: MainAxisSize.min,
           children: [
             if (conectando)
-              SizedBox(
+              const SizedBox(
                 width: 44,
                 height: 44,
                 child: CircularProgressIndicator(
@@ -1555,7 +1555,7 @@ class _Header extends StatelessWidget {
                   // nada en el medio de un episodio.
                   IconButton(
                     tooltip: 'common.disconnect'.i18n,
-                    icon: Icon(Icons.cast_connected,
+                    icon: const Icon(Icons.cast_connected,
                         color: HomeTheme.oscuroAcento),
                     onPressed: () => _confirmarDesconectar(context),
                   ),
@@ -1856,7 +1856,7 @@ class _Footer extends StatelessWidget {
                   // Resolviendo el servidor elegido — bloquear el botón para
                   // no permitir otro toque/doble intento mientras carga.
                   if (controller.isGettingWatchData.value) {
-                    return IconButton(
+                    return const IconButton(
                       onPressed: null,
                       icon: SizedBox(
                         width: 24,
