@@ -6763,7 +6763,7 @@ class VideoPlayerController extends GetxController with WidgetsBindingObserver {
       //
       // Así que primero se comprueba si es un MP4 —el `ftyp` de los primeros
       // bytes lo dice— y recién después se opina sobre dónde está el índice.
-      final esMp4 = texto.indexOf('ftyp') >= 0 && texto.indexOf('ftyp') < 16;
+      final esMp4 = texto.contains('ftyp') && texto.indexOf('ftyp') < 16;
       if (mdat < 0) {
         return esMp4
             ? 'es un MP4, pero el índice no entra en los primeros 2 KB'
@@ -7807,8 +7807,9 @@ class VideoPlayerController extends GetxController with WidgetsBindingObserver {
     if (!dlnaDevice.value!.permiteSaltar) {
       castAviso.value = 'video.cast-no-seek'.i18n;
       Timer(const Duration(milliseconds: 2000), () {
-        if (castAviso.value == 'video.cast-no-seek'.i18n)
+        if (castAviso.value == 'video.cast-no-seek'.i18n) {
           castAviso.value = null;
+        }
       });
       return;
     }
@@ -7951,8 +7952,9 @@ class VideoPlayerController extends GetxController with WidgetsBindingObserver {
       castBuscando.value = false;
       castAviso.value = 'video.cast-no-seek'.i18n;
       Timer(const Duration(milliseconds: 2000), () {
-        if (castAviso.value == 'video.cast-no-seek'.i18n)
+        if (castAviso.value == 'video.cast-no-seek'.i18n) {
           castAviso.value = null;
+        }
       });
     }
   }

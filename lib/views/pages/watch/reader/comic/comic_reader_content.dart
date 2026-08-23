@@ -762,7 +762,7 @@ class _ComicReaderContentState extends State<ComicReaderContent> {
             // venir de este Stack en realidad era una carrera aparte en
             // ComicController._jumpPage, ya arreglada — este Stack nunca
             // fue la causa real.)
-            Positioned.fill(child: AnimatedBackgroundGlow()),
+            const Positioned.fill(child: AnimatedBackgroundGlow()),
             LayoutBuilder(
               builder: (context, constraints) {
                 final maxWidth = constraints.maxWidth;

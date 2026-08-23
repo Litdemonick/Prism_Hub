@@ -76,7 +76,7 @@ class CopiaSeguridad {
     Set<String>? paquetes,
   }) async {
     if (clave.length < CopiaCifrado.largoMinimo) {
-      throw CopiaInvalida(
+      throw const CopiaInvalida(
         'La clave tiene que tener al menos '
         '${CopiaCifrado.largoMinimo} caracteres.',
       );
