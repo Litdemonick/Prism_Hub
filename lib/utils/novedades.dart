@@ -83,7 +83,7 @@ class Novedades {
     try {
       final detalle = await runtime.detail(h.url);
       final total = (detalle.episodes ?? [])
-          .fold<int>(0, (n, g) => n + (g.urls?.length ?? 0));
+          .fold<int>(0, (n, g) => n + g.urls.length);
       // La marca de tiempo se pone SIEMPRE que la consulta responda, haya
       // novedad o no: si solo se guardara al encontrar algo, una obra sin
       // novedades se consultaría en cada refresco del Home.
@@ -126,7 +126,7 @@ class Novedades {
     final grupos = detalle.episodes ?? [];
     for (final g in grupos.reversed) {
       final urls = g.urls;
-      if (urls != null && urls.isNotEmpty) return urls.last.name;
+      if (urls.isNotEmpty) return urls.last.name;
     }
     return null;
   }

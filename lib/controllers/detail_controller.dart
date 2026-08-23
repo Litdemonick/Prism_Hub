@@ -139,7 +139,7 @@ class DetailPageController extends GetxController {
     // 2) Sin estado: se cuenta. Más de un capítulo/episodio es serializado.
     final grupos = detail?.episodes;
     if (grupos == null || grupos.isEmpty) return false;
-    final total = grupos.fold<int>(0, (n, g) => n + (g.urls?.length ?? 0));
+    final total = grupos.fold<int>(0, (n, g) => n + g.urls.length);
     return total > 1;
   }
 

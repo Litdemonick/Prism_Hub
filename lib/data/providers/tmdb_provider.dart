@@ -22,7 +22,7 @@ class TmdbApi {
       if (results.isEmpty) {
         return null;
       }
-      return getDetail(
+      return await getDetail(
         results.first["id"],
         results.first["media_type"],
       );

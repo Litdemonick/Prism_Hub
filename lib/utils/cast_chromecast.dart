@@ -45,7 +45,7 @@ class ChromecastCliente {
   int? _sesionMedios;
 
   /// Último estado informado por el aparato.
-  final estado = _EstadoCast();
+  final estado = EstadoCast();
 
   /// Lo ultimo que el aparato dijo que salio mal, si dijo algo.
   ///
@@ -58,10 +58,10 @@ class ChromecastCliente {
   /// Lo último que informó el reproductor, para anotar solo los cambios.
   String? _ultimoPlayerState;
 
-  final _alCambiar = StreamController<_EstadoCast>.broadcast();
+  final _alCambiar = StreamController<EstadoCast>.broadcast();
 
   /// Avisa cada vez que llega un estado nuevo del aparato.
-  Stream<_EstadoCast> get cambios => _alCambiar.stream;
+  Stream<EstadoCast> get cambios => _alCambiar.stream;
 
   bool get conectado => _socket != null;
 
@@ -497,7 +497,7 @@ class ChromecastCliente {
 }
 
 /// Lo último que informó el aparato.
-class _EstadoCast {
+class EstadoCast {
   bool reproduciendo = false;
   bool cargando = false;
   bool parado = false;
