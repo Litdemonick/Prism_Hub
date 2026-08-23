@@ -67,7 +67,7 @@ class HomePage extends StatefulWidget {
   State<HomePage> createState() => _HomePageState();
 }
 
-class _HomePageState extends State<HomePage> {
+class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
   // Se reusa si ya existe: en Android, cambiar de pestaña reconstruye la
   // página entera, y crear otro tiraría el catálogo ya cargado.
   late final CatalogoExtensionesController c =
@@ -76,12 +76,44 @@ class _HomePageState extends State<HomePage> {
           : Get.put(CatalogoExtensionesController());
 
   @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addObserver(this);
+  }
+
+  @override
+  void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
+    super.dispose();
+  }
+
+  // Reportado en vivo en un Samsung A54: a veces, al volver la app de segundo
+  // plano, el scroll del Home queda "pegado" y no responde más al dedo. No se
+  // pudo reproducir acá (funciona en PC y en los Android de prueba), así que
+  // no hay forma de confirmar la causa exacta — pero es un síntoma conocido
+  // en Android cuando el sistema (más agresivo en algunas capas como One UI)
+  // suspende la superficie de dibujo en segundo plano y Flutter no siempre
+  // la relayoutea sola al volver.
+  //
+  // Un setState acá fuerza un relayout/repintado completo del árbol al
+  // volver a primer plano. Es de bajo riesgo (un solo rebuild extra, nunca en
+  // primer plano) aunque no esté confirmado que sea LA causa — si el reporte
+  // vuelve a repetirse después de esto, hace falta más detalle de en qué
+  // momento pasa para seguir buscando.
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.resumed && mounted) {
+      setState(() {});
+    }
+  }
+
+  @override
   Widget build(BuildContext context) {
     return Container(
       color: HomeTheme.bg,
       child: Stack(
         children: [
-          Positioned.fill(child: AnimatedBackgroundGlow()),
+          const Positioned.fill(child: AnimatedBackgroundGlow()),
           // El fondo animado es el mismo para los dos. De acá para abajo, cada
           // plataforma arma su Home entero.
           _esTactil ? HomeAndroid(c: c) : HomeWindows(c: c),
