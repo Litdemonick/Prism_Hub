@@ -1,3 +1,6 @@
+# Caché en tiempo de ejecución del SDK nativo de Sentry.
+.sentry-native/
+
 # Miscellaneous
 *.class
 *.log

@@ -111,6 +111,7 @@ dependencies:
   # el código de la app en sí también la necesita en runtime.
   image: ^4.8.0
   audio_service: ^0.18.19
+  sentry_flutter: ^8.14.2
 
 dev_dependencies:
   flutter_test:

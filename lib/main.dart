@@ -24,6 +24,8 @@ import 'package:prismhub/router/router.dart';
 import 'package:prismhub/utils/extension.dart';
 import 'package:prismhub/utils/i18n.dart';
 import 'package:prismhub/utils/prismhub_storage.dart';
+import 'package:prismhub/utils/sentry_config.dart';
+import 'package:sentry_flutter/sentry_flutter.dart';
 import 'package:prismhub/utils/application.dart';
 import 'package:prismhub/views/widgets/platform_widget.dart';
 import 'package:prismhub/utils/compartir.dart';
@@ -42,8 +44,32 @@ void main(List<String> args) async {
   }
 
   runZonedGuarded(() async {
+    // Sentry va ANTES que todo lo demás: los handlers de abajo lo usan, y si
+    // el DSN está vacío (SentryConfig.dsn) esto no hace nada — queda
+    // apagado hasta que alguien le ponga uno de verdad.
+    await SentryConfig.init();
+
     FlutterError.onError = (FlutterErrorDetails details) {
-      logger.severe("", details.exception, details.stack);
+      // details.exception a secas es solo el resumen ("A RenderFlex
+      // overflowed by 13 pixels..."), sin el widget/archivo/línea donde
+      // pasó — eso vive en el árbol de diagnóstico que arma
+      // details.toString(), y se estaba tirando. Sin esto había que
+      // reproducir el error a mano con la consola de flutter run abierta
+      // para saber DÓNDE, en vez de leerlo en el log ya guardado.
+      logger.severe(details.toString(), details.exception, details.stack);
+      // No await, y con try/catch propio: un fallo de Sentry (sin red, DSN
+      // vacío, lo que sea) no puede sumarse al error que se está reportando.
+      unawaited(_reportarASentry(details.exception, details.stack));
+    };
+
+    // Errores del motor nativo/engine que no pasan por el árbol de widgets
+    // (y por lo tanto no llegan a FlutterError.onError) — decodificación de
+    // video, canales de plataforma, etc. Devuelve true: ya se lo maneja acá,
+    // no hace falta que Flutter lo trate como fatal.
+    ui.PlatformDispatcher.instance.onError = (error, stack) {
+      logger.severe("", error, stack);
+      unawaited(_reportarASentry(error, stack));
+      return true;
     };
 
     // En release, el ErrorWidget por defecto de Flutter es un rectángulo GRIS
@@ -348,7 +374,20 @@ void main(List<String> args) async {
     runApp(const _AppRoot());
   }, (error, stack) {
     logger.severe("", error, stack);
+    unawaited(_reportarASentry(error, stack));
   });
+}
+
+/// Manda un error a Sentry si el reporte está habilitado (ver
+/// SentryConfig — apagado por defecto, y sin efecto si el DSN está vacío).
+/// Nunca deja que un fallo DE Sentry tumbe nada: es diagnóstico, no puede
+/// ser parte del problema.
+Future<void> _reportarASentry(Object error, StackTrace? stack) async {
+  try {
+    await Sentry.captureException(error, stackTrace: stack);
+  } catch (_) {
+    // Sin red, sin DSN configurado, lo que sea: se ignora en silencio.
+  }
 }
 
 /// Muestra la ventana en cuanto Flutter haya pintado su primer fotograma.
