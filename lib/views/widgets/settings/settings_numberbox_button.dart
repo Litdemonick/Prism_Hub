@@ -141,23 +141,30 @@ class _SettingNumboxButtonState extends State<SettingNumboxButton> {
           // aplicar, no el activo, para que se entienda qué pasa al tocarlo.
           Tooltip(
             message: 'settings.skip-step-hint'.i18n,
-            child: InkWell(
-              onTap: () => setState(() => buttonSwitch = !buttonSwitch),
-              borderRadius: BorderRadius.circular(999),
-              child: Container(
-                padding:
-                    const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
-                decoration: BoxDecoration(
-                  color: HomeTheme.accentPink.withValues(alpha: 0.16),
-                  borderRadius: BorderRadius.circular(999),
-                  border: Border.all(color: HomeTheme.accentPink),
-                ),
-                child: Text(
-                  buttonSwitch ? widget.button2text : widget.button1text,
-                  style: TextStyle(
-                    color: HomeTheme.accentPink,
-                    fontSize: 12,
-                    fontWeight: FontWeight.w700,
+            child: Material(
+              // Transparente: el fondo rosado ya lo pinta el Container de
+              // abajo. Sin este Material, el InkWell tira "No Material
+              // widget found" — a diferencia del de _stepButton, este no
+              // tenía ninguno propio.
+              color: Colors.transparent,
+              child: InkWell(
+                onTap: () => setState(() => buttonSwitch = !buttonSwitch),
+                borderRadius: BorderRadius.circular(999),
+                child: Container(
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+                  decoration: BoxDecoration(
+                    color: HomeTheme.accentPink.withValues(alpha: 0.16),
+                    borderRadius: BorderRadius.circular(999),
+                    border: Border.all(color: HomeTheme.accentPink),
+                  ),
+                  child: Text(
+                    buttonSwitch ? widget.button2text : widget.button1text,
+                    style: TextStyle(
+                      color: HomeTheme.accentPink,
+                      fontSize: 12,
+                      fontWeight: FontWeight.w700,
+                    ),
                   ),
                 ),
               ),
