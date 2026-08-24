@@ -1,7 +1,9 @@
 ﻿import 'package:flutter/material.dart';
 import 'package:prismhub/views/widgets/settings/settings_subtitle.dart';
 import 'package:prismhub/views/widgets/home/home_theme.dart';
+import 'package:prismhub/utils/platform_tv.dart';
 import 'package:prismhub/views/widgets/platform_widget.dart';
+import 'package:prismhub/views/widgets/tv/focusable_card.dart';
 
 class SettingsTile extends StatefulWidget {
   const SettingsTile({
@@ -112,9 +114,19 @@ class _SettingsTileState extends State<SettingsTile> {
 
   @override
   Widget build(BuildContext context) {
-    return PlatformBuildWidget(
+    final tile = PlatformBuildWidget(
       androidBuilder: _buildAndroid,
       desktopBuilder: _buildDesktop,
+    );
+    // En TV cada fila de Ajustes tiene que poder enfocarse con el mando. Las
+    // que no hacen nada al tocarse (un texto informativo, un interruptor que
+    // se maneja solo) se dejan como están: enfocarlas sería parar el
+    // recorrido en algo que no responde.
+    if (!PlatformTv.esTelevisionSync || widget.onTap == null) return tile;
+    return FocusableCard(
+      borderRadius: 12,
+      onTap: widget.onTap!,
+      child: IgnorePointer(child: tile),
     );
   }
 }

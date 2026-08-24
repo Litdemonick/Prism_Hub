@@ -22,7 +22,7 @@ import 'package:prismhub/views/widgets/home/home_theme.dart';
 // reconocible — y se difumina con una máscara hacia el degradado de la
 // izquierda, donde va el texto.
 class HomeHeroBanner extends StatelessWidget {
-  HomeHeroBanner({
+  const HomeHeroBanner({
     super.key,
     this.background,
     this.gradient,

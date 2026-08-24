@@ -1,1 +1,16 @@
+analyzer:
+  exclude:
+    - build/**
+    - android/**
+    - ios/**
+    - web/**
+    - windows/**
+    - macos/**
+    - linux/**
+    - temp/**
+    # Generados por Isar (build_runner): se pisan solos, no se editan a mano.
+    - "**/*.g.dart"
+  errors:
+    # Notas de trabajo pendiente, no errores: que no sumen al panel Problems.
+    todo: ignore
 include: package:flutter_lints/flutter.yaml

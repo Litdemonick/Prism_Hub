@@ -4,9 +4,11 @@ import 'package:get/get.dart';
 import 'package:prismhub/models/extension.dart';
 import 'package:prismhub/controllers/search_controller.dart';
 import 'package:prismhub/utils/extension.dart';
+import 'package:prismhub/utils/platform_tv.dart';
 import 'package:prismhub/utils/prismhub_storage.dart';
 import 'package:prismhub/views/pages/nsfw18/nsfw18_search_page.dart';
 import 'package:prismhub/views/pages/search/extension_searcher_page.dart';
+import 'package:prismhub/views/pages/search/search_page_tv.dart';
 import 'package:prismhub/views/widgets/franja_de_zona.dart';
 import 'package:prismhub/views/widgets/home/animated_background_glow.dart';
 import 'package:prismhub/views/widgets/home/home_theme.dart';
@@ -379,7 +381,7 @@ class _SearchPageState extends State<SearchPage> {
           color: HomeTheme.bg,
           child: Stack(
             children: [
-              Positioned.fill(child: AnimatedBackgroundGlow()),
+              const Positioned.fill(child: AnimatedBackgroundGlow()),
               // La franja va DENTRO del área desplazable, como primer
               // elemento: se va con los resultados al bajar y vuelve al subir,
               // igual que el nombre de la app en el Inicio. Ver la nota en
@@ -441,7 +443,7 @@ class _SearchPageState extends State<SearchPage> {
       color: HomeTheme.bg,
       child: Stack(
         children: [
-          Positioned.fill(child: AnimatedBackgroundGlow()),
+          const Positioned.fill(child: AnimatedBackgroundGlow()),
           Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
@@ -473,9 +475,11 @@ class _SearchPageState extends State<SearchPage> {
                     // ancho, los filtros bajan a su propia línea en vez de
                     // pelear por el que queda.
                     LayoutBuilder(builder: (context, constraints) {
+                      // El botón de entrada a la Zona +18 se sacó de acá: un
+                      // acento rojo en la barra de Buscar es lo contrario de
+                      // discreto. Ahora entra por Ajustes (ver
+                      // settings_page.dart), igual que la Zona +18 entera.
                       final acciones = <Widget>[
-                        _buildNsfwButton(context),
-                        const SizedBox(width: 16),
                         SizedBox(
                           height: 32,
                           child: VerticalDivider(
@@ -590,8 +594,41 @@ class _SearchPageState extends State<SearchPage> {
     );
   }
 
+  /// El buscador de TV: teclado en pantalla a la izquierda, resultados a la
+  /// derecha. Ver `search_page_tv.dart`.
+  Widget _buildTvSearch(BuildContext context) {
+    return Scaffold(
+      backgroundColor: HomeTheme.bg,
+      body: Stack(
+        children: [
+          const Positioned.fill(child: AnimatedBackgroundGlow()),
+          SafeArea(
+            child: Padding(
+              padding: const EdgeInsets.all(28),
+              child: SearchTV(
+                c: c,
+                accent: _accent,
+                onClickMore: (index) {
+                  Get.to(ExtensionSearcherPage(
+                    package: c.getPackgeByIndex(index),
+                    keyWord: c.search.value,
+                    soloAdulto: widget.nsfwOnly,
+                  ));
+                },
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
+    // TV primero: un Android TV sigue siendo `Platform.isAndroid`, así que
+    // sin este chequeo antes, PlatformBuildWidget lo manda al buscador de
+    // teléfono — con su teclado del sistema tapando media pantalla.
+    if (PlatformTv.esTelevisionSync) return _buildTvSearch(context);
     return PlatformBuildWidget(
       androidBuilder: _buildAndroidSearch,
       desktopBuilder: _buildDesktopSearch,

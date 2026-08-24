@@ -85,6 +85,7 @@ class _GridItemTileState extends State<GridItemTile> {
                     height: 20,
                     child: Text(
                       widget.title,
+                      maxLines: 1,
                       overflow: TextOverflow.ellipsis,
                       // ENCIMA de la portada, y por eso blanco fijo.
                       //
@@ -106,6 +107,7 @@ class _GridItemTileState extends State<GridItemTile> {
                   if (widget.subtitle != null)
                     Text(
                       widget.subtitle!,
+                      maxLines: 1,
                       overflow: TextOverflow.ellipsis,
                       // Mismo caso que el título: va sobre el velo. Blanco
                       // apagado en vez de textMuted, que en claro es un gris
@@ -201,6 +203,7 @@ class _GridItemTileState extends State<GridItemTile> {
               height: 20,
               child: Text(
                 widget.title,
+                maxLines: 1,
                 overflow: TextOverflow.ellipsis,
                 style: TextStyle(color: HomeTheme.textPrimary),
               ),
@@ -208,6 +211,8 @@ class _GridItemTileState extends State<GridItemTile> {
             if (widget.subtitle != null)
               Text(
                 widget.subtitle.toString(),
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
                 style: TextStyle(
                   fontSize: 12,
                   color: HomeTheme.textMuted,

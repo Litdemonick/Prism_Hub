@@ -334,8 +334,9 @@ class StreamSnifferService {
           controller.addJavaScriptHandler(
             handlerName: 'prismDebug',
             callback: (args) {
-              if (args.isNotEmpty)
+              if (args.isNotEmpty) {
                 logger.info('[sniffer/loader] ${args.first}');
+              }
               return null;
             },
           );
@@ -443,6 +444,99 @@ class StreamSnifferService {
     } catch (e) {
       logger.warning('[sniffer/embeds] error WebView: $e');
       finish([]);
+    }
+
+    final result = await completer.future;
+    await Future.delayed(const Duration(milliseconds: 150));
+    try {
+      await webView?.dispose();
+    } catch (_) {}
+    return result;
+  }
+
+  /// Carga [url] en un WebView oculto y devuelve el HTML final, ya con el
+  /// JavaScript de la página corrido.
+  ///
+  /// Para qué sirve: el pedido HTTP directo de las extensiones (jsRequest →
+  /// Dio) no ejecuta JavaScript, así que un sitio detrás de un desafío tipo
+  /// Cloudflare "Just a moment..." le devuelve la página del desafío en vez
+  /// del contenido real — y como Dio no lanza excepción por eso
+  /// (validateStatus:(_)=>true), la extensión lo recibe como si fuera una
+  /// respuesta válida y no tiene forma de notar la diferencia salvo mirar el
+  /// propio HTML. Un WebView de verdad corre el JS del desafío igual que un
+  /// navegador y termina en la página real.
+  ///
+  /// Mucho más lento que el pedido directo (segundos, no milisegundos: hay
+  /// que levantar un motor de renderizado entero) — pensado como RESPALDO,
+  /// no como reemplazo. La extensión decide cuándo hace falta (ver
+  /// _paginaDeVerificacion en extensions/ixxx), no esto.
+  static Future<String?> renderHtml(
+    String url, {
+    String? referer,
+    Duration timeout = const Duration(seconds: 20),
+    // Cuánto esperar sin que la página vuelva a navegar antes de darla por
+    // terminada. Un desafío resuelto redirige solo (onLoadStop se dispara de
+    // nuevo con la URL final) — sin este margen se leería el HTML del
+    // cartel "Just a moment..." en vez del contenido real de atrás.
+    Duration settle = const Duration(milliseconds: 2500),
+  }) async {
+    final completer = Completer<String?>();
+    HeadlessInAppWebView? webView;
+    Timer? timeoutTimer;
+    Timer? settleTimer;
+
+    void finish(String? html) {
+      if (completer.isCompleted) return;
+      timeoutTimer?.cancel();
+      settleTimer?.cancel();
+      completer.complete(html);
+    }
+
+    Future<void> leerHtml(InAppWebViewController controller) async {
+      try {
+        final html = await controller.evaluateJavascript(
+          source: 'document.documentElement.outerHTML',
+        );
+        finish(html?.toString());
+      } catch (e) {
+        logger.warning('[webview-html] error leyendo HTML de $url: $e');
+        finish(null);
+      }
+    }
+
+    try {
+      webView = HeadlessInAppWebView(
+        // Ver el comentario del otro HeadlessInAppWebView de este archivo.
+        webViewEnvironment: await ensureWebViewEnvironment(),
+        initialUrlRequest: URLRequest(
+          url: WebUri(url),
+          headers: referer != null ? {'Referer': referer} : null,
+        ),
+        initialSettings: InAppWebViewSettings(
+          userAgent: PrismHubStorage.getUASetting(),
+          javaScriptEnabled: true,
+          javaScriptCanOpenWindowsAutomatically: false,
+          supportMultipleWindows: false,
+          transparentBackground: true,
+          isInspectable: false,
+        ),
+        onLoadStop: (controller, uri) {
+          // Cada carga —la del desafío y, si redirige, la de la página
+          // final— reinicia la espera. Si no llega otra dentro de [settle],
+          // se da esa por terminada.
+          settleTimer?.cancel();
+          settleTimer = Timer(settle, () => leerHtml(controller));
+        },
+      );
+
+      await webView.run();
+      timeoutTimer = Timer(timeout, () {
+        logger.info('[webview-html] timeout esperando $url');
+        finish(null);
+      });
+    } catch (e) {
+      logger.warning('[webview-html] error iniciando WebView oculto: $e');
+      finish(null);
     }
 
     final result = await completer.future;

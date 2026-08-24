@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:io';
 
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:get/get.dart';
 import 'package:prismhub/controllers/catalogo_extensiones_controller.dart';
 import 'package:prismhub/controllers/main_controller.dart';
@@ -10,7 +11,10 @@ import 'package:prismhub/router/router.dart';
 import 'package:prismhub/utils/breakpoints.dart';
 import 'package:prismhub/utils/extension.dart';
 import 'package:prismhub/utils/i18n.dart';
+import 'package:prismhub/utils/platform_tv.dart';
+import 'package:prismhub/views/pages/extension/extension_repo_page.dart';
 import 'package:prismhub/views/pages/history_page.dart';
+import 'package:prismhub/views/pages/library_page.dart';
 import 'package:prismhub/views/widgets/cache_network_image.dart';
 import 'package:prismhub/views/pages/home/ultimas_actualizaciones_mangadex_page.dart';
 import 'package:prismhub/views/widgets/home/animated_background_glow.dart';
@@ -18,6 +22,8 @@ import 'package:prismhub/views/widgets/home/esqueleto.dart';
 import 'package:prismhub/views/widgets/home/home_theme.dart';
 import 'package:prismhub/views/widgets/home/indicadores_de_pagina.dart';
 import 'package:prismhub/views/widgets/home/tarjeta_de_catalogo.dart';
+import 'package:prismhub/views/widgets/tv/focusable_card.dart';
+import 'package:prismhub/views/widgets/zona_en_creacion.dart';
 
 // ── Por qué está partido en tres archivos ───────────────────────────────────
 //
@@ -39,6 +45,7 @@ import 'package:prismhub/views/widgets/home/tarjeta_de_catalogo.dart';
 // nadie sabría dónde buscar.
 part 'home_page_android.dart';
 part 'home_page_windows.dart';
+part 'home_page_tv.dart';
 
 /// El Home: **descubrir, con lo que traen tus extensiones**.
 ///
@@ -67,7 +74,7 @@ class HomePage extends StatefulWidget {
   State<HomePage> createState() => _HomePageState();
 }
 
-class _HomePageState extends State<HomePage> {
+class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
   // Se reusa si ya existe: en Android, cambiar de pestaña reconstruye la
   // página entera, y crear otro tiraría el catálogo ya cargado.
   late final CatalogoExtensionesController c =
@@ -76,15 +83,54 @@ class _HomePageState extends State<HomePage> {
           : Get.put(CatalogoExtensionesController());
 
   @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addObserver(this);
+  }
+
+  @override
+  void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
+    super.dispose();
+  }
+
+  // Reportado en vivo en un Samsung A54: a veces, al volver la app de segundo
+  // plano, el scroll del Home queda "pegado" y no responde más al dedo. No se
+  // pudo reproducir acá (funciona en PC y en los Android de prueba), así que
+  // no hay forma de confirmar la causa exacta — pero es un síntoma conocido
+  // en Android cuando el sistema (más agresivo en algunas capas como One UI)
+  // suspende la superficie de dibujo en segundo plano y Flutter no siempre
+  // la relayoutea sola al volver.
+  //
+  // Un setState acá fuerza un relayout/repintado completo del árbol al
+  // volver a primer plano. Es de bajo riesgo (un solo rebuild extra, nunca en
+  // primer plano) aunque no esté confirmado que sea LA causa — si el reporte
+  // vuelve a repetirse después de esto, hace falta más detalle de en qué
+  // momento pasa para seguir buscando.
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.resumed && mounted) {
+      setState(() {});
+    }
+  }
+
+  @override
   Widget build(BuildContext context) {
     return Container(
       color: HomeTheme.bg,
       child: Stack(
         children: [
-          Positioned.fill(child: AnimatedBackgroundGlow()),
-          // El fondo animado es el mismo para los dos. De acá para abajo, cada
-          // plataforma arma su Home entero.
-          _esTactil ? HomeAndroid(c: c) : HomeWindows(c: c),
+          const Positioned.fill(child: AnimatedBackgroundGlow()),
+          // El fondo animado es el mismo para las tres. De acá para abajo,
+          // cada plataforma arma su Home entero.
+          //
+          // TV primero: un Android TV sigue siendo `Platform.isAndroid ==
+          // true`, así que si no se pregunta ACÁ primero, `_esTactil` se lo
+          // lleva puesto y termina en HomeAndroid, con controles pensados
+          // para el dedo y nada de foco D-pad.
+          _esTelevision
+              ? HomeTV(c: c)
+              : (_esTactil ? HomeAndroid(c: c) : HomeWindows(c: c)),
         ],
       ),
     );
@@ -93,7 +139,7 @@ class _HomePageState extends State<HomePage> {
 
 /// Qué Home se dibuja.
 ///
-/// Va por plataforma y NO por ancho de pantalla, y es a propósito: son dos
+/// Va por plataforma y NO por ancho de pantalla, y es a propósito: son
 /// diseños distintos, no uno que se estira. El ancho sigue mandando ADENTRO de
 /// cada uno —cuántas columnas entran, qué tan grande es el título— y para eso
 /// está `Ancho`.
@@ -101,6 +147,10 @@ class _HomePageState extends State<HomePage> {
 /// En escritorio el Home queda exactamente como estaba, se achique la ventana
 /// hasta donde se achique.
 bool get _esTactil => Platform.isAndroid || Platform.isIOS;
+
+/// Si esto es un Android TV. Se pregunta ANTES que [_esTactil] en el
+/// bifurcado de arriba — ver el comentario ahí.
+bool get _esTelevision => PlatformTv.esTelevisionSync;
 
 // ─── Piezas compartidas ──────────────────────────────────────────────────────
 

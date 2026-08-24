@@ -175,7 +175,7 @@ class PlaylistAndroidTile extends StatelessWidget {
                 ),
                 if (selected)
                   Padding(
-                    padding: EdgeInsets.only(left: 10),
+                    padding: const EdgeInsets.only(left: 10),
                     child: Icon(
                       Icons.check_circle,
                       size: 20,

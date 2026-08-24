@@ -109,8 +109,19 @@ class _SearchAllTileState extends State<SearchAllTile> {
 
   /// El alto de la fila. Sigue al ancho: la portada guarda su proporción y
   /// debajo van el título y la línea de la extensión.
+  ///
+  /// Antes usaba HomeMediaCard.androidHeight (233) y 280 en escritorio, que
+  /// eran el alto de la tarjeta CARGADA (imagen flexible + título +
+  /// subtítulo) pero no alcanzaban para el esqueleto de espera: EsqueletoTarjeta
+  /// arma su bloque de portada con proporción FIJA 2:3 (ancho*3/2 de alto) más
+  /// 38 de textos (8+12+6+12), y esa cuenta da más que la tarjeta cargada.
+  /// Con el número viejo, la fila entera desbordaba por la diferencia
+  /// mientras esperaba resultados — confirmado en vivo: "overflowed by 13
+  /// pixels" en escritorio (293 necesarios contra 280 disponibles) y por más
+  /// todavía en el teléfono (290 contra 233). El número de acá es el que
+  /// pide el esqueleto, con la MISMA fórmula que EsqueletoTarjeta.
   static double get altoFila =>
-      Platform.isAndroid ? HomeMediaCard.androidHeight : 280;
+      anchoTarjeta * 3 / 2 + 8 + 12 + 6 + 12;
 
   Widget _cargando() {
     final alto = altoFila;

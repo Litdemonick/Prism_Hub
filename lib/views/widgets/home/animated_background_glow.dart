@@ -7,7 +7,7 @@ import 'package:prismhub/views/widgets/home/home_theme.dart';
 // Fondo ambiental animado. Usa gradientes radiales en vez de blur gaussiano:
 // el look sigue siendo suave, pero evita un ImageFilter.blur por frame.
 class AnimatedBackgroundGlow extends StatefulWidget {
-  AnimatedBackgroundGlow({super.key, this.accent});
+  const AnimatedBackgroundGlow({super.key, this.accent});
 
   // Zona +18: se pasa HomeTheme.accentRed para diferenciarla visualmente del
   // Home normal, reusando este mismo widget en vez de duplicarlo.

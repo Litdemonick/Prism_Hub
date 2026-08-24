@@ -25,7 +25,11 @@ class PrismRequest {
     // a mitad de camino en una red lenta. Los fetches chicos (catálogo de
     // extensiones, scripts) le ponen su propio receiveTimeout por request.
     dio = Dio(BaseOptions(
-      connectTimeout: const Duration(seconds: 15),
+      // 20s y no 15: reportado que conexiones internacionales con latencia
+      // alta (rutas largas, ISP con inspección) tardan más en abrir la
+      // conexión que en una red normal, y a los 15 cortaba antes de que el
+      // sitio llegara a contestar.
+      connectTimeout: const Duration(seconds: 20),
       sendTimeout: const Duration(seconds: 15),
     ));
     final cookieManager = CookieManager(_cookieJar);
@@ -102,8 +106,10 @@ class PrismRequest {
 
   static Dio dioForPackage(String package) {
     return _extensionDios.putIfAbsent(package, () {
+      // Mismo ajuste que el Dio global (ver ensureInitialized): 20s para
+      // darle margen a conexiones internacionales con latencia alta.
       final d = Dio(BaseOptions(
-        connectTimeout: const Duration(seconds: 15),
+        connectTimeout: const Duration(seconds: 20),
         sendTimeout: const Duration(seconds: 15),
       ));
       d.interceptors.add(CookieManager(cookieJarForPackage(package)));

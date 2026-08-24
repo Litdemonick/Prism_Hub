@@ -3,7 +3,6 @@ import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:flutter_i18n/flutter_i18n.dart';
 import 'package:get/get.dart';
-import 'package:prismhub/models/favorite.dart';
 import 'package:prismhub/controllers/home_controller.dart';
 import 'package:prismhub/controllers/main_controller.dart';
 import 'package:prismhub/models/index.dart';
@@ -125,7 +124,7 @@ class _Nsfw18ZoneGateState extends State<Nsfw18ZoneGate> {
       return const _Nsfw18DisabledPage();
     }
     if (!_confirmed) {
-      return Scaffold(backgroundColor: HomeTheme.bg, body: SizedBox.shrink());
+      return Scaffold(backgroundColor: HomeTheme.bg, body: const SizedBox.shrink());
     }
     if (!_unlocked) {
       return Nsfw18LockPage(

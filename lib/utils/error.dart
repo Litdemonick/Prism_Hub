@@ -37,6 +37,12 @@ bool isConnectionError(Object? error) {
     'no address associated',
     'software caused connection abort',
     'xmlhttprequest error',
+    // Fallo de TLS: típico de un ISP/firewall interceptando o cortando la
+    // conexión antes de que llegue al sitio real (más común en conexiones
+    // internacionales o países con bloqueo por proveedor) — no es "el sitio
+    // está caído", es que la conexión nunca se estableció de verdad.
+    'handshakeexception',
+    'connection terminated during handshake',
     // Timeouts propios de Dio (connectTimeout/receiveTimeout/sendTimeout) —
     // el mensaje de Dio no incluye ninguna de las frases de arriba.
     //

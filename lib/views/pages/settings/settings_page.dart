@@ -11,6 +11,7 @@ import 'package:prismhub/utils/portadas_perdidas.dart';
 import 'package:prismhub/router/router.dart';
 import 'package:prismhub/utils/bloqueador_anuncios.dart';
 import 'package:prismhub/utils/modo_app.dart';
+import 'package:prismhub/views/pages/extension/extension_repo_page.dart';
 import 'package:prismhub/views/pages/settings/bloqueador_page.dart';
 import 'package:prismhub/views/pages/settings/copia_elegir_extensiones.dart';
 import 'package:prismhub/views/pages/settings/copia_resultado.dart';
@@ -19,7 +20,9 @@ import 'package:fluent_ui/fluent_ui.dart' as fluent;
 import 'package:flutter/material.dart';
 import 'package:flutter_i18n/flutter_i18n.dart';
 import 'package:get/get.dart';
+import 'package:go_router/go_router.dart';
 import 'package:prismhub/views/pages/nsfw18/nsfw18_age_dialog.dart';
+import 'package:prismhub/views/pages/nsfw18/nsfw18_search_page.dart';
 import 'package:prismhub/views/widgets/button.dart';
 import 'package:prismhub/views/widgets/messenger.dart';
 import 'package:prismhub/data/providers/tmdb_provider.dart';
@@ -205,7 +208,7 @@ class _SettingsPageState extends State<SettingsPage> {
                 await PrismHubStorage.setSetting(SettingKey.keyJ, -10.0);
                 await PrismHubStorage.setSetting(SettingKey.arrowLeft, -2.0);
                 await PrismHubStorage.setSetting(SettingKey.arrowRight, 2.0);
-                if (!context.mounted) return;
+                if (!mounted) return;
                 setState(() {});
                 showPlatformSnackbar(
                   context: context,
@@ -779,7 +782,7 @@ class _SettingsPageState extends State<SettingsPage> {
             onPressed: () async {
               await PrismHubStorage.setSetting(SettingKey.arrowLeft, -2.0);
               await PrismHubStorage.setSetting(SettingKey.arrowRight, 2.0);
-              if (!context.mounted) return;
+              if (!mounted) return;
               setState(() {});
               showPlatformSnackbar(
                 context: context,
@@ -941,12 +944,7 @@ class _SettingsPageState extends State<SettingsPage> {
         icon: fluent.FluentIcons.developer_tools,
         androidIcon: Icons.construction,
         title: 'settings.general'.i18n,
-        // En celular la entrada a la Zona +18 vive DENTRO de General (en
-        // escritorio está en el panel lateral), así que el subtítulo lo dice
-        // solo ahí — si no, mandaría a buscar algo que en PC no está acá.
-        subTitle: Platform.isAndroid
-            ? 'settings.general-subtitle-android'.i18n
-            : 'settings.general-subtitle'.i18n,
+        subTitle: 'settings.general-subtitle'.i18n,
         content: Column(
           children: [
             // TMDB KEY 设置
@@ -1090,7 +1088,22 @@ class _SettingsPageState extends State<SettingsPage> {
                 PrismHubStorage.setSetting(SettingKey.autoPlayNext, value);
               },
             ),
-            // NSFW
+          ],
+        ),
+      ),
+      const SizedBox(height: 10),
+      // Zona +18: caja propia y no metida dentro de "General" — antes estaba
+      // ahí, mezclada con TMDB/idioma/actualizaciones, así que costaba
+      // encontrarla. Junto todo lo +18 en un solo lugar: el interruptor
+      // general, la entrada a la Zona, la búsqueda +18 (solo escritorio, ver
+      // más abajo) y el PIN.
+      SettingsExpanderTile(
+        icon: fluent.FluentIcons.warning,
+        androidIcon: Icons.warning_amber_rounded,
+        title: 'nsfw18.title'.i18n,
+        subTitle: 'settings.nsfw18-section-subtitle'.i18n,
+        content: Column(
+          children: [
             SettingsSwitchTile(
               title: 'settings.nsfw'.i18n,
               buildSubtitle: () => "settings.nsfw-subtitle".i18n,
@@ -1149,17 +1162,51 @@ class _SettingsPageState extends State<SettingsPage> {
                 await ExtensionUtils.setApagadasPorNsfw(const []);
               },
             ),
-            // Desktop ya tiene su propia entrada discreta en el panel de
-            // navegación (footerItems, ver main_page.dart) — acá solo hace
-            // falta en Android, que no tiene ese panel.
-            if (Platform.isAndroid)
+            const SizedBox(height: 10),
+            // Antes, en escritorio esto vivía como ícono de advertencia
+            // siempre visible en el panel lateral (footerItems de
+            // main_page.dart) — lo contrario de discreto. Ahora entra por
+            // Ajustes en las tres plataformas, igual que ya estaba en
+            // Android.
+            SettingsTile(
+              icon: const Icon(Icons.warning_amber_rounded,
+                  color: Color(0xFFE5484D)),
+              title: 'nsfw18.menu-label'.i18n,
+              trailing: const Icon(Icons.chevron_right),
+              onTap: () {
+                // Get.to no navega en escritorio: el navegador de GetX no
+                // está activo ahí (main.dart usa GetMaterialApp con home
+                // solo para Android) — mismo motivo que openNsfw18Search.
+                if (Platform.isAndroid) {
+                  Get.to(const Nsfw18ZoneGate());
+                  return;
+                }
+                // Se manda la ruta actual como "from": si se cancela dentro
+                // de la Zona +18, se vuelve a Ajustes en vez de a Home (ver
+                // Nsfw18ZoneGate — router.go reemplaza todo el stack, no hay
+                // "atrás" al que hacer pop).
+                final current = GoRouterState.of(context).uri.toString();
+                router.go(
+                  Uri(
+                    path: '/adult-zone',
+                    queryParameters: {'from': current},
+                  ).toString(),
+                );
+              },
+            ),
+            // Solo en escritorio: en Android la entrada a la búsqueda +18 ya
+            // está dentro de la propia pantalla de Buscar (ver
+            // search_page.dart), no hace falta repetirla acá.
+            if (!Platform.isAndroid) ...[
+              const SizedBox(height: 10),
               SettingsTile(
-                icon: const Icon(Icons.warning_amber_rounded,
-                    color: Color(0xFFE5484D)),
-                title: 'nsfw18.menu-label'.i18n,
+                icon: const Icon(Icons.search, color: Color(0xFFE5484D)),
+                title: 'nsfw18.search-zone-title'.i18n,
                 trailing: const Icon(Icons.chevron_right),
-                onTap: () => Get.to(const Nsfw18ZoneGate()),
+                onTap: () => openNsfw18Search(context),
               ),
+            ],
+            const SizedBox(height: 10),
             const Nsfw18PinSettingsTile(),
           ],
         ),
@@ -1173,6 +1220,29 @@ class _SettingsPageState extends State<SettingsPage> {
         subTitle: 'settings.extension-subtitle'.i18n,
         content: Column(
           children: [
+            // Solo Android (teléfono y TV): en escritorio esto ya vive
+            // siempre a la vista en el panel lateral, así que repetirlo acá
+            // sería un atajo a algo que ya está enfrente. En TV es el ÚNICO
+            // camino: sin barra de navegación propia ahí (ver main_page.dart),
+            // Ajustes es de dónde tiene que salir todo lo que no es
+            // contenido.
+            if (Platform.isAndroid) ...[
+              SettingsTile(
+                icon: const Icon(Icons.extension_outlined),
+                title: 'common.extension-installed'.i18n,
+                trailing: const Icon(Icons.chevron_right),
+                onTap: () => Get.find<MainController>()
+                    .changeTab(MainController.tabExtensiones),
+              ),
+              const SizedBox(height: 8),
+              SettingsTile(
+                icon: const Icon(Icons.travel_explore_outlined),
+                title: 'settings.extension-repo-open'.i18n,
+                trailing: const Icon(Icons.chevron_right),
+                onTap: () => Get.to(() => const ExtensionRepoPage()),
+              ),
+              const SizedBox(height: 8),
+            ],
             SettingsIntpuTile(
               title: 'settings.repo-url'.i18n,
               // Bloqueado, igual que el proxy. Vaciarlo o escribir cualquier
@@ -1794,7 +1864,7 @@ class _SettingsPageState extends State<SettingsPage> {
         color: HomeTheme.bg,
         child: Stack(
           children: [
-            Positioned.fill(child: AnimatedBackgroundGlow()),
+            const Positioned.fill(child: AnimatedBackgroundGlow()),
             // ListView.builder y no ListView(children:): la segunda forma
             // MONTA todos los hijos de una, y esta página son varias secciones
             // pesadas (en escritorio, Expander de fluent). Eso trababa la
@@ -1834,7 +1904,7 @@ class _SettingsPageState extends State<SettingsPage> {
         color: HomeTheme.bg,
         child: Stack(
           children: [
-            Positioned.fill(child: AnimatedBackgroundGlow()),
+            const Positioned.fill(child: AnimatedBackgroundGlow()),
             // Ver el mismo cambio en la versión Android.
             Builder(builder: (context) {
               final items = _buildContent();

@@ -1,3 +1,8 @@
+# Carpeta residual de cuando probamos Sentry — el .run.lock lo tiene tomado
+# el prismhub.exe que sigue corriendo, se puede borrar del disco cuando se
+# cierre. Ignorada por si tarda en irse.
+.sentry-native/
+
 # Miscellaneous
 *.class
 *.log

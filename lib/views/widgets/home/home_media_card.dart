@@ -4,8 +4,10 @@ import 'dart:ui' show ImageFilter;
 import 'package:flutter/material.dart';
 import 'package:prismhub/models/extension.dart';
 import 'package:prismhub/utils/i18n.dart';
+import 'package:prismhub/utils/platform_tv.dart';
 import 'package:prismhub/views/widgets/cache_network_image.dart';
 import 'package:prismhub/views/widgets/home/home_theme.dart';
+import 'package:prismhub/views/widgets/tv/focusable_card.dart';
 
 // Tarjeta de medio — calca el spec exacto del diseño (MediaCard.dc.html):
 // 180x250, radio 14, degradado de fondo si no hay portada, badge arriba a
@@ -134,7 +136,7 @@ class HomeMediaCard extends StatefulWidget {
   static double androidLandscapeWidth = 144;
   static double androidLandscapeHeight = 200;
 
-  HomeMediaCard({
+  const HomeMediaCard({
     super.key,
     required this.title,
     this.subtitle,
@@ -564,6 +566,28 @@ class _HomeMediaCardState extends State<HomeMediaCard> {
 
   @override
   Widget build(BuildContext context) {
+    // En TV la tarjeta se envuelve para que el D-pad pueda enfocarla —
+    // igual que ExtensionItemCard, y por el mismo motivo: sin esto la
+    // Biblioteca (y cualquier otra pantalla que use esta tarjeta) se ve
+    // pero no se puede recorrer con el mando.
+    //
+    // El `IgnorePointer` apaga los gestos que la tarjeta trae adentro: con
+    // los dos activos, un click abría la ficha dos veces. Se pierde el menú
+    // de mantener apretado (ocultar/borrar), que es un gesto de dedo sin
+    // equivalente en un control remoto — en TV esas acciones ya viven en
+    // sus propias pantallas.
+    if (PlatformTv.esTelevisionSync) {
+      return FocusableCard(
+        borderRadius: 10,
+        accent: widget.acento,
+        onTap: widget.onTap ?? () {},
+        child: IgnorePointer(child: _construir(context)),
+      );
+    }
+    return _construir(context);
+  }
+
+  Widget _construir(BuildContext context) {
     if (widget.horizontal) return _buildHorizontal(context);
     final hasCover = !widget.hidden &&
         (widget.cover?.isNotEmpty == true || widget.coverFile != null);
@@ -879,7 +903,7 @@ class _WideMenuButton extends StatelessWidget {
 
   // Eran parámetros, con estos mismos valores por defecto. El único que los
   // pasaba distinto era el menú de encima de la portada, que ya no existe.
-  static Color _iconColor = HomeTheme.textMuted;
+  static final Color _iconColor = HomeTheme.textMuted;
   static const double _size = 28;
 
   final bool hidden;

@@ -17,13 +17,21 @@ pluginManagement {
 plugins {
     id "dev.flutter.flutter-plugin-loader" version "1.0.0"
     id "com.android.application" version "8.11.1" apply false
-    // El Kotlin Gradle Plugin ya NO se declara aca: lo aplica Flutter por su
-    // cuenta (Kotlin integrado). Declararlo aparte avisa que va a romper la
-    // compilacion en versiones futuras de Flutter.
+    // El Kotlin integrado de Flutter (FlutterPluginUtils.isBuiltInKotlinEnabled)
+    // SIEMPRE devuelve false con un AGP menor a 9.0.0 — y este proyecto tiene
+    // 8.11.1. O sea que no declararlo acá no lo deja en manos de Flutter: lo
+    // deja en manos de CUALQUIERA de los plugins de terceros que apliquen
+    // org.jetbrains.kotlin.android por su cuenta (device_info_plus, share_plus
+    // y otros seis, ver el aviso de compilación) con LA VERSIÓN QUE ELLOS
+    // HAYAN PINEADO — que puede quedar vieja mucho antes de que sus autores la
+    // actualicen. Eso fue justo lo que rompió el build: Flutter subió su
+    // mínimo a Kotlin 2.2.20 y uno de esos plugins seguía pidiendo 2.0.0.
     //
-    // OJO: esto solo saca el aviso de NUESTRO proyecto. El otro aviso, el de
-    // los 8 plugins que aplican KGP por su cuenta (device_info_plus, share_plus
-    // y compania), no depende de nosotros: lo tienen que arreglar sus autores.
+    // Declararlo ACÁ, a una versión más nueva, gana la resolución de Gradle
+    // (que toma la mayor versión pedida para un mismo plugin) sin tener que
+    // esperar a esos autores ni tocar cada plugin. Cuando el proyecto suba a
+    // AGP 9+, esto se saca y el Kotlin integrado pasa a hacerse cargo solo.
+    id "org.jetbrains.kotlin.android" version "2.2.20" apply false
 }
 
 include ":app"

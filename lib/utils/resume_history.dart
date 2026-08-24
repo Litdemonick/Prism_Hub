@@ -283,7 +283,7 @@ class _ResumeHistoryLoaderPageState extends State<_ResumeHistoryLoaderPage> {
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: HomeTheme.bg,
-      body: Center(child: ProgressRing()),
+      body: const Center(child: ProgressRing()),
     );
   }
 }
@@ -344,7 +344,7 @@ class _DeferredResumeWatchPage extends StatelessWidget {
       pushAnimation: pushAnimation,
       placeholder: Scaffold(
         backgroundColor: HomeTheme.bg,
-        body: Center(child: ProgressRing()),
+        body: const Center(child: ProgressRing()),
       ),
       builder: (context) => WatchPage(
         cover: target.detail.cover,

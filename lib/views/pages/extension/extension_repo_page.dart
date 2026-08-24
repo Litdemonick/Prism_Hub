@@ -16,6 +16,8 @@ import 'package:prismhub/views/widgets/button.dart';
 import 'package:prismhub/views/widgets/platform_widget.dart';
 import 'package:prismhub/views/widgets/search_appbar.dart';
 import 'package:prismhub/views/widgets/messenger.dart';
+import 'package:prismhub/views/pages/nsfw18/nsfw18_access.dart';
+import 'package:prismhub/utils/platform_tv.dart';
 
 class ExtensionRepoPage extends StatefulWidget {
   const ExtensionRepoPage({super.key});
@@ -44,6 +46,28 @@ class _ExtensionRepoPageState extends State<ExtensionRepoPage> {
   final _langFlyoutController = fluent.FlyoutController();
   final _nsfwFlyoutController = fluent.FlyoutController();
   final _installedFlyoutController = fluent.FlyoutController();
+
+  // Se pide el PIN para ver el filtro +18 de esta pantalla — por visita, no
+  // se guarda en disco ni se comparte con la Zona +18. Mientras esté en
+  // false, las +18 quedan afuera de la lista aunque el interruptor general
+  // esté prendido (ver _content()).
+  bool _nsfwDesbloqueado = false;
+
+  /// Aplica el filtro +18 del selector. Elegir 'all' o 'sfw' no pide nada —
+  /// solo 'nsfw' dispara la compuerta (confirmación + PIN), y una sola vez
+  /// por visita a esta pantalla.
+  Future<void> _elegirFiltroNsfw(String v) async {
+    if (v == 'nsfw' && !_nsfwDesbloqueado) {
+      final ok = await confirmNsfw18Access(
+        context,
+        contentText: 'nsfw18.repo-enter-content'.i18n,
+      );
+      if (!mounted) return;
+      if (!ok) return;
+      setState(() => _nsfwDesbloqueado = true);
+    }
+    c.searchNsfw.value = v;
+  }
 
   // Paginación de "Instaladas"/"Disponibles" — con muchas extensiones el
   // grid/lista se volvía larguísimo de scrollear. Estado local (no en el
@@ -205,14 +229,31 @@ class _ExtensionRepoPageState extends State<ExtensionRepoPage> {
                       const SizedBox(width: 12),
                       Expanded(
                         child: FilledButton(
-                          onPressed: () {
+                          onPressed: () async {
+                            // El +18 se resuelve aparte, con la hoja todavía
+                            // abierta detrás: si cancela el PIN, se aplican
+                            // los otros tres filtros igual pero éste vuelve a
+                            // 'all' — cancelar el PIN no debería tirar abajo
+                            // el resto de lo que ya había elegido.
+                            if (contenido == 'nsfw' && !_nsfwDesbloqueado) {
+                              final ok = await confirmNsfw18Access(
+                                context,
+                                contentText: 'nsfw18.repo-enter-content'.i18n,
+                              );
+                              if (!mounted) return;
+                              if (ok) {
+                                setState(() => _nsfwDesbloqueado = true);
+                              } else {
+                                contenido = 'all';
+                              }
+                            }
                             // Todo junto y una sola vez: cambiar cada valor por
                             // separado disparaba una reconstruccion por filtro.
                             c.searchType.value = tipo;
                             c.searchLevel.value = nivel;
                             c.searchNsfw.value = contenido;
                             c.searchInstalled.value = estado;
-                            Navigator.of(context).pop();
+                            if (context.mounted) Navigator.of(context).pop();
                           },
                           child: Text('common.confirm'.i18n),
                         ),
@@ -622,6 +663,12 @@ class _ExtensionRepoPageState extends State<ExtensionRepoPage> {
       final quiereNsfw = c.searchNsfw.value == 'nsfw';
       extensionCards.removeWhere((element) => element.nsfw != quiereNsfw);
     }
+    // Discreción: sin el PIN de esta visita, las +18 no aparecen aunque el
+    // filtro de arriba diga 'all' o 'nsfw' — se pide en el propio selector,
+    // ver _elegirFiltroNsfw.
+    if (!_nsfwDesbloqueado) {
+      extensionCards.removeWhere((element) => element.nsfw);
+    }
     switch (c.searchInstalled.value) {
       case 'installed':
         extensionCards.removeWhere(
@@ -731,7 +778,14 @@ class _ExtensionRepoPageState extends State<ExtensionRepoPage> {
         Widget listRender(List<Widget> cards) =>
             Column(mainAxisSize: MainAxisSize.min, children: cards);
         return ListView(
-          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+          // En TV, más aire a los costados y sobre todo ABAJO: la tarjeta
+          // enfocada crece y le sale su marco, así que la última quedaba
+          // mordida contra el borde de la lista y no había forma de verla
+          // entera. El relleno de abajo también da a dónde desplazarse
+          // cuando el foco llega al final.
+          padding: PlatformTv.esTelevisionSync
+              ? const EdgeInsets.fromLTRB(26, 14, 26, 96)
+              : const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
           children: [
             ...paginatedSection(
               headerKey: 'extension-repo.installed',
@@ -879,7 +933,7 @@ class _ExtensionRepoPageState extends State<ExtensionRepoPage> {
         ),
         body: Stack(
           children: [
-            Positioned.fill(child: AnimatedBackgroundGlow()),
+            const Positioned.fill(child: AnimatedBackgroundGlow()),
             EasyRefresh(
               onRefresh: c.onRefresh,
               header: const ClassicHeader(
@@ -899,7 +953,7 @@ class _ExtensionRepoPageState extends State<ExtensionRepoPage> {
       color: HomeTheme.bg,
       child: Stack(
         children: [
-          Positioned.fill(child: AnimatedBackgroundGlow()),
+          const Positioned.fill(child: AnimatedBackgroundGlow()),
           Column(
             children: [
               // Encabezado + filtros: centrados con ancho máximo, fijos
@@ -1046,7 +1100,7 @@ class _ExtensionRepoPageState extends State<ExtensionRepoPage> {
                                         ),
                                         onPressed: () {
                                           fluent.Flyout.of(context).close();
-                                          c.searchNsfw.value = v;
+                                          _elegirFiltroNsfw(v);
                                         },
                                       ),
                                   ],

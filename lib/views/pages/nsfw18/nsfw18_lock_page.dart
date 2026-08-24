@@ -5,6 +5,8 @@ import 'package:prismhub/utils/i18n.dart';
 import 'package:prismhub/utils/nsfw18_biometric.dart';
 import 'package:prismhub/utils/nsfw18_zone.dart';
 import 'package:prismhub/views/widgets/home/home_theme.dart';
+import 'package:prismhub/utils/platform_tv.dart';
+import 'package:prismhub/views/widgets/tv/pad_numerico_tv.dart';
 
 // Pantalla de bloqueo de la Zona +18. Dos modos según si ya hay un PIN
 // guardado (ver Nsfw18Zone.isPinConfigured):
@@ -24,6 +26,16 @@ class _Nsfw18LockPageState extends State<Nsfw18LockPage> {
   late final bool _isSetup = !Nsfw18Zone.isPinConfigured;
   final _pinController = TextEditingController();
   final _confirmController = TextEditingController();
+
+  /// A qué campo le escribe el pad numérico de TV.
+  ///
+  /// Al configurar el PIN hay dos: se llena el primero y, cuando ya tiene
+  /// algo, se pasa solo al de confirmación. Sin esto habría que elegir el
+  /// campo a mano con el mando antes de poder escribir.
+  TextEditingController _campoActivo() {
+    if (!_isSetup) return _pinController;
+    return _pinController.text.isEmpty ? _pinController : _confirmController;
+  }
   final _focusNode = FocusNode();
   String? _error;
   bool _submitting = false;
@@ -245,6 +257,11 @@ class _Nsfw18LockPageState extends State<Nsfw18LockPage> {
                           controller: _pinController,
                           focusNode: _focusNode,
                           obscureText: true,
+                          // En TV no se enfoca: se escribe con el pad de
+                          // abajo, y enfocarlo levantaría el teclado del
+                          // sistema encima de todo.
+                          readOnly: PlatformTv.esTelevisionSync,
+                          canRequestFocus: !PlatformTv.esTelevisionSync,
                           keyboardType: TextInputType.number,
                           inputFormatters: [
                             FilteringTextInputFormatter.digitsOnly
@@ -261,6 +278,8 @@ class _Nsfw18LockPageState extends State<Nsfw18LockPage> {
                           TextField(
                             controller: _confirmController,
                             obscureText: true,
+                            readOnly: PlatformTv.esTelevisionSync,
+                            canRequestFocus: !PlatformTv.esTelevisionSync,
                             keyboardType: TextInputType.number,
                             inputFormatters: [
                               FilteringTextInputFormatter.digitsOnly
@@ -271,6 +290,34 @@ class _Nsfw18LockPageState extends State<Nsfw18LockPage> {
                             decoration:
                                 _decoration('nsfw18.pin-confirm-label'.i18n),
                             onSubmitted: (_) => _submit(),
+                          ),
+                        ],
+                        // El pad numérico, solo en TV: los campos de arriba
+                        // siguen mostrando lo escrito, pero acá no se
+                        // enfocan (ver más abajo) para que Android no
+                        // levante su teclado encima.
+                        //
+                        // Al configurar el PIN hay DOS campos, así que el pad
+                        // escribe en el que corresponda: primero el PIN y,
+                        // cuando ese ya tiene algo, la confirmación. Es lo
+                        // mismo que haría alguien con un teclado, sin tener
+                        // que elegir el campo a mano.
+                        if (PlatformTv.esTelevisionSync) ...[
+                          const SizedBox(height: 18),
+                          Center(
+                            child: PadNumericoTv(
+                              onDigito: (d) {
+                                final campo = _campoActivo();
+                                if (campo.text.length >= 8) return;
+                                setState(() => campo.text += d);
+                              },
+                              onBorrar: () {
+                                final campo = _campoActivo();
+                                if (campo.text.isEmpty) return;
+                                setState(() => campo.text = campo.text
+                                    .substring(0, campo.text.length - 1));
+                              },
+                            ),
                           ),
                         ],
                         if (_error != null) ...[

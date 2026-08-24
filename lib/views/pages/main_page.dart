@@ -9,7 +9,6 @@ import 'package:prismhub/controllers/watch/video_controller.dart';
 import 'package:prismhub/views/pages/home_page.dart';
 import 'package:prismhub/views/pages/library_page.dart';
 import 'package:prismhub/views/pages/history_page.dart';
-import 'package:prismhub/views/pages/nsfw18/nsfw18_zone_page.dart';
 import 'package:prismhub/controllers/main_controller.dart';
 import 'package:prismhub/views/pages/search/search_page.dart';
 import 'package:prismhub/views/pages/settings/settings_page.dart';
@@ -17,6 +16,7 @@ import 'package:prismhub/router/router.dart';
 import 'package:prismhub/utils/application.dart';
 import 'package:prismhub/utils/i18n.dart';
 import 'package:prismhub/utils/modo_app.dart';
+import 'package:prismhub/utils/platform_tv.dart';
 import 'package:prismhub/utils/prismhub_storage.dart';
 import 'package:prismhub/views/widgets/window_caption_buttons.dart';
 import 'package:window_manager/window_manager.dart';
@@ -204,29 +204,11 @@ class _DesktopMainPageState extends State<DesktopMainPage> with WindowListener {
         displayMode: fluent.PaneDisplayMode.compact,
         footerItems: [
           fluent.PaneItemSeparator(),
-          fluent.PaneItem(
-            icon: const Icon(fluent.FluentIcons.warning,
-                color: Color(0xFFE5484D)),
-            title: Text('nsfw18.menu-label'.i18n),
-            body: const Nsfw18ZoneGate(),
-            onTap: () {
-              // Se manda la ruta actual (antes de entrar) como "from" — así,
-              // si se cancela/dice "no entrar" en la Zona +18, se vuelve
-              // ahí en vez de siempre a Home (ver Nsfw18ZoneGate/router.go
-              // reemplaza todo el stack, no hay "atrás" al que hacer pop).
-              // Si ya se estaba en /adult-zone (re-tocar el mismo item), no
-              // se manda from — evita un bucle donde cancelar reabre la
-              // misma Zona +18 y vuelve a preguntar.
-              final current = widget.state.uri.toString();
-              final from = current == '/adult-zone' ? null : current;
-              router.go(
-                Uri(
-                  path: '/adult-zone',
-                  queryParameters: from == null ? null : {'from': from},
-                ).toString(),
-              );
-            },
-          ),
+          // La entrada a la Zona +18 se sacó de acá: un ícono de advertencia
+          // rojo siempre visible en el panel lateral es lo contrario de
+          // discreto — cualquiera que mire la pantalla de reojo lo ve. Ahora
+          // vive dentro de Ajustes, junto al switch de NSFW (ver
+          // settings_page.dart), igual que ya estaba en Android.
           fluent.PaneItem(
             icon: const Icon(fluent.FluentIcons.repo),
             title: Text('common.extension-repo'.i18n),
@@ -395,6 +377,48 @@ class ObservadorDePila extends NavigatorObserver {
   @override
   void didPop(Route<dynamic> route, Route<dynamic>? previousRoute) {
     if (route is PageRoute && previousRoute != null) _contar(-1);
+    _devolverElFoco(previousRoute);
+  }
+
+  /// Le devuelve el foco a la pantalla que queda a la vista.
+  ///
+  /// ── Por qué hace falta ────────────────────────────────────────────────
+  ///
+  /// Al cerrar una pantalla, el widget que tenía el foco se va con ella y el
+  /// foco queda en el aire. Con dedo o mouse no se nota —el próximo toque lo
+  /// arregla— pero con un control remoto es fatal: sin nada enfocado, las
+  /// flechas no tienen desde dónde moverse y la app queda congelada.
+  ///
+  /// Pasaba al volver de Extensiones, Favoritos o Ajustes con el botón de
+  /// atrás del mando.
+  void _devolverElFoco(Route<dynamic>? destino) {
+    if (!PlatformTv.esTelevisionSync) return;
+    final contexto = destino?.navigator?.context;
+    if (contexto == null) return;
+    // Después del cuadro: durante el pop el árbol todavía se está
+    // desarmando, y pedir foco ahí no llega a ningún lado.
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!contexto.mounted) return;
+      final ambito = FocusScope.of(contexto);
+      // `focusedChild` es lo que esa pantalla tenía enfocado antes de que le
+      // abrieran algo encima: devolvérselo deja al usuario donde estaba, no
+      // en el primer elemento de la lista.
+      //
+      // Ojo con el caso que rompía todo (medido en vivo): ese "hijo
+      // enfocado" puede ser OTRO ÁMBITO, no un widget. Devolverle el foco a
+      // un ámbito deja al mando sin destino —las flechas no tienen desde
+      // dónde salir— y la app queda congelada hasta cerrarla. Por eso solo
+      // vale si es un nodo de verdad.
+      final anterior = ambito.focusedChild;
+      if (anterior != null &&
+          anterior is! FocusScopeNode &&
+          anterior.context != null &&
+          anterior.canRequestFocus) {
+        anterior.requestFocus();
+        return;
+      }
+      ambito.nextFocus();
+    });
   }
 
   @override
@@ -556,7 +580,14 @@ class _AndroidMainPageState extends fluent.State<AndroidMainPage> {
                 // solas, y a las otras se les puso.
                 _noConnectionBanner(),
                 Expanded(
-                  child: _apaisado(context)
+                  // TV primero: sin riel ni barra flotante — son diseño de
+                  // teléfono/tablet, pensados para dedo y pulgar. En TV la
+                  // navegación entre secciones va por la barra propia de
+                  // `HomeTV` (Buscar/Favoritos/Historial/Ajustes) y por
+                  // Ajustes; acá no hay nada que dibujar aparte del contenido.
+                  child: PlatformTv.esTelevisionSync
+                      ? _buildPages()
+                      : _apaisado(context)
                       // ── Teléfono acostado: riel a la izquierda ─────────────
                       //
                       // Abajo no puede quedarse. En horizontal el alto es lo único
@@ -644,7 +675,7 @@ class _AndroidMainPageState extends fluent.State<AndroidMainPage> {
           // Una tablet es una pantalla táctil grande, no un escritorio: le sirve
           // lo mismo que al teléfono, con más aire. El aire ya lo da `_margen`,
           // que en `amplio` y `enorme` deja 32 y 48 píxeles a los costados.
-          bottomNavigationBar: _apaisado(context)
+          bottomNavigationBar: (PlatformTv.esTelevisionSync || _apaisado(context))
               ? null
               : AnimatedSlide(
                   offset: _barraEscondida ? const Offset(0, 1.6) : Offset.zero,
@@ -1072,6 +1103,16 @@ class _AndroidMainPageState extends fluent.State<AndroidMainPage> {
       children: [
         for (var i = 0; i < zonas.length; i++)
           RepaintBoundary(
+            // ── Sin un FocusScope por zona ──────────────────────────────
+            //
+            // Se probó darle a cada zona su propio ámbito (para que
+            // recordara en qué tarjeta estabas al volver) y salió mucho
+            // peor: al volver de Extensiones el foco quedaba en un ámbito
+            // apagado y la app se congelaba del todo — había que cerrarla.
+            //
+            // Que el foco vuelva donde estaba se resuelve en el observador
+            // de navegación (ver _devolverElFoco), que es donde de verdad se
+            // sabe que una pantalla se cerró.
             child: TickerMode(
               enabled: i == c.selectedTab.value,
               // ── Sin SafeArea de abajo tampoco ──────────────────────
@@ -1230,7 +1271,7 @@ class _OpcionFlotante extends StatelessWidget {
       ),
       child: Text(
         texto,
-        style: TextStyle(
+        style: const TextStyle(
           // La etiqueta va sobre una pastilla oscura: blanca siempre. Con el
           // color del tema quedaba negra sobre negro y las tres opciones
           // —Ajustes, Historial, Favoritos— se veían como cajas vacías.

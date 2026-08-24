@@ -144,12 +144,21 @@ dependencies {
 }
 
 ext.abiCodes = ["x86_64": 1, "armeabi-v7a": 2, "arm64-v8a": 3]
-import com.android.build.OutputFile
-android.applicationVariants.all { variant ->
-    variant.outputs.each { output ->
-        def abiVersionCode = project.ext.abiCodes.get(output.getFilter(OutputFile.ABI))
-        if (abiVersionCode != null) {
-            output.versionCodeOverride = variant.versionCode * 10 + abiVersionCode
+// Migrado de la Variant API vieja (android.applicationVariants.all +
+// com.android.build.OutputFile), que AGP saca del todo en algún momento y
+// mientras tanto el IDE la marca en rojo aunque compile. La de acá es la
+// que reemplaza: cada output pasa a tener su versionCode propio como
+// Property, en vez de un versionCodeOverride suelto en el objeto viejo.
+androidComponents {
+    onVariants(selector().all()) { variant ->
+        variant.outputs.each { output ->
+            def filtroAbi = output.filters.find {
+                it.filterType == com.android.build.api.variant.FilterConfiguration.FilterType.ABI
+            }
+            def abiVersionCode = filtroAbi != null ? project.ext.abiCodes.get(filtroAbi.identifier) : null
+            if (abiVersionCode != null) {
+                output.versionCode.set(flutterVersionCode.toInteger() * 10 + abiVersionCode)
+            }
         }
     }
 }

@@ -9,6 +9,8 @@ import 'package:prismhub/controllers/watch/video_controller.dart';
 import 'package:prismhub/views/pages/watch/video/video_player_desktop_controls.dart';
 import 'package:prismhub/views/pages/watch/video/video_player_mobile_controls.dart';
 import 'package:prismhub/views/widgets/watch/tutorial_reproductor.dart';
+import 'package:prismhub/utils/platform_tv.dart';
+import 'package:prismhub/views/pages/watch/video/video_player_tv_controls.dart';
 
 class VideoPlayerConten extends StatefulWidget {
   const VideoPlayerConten({
@@ -99,6 +101,24 @@ class _VideoPlayerContenState extends State<VideoPlayerConten> {
   Widget build(BuildContext context) {
     final c = widget.controller;
     Widget controls() {
+      // ── En TV NO van los controles de teléfono ──────────────────────────
+      //
+      // Los de Android son 100% gestuales: arrastrar para el volumen y el
+      // brillo, doble toque para adelantar, deslizar la barra. Con un mando
+      // no hay ninguno de esos gestos, así que ahí la pantalla queda sin
+      // forma de hacer nada.
+      //
+      // Los de escritorio ya están hechos alrededor del TECLADO (ver el mapa
+      // `keyboardShortcuts` del controlador: flechas, espacio, teclas de
+      // medios) — y el D-pad de un televisor llega a Flutter exactamente
+      // como esas mismas teclas. O sea que es la variante que ya sirve, sin
+      // escribir una tercera.
+      // TV tiene su propia barra, pensada para el mando — pero por debajo
+      // sigue montado el motor de los controles de escritorio, que es lo
+      // que hace andar el reproductor. Ver video_player_tv_controls.dart.
+      if (PlatformTv.esTelevisionSync) {
+        return VideoPlayerTvControls(key: _controlsKey, controller: c);
+      }
       if (Platform.isAndroid) {
         return VideoPlayerMobileControls(key: _controlsKey, controller: c);
       }
@@ -184,7 +204,26 @@ class _VideoPlayerContenState extends State<VideoPlayerConten> {
           subtitleViewConfiguration: const SubtitleViewConfiguration(
             visible: false,
           ),
-          controls: (state) => controls(),
+          // El cuadro congelado, tapando el hueco de la reapertura al saltar.
+          //
+          // Va DENTRO de `controls` a propósito: así queda encima de la imagen
+          // pero DEBAJO de los botones, que tienen que seguir viéndose y
+          // respondiendo mientras dura. Por fuera del Video los habría tapado.
+          //
+          // Es null salvo durante un salto, así que el resto del tiempo esto no
+          // dibuja nada.
+          controls: (state) => Stack(
+            fit: StackFit.expand,
+            children: [
+              Obx(() {
+                final foto = c.cuadroCongelado.value;
+                if (foto == null) return const SizedBox.shrink();
+                return Image.memory(foto,
+                    fit: BoxFit.contain, gaplessPlayback: true);
+              }),
+              controls(),
+            ],
+          ),
         ),
       );
     });

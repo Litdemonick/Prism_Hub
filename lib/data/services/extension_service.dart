@@ -7,6 +7,7 @@ import 'package:get/get.dart';
 import 'package:html/dom.dart';
 import 'package:html/parser.dart';
 import 'package:prismhub/data/services/extension_jscore_plugin.dart';
+import 'package:prismhub/data/services/stream_sniffer_service.dart';
 import 'package:prismhub/utils/log.dart';
 import 'package:prismhub/utils/prismhub_storage.dart';
 import 'package:prismhub/utils/request.dart';
@@ -129,7 +130,10 @@ class ExtensionService {
             // respuesta deja esperando para siempre, sin ningún timeout que
             // lo rescate — el reproductor queda pegado en "Obteniendo
             // enlace..." sin forma de recuperarse salvo cerrar la app.
-            receiveTimeout: const Duration(seconds: 20),
+            // 25s y no 20: margen extra para sitios servidos desde lejos con
+            // latencia alta (mismo motivo que el connectTimeout de
+            // request.dart).
+            receiveTimeout: const Duration(seconds: 25),
           ),
         );
         log.requestHeaders = res.requestOptions.headers;
@@ -164,6 +168,35 @@ class ExtensionService {
         );
         rethrow;
       }
+    }
+
+    // Respaldo de jsRequest para sitios que bloquean el pedido HTTP directo
+    // (Dio no corre JavaScript, así que un desafío tipo Cloudflare "Just a
+    // moment..." le llega a la extensión como si fuera la respuesta real —
+    // ver StreamSnifferService.renderHtml). Mucho más lento a propósito: la
+    // extensión lo pide solo cuando ya notó que jsRequest volvió bloqueada,
+    // no en cada pedido.
+    jsRequestViaWebview(dynamic args) async {
+      final url = args[0].toString();
+      final headers = (args.length > 1 && args[1] is Map)
+          ? Map<String, dynamic>.from(args[1]['headers'] ?? {})
+          : <String, dynamic>{};
+      final referer = headers['Referer']?.toString();
+
+      final log = ExtensionNetworkLog(
+        extension: extension,
+        url: url,
+        method: 'GET (webview)',
+        requestHeaders: headers,
+      );
+      final key = UniqueKey().toString();
+      ExtensionUtils.addNetworkLog(key, log);
+
+      final html = await StreamSnifferService.renderHtml(url, referer: referer);
+      log.responseBody = html;
+      log.statusCode = html != null ? 200 : null;
+      ExtensionUtils.addNetworkLog(key, log);
+      return html ?? '';
     }
 
     jsRegisterSetting(dynamic args) async {
@@ -275,6 +308,8 @@ class ExtensionService {
     runtime.onMessage('log', (args) => jsLog(args));
     // 请求
     runtime.onMessage('request', (args) => jsRequest(args));
+    // Respaldo vía WebView (ver jsRequestViaWebview)
+    runtime.onMessage('requestViaWebview', (args) => jsRequestViaWebview(args));
     // 设置
     runtime.onMessage('registerSetting', (args) => jsRegisterSetting(args));
     // 清理扩展设置
@@ -308,6 +343,7 @@ class ExtensionService {
       jsBridge = JsBridge(jsRuntime: runtime);
       handleDartBridge('cleanSettings$className', jsCleanSettings);
       handleDartBridge('request$className', jsRequest);
+      handleDartBridge('requestViaWebview$className', jsRequestViaWebview);
       handleDartBridge('log$className', jsLog);
       handleDartBridge('queryXPath$className', jsQueryXPath);
       handleDartBridge('removeSelector$className', jsRemoveSelector);

@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 import 'package:prismhub/controllers/detail_controller.dart';
 import 'package:prismhub/utils/compartir.dart';
+import 'package:prismhub/utils/platform_tv.dart';
 import 'package:prismhub/utils/i18n.dart';
 import 'package:prismhub/views/widgets/messenger.dart';
 import 'package:prismhub/views/widgets/home/home_theme.dart';
@@ -118,8 +119,16 @@ class DetailShareButton extends StatelessWidget {
   }
 
   @override
-  Widget build(BuildContext context) => PlatformBuildWidget(
-        androidBuilder: _buildAndroid,
-        desktopBuilder: _buildDesktop,
-      );
+  Widget build(BuildContext context) {
+    // En TV no va. Compartir abre el menú del sistema para mandarle el
+    // enlace a otra app (chat, correo): en un televisor no hay ninguna de
+    // esas, y en escritorio el respaldo es "copiado al portapapeles", que
+    // ahí tampoco lleva a ningún lado. Un botón que no puede terminar lo que
+    // ofrece es peor que no tenerlo.
+    if (PlatformTv.esTelevisionSync) return const SizedBox.shrink();
+    return PlatformBuildWidget(
+      androidBuilder: _buildAndroid,
+      desktopBuilder: _buildDesktop,
+    );
+  }
 }

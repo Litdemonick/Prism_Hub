@@ -593,7 +593,7 @@ class BloqueadorAnuncios {
     final malos = <String>{};
     for (final l in listas()) {
       if (!l.activa) continue;
-      final suyos = await _leerDominios(l.url);
+      final suyos = _leerDominios(l.url);
       juntos.addAll(suyos);
       // Aparte se junta lo que es PELIGROSO, no solo molesto: un dominio de
       // EasyList es un servidor de anuncios y no hay nada que avisar, pero uno
@@ -797,7 +797,7 @@ class BloqueadorAnuncios {
     final fuera = <String>[];
     for (final l in listas()) {
       if (!l.activa || !_esDeSeguridad(l.url)) continue;
-      final suyos = await _leerDominios(l.url);
+      final suyos = _leerDominios(l.url);
       if (niveles.any(suyos.contains)) fuera.add(l.nombre);
     }
     return fuera;

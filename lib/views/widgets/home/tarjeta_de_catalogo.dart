@@ -5,6 +5,7 @@ import 'package:prismhub/utils/breakpoints.dart';
 import 'package:prismhub/utils/i18n.dart';
 import 'package:prismhub/views/widgets/cache_network_image.dart';
 import 'package:prismhub/views/widgets/home/home_theme.dart';
+import 'package:prismhub/utils/platform_tv.dart';
 
 /// Si el aparato se maneja con el dedo.
 ///
@@ -39,7 +40,7 @@ bool get _esTactil => Platform.isAndroid || Platform.isIOS;
 /// duración no siempre vienen. Cada uno se dibuja solo si está, y el panel se
 /// acomoda: nunca queda un hueco reservado para algo que no llegó.
 class TarjetaDeCatalogo extends StatefulWidget {
-  TarjetaDeCatalogo({
+  const TarjetaDeCatalogo({
     super.key,
     required this.titulo,
     this.subtitulo,
@@ -151,7 +152,15 @@ class _TarjetaDeCatalogoState extends State<TarjetaDeCatalogo> {
     final conMouse = !_esTactil;
     // Se muestra por mouse en escritorio y por toque en celular.
     final panelVisible = _hayPanel && (conMouse ? _encima : _abierto);
-    final resaltada = _encima || _abierto;
+    // En TV la tarjeta NO se resalta sola.
+    //
+    // `_encima` es el hover del mouse, y en TV el resaltado lo pone
+    // FocusableCard, que la envuelve por fuera. Con los dos a la vez había
+    // DOS escalas encimadas (esta de 1.04 y la del foco): la portada crecía
+    // más que el marco y se salía por los bordes — el marco quedaba
+    // dibujado "por dentro" de la imagen. Reportado en vivo.
+    final resaltada =
+        !PlatformTv.esTelevisionSync && (_encima || _abierto);
 
     return SizedBox(
       width: ancho,
@@ -495,7 +504,7 @@ class _TarjetaDeCatalogoState extends State<TarjetaDeCatalogo> {
   /// entero.
   Widget _mientrasCarga() => DecoratedBox(
         decoration: BoxDecoration(color: HomeTheme.cardSurface),
-        child: Opacity(
+        child: const Opacity(
           opacity: 0.55,
           child: Image(
             image: AssetImage('assets/carddefaultoffline.png'),

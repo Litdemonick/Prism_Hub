@@ -34,6 +34,7 @@ import 'package:prismhub/utils/notificacion_reproductor.dart';
 import 'package:prismhub/utils/audio_hls.dart';
 import 'package:prismhub/utils/bomba_de_datos.dart';
 import 'package:prismhub/utils/cast_relay_server.dart';
+import 'package:prismhub/controllers/watch/recorte_fmp4.dart';
 import 'package:prismhub/utils/watch_state.dart';
 import 'package:prismhub/data/services/database_service.dart';
 import 'package:prismhub/data/services/extension_service.dart';
@@ -456,6 +457,27 @@ class VideoPlayerController extends GetxController with WidgetsBindingObserver {
       serverFailedMessage.value.isEmpty &&
       !awaitingServerChoice.value &&
       !isWebViewActive.value;
+
+  /// Si la barra de progreso NO se debe poder tocar ahora mismo.
+  ///
+  /// Un único sitio para las dos plataformas: la barra de escritorio y la del
+  /// teléfono preguntan lo mismo, así que no puede pasar que una deje hacer lo
+  /// que la otra bloquea.
+  ///
+  /// `seek()` ya ignora los saltos en estos estados, pero eso el usuario no lo
+  /// ve: arrastraba la barra, la barra se movía, y el vídeo no iba a ningún
+  /// lado. Bloquearla de verdad hace que el reproductor no mienta.
+  ///
+  /// Se bloquea mientras:
+  ///  - se resuelve o se cambia de servidor (`isGettingWatchData`);
+  ///  - se espera el primer cuadro de una fuente recién abierta;
+  ///  - hay un salto con recorte en curso, que es una reapertura entera;
+  ///  - está el diálogo de «¿continuar donde ibas?» esperando respuesta.
+  bool get barraBloqueada =>
+      isGettingWatchData.value ||
+      esperandoElPrimerCuadro ||
+      _saltandoConRecorte.value ||
+      resumePrompt.value != null;
 
   /// Red de seguridad: la rueda no puede quedarse girando para siempre.
   ///
@@ -1340,6 +1362,24 @@ class VideoPlayerController extends GetxController with WidgetsBindingObserver {
       if (ua != null && ua.isNotEmpty) {
         await np.setProperty('user-agent', ua);
       }
+      // ── mpv NO guarda ni restaura posiciones por su cuenta ────────────────
+      //
+      // mpv trae de fábrica el «reanudar donde ibas»: al cerrar un archivo
+      // anota el minuto en su carpeta de watch-later, y al reabrirlo salta ahí
+      // solo. Eso lo maneja la app —con su historial y su cartel— así que acá
+      // no puede haber un segundo mecanismo decidiendo por su cuenta.
+      //
+      // Rompía en Android: cualquier episodio de AnimeAV1 arrancaba SIEMPRE en
+      // el minuto 19, aunque se abriera desde cero y aunque se borrara el
+      // historial de la app. La razón: con el recorte la fuente es
+      // `http://127.0.0.1:PUERTO/lista_1.m3u8`, y ese nombre es el mismo para
+      // todos los episodios, así que mpv creía que era siempre el mismo archivo
+      // y le aplicaba la posición guardada de otro.
+      //
+      // Se cazó con un detector de saltos: la pila mostró que ningún código de
+      // la app pedía ese salto — lo hacía mpv solo.
+      await np.setProperty('resume-playback', 'no');
+      await np.setProperty('save-position-on-quit', 'no');
       // Buffer para streaming (segmentos HLS de 5-10 s).
       //
       // Decía "en desktop sube solo porque hay más RAM" y no era cierto: el
@@ -1770,9 +1810,32 @@ class VideoPlayerController extends GetxController with WidgetsBindingObserver {
           logger.info('historial: se ignora una posición guardada imposible '
               '($guardado s sobre $duracionReal s reales) y se empieza de cero');
         } else if (guardado > 0) {
-          _isAutoSeekPosition = true;
-          player.seek(Duration(seconds: guardado));
-          sendMessage(Message(Text('video.resume-last-playback'.i18n)));
+          final recorte = _recorte;
+          if (recorte != null) {
+            // ── Con recorte NO se retoma por acá ─────────────────────────
+            //
+            // Este camino restaura la posición guardada con un `player.seek()`
+            // en cuanto se conoce la duración. Con el recorte hace daño:
+            //
+            //  - es un salto de mpv sobre fMP4, o sea el que no funciona;
+            //  - y se dispara en CADA apertura, incluidas las del failover.
+            //    En el teléfono el codec AV1 no abre por hardware, así que hay
+            //    failover casi siempre: se reabría, este listener leía el
+            //    historial —que la app acababa de guardar— y devolvía el vídeo
+            //    al minuto viejo. De ahí que en PC fuera bien y en celular
+            //    empezara siempre en el 19, incluso borrando el historial: se
+            //    volvía a escribir solo antes de que esto lo leyera.
+            //
+            // Quien retoma con recorte es el cartel de «¿continuar donde
+            // ibas?», que va por `confirmResume` y rehace la lista. Acá no hay
+            // nada que hacer.
+            logger.info('recorte fMP4: no se retoma en ${guardado}s por el '
+                'listener de duración — de eso se encarga el cartel');
+          } else {
+            _isAutoSeekPosition = true;
+            player.seek(Duration(seconds: guardado));
+            sendMessage(Message(Text('video.resume-last-playback'.i18n)));
+          }
         }
       }
     }));
@@ -1813,7 +1876,13 @@ class VideoPlayerController extends GetxController with WidgetsBindingObserver {
       if (dlnaDevice.value != null) {
         return;
       }
-      duration.value = event;
+      // Con recorte, mpv solo conoce el largo del pedazo que se le dio. La
+      // barra tiene que seguir mostrando el episodio entero, o al saltar al
+      // minuto 20 el vídeo "duraría" 91 minutos en vez de 111.
+      final recorte = _recorte;
+      duration.value = recorte != null && recorte.duracionTotal > Duration.zero
+          ? recorte.duracionTotal
+          : event;
       // Con el largo ya conocido la notificación puede dibujar su barra. Es
       // también la primera vez que hay algo real que mostrar.
       if (event > Duration.zero) unawaited(_mostrarNotificacion());
@@ -1850,10 +1919,36 @@ class VideoPlayerController extends GetxController with WidgetsBindingObserver {
     }));
 
     // 监听进度
-    _addSubscription(player.stream.position.listen((event) {
+    _addSubscription(player.stream.position.listen((crudo) {
       if (dlnaDevice.value != null) {
         return;
       }
+      // Con recorte, mpv cuenta desde el principio del PEDAZO que se le dio, no
+      // del episodio. Se traduce acá arriba, una sola vez, para que todo lo de
+      // abajo —aceptar la posición, la notificación, el guardado del minuto—
+      // trabaje en minutos del episodio de verdad. Sin recorte el desfase es
+      // cero y esto no cambia nada.
+      final event = crudo + (_recorte?.desfase ?? Duration.zero);
+      // ── Detector de saltos que nadie pidió ────────────────────────────────
+      //
+      // TEMPORAL, para cazar un salto fantasma: en Android el vídeo empieza
+      // siempre en el mismo minuto aunque se abra desde cero, y ya se
+      // descartaron tres caminos (el cartel de continuar, `_midStreamResumeAt`
+      // y el retomar del listener de duración).
+      //
+      // Si la posición CRUDA de mpv da un brinco sin que haya un salto en
+      // curso, lo movió alguien más. Queda anotado con la pila de llamadas, que
+      // es lo único que dice QUIÉN.
+      if (_ultimaCruda != null &&
+          !_saltandoConRecorte.value &&
+          _destinoDeSalto == null &&
+          (crudo - _ultimaCruda!).abs() > const Duration(seconds: 3)) {
+        logger.warning(
+            'SALTO FANTASMA: mpv pasó de ${_ultimaCruda!.inSeconds}s a '
+            '${crudo.inSeconds}s sin que nadie lo pidiera',
+            StackTrace.current);
+      }
+      _ultimaCruda = crudo;
       // Con un salto en camino la barra muestra adonde VA a ir. Pisarla con la
       // posicion actual la haria volver atras entre toque y toque, que es lo
       // que impedia encadenar saltos.
@@ -3938,10 +4033,14 @@ class VideoPlayerController extends GetxController with WidgetsBindingObserver {
       if (_disposed) return;
       final cover = await _historyCoverFallback(existing);
       final epName = playList[index.value].name;
-      final totalSeconds = duration.value.inSeconds > 0
+      // El respaldo a los valores crudos de mpv solo vale SIN recorte: con él,
+      // los de mpv son los del pedazo y meterían en el historial una posición
+      // que no es la del episodio. Ver el comentario largo en _saveHistory.
+      final conRecorte = _recorte != null;
+      final totalSeconds = duration.value.inSeconds > 0 || conRecorte
           ? duration.value.inSeconds
           : player.state.duration.inSeconds;
-      final progressSeconds = position.value.inSeconds > 0
+      final progressSeconds = position.value.inSeconds > 0 || conRecorte
           ? position.value.inSeconds
           : player.state.position.inSeconds;
       await DatabaseService.putHistory(
@@ -4116,14 +4215,26 @@ class VideoPlayerController extends GetxController with WidgetsBindingObserver {
       // Se mira tambien _casteabaAlCerrar: al cerrar el reproductor, el
       // desmontaje suelta el aparato ANTES de llegar aca, asi que preguntar
       // solo por dlnaDevice daria false justo en el caso que importa.
+      // ── Se guarda la posición del EPISODIO, no la de mpv ─────────────────
+      //
+      // Con el recorte de fMP4, mpv reproduce un pedazo que arranca en cero, así
+      // que `player.state.position` es la posición DENTRO del pedazo. Guardando
+      // eso, estar en el minuto 14 de un episodio abierto desde el 13:54 se
+      // anotaba como **6 segundos**, y al volver el diálogo ofrecía continuar en
+      // 00:06. Visto en vivo.
+      //
+      // `position.value` es la misma posición cuando no hay recorte —el desfase
+      // vale cero— y la correcta cuando lo hay. Igual para la duración: con
+      // recorte, la de mpv es la del pedazo, y guardarla haría que el vídeo
+      // pareciera más corto de lo que es.
       final casteando = dlnaDevice.value != null || _casteabaAlCerrar;
       final posicionSeg = !casteando
-          ? player.state.position.inSeconds
+          ? position.value.inSeconds
           : (dlnaDevice.value != null
               ? position.value.inSeconds
               : _posicionCastAlCerrar.inSeconds);
       final duracionSeg = !casteando
-          ? player.state.duration.inSeconds
+          ? duration.value.inSeconds
           : (dlnaDevice.value != null
               ? duration.value.inSeconds
               : _duracionCastAlCerrar.inSeconds);
@@ -4560,6 +4671,27 @@ class VideoPlayerController extends GetxController with WidgetsBindingObserver {
     final donde = position.value;
     try {
       await np.setProperty('hwdec', 'no');
+
+      // ── Con recorte se reabre la LISTA RECORTADA, no la de la red ────────
+      //
+      // Sin esto, el reintento abría `watchData.url` —el m3u8 original de
+      // zilla— y el recorte quedaba fuera de juego. En Android eso pasaba
+      // SIEMPRE: el AV1 de AnimeAV1 no abre por hardware, así que este camino
+      // se dispara en cada apertura.
+      //
+      // Consecuencias que se vieron en vivo, y que no se entendían: el vídeo
+      // arrancaba en un minuto que nadie pidió, la barra y el salto se
+      // comportaban distinto que en PC, y ninguno de los arreglos del recorte
+      // parecía tener efecto en el teléfono — porque mpv no estaba
+      // reproduciendo la lista recortada.
+      final recorte = _recorte;
+      if (recorte != null) {
+        logger.info('recorte fMP4: el reintento por software vuelve a la lista '
+            'recortada, no a la de la red');
+        await _saltarConRecorte(recorte, donde);
+        return;
+      }
+
       final actual = watchData;
       if (actual == null) return;
       await player.open(Media(actual.url, httpHeaders: actual.headers));
@@ -5603,6 +5735,547 @@ class VideoPlayerController extends GetxController with WidgetsBindingObserver {
     BombaDeDatos.soltar(vieja);
   }
 
+  // ── Adelantar en fMP4 (solo AnimeAV1) ──────────────────────────────────────
+  //
+  // Null salvo que la fuente sea una lista fMP4 de la única extensión que las
+  // sirve. Mientras sea null, el reproductor se comporta igual que siempre:
+  // todos los enganches de abajo preguntan por él primero.
+  RecorteFmp4? _recorte;
+
+  /// Deja listo (o no) el recorte para la fuente que se está por abrir.
+  ///
+  /// Suelta el de la fuente anterior siempre: dos episodios seguidos tienen
+  /// listas distintas y quedarse con la vieja daría saltos a otro vídeo.
+  Future<void> _prepararRecorte(String url, Map<String, String> cabeceras) async {
+    final anterior = _recorte;
+    _recorte = null;
+    if (anterior != null) {
+      // Fuente nueva: NADA del salto anterior sobrevive. Sin esto quedaban un
+      // salto encolado que se ejecutaba sobre el vídeo nuevo, la barra en el
+      // minuto del vídeo viejo (se vio en vivo: `posición: 836s` sobre una
+      // fuente recién abierta en cero) y el cuadro congelado del otro servidor
+      // tapando la imagen.
+      logger.info('recorte fMP4: se suelta el de la fuente anterior');
+      _saltoPendiente = null;
+      _destinoDeSalto = null;
+      cuadroCongelado.value = null;
+      unawaited(anterior.limpiar());
+    }
+    try {
+      _recorte = await RecorteFmp4.preparar(
+        url: url,
+        paquete: runtime.extension.package,
+        cabeceras: cabeceras,
+      );
+    } catch (e) {
+      // Una mejora no puede impedir que se abra el vídeo.
+      logger.warning('recorte fMP4: se sigue sin él', e);
+      _recorte = null;
+    }
+  }
+
+  /// Si las cabeceras del recorte están puestas como propiedad de mpv.
+  bool _cabecerasDeRecortePuestas = false;
+
+  /// Le pasa a mpv las cabeceras que necesitan los pedacitos del recorte.
+  ///
+  /// **Sin esto el recorte da 403 y no reproduce nada** — medido en vivo: la
+  /// lista se arma perfecta (142 pedacitos) y después `Failed to open
+  /// .../segs/000.html`. La razón es que al abrir un ARCHIVO LOCAL, las
+  /// `httpHeaders` del `Media` no viajan a los pedacitos, que sí son remotos:
+  /// media_kit las aplica mirando la fuente principal, y esa ahora es un
+  /// `.m3u8` en disco. Los de zilla exigen `Sec-Fetch-Site: same-origin`.
+  ///
+  /// Va como propiedad del reproductor, que sí alcanza a todas las peticiones
+  /// HTTP que haga mpv, vengan de donde vengan.
+  ///
+  /// Van unidas por comas y **sin escapar**, que suena mal y es lo correcto:
+  ///
+  /// `http-header-fields` es una lista, y varias cabeceras de navegador llevan
+  /// comas adentro (`sec-ch-ua` es `"Chromium";v="131", "Not_A Brand";v="24"`),
+  /// así que lo prudente parecía usar el escapado de listas de mpv,
+  /// `%LARGO%contenido`. **Medido: por `setProperty` ese escapado no se
+  /// interpreta** — mpv se guarda el `%27%Sec-Fetch-Site: same-origin` tal cual
+  /// y los pedacitos vuelven a dar 403. Es cosa del parser de la línea de
+  /// órdenes, no de la API de propiedades.
+  ///
+  /// Y las comas resultaron inofensivas: con las once cabeceras planas, la
+  /// reproducción avanza 8,9 s en 10 y sin un solo error. Banco:
+  /// `temp/prueba_cabeceras.dart`.
+  ///
+  ///     1 cabecera,  sin escapar    ✔ 8,4s ·  0 errores
+  ///     1 cabecera,  escapada       ✗ 0,0s · 31 errores
+  ///     11 cabeceras, sin escapar   ✔ 8,9s ·  0 errores
+  ///     11 cabeceras, escapadas     ✗ 0,0s · 31 errores
+  Future<void> _cabecerasParaElRecorte(Map<String, String> cabeceras) async {
+    final np = player.platform;
+    if (np is! NativePlayer) return;
+    try {
+      if (_recorte == null) {
+        // Se vuelve a una fuente normal: la propiedad no puede quedar pegada
+        // con las cabeceras del episodio anterior.
+        if (_cabecerasDeRecortePuestas) {
+          await np.setProperty('http-header-fields', '');
+          _cabecerasDeRecortePuestas = false;
+        }
+        return;
+      }
+      // `demuxer-lavf-o` NO se toca, y eso es a propósito: la lista se sirve
+      // por 127.0.0.1, así que para mpv la entrada sigue siendo HTTP y las
+      // opciones que dejó `_comoAbrir` le valen igual. Ver el comentario largo
+      // en RecorteFmp4 sobre por qué un servidor y no un archivo.
+      // ── Fuera las que llevan COMAS en el valor ──────────────────────────
+      //
+      // `http-header-fields` separa por comas, y dos de las que manda la
+      // extensión las llevan adentro:
+      //
+      //     Accept-Language: es-ES,es;q=0.9,en;q=0.8
+      //     sec-ch-ua: "Chromium";v="131", "Not_A Brand";v="24"
+      //
+      // mpv las parte y manda trozos que no son cabeceras (`es;q=0.9`,
+      // `"Not_A Brand";v="24"`). Un servidor remoto tolerante los ignora —por
+      // eso zilla nunca se quejó— pero el servidor de la lista **corta la
+      // conexión**, y mpv ni llega a pedirla: «Failed to open http://127.0.0.1
+      // /lista_1.m3u8» a los 10 ms, con CERO pedidos recibidos.
+      //
+      // Medido con las once y con las nueve, mismo episodio y mismo servidor:
+      //
+      //     11 cabeceras (con comas)   0 pedidos · 0,0 s   ✗
+      //      9 cabeceras (sin comas)   2 pedidos · 19,0 s  ✔
+      //
+      // Y no se pierde nada que haga falta: lo que abre los pedacitos de zilla
+      // es `Sec-Fetch-Site: same-origin`, medido aparte quitando y poniendo de
+      // a una sobre el juego completo.
+      final sinComas = Map<String, String>.of(cabeceras)
+        ..removeWhere((_, v) => v.contains(','));
+      final lista =
+          sinComas.entries.map((e) => '${e.key}: ${e.value}').join(',');
+      await np.setProperty('http-header-fields', lista);
+      _cabecerasDeRecortePuestas = true;
+      // Se lee de vuelta y se anota. En este repo ya hubo dos cambios que se
+      // dieron por buenos sin haberse aplicado nunca (mpv acepta la orden y
+      // deja la propiedad vacía), así que acá se comprueba que ENTRÓ.
+      final quedo = await np.getProperty('http-header-fields');
+      logger.info('recorte fMP4: ${sinComas.length} de ${cabeceras.length} '
+          'cabeceras ${quedo.isEmpty ? "(VACÍO — no entraron)" : "puestas"} '
+          '(se sacan las que llevan comas)');
+    } catch (e) {
+      logger.warning('recorte fMP4: no se pudieron poner las cabeceras', e);
+    }
+  }
+
+  /// El último cuadro de antes del salto, para tapar el negro de la reapertura.
+  ///
+  /// Saltar con recorte no es un `seek`: es abrir otra fuente. Entre que mpv
+  /// suelta la anterior y dibuja el primer cuadro de la nueva no tiene NADA que
+  /// pintar, y eso se ve como un parpadeo negro. Se congela el cuadro anterior
+  /// encima y se suelta en cuanto hay imagen nueva.
+  ///
+  /// Null casi siempre: solo vive el rato que dura la reapertura.
+
+
+  /// Recorre a toda velocidad lo que sobra del pedacito, para caer en el
+  /// segundo exacto.
+  ///
+  /// ── El problema ──────────────────────────────────────────────────────────
+  ///
+  /// El recorte deja el vídeo al principio de un pedacito, unos segundos antes
+  /// del punto pedido: se pide el 41 y queda en el 31.
+  ///
+  /// Para mostrar el segundo 41 hay que arrancar en el fotograma clave del 31 y
+  /// decodificar hasta el 41. Eso normalmente lo hace ffmpeg en silencio dentro
+  /// del seek — y el seek es justo lo que no funciona en fMP4. Las dos formas
+  /// de pedírselo están descartadas con medición: el salto corto no hace nada,
+  /// y la opción `start` **cierra la app** (arranca sin el fotograma clave).
+  ///
+  /// ── Lo que se hace ───────────────────────────────────────────────────────
+  ///
+  /// Lo mismo, pero a mano: se reproduce ese tramo a 8x con el sonido cortado y
+  /// la imagen congelada encima, así que el decodificador pasa por todos los
+  /// fotogramas —tiene su referencia, no se rompe nada— y quien mira solo ve la
+  /// imagen quieta un instante más. Diez segundos de vídeo son poco más de uno
+  /// de espera.
+  ///
+  /// Degrada solo: si algo falla, el vídeo se queda donde lo dejó el recorte,
+  /// que es exactamente el comportamiento de antes.
+  Future<void> _afinarCorriendoRapido(
+      RecorteFmp4 recorte, Duration destino) async {
+    final falta = destino - recorte.desfase;
+    if (falta <= const Duration(milliseconds: 700) ||
+        falta > const Duration(seconds: 30)) {
+      return;
+    }
+    final np = player.platform;
+    if (np is! NativePlayer) return;
+
+    final reloj = Stopwatch()..start();
+    try {
+      // Sin sonido: a 8x sería un chillido.
+      await np.setProperty('mute', 'yes');
+      // ── Rápido lejos, despacio cerca ────────────────────────────────────
+      //
+      // A 8x, entre dos comprobaciones el vídeo avanza 320 ms, así que frenar
+      // solo al llegar deja pasarse un cuarto de segundo largo. Bajando a 2x en
+      // el último tramo, el sobrepaso queda por debajo de una décima —
+      // imperceptible— y casi no cuesta tiempo, porque son los últimos dos
+      // segundos de vídeo y no los diez.
+      // ── La velocidad de crucero depende de quién decodifica ─────────────
+      //
+      // En Android el AV1 de AnimeAV1 no abre por hardware y lo decodifica la
+      // CPU («Codec sin abrir — reintentando por software» en el registro). A
+      // 8x eso puede no dar abasto, así que ahí se pide 4x: tarda el doble de
+      // tiempo real, pero llega. En PC hay GPU y 8x entra sin despeinarse.
+      final crucero = Platform.isAndroid ? '4' : '8';
+      var velocidad = '';
+      // Para detectar que no avanza: si el decodificador no llega, seguir
+      // esperando no arregla nada y deja al usuario mirando una imagen quieta.
+      var ultimaVista = player.state.position;
+      var quietoDesde = DateTime.now();
+      while (!_disposed && reloj.elapsed < const Duration(seconds: 8)) {
+        // Si ya se pidió otro salto, este destino quedó viejo: seguir corriendo
+        // hacia él es tiempo perdido y encima retrasa el que sí importa.
+        if (_saltoPendiente != null) {
+          logger.info('recorte fMP4: se corta el afinado, hay otro salto');
+          break;
+        }
+        final donde = player.state.position;
+        final resta = falta - donde;
+        if (resta <= Duration.zero) break;
+
+        // ¿Se está moviendo? Un segundo y medio sin avanzar es que no llega.
+        if (donde > ultimaVista) {
+          ultimaVista = donde;
+          quietoDesde = DateTime.now();
+        } else if (DateTime.now().difference(quietoDesde) >
+            const Duration(milliseconds: 1500)) {
+          logger.info('recorte fMP4: se corta el afinado, el vídeo no avanza '
+              '(quedan ${resta.inMilliseconds} ms) — se deja donde está');
+          break;
+        }
+
+        final quiere = resta > const Duration(seconds: 2) ? crucero : '2';
+        if (quiere != velocidad) {
+          await np.setProperty('speed', quiere);
+          velocidad = quiere;
+        }
+        await Future<void>.delayed(const Duration(milliseconds: 20));
+      }
+    } catch (e) {
+      logger.info('recorte fMP4: no se pudo afinar corriendo rápido', e);
+    } finally {
+      // Se restaura SIEMPRE, pase lo que pase: dejar el vídeo a 8x y en
+      // silencio sería mucho peor que caer unos segundos antes.
+      try {
+        await np.setProperty('speed', '1');
+        await np.setProperty('mute', 'no');
+      } catch (_) {}
+    }
+    if (_disposed) return;
+    logger.info('recorte fMP4: afinado corriendo ${falta.inMilliseconds} ms a 8x '
+        'en ${reloj.elapsedMilliseconds} ms reales → '
+        '${(player.state.position + recorte.desfase).inSeconds}s');
+  }
+
+  /// Suelta el cuadro congelado cuando el vídeo volvió a avanzar.
+  ///
+  /// Y de paso apaga la rueda de búsqueda: sin esto se quedaba girando un rato
+  /// después de que la imagen ya se veía. La lógica normal la apaga al ver dos
+  /// posiciones distintas seguidas, y en una reapertura la primera tarda en
+  /// llegar, así que la rueda sobrevivía a la vuelta de la imagen.
+  Future<void> _soltarCuadroCuandoHayaImagen({Duration? desdeAquiSuma}) async {
+    // Desde dónde cuenta el avance. Con el afinado, el vídeo ya está en el
+    // punto pedido cuando esto arranca, así que el umbral tiene que ser
+    // RELATIVO a ahí: si no, se cumple en el acto y se destapa la imagen antes
+    // de que mpv haya pintado el primer cuadro nuevo — el parpadeo otra vez.
+    final base = desdeAquiSuma ?? Duration.zero;
+    final reloj = Stopwatch()..start();
+    while (!_disposed && reloj.elapsed < const Duration(seconds: 6)) {
+      // Se mira seguido: cada vuelta que se tarda de más es un cuadro nuevo
+      // tapado por la foto vieja, y eso se nota como una transición pesada.
+      await Future<void>.delayed(const Duration(milliseconds: 40));
+      // ── La posición CRUDA de mpv, no `position.value` ──────────────────
+      //
+      // `position.value` no sirve de referencia acá: `seek()` la mueve al
+      // destino ANTES de mandar el salto (para que se puedan encadenar), así
+      // que ya vale lo mismo que valdrá después. Comparando contra ella la
+      // condición no se cumplía nunca y el cuadro congelado se quedaba pegado
+      // los seis segundos del tope, tapando la imagen nueva. Peor que el
+      // parpadeo que venía a tapar.
+      //
+      // La cruda sí sirve: tras reabrir arranca en cero y sube sola. En cuanto
+      // se mueve hay imagen nueva, y ese es el momento de soltar la foto.
+      //
+      // El umbral era de medio segundo y se veía como una transición lenta: la
+      // imagen nueva ya estaba pintada y la foto vieja seguía encima medio
+      // segundo más. Con 120 ms alcanza para no confundir el cero inicial con
+      // reproducción, y el cambio pasa desapercibido.
+      // Y además tiene que estar reproduciendo: con el búfer todavía llenándose
+      // la posición se mueve pero la imagen no está, y destapar ahí es
+      // exactamente el parpadeo que se quiere evitar.
+      if (player.state.position - base > const Duration(milliseconds: 120) &&
+          !player.state.buffering) {
+        break;
+      }
+    }
+    if (_disposed) return;
+
+    // ── Se suelta TODO lo que enciende la rueda, no solo la búsqueda ───────
+    //
+    // Con `_clearSeeking()` sola no alcanzaba y la rueda seguía girando un buen
+    // rato con la imagen ya en pantalla. Los otros dos que la encienden:
+    //
+    //  - `_destinoDeSalto`: mientras está puesto, `_aceptarPosicion` rechaza
+    //    todo lo que informe mpv, así que la posición no se actualiza y nada
+    //    da la búsqueda por terminada. El corte cae al principio de un
+    //    pedacito, o sea unos segundos ANTES del minuto pedido, y esa
+    //    diferencia bastaba para que no se soltara solo.
+    //  - `isActuallyBuffering`: mpv lo deja pegado en true al cambiar de
+    //    fuente, y se apaga al ver avanzar la posición — que es justo lo que
+    //    el punto anterior estaba bloqueando.
+    //
+    // Acá ya hay imagen nueva confirmada, así que los tres sobran.
+    cuadroCongelado.value = null;
+    _destinoDeSalto = null;
+    if (isActuallyBuffering.value) isActuallyBuffering.value = false;
+    _clearSeeking();
+  }
+
+  /// El último cuadro de antes del salto, congelado hasta que haya imagen nueva.
+  ///
+  /// Es lo que evita el negro al saltar: la imagen se queda quieta y cambia
+  /// cuando llega la nueva, como en YouTube. Null casi siempre — solo vive lo
+  /// que dura la reapertura.
+  final Rx<Uint8List?> cuadroCongelado = Rx<Uint8List?>(null);
+
+  /// La última posición cruda que informó mpv. Solo para el detector de saltos
+  /// fantasma del listener de posición — temporal.
+  Duration? _ultimaCruda;
+
+  /// Rehace la lista para que empiece en [destino] y la abre.
+  ///
+  /// Es lo que reemplaza al `player.seek()` cuando hay recorte. Cuesta una
+  /// reapertura (~1,5 s medidos en zilla), pero hoy el salto directo
+  /// sencillamente no llega nunca.
+  Future<void> _saltarConRecorte(RecorteFmp4 recorte, Duration destino) async {
+    // ── Uno por vez ────────────────────────────────────────────────────────
+    //
+    // Con la barra da igual —los saltos se juntan y llega uno solo— pero con
+    // las teclas no: cada toque del salto por intervalo puede disparar su
+    // reapertura, y dos `player.open()` encimados dejan a mpv abriendo dos
+    // fuentes a la vez. Es el mismo cuadro que ya está documentado como causa
+    // del audio duplicado.
+    //
+    // Se anota el ÚLTIMO destino pedido y lo atiende el que está corriendo al
+    // terminar: así cinco toques seguidos son una reapertura al punto final,
+    // no cinco encadenadas.
+    if (_saltandoConRecorte.value) {
+      _saltoPendiente = destino;
+      return;
+    }
+    _saltandoConRecorte.value = true;
+    try {
+      await _hacerElSaltoConRecorte(recorte, destino);
+    } finally {
+      _saltandoConRecorte.value = false;
+    }
+    final pendiente = _saltoPendiente;
+    _saltoPendiente = null;
+    // Y se atiende SOLO si el recorte sigue siendo el de la fuente actual. Si
+    // en el medio se cambió de servidor o de episodio, `_recorte` ya es otro y
+    // este pedido quedó viejo: hacerlo abriría un pedazo del vídeo anterior.
+    if (pendiente != null && !_disposed && identical(_recorte, recorte)) {
+      await _saltarConRecorte(recorte, pendiente);
+    } else if (pendiente != null) {
+      logger.info('recorte fMP4: se descarta un salto pendiente, la fuente '
+          'cambió mientras tanto');
+    }
+  }
+
+  final _saltandoConRecorte = false.obs;
+  Duration? _saltoPendiente;
+
+  /// Si el vídeo venía reproduciendo cuando empezó el salto.
+  ///
+  /// Al tocar la barra o el intervalo con recorte se pausa —si no, la escena
+  /// sigue corriendo mientras la barra ya apunta a otro lado— y al terminar hay
+  /// que dejarlo como estaba: saltar no puede reanudar algo que el usuario
+  /// había pausado a propósito.
+  bool _reproduciaAntesDelSalto = true;
+
+  /// Deja el reproductor como estaba cuando un salto no se pudo hacer.
+  ///
+  /// Todo lo que se enciende al empezar un salto tiene que apagarse acá, o la
+  /// pantalla queda peor que si no se hubiera tocado nada: la barra clavada en
+  /// un minuto al que nunca se llegó, la rueda girando sin fin y el cuadro
+  /// viejo tapando la imagen. El vídeo sigue reproduciendo donde estaba.
+  void _rendirseConElSalto() {
+    cuadroCongelado.value = null;
+    _destinoDeSalto = null;
+    _clearSeeking();
+    // La barra vuelve a donde el vídeo está de verdad, no donde se quiso ir.
+    if (_recorte != null) {
+      position.value = player.state.position + _recorte!.desfase;
+    }
+  }
+
+  Future<void> _hacerElSaltoConRecorte(
+      RecorteFmp4 recorte, Duration destino) async {
+    // ── La barra va al destino YA ──────────────────────────────────────────
+    //
+    // Cuando el salto viene de la barra o de las teclas esto ya lo hizo
+    // `seek()`. Pero «continuar viendo» NO pasa por ahí: llama derecho a
+    // `_saltarCuandoSePueda`, así que la barra se quedaba en la posición vieja
+    // hasta que mpv terminaba de reabrir —un segundo largo— y recién ahí
+    // saltaba al minuto bueno. Eso es lo que se ve como «pone una posición que
+    // no es y después la corrige».
+    //
+    // `_destinoDeSalto` además protege ese rato: sin él, las posiciones que mpv
+    // informa mientras todavía reproduce el tramo anterior pisan la barra y la
+    // hacen ir y venir.
+    _destinoDeSalto = destino;
+    position.value = destino;
+    markSeeking();
+    // El reloj del vigilante arranca de cero acá también: si no, cuenta como
+    // «el vídeo no avanza» todo el rato que tarda la reapertura, que es trabajo
+    // nuestro y no un problema del vídeo.
+    _lastPositionAdvanceAt = DateTime.now();
+
+    // ── La imagen se congela ANTES de reabrir ──────────────────────────────
+    //
+    // Como hace YouTube: el último cuadro se queda quieto y cambia recién
+    // cuando hay imagen nueva. Sin negro en el medio.
+    //
+    // El orden es lo que importa, y es donde fallaba antes: la foto se pedía en
+    // paralelo con la apertura, así que mpv soltaba la imagen mientras la foto
+    // todavía se estaba sacando (mide 374-901 ms) y el negro se veía igual.
+    // Ahora se espera a tenerla EN PANTALLA y recién entonces se reabre. Cuesta
+    // esa espera, y es justamente lo que se está comprando.
+    //
+    // Si no se puede sacar, se sigue igual: se verá el parpadeo, pero saltar es
+    // la función y tapar el hueco es la comodidad.
+    final relojFoto = Stopwatch()..start();
+    try {
+      final foto = await player
+          .screenshot()
+          .timeout(const Duration(milliseconds: 900));
+      if (foto != null && foto.isNotEmpty) cuadroCongelado.value = foto;
+    } catch (_) {}
+    if (_disposed) return;
+    logger.info('recorte fMP4: imagen congelada en '
+        '${relojFoto.elapsedMilliseconds} ms'
+        '${cuadroCongelado.value == null ? " (no se pudo — se verá el parpadeo)" : ""}');
+
+    // Dónde está el vídeo AHORA, para que un salto adelante no termine detrás.
+    // Es la posición real del episodio, no la del pedazo. Ver listaDesde.
+    final estabaEn = player.state.position + recorte.desfase;
+    final ruta = await recorte.listaDesde(destino, sinQuedarAtrasDe: estabaEn);
+    // La barra pasa YA al minuto donde va a quedar el vídeo, y se queda ahí.
+    //
+    // Cuál es ese minuto depende de si el tramo sobrante se va a recorrer a 8x
+    // (ver _afinarCorriendoRapido):
+    //
+    //  - con afinado, el vídeo termina en el minuto PEDIDO;
+    //  - sin él, termina donde empieza el pedacito.
+    //
+    // Y `_destinoDeSalto` tiene que quedar en ese mismo valor: mientras está
+    // puesto, las posiciones intermedias no pisan la barra. Sin eso, durante el
+    // avance rápido se veía el contador trepar de 780 a 790 a la vista, que es
+    // justo lo que el afinado viene a disimular.
+    if (ruta != null && !_disposed) {
+      final delPedacito = recorte.desfaseQueViene;
+      final sobra = destino - delPedacito;
+      final habraAfinado = sobra > const Duration(milliseconds: 700) &&
+          sobra <= const Duration(seconds: 30);
+      final real = habraAfinado ? destino : delPedacito;
+      _destinoDeSalto = real;
+      position.value = real;
+    }
+    if (ruta == null || _disposed) {
+      // Que el salto falle no puede dejar la pantalla rota: sin esto quedaban
+      // la barra clavada en un destino al que nunca se llegó, la rueda girando
+      // para siempre y el cuadro viejo congelado encima. El vídeo sigue
+      // reproduciendo donde estaba, así que hay que devolverle el mando.
+      _rendirseConElSalto();
+      return;
+    }
+
+    // ── El salto cae al PRINCIPIO del pedacito, y no hay forma de afinarlo ──
+    //
+    // Se pide el 41 y queda en el 31. Es la granularidad del formato: los
+    // pedacitos de zilla duran ~10 s y cada uno empieza con un fotograma clave.
+    //
+    // Se intentaron las dos formas de cerrar esa diferencia, y las DOS están
+    // descartadas con medición. No reintentarlas:
+    //
+    //  1. `player.seek()` corto después de abrir → no hace nada. Es el mismo
+    //     bug de fMP4 en pequeño: el registro decía «ajuste fino de 5000 ms» y
+    //     el vídeo se quedaba igual en 11 s.
+    //
+    //  2. La opción `start` de mpv, para arrancar unos segundos adentro →
+    //     **CIERRA LA APP**. Arrancar a mitad de un pedacito deja al
+    //     decodificador AV1 sin el fotograma de referencia:
+    //
+    //         Missing reference frame needed for show_existing_frame
+    //         No sequence header available: unable to decode frame header
+    //         Missing Sequence Header
+    //         Lost connection to device
+    //
+    //     Y tiene sentido: el keyframe está al principio del pedacito, que es
+    //     justo lo que `start` se saltea.
+    //
+    // Así que el salto cae donde cae. La barra muestra el minuto real, que es
+    // lo que importa para no mentirle a quien mira.
+    try {
+      // Sin httpHeaders, igual que en la apertura: las de los pedacitos ya
+      // están puestas como propiedad de mpv y siguen ahí entre aperturas.
+      await player.open(Media(ruta));
+      if (_disposed) return;
+      // Recién ACÁ entra el desfase nuevo. Antes de `open()` mpv todavía
+      // informa la posición del tramo anterior, y sumarle el desfase de la
+      // lista nueva daba una posición inventada. Eso rompía dos cosas a la vez:
+      // el contador saltaba a cero o a cualquier lado, y como `_aceptarPosicion`
+      // nunca reconocía esa posición, la búsqueda no se daba por terminada y la
+      // rueda giraba para siempre aunque el vídeo estuviera reproduciendo bien.
+      recorte.confirmar();
+
+      // ── El vigilante de «imagen congelada» no puede acusar a sus propios
+      //    saltos ─────────────────────────────────────────────────────────
+      //
+      // Ese vigilante mide cuánto hace que la posición no avanza. Mientras
+      // dura una reapertura, `_aceptarPosicion` rechaza las posiciones que
+      // informa mpv —son del tramo viejo— así que ese reloj no se toca y sigue
+      // corriendo. Con varios saltos seguidos llegaba a 39 s y saltaba
+      // «El video lleva 39s sin avanzar» sobre un vídeo que reproducía
+      // perfecto. Es exactamente lo mismo que se hace al abrir una fuente.
+      _lastPositionAdvanceAt = DateTime.now();
+      _lastPositionSeen = null;
+      imagenCongelada.value = false;
+      safePlay();
+      // Y el tramo que sobra del pedacito se recorre a toda velocidad, tapado.
+      await _afinarCorriendoRapido(recorte, destino);
+      // El cuadro congelado se suelta cuando hay imagen nueva de verdad, no al
+      // volver `open()`: ahí mpv todavía está abriendo y soltarlo deja el
+      // parpadeo igual. Se espera a que la posición avance, con tope por si no
+      // llega nunca —quedarse con una foto pegada sería peor que el parpadeo—.
+      // Y se lo deja como estaba antes del salto. El afinado necesita que
+      // reproduzca para avanzar, así que la pausa solo se puede reponer acá,
+      // cuando ya llegó.
+      if (!_reproduciaAntesDelSalto && _saltoPendiente == null) {
+        try {
+          player.pause();
+        } catch (_) {}
+      }
+      // La imagen se destapa recién cuando el vídeo REPRODUCE en el punto
+      // nuevo. Si hubo afinado, ya está ahí, así que se cuenta desde ese punto
+      // y no desde cero.
+      unawaited(_soltarCuadroCuandoHayaImagen(
+          desdeAquiSuma: player.state.position));
+    } catch (e) {
+      _rendirseConElSalto();
+      logger.warning('recorte fMP4: no se pudo reabrir en $destino', e);
+    }
+  }
+
   Future<bool> _tryOpenPlayer(String url, Map<String, String>? headers) async {
     // _isPlaybackClosed() y no _disposed a secas en toda esta función: acá
     // es donde de verdad se abre el audio, así que es el lugar que más le
@@ -5680,7 +6353,46 @@ class VideoPlayerController extends GetxController with WidgetsBindingObserver {
       await player.stop().timeout(const Duration(seconds: 2));
     } catch (_) {}
     if (_isPlaybackClosed()) return false;
-    await player.open(Media(plan.url ?? url, httpHeaders: hdrs));
+
+    // ── Adelantar en fMP4: se abre una lista recortada, no la de la red ──────
+    //
+    // Solo AnimeAV1, y solo si la lista trae de verdad un `#EXT-X-MAP`. En fMP4
+    // pedirle a mpv que salte lo deja clavado —bug de ffmpeg cerrado como "not
+    // planned"— así que en vez de pedirle que salte se le da una lista que ya
+    // empieza donde se quiere. Ver `RecorteFmp4`.
+    //
+    // Si no aplica, `_recorte` queda en null y de acá para abajo todo sigue
+    // exactamente como antes.
+    await _prepararRecorte(plan.url ?? url, hdrs);
+
+    // ── Siempre se abre en el PRINCIPIO ────────────────────────────────────
+    //
+    // Se probó abrir directo en el minuto guardado, para ahorrarse la
+    // reapertura al contestar «continuar». Técnicamente andaba, pero el flujo
+    // quedaba al revés: el vídeo ya estaba en el minuto cuando aparecía el
+    // cartel preguntando si querías ir ahí, así que aceptar no hacía nada
+    // visible y el mensaje sobraba.
+    //
+    // El orden correcto es el de siempre: empieza en cero, y el cartel es lo
+    // que lleva al minuto guardado si se acepta. Descartado a propósito, no se
+    // perdió: si alguna vez se quiere quitar esa reapertura, hay que quitar
+    // también el cartel, no dejar los dos.
+    final listaRecortada = await _recorte?.listaDesde(Duration.zero);
+    // Las cabeceras de los pedacitos van como propiedad de mpv, no en el
+    // Media: ver _cabecerasParaElRecorte.
+    await _cabecerasParaElRecorte(hdrs);
+
+    // Y con recorte el Media va SIN httpHeaders a propósito. Si se las pasara
+    // igual, media_kit volvería a escribir `http-header-fields` con su propio
+    // formato —pegando las cabeceras con comas, sin escapar— y pisaría el que
+    // se acaba de poner bien.
+    await player.open(listaRecortada != null
+        ? Media(listaRecortada)
+        : Media(plan.url ?? url, httpHeaders: hdrs));
+    // El desfase entra recién con la fuente ya abierta — igual que en el salto.
+    // Sin esto, abrir directo en el minuto guardado dejaba la barra contando
+    // desde cero sobre un vídeo que empieza más adelante.
+    _recorte?.confirmar();
 
     if (_isPlaybackClosed()) {
       try {
@@ -5742,11 +6454,31 @@ class VideoPlayerController extends GetxController with WidgetsBindingObserver {
     if (!ok) {
       logger.info('Fuente no reproducible, se intentará failover: $url');
     } else if (_midStreamResumeAt != null) {
-      // Recuperación de un corte a mitad de capítulo (ver
-      // _midStreamResumeAt) — seguir donde se quedó en vez de arrancar
-      // la fuente nueva desde 0.
-      player.seek(_midStreamResumeAt!);
-      _midStreamResumeAt = null;
+      if (_recorte != null) {
+        // ── Con recorte, esto NO se aplica ────────────────────────────────
+        //
+        // Esta marca existe para recuperarse de un corte a mitad de capítulo:
+        // se guarda dónde iba y se vuelve ahí tras reabrir. Con el recorte
+        // sobra y hace daño:
+        //
+        //  - la lista ya se armó desde el punto que corresponde, así que no hay
+        //    nada que recuperar;
+        //  - es un `player.seek()` sobre fMP4, o sea el salto que no funciona;
+        //  - y devolvía al minuto viejo justo cuando se había pedido el
+        //    principio. Reportado en vivo: cancelar el cartel de continuar y
+        //    querer ir al comienzo terminaba de vuelta en el 19.
+        //
+        // Se descarta la marca, que es lo que la deja de arrastrar.
+        logger.info('recorte fMP4: se descarta la vuelta al minuto '
+            '${_midStreamResumeAt!.inSeconds}s — la lista ya empieza donde toca');
+        _midStreamResumeAt = null;
+      } else {
+        // Recuperación de un corte a mitad de capítulo (ver
+        // _midStreamResumeAt) — seguir donde se quedó en vez de arrancar
+        // la fuente nueva desde 0.
+        player.seek(_midStreamResumeAt!);
+        _midStreamResumeAt = null;
+      }
     }
     return ok;
   }
@@ -6031,7 +6763,7 @@ class VideoPlayerController extends GetxController with WidgetsBindingObserver {
       //
       // Así que primero se comprueba si es un MP4 —el `ftyp` de los primeros
       // bytes lo dice— y recién después se opina sobre dónde está el índice.
-      final esMp4 = texto.indexOf('ftyp') >= 0 && texto.indexOf('ftyp') < 16;
+      final esMp4 = texto.contains('ftyp') && texto.indexOf('ftyp') < 16;
       if (mdat < 0) {
         return esMp4
             ? 'es un MP4, pero el índice no entra en los primeros 2 KB'
@@ -6422,6 +7154,21 @@ class VideoPlayerController extends GetxController with WidgetsBindingObserver {
     }
     if (_disposed) return;
 
+    // Con recorte, «continuar viendo» tampoco puede saltar: se rehace la lista
+    // para que empiece en el minuto guardado. Sin esto el episodio arrancaría
+    // desde cero justo en la extensión donde el salto no anda.
+    //
+    // Y va UNA sola vez, fuera del bucle de reintentos de abajo: ese bucle
+    // existe porque un salto de mpv en HLS a veces no agarra y hay que
+    // repetirlo, pero acá no hay salto que pueda fallar —la lista ya empieza
+    // donde tiene que empezar— y cada intento cuesta una reapertura entera
+    // (~1,5 s). Reintentar tres veces serían tres reaperturas seguidas.
+    final recorteActivo = _recorte;
+    if (recorteActivo != null) {
+      await _saltarConRecorte(recorteActivo, destino);
+      return;
+    }
+
     for (var intento = 1; intento <= 3; intento++) {
       try {
         await player.seek(destino);
@@ -6451,6 +7198,15 @@ class VideoPlayerController extends GetxController with WidgetsBindingObserver {
     if (_disposed) return;
     _isAutoSeekPosition = true;
     resumePrompt.value = null;
+    // Cancelar no tiene nada que mover: la fuente se abre siempre en el
+    // principio, así que quedarse donde está YA es empezar de nuevo.
+    //
+    // Pero sí hay que BORRAR todo lo que después podría llevarte de vuelta al
+    // minuto viejo. Si no, se cancelaba y el reproductor te devolvía ahí igual
+    // —visto en vivo: cancelar y terminar en el 19— porque quedaban dos marcas
+    // pendientes por otro lado.
+    _pendingResumeSeconds = null;
+    _midStreamResumeAt = null;
     safePlay();
   }
 
@@ -6790,6 +7546,23 @@ class VideoPlayerController extends GetxController with WidgetsBindingObserver {
       logger.info('play/pausa ignorado: el vídeo todavía está cargando');
       return;
     }
+    // Con el diálogo de «¿continuar donde ibas?» en pantalla tampoco. Ahí el
+    // vídeo está pausado A PROPÓSITO esperando una respuesta, y un toque al
+    // botón lo ponía a reproducir desde el principio por debajo del diálogo:
+    // el usuario contestaba «continuar» sobre un vídeo que ya había arrancado
+    // en otro lado. La única forma de salir de ese estado es contestar.
+    if (resumePrompt.value != null) {
+      logger.info('play/pausa ignorado: está el diálogo de continuar viendo');
+      return;
+    }
+    // Ni en mitad de un salto con recorte: ahí mpv está cambiando de fuente,
+    // y un play/pausa justo en ese instante deja el estado al revés de lo que
+    // muestra el botón (se toca «pausa», la fuente nueva arranca reproduciendo
+    // por su cuenta, y el icono queda mintiendo). Dura lo que la reapertura.
+    if (_saltandoConRecorte.value) {
+      logger.info('play/pausa ignorado: hay un salto en curso');
+      return;
+    }
     if (dlnaDevice.value == null) {
       player.playOrPause();
       return;
@@ -6922,6 +7695,19 @@ class VideoPlayerController extends GetxController with WidgetsBindingObserver {
           'está cargando');
       return;
     }
+    // Ni mientras se cambia de servidor. Ahí `hasRenderedFrame` sigue en true
+    // —es el cuadro del vídeo ANTERIOR, que todavía se ve— así que la guarda de
+    // arriba no alcanza, y la barra seguía aceptando toques.
+    //
+    // Medido en vivo: tocando la barra durante un cambio a UPNShare, dos saltos
+    // se fueron al recorte de zilla (el servidor que se estaba dejando) mientras
+    // el nuevo todavía se estaba armando. De ahí el progreso arrancando en cero
+    // y el vídeo cargando dos veces.
+    if (isGettingWatchData.value) {
+      logger.info('salto a ${destino.inSeconds}s ignorado: se está cambiando '
+          'de servidor');
+      return;
+    }
     // Acá y no en cada botón: seek() es el único punto de entrada para la
     // barra de progreso, los atajos de teclado y los saltos, así que marcarlo
     // una vez cubre todos los casos en las tres plataformas.
@@ -6956,7 +7742,35 @@ class VideoPlayerController extends GetxController with WidgetsBindingObserver {
     // Ojo: NO se suelta _destinoDeSalto al mandarlo. Se suelta cuando el
     // reproductor informe que llego (ver _aceptarPosicion), o cuando salte la
     // red de seguridad de markSeeking si no llega nunca.
-    _juntadorDeSaltos = Timer(_esperaEntreSaltos, () {
+    // ── Con recorte, el vídeo se PARA en cuanto se toca ────────────────────
+    //
+    // Entre el toque y el salto pasan la ventana de agrupación y la reapertura.
+    // Con el vídeo corriendo durante todo eso, saltar varias veces seguidas se
+    // veía y se oía raro: la escena seguía avanzando mientras la barra ya
+    // apuntaba a otro lado.
+    //
+    // Se recuerda si estaba reproduciendo, porque al terminar el salto hay que
+    // dejarlo como estaba: si el usuario había pausado a propósito, saltar no
+    // puede ponerlo a reproducir.
+    if (_recorte != null && dlnaDevice.value == null) {
+      _reproduciaAntesDelSalto = isPlaying.value;
+      try {
+        player.pause();
+      } catch (_) {}
+    }
+
+    // Con recorte se espera un poco más antes de mandarlo.
+    //
+    // Ahí un salto no es instantáneo: cuesta reabrir la fuente y recorrer el
+    // resto del pedacito. Con la ventana corta, tocar cinco veces seguidas
+    // encolaba cinco saltos de segundos cada uno y el reproductor hacía cosas
+    // raras un buen rato. Juntándolos mejor, cinco toques son UN salto al punto
+    // final. Sin recorte queda como estaba, que ahí un toque de más no cuesta
+    // nada.
+    _juntadorDeSaltos = Timer(
+        _recorte != null
+            ? const Duration(milliseconds: 700)
+            : _esperaEntreSaltos, () {
       final adonde = _destinoDeSalto;
       if (adonde == null || _disposed) return;
       unawaited(_mandarSalto(adonde));
@@ -6967,6 +7781,16 @@ class VideoPlayerController extends GetxController with WidgetsBindingObserver {
   Future<void> _mandarSalto(Duration duration) async {
     if (_disposed) return;
     if (dlnaDevice.value == null) {
+      // En fMP4 no se salta: se rehace la lista para que empiece ahí. Pedirle
+      // el salto a mpv en ese formato lo deja clavado — ver RecorteFmp4.
+      //
+      // Transmitiendo NO se usa: ahí la dirección se la queda el televisor, que
+      // salta por su cuenta y no pasa por mpv.
+      final recorte = _recorte;
+      if (recorte != null) {
+        await _saltarConRecorte(recorte, duration);
+        return;
+      }
       player.seek(duration);
       return;
     }
@@ -6983,8 +7807,9 @@ class VideoPlayerController extends GetxController with WidgetsBindingObserver {
     if (!dlnaDevice.value!.permiteSaltar) {
       castAviso.value = 'video.cast-no-seek'.i18n;
       Timer(const Duration(milliseconds: 2000), () {
-        if (castAviso.value == 'video.cast-no-seek'.i18n)
+        if (castAviso.value == 'video.cast-no-seek'.i18n) {
           castAviso.value = null;
+        }
       });
       return;
     }
@@ -7127,8 +7952,9 @@ class VideoPlayerController extends GetxController with WidgetsBindingObserver {
       castBuscando.value = false;
       castAviso.value = 'video.cast-no-seek'.i18n;
       Timer(const Duration(milliseconds: 2000), () {
-        if (castAviso.value == 'video.cast-no-seek'.i18n)
+        if (castAviso.value == 'video.cast-no-seek'.i18n) {
           castAviso.value = null;
+        }
       });
     }
   }
@@ -7345,6 +8171,11 @@ class VideoPlayerController extends GetxController with WidgetsBindingObserver {
       worker.dispose();
     }
     _workers.clear();
+    // Las listas recortadas que quedaron en la carpeta temporal. Son unos KB,
+    // pero se acumularían una por salto y por episodio.
+    final recorte = _recorte;
+    _recorte = null;
+    if (recorte != null) unawaited(recorte.limpiar());
     for (final subscription in _subscriptions) {
       try {
         await subscription.cancel();

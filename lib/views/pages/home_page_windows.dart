@@ -178,14 +178,29 @@ class _FilaWindows extends StatefulWidget {
     super.key,
     required this.c,
     required this.fila,
+    this.conFocoTv = false,
   });
 
   final CatalogoExtensionesController c;
   final FilaDeExtension fila;
 
+  /// Si `true`, cada tarjeta se envuelve en [FocusableCard] para que sea
+  /// navegable con D-pad. Solo lo usa [HomeTV] — en Windows queda en `false`
+  /// y la fila se comporta exactamente igual que siempre.
+  final bool conFocoTv;
+
   @override
   State<_FilaWindows> createState() => _FilaWindowsState();
 }
+
+/// El ancho de tarjeta en TV: más grande que el de escritorio (mismo
+/// `Ancho.anchoPara` como base, un cuarto más) porque en TV se mira desde
+/// el sillón, no a 30cm de la cara.
+double _anchoTarjetaTv(BuildContext context) =>
+    TarjetaDeCatalogo.anchoPara(Ancho.de(context)) * 1.25;
+
+double _altoFilaTv(BuildContext context) =>
+    TarjetaDeCatalogo.altoTotalDeAncho(_anchoTarjetaTv(context)) + 28;
 
 class _FilaWindowsState extends State<_FilaWindows> {
   final _scroll = ScrollController();
@@ -235,12 +250,15 @@ class _FilaWindowsState extends State<_FilaWindows> {
       }
 
       return Padding(
-        padding: const EdgeInsets.only(top: 26),
+        // En TV, más separación entre filas: la tarjeta enfocada crece hacia
+        // arriba y hacia abajo, y con 26 la de una fila se metía sobre el
+        // título de la siguiente.
+        padding: EdgeInsets.only(top: widget.conFocoTv ? 34 : 26),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             _encabezado(),
-            const SizedBox(height: 14),
+            SizedBox(height: widget.conFocoTv ? 18 : 14),
             SizedBox(
               // Aire de más para la sombra.
               //
@@ -248,7 +266,16 @@ class _FilaWindowsState extends State<_FilaWindows> {
               // las dos cosas se salen de su caja. Con el alto justo, la fila
               // recortaba contra su borde y la sombra aparecía cortada en
               // línea recta — se veía peor que no tenerla.
-              height: TarjetaDeCatalogo.altoTotalPara(Ancho.de(context)) + 28,
+              //
+              // En TV, más grande: se mira desde el sillón, no a 30cm de la
+              // cara — el tamaño de escritorio se queda chico en un
+              // televisor real. `_anchoTarjetaTv`/`_altoFilaTv` son las que
+              // de verdad se usan cuando `conFocoTv`; el resto de la fila
+              // (bloques grises, `ClipRect`, etc.) sigue funcionando igual
+              // porque solo cambia el número que le pasan.
+              height: widget.conFocoTv
+                  ? _altoFilaTv(context)
+                  : TarjetaDeCatalogo.altoTotalPara(Ancho.de(context)) + 28,
               // Bloques grises con la forma de las tarjetas, igual que en
               // celular: dicen QUÉ va a aparecer y dónde, así que al llegar el
               // contenido nada se mueve. Y salen también con contenido en
@@ -277,7 +304,9 @@ class _FilaWindowsState extends State<_FilaWindows> {
                   // Los que entran, no seis fijos: en una ventana ancha la fila
                   // de bloques terminaba a media pantalla. Ver EsqueletoDeFila.
                   ? EsqueletoDeFila(
-                      ancho: TarjetaDeCatalogo.anchoPara(Ancho.de(context)),
+                      ancho: widget.conFocoTv
+                          ? _anchoTarjetaTv(context)
+                          : TarjetaDeCatalogo.anchoPara(Ancho.de(context)),
                       separacion: 14,
                       padding:
                           EdgeInsets.symmetric(horizontal: _margen(context)),
@@ -295,7 +324,9 @@ class _FilaWindowsState extends State<_FilaWindows> {
                   // corta a izquierda y derecha —donde molesta— y deja pasar
                   // arriba y abajo, que es por donde sale la sombra.
                   : ClipRect(
-                      clipper: const _SoloCostados(),
+                      clipper: _SoloCostados(
+                        aireLateral: widget.conFocoTv ? 12 : 0,
+                      ),
                       child: ListView.separated(
                         controller: _scroll,
                         scrollDirection: Axis.horizontal,
@@ -303,8 +334,15 @@ class _FilaWindowsState extends State<_FilaWindows> {
                         // aire que se le dé: un ListView recorta en su borde
                         // por defecto.
                         clipBehavior: Clip.none,
-                        padding:
-                            EdgeInsets.symmetric(horizontal: _margen(context)),
+                        // En TV, más aire a los costados: la tarjeta
+                        // enfocada crece y le sale un marco, y con el margen
+                        // justo la primera y la última quedaban cortadas
+                        // contra el recorte de la fila.
+                        padding: EdgeInsets.symmetric(
+                          horizontal: widget.conFocoTv
+                              ? _margen(context) + 14
+                              : _margen(context),
+                        ),
                         // ── Y dos brillando al final si está trayendo ──
                         //
                         // Refrescar una fila que ya tiene portadas no las
@@ -324,30 +362,65 @@ class _FilaWindowsState extends State<_FilaWindows> {
                             return Padding(
                               padding: const EdgeInsets.only(top: 10),
                               child: EsqueletoTarjeta(
-                                ancho: TarjetaDeCatalogo.anchoPara(
-                                    Ancho.de(context)),
+                                ancho: widget.conFocoTv
+                                    ? _anchoTarjetaTv(context)
+                                    : TarjetaDeCatalogo.anchoPara(
+                                        Ancho.de(context)),
                               ),
                             );
                           }
                           final item = items[i];
+                          void abrir() =>
+                              _abrir(context, item, widget.fila.package);
+                          final tarjeta = TarjetaDeCatalogo(
+                            titulo: item.title,
+                            portada: item.cover,
+                            cabeceras: _cabeceras(widget.fila.package),
+                            encabezado: widget.fila.nombre,
+                            // `update` es lo único con forma de fecha que
+                            // devuelve `latest()`. Cada extensión lo escribe a
+                            // su manera —«hace 2 días», «Ep 12», una fecha— así
+                            // que se muestra TAL CUAL: normalizarlo acá sería
+                            // inventar una precisión que el dato no tiene.
+                            fecha: item.update,
+                            // Más grande en TV — se mira desde el sillón.
+                            ancho: widget.conFocoTv
+                                ? _anchoTarjetaTv(context)
+                                : null,
+                            // Sin onTap cuando hay foco de TV: FocusableCard ya
+                            // lo maneja por fuera. Con los dos a la vez, un
+                            // solo click dispara `abrir` DOS veces — cada
+                            // GestureDetector reconoce el toque por su cuenta,
+                            // ninguno "gana" sobre el otro porque no compiten
+                            // por el mismo gesto (no hay arrastre de por medio).
+                            onTap: widget.conFocoTv ? null : abrir,
+                          );
                           return Padding(
                             // Arriba, para que la tarjeta tenga hacia dónde
                             // crecer sin pisar el título de la fila.
                             padding: const EdgeInsets.only(top: 10),
-                            child: TarjetaDeCatalogo(
-                              titulo: item.title,
-                              portada: item.cover,
-                              cabeceras: _cabeceras(widget.fila.package),
-                              encabezado: widget.fila.nombre,
-                              // `update` es lo único con forma de fecha que
-                              // devuelve `latest()`. Cada extensión lo escribe a
-                              // su manera —«hace 2 días», «Ep 12», una fecha— así
-                              // que se muestra TAL CUAL: normalizarlo acá sería
-                              // inventar una precisión que el dato no tiene.
-                              fecha: item.update,
-                              onTap: () =>
-                                  _abrir(context, item, widget.fila.package),
-                            ),
+                            child: widget.conFocoTv
+                                ? FocusableCard(
+                                    onTap: abrir,
+                                    // Solo la PORTADA, no el título de
+                                    // debajo: lo que se está eligiendo es la
+                                    // imagen, y el marco alrededor de las
+                                    // dos cosas encierra un texto suelto en
+                                    // el aire.
+                                    //
+                                    // El alto es exacto: la portada de
+                                    // TarjetaDeCatalogo es 2:3 sobre el
+                                    // ancho que se le pasa (ver su
+                                    // `altoPortada`). El primer intento se
+                                    // veía corrido, pero no era la cuenta —
+                                    // era que la tarjeta ADEMÁS se agrandaba
+                                    // sola con el hover y crecía más que el
+                                    // marco; eso ya no pasa en TV.
+                                    altoMarco:
+                                        _anchoTarjetaTv(context) * 3 / 2,
+                                    child: tarjeta,
+                                  )
+                                : tarjeta,
                           );
                         },
                       ),
@@ -536,14 +609,28 @@ class _FlechaDeFilaState extends State<_FlechaDeFila> {
 /// lateral— pero NO lo que se sale por arriba y por abajo, que es la sombra de
 /// la tarjeta cuando se le pasa el mouse.
 class _SoloCostados extends CustomClipper<Rect> {
-  const _SoloCostados();
+  const _SoloCostados({this.aireLateral = 0});
 
   /// Cuánto se deja escapar arriba y abajo. Con la sombra actual sobra.
   static const _aire = 60.0;
 
+  /// Y cuánto a los costados. Cero en teléfono/escritorio: ahí el recorte
+  /// lateral existe justamente para que una tarjeta que sale de la fila no
+  /// se dibuje encima del margen ni de la barra lateral.
+  ///
+  /// En TV no puede ser cero: la tarjeta enfocada CRECE y le sale un marco,
+  /// y con el corte al ras quedaba mordida por los dos lados. El aire es
+  /// menor que el relleno extra que llevan las filas de TV, así que sigue
+  /// sin llegar al sidebar.
+  final double aireLateral;
+
   @override
-  Rect getClip(Size size) =>
-      Rect.fromLTRB(0, -_aire, size.width, size.height + _aire);
+  Rect getClip(Size size) => Rect.fromLTRB(
+        -aireLateral,
+        -_aire,
+        size.width + aireLateral,
+        size.height + _aire,
+      );
 
   @override
   bool shouldReclip(covariant CustomClipper<Rect> oldClipper) => false;

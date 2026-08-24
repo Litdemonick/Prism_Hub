@@ -1,6 +1,9 @@
 package com.prismhub.app
 
+import android.app.UiModeManager
+import android.content.Context
 import android.content.Intent
+import android.content.res.Configuration
 import android.net.Uri
 import android.os.Build
 import android.provider.Settings
@@ -70,6 +73,9 @@ class MainActivity: AudioServiceFragmentActivity() {
                     "canInstallApks" -> {
                         result.success(canInstallApks())
                     }
+                    "isTelevision" -> {
+                        result.success(isTelevision())
+                    }
                     "openInstallSettings" -> {
                         openInstallSettings()
                         result.success(null)
@@ -90,6 +96,15 @@ class MainActivity: AudioServiceFragmentActivity() {
                     else -> result.notImplemented()
                 }
             }
+    }
+
+    // Es la forma oficial de saber si esto es un Android TV (o una caja
+    // Google TV/leanback) en vez de un teléfono o tablet: el sistema mismo
+    // reporta el "modo de UI" actual, y UI_MODE_TYPE_TELEVISION es el valor
+    // que usa cualquier launcher de TV real.
+    private fun isTelevision(): Boolean {
+        val uiModeManager = getSystemService(Context.UI_MODE_SERVICE) as? UiModeManager
+        return uiModeManager?.currentModeType == Configuration.UI_MODE_TYPE_TELEVISION
     }
 
     private fun canInstallApks(): Boolean {

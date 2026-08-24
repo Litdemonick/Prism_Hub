@@ -6,6 +6,7 @@ import 'package:prismhub/utils/prismhub_storage.dart';
 import 'package:prismhub/views/widgets/home/home_theme.dart';
 import 'package:window_manager/window_manager.dart';
 import 'package:prismhub/views/widgets/window_caption_buttons.dart';
+import 'package:prismhub/utils/platform_tv.dart';
 
 /// Aviso breve, centrado, que aparece y se va solo.
 ///
@@ -84,14 +85,14 @@ class _AvisoCentrado extends StatelessWidget {
               child: Row(
                 mainAxisSize: MainAxisSize.min,
                 children: [
-                  Icon(Icons.school_outlined,
+                  const Icon(Icons.school_outlined,
                       color: HomeTheme.oscuroAcento, size: 20),
                   const SizedBox(width: 12),
                   Flexible(
                     child: Text(
                       controlador.texto,
                       textAlign: TextAlign.center,
-                      style: TextStyle(
+                      style: const TextStyle(
                         color: HomeTheme.oscuroTexto,
                         fontSize: 14,
                         fontWeight: FontWeight.w600,
@@ -164,7 +165,16 @@ class TutorialReproductor extends StatefulWidget {
   final VoidCallback onCerrar;
 
   /// ¿Ya se mostró alguna vez?
+  ///
+  /// En TV devuelve siempre `true`, o sea que NUNCA se muestra: todos sus
+  /// pasos enseñan gestos que ahí no existen —"tocá la pantalla", "dos
+  /// toques en el centro", arrastrar para el volumen— porque el reproductor
+  /// de televisor se maneja con las teclas del mando, no con el dedo (ver
+  /// video_player_content.dart, que en TV usa los controles de teclado).
+  ///
+  /// Además tapaba la pantalla con un diálogo que el mando no podía cerrar.
   static bool get yaVisto =>
+      PlatformTv.esTelevisionSync ||
       PrismHubStorage.getSetting(SettingKey.tutorialReproductorVisto) == true;
 
   static Future<void> marcarVisto() =>
@@ -210,7 +220,7 @@ class _TutorialReproductorState extends State<TutorialReproductor>
   }
 
   List<_Paso> get _pasos {
-    final t = (String k) => 'video.tutorial.$k'.i18n;
+    String t(String k) => 'video.tutorial.$k'.i18n;
 
     if (Platform.isAndroid) {
       return [
@@ -390,16 +400,16 @@ class _TutorialReproductorState extends State<TutorialReproductor>
           // unico de atras que sigue respondiendo — y tiene que serlo, porque
           // si no la ventana queda atrapada.
           if (!Platform.isAndroid)
-            Positioned(
+            const Positioned(
               top: 0,
               left: 0,
               right: 0,
               child: Row(
                 children: [
-                  const Expanded(
+                  Expanded(
                     child: DragToMoveArea(child: SizedBox(height: 40)),
                   ),
-                  const BotonesVentana(),
+                  BotonesVentana(),
                 ],
               ),
             ),
@@ -430,7 +440,7 @@ class _TutorialReproductorState extends State<TutorialReproductor>
                 Text(
                   paso.titulo,
                   textAlign: TextAlign.center,
-                  style: TextStyle(
+                  style: const TextStyle(
                     color: HomeTheme.oscuroTexto,
                     fontSize: 19,
                     fontWeight: FontWeight.w800,
@@ -440,7 +450,7 @@ class _TutorialReproductorState extends State<TutorialReproductor>
                 Text(
                   paso.detalle,
                   textAlign: TextAlign.center,
-                  style: TextStyle(
+                  style: const TextStyle(
                     color: HomeTheme.oscuroTextoTenue,
                     fontSize: 14,
                     height: 1.4,
@@ -473,7 +483,7 @@ class _TutorialReproductorState extends State<TutorialReproductor>
                       onPressed: _terminar,
                       child: Text(
                         'video.tutorial.skip'.i18n,
-                        style: TextStyle(color: HomeTheme.oscuroTextoTenue),
+                        style: const TextStyle(color: HomeTheme.oscuroTextoTenue),
                       ),
                     ),
                     // Volver atras: los pasos traen el numero de segundos que
@@ -486,7 +496,7 @@ class _TutorialReproductorState extends State<TutorialReproductor>
                         onPressed: () => setState(() => _indice = i - 1),
                         child: Text(
                           'video.tutorial.back'.i18n,
-                          style: TextStyle(color: HomeTheme.oscuroTexto),
+                          style: const TextStyle(color: HomeTheme.oscuroTexto),
                         ),
                       ),
                     ],

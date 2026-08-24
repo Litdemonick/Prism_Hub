@@ -204,7 +204,7 @@ class DetailExtensionTile extends StatelessWidget {
                     shape: BoxShape.circle,
                     color: HomeTheme.textMuted,
                   ),
-                  child: SizedBox(width: 4, height: 4),
+                  child: const SizedBox(width: 4, height: 4),
                 ),
                 const SizedBox(width: 8),
                 // Mismo color que el badge de tipo en las tarjetas (azul para

@@ -4,6 +4,7 @@ import 'dart:io';
 import 'package:fluent_ui/fluent_ui.dart' as fluent;
 import 'package:flutter/material.dart' as material;
 import 'package:flutter/widgets.dart';
+import 'package:prismhub/utils/platform_tv.dart';
 import 'package:window_manager/window_manager.dart' show DragToMoveArea;
 
 showPlatformSnackbar({
@@ -126,11 +127,42 @@ showPlatformDialog({
       context: context,
       barrierDismissible: barrierDismissible,
       builder: (context) {
+        // En TV nada tiene foco al abrir un diálogo — no hay dedo que toque
+        // el botón, así que sin esto el control remoto no mueve nada: el
+        // diálogo queda ahí, sin forma de aceptarlo ni de cerrarlo.
+        //
+        // No hace falta elegir un botón a mano: se le pide al propio
+        // recorrido de foco de Flutter que encuentre el primer widget
+        // enfocable de VERDAD (los botones de `actions` ya lo son, son
+        // FilledButton/TextButton) y lo enfoque — así el mando ya tiene
+        // dónde empezar a moverse.
+        //
+        // Se pide SIEMPRE, no solo "si nadie lo tiene": la pantalla de
+        // atrás sigue viva y puede pedirlo ella al reconstruirse (el
+        // sidebar de la Home de TV lo hacía), y entonces el diálogo queda
+        // adelante mientras las flechas mueven el fondo.
+        if (PlatformTv.esTelevisionSync) {
+          WidgetsBinding.instance.addPostFrameCallback((_) {
+            if (!context.mounted) return;
+            final alcance = FocusScope.of(context);
+            FocusTraversalGroup.of(context)
+                .findFirstFocus(alcance, ignoreCurrentFocus: true)
+                ?.requestFocus();
+          });
+        }
         return material.AlertDialog(
           scrollable: scrollable,
           title: Text(title),
           content: content,
           actions: actions,
+          // A la izquierda en TV: a la derecha (lo de siempre) el foco
+          // inicial cae lejos del título y del contenido, que se leen de
+          // izquierda a derecha — obliga a cruzar toda la pantalla con el
+          // mando antes de llegar al primer botón. Pegados al mismo borde
+          // que el resto, el recorrido es corto y predecible.
+          actionsAlignment: PlatformTv.esTelevisionSync
+              ? material.MainAxisAlignment.start
+              : null,
         );
       },
     );

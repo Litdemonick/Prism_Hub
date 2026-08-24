@@ -4,6 +4,7 @@ import 'dart:io';
 import 'package:easy_refresh/easy_refresh.dart';
 import 'package:fluent_ui/fluent_ui.dart' as fluent;
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter/scheduler.dart';
 import 'package:flutter_i18n/flutter_i18n.dart';
 import 'package:get/get.dart';
@@ -22,7 +23,10 @@ import 'package:prismhub/utils/i18n.dart';
 import 'package:prismhub/views/widgets/extension_item_card.dart';
 import 'package:prismhub/views/widgets/home/esqueleto.dart';
 import 'package:prismhub/views/widgets/home/animated_background_glow.dart';
+import 'package:prismhub/utils/platform_tv.dart';
 import 'package:prismhub/views/widgets/home/home_theme.dart';
+import 'package:prismhub/views/widgets/tv/focusable_card.dart';
+import 'package:prismhub/views/widgets/tv/teclado_tv.dart';
 import 'package:prismhub/views/widgets/home/refresh_button.dart';
 import 'package:prismhub/views/widgets/infinite_scroller.dart';
 import 'package:prismhub/views/widgets/messenger.dart';
@@ -695,6 +699,158 @@ class _ExtensionSearcherPageState extends fluent.State<ExtensionSearcherPage> {
       },
     );
 
+    // ── En TV: un panel a la derecha, no una hoja desde abajo ───────────
+    //
+    // La hoja de Android sube desde el borde inferior y se cierra
+    // arrastrándola: dos cosas que en un televisor no existen. Y ocupa el
+    // alto entero, así que se pierde de vista lo que se está filtrando.
+    //
+    // Un panel lateral respeta el mismo reparto que el resto de la interfaz
+    // de TV (algo fijo a un costado, el contenido al lado) y se cierra con
+    // el botón de atrás del mando, que es lo que uno aprieta.
+    if (PlatformTv.esTelevisionSync) {
+      showGeneralDialog(
+        context: context,
+        barrierDismissible: true,
+        barrierLabel: 'search.filter'.i18n,
+        barrierColor: Colors.black54,
+        transitionDuration: const Duration(milliseconds: 220),
+        pageBuilder: (_, __, ___) => Align(
+          alignment: Alignment.centerRight,
+          child: Material(
+            color: HomeTheme.cardSurface,
+            child: SizedBox(
+              width: (MediaQuery.sizeOf(context).width * 0.42)
+                  .clamp(380.0, 620.0),
+              height: double.infinity,
+              child: SafeArea(
+                child: Padding(
+                  padding: const EdgeInsets.all(22),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        'search.filter'.i18n,
+                        style: TextStyle(
+                          fontSize: 22,
+                          fontWeight: FontWeight.w800,
+                          color: HomeTheme.textPrimary,
+                        ),
+                      ),
+                      const SizedBox(height: 16),
+                      // Aire de verdad antes de los botones: el último chip
+                      // crece al enfocarse y quedaba montado sobre
+                      // "Confirmar".
+                      const SizedBox(height: 22),
+                      Row(
+                        children: [
+                          Expanded(
+                            child: FocusableCard(
+                              borderRadius: 10,
+                              autofocus: true,
+                              onTap: () {
+                                Get.back();
+                                _easyRefreshController.callRefresh();
+                              },
+                              child: Container(
+                                height: 48,
+                                alignment: Alignment.center,
+                                decoration: BoxDecoration(
+                                  color: HomeTheme.accentPink,
+                                  borderRadius: BorderRadius.circular(10),
+                                ),
+                                child: Text(
+                                  'common.confirm'.i18n,
+                                  style: const TextStyle(
+                                    color: Colors.white,
+                                    fontSize: 16,
+                                    fontWeight: FontWeight.w700,
+                                  ),
+                                ),
+                              ),
+                            ),
+                          ),
+                          const SizedBox(width: 12),
+                          FocusableCard(
+                            borderRadius: 10,
+                            onTap: () => Get.back(),
+                            child: Container(
+                              height: 48,
+                              padding:
+                                  const EdgeInsets.symmetric(horizontal: 22),
+                              alignment: Alignment.center,
+                              decoration: BoxDecoration(
+                                borderRadius: BorderRadius.circular(10),
+                                border: Border.all(color: HomeTheme.border),
+                              ),
+                              child: Text(
+                                'common.cancel'.i18n,
+                                style: TextStyle(
+                                  color: HomeTheme.textMuted,
+                                  fontSize: 16,
+                                  fontWeight: FontWeight.w600,
+                                ),
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 18),
+                      // ── Recorrido en ORDEN, no direccional ────────────
+                      //
+                      // Los chips se acomodan en un `Wrap`, o sea filas que
+                      // se arman según el ancho. Con la navegación
+                      // direccional de Flutter, apretar izquierda en el
+                      // primer chip de una fila no encuentra nada a su
+                      // izquierda y salta al enfocable más cercano en esa
+                      // dirección — que termina siendo uno de la fila de
+                      // ABAJO. Eso es el "me baja solo sin que yo marque
+                      // abajo".
+                      //
+                      // Acá derecha/izquierda recorren la lista en orden
+                      // (siguiente/anterior), como se leería: al llegar al
+                      // final de una fila sigue en la próxima, y nunca
+                      // salta a un lugar que no se esperaba.
+                      Expanded(
+                        child: Focus(
+                          canRequestFocus: false,
+                          skipTraversal: true,
+                          onKeyEvent: (node, evento) {
+                            if (evento is! KeyDownEvent) {
+                              return KeyEventResult.ignored;
+                            }
+                            final tecla = evento.logicalKey;
+                            if (tecla == LogicalKeyboardKey.arrowRight) {
+                              node.nextFocus();
+                              return KeyEventResult.handled;
+                            }
+                            if (tecla == LogicalKeyboardKey.arrowLeft) {
+                              node.previousFocus();
+                              return KeyEventResult.handled;
+                            }
+                            return KeyEventResult.ignored;
+                          },
+                          child: fiterWidget,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ),
+          ),
+        ),
+        // Entra deslizándose desde el borde derecho: deja claro de dónde
+        // salió y hacia dónde se va al cerrarlo.
+        transitionBuilder: (_, anim, __, hijo) => SlideTransition(
+          position: Tween(begin: const Offset(1, 0), end: Offset.zero)
+              .animate(CurvedAnimation(parent: anim, curve: Curves.easeOut)),
+          child: hijo,
+        ),
+      );
+      return;
+    }
+
     if (Platform.isAndroid) {
       showModalBottomSheet(
         context: context,
@@ -771,7 +927,7 @@ class _ExtensionSearcherPageState extends fluent.State<ExtensionSearcherPage> {
           style: fluent.ContentDialogThemeData(
             decoration: BoxDecoration(
               color: HomeTheme.cardSurface,
-              borderRadius: BorderRadius.all(Radius.circular(14)),
+              borderRadius: const BorderRadius.all(Radius.circular(14)),
             ),
           ),
           title: Text(
@@ -1042,7 +1198,7 @@ class _ExtensionSearcherPageState extends fluent.State<ExtensionSearcherPage> {
         color: HomeTheme.bg,
         child: Stack(
           children: [
-            Positioned.fill(child: AnimatedBackgroundGlow()),
+            const Positioned.fill(child: AnimatedBackgroundGlow()),
             // Mientras no se sepa si hace falta actualizar (null) o si SÍ
             // hace falta (true), ni se pide ni se muestra ninguna card —
             // antes esto era solo un banner arriba con la grilla
@@ -1079,8 +1235,16 @@ class _ExtensionSearcherPageState extends fluent.State<ExtensionSearcherPage> {
                               );
                               return ExcludeSemantics(
                                 child: GridView.builder(
-                                  padding: const EdgeInsets.symmetric(
-                                      horizontal: 16),
+                                  // En TV, más aire: la tarjeta enfocada
+                                  // crece y le sale su marco, y con 16 justos
+                                  // la primera fila y las columnas de los
+                                  // extremos quedaban cortadas contra el
+                                  // borde del panel.
+                                  padding: PlatformTv.esTelevisionSync
+                                      ? const EdgeInsets.fromLTRB(
+                                          26, 14, 26, 14)
+                                      : const EdgeInsets.symmetric(
+                                          horizontal: 16),
                                   gridDelegate:
                                       SliverGridDelegateWithFixedCrossAxisCount(
                                     crossAxisCount: rejilla.columnas,
@@ -1141,7 +1305,11 @@ class _ExtensionSearcherPageState extends fluent.State<ExtensionSearcherPage> {
             );
             return ExcludeSemantics(
               child: GridView.builder(
-                padding: const EdgeInsets.all(relleno),
+                // Ver el mismo caso arriba: en TV la tarjeta enfocada crece
+                // y necesita aire para no quedar cortada.
+                padding: PlatformTv.esTelevisionSync
+                    ? const EdgeInsets.all(relleno + 10)
+                    : const EdgeInsets.all(relleno),
                 gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
                   crossAxisCount: rejilla.columnas,
                   childAspectRatio: rejilla.proporcion,
@@ -1278,7 +1446,7 @@ class _ExtensionSearcherPageState extends fluent.State<ExtensionSearcherPage> {
       color: HomeTheme.bg,
       child: Stack(
         children: [
-          Positioned.fill(child: AnimatedBackgroundGlow()),
+          const Positioned.fill(child: AnimatedBackgroundGlow()),
           Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
@@ -1516,6 +1684,41 @@ class _ExtensionSearcherPageState extends fluent.State<ExtensionSearcherPage> {
       );
     }
     _runtime = runtime;
+    // En TV, el teclado en pantalla a la izquierda y el catálogo de la
+    // extensión a la derecha — el mismo reparto que el buscador general.
+    //
+    // El campo de texto de la barra de arriba sigue existiendo y muestra lo
+    // que se va escribiendo, pero ya no hace falta enfocarlo: con el mando
+    // se escribe acá, sin que el teclado del sistema tape la grilla.
+    if (PlatformTv.esTelevisionSync) {
+      return Scaffold(
+        backgroundColor: HomeTheme.bg,
+        body: SafeArea(
+          child: Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Padding(
+                padding: const EdgeInsets.fromLTRB(24, 16, 0, 16),
+                child: TecladoTv(
+                  // Sin cartel propio: el texto ya se ve en la barra de
+                  // arriba de esta pantalla.
+                  mostrarCampo: false,
+                  texto: _keyWord,
+                  onCambio: (texto) {
+                    _typedText = '';
+                    _ghostBase = null;
+                    _textEditingController.text = texto;
+                    _onSearch(texto);
+                  },
+                ),
+              ),
+              const SizedBox(width: 16),
+              Expanded(child: _buildAndroid(context)),
+            ],
+          ),
+        ),
+      );
+    }
     return PlatformBuildWidget(
       androidBuilder: _buildAndroid,
       desktopBuilder: _buildDesktop,
@@ -1704,30 +1907,77 @@ class _ExtensionFilterWidgetState extends State<_ExtensionFilterWidget> {
       {required String label,
       required bool selected,
       required VoidCallback onTap}) {
+    // En TV el chip tiene que poder enfocarse: con GestureDetector a secas
+    // el mando no tenía dónde pararse y los filtros quedaban a la vista pero
+    // intocables.
+    if (PlatformTv.esTelevisionSync) {
+      // Radio 10, el mismo que la pastilla de TV (ver _pastillaChip): con
+      // 999 el marco de foco salía redondo alrededor de un bloque de
+      // esquinas rectas.
+      return FocusableCard(
+        borderRadius: 10,
+        onTap: onTap,
+        child: _pastillaChip(label: label, selected: selected),
+      );
+    }
     return GestureDetector(
       onTap: onTap,
       child: MouseRegion(
         cursor: SystemMouseCursors.click,
-        child: AnimatedContainer(
-          duration: const Duration(milliseconds: 150),
-          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
-          decoration: BoxDecoration(
-            color: selected
-                ? HomeTheme.accentPink.withValues(alpha: 0.18)
-                : HomeTheme.cardSurface,
-            borderRadius: BorderRadius.circular(999),
-            border: Border.all(
-              color: selected ? HomeTheme.accentPink : HomeTheme.border,
-            ),
+        child: _pastillaChip(label: label, selected: selected),
+      ),
+    );
+  }
+
+  Widget _pastillaChip({required String label, required bool selected}) {
+    // ── El chip de TV es otro, no el mismo más grande ───────────────────
+    //
+    // El de teléfono/escritorio es una cápsula fina con borde: se lee bien
+    // de cerca, donde el borde de 1px se distingue. A tres metros ese borde
+    // desaparece y lo elegido no se diferencia de lo no elegido.
+    //
+    // El de TV es un bloque sólido: lo elegido va RELLENO con el acento y
+    // texto blanco, lo demás en la superficie de tarjeta. Se distingue de
+    // un vistazo, sin depender de una línea de un píxel — y las esquinas
+    // menos redondeadas lo separan visualmente de los chips redondos del
+    // teléfono, que era el pedido: que en TV se vea distinto, no calcado.
+    final tv = PlatformTv.esTelevisionSync;
+    if (tv) {
+      return AnimatedContainer(
+        duration: const Duration(milliseconds: 150),
+        padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 13),
+        decoration: BoxDecoration(
+          color: selected ? HomeTheme.accentPink : HomeTheme.cardSurface,
+          borderRadius: BorderRadius.circular(10),
+        ),
+        child: Text(
+          label,
+          style: TextStyle(
+            color: selected ? Colors.white : HomeTheme.textPrimary,
+            fontSize: 15,
+            fontWeight: selected ? FontWeight.w800 : FontWeight.w600,
           ),
-          child: Text(
-            label,
-            style: TextStyle(
-              color: selected ? HomeTheme.accentPink : HomeTheme.textPrimary,
-              fontSize: 13,
-              fontWeight: FontWeight.w600,
-            ),
-          ),
+        ),
+      );
+    }
+    return AnimatedContainer(
+      duration: const Duration(milliseconds: 150),
+      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+      decoration: BoxDecoration(
+        color: selected
+            ? HomeTheme.accentPink.withValues(alpha: 0.18)
+            : HomeTheme.cardSurface,
+        borderRadius: BorderRadius.circular(999),
+        border: Border.all(
+          color: selected ? HomeTheme.accentPink : HomeTheme.border,
+        ),
+      ),
+      child: Text(
+        label,
+        style: TextStyle(
+          color: selected ? HomeTheme.accentPink : HomeTheme.textPrimary,
+          fontSize: 13,
+          fontWeight: FontWeight.w600,
         ),
       ),
     );
@@ -1741,7 +1991,31 @@ class _ExtensionFilterWidgetState extends State<_ExtensionFilterWidget> {
       children: [
         Align(
           alignment: Alignment.centerRight,
-          child: GestureDetector(
+          // En TV es un botón enfocable, no un texto subrayado: con el mando
+          // no hay dónde pararse sobre un texto suelto, así que restablecer
+          // los filtros era una opción visible pero imposible de usar.
+          child: PlatformTv.esTelevisionSync
+              ? FocusableCard(
+                  borderRadius: 10,
+                  onTap: _onReset,
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(
+                        horizontal: 18, vertical: 11),
+                    decoration: BoxDecoration(
+                      borderRadius: BorderRadius.circular(10),
+                      border: Border.all(color: HomeTheme.border),
+                    ),
+                    child: Text(
+                      'search.reset-filters'.i18n,
+                      style: TextStyle(
+                        color: HomeTheme.textMuted,
+                        fontSize: 14,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                  ),
+                )
+              : GestureDetector(
             onTap: _onReset,
             child: MouseRegion(
               cursor: SystemMouseCursors.click,

@@ -13,6 +13,7 @@ import 'package:prismhub/controllers/application_controller.dart';
 import 'package:prismhub/utils/connectivity.dart';
 import 'package:prismhub/utils/bloqueador_anuncios.dart';
 import 'package:prismhub/utils/log.dart';
+import 'package:prismhub/utils/platform_tv.dart';
 import 'package:prismhub/utils/prismhub_directory.dart';
 import 'package:prismhub/utils/request.dart';
 import 'package:prismhub/views/pages/debug_page.dart';
@@ -26,6 +27,7 @@ import 'package:prismhub/utils/i18n.dart';
 import 'package:prismhub/utils/prismhub_storage.dart';
 import 'package:prismhub/utils/application.dart';
 import 'package:prismhub/views/widgets/platform_widget.dart';
+import 'package:prismhub/views/widgets/tv/rescate_de_foco.dart';
 import 'package:prismhub/utils/compartir.dart';
 import 'package:prismhub/utils/notificacion_reproductor.dart';
 import 'package:prismhub/utils/instancia_unica.dart';
@@ -43,7 +45,22 @@ void main(List<String> args) async {
 
   runZonedGuarded(() async {
     FlutterError.onError = (FlutterErrorDetails details) {
-      logger.severe("", details.exception, details.stack);
+      // details.exception a secas es solo el resumen ("A RenderFlex
+      // overflowed by 13 pixels..."), sin el widget/archivo/línea donde
+      // pasó — eso vive en el árbol de diagnóstico que arma
+      // details.toString(), y se estaba tirando. Sin esto había que
+      // reproducir el error a mano con la consola de flutter run abierta
+      // para saber DÓNDE, en vez de leerlo en el log ya guardado.
+      logger.severe(details.toString(), details.exception, details.stack);
+    };
+
+    // Errores del motor nativo/engine que no pasan por el árbol de widgets
+    // (y por lo tanto no llegan a FlutterError.onError) — decodificación de
+    // video, canales de plataforma, etc. Devuelve true: ya se lo maneja acá,
+    // no hace falta que Flutter lo trate como fatal.
+    ui.PlatformDispatcher.instance.onError = (error, stack) {
+      logger.severe("", error, stack);
+      return true;
     };
 
     // En release, el ErrorWidget por defecto de Flutter es un rectángulo GRIS
@@ -701,6 +718,15 @@ class _AppRootState extends State<_AppRoot> with WidgetsBindingObserver {
     } catch (e) {
       debugPrint('ERROR: MediaKit.ensureInitialized falló: $e');
     }
+    // Solo pregunta en Android (PlatformTv.ensureInitialized vuelve de
+    // inmediato en Windows/Linux, sin tocar ningún canal). Tiene que estar
+    // resuelto ANTES de _ready = true: es lo que decide, más abajo en el
+    // árbol, si Android construye la Home de teléfono o la de TV.
+    try {
+      await PlatformTv.ensureInitialized();
+    } catch (e) {
+      debugPrint('ERROR: PlatformTv.ensureInitialized falló: $e');
+    }
     // La notificación del reproductor, solo en Android.
     //
     // Se enciende UNA vez al arrancar y no al abrir cada vídeo: Android no deja
@@ -928,12 +954,45 @@ class _MainAppState extends State<MainApp> {
           GlobalMaterialLocalizations.delegate,
           GlobalWidgetsLocalizations.delegate,
           GlobalCupertinoLocalizations.delegate,
+          // Las traducciones de fluent_ui, también en la rama de Android.
+          //
+          // Acá la raíz es GetMaterialApp, que no las trae: en escritorio sí,
+          // porque ahí la raíz es FluentApp. Antes daba igual —Android no
+          // usaba ningún widget de fluent— pero en TV el reproductor usa los
+          // controles de escritorio (ver video_player_content.dart), y esos
+          // están hechos con widgets de fluent. Sin este delegado, abrir un
+          // vídeo en TV llenaba la pantalla con "No FluentLocalizations
+          // found" antes de acomodarse.
+          fluent.FluentLocalizations.delegate,
         ],
         // Sin supportedLocales, el resolvedor cae a inglés aunque los delegados
         // estén puestos — por eso el selector de fecha salía en inglés con la
         // app en español.
         supportedLocales: const [Locale('es'), Locale('en')],
         locale: Locale(I18nUtils.currentLanguageCode),
+        builder: (context, child) {
+          if (child == null || !PlatformTv.esTelevisionSync) return child ?? const SizedBox.shrink();
+          // El botón central del D-pad (OK/select) llega como
+          // LogicalKeyboardKey.select, y Flutter NO lo liga a ActivateIntent
+          // por default —solo enter/espacio—. Sin esto, un botón de
+          // Material (FilledButton, TextButton, lo que sea) se ve enfocado
+          // (el propio Material dibuja el resaltado) pero apretar OK no
+          // hace nada: el foco está, pero no hay quién lo confirme.
+          //
+          // Se agrega, no se reemplaza: un Shortcuts que no reconoce una
+          // tecla la deja seguir subiendo, así que enter/espacio/flechas
+          // siguen andando exactamente igual que antes.
+          return Shortcuts(
+            shortcuts: const <ShortcutActivator, Intent>{
+              SingleActivator(LogicalKeyboardKey.select): ActivateIntent(),
+              SingleActivator(LogicalKeyboardKey.gameButtonA): ActivateIntent(),
+            },
+            // Y la red de seguridad del mando: si el foco se pierde, la
+            // primera flecha lo recupera en vez de dejar la app muerta.
+            // Ver RescateDeFoco.
+            child: RescateDeFoco(child: child),
+          );
+        },
       ),
     );
   }

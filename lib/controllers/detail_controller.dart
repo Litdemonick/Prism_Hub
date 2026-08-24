@@ -28,7 +28,6 @@ import 'package:prismhub/utils/external_player.dart';
 import 'package:prismhub/utils/i18n.dart';
 import 'package:prismhub/utils/prismhub_storage.dart';
 import 'package:prismhub/views/widgets/messenger.dart';
-import 'package:prismhub/views/widgets/nsfw_confirm_dialog.dart';
 
 class DetailPageController extends GetxController {
   DetailPageController({
@@ -64,49 +63,34 @@ class DetailPageController extends GetxController {
   // Atajo: si ya viene en true, _resolveNsfwStatus no necesita preguntar.
   final bool isAdultOption;
 
-  // No se puede saber automáticamente, ítem por ítem, si algo es +18 o no —
-  // así que se le pregunta al usuario UNA vez por título, al mirar/leer o al
-  // marcar favorito, y se recuerda la respuesta (queda guardada en el propio
-  // History/Favorite, así que no se vuelve a preguntar nunca por ese título).
+  // ── Ya NO se le pregunta al usuario si algo es +18 ────────────────────
   //
-  // Se pregunta en TODA extensión, no solo en las marcadas nsfw:true: a pedido
-  // explícito, una extensión sin esa marca igual puede tener contenido +18
-  // suelto, y el usuario tiene que poder mandarlo a la Zona +18. Antes se
-  // cortaba acá para las no-nsfw y nunca preguntaba.
-  bool? _nsfwAnswer;
-
-  // null = el usuario canceló (tocó afuera del diálogo) sin elegir Sí/No —
-  // quien llama a esto DEBE tratar null como "abortar la acción entera"
-  // (no favoritear, no abrir el reproductor/lector), no como "No". Antes
-  // tocar afuera devolvía false igual que "No" y la acción seguía de largo
-  // (favoriteaba igual, mandándolo al Home normal sin querer).
+  // Antes esto abría un diálogo ("¿Es contenido +18?") en CADA título nuevo,
+  // en toda extensión. La idea era cubrir el caso de contenido +18 suelto
+  // dentro de una extensión normal, pero en la práctica el aviso salía
+  // siempre —en One Piece, en cualquier cosa— justo al tocar "ver", que es
+  // el peor momento posible para frenar a alguien con una pregunta que casi
+  // nunca aplica.
+  //
+  // Ahora se resuelve solo, con lo que la app YA sabe:
+  //
+  //   · La extensión viene marcada +18 en el catálogo (`extension.nsfw`):
+  //     todo lo suyo es +18 y va a la Zona +18.
+  //   · Se está explorando con el filtro de adultos de una extensión mixta
+  //     (`isAdultOption`, ej. ManhwaWeb): eso también es +18.
+  //   · Cualquier otra cosa es contenido normal.
+  //
+  // Sin preguntas, y cada cosa termina en su zona igual. Lo ya guardado
+  // (historial/favoritos) manda por encima de todo: una respuesta vieja no
+  // se pisa.
+  //
+  // Devuelve `Future` y sigue pudiendo devolver null por compatibilidad con
+  // quien lo llama, pero hoy nunca cancela: no hay nada que cancelar.
   Future<bool?> resolveIsNsfw(BuildContext context,
       {bool opening = true}) async {
-    // Ya se guardó antes (con esta respuesta o con el default de un
-    // registro viejo, previo a este campo) — no se vuelve a preguntar.
     if (history.value != null) return history.value!.isNsfw;
     if (favorite.value != null) return favorite.value!.isNsfw;
-    if (_nsfwAnswer != null) return _nsfwAnswer!;
-    // Venir del filtro "+18" de la extensión ya NO responde solo: antes acá
-    // había un `if (isAdultOption) return true;` que daba por hecho el sí. A
-    // pedido explícito se pregunta igual — el filtro dice qué se está
-    // explorando, no que ESTE título puntual sea +18.
-    final result = await showNsfwConfirmDialog(
-      context,
-      title: detail?.title ?? '',
-      type: type,
-      opening: opening,
-      // Cambia el tono del aviso (rojo, con advertencia y la opción "sí"
-      // primero) cuando la extensión ya viene marcada +18 en el catálogo:
-      // preguntar en frío ahí quedaba raro, como si nada lo sugiriera.
-      extensionIsNsfw: extension?.nsfw ?? false,
-    );
-    // Tocar afuera: result queda null — NO se cachea nada en _nsfwAnswer,
-    // así que la próxima vez se vuelve a preguntar en vez de quedar
-    // "decidido" con una respuesta que el usuario nunca dio.
-    if (result == null) return null;
-    _nsfwAnswer = result == true;
-    return _nsfwAnswer!;
+    return isAdultOption || (extension?.nsfw ?? false);
   }
 
   ScrollController scrollController = ScrollController();
@@ -139,7 +123,7 @@ class DetailPageController extends GetxController {
     // 2) Sin estado: se cuenta. Más de un capítulo/episodio es serializado.
     final grupos = detail?.episodes;
     if (grupos == null || grupos.isEmpty) return false;
-    final total = grupos.fold<int>(0, (n, g) => n + (g.urls?.length ?? 0));
+    final total = grupos.fold<int>(0, (n, g) => n + g.urls.length);
     return total > 1;
   }
 
@@ -717,14 +701,13 @@ class DetailPageController extends GetxController {
   }
 
   // Se llama al quitar favorito o borrar historial (acá mismo, o desde
-  // HistoryPage vía el tag de este controller) — "olvida" la respuesta de
-  // +18 que este título tenía guardada, para que la próxima vez que se
-  // toque favorito o un capítulo se vuelva a preguntar en vez de arrastrar
-  // una decisión vieja de contenido que el usuario ya sacó de encima.
+  // HistoryPage vía el tag de este controller) — suelta lo guardado para
+  // este título, así la próxima vez la zona se vuelve a resolver desde la
+  // extensión (ver resolveIsNsfw) en vez de arrastrar un registro viejo de
+  // contenido que el usuario ya sacó de encima.
   void forgetNsfwDecision() {
     history.value = null;
     favorite.value = null;
-    _nsfwAnswer = null;
   }
 
   toggleFavorite(BuildContext context) async {

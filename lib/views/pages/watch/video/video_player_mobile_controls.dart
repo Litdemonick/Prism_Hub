@@ -252,7 +252,21 @@ class _VideoPlayerMobileControlsState extends State<VideoPlayerMobileControls> {
           ),
         ],
       ),
-    );
+    ).then((_) {
+      // Tocar fuera del cartel —o el botón atrás— también cuenta como
+      // cancelar.
+      //
+      // Sin esto el diálogo se cerraba y nadie contestaba: `resumePrompt`
+      // quedaba con valor, el vídeo pausado a propósito esperando una
+      // respuesta que ya no iba a llegar, y el reproductor sin forma de salir
+      // de ahí salvo cerrar y volver a entrar.
+      //
+      // Se comprueba que siga pendiente para no pisar la respuesta de los
+      // botones: los dos hacen `pop()`, así que este `then` corre igual
+      // después de ellos.
+      if (!mounted) return;
+      if (_c.resumePrompt.value != null) _c.cancelResume();
+    });
   }
 
   @override
@@ -337,7 +351,7 @@ class _VideoPlayerMobileControlsState extends State<VideoPlayerMobileControls> {
                                               _c.isActuallyBuffering.value)))))
                           ? 1
                           : 0,
-                      child: Center(
+                      child: const Center(
                         child: DecoratedBox(
                           decoration: BoxDecoration(
                             // Disco oscuro detrás: sobre un fotograma claro
@@ -521,15 +535,15 @@ class _VideoPlayerMobileControlsState extends State<VideoPlayerMobileControls> {
                       _c.seek(_c.position.value + adelante);
                       _mostrarSalto(adelante.inSeconds);
                       if (enPausa) _mostrarAviso('video.paused'.i18n);
-                    } else {
-                      _c.playOrPause();
-                      // Casteando no hace falta: el panel del centro ya dice si
-                      // esta andando o en pausa, y repetirlo encima solo tapa.
-                      // Estaba andando, asi que este toque lo pausa.
-                      if (!enPausa && !casteando) {
-                        _mostrarAviso('video.paused'.i18n);
-                      }
                     }
+                    // El tercio del CENTRO ya no pausa con doble toque.
+                    //
+                    // Para eso está el botón grande de pausa, que cae justo
+                    // ahí: quedaban dos formas de pausar en el mismo sitio y la
+                    // del doble toque se disparaba sin querer al intentar
+                    // saltar cerca del medio. Los tercios de los costados
+                    // siguen igual — ahí el doble toque es el único atajo de
+                    // salto que hay en el teléfono.
                   },
                   // Deslizar vertical = volumen, en cualquier parte de la
                   // pantalla — a pedido explícito, el reproductor ya no toca
@@ -645,7 +659,7 @@ class _VideoPlayerMobileControlsState extends State<VideoPlayerMobileControls> {
                                   .withValues(alpha: 0.18),
                               border: Border.all(color: HomeTheme.oscuroAcento),
                             ),
-                            child: Icon(Icons.play_arrow,
+                            child: const Icon(Icons.play_arrow,
                                 color: HomeTheme.oscuroAcento, size: 36),
                           ),
                           const SizedBox(height: 10),
@@ -1096,7 +1110,17 @@ class _VideoPlayerMobileControlsState extends State<VideoPlayerMobileControls> {
             Positioned.fill(
               child: Obx(() {
                 if (_c.dlnaDevice.value != null ||
-                    _c.isGettingWatchData.value) {
+                    _c.isGettingWatchData.value ||
+                    // Ni cuando el centro ya tiene su propio cartel con su
+                    // botón: el de «Tocá para reproducir el servidor elegido»,
+                    // el de un servidor que falló y el de error. Los tres
+                    // dibujan un botón en el mismo sitio, así que este quedaba
+                    // ENCIMA del de ellos —se veían los dos superpuestos— y
+                    // encima no hay nada que pausar todavía.
+                    _c.awaitingServerChoice.value ||
+                    _c.serverFailedMessage.value.isNotEmpty ||
+                    _c.error.value.isNotEmpty ||
+                    _c.extensionCaida.value != null) {
                   return const SizedBox.shrink();
                 }
                 return IgnorePointer(
@@ -1202,7 +1226,7 @@ class _PanelCasteandoState extends State<_PanelCasteando>
           mainAxisSize: MainAxisSize.min,
           children: [
             if (conectando)
-              SizedBox(
+              const SizedBox(
                 width: 44,
                 height: 44,
                 child: CircularProgressIndicator(
@@ -1531,7 +1555,7 @@ class _Header extends StatelessWidget {
                   // nada en el medio de un episodio.
                   IconButton(
                     tooltip: 'common.disconnect'.i18n,
-                    icon: Icon(Icons.cast_connected,
+                    icon: const Icon(Icons.cast_connected,
                         color: HomeTheme.oscuroAcento),
                     onPressed: () => _confirmarDesconectar(context),
                   ),
@@ -1791,7 +1815,17 @@ class _Footer extends StatelessWidget {
       child: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
-          _SeekBar(controller: controller),
+          // Mismo criterio que en escritorio: la barra no se toca mientras el
+          // reproductor está ocupado. Ver `barraBloqueada` en el controller —
+          // es el único sitio donde se decide, así que las dos plataformas se
+          // comportan igual.
+          Obx(() => IgnorePointer(
+                ignoring: controller.barraBloqueada,
+                child: Opacity(
+                  opacity: controller.barraBloqueada ? 0.5 : 1,
+                  child: _SeekBar(controller: controller),
+                ),
+              )),
           const SizedBox(height: 10),
           // Scrolleable horizontal: cuando el sidebar (ajustes/calidad/etc.)
           // está abierto, le saca 300px de ancho al video — sin esto, esta
@@ -1822,7 +1856,7 @@ class _Footer extends StatelessWidget {
                   // Resolviendo el servidor elegido — bloquear el botón para
                   // no permitir otro toque/doble intento mientras carga.
                   if (controller.isGettingWatchData.value) {
-                    return IconButton(
+                    return const IconButton(
                       onPressed: null,
                       icon: SizedBox(
                         width: 24,
