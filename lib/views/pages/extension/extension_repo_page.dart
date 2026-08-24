@@ -17,6 +17,7 @@ import 'package:prismhub/views/widgets/platform_widget.dart';
 import 'package:prismhub/views/widgets/search_appbar.dart';
 import 'package:prismhub/views/widgets/messenger.dart';
 import 'package:prismhub/views/pages/nsfw18/nsfw18_access.dart';
+import 'package:prismhub/utils/platform_tv.dart';
 
 class ExtensionRepoPage extends StatefulWidget {
   const ExtensionRepoPage({super.key});
@@ -777,7 +778,14 @@ class _ExtensionRepoPageState extends State<ExtensionRepoPage> {
         Widget listRender(List<Widget> cards) =>
             Column(mainAxisSize: MainAxisSize.min, children: cards);
         return ListView(
-          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+          // En TV, más aire a los costados y sobre todo ABAJO: la tarjeta
+          // enfocada crece y le sale su marco, así que la última quedaba
+          // mordida contra el borde de la lista y no había forma de verla
+          // entera. El relleno de abajo también da a dónde desplazarse
+          // cuando el foco llega al final.
+          padding: PlatformTv.esTelevisionSync
+              ? const EdgeInsets.fromLTRB(26, 14, 26, 96)
+              : const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
           children: [
             ...paginatedSection(
               headerKey: 'extension-repo.installed',

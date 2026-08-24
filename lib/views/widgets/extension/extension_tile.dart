@@ -19,6 +19,7 @@ import 'package:prismhub/views/widgets/home/home_theme.dart';
 import 'package:prismhub/views/widgets/messenger.dart';
 import 'package:prismhub/views/widgets/platform_widget.dart';
 import 'package:prismhub/views/widgets/progress.dart';
+import 'package:prismhub/utils/platform_tv.dart';
 
 class ExtensionTile extends StatefulWidget {
   const ExtensionTile(this.extension, {super.key});
@@ -371,20 +372,40 @@ class _ExtensionTileState extends State<ExtensionTile> {
           border: Border.all(color: HomeTheme.border),
         ),
         clipBehavior: Clip.antiAlias,
-        child: _buildAndroidTile(context),
+        // El ListTile necesita un Material propio debajo: pinta su fondo y
+        // su efecto de toque sobre el más cercano, y el Container de acá
+        // arriba (que sí tiene color) se los tapaba. Flutter lo avisaba en
+        // consola una vez por extensión de la lista.
+        child: Material(
+          color: Colors.transparent,
+          child: _buildAndroidTile(context),
+        ),
       ),
     );
   }
 
   Widget _buildAndroidTile(BuildContext context) {
+    // En TV todo más grande: la fila se mira desde el sillón, no a 30cm.
+    // Con las medidas de teléfono, el nombre y el icono quedan chiquitos en
+    // el medio de una pantalla enorme, y el interruptor —que es lo que uno
+    // viene a tocar— es un blanco diminuto para el mando.
+    final tv = PlatformTv.esTelevisionSync;
     return ListTile(
-      leading: _iconBox(size: 40, iconSize: 20),
+      contentPadding: tv
+          ? const EdgeInsets.symmetric(horizontal: 22, vertical: 14)
+          : null,
+      leading: tv
+          ? _iconBox(size: 56, iconSize: 28)
+          : _iconBox(size: 40, iconSize: 20),
       // Si el nombre no entra, al lado sale el botón para verlo completo. En
       // una lista de diecisiete, dos que empiezan igual y se cortan en el
       // mismo punto se ven idénticas.
       title: TextoQueNoCabe(
         widget.extension.name,
-        estilo: const TextStyle(fontWeight: FontWeight.w600),
+        estilo: TextStyle(
+          fontWeight: FontWeight.w600,
+          fontSize: tv ? 20 : null,
+        ),
       ),
       subtitle: Column(
         crossAxisAlignment: CrossAxisAlignment.start,

@@ -10,6 +10,7 @@ import 'package:prismhub/utils/extension.dart';
 import 'package:prismhub/utils/hidden_cards.dart';
 import 'package:prismhub/utils/history_cover.dart';
 import 'package:prismhub/utils/i18n.dart';
+import 'package:prismhub/utils/platform_tv.dart';
 import 'package:prismhub/utils/resume_history.dart';
 import 'package:prismhub/views/pages/history_page.dart';
 import 'package:prismhub/views/widgets/home/animated_background_glow.dart';
@@ -493,8 +494,68 @@ class _LibraryPageState extends State<LibraryPage> {
     return _buildContent();
   }
 
+  /// Biblioteca en TV.
+  ///
+  /// Las secciones son las mismas (Continuar viendo/leyendo, Favoritos) y las
+  /// tarjetas ya se enfocan solas en TV (ver HomeMediaCard). Lo que cambia es
+  /// el marco: nada de Scaffold ni de "deslizar para actualizar" —no hay dedo
+  /// que deslice, y ese gesto además peleaba con el subir del mando—.
+  ///
+  /// Sin fondo propio ni márgenes: en TV esta pantalla se dibuja DENTRO de la
+  /// Home (es una zona más del sidebar, ver home_page_tv.dart), que ya pone el
+  /// fondo, la barra de arriba y el margen de overscan. Repetirlos acá daba
+  /// doble margen y un fondo encima del otro.
+  ///
+  /// Y tampoco reusa `_buildContent`: ese está armado para ocupar la pantalla
+  /// ENTERA —el hueco del estado vacío se calcula restándole al alto total—
+  /// y acá el alto disponible es menor (el sidebar y la barra de arriba ya se
+  /// llevaron lo suyo). Con esa cuenta pensada para pantalla completa, el
+  /// contenido se pasaba de largo: los 28 píxeles de desborde que se veían.
+  Widget _buildTvHome(BuildContext context) {
+    return Obx(() {
+      // Sin título ni botones de Favoritos/Historial: en TV esos dos ya
+      // están en la barra de arriba de la Home (esta pantalla vive dentro de
+      // ella), y el nombre de la zona lo dice el sidebar. Repetirlos era
+      // gastar la franja de arriba en algo que el usuario tiene enfrente.
+      final vacia = c.resents.isEmpty && c.favorites.isEmpty;
+      // El vacío de TV es propio: el de teléfono trae su recuadro con borde
+      // y su botón de "Ver historial", y acá los dos sobran — el historial
+      // ya está en la barra de arriba, y el recuadro dentro del panel se
+      // leía como una caja flotando arriba en vez de un centro de pantalla.
+      if (vacia) {
+        return Center(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Icon(
+                Icons.video_library_outlined,
+                size: 56,
+                color: HomeTheme.textMuted,
+              ),
+              const SizedBox(height: 18),
+              Text(
+                'home.no-record'.i18n,
+                textAlign: TextAlign.center,
+                style: TextStyle(color: HomeTheme.textMuted, fontSize: 16),
+              ),
+            ],
+          ),
+        );
+      }
+      return ListView(
+        physics: const AlwaysScrollableScrollPhysics(),
+        padding: const EdgeInsets.only(bottom: 24),
+        children: [
+          ..._continuarSecciones(context),
+          ..._favoritosSecciones(context),
+        ],
+      );
+    });
+  }
+
   @override
   Widget build(BuildContext context) {
+    if (PlatformTv.esTelevisionSync) return _buildTvHome(context);
     return PlatformBuildWidget(
       androidBuilder: _buildAndroidHome,
       desktopBuilder: _buildDesktopHome,

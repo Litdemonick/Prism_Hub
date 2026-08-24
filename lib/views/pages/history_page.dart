@@ -23,6 +23,8 @@ import 'package:prismhub/views/widgets/home/animated_background_glow.dart';
 import 'package:prismhub/views/widgets/home/home_media_card.dart';
 import 'package:prismhub/views/widgets/home/home_theme.dart';
 import 'package:prismhub/views/widgets/platform_widget.dart';
+import 'package:prismhub/utils/platform_tv.dart';
+import 'package:prismhub/views/widgets/tv/focusable_card.dart';
 
 // "Ver todo" destination for Home's Continuar section — one place with
 // every history/favorite item, filterable by tab, searchable by title, and
@@ -625,11 +627,28 @@ class _HistoryPageState extends State<HistoryPage> {
   // escrito inline y copiarlo dos veces más era garantizar que se separaran.
   Widget _chip(String texto, bool seleccionado, VoidCallback onTap,
       {double fontSize = 13}) {
+    // En TV el chip se envuelve para que el mando pueda enfocarlo: con
+    // GestureDetector a secas no hay dónde pararse y las pestañas quedan
+    // visibles pero intocables.
+    if (PlatformTv.esTelevisionSync) {
+      return FocusableCard(
+        borderRadius: 999,
+        accent: _accent,
+        onTap: onTap,
+        child: _pastillaChip(texto, seleccionado, fontSize),
+      );
+    }
     return GestureDetector(
       onTap: onTap,
       child: MouseRegion(
         cursor: SystemMouseCursors.click,
-        child: AnimatedContainer(
+        child: _pastillaChip(texto, seleccionado, fontSize),
+      ),
+    );
+  }
+
+  Widget _pastillaChip(String texto, bool seleccionado, double fontSize) {
+    return AnimatedContainer(
           duration: const Duration(milliseconds: 150),
           padding: EdgeInsets.symmetric(
               horizontal: fontSize > 12 ? 16 : 12,
@@ -643,14 +662,12 @@ class _HistoryPageState extends State<HistoryPage> {
               color: seleccionado ? _accent : HomeTheme.border,
             ),
           ),
-          child: Text(
-            texto,
-            style: TextStyle(
-              color: seleccionado ? _accent : HomeTheme.textPrimary,
-              fontSize: fontSize,
-              fontWeight: FontWeight.w600,
-            ),
-          ),
+      child: Text(
+        texto,
+        style: TextStyle(
+          color: seleccionado ? _accent : HomeTheme.textPrimary,
+          fontSize: fontSize,
+          fontWeight: FontWeight.w600,
         ),
       ),
     );

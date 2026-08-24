@@ -11,6 +11,7 @@ import 'package:prismhub/utils/portadas_perdidas.dart';
 import 'package:prismhub/router/router.dart';
 import 'package:prismhub/utils/bloqueador_anuncios.dart';
 import 'package:prismhub/utils/modo_app.dart';
+import 'package:prismhub/views/pages/extension/extension_repo_page.dart';
 import 'package:prismhub/views/pages/settings/bloqueador_page.dart';
 import 'package:prismhub/views/pages/settings/copia_elegir_extensiones.dart';
 import 'package:prismhub/views/pages/settings/copia_resultado.dart';
@@ -1219,6 +1220,29 @@ class _SettingsPageState extends State<SettingsPage> {
         subTitle: 'settings.extension-subtitle'.i18n,
         content: Column(
           children: [
+            // Solo Android (teléfono y TV): en escritorio esto ya vive
+            // siempre a la vista en el panel lateral, así que repetirlo acá
+            // sería un atajo a algo que ya está enfrente. En TV es el ÚNICO
+            // camino: sin barra de navegación propia ahí (ver main_page.dart),
+            // Ajustes es de dónde tiene que salir todo lo que no es
+            // contenido.
+            if (Platform.isAndroid) ...[
+              SettingsTile(
+                icon: const Icon(Icons.extension_outlined),
+                title: 'common.extension-installed'.i18n,
+                trailing: const Icon(Icons.chevron_right),
+                onTap: () => Get.find<MainController>()
+                    .changeTab(MainController.tabExtensiones),
+              ),
+              const SizedBox(height: 8),
+              SettingsTile(
+                icon: const Icon(Icons.travel_explore_outlined),
+                title: 'settings.extension-repo-open'.i18n,
+                trailing: const Icon(Icons.chevron_right),
+                onTap: () => Get.to(() => const ExtensionRepoPage()),
+              ),
+              const SizedBox(height: 8),
+            ],
             SettingsIntpuTile(
               title: 'settings.repo-url'.i18n,
               // Bloqueado, igual que el proxy. Vaciarlo o escribir cualquier

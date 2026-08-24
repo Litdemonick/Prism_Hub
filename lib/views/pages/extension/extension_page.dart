@@ -11,7 +11,9 @@ import 'package:prismhub/views/widgets/extension/extension_tile.dart';
 import 'package:prismhub/views/pages/extension/extension_repo_page.dart';
 import 'package:prismhub/views/pages/nsfw18/nsfw18_access.dart';
 import 'package:prismhub/views/widgets/home/animated_background_glow.dart';
+import 'package:prismhub/utils/platform_tv.dart';
 import 'package:prismhub/views/widgets/home/home_theme.dart';
+import 'package:prismhub/views/widgets/tv/focusable_card.dart';
 import 'package:prismhub/views/widgets/home/indicadores_de_pagina.dart';
 import 'package:prismhub/utils/extension.dart';
 import 'package:prismhub/utils/log.dart';
@@ -1492,31 +1494,44 @@ class _ExtFilterChip extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final color = accent ?? HomeTheme.accentPink;
+    final pastilla = AnimatedContainer(
+      duration: const Duration(milliseconds: 150),
+      // En TV, más grande: se mira de lejos, y estos chips a 12.5 puntos
+      // no se leen desde el sillón.
+      padding: PlatformTv.esTelevisionSync
+          ? const EdgeInsets.symmetric(horizontal: 18, vertical: 11)
+          : const EdgeInsets.symmetric(horizontal: 14, vertical: 7),
+      decoration: BoxDecoration(
+        color: selected ? color.withValues(alpha: 0.18) : HomeTheme.cardSurface,
+        borderRadius: BorderRadius.circular(999),
+        border: Border.all(
+          color: selected ? color : HomeTheme.border,
+        ),
+      ),
+      child: Text(
+        label,
+        style: TextStyle(
+          color: selected ? color : HomeTheme.textMuted,
+          fontSize: PlatformTv.esTelevisionSync ? 15 : 12.5,
+          fontWeight: selected ? FontWeight.w700 : FontWeight.w500,
+        ),
+      ),
+    );
+    // En TV el chip tiene que poder enfocarse: sin esto los filtros se ven
+    // pero el mando no tiene dónde pararse.
+    if (PlatformTv.esTelevisionSync) {
+      return FocusableCard(
+        borderRadius: 999,
+        accent: accent,
+        onTap: onTap,
+        child: pastilla,
+      );
+    }
     return GestureDetector(
       onTap: onTap,
       child: MouseRegion(
         cursor: SystemMouseCursors.click,
-        child: AnimatedContainer(
-          duration: const Duration(milliseconds: 150),
-          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 7),
-          decoration: BoxDecoration(
-            color: selected
-                ? color.withValues(alpha: 0.18)
-                : HomeTheme.cardSurface,
-            borderRadius: BorderRadius.circular(999),
-            border: Border.all(
-              color: selected ? color : HomeTheme.border,
-            ),
-          ),
-          child: Text(
-            label,
-            style: TextStyle(
-              color: selected ? color : HomeTheme.textMuted,
-              fontSize: 12.5,
-              fontWeight: selected ? FontWeight.w700 : FontWeight.w500,
-            ),
-          ),
-        ),
+        child: pastilla,
       ),
     );
   }

@@ -2,8 +2,10 @@
 import 'package:prismhub/models/extension.dart';
 import 'package:prismhub/utils/extension.dart';
 import 'package:prismhub/utils/forma_portada.dart';
+import 'package:prismhub/utils/platform_tv.dart';
 import 'package:prismhub/views/widgets/grid_item_tile.dart';
 import 'package:prismhub/views/widgets/platform_widget.dart';
+import 'package:prismhub/views/widgets/tv/focusable_card.dart';
 
 class ExtensionItemCard extends StatefulWidget {
   const ExtensionItemCard({
@@ -94,11 +96,34 @@ class _ExtensionItemCardState extends State<ExtensionItemCard> {
     );
   }
 
+  /// Abre la ficha de este ítem. Es lo mismo que hace el `onTap` de las dos
+  /// variantes de arriba — extraído para que la envoltura de foco de TV no
+  /// tenga que repetir la lista de argumentos.
+  void _abrir(BuildContext context) => ExtensionUtils.openExtensionDetail(
+        context,
+        package: widget.package,
+        url: widget.url,
+        isAdultOption: widget.isAdultOption,
+        cover: widget.cover,
+        coverHeaders: widget.headers,
+      );
+
   @override
   Widget build(BuildContext context) {
-    return PlatformBuildWidget(
+    final tarjeta = PlatformBuildWidget(
       androidBuilder: _buildAndroid,
       desktopBuilder: _buildDesktop,
+    );
+    if (!PlatformTv.esTelevisionSync) return tarjeta;
+    // En TV la tarjeta se envuelve para que el D-pad pueda enfocarla. El
+    // `IgnorePointer` apaga el `onTap` que la tarjeta ya trae adentro: con
+    // los dos activos, un solo click abría la ficha DOS veces (ninguno de
+    // los dos gestos "gana" — no compiten por un arrastre, así que ambos
+    // reconocen el toque).
+    return FocusableCard(
+      borderRadius: 10,
+      onTap: () => _abrir(context),
+      child: IgnorePointer(child: tarjeta),
     );
   }
 }

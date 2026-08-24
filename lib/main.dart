@@ -27,6 +27,7 @@ import 'package:prismhub/utils/i18n.dart';
 import 'package:prismhub/utils/prismhub_storage.dart';
 import 'package:prismhub/utils/application.dart';
 import 'package:prismhub/views/widgets/platform_widget.dart';
+import 'package:prismhub/views/widgets/tv/rescate_de_foco.dart';
 import 'package:prismhub/utils/compartir.dart';
 import 'package:prismhub/utils/notificacion_reproductor.dart';
 import 'package:prismhub/utils/instancia_unica.dart';
@@ -723,10 +724,6 @@ class _AppRootState extends State<_AppRoot> with WidgetsBindingObserver {
     // árbol, si Android construye la Home de teléfono o la de TV.
     try {
       await PlatformTv.ensureInitialized();
-      // TODO(fase-0-tv): diagnóstico temporal, sacar apenas se confirme en
-      // un Android TV real/emulado que esTelevisionSync da true ahí y false
-      // en un teléfono con el mismo build.
-      debugPrint('PlatformTv.esTelevisionSync = ${PlatformTv.esTelevisionSync}');
     } catch (e) {
       debugPrint('ERROR: PlatformTv.ensureInitialized falló: $e');
     }
@@ -957,12 +954,45 @@ class _MainAppState extends State<MainApp> {
           GlobalMaterialLocalizations.delegate,
           GlobalWidgetsLocalizations.delegate,
           GlobalCupertinoLocalizations.delegate,
+          // Las traducciones de fluent_ui, también en la rama de Android.
+          //
+          // Acá la raíz es GetMaterialApp, que no las trae: en escritorio sí,
+          // porque ahí la raíz es FluentApp. Antes daba igual —Android no
+          // usaba ningún widget de fluent— pero en TV el reproductor usa los
+          // controles de escritorio (ver video_player_content.dart), y esos
+          // están hechos con widgets de fluent. Sin este delegado, abrir un
+          // vídeo en TV llenaba la pantalla con "No FluentLocalizations
+          // found" antes de acomodarse.
+          fluent.FluentLocalizations.delegate,
         ],
         // Sin supportedLocales, el resolvedor cae a inglés aunque los delegados
         // estén puestos — por eso el selector de fecha salía en inglés con la
         // app en español.
         supportedLocales: const [Locale('es'), Locale('en')],
         locale: Locale(I18nUtils.currentLanguageCode),
+        builder: (context, child) {
+          if (child == null || !PlatformTv.esTelevisionSync) return child ?? const SizedBox.shrink();
+          // El botón central del D-pad (OK/select) llega como
+          // LogicalKeyboardKey.select, y Flutter NO lo liga a ActivateIntent
+          // por default —solo enter/espacio—. Sin esto, un botón de
+          // Material (FilledButton, TextButton, lo que sea) se ve enfocado
+          // (el propio Material dibuja el resaltado) pero apretar OK no
+          // hace nada: el foco está, pero no hay quién lo confirme.
+          //
+          // Se agrega, no se reemplaza: un Shortcuts que no reconoce una
+          // tecla la deja seguir subiendo, así que enter/espacio/flechas
+          // siguen andando exactamente igual que antes.
+          return Shortcuts(
+            shortcuts: const <ShortcutActivator, Intent>{
+              SingleActivator(LogicalKeyboardKey.select): ActivateIntent(),
+              SingleActivator(LogicalKeyboardKey.gameButtonA): ActivateIntent(),
+            },
+            // Y la red de seguridad del mando: si el foco se pierde, la
+            // primera flecha lo recupera en vez de dejar la app muerta.
+            // Ver RescateDeFoco.
+            child: RescateDeFoco(child: child),
+          );
+        },
       ),
     );
   }
