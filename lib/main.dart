@@ -13,6 +13,7 @@ import 'package:prismhub/controllers/application_controller.dart';
 import 'package:prismhub/utils/connectivity.dart';
 import 'package:prismhub/utils/bloqueador_anuncios.dart';
 import 'package:prismhub/utils/log.dart';
+import 'package:prismhub/utils/platform_tv.dart';
 import 'package:prismhub/utils/prismhub_directory.dart';
 import 'package:prismhub/utils/request.dart';
 import 'package:prismhub/views/pages/debug_page.dart';
@@ -715,6 +716,19 @@ class _AppRootState extends State<_AppRoot> with WidgetsBindingObserver {
       MediaKit.ensureInitialized();
     } catch (e) {
       debugPrint('ERROR: MediaKit.ensureInitialized falló: $e');
+    }
+    // Solo pregunta en Android (PlatformTv.ensureInitialized vuelve de
+    // inmediato en Windows/Linux, sin tocar ningún canal). Tiene que estar
+    // resuelto ANTES de _ready = true: es lo que decide, más abajo en el
+    // árbol, si Android construye la Home de teléfono o la de TV.
+    try {
+      await PlatformTv.ensureInitialized();
+      // TODO(fase-0-tv): diagnóstico temporal, sacar apenas se confirme en
+      // un Android TV real/emulado que esTelevisionSync da true ahí y false
+      // en un teléfono con el mismo build.
+      debugPrint('PlatformTv.esTelevisionSync = ${PlatformTv.esTelevisionSync}');
+    } catch (e) {
+      debugPrint('ERROR: PlatformTv.ensureInitialized falló: $e');
     }
     // La notificación del reproductor, solo en Android.
     //

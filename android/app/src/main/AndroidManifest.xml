@@ -6,12 +6,18 @@
          13+. Sin el, el sistema avisa en cada arranque que no esta habilitado
          y no se ve la animacion de vuelta que el usuario ya espera del resto
          del telefono. -->
+    <!-- No excluye el APK de dispositivos táctiles: los dos van con
+         required="false". Sin esto, un Play Store real podría dejar de
+         ofrecer la app a teléfonos normales al declarar soporte de TV. -->
+    <uses-feature android:name="android.software.leanback" android:required="false" />
+    <uses-feature android:name="android.hardware.touchscreen" android:required="false" />
     <application
         android:label="${appLabel}"
         android:name="${applicationName}"
         android:requestLegacyExternalStorage="true"
         android:usesCleartextTraffic="true"
         android:enableOnBackInvokedCallback="true"
+        android:banner="@drawable/banner_tv"
         android:icon="@mipmap/ic_launcher">
         <activity
             android:name=".MainActivity"
@@ -32,6 +38,14 @@
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />
                 <category android:name="android.intent.category.LAUNCHER" />
+            </intent-filter>
+            <!-- LEANBACK_LAUNCHER es lo que hace que el ícono (con el banner
+                 de arriba) aparezca en el selector de apps de Android TV. Se
+                 SUMA al intent-filter de arriba, no lo reemplaza: el mismo
+                 APK sigue instalando y abriendo igual en teléfono/tablet. -->
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+                <category android:name="android.intent.category.LEANBACK_LAUNCHER" />
             </intent-filter>
             <!-- Enlaces compartidos: prismhub://detail?package=...&url=...
                  BROWSABLE es lo que permite que lo abra otra app (WhatsApp,

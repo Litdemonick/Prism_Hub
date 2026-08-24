@@ -140,6 +140,13 @@ flutter_launcher_icons:
     generate: false
     image_path: "assets/icon/icon_square.png"
     icon_size: 256
+  # El banner de Android TV (320x180, el que se ve en el selector de apps del
+  # launcher de TV) TAMPOCO sale de acá: flutter_launcher_icons no genera
+  # banners, solo íconos. assets/icon/banner_tv.png es la fuente; la copia que
+  # de verdad usa Android vive a mano en
+  # android/app/src/main/res/drawable-xhdpi/banner_tv.png. Si se retoca el
+  # banner, hay que actualizar los dos archivos — no hay ningún paso
+  # automático que los sincronice.
 
 flutter:
   uses-material-design: true
