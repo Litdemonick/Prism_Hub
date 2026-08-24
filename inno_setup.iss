@@ -35,7 +35,10 @@ DisableProgramGroupPage=yes
 DisableDirPage=auto
 ; Uncomment the following line to run in non administrative install mode (install for current user only.)
 ;PrivilegesRequired=lowest
-OutputBaseFilename=PrismHub-setup-{#MyAppVersion}
+; Con "windows" en el nombre: en la lista de descargas de una version hay
+; archivos de tres plataformas, y "PrismHub-setup-v1.0.28.exe" a secas no
+; decia para cual era — el resto si lo dice (android, linux).
+OutputBaseFilename=PrismHub-setup-windows-{#MyAppVersion}
 SetupIconFile=.\windows\runner\resources\app_icon.ico
 Compression=lzma
 SolidCompression=yes

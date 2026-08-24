@@ -115,6 +115,17 @@ jobs:
             # Es lo que permite dejar un código de Downloader (aftvnews) o
             # un QR puestos para siempre en un televisor.
             cp "PrismHub-${{ github.ref_name }}-android-$arch.apk"                "PrismHub-android-$arch.apk"
+            # ── Y el mismo archivo, con nombre de televisor ──────────────
+            #
+            # Es UNA copia identica, no otra compilacion: el mismo APK sirve
+            # para telefono, tablet y TV, y la app reconoce sola donde esta
+            # corriendo.
+            #
+            # Existe solo para que se entienda: en una lista de descargas,
+            # alguien con un televisor no tiene por que saber que "android"
+            # tambien lo incluye. Con el nombre a la vista, no hay que
+            # explicarlo.
+            cp "PrismHub-${{ github.ref_name }}-android-$arch.apk"                "PrismHub-androidtv-$arch.apk"
           done
       - name: Release Android
         uses: ncipollo/release-action@v1

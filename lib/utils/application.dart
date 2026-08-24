@@ -261,14 +261,26 @@ class ApplicationUtils {
 
   static Map<String, dynamic>? _findAsset(dynamic assets, String tagName) {
     final expectedName = 'PrismHub-$tagName-$_platformSuffix';
-    final expectedSetupName = 'PrismHub-setup-$tagName.exe';
+    // Dos nombres para el instalador de Windows, y no uno.
+    //
+    // Desde la 1.0.28 lleva "windows" adentro (antes era solo "setup", que en
+    // una lista con archivos de tres plataformas no decía para cuál era). El
+    // nombre viejo se sigue aceptando: una versión anterior instalada tiene
+    // que poder actualizarse igual, y quien publique un release con el nombre
+    // de antes no se queda sin actualizaciones.
+    final nombresDelSetup = <String>[
+      'PrismHub-setup-windows-$tagName.exe',
+      'PrismHub-setup-$tagName.exe',
+    ];
     try {
       final list = assets as List;
       if (Platform.isWindows && _windowsInstallLooksManaged) {
-        final setup = list.firstWhereOrNull(
-          (a) => (a['name'] as String?) == expectedSetupName,
-        );
-        if (setup != null) return setup as Map<String, dynamic>;
+        for (final esperado in nombresDelSetup) {
+          final setup = list.firstWhereOrNull(
+            (a) => (a['name'] as String?) == esperado,
+          );
+          if (setup != null) return setup as Map<String, dynamic>;
+        }
       }
       final archive = list.firstWhere(
         (a) => (a['name'] as String) == expectedName,

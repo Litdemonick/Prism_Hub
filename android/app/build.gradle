@@ -64,6 +64,25 @@ android {
         main.java.srcDirs += 'src/main/kotlin'
     }
 
+    lint {
+        // ── El aviso de "Google Play exige API 33 o superior" ────────────
+        //
+        // Es un ERROR fatal para el linter y tira abajo la compilación de
+        // release. Empezó a aplicarlo al declarar la app para televisores:
+        // con el intent-filter de leanback, lint la trata como una app
+        // publicable en Play Store.
+        //
+        // PrismHub NO se publica en Play Store — se distribuye como APK
+        // directo desde las versiones de GitHub — así que ese requisito no
+        // aplica.
+        //
+        // Y el targetSdk no se puede subir: está clavado en 28 porque más
+        // arriba el servidor de torrents no arranca (ver defaultConfig).
+        // O sea que el aviso pide algo que romperia la app para cumplir una
+        // regla de una tienda donde no estamos.
+        disable 'ExpiredTargetSdkVersion'
+    }
+
     defaultConfig {
         applicationId "com.prismhub.app"
         minSdk flutter.minSdkVersion

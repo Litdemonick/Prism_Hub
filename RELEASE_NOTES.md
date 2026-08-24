@@ -59,29 +59,35 @@ televisor y se maneja de punta a punta con el control remoto.
 
 | Archivo | Para |
 |---|---|
-| **`PrismHub-android-arm64-v8a.apk`** | **La mayoría de los televisores** y cajas actuales |
-| `PrismHub-android-armeabi-v7a.apk` | Aparatos viejos, de 32 bits |
-| `PrismHub-android-x86_64.apk` | Emuladores y algunas cajas con procesador Intel |
+| **`PrismHub-androidtv-arm64-v8a.apk`** | **La mayoría de los televisores** y cajas actuales |
+| `PrismHub-androidtv-armeabi-v7a.apk` | Aparatos viejos, de 32 bits |
+| `PrismHub-androidtv-x86_64.apk` | Emuladores y algunas cajas con procesador Intel |
 
 > 💡 **Instalar en el televisor sin cables.** Con la app **Downloader** (la de
 > Fire TV / Android TV), pegá este enlace y listo — apunta siempre a la última
 > versión, así que sirve para siempre:
 >
 > ```
-> https://github.com/Litdemonick/Prism_Hub/releases/latest/download/PrismHub-android-arm64-v8a.apk
+> https://github.com/Litdemonick/Prism_Hub/releases/latest/download/PrismHub-androidtv-arm64-v8a.apk
 > ```
 
 ### 📱 Android (teléfono y tablet)
 
-Los mismos archivos de arriba: **es un solo APK para todo Android**. La app
-reconoce sola si está en un televisor y cambia la interfaz. En un teléfono
-normal va el **`arm64-v8a`**.
+| Archivo | Para |
+|---|---|
+| **`PrismHub-android-arm64-v8a.apk`** | **La mayoría de los teléfonos** y tablets |
+| `PrismHub-android-armeabi-v7a.apk` | Teléfonos viejos, de 32 bits |
+| `PrismHub-android-x86_64.apk` | Emuladores |
+
+> Los de teléfono y los de televisor son **el mismo archivo**, con dos nombres:
+> un solo APK sirve para todo Android y la app reconoce sola dónde está
+> corriendo. Están separados solo para que se vea de un vistazo cuál bajar.
 
 ### 🪟 Windows
 
 | Archivo | Para |
 |---|---|
-| **`PrismHub-setup-v1.0.28.exe`** | **Instalador.** Lo normal: instala y crea el acceso directo |
+| **`PrismHub-setup-windows-v1.0.28.exe`** | **Instalador.** Lo normal: instala y crea el acceso directo |
 | `PrismHub-v1.0.28-windows-x64.zip` | Portable: se descomprime y se ejecuta, sin instalar |
 
 ### 🐧 Linux
