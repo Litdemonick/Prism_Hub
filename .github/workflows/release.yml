@@ -518,6 +518,25 @@ jobs:
       - name: Package zip
         run: |
           Compress-Archive -Path "build\windows\x64\runner\Release\*" -DestinationPath "PrismHub-${{ github.ref_name }}-windows-x64.zip"
+      # ── El instalador, TAMBIEN con el nombre de antes ──────────────────
+      #
+      # Desde la 1.0.29 se llama "PrismHub-setup-windows-vX.exe" (antes era
+      # solo "setup", que en una lista con archivos de tres plataformas no
+      # decia para cual era).
+      #
+      # Pero el actualizador DENTRO de la app busca ese archivo por nombre
+      # EXACTO, y las versiones ya instaladas (1.0.28 y anteriores) piden el
+      # nombre viejo. Sin esta copia no lo encuentran, caen al zip y el
+      # proceso falla: la app se cierra y el instalador nunca abre —
+      # reportado en vivo al actualizar desde la 1.0.28.
+      #
+      # Se publica con los dos nombres. El viejo se puede sacar recien cuando
+      # ya no queden instalaciones anteriores a la 1.0.29 dando vueltas.
+      - name: Copia del instalador con el nombre anterior
+        run: |
+          $nuevo = "Output/PrismHub-setup-windows-${{ github.ref_name }}.exe"
+          $viejo = "Output/PrismHub-setup-${{ github.ref_name }}.exe"
+          if (Test-Path $nuevo) { Copy-Item $nuevo $viejo }
       - name: Release Windows
         uses: ncipollo/release-action@v1
         with:
