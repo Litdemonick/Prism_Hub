@@ -4,9 +4,11 @@ import 'package:get/get.dart';
 import 'package:prismhub/models/extension.dart';
 import 'package:prismhub/controllers/search_controller.dart';
 import 'package:prismhub/utils/extension.dart';
+import 'package:prismhub/utils/platform_tv.dart';
 import 'package:prismhub/utils/prismhub_storage.dart';
 import 'package:prismhub/views/pages/nsfw18/nsfw18_search_page.dart';
 import 'package:prismhub/views/pages/search/extension_searcher_page.dart';
+import 'package:prismhub/views/pages/search/search_page_tv.dart';
 import 'package:prismhub/views/widgets/franja_de_zona.dart';
 import 'package:prismhub/views/widgets/home/animated_background_glow.dart';
 import 'package:prismhub/views/widgets/home/home_theme.dart';
@@ -592,8 +594,41 @@ class _SearchPageState extends State<SearchPage> {
     );
   }
 
+  /// El buscador de TV: teclado en pantalla a la izquierda, resultados a la
+  /// derecha. Ver `search_page_tv.dart`.
+  Widget _buildTvSearch(BuildContext context) {
+    return Scaffold(
+      backgroundColor: HomeTheme.bg,
+      body: Stack(
+        children: [
+          const Positioned.fill(child: AnimatedBackgroundGlow()),
+          SafeArea(
+            child: Padding(
+              padding: const EdgeInsets.all(28),
+              child: SearchTV(
+                c: c,
+                accent: _accent,
+                onClickMore: (index) {
+                  Get.to(ExtensionSearcherPage(
+                    package: c.getPackgeByIndex(index),
+                    keyWord: c.search.value,
+                    soloAdulto: widget.nsfwOnly,
+                  ));
+                },
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
+    // TV primero: un Android TV sigue siendo `Platform.isAndroid`, así que
+    // sin este chequeo antes, PlatformBuildWidget lo manda al buscador de
+    // teléfono — con su teclado del sistema tapando media pantalla.
+    if (PlatformTv.esTelevisionSync) return _buildTvSearch(context);
     return PlatformBuildWidget(
       androidBuilder: _buildAndroidSearch,
       desktopBuilder: _buildDesktopSearch,

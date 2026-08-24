@@ -91,6 +91,14 @@
     "filtros-desliza": "Deslizá hacia abajo para aplicar los filtros",
     "filtros-restablecer": "Restablecer",
     "fila-sin-genero": "no tiene ese género",
+    "tv-todo": "TV",
+    "tv-video": "Vídeo",
+    "tv-manga": "Manga",
+    "tv-novela": "Novela",
+    "tv-buscar": "Buscar",
+    "tv-favoritos": "Favoritos",
+    "tv-historial": "Historial",
+    "tv-ajustes": "Ajustes",
     "genero": {
       "accion": "Acción",
       "aventura": "Aventura",
@@ -170,7 +178,8 @@
       "lo-mas-reciente": "Lo más reciente"
     },
     "modo-buscando": "Buscando…",
-    "refrescar": "Refrescar"
+    "refrescar": "Refrescar",
+    "tv-canales": "TV en vivo"
   },
   "search": {
     "hint-text": "¡Por favor, busca ampliamente!~",
@@ -304,6 +313,7 @@
     "about-description": "🎉 PrismHub - Una aplicación versátil, gratuita y de código abierto, con soporte para extensiones de vídeos, cómics y novelas, disponible en Android, Windows y Linux.",
     "links": "Enlaces",
     "contributors": "Contribuidores",
+    "extension-repo-open": "Repositorio de extensiones",
     "repo-url": "URL del repositorio de extensiones",
     "repo-url-subtitle": "Obtener el URL del repositorio de extensiones",
     "repo-official-note": "El repositorio predeterminado es el oficial de PrismPlus. Las extensiones que vienen firmadas desde ahí se marcan como \"PrismPlus\" en el listado.",
@@ -655,7 +665,13 @@
       "servers-body": "Muchas fuentes traen varios. El botón de servidores lista los disponibles.",
       "quality-title": "Calidad",
       "quality-body": "El botón de calidad muestra las que ofrece ese vídeo. Si no hay ninguna, es que la fuente entrega una sola."
-    }
+    },
+    "tv-ok": "Pausar / seguir",
+    "tv-mover": "Retroceder / adelantar",
+    "tv-opciones": "Opciones",
+    "tv-volumen": "Volumen",
+    "tv-salir": "Salir",
+    "tv-servidores": "Servidor"
   },
   "comic-settings": {
     "read-mode": "Modo de lectura",

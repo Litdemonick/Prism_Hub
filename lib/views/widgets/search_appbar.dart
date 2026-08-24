@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:prismhub/views/widgets/home/home_theme.dart';
+import 'package:prismhub/utils/platform_tv.dart';
 
 class SearchAppBar extends StatefulWidget implements PreferredSizeWidget {
   SearchAppBar({
@@ -43,7 +44,15 @@ class SearchAppBar extends StatefulWidget implements PreferredSizeWidget {
 }
 
 class _SearchAppBarState extends State<SearchAppBar> {
-  late bool _showSearch = widget.textEditingController.text.isNotEmpty;
+  // En TV el campo se muestra SIEMPRE.
+  //
+  // En teléfono/escritorio arranca cerrado y se abre con la lupa, porque ahí
+  // el campo se usa de a ratos y el título vale más. En TV el teclado en
+  // pantalla ya está a la izquierda, permanente: tener que apretar una lupa
+  // primero para que aparezca dónde se escribe es un paso de más, y el
+  // recorrido con el mando se vuelve ir y volver entre dos puntas.
+  late bool _showSearch = PlatformTv.esTelevisionSync ||
+      widget.textEditingController.text.isNotEmpty;
 
   @override
   Widget build(BuildContext context) {
@@ -80,7 +89,18 @@ class _SearchAppBarState extends State<SearchAppBar> {
                   hintText: widget.hintText ?? widget.title,
                   border: InputBorder.none,
                 ),
-                autofocus: true,
+                // En TV este campo solo MUESTRA lo que se va escribiendo: se
+                // escribe con el teclado en pantalla (ver TecladoTv). Sin
+                // esto, el campo pedía el foco al abrir y Android levantaba
+                // su propio teclado encima de los resultados — justo lo que
+                // el teclado propio viene a evitar.
+                readOnly: PlatformTv.esTelevisionSync,
+                canRequestFocus: !PlatformTv.esTelevisionSync,
+                // Y sin autofocus en TV: al volver de una ficha, esta barra
+                // se reconstruye y su autofocus se llevaba el foco puesto,
+                // así que la tarjeta desde la que habías salido dejaba de
+                // estar marcada y el mando arrancaba de nuevo desde arriba.
+                autofocus: !PlatformTv.esTelevisionSync,
                 onChanged: widget.onChanged,
                 onSubmitted: widget.onSubmitted,
               ),
@@ -103,19 +123,25 @@ class _SearchAppBarState extends State<SearchAppBar> {
               ),
             ),
       actions: [
-        IconButton(
-          onPressed: () {
-            setState(() {
-              if (_showSearch) {
-                widget.textEditingController.clear();
-                widget.onSubmitted?.call('');
-                return;
-              }
-              _showSearch = !_showSearch;
-            });
-          },
-          icon: Icon(_showSearch ? Icons.close : Icons.search),
-        ),
+        // La lupa (y su cruz para cerrar) no van en TV: ahí el campo está
+        // siempre puesto y lo que se escribe se borra desde el propio
+        // teclado en pantalla, que tiene su tecla para eso. El botón sería
+        // un destino más que cruzar con el mando para algo que ya está
+        // resuelto al lado de donde se escribe.
+        if (!PlatformTv.esTelevisionSync)
+          IconButton(
+            onPressed: () {
+              setState(() {
+                if (_showSearch) {
+                  widget.textEditingController.clear();
+                  widget.onSubmitted?.call('');
+                  return;
+                }
+                _showSearch = !_showSearch;
+              });
+            },
+            icon: Icon(_showSearch ? Icons.close : Icons.search),
+          ),
         ...widget.actions ?? [],
       ],
       bottom: widget.bottom,

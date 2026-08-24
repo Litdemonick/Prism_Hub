@@ -91,6 +91,14 @@
     "zona-en-camino": "Nothing here yet: this zone gets its sections with the metadata layer.",
     "sin-extensiones": "No extensions enabled. Install one from Extensions and its content will show up here.",
     "fila-sin-respuesta": "did not respond",
+    "tv-todo": "TV",
+    "tv-video": "Video",
+    "tv-manga": "Manga",
+    "tv-novela": "Novels",
+    "tv-buscar": "Search",
+    "tv-favoritos": "Favourites",
+    "tv-historial": "History",
+    "tv-ajustes": "Settings",
     "activar": "Enable",
     "filtros-desliza": "Pull down to apply the filters",
     "filtros-restablecer": "Reset",
@@ -174,7 +182,8 @@
       "lo-mas-reciente": "Latest"
     },
     "modo-buscando": "Searching…",
-    "refrescar": "Refresh"
+    "refrescar": "Refresh",
+    "tv-canales": "Live TV"
   },
   "search": {
     "hint-text": "Please use search wisely!~",
@@ -308,6 +317,7 @@
     "about-description": "🎉 PrismHub - A versatile application that is free, open-source, and supports extension sources for videos, comics, and novels, available on Android, Windows and Linux.",
     "links": "Links",
     "contributors": "Contributors",
+    "extension-repo-open": "Extension repository",
     "repo-url": "Extension Repository URL",
     "repo-url-subtitle": "Get the repository URL for extensions",
     "repo-official-note": "The default repository is the official PrismPlus one. Extensions signed from there are marked \"PrismPlus\" in the list.",
@@ -659,7 +669,13 @@
       "servers-body": "Many sources ship several. The servers button lists the ones available.",
       "quality-title": "Quality",
       "quality-body": "The quality button shows what that video offers. If there is none, the source only ships one."
-    }
+    },
+    "tv-ok": "Pause / resume",
+    "tv-mover": "Rewind / forward",
+    "tv-opciones": "Options",
+    "tv-volumen": "Volume",
+    "tv-salir": "Exit",
+    "tv-servidores": "Server"
   },
   "comic-settings": {
     "read-mode": "Read mode",
