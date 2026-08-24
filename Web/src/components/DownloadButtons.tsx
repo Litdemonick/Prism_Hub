@@ -23,10 +23,22 @@ const AndroidIcon = () => (
   </svg>
 );
 
+
+const AndroidTvIcon = () => (
+  <svg fill="currentColor" strokeWidth="0" viewBox="0 0 24 24" className="w-4 h-4">
+    <path d="M21 3H3c-1.1 0-2 .9-2 2v12c0 1.1.9 2 2 2h5v2h8v-2h5c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2zm0 14H3V5h18v12z"/>
+  </svg>
+);
+
 const platforms = [
   { name: 'Windows', icon: WindowsIcon, assetKey: 'windows' as const, color: '#0ea5e9' },
   { name: 'Linux', icon: LinuxIcon, assetKey: 'linux' as const, color: '#f97316' },
   { name: 'Android', icon: AndroidIcon, assetKey: 'android' as const, color: '#22c55e' },
+  // El de televisor apunta al MISMO APK que el de Android — un solo archivo
+  // sirve para telefono, tablet y TV, y la app reconoce sola donde corre.
+  // Esta aparte porque nadie con un televisor tiene por que adivinar que
+  // "Android" tambien lo incluye.
+  { name: 'Android TV', icon: AndroidTvIcon, assetKey: 'androidTv' as const, color: '#a855f7' },
 ];
 
 export default function DownloadButtons() {
