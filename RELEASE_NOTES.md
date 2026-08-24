@@ -1,71 +1,52 @@
-## PrismHub v1.0.27 — El lector a pantalla completa, y el modo claro que por fin se ve
+## PrismHub v1.0.28 — Ahora también en el televisor
 
-Versión de pulido sobre la [1.0.26](https://github.com/Litdemonick/Prism_Hub/releases/tag/v1.0.26).
-Casi todo lo de esta tanda son detalles de uso diario: leer sin nada alrededor,
-que el zoom no te mueva de lugar y que el modo claro deje de comerse la hora y
-la batería.
+Versión grande sobre la [1.0.27](https://github.com/Litdemonick/Prism_Hub/releases/tag/v1.0.27).
+PrismHub llega a **Android TV**: aparece en el menú de aplicaciones del
+televisor y se maneja de punta a punta con el control remoto.
 
-### 📖 Lector de manga, manhwa y novelas
+> ⚠️ **La app está en mantenimiento general.**
+> Se la está reestructurando por dentro mientras se suma el soporte para
+> televisores, así que es posible que te cruces con fallos o con cosas a medio
+> terminar, también en teléfono y en PC. Si encontrás algo roto, reportalo
+> desde Ajustes → Reportar: es lo que hace que se arregle rápido.
 
-- **Llenar pantalla, de verdad.** El botón nuevo esconde la barra de arriba del
-  teléfono y la de navegación de abajo, igual que hace el reproductor de vídeo:
-  la página usa la pantalla entera. Está en el panel de ajustes del lector, al
-  lado de «Modo de lectura», y **también llegó a las novelas**.
-- **El doble toque ya no te mueve de lugar.** Antes, alejar o acercar te dejaba
-  mirando otra parte de la página. Ahora el zoom se queda clavado **en el punto
-  exacto donde tocaste**: ves lo mismo, más cerca o más lejos.
-- **El zoom se mantiene al cambiar de página.** Se guardaba por página, así que
-  alejabas en la 20 y la 21 aparecía otra vez grande. Ahora es uno solo para
-  todo el lector: se respeta al pasar de página, al cambiar de capítulo y al
-  pasar de cascada a paginado.
-- **En paginado, el doble toque acerca.** En una página de manga no hacía
-  absolutamente nada.
-- **Deslizar para bajar ya no se confunde con pasar de página.** Los dos gestos
-  usaban el mismo umbral y competían: un deslizamiento apenas torcido se lo
-  quedaba el cambio de página. Y tocar mientras la página se estaba asentando
-  la dejaba a mitad de camino y a veces saltaba sola a la otra.
-- **En PC, las flechas de arriba y abajo bajan la página** en vez de cambiarla.
-  Pasar de página queda para las flechas de los costados.
-- **El contador de página** ya no va pegado al vértice de la pantalla.
-- **La barra de arriba llega hasta el borde**, sin esa franja suelta encima.
+### 📺 Android TV
 
-### 🎬 Reproductor de vídeo
+- **Se instala y aparece como cualquier app de TV**, con su ícono en el menú
+  del televisor.
+- **Inicio propio**, con el menú de zonas a la izquierda (Inicio, TV en vivo,
+  Biblioteca, Películas, Series, Anime) y el catálogo al lado. Las zonas que
+  todavía no existen se muestran igual, diciendo que están en construcción: así
+  se sabe qué viene, en vez de que aparezcan un día de la nada.
+- **Buscar con teclado en pantalla.** En un televisor no hay teclado, y el del
+  sistema tapa media pantalla justo cuando querés ver los resultados. Acá el
+  teclado es parte de la pantalla y los resultados quedan siempre a la vista,
+  actualizándose con cada letra.
+- **La ficha, en dos paneles**: portada, datos y acciones a un lado; los
+  episodios al otro. Desde un episodio llegás a «Ver ahora» con una sola flecha.
+- **El reproductor dice qué hace cada tecla** —OK pausa, ◀ ▶ mueven, ▼ abre los
+  servidores— porque en un mando, lo que no está escrito no se descubre.
+- **Todo se recorre con el control**: extensiones, repositorio, ajustes,
+  biblioteca, historial y filtros. Y si el foco se pierde por algún motivo, la
+  primera flecha lo recupera en vez de dejar la app trabada.
+- **Lo que no tiene sentido en un televisor, no está**: el envío a otra pantalla
+  (ya lo estás viendo en el televisor), los botones de ventana y el tutorial de
+  gestos táctiles.
 
-- **Barra de volumen siempre visible**, en PC y en Android, con el porcentaje al
-  lado y sin tener que abrir ningún menú. Reemplaza al gesto de deslizar arriba
-  y abajo, que se disparaba sin querer. Sigue pudiendo pasar del 100 %.
-- **Tocar la bocina silencia** y vuelve a poner el volumen exacto que tenías.
-- **Botón grande de pausa en el centro** en el teléfono.
-- **Los controles ya no se esconden a mitad de un arrastre**, ni en PC ni en
-  Android: mover la barra de progreso o la de volumen ya no se corta por el
-  temporizador.
-- **Se dejaba de escuchar mal al salir.** Si salías con el botón o el gesto de
-  atrás del sistema —no con la flecha del reproductor— el audio seguía sonando.
-- **Llenar pantalla llega hasta la cámara** y la barra de arriba ya no deja un
-  hueco de vídeo por encima.
-- El botón de pantalla completa en Android **quedó más a mano** en la fila de
-  botones.
-- **Tutorial actualizado** con los gestos que de verdad existen ahora.
+### 🔞 Zona +18
 
-### 🎨 Modo claro
+- **Se terminó la pregunta de «¿esto es contenido +18?».** Salía al abrir
+  cualquier título nuevo —en One Piece, en lo que fuera— y justo al tocar «ver»,
+  que es el peor momento para frenar a alguien con una pregunta que casi nunca
+  aplica.
+- Ahora se resuelve solo, con lo que la app ya sabe: si la extensión está
+  marcada +18 en el catálogo, o si estás explorando con su filtro de adultos, es
+  +18; el resto es contenido normal. Cada cosa sigue yendo a su zona, sin
+  preguntarte nada.
 
-- **La barra de estado por fin se ve.** La hora, la señal y la batería quedaban
-  invisibles: Android pintaba esa franja en negro por su cuenta e ignoraba el
-  color que pedía la app. Ahora el color lo manda PrismHub.
-- **Se van las sombras sucias.** Las portadas del carrusel y las de las filas
-  llevaban una sombra negra pensada para el fondo oscuro; sobre fondo claro se
-  leía como un halo gris alrededor de cada tarjeta.
-- **El fondo deja de salir teñido de rosa.** Se notaba con el teléfono
-  acostado, en la franja del menú lateral.
-- Salir del lector a pantalla completa **ya no dejaba los iconos del sistema
-  invisibles**.
+### 🧩 En todas las plataformas
 
-### 🔎 Búsqueda
-
-- **La búsqueda general dejó de rendirse antes de tiempo** con las extensiones
-  lentas: cortaba la espera antes de terminar de probar.
-
----
-
-Gracias por probar y por reportar cada detalle. Si algo no anda,
-[abrí un issue](https://github.com/Litdemonick/Prism_Hub/issues) y lo miramos.
+- El listado de extensiones instaladas dejó de tirar avisos en consola por cada
+  extensión de la lista.
+- Ajustes suma accesos directos a **Extensiones instaladas** y al
+  **Repositorio**.
