@@ -6,6 +6,7 @@ import 'package:prismhub/utils/prismhub_storage.dart';
 import 'package:prismhub/views/widgets/home/home_theme.dart';
 import 'package:window_manager/window_manager.dart';
 import 'package:prismhub/views/widgets/window_caption_buttons.dart';
+import 'package:prismhub/utils/platform_tv.dart';
 
 /// Aviso breve, centrado, que aparece y se va solo.
 ///
@@ -164,7 +165,16 @@ class TutorialReproductor extends StatefulWidget {
   final VoidCallback onCerrar;
 
   /// ¿Ya se mostró alguna vez?
+  ///
+  /// En TV devuelve siempre `true`, o sea que NUNCA se muestra: todos sus
+  /// pasos enseñan gestos que ahí no existen —"tocá la pantalla", "dos
+  /// toques en el centro", arrastrar para el volumen— porque el reproductor
+  /// de televisor se maneja con las teclas del mando, no con el dedo (ver
+  /// video_player_content.dart, que en TV usa los controles de teclado).
+  ///
+  /// Además tapaba la pantalla con un diálogo que el mando no podía cerrar.
   static bool get yaVisto =>
+      PlatformTv.esTelevisionSync ||
       PrismHubStorage.getSetting(SettingKey.tutorialReproductorVisto) == true;
 
   static Future<void> marcarVisto() =>

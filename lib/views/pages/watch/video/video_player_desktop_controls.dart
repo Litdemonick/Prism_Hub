@@ -19,13 +19,31 @@ import 'package:prismhub/views/widgets/watch/aviso_extension_caida.dart';
 import 'package:prismhub/views/widgets/window_caption_buttons.dart';
 import 'package:prismhub/views/widgets/watch/playlist.dart';
 import 'package:window_manager/window_manager.dart';
+import 'package:prismhub/utils/platform_tv.dart';
 
 class VideoPlayerDesktopControls extends StatefulWidget {
   const VideoPlayerDesktopControls({
     super.key,
     required this.controller,
+    this.soloLogica = false,
   });
   final VideoPlayerController controller;
+
+  /// No dibuja nada, pero sigue funcionando por dentro.
+  ///
+  /// ── Para qué existe ───────────────────────────────────────────────────
+  ///
+  /// Estos controles NO son solo una barra de botones: acá viven los
+  /// vigilantes que hacen andar el reproductor —el que abre el navegador
+  /// interno cuando un servidor no se puede reproducir de forma nativa
+  /// (`webViewFallback`), el del aviso de "seguí donde quedaste"
+  /// (`resumePrompt`) y el que espera a que se cierre el tutorial—.
+  ///
+  /// Se descubrió por las malas: en TV se probó reemplazarlos por unos
+  /// propios y el vídeo quedaba en negro, porque nadie escuchaba esas
+  /// señales. Con esto, la TV puede tener SU barra y esta seguir haciendo
+  /// el trabajo de fondo, sin duplicar nada de esa lógica delicada.
+  final bool soloLogica;
 
   @override
   State<VideoPlayerDesktopControls> createState() =>
@@ -194,6 +212,9 @@ class _VideoPlayerDesktopControlsState
 
   @override
   Widget build(BuildContext context) {
+    // Ver `soloLogica`: los vigilantes de arriba siguen vivos, pero la barra
+    // no se dibuja porque la pinta otro (la de TV).
+    if (widget.soloLogica) return const SizedBox.shrink();
     return MouseRegion(
       onHover: (_) => _resetHideTimer(),
       // El puntero se esconde junto con los controles: quedaba una flecha
@@ -222,6 +243,15 @@ class _VideoPlayerDesktopControlsState
             if (value is! KeyDownEvent || _c.disposed) {
               return KeyEventResult.ignored;
             }
+            // Cualquier tecla vuelve a mostrar los controles y reinicia la
+            // cuenta para esconderlos.
+            //
+            // Antes eso solo lo hacía `onHover`, o sea el MOUSE. Con un
+            // mando —donde no hay puntero— los controles se escondían a los
+            // segundos y no había forma de traerlos de vuelta salvo tocar
+            // algo que además hiciera otra cosa (pausar, adelantar). Ahora
+            // mover el D-pad los muestra, que es lo que uno espera.
+            _resetHideTimer();
             // ── ESC se maneja ACÁ, y no por la tabla de atajos ─────────
             //
             // Porque cerrar necesita un `context`, y la tabla de atajos vive
@@ -928,11 +958,17 @@ class _HeaderState extends State<_Header> {
             // de "RenderBox was not laid out" que tumbaba TODO el reproductor,
             // no solo esta esquina). control_panel_header.dart no tiene este
             // problema porque ahí todo el header ya tiene height: 40 fijo.
-            const SizedBox(
-              width: 138,
-              height: 32,
-              child: _VideoWindowCaptionButtons(),
-            ),
+            // Minimizar/maximizar/cerrar la VENTANA: solo en escritorio.
+            //
+            // En un televisor no hay ventana que manejar —la app ocupa la
+            // pantalla entera— así que eran tres botones que no hacían nada
+            // y que además el mando tenía que cruzar para llegar al resto.
+            if (!PlatformTv.esTelevisionSync)
+              const SizedBox(
+                width: 138,
+                height: 32,
+                child: _VideoWindowCaptionButtons(),
+              ),
           ],
         ),
       ),
@@ -2156,6 +2192,10 @@ class _CastState extends State<_Cast> {
         // Mientras el vídeo se está abriendo el botón no se dibuja, igual que
         // en el teléfono: es un estado de unos segundos que se resuelve solo, y
         // un botón apagado ahí no le dice nada a nadie. Ver mostrarBotonDeCast.
+        // En TV el botón no va: transmitir es mandar el vídeo A un
+        // televisor, y acá YA se está viendo en uno. Ofrecerlo sería
+        // proponerle al usuario enviarse el vídeo a sí mismo.
+        if (PlatformTv.esTelevisionSync) return const SizedBox.shrink();
         if (!widget.controller.mostrarBotonDeCast) {
           return const SizedBox.shrink();
         }
