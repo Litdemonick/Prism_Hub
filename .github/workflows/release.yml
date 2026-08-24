@@ -100,6 +100,21 @@ jobs:
             arch="${f#app-}"
             arch="${arch%-release.apk}"
             mv "$f" "PrismHub-${{ github.ref_name }}-android-$arch.apk"
+            # ── Y una copia con nombre FIJO, sin la versión ──────────────
+            #
+            # Para que este enlace sirva siempre, sin rehacerlo en cada
+            # release:
+            #
+            #   .../releases/latest/download/PrismHub-android-$arch.apk
+            #
+            # GitHub resuelve `latest` a la última publicada, así que el
+            # enlace apunta solo a la nueva. Hace falta un nombre estable:
+            # con la versión adentro, cada release estrena archivo y el
+            # enlace de antes deja de existir.
+            #
+            # Es lo que permite dejar un código de Downloader (aftvnews) o
+            # un QR puestos para siempre en un televisor.
+            cp "PrismHub-${{ github.ref_name }}-android-$arch.apk"                "PrismHub-android-$arch.apk"
           done
       - name: Release Android
         uses: ncipollo/release-action@v1
