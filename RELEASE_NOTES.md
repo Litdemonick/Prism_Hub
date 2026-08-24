@@ -50,3 +50,47 @@ televisor y se maneja de punta a punta con el control remoto.
   extensión de la lista.
 - Ajustes suma accesos directos a **Extensiones instaladas** y al
   **Repositorio**.
+
+---
+
+## ⬇️ Cuál descargar
+
+### 📺 Android TV, Fire TV y cajas Android
+
+| Archivo | Para |
+|---|---|
+| **`PrismHub-android-arm64-v8a.apk`** | **La mayoría de los televisores** y cajas actuales |
+| `PrismHub-android-armeabi-v7a.apk` | Aparatos viejos, de 32 bits |
+| `PrismHub-android-x86_64.apk` | Emuladores y algunas cajas con procesador Intel |
+
+> 💡 **Instalar en el televisor sin cables.** Con la app **Downloader** (la de
+> Fire TV / Android TV), pegá este enlace y listo — apunta siempre a la última
+> versión, así que sirve para siempre:
+>
+> ```
+> https://github.com/Litdemonick/Prism_Hub/releases/latest/download/PrismHub-android-arm64-v8a.apk
+> ```
+
+### 📱 Android (teléfono y tablet)
+
+Los mismos archivos de arriba: **es un solo APK para todo Android**. La app
+reconoce sola si está en un televisor y cambia la interfaz. En un teléfono
+normal va el **`arm64-v8a`**.
+
+### 🪟 Windows
+
+| Archivo | Para |
+|---|---|
+| **`PrismHub-setup-v1.0.28.exe`** | **Instalador.** Lo normal: instala y crea el acceso directo |
+| `PrismHub-v1.0.28-windows-x64.zip` | Portable: se descomprime y se ejecuta, sin instalar |
+
+### 🐧 Linux
+
+| Archivo | Para |
+|---|---|
+| `PrismHub-v1.0.28-linux-x64.tar.gz` | Se descomprime y se ejecuta |
+
+> Los archivos que llevan la versión en el nombre (`v1.0.28`) quedan fijos en
+> esta publicación. Los de Android que **no** la llevan apuntan siempre a la
+> más nueva — son los que conviene usar para un enlace o un código que quede
+> guardado.
