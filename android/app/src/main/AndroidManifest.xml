@@ -11,6 +11,34 @@
          ofrecer la app a teléfonos normales al declarar soporte de TV. -->
     <uses-feature android:name="android.software.leanback" android:required="false" />
     <uses-feature android:name="android.hardware.touchscreen" android:required="false" />
+    <!-- ── Todo lo que un televisor NO tiene, declarado como opcional ──────
+         Android DEDUCE hardware obligatorio a partir de los permisos, y con
+         que uno solo quede como obligatorio, el televisor rechaza la app
+         entera: "Esta app no es compatible con la TV" (pasó en un aparato
+         real con la 1.0.28).
+
+         El culpable acá era la huella digital: USE_BIOMETRIC —que usa la
+         Zona +18— hace que Android asuma android.hardware.fingerprint como
+         requisito, y ningún televisor tiene lector de huella.
+
+         Van también los demás sospechosos de siempre en un aparato sin
+         pantalla táctil ni teléfono. Ninguno hace falta para que la app
+         funcione: la huella es opcional (siempre queda el PIN), la cámara y
+         el micrófono no se usan, y la orientación vertical no existe en una
+         TV. -->
+    <uses-feature android:name="android.hardware.fingerprint" android:required="false" />
+    <uses-feature android:name="android.hardware.faketouch" android:required="false" />
+    <uses-feature android:name="android.hardware.screen.portrait" android:required="false" />
+    <uses-feature android:name="android.hardware.screen.landscape" android:required="false" />
+    <uses-feature android:name="android.hardware.telephony" android:required="false" />
+    <uses-feature android:name="android.hardware.camera" android:required="false" />
+    <uses-feature android:name="android.hardware.camera.autofocus" android:required="false" />
+    <uses-feature android:name="android.hardware.microphone" android:required="false" />
+    <uses-feature android:name="android.hardware.location" android:required="false" />
+    <uses-feature android:name="android.hardware.location.gps" android:required="false" />
+    <uses-feature android:name="android.hardware.wifi" android:required="false" />
+    <uses-feature android:name="android.hardware.bluetooth" android:required="false" />
+    <uses-feature android:name="android.hardware.sensor.accelerometer" android:required="false" />
     <application
         android:label="${appLabel}"
         android:name="${applicationName}"
