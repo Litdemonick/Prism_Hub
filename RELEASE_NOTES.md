@@ -1,8 +1,17 @@
-## PrismHub v1.0.28 — Ahora también en el televisor
+## PrismHub v1.0.29 — Ahora sí se instala en el televisor
 
-Versión grande sobre la [1.0.27](https://github.com/Litdemonick/Prism_Hub/releases/tag/v1.0.27).
 PrismHub llega a **Android TV**: aparece en el menú de aplicaciones del
 televisor y se maneja de punta a punta con el control remoto.
+
+> 🔧 **Si probaste la 1.0.28 y tu televisor decía «Esta app no es compatible
+> con la TV», era esto.** El sistema la rechazaba antes de abrirla porque, por
+> el permiso de huella digital que usa la Zona +18, daba por hecho que la app
+> exigía un lector de huella — y ningún televisor tiene. Ya está corregido:
+> **usá esta versión, no la 1.0.28.**
+
+Todo lo demás de esta versión venía de la
+[1.0.28](https://github.com/Litdemonick/Prism_Hub/releases/tag/v1.0.28), que
+quedó sin poder instalarse en televisores.
 
 > ⚠️ **La app está en mantenimiento general.**
 > Se la está reestructurando por dentro mientras se suma el soporte para
@@ -87,16 +96,16 @@ televisor y se maneja de punta a punta con el control remoto.
 
 | Archivo | Para |
 |---|---|
-| **`PrismHub-setup-windows-v1.0.28.exe`** | **Instalador.** Lo normal: instala y crea el acceso directo |
-| `PrismHub-v1.0.28-windows-x64.zip` | Portable: se descomprime y se ejecuta, sin instalar |
+| **`PrismHub-setup-windows-v1.0.29.exe`** | **Instalador.** Lo normal: instala y crea el acceso directo |
+| `PrismHub-v1.0.29-windows-x64.zip` | Portable: se descomprime y se ejecuta, sin instalar |
 
 ### 🐧 Linux
 
 | Archivo | Para |
 |---|---|
-| `PrismHub-v1.0.28-linux-x64.tar.gz` | Se descomprime y se ejecuta |
+| `PrismHub-v1.0.29-linux-x64.tar.gz` | Se descomprime y se ejecuta |
 
-> Los archivos que llevan la versión en el nombre (`v1.0.28`) quedan fijos en
+> Los archivos que llevan la versión en el nombre (`v1.0.29`) quedan fijos en
 > esta publicación. Los de Android que **no** la llevan apuntan siempre a la
 > más nueva — son los que conviene usar para un enlace o un código que quede
 > guardado.

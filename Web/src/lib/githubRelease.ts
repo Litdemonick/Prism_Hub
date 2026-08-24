@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 
 export const REPO = 'Litdemonick/Prism_Hub';
-export const APP_VERSION = 'v1.0.10';
+export const APP_VERSION = 'v1.0.29';
 
 export type ReleaseAsset = { name: string; browser_download_url: string; size: number };
 export type ReleaseInfo = {
@@ -28,9 +28,13 @@ const fallbackAssetNames = {
   windows: `PrismHub-setup-windows-${APP_VERSION}.exe`,
   androidTv: `PrismHub-androidtv-arm64-v8a.apk`,
   linux: `PrismHub-${APP_VERSION}-linux-x64.tar.gz`,
-  androidArm64: `PrismHub-${APP_VERSION}-arm64-v8a.apk`,
-  androidArmv7: `PrismHub-${APP_VERSION}-armeabi-v7a.apk`,
-  androidX64: `PrismHub-${APP_VERSION}-x86_64.apk`,
+  // Sin la version adentro: estos son el respaldo para cuando no se puede
+  // consultar la API de GitHub, y con la version clavada apuntaban a una
+  // publicacion vieja (o inexistente) en cuanto salia una nueva. Los nombres
+  // fijos los resuelve "latest" siempre a la ultima.
+  androidArm64: `PrismHub-android-arm64-v8a.apk`,
+  androidArmv7: `PrismHub-android-armeabi-v7a.apk`,
+  androidX64: `PrismHub-android-x86_64.apk`,
 };
 
 function latestDownloadUrl(assetName: string) {
