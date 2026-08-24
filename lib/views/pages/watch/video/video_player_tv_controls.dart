@@ -60,14 +60,37 @@ class _VideoPlayerTvControlsState extends State<VideoPlayerTvControls> {
 
   Timer? _paraOcultar;
 
+  /// Vigila cuándo el reproductor se queda esperando que se elija servidor.
+  Worker? _vigiaDeLaEleccion;
+
   @override
   void initState() {
     super.initState();
     _reiniciarEspera();
+    // ── Con varios servidores, el vídeo NO arranca solo ─────────────────
+    //
+    // Es a propósito (ver play() en el controlador): probar los cinco o seis
+    // servidores al abrir cada episodio gasta red de más. La app espera a
+    // que el usuario elija uno.
+    //
+    // Pero acá los servidores viven escondidos detrás de ▼, así que la
+    // pantalla quedaba en negro con 00:00 y nada explicaba por qué —
+    // reportado en un televisor real. Al levantarse esa bandera, las
+    // opciones se abren solas: es justo el momento en que hay que elegir.
+    if (_c.awaitingServerChoice.value) _opciones = true;
+    _vigiaDeLaEleccion = ever(_c.awaitingServerChoice, (bool esperando) {
+      if (!mounted || !esperando) return;
+      setState(() {
+        _opciones = true;
+        _barraVisible = true;
+      });
+      _paraOcultar?.cancel();
+    });
   }
 
   @override
   void dispose() {
+    _vigiaDeLaEleccion?.dispose();
     _paraOcultar?.cancel();
     _foco.dispose();
     super.dispose();
@@ -154,6 +177,139 @@ class _VideoPlayerTvControlsState extends State<VideoPlayerTvControls> {
       children: [
         // El motor: invisible, pero es lo que hace andar el reproductor.
         VideoPlayerDesktopControls(controller: _c, soloLogica: true),
+        // ── "Elegí un servidor" ─────────────────────────────────────────
+        //
+        // Con varios servidores el vídeo NO arranca solo — es a propósito
+        // (ver play() en el controlador): probar los cinco o seis de una
+        // gasta red de más, así que espera a que el usuario elija.
+        //
+        // En PC eso se dice con un cartel en el medio de la pantalla. Acá
+        // faltaba: quedaba todo negro con 00:00 y nada explicaba que había
+        // que hacer algo. Reportado en un televisor real.
+        // ── Fallo del servidor ──────────────────────────────────────────
+        //
+        // Mismo criterio que en PC: se dice qué pasó y se ofrece reintentar,
+        // en vez de dejar la pantalla en negro. Es de lo más común acá — un
+        // servidor que se cae — y sin aviso parece que la app se colgó.
+        Obx(() {
+          if (_c.error.value.isEmpty) return const SizedBox.shrink();
+          return Center(
+            child: Container(
+              margin: const EdgeInsets.only(bottom: 120),
+              padding:
+                  const EdgeInsets.symmetric(horizontal: 34, vertical: 26),
+              decoration: BoxDecoration(
+                color: HomeTheme.oscuroSuperficie.withValues(alpha: 0.92),
+                borderRadius: BorderRadius.circular(16),
+                border: Border.all(color: HomeTheme.oscuroBorde),
+              ),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Icon(Icons.error_outline,
+                      size: 40, color: HomeTheme.accentRed),
+                  const SizedBox(height: 14),
+                  ConstrainedBox(
+                    constraints: const BoxConstraints(maxWidth: 560),
+                    child: Text(
+                      _c.error.value,
+                      textAlign: TextAlign.center,
+                      style:
+                          const TextStyle(fontSize: 16, color: Colors.white),
+                    ),
+                  ),
+                  const SizedBox(height: 18),
+                  FocusableCard(
+                    borderRadius: 10,
+                    autofocus: true,
+                    onTap: () {
+                      _c.error.value = '';
+                      // Se vuelve a la eleccion de servidor: reintentar el
+                      // mismo que acaba de fallar rara vez sirve, y la lista
+                      // es justo lo que hace falta ver.
+                      _c.awaitingServerChoice.value = true;
+                      setState(() => _opciones = true);
+                    },
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 26, vertical: 13),
+                      decoration: BoxDecoration(
+                        color: HomeTheme.accentPink,
+                        borderRadius: BorderRadius.circular(10),
+                      ),
+                      child: Text(
+                        'common.retry'.i18n,
+                        style: const TextStyle(
+                          color: Colors.white,
+                          fontSize: 16,
+                          fontWeight: FontWeight.w700,
+                        ),
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          );
+        }),
+        // ── Cargando ────────────────────────────────────────────────────
+        //
+        // Entre que el servidor abre y que se pinta el primer cuadro puede
+        // pasar un rato largo (sobre todo en HLS) sin que nada avise. En una
+        // pantalla grande eso se lee como que se colgó.
+        Obx(() {
+          final cargando = _c.isGettingWatchData.value ||
+              (!_c.hasRenderedFrame.value &&
+                  !_c.awaitingServerChoice.value &&
+                  _c.error.value.isEmpty);
+          if (!cargando) return const SizedBox.shrink();
+          return Center(
+            child: Container(
+              margin: const EdgeInsets.only(bottom: 120),
+              padding: const EdgeInsets.all(22),
+              decoration: BoxDecoration(
+                color: Colors.black.withValues(alpha: 0.55),
+                shape: BoxShape.circle,
+              ),
+              child: SizedBox(
+                width: 44,
+                height: 44,
+                child: CircularProgressIndicator(
+                  strokeWidth: 3,
+                  valueColor: AlwaysStoppedAnimation(HomeTheme.accentPink),
+                ),
+              ),
+            ),
+          );
+        }),
+        Obx(() {
+          if (!_c.awaitingServerChoice.value) return const SizedBox.shrink();
+          return Center(
+            child: Container(
+              margin: const EdgeInsets.only(bottom: 120),
+              padding:
+                  const EdgeInsets.symmetric(horizontal: 34, vertical: 26),
+              decoration: BoxDecoration(
+                color: HomeTheme.oscuroSuperficie.withValues(alpha: 0.92),
+                borderRadius: BorderRadius.circular(16),
+                border: Border.all(color: HomeTheme.oscuroBorde),
+              ),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Icon(Icons.dns_outlined,
+                      size: 40, color: HomeTheme.accentPink),
+                  const SizedBox(height: 14),
+                  Text(
+                    'video.tv-elegi-servidor'.i18n,
+                    textAlign: TextAlign.center,
+                    style: const TextStyle(fontSize: 17, color: Colors.white),
+                  ),
+                ],
+              ),
+            ),
+          );
+        }),
         Focus(
           focusNode: _foco,
           autofocus: true,

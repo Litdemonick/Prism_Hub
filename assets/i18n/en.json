@@ -675,7 +675,8 @@
     "tv-opciones": "Options",
     "tv-volumen": "Volume",
     "tv-salir": "Exit",
-    "tv-servidores": "Server"
+    "tv-servidores": "Server",
+    "tv-elegi-servidor": "Pick a server from the list below and press OK to start"
   },
   "comic-settings": {
     "read-mode": "Read mode",

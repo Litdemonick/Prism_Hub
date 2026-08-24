@@ -1,4 +1,15 @@
-## PrismHub v1.0.30 — Un solo archivo que anda en cualquier televisor
+## PrismHub v1.0.31 — El vídeo ya arranca en el televisor
+
+> ▶️ **Si en el televisor todo quedaba en negro con 00:00, era esto.**
+> Con varios servidores el vídeo nunca arranca solo —es a propósito, probar
+> los cinco o seis de una gasta datos de más— así que la app espera a que
+> elijas uno. En PC y en el teléfono eso se avisa con un cartel; en el
+> televisor faltaba, y la lista de servidores quedaba escondida. Ahora se
+> abre sola y dice qué hacer.
+>
+> De paso, el reproductor de TV muestra lo mismo que el de PC cuando algo
+> falla: el motivo y un botón para volver a elegir servidor, en vez de una
+> pantalla negra sin explicación.
 
 PrismHub llega a **Android TV**: aparece en el menú de aplicaciones del
 televisor y se maneja de punta a punta con el control remoto.
@@ -108,16 +119,16 @@ quedó sin poder instalarse en televisores.
 
 | Archivo | Para |
 |---|---|
-| **`PrismHub-setup-windows-v1.0.30.exe`** | **Instalador.** Lo normal: instala y crea el acceso directo |
-| `PrismHub-v1.0.30-windows-x64.zip` | Portable: se descomprime y se ejecuta, sin instalar |
+| **`PrismHub-setup-windows-v1.0.31.exe`** | **Instalador.** Lo normal: instala y crea el acceso directo |
+| `PrismHub-v1.0.31-windows-x64.zip` | Portable: se descomprime y se ejecuta, sin instalar |
 
 ### 🐧 Linux
 
 | Archivo | Para |
 |---|---|
-| `PrismHub-v1.0.30-linux-x64.tar.gz` | Se descomprime y se ejecuta |
+| `PrismHub-v1.0.31-linux-x64.tar.gz` | Se descomprime y se ejecuta |
 
-> Los archivos que llevan la versión en el nombre (`v1.0.30`) quedan fijos en
+> Los archivos que llevan la versión en el nombre (`v1.0.31`) quedan fijos en
 > esta publicación. Los de Android que **no** la llevan apuntan siempre a la
 > más nueva — son los que conviene usar para un enlace o un código que quede
 > guardado.
