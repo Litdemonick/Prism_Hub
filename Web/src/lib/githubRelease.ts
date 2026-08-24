@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 
 export const REPO = 'Litdemonick/Prism_Hub';
-export const APP_VERSION = 'v1.0.29';
+export const APP_VERSION = 'v1.0.30';
 
 export type ReleaseAsset = { name: string; browser_download_url: string; size: number };
 export type ReleaseInfo = {
@@ -16,6 +16,7 @@ export type ReleaseInfo = {
   /// —un solo APK sirve para telefono, tablet y TV— y existe para que en la
   /// pagina se vea de un vistazo cual bajar para un televisor.
   androidTv?: ReleaseAsset;
+  androidUniversal?: ReleaseAsset;
   androidArm64?: ReleaseAsset;
   androidArmv7?: ReleaseAsset;
   androidX64?: ReleaseAsset;
@@ -26,12 +27,13 @@ export type AndroidVariant = 'auto' | 'arm64-v8a' | 'armeabi-v7a' | 'x86_64';
 
 const fallbackAssetNames = {
   windows: `PrismHub-setup-windows-${APP_VERSION}.exe`,
-  androidTv: `PrismHub-androidtv-arm64-v8a.apk`,
+  androidTv: `PrismHub-androidtv-universal.apk`,
   linux: `PrismHub-${APP_VERSION}-linux-x64.tar.gz`,
   // Sin la version adentro: estos son el respaldo para cuando no se puede
   // consultar la API de GitHub, y con la version clavada apuntaban a una
   // publicacion vieja (o inexistente) en cuanto salia una nueva. Los nombres
   // fijos los resuelve "latest" siempre a la ultima.
+  androidUniversal: `PrismHub-android-universal.apk`,
   androidArm64: `PrismHub-android-arm64-v8a.apk`,
   androidArmv7: `PrismHub-android-armeabi-v7a.apk`,
   androidX64: `PrismHub-android-x86_64.apk`,
@@ -45,6 +47,7 @@ export const fallbackDownloads = {
   windows: latestDownloadUrl(fallbackAssetNames.windows),
   androidTv: latestDownloadUrl(fallbackAssetNames.androidTv),
   linux: latestDownloadUrl(fallbackAssetNames.linux),
+  androidUniversal: latestDownloadUrl(fallbackAssetNames.androidUniversal),
   androidArm64: latestDownloadUrl(fallbackAssetNames.androidArm64),
   androidArmv7: latestDownloadUrl(fallbackAssetNames.androidArmv7),
   androidX64: latestDownloadUrl(fallbackAssetNames.androidX64),
@@ -85,7 +88,13 @@ function assetsToRelease(data: {
   const androidArm64 = buscarApk(/arm64-v8a.*\.apk$/i);
   const androidArmv7 = buscarApk(/armeabi-v7a.*\.apk$/i);
   const androidX64 = buscarApk(/x86_64.*\.apk$/i);
-  const androidTv = find(/androidtv.*arm64-v8a.*\.apk$/i) ||
+  // El universal primero: trae las tres arquitecturas adentro, asi que es el
+  // que anda en cualquier aparato. Un stick de 32 bits rechaza el arm64 con
+  // "esta app no es compatible con la TV", y desde la pagina no hay forma de
+  // saber que procesador tiene quien descarga.
+  const androidUniversal = buscarApk(/android-universal\.apk$/i);
+  const androidTv = find(/androidtv-universal\.apk$/i) ||
+      find(/androidtv.*arm64-v8a.*\.apk$/i) ||
       find(/androidtv.*\.apk$/i);
   return {
     tag: data.tag_name,
@@ -94,7 +103,9 @@ function assetsToRelease(data: {
     publishedAt: data.published_at,
     windows: find(/setup.*\.exe$/i) || find(/\.exe$/i) || find(/windows.*\.zip$/i),
     linux: find(/linux.*\.tar\.gz$/i),
-    android: androidArm64 || androidArmv7 || androidX64 || find(/\.apk$/i),
+    android: androidUniversal || androidArm64 || androidArmv7 || androidX64 ||
+        find(/\.apk$/i),
+    androidUniversal,
     // Si un release viejo no trae el de televisor, se cae al de Android: es
     // el mismo archivo, asi que el boton sigue sirviendo igual.
     androidTv: androidTv || androidArm64 || find(/\.apk$/i),

@@ -76,7 +76,18 @@ jobs:
           ENCODED_KEYSTORE: ${{ secrets.KEYSTORE }}
       - run: flutter pub get
       - name: Build APKs
-        run: flutter build apk --release --split-per-abi
+        # Los de siempre, uno por arquitectura (mas chicos), y ADEMAS uno
+        # universal con las tres adentro.
+        #
+        # El universal existe para instalar a mano en un televisor: ahi no hay
+        # una tienda que elija la arquitectura correcta, y si uno le da la
+        # equivocada Android contesta "esta app no es compatible con la TV" —
+        # el mismo mensaje que da cuando falta hardware, asi que confunde de
+        # lo lindo. Con el universal, la arquitectura deja de ser una cosa
+        # que el usuario tenga que adivinar.
+        run: |
+          flutter build apk --release --split-per-abi
+          flutter build apk --release
         env:
           KEYSTORE_PASSWORD: ${{ secrets.KEYSTORE_PASSWORD }}
           KEY_ALIAS: ${{ secrets.KEY_ALIAS }}
@@ -96,6 +107,14 @@ jobs:
       - name: Rename APKs
         run: |
           cd build/app/outputs/flutter-apk
+          # El universal primero, para que el bucle de abajo no lo tome como
+          # si fuera una arquitectura mas ("app-release.apk" no tiene arch).
+          if [ -f app-release.apk ]; then
+            cp app-release.apk "PrismHub-${{ github.ref_name }}-android-universal.apk"
+            cp app-release.apk "PrismHub-android-universal.apk"
+            cp app-release.apk "PrismHub-androidtv-universal.apk"
+            rm app-release.apk
+          fi
           for f in app-*-release.apk; do
             arch="${f#app-}"
             arch="${arch%-release.apk}"

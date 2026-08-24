@@ -1,15 +1,19 @@
-## PrismHub v1.0.29 — Ahora sí se instala en el televisor
+## PrismHub v1.0.30 — Un solo archivo que anda en cualquier televisor
 
 PrismHub llega a **Android TV**: aparece en el menú de aplicaciones del
 televisor y se maneja de punta a punta con el control remoto.
 
-> 🔧 **Si probaste la 1.0.28 y tu televisor decía «Esta app no es compatible
-> con la TV», era esto.** El sistema la rechazaba antes de abrirla porque, por
-> el permiso de huella digital que usa la Zona +18, daba por hecho que la app
-> exigía un lector de huella — y ningún televisor tiene. Ya está corregido:
-> **usá esta versión, no la 1.0.28.**
+> 🔧 **Si tu televisor decía «Esta app no es compatible con la TV», usá el
+> archivo `universal`.** Eran dos cosas distintas dando el mismo mensaje:
+>
+> 1. La app parecía exigir un lector de huella (por el permiso que usa la
+>    Zona +18) y ningún televisor tiene. Corregido en la 1.0.29.
+> 2. El archivo no coincidía con el procesador del aparato — pasa en sticks
+>    de 32 bits como los **onn**, donde el `arm64` no sirve. **Desde esta
+>    versión hay un APK `universal`** con las tres arquitecturas adentro:
+>    anda en cualquiera y no hay nada que adivinar.
 
-Todo lo demás de esta versión venía de la
+Todo lo demás venía de la
 [1.0.28](https://github.com/Litdemonick/Prism_Hub/releases/tag/v1.0.28), que
 quedó sin poder instalarse en televisores.
 
@@ -68,23 +72,31 @@ quedó sin poder instalarse en televisores.
 
 | Archivo | Para |
 |---|---|
-| **`PrismHub-androidtv-arm64-v8a.apk`** | **La mayoría de los televisores** y cajas actuales |
-| `PrismHub-androidtv-armeabi-v7a.apk` | Aparatos viejos, de 32 bits |
+| **`PrismHub-androidtv-universal.apk`** | **Cualquier televisor.** Si no sabés cuál, es este |
+| `PrismHub-androidtv-arm64-v8a.apk` | Televisores y cajas de 64 bits |
+| `PrismHub-androidtv-armeabi-v7a.apk` | Aparatos de 32 bits (varios sticks económicos, como los onn) |
 | `PrismHub-androidtv-x86_64.apk` | Emuladores y algunas cajas con procesador Intel |
+
+> ⚠️ **Si el televisor dice «Esta app no es compatible con la TV», bajá el
+> universal.** Android da ese mismo mensaje cuando el archivo no coincide con
+> el procesador del aparato, así que parece un problema de la app cuando en
+> realidad es el archivo equivocado. El universal trae las tres
+> arquitecturas adentro y no falla.
 
 > 💡 **Instalar en el televisor sin cables.** Con la app **Downloader** (la de
 > Fire TV / Android TV), pegá este enlace y listo — apunta siempre a la última
 > versión, así que sirve para siempre:
 >
 > ```
-> https://github.com/Litdemonick/Prism_Hub/releases/latest/download/PrismHub-androidtv-arm64-v8a.apk
+> https://github.com/Litdemonick/Prism_Hub/releases/latest/download/PrismHub-androidtv-universal.apk
 > ```
 
 ### 📱 Android (teléfono y tablet)
 
 | Archivo | Para |
 |---|---|
-| **`PrismHub-android-arm64-v8a.apk`** | **La mayoría de los teléfonos** y tablets |
+| **`PrismHub-android-universal.apk`** | **Cualquier teléfono o tablet.** Si no sabés cuál, es este |
+| `PrismHub-android-arm64-v8a.apk` | La mayoría de los teléfonos actuales |
 | `PrismHub-android-armeabi-v7a.apk` | Teléfonos viejos, de 32 bits |
 | `PrismHub-android-x86_64.apk` | Emuladores |
 
@@ -96,16 +108,16 @@ quedó sin poder instalarse en televisores.
 
 | Archivo | Para |
 |---|---|
-| **`PrismHub-setup-windows-v1.0.29.exe`** | **Instalador.** Lo normal: instala y crea el acceso directo |
-| `PrismHub-v1.0.29-windows-x64.zip` | Portable: se descomprime y se ejecuta, sin instalar |
+| **`PrismHub-setup-windows-v1.0.30.exe`** | **Instalador.** Lo normal: instala y crea el acceso directo |
+| `PrismHub-v1.0.30-windows-x64.zip` | Portable: se descomprime y se ejecuta, sin instalar |
 
 ### 🐧 Linux
 
 | Archivo | Para |
 |---|---|
-| `PrismHub-v1.0.29-linux-x64.tar.gz` | Se descomprime y se ejecuta |
+| `PrismHub-v1.0.30-linux-x64.tar.gz` | Se descomprime y se ejecuta |
 
-> Los archivos que llevan la versión en el nombre (`v1.0.29`) quedan fijos en
+> Los archivos que llevan la versión en el nombre (`v1.0.30`) quedan fijos en
 > esta publicación. Los de Android que **no** la llevan apuntan siempre a la
 > más nueva — son los que conviene usar para un enlace o un código que quede
 > guardado.
