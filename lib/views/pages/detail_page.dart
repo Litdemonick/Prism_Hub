@@ -18,6 +18,8 @@ import 'package:prismhub/views/widgets/detail/detail_background_color.dart';
 import 'package:prismhub/views/widgets/detail/detail_episodes.dart';
 import 'package:prismhub/views/widgets/detail/detail_extension_tile.dart';
 import 'package:prismhub/views/widgets/detail/detail_favorite_button.dart';
+import 'package:prismhub/utils/platform_tv.dart';
+import 'package:prismhub/views/pages/detail_page_tv.dart';
 import 'package:prismhub/views/widgets/detail/detail_share_button.dart';
 import 'package:prismhub/views/widgets/detail/detail_overview.dart';
 import 'package:prismhub/views/widgets/detail/portada_con_relevo.dart';
@@ -1235,8 +1237,31 @@ class _DetailPageState extends State<DetailPage> {
     });
   }
 
+  /// La ficha de TV: dos paneles fijos, hecha de cero (ver detail_page_tv).
+  ///
+  /// Los estados de error y carga se comparten con las otras plataformas —
+  /// son pantallas centradas sin nada que navegar, así que no hace falta una
+  /// versión distinta.
+  Widget _buildTvDetail(BuildContext context) {
+    return Obx(() {
+      if (c.error.value.isNotEmpty) {
+        return _transicion('error', _pantallaDeError(context));
+      }
+      if (c.isLoading.value) {
+        return _transicion('cargando', _pantallaCargando(context));
+      }
+      return _transicion(
+        'contenido',
+        DetailTV(c: c, tag: widget.tag),
+      );
+    });
+  }
+
   @override
   Widget build(BuildContext context) {
+    // TV primero: un Android TV sigue siendo `Platform.isAndroid`, así que
+    // sin esto PlatformBuildWidget lo manda a la ficha de teléfono.
+    if (PlatformTv.esTelevisionSync) return _buildTvDetail(context);
     return PlatformBuildWidget(
       androidBuilder: _buildAndroidDetail,
       desktopBuilder: _buildDesktopDetail,

@@ -8,7 +8,9 @@ import 'package:prismhub/views/widgets/detail/detail_continue_play.dart';
 import 'package:prismhub/utils/prismhub_storage.dart';
 import 'package:prismhub/views/widgets/detail/detail_card_tile.dart';
 import 'package:prismhub/utils/i18n.dart';
+import 'package:prismhub/utils/platform_tv.dart';
 import 'package:prismhub/views/widgets/home/home_theme.dart';
+import 'package:prismhub/views/widgets/tv/focusable_card.dart';
 import 'package:prismhub/views/widgets/platform_widget.dart';
 
 /// La geometría de la lista de capítulos, en un solo lugar.
@@ -271,7 +273,7 @@ class _CajaDeTarjeta extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Material(
+    final caja = Material(
       color: enCurso
           ? HomeTheme.accentPink.withValues(alpha: 0.12)
           : HomeTheme.cardSurface,
@@ -284,6 +286,23 @@ class _CajaDeTarjeta extends StatelessWidget {
         ),
       ),
       child: InkWell(onTap: onTap, child: child),
+    );
+    if (!PlatformTv.esTelevisionSync) return caja;
+    // En TV cada episodio tiene que poder enfocarse con el mando. El
+    // `IgnorePointer` apaga el InkWell de adentro para que un click no
+    // dispare la apertura dos veces.
+    //
+    // El marco va en el acento de la app, igual que el resto de la interfaz
+    // de TV: se probó en blanco —para no confundirlo con el episodio "en
+    // curso", que también se pinta con el acento— y quedó peor, porque un
+    // recuadro blanco sobre una grilla oscura se lee como una tarjeta
+    // seleccionada de otro sistema, no como el foco de esta app. Que sea
+    // del mismo color no molesta: el "en curso" es un relleno tenue y esto
+    // es una línea gruesa con halo, no se parecen.
+    return FocusableCard(
+      borderRadius: 12,
+      onTap: onTap,
+      child: IgnorePointer(child: caja),
     );
   }
 }
@@ -481,12 +500,26 @@ class _DetailEpisodesState extends State<DetailEpisodes> {
     );
   }
 
-  static const _rellenoLista = EdgeInsets.fromLTRB(
-    GeometriaCapitulos.margen,
-    0,
-    GeometriaCapitulos.margen,
-    GeometriaCapitulos.rellenoAbajo,
-  );
+  /// En TV, más margen: la tarjeta enfocada crece y le sale su marco, y con
+  /// el margen justo la primera columna quedaba cortada contra el borde del
+  /// panel. Arriba también, por la misma razón.
+  static EdgeInsets get _rellenoLista => PlatformTv.esTelevisionSync
+      ? const EdgeInsets.fromLTRB(
+          GeometriaCapitulos.margen + 10,
+          14,
+          GeometriaCapitulos.margen + 10,
+          // Más aire abajo que en teléfono: acá no hay barra flotante que
+          // tapar, pero SÍ está el crecido del foco — sin este margen, la
+          // última fila quedaba mordida contra el borde de la grilla justo
+          // cuando se la selecciona, que es cuando más se mira.
+          GeometriaCapitulos.rellenoAbajo + 24,
+        )
+      : const EdgeInsets.fromLTRB(
+          GeometriaCapitulos.margen,
+          0,
+          GeometriaCapitulos.margen,
+          GeometriaCapitulos.rellenoAbajo,
+        );
 
   /// Vídeo: una grilla de tarjetas cortas.
   ///
@@ -530,6 +563,14 @@ class _DetailEpisodesState extends State<DetailEpisodes> {
 
     return GridView.builder(
       padding: _rellenoLista,
+      // El recorte se queda como está (hardEdge).
+      //
+      // Se probó `Clip.none` en TV para que la tarjeta enfocada no quedara
+      // mordida en el borde, y salió peor: sin recorte, lo que se desplaza
+      // FUERA de la grilla se sigue dibujando, así que las tarjetas de
+      // arriba aparecían encima del encabezado ("Total N", el botón de
+      // orden). Lo que sobresale del foco se resolvió achicándolo — ver la
+      // escala en FocusableCard.
       gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
         crossAxisCount: columnas,
         crossAxisSpacing: GeometriaCapitulos.separacionGrilla,
