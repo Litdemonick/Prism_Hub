@@ -18,11 +18,14 @@ Widget _tarjeta(String label) => Container(
       child: Text(label),
     );
 
-Color? _colorDelBorde(WidgetTester tester) {
-  final caja =
-      tester.widget<AnimatedContainer>(find.byType(AnimatedContainer));
-  final borde = (caja.decoration as BoxDecoration).border as Border?;
-  return borde?.top.color;
+/// Si el marco de "esto está seleccionado" se está viendo.
+///
+/// El marco vive en su propia capa encima de la tarjeta (ver FocusableCard:
+/// puesto alrededor achicaba al hijo y temblaba), así que lo que cambia al
+/// enfocar es su OPACIDAD, no el color del borde.
+bool _marcoVisible(WidgetTester tester) {
+  final capa = tester.widget<AnimatedOpacity>(find.byType(AnimatedOpacity));
+  return capa.opacity > 0;
 }
 
 void main() {
@@ -63,16 +66,16 @@ void main() {
       ),
     ));
 
-    expect(_colorDelBorde(tester), Colors.transparent);
+    expect(_marcoVisible(tester), isFalse);
 
     // D-pad/teclado: FocusTraversalGroup termina pidiendo el foco así.
     nodo.requestFocus();
     await tester.pumpAndSettle();
-    expect(_colorDelBorde(tester), isNot(Colors.transparent));
+    expect(_marcoVisible(tester), isTrue);
 
     nodo.unfocus();
     await tester.pumpAndSettle();
-    expect(_colorDelBorde(tester), Colors.transparent);
+    expect(_marcoVisible(tester), isFalse);
 
     // Mouse: hover sin foco de teclado enciende la MISMA señal.
     final gesture = await tester.createGesture(kind: PointerDeviceKind.mouse);
@@ -81,7 +84,7 @@ void main() {
     await tester.pump();
     await gesture.moveTo(tester.getCenter(find.text('A')));
     await tester.pumpAndSettle();
-    expect(_colorDelBorde(tester), isNot(Colors.transparent));
+    expect(_marcoVisible(tester), isTrue);
   });
 
   testWidgets('select/enter del mando confirma igual que un tap',

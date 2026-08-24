@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:io';
 
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:get/get.dart';
 import 'package:prismhub/controllers/catalogo_extensiones_controller.dart';
 import 'package:prismhub/controllers/main_controller.dart';
@@ -10,7 +11,10 @@ import 'package:prismhub/router/router.dart';
 import 'package:prismhub/utils/breakpoints.dart';
 import 'package:prismhub/utils/extension.dart';
 import 'package:prismhub/utils/i18n.dart';
+import 'package:prismhub/utils/platform_tv.dart';
+import 'package:prismhub/views/pages/extension/extension_repo_page.dart';
 import 'package:prismhub/views/pages/history_page.dart';
+import 'package:prismhub/views/pages/library_page.dart';
 import 'package:prismhub/views/widgets/cache_network_image.dart';
 import 'package:prismhub/views/pages/home/ultimas_actualizaciones_mangadex_page.dart';
 import 'package:prismhub/views/widgets/home/animated_background_glow.dart';
@@ -18,6 +22,8 @@ import 'package:prismhub/views/widgets/home/esqueleto.dart';
 import 'package:prismhub/views/widgets/home/home_theme.dart';
 import 'package:prismhub/views/widgets/home/indicadores_de_pagina.dart';
 import 'package:prismhub/views/widgets/home/tarjeta_de_catalogo.dart';
+import 'package:prismhub/views/widgets/tv/focusable_card.dart';
+import 'package:prismhub/views/widgets/zona_en_creacion.dart';
 
 // ── Por qué está partido en tres archivos ───────────────────────────────────
 //
@@ -39,6 +45,7 @@ import 'package:prismhub/views/widgets/home/tarjeta_de_catalogo.dart';
 // nadie sabría dónde buscar.
 part 'home_page_android.dart';
 part 'home_page_windows.dart';
+part 'home_page_tv.dart';
 
 /// El Home: **descubrir, con lo que traen tus extensiones**.
 ///
@@ -114,9 +121,16 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
       child: Stack(
         children: [
           const Positioned.fill(child: AnimatedBackgroundGlow()),
-          // El fondo animado es el mismo para los dos. De acá para abajo, cada
-          // plataforma arma su Home entero.
-          _esTactil ? HomeAndroid(c: c) : HomeWindows(c: c),
+          // El fondo animado es el mismo para las tres. De acá para abajo,
+          // cada plataforma arma su Home entero.
+          //
+          // TV primero: un Android TV sigue siendo `Platform.isAndroid ==
+          // true`, así que si no se pregunta ACÁ primero, `_esTactil` se lo
+          // lleva puesto y termina en HomeAndroid, con controles pensados
+          // para el dedo y nada de foco D-pad.
+          _esTelevision
+              ? HomeTV(c: c)
+              : (_esTactil ? HomeAndroid(c: c) : HomeWindows(c: c)),
         ],
       ),
     );
@@ -125,7 +139,7 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
 
 /// Qué Home se dibuja.
 ///
-/// Va por plataforma y NO por ancho de pantalla, y es a propósito: son dos
+/// Va por plataforma y NO por ancho de pantalla, y es a propósito: son
 /// diseños distintos, no uno que se estira. El ancho sigue mandando ADENTRO de
 /// cada uno —cuántas columnas entran, qué tan grande es el título— y para eso
 /// está `Ancho`.
@@ -133,6 +147,10 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
 /// En escritorio el Home queda exactamente como estaba, se achique la ventana
 /// hasta donde se achique.
 bool get _esTactil => Platform.isAndroid || Platform.isIOS;
+
+/// Si esto es un Android TV. Se pregunta ANTES que [_esTactil] en el
+/// bifurcado de arriba — ver el comentario ahí.
+bool get _esTelevision => PlatformTv.esTelevisionSync;
 
 // ─── Piezas compartidas ──────────────────────────────────────────────────────
 

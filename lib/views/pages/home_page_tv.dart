@@ -1,0 +1,636 @@
+part of 'home_page.dart';
+
+// ─── El Home de Android TV ───────────────────────────────────────────────
+//
+// Aparece solo cuando `_esTelevision` (ver el bifurcado en `home_page.dart`)
+// da true. Reusa lo mismo que ya prueba escritorio: el mismo `_CarruselAndroid`
+// para el destacado de arriba, la misma `_BarraDeFiltros`, y `_FilaWindows`
+// para cada fila —con `conFocoTv: true` para que las tarjetas sean
+// navegables con D-pad—. Nada de eso se reescribe.
+//
+// Lo nuevo es el sidebar de categorías a la izquierda y la barra de arriba a
+// la derecha, que es lo que la referencia (estilo Magis TV) agrega sobre el
+// diseño de escritorio.
+//
+// ── Por qué el sidebar no tiene "Película/Serie/Kids/Anime" ────────────────
+//
+// Esos no son tipos, son GÉNEROS, y los géneros los define cada extensión —
+// varían de un sitio a otro (`generosDisponibles`, cargado en vivo). Una
+// lista fija con esos nombres podría no coincidir con ningún género real de
+// las extensiones instaladas y mostrar el sidebar lleno de categorías
+// vacías. Lo único que el catálogo puede filtrar con certeza, sea cual sea
+// la extensión, es el TIPO (`ExtensionType`). Clasificar por Anime/Series/
+// Películas de verdad es una funcionalidad aparte — ya hay lugar reservado
+// para eso en el i18n (`home.zona-anime` y compañía, "esperando la capa de
+// metadatos") — y queda para otro momento, en las cuatro plataformas.
+
+/// Las categorías del sidebar. Fijas y iguales para cualquier extensión.
+///
+/// `tv` es la única que no filtra nada: es la zona de canales en vivo, que
+/// todavía no existe. Se muestra igual —en construcción— y no escondida: si
+/// no está a la vista, nadie se entera de que viene.
+enum _CategoriaTV {
+  /// El catálogo de todas las extensiones — lo que se ve al abrir, y por eso
+  /// va primero: es donde arranca el foco y de donde parte todo.
+  inicio(Icons.home_rounded, null),
+
+  /// Canales en vivo. Todavía no existe.
+  tv(Icons.live_tv_rounded, null, enConstruccion: true),
+
+  /// Continuar viendo/leyendo y favoritos: la LibraryPage de siempre.
+  biblioteca(Icons.video_library_rounded, null, esBiblioteca: true),
+
+  // ── Estas tres todavía no se pueden armar de verdad ──────────────────
+  //
+  // Separar "películas" de "series" necesita saber QUÉ ofrece cada
+  // extensión, y hoy ninguna lo dice: solo declaran su tipo (vídeo, manga,
+  // novela) y géneros sueltos que cambian de sitio en sitio. Filtrar por un
+  // género llamado "película" daría listas vacías en la mayoría de las
+  // extensiones instaladas.
+  //
+  // Se muestran igual, en construcción, porque son parte del mapa de la app
+  // — no un secreto hasta que estén listas.
+  peliculas(Icons.movie_outlined, null, enConstruccion: true),
+  series(Icons.tv_rounded, null, enConstruccion: true),
+  anime(Icons.animation_rounded, null, enConstruccion: true);
+
+  const _CategoriaTV(
+    this.icono,
+    this.tipo, {
+    this.enConstruccion = false,
+    this.esBiblioteca = false,
+  });
+  final IconData icono;
+  final ExtensionType? tipo;
+  final bool enConstruccion;
+  final bool esBiblioteca;
+
+  String etiqueta() => switch (this) {
+        _CategoriaTV.inicio => 'common.home'.i18n,
+        _CategoriaTV.tv => 'home.tv-canales'.i18n,
+        _CategoriaTV.biblioteca => 'common.library'.i18n,
+        _CategoriaTV.peliculas => 'home.zona-peliculas'.i18n,
+        _CategoriaTV.series => 'home.zona-series'.i18n,
+        _CategoriaTV.anime => 'home.zona-anime'.i18n,
+      };
+}
+
+/// El ancho del sidebar, por tamaño de pantalla. Una TV real cae casi
+/// siempre en `enorme` (≥1600px lógicos), pero se sigue el mismo criterio de
+/// `Ancho` que el resto de la app en vez de un número fijo pensado para una
+/// sola resolución — así una TV 1080p, una 4K o el emulador en una ventana
+/// chica se acomodan solas.
+double _anchoSidebarTv(Ancho a) =>
+    a.elegir(compacto: 84, medio: 168, amplio: 190, enorme: 210);
+
+/// El margen "TV-safe" contra el borde de la pantalla (overscan). Algunos
+/// televisores recortan el borde real de la imagen; sin este aire, el
+/// sidebar y la barra de arriba quedarían pegados a un borde que en esos
+/// aparatos ni se ve.
+double _overscanTv(BuildContext context) =>
+    (MediaQuery.sizeOf(context).width * 0.025).clamp(12, 48);
+
+class HomeTV extends StatefulWidget {
+  const HomeTV({super.key, required this.c});
+
+  final CatalogoExtensionesController c;
+
+  @override
+  State<HomeTV> createState() => _HomeTVState();
+}
+
+class _HomeTVState extends State<HomeTV> {
+  /// El foco de la primera categoría, para que el sidebar arranque con algo
+  /// enfocado apenas se entra a la Home — sin esto el mando queda "sin
+  /// dónde" hasta que alguien toca una flecha por las dudas.
+  final _primerFoco = FocusNode(debugLabel: 'sidebar-tv-0');
+
+  /// Qué categoría está elegida. Se guarda acá y no se deduce de
+  /// `c.tipoElegido` porque dos categorías pueden compartir tipo: `tv` y
+  /// `todo` no filtran nada las dos (`tipo == null`), así que mirando solo
+  /// el tipo del controller quedarían las dos resaltadas a la vez.
+  _CategoriaTV _categoria = _CategoriaTV.inicio;
+
+  @override
+  void dispose() {
+    _primerFoco.dispose();
+    super.dispose();
+  }
+
+  /// Marca la categoría Y la aplica en el acto.
+  ///
+  /// En el teléfono, elegir un filtro solo lo MARCA — hace falta deslizar
+  /// para aplicarlo (ver `_BarraDeFiltros`), porque aplicar de una implica
+  /// pedirle contenido de nuevo a cada extensión y tocando varios chips
+  /// seguidos se tirarían pedidos a la basura. Acá el sidebar tiene cuatro
+  /// categorías nada más —no hay forma de "tocar varias seguidas por
+  /// error"— y en una TV no hay gesto de "deslizar para aplicar": aplicar
+  /// al toque es lo que se espera.
+  Future<void> _elegir(_CategoriaTV categoria) async {
+    setState(() => _categoria = categoria);
+    // La zona en construcción no toca los filtros: no muestra catálogo, así
+    // que volver a pedirle contenido a cada extensión sería trabajo tirado.
+    // Y al salir de ahí, lo que ya estaba cargado sigue como estaba.
+    if (categoria.enConstruccion) return;
+    widget.c.tipoElegido.value = categoria.tipo;
+    await widget.c.aplicarFiltros();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final overscan = _overscanTv(context);
+    // ── La barra de arriba manda en TODA la pantalla ────────────────────
+    //
+    // Estaba dentro del panel de contenido, así que entrar a una zona sin
+    // catálogo (TV en vivo) o quedarse sin extensiones se llevaba puesto el
+    // logo y los accesos: la pantalla quedaba sin salida visible. Acá arriba
+    // vive fuera de todo lo que cambia — pase lo que pase debajo, siempre
+    // están el nombre y los botones.
+    return SafeArea(
+      child: Padding(
+        padding: EdgeInsets.all(overscan),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const _BarraSuperiorTV(),
+            Expanded(
+              child: Obx(() {
+                if (widget.c.filas.isEmpty) {
+                  return widget.c.armado.value
+                      ? const _SinExtensiones()
+                      : const _HomeEsperando(conCabecera: false);
+                }
+                return Row(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    _SidebarTV(
+                      c: widget.c,
+                      primerFoco: _primerFoco,
+                      elegida: _categoria,
+                      onElegir: _elegir,
+                    ),
+                    // Aire de verdad entre el sidebar y el contenido: con
+                    // solo el overscan, la primera tarjeta de cada fila
+                    // quedaba pegada a las categorías y las dos cosas se
+                    // leían como una sola.
+                    SizedBox(width: overscan * 1.5),
+                    Expanded(
+                      // ── IndexedStack y no AnimatedSwitcher ────────────
+                      //
+                      // El switcher DESTRUYE la zona que se deja: al volver,
+                      // el scroll arrancaba de cero y el foco se perdía —
+                      // justo lo contrario de lo que uno espera al ir y
+                      // volver con el mando.
+                      //
+                      // Con IndexedStack las zonas se construyen una vez y
+                      // se quedan vivas (mismo criterio que ya usa la barra
+                      // de Android, ver main_page.dart): volver a una zona la
+                      // encuentra tal cual se dejó.
+                      //
+                      // La entrada se anima igual, sin perder ese estado: la
+                      // zona que se muestra aparece con un fundido y un
+                      // desplazamiento corto hacia arriba, atado al índice —
+                      // así cambiar de zona con el mando se siente como un
+                      // movimiento y no como un parpadeo, pero volver sigue
+                      // encontrando todo donde estaba.
+                      child: TweenAnimationBuilder<double>(
+                        key: ValueKey(_categoria),
+                        tween: Tween(begin: 0, end: 1),
+                        duration: const Duration(milliseconds: 260),
+                        curve: Curves.easeOutCubic,
+                        builder: (context, v, hijo) => Opacity(
+                          opacity: v,
+                          child: Transform.translate(
+                            offset: Offset(0, (1 - v) * 14),
+                            child: hijo,
+                          ),
+                        ),
+                        child: IndexedStack(
+                          index: _CategoriaTV.values.indexOf(_categoria),
+                          children: [
+                            for (final z in _CategoriaTV.values)
+                              switch (z) {
+                                final e when e.enConstruccion =>
+                                  ZonaEnCreacion(titulo: e.etiqueta()),
+                                _CategoriaTV.biblioteca => const LibraryPage(),
+                                _ => _ContenidoTV(c: widget.c),
+                              },
+                          ],
+                        ),
+                      ),
+                    ),
+                  ],
+                );
+              }),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+/// El sidebar de categorías, a la izquierda.
+class _SidebarTV extends StatefulWidget {
+  const _SidebarTV({
+    required this.c,
+    required this.primerFoco,
+    required this.elegida,
+    required this.onElegir,
+  });
+
+  final CatalogoExtensionesController c;
+  final FocusNode primerFoco;
+  final _CategoriaTV elegida;
+  final Future<void> Function(_CategoriaTV) onElegir;
+
+  @override
+  State<_SidebarTV> createState() => _SidebarTVState();
+}
+
+class _SidebarTVState extends State<_SidebarTV> {
+  /// Un nodo por categoría, para saber en cuál está parado el mando y poder
+  /// frenar en los extremos (ver `_frenarEnLosBordes`).
+  late final List<FocusNode> _nodos = [
+    for (final cat in _CategoriaTV.values)
+      cat == _CategoriaTV.inicio
+          ? widget.primerFoco
+          : FocusNode(debugLabel: 'sidebar-${cat.name}'),
+  ];
+
+  /// Si ya se enfocó algo alguna vez en esta pantalla.
+  ///
+  /// El `autofocus` tiene que correr UNA sola vez, al entrar por primera
+  /// vez. Volviendo de otra pantalla (Extensiones, Ajustes, Favoritos) esta
+  /// se reconstruye, y con el autofocus siempre puesto el foco se iba de
+  /// vuelta a "Inicio" — o sea que ir a Ajustes y volver te dejaba en otro
+  /// lado del que estabas. Con la bandera, al volver el foco se queda donde
+  /// lo dejaste.
+  bool _yaEnfoco = false;
+
+  @override
+  void dispose() {
+    for (final nodo in _nodos) {
+      // El primero lo creó y lo descarta HomeTV; los demás son de acá.
+      if (nodo != widget.primerFoco) nodo.dispose();
+    }
+    super.dispose();
+  }
+
+  /// Arriba en la primera y abajo en la última NO hacen nada.
+  ///
+  /// Sin esto, bajar desde la última categoría mandaba el foco al panel de
+  /// la derecha —lo más cercano hacia abajo— y con él se iba el scroll del
+  /// contenido: se sentía como que la lista "se movía sola" mientras uno
+  /// solo estaba recorriendo el menú. El menú es una lista cerrada: al
+  /// llegar al final, se queda ahí.
+  KeyEventResult _frenarEnLosBordes(FocusNode node, KeyEvent evento) {
+    if (evento is! KeyDownEvent) return KeyEventResult.ignored;
+    final tecla = evento.logicalKey;
+    final baja = tecla == LogicalKeyboardKey.arrowDown;
+    final sube = tecla == LogicalKeyboardKey.arrowUp;
+    if (!baja && !sube) return KeyEventResult.ignored;
+    if (baja && _nodos.last.hasFocus) return KeyEventResult.handled;
+    if (sube && _nodos.first.hasFocus) return KeyEventResult.handled;
+    return KeyEventResult.ignored;
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final a = Ancho.de(context);
+    // ── El autofocus solo si esta pantalla es la que está adelante ──────
+    //
+    // El aviso de beta se abre encima de la Home, y la Home se construye
+    // después: su `autofocus` le arrancaba el foco al diálogo, así que las
+    // flechas movían el sidebar de atrás mientras el aviso quedaba ahí
+    // adelante sin poder manejarse. `isCurrent` es falso cuando hay algo
+    // encima, y entonces acá no se pide nada.
+    final alFrente = ModalRoute.of(context)?.isCurrent ?? true;
+    // Solo la primera vez que esta pantalla está adelante (ver _yaEnfoco).
+    final pedirFoco = alFrente && !_yaEnfoco;
+    if (pedirFoco) {
+      // Se anota para el próximo build, no ahora: cambiar estado durante el
+      // build es justo lo que Flutter no deja.
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted) _yaEnfoco = true;
+      });
+    }
+    return SizedBox(
+      width: _anchoSidebarTv(a),
+      // El Focus de afuera ve las teclas que suben desde la categoría
+      // enfocada — al revés que un hijo, que nunca las vería.
+      child: Focus(
+        canRequestFocus: false,
+        skipTraversal: true,
+        onKeyEvent: _frenarEnLosBordes,
+        // Centrado vertical: son pocas categorías fijas, no una lista que
+        // pueda crecer, así que no hace falta que puedan desplazarse —
+        // alcanza con un Column centrado en el alto disponible, más prolijo
+        // que dejarlas pegadas arriba con el resto de la pantalla vacío
+        // debajo.
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            for (final (i, categoria) in _CategoriaTV.values.indexed)
+              Padding(
+                padding: const EdgeInsets.only(bottom: 10),
+                child: FocusableCard(
+                  focusNode: _nodos[i],
+                  autofocus: pedirFoco && categoria == _CategoriaTV.inicio,
+                  borderRadius: 14,
+                  onTap: () => widget.onElegir(categoria),
+                  child: _ItemSidebarTV(
+                    categoria: categoria,
+                    elegido: widget.elegida == categoria,
+                  ),
+                ),
+              ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+/// Una fila del sidebar: ícono + etiqueta, grandes — en una TV se mira desde
+/// el sillón, no a 30cm de la cara, así que el texto y el ícono de teléfono/
+/// escritorio se quedan chicos acá.
+class _ItemSidebarTV extends StatelessWidget {
+  const _ItemSidebarTV({required this.categoria, required this.elegido});
+
+  final _CategoriaTV categoria;
+  final bool elegido;
+
+  @override
+  Widget build(BuildContext context) {
+    final color = elegido ? HomeTheme.accentPink : HomeTheme.textPrimary;
+    // Ancho completo y alineado a la izquierda, como en la referencia: con
+    // `MainAxisSize.min` cada fila medía lo que midiera su texto, así que
+    // "TV" y "Novela" arrancaban en la misma x pero terminaban en distintas
+    // — y el resaltado del elegido quedaba de un ancho distinto en cada
+    // categoría, que es lo que se veía desprolijo.
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 13),
+      decoration: BoxDecoration(
+        color: elegido
+            ? HomeTheme.accentPink.withValues(alpha: 0.16)
+            : Colors.transparent,
+        borderRadius: BorderRadius.circular(14),
+      ),
+      child: Row(
+        children: [
+          Icon(categoria.icono, size: 26, color: color),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Text(
+              categoria.etiqueta(),
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: TextStyle(
+                fontSize: 17,
+                fontWeight: elegido ? FontWeight.w800 : FontWeight.w600,
+                color: color,
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+/// Todo lo que va a la derecha del sidebar: la barra de arriba, el
+/// destacado, los filtros y las filas.
+class _ContenidoTV extends StatelessWidget {
+  const _ContenidoTV({required this.c});
+
+  final CatalogoExtensionesController c;
+
+  List<FilaDeExtension> _visibles() {
+    final lista = c.filas
+        .where((f) => f.estadoExt == EstadoExtension.activa || f.esVistaPrevia)
+        .where(c.entraEnElTipo)
+        .toList();
+    if (c.hayFiltros) {
+      lista.sort((a, b) {
+        final pa = c.puedeConEsteGenero(a.package) ? 0 : 1;
+        final pb = c.puedeConEsteGenero(b.package) ? 0 : 1;
+        return pa - pb;
+      });
+    }
+    return lista;
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    // La barra de arriba NO va acá: vive en `HomeTV`, arriba de todo, para
+    // que no se pierda al cambiar de zona ni al reciclarse la lista. Ver el
+    // comentario ahí.
+    return Column(
+      children: [
+        Expanded(
+          child: Obx(() {
+            final visibles = _visibles();
+            return ListView.builder(
+              physics: const AlwaysScrollableScrollPhysics(),
+              padding: const EdgeInsets.only(bottom: 24),
+              // +2: el destacado y los filtros.
+              itemCount: (visibles.isEmpty ? 2 : visibles.length) + 2,
+              itemBuilder: (context, i) => switch (i) {
+                // Sin FocusableCard alrededor: el carrusel se enfoca solo y
+                // maneja sus propias flechas (ver _CarruselAndroid con
+                // conFocoTv). Envuelto, el foco se quedaba afuera y las
+                // teclas nunca llegaban adentro.
+                0 => RepaintBoundary(
+                    child: _CarruselAndroid(c: c, conFocoTv: true),
+                  ),
+                1 => _BarraDeFiltros(c: c),
+                _ => visibles.isEmpty
+                    ? const _FilaEsperando()
+                    : (i - 2 < visibles.length
+                        ? _FilaWindows(
+                            key: ValueKey(visibles[i - 2].package),
+                            c: c,
+                            fila: visibles[i - 2],
+                            conFocoTv: true,
+                          )
+                        : const SizedBox.shrink()),
+              },
+            );
+          }),
+        ),
+      ],
+    );
+  }
+}
+
+/// Buscar, Favoritos, Historial, Ajustes y el reloj — el equivalente TV de
+/// `_Cabecera` (teléfono) y del rail de escritorio, que acá no están.
+class _BarraSuperiorTV extends StatefulWidget {
+  const _BarraSuperiorTV();
+
+  @override
+  State<_BarraSuperiorTV> createState() => _BarraSuperiorTVState();
+}
+
+class _BarraSuperiorTVState extends State<_BarraSuperiorTV> {
+  /// El momento que muestra el reloj. Se guarda el `DateTime` y no el texto
+  /// ya armado porque el formato (24h, o 12h con a. m./p. m.) depende del
+  /// idioma y de la configuración del sistema, y eso solo se puede resolver
+  /// con el `context` — o sea, al dibujar, no acá.
+  DateTime _ahora = DateTime.now();
+  Timer? _reloj;
+
+  @override
+  void initState() {
+    super.initState();
+    // Cada 30s alcanza de sobra para un reloj que solo muestra hora:minuto,
+    // y es mucho más liviano que uno por segundo en una pantalla que además
+    // ya tiene el fondo animado y el carrusel dibujándose.
+    _reloj = Timer.periodic(const Duration(seconds: 30), (_) {
+      if (mounted) setState(() => _ahora = DateTime.now());
+    });
+  }
+
+  @override
+  void dispose() {
+    _reloj?.cancel();
+    super.dispose();
+  }
+
+  void _buscar() {
+    if (!Get.isRegistered<MainController>()) return;
+    Get.find<MainController>().changeTab(MainController.tabBuscar);
+  }
+
+  void _favoritos() => Get.to(() => const HistoryPage(soloFavoritos: true));
+
+  void _historial() => Get.to(() => const HistoryPage());
+
+  void _ajustes() {
+    if (!Get.isRegistered<MainController>()) return;
+    Get.find<MainController>().changeTab(MainController.tabAjustes);
+  }
+
+  /// Extensiones instaladas y repositorio, arriba y a la vista.
+  ///
+  /// En TV son de lo MÁS usado, no un ajuste perdido: acá el contenido no
+  /// viene de un catálogo propio sino de lo que el usuario tenga instalado,
+  /// así que si no hay extensiones, no hay app. Enterrarlas dos niveles
+  /// dentro de Ajustes era hacer difícil justamente lo primero que hay que
+  /// hacer al abrir PrismHub por primera vez.
+  void _instaladas() {
+    if (!Get.isRegistered<MainController>()) return;
+    Get.find<MainController>().changeTab(MainController.tabExtensiones);
+  }
+
+  void _repositorio() => Get.to(() => const ExtensionRepoPage());
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 18),
+      child: Row(
+        children: [
+          Text(
+            'PrismHub',
+            style: HomeTheme.tituloDeZona(bajo: false),
+          ),
+          const Spacer(),
+          _BotonSuperiorTV(
+            icono: Icons.search_rounded,
+            etiqueta: 'home.tv-buscar'.i18n,
+            onTap: _buscar,
+          ),
+          _BotonSuperiorTV(
+            icono: Icons.extension_outlined,
+            etiqueta: 'common.extension-installed'.i18n,
+            onTap: _instaladas,
+          ),
+          _BotonSuperiorTV(
+            icono: Icons.travel_explore_outlined,
+            etiqueta: 'common.extension-repo'.i18n,
+            onTap: _repositorio,
+          ),
+          _BotonSuperiorTV(
+            icono: Icons.favorite_border_rounded,
+            etiqueta: 'home.tv-favoritos'.i18n,
+            onTap: _favoritos,
+          ),
+          _BotonSuperiorTV(
+            icono: Icons.history_rounded,
+            etiqueta: 'home.tv-historial'.i18n,
+            onTap: _historial,
+          ),
+          _BotonSuperiorTV(
+            icono: Icons.settings_outlined,
+            etiqueta: 'home.tv-ajustes'.i18n,
+            onTap: _ajustes,
+          ),
+          // Separación clara antes del reloj: es información, no un botón
+          // más, y pegado al último parecía parte de la fila de acciones.
+          const SizedBox(width: 22),
+          // La hora, en el formato del aparato: `alwaysUse24HourFormat` es
+          // el interruptor de "usar 24 horas" del sistema, y el idioma de la
+          // app decide cómo se escribe el resto (en español "p. m.", en
+          // inglés "PM"). Escribirla a mano en 24h se veía mal para quien
+          // tiene el teléfono/TV configurado en 12 horas.
+          Text(
+            MaterialLocalizations.of(context).formatTimeOfDay(
+              TimeOfDay.fromDateTime(_ahora),
+              alwaysUse24HourFormat:
+                  MediaQuery.alwaysUse24HourFormatOf(context),
+            ),
+            style: TextStyle(
+              fontSize: 18,
+              fontWeight: FontWeight.w600,
+              color: HomeTheme.textMuted,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+/// Un botón grande de la barra superior — mismo criterio de tamaño que el
+/// sidebar: se mira de lejos.
+class _BotonSuperiorTV extends StatelessWidget {
+  const _BotonSuperiorTV({
+    required this.icono,
+    required this.etiqueta,
+    required this.onTap,
+  });
+
+  final IconData icono;
+  final String etiqueta;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    // El aire tiene que dar para el crecido: al enfocarse el botón escala y
+    // le suma su marco, así que con la separación justa el de al lado
+    // quedaba tapado por el halo del que estaba seleccionado.
+    return Padding(
+      padding: const EdgeInsets.only(left: 16),
+      child: Tooltip(
+        message: etiqueta,
+        child: FocusableCard(
+          borderRadius: 999,
+          onTap: onTap,
+          child: Container(
+            width: 52,
+            height: 52,
+            alignment: Alignment.center,
+            decoration: BoxDecoration(
+              shape: BoxShape.circle,
+              color: HomeTheme.cardSurface,
+            ),
+            child: Icon(icono, size: 26, color: HomeTheme.textPrimary),
+          ),
+        ),
+      ),
+    );
+  }
+}

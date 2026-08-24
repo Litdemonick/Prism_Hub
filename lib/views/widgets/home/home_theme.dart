@@ -201,6 +201,20 @@ class HomeTheme {
   /// distinta del Home normal. Ver AnimatedBackgroundGlow/HomeSection/
   /// HomeMediaCard, que aceptan `accent` en vez de tener este color fijo.
   static Color get accentRed => _claro ? _accentRedClaro : _accentRedOscuro;
+
+  /// El color que marca DÓNDE ESTÁ EL FOCO en televisor (ver FocusableCard).
+  ///
+  /// Blanco, y no el rosa de la app: el foco cae seguido sobre cosas que ya
+  /// son rosas (el botón de "Ver ahora", un chip elegido, la categoría
+  /// activa del menú) y ahí un marco del mismo color se funde con el fondo.
+  ///
+  /// Se probó en dorado —el secundario de la marca— por la misma razón, pero
+  /// no combinaba con la paleta. El blanco no compite con ningún color de la
+  /// app y se ve sobre cualquier portada.
+  ///
+  /// En modo claro va oscuro: un marco blanco sobre fondo claro no se vería.
+  static Color get focoTv =>
+      _claro ? const Color(0xFF14151A) : Colors.white;
   static Color get cardSurface =>
       _claro ? _cardSurfaceClaro : _cardSurfaceOscuro;
 

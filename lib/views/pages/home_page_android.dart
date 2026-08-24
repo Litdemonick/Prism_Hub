@@ -328,7 +328,13 @@ class _BarraDeFiltrosState extends State<_BarraDeFiltros> {
       return Padding(
         // Despegada del título: pegada arriba, la barra se leía como parte de
         // la cabecera y no como algo que se puede tocar.
-        padding: const EdgeInsets.only(top: 14, bottom: 14),
+        //
+        // En TV, más aire arriba y abajo: el chip enfocado crece y le sale
+        // su marco, y con 14 justos quedaba cortado contra el borde de su
+        // fila (la lista recorta lo que se sale).
+        padding: PlatformTv.esTelevisionSync
+            ? const EdgeInsets.only(top: 26, bottom: 26)
+            : const EdgeInsets.only(top: 14, bottom: 14),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
@@ -380,9 +386,15 @@ class _BarraDeFiltrosState extends State<_BarraDeFiltros> {
                     child: SingleChildScrollView(
                       controller: _esTactil ? null : _scroll,
                       scrollDirection: Axis.horizontal,
-                      padding: EdgeInsets.only(
-                          left: _esTactil ? margen : 6,
-                          right: _esTactil ? margen : 6),
+                      // En TV los chips también crecen al enfocarse, y esta
+                      // fila recorta en su borde: sin aire, al primero y al
+                      // último se les comían las esquinas. Con 22 el crecido
+                      // entra entero.
+                      padding: EdgeInsets.symmetric(
+                        horizontal: PlatformTv.esTelevisionSync
+                            ? 22
+                            : (_esTactil ? margen : 6),
+                      ),
                       child: Row(
                         children: [
                           // ── Los activos, primeros y en la MISMA fila ──────
@@ -622,9 +634,17 @@ class _Chip extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return GestureDetector(
-      onTap: onTap,
-      child: AnimatedContainer(
+    // En TV el chip es un FocusableCard: con `GestureDetector` a secas no
+    // hay nada que el D-pad pueda enfocar, así que la fila de filtros
+    // quedaba visible pero intocable con el mando.
+    if (PlatformTv.esTelevisionSync) {
+      return FocusableCard(borderRadius: 20, onTap: onTap, child: _pastilla());
+    }
+    return GestureDetector(onTap: onTap, child: _pastilla());
+  }
+
+  Widget _pastilla() {
+    return AnimatedContainer(
         duration: const Duration(milliseconds: 160),
         // ── Ni el ancho ni la posición del texto cambian al marcarlo ──────
         //
@@ -680,7 +700,6 @@ class _Chip extends StatelessWidget {
               ),
           ],
         ),
-      ),
     );
   }
 }
@@ -818,9 +837,14 @@ class _BotonDeCabecera extends StatelessWidget {
 /// leyendo se la corre de abajo del pulgar, y si justo la estaba arrastrando,
 /// pelea con el gesto. En escritorio sí rota: ahí el cursor está en otro lado.
 class _CarruselAndroid extends StatefulWidget {
-  const _CarruselAndroid({required this.c});
+  const _CarruselAndroid({required this.c, this.conFocoTv = false});
 
   final CatalogoExtensionesController c;
+
+  /// En TV el carrusel se recorre con las flechas del mando, no arrastrando.
+  /// Ver `_ContenidoTV`: sin esto quedaba como un hueco mudo entre la barra
+  /// de arriba y las filas — se podía enfocar pero no moverse por dentro.
+  final bool conFocoTv;
 
   @override
   State<_CarruselAndroid> createState() => _CarruselAndroidState();
@@ -1483,11 +1507,62 @@ class _CarruselAndroidState extends State<_CarruselAndroid>
         final tanda = grupos[widget.c.carruselExt].$2;
         final base = _indiceGlobal(grupos) - widget.c.carruselPos;
 
+        // En TV: las flechas mueven de tarjeta en tarjeta.
+        //
+        // Solo izquierda/derecha se consumen, y solo mientras QUEDE a dónde
+        // ir en esa dirección: en el extremo la tecla se deja pasar para que
+        // el foco salga del carrusel (al sidebar, a la izquierda). Arriba y
+        // abajo nunca se tocan — son la salida hacia la barra de arriba y
+        // hacia las filas de abajo.
+        KeyEventResult manejarTecla(FocusNode node, KeyEvent evento) {
+          if (evento is! KeyDownEvent) return KeyEventResult.ignored;
+          final tecla = evento.logicalKey;
+          // OK/Enter abre lo que esté centrado ahora.
+          if (tecla == LogicalKeyboardKey.select ||
+              tecla == LogicalKeyboardKey.enter ||
+              tecla == LogicalKeyboardKey.numpadEnter ||
+              tecla == LogicalKeyboardKey.gameButtonA) {
+            final i = _p.round();
+            if (i < 0 || i >= planos.length) return KeyEventResult.ignored;
+            final (paquete, item) = planos[i];
+            _abrir(context, item, paquete);
+            return KeyEventResult.handled;
+          }
+          final int paso;
+          if (tecla == LogicalKeyboardKey.arrowRight) {
+            paso = 1;
+          } else if (tecla == LogicalKeyboardKey.arrowLeft) {
+            paso = -1;
+          } else {
+            return KeyEventResult.ignored;
+          }
+          final destino = _p.round() + paso;
+          // En el extremo se deja pasar la tecla: así el foco puede salir
+          // del carrusel hacia el sidebar en vez de quedarse trabado.
+          if (destino < 0 || destino > ultimo) return KeyEventResult.ignored;
+          _irA(destino.toDouble(), grupos);
+          return KeyEventResult.handled;
+        }
+
         return Column(
           children: [
             SizedBox(
               height: m.alto,
-              child: GestureDetector(
+              // ── El carrusel es SU PROPIO enfocable ────────────────────
+              //
+              // El primer intento fue envolverlo por fuera en FocusableCard
+              // y manejar las flechas en un Focus interno. No funciona: los
+              // eventos de teclado salen del nodo ENFOCADO y suben por sus
+              // ancestros, nunca bajan a los hijos — así que el Focus de
+              // adentro no veía una sola tecla y el carrusel quedaba mudo.
+              //
+              // Siendo él mismo el nodo que recibe el foco, las teclas
+              // llegan directo.
+              child: Focus(
+                canRequestFocus: widget.conFocoTv,
+                skipTraversal: !widget.conFocoTv,
+                onKeyEvent: widget.conFocoTv ? manejarTecla : null,
+                child: GestureDetector(
                 behavior: HitTestBehavior.opaque,
                 onHorizontalDragStart: (_) {
                   _anim.stop();
@@ -1682,6 +1757,7 @@ class _CarruselAndroidState extends State<_CarruselAndroid>
                     }),
                   ],
                 ),
+              ),
               ),
             ),
             // En táctil la sombra sigue estando y ya no se corta, así que
@@ -1969,9 +2045,15 @@ class _CarruselAndroidState extends State<_CarruselAndroid>
 
     // Cuanto más ancha la pantalla, menos se lleva la tarjeta en foco: en una
     // tablet, dos tercios del ancho serían una sola tarjeta enorme.
-    final parte = bajo
-        ? a.elegir(compacto: 0.46, medio: 0.36, amplio: 0.34, enorme: 0.28)
-        : a.elegir(compacto: 0.66, medio: 0.5, amplio: 0.42, enorme: 0.34);
+    // En TV la tarjeta en foco se lleva bastante más: `enorme` (el peldaño
+    // en el que cae cualquier televisor) está pensado para un monitor de
+    // escritorio, que se mira de cerca. A tres metros, ese 0.34 es una
+    // portada chica en el medio de una pantalla enorme.
+    final parte = widget.conFocoTv
+        ? 0.44
+        : (bajo
+            ? a.elegir(compacto: 0.46, medio: 0.36, amplio: 0.34, enorme: 0.28)
+            : a.elegir(compacto: 0.66, medio: 0.5, amplio: 0.42, enorme: 0.34));
 
     var ancho = anchoUtil * parte;
     var alto = ancho * relacion;
@@ -1986,8 +2068,15 @@ class _CarruselAndroidState extends State<_CarruselAndroid>
     // píxeles de alto daban tarjetas de 320 — chiquitas y perdidas en 1280 de
     // ancho. Tiene sitio de sobra para el doble, y debajo igual entra la
     // primera fila.
+    //
+    // En TV el alto sobra y la distancia de mirada es otra: con el tope de
+    // escritorio el destacado quedaba como una tira fina arriba, sin ser el
+    // destacado de nada. Se le da más de la mitad de la pantalla, que es lo
+    // que hace cualquier app de televisor.
     final tope = altoPantalla *
-        (bajo ? 0.66 : a.elegir(compacto: 0.4, medio: 0.42, amplio: 0.55));
+        (widget.conFocoTv
+            ? 0.58
+            : (bajo ? 0.66 : a.elegir(compacto: 0.4, medio: 0.42, amplio: 0.55)));
     if (alto > tope) {
       alto = tope;
       ancho = alto / relacion;
