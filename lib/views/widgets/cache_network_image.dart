@@ -8,6 +8,7 @@ import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 import 'package:image_gallery_saver_plus/image_gallery_saver_plus.dart';
 import 'package:prismhub/utils/i18n.dart';
+import 'package:prismhub/utils/platform_tv.dart';
 import 'package:prismhub/utils/request.dart';
 import 'package:prismhub/views/widgets/home/esqueleto.dart';
 import 'package:prismhub/views/widgets/home/home_theme.dart';
@@ -216,6 +217,58 @@ class _CacheNetWorkImagePicState extends State<CacheNetWorkImagePic> {
     );
   }
 
+  /// El tope de ancho al que conviene decodificar en ESTE aparato, o null si
+  /// no hay que ponerle ninguno.
+  ///
+  /// ── Por qué hace falta ─────────────────────────────────────────────────
+  ///
+  /// Una imagen ocupa en memoria cuatro bytes por píxel DECODIFICADO, sin
+  /// importar lo que pese el archivo. Sin tope, una portada de 2000×3000 son
+  /// 24 MB aunque se muestre en una tarjeta de 150 puntos.
+  ///
+  /// Casi todas las pantallas ya pasan su `cacheWidth` a mano y hacen bien la
+  /// cuenta, pero quedaban dieciocho llamadas sin ninguno — y varias son a
+  /// pantalla completa (el fondo de una ficha, la portada del televisor). Ahí
+  /// es donde más duele: en un panel 4K son más de treinta megas por imagen.
+  ///
+  /// ── Y por qué solo en televisor ────────────────────────────────────────
+  ///
+  /// En el nivel `alto` (escritorio, teléfono y tablet) devuelve null: ahí
+  /// nada cambia, ni una llamada. Poner un tope general sería tocar de
+  /// refilón cosas que hoy funcionan bien —el lector de cómic, que se puede
+  /// ampliar con los dedos y necesita todos los píxeles— sin ninguna medición
+  /// que lo pida.
+  ///
+  /// En un televisor esa preocupación no existe: no hay pellizco para ampliar,
+  /// y la pantalla no da más de lo que el tope permite igual.
+  static int? get _topeDelPerfil => PerfilDeAparato.nivel.elegir<int?>(
+        alto: null,
+        medio: 1080,
+        bajo: 720,
+      );
+
+  int? _topeDeAncho(BuildContext context, BoxConstraints? caja) {
+    final tope = _topeDelPerfil;
+    if (tope == null) return null;
+    // El ancho de verdad que va a ocupar, en puntos. Se prueba primero lo que
+    // le dio el padre y después lo que pidió quien la usa; si ninguno de los
+    // dos es un número finito (pasa con `double.infinity`, que es "llená lo
+    // que haya"), se cae al ancho de la pantalla, que es el techo real.
+    final anchoCaja = caja?.maxWidth;
+    final anchoPedido = widget.width;
+    final double enPuntos;
+    if (anchoCaja != null && anchoCaja.isFinite && anchoCaja > 0) {
+      enPuntos = anchoCaja;
+    } else if (anchoPedido != null && anchoPedido.isFinite && anchoPedido > 0) {
+      enPuntos = anchoPedido;
+    } else {
+      enPuntos = MediaQuery.sizeOf(context).width;
+    }
+    final enPixeles =
+        (enPuntos * MediaQuery.devicePixelRatioOf(context)).ceil();
+    return enPixeles.clamp(1, tope);
+  }
+
   @override
   Widget build(BuildContext context) {
     // URL vacía (ej. extensión sin ícono en su manifest) no es un fallo de
@@ -227,6 +280,21 @@ class _CacheNetWorkImagePicState extends State<CacheNetWorkImagePic> {
       return _errorBuild();
     }
 
+    // Quien ya pasó su propio tamaño manda: la cuenta de arriba solo cubre a
+    // los que no pasaron ninguno. Y `_topeDeAncho` devuelve null en
+    // escritorio y teléfono, así que ahí esto no hace absolutamente nada y no
+    // se agrega ni un `LayoutBuilder` al árbol.
+    final leFaltaTope = widget.cacheWidth == null && widget.cacheHeight == null;
+    if (leFaltaTope && _topeDelPerfil != null) {
+      return LayoutBuilder(
+        builder: (context, caja) =>
+            _imagen(context, _topeDeAncho(context, caja)),
+      );
+    }
+    return _imagen(context, widget.cacheWidth);
+  }
+
+  Widget _imagen(BuildContext context, int? cacheWidth) {
     final image = ExtendedImage.network(
       widget.url,
       headers: widget.headers,
@@ -248,7 +316,7 @@ class _CacheNetWorkImagePicState extends State<CacheNetWorkImagePic> {
       alignment: widget.alignment,
       filterQuality: widget.filterQuality,
       cache: true,
-      cacheWidth: widget.cacheWidth,
+      cacheWidth: cacheWidth,
       cacheHeight: widget.cacheHeight,
       mode: widget.mode,
       // En una grilla, decenas de tarjetas piden su portada al mismo tiempo
