@@ -1,6 +1,7 @@
 import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
+import 'package:prismhub/utils/platform_tv.dart';
 
 /// El fondo vivo de la app: una pared de portadas inclinada que se desplaza.
 ///
@@ -73,7 +74,22 @@ class _ParedDePortadasState extends State<ParedDePortadas>
   late final AnimationController _control = AnimationController(
     vsync: this,
     duration: _duracion,
-  )..repeat();
+  );
+
+  @override
+  void initState() {
+    super.initState();
+    // ── En un aparato modesto, la pared no se mueve ────────────────────────
+    //
+    // El desplazamiento es barato —mover una textura ya pintada— pero no es
+    // gratis: obliga al motor a producir un cuadro por vsync durante todo el
+    // arranque, que es justo cuando la app está haciendo todo lo demás. En un
+    // televisor viejo eso es competencia directa contra la carga.
+    //
+    // Quieta se ve igual de bien: es un fondo de tarjetas inclinadas, y nadie
+    // que abra la app por primera vez sabe que se suponía que se movía.
+    if (PerfilDeAparato.nivel != NivelDeAparato.bajo) _control.repeat();
+  }
 
   @override
   void dispose() {
@@ -84,9 +100,18 @@ class _ParedDePortadasState extends State<ParedDePortadas>
   @override
   Widget build(BuildContext context) {
     return IgnorePointer(
-      child: Opacity(
-        opacity: widget.opacidad,
-        child: ClipRect(
+      // ── La opacidad va DENTRO del pincel, no alrededor ──────────────────
+      //
+      // Estaba como `Opacity` envolviendo la pared entera, y bajarle la
+      // intensidad a algo obliga a componerlo en una capa aparte del tamaño de
+      // la pantalla. En una pared que además se desplaza, eso es una capa a
+      // pantalla completa por cuadro, durante todo el arranque.
+      //
+      // Aplicándola al color de cada tarjeta al pintarla (ver
+      // `_PintorDeLaPared`), el resultado se ve exactamente igual y no hay
+      // ninguna capa de más: entra en el dibujo que el RepaintBoundary ya
+      // guarda, así que se paga una sola vez.
+      child: ClipRect(
           child: LayoutBuilder(
             builder: (context, caja) {
               // El alto de una tarjeta manda todo lo demás. Proporción 2:3,
@@ -111,6 +136,7 @@ class _ParedDePortadasState extends State<ParedDePortadas>
                     alto: alto,
                     paso: paso,
                     desenfoque: widget.desenfoque,
+                    opacidad: widget.opacidad,
                   ),
                 ),
               );
@@ -132,7 +158,6 @@ class _ParedDePortadasState extends State<ParedDePortadas>
               );
             },
           ),
-        ),
       ),
     );
   }
@@ -143,11 +168,20 @@ class _PintorDeLaPared extends CustomPainter {
     required this.alto,
     required this.paso,
     this.desenfoque = 0,
+    this.opacidad = 1,
   });
 
   final double alto;
   final double paso;
   final double desenfoque;
+
+  /// Cuánto se deja ver la pared, aplicado al COLOR de cada tarjeta.
+  ///
+  /// Antes esto era un `Opacity` envolviendo la pared entera, o sea una capa a
+  /// pantalla completa por cuadro mientras la pared se desplaza. Acá el mismo
+  /// resultado sale gratis: el color ya se pinta apagado y entra en el dibujo
+  /// que el `RepaintBoundary` guarda una sola vez.
+  final double opacidad;
 
   /// Los tonos de las tarjetas.
   ///
@@ -200,8 +234,9 @@ class _PintorDeLaPared extends CustomPainter {
           begin: Alignment.topLeft,
           end: Alignment.bottomRight,
           colors: [
-            tono,
-            Color.lerp(tono, const Color(0xFF08080F), 0.55)!,
+            tono.withValues(alpha: opacidad),
+            Color.lerp(tono, const Color(0xFF08080F), 0.55)!
+                .withValues(alpha: opacidad),
           ],
         ).createShader(rect);
         canvas.drawRRect(
@@ -216,5 +251,6 @@ class _PintorDeLaPared extends CustomPainter {
   bool shouldRepaint(_PintorDeLaPared anterior) =>
       anterior.alto != alto ||
       anterior.paso != paso ||
-      anterior.desenfoque != desenfoque;
+      anterior.desenfoque != desenfoque ||
+      anterior.opacidad != opacidad;
 }

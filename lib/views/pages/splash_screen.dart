@@ -119,8 +119,28 @@ class _SplashScreenState extends State<SplashScreen>
           // columna no entraba y desbordaba. Confirmado en vivo.
           LayoutBuilder(
             builder: (context, caja) {
-              final ladoDelLogo =
-                  (caja.maxHeight * 0.30).clamp(110.0, 240.0).toDouble();
+              // ── El logo, y por qué no puede medir lo mismo en un televisor
+              //
+              // La cuenta original —30% del alto, hasta 240— está pensada para
+              // un teléfono en vertical, donde el alto es mucho y el ancho
+              // poco. En una pantalla apaisada esa misma cuenta deja un logo
+              // desproporcionado: se mira desde lejos y ocupa media pantalla.
+              // Reportado en vivo en un televisor.
+              //
+              // Se decide por la FORMA de la pantalla y no preguntando «¿esto
+              // es una TV?» a propósito: acá todavía no se sabe —la detección
+              // necesita el canal con la parte nativa y se resuelve más
+              // adelante, mientras esta pantalla ya se está dibujando— y
+              // además la forma es lo que de verdad importa. Un televisor
+              // siempre es apaisado, y una ventana de escritorio apaisada
+              // agradece exactamente lo mismo.
+              //
+              // En vertical la cuenta queda idéntica a la de siempre: en
+              // teléfono no cambia nada.
+              final apaisado = caja.maxWidth > caja.maxHeight * 1.4;
+              final ladoDelLogo = (caja.maxHeight * (apaisado ? 0.20 : 0.30))
+                  .clamp(110.0, apaisado ? 150.0 : 240.0)
+                  .toDouble();
               return Center(
                 child: SingleChildScrollView(
                   child: Column(
@@ -132,7 +152,12 @@ class _SplashScreenState extends State<SplashScreen>
                       _Aparece(
                         demora: Duration.zero,
                         saltear: widget.soloLogo,
-                        child: AnimatedBuilder(
+                        // El latido, en su propia capa: es lo único que se
+                        // mueve en el centro de la pantalla, y sin esto cada
+                        // cuadro suyo obliga a repintar también el título, la
+                        // frase y la rueda de abajo.
+                        child: RepaintBoundary(
+                          child: AnimatedBuilder(
                           animation: _pulso,
                           // El logo va como `child`: se construye UNA vez y el
                           // builder solo lo envuelve. Sin esto, cada cuadro
@@ -151,28 +176,60 @@ class _SplashScreenState extends State<SplashScreen>
                           ),
                           builder: (context, hijo) {
                             final t = _pulso.value;
-                            return Container(
-                              decoration: BoxDecoration(
-                                shape: BoxShape.circle,
-                                boxShadow: [
-                                  BoxShadow(
-                                    color: _acento.withValues(
-                                        alpha: 0.16 + t * 0.20),
-                                    blurRadius: 40 + t * 46,
-                                    spreadRadius: 2 + t * 10,
+                            // ── El resplandor, con un degradado y no con una
+                            //    sombra desenfocada ────────────────────────
+                            //
+                            // Acá había un `BoxShadow` cuyo `blurRadius` iba
+                            // de 40 a 86 y cuyo `spreadRadius` iba de 2 a 12,
+                            // los dos atados al latido. O sea: hasta 86
+                            // píxeles de desenfoque REGENERÁNDOSE sesenta
+                            // veces por segundo, y justo mientras la app se
+                            // está inicializando, que es cuando menos aire
+                            // hay. Era el cuadro más caro de toda la app, y
+                            // en un televisor se veía como que la pantalla de
+                            // arranque va a tirones.
+                            //
+                            // Un degradado radial da el mismo resplandor —se
+                            // apaga hacia afuera igual— y no cuesta nada
+                            // parecido: no hay capa aparte ni desenfoque, es
+                            // un relleno. Lo que late es el tamaño del círculo
+                            // y su intensidad, que es lo que se ve.
+                            return Stack(
+                              alignment: Alignment.center,
+                              children: [
+                                SizedBox(
+                                  width: ladoDelLogo * (1.7 + t * 0.35),
+                                  height: ladoDelLogo * (1.7 + t * 0.35),
+                                  child: DecoratedBox(
+                                    decoration: BoxDecoration(
+                                      shape: BoxShape.circle,
+                                      gradient: RadialGradient(
+                                        colors: [
+                                          _acento.withValues(
+                                              alpha: 0.20 + t * 0.16),
+                                          _acento.withValues(alpha: 0),
+                                        ],
+                                        // El color vive en el centro y se
+                                        // apaga antes del borde: sin esto el
+                                        // círculo termina en un filo visible
+                                        // en vez de fundirse con el fondo.
+                                        stops: const [0.25, 1.0],
+                                      ),
+                                    ),
                                   ),
-                                ],
-                              ),
-                              // Late poco: 3% de más y de menos. Un latido
-                              // grande marea y encima delata que es un bucle;
-                              // uno chico se siente vivo sin llamar la
-                              // atención.
-                              child: Transform.scale(
-                                scale: 0.97 + t * 0.06,
-                                child: hijo,
-                              ),
+                                ),
+                                // Late poco: 3% de más y de menos. Un latido
+                                // grande marea y encima delata que es un
+                                // bucle; uno chico se siente vivo sin llamar
+                                // la atención.
+                                Transform.scale(
+                                  scale: 0.97 + t * 0.06,
+                                  child: hijo,
+                                ),
+                              ],
                             );
                           },
+                          ),
                         ),
                       ),
                       if (!widget.soloLogo) ...[
