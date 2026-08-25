@@ -146,7 +146,13 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
 ///
 /// En escritorio el Home queda exactamente como estaba, se achique la ventana
 /// hasta donde se achique.
-bool get _esTactil => Platform.isAndroid || Platform.isIOS;
+/// Una sola definición, en `platform_tv.dart`. Estaba escrita también en
+/// `tarjeta_de_catalogo.dart`, con el mismo cuerpo copiado.
+bool get _esTactil => esPantallaTactil;
+
+/// Si el aparato tiene GESTOS de dedo. Un televisor es «táctil» para el
+/// sistema pero no tiene con qué deslizar — ver [hayGestosDeDedo].
+bool get _hayGestos => hayGestosDeDedo;
 
 /// Si esto es un Android TV. Se pregunta ANTES que [_esTactil] en el
 /// bifurcado de arriba — ver el comentario ahí.

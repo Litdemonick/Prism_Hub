@@ -51,6 +51,35 @@ class PlatformTv {
   }
 }
 
+/// Si el aparato se maneja tocando la pantalla, en vez de con un puntero.
+///
+/// Va por sistema operativo a propósito y no por el ancho de la ventana: el
+/// tamaño no dice si hay mouse. Estaba escrito dos veces —en `home_page.dart`
+/// y en `tarjeta_de_catalogo.dart`— con el mismo cuerpo; ahora los dos apuntan
+/// acá.
+///
+/// **Un Android TV contesta que sí**, y es correcto: es Android, y muchas
+/// decisiones de tamaño y de diseño que dependen de esto le sirven igual. Lo
+/// que un televisor NO tiene son los gestos — para eso está [hayGestosDeDedo].
+bool get esPantallaTactil => Platform.isAndroid || Platform.isIOS;
+
+/// Si existen los GESTOS de dedo: deslizar para refrescar, arrastrar una fila,
+/// tirar hacia abajo para aplicar un filtro.
+///
+/// ── Por qué hace falta separarlo de [esPantallaTactil] ──────────────────
+///
+/// Porque un Android TV es «táctil» para el sistema operativo y no tiene ni
+/// dedo ni puntero: se maneja con un control remoto. Preguntando solo por
+/// [esPantallaTactil], el televisor entraba por el camino del teléfono y se
+/// quedaba sin salida — el caso concreto: al marcar un filtro salía «deslizá
+/// hacia abajo para aplicar» y el botón de aplicar estaba escondido porque «en
+/// celular se aplica deslizando». En un televisor no hay forma de deslizar, así
+/// que el filtro quedaba marcado y sin poder aplicarse nunca.
+///
+/// Regla simple: si lo que se está decidiendo es un GESTO, se pregunta acá. Si
+/// es un tamaño o un detalle visual, [esPantallaTactil] alcanza.
+bool get hayGestosDeDedo => esPantallaTactil && !PlatformTv.esTelevisionSync;
+
 /// Cuánto puede gastar la app en este aparato.
 ///
 /// ── Por qué no alcanza con «es TV o no» ─────────────────────────────────

@@ -509,7 +509,13 @@ class _BarraDeFiltrosState extends State<_BarraDeFiltros> {
               // En celular no hace falta: ahí se tira de la pantalla y el
               // gesto está siempre disponible, así que la fila sigue
               // apareciendo solo cuando tiene algo que decir.
-              child: (c.hayCambiosSinAplicar || hayAlgo || !_esTactil)
+              //
+              // En televisor tampoco: no hay de dónde tirar. Por eso acá y en
+              // los tres `if` de abajo se pregunta por los GESTOS y no por
+              // «pantalla táctil» — un Android TV es lo primero pero no lo
+              // segundo, y por preguntar mal se quedaba sin botón de aplicar y
+              // sin botón de refrescar, con un cartel que le pedía deslizar.
+              child: (c.hayCambiosSinAplicar || hayAlgo || !_hayGestos)
                   ? Padding(
                       padding: EdgeInsets.fromLTRB(margen, 10, margen, 0),
                       child: Row(
@@ -520,7 +526,7 @@ class _BarraDeFiltrosState extends State<_BarraDeFiltros> {
                           // ya existe para refrescar. En escritorio ese gesto no
                           // existe —nadie tira de una ventana con el mouse— así que
                           // ahí va un botón, que es lo que se busca.
-                          if (c.hayCambiosSinAplicar && _esTactil) ...[
+                          if (c.hayCambiosSinAplicar && _hayGestos) ...[
                             Icon(Icons.arrow_downward_rounded,
                                 size: 15, color: HomeTheme.accentPink),
                             const SizedBox(width: 6),
@@ -545,7 +551,7 @@ class _BarraDeFiltrosState extends State<_BarraDeFiltros> {
                           // no existe con mouse. Sin esto, la única forma de poner el
                           // Home al día —o de que aparezca una extensión recién
                           // instalada— era cerrar y volver a abrir la app.
-                          if (!_esTactil) ...[
+                          if (!_hayGestos) ...[
                             const SizedBox(width: 8),
                             _BotonDeBarra(
                               // Mientras trabaja cambia de ícono y no se deja
@@ -560,7 +566,7 @@ class _BarraDeFiltrosState extends State<_BarraDeFiltros> {
                                   c.refrescando.value ? null : c.refrescarTodo,
                             ),
                           ],
-                          if (!_esTactil && c.hayCambiosSinAplicar) ...[
+                          if (!_hayGestos && c.hayCambiosSinAplicar) ...[
                             const SizedBox(width: 8),
                             FilledButton.icon(
                               onPressed: c.aplicarFiltros,

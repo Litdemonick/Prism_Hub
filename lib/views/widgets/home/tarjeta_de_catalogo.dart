@@ -1,5 +1,3 @@
-import 'dart:io';
-
 import 'package:flutter/material.dart';
 import 'package:prismhub/utils/breakpoints.dart';
 import 'package:prismhub/utils/i18n.dart';
@@ -9,9 +7,11 @@ import 'package:prismhub/utils/platform_tv.dart';
 
 /// Si el aparato se maneja con el dedo.
 ///
-/// Es lo mismo que mira el Inicio (`home_page.dart`), y va por sistema
-/// operativo a propósito: el ancho de la ventana no dice si hay mouse.
-bool get _esTactil => Platform.isAndroid || Platform.isIOS;
+/// Es lo mismo que mira el Inicio (`home_page.dart`): los dos apuntan a la
+/// única definición, en `platform_tv.dart`. Antes estaba escrita acá y allá
+/// con el mismo cuerpo copiado, que es como se termina cambiando una sola de
+/// las dos.
+bool get _esTactil => esPantallaTactil;
 
 /// La tarjeta del catálogo: **póster limpio, sin marco**.
 ///
@@ -177,13 +177,28 @@ class _TarjetaDeCatalogoState extends State<TarjetaDeCatalogo> {
           // había forma de sacárselo de encima sin entrar a algún lado. Ahora
           // lo único que abre la ficha es el botón «Ver detalles», que para eso
           // está.
-          onTap: () {
-            if (conMouse || !_hayPanel) {
-              widget.onTap?.call();
-              return;
-            }
-            setState(() => _abierto = !_abierto);
-          },
+          // ── Y sin `onTap` propio, la tarjeta no atiende el toque ──────────
+          //
+          // Esto es lo que pasa en televisor: ahí el toque lo maneja el
+          // FocusableCard que la envuelve por fuera, y por eso llega sin
+          // `onTap`. Pero este `GestureDetector` está POR DENTRO del suyo, así
+          // que era este el que ganaba el clic — y como `conMouse` es
+          // `!_esTactil`, o sea false en Android TV, en vez de abrir la ficha
+          // alternaba el panel de información.
+          //
+          // Con el mando no se notaba (el D-pad no pasa por acá, va por el
+          // foco), pero con un mouse enchufado al televisor hacer clic en una
+          // tarjeta no abría nada. Devolviendo null, el toque sigue de largo
+          // hasta quien sí sabe qué hacer con él.
+          onTap: widget.onTap == null
+              ? null
+              : () {
+                  if (conMouse || !_hayPanel) {
+                    widget.onTap?.call();
+                    return;
+                  }
+                  setState(() => _abierto = !_abierto);
+                },
           behavior: HitTestBehavior.opaque,
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,

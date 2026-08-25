@@ -113,6 +113,18 @@ class _FocusableCardState extends State<FocusableCard> {
   void _onFocusChange(bool tieneFoco) {
     if (mounted) setState(() => _tieneFoco = tieneFoco);
     if (!tieneFoco) return;
+    // ── En televisor de esto se encarga otro, y con razón ─────────────────
+    //
+    // `RescateDeFoco` hace exactamente lo mismo para TODA la app —también
+    // para los botones de Material, que no pasan por acá— y en televisor está
+    // siempre montado. O sea que cada movimiento del mando disparaba CUATRO
+    // desplazamientos a la vez sobre la misma lista: los dos de acá y los dos
+    // de allá, cada uno con su animación de 180 ms, peleándose entre ellos.
+    //
+    // Fuera de televisor el rescate no está montado, así que acá sí hace
+    // falta: es lo que hace que moverse con el teclado en escritorio traiga a
+    // la vista lo que se enfoca.
+    if (PlatformTv.esTelevisionSync) return;
     // Después del frame: `ensureVisible` necesita que el `RenderObject` ya
     // esté ubicado con el layout nuevo, y justo después de ganar el foco
     // eso todavía puede no estar listo.
