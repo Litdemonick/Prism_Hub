@@ -2,11 +2,13 @@ import 'dart:async';
 import 'dart:math';
 
 import 'package:flutter/scheduler.dart';
+import 'package:flutter/widgets.dart';
 import 'package:get/get.dart';
 import 'package:prismhub/data/services/extension_service.dart';
 import 'package:prismhub/models/index.dart';
 import 'package:prismhub/data/services/database_service.dart';
 import 'package:prismhub/utils/novedades.dart';
+import 'package:prismhub/utils/platform_tv.dart';
 import 'package:prismhub/utils/connectivity.dart';
 import 'package:prismhub/utils/extension.dart';
 import 'package:prismhub/utils/portadas_perdidas.dart';
@@ -106,9 +108,30 @@ class HomePageController extends GetxController {
       const Duration(minutes: 20),
       (_) => _refreshHeroPool(),
     );
+    // ── Cada cuánto rota, y cuándo NO rota ────────────────────────────────
+    //
+    // Cambiar el fondo destacado no es gratis: dispara el cruce de 600 ms del
+    // hero, con sus dos capas de degradado, y decodifica una imagen nueva. En
+    // un televisor modesto eso es un hipo cada veinte segundos.
+    //
+    // Y un `Timer.periodic` es inmune a `TickerMode`, así que seguía rotando
+    // con la app en segundo plano o con el usuario en Ajustes — o sea,
+    // pagando el cruce entero para que no lo viera nadie.
     _rotationTimer = Timer.periodic(
-      const Duration(seconds: 20),
-      (_) => _pickHeroBackground(),
+      PerfilDeAparato.nivel.elegir(
+        alto: const Duration(seconds: 20),
+        medio: const Duration(seconds: 45),
+        bajo: const Duration(seconds: 90),
+      ),
+      (_) {
+        // Con la app atrás no hay nada que mirar. Al volver, el siguiente
+        // latido rota igual: no hace falta recuperar los que se saltearon.
+        if (WidgetsBinding.instance.lifecycleState !=
+            AppLifecycleState.resumed) {
+          return;
+        }
+        _pickHeroBackground();
+      },
     );
     super.onInit();
   }

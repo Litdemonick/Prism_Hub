@@ -111,6 +111,25 @@ class _HomeTVState extends State<HomeTV> {
   /// el tipo del controller quedarían las dos resaltadas a la vez.
   _CategoriaTV _categoria = _CategoriaTV.inicio;
 
+  /// Las zonas que el usuario ABRIÓ alguna vez.
+  ///
+  /// ── Por qué no se construyen todas de entrada ───────────────────────────
+  ///
+  /// `IndexedStack` construye a TODOS sus hijos, muestre al que muestre. O sea
+  /// que entrar al Inicio armaba también la Biblioteca entera —con sus
+  /// controllers, su fondo y sus animaciones— aunque nadie la hubiera abierto.
+  /// Y como la Biblioteca ya vive además como zona propia de la barra
+  /// principal (ver main_page.dart), quedaba montada DOS VECES a la vez.
+  ///
+  /// Peor todavía: el `IndexedStack` esconde con `Offstage`, que no apaga los
+  /// relojes de animación. La Biblioteca escondida acá seguía latiendo a 60
+  /// cuadros por segundo sin que se viera nada.
+  ///
+  /// Con esto, una zona se arma recién la primera vez que se entra. Lo que el
+  /// `IndexedStack` vino a dar se conserva entero: una vez armada se queda
+  /// viva, así que volver la encuentra tal cual se dejó.
+  final Set<_CategoriaTV> _visitadas = {_CategoriaTV.inicio};
+
   @override
   void dispose() {
     _primerFoco.dispose();
@@ -127,7 +146,11 @@ class _HomeTVState extends State<HomeTV> {
   /// error"— y en una TV no hay gesto de "deslizar para aplicar": aplicar
   /// al toque es lo que se espera.
   Future<void> _elegir(_CategoriaTV categoria) async {
-    setState(() => _categoria = categoria);
+    setState(() {
+      _categoria = categoria;
+      // A partir de acá esta zona se arma y se queda viva. Ver [_visitadas].
+      _visitadas.add(categoria);
+    });
     // La zona en construcción no toca los filtros: no muestra catálogo, así
     // que volver a pedirle contenido a cada extensión sería trabajo tirado.
     // Y al salir de ahí, lo que ya estaba cargado sigue como estaba.
@@ -209,12 +232,28 @@ class _HomeTVState extends State<HomeTV> {
                           index: _CategoriaTV.values.indexOf(_categoria),
                           children: [
                             for (final z in _CategoriaTV.values)
-                              switch (z) {
-                                final e when e.enConstruccion =>
-                                  ZonaEnCreacion(titulo: e.etiqueta()),
-                                _CategoriaTV.biblioteca => const LibraryPage(),
-                                _ => _ContenidoTV(c: widget.c),
-                              },
+                              // ── Y cada zona con su reloj apagado ────────
+                              //
+                              // `IndexedStack` esconde con `Offstage`, que NO
+                              // toca `TickerMode`: sin esto, las zonas que no
+                              // se ven siguen animando a 60 cuadros por
+                              // segundo. Es el mismo cuidado que ya tiene la
+                              // barra principal (ver main_page.dart), que acá
+                              // faltaba.
+                              TickerMode(
+                                enabled: z == _categoria,
+                                child: !_visitadas.contains(z)
+                                    // Todavía no se entró nunca: no hay nada
+                                    // que armar. Ver [_visitadas].
+                                    ? const SizedBox.shrink()
+                                    : switch (z) {
+                                        final e when e.enConstruccion =>
+                                          ZonaEnCreacion(titulo: e.etiqueta()),
+                                        _CategoriaTV.biblioteca =>
+                                          const LibraryPage(),
+                                        _ => _ContenidoTV(c: widget.c),
+                                      },
+                              ),
                           ],
                         ),
                       ),

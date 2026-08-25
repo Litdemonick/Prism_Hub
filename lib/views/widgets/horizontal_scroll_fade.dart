@@ -3,6 +3,7 @@ import 'dart:io';
 
 import 'package:fluent_ui/fluent_ui.dart' as fluent;
 import 'package:flutter/material.dart';
+import 'package:prismhub/utils/platform_tv.dart';
 
 /// Wraps a horizontally-scrolling [child] with a visible "there's more"
 /// indicator — a soft edge fade plus a chevron that bounces gently toward
@@ -66,9 +67,41 @@ class _HorizontalScrollFadeState extends State<HorizontalScrollFade>
       duration: const Duration(milliseconds: 700),
     );
     _bounceOffset = CurvedAnimation(parent: _bounce, curve: Curves.easeInOut);
-    _bounce.repeat(reverse: true);
     widget.controller.addListener(_update);
     WidgetsBinding.instance.addPostFrameCallback((_) => _update());
+  }
+
+  /// El vaivén corre SOLO mientras haya una flecha dibujada.
+  ///
+  /// ── Qué estaba pasando ──────────────────────────────────────────────────
+  ///
+  /// El `repeat` iba en `initState` sin ninguna condición y solo se paraba al
+  /// desmontar. O sea que este reloj latía siempre, aunque no hubiera ni una
+  /// flecha en pantalla (`_canScrollLeft`/`_canScrollRight` en false solo
+  /// deciden si se DIBUJAN, no si el reloj corre).
+  ///
+  /// Y esto se crea una vez por FILA. Con diez filas eran diez relojes vivos,
+  /// y un reloj vivo obliga al motor a producir un cuadro por vsync aunque no
+  /// haya cambiado nada: en cada uno de esos cuadros se vuelve a pintar todo
+  /// lo que no tenga su propio límite de repintado. Eso es lo que se veía como
+  /// «va lenta sin hacer nada» en televisores, y por qué el trabajo estaba en
+  /// el pintado y no en la lógica.
+  ///
+  /// Con la flecha en pantalla el vaivén se ve exactamente igual que antes;
+  /// sin flecha, ahora no cuesta nada.
+  void _acomodarElVaiven() {
+    // En televisor la flecha se sigue viendo y se sigue pudiendo clickear con
+    // un mouse, pero quieta: el rebote es una pista de «deslizá para acá» y
+    // con un control remoto no se desliza nada. Ahí no dice nada y cuesta un
+    // reloj por fila.
+    final hayFlecha = (_canScrollLeft || _canScrollRight) &&
+        !PlatformTv.esTelevisionSync;
+    if (hayFlecha == _bounce.isAnimating) return;
+    if (hayFlecha) {
+      _bounce.repeat(reverse: true);
+    } else {
+      _bounce.stop();
+    }
   }
 
   @override
@@ -100,6 +133,7 @@ class _HorizontalScrollFadeState extends State<HorizontalScrollFade>
         _canScrollLeft = canLeft;
         _canScrollRight = canRight;
       });
+      _acomodarElVaiven();
     }
   }
 

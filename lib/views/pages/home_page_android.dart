@@ -926,7 +926,15 @@ class _CarruselAndroidState extends State<_CarruselAndroid>
   /// dispara onHorizontalDragStart, y con un flag propio de "arrastrando"
   /// la pista se apagaba con solo tocar, aunque _p no se hubiera movido un
   /// píxel. Solo cuando la posición cambia de verdad hay algo que ocultar.
-  bool get _pistaVisible => _p < 0.5;
+  ///
+  /// En televisor NUNCA se muestra, y no es solo estética. La pista dice
+  /// «arrastrá para el costado», y con un control remoto no se arrastra: el
+  /// carrusel se recorre con las flechas. Encima, como se enciende cuando el
+  /// carrusel está en el principio —o sea al entrar al Inicio— y solo se apaga
+  /// cuando alguien lo mueve, en una TV donde nadie lo toca quedaba latiendo
+  /// para siempre, obligando al motor a producir un cuadro por vsync sin que
+  /// hubiera nada que mostrar.
+  bool get _pistaVisible => !PlatformTv.esTelevisionSync && _p < 0.5;
 
   /// Prende o apaga el vaivén según corresponda ahora. Se llama después de
   /// cualquier cambio que pueda mover _pistaVisible (posición o arrastre):
