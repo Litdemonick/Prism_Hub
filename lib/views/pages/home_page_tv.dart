@@ -216,18 +216,25 @@ class _HomeTVState extends State<HomeTV> {
                       // así cambiar de zona con el mando se siente como un
                       // movimiento y no como un parpadeo, pero volver sigue
                       // encontrando todo donde estaba.
-                      child: TweenAnimationBuilder<double>(
+                      //
+                      // ── Y el fundido cuesta, así que se cuida ─────────
+                      //
+                      // Este `Opacity` envuelve el panel de contenido ENTERO
+                      // —el carrusel, los filtros y todas las filas—, y bajar
+                      // la intensidad de algo obliga a componerlo en una capa
+                      // aparte. Es el mismo patrón que ya se sacó de la barra
+                      // principal por costoso (ver main_page.dart).
+                      //
+                      // Acá se resuelve de dos maneras: con el
+                      // `RepaintBoundary` de más abajo, el contenido se pinta
+                      // UNA vez y el fundido solo compone esa capa ya lista;
+                      // y en un aparato modesto el fundido no se hace, que en
+                      // un televisor no se extraña —el cambio de zona pasa a
+                      // ser instantáneo, que tampoco está mal.
+                      child: _ZonaQueAparece(
+                        // La clave atada a la categoría es lo que hace que la
+                        // animación vuelva a empezar en cada cambio.
                         key: ValueKey(_categoria),
-                        tween: Tween(begin: 0, end: 1),
-                        duration: const Duration(milliseconds: 260),
-                        curve: Curves.easeOutCubic,
-                        builder: (context, v, hijo) => Opacity(
-                          opacity: v,
-                          child: Transform.translate(
-                            offset: Offset(0, (1 - v) * 14),
-                            child: hijo,
-                          ),
-                        ),
                         child: IndexedStack(
                           index: _CategoriaTV.values.indexOf(_categoria),
                           children: [
@@ -265,6 +272,43 @@ class _HomeTVState extends State<HomeTV> {
           ],
         ),
       ),
+    );
+  }
+}
+
+/// La zona que se acaba de elegir, entrando con un fundido corto y un
+/// desplazamiento hacia arriba.
+///
+/// Envuelve al panel de contenido entero, así que es de lo más caro que se
+/// anima en la Home de TV. Dos cosas lo hacen barato:
+///
+///   · El `RepaintBoundary` de adentro. Sin él, cada cuadro del fundido
+///     obliga a repintar el carrusel, los filtros y todas las filas; con él,
+///     eso se pinta una vez y el fundido solo compone la capa ya lista.
+///   · En un aparato modesto no hay fundido: el contenido aparece puesto. En
+///     un televisor no se extraña, y ahí 260 ms componiendo media pantalla en
+///     cada cambio de zona es justo lo que no sobra.
+class _ZonaQueAparece extends StatelessWidget {
+  const _ZonaQueAparece({super.key, required this.child});
+
+  final Widget child;
+
+  @override
+  Widget build(BuildContext context) {
+    final contenido = RepaintBoundary(child: child);
+    if (PerfilDeAparato.nivel == NivelDeAparato.bajo) return contenido;
+    return TweenAnimationBuilder<double>(
+      tween: Tween(begin: 0, end: 1),
+      duration: const Duration(milliseconds: 260),
+      curve: Curves.easeOutCubic,
+      builder: (context, v, hijo) => Opacity(
+        opacity: v,
+        child: Transform.translate(
+          offset: Offset(0, (1 - v) * 14),
+          child: hijo,
+        ),
+      ),
+      child: contenido,
     );
   }
 }

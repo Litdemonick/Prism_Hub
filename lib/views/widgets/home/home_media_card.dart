@@ -1,11 +1,11 @@
 import 'dart:io';
-import 'dart:ui' show ImageFilter;
 
 import 'package:flutter/material.dart';
 import 'package:prismhub/models/extension.dart';
 import 'package:prismhub/utils/i18n.dart';
 import 'package:prismhub/utils/platform_tv.dart';
 import 'package:prismhub/views/widgets/cache_network_image.dart';
+import 'package:prismhub/views/widgets/relleno_borroso.dart';
 import 'package:prismhub/views/widgets/home/home_theme.dart';
 import 'package:prismhub/views/widgets/tv/focusable_card.dart';
 
@@ -728,22 +728,25 @@ class _HomeMediaCardState extends State<HomeMediaCard> {
                           // borroso de la MISMA imagen estirada a cubrir. Llena la
                           // card, no recorta nada y no se ve estirado.
                           //
-                          // El fondo se decodifica a un cuarto del tamaño: va
+                          // El fondo se decodifica mucho más chico: va
                           // desenfocado, así que más resolución no se notaría y sí
-                          // costaría memoria en una lista con muchas cards.
+                          // costaría memoria en una lista con muchas cards. Cuánto
+                          // más chico, y si el desenfoque se aplica de verdad o se
+                          // consigue con el propio estirado, lo decide
+                          // [RellenoBorroso] según el aparato — en un televisor
+                          // este desenfoque, una vez por tarjeta, era de lo más
+                          // caro de la fila.
                           Stack(
                             fit: StackFit.expand,
                             children: [
-                              ImageFiltered(
-                                imageFilter:
-                                    ImageFilter.blur(sigmaX: 18, sigmaY: 18),
-                                child: Image.file(
+                              RellenoBorroso(
+                                anchoDeLaCaja: width,
+                                imagen: (anchoDecodificado) => Image.file(
                                   widget.coverFile!,
                                   fit: BoxFit.cover,
                                   width: double.infinity,
                                   height: double.infinity,
-                                  cacheWidth:
-                                      (cacheWidth / 4).ceil().clamp(1, 4096),
+                                  cacheWidth: anchoDecodificado,
                                   // Sin errorBuilder acá: si la imagen falla, el
                                   // de la capa de arriba ya muestra el default.
                                   errorBuilder: (_, __, ___) =>
@@ -751,9 +754,6 @@ class _HomeMediaCardState extends State<HomeMediaCard> {
                                           color: Color(0xFF15151C)),
                                 ),
                               ),
-                              // Oscurece un poco el fondo para que el frame de
-                              // adelante resalte y el texto de abajo siga legible.
-                              const ColoredBox(color: Color(0x66000000)),
                               Padding(
                                 padding: EdgeInsets.all(_coverInset),
                                 child: Image.file(

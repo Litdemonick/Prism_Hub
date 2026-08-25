@@ -1,8 +1,7 @@
-import 'dart:ui' as ui;
-
 import 'package:flutter/material.dart';
 import 'package:prismhub/views/widgets/cache_network_image.dart';
 import 'package:prismhub/views/widgets/cover.dart';
+import 'package:prismhub/views/widgets/relleno_borroso.dart';
 
 /// Dibuja la portada de la ficha sin que se vea un hueco al cambiar de imagen.
 ///
@@ -109,8 +108,12 @@ class _PortadaConRelevoState extends State<PortadaConRelevo> {
       });
     }
 
-    Widget pic(
-        {required BoxFit fit, bool conAviso = false, bool toque = false}) {
+    Widget pic({
+      required BoxFit fit,
+      bool conAviso = false,
+      bool toque = false,
+      int? anchoDecodificado,
+    }) {
       return CacheNetWorkImagePic(
         url,
         fit: fit,
@@ -119,6 +122,7 @@ class _PortadaConRelevoState extends State<PortadaConRelevo> {
         alignment: widget.alignment,
         headers: cabeceras,
         canFullScreen: toque,
+        cacheWidth: anchoDecodificado,
         onTamanoReal: conAviso ? avisar : null,
       );
     }
@@ -131,12 +135,35 @@ class _PortadaConRelevoState extends State<PortadaConRelevo> {
     return Stack(
       fit: StackFit.expand,
       children: [
-        // El relleno: la misma imagen estirada y desenfocada. Es la única que
-        // siempre combina con la de adelante, venga de donde venga. Va
-        // apagada para que no compita con la de verdad.
-        ImageFiltered(
-          imageFilter: ui.ImageFilter.blur(sigmaX: 18, sigmaY: 18),
-          child: Opacity(opacity: 0.55, child: pic(fit: BoxFit.cover)),
+        // El relleno: la misma imagen estirada y desdibujada. Es la única que
+        // siempre combina con la de adelante, venga de donde venga. Va apagada
+        // para que no compita con la de verdad.
+        //
+        // ── Y por qué ahora lo arma [RellenoBorroso] ──────────────────────
+        //
+        // Acá había un desenfoque de 18 A PANTALLA COMPLETA con un `Opacity`
+        // adentro: dos capas aparte, las dos del tamaño de la pantalla, y
+        // encima la imagen se decodificaba entera y DOS veces (esta y la de
+        // adelante). En un televisor eso es de lo más caro que se dibuja en
+        // toda la app, y pasa cada vez que se abre una ficha.
+        //
+        // El relleno compartido resuelve las tres cosas: decodifica el fondo
+        // diminuto, consigue el difuminado con el propio estirado donde el
+        // desenfoque no conviene, y el apagado lo hace con un color plano
+        // encima en vez de con un `Opacity` alrededor.
+        LayoutBuilder(
+          builder: (context, caja) => RellenoBorroso(
+            anchoDeLaCaja: caja.maxWidth.isFinite
+                ? caja.maxWidth
+                : MediaQuery.sizeOf(context).width,
+            // Equivale al `Opacity(0.55)` que había: la imagen se ve apagada,
+            // pero sin componerla en una capa aparte para conseguirlo.
+            velo: const Color(0x73000000),
+            imagen: (anchoDecodificado) => pic(
+              fit: BoxFit.cover,
+              anchoDecodificado: anchoDecodificado,
+            ),
+          ),
         ),
         pic(fit: BoxFit.contain, conAviso: avisarCuandoCargue, toque: tocable),
       ],
