@@ -18,6 +18,7 @@ import 'package:prismhub/views/widgets/search_appbar.dart';
 import 'package:prismhub/views/widgets/messenger.dart';
 import 'package:prismhub/views/pages/nsfw18/nsfw18_access.dart';
 import 'package:prismhub/utils/platform_tv.dart';
+import 'package:prismhub/views/widgets/tv/focusable_card.dart';
 
 class ExtensionRepoPage extends StatefulWidget {
   const ExtensionRepoPage({super.key});
@@ -399,23 +400,42 @@ class _ExtensionRepoPageState extends State<ExtensionRepoPage> {
     final tapSize = useFluent ? 20.0 : 44.0;
     final iconSize = useFluent ? 14.0 : 22.0;
     Widget arrow(IconData icon, bool enabled, VoidCallback onTap) {
+      final boton = SizedBox(
+        width: tapSize,
+        height: tapSize,
+        child: Center(
+          child: Icon(
+            icon,
+            size: iconSize,
+            color: enabled
+                ? HomeTheme.textMuted
+                : HomeTheme.textMuted.withValues(alpha: 0.3),
+          ),
+        ),
+      );
+      // ── En televisor, con marco de foco y no solo con mouse ────────────
+      //
+      // Sin esto, con más de `pageSize` extensiones en una sección (4 acá)
+      // no había NINGUNA forma de llegar a las siguientes con el control
+      // remoto: las flechas solo escuchaban mouse/dedo. Mismo motivo por el
+      // que la lista de instaladas dejó de paginar así — ver
+      // `IndicadoresDePagina`.
+      if (PlatformTv.esTelevisionSync) {
+        // Deshabilitada (ya estás en la primera/última página): sin marco,
+        // porque no hay nada que el mando pueda activar ahí — el ícono ya
+        // se ve apagado, que es la misma señal que en mouse/dedo.
+        if (!enabled) return boton;
+        return FocusableCard(
+          borderRadius: tapSize / 2,
+          onTap: onTap,
+          child: boton,
+        );
+      }
       return MouseRegion(
         cursor: enabled ? SystemMouseCursors.click : SystemMouseCursors.basic,
         child: GestureDetector(
           onTap: enabled ? onTap : null,
-          child: SizedBox(
-            width: tapSize,
-            height: tapSize,
-            child: Center(
-              child: Icon(
-                icon,
-                size: iconSize,
-                color: enabled
-                    ? HomeTheme.textMuted
-                    : HomeTheme.textMuted.withValues(alpha: 0.3),
-              ),
-            ),
-          ),
+          child: boton,
         ),
       );
     }

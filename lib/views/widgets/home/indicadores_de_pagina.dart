@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
+import 'package:prismhub/utils/platform_tv.dart';
 import 'package:prismhub/views/widgets/home/home_theme.dart';
+import 'package:prismhub/views/widgets/tv/focusable_card.dart';
 
 /// Las rayitas que dicen en cuál de la tanda vas.
 ///
@@ -43,33 +45,54 @@ class IndicadoresDePagina extends StatelessWidget {
   Widget build(BuildContext context) {
     // Con una sola no hay nada que indicar.
     if (cantidad < 2) return const SizedBox.shrink();
+    final esTv = PlatformTv.esTelevisionSync;
     return Row(
       mainAxisSize: MainAxisSize.min,
       children: [
         for (var i = 0; i < cantidad; i++)
-          GestureDetector(
-            behavior: HitTestBehavior.opaque,
-            onTap: () => onTocar(i),
-            child: Padding(
-              // El aire va ADENTRO del área de toque, no entre widgets: así lo
-              // que se puede tocar es más grande que la raya sin que las rayas
-              // queden separadas de más.
-              padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 8),
-              child: AnimatedContainer(
-                duration: const Duration(milliseconds: 220),
-                curve: Curves.easeOut,
-                width: i == actual ? 30 : 20,
-                height: 3,
-                decoration: BoxDecoration(
-                  color: i == actual
-                      ? HomeTheme.accentPink
-                      : HomeTheme.contraste.withValues(alpha: 0.35),
-                  borderRadius: BorderRadius.circular(2),
-                ),
-              ),
-            ),
-          ),
+          _raya(i, esTv),
       ],
+    );
+  }
+
+  Widget _raya(int i, bool esTv) {
+    final raya = Padding(
+      // El aire va ADENTRO del área de toque, no entre widgets: así lo que
+      // se puede tocar es más grande que la raya sin que las rayas queden
+      // separadas de más.
+      padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 8),
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 220),
+        curve: Curves.easeOut,
+        width: i == actual ? 30 : 20,
+        height: 3,
+        decoration: BoxDecoration(
+          color: i == actual
+              ? HomeTheme.accentPink
+              : HomeTheme.contraste.withValues(alpha: 0.35),
+          borderRadius: BorderRadius.circular(2),
+        ),
+      ),
+    );
+    // ── En televisor, cada raya se puede enfocar y saltar con el mando ────
+    //
+    // Con solo GestureDetector, esto pedía mouse o dedo: la lista de
+    // extensiones instaladas dejó los botones de página por esto mismo
+    // (con más de cinco extensiones instaladas, saltar de página era
+    // imposible con el control remoto — no había otra forma de llegar a
+    // las siguientes). El mismo `onTocar` que ya usa el toque sirve tal
+    // cual para el D-pad; solo hacía falta darle dónde pararse.
+    if (!esTv) {
+      return GestureDetector(
+        behavior: HitTestBehavior.opaque,
+        onTap: () => onTocar(i),
+        child: raya,
+      );
+    }
+    return FocusableCard(
+      borderRadius: 6,
+      onTap: () => onTocar(i),
+      child: raya,
     );
   }
 }

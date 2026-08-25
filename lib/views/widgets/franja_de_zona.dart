@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:prismhub/utils/platform_tv.dart';
 import 'package:prismhub/views/widgets/home/home_theme.dart';
 
 /// La franja fina con el nombre de la zona, arriba de todo.
@@ -78,12 +79,21 @@ class _FranjaDeZonaState extends State<FranjaDeZona> {
     // Acostado en un teléfono, 25 de título se come alto que le hace falta al
     // contenido. Mismo criterio y mismo número que el resto de las zonas.
     final bajo = MediaQuery.sizeOf(context).height < 520;
+    // En televisor, el margen de overscan a los costados — esta franja no
+    // lo tenía, así que la flecha de volver, el título y los botones de la
+    // derecha quedaban pegados a un borde que en un televisor viejo puede
+    // estar recortado. En teléfono/escritorio da exactamente los mismos 4 y
+    // 16 de siempre (por eso se sigue sumando ahí, no reemplazando).
+    final esTv = PlatformTv.esTelevisionSync;
+    final overscan = esTv ? HomeTheme.overscanTv(context) : 0.0;
+    final izquierda =
+        (_abierto || widget.alVolver != null ? 4.0 : 16.0) + overscan;
 
     return Padding(
       padding: EdgeInsets.fromLTRB(
-        _abierto || widget.alVolver != null ? 4 : 16,
+        izquierda,
         MediaQuery.paddingOf(context).top + 4,
-        4,
+        4 + overscan,
         4,
       ),
       child: SizedBox(
