@@ -997,6 +997,14 @@ class _MainAppState extends State<MainApp> {
         // app en español.
         supportedLocales: const [Locale('es'), Locale('en')],
         locale: Locale(I18nUtils.currentLanguageCode),
+        // En televisor, sin el brillo de sobre-desplazamiento. Es una pista
+        // táctil —«llegaste al final, seguí tirando»— y con un control remoto
+        // no se tira de nada: aparecería en cada extremo de cada fila mientras
+        // el foco la recorre, y cada aparición es una capa que se pinta para no
+        // decir nada. En teléfono y escritorio queda igual que siempre.
+        scrollBehavior: PlatformTv.esTelevisionSync
+            ? const _ComportamientoDeScrollTv()
+            : null,
         builder: (context, child) {
           if (child == null || !PlatformTv.esTelevisionSync) return child ?? const SizedBox.shrink();
           // El botón central del D-pad (OK/select) llega como
@@ -1046,6 +1054,29 @@ class _MainAppState extends State<MainApp> {
     return base.copyWith(
       colorScheme: scheme,
       textTheme: _buildTextTheme(brightness, fallback),
+      // ── En televisor, las pantallas entran con un fundido corto ─────────
+      //
+      // La transición de Android desliza la pantalla nueva de costado por
+      // encima de la vieja: mientras dura, hay DOS pantallas dibujándose a la
+      // vez y las dos se mueven, así que todo se repinta cuadro a cuadro. En
+      // un teléfono ni se nota; en un televisor modesto es un tirón cada vez
+      // que se abre una ficha.
+      //
+      // Un fundido se resuelve componiendo lo que ya está pintado, no
+      // repintándolo, y encima es lo que hacen las apps de televisor: acá no
+      // hay gesto de «volver deslizando» que el desplazamiento tenga que
+      // insinuar.
+      //
+      // Solo en TV: teléfono y escritorio siguen con lo suyo.
+      pageTransitionsTheme: PlatformTv.esTelevisionSync
+          ? const PageTransitionsTheme(
+              builders: {
+                TargetPlatform.android: _TransicionTv(),
+                TargetPlatform.linux: _TransicionTv(),
+                TargetPlatform.windows: _TransicionTv(),
+              },
+            )
+          : base.pageTransitionsTheme,
       // ── La franja gris que aparecía al desplazarse ────────────────────
       //
       // Es de Material 3: cuando el contenido pasa POR DEBAJO de una AppBar,
@@ -1277,6 +1308,60 @@ class _MainAppState extends State<MainApp> {
     return PlatformBuildWidget(
       androidBuilder: _buildMobileMain,
       desktopBuilder: _buildDesktopMain,
+    );
+  }
+}
+
+// ── Lo que un televisor hace distinto al desplazarse y al navegar ──────────
+
+/// Sin el brillo/estiramiento de sobre-desplazamiento.
+///
+/// Ese efecto existe para contestarle al dedo cuando uno sigue tirando de una
+/// lista que ya llegó al final. Con un control remoto no hay de qué tirar: lo
+/// único que pasa es que el foco recorre una fila, llega al extremo y ahí se
+/// pinta un brillo que nadie pidió — una vez por fila y por extremo.
+///
+/// Se sacan solo los efectos. La física del desplazamiento y todo lo demás
+/// quedan como estaban.
+class _ComportamientoDeScrollTv extends MaterialScrollBehavior {
+  const _ComportamientoDeScrollTv();
+
+  @override
+  Widget buildOverscrollIndicator(
+    BuildContext context,
+    Widget child,
+    ScrollableDetails details,
+  ) =>
+      child;
+}
+
+/// La transición entre pantallas en televisor: un fundido corto.
+///
+/// La de Android desliza la pantalla nueva de costado por encima de la vieja,
+/// así que mientras dura hay DOS pantallas dibujándose y moviéndose a la vez —
+/// todo se repinta cuadro a cuadro. En un teléfono ni se nota; en un televisor
+/// modesto es un tirón cada vez que se abre una ficha.
+///
+/// Un fundido se resuelve componiendo lo que ya está pintado, y es además lo
+/// que hacen las apps de televisor: acá no existe el gesto de «volver
+/// deslizando» que el desplazamiento venía a insinuar.
+class _TransicionTv extends PageTransitionsBuilder {
+  const _TransicionTv();
+
+  @override
+  Widget buildTransitions<T>(
+    PageRoute<T> route,
+    BuildContext context,
+    Animation<double> animation,
+    Animation<double> secondaryAnimation,
+    Widget child,
+  ) {
+    // Cuánto DURA no se decide acá: lo pone la ruta (los 300 ms de siempre de
+    // Material). Lo que cambia es QUÉ se hace durante ese rato — fundir en vez
+    // de desplazar dos pantallas enteras.
+    return FadeTransition(
+      opacity: CurvedAnimation(parent: animation, curve: Curves.easeOut),
+      child: child,
     );
   }
 }
