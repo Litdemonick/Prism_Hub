@@ -4,6 +4,7 @@ import 'package:fluent_ui/fluent_ui.dart';
 import 'package:flutter/scheduler.dart';
 import 'package:flutter/services.dart';
 import 'package:get/get.dart';
+import 'package:prismhub/utils/comportamiento_sistema_tv.dart';
 import 'package:prismhub/data/providers/anilist_provider.dart';
 import 'package:prismhub/models/index.dart';
 import 'package:prismhub/controllers/watch/reader_controller.dart';
@@ -91,10 +92,7 @@ class ComicController extends ReaderController<ExtensionMangaWatch> {
     if (activo) {
       SystemChrome.setEnabledSystemUIMode(SystemUiMode.immersiveSticky);
     } else {
-      SystemChrome.setEnabledSystemUIMode(
-        SystemUiMode.manual,
-        overlays: SystemUiOverlay.values,
-      );
+      restaurarBarrasDelSistema();
     }
     ModoDeColor.aplicarBarrasDelSistema();
   }
@@ -437,10 +435,7 @@ class ComicController extends ReaderController<ExtensionMangaWatch> {
     // la batería comidas hasta reiniciar la app (mismo síntoma que ya se
     // vio y resolvió en el reproductor de video).
     if (Platform.isAndroid && llenarPantalla.value) {
-      SystemChrome.setEnabledSystemUIMode(
-        SystemUiMode.manual,
-        overlays: SystemUiOverlay.values,
-      );
+      restaurarBarrasDelSistema();
       // Y el estilo, por lo mismo que en
       // _actualizarPantallaCompletaAndroid: pedir el modo lo reinicia, y sin
       // esto se salía del lector con los iconos del sistema en claro —

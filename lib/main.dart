@@ -751,6 +751,18 @@ class _AppRootState extends State<_AppRoot> with WidgetsBindingObserver {
       // decidir; hasta este punto casi no se decodificó nada, así que ese
       // techo alto no llega a llenarse.
       AlivioDeMemoria.aplicarTechoDeImagenes();
+      // ── Lo que un televisor hace distinto de arranque ────────────────────
+      //
+      // Un televisor SIEMPRE está apaisado — no hay forma física de girarlo —
+      // y no tiene hora, batería ni notificaciones que la app tenga que dejar
+      // ver. En teléfono y tablet no se toca nada de esto: siguen libres para
+      // rotar y con la barra de estado de siempre.
+      if (PlatformTv.esTelevisionSync) {
+        await SystemChrome.setPreferredOrientations(
+          [DeviceOrientation.landscapeLeft, DeviceOrientation.landscapeRight],
+        );
+        SystemChrome.setEnabledSystemUIMode(SystemUiMode.immersiveSticky);
+      }
     } catch (e) {
       debugPrint('ERROR: PlatformTv.ensureInitialized falló: $e');
     }

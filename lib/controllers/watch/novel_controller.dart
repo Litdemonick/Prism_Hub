@@ -6,6 +6,7 @@ import 'package:get/get.dart';
 import 'package:prismhub/models/index.dart';
 import 'package:prismhub/controllers/watch/reader_controller.dart';
 import 'package:prismhub/data/services/database_service.dart';
+import 'package:prismhub/utils/comportamiento_sistema_tv.dart';
 import 'package:prismhub/utils/prismhub_storage.dart';
 import 'package:prismhub/views/widgets/home/home_theme.dart';
 import 'package:scrollable_positioned_list/scrollable_positioned_list.dart';
@@ -54,10 +55,7 @@ class NovelController extends ReaderController<ExtensionFikushonWatch> {
     if (activo) {
       SystemChrome.setEnabledSystemUIMode(SystemUiMode.immersiveSticky);
     } else {
-      SystemChrome.setEnabledSystemUIMode(
-        SystemUiMode.manual,
-        overlays: SystemUiOverlay.values,
-      );
+      restaurarBarrasDelSistema();
     }
     ModoDeColor.aplicarBarrasDelSistema();
   }
@@ -160,10 +158,7 @@ class NovelController extends ReaderController<ExtensionFikushonWatch> {
     // escondidas — sin esto la pantalla de atrás se quedaba sin hora ni
     // barra de navegación hasta reiniciar la app.
     if (Platform.isAndroid && llenarPantalla.value) {
-      SystemChrome.setEnabledSystemUIMode(
-        SystemUiMode.manual,
-        overlays: SystemUiOverlay.values,
-      );
+      restaurarBarrasDelSistema();
       // Y el estilo, por lo mismo de arriba: sin esto se salía del lector con
       // los iconos del sistema en claro, invisibles con el modo claro puesto.
       ModoDeColor.aplicarBarrasDelSistema();

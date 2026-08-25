@@ -16,6 +16,7 @@ import 'package:media_kit_video/media_kit_video.dart';
 import 'package:prismhub/data/providers/anilist_provider.dart';
 import 'package:prismhub/data/providers/bt_server_provider.dart';
 import 'package:prismhub/models/index.dart';
+import 'package:prismhub/utils/comportamiento_sistema_tv.dart';
 import 'package:prismhub/utils/error.dart';
 import 'package:prismhub/utils/log.dart';
 import 'package:prismhub/utils/request.dart';
@@ -7978,10 +7979,9 @@ class VideoPlayerController extends GetxController with WidgetsBindingObserver {
     // se dibujaba encima de donde iría el status bar. Pedir manual con TODOS
     // los overlays fuerza que ambas barras vuelvan a mostrarse reservando su
     // espacio, sin depender de ese timing.
-    SystemChrome.setEnabledSystemUIMode(
-      SystemUiMode.manual,
-      overlays: SystemUiOverlay.values,
-    );
+    //
+    // En televisor no hay barras que mostrar — ver restaurarBarrasDelSistema.
+    restaurarBarrasDelSistema();
     // Y los colores, por lo mismo que en _barrasDelSistemaVisibles: pedir el
     // modo reinicia el estilo, así que salir del reproductor dejaba la app con
     // los iconos del sistema en claro — invisibles con el modo claro puesto.
@@ -8001,10 +8001,7 @@ class VideoPlayerController extends GetxController with WidgetsBindingObserver {
     // relleno real; no cuesta nada si ya estaba bien.
     Future<void>.delayed(const Duration(milliseconds: 400), () {
       if (!Platform.isAndroid) return;
-      SystemChrome.setEnabledSystemUIMode(
-        SystemUiMode.manual,
-        overlays: SystemUiOverlay.values,
-      );
+      restaurarBarrasDelSistema();
       ModoDeColor.aplicarBarrasDelSistema();
     });
     // 如果是平板则不改变
@@ -8119,10 +8116,8 @@ class VideoPlayerController extends GetxController with WidgetsBindingObserver {
   /// Es lo mismo que pide el resto de la app al salir del reproductor, ahora en
   /// un solo lugar para que no se puedan separar.
   static void _barrasDelSistemaVisibles() {
-    SystemChrome.setEnabledSystemUIMode(
-      SystemUiMode.manual,
-      overlays: SystemUiOverlay.values,
-    );
+    // En televisor no hay barras que mostrar — ver restaurarBarrasDelSistema.
+    restaurarBarrasDelSistema();
     // ── Y SUS COLORES, que el cambio de modo se lleva puestos ──────────────
     //
     // `setEnabledSystemUIMode` reinicia el estilo de las barras a los valores
