@@ -25,6 +25,7 @@ import 'package:prismhub/router/router.dart';
 import 'package:prismhub/utils/extension.dart';
 import 'package:prismhub/utils/i18n.dart';
 import 'package:prismhub/utils/prismhub_storage.dart';
+import 'package:prismhub/utils/alivio_de_memoria.dart';
 import 'package:prismhub/utils/application.dart';
 import 'package:prismhub/views/widgets/platform_widget.dart';
 import 'package:prismhub/views/widgets/tv/rescate_de_foco.dart';
@@ -116,9 +117,29 @@ void main(List<String> args) async {
     //
     // Con 220 MB entran el Inicio entero y una ficha encima sin echar nada. No
     // es memoria reservada: es un techo, y se llena solo con lo que de verdad
-    // se mostró. Y si el sistema avisa que falta memoria, Flutter vacía la
-    // caché él solo, así que el techo alto no deja a la app sin salida.
-    PaintingBinding.instance.imageCache.maximumSizeBytes = 220 << 20;
+    // se mostró. Y si el sistema avisa que falta memoria, la app suelta lo
+    // decodificado (ver alivio_de_memoria.dart), así que el techo alto no deja
+    // a la app sin salida.
+    //
+    // ── Pero 220 MB no le sirven a CUALQUIER aparato ──────────────────────
+    //
+    // Las cuentas de arriba son de un teléfono actual. En un televisor viejo
+    // ese techo se come el heap entero de la app y el sistema la mata — es el
+    // «se peta» que se reportó. Por eso el número sale del perfil del aparato
+    // y no está escrito acá; el porqué completo, en
+    // [AlivioDeMemoria.aplicarTechoDeImagenes].
+    //
+    // OJO con el momento: acá todavía NO se sabe en qué aparato corre la app
+    // (eso lo resuelve PlatformTv más adelante, cuando el canal con la parte
+    // nativa ya está listo). Así que esta llamada pone el techo de siempre, y
+    // la de _init() —después de averiguarlo— lo ajusta si hace falta. Hasta
+    // entonces casi no se decodifica nada, así que no llega a llenarse.
+    AlivioDeMemoria.aplicarTechoDeImagenes();
+
+    // Y engancharse al aviso de "me estoy quedando sin memoria" del sistema,
+    // que es el último momento en que la app puede hacer algo antes de que la
+    // maten. Ver alivio_de_memoria.dart.
+    AlivioDeMemoria.ensureInitialized();
 
     // Instrumentación temporal de frames — para diagnosticar tirones reales.
     // En Windows debug, totalSpan también sube cuando hay huecos entre frames
@@ -724,6 +745,12 @@ class _AppRootState extends State<_AppRoot> with WidgetsBindingObserver {
     // árbol, si Android construye la Home de teléfono o la de TV.
     try {
       await PlatformTv.ensureInitialized();
+      // Recién ACÁ se sabe qué aparato es esto, así que recién acá se le puede
+      // poner a la caché de imágenes el techo que le corresponde. Arriba, en
+      // main(), se pone el de siempre (220 MB) porque todavía no hay con qué
+      // decidir; hasta este punto casi no se decodificó nada, así que ese
+      // techo alto no llega a llenarse.
+      AlivioDeMemoria.aplicarTechoDeImagenes();
     } catch (e) {
       debugPrint('ERROR: PlatformTv.ensureInitialized falló: $e');
     }

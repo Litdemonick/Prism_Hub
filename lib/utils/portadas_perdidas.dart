@@ -238,7 +238,10 @@ class PortadasPerdidas {
   }
 
   /// Vuelve a permitir el intento. Para después de importar, donde puede haber
-  /// aparecido una ficha nueva que sí tenga la portada.
+  /// aparecido una ficha nueva que sí tenga la portada — y también cuando el
+  /// sistema avisa que falta memoria (ver `alivio_de_memoria.dart`): estas dos
+  /// listas solo crecen, una entrada por cada título que pasó por el inicio, y
+  /// no guardan nada que no se pueda volver a averiguar.
   static void olvidarLoMirado() {
     _yaMirados.clear();
     _yaPedidos.clear();

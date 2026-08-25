@@ -56,6 +56,20 @@ class CacheNetWorkImagePic extends StatefulWidget {
   /// vertical de un fotograma apaisado.
   final void Function(int ancho, int alto)? onTamanoReal;
 
+  /// Vacía lo que el widget recuerda entre pantallas: qué URLs fallaron hace
+  /// poco y cuáles ya se habían visto bien.
+  ///
+  /// Se llama cuando el sistema avisa que se está quedando sin memoria (ver
+  /// `alivio_de_memoria.dart`). Perderlos no rompe nada: son atajos para no
+  /// reintentar de más y para no parpadear al remontar, no información que
+  /// haga falta. Lo peor que puede pasar es que una portada que ya se vio
+  /// vuelva a mostrar el bloque brillando mientras llega — que en ese momento
+  /// además es la verdad, porque Flutter también acaba de soltar sus píxeles.
+  static void olvidarLoRecordado() {
+    _CacheNetWorkImagePicState._fallosRecientes.clear();
+    _CacheNetWorkImagePicState._yaCargaron.clear();
+  }
+
   @override
   State<CacheNetWorkImagePic> createState() => _CacheNetWorkImagePicState();
 }
