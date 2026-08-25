@@ -477,6 +477,10 @@ class SettingKey {
   // teléfono o de dónde está la ventana, no del título que se lee.
   static const mangaStripAlign = 'MangaStripAlign';
   static const enableNSFW = 'EnableNSFW';
+  // Las últimas búsquedas escritas en el buscador de TV, para no tener que
+  // volver a escribirlas letra por letra con el mando. Ver
+  // busquedas_recientes.dart.
+  static const busquedasRecientesTv = 'BusquedasRecientesTv';
   // Versión en la que el usuario aceptó el aviso de beta. Vacío = todavía no
   // lo aceptó, así que el aviso vuelve a salir en el próximo arranque.
   static const betaNoticeAccepted = 'BetaNoticeAccepted';

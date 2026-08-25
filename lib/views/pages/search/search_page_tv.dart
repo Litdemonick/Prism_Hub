@@ -1,7 +1,13 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 import 'package:prismhub/controllers/search_controller.dart';
+import 'package:prismhub/utils/busquedas_recientes.dart';
+import 'package:prismhub/utils/i18n.dart';
+import 'package:prismhub/views/widgets/home/home_theme.dart';
 import 'package:prismhub/views/widgets/search/search_all_extension.dart';
+import 'package:prismhub/views/widgets/tv/focusable_card.dart';
 import 'package:prismhub/views/widgets/tv/teclado_tv.dart';
 
 // ─── El buscador de Android TV ──────────────────────────────────────────
@@ -31,6 +37,20 @@ class SearchTV extends StatefulWidget {
 
 class _SearchTVState extends State<SearchTV> {
   late String _texto = widget.c.search.value;
+  List<String> _recientes = BusquedasRecientes.obtener();
+
+  /// El guardado no es en cada tecla — mientras se está escribiendo, lo
+  /// escrito todavía no es una búsqueda "de verdad", es una palabra a
+  /// medio terminar. Se anota recién cuando el usuario deja de tocar el
+  /// mando un rato, que es la señal más simple de que llegó a lo que
+  /// quería escribir.
+  Timer? _guardadoDemorado;
+
+  @override
+  void dispose() {
+    _guardadoDemorado?.cancel();
+    super.dispose();
+  }
 
   void _buscar(String texto) {
     setState(() => _texto = texto);
@@ -38,6 +58,18 @@ class _SearchTVState extends State<SearchTV> {
     // manejo de pedidos encadenados (ver `getResult`/`_randomKey`), así que
     // escribir rápido no apila búsquedas que se pisen.
     widget.c.submitSearch(texto);
+    _guardadoDemorado?.cancel();
+    if (texto.trim().isEmpty) return;
+    _guardadoDemorado = Timer(const Duration(milliseconds: 1200), () {
+      BusquedasRecientes.agregar(texto).then((_) {
+        if (mounted) setState(() => _recientes = BusquedasRecientes.obtener());
+      });
+    });
+  }
+
+  Future<void> _borrarRecientes() async {
+    await BusquedasRecientes.limpiar();
+    if (mounted) setState(() => _recientes = BusquedasRecientes.obtener());
   }
 
   @override
@@ -45,7 +77,39 @@ class _SearchTVState extends State<SearchTV> {
     return Row(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        TecladoTv(texto: _texto, onCambio: _buscar, accent: widget.accent),
+        SizedBox(
+          width: 380,
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              // ── Las últimas búsquedas, arriba del teclado ──────────────
+              //
+              // Solo mientras el campo está vacío: son un punto de partida
+              // para no escribir nada, y una vez que ya se está escribiendo
+              // o hay resultados en pantalla, dejan de aportar y solo
+              // ocuparían lugar. Escribir letra por letra con un control
+              // remoto es lo peor de cualquier app de TV — un botón con lo
+              // ya buscado vale por diez letras.
+              if (_texto.isEmpty && _recientes.isNotEmpty)
+                Padding(
+                  padding: const EdgeInsets.only(bottom: 16),
+                  child: _BusquedasRecientesTv(
+                    terminos: _recientes,
+                    accent: widget.accent,
+                    onElegir: _buscar,
+                    onBorrar: _borrarRecientes,
+                  ),
+                ),
+              TecladoTv(
+                texto: _texto,
+                onCambio: _buscar,
+                accent: widget.accent,
+                ancho: 380,
+              ),
+            ],
+          ),
+        ),
         const SizedBox(width: 24),
         // Los resultados: los mismos de siempre, sin envolver en nada
         // especial — cada tarjeta ya trae su propio foco por dentro (ver
@@ -60,6 +124,97 @@ class _SearchTVState extends State<SearchTV> {
               onClickMore: widget.onClickMore,
             );
           }),
+        ),
+      ],
+    );
+  }
+}
+
+/// La fila de chips con las últimas búsquedas.
+class _BusquedasRecientesTv extends StatelessWidget {
+  const _BusquedasRecientesTv({
+    required this.terminos,
+    required this.accent,
+    required this.onElegir,
+    required this.onBorrar,
+  });
+
+  final List<String> terminos;
+  final Color accent;
+  final ValueChanged<String> onElegir;
+  final VoidCallback onBorrar;
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Row(
+          children: [
+            Text(
+              'search.recent'.i18n,
+              style: TextStyle(
+                fontSize: 13,
+                fontWeight: FontWeight.w700,
+                color: HomeTheme.textMuted,
+              ),
+            ),
+            const Spacer(),
+            FocusableCard(
+              borderRadius: 8,
+              onTap: onBorrar,
+              child: Padding(
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                child: Icon(
+                  Icons.delete_outline_rounded,
+                  size: 18,
+                  color: HomeTheme.textMuted,
+                ),
+              ),
+            ),
+          ],
+        ),
+        const SizedBox(height: 8),
+        Wrap(
+          spacing: 8,
+          runSpacing: 8,
+          children: [
+            for (final termino in terminos)
+              FocusableCard(
+                borderRadius: 999,
+                accent: accent,
+                onTap: () => onElegir(termino),
+                child: Container(
+                  padding: const EdgeInsets.symmetric(
+                      horizontal: 14, vertical: 9),
+                  decoration: BoxDecoration(
+                    color: HomeTheme.cardSurface,
+                    borderRadius: BorderRadius.circular(999),
+                    border: Border.all(color: HomeTheme.border),
+                  ),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Icon(Icons.history_rounded,
+                          size: 15, color: HomeTheme.textMuted),
+                      const SizedBox(width: 6),
+                      Text(
+                        termino,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: TextStyle(
+                          fontSize: 13.5,
+                          fontWeight: FontWeight.w600,
+                          color: HomeTheme.textPrimary,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+          ],
         ),
       ],
     );

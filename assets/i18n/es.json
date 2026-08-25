@@ -186,7 +186,8 @@
     "all": "Todo",
     "filter": "Filtro",
     "reset-filters": "Restablecer filtros",
-    "filters-note": "Los filtros los define cada extensión. Al actualizarlas pueden aparecer más opciones, o cambiar las que ya están, sin que tengas que actualizar PrismHub."
+    "filters-note": "Los filtros los define cada extensión. Al actualizarlas pueden aparecer más opciones, o cambiar las que ya están, sin que tengas que actualizar PrismHub.",
+    "recent": "Búsquedas recientes"
   },
   "extension": {
     "import": {
