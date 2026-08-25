@@ -76,6 +76,9 @@ class MainActivity: AudioServiceFragmentActivity() {
                     "isTelevision" -> {
                         result.success(isTelevision())
                     }
+                    "perfilDelAparato" -> {
+                        result.success(perfilDelAparato())
+                    }
                     "openInstallSettings" -> {
                         openInstallSettings()
                         result.success(null)
@@ -105,6 +108,45 @@ class MainActivity: AudioServiceFragmentActivity() {
     private fun isTelevision(): Boolean {
         val uiModeManager = getSystemService(Context.UI_MODE_SERVICE) as? UiModeManager
         return uiModeManager?.currentModeType == Configuration.UI_MODE_TYPE_TELEVISION
+    }
+
+    // Todo lo que hace falta saber del aparato para decidir cuánto puede
+    // gastar la app, en UNA sola llamada.
+    //
+    // ── Por qué no alcanza con isTelevision() ──────────────────────────────
+    //
+    // Un Chromecast con Google TV 4K y un stick de 1 GB contestan los dos "soy
+    // un televisor", y no se les puede pedir lo mismo: al segundo, el techo de
+    // memoria de imágenes que le viene bien a un teléfono actual se le come el
+    // heap entero y el sistema lo mata. Con esto Dart puede bajar el gasto solo
+    // donde hace falta, en vez de castigar a todos por igual.
+    //
+    // isLowRamDevice() es la respuesta oficial de Android a "esto es un aparato
+    // modesto" (la fija el fabricante) — pero no todos los sticks baratos la
+    // declaran, así que además se manda la memoria total y los núcleos, y del
+    // lado de Dart se decide con los tres.
+    private fun perfilDelAparato(): Map<String, Any> {
+        val am = getSystemService(Context.ACTIVITY_SERVICE) as? android.app.ActivityManager
+        var memoriaTotalMb = 0L
+        var bajaMemoria = false
+        if (am != null) {
+            try {
+                val info = android.app.ActivityManager.MemoryInfo()
+                am.getMemoryInfo(info)
+                memoriaTotalMb = info.totalMem / (1024L * 1024L)
+            } catch (e: Exception) {
+                // Sin memoria total no se rompe nada: del lado de Dart un 0 se
+                // trata como "no se sabe" y deciden los otros dos datos.
+                memoriaTotalMb = 0L
+            }
+            bajaMemoria = am.isLowRamDevice
+        }
+        return mapOf(
+            "esTelevision" to isTelevision(),
+            "bajaMemoria" to bajaMemoria,
+            "memoriaTotalMb" to memoriaTotalMb,
+            "nucleos" to Runtime.getRuntime().availableProcessors()
+        )
     }
 
     private fun canInstallApks(): Boolean {
