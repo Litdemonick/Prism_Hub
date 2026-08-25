@@ -1,9 +1,11 @@
 import 'dart:io';
 
 import 'package:flutter/material.dart';
+import 'package:prismhub/utils/platform_tv.dart';
 import 'package:prismhub/views/widgets/home/home_media_card.dart';
 import 'package:prismhub/views/widgets/home/home_theme.dart';
 import 'package:prismhub/views/widgets/horizontal_scroll_fade.dart';
+import 'package:prismhub/views/widgets/tv/focusable_card.dart';
 
 // Envoltorio de sección — calca el header del diseño (título + ›, botones
 // prev/next redondeados) sin tocar HorizontalList, que es compartido con
@@ -76,7 +78,12 @@ class _HomeSectionState extends State<HomeSection> {
 
   @override
   Widget build(BuildContext context) {
+    // Mismo cuidado que en HomeMediaCard: un televisor siempre reporta
+    // horizontal y no es un teléfono acostado — sin excluirlo acá también,
+    // esta cuenta (que HomeMediaCard no controla) se llevaba igual la
+    // variante más chica de las tres para la fila entera.
     final isAndroidLandscape = Platform.isAndroid &&
+        !PlatformTv.esTelevisionSync &&
         MediaQuery.of(context).orientation == Orientation.landscape;
     final cardWidth = isAndroidLandscape
         ? HomeMediaCard.androidLandscapeWidth
@@ -109,52 +116,63 @@ class _HomeSectionState extends State<HomeSection> {
       ),
     );
 
+    final esTv = PlatformTv.esTelevisionSync;
+    final double tituloFontSize =
+        esTv ? HomeTheme.tituloDeFilaTv(context).fontSize! : 17;
+    Widget encabezado = MouseRegion(
+      cursor: SystemMouseCursors.click,
+      onEnter: (_) => setState(() => _headerHover = true),
+      onExit: (_) => setState(() => _headerHover = false),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          AnimatedDefaultTextStyle(
+            duration: const Duration(milliseconds: 150),
+            style: TextStyle(
+              color: _headerHover ? widget.acento : HomeTheme.textPrimary,
+              fontSize: tituloFontSize,
+              fontWeight: FontWeight.w700,
+            ),
+            child: Text(widget.title),
+          ),
+          const SizedBox(width: 6),
+          AnimatedDefaultTextStyle(
+            duration: const Duration(milliseconds: 150),
+            style: TextStyle(
+              color: _headerHover ? widget.acento : HomeTheme.textMuted,
+              fontSize: 15,
+            ),
+            child: AnimatedSlide(
+              duration: const Duration(milliseconds: 150),
+              offset: _headerHover ? const Offset(0.25, 0) : Offset.zero,
+              child: const Text('›'),
+            ),
+          ),
+        ],
+      ),
+    );
+    // ── En TV, "Ver todo" se envuelve para que el mando lo alcance ────────
+    //
+    // Con solo GestureDetector, este título es una de las pocas cosas de la
+    // Biblioteca que un mouse o un dedo pueden tocar pero un control remoto
+    // no: no hay foco que pedirle. `FocusableCard` es lo mismo que envuelve
+    // cada tarjeta de la fila, así que "Ver todo" queda alcanzable con la
+    // misma flecha que ya recorre la fila.
+    encabezado = esTv
+        ? FocusableCard(onTap: widget.onClickMore, child: encabezado)
+        : GestureDetector(onTap: widget.onClickMore, child: encabezado);
     final section = Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Row(
           children: [
-            GestureDetector(
-              onTap: widget.onClickMore,
-              child: MouseRegion(
-                cursor: SystemMouseCursors.click,
-                onEnter: (_) => setState(() => _headerHover = true),
-                onExit: (_) => setState(() => _headerHover = false),
-                child: Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    AnimatedDefaultTextStyle(
-                      duration: const Duration(milliseconds: 150),
-                      style: TextStyle(
-                        color: _headerHover
-                            ? widget.acento
-                            : HomeTheme.textPrimary,
-                        fontSize: 17,
-                        fontWeight: FontWeight.w700,
-                      ),
-                      child: Text(widget.title),
-                    ),
-                    const SizedBox(width: 6),
-                    AnimatedDefaultTextStyle(
-                      duration: const Duration(milliseconds: 150),
-                      style: TextStyle(
-                        color:
-                            _headerHover ? widget.acento : HomeTheme.textMuted,
-                        fontSize: 15,
-                      ),
-                      child: AnimatedSlide(
-                        duration: const Duration(milliseconds: 150),
-                        offset:
-                            _headerHover ? const Offset(0.25, 0) : Offset.zero,
-                        child: const Text('›'),
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-            ),
+            encabezado,
             const Spacer(),
-            if (widget.showNavButtons) ...[
+            // Las flechas de a poco son para mouse: con el mando, la fila ya
+            // se recorre tarjeta por tarjeta con las flechas del control, así
+            // que en TV no aportan nada y solo ocupan lugar sin que nadie
+            // pueda tocarlas.
+            if (widget.showNavButtons && !esTv) ...[
               _NavButton(icon: Icons.chevron_left, onTap: () => _move(true)),
               const SizedBox(width: 6),
               _NavButton(icon: Icons.chevron_right, onTap: () => _move(false)),

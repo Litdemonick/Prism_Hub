@@ -83,8 +83,14 @@ class HomeMediaCard extends StatefulWidget {
   //
   // La proporción de cada una se conserva exacta, así que ninguna portada se
   // deforma ni se recorta distinto que antes.
-  static double androidWidth = 168;
-  static double androidHeight = 233;
+  // Eran campos fijos; pasan a ser getters porque en TV valen otra cosa: la
+  // de escritorio, ver el porqué en HomeTheme y en el comentario de
+  // `anchoAncha` más abajo. Nada más los usaba para asignarles nada, así que
+  // el cambio no afecta a quien ya los lee.
+  static double get androidWidth =>
+      PlatformTv.esTelevisionSync ? desktopWidth : 168;
+  static double get androidHeight =>
+      PlatformTv.esTelevisionSync ? desktopHeight : 233;
   static double desktopWidth = 236;
   static double desktopHeight = 328;
   // Android landscape: la tarjeta a tamaño "vertical" (208 de alto) no
@@ -106,15 +112,25 @@ class HomeMediaCard extends StatefulWidget {
   // Getters y no constantes porque dependen de la plataforma. Quien los use
   // tiene que usar LOS TRES: mezclarlos con los viejos deja la imagen de un
   // tamaño y el hueco reservado de otro.
-  static double get anchoAncha => Platform.isAndroid ? 264 : 380;
-  static double get altoImagenAncha => Platform.isAndroid ? 148 : 214;
+  // ── Y también en televisor, con el tamaño de escritorio ────────────────
+  //
+  // Un televisor es Platform.isAndroid, así que sin este agregado se llevaba
+  // la variante de teléfono — la misma tarjeta que en un celular de 6
+  // pulgadas, en una pantalla que se mira desde el sillón. La de escritorio
+  // ya está pensada para verse "más grande, más espacio en pantalla" (ver el
+  // comentario de arriba), y el peldaño `enorme` de `Ancho` ya agrupa
+  // monitores grandes CON televisores — reusarla es el mismo criterio, sin
+  // inventar un tercer número sin probar.
+  static bool get _grande => !Platform.isAndroid || PlatformTv.esTelevisionSync;
+  static double get anchoAncha => _grande ? 380 : 264;
+  static double get altoImagenAncha => _grande ? 214 : 148;
   // El alto total tiene que cubrir la etiqueta de la extensión, no solo el
   // subtítulo. La etiqueta es una pastilla con su relleno —unos 21 puntos—
   // contra los 16 de una línea de texto suelta, así que con la cuenta vieja
   // sobresalía por abajo y la franja de la fila se la comía a la mitad. Se ve
   // en «Continuar viendo», que es donde la etiqueta dice de qué extensión
   // viene cada cosa.
-  static double get altoTotalAncha => Platform.isAndroid ? 224 : 292;
+  static double get altoTotalAncha => _grande ? 292 : 224;
 
   // ── Y es 16:9 EXACTO ───────────────────────────────────────────────────
   //
@@ -604,7 +620,17 @@ class _HomeMediaCardState extends State<HomeMediaCard> {
         widget.onExtraAction != null ||
         widget.onVerDetalle != null ||
         widget.onAlternarFavorito != null;
+    // ── Un televisor SIEMPRE reporta horizontal, y no es un teléfono acostado
+    //
+    // Sin el `!PlatformTv.esTelevisionSync`, un Android TV entraba por acá:
+    // es Android y su MediaQuery siempre da horizontal (no hay forma física
+    // de girarlo), así que se llevaba `androidLandscapeWidth` — la variante
+    // MÁS CHICA de las tres, pensada para un teléfono de costado con poco
+    // alto. La Biblioteca de TV terminaba con tarjetas más chicas que las de
+    // un teléfono, que es lo contrario de lo que hace falta en una pantalla
+    // que se mira de lejos.
     final isAndroidLandscape = Platform.isAndroid &&
+        !PlatformTv.esTelevisionSync &&
         MediaQuery.of(context).orientation == Orientation.landscape;
     final anchoBase = isAndroidLandscape
         ? HomeMediaCard.androidLandscapeWidth
