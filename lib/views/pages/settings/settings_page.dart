@@ -41,6 +41,7 @@ import 'package:prismhub/views/widgets/settings/settings_numberbox_button.dart';
 import 'package:prismhub/views/widgets/settings/settings_tile.dart';
 import 'package:prismhub/controllers/main_controller.dart';
 import 'package:prismhub/utils/i18n.dart';
+import 'package:prismhub/utils/platform_tv.dart';
 import 'package:prismhub/utils/prismhub_storage.dart';
 import 'package:prismhub/utils/router.dart';
 import 'package:prismhub/utils/application.dart';
@@ -1872,22 +1873,37 @@ class _SettingsPageState extends State<SettingsPage> {
             // solo se montan las que se ven.
             SafeArea(
               bottom: false,
-              child: Column(
-                children: [
-                  _cabecera(context),
-                  Expanded(
-                    child: Builder(builder: (context) {
-                      final items = _buildContent();
-                      return ListView.builder(
-                        padding: EdgeInsets.only(
-                            top: 4,
-                            bottom: MediaQuery.paddingOf(context).bottom + 24),
-                        itemCount: items.length,
-                        itemBuilder: (context, i) => items[i],
-                      );
-                    }),
-                  ),
-                ],
+              // ── El margen de overscan, solo en televisor ────────────────
+              //
+              // Esta pantalla nunca tuvo ninguno: en un teléfono o una
+              // ventana de escritorio no hace falta, pero en un televisor
+              // que recorta el borde real, la flecha de volver y la
+              // primera fila de la lista quedaban pegadas a un filo que en
+              // esos aparatos ni se ve.
+              child: Padding(
+                padding: EdgeInsets.symmetric(
+                  horizontal: PlatformTv.esTelevisionSync
+                      ? HomeTheme.overscanTv(context)
+                      : 0,
+                ),
+                child: Column(
+                  children: [
+                    _cabecera(context),
+                    Expanded(
+                      child: Builder(builder: (context) {
+                        final items = _buildContent();
+                        return ListView.builder(
+                          padding: EdgeInsets.only(
+                              top: 4,
+                              bottom:
+                                  MediaQuery.paddingOf(context).bottom + 24),
+                          itemCount: items.length,
+                          itemBuilder: (context, i) => items[i],
+                        );
+                      }),
+                    ),
+                  ],
+                ),
               ),
             ),
           ],

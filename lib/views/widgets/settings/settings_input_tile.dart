@@ -69,16 +69,16 @@ class _SettingsIntpuTileState extends fluent.State<SettingsIntpuTile> {
   }
 
   Widget _buildAndroid(BuildContext context) {
-    return ListTile(
-      leading: widget.icon,
-      title: Text(
-        widget.title,
-        style: TextStyle(color: HomeTheme.textPrimary),
-      ),
-      subtitle: Text(
-        widget.buildSubtitle(),
-        style: TextStyle(color: HomeTheme.textMuted),
-      ),
+    // SettingsTile y no un ListTile suelto: por fuera se ve exactamente
+    // igual (SettingsTile arma el mismo ListTile en Android), pero de
+    // paso esta fila entra al mismo mecanismo que ya envuelve a las demás
+    // en televisor (ver SettingsTile). Con el ListTile suelto, este era el
+    // único campo de Ajustes sin marco de foco ni garantía de que el mando
+    // lo alcanzara.
+    return SettingsTile(
+      icon: widget.icon,
+      title: widget.title,
+      buildSubtitle: widget.buildSubtitle,
       trailing: widget.trailing,
       onTap: !widget.enabled
           // Con onTap en null el campo no hacía absolutamente nada al tocarlo
