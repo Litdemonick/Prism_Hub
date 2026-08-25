@@ -14,6 +14,7 @@ import 'package:prismhub/views/widgets/home/animated_background_glow.dart';
 import 'package:prismhub/views/widgets/home/home_theme.dart';
 import 'package:prismhub/views/widgets/home/refresh_button.dart';
 import 'package:prismhub/views/widgets/search/search_all_extension.dart';
+import 'package:prismhub/views/widgets/tv/pantalla_tv.dart';
 import 'package:prismhub/router/router.dart';
 import 'package:prismhub/utils/i18n.dart';
 import 'package:prismhub/views/widgets/platform_widget.dart';
@@ -597,28 +598,21 @@ class _SearchPageState extends State<SearchPage> {
   /// El buscador de TV: teclado en pantalla a la izquierda, resultados a la
   /// derecha. Ver `search_page_tv.dart`.
   Widget _buildTvSearch(BuildContext context) {
-    return Scaffold(
-      backgroundColor: HomeTheme.bg,
-      body: Stack(
-        children: [
-          const Positioned.fill(child: AnimatedBackgroundGlow()),
-          SafeArea(
-            child: Padding(
-              padding: const EdgeInsets.all(28),
-              child: SearchTV(
-                c: c,
-                accent: _accent,
-                onClickMore: (index) {
-                  Get.to(ExtensionSearcherPage(
-                    package: c.getPackgeByIndex(index),
-                    keyWord: c.search.value,
-                    soloAdulto: widget.nsfwOnly,
-                  ));
-                },
-              ),
-            ),
-          ),
-        ],
+    // Antes iba con un margen fijo de 28 en vez del overscan real — en un
+    // televisor que recorta el borde, el teclado en pantalla quedaba pegado
+    // al filo. `PantallaTv` es lo que ahora lo aplica bien, en un solo lugar.
+    return PantallaTv(
+      fondo: const AnimatedBackgroundGlow(),
+      child: SearchTV(
+        c: c,
+        accent: _accent,
+        onClickMore: (index) {
+          Get.to(ExtensionSearcherPage(
+            package: c.getPackgeByIndex(index),
+            keyWord: c.search.value,
+            soloAdulto: widget.nsfwOnly,
+          ));
+        },
       ),
     );
   }

@@ -7,6 +7,7 @@ import 'package:prismhub/views/widgets/detail/detail_continue_play.dart';
 import 'package:prismhub/views/widgets/detail/detail_episodes.dart';
 import 'package:prismhub/views/widgets/detail/detail_favorite_button.dart';
 import 'package:prismhub/views/widgets/home/home_theme.dart';
+import 'package:prismhub/views/widgets/tv/pantalla_tv.dart';
 
 // ─── La ficha en Android TV ─────────────────────────────────────────────
 //
@@ -44,78 +45,73 @@ class DetailTV extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final overscan = _overscan(context);
-    return Scaffold(
-      backgroundColor: HomeTheme.bg,
-      body: Stack(
-        children: [
-          // La portada, enorme y muy tenue, como fondo. No es decoración
-          // gratis: en una pantalla grande y oscura da contexto de QUÉ se
-          // está mirando sin robarle sitio a nada.
-          // ── El fondo: la portada grande, difuminándose hacia el texto ──
-          //
-          // La primera versión ponía la imagen a opacidad 0.14 sobre toda la
-          // pantalla: quedaba tan tenue que no se veía nada y solo ensuciaba
-          // el fondo. Ahora se ve de verdad —a la derecha, donde no compite
-          // con la ficha— y se apaga con un degradado hacia la izquierda,
-          // que es donde va el texto y donde el contraste importa.
-          if (c.portada != null)
-            Positioned.fill(
-              child: ShaderMask(
-                blendMode: BlendMode.dstIn,
-                shaderCallback: (rect) => const LinearGradient(
-                  begin: Alignment.centerLeft,
-                  end: Alignment.centerRight,
-                  colors: [Colors.transparent, Colors.white],
-                  // Arranca antes y llega entera: la imagen ocupa el fondo
-                  // de verdad en vez de asomar solo en un costado. El
-                  // degradado sigue apagándola sobre la ficha, que es donde
-                  // hay texto que leer.
-                  stops: [0.12, 0.62],
-                ).createShader(rect),
-                child: CacheNetWorkImagePic(
-                  c.portada!,
-                  headers: c.portadaHeaders,
-                  fit: BoxFit.cover,
-                ),
-              ),
-            ),
-          // Un velo por encima: la portada es el fondo, no el contenido —
-          // sin esto, sobre una imagen clara los títulos de los episodios no
-          // se leen.
-          Positioned.fill(
-            child: DecoratedBox(
-              decoration: BoxDecoration(
-                gradient: LinearGradient(
-                  begin: Alignment.centerLeft,
-                  end: Alignment.centerRight,
-                  colors: [
-                    HomeTheme.bg,
-                    HomeTheme.bg.withValues(alpha: 0.78),
-                  ],
-                ),
-              ),
-            ),
-          ),
-          SafeArea(
-            child: Padding(
-              padding: EdgeInsets.all(overscan),
-              child: Row(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  SizedBox(
-                    // Un tercio para la ficha: lo justo para que el título
-                    // entre en dos líneas y la portada se vea grande, sin
-                    // quitarle columnas a los episodios.
-                    width: (MediaQuery.sizeOf(context).width * 0.34)
-                        .clamp(280.0, 460.0),
-                    child: _Ficha(c: c, tag: tag),
+    return PantallaTv(
+      // La portada, enorme y muy tenue, como fondo. No es decoración
+      // gratis: en una pantalla grande y oscura da contexto de QUÉ se está
+      // mirando sin robarle sitio a nada.
+      // ── El fondo: la portada grande, difuminándose hacia el texto ──────
+      //
+      // La primera versión ponía la imagen a opacidad 0.14 sobre toda la
+      // pantalla: quedaba tan tenue que no se veía nada y solo ensuciaba el
+      // fondo. Ahora se ve de verdad —a la derecha, donde no compite con la
+      // ficha— y se apaga con un degradado hacia la izquierda, que es donde
+      // va el texto y donde el contraste importa.
+      fondo: c.portada == null
+          ? null
+          : Stack(
+              children: [
+                Positioned.fill(
+                  child: ShaderMask(
+                    blendMode: BlendMode.dstIn,
+                    shaderCallback: (rect) => const LinearGradient(
+                      begin: Alignment.centerLeft,
+                      end: Alignment.centerRight,
+                      colors: [Colors.transparent, Colors.white],
+                      // Arranca antes y llega entera: la imagen ocupa el
+                      // fondo de verdad en vez de asomar solo en un
+                      // costado. El degradado sigue apagándola sobre la
+                      // ficha, que es donde hay texto que leer.
+                      stops: [0.12, 0.62],
+                    ).createShader(rect),
+                    child: CacheNetWorkImagePic(
+                      c.portada!,
+                      headers: c.portadaHeaders,
+                      fit: BoxFit.cover,
+                    ),
                   ),
-                  SizedBox(width: overscan),
-                  Expanded(child: _Episodios(c: c, tag: tag)),
-                ],
-              ),
+                ),
+                // Un velo por encima: la portada es el fondo, no el
+                // contenido — sin esto, sobre una imagen clara los títulos
+                // de los episodios no se leen.
+                Positioned.fill(
+                  child: DecoratedBox(
+                    decoration: BoxDecoration(
+                      gradient: LinearGradient(
+                        begin: Alignment.centerLeft,
+                        end: Alignment.centerRight,
+                        colors: [
+                          HomeTheme.bg,
+                          HomeTheme.bg.withValues(alpha: 0.78),
+                        ],
+                      ),
+                    ),
+                  ),
+                ),
+              ],
             ),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          SizedBox(
+            // Un tercio para la ficha: lo justo para que el título entre
+            // en dos líneas y la portada se vea grande, sin quitarle
+            // columnas a los episodios.
+            width:
+                (MediaQuery.sizeOf(context).width * 0.34).clamp(280.0, 460.0),
+            child: _Ficha(c: c, tag: tag),
           ),
+          SizedBox(width: overscan),
+          Expanded(child: _Episodios(c: c, tag: tag)),
         ],
       ),
     );
