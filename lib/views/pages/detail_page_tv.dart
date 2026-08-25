@@ -34,10 +34,12 @@ class DetailTV extends StatelessWidget {
   final DetailPageController c;
   final String? tag;
 
-  /// El margen contra el borde de la pantalla (overscan). Mismo criterio
-  /// que la Home de TV: algunos televisores recortan el borde real.
+  /// El margen contra el borde de la pantalla (overscan).
+  ///
+  /// Estaba escrito acá y en `home_page_tv.dart` con el mismo cuerpo — ahora
+  /// las dos apuntan a la única definición, en `HomeTheme.overscanTv`.
   static double _overscan(BuildContext context) =>
-      (MediaQuery.sizeOf(context).width * 0.03).clamp(16, 56);
+      HomeTheme.overscanTv(context);
 
   @override
   Widget build(BuildContext context) {

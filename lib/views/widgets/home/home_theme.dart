@@ -3,6 +3,7 @@ import 'dart:io';
 import 'package:flutter/services.dart';
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
+import 'package:prismhub/utils/breakpoints.dart';
 
 /// Qué modo de color usa la app.
 ///
@@ -346,4 +347,74 @@ class HomeTheme {
 
   static List<Color> gradientFor(int index) =>
       cardGradients[index % cardGradients.length];
+
+  // ─── Medidas de televisor (regla de los 10 pies) ─────────────────────────
+  //
+  // Un televisor se mira desde el sillón, a unos tres metros, no a treinta
+  // centímetros como un teléfono. Un tamaño que en PC se lee perfecto ahí es
+  // ilegible, y un margen que en un monitor no se nota, en un televisor que
+  // recorta el borde de la imagen se pierde entero.
+  //
+  // Estaba resuelto a ojo y por separado en cada pantalla de TV — el overscan
+  // llegó a estar escrito DOS VECES con el mismo cuerpo
+  // (`home_page_tv.dart`/`detail_page_tv.dart`), al 2,5%, y ninguna otra
+  // pantalla de TV lo aplicaba. Acá queda uno solo, y con criterio: todo sale
+  // de `Ancho.elegir<T>()`, el mismo mecanismo que ya usa el resto de la app
+  // para adaptarse a un tamaño real en vez de tirar un número fijo pensado
+  // para una sola resolución — así una TV 1080p, una 4K, o el emulador en una
+  // ventana chica se acomodan solas.
+
+  /// El margen de seguridad contra el borde de la pantalla (overscan).
+  ///
+  /// 5%, el mínimo que recomienda la propia guía de diseño de Android TV —
+  /// antes eran 2,5%, cortos para lo que de verdad recortan algunos
+  /// televisores viejos.
+  static double overscanTv(BuildContext context) =>
+      (MediaQuery.sizeOf(context).width * 0.05).clamp(16, 64);
+
+  /// El título de una ficha, o de un destacado grande. Mucho más grande que
+  /// en PC/teléfono a propósito: se lee de un vistazo desde el sillón, no de
+  /// cerca.
+  static TextStyle tituloTv(BuildContext context) => TextStyle(
+        fontSize: Ancho.de(context).elegir(compacto: 30, enorme: 40),
+        fontWeight: FontWeight.w800,
+        letterSpacing: -0.6,
+        height: 1.1,
+        color: sobrePortada,
+      );
+
+  /// El nombre de una fila («Continuar viendo», el nombre de una extensión).
+  static TextStyle tituloDeFilaTv(BuildContext context) => TextStyle(
+        fontSize: Ancho.de(context).elegir(compacto: 18, enorme: 22),
+        fontWeight: FontWeight.w700,
+        color: _claro ? _textPrimaryClaro : Colors.white,
+      );
+
+  /// El párrafo de sinopsis de una ficha. Breve por diseño —la pantalla ya
+  /// limita cuántas líneas entran— pero cuando hay, tiene que leerse entera
+  /// desde lejos.
+  static TextStyle sinopsisTv(BuildContext context) => TextStyle(
+        fontSize: Ancho.de(context).elegir(compacto: 15, enorme: 17),
+        height: 1.5,
+        color: textMuted,
+      );
+
+  /// La etiqueta de un botón o de una entrada del menú.
+  static TextStyle etiquetaTv(BuildContext context) => TextStyle(
+        fontSize: Ancho.de(context).elegir(compacto: 13, enorme: 15),
+        fontWeight: FontWeight.w600,
+      );
+
+  /// El alto mínimo de cualquier cosa enfocable: un botón, una entrada del
+  /// menú, una fila de Ajustes. Con el dedo alcanza con que el blanco sea
+  /// grande; con el D-pad lo que hace falta es que el SALTO entre un elemento
+  /// y el siguiente sea inconfundible, y eso lo da la altura mínima, no el
+  /// ancho.
+  static double altoEnfocableTv(BuildContext context) =>
+      Ancho.de(context).elegir(compacto: 48, enorme: 56);
+
+  /// El radio de esquina que usan las tarjetas y los paneles de TV. Un poco
+  /// más suave que el de PC/teléfono (8): a la distancia de un sillón, un
+  /// radio chico casi no se distingue de una esquina recta.
+  static const radioTv = 12.0;
 }

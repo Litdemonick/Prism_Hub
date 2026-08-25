@@ -83,12 +83,11 @@ enum _CategoriaTV {
 double _anchoSidebarTv(Ancho a) =>
     a.elegir(compacto: 84, medio: 168, amplio: 190, enorme: 210);
 
-/// El margen "TV-safe" contra el borde de la pantalla (overscan). Algunos
-/// televisores recortan el borde real de la imagen; sin este aire, el
-/// sidebar y la barra de arriba quedarían pegados a un borde que en esos
-/// aparatos ni se ve.
-double _overscanTv(BuildContext context) =>
-    (MediaQuery.sizeOf(context).width * 0.025).clamp(12, 48);
+/// El margen "TV-safe" contra el borde de la pantalla (overscan).
+///
+/// Estaba escrito acá y en `detail_page_tv.dart` con el mismo cuerpo — ahora
+/// las dos apuntan a la única definición, en `HomeTheme.overscanTv`.
+double _overscanTv(BuildContext context) => HomeTheme.overscanTv(context);
 
 class HomeTV extends StatefulWidget {
   const HomeTV({super.key, required this.c});
