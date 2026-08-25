@@ -162,7 +162,7 @@ class _TarjetaDeCatalogoState extends State<TarjetaDeCatalogo> {
     final resaltada =
         !PlatformTv.esTelevisionSync && (_encima || _abierto);
 
-    return SizedBox(
+    final tarjeta = SizedBox(
       width: ancho,
       child: MouseRegion(
         cursor: SystemMouseCursors.click,
@@ -297,6 +297,17 @@ class _TarjetaDeCatalogoState extends State<TarjetaDeCatalogo> {
         ),
       ),
     );
+    // ── La tarjeta, en su propia capa ───────────────────────────────────
+    //
+    // Lo caro de acá es la portada, que es una imagen decodificada y es
+    // justo lo que MENOS cambia. Sin un límite de repintado, cualquier cosa
+    // que se mueva en la tarjeta —el panel que aparece al pasar el mouse, la
+    // escala, el marco de foco en televisor— obliga a repintar también todo
+    // lo que la rodea: en una fila, las tarjetas vecinas.
+    //
+    // Con el límite, la portada se compone como una textura ya lista y lo
+    // único que se rehace es lo que de verdad cambió.
+    return RepaintBoundary(child: tarjeta);
   }
 
   /// Cuánto dura, abajo a la derecha del póster.

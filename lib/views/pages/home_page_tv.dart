@@ -568,7 +568,7 @@ class _BarraSuperiorTVState extends State<_BarraSuperiorTV> {
 
   @override
   Widget build(BuildContext context) {
-    return Padding(
+    final barra = Padding(
       padding: const EdgeInsets.only(bottom: 18),
       child: Row(
         children: [
@@ -630,6 +630,13 @@ class _BarraSuperiorTVState extends State<_BarraSuperiorTV> {
         ],
       ),
     );
+    // La barra, en su propia capa.
+    //
+    // El reloj se actualiza cada 30 segundos, y ese `setState` vuelve a pintar
+    // toda la barra —el nombre y los seis botones con sus iconos— y, sin
+    // límite, también lo que quede alrededor. Con esto, cambiar la hora
+    // repinta la barra y nada más.
+    return RepaintBoundary(child: barra);
   }
 }
 

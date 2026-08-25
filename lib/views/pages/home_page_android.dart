@@ -2154,7 +2154,21 @@ class _TarjetaGrande extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final radio = BorderRadius.circular(20);
-    return GestureDetector(
+    // ── En televisor, sin sombra ────────────────────────────────────────
+    //
+    // La condición de más abajo es `_esTactil`, que es `Platform.isAndroid`,
+    // así que un Android TV entra como si fuera un teléfono: cada tarjeta del
+    // acordeón se lleva 20 píxeles de desenfoque, el acordeón dibuja seis a
+    // la vez y se repinta entero mientras se mueve. Es de lo más caro que
+    // pinta el Inicio, y está pagado por un efecto pensado para mirar el
+    // teléfono a treinta centímetros.
+    //
+    // Lo que la sombra daba —que la portada se despegue del fondo— en un
+    // televisor ya lo dan el filo claro del borde y el degradado que la
+    // tarjeta lleva encima del título.
+    final conSombra =
+        _esTactil && !ModoDeColor.claro && !PlatformTv.esTelevisionSync;
+    final tarjeta = GestureDetector(
       onTap: onTap,
       child: DecoratedBox(
         decoration: BoxDecoration(
@@ -2196,7 +2210,7 @@ class _TarjetaGrande extends StatelessWidget {
           // tarjeta, más marcado abajo por el corrimiento de 8px. Reportado
           // en vivo con captura: "atrás de las cards". En claro la portada ya
           // resalta sola contra el fondo, así que no hace falta nada.
-          boxShadow: _esTactil && !ModoDeColor.claro
+          boxShadow: conSombra
               ? const [
                   BoxShadow(
                     color: Color(0x73000000),
@@ -2363,6 +2377,11 @@ class _TarjetaGrande extends StatelessWidget {
         ),
       ),
     );
+    // Cada tarjeta en su propia capa: el acordeón se recompone en cada cuadro
+    // mientras se mueve, y sin esto las seis tarjetas se vuelven a pintar
+    // enteras —portada, filo, degradado y los dos textos con sus sombras— en
+    // cada uno de esos cuadros.
+    return RepaintBoundary(child: tarjeta);
   }
 }
 

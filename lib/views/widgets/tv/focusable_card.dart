@@ -178,7 +178,17 @@ class _FocusableCardState extends State<FocusableCard> {
     // mire de lejos, desde el sillón. El hover de mouse ya tiene al cursor
     // mismo como pista extra, por eso alcanza con menos.
     final grosor = _tieneFoco ? 3.5 : 2.0;
-    return Focus(
+    // ── En un aparato modesto, el marco y nada más ───────────────────────
+    //
+    // La escala es un transform animado: obliga a recomponer la tarjeta en
+    // cada cuadro de los 160 ms que dura. En un stick viejo eso es justo lo
+    // que se siente como que el mando responde tarde.
+    //
+    // El marco dorado ya dice dónde está parado el usuario —que es lo único
+    // que no se puede perder— y que aparezca de golpe no se nota mal: con un
+    // control remoto el foco SALTA de tarjeta en tarjeta, no se desliza.
+    final conEscala = PerfilDeAparato.nivel != NivelDeAparato.bajo;
+    final tarjeta = Focus(
       focusNode: _focusNode,
       autofocus: widget.autofocus,
       onFocusChange: _onFocusChange,
@@ -201,7 +211,7 @@ class _FocusableCardState extends State<FocusableCard> {
             // que se desplaza fuera se dibuja igual y termina encima de los
             // encabezados. Con 1.03 se nota que está elegida y casi no
             // invade, así que nada queda cortado.
-            scale: activo ? 1.03 : 1.0,
+            scale: (activo && conEscala) ? 1.03 : 1.0,
             // ── El borde va ENCIMA, no alrededor ─────────────────────────
             //
             // Con `Border.all` en el contenedor que envuelve al hijo, el
@@ -263,5 +273,15 @@ class _FocusableCardState extends State<FocusableCard> {
         ),
       ),
     );
+    // ── Cada tarjeta se pinta en su propia capa ─────────────────────────
+    //
+    // Sin esto, la escala y el marco al enfocarse invalidan el pintado de
+    // TODO lo que contenga a la tarjeta: en una fila de diez, mover el foco
+    // una posición volvía a pintar la fila entera. Con el límite, lo único
+    // que se repinta es la tarjeta que gana el foco y la que lo pierde, y la
+    // escala pasa a mover una textura ya lista en vez de rehacerla.
+    //
+    // Es, de todo lo que se tocó, lo que más se nota con el mando en la mano.
+    return RepaintBoundary(child: tarjeta);
   }
 }

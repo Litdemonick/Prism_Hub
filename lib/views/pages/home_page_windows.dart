@@ -234,6 +234,21 @@ class _FilaWindowsState extends State<_FilaWindows> {
 
   @override
   Widget build(BuildContext context) {
+    // ── Cada fila se pinta en su propia capa ──────────────────────────────
+    //
+    // Sin esto, cualquier cosa que cambie dentro de UNA fila —una portada que
+    // termina de llegar, el marco de foco que se mueve, los dos bloques
+    // brillando del final mientras refresca— obliga a volver a pintar todas
+    // las filas que estén en pantalla.
+    //
+    // La rama de teléfono ya lo hacía (ver `home_page_android.dart`); acá
+    // faltaba, y esta es justo la fila que usan escritorio y televisor. Va
+    // adentro del widget y no en quien lo llama, para que valga en los dos
+    // lados sin repetirlo.
+    return RepaintBoundary(child: _contenido(context));
+  }
+
+  Widget _contenido(BuildContext context) {
     // Apagada o sin instalar: no hay contenido que traer, así que en vez de una
     // fila vacía va una línea con lo que hay que hacer para que traiga algo.
     if (widget.fila.estadoExt != EstadoExtension.activa) {
