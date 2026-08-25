@@ -52,6 +52,26 @@ class ApplicationUtils {
       Platform.isWindows ? 'windows-x64.zip' : 'linux-x64.tar.gz';
 
   static bool _forcedUpdatePageOpen = false;
+
+  /// Ya se está descargando/instalando una actualización.
+  ///
+  /// ── Por qué hace falta ────────────────────────────────────────────────
+  ///
+  /// La descarga de una versión nueva puede llevar varios minutos con una
+  /// conexión lenta, y mientras tanto el chequeo periódico sigue latiendo:
+  /// volvía a encontrar la misma versión nueva y sacaba el aviso ENCIMA de la
+  /// descarga que ya estaba en curso. Desde afuera se ve como que la app
+  /// insiste con algo que uno ya aceptó.
+  ///
+  /// La bandera que había vivía dentro del widget del diálogo, así que se
+  /// perdía en cuanto ese widget se reconstruía o se abría otra pantalla —
+  /// que es justo lo que pasa en Android al cambiar de pestaña.
+  ///
+  /// Estática: hay una sola actualización a la vez en toda la app.
+  static bool _instalacionEnCurso = false;
+
+  /// Para que otras partes puedan preguntar sin poder tocarla.
+  static bool get instalacionEnCurso => _instalacionEnCurso;
   static Future<void>? _forcedUpdateCheckInFlight;
 
   static void scheduleForcedUpdateCheck(BuildContext context) {
@@ -332,6 +352,11 @@ class ApplicationUtils {
     // checkUpdate, que avisa en qué modo está).
     if (!ModoApp.esRelease) return;
     if (_forcedUpdatePageOpen) return;
+    // Ya se está bajando/instalando: no se vuelve a avisar de la misma
+    // versión encima de la descarga que el usuario ya aceptó. Con una
+    // conexión lenta la descarga dura minutos y el chequeo periódico seguía
+    // latiendo — ver _instalacionEnCurso.
+    if (_instalacionEnCurso) return;
     final activeCheck = _forcedUpdateCheckInFlight;
     if (activeCheck != null) return activeCheck;
 
@@ -788,6 +813,10 @@ class ApplicationUtils {
     Map<String, dynamic> asset,
     String version,
   ) async {
+    // Ya hay una descarga andando: no se arranca otra ni se avisa de nuevo.
+    // Ver _instalacionEnCurso.
+    if (_instalacionEnCurso) return;
+    _instalacionEnCurso = true;
     var progressDialogOpen = false;
     // Cuánto va descargado, para poder mostrarlo.
     //
@@ -920,6 +949,10 @@ class ApplicationUtils {
       // app para instalar, y por el malo sale por el catch. Soltarlo en uno
       // solo de los dos lo dejaba colgado en el otro.
       progreso.dispose();
+      // El candado se suelta pase lo que pase. Si la descarga fallo, el
+      // usuario tiene que poder volver a intentar; y si salio bien, la app
+      // se esta por cerrar igual para instalar.
+      _instalacionEnCurso = false;
     }
   }
 
