@@ -340,6 +340,38 @@ class _SidebarTVState extends State<_SidebarTV> {
           : FocusNode(debugLabel: 'sidebar-${cat.name}'),
   ];
 
+  /// Si el sidebar tiene que mostrarse desplegado (con el nombre de cada
+  /// categoría) o solo con los íconos.
+  ///
+  /// ── El criterio: se despliega mientras el mando está PARADO ahí ────────
+  ///
+  /// Igual que el menú de Netflix o YouTube en TV: contraído mientras el
+  /// foco está en el contenido —para no robarle ancho a las tarjetas—, y
+  /// se abre solo mientras el usuario está eligiendo una categoría, que es
+  /// el único momento en que el nombre hace falta (el ícono solo no dice si
+  /// "Series" es la de video o si hay una zona de anime distinta).
+  ///
+  /// Arranca en `true` porque el foco inicial de la pantalla ES una
+  /// categoría del sidebar (ver `autofocus` más abajo): si arrancara
+  /// contraído, se abriría de golpe en el primer cuadro y se vería como un
+  /// salto en vez de como el estado de reposo.
+  bool _expandido = true;
+
+  @override
+  void initState() {
+    super.initState();
+    for (final nodo in _nodos) {
+      nodo.addListener(_alCambiarElFoco);
+    }
+  }
+
+  void _alCambiarElFoco() {
+    final expandido = _nodos.any((n) => n.hasFocus);
+    if (expandido != _expandido && mounted) {
+      setState(() => _expandido = expandido);
+    }
+  }
+
   /// Si ya se enfocó algo alguna vez en esta pantalla.
   ///
   /// El `autofocus` tiene que correr UNA sola vez, al entrar por primera
@@ -353,6 +385,7 @@ class _SidebarTVState extends State<_SidebarTV> {
   @override
   void dispose() {
     for (final nodo in _nodos) {
+      nodo.removeListener(_alCambiarElFoco);
       // El primero lo creó y lo descarta HomeTV; los demás son de acá.
       if (nodo != widget.primerFoco) nodo.dispose();
     }
@@ -397,37 +430,54 @@ class _SidebarTVState extends State<_SidebarTV> {
         if (mounted) _yaEnfoco = true;
       });
     }
-    return SizedBox(
-      width: _anchoSidebarTv(a),
-      // El Focus de afuera ve las teclas que suben desde la categoría
-      // enfocada — al revés que un hijo, que nunca las vería.
-      child: Focus(
-        canRequestFocus: false,
-        skipTraversal: true,
-        onKeyEvent: _frenarEnLosBordes,
-        // Centrado vertical: son pocas categorías fijas, no una lista que
-        // pueda crecer, así que no hace falta que puedan desplazarse —
-        // alcanza con un Column centrado en el alto disponible, más prolijo
-        // que dejarlas pegadas arriba con el resto de la pantalla vacío
-        // debajo.
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            for (final (i, categoria) in _CategoriaTV.values.indexed)
-              Padding(
-                padding: const EdgeInsets.only(bottom: 10),
-                child: FocusableCard(
-                  focusNode: _nodos[i],
-                  autofocus: pedirFoco && categoria == _CategoriaTV.inicio,
-                  borderRadius: 14,
-                  onTap: () => widget.onElegir(categoria),
-                  child: _ItemSidebarTV(
-                    categoria: categoria,
-                    elegido: widget.elegida == categoria,
+    // ── Contraído a solo íconos, y desplegado mientras el mando está acá ──
+    //
+    // El ancho es lo único que cambia, y va en su PROPIA capa: así la
+    // animación no arrastra al panel de contenido de al lado (que además ya
+    // tiene su propio límite de repintado en `_ZonaQueAparece`), y en un
+    // aparato modesto sigue siendo barata — es un `Transform`/tamaño, no un
+    // repintado del texto ni de los íconos.
+    final anchoContraido = a.elegir<double>(
+      compacto: 64,
+      medio: 72,
+      amplio: 76,
+      enorme: 80,
+    );
+    final anchoObjetivo = _expandido ? _anchoSidebarTv(a) : anchoContraido;
+    return RepaintBoundary(
+      child: AnimatedContainer(
+        width: anchoObjetivo,
+        duration: const Duration(milliseconds: 200),
+        curve: Curves.easeOutCubic,
+        child: Focus(
+          canRequestFocus: false,
+          skipTraversal: true,
+          onKeyEvent: _frenarEnLosBordes,
+          // Centrado vertical: son pocas categorías fijas, no una lista que
+          // pueda crecer, así que no hace falta que puedan desplazarse —
+          // alcanza con un Column centrado en el alto disponible, más
+          // prolijo que dejarlas pegadas arriba con el resto de la
+          // pantalla vacío debajo.
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              for (final (i, categoria) in _CategoriaTV.values.indexed)
+                Padding(
+                  padding: const EdgeInsets.only(bottom: 10),
+                  child: FocusableCard(
+                    focusNode: _nodos[i],
+                    autofocus: pedirFoco && categoria == _CategoriaTV.inicio,
+                    borderRadius: 14,
+                    onTap: () => widget.onElegir(categoria),
+                    child: _ItemSidebarTV(
+                      categoria: categoria,
+                      elegido: widget.elegida == categoria,
+                      expandido: _expandido,
+                    ),
                   ),
                 ),
-              ),
-          ],
+            ],
+          ),
         ),
       ),
     );
@@ -438,10 +488,19 @@ class _SidebarTVState extends State<_SidebarTV> {
 /// el sillón, no a 30cm de la cara, así que el texto y el ícono de teléfono/
 /// escritorio se quedan chicos acá.
 class _ItemSidebarTV extends StatelessWidget {
-  const _ItemSidebarTV({required this.categoria, required this.elegido});
+  const _ItemSidebarTV({
+    required this.categoria,
+    required this.elegido,
+    required this.expandido,
+  });
 
   final _CategoriaTV categoria;
   final bool elegido;
+
+  /// Si el sidebar está desplegado. Contraído, solo se ve el ícono —
+  /// centrado, en vez de pegado a la izquierda con un hueco donde iría el
+  /// nombre.
+  final bool expandido;
 
   @override
   Widget build(BuildContext context) {
@@ -461,21 +520,29 @@ class _ItemSidebarTV extends StatelessWidget {
         borderRadius: BorderRadius.circular(14),
       ),
       child: Row(
+        mainAxisAlignment:
+            expandido ? MainAxisAlignment.start : MainAxisAlignment.center,
         children: [
           Icon(categoria.icono, size: 26, color: color),
-          const SizedBox(width: 12),
-          Expanded(
-            child: Text(
-              categoria.etiqueta(),
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-              style: TextStyle(
-                fontSize: 17,
-                fontWeight: elegido ? FontWeight.w800 : FontWeight.w600,
-                color: color,
+          // El nombre no se anima entrando/saliendo con un fundido propio:
+          // el `AnimatedContainer` de afuera ya recorta el ancho, así que el
+          // texto desaparece con la caja misma sin necesidad de una segunda
+          // animación superpuesta.
+          if (expandido) ...[
+            const SizedBox(width: 12),
+            Expanded(
+              child: Text(
+                categoria.etiqueta(),
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: TextStyle(
+                  fontSize: 17,
+                  fontWeight: elegido ? FontWeight.w800 : FontWeight.w600,
+                  color: color,
+                ),
               ),
             ),
-          ),
+          ],
         ],
       ),
     );
