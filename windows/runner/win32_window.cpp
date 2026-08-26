@@ -16,6 +16,20 @@ namespace {
 #define DWMWA_USE_IMMERSIVE_DARK_MODE 20
 #endif
 
+/// Window attribute that controls corner rounding on Windows 11.
+///
+/// Redefined for SDKs older than 10.0.22000.0, igual que el de arriba. Sin
+/// esto la ventana depende del valor por defecto del sistema (que puede
+/// venir apagado por una política o un tema de terceros) — pedirlo
+/// explícito asegura la esquina redondeada en cualquier Windows 11. En
+/// Windows 10 el sistema simplemente ignora el atributo, sin error.
+#ifndef DWMWA_WINDOW_CORNER_PREFERENCE
+#define DWMWA_WINDOW_CORNER_PREFERENCE 33
+#endif
+#ifndef DWMWCP_ROUND
+#define DWMWCP_ROUND 2
+#endif
+
 constexpr const wchar_t kWindowClassName[] = L"FLUTTER_RUNNER_WIN32_WINDOW";
 
 /// Registry key for app theme preference.
@@ -145,6 +159,10 @@ bool Win32Window::Create(const std::wstring& title,
   }
 
   UpdateTheme(window);
+
+  const DWORD corner_preference = DWMWCP_ROUND;
+  DwmSetWindowAttribute(window, DWMWA_WINDOW_CORNER_PREFERENCE,
+                        &corner_preference, sizeof(corner_preference));
 
   return OnCreate();
 }
