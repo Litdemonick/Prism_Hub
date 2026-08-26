@@ -231,13 +231,6 @@ class CatalogoExtensionesController extends GetxController {
   int carruselPos = 0;
   bool _carruselSembrado = false;
 
-  /// Sube cada vez que `reordenarCarruselAlAzar()` pone una posición nueva
-  /// a propósito — la señal que el widget del acordeón mira para saber que
-  /// tiene que volver a leer `carruselExt`/`carruselPos`, aunque ya se
-  /// hubiera ubicado antes. Ver el comentario largo en
-  /// `reordenarCarruselAlAzar`.
-  int carruselVersion = 0;
-
   /// El acordeón ya se puso en su sitio en esta sesión del Home.
   ///
   /// ── Por qué vive acá y no en el widget ──────────────────────────────────
@@ -253,72 +246,6 @@ class CatalogoExtensionesController extends GetxController {
   /// valiendo la regla de que abrir el Home empieza de cero — lo que cambia es
   /// que desplazarse ya no cuenta como abrirlo.
   bool acordeonUbicado = false;
-
-  /// Vuelve a sortear desde dónde arranca el carrusel — pedido explícito:
-  /// "cada vez que entro a Inicio y salgo y entro debe... dar random en el
-  /// carrusel". El sembrado automático (`_carruselSembrado`, arriba) es
-  /// UNA sola vez por sesión a propósito —evita que el acordeón salte
-  /// mientras el usuario lo está mirando— así que esto es un pedido
-  /// aparte, explícito, para cuando de verdad se re-entra a la pantalla
-  /// (ver el llamador en main_page.dart, que solo dispara esto al
-  /// NAVEGAR de nuevo a Inicio, nunca durante el scroll ni por un rebuild
-  /// cualquiera).
-  void reordenarCarruselAlAzar() {
-    if (destacados.isEmpty) return;
-    // ── Por qué esto toca `_paqueteDeArranque`, no `carruselExt` a secas ──
-    //
-    // Primer intento (equivocado, reportado en vivo: "me lleva a la mitad
-    // del acordeón"): poner `carruselExt` en un índice al azar de
-    // `destacados` directo. Pero `carruselExt` es un índice sobre la lista
-    // YA ROTADA (`destacadosVisibles`, ver `_rotadas`), no sobre
-    // `destacados` cruda — así que un valor al azar ahí cae en cualquier
-    // punto de la vuelta, casi nunca en el principio real de lo que se ve.
-    //
-    // Lo que hay que mover es POR DÓNDE EMPIEZA la rotación
-    // (`_paqueteDeArranque`, el mismo campo que ya usa `_rotadas` para "la
-    // próxima vez arranca por la siguiente" en cada apertura de la app) — y
-    // recién ahí, `carruselExt = 0` apunta de verdad al principio, porque
-    // el principio pasó a ser la extensión elegida.
-    //
-    // Se evita repetir la misma extensión que ya estaba arrancando: sin
-    // esto, una de cada N veces el cambio no se notaría y parecería que no
-    // hizo nada — el mismo motivo por el que `_arranque` (la rotación de
-    // cada apertura) usa un contador y no random puro.
-    final candidatos = destacados
-        .map((d) => d.$1)
-        .where((p) => p != _paqueteDeArranque)
-        .toList();
-    final elegibles = candidatos.isNotEmpty
-        ? candidatos
-        : destacados.map((d) => d.$1).toList();
-    _paqueteDeArranque = elegibles[Random().nextInt(elegibles.length)];
-    carruselExt = 0;
-    carruselPos = 0;
-    // Sube SIEMPRE, no solo cuando `acordeonUbicado` todavía está en falso.
-    //
-    // El widget del acordeón (_CarruselAndroidState) solo vuelve a leer
-    // carruselExt/carruselPos UNA vez por vida propia (`_sembrado`) — el
-    // resto del tiempo ignora estos dos campos a propósito, para no saltar
-    // de posición mientras el usuario lo está mirando o arrastrando (ver el
-    // comentario largo ahí). Sin una señal aparte, cambiar estos dos campos
-    // acá no le llegaba al widget: en escritorio, además, la pantalla se
-    // reconstruye entera al volver a Inicio (ShellRoute sin
-    // StatefulShellRoute), así que ni siquiera sobrevivía el `_sembrado` de
-    // antes — pero el resultado visual era el mismo problema reportado en
-    // vivo: "empieza desde el inicio, no desde donde iba" en vez de la
-    // posición al azar que se le acaba de pedir.
-    //
-    // Esta versión es la señal: el widget compara este número contra el
-    // último que ya sincronizó y, si cambió, vuelve a leer la posición del
-    // controller — la MISMA cuenta que ya usa para "recordar dónde iba" al
-    // volver de haber bajado el scroll, no una nueva.
-    carruselVersion++;
-    // carruselExt/carruselPos son campos planos, no .obs — el Obx del
-    // acordeón solo vuelve a correr si algo reactivo cambia DE VERDAD.
-    // Mismo truco que ya usa el resto del archivo para avisar de un cambio
-    // en un campo plano sin convertirlo en Rx aparte.
-    destacados.refresh();
-  }
 
   /// Avanza una posición. Al terminar la tanda de una extensión salta a la
   /// siguiente, desde su primera.

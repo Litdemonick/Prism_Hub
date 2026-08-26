@@ -167,10 +167,14 @@ class _DesktopMainPageState extends State<DesktopMainPage> with WindowListener {
   void _alVolverA(String ruta) {
     if (ruta == '/') {
       if (!Get.isRegistered<CatalogoExtensionesController>()) return;
-      final home = Get.find<CatalogoExtensionesController>();
-      // Al azar YA, con lo que ya está cargado — no espera a la red.
-      home.reordenarCarruselAlAzar();
-      unawaited(home.refrescarTodo());
+      // Solo el refresco de contenido — pedido explícito: el carrusel NO
+      // se toca acá. Ya tiene su propio criterio de rotación/random
+      // (_arranque, una vez por apertura de la app) que sigue andando
+      // solo; intentar resortearlo también al re-entrar dio varios bugs
+      // seguidos (saltos raros, posiciones a mitad de camino) sin poder
+      // verlo en pantalla para depurarlo bien. Mejor uno solo, que ya
+      // funciona, que dos peleándose.
+      unawaited(Get.find<CatalogoExtensionesController>().refrescarTodo());
       return;
     }
     final zona = _zonaDeRuta(ruta);

@@ -143,7 +143,26 @@ class HomeAndroid extends StatelessWidget {
               // tarjetas grandes. Sin esto, cualquier repintado de la lista
               // —una fila que termina de cargar más abajo— lo arrastra a
               // repintarse entero aunque no haya cambiado nada suyo.
-              1 => RepaintBoundary(child: _CarruselAndroid(c: c)),
+              1 => Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    RepaintBoundary(child: _CarruselAndroid(c: c)),
+                    // Pedido explícito: un botón para poner al día las
+                    // extensiones de las filas de abajo, sin que eso mueva
+                    // ni cambie el carrusel — reordenarlo/re-arrancarlo es
+                    // otra cosa que ya tiene su propio criterio (ver
+                    // main_page.dart). refrescarTodo() no toca
+                    // carruselExt/carruselPos/_paqueteDeArranque en ningún
+                    // lado, así que la posición del carrusel no se mueve
+                    // aunque su contenido se ponga al día de paso —igual que
+                    // ya hace el pull-to-refresh de toda la vida.
+                    Padding(
+                      padding:
+                          EdgeInsets.fromLTRB(_margen(context), 12, 16, 4),
+                      child: RefreshButton(onTap: c.refrescarTodo),
+                    ),
+                  ],
+                ),
               // RepaintBoundary por fila: sin esto, cualquier repintado
               // —el fondo animado, una portada que termina de cargar— vuelve a
               // pintar TODA la lista visible. Con la capa propia, cada fila se
@@ -326,13 +345,6 @@ class _CarruselAndroidState extends State<_CarruselAndroid>
   /// los anchos, así que el dibujo sigue al dedo sin saltos.
   double _p = 0;
   bool _sembrado = false;
-
-  /// Último `carruselVersion` del controller que ya se sincronizó — ver el
-  /// comentario largo en `CatalogoExtensionesController.
-  /// reordenarCarruselAlAzar`. Arranca en -1 para que la primera lectura
-  /// (con `carruselVersion` en 0) nunca cuente como "ya sincronizado" antes
-  /// de tiempo.
-  int _versionSincronizada = -1;
 
   late final AnimationController _anim = AnimationController(
     vsync: this,
@@ -831,30 +843,14 @@ class _CarruselAndroidState extends State<_CarruselAndroid>
       if (widget.c.carruselPos >= largoTanda) {
         widget.c.carruselPos = largoTanda > 0 ? largoTanda - 1 : 0;
       }
-      // Dos razones distintas para (re)ubicar la posición, no una: la
-      // primera vez que este widget existe en la sesión (`!_sembrado`), o
-      // que el controller haya pedido explícitamente una posición nueva
-      // (`carruselVersion` cambió — ver reordenarCarruselAlAzar). Sin la
-      // segunda condición, pedir una posición al azar desde afuera no tenía
-      // ningún efecto visible una vez que el widget ya se había ubicado una
-      // vez: este bloque entero es la ÚNICA parte del build que toca `_p`
-      // a partir de `carruselExt`/`carruselPos`, y sin `!_sembrado` nunca
-      // se volvía a ejecutar. Reportado en vivo: pedir un cambio de
-      // posición al volver a Inicio no hacía nada, o directamente volvía a
-      // la primera tarjeta en vez de a la que se le acababa de pedir.
-      if (!_sembrado || widget.c.carruselVersion != _versionSincronizada) {
-        final primeraVezEnEstaSesion = !_sembrado;
+      if (!_sembrado) {
         _sembrado = true;
-        _versionSincronizada = widget.c.carruselVersion;
-        // Si había un viaje animado en curso (auto-avance, o el usuario
-        // soltó de un arrastre hace un instante), su propio listener sigue
-        // escribiendo `_p` cuadro a cuadro DESPUÉS de este build —y lo que
-        // se escriba acá abajo quedaría tapado por el próximo cuadro de esa
-        // animación vieja. Reportado en vivo: "se mueve solo el carrusel"
-        // al pedir una posición nueva. Se corta ANTES de tocar `_p`, mismo
-        // criterio que ya usa `onHorizontalDragStart` para lo mismo.
+        // Por si quedó un viaje animado en curso (mismo criterio que ya usa
+        // `onHorizontalDragStart` para lo mismo) — barato de más y evita
+        // que ese listener siga escribiendo `_p` un cuadro después de este
+        // build y tape lo que se fija acá abajo.
         if (_anim.isAnimating) _anim.stop();
-        if (primeraVezEnEstaSesion && !widget.c.acordeonUbicado) {
+        if (!widget.c.acordeonUbicado) {
           // ── Abrir el Home SÍ empieza desde la primera ─────────────────
           //
           // Antes arrancaba donde el usuario había quedado la vez pasada. La
@@ -868,7 +864,7 @@ class _CarruselAndroidState extends State<_CarruselAndroid>
           widget.c.carruselPos = 0;
           _p = 0;
         } else {
-          // ── Pero DESPLAZARSE no, y un pedido explícito tampoco es esto ──
+          // ── Pero DESPLAZARSE no ───────────────────────────────────────
           //
           // El Home es una lista perezosa y el acordeón es su ítem 2: bajando
           // un poco, Flutter lo desmonta, y al volver a subir este estado nace
@@ -877,10 +873,7 @@ class _CarruselAndroidState extends State<_CarruselAndroid>
           // vuelve al inicio» que se reportó.
           //
           // La posición de verdad vive en el controlador, que sobrevive al
-          // desmontaje (y a un `carruselVersion` nuevo), así que se vuelve a
-          // leer de ahí — sea "donde iba" o "la nueva al azar que se acaba
-          // de pedir", según cuál de las dos haya cambiado `carruselExt`/
-          // `carruselPos` último.
+          // desmontaje, así que se vuelve a donde iba.
           _p = _indiceGlobal(grupos)
               .toDouble()
               .clamp(0.0, (planos.length - 1).toDouble());
