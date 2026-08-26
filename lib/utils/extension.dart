@@ -1172,14 +1172,39 @@ class ExtensionUtils {
       ));
 
   // Extensiones que se auto-instalan en el primer launch.
+  //
   // Solo las publicadas en prism+ index.json; añadir aquí solo cuando ya
   // exista la entrada firmada en el catálogo.
+  //
+  // ── Por qué estas cuatro, medido contra el catálogo real ────────────────
+  //
+  // Antes era una sola (jkanime). Con las zonas de contenido nuevas
+  // (Películas/Series/Anime/Mangas — ver `ZonaPrincipal`), dejar una sola
+  // extensión por defecto significa que tres de las cuatro quedan vacías el
+  // primer día. Se midió el índice real de prism-plus (2026-08-26, 20
+  // extensiones) para elegir, no se adivinó:
+  //
+  //   · Anime: varias limpias sin +18 (jkanime, animeav1, animefenix,
+  //     latanime, tioanime). Se mantiene jkanime, la que ya era default —
+  //     cambiarla no aporta nada y sí cambia el comportamiento de quien ya
+  //     la tiene.
+  //   · Mangas: varias limpias sin +18 (olympus, tumangaonline, mangadex).
+  //     Se elige olympus.
+  //   · Películas y Series: acá NO hay, hoy, una extensión que sea SOLO
+  //     películas o SOLO series — las dos únicas con ese contenido
+  //     (fuegocine, lamovie) traen las dos cosas mezcladas, ninguna sin
+  //     +18. Igual que ShadeManga separa su vídeo de su lectura por el eje
+  //     que el propio sitio declara (Fase 3 del plan de rediseño),
+  //     fuegocine/lamovie separan su película de su serie por el mismo
+  //     mecanismo — ver `filtroDeFormatoZona`. Se instalan las DOS, una
+  //     para cada zona (fuegocine → Películas, lamovie → Series) en vez de
+  //     la misma repetida, para no depender de una sola fuente en las dos
+  //     zonas que más contenido piden.
   static const Set<String> defaultPackages = {
-    'io.prismhub.jkanime', // anime ES — múltiples servidores confiables
-    // Las demás extensiones oficiales (manhwaweb, shademanga, etc.) ya NO se
-    // auto-instalan: el usuario debe instalarlas y activarlas a mano desde
-    // el repositorio (varias tienen contenido +18, ver nsfw gating en
-    // ExtensionCard/ExtensionTile).
+    'io.prismhub.jkanime', // Anime
+    'io.prismhub.olympus', // Mangas
+    'io.prismhub.fuegocine', // Películas
+    'io.prismhub.lamovie', // Series
   };
 
   // Todos los paquetes oficiales de prism+. Bloqueados de instalar externamente
@@ -1272,28 +1297,47 @@ class ExtensionUtils {
 
         final dest = File(path.join(extensionsDir, '$pkg.js'));
         final exists = await dest.exists();
-        // Los 3 defaults se garantizan siempre presentes: si falta uno (p.ej.
+        // Los 4 defaults se garantizan siempre presentes: si falta uno (p.ej.
         // cambió el set de defaults tras el primer arranque), se instala. Así el
-        // equipo siempre tiene exactamente las 3 oficiales por defecto.
+        // equipo siempre tiene exactamente las 4 oficiales por defecto.
         // Already installed: only re-download when the repo version is different.
         if (exists) {
           final repoVersion = e['version']?.toString().replaceFirst('v', '');
           final localVersion = _scriptVersion(await dest.readAsString());
           if (repoVersion == null || repoVersion == localVersion) continue;
         }
-        final sep = scriptUrl.contains('?') ? '&' : '?';
-        final js = await dio.get<String>('$scriptUrl${sep}t=$bust',
-            options: smallFetch);
-        if (js.data != null && js.data!.isNotEmpty) {
-          // Seguridad: los defaults son oficiales y DEBEN traer firma válida de
-          // prism+. Si falta o no valida, es manipulación → no se instala.
-          final signature = e['signature']?.toString();
-          if (!ExtensionSignature.isOfficial(js.data!, signature)) {
-            debugPrint(
-                'Firma inválida o ausente para $pkg — no se instala (posible manipulación).');
-            continue;
+        // ── Por qué cada descarga tiene su propio try/catch ────────────
+        //
+        // Antes esto no lo tenía, y con un solo default (jkanime) no se
+        // notaba: si fallaba, fallaba el único. Con cuatro (Fase 10 del
+        // plan de rediseño) un tropiezo transitorio en UNO —una descarga
+        // que se corta a la mitad, un timeout puntual— tiraba una
+        // excepción que el try/catch de AFUERA atajaba cortando el
+        // `for` entero: ni los defaults que venían DESPUÉS en el índice
+        // se llegaban a pedir, ni siquiera se terminaban de registrar en
+        // `officialPackages` las extensiones oficiales que venían después
+        // en la lista (rompiendo de paso el bloqueo de sideloads
+        // duplicados para esas). Es justo el "a medias" que el plan pide
+        // evitar: mejor 3 de 4 instalados y uno reintentado en el
+        // próximo arranque que ninguno.
+        try {
+          final sep = scriptUrl.contains('?') ? '&' : '?';
+          final js = await dio.get<String>('$scriptUrl${sep}t=$bust',
+              options: smallFetch);
+          if (js.data != null && js.data!.isNotEmpty) {
+            // Seguridad: los defaults son oficiales y DEBEN traer firma
+            // válida de prism+. Si falta o no valida, es manipulación →
+            // no se instala.
+            final signature = e['signature']?.toString();
+            if (!ExtensionSignature.isOfficial(js.data!, signature)) {
+              debugPrint(
+                  'Firma inválida o ausente para $pkg — no se instala (posible manipulación).');
+            } else {
+              await dest.writeAsString(js.data!);
+            }
           }
-          await dest.writeAsString(js.data!);
+        } catch (err) {
+          debugPrint('No se pudo instalar el default $pkg: $err');
         }
       }
       await PrismHubStorage.setSetting(
