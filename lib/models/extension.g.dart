@@ -20,6 +20,7 @@ Extension _$ExtensionFromJson(Map<String, dynamic> json) => Extension(
       url: json['url'] as String?,
       description: json['description'] as String?,
       latestLabel: json['latestLabel'] as String?,
+      contentKind: json['contentKind'] as String?,
     );
 
 Map<String, dynamic> _$ExtensionToJson(Extension instance) => <String, dynamic>{
@@ -35,6 +36,7 @@ Map<String, dynamic> _$ExtensionToJson(Extension instance) => <String, dynamic>{
       'icon': instance.icon,
       'url': instance.url,
       'description': instance.description,
+      'contentKind': instance.contentKind,
       'latestLabel': instance.latestLabel,
     };
 

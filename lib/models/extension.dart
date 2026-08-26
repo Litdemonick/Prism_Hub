@@ -40,6 +40,7 @@ class Extension {
     this.url,
     this.description,
     this.latestLabel,
+    this.contentKind,
   });
 
   final bool nsfw;
@@ -54,6 +55,28 @@ class Extension {
   String? icon;
   String? url;
   String? description;
+
+  /// Qué clase de vídeo trae la extensión: `'anime'`, `'accion-real'` o
+  /// `'mixto'` (las dos cosas en el mismo sitio, ej. ShadeManga).
+  ///
+  /// Solo tiene sentido para extensiones de vídeo — una extensión de
+  /// lectura pura no necesita declararlo. Lo declara la extensión en su
+  /// manifiesto (`@contentKind`) y viaja en la cabecera del paquete.
+  ///
+  /// ── Por qué es un String? y no un enum ──────────────────────────────
+  ///
+  /// `$enumDecode` (lo que genera `json_serializable` para un enum) lanza
+  /// una excepción si el valor no matchea ningún nombre — correcto para
+  /// `type`, que es obligatorio y ya está validado, pero no para un campo
+  /// nuevo y opcional: una extensión de la comunidad que declare
+  /// `@contentKind live-action` (en vez de `accion-real`) tiene que seguir
+  /// instalando y funcionando igual, solo sin entrar a Películas/Series/
+  /// Anime hasta que lo corrija. Mismo criterio que ya usa `lang`.
+  ///
+  /// Ausente, o con un valor que no se reconoce, no rompe nada: la
+  /// extensión sigue viéndose en Inicio/Biblioteca/Buscar exactamente
+  /// igual que si nunca hubiera existido este campo.
+  final String? contentKind;
 
   /// Cómo llama el sitio a su sección de «lo último»: «Programación»,
   /// «Últimos añadidos», «Novedades».
