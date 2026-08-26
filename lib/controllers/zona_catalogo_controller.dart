@@ -68,6 +68,52 @@ class ZonaCatalogoController extends GetxController {
 
   final fuentes = <ZonaFuente>[].obs;
 
+  /// El resultado ya intercalado — se mantiene y se hace CRECER, nunca se
+  /// recalcula entero de nuevo.
+  ///
+  /// ── El bug real que esto corrige ─────────────────────────────────────
+  ///
+  /// `entrelazados` era un getter que recorría todas las `fuentes` de cero
+  /// cada vez, tomando bloques de `porExtension` de cada una según cuánto
+  /// tuviera cargado EN ESE MOMENTO. Eso es determinista para una foto fija,
+  /// pero con paginación no lo es entre dos fotos: si la fuente B recién
+  /// tenía 3 ítems y pasa a tener 8 (llegó una página nueva), el bloque de B
+  /// crece de 3 a 8 y TODO lo que venía después en la lista intercalada —los
+  /// ítems de A que ya estaban en pantalla— se corre para atrás. Reportado
+  /// en vivo: una tarjeta que ya estaba en una posición saltaba a otra
+  /// apenas terminaba de cargar más.
+  ///
+  /// Ahora se guarda hasta dónde de cada fuente ya se repartió
+  /// (`_cursores`) y cada vez que hay contenido nuevo se AGREGA el
+  /// intercalado que corresponde a lo nuevo — nunca se reordena ni se
+  /// vuelve a repartir lo que ya se entregó antes.
+  final _entrelazados = <ZonaItem>[];
+  final _cursores = <String, int>{};
+
+  List<ZonaItem> get entrelazados => _entrelazados;
+
+  /// Reparte en `_entrelazados` lo que haya de nuevo desde la última vez,
+  /// respetando el mismo orden de fuentes y el mismo tamaño de bloque de
+  /// siempre — solo que agregando, nunca recalculando desde cero.
+  void _actualizarEntrelazados() {
+    var progreso = true;
+    while (progreso) {
+      progreso = false;
+      for (final f in fuentes) {
+        final desde = _cursores[f.package] ?? 0;
+        final hasta = (desde + CatalogoExtensionesController.porExtension)
+            .clamp(0, f.items.length);
+        if (hasta <= desde) continue;
+        for (var i = desde; i < hasta; i++) {
+          _entrelazados
+              .add((package: f.package, nombre: f.nombre, item: f.items[i]));
+        }
+        _cursores[f.package] = hasta;
+        progreso = true;
+      }
+    }
+  }
+
   /// Cargando la primera tanda (la lista de fuentes + su primera página).
   final cargando = false.obs;
 
@@ -282,6 +328,13 @@ class ZonaCatalogoController extends GetxController {
         }
       }
       fuentes.assignAll(nuevas);
+      // Arranque de cero: acá SÍ corresponde reordenar todo (armado nuevo,
+      // filtro que cambió, o pull-to-refresh) — es la única vez que
+      // `_entrelazados` se descarta entero. De acá en más (paginación) solo
+      // se agrega, nunca se vuelve a repartir lo que ya se entregó.
+      _entrelazados.clear();
+      _cursores.clear();
+      _actualizarEntrelazados();
       await _pedir(fuentes.where((f) => f.items.isEmpty).toList());
     } finally {
       cargando.value = false;
@@ -358,6 +411,12 @@ class ZonaCatalogoController extends GetxController {
         } else {
           final vistas = f.items.map((e) => e.url).toSet();
           f.items.addAll(items.where((e) => !vistas.contains(e.url)));
+          // Se reparte lo nuevo YA, no recién cuando se refresca la UI: son
+          // dos cosas separadas — esto es barato (solo agregar a una lista)
+          // y tiene que pasar apenas hay datos nuevos, sin esperar los
+          // 200ms del debounce de abajo (ese es solo para no reconstruir la
+          // grilla de más, no para esto).
+          _actualizarEntrelazados();
         }
         f.error = null;
         _refrescarDebounced();
@@ -395,29 +454,4 @@ class ZonaCatalogoController extends GetxController {
     fuentes.refresh();
   }
 
-  /// Todo lo cargado, intercalado en tandas por fuente — mismo patrón que
-  /// ya prueba el carrusel del Home (`_CarruselAndroidState._planos`,
-  /// "rondas de ocho, no una extensión entera") para que ninguna con un
-  /// catálogo gigante tape a las demás en las primeras pantallas.
-  List<ZonaItem> get entrelazados {
-    final resultado = <ZonaItem>[];
-    final indices = {for (final f in fuentes) f.package: 0};
-    var progreso = true;
-    while (progreso) {
-      progreso = false;
-      for (final f in fuentes) {
-        final desde = indices[f.package]!;
-        final hasta =
-            (desde + CatalogoExtensionesController.porExtension)
-                .clamp(0, f.items.length);
-        if (hasta <= desde) continue;
-        for (var i = desde; i < hasta; i++) {
-          resultado.add((package: f.package, nombre: f.nombre, item: f.items[i]));
-        }
-        indices[f.package] = hasta;
-        progreso = true;
-      }
-    }
-    return resultado;
-  }
 }
