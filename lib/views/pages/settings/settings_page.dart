@@ -5,6 +5,8 @@ import 'dart:io';
 import 'package:file_picker/file_picker.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:prismhub/controllers/home_controller.dart';
+import 'package:prismhub/models/extension.dart';
+import 'package:prismhub/utils/zonas_preferidas.dart';
 import 'package:prismhub/utils/copia_cifrado.dart';
 import 'package:prismhub/utils/copia_seguridad.dart';
 import 'package:prismhub/utils/portadas_perdidas.dart';
@@ -1089,6 +1091,37 @@ class _SettingsPageState extends State<SettingsPage> {
                 PrismHubStorage.setSetting(SettingKey.autoPlayNext, value);
               },
             ),
+          ],
+        ),
+      ),
+      const SizedBox(height: 10),
+      // Qué zonas se mezclan en Inicio (Fase 11 del plan de rediseño):
+      // caja propia, chica, separada del resto — es una preferencia de
+      // descubrimiento, no encaja ni en Reproducción ni en +18.
+      SettingsExpanderTile(
+        icon: fluent.FluentIcons.home,
+        androidIcon: Icons.home_outlined,
+        title: 'settings.zonas-inicio-title'.i18n,
+        subTitle: 'settings.zonas-inicio-subtitle'.i18n,
+        content: Column(
+          children: [
+            for (final zona in ZonaPrincipal.values) ...[
+              if (zona != ZonaPrincipal.values.first)
+                const SizedBox(height: 10),
+              SettingsSwitchTile(
+                title: switch (zona) {
+                  ZonaPrincipal.peliculas => 'home.zona-peliculas'.i18n,
+                  ZonaPrincipal.series => 'home.zona-series'.i18n,
+                  ZonaPrincipal.anime => 'home.zona-anime'.i18n,
+                  ZonaPrincipal.mangas => 'home.zona-mangas'.i18n,
+                },
+                buildValue: () {
+                  ZonasPreferidasEnInicio.ensureLoaded();
+                  return ZonasPreferidasEnInicio.elegidas.contains(zona);
+                },
+                onChanged: (_) => ZonasPreferidasEnInicio.alternar(zona),
+              ),
+            ],
           ],
         ),
       ),

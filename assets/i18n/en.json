@@ -350,6 +350,8 @@
     "nsfw": "NSFW",
     "nsfw-subtitle": "Show NSFW content",
     "nsfw18-section-subtitle": "Adult content: turn it on, enter the zone, and set up the PIN",
+    "zonas-inicio-title": "What to show on Home",
+    "zonas-inicio-subtitle": "Choose which zones mix into Home — with none picked, you see everything, same as always",
     "external-player": "Preferred video player",
     "external-player-subtitle": "Currently, the preferred player is {player}",
     "external-player-locked-subtitle": "For now the whole app uses the built-in player.",

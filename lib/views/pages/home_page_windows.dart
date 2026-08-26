@@ -53,6 +53,11 @@ class HomeWindows extends StatelessWidget {
         final visibles = c.filas
             .where((f) =>
                 f.estadoExt == EstadoExtension.activa || f.esVistaPrevia)
+            // Preferencia de Ajustes (Fase 11): qué zonas se mezclan en
+            // Inicio. Vacía = todas, como siempre.
+            .where((f) => ZonasPreferidasEnInicio.pasaElFiltro(
+                  ExtensionUtils.zonasDe(f.package),
+                ))
             .toList();
         return RefreshIndicator(
           // Sin la barra de chips ya no hay ningún filtro que "aplicar" —

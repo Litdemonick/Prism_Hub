@@ -346,6 +346,8 @@
     "nsfw": "NSFW",
     "nsfw-subtitle": "Mostrar contenido NSFW",
     "nsfw18-section-subtitle": "Contenido para adultos: activarlo, entrar a la zona y configurar el PIN",
+    "zonas-inicio-title": "Qué mostrar en Inicio",
+    "zonas-inicio-subtitle": "Elegí qué zonas se mezclan en Inicio — sin elegir ninguna, se ve todo, como siempre",
     "external-player": "Reproductor de vídeo preferido",
     "external-player-subtitle": "Actualmente, el reproductor preferido es {player}",
     "external-player-locked-subtitle": "Por ahora toda la app usa el reproductor incorporado.",

@@ -13,6 +13,7 @@ import 'package:prismhub/utils/breakpoints.dart';
 import 'package:prismhub/utils/extension.dart';
 import 'package:prismhub/utils/i18n.dart';
 import 'package:prismhub/utils/platform_tv.dart';
+import 'package:prismhub/utils/zonas_preferidas.dart';
 import 'package:prismhub/views/pages/extension/extension_repo_page.dart';
 import 'package:prismhub/views/pages/history_page.dart';
 import 'package:prismhub/views/pages/library_page.dart';

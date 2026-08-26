@@ -48,6 +48,12 @@ class HomeAndroid extends StatelessWidget {
     // previa— pero sí traen contenido, que es lo único que el Home pide.
     return c.filas
         .where((f) => f.estadoExt == EstadoExtension.activa || f.esVistaPrevia)
+        // Preferencia de Ajustes (Fase 11): qué zonas se mezclan en
+        // Inicio. Vacía = todas, como siempre. Sin costo de red — filtra
+        // lo que ya está en `c.filas`.
+        .where((f) => ZonasPreferidasEnInicio.pasaElFiltro(
+              ExtensionUtils.zonasDe(f.package),
+            ))
         .toList();
   }
 

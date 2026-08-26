@@ -547,6 +547,11 @@ class _ContenidoTV extends StatelessWidget {
 
   List<FilaDeExtension> _visibles() => c.filas
       .where((f) => f.estadoExt == EstadoExtension.activa || f.esVistaPrevia)
+      // Preferencia de Ajustes (Fase 11): qué zonas se mezclan en Inicio.
+      // Vacía = todas, como siempre.
+      .where((f) => ZonasPreferidasEnInicio.pasaElFiltro(
+            ExtensionUtils.zonasDe(f.package),
+          ))
       .toList();
 
   @override

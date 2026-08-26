@@ -462,6 +462,9 @@ class SettingKey {
   static const defaultExtensionsInstalled = "DefaultExtensionsInstalled";
   static const disabledExtensions = "DisabledExtensions";
   static const hiddenCards = "HiddenCards";
+  // Qué zonas (`ZonaPrincipal`, por nombre) el usuario eligió ver mezcladas
+  // en Inicio. Vacía/ausente = todas — ver ZonasPreferidasEnInicio.
+  static const zonasEnInicio = "ZonasEnInicio";
   // Paquetes del catalogo ya vistos, para poder marcar cuales son NUEVOS. El
   // indice del repositorio no trae fecha de publicacion, asi que "nueva" no se
   // puede deducir de los datos: se calcula contra lo que este dispositivo ya
