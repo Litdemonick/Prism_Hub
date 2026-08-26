@@ -157,9 +157,27 @@ class _ZonaCatalogoPageState extends State<ZonaCatalogoPage> {
             if (!c.armado.value || c.fuentes.isEmpty) {
               return const SizedBox.shrink();
             }
-            return _BotonDeOrden(
-              orden: _orden,
-              onChanged: (o) => setState(() => _orden = o),
+            final opciones = c.opcionesDeFormato;
+            return Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                // Solo en Anime, y solo si al menos una extensión activa
+                // declara el eje — pedido explícito: una película de anime
+                // (un capítulo) se mezclaba con series de decenas sin
+                // forma de pedir solo una de las dos.
+                if (opciones.isNotEmpty) ...[
+                  _BotonDeFormato(
+                    opciones: opciones,
+                    elegido: c.formato.value,
+                    onChanged: c.cambiarFormato,
+                  ),
+                  const SizedBox(width: 8),
+                ],
+                _BotonDeOrden(
+                  orden: _orden,
+                  onChanged: (o) => setState(() => _orden = o),
+                ),
+              ],
             );
           }),
         ],
@@ -313,6 +331,111 @@ class _ZonaCatalogoPageState extends State<ZonaCatalogoPage> {
         padding: const EdgeInsets.fromLTRB(margen, 8, margen, 8),
       );
     });
+  }
+}
+
+/// El selector de Formato de una zona (hoy, solo Anime): "Todos" + un
+/// ítem por cada id que al menos una extensión activa declara.
+class _BotonDeFormato extends StatelessWidget {
+  const _BotonDeFormato({
+    required this.opciones,
+    required this.elegido,
+    required this.onChanged,
+  });
+
+  /// Los ids con eje real (`_formatos`, ej. 'pelicula'/'serie'/'ova'), sin
+  /// el "Todos" — ese se agrega siempre, acá adentro.
+  final Set<String> opciones;
+
+  /// '' es "Todos".
+  final String elegido;
+  final ValueChanged<String> onChanged;
+
+  static const _orden = ['', 'pelicula', 'serie', 'ova', 'especial'];
+
+  String _etiqueta(String id) =>
+      id.isEmpty ? 'search.all'.i18n : 'home.formato.$id'.i18n;
+
+  @override
+  Widget build(BuildContext context) {
+    final items = _orden.where((id) => id.isEmpty || opciones.contains(id));
+    return PopupMenuButton<String>(
+      initialValue: elegido,
+      onSelected: onChanged,
+      color: HomeTheme.cardSurface,
+      surfaceTintColor: Colors.transparent,
+      elevation: 6,
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(12),
+        side: BorderSide(color: HomeTheme.border),
+      ),
+      itemBuilder: (context) => [
+        for (final id in items)
+          PopupMenuItem(
+            value: id,
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Icon(
+                  id == elegido
+                      ? Icons.radio_button_checked_rounded
+                      : Icons.radio_button_off_rounded,
+                  size: 18,
+                  color:
+                      id == elegido ? HomeTheme.accentPink : HomeTheme.textMuted,
+                ),
+                const SizedBox(width: 10),
+                Text(
+                  _etiqueta(id),
+                  style: TextStyle(
+                    color: id == elegido
+                        ? HomeTheme.accentPink
+                        : HomeTheme.textPrimary,
+                    fontWeight:
+                        id == elegido ? FontWeight.w700 : FontWeight.w500,
+                  ),
+                ),
+              ],
+            ),
+          ),
+      ],
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+        decoration: BoxDecoration(
+          // Un punto de acento cuando hay algo elegido que no es "Todos" —
+          // mismo lenguaje que `_PuntoDeFiltro` en el buscador por
+          // extensión, para que se note de un vistazo que hay un filtro
+          // puesto sin tener que abrir el menú.
+          color: elegido.isEmpty
+              ? HomeTheme.cardSurface
+              : HomeTheme.accentPink.withValues(alpha: 0.14),
+          borderRadius: BorderRadius.circular(10),
+          border: Border.all(
+            color: elegido.isEmpty ? HomeTheme.border : HomeTheme.accentPink,
+          ),
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(Icons.tune_rounded,
+                size: 16,
+                color:
+                    elegido.isEmpty ? HomeTheme.textMuted : HomeTheme.accentPink),
+            const SizedBox(width: 6),
+            Text(
+              elegido.isEmpty ? 'search.filter'.i18n : _etiqueta(elegido),
+              style: TextStyle(
+                fontSize: 13,
+                fontWeight: FontWeight.w600,
+                color: elegido.isEmpty
+                    ? HomeTheme.textPrimary
+                    : HomeTheme.accentPink,
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
   }
 }
 

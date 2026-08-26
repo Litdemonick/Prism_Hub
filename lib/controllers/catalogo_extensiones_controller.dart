@@ -1394,6 +1394,19 @@ class CatalogoExtensionesController extends GetxController {
     return null;
   }
 
+  /// De los [formatosCandidatos], cuáles declara ESTA extensión en su
+  /// propio filtro — para armar las opciones del selector manual de
+  /// Formato de una zona (ver `ZonaCatalogoController.opcionesDeFormato`)
+  /// sin ofrecer una opción que ningún sitio activo puede cumplir.
+  Set<String> formatosDisponiblesDe(
+    String package,
+    Set<String> formatosCandidatos,
+  ) {
+    final ejes = _ejesPorExtension[package];
+    if (ejes == null) return const {};
+    return formatosCandidatos.where(ejes.containsKey).toSet();
+  }
+
   /// El filtro concreto que hay que mandarle a ESTA extensión, o null.
   ///
   /// Sin la barra de filtros ya no hay nada que el usuario haya elegido —

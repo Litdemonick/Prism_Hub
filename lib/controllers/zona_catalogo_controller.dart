@@ -127,6 +127,46 @@ class ZonaCatalogoController extends GetxController {
       ? ExtensionUtils.formatosDeLectura
       : ExtensionUtils.formatosDeVideo;
 
+  /// Selector manual de Formato — hoy solo en la zona Anime: sin esto, una
+  /// película de anime (un solo capítulo) se mezclaba con series de
+  /// decenas, sin forma de pedir solo una de las dos. `''` es "Todos", el
+  /// comportamiento de siempre.
+  static const _formatosAnimeManual = {'pelicula', 'serie', 'ova', 'especial'};
+  final formato = ''.obs;
+
+  /// Las opciones reales de ese selector — vacío si la zona no tiene uno.
+  /// Se arma mirando qué extensiones ACTIVAS de la zona declaran cada eje
+  /// en su propio filtro, así que nunca ofrece una opción que ningún sitio
+  /// instalado puede cumplir.
+  Set<String> get opcionesDeFormato {
+    if (zona != ZonaPrincipal.anime) return const {};
+    final catalogo = Get.isRegistered<CatalogoExtensionesController>()
+        ? Get.find<CatalogoExtensionesController>()
+        : null;
+    if (catalogo == null) return const {};
+    final disponibles = <String>{};
+    for (final entrada in ExtensionUtils.enabledRuntimes.entries) {
+      final package = entrada.key;
+      if (entrada.value.extension.nsfw) continue;
+      if (!ExtensionUtils.zonasDe(package).contains(zona)) continue;
+      disponibles.addAll(
+        catalogo.formatosDisponiblesDe(package, _formatosAnimeManual),
+      );
+    }
+    return disponibles;
+  }
+
+  /// Cambia el Formato elegido y vuelve a armar la zona con el filtro
+  /// nuevo — un cambio de eje no es un dato que se pueda recortar del lado
+  /// del cliente (`ExtensionListItem` no trae el formato por ítem, ver
+  /// hallazgo D del plan), así que hace falta pedirlo de nuevo a cada
+  /// fuente.
+  void cambiarFormato(String nuevo) {
+    if (formato.value == nuevo) return;
+    formato.value = nuevo;
+    unawaited(cargarInicial());
+  }
+
   /// Arma la lista de extensiones de la zona y resuelve el filtro de cada
   /// una — de solo lectura sobre `ExtensionUtils`/`CatalogoExtensionesController`,
   /// nunca escribe nada compartido.
@@ -154,13 +194,28 @@ class ZonaCatalogoController extends GetxController {
         // lectura; la próxima vez que se arme la lista (recargar/pull to
         // refresh) ya lo va a encontrar registrado.
         if (catalogo == null) continue;
-        final resuelto = catalogo.filtroDeFormatoZona(
-          package,
-          _formatosCandidatos,
-        );
-        // Sin ningún eje que separe vídeo de lectura: se excluye la
-        // extensión ENTERA de esta zona (mismo criterio fijado en la
-        // Fase 3) — nunca se muestra sin filtrar.
+        // Con el selector manual de Formato puesto (solo existe en Anime),
+        // se acota al eje puntual elegido en vez del conjunto entero de
+        // formatos de vídeo — mismo criterio que la rama de abajo.
+        final candidatos = (zona == ZonaPrincipal.anime &&
+                formato.value.isNotEmpty)
+            ? {formato.value}
+            : _formatosCandidatos;
+        final resuelto = catalogo.filtroDeFormatoZona(package, candidatos);
+        // Sin ningún eje que separe vídeo de lectura (o que cumpla el
+        // formato elegido a mano): se excluye la extensión ENTERA de esta
+        // zona (mismo criterio fijado en la Fase 3) — nunca se muestra sin
+        // filtrar.
+        if (resuelto == null) continue;
+        filtro = resuelto;
+      } else if (zona == ZonaPrincipal.anime && formato.value.isNotEmpty) {
+        // Selector manual de Formato: sin elegir nada ("Todos") no cambia
+        // nada de lo que ya había. Con una opción puesta, mismo mecanismo
+        // que arriba para pedir el eje puntual — y mismo criterio de
+        // excluir la fuente si el sitio no lo declara, en vez de mostrarla
+        // sin filtrar contradiciendo lo que el usuario pidió ver.
+        if (catalogo == null) continue;
+        final resuelto = catalogo.filtroDeFormatoZona(package, {formato.value});
         if (resuelto == null) continue;
         filtro = resuelto;
       } else if ((zona == ZonaPrincipal.peliculas ||
