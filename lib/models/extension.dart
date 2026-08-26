@@ -17,6 +17,16 @@ part 'extension.g.dart';
 //                es lo que pasaba al declararla mixed.
 enum ExtensionType { manga, bangumi, fikushon, mixed, mixedReading }
 
+/// Las zonas de contenido de primer nivel: Películas, Series, Anime y
+/// Mangas. A qué zona(s) pertenece una extensión lo decide
+/// `ExtensionUtils.zonasDe` (`lib/utils/extension.dart`) — este enum es
+/// solo el vocabulario compartido entre esa función y la navegación.
+///
+/// Una extensión puede estar en más de una a la vez: una `mixed` (anime y
+/// manga en el mismo sitio, ej. ShadeManga) entra a la vez a `anime` y a
+/// `mangas` — cada zona filtra después su propia parte, nunca se mezclan.
+enum ZonaPrincipal { peliculas, series, anime, mangas }
+
 enum ExtensionWatchBangumiType { hls, mp4, torrent }
 
 enum ExtensionLogLevel {

@@ -1972,6 +1972,45 @@ class ExtensionUtils {
     ExtensionType.mixedReading,
   };
 
+  /// A qué zona de contenido pertenece cada extensión de vídeo — vive
+  /// junto a `zonasDe`.
+  ///
+  /// `mangas` no está acá: no es una clase de vídeo, es la contraparte de
+  /// lectura, y ver `zonasDe` para cómo entra ahí sin depender de este dato.
+  static Set<ZonaPrincipal> zonasDe(String package) {
+    final ext = runtimes[package]?.extension ?? vistaPrevia[package]?.extension;
+    if (ext == null) return const {};
+    final zonas = <ZonaPrincipal>{};
+
+    // Vídeo: SÍ depende de `contentKind` — el dato que hoy no existe en
+    // ningún lado y que la extensión tiene que declarar. Sin declararlo,
+    // no entra a ninguna de las tres zonas de vídeo, pero sigue en Inicio.
+    if (videoTypes.contains(ext.type)) {
+      zonas.addAll(switch (ext.contentKind) {
+        'anime' => const {ZonaPrincipal.anime},
+        'accion-real' => const {
+            ZonaPrincipal.series,
+            ZonaPrincipal.peliculas,
+          },
+        'mixto' => const {
+            ZonaPrincipal.anime,
+            ZonaPrincipal.series,
+            ZonaPrincipal.peliculas,
+          },
+        _ => const <ZonaPrincipal>{},
+      });
+    }
+
+    // Lectura: NO depende de ningún campo nuevo. `ExtensionType` ya dice
+    // hoy, con certeza, si una extensión tiene lectura — no hace falta
+    // esperar a que nadie declare nada para que la zona Mangas ande.
+    if (readingTypes.contains(ext.type)) {
+      zonas.add(ZonaPrincipal.mangas);
+    }
+
+    return zonas;
+  }
+
   static addLog(
     Extension ext,
     ExtensionLogLevel level,
