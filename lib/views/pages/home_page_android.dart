@@ -2028,10 +2028,27 @@ class _CarruselAndroidState extends State<_CarruselAndroid>
 
   /// Un disco oscuro detrás de la flecha, para que se lea sobre cualquier
   /// portada.
+  ///
+  /// ── Por qué lleva un borde, y no solo el relleno oscuro ────────────────
+  ///
+  /// El degradado que apaga las puntas del acordeón (`_conPuntasDifuminadas`)
+  /// se calcula como PORCENTAJE del ancho de la ventana, así que en una
+  /// ventana angosta ese mismo 5% cubre menos píxeles — y el disco, que tiene
+  /// tamaño y posición fijos, termina cayendo más adentro de esa zona ya casi
+  /// negra. Ahí un relleno semitransparente casi negro se funde con el fondo
+  /// y desaparece: reportado en vivo, la flecha derecha invisible en una
+  /// laptop mientras en un monitor de escritorio (más ancho) se veía bien.
+  ///
+  /// Con un borde claro y tenue, el disco tiene un contorno que se lee
+  /// siempre, sea cual sea lo que haya detrás — oscuro, claro o ya
+  /// desvanecido a negro.
   static Widget _discoDeFlecha(Widget flecha) => DecoratedBox(
-        decoration: const BoxDecoration(
+        decoration: BoxDecoration(
           shape: BoxShape.circle,
-          color: Color(0xB3101018),
+          color: const Color(0xB3101018),
+          border: Border.all(
+            color: HomeTheme.sobrePortada.withValues(alpha: 0.28),
+          ),
         ),
         child: Padding(padding: const EdgeInsets.all(3), child: flecha),
       );
