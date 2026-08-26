@@ -197,11 +197,21 @@ class SearchPorCategoria extends StatelessWidget {
           if (relevantes.isNotEmpty) ...[
             seccion(
               titulo: 'search.most-relevant'.i18n,
-              // Sin duplicados: el mismo título puede coincidir en más de
-              // una extensión.
-              items: {
+              // Sin duplicados (el mismo título puede coincidir en más de
+              // una extensión) y con el que coincide EXACTO con lo escrito
+              // siempre primero — sin esto, el orden dependía de qué
+              // extensión respondió antes, así que lo que se buscaba de
+              // verdad podía aparecer después de una coincidencia parcial.
+              items: ({
                 for (final h in relevantes) '${h.package}|${h.item.url}': h
-              }.values.toList(),
+              }.values.toList()
+                ..sort((a, b) {
+                  int rango(_Hallazgo h) => SearchText.normalize(h.item.title) ==
+                          consultaNormalizada
+                      ? 0
+                      : 1;
+                  return rango(a).compareTo(rango(b));
+                })),
               verMas: () {},
             ),
             const SizedBox(height: 20),

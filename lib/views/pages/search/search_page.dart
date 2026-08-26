@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:fluent_ui/fluent_ui.dart' as fluent;
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
@@ -12,7 +14,6 @@ import 'package:prismhub/views/pages/search/search_page_tv.dart';
 import 'package:prismhub/views/widgets/franja_de_zona.dart';
 import 'package:prismhub/views/widgets/home/animated_background_glow.dart';
 import 'package:prismhub/views/widgets/home/home_theme.dart';
-import 'package:prismhub/views/widgets/home/refresh_button.dart';
 import 'package:prismhub/views/widgets/search/search_por_categoria.dart';
 import 'package:prismhub/views/widgets/tv/pantalla_tv.dart';
 import 'package:prismhub/router/router.dart';
@@ -39,6 +40,29 @@ class SearchPage extends StatefulWidget {
 class _SearchPageState extends State<SearchPage> {
   late SearchPageController c;
   final _searchController = TextEditingController();
+
+  /// Buscar en vivo, sin esperar Enter — pedido explícito. Sin este
+  /// debounce, cada letra dispararía el pool entero (una petición real por
+  /// extensión) — el mismo mecanismo que ya cancela una búsqueda vieja
+  /// cuando llega una nueva (`_randomKey` en SearchPageController) hace que
+  /// eso sea seguro pero no gratis: con 20 extensiones instaladas son 20
+  /// pedidos de red por letra tecleada. 350ms de silencio alcanza para que
+  /// escribir una palabra entera dispare UNA sola búsqueda, no una por
+  /// letra.
+  Timer? _debounceEscritura;
+
+  void _alEscribirEnVivo(String value) {
+    _debounceEscritura?.cancel();
+    if (value.isEmpty) {
+      // Vaciar el campo es instantáneo: no hay nada que esperar para volver
+      // a la zona vacía.
+      c.search.value = '';
+      return;
+    }
+    _debounceEscritura = Timer(const Duration(milliseconds: 350), () {
+      c.submitSearch(value);
+    });
+  }
 
   // Todo lo que en el buscador normal es rosa, en la zona +18 va en rojo —
   // mismo criterio que la Zona +18 del Home (ver HomeTheme.accentRed).
@@ -89,42 +113,9 @@ class _SearchPageState extends State<SearchPage> {
   @override
   void dispose() {
     c.isPageOpen = false;
+    _debounceEscritura?.cancel();
     _searchController.dispose();
     super.dispose();
-  }
-
-  Widget _chip(int index) {
-    return Obx(() {
-      final type = _types[index];
-      final selected = c.cuurentExtensionType.value == type;
-      return GestureDetector(
-        onTap: () => c.getRuntime(types: type),
-        child: MouseRegion(
-          cursor: SystemMouseCursors.click,
-          child: AnimatedContainer(
-            duration: const Duration(milliseconds: 150),
-            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 9),
-            decoration: BoxDecoration(
-              color: selected
-                  ? _accent.withValues(alpha: 0.18)
-                  : HomeTheme.cardSurface,
-              borderRadius: BorderRadius.circular(999),
-              border: Border.all(
-                color: selected ? _accent : HomeTheme.border,
-              ),
-            ),
-            child: Text(
-              _typeLabels[index].i18n,
-              style: TextStyle(
-                color: selected ? _accent : HomeTheme.textPrimary,
-                fontSize: 13,
-                fontWeight: FontWeight.w600,
-              ),
-            ),
-          ),
-        ),
-      );
-    });
   }
 
   /// El filtro de tipo, en la barra de arriba. Solo Android.
@@ -260,23 +251,6 @@ class _SearchPageState extends State<SearchPage> {
     );
   }
 
-  // Versión Desktop: en una sola línea siempre, con scroll horizontal en vez
-  // de envolver — así nunca "salta" de tamaño ni empuja al buscador (que
-  // queda fijo a la derecha en la misma fila).
-  Widget _buildTypeChipsScrollable() {
-    return SingleChildScrollView(
-      scrollDirection: Axis.horizontal,
-      child: Row(
-        children: [
-          for (var i = 0; i < _types.length; i++) ...[
-            if (i > 0) const SizedBox(width: 10),
-            _chip(i),
-          ],
-        ],
-      ),
-    );
-  }
-
   // Botón de entrada a la zona +18 del buscador. Solo aparece en el buscador
   // normal (dentro de la zona +18 no tiene sentido) y solo si el switch de NSFW
   // de Ajustes está prendido — si está apagado, el contenido +18 no existe para
@@ -404,9 +378,7 @@ class _SearchPageState extends State<SearchPage> {
                           : "common.search".i18n,
                       controlador: _searchController,
                       ayuda: "search.hint-text".i18n,
-                      alEscribir: (value) {
-                        if (value.isEmpty) c.search.value = '';
-                      },
+                      alEscribir: _alEscribirEnVivo,
                       alEnviar: c.submitSearch,
                       alVolver: widget.nsfwOnly
                           ? () {
@@ -452,123 +424,61 @@ class _SearchPageState extends State<SearchPage> {
           Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
+              // ── Solo la barra de búsqueda, sin nada alrededor ───────────
+              //
+              // Pedido explícito con una referencia (una caja de texto sola,
+              // sobre fondo liso): sin título, sin chips de Vídeo/Lectura,
+              // sin botón de Actualizar — todo eso competía con lo único que
+              // esta pantalla necesita mostrar de entrada, que es dónde
+              // escribir. El filtro por tipo y el refresco manual siguen
+              // existiendo en el controller (getRuntime(types:...)) para
+              // quien los necesite después; lo que se saca es la barra que
+              // los mostraba siempre, incluso con la pantalla vacía.
               Padding(
-                padding: const EdgeInsets.all(16),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      'common.search'.i18n,
-                      // Mismo estilo que el título de Inicio, desde un solo
-                      // lugar.
-                      style: HomeTheme.tituloDeZona(),
-                    ),
-                    const SizedBox(height: 16),
-                    _buildProgress(),
-                    // Fila fija en una sola línea: buscador siempre pegado
-                    // a la derecha como en el diseño original. Los chips ya
-                    // no usan Wrap (eso hacía que "Lectura" se cortara a una
-                    // segunda línea suelta al elegir "Vídeo") — ahora
-                    // scrollean horizontal si no entran, nunca cambian de
-                    // alto ni empujan al resto. Un VerticalDivider separa
-                    // visualmente el grupo de filtros del de acciones.
-                    // La barra se acomoda al ancho REAL disponible. Con el
-                    // panel lateral abierto, la caja de búsqueda y los botones
-                    // (de ancho fijo) se comían todo el espacio y los chips de
-                    // tipo quedaban recortados hasta desaparecer — "Vídeo" y
-                    // "Lectura" directamente no se veían. Por debajo de cierto
-                    // ancho, los filtros bajan a su propia línea en vez de
-                    // pelear por el que queda.
-                    LayoutBuilder(builder: (context, constraints) {
-                      // El botón de entrada a la Zona +18 se sacó de acá: un
-                      // acento rojo en la barra de Buscar es lo contrario de
-                      // discreto. Ahora entra por Ajustes (ver
-                      // settings_page.dart), igual que la Zona +18 entera.
-                      final acciones = <Widget>[
-                        SizedBox(
-                          height: 32,
-                          child: VerticalDivider(
-                            width: 1,
-                            thickness: 1,
-                            color: HomeTheme.border,
+                padding: const EdgeInsets.fromLTRB(16, 16, 16, 8),
+                child: Container(
+                  height: 44,
+                  padding: const EdgeInsets.symmetric(horizontal: 14),
+                  decoration: BoxDecoration(
+                    color: HomeTheme.cardSurface,
+                    borderRadius: BorderRadius.circular(10),
+                    border: Border.all(color: HomeTheme.border),
+                  ),
+                  child: Row(
+                    children: [
+                      Icon(Icons.search, size: 18, color: HomeTheme.textMuted),
+                      const SizedBox(width: 10),
+                      Expanded(
+                        child: fluent.TextBox(
+                          controller: _searchController,
+                          placeholder: "search.hint-text".i18n,
+                          decoration:
+                              const WidgetStatePropertyAll(BoxDecoration()),
+                          style:
+                              TextStyle(color: HomeTheme.textPrimary, fontSize: 15),
+                          placeholderStyle: TextStyle(color: HomeTheme.textMuted),
+                          // Buscar en vivo, sin esperar Enter — ver
+                          // _alEscribirEnVivo.
+                          onChanged: _alEscribirEnVivo,
+                          onSubmitted: c.submitSearch,
+                          suffix: fluent.IconButton(
+                            icon: const Icon(fluent.FluentIcons.chrome_close,
+                                size: 9.0),
+                            onPressed: () {
+                              _searchController.clear();
+                              c.search.value = '';
+                            },
                           ),
+                          suffixMode: fluent.OverlayVisibilityMode.editing,
                         ),
-                        const SizedBox(width: 16),
-                        SizedBox(
-                          height: 40,
-                          child: RefreshButton(
-                            onTap: () async => c.getRuntime(
-                                types: c.cuurentExtensionType.value),
-                          ),
-                        ),
-                        const SizedBox(width: 16),
-                        Container(
-                          width: 300,
-                          height: 40,
-                          padding: const EdgeInsets.symmetric(horizontal: 12),
-                          decoration: BoxDecoration(
-                            color: HomeTheme.cardSurface,
-                            borderRadius: BorderRadius.circular(10),
-                            border: Border.all(color: HomeTheme.border),
-                          ),
-                          child: Row(
-                            children: [
-                              Icon(Icons.search,
-                                  size: 18, color: HomeTheme.textMuted),
-                              const SizedBox(width: 8),
-                              Expanded(
-                                child: fluent.TextBox(
-                                  controller: _searchController,
-                                  placeholder: "search.hint-text".i18n,
-                                  decoration: const WidgetStatePropertyAll(
-                                      BoxDecoration()),
-                                  style: TextStyle(
-                                      color: HomeTheme.textPrimary,
-                                      fontSize: 14),
-                                  placeholderStyle: TextStyle(
-                                      color: HomeTheme.textMuted),
-                                  onChanged: (value) {
-                                    if (value.isEmpty) c.search.value = '';
-                                  },
-                                  onSubmitted: c.submitSearch,
-                                  suffix: fluent.IconButton(
-                                    icon: const Icon(
-                                        fluent.FluentIcons.chrome_close,
-                                        size: 9.0),
-                                    onPressed: () {
-                                      _searchController.clear();
-                                      c.search.value = '';
-                                    },
-                                  ),
-                                  suffixMode:
-                                      fluent.OverlayVisibilityMode.editing,
-                                ),
-                              ),
-                            ],
-                          ),
-                        ),
-                      ];
-                      if (constraints.maxWidth >= 980) {
-                        return Row(
-                          crossAxisAlignment: CrossAxisAlignment.center,
-                          children: [
-                            Expanded(child: _buildTypeChipsScrollable()),
-                            const SizedBox(width: 12),
-                            ...acciones,
-                          ],
-                        );
-                      }
-                      return Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          _buildTypeChipsScrollable(),
-                          const SizedBox(height: 12),
-                          Row(children: acciones),
-                        ],
-                      );
-                    }),
-                  ],
+                      ),
+                    ],
+                  ),
                 ),
+              ),
+              Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 16),
+                child: _buildProgress(),
               ),
               Expanded(
                 child: _buildResults((index) {
