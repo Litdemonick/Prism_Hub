@@ -19,6 +19,7 @@ import 'package:prismhub/utils/i18n.dart';
 import 'package:prismhub/utils/modo_app.dart';
 import 'package:prismhub/utils/platform_tv.dart';
 import 'package:prismhub/utils/prismhub_storage.dart';
+import 'package:prismhub/views/widgets/nav/zona_glyph.dart';
 import 'package:prismhub/views/widgets/window_caption_buttons.dart';
 import 'package:window_manager/window_manager.dart';
 
@@ -227,7 +228,7 @@ class _DesktopMainPageState extends State<DesktopMainPage> with WindowListener {
           // vive dentro de Ajustes, junto al switch de NSFW (ver
           // settings_page.dart), igual que ya estaba en Android.
           fluent.PaneItem(
-            icon: const Icon(fluent.FluentIcons.repo),
+            icon: const ZonaGlyph(Forma.repositorio),
             title: Text('common.extension-repo'.i18n),
             body: const ExtensionPage(),
             onTap: () {
@@ -235,7 +236,7 @@ class _DesktopMainPageState extends State<DesktopMainPage> with WindowListener {
             },
           ),
           fluent.PaneItem(
-            icon: const Icon(fluent.FluentIcons.settings),
+            icon: const ZonaGlyph(Forma.ajustes),
             title: Text('common.settings'.i18n),
             body: const SettingsPage(),
             onTap: () {
@@ -267,17 +268,15 @@ class _DesktopMainPageState extends State<DesktopMainPage> with WindowListener {
         ],
         items: [
           fluent.PaneItem(
-            icon: const Icon(fluent.FluentIcons.home),
+            icon: const ZonaGlyph(Forma.inicio),
             title: Text('common.home'.i18n),
             body: const HomePage(),
             onTap: () {
               router.go('/');
             },
           ),
-          // Mismos íconos que ya eligió Android TV para estas tres
-          // categorías (`_CategoriaTV`, home_page_tv.dart).
           fluent.PaneItem(
-            icon: const Icon(fluent.FluentIcons.my_movies_t_v),
+            icon: const ZonaGlyph(Forma.peliculas),
             title: Text('home.zona-peliculas'.i18n),
             body: const ZonaCatalogoPage(zona: ZonaPrincipal.peliculas),
             onTap: () {
@@ -285,7 +284,7 @@ class _DesktopMainPageState extends State<DesktopMainPage> with WindowListener {
             },
           ),
           fluent.PaneItem(
-            icon: const Icon(fluent.FluentIcons.t_v_monitor),
+            icon: const ZonaGlyph(Forma.series),
             title: Text('home.zona-series'.i18n),
             body: const ZonaCatalogoPage(zona: ZonaPrincipal.series),
             onTap: () {
@@ -293,7 +292,7 @@ class _DesktopMainPageState extends State<DesktopMainPage> with WindowListener {
             },
           ),
           fluent.PaneItem(
-            icon: const Icon(fluent.FluentIcons.video),
+            icon: const ZonaGlyph(Forma.anime),
             title: Text('home.zona-anime'.i18n),
             body: const ZonaCatalogoPage(zona: ZonaPrincipal.anime),
             onTap: () {
@@ -301,7 +300,7 @@ class _DesktopMainPageState extends State<DesktopMainPage> with WindowListener {
             },
           ),
           fluent.PaneItem(
-            icon: const Icon(fluent.FluentIcons.book_answers),
+            icon: const ZonaGlyph(Forma.mangas),
             title: Text('home.zona-mangas'.i18n),
             body: const ZonaCatalogoPage(zona: ZonaPrincipal.mangas),
             onTap: () {
@@ -312,7 +311,7 @@ class _DesktopMainPageState extends State<DesktopMainPage> with WindowListener {
           // Favoritos). Es el Home de antes, movido tal cual sin rediseñar —
           // ver library_page.dart.
           fluent.PaneItem(
-            icon: const Icon(fluent.FluentIcons.library),
+            icon: const ZonaGlyph(Forma.biblioteca),
             title: Text('common.library'.i18n),
             body: const LibraryPage(),
             onTap: () {
@@ -320,7 +319,7 @@ class _DesktopMainPageState extends State<DesktopMainPage> with WindowListener {
             },
           ),
           fluent.PaneItem(
-            icon: const Icon(fluent.FluentIcons.add_in),
+            icon: const ZonaGlyph(Forma.extensiones),
             title: Text('common.extension'.i18n),
             body: const ExtensionPage(),
             onTap: () {
