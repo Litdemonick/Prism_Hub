@@ -625,10 +625,10 @@ class _BarraSuperiorTVState extends State<_BarraSuperiorTV> {
     super.dispose();
   }
 
-  void _buscar() {
-    if (!Get.isRegistered<MainController>()) return;
-    Get.find<MainController>().changeTab(MainController.tabBuscar);
-  }
+  // Buscar ya no es una pestaña del shell principal (ver
+  // main_controller.dart) — se empuja como pantalla propia, igual que ya
+  // hacen Favoritos/Historial/Repositorio acá abajo.
+  void _buscar() => Get.to(() => const SearchPage());
 
   void _favoritos() => Get.to(() => const HistoryPage(soloFavoritos: true));
 

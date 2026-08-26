@@ -15,9 +15,8 @@ class MainController extends GetxController {
   // `destinations` en main_page.dart. Es un solo lugar y se ve de un vistazo.
   static const tabHome = 0;
   static const tabBiblioteca = 1;
-  static const tabBuscar = 2;
-  static const tabExtensiones = 3;
-  static const tabAjustes = 4;
+  static const tabExtensiones = 2;
+  static const tabAjustes = 3;
 
   final selectedTab = 0.obs;
 

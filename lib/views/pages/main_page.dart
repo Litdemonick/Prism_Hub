@@ -10,7 +10,6 @@ import 'package:prismhub/views/pages/home_page.dart';
 import 'package:prismhub/views/pages/library_page.dart';
 import 'package:prismhub/views/pages/history_page.dart';
 import 'package:prismhub/controllers/main_controller.dart';
-import 'package:prismhub/views/pages/search/search_page.dart';
 import 'package:prismhub/views/pages/settings/settings_page.dart';
 import 'package:prismhub/router/router.dart';
 import 'package:prismhub/utils/application.dart';
@@ -269,14 +268,6 @@ class _DesktopMainPageState extends State<DesktopMainPage> with WindowListener {
             },
           ),
           fluent.PaneItem(
-            icon: const Icon(fluent.FluentIcons.search),
-            title: Text('common.search'.i18n),
-            body: const SearchPage(),
-            onTap: () {
-              router.go('/search');
-            },
-          ),
-          fluent.PaneItem(
             icon: const Icon(fluent.FluentIcons.add_in),
             title: Text('common.extension'.i18n),
             body: const ExtensionPage(),
@@ -474,15 +465,17 @@ class _AndroidMainPageState extends fluent.State<AndroidMainPage> {
   /// canonizado, o sea que `const HomePage()` devuelve SIEMPRE el mismo objeto
   /// y rehacer la lista no cambiaría nada. Es justamente lo que hay que evitar.
   ///
-  /// De ahí los cinco `ignore`: el analizador ve constructores que podrían ser
-  /// const y avisa, sin saber que acá eso rompe la función.
+  /// De ahí los cuatro `ignore`: el analizador ve constructores que podrían
+  /// ser const y avisa, sin saber que acá eso rompe la función.
+  ///
+  /// Buscar ya no tiene zona propia acá — ver `home_hero_banner.dart`/
+  /// `home_page_tv.dart`, que ahora la empujan como pantalla suelta
+  /// (`Get.to`), igual que Historial o el Repositorio.
   static List<Widget> _crearZonas() => [
         // ignore: prefer_const_constructors
         HomePage(),
         // ignore: prefer_const_constructors
         LibraryPage(),
-        // ignore: prefer_const_constructors
-        SearchPage(),
         // ignore: prefer_const_constructors
         ExtensionPage(),
         // ignore: prefer_const_constructors
@@ -514,7 +507,6 @@ class _AndroidMainPageState extends fluent.State<AndroidMainPage> {
       // Es el Home de antes, movido tal cual — ver library_page.dart.
       _Destination(Icons.video_library_outlined, Icons.video_library,
           'common.library'.i18n),
-      _Destination(Icons.search_outlined, Icons.search, 'common.search'.i18n),
       _Destination(
           Icons.extension_outlined, Icons.extension, 'common.extension'.i18n),
       _Destination(

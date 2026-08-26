@@ -3,9 +3,9 @@ import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 import 'package:prismhub/controllers/home_controller.dart';
-import 'package:prismhub/controllers/main_controller.dart';
 import 'package:prismhub/router/router.dart';
 import 'package:prismhub/utils/i18n.dart';
+import 'package:prismhub/views/pages/search/search_page.dart';
 import 'package:prismhub/views/widgets/cache_network_image.dart';
 import 'package:prismhub/views/widgets/home/home_theme.dart';
 
@@ -49,8 +49,11 @@ class HomeHeroBanner extends StatelessWidget {
       onExploreCatalog!();
       return;
     }
+    // Buscar ya no es una pestaña del shell principal (ver
+    // main_controller.dart) — en Android/TV se empuja como pantalla propia,
+    // igual que ya se hace con Historial/Favoritos/Extensiones desde acá.
     if (Platform.isAndroid) {
-      Get.find<MainController>().changeTab(MainController.tabBuscar);
+      Get.to(() => const SearchPage());
       return;
     }
     router.go('/search');
