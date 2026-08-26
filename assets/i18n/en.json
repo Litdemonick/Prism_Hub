@@ -195,7 +195,9 @@
     "filter": "Filter",
     "reset-filters": "Reset filters",
     "filters-note": "Filters are defined by each extension. Updating them can bring new options, or change the ones already here, without updating PrismHub.",
-    "recent": "Recent searches"
+    "recent": "Recent searches",
+    "empty-hint": "Type something to search across all your extensions",
+    "most-relevant": "Most relevant results"
   },
   "extension": {
     "import": {

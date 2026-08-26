@@ -13,7 +13,7 @@ import 'package:prismhub/views/widgets/franja_de_zona.dart';
 import 'package:prismhub/views/widgets/home/animated_background_glow.dart';
 import 'package:prismhub/views/widgets/home/home_theme.dart';
 import 'package:prismhub/views/widgets/home/refresh_button.dart';
-import 'package:prismhub/views/widgets/search/search_all_extension.dart';
+import 'package:prismhub/views/widgets/search/search_por_categoria.dart';
 import 'package:prismhub/views/widgets/tv/pantalla_tv.dart';
 import 'package:prismhub/router/router.dart';
 import 'package:prismhub/utils/i18n.dart';
@@ -327,6 +327,7 @@ class _SearchPageState extends State<SearchPage> {
 
   Widget _buildResults(void Function(int) onClickMore) {
     return Obx(() {
+      if (c.search.value.trim().isEmpty) return const _SearchVacio();
       // ignore: invalid_use_of_protected_member
       final list = c.searchResultList.value;
       // Antes tenía un ValueKey(search + tipo) — cambiar de chip o
@@ -339,7 +340,7 @@ class _SearchPageState extends State<SearchPage> {
       // reconstrucciones completas más rápido de lo que el hilo de UI podía
       // procesarlas, sintiéndose como tirones/traba. Sin key, Flutter solo
       // actualiza las props del mismo widget en vez de recrearlo entero.
-      return SearchAllExtSearch(
+      return SearchPorCategoria(
         kw: c.search.value,
         runtimeList: list,
         onClickMore: onClickMore,
@@ -350,9 +351,12 @@ class _SearchPageState extends State<SearchPage> {
   /// Los resultados, con la franja del título como primer elemento.
   Widget _buildResultados(Widget cabecera, void Function(int) onClickMore) {
     return Obx(() {
+      if (c.search.value.trim().isEmpty) {
+        return Column(children: [cabecera, const Expanded(child: _SearchVacio())]);
+      }
       // ignore: invalid_use_of_protected_member
       final list = c.searchResultList.value;
-      return SearchAllExtSearch(
+      return SearchPorCategoria(
         kw: c.search.value,
         runtimeList: list,
         onClickMore: onClickMore,
@@ -685,6 +689,41 @@ class _Nsfw18SearchButtonState extends State<_Nsfw18SearchButton> {
                   size: 13, color: HomeTheme.accentRed.withValues(alpha: 0.75)),
             ],
           ),
+        ),
+      ),
+    );
+  }
+}
+
+/// El cuerpo de Buscar antes de escribir nada — pedido explícito: esta
+/// pantalla ANTES pedía el catálogo completo de cada extensión activa
+/// apenas se abría (o al tocar un chip de tipo), así que se sentía como un
+/// Inicio más, con filas de portadas, en vez de un buscador. Ahora no se
+/// pide ni se muestra nada hasta que el usuario escribe algo de verdad —
+/// ver el mismo criterio en `SearchPageController.getRuntime()`.
+class _SearchVacio extends StatelessWidget {
+  const _SearchVacio();
+
+  @override
+  Widget build(BuildContext context) {
+    return Center(
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 32),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(Icons.search_rounded, size: 44, color: HomeTheme.textMuted),
+            const SizedBox(height: 14),
+            Text(
+              'search.empty-hint'.i18n,
+              textAlign: TextAlign.center,
+              style: TextStyle(
+                fontSize: 14,
+                height: 1.45,
+                color: HomeTheme.textMuted,
+              ),
+            ),
+          ],
         ),
       ),
     );
