@@ -277,6 +277,12 @@ class _ExtensionRepoPageState extends State<ExtensionRepoPage> {
     'all': 'Todos',
     'es': 'Español',
     'en': 'English',
+    // Para poder pedir explícitamente "solo multiidioma" (MangaDex hoy) —
+    // ver ExtensionUtils.coincideIdioma. Mismo texto que ya usa
+    // detail.lang.multi (assets/i18n/es.json:506); literal acá porque el
+    // resto del mapa tampoco pasa por i18n (son nombres de idioma, no
+    // texto de interfaz) y ".i18n" no es una expresión const.
+    'multi': 'Varios idiomas',
   };
 
   // (total, instaladas, disponibles) — sobre el catálogo COMPLETO, sin
@@ -670,7 +676,8 @@ class _ExtensionRepoPageState extends State<ExtensionRepoPage> {
     }
     if (c.searchLang.value != 'all') {
       extensionCards.removeWhere(
-        (element) => element.lang != c.searchLang.value,
+        (element) =>
+            !ExtensionUtils.coincideIdioma(element.lang, c.searchLang.value),
       );
     }
     if (c.searchLevel.value != 'all') {

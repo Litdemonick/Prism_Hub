@@ -1990,6 +1990,21 @@ class ExtensionUtils {
   static const formatosDeVideo = {'pelicula', 'serie', 'ova', 'especial'};
   static const formatosDeLectura = {'manhwa', 'manhua', 'manga', 'novela'};
 
+  /// Compara el `lang` de una extensión contra el filtro elegido en el
+  /// repositorio — el bug real que resuelve: `lang == filtro` a secas deja
+  /// afuera a cualquier extensión `multi` (hoy solo MangaDex) tanto del
+  /// filtro Español como del filtro English, porque `'multi' != 'es'` y
+  /// `'multi' != 'en'` — el filtro simplemente no la reconoce como
+  /// ninguna de las dos, aunque tenga las dos.
+  ///
+  /// `filtro == 'multi'` pide explícitamente "solo multiidioma" (para
+  /// poder aislarla), así que ahí NO se aplica el mismo perdón.
+  static bool coincideIdioma(String langExtension, String filtro) {
+    if (filtro == 'all') return true;
+    if (filtro == 'multi') return langExtension == 'multi';
+    return langExtension == filtro || langExtension == 'multi';
+  }
+
   /// A qué zona de contenido pertenece cada extensión de vídeo — vive
   /// junto a `zonasDe`.
   ///

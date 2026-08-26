@@ -421,6 +421,7 @@ class _ExtensionTileState extends State<ExtensionTile> {
             children: [
               _badge(widget.extension.version),
               _badge(ExtensionUtils.typeToString(widget.extension.type)),
+              _badge(_langBadgeLabel(widget.extension.lang)),
               if (widget.extension.nsfw) _badge('18+', color: Colors.redAccent),
               if (_unstable)
                 _badge(ExtensionUtils.etiquetaCortaInestable(_motivoInestable),
@@ -624,6 +625,20 @@ class _ExtensionTileState extends State<ExtensionTile> {
     );
   }
 
+  // Pastilla de idioma en Extensiones instaladas — antes `lang` estaba
+  // cargado en el modelo pero no se mostraba en ningún lado acá, así que no
+  // había forma de distinguir a simple vista una extensión en español de una
+  // en inglés o multiidioma sin abrirla. Mismos tres casos que ya reconoce
+  // ExtensionUtils.coincideIdioma; cualquier otro código (extensión de
+  // terceros con un `lang` no anticipado) se muestra tal cual, en mayúsculas,
+  // en vez de ocultarse.
+  String _langBadgeLabel(String lang) => switch (lang) {
+        'es' => 'ES',
+        'en' => 'EN',
+        'multi' => 'Multi',
+        _ => lang.toUpperCase(),
+      };
+
   // Pill con fondo propio para cada badge — mismo widget que ExtensionCard
   // del repositorio, repetido acá porque no comparten archivo.
   Widget _badge(String text, {Color? color}) {
@@ -731,6 +746,7 @@ class _ExtensionTileState extends State<ExtensionTile> {
               children: [
                 _badge(widget.extension.version),
                 _badge(ExtensionUtils.typeToString(widget.extension.type)),
+                _badge(_langBadgeLabel(widget.extension.lang)),
                 if (widget.extension.nsfw)
                   _badge('18+', color: Colors.redAccent),
                 if (_unstable)
