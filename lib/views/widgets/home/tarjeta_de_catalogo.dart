@@ -264,26 +264,45 @@ class _TarjetaDeCatalogoState extends State<TarjetaDeCatalogo> {
                   ),
                   child: ClipRRect(
                     borderRadius: radio,
-                    child: SizedBox(
-                      width: ancho,
-                      height: altoPortada,
-                      child: Stack(
-                        fit: StackFit.expand,
-                        children: [
-                          _portada(ancho, altoPortada),
-                          if (widget.duracion != null) _insigniaDeDuracion(),
-                          if (_hayPanel)
-                            AnimatedOpacity(
-                              opacity: panelVisible ? 1 : 0,
-                              duration: const Duration(milliseconds: 160),
-                              // Sin esto, el panel invisible se sigue comiendo
-                              // los toques del póster.
-                              child: IgnorePointer(
-                                ignoring: !panelVisible,
-                                child: _panel(ancho),
+                    // ── El pelo de gris en un borde al agrandarse ─────────
+                    //
+                    // Reportado en vivo: al pasar el mouse (cuando esta caja
+                    // ya está adentro de un AnimatedScale a 1.04) aparecía
+                    // una línea fina en UN borde —abajo, arriba o a la
+                    // derecha según la tarjeta, nunca el mismo en todas—.
+                    // Es un problema conocido de Flutter: escalar un
+                    // ClipRRect con `Transform` (que es lo que usa
+                    // AnimatedScale por dentro) redondea el recorte a
+                    // píxeles de pantalla de forma independiente del
+                    // contenido, así que en ciertos tamaños el contenido
+                    // queda un pixel más chico que el hueco recortado — el
+                    // fondo detrás de la tarjeta se asoma por esa rendija.
+                    // Se agranda el contenido un poco de más (2%) para que
+                    // siempre desborde el recorte en vez de quedarse corto,
+                    // sea cual sea el redondeo.
+                    child: Transform.scale(
+                      scale: 1.02,
+                      child: SizedBox(
+                        width: ancho,
+                        height: altoPortada,
+                        child: Stack(
+                          fit: StackFit.expand,
+                          children: [
+                            _portada(ancho, altoPortada),
+                            if (widget.duracion != null) _insigniaDeDuracion(),
+                            if (_hayPanel)
+                              AnimatedOpacity(
+                                opacity: panelVisible ? 1 : 0,
+                                duration: const Duration(milliseconds: 160),
+                                // Sin esto, el panel invisible se sigue
+                                // comiendo los toques del póster.
+                                child: IgnorePointer(
+                                  ignoring: !panelVisible,
+                                  child: _panel(ancho),
+                                ),
                               ),
-                            ),
-                        ],
+                          ],
+                        ),
                       ),
                     ),
                   ),
