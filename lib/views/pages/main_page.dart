@@ -142,6 +142,28 @@ class _DesktopMainPageState extends State<DesktopMainPage> with WindowListener {
         _ => null,
       };
 
+  /// El `onTap` de cada destino del panel lateral (Inicio y las 4 zonas).
+  ///
+  /// `router.go(ruta)` a la ruta en la que ya se está es un no-op para
+  /// go_router — sin transición, sin que `didUpdateWidget` se entere de
+  /// nada. Pedido explícito: tocar el botón de una zona estando YA
+  /// adentro tiene que refrescar y volver arriba al principio, no quedarse
+  /// quieto como si no hubiera pasado nada.
+  void _alTocarDestino(String ruta) {
+    if (widget.state.uri.path == ruta) {
+      if (ruta == '/') {
+        _alVolverA(ruta);
+        return;
+      }
+      final zona = _zonaDeRuta(ruta);
+      if (zona != null && Get.isRegistered<ZonaCatalogoController>(tag: zona.name)) {
+        Get.find<ZonaCatalogoController>(tag: zona.name).alTocarDeNuevo();
+      }
+      return;
+    }
+    router.go(ruta);
+  }
+
   void _alVolverA(String ruta) {
     if (ruta == '/') {
       if (!Get.isRegistered<CatalogoExtensionesController>()) return;
@@ -339,41 +361,31 @@ class _DesktopMainPageState extends State<DesktopMainPage> with WindowListener {
             icon: const ZonaGlyph(Forma.inicio),
             title: Text('common.home'.i18n),
             body: const HomePage(),
-            onTap: () {
-              router.go('/');
-            },
+            onTap: () => _alTocarDestino('/'),
           ),
           fluent.PaneItem(
             icon: const ZonaGlyph(Forma.peliculas),
             title: Text('home.zona-peliculas'.i18n),
             body: const ZonaCatalogoPage(zona: ZonaPrincipal.peliculas),
-            onTap: () {
-              router.go('/peliculas');
-            },
+            onTap: () => _alTocarDestino('/peliculas'),
           ),
           fluent.PaneItem(
             icon: const ZonaGlyph(Forma.series),
             title: Text('home.zona-series'.i18n),
             body: const ZonaCatalogoPage(zona: ZonaPrincipal.series),
-            onTap: () {
-              router.go('/series');
-            },
+            onTap: () => _alTocarDestino('/series'),
           ),
           fluent.PaneItem(
             icon: const ZonaGlyph(Forma.anime),
             title: Text('home.zona-anime'.i18n),
             body: const ZonaCatalogoPage(zona: ZonaPrincipal.anime),
-            onTap: () {
-              router.go('/anime');
-            },
+            onTap: () => _alTocarDestino('/anime'),
           ),
           fluent.PaneItem(
             icon: const ZonaGlyph(Forma.mangas),
             title: Text('home.zona-mangas'.i18n),
             body: const ZonaCatalogoPage(zona: ZonaPrincipal.mangas),
-            onTap: () {
-              router.go('/mangas');
-            },
+            onTap: () => _alTocarDestino('/mangas'),
           ),
           // Biblioteca: lo que el usuario YA tiene (Continuar viendo,
           // Favoritos). Es el Home de antes, movido tal cual sin rediseñar —

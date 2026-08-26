@@ -68,6 +68,15 @@ class ZonaCatalogoController extends GetxController {
 
   final fuentes = <ZonaFuente>[].obs;
 
+  /// Sube cada vez que se pide "volver arriba" en esta zona — tocar de
+  /// nuevo su propio botón en el panel lateral estando ya adentro. Un
+  /// `router.go` a la ruta en la que ya se está es un no-op para
+  /// go_router (no hay transición, `didUpdateWidget` no se entera), así
+  /// que hace falta una señal aparte para que la pantalla sepa que hay que
+  /// desplazar la grilla al principio. `ZonaCatalogoPage` escucha esto con
+  /// un `ever` y anima su `ScrollController` a 0.
+  final volverArriba = 0.obs;
+
   /// El resultado ya intercalado — se mantiene y se hace CRECER, nunca se
   /// recalcula entero de nuevo.
   ///
@@ -304,6 +313,17 @@ class ZonaCatalogoController extends GetxController {
       ));
     }
     return nuevas;
+  }
+
+  /// Tocar de nuevo el botón de esta zona estando ya adentro — pedido
+  /// explícito: "deja que al tocarlos, refresca, me devuelve arriba al
+  /// principio para actualizar por si hay contenido nuevo". Sube la señal
+  /// de scroll (`ZonaCatalogoPage` la escucha) y pide `cargarInicial()`
+  /// como cualquier otro refresco — reusa filas existentes cuyo filtro no
+  /// cambió, no tira nada a la basura de entrada.
+  void alTocarDeNuevo() {
+    volverArriba.value++;
+    unawaited(cargarInicial());
   }
 
   /// Suelta lo acumulado por paginación, sin perder la zona del todo.

@@ -58,6 +58,32 @@ class _ZonaCatalogoPageState extends State<ZonaCatalogoPage> {
               tag: widget.zona.name,
             );
 
+  /// Para poder llevar la grilla al principio a pedido — ver
+  /// `ZonaCatalogoController.volverArriba` y `ZonaCatalogoController.
+  /// alTocarDeNuevo`.
+  final _scroll = ScrollController();
+  Worker? _workerVolverArriba;
+
+  @override
+  void initState() {
+    super.initState();
+    _workerVolverArriba = ever(c.volverArriba, (_) {
+      if (!_scroll.hasClients) return;
+      _scroll.animateTo(
+        0,
+        duration: const Duration(milliseconds: 320),
+        curve: Curves.easeOut,
+      );
+    });
+  }
+
+  @override
+  void dispose() {
+    _workerVolverArriba?.dispose();
+    _scroll.dispose();
+    super.dispose();
+  }
+
   String get _titulo => switch (widget.zona) {
         ZonaPrincipal.peliculas => 'home.zona-peliculas'.i18n,
         ZonaPrincipal.series => 'home.zona-series'.i18n,
@@ -256,6 +282,7 @@ class _ZonaCatalogoPageState extends State<ZonaCatalogoPage> {
               // arriba y para abajo le da tiempo a la imagen sin pedir
               // tarjetas de más que nunca se llegan a ver.
               scrollCacheExtent: ScrollCacheExtent.pixels(alto * 2),
+              controller: _scroll,
               padding: const EdgeInsets.fromLTRB(margen, 8, margen, 24),
               gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
                 crossAxisCount: rejilla.columnas,
