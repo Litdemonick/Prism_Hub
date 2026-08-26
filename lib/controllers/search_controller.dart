@@ -36,6 +36,24 @@ class SearchPageController extends GetxController {
   final Set<String> _coincidenPorNombre = <String>{};
 
   Worker? _searchWorker;
+
+  /// Junta varios `searchResultList.refresh()` seguidos en uno solo.
+  ///
+  /// Con el pool de `maxConcurrent` tareas, cada extensión termina su pedido
+  /// por separado y refrescaba la lista al toque — varias reconstrucciones
+  /// de la grilla entera en la misma ráfaga de un segundo. Reportado en vivo
+  /// como la barra de scroll de escritorio "parpadeando" y moviéndose de más
+  /// justo mientras las extensiones están respondiendo (Flutter reinicia la
+  /// animación de aparición de su propia scrollbar en cada reconstrucción).
+  /// Mismo arreglo que `ZonaCatalogoController._refrescarDebounced`.
+  Timer? _debounceRefresco;
+  void _refrescarDebounced() {
+    _debounceRefresco?.cancel();
+    _debounceRefresco = Timer(
+      const Duration(milliseconds: 200),
+      searchResultList.refresh,
+    );
+  }
   // 是否打开了这个页面
 
   @override
@@ -54,6 +72,7 @@ class SearchPageController extends GetxController {
   @override
   void onClose() {
     _searchWorker?.dispose();
+    _debounceRefresco?.cancel();
     super.onClose();
   }
 
@@ -329,11 +348,11 @@ class SearchPageController extends GetxController {
         // cargaba (confirmado en vivo). El orden se queda estable durante
         // toda la carga; el único reordenamiento por relevancia pasa UNA vez
         // al final (ver el sort al cierre de este método).
-        searchResultList.refresh();
+        _refrescarDebounced();
       } catch (e) {
         if (_randomKey != key) return;
         element.error = e;
-        searchResultList.refresh();
+        _refrescarDebounced();
       } finally {
         // isFetching/completed SIEMPRE se actualizan, sin importar el key —
         // pase lo que pase, este fetch puntual ya terminó, y si se dejara
@@ -364,6 +383,11 @@ class SearchPageController extends GetxController {
     await Future.wait([
       for (var i = 0; i < maxConcurrent && i < pending.length; i++) worker(),
     ]);
+    // Esta tanda terminó: se corta cualquier debounce pendiente y se
+    // refresca ya — sin esto, el último tramo se sentía tardar de más en
+    // asentarse (hasta 200ms de nada visible, después del último ítem real).
+    _debounceRefresco?.cancel();
+    searchResultList.refresh();
 
     // Segunda pasada por las salteadas: se espera a que su pedido viejo
     // termine (como mucho su timeout de 15s) y recién ahí se las pide para
@@ -397,6 +421,8 @@ class SearchPageController extends GetxController {
           for (var i = 0; i < maxConcurrent && i < pending.length; i++)
             worker(),
         ]);
+        _debounceRefresco?.cancel();
+        searchResultList.refresh();
       }
     }
 

@@ -81,6 +81,37 @@ class ZonaCatalogoController extends GetxController {
 
   static const _maxConcurrent = 4;
 
+  /// Junta varios `fuentes.refresh()` seguidos en uno solo.
+  ///
+  /// ── Por qué hacía falta ──────────────────────────────────────────────
+  ///
+  /// Con `_maxConcurrent=4`, cada una de las N extensiones de la zona
+  /// terminaba su pedido por separado y llamaba a `fuentes.refresh()` —o
+  /// sea, hasta N reconstrucciones de la grilla entera en la misma ráfaga de
+  /// un segundo. La grilla en sí no perdía la posición del scroll (el
+  /// `Element` del `GridView` es el mismo entre una reconstrucción y la
+  /// siguiente), pero la barra de scroll que Flutter agrega sola en
+  /// escritorio SÍ reinicia su animación de aparición/desvanecido con cada
+  /// reconstrucción — reportado en vivo como "la barra parpadea y va muy
+  /// rápido" al bajar justo mientras las extensiones están respondiendo.
+  ///
+  /// Se junta en una sola actualización por tanda en vez de tocar cómo
+  /// Flutter dibuja su propia barra.
+  Timer? _debounceRefresco;
+  void _refrescarDebounced() {
+    _debounceRefresco?.cancel();
+    _debounceRefresco = Timer(
+      const Duration(milliseconds: 200),
+      fuentes.refresh,
+    );
+  }
+
+  @override
+  void onClose() {
+    _debounceRefresco?.cancel();
+    super.onClose();
+  }
+
   /// Mismo tope que ya usa el Home para su carrusel — evita pedir para
   /// siempre a una extensión con un catálogo enorme.
   static const _maxPaginas = 25;
@@ -274,14 +305,14 @@ class ZonaCatalogoController extends GetxController {
           f.items.addAll(items.where((e) => !vistas.contains(e.url)));
         }
         f.error = null;
-        fuentes.refresh();
+        _refrescarDebounced();
       } catch (e) {
         f.error = e;
         // Se devuelve la página: un fallo no puede saltearse contenido
         // para siempre — mismo criterio que ya usa el Home
         // (_traerDeVerdad) para sus propias filas.
         if (f.pagina > 1) f.pagina--;
-        fuentes.refresh();
+        _refrescarDebounced();
       } finally {
         f.isFetching = false;
         f.inFlight = null;
@@ -302,6 +333,11 @@ class ZonaCatalogoController extends GetxController {
     await Future.wait([
       for (var i = 0; i < _maxConcurrent && i < lista.length; i++) worker(),
     ]);
+    // La tanda entera terminó: se corta cualquier debounce pendiente y se
+    // refresca ya mismo — sin esto, el último tramo (los 200ms del
+    // debounce) se sentía como que la pantalla tardaba de más en asentarse.
+    _debounceRefresco?.cancel();
+    fuentes.refresh();
   }
 
   /// Todo lo cargado, intercalado en tandas por fuente — mismo patrón que
