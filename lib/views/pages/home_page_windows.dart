@@ -134,7 +134,7 @@ class HomeWindows extends StatelessWidget {
                       // carruselExt/carruselPos/_paqueteDeArranque en
                       // ningún lado.
                       Padding(
-                        padding: const EdgeInsets.only(top: 12, bottom: 4),
+                        padding: const EdgeInsets.fromLTRB(0, 22, 0, 8),
                         // El ancho lo pone el SizedBox: el Column de arriba
                         // usa crossAxisAlignment.start (para el carrusel),
                         // así que sin esto Center no tenía dentro de qué

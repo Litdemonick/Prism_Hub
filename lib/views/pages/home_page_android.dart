@@ -157,7 +157,7 @@ class HomeAndroid extends StatelessWidget {
                     // aunque su contenido se ponga al día de paso —igual que
                     // ya hace el pull-to-refresh de toda la vida.
                     Padding(
-                      padding: const EdgeInsets.symmetric(vertical: 12),
+                      padding: const EdgeInsets.fromLTRB(0, 22, 0, 8),
                       // El ancho lo pone el SizedBox: el Column de arriba
                       // usa crossAxisAlignment.start (para el carrusel, que
                       // no tiene que estirarse), así que sin esto Center no
