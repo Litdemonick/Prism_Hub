@@ -327,6 +327,13 @@ class _CarruselAndroidState extends State<_CarruselAndroid>
   double _p = 0;
   bool _sembrado = false;
 
+  /// Último `carruselVersion` del controller que ya se sincronizó — ver el
+  /// comentario largo en `CatalogoExtensionesController.
+  /// reordenarCarruselAlAzar`. Arranca en -1 para que la primera lectura
+  /// (con `carruselVersion` en 0) nunca cuente como "ya sincronizado" antes
+  /// de tiempo.
+  int _versionSincronizada = -1;
+
   late final AnimationController _anim = AnimationController(
     vsync: this,
     duration: const Duration(milliseconds: 340),
@@ -824,9 +831,22 @@ class _CarruselAndroidState extends State<_CarruselAndroid>
       if (widget.c.carruselPos >= largoTanda) {
         widget.c.carruselPos = largoTanda > 0 ? largoTanda - 1 : 0;
       }
-      if (!_sembrado) {
+      // Dos razones distintas para (re)ubicar la posición, no una: la
+      // primera vez que este widget existe en la sesión (`!_sembrado`), o
+      // que el controller haya pedido explícitamente una posición nueva
+      // (`carruselVersion` cambió — ver reordenarCarruselAlAzar). Sin la
+      // segunda condición, pedir una posición al azar desde afuera no tenía
+      // ningún efecto visible una vez que el widget ya se había ubicado una
+      // vez: este bloque entero es la ÚNICA parte del build que toca `_p`
+      // a partir de `carruselExt`/`carruselPos`, y sin `!_sembrado` nunca
+      // se volvía a ejecutar. Reportado en vivo: pedir un cambio de
+      // posición al volver a Inicio no hacía nada, o directamente volvía a
+      // la primera tarjeta en vez de a la que se le acababa de pedir.
+      if (!_sembrado || widget.c.carruselVersion != _versionSincronizada) {
+        final primeraVezEnEstaSesion = !_sembrado;
         _sembrado = true;
-        if (!widget.c.acordeonUbicado) {
+        _versionSincronizada = widget.c.carruselVersion;
+        if (primeraVezEnEstaSesion && !widget.c.acordeonUbicado) {
           // ── Abrir el Home SÍ empieza desde la primera ─────────────────
           //
           // Antes arrancaba donde el usuario había quedado la vez pasada. La
@@ -840,7 +860,7 @@ class _CarruselAndroidState extends State<_CarruselAndroid>
           widget.c.carruselPos = 0;
           _p = 0;
         } else {
-          // ── Pero DESPLAZARSE no ───────────────────────────────────────
+          // ── Pero DESPLAZARSE no, y un pedido explícito tampoco es esto ──
           //
           // El Home es una lista perezosa y el acordeón es su ítem 2: bajando
           // un poco, Flutter lo desmonta, y al volver a subir este estado nace
@@ -849,7 +869,10 @@ class _CarruselAndroidState extends State<_CarruselAndroid>
           // vuelve al inicio» que se reportó.
           //
           // La posición de verdad vive en el controlador, que sobrevive al
-          // desmontaje, así que se vuelve a donde iba.
+          // desmontaje (y a un `carruselVersion` nuevo), así que se vuelve a
+          // leer de ahí — sea "donde iba" o "la nueva al azar que se acaba
+          // de pedir", según cuál de las dos haya cambiado `carruselExt`/
+          // `carruselPos` último.
           _p = _indiceGlobal(grupos)
               .toDouble()
               .clamp(0.0, (planos.length - 1).toDouble());
