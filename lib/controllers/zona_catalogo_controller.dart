@@ -306,6 +306,36 @@ class ZonaCatalogoController extends GetxController {
     return nuevas;
   }
 
+  /// Suelta lo acumulado por paginación, sin perder la zona del todo.
+  ///
+  /// Pedido explícito: con el refresco automático al re-entrar (ver
+  /// `main_page.dart`) y el scroll infinito, una zona visitada varias veces
+  /// y con mucho scroll puede terminar con cientos de ítems por extensión
+  /// guardados en memoria, la mayoría ya invisibles hace rato. Se llama al
+  /// SALIR de la zona (no mientras se la está mirando, para no borrar nada
+  /// de lo que el usuario tiene en pantalla): cada fuente vuelve a su
+  /// primera tanda, como recién llegado. Al volver a entrar,
+  /// `cargarInicial()` la pide de nuevo — un poco de red de más a cambio de
+  /// no acumular memoria para siempre en una zona que ya no se está viendo.
+  void liberarMemoria() {
+    if (fuentes.isEmpty) return;
+    for (final f in fuentes) {
+      if (f.items.length <= CatalogoExtensionesController.porExtension) {
+        continue;
+      }
+      f.items.removeRange(
+        CatalogoExtensionesController.porExtension,
+        f.items.length,
+      );
+      f.pagina = 1;
+      f.agotada = false;
+    }
+    _entrelazados.clear();
+    _cursores.clear();
+    _actualizarEntrelazados();
+    fuentes.refresh();
+  }
+
   Future<void> cargarInicial() async {
     if (cargando.value) return;
     cargando.value = true;

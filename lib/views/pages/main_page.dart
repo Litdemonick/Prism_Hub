@@ -1,9 +1,13 @@
+import 'dart:async';
+
 import 'package:fluent_ui/fluent_ui.dart' as fluent;
 import 'package:prismhub/views/widgets/home/home_theme.dart';
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 import 'package:go_router/go_router.dart';
 import 'package:prismhub/views/widgets/beta_notice.dart';
+import 'package:prismhub/controllers/catalogo_extensiones_controller.dart';
+import 'package:prismhub/controllers/zona_catalogo_controller.dart';
 import 'package:prismhub/views/pages/extension/extension_page.dart';
 import 'package:prismhub/controllers/watch/video_controller.dart';
 import 'package:prismhub/views/pages/home_page.dart';
@@ -87,6 +91,70 @@ class _DesktopMainPageState extends State<DesktopMainPage> with WindowListener {
     windowManager.removeListener(this);
     ApplicationUtils.detenerChequeoPeriodico();
     super.dispose();
+  }
+
+  /// Al VOLVER a una zona, no solo al abrirla la primera vez.
+  ///
+  /// ── Por qué acá y no en el `initState` de cada pantalla ─────────────────
+  ///
+  /// Inicio y las 4 zonas de contenido viven en un `IndexedStack` (o
+  /// registradas por tag en GetX) que nunca se desmonta al cambiar de
+  /// pestaña — es lo que evita perder el scroll y el catálogo ya cargado.
+  /// Pero eso significa que `initState()` corre UNA sola vez por sesión:
+  /// cambiar de pestaña y volver no lo vuelve a disparar.
+  ///
+  /// `widget.state` en cambio SÍ cambia en cada navegación (esta pantalla
+  /// es hija de una ShellRoute de go_router) — comparando la ruta vieja
+  /// contra la nueva en `didUpdateWidget` se sabe exactamente cuándo el
+  /// usuario ACABA de entrar a una pestaña, sin importar que su contenido
+  /// ya estuviera armado de antes.
+  ///
+  /// Pedido explícito: Inicio se pone al día y resortea por dónde arranca
+  /// el carrusel cada vez que se vuelve a entrar; las zonas de contenido
+  /// se ponen al día por si alguna extensión publicó algo nuevo — ninguna
+  /// de las dos cosas rompe lo que ya estaba en pantalla (el refresco
+  /// reusa/actualiza filas existentes, nunca las tira a la basura de
+  /// entrada).
+  @override
+  void didUpdateWidget(covariant DesktopMainPage oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    final rutaVieja = oldWidget.state.uri.path;
+    final rutaNueva = widget.state.uri.path;
+    if (rutaVieja == rutaNueva) return;
+    _alSalirDe(rutaVieja);
+    _alVolverA(rutaNueva);
+  }
+
+  /// Libera lo acumulado por scroll de la zona que se deja — ver
+  /// `ZonaCatalogoController.liberarMemoria`.
+  void _alSalirDe(String ruta) {
+    final zona = _zonaDeRuta(ruta);
+    if (zona == null) return;
+    if (!Get.isRegistered<ZonaCatalogoController>(tag: zona.name)) return;
+    Get.find<ZonaCatalogoController>(tag: zona.name).liberarMemoria();
+  }
+
+  ZonaPrincipal? _zonaDeRuta(String ruta) => switch (ruta) {
+        final r when r.startsWith('/peliculas') => ZonaPrincipal.peliculas,
+        final r when r.startsWith('/series') => ZonaPrincipal.series,
+        final r when r.startsWith('/anime') => ZonaPrincipal.anime,
+        final r when r.startsWith('/mangas') => ZonaPrincipal.mangas,
+        _ => null,
+      };
+
+  void _alVolverA(String ruta) {
+    if (ruta == '/') {
+      if (!Get.isRegistered<CatalogoExtensionesController>()) return;
+      final home = Get.find<CatalogoExtensionesController>();
+      // Al azar YA, con lo que ya está cargado — no espera a la red.
+      home.reordenarCarruselAlAzar();
+      unawaited(home.refrescarTodo());
+      return;
+    }
+    final zona = _zonaDeRuta(ruta);
+    if (zona == null) return;
+    if (!Get.isRegistered<ZonaCatalogoController>(tag: zona.name)) return;
+    unawaited(Get.find<ZonaCatalogoController>(tag: zona.name).cargarInicial());
   }
 
   /// En qué zona está parado el usuario, según la dirección actual.

@@ -247,6 +247,26 @@ class CatalogoExtensionesController extends GetxController {
   /// que desplazarse ya no cuenta como abrirlo.
   bool acordeonUbicado = false;
 
+  /// Vuelve a sortear desde dónde arranca el carrusel — pedido explícito:
+  /// "cada vez que entro a Inicio y salgo y entro debe... dar random en el
+  /// carrusel". El sembrado automático (`_carruselSembrado`, arriba) es
+  /// UNA sola vez por sesión a propósito —evita que el acordeón salte
+  /// mientras el usuario lo está mirando— así que esto es un pedido
+  /// aparte, explícito, para cuando de verdad se re-entra a la pantalla
+  /// (ver el llamador en main_page.dart, que solo dispara esto al
+  /// NAVEGAR de nuevo a Inicio, nunca durante el scroll ni por un rebuild
+  /// cualquiera).
+  void reordenarCarruselAlAzar() {
+    if (destacados.isEmpty) return;
+    carruselExt = Random().nextInt(destacados.length);
+    carruselPos = 0;
+    // carruselExt/carruselPos son campos planos, no .obs — el Obx del
+    // acordeón solo vuelve a correr si algo reactivo cambia DE VERDAD.
+    // Mismo truco que ya usa el resto del archivo para avisar de un cambio
+    // en un campo plano sin convertirlo en Rx aparte.
+    destacados.refresh();
+  }
+
   /// Avanza una posición. Al terminar la tanda de una extensión salta a la
   /// siguiente, desde su primera.
   void avanzarCarrusel() {
