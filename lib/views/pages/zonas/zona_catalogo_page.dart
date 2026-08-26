@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/rendering.dart' show ScrollCacheExtent;
 import 'package:get/get.dart';
 import 'package:prismhub/controllers/zona_catalogo_controller.dart';
 import 'package:prismhub/models/extension.dart';
@@ -38,6 +39,13 @@ class ZonaCatalogoPage extends StatefulWidget {
 
 class _ZonaCatalogoPageState extends State<ZonaCatalogoPage> {
   _Orden _orden = _Orden.recientes;
+
+  /// Qué tarjetas ya se mostraron con su entrada animada — para no repetirla
+  /// cada vez que `GridView.builder` las vuelve a construir al pasar de
+  /// nuevo por encima (sale de la ventana de caché y vuelve). Sin esto, ir
+  /// y volver con el scroll hacía que las mismas tarjetas parpadearan de
+  /// nuevo como si fueran nuevas.
+  final _yaAparecio = <String>{};
 
   /// Se reusa si ya existe: volver a esta zona no debería perder lo que ya
   /// se había cargado — mismo patrón que `HomePage`/`SearchPage` con sus
@@ -222,6 +230,14 @@ class _ZonaCatalogoPageState extends State<ZonaCatalogoPage> {
             final cargandoMas = c.cargandoMas.value;
             final extra = cargandoMas ? rejilla.columnas : 0;
             return GridView.builder(
+              // Más margen de precarga que el default (250px): con tarjetas
+              // altas, el default apenas cubre una fila de sobra. Haciendo
+              // scroll rápido (arrastre fuerte o rueda del mouse a fondo) se
+              // veían huecos en gris un instante antes de que la portada
+              // llegara a decodificarse. El doble de alto de tarjeta para
+              // arriba y para abajo le da tiempo a la imagen sin pedir
+              // tarjetas de más que nunca se llegan a ver.
+              scrollCacheExtent: ScrollCacheExtent.pixels(alto * 2),
               padding: const EdgeInsets.fromLTRB(margen, 8, margen, 24),
               gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
                 crossAxisCount: rejilla.columnas,
@@ -235,8 +251,17 @@ class _ZonaCatalogoPageState extends State<ZonaCatalogoPage> {
                   return EsqueletoTarjeta(ancho: rejilla.ancho);
                 }
                 final zi = items[i];
-                return TarjetaDeCatalogo(
-                  key: ValueKey('${zi.package}|${zi.item.url}'),
+                final clave = '${zi.package}|${zi.item.url}';
+                // La primera vez que esta tarjeta se dibuja, entra con un
+                // fundido — la tanda entera de golpe, sin avisar, hacía
+                // perder de vista dónde estaba parado el ojo justo cuando
+                // llegan muchas juntas (pedido explícito, estilo
+                // Crunchyroll: "que vayan poniendo poco a poco pero
+                // rápido"). Si ya se vio antes, aparece directo — no hay
+                // que repetirle la animación cada vez que vuelve a entrar
+                // en pantalla con el scroll.
+                final yaVista = !_yaAparecio.add(clave);
+                final tarjeta = TarjetaDeCatalogo(
                   titulo: zi.item.title,
                   subtitulo: zi.item.update,
                   // De qué extensión viene — imprescindible acá: a
@@ -254,6 +279,17 @@ class _ZonaCatalogoPageState extends State<ZonaCatalogoPage> {
                     cover: zi.item.cover,
                     coverHeaders: zi.item.headers,
                   ),
+                );
+                if (yaVista) return KeyedSubtree(key: ValueKey(clave), child: tarjeta);
+                return _EntradaSuave(
+                  key: ValueKey(clave),
+                  // Un escalón chico por columna: la fila entera termina de
+                  // entrar rápido (no más de unos 200ms de punta a punta),
+                  // pero se nota que van "poniéndose" una detrás de otra en
+                  // vez de aparecer todas en el mismo instante.
+                  retraso: Duration(
+                      milliseconds: (i % rejilla.columnas) * 35),
+                  child: tarjeta,
                 );
               },
             );
@@ -379,6 +415,76 @@ class _BotonDeOrden extends StatelessWidget {
             Icon(Icons.expand_more_rounded,
                 size: 16, color: HomeTheme.textMuted),
           ],
+        ),
+      ),
+    );
+  }
+}
+
+/// La entrada de una tarjeta nueva: fundido + un empujón chico hacia
+/// arriba, con un [retraso] opcional para escalonarla contra las de al
+/// lado.
+///
+/// Por qué no `AnimatedList`/`AnimatedSwitcher`: acá no hace falta animar
+/// una salida ni reordenar nada, solo la aparición única de cada tarjeta
+/// nueva — un controller propio, chico y sin dependencias es más simple
+/// que adaptar un widget pensado para otra cosa.
+class _EntradaSuave extends StatefulWidget {
+  const _EntradaSuave({
+    super.key,
+    required this.child,
+    this.retraso = Duration.zero,
+  });
+
+  final Widget child;
+  final Duration retraso;
+
+  @override
+  State<_EntradaSuave> createState() => _EntradaSuaveState();
+}
+
+class _EntradaSuaveState extends State<_EntradaSuave>
+    with SingleTickerProviderStateMixin {
+  late final AnimationController _controller = AnimationController(
+    vsync: this,
+    // Rápido a propósito: el pedido fue "que vayan poniendo poco a poco
+    // pero rápido" — esto es lo que tarda UNA tarjeta desde que arranca,
+    // no la tanda entera (eso lo pone el escalón por columna en `retraso`).
+    duration: const Duration(milliseconds: 220),
+  );
+  late final _opacidad = CurvedAnimation(
+    parent: _controller,
+    curve: Curves.easeOut,
+  );
+
+  @override
+  void initState() {
+    super.initState();
+    if (widget.retraso == Duration.zero) {
+      _controller.forward();
+    } else {
+      Future.delayed(widget.retraso, () {
+        if (mounted) _controller.forward();
+      });
+    }
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return AnimatedBuilder(
+      animation: _opacidad,
+      child: widget.child,
+      builder: (context, child) => Opacity(
+        opacity: _opacidad.value,
+        child: Transform.translate(
+          offset: Offset(0, (1 - _opacidad.value) * 14),
+          child: child,
         ),
       ),
     );
