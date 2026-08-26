@@ -310,7 +310,17 @@ class _DesktopMainPageState extends State<DesktopMainPage> with WindowListener {
         );
       },
       pane: fluent.NavigationPane(
-        size: const fluent.NavigationPaneSize(openMaxWidth: 230),
+        // Pedido explícito: iconos grandes en el panel lateral. Fluent
+        // calcula el ancho de cada ícono del riel a partir de este
+        // `compactWidth` (por defecto 50), así que hace falta agrandar el
+        // riel entero para que el ícono más grande (ver `size` en cada
+        // ZonaGlyph, abajo) tenga dónde entrar sin desbordar la fila —
+        // mismo desborde que ya se reportó una vez con el tamaño por
+        // defecto de Fluent.
+        size: const fluent.NavigationPaneSize(
+          openMaxWidth: 230,
+          compactWidth: 64,
+        ),
         selected: c.selectedTab.value,
         onChanged: c.changeTab,
         displayMode: fluent.PaneDisplayMode.compact,
@@ -322,7 +332,7 @@ class _DesktopMainPageState extends State<DesktopMainPage> with WindowListener {
           // vive dentro de Ajustes, junto al switch de NSFW (ver
           // settings_page.dart), igual que ya estaba en Android.
           fluent.PaneItem(
-            icon: const ZonaGlyph(Forma.repositorio),
+            icon: const ZonaGlyph(Forma.repositorio, size: 24),
             title: Text('common.extension-repo'.i18n),
             body: const ExtensionPage(),
             onTap: () {
@@ -330,7 +340,7 @@ class _DesktopMainPageState extends State<DesktopMainPage> with WindowListener {
             },
           ),
           fluent.PaneItem(
-            icon: const ZonaGlyph(Forma.ajustes),
+            icon: const ZonaGlyph(Forma.ajustes, size: 24),
             title: Text('common.settings'.i18n),
             body: const SettingsPage(),
             onTap: () {
@@ -362,31 +372,31 @@ class _DesktopMainPageState extends State<DesktopMainPage> with WindowListener {
         ],
         items: [
           fluent.PaneItem(
-            icon: const ZonaGlyph(Forma.inicio),
+            icon: const ZonaGlyph(Forma.inicio, size: 24),
             title: Text('common.home'.i18n),
             body: const HomePage(),
             onTap: () => _alTocarDestino('/'),
           ),
           fluent.PaneItem(
-            icon: const ZonaGlyph(Forma.peliculas),
+            icon: const ZonaGlyph(Forma.peliculas, size: 24),
             title: Text('home.zona-peliculas'.i18n),
             body: const ZonaCatalogoPage(zona: ZonaPrincipal.peliculas),
             onTap: () => _alTocarDestino('/peliculas'),
           ),
           fluent.PaneItem(
-            icon: const ZonaGlyph(Forma.series),
+            icon: const ZonaGlyph(Forma.series, size: 24),
             title: Text('home.zona-series'.i18n),
             body: const ZonaCatalogoPage(zona: ZonaPrincipal.series),
             onTap: () => _alTocarDestino('/series'),
           ),
           fluent.PaneItem(
-            icon: const ZonaGlyph(Forma.anime),
+            icon: const ZonaGlyph(Forma.anime, size: 24),
             title: Text('home.zona-anime'.i18n),
             body: const ZonaCatalogoPage(zona: ZonaPrincipal.anime),
             onTap: () => _alTocarDestino('/anime'),
           ),
           fluent.PaneItem(
-            icon: const ZonaGlyph(Forma.mangas),
+            icon: const ZonaGlyph(Forma.mangas, size: 24),
             title: Text('home.zona-mangas'.i18n),
             body: const ZonaCatalogoPage(zona: ZonaPrincipal.mangas),
             onTap: () => _alTocarDestino('/mangas'),
@@ -395,7 +405,7 @@ class _DesktopMainPageState extends State<DesktopMainPage> with WindowListener {
           // Favoritos). Es el Home de antes, movido tal cual sin rediseñar —
           // ver library_page.dart.
           fluent.PaneItem(
-            icon: const ZonaGlyph(Forma.biblioteca),
+            icon: const ZonaGlyph(Forma.biblioteca, size: 24),
             title: Text('common.library'.i18n),
             body: const LibraryPage(),
             onTap: () {
@@ -403,7 +413,7 @@ class _DesktopMainPageState extends State<DesktopMainPage> with WindowListener {
             },
           ),
           fluent.PaneItem(
-            icon: const ZonaGlyph(Forma.extensiones),
+            icon: const ZonaGlyph(Forma.extensiones, size: 24),
             title: Text('common.extension'.i18n),
             body: const ExtensionPage(),
             onTap: () {
