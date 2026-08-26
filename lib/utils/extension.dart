@@ -1972,6 +1972,24 @@ class ExtensionUtils {
     ExtensionType.mixedReading,
   };
 
+  /// Los IDs canónicos de `_formatos` (`catalogo_extensiones_controller.dart`)
+  /// que son de VÍDEO, y los que son de LECTURA — la misma lista que ya
+  /// existe ahí, separada en dos.
+  ///
+  /// ── Para qué sirve esta separación ──────────────────────────────────
+  ///
+  /// Una extensión `mixed` (ShadeManga: anime y manga en el mismo sitio) no
+  /// trae un tipo por ítem en su catálogo — ese dato solo existe al abrir
+  /// el detalle de un título puntual, demasiado tarde para filtrar una fila
+  /// entera. Pero el filtro real del sitio SÍ separa las dos cosas: el
+  /// propio `home_filtros.json` ya cachea, para ShadeManga, un eje "tipo"
+  /// con las opciones `manga`/`anime`. Con estos dos conjuntos, la zona
+  /// Anime le pide a una extensión mixta el primer formato de VÍDEO que
+  /// declare, y la zona Mangas el primero de LECTURA — nunca el catálogo
+  /// sin separar.
+  static const formatosDeVideo = {'pelicula', 'serie', 'ova', 'especial'};
+  static const formatosDeLectura = {'manhwa', 'manhua', 'manga', 'novela'};
+
   /// A qué zona de contenido pertenece cada extensión de vídeo — vive
   /// junto a `zonasDe`.
   ///
