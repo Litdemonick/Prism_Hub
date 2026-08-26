@@ -419,9 +419,19 @@ class CatalogoExtensionesController extends GetxController {
   /// sacaron. Aquellos eran el tipo de la EXTENSIÓN —y eso ya lo dice el
   /// nombre de la fila—; esto es el formato de cada obra, que es una pregunta
   /// distinta: «quiero una película», no «quiero una extensión de vídeo».
+  // 'anime' separado de 'serie' a propósito (antes vivían juntos: 'tv
+  // anime'/'anime'/'animes' eran sinónimos de 'serie'). Inofensivo mientras
+  // esto solo alimentaba `formatosDeVideo` como CONJUNTO —daba igual bajo
+  // qué id exacto cayera "anime" con tal de que entrara al set de vídeo—,
+  // pero la Zona Películas/Series (ver `ZonaCatalogoController`) pide el eje
+  // 'serie' de forma PRECISA: con el anime adentro, un sitio como LaMovie
+  // ("Películas, series, ANIMES y novelas", filtro propio con esa opción)
+  // metía anime en la zona Series. Con el id separado, un sitio que declare
+  // una opción "Anime" en su propio filtro cae acá y no en 'serie'.
   static const _formatos = <String, List<String>>{
     'pelicula': ['pelicula', 'peliculas', 'movie', 'movies', 'film'],
-    'serie': ['serie', 'series', 'tv', 'tv anime', 'anime', 'animes'],
+    'serie': ['serie', 'series', 'tv'],
+    'anime': ['anime', 'animes', 'tv anime'],
     'ova': ['ova', 'ovas', 'ona', 'onas'],
     'especial': ['especial', 'especiales', 'special', 'corto', 'cortos'],
     'manhwa': ['manhwa', 'manhwas'],

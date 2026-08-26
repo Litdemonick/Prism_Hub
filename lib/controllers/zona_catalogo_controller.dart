@@ -132,10 +132,37 @@ class ZonaCatalogoController extends GetxController {
         // Fase 3) — nunca se muestra sin filtrar.
         if (resuelto == null) continue;
         filtro = resuelto;
+      } else if ((zona == ZonaPrincipal.peliculas ||
+              zona == ZonaPrincipal.series) &&
+          ExtensionUtils.zonasDe(package).containsAll(const {
+            ZonaPrincipal.peliculas,
+            ZonaPrincipal.series,
+          })) {
+        // Una extensión `accion-real`/`mixto` (LaMovie, FuegoCine) entra a
+        // las DOS zonas a la vez — sin partir por formato, Películas y
+        // Series mostraban el mismo catálogo completo sin filtrar: medido en
+        // vivo, la zona Películas traía series de veinte capítulos. Mismo
+        // mecanismo que ya separa vídeo de lectura en una extensión `mixed`
+        // (arriba), pidiendo el eje puntual de esta zona (`pelicula`/`serie`
+        // de `_formatos`) en vez del conjunto entero de formatos de vídeo.
+        if (catalogo == null) continue;
+        final candidato = zona == ZonaPrincipal.peliculas
+            ? const {'pelicula'}
+            : const {'serie'};
+        final resuelto = catalogo.filtroDeFormatoZona(package, candidato);
+        // Sin ningún eje que distinga película de serie en este sitio: se
+        // excluye la extensión de esta zona — mejor una fuente de menos que
+        // arriesgarse a mezclar series y películas en una zona que promete
+        // solo una de las dos.
+        if (resuelto == null) continue;
+        filtro = resuelto;
       } else {
-        // No es mixta: todo su catálogo ya es de un solo tipo. `segurosDe`
-        // puede seguir devolviendo null acá — no todas tienen una puerta a
-        // adultos que cerrar, y no tenerla no es un problema.
+        // No hay ambigüedad que resolver: o es una zona de un solo formato
+        // para esta extensión (anime puro, o accion-real que por algún
+        // motivo no entrara a la zona hermana), o es la zona Mangas. Todo su
+        // catálogo ya es del tipo que corresponde. `segurosDe` puede seguir
+        // devolviendo null acá — no todas tienen una puerta a adultos que
+        // cerrar, y no tenerla no es un problema.
         filtro = ExtensionUtils.segurosDe(package);
       }
       nuevas.add(ZonaFuente(

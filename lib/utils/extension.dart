@@ -2031,7 +2031,13 @@ class ExtensionUtils {
   /// Anime le pide a una extensión mixta el primer formato de VÍDEO que
   /// declare, y la zona Mangas el primero de LECTURA — nunca el catálogo
   /// sin separar.
-  static const formatosDeVideo = {'pelicula', 'serie', 'ova', 'especial'};
+  static const formatosDeVideo = {
+    'pelicula',
+    'serie',
+    'anime',
+    'ova',
+    'especial',
+  };
   static const formatosDeLectura = {'manhwa', 'manhua', 'manga', 'novela'};
 
   /// Compara el `lang` de una extensión contra el filtro elegido en el
