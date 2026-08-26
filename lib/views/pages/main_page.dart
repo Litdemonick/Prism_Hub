@@ -180,6 +180,18 @@ class _DesktopMainPageState extends State<DesktopMainPage> with WindowListener {
             children: [
               const Spacer(),
               ...c.actions,
+              // Único punto para buscar en escritorio desde que la Fase 6c
+              // sacó "Buscar" del panel lateral (era una zona más, con su
+              // propia entrada fija) — reportado en vivo: sin esto no había
+              // NINGÚN camino visible a SearchPage en Windows. Se pone acá,
+              // en la barra superior, en vez de depender de un botón dentro
+              // de cada zona: es el único lugar que se ve sea cual sea la
+              // pantalla en la que se esté parado.
+              fluent.IconButton(
+                icon: const Icon(fluent.FluentIcons.search, size: 16.0),
+                onPressed: () => router.go('/search'),
+              ),
+              const SizedBox(width: 4),
               SizedBox(
                 width: 138,
                 height: 50,
