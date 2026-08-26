@@ -365,6 +365,12 @@ class _BotonDeFormato extends StatelessWidget {
       color: HomeTheme.cardSurface,
       surfaceTintColor: Colors.transparent,
       elevation: 6,
+      // `PopupMenuButton.clipBehavior` viene en `Clip.none` por defecto —
+      // con el borde redondeado puesto pero sin recortar, el fondo
+      // cuadrado de cada ítem (su resaltado al pasar el mouse) se salía
+      // por las esquinas del borde curvo. Se veía justo en las puntas,
+      // que es lo que se reportó como "abre feo, los bordes".
+      clipBehavior: Clip.antiAlias,
       shape: RoundedRectangleBorder(
         borderRadius: BorderRadius.circular(12),
         side: BorderSide(color: HomeTheme.border),
@@ -496,6 +502,12 @@ class _BotonDeOrden extends StatelessWidget {
       color: HomeTheme.cardSurface,
       surfaceTintColor: Colors.transparent,
       elevation: 6,
+      // `PopupMenuButton.clipBehavior` viene en `Clip.none` por defecto —
+      // con el borde redondeado puesto pero sin recortar, el fondo
+      // cuadrado de cada ítem (su resaltado al pasar el mouse) se salía
+      // por las esquinas del borde curvo. Se veía justo en las puntas,
+      // que es lo que se reportó como "abre feo, los bordes".
+      clipBehavior: Clip.antiAlias,
       shape: RoundedRectangleBorder(
         borderRadius: BorderRadius.circular(12),
         side: BorderSide(color: HomeTheme.border),
