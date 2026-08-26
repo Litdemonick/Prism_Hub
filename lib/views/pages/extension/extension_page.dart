@@ -175,12 +175,16 @@ class _ExtensionPageState extends State<ExtensionPage> {
     }).toList();
   }
 
-  /// Prende o apaga TODAS las que se están viendo ahora.
+  /// Prende o apaga TODAS las instaladas, sin importar ningún filtro puesto.
   ///
-  /// Sobre la lista FILTRADA y no sobre todas las instaladas, a propósito: si
-  /// el usuario está viendo «Lectura» y toca desactivar, espera que se apaguen
-  /// las de lectura — no las diecisiete. El botón hace lo que la pantalla
-  /// muestra.
+  /// Antes operaba sobre la lista FILTRADA («si estás viendo Lectura, se
+  /// apagan solo las de lectura») — pedido explícito en contra: "activar
+  /// todas, desactivar todas es global, no importa si están en zonas
+  /// diferentes". El nombre del botón ya dice «todas», sin condición; que
+  /// dependiera en secreto de qué filtro quedó puesto era la parte
+  /// confusa. Quien quiera apagar solo un grupo puede seguir haciéndolo
+  /// una por una desde la lista filtrada — este botón es la acción
+  /// deliberadamente total.
   /// Hay una acción masiva corriendo AHORA MISMO.
   ///
   /// ── Una sola para las cuatro ────────────────────────────────────────────
@@ -212,7 +216,7 @@ class _ExtensionPageState extends State<ExtensionPage> {
   }
 
   Future<void> _cambiarTodas(bool activar) async {
-    final visibles = _applyFilters(c.runtimes.values.toList(growable: false));
+    final visibles = c.runtimes.values.toList(growable: false);
     if (visibles.isEmpty) return;
 
     // Las +18 no se prenden en masa si el interruptor general está apagado.
@@ -271,10 +275,9 @@ class _ExtensionPageState extends State<ExtensionPage> {
   ///
   /// ── Sobre TODAS las instaladas, no sobre las filtradas ──────────────────
   ///
-  /// Al revés que activar/desactivar. Ahí el botón hace lo que la pantalla
-  /// muestra porque prender de más es un error caro. Acá no: dejar una
-  /// extensión sin actualizar porque justo estaba filtrada no le sirve a nadie,
-  /// y una desactualizada deja de funcionar sin avisar.
+  /// Mismo criterio que activar/desactivar todas (ver _cambiarTodas): dejar
+  /// una extensión sin actualizar porque justo estaba filtrada no le sirve a
+  /// nadie, y una desactualizada deja de funcionar sin avisar.
   Future<void> _actualizarTodas() async {
     if (_actualizandoTodas) return;
     setState(() => _actualizandoTodas = true);
