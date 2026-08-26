@@ -78,6 +78,20 @@ class SearchPageController extends GetxController {
 
   getRuntime({Set<ExtensionType>? types}) {
     _randomKey = DateTime.now().millisecondsSinceEpoch.toString();
+    // ── Sin nada escrito, esto es una zona VACÍA ──────────────────────────
+    //
+    // Antes, apenas se abría la pantalla (o al tocar un chip de tipo), se
+    // pedía el catálogo completo de CADA extensión habilitada — Buscar se
+    // sentía como otro Inicio, con filas y portadas, en vez de un buscador.
+    // Pedido explícito: nada hasta que el usuario escriba algo de verdad.
+    // Se actualiza el tipo elegido igual (para que el chip se vea marcado)
+    // pero no se pide ni se muestra ningún catálogo.
+    cuurentExtensionType.value = types;
+    if (search.value.trim().isEmpty) {
+      searchResultList.clear();
+      needRefresh = false;
+      return;
+    }
     final exts = ExtensionUtils.enabledRuntimes.values.toList();
     if (types != null) {
       exts.removeWhere((element) => !types.contains(element.extension.type));
