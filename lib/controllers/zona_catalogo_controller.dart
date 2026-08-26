@@ -106,8 +106,16 @@ class ZonaCatalogoController extends GetxController {
     final nuevas = <ZonaFuente>[];
     for (final entrada in ExtensionUtils.enabledRuntimes.entries) {
       final package = entrada.key;
-      if (!ExtensionUtils.zonasDe(package).contains(zona)) continue;
       final extension = entrada.value.extension;
+      // Una extensión marcada +18 de punta a punta (HentaiLA, VeoHentai)
+      // NUNCA entra a una zona normal, sea cual sea su `contentKind` —
+      // mismo criterio que ya aplica `SearchController` para el buscador
+      // general. Una MIXTA (ShadeManga, ManhwaWeb) no cae acá: esas
+      // declaran `nsfw: false` en su manifiesto — su contenido +18 vive
+      // detrás del filtro propio del sitio, ya resuelto más abajo
+      // (`filtroDeFormatoZona`/`segurosDe`), no de esta marca global.
+      if (extension.nsfw) continue;
+      if (!ExtensionUtils.zonasDe(package).contains(zona)) continue;
       Map<String, List<String>>? filtro;
       if (extension.type == ExtensionType.mixed) {
         // Sin el controller todavía registrado no hay de dónde leer el eje
