@@ -48,37 +48,12 @@ class HomeWindows extends StatelessWidget {
               : const _HomeEsperando(conCabecera: false);
         }
         // Igual que en celular: la lista se calcula UNA vez, para que
-        // `itemCount` y el constructor no puedan discrepar cuando el filtro
-        // acorta la lista entre una llamada y la otra.
-        final visibles = () {
-          final lista = c.filas
-              .where((f) =>
-                  f.estadoExt == EstadoExtension.activa || f.esVistaPrevia)
-              .where(c.entraEnElTipo)
-              .toList();
-
-          // ── Con filtro puesto, las que lo tienen van arriba ────────────────
-          //
-          // Esto se sacó una vez porque al aplicar cambiaba el título que el usuario
-          // estaba mirando. Vuelve, pero ahora el reordenamiento pasa EN EL MISMO
-          // INSTANTE en que todas las filas pasan a bloques grises —`aplicarFiltros`
-          // avisa antes de pedir nada— así que no se ve un título reemplazando a
-          // otro sobre contenido: se ve la lista acomodándose para el filtro, y
-          // recién después se llena.
-          //
-          // Y hace falta: sin esto, marcar «Isekai» dejaba arriba las extensiones
-          // que no lo tienen, y había que bajar hasta el final para encontrar las que
-          // sí. El orden es estable —entre las que pueden se respeta el de siempre,
-          // el del historial— así que no baila entre cargas.
-          if (c.hayFiltros) {
-            lista.sort((a, b) {
-              final pa = c.puedeConEsteGenero(a.package) ? 0 : 1;
-              final pb = c.puedeConEsteGenero(b.package) ? 0 : 1;
-              return pa - pb;
-            });
-          }
-          return lista;
-        }();
+        // `itemCount` y el constructor no puedan discrepar entre una
+        // llamada y la otra.
+        final visibles = c.filas
+            .where((f) =>
+                f.estadoExt == EstadoExtension.activa || f.esVistaPrevia)
+            .toList();
         return RefreshIndicator(
           // Sin la barra de chips ya no hay ningún filtro que "aplicar" —
           // deslizar hacia abajo siempre vuelve a pedir lo mismo de antes.
@@ -489,9 +464,8 @@ class _FilaWindowsState extends State<_FilaWindows> {
                   widget.fila.refrescando.value
                       ? 'home.modo-buscando'.i18n
                       : widget.c.etiquetaDe(widget.fila) ??
-                          switch (widget.c.modoDe(widget.fila)) {
+                          switch (widget.fila.modo) {
                             ModoDeFila.popular => 'home.modo-popular'.i18n,
-                            ModoDeFila.filtrado => 'home.modo-filtrado'.i18n,
                             ModoDeFila.reciente => 'home.modo-reciente'.i18n,
                           },
                   maxLines: 1,

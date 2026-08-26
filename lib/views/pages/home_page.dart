@@ -150,10 +150,6 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
 /// `tarjeta_de_catalogo.dart`, con el mismo cuerpo copiado.
 bool get _esTactil => esPantallaTactil;
 
-/// Si el aparato tiene GESTOS de dedo. Un televisor es «táctil» para el
-/// sistema pero no tiene con qué deslizar — ver [hayGestosDeDedo].
-bool get _hayGestos => hayGestosDeDedo;
-
 /// Si esto es un Android TV. Se pregunta ANTES que [_esTactil] en el
 /// bifurcado de arriba — ver el comentario ahí.
 bool get _esTelevision => PlatformTv.esTelevisionSync;

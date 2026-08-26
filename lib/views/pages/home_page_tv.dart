@@ -4,25 +4,23 @@ part of 'home_page.dart';
 //
 // Aparece solo cuando `_esTelevision` (ver el bifurcado en `home_page.dart`)
 // da true. Reusa lo mismo que ya prueba escritorio: el mismo `_CarruselAndroid`
-// para el destacado de arriba, la misma `_BarraDeFiltros`, y `_FilaWindows`
-// para cada fila —con `conFocoTv: true` para que las tarjetas sean
-// navegables con D-pad—. Nada de eso se reescribe.
+// para el destacado de arriba y `_FilaWindows` para cada fila —con
+// `conFocoTv: true` para que las tarjetas sean navegables con D-pad—. Nada
+// de eso se reescribe.
 //
 // Lo nuevo es el sidebar de categorías a la izquierda y la barra de arriba a
 // la derecha, que es lo que la referencia (estilo Magis TV) agrega sobre el
 // diseño de escritorio.
 //
-// ── Por qué el sidebar no tiene "Película/Serie/Kids/Anime" ────────────────
+// ── Por qué Películas/Series/Anime siguen `enConstruccion` acá ────────────
 //
-// Esos no son tipos, son GÉNEROS, y los géneros los define cada extensión —
-// varían de un sitio a otro (`generosDisponibles`, cargado en vivo). Una
-// lista fija con esos nombres podría no coincidir con ningún género real de
-// las extensiones instaladas y mostrar el sidebar lleno de categorías
-// vacías. Lo único que el catálogo puede filtrar con certeza, sea cual sea
-// la extensión, es el TIPO (`ExtensionType`). Clasificar por Anime/Series/
-// Películas de verdad es una funcionalidad aparte — ya hay lugar reservado
-// para eso en el i18n (`home.zona-anime` y compañía, "esperando la capa de
-// metadatos") — y queda para otro momento, en las cuatro plataformas.
+// `ExtensionUtils.zonasDe` (ver lib/utils/extension.dart) ya sabe clasificar
+// una extensión en estas zonas de verdad — es lo que ya usan las 4 pestañas
+// nuevas de Android/Windows/Linux. Lo que falta del lado de TV es su propia
+// pantalla de catálogo (`ZonaCatalogoController`/`ZonaCatalogoPage`, para
+// cuando se arme la Fase 7 del plan de rediseño) en vez de las filas de
+// `_ContenidoTV` — hasta entonces, el sidebar las muestra igual, en
+// construcción, en vez de esconderlas.
 
 /// Las categorías del sidebar. Fijas y iguales para cualquier extensión.
 ///
@@ -135,27 +133,18 @@ class _HomeTVState extends State<HomeTV> {
     super.dispose();
   }
 
-  /// Marca la categoría Y la aplica en el acto.
+  /// Marca la categoría elegida.
   ///
-  /// En el teléfono, elegir un filtro solo lo MARCA — hace falta deslizar
-  /// para aplicarlo (ver `_BarraDeFiltros`), porque aplicar de una implica
-  /// pedirle contenido de nuevo a cada extensión y tocando varios chips
-  /// seguidos se tirarían pedidos a la basura. Acá el sidebar tiene cuatro
-  /// categorías nada más —no hay forma de "tocar varias seguidas por
-  /// error"— y en una TV no hay gesto de "deslizar para aplicar": aplicar
-  /// al toque es lo que se espera.
-  Future<void> _elegir(_CategoriaTV categoria) async {
+  /// Ya no toca ningún filtro compartido: cada categoría real (Inicio,
+  /// Biblioteca) trae su propio contenido por su cuenta, y las de zona
+  /// (Películas/Series/Anime) van a traer el suyo vía `ZonaCatalogoController`
+  /// cuando se armen — ninguna de las dos depende de marcar nada acá.
+  void _elegir(_CategoriaTV categoria) {
     setState(() {
       _categoria = categoria;
       // A partir de acá esta zona se arma y se queda viva. Ver [_visitadas].
       _visitadas.add(categoria);
     });
-    // La zona en construcción no toca los filtros: no muestra catálogo, así
-    // que volver a pedirle contenido a cada extensión sería trabajo tirado.
-    // Y al salir de ahí, lo que ya estaba cargado sigue como estaba.
-    if (categoria.enConstruccion) return;
-    widget.c.tipoElegido.value = categoria.tipo;
-    await widget.c.aplicarFiltros();
   }
 
   @override
@@ -324,7 +313,7 @@ class _SidebarTV extends StatefulWidget {
   final CatalogoExtensionesController c;
   final FocusNode primerFoco;
   final _CategoriaTV elegida;
-  final Future<void> Function(_CategoriaTV) onElegir;
+  final void Function(_CategoriaTV) onElegir;
 
   @override
   State<_SidebarTV> createState() => _SidebarTVState();
@@ -556,20 +545,9 @@ class _ContenidoTV extends StatelessWidget {
 
   final CatalogoExtensionesController c;
 
-  List<FilaDeExtension> _visibles() {
-    final lista = c.filas
-        .where((f) => f.estadoExt == EstadoExtension.activa || f.esVistaPrevia)
-        .where(c.entraEnElTipo)
-        .toList();
-    if (c.hayFiltros) {
-      lista.sort((a, b) {
-        final pa = c.puedeConEsteGenero(a.package) ? 0 : 1;
-        final pb = c.puedeConEsteGenero(b.package) ? 0 : 1;
-        return pa - pb;
-      });
-    }
-    return lista;
-  }
+  List<FilaDeExtension> _visibles() => c.filas
+      .where((f) => f.estadoExt == EstadoExtension.activa || f.esVistaPrevia)
+      .toList();
 
   @override
   Widget build(BuildContext context) {

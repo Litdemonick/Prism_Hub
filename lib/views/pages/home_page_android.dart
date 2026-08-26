@@ -43,39 +43,12 @@ class HomeAndroid extends StatelessWidget {
   /// algo. Y el lugar para prender o instalar ya existe, es la zona de
   /// Extensiones, que está a un toque en la barra.
   ///
-  /// El tipo se resuelve ACÁ y no pidiéndole nada a nadie: `extension.type` ya
-  /// está cargado para las diecisiete. Elegir «solo mangas» es no dibujar las
-  /// que no lo son, y eso es instantáneo. El género es otra cosa: ese sí hay
-  /// que preguntárselo al sitio, y por eso espera a que el usuario actualice.
   List<FilaDeExtension> _visibles(CatalogoExtensionesController c) {
-    final lista = c.filas
-        // Las de vista previa también: no están encendidas —por eso son vista
-        // previa— pero sí traen contenido, que es lo único que el Home pide.
+    // Las de vista previa también: no están encendidas —por eso son vista
+    // previa— pero sí traen contenido, que es lo único que el Home pide.
+    return c.filas
         .where((f) => f.estadoExt == EstadoExtension.activa || f.esVistaPrevia)
-        .where(c.entraEnElTipo)
         .toList();
-
-    // ── Con filtro puesto, las que lo tienen van arriba ────────────────
-    //
-    // Esto se sacó una vez porque al aplicar cambiaba el título que el usuario
-    // estaba mirando. Vuelve, pero ahora el reordenamiento pasa EN EL MISMO
-    // INSTANTE en que todas las filas pasan a bloques grises —`aplicarFiltros`
-    // avisa antes de pedir nada— así que no se ve un título reemplazando a
-    // otro sobre contenido: se ve la lista acomodándose para el filtro, y
-    // recién después se llena.
-    //
-    // Y hace falta: sin esto, marcar «Isekai» dejaba arriba las extensiones
-    // que no lo tienen, y había que bajar hasta el final para encontrar las que
-    // sí. El orden es estable —entre las que pueden se respeta el de siempre,
-    // el del historial— así que no baila entre cargas.
-    if (c.hayFiltros) {
-      lista.sort((a, b) {
-        final pa = c.puedeConEsteGenero(a.package) ? 0 : 1;
-        final pb = c.puedeConEsteGenero(b.package) ? 0 : 1;
-        return pa - pb;
-      });
-    }
-    return lista;
   }
 
   @override
@@ -188,511 +161,6 @@ class HomeAndroid extends StatelessWidget {
           ),
         );
       }),
-    );
-  }
-}
-
-/// Los filtros del Home: por tipo y por género.
-///
-/// ── Por qué no se aplican al tocar ────────────────────────────────────────
-///
-/// Porque aplicar un género significa volver a pedirle contenido a once
-/// sitios. Tocando tres chips seguidos serían tres tandas de once pedidos, y
-/// las dos primeras se tiran a la basura antes de llegar.
-///
-/// Entonces el toque solo MARCA. Cuando el usuario terminó de elegir, tira de
-/// la pantalla hacia abajo y ahí se pide todo, una vez. Mientras haya algo
-/// marcado sin aplicar, aparece un aviso que lo dice — un filtro elegido que
-/// no cambió nada en pantalla se lee como que la app no funciona.
-class _BarraDeFiltros extends StatefulWidget {
-  const _BarraDeFiltros({required this.c});
-
-  final CatalogoExtensionesController c;
-
-  @override
-  State<_BarraDeFiltros> createState() => _BarraDeFiltrosState();
-}
-
-class _BarraDeFiltrosState extends State<_BarraDeFiltros> {
-  /// Para las flechas de escritorio. En celular no se usa: ahí la fila se
-  /// arrastra con el dedo.
-  final _scroll = ScrollController();
-
-  @override
-  void dispose() {
-    _scroll.dispose();
-    super.dispose();
-  }
-
-  /// Los filtros que están marcados, con su texto y cómo apagarlos.
-  ///
-  /// Se devuelven en el mismo orden que los grupos de la barra —estado,
-  /// formato, género— para que al marcar dos no bailen entre sí.
-  List<(String, String, VoidCallback)> _marcados(
-      CatalogoExtensionesController c) {
-    final lista = <(String, String, VoidCallback)>[];
-    final e = c.estadoElegido.value;
-    if (e != null) {
-      lista.add((e, 'home.estado.$e'.i18n, () => c.estadoElegido.value = null));
-    }
-    final f = c.formatoElegido.value;
-    if (f != null) {
-      lista.add(
-          (f, 'home.formato.$f'.i18n, () => c.formatoElegido.value = null));
-    }
-    final g = c.generoElegido.value;
-    if (g != null) {
-      lista.add((g, 'home.genero.$g'.i18n, () => c.generoElegido.value = null));
-    }
-    return lista;
-  }
-
-  /// Corre la fila de chips la mayor parte de su ancho.
-  void _correr(int signo) {
-    if (!_scroll.hasClients) return;
-    final salto = _scroll.position.viewportDimension * 0.8;
-    _scroll.animateTo(
-      (_scroll.offset + salto * signo)
-          .clamp(0.0, _scroll.position.maxScrollExtent),
-      duration: const Duration(milliseconds: 300),
-      curve: Curves.easeOutCubic,
-    );
-  }
-
-  @override
-  void initState() {
-    super.initState();
-    // Los géneros se leen una vez por sesión, y recién cuando el Home ya está
-    // en pantalla: `createFilter()` corre JavaScript en el motor de cada
-    // extensión, y hacerlo durante el arranque sería sumarle tiempo justo al
-    // momento en que menos sobra.
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      widget.c.cargarGeneros();
-    });
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    final margen = _margen(context);
-    return Obx(() {
-      final c = widget.c;
-      final generos = c.generosDisponibles;
-      final hayAlgo =
-          c.tipoElegido.value != null || c.generoElegido.value != null;
-
-      // ── El alto de la barra NUNCA cambia ──────────────────────────────
-      //
-      // Los géneros se leen en segundo plano, después de que carguen las
-      // filas. Antes, mientras tanto, la barra medía seis píxeles y al llegar
-      // saltaba a su tamaño completo empujando el carrusel y todas las filas
-      // hacia abajo — el usuario ya estaba mirando algo y se le movía solo.
-      //
-      // Ahora ocupa siempre lo mismo y lo que cambia es el contenido:
-      // primero bloques grises con forma de chip, después los chips de
-      // verdad. Igual que las tarjetas.
-      final cargandoChips = generos.isEmpty &&
-          c.estadosDisponibles.isEmpty &&
-          c.formatosDisponibles.isEmpty;
-
-      // ── Reintentar mientras no haya nada ────────────────────────────────
-      //
-      // El primer intento sale al montar la barra, y puede volver con las manos
-      // vacías: la cola de pedidos todavía llena, una extensión que no
-      // contestó, sin red. Antes eso dejaba los chips sin aparecer en toda la
-      // sesión.
-      //
-      // Este build corre cada vez que algo del catálogo cambia —una fila que
-      // termina de cargar, por ejemplo—, así que sirve de reintento natural sin
-      // necesidad de un reloj. Y `cargarGeneros` se protege sola de correr dos
-      // veces a la vez, así que llamarla de más no cuesta nada.
-      if (cargandoChips) unawaited(c.cargarGeneros());
-
-      // Se calcula UNA vez: se consultaba cuatro veces por construcción y cada
-      // una armaba su propia lista. Misma clase de error que `_visibles`, y
-      // acá además puede discrepar entre una lectura y la siguiente.
-      final marcados = _marcados(c);
-
-      return Padding(
-        // Despegada del título: pegada arriba, la barra se leía como parte de
-        // la cabecera y no como algo que se puede tocar.
-        //
-        // En TV, más aire arriba y abajo: el chip enfocado crece y le sale
-        // su marco, y con 14 justos quedaba cortado contra el borde de su
-        // fila (la lista recorta lo que se sale).
-        padding: PlatformTv.esTelevisionSync
-            ? const EdgeInsets.only(top: 26, bottom: 26)
-            : const EdgeInsets.only(top: 14, bottom: 14),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            // ── Solo géneros ──────────────────────────────────────────
-            //
-            // Los chips de tipo —Vídeo, Manga, Novela— se sacaron: en el Home
-            // cada fila YA lleva el nombre de su extensión, y con eso el
-            // usuario sabe de sobra si está mirando anime o manga. Ocupaban la
-            // primera pantalla de la barra empujando los géneros, que son los
-            // que de verdad sirven para encontrar algo.
-            if (cargandoChips)
-              SizedBox(
-                height: 40,
-                child: ListView.separated(
-                  scrollDirection: Axis.horizontal,
-                  physics: const NeverScrollableScrollPhysics(),
-                  padding: EdgeInsets.symmetric(horizontal: margen),
-                  itemCount: 7,
-                  separatorBuilder: (_, __) => const SizedBox(width: 8),
-                  // Anchos distintos: siete cápsulas idénticas se leen como un
-                  // patrón, no como chips que están por aparecer.
-                  itemBuilder: (_, i) => Esqueleto(
-                    radio: 20,
-                    width: 78.0 + (i % 3) * 26,
-                    height: 38,
-                  ),
-                ),
-              )
-            else
-              Row(
-                children: [
-                  // Flechas solo en escritorio: en una pantalla táctil la fila
-                  // se arrastra con el dedo y las flechas solo taparían chips.
-                  if (!_esTactil) SizedBox(width: margen - 8),
-                  if (!_esTactil)
-                    _FlechaDeFila(
-                        icono: Icons.chevron_left_rounded,
-                        onTap: () => _correr(-1)),
-                  // ── Los activos, FIJOS a la izquierda ─────────────────
-                  //
-                  // Fuera del área que se desplaza: así el filtro puesto se ve
-                  // siempre, aunque el usuario se haya ido al final de los
-                  // cuarenta y cuatro géneros buscando otro. Antes iba adentro y
-                  // se perdía de vista al primer arrastre.
-                  //
-                  // Flexible y con su propio desplazamiento: con tres activos en
-                  // un teléfono angosto, si no, se comerían la barra entera.
-                  Expanded(
-                    child: SingleChildScrollView(
-                      controller: _esTactil ? null : _scroll,
-                      scrollDirection: Axis.horizontal,
-                      // En TV los chips también crecen al enfocarse, y esta
-                      // fila recorta en su borde: sin aire, al primero y al
-                      // último se les comían las esquinas. Con 22 el crecido
-                      // entra entero.
-                      padding: EdgeInsets.symmetric(
-                        horizontal: PlatformTv.esTelevisionSync
-                            ? 22
-                            : (_esTactil ? margen : 6),
-                      ),
-                      child: Row(
-                        children: [
-                          // ── Los activos, primeros y en la MISMA fila ──────
-                          //
-                          // Antes iban en un grupo aparte, fijo a la izquierda
-                          // y fuera del área que se desplaza. La idea era que
-                          // el filtro puesto se viera siempre, pero ese grupo
-                          // se llevaba hasta un tercio del ancho y se lo quitaba
-                          // a los demás: al marcar uno, la fila de chips
-                          // terminaba trescientos píxeles antes y parecía que
-                          // todo se hubiera achicado. Reportado en las tres
-                          // plataformas, con capturas.
-                          //
-                          // Acá adentro no le quita ancho a nadie: la fila
-                          // ocupa lo mismo marcada que sin marcar. Y siguen
-                          // siendo lo primero que se ve, así que en la práctica
-                          // se ven igual —recién marcado nadie está desplazado
-                          // al final de los cuarenta y cuatro géneros—.
-                          for (final m in marcados)
-                            Padding(
-                              padding: const EdgeInsets.only(right: 8),
-                              child: _Chip(
-                                  texto: m.$2, marcado: true, onTap: m.$3),
-                            ),
-                          if (marcados.isNotEmpty) _separadorDeChips,
-                          // ── Lo elegido, al principio de todo ──────────────────
-                          //
-                          // Con cuarenta y cuatro géneros, el chip marcado podía
-                          // quedar a tres pantallazos de distancia: el usuario filtra
-                          // y después no ve por qué filtró. Adelante y con su ganchito
-                          // se lee de un vistazo, y se apaga tocándolo sin buscarlo.
-                          // El estado va primero: son dos chips y acotan mucho más que
-                          // un género —«algo terminado, para maratonear» es de las
-                          // primeras cosas que alguien busca—.
-                          for (final e in c.estadosDisponibles)
-                            if (c.estadoElegido.value != e)
-                              Padding(
-                                padding: const EdgeInsets.only(right: 8),
-                                child: _Chip(
-                                  texto: 'home.estado.$e'.i18n,
-                                  marcado: c.estadoElegido.value == e,
-                                  onTap: () => c.estadoElegido.value =
-                                      c.estadoElegido.value == e ? null : e,
-                                ),
-                              ),
-                          if (c.estadosDisponibles.isNotEmpty &&
-                              c.formatosDisponibles.isNotEmpty)
-                            _separadorDeChips,
-                          // El formato después del estado y antes del género: son
-                          // pocos y acotan mucho —«una película», «un manhwa»— así
-                          // que van donde se ven sin desplazar.
-                          for (final f in c.formatosDisponibles)
-                            if (c.formatoElegido.value != f)
-                              Padding(
-                                padding: const EdgeInsets.only(right: 8),
-                                child: _Chip(
-                                  texto: 'home.formato.$f'.i18n,
-                                  marcado: c.formatoElegido.value == f,
-                                  onTap: () => c.formatoElegido.value =
-                                      c.formatoElegido.value == f ? null : f,
-                                ),
-                              ),
-                          if ((c.estadosDisponibles.isNotEmpty ||
-                                  c.formatosDisponibles.isNotEmpty) &&
-                              generos.isNotEmpty)
-                            _separadorDeChips,
-                          for (final g in generos)
-                            if (c.generoElegido.value != g)
-                              Padding(
-                                padding: const EdgeInsets.only(right: 8),
-                                child: _Chip(
-                                  // El chip muestra la traducción; lo que se guarda y se
-                                  // compara es el identificador.
-                                  texto: 'home.genero.$g'.i18n,
-                                  marcado: c.generoElegido.value == g,
-                                  // Volver a tocar el mismo lo apaga: sin eso, una vez
-                                  // elegido un género no habría forma de volver a
-                                  // «todos» salvo con Restablecer.
-                                  onTap: () => c.generoElegido.value =
-                                      c.generoElegido.value == g ? null : g,
-                                ),
-                              ),
-                        ],
-                      ),
-                    ),
-                  ),
-                  if (!_esTactil) ...[
-                    _FlechaDeFila(
-                        icono: Icons.chevron_right_rounded,
-                        onTap: () => _correr(1)),
-                    SizedBox(width: margen - 8),
-                  ],
-                ],
-              ),
-            // ── El alto está SIEMPRE reservado ────────────────────────
-            //
-            // Antes esta línea aparecía al marcar un chip y desaparecía al
-            // aplicar. Cada vez, todo lo de abajo —el carrusel y las filas
-            // enteras— saltaba cuarenta píxeles. Con el alto fijo solo cambia
-            // lo que hay adentro, y nada se mueve.
-            SizedBox(
-              height: 44,
-              // ── En escritorio la fila está SIEMPRE ────────────────────
-              //
-              // Acá vive el botón de refrescar, y hasta ahora la fila entera
-              // solo aparecía si había un filtro puesto o marcado. O sea que
-              // el botón se escondía justo en el caso normal: sin ningún
-              // filtro, que es cuando alguien instala una extensión y quiere
-              // verla en el Home. Quedaba otra vez sin forma de actualizar que
-              // no fuera cerrar la app.
-              //
-              // En celular no hace falta: ahí se tira de la pantalla y el
-              // gesto está siempre disponible, así que la fila sigue
-              // apareciendo solo cuando tiene algo que decir.
-              //
-              // En televisor tampoco: no hay de dónde tirar. Por eso acá y en
-              // los tres `if` de abajo se pregunta por los GESTOS y no por
-              // «pantalla táctil» — un Android TV es lo primero pero no lo
-              // segundo, y por preguntar mal se quedaba sin botón de aplicar y
-              // sin botón de refrescar, con un cartel que le pedía deslizar.
-              child: (c.hayCambiosSinAplicar || hayAlgo || !_hayGestos)
-                  ? Padding(
-                      padding: EdgeInsets.fromLTRB(margen, 10, margen, 0),
-                      child: Row(
-                        children: [
-                          // ── Cómo se aplica, según el aparato ──────────────
-                          //
-                          // En celular se desliza hacia abajo, que es el gesto que
-                          // ya existe para refrescar. En escritorio ese gesto no
-                          // existe —nadie tira de una ventana con el mouse— así que
-                          // ahí va un botón, que es lo que se busca.
-                          if (c.hayCambiosSinAplicar && _hayGestos) ...[
-                            Icon(Icons.arrow_downward_rounded,
-                                size: 15, color: HomeTheme.accentPink),
-                            const SizedBox(width: 6),
-                            Expanded(
-                              child: Text(
-                                'home.filtros-desliza'.i18n,
-                                style: TextStyle(
-                                  fontSize: 12.5,
-                                  color: HomeTheme.accentPink,
-                                  fontWeight: FontWeight.w600,
-                                ),
-                              ),
-                            ),
-                          ] else
-                            const Spacer(),
-                          if (hayAlgo || c.hayFiltros)
-                            TextButton(
-                              onPressed: c.restablecerFiltros,
-                              child: Text('home.filtros-restablecer'.i18n),
-                            ),
-                          // En escritorio no hay «tirar para refrescar»: el gesto
-                          // no existe con mouse. Sin esto, la única forma de poner el
-                          // Home al día —o de que aparezca una extensión recién
-                          // instalada— era cerrar y volver a abrir la app.
-                          if (!_hayGestos) ...[
-                            const SizedBox(width: 8),
-                            _BotonDeBarra(
-                              // Mientras trabaja cambia de ícono y no se deja
-                              // tocar: sin eso, el botón no daba ninguna señal
-                              // de que estuviera pasando algo y la gente lo
-                              // tocaba tres veces seguidas.
-                              icono: c.refrescando.value
-                                  ? Icons.hourglass_top_rounded
-                                  : Icons.refresh_rounded,
-                              etiqueta: 'home.refrescar'.i18n,
-                              onTap:
-                                  c.refrescando.value ? null : c.refrescarTodo,
-                            ),
-                          ],
-                          if (!_hayGestos && c.hayCambiosSinAplicar) ...[
-                            const SizedBox(width: 8),
-                            FilledButton.icon(
-                              onPressed: c.aplicarFiltros,
-                              icon: const Icon(Icons.filter_alt_rounded,
-                                  size: 18),
-                              label: Text('home.filtros-aplicar'.i18n),
-                              style: FilledButton.styleFrom(
-                                backgroundColor: HomeTheme.accentPink,
-                                foregroundColor: Colors.white,
-                              ),
-                            ),
-                          ],
-                        ],
-                      ),
-                    )
-                  : const SizedBox.shrink(),
-            ),
-          ],
-        ),
-      );
-    });
-  }
-}
-
-/// La rayita que separa un grupo de chips del siguiente.
-const _separadorDeChips = Padding(
-  padding: EdgeInsets.only(right: 8),
-  child: SizedBox(
-    width: 1,
-    height: 22,
-    child: ColoredBox(color: Color(0x24FFFFFF)),
-  ),
-);
-
-/// Un botón discreto de la barra de filtros, solo con su ícono.
-class _BotonDeBarra extends StatelessWidget {
-  const _BotonDeBarra({
-    required this.icono,
-    required this.etiqueta,
-    required this.onTap,
-  });
-
-  final IconData icono;
-  final String etiqueta;
-  final VoidCallback? onTap;
-
-  @override
-  Widget build(BuildContext context) {
-    return Tooltip(
-      message: etiqueta,
-      child: IconButton(
-        onPressed: onTap,
-        icon: Icon(icono, size: 20, color: HomeTheme.textMuted),
-        constraints: const BoxConstraints(minWidth: 38, minHeight: 38),
-        splashRadius: 19,
-      ),
-    );
-  }
-}
-
-class _Chip extends StatelessWidget {
-  const _Chip({
-    required this.texto,
-    required this.marcado,
-    required this.onTap,
-  });
-
-  final String texto;
-  final bool marcado;
-  final VoidCallback onTap;
-
-  @override
-  Widget build(BuildContext context) {
-    // En TV el chip es un FocusableCard: con `GestureDetector` a secas no
-    // hay nada que el D-pad pueda enfocar, así que la fila de filtros
-    // quedaba visible pero intocable con el mando.
-    if (PlatformTv.esTelevisionSync) {
-      return FocusableCard(borderRadius: 20, onTap: onTap, child: _pastilla());
-    }
-    return GestureDetector(onTap: onTap, child: _pastilla());
-  }
-
-  Widget _pastilla() {
-    return AnimatedContainer(
-        duration: const Duration(milliseconds: 160),
-        // ── Ni el ancho ni la posición del texto cambian al marcarlo ──────
-        //
-        // Van tres intentos con esto, así que vale explicar por qué los dos
-        // anteriores no alcanzaban:
-        //
-        //   1. Achicar el relleno izquierdo para hacerle sitio al ganchito.
-        //      El chip CRECÍA al tocarlo y empujaba a los de la derecha.
-        //   2. Reservar el hueco del ganchito siempre, dentro de la fila.
-        //      El ancho ya no cambiaba, pero el texto quedaba corrido a la
-        //      derecha en los que NO estaban marcados — el hueco vacío lo
-        //      empujaba igual.
-        //
-        // Lo que funciona: relleno **parejo a los dos lados** y el ganchito
-        // fuera del flujo, dibujado encima. El texto está centrado siempre,
-        // el chip mide lo mismo en los dos estados, y nada se mueve.
-        padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 8),
-        decoration: BoxDecoration(
-          color: marcado
-              ? HomeTheme.accentPink.withValues(alpha: 0.18)
-              : HomeTheme.cardSurface,
-          borderRadius: BorderRadius.circular(20),
-          border: Border.all(
-            color: marcado
-                ? HomeTheme.accentPink
-                : HomeTheme.contraste.withValues(alpha: 0.08),
-          ),
-        ),
-        child: Stack(
-          clipBehavior: Clip.none,
-          alignment: Alignment.center,
-          children: [
-            Text(
-              texto,
-              textAlign: TextAlign.center,
-              style: TextStyle(
-                fontSize: 13.5,
-                fontWeight: FontWeight.w600,
-                color: marcado ? Colors.white : HomeTheme.textMuted,
-              ),
-            ),
-            // El ganchito, no solo el color: sobre un fondo oscuro, «rosa
-            // tenue» y «gris» se parecen bastante, y hay gente que no
-            // distingue esos dos tonos. La marca tiene que ser una forma.
-            //
-            // Va como capa y con desplazamiento negativo: se mete en el relleno
-            // de 24 que ya está reservado, sin ocupar lugar en el flujo.
-            if (marcado)
-              Positioned(
-                left: -19,
-                child: Icon(Icons.check_rounded,
-                    size: 15, color: HomeTheme.accentPink),
-              ),
-          ],
-        ),
     );
   }
 }
@@ -852,9 +320,6 @@ class _CarruselAndroidState extends State<_CarruselAndroid>
   /// los anchos, así que el dibujo sigue al dedo sin saltos.
   double _p = 0;
   bool _sembrado = false;
-
-  /// El último aviso de «volvé al principio» que se atendió. Ver `reinicios`.
-  int _reinicioVisto = 0;
 
   late final AnimationController _anim = AnimationController(
     vsync: this,
@@ -1035,9 +500,8 @@ class _CarruselAndroidState extends State<_CarruselAndroid>
   /// portadas de alguna.
   static int _firmaDe(
       List<(String, List<ExtensionListItem>)> grupos, bool porBloques) {
-    // El modo entra en la firma: al poner o sacar un filtro cambia cómo se
-    // arma la lista aunque el contenido sea el mismo, y sin esto se reusaría
-    // la de antes.
+    // El modo entra en la firma: cómo se arma la lista puede cambiar aunque
+    // el contenido sea el mismo, y sin esto se reusaría la de antes.
     var f = grupos.length * 2 + (porBloques ? 1 : 0);
     for (final g in grupos) {
       f = f * 31 + g.$2.length;
@@ -1303,16 +767,6 @@ class _CarruselAndroidState extends State<_CarruselAndroid>
     double ultimoReal,
   ) {
     if (planos.isEmpty) return;
-    // ── Con filtro se le pide a TODAS, no a la del foco ────────────────────
-    //
-    // Ahí la lista va en rondas de ocho (ver _planos), así que hacer crecer
-    // solo la que se está mirando rompería las rondas: esa extensión pasaría a
-    // tener el doble que las demás. Pidiéndole a todas, la ronda siguiente
-    // llega completa.
-    if (widget.c.hayFiltros) {
-      if (destino >= ultimoReal - 10) unawaited(widget.c.traerMas());
-      return;
-    }
     final foco = destino.round().clamp(0, planos.length - 1);
     final finBloque = _finDelBloque(planos, foco);
     // Cuatro tarjetas de aviso: es lo que se ve de un vistazo a cada lado, así
@@ -1343,35 +797,7 @@ class _CarruselAndroidState extends State<_CarruselAndroid>
   Widget build(BuildContext context) {
     return Obx(() {
       final grupos = widget.c.destacadosVisibles;
-      // Filtrando NO se vacía: las portadas se quedan y se reemplazan cuando
-      // llega lo nuevo. Vaciarlo dejaba media pantalla en gris y después todo
-      // de vuelta — dos saltos para una sola espera.
       // La lista se arma SIEMPRE en rondas de ocho. Ver _planos.
-      final conFiltro = widget.c.hayFiltros;
-
-      // ── Mientras se aplica un filtro no se deja deslizar ────────────────
-      //
-      // El síntoma: filtrabas, el acordeón te mandaba al principio, empezabas a
-      // moverte mientras todavía cargaba y al terminar te devolvía al principio
-      // otra vez.
-      //
-      // El motivo: `carruselExt` es un índice DENTRO de `destacadosVisibles`, y
-      // esa lista va creciendo a medida que contestan las extensiones. El índice
-      // cuatro de recién no es la misma extensión que el índice cuatro de ahora.
-      // Con la lista cambiando debajo, el ancla —la tarjeta que estabas mirando—
-      // se perdía, y sin ancla `_indiceGlobal` devuelve cero: al principio.
-      //
-      // Se podría intentar seguir la tarjeta por paquete en vez de por índice,
-      // pero no arregla el fondo: con el filtro puesto la lista se arma en rondas
-      // (ver _planos), así que cada extensión que llega REORDENA todo lo demás.
-      // Deslizarse sobre una lista que se está reordenando sola no tiene una
-      // posición «correcta» a la que volver.
-      //
-      // Así que mientras dura, los bloques grises y quieto. Es un solo viaje al
-      // principio, y cae cuando no estabas haciendo nada. La espera es corta a
-      // propósito: el controlador suelta apenas contestan dos extensiones, no
-      // cuando terminan las once (ver aplicarFiltros).
-      if (widget.c.aplicandoFiltros.value) return const _CarruselEsperando();
 
       final planos = grupos.isEmpty
           ? const <(String, ExtensionListItem)>[]
@@ -1391,42 +817,6 @@ class _CarruselAndroidState extends State<_CarruselAndroid>
       final largoTanda = grupos[widget.c.carruselExt].$2.length;
       if (widget.c.carruselPos >= largoTanda) {
         widget.c.carruselPos = largoTanda > 0 ? largoTanda - 1 : 0;
-      }
-      // ── Filtrar lleva al principio ────────────────────────────────────
-      //
-      // Se mira acá, dentro del Obx, para que el aviso llegue solo: no hace
-      // falta que nadie llame a nada. Y se limpia el ancla, porque apunta a una
-      // tarjeta que con el filtro nuevo puede no estar.
-      final reinicio = widget.c.reinicios.value;
-      if (reinicio != _reinicioVisto) {
-        _reinicioVisto = reinicio;
-        _anclaPaquete = null;
-        _anclaUrl = null;
-        _sobrante = 0;
-        // Filtrar sí manda al principio de verdad: se suelta también la marca
-        // del controlador, o al volver a montarse el acordeón se restauraría
-        // la posición vieja, que es de otro filtro.
-        widget.c.acordeonUbicado = false;
-        // ── Viajando, no de un salto ────────────────────────────────────
-        //
-        // Aparecer de golpe en la primera no se entiende: el usuario no sabe si
-        // volvió al principio o si le cambiaron la lista debajo. Yendo, se ve de
-        // dónde a dónde fue.
-        //
-        // El viaje se pide para el próximo cuadro y no acá: esto corre DENTRO de
-        // `build`, y arrancar la animación en el medio de un dibujo dispara un
-        // `setState` mientras Flutter todavía está dibujando.
-        //
-        // Si todavía no se había sembrado —o ya estaba en la primera— no hay
-        // nada que animar y se siembra en cero como siempre.
-        if (_sembrado && _p > 0.01) {
-          WidgetsBinding.instance.addPostFrameCallback((_) {
-            if (!mounted) return;
-            _irA(0, widget.c.destacadosVisibles);
-          });
-        } else {
-          _sembrado = false;
-        }
       }
       if (!_sembrado) {
         _sembrado = true;
@@ -1475,9 +865,7 @@ class _CarruselAndroidState extends State<_CarruselAndroid>
       // tarjeta pega un tirón — se siente como si la app hubiera recargado
       // algo. Así que si la lista cambió mientras arrastrabas, queda anotado y
       // se acomoda al soltar, cuando ya no se nota.
-      // Con el modo incluido: poner o sacar un filtro reordena la lista aunque
-      // el contenido sea el mismo, y ahí también hay que volver a anclar.
-      final firma = _firmaDe(grupos, conFiltro);
+      final firma = _firmaDe(grupos, true);
       if (firma != _firmaVista) {
         _firmaVista = firma;
         _reubicarPorAncla(planos, grupos);
@@ -2552,9 +1940,8 @@ class _FilaAndroidState extends State<_FilaAndroid> {
             widget.fila.refrescando.value
                 ? 'home.modo-buscando'.i18n
                 : widget.c.etiquetaDe(widget.fila) ??
-                    switch (widget.c.modoDe(widget.fila)) {
+                    switch (widget.fila.modo) {
                       ModoDeFila.popular => 'home.modo-popular'.i18n,
-                      ModoDeFila.filtrado => 'home.modo-filtrado'.i18n,
                       ModoDeFila.reciente => 'home.modo-reciente'.i18n,
                     },
             maxLines: 1,

@@ -33,9 +33,6 @@ enum ModoDeFila {
   /// Lo más visto. Solo donde la extensión tiene un orden por popularidad —
   /// medido: JKAnime, LaMovie y ManhwaWeb. En las demás no se puede pedir.
   popular,
-
-  /// Hay un filtro puesto: lo que manda es el filtro, no el criterio.
-  filtrado,
 }
 
 /// Una fila del Home: una extensión y lo último que tiene.
@@ -160,21 +157,10 @@ class CatalogoExtensionesController extends GetxController {
   ///
   /// ── Por qué no es `destacados` a secas ──────────────────────────────────
   ///
-  /// Porque con un filtro puesto, las extensiones que no lo tienen siguen
-  /// trayendo su contenido de siempre —y está bien, su fila lo aclara con «Lo
-  /// más reciente»—. Pero el carrusel no tiene encabezado por extensión: es una
-  /// sola tira. Ahí, una película de FuegoCine entre puros animes en emisión se
-  /// lee como que el filtro no funciona.
-  ///
-  /// Así que el carrusel muestra solo lo que SÍ está filtrado. Y como es una
-  /// vista calculada y no una lista aparte, al restablecer vuelve todo en el
-  /// acto sin volver a pedirle nada a nadie.
-  List<(String, List<ExtensionListItem>)> get destacadosVisibles {
-    final lista = hayFiltros
-        ? destacados.where((d) => puedeConEsteGenero(d.$1)).toList()
-        : destacados.toList();
-    return _rotadas(lista);
-  }
+  /// Sin la barra de filtros ya no hay nada que dejar afuera acá — es una
+  /// vista calculada (rotada, ver `_rotadas`) sobre `destacados` entero.
+  List<(String, List<ExtensionListItem>)> get destacadosVisibles =>
+      _rotadas(destacados.toList());
 
   /// La misma lista, empezando por otra extensión.
   ///
@@ -221,14 +207,6 @@ class CatalogoExtensionesController extends GetxController {
   /// aunque la app se cierre por completo. Un número al azar no servía: dos
   /// aperturas seguidas podían caer en la misma y parecía que no rotaba.
   int _arranque = 0;
-
-  /// Sube cada vez que hay que llevar el acordeón al principio.
-  ///
-  /// Un contador y no un booleano: un booleano habría que apagarlo después, y si
-  /// el acordeón no estaba montado en ese momento se perdería el aviso. Con un
-  /// número, el acordeón compara con el último que vio y se pone al día cuando
-  /// le toque, sin que nadie tenga que limpiar nada.
-  final reinicios = 0.obs;
 
   /// Cuántas se toman de cada extensión para el carrusel.
   ///
@@ -452,52 +430,6 @@ class CatalogoExtensionesController extends GetxController {
     'novela': ['novela', 'novelas', 'novel', 'light novel'],
   };
 
-  /// Un chip solo aparece si al menos ESTAS extensiones pueden contestarlo.
-  ///
-  /// Con una sola, tocarlo dejaba el Home con una fila y quince líneas de «no
-  /// tiene ese género» — se leía como que el filtro rompió algo.
-  static const _minimoParaOfrecer = 2;
-
-  /// Los géneros que se ofrecen, en el orden de [_canonicos].
-  final generosDisponibles = <String>[].obs;
-
-  /// Los estados que se ofrecen, en el orden de [_estados].
-  final estadosDisponibles = <String>[].obs;
-  final formatosDisponibles = <String>[].obs;
-
-  final estadoElegido = RxnString();
-  String? estadoAplicado;
-
-  final formatoElegido = RxnString();
-  String? formatoAplicado;
-
-  /// Lo que el usuario tocó pero todavía no aplicó.
-  final tipoElegido = Rxn<ExtensionType>();
-  final generoElegido = RxnString();
-
-  /// Lo que está aplicado de verdad, o sea con lo que se pidió el contenido.
-  ExtensionType? tipoAplicado;
-  String? generoAplicado;
-
-  bool get hayCambiosSinAplicar =>
-      tipoElegido.value != tipoAplicado ||
-      generoElegido.value != generoAplicado ||
-      estadoElegido.value != estadoAplicado ||
-      formatoElegido.value != formatoAplicado;
-
-  bool get hayFiltros =>
-      tipoAplicado != null ||
-      generoAplicado != null ||
-      estadoAplicado != null ||
-      formatoAplicado != null;
-
-  /// Hay un cambio de filtro en curso.
-  ///
-  /// Mientras dure, las filas muestran los bloques grises en vez de su
-  /// contenido: lo que está en pantalla es del filtro anterior, y dejarlo
-  /// quieto haría creer que tocar el chip no sirvió de nada.
-  final aplicandoFiltros = false.obs;
-
   /// Para cada extensión y cada valor canónico —género o estado—, EN QUÉ
   /// filtro vive y con qué valor se pide.
   ///
@@ -656,7 +588,6 @@ class CatalogoExtensionesController extends GetxController {
     _popularPorExtension.removeWhere((p, _) => !vivas.contains(p));
     _segurosPorExtension.removeWhere((p, _) => !vivas.contains(p));
 
-    final cuantas = <String, int>{};
     var alguna = false;
     var salteadas = 0;
     for (final e in _motoresDelHome.entries) {
@@ -769,32 +700,11 @@ class CatalogoExtensionesController extends GetxController {
       }
     }
 
-    // Sin nada leído no se toca la barra: se deja lo que ya había y se
-    // reintenta la próxima. `salteadas` ya no cierra nada — cada extensión
-    // lleva su propia marca, así que la que quedó ocupada vuelve sola.
+    // Sin nada leído no se toca nada: se deja lo que ya había y se reintenta
+    // la próxima. `salteadas` ya no cierra nada — cada extensión lleva su
+    // propia marca, así que la que quedó ocupada vuelve sola.
     if (!alguna && salteadas > 0) return;
 
-    // ── Se cuenta sobre TODO lo acumulado, no sobre esta vuelta ──────────
-    //
-    // Antes se contaba con lo leído en la pasada, que servía cuando la pasada
-    // era siempre todas. Ahora las que ya se conocen se saltean, así que
-    // contar solo lo de esta vuelta dejaría la barra con los ejes de la última
-    // extensión instalada y nada más.
-    cuantas.clear();
-    for (final entrada in _ejesPorExtension.entries) {
-      if (!_motoresDelHome.containsKey(entrada.key)) continue;
-      for (final id in entrada.value.keys) {
-        cuantas[id] = (cuantas[id] ?? 0) + 1;
-      }
-    }
-
-    bool ofrecible(String id) => (cuantas[id] ?? 0) >= _minimoParaOfrecer;
-
-    // En el orden de las listas curadas, no alfabético: así los más usados
-    // —Acción, Aventura, Comedia— quedan primero y no hay que desplazarse.
-    generosDisponibles.assignAll(_canonicos.keys.where(ofrecible));
-    estadosDisponibles.assignAll(_estados.keys.where(ofrecible));
-    formatosDisponibles.assignAll(_formatos.keys.where(ofrecible));
     _repartirModos();
     unawaited(_guardarFiltros());
   }
@@ -881,82 +791,6 @@ class CatalogoExtensionesController extends GetxController {
     return null;
   }
 
-  /// ¿Esta extensión puede contestar al género que está aplicado?
-  bool puedeConEsteGenero(String package) {
-    final ejes = _ejesPorExtension[package];
-    for (final id in [generoAplicado, estadoAplicado]) {
-      if (id == null) continue;
-      if (ejes == null || !ejes.containsKey(id)) return false;
-    }
-    final formato = formatoAplicado;
-    if (formato != null) {
-      final loTieneComoFiltro = ejes?.containsKey(formato) ?? false;
-      if (!loTieneComoFiltro && !_yaEsDeEseFormato(package, formato)) {
-        return false;
-      }
-    }
-    return true;
-  }
-
-  /// La extensión ENTERA es de ese formato, así que no necesita filtrarlo.
-  ///
-  /// ── El caso que faltaba ─────────────────────────────────────────────────
-  ///
-  /// Olympus es un sitio de manga y su `type` lo dice, pero NO tiene filtro
-  /// «Tipo» — porque todo lo que publica ya es manga, no hay nada que elegir.
-  /// Con la regla anterior, pedirle el formato «Manga» lo dejaba afuera: justo
-  /// al revés de lo que corresponde.
-  ///
-  /// ── Por qué solo manga y novela ─────────────────────────────────────────
-  ///
-  /// Porque son los únicos donde el tipo de la extensión ES el formato. Un
-  /// sitio de vídeo tiene películas Y series mezcladas, así que su `type` no
-  /// alcanza para contestar «solo películas»: ahí sí hace falta el filtro del
-  /// sitio, y si no lo tiene, no puede.
-  bool _yaEsDeEseFormato(String package, String formato) {
-    final tipo = ExtensionUtils.runtimes[package]?.extension.type ??
-        ExtensionUtils.vistaPrevia[package]?.extension.type;
-    if (tipo == null) return false;
-    return switch (formato) {
-      'manga' => tipo == ExtensionType.manga,
-      'novela' => tipo == ExtensionType.fikushon,
-      _ => false,
-    };
-  }
-
-  /// ¿Esta fila entra en el tipo elegido?
-  bool entraEnElTipo(FilaDeExtension fila) {
-    final t = tipoAplicado;
-    if (t == null) return true;
-    final ext = ExtensionUtils.runtimes[fila.package]?.extension ??
-        ExtensionUtils.vistaPrevia[fila.package]?.extension;
-    return ext?.type == t;
-  }
-
-  /// Deja lo elegido como aplicado y vuelve a pedir todo.
-  ///
-  /// ── Lo viejo se queda hasta que llegue lo nuevo ────────────────────────
-  ///
-  /// La primera versión de esto vaciaba `items` y `destacados` antes de pedir
-  /// nada. Se veía pésimo y era peligroso: si un sitio tardaba o fallaba —y
-  /// con once a la vez siempre falla alguno— esa fila se quedaba SIN nada y
-  /// mostrando «no respondió». O sea que aplicar un filtro podía dejar el Home
-  /// entero vacío, y encima daba a entender que la culpa era de las
-  /// extensiones.
-  ///
-  /// Ahora solo se marca que hay que volver a pedir (`traidoEl = null`). Cada
-  /// fila reemplaza su contenido cuando el suyo llega, y la que falle se queda
-  /// con lo de antes — que es exactamente la regla que `_traer` ya seguía para
-  /// los refrescos normales.
-  ///
-  /// El precio es un rato con contenido del filtro anterior en pantalla. Es
-  /// mucho más barato que un Home en blanco.
-  /// Lo que muestra una fila ahora mismo, para el encabezado.
-  ///
-  /// Solo dice «según tu filtro» si esta extensión PUEDE contestarlo. Las que
-  /// no lo tienen siguen mostrando lo suyo, y el encabezado lo dice: mentirles
-  /// con «según tu filtro» sobre contenido que no está filtrado es peor que no
-  /// filtrar.
   /// Cómo llama ESTA extensión a su sección de «lo último».
   ///
   /// Sale del manifiesto de la extensión (`@latestLabel`): «Programación»,
@@ -966,11 +800,10 @@ class CatalogoExtensionesController extends GetxController {
   /// Null cuando la extensión no lo declara —una vieja, o una de la comunidad—
   /// y ahí el Home cae al texto genérico. Nada se rompe por no tenerlo.
   ///
-  /// Y solo aplica al modo «reciente»: con un filtro puesto, o mostrando lo más
-  /// visto, la fila NO está mostrando esa sección y decir su nombre sería
-  /// mentir.
+  /// Y solo aplica al modo «reciente»: mostrando lo más visto, la fila NO está
+  /// mostrando esa sección y decir su nombre sería mentir.
   String? etiquetaDe(FilaDeExtension fila) {
-    if (modoDe(fila) != ModoDeFila.reciente) return null;
+    if (fila.modo != ModoDeFila.reciente) return null;
     final ext = ExtensionUtils.runtimes[fila.package]?.extension ??
         ExtensionUtils.vistaPrevia[fila.package]?.extension;
     final clave = ext?.latestLabel?.trim();
@@ -990,100 +823,6 @@ class CatalogoExtensionesController extends GetxController {
     final ruta = 'home.seccion.$clave';
     final texto = ruta.i18n;
     return texto == ruta ? clave : texto;
-  }
-
-  ModoDeFila modoDe(FilaDeExtension fila) =>
-      (hayFiltros && puedeConEsteGenero(fila.package))
-          ? ModoDeFila.filtrado
-          : fila.modo;
-
-  Future<void> aplicarFiltros() async {
-    // Ya hay uno en curso: tocar «Filtrar» dos veces, o deslizar mientras
-    // todavía está pidiendo, encadenaba dos esperas de veinte segundos y dos
-    // tandas de pedidos a once sitios. La segunda se descarta.
-    if (aplicandoFiltros.value) return;
-    tipoAplicado = tipoElegido.value;
-    generoAplicado = generoElegido.value;
-    estadoAplicado = estadoElegido.value;
-    formatoAplicado = formatoElegido.value;
-    aplicandoFiltros.value = true;
-    // ── Al principio del acordeón ──────────────────────────────────────
-    //
-    // Filtrar cambia QUÉ contenido hay, así que la posición vieja no significa
-    // nada: si estabas en la tarjeta treinta y el filtro deja doce, quedabas al
-    // final de una lista que no habías visto. Y si deja cuarenta, arrancabas por
-    // el medio sin haber visto lo primero, que es justo lo que pediste ver.
-    reinicios.value++;
-    for (final fila in filas) {
-      fila.traidoEl = null;
-      // Se vuelve a la primera página: las que se habían pedido de más son de
-      // otra búsqueda y no tienen nada que ver con este filtro.
-      fila.pagina = 1;
-    }
-    // ── Avisar del cambio A MANO ───────────────────────────────────────
-    //
-    // `tipoAplicado`, `generoAplicado` y `formatoAplicado` son campos planos,
-    // no Rx. Eso es a propósito —se leen en cada fila y no hace falta que cada
-    // lectura suscriba— pero tiene una consecuencia: al aplicar no cambia nada
-    // observable, así que el Obx del Home NO se entera.
-    //
-    // El síntoma medido en PC: se filtraba y las extensiones que no tenían ese
-    // género seguían arriba; había que bajar hasta el final para encontrar las
-    // que sí. Recién al salir del Home y volver aparecían ordenadas, porque
-    // ahí el árbol se reconstruía por otro motivo.
-    //
-    // Este `refresh` es el aviso. Y va ANTES de pedir nada: el orden se sabe
-    // de entrada —sale de los filtros ya leídos, no del contenido— así que los
-    // bloques grises salen directamente en su sitio definitivo y no se mueve
-    // nada cuando llegan las portadas.
-    filas.refresh();
-    try {
-      await refrescarTodo();
-      // ── Se suelta cuando hay algo REAL que mostrar, no cuando contestan
-      //    las once ──────────────────────────────────────────────────────
-      //
-      // `refrescarTodo` solo ENCOLA; el trabajo sigue después. Antes se
-      // esperaba a que la cola se vaciara entera, hasta veinte segundos: con
-      // una extensión lenta el usuario se quedaba mirando bloques grises un
-      // montón de rato aunque las primeras ya hubieran contestado.
-      //
-      // Ahora alcanza con que el acordeón tenga contenido de DOS extensiones
-      // —o de una, si es la única que puede con este filtro—. Con eso ya hay
-      // qué deslizar, y las que faltan se van sumando por detrás sin que nadie
-      // espere: la lista crece por el final y la rotación está anclada por
-      // paquete, así que nada se reordena bajo el dedo.
-      //
-      // El tope de veinte segundos se queda como red: si NINGUNA contesta, hay
-      // que soltar igual y dejar que cada fila muestre lo suyo.
-      final objetivo = _cuantasPuedenConElFiltro() >= 2 ? 2 : 1;
-      for (var i = 0; i < 80 && (_enVuelo > 0 || _cola.isNotEmpty); i++) {
-        await Future<void>.delayed(const Duration(milliseconds: 250));
-        if (destacadosVisibles.length >= objetivo) break;
-      }
-    } finally {
-      aplicandoFiltros.value = false;
-      // Y otra vez al terminar: alguna fila pudo quedar sin contenido para
-      // este filtro, y eso cambia dónde va.
-      filas.refresh();
-    }
-  }
-
-  /// Cuántas extensiones pueden contestar al filtro que está puesto.
-  ///
-  /// Para no esperar a dos cuando solo una puede: ahí la espera nunca se
-  /// cumpliría y se irían los veinte segundos completos.
-  int _cuantasPuedenConElFiltro() {
-    if (!hayFiltros) return filas.length;
-    return filas.where((f) => puedeConEsteGenero(f.package)).length;
-  }
-
-  /// Vuelve a como estaba: sin filtros.
-  Future<void> restablecerFiltros() async {
-    tipoElegido.value = null;
-    generoElegido.value = null;
-    estadoElegido.value = null;
-    formatoElegido.value = null;
-    await aplicarFiltros();
   }
 
   var _enVuelo = 0;
@@ -1398,8 +1137,7 @@ class CatalogoExtensionesController extends GetxController {
   bool get puedeTraerMas => filas.any((f) =>
       (f.estadoExt == EstadoExtension.activa || f.esVistaPrevia) &&
       f.pagina < _maxPaginas &&
-      f.items.isNotEmpty &&
-      (!hayFiltros || puedeConEsteGenero(f.package)));
+      f.items.isNotEmpty);
 
   /// Pide la página siguiente.
   ///
@@ -1423,7 +1161,6 @@ class CatalogoExtensionesController extends GetxController {
         .where((f) => f.estadoExt == EstadoExtension.activa || f.esVistaPrevia)
         .where((f) => f.pagina < _maxPaginas)
         .where((f) => f.items.isNotEmpty)
-        .where((f) => !hayFiltros || puedeConEsteGenero(f.package))
         .toList();
     if (soloPaquete != null) {
       final delFoco =
@@ -1617,11 +1354,9 @@ class CatalogoExtensionesController extends GetxController {
   /// zonas no viven en este controller, así que necesitan poder pedirle
   /// esto desde afuera sin duplicar el escaneo de `_ejesPorExtension`.
   ///
-  /// A propósito, NO lee `generoAplicado`/`estadoAplicado`/
-  /// `formatoAplicado` (el estado compartido y mutable de Inicio, ver el
-  /// comentario largo en `hayCambiosSinAplicar`): una zona de contenido
-  /// jamás debe pisar ni depender del filtro que el usuario dejó puesto en
-  /// otra pantalla — y tampoco muta nada acá, solo lee cachés propios.
+  /// No toca ningún estado compartido con Inicio, ni lee ni escribe —
+  /// una zona de contenido jamás debe pisar ni depender de nada que otra
+  /// pantalla haya dejado puesto. Solo lee cachés propios del controller.
   ///
   /// Null si la extensión no declara ningún eje que separe las dos cosas —
   /// quien llama a esto tiene que excluir esa extensión de la zona en vez
@@ -1651,14 +1386,14 @@ class CatalogoExtensionesController extends GetxController {
 
   /// El filtro concreto que hay que mandarle a ESTA extensión, o null.
   ///
-  /// Null significa «pedí lo último de siempre»: o no hay género aplicado, o
-  /// esta extensión no lo conoce.
+  /// Sin la barra de filtros ya no hay nada que el usuario haya elegido —
+  /// esto existe solo para dejar cerrada la puerta a adultos de una
+  /// extensión mixta (ManhwaWeb, ShadeManga) también en su fila de Inicio,
+  /// nunca solo en el buscador. Null significa «pedí lo último de
+  /// siempre», cuando no hace falta ninguna puerta.
   Map<String, List<String>>? _generoPara(String package) {
-    final ejes = _ejesPorExtension[package];
-    if (ejes == null) return null;
-    // Se arranca con lo seguro puesto: si esta extensión tiene una puerta a
-    // contenido adulto, va cerrada de entrada.
-    // Las dos fuentes, no una: la que se leyó al armar los chips y la que
+    if (_ejesPorExtension[package] == null) return null;
+    // Las dos fuentes, no una: la que se leyó al armar los ejes y la que
     // anota la clasificación de extensiones. Las dos preguntan lo mismo a la
     // misma extensión, pero se llenan en momentos distintos — si una todavía
     // no corrió, la otra tapa el hueco. Acá una ausencia significa «puerta
@@ -1667,23 +1402,11 @@ class CatalogoExtensionesController extends GetxController {
       ...?ExtensionUtils.segurosDe(package),
       ...?_segurosPorExtension[package],
     };
-    var eligioAlgo = false;
-    for (final id in [generoAplicado, estadoAplicado, formatoAplicado]) {
-      if (id == null) continue;
-      // Si la extensión entera ya es de ese formato, no hay nada que pedirle:
-      // todo lo que devuelva sirve. Ver `_yaEsDeEseFormato`.
-      final donde = ejes[id];
-      if (donde == null) continue;
-      eligioAlgo = true;
-      // Dos ejes pueden caer en el mismo filtro del sitio; ahí se acumulan.
-      (filtro[donde.clave] ??= <String>[]).add(donde.valor);
-    }
     // ── Con lo seguro puesto SIEMPRE se usa search ────────────────────
     //
-    // Aunque el usuario no haya elegido nada. `latest()` no acepta filtros, así
-    // que por ese camino no hay forma de decirle «sin contenido para adultos»,
-    // y encima suele pegarle a OTRO endpoint del sitio, uno que ni siquiera
-    // conoce ese parámetro.
+    // `latest()` no acepta filtros, así que por ese camino no hay forma de
+    // decirle «sin contenido para adultos», y encima suele pegarle a OTRO
+    // endpoint del sitio, uno que ni siquiera conoce ese parámetro.
     //
     // Costar un `search('')` en vez de un `latest()` para dos extensiones es
     // barato. Que se cuele una portada +18 en el Home no lo es.
@@ -1693,11 +1416,7 @@ class CatalogoExtensionesController extends GetxController {
     // Y hace falta, porque el precio de esa regla no era solo un pedido de
     // más: cambia QUÉ se muestra. `search('')` lista el catálogo; `latest()`
     // trae los capítulos nuevos, que es lo que la fila del Inicio promete.
-    //
-    // Solo para las que se comprobó una por una, y solo mientras el usuario
-    // no haya elegido nada: apenas toca un filtro se vuelve al camino de
-    // search con lo seguro puesto, igual que antes.
-    if (!eligioAlgo && _loUltimoYaEsSeguro.contains(package)) return null;
+    if (_loUltimoYaEsSeguro.contains(package)) return null;
     return filtro.isEmpty ? null : filtro;
   }
 
@@ -2065,11 +1784,6 @@ class CatalogoExtensionesController extends GetxController {
               (clave: '${par[0]}', valor: '${par[1]}');
         });
       }
-      List<String> lista(String k) =>
-          (crudo[k] as List?)?.map((e) => '$e').toList() ?? const [];
-      generosDisponibles.assignAll(lista('generos'));
-      estadosDisponibles.assignAll(lista('estados'));
-      formatosDisponibles.assignAll(lista('formatos'));
     } catch (e) {
       // Un caché ilegible no puede impedir que el Home abra: se descarta y se
       // vuelve a escanear como la primera vez.
@@ -2084,9 +1798,6 @@ class CatalogoExtensionesController extends GetxController {
             MapEntry(pkg, m.map((id, d) => MapEntry(id, [d.clave, d.valor])))),
         'popular': _popularPorExtension
             .map((pkg, d) => MapEntry(pkg, [d.clave, d.valor])),
-        'generos': generosDisponibles.toList(),
-        'estados': estadosDisponibles.toList(),
-        'formatos': formatosDisponibles.toList(),
       }));
     } catch (e) {
       logger.info('[home] no se pudieron guardar los filtros: $e');
