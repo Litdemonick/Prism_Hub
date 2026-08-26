@@ -846,6 +846,14 @@ class _CarruselAndroidState extends State<_CarruselAndroid>
         final primeraVezEnEstaSesion = !_sembrado;
         _sembrado = true;
         _versionSincronizada = widget.c.carruselVersion;
+        // Si había un viaje animado en curso (auto-avance, o el usuario
+        // soltó de un arrastre hace un instante), su propio listener sigue
+        // escribiendo `_p` cuadro a cuadro DESPUÉS de este build —y lo que
+        // se escriba acá abajo quedaría tapado por el próximo cuadro de esa
+        // animación vieja. Reportado en vivo: "se mueve solo el carrusel"
+        // al pedir una posición nueva. Se corta ANTES de tocar `_p`, mismo
+        // criterio que ya usa `onHorizontalDragStart` para lo mismo.
+        if (_anim.isAnimating) _anim.stop();
         if (primeraVezEnEstaSesion && !widget.c.acordeonUbicado) {
           // ── Abrir el Home SÍ empieza desde la primera ─────────────────
           //
@@ -1349,39 +1357,57 @@ class _CarruselAndroidState extends State<_CarruselAndroid>
             // contenido llegue va a ocupar exactamente este hueco.
             child: i >= planos.length
                 ? Esqueleto(radio: 20, width: anchoDe(i), height: m.alto)
-                : _TarjetaGrande(
-                    // ── El ancho para DECODIFICAR es fijo ──────────────────────
-                    //
-                    // Y no el ancho real de la tarjeta, que cambia en cada cuadro
-                    // mientras el dedo arrastra. Con el real, la imagen se volvía a
-                    // decodificar sesenta veces por segundo a un tamaño distinto, y
-                    // eso es exactamente el parpadeo: entre una decodificación y la
-                    // siguiente no hay nada que dibujar.
-                    //
-                    // Se pide siempre al tamaño de la grande: es el máximo al que se
-                    // va a ver, así que nunca queda borrosa, y como el número no
-                    // cambia, la imagen se decodifica UNA vez y se reusa.
-                    ancho: m.ancho,
-                    item: planos[i].$2,
-                    fuente:
+                : (() {
+                    // El texto solo en la que está en foco: en una tira de
+                    // cincuenta píxeles no entra, y recortado se lee como un
+                    // error. El panel de hover comparte esa misma condición.
+                    final conTexto = (_p - i).abs() < 0.5;
+                    final fuente =
                         ExtensionUtils.runtimes[planos[i].$1]?.extension.name ??
-                            '',
-                    cabeceras: _cabeceras(planos[i].$1),
-                    // El texto solo en la que está en foco: en una tira de cincuenta
-                    // píxeles no entra, y recortado se lee como un error.
-                    conTexto: (_p - i).abs() < 0.5,
-                    anchoTexto: m.ancho - 28,
-                    onTap: () {
-                      // Tocar una de los costados la trae al centro; tocar la que ya
-                      // está en foco abre la ficha. Sin esto, para abrir la de al
-                      // lado había que deslizar y después tocar.
+                            '';
+                    void abrir() {
+                      // Tocar una de los costados la trae al centro; tocar la
+                      // que ya está en foco abre la ficha. Sin esto, para
+                      // abrir la de al lado había que deslizar y después
+                      // tocar.
                       if ((_p - i).abs() > 0.35) {
                         _irA(i.toDouble(), grupos);
                         return;
                       }
                       _abrir(context, planos[i].$2, planos[i].$1);
-                    },
-                  ),
+                    }
+
+                    return _ConPanelDeHover(
+                      activo: conTexto && !_esTactil &&
+                          !PlatformTv.esTelevisionSync,
+                      titulo: planos[i].$2.title,
+                      encabezado: fuente,
+                      fecha: planos[i].$2.update,
+                      onTap: abrir,
+                      child: _TarjetaGrande(
+                        // ── El ancho para DECODIFICAR es fijo ────────────
+                        //
+                        // Y no el ancho real de la tarjeta, que cambia en
+                        // cada cuadro mientras el dedo arrastra. Con el
+                        // real, la imagen se volvía a decodificar sesenta
+                        // veces por segundo a un tamaño distinto, y eso es
+                        // exactamente el parpadeo: entre una decodificación
+                        // y la siguiente no hay nada que dibujar.
+                        //
+                        // Se pide siempre al tamaño de la grande: es el
+                        // máximo al que se va a ver, así que nunca queda
+                        // borrosa, y como el número no cambia, la imagen se
+                        // decodifica UNA vez y se reusa.
+                        ancho: m.ancho,
+                        item: planos[i].$2,
+                        fuente: fuente,
+                        cabeceras: _cabeceras(planos[i].$1),
+                        conTexto: conTexto,
+                        anchoTexto: m.ancho - 28,
+                        onTap: abrir,
+                      ),
+                    );
+                  })(),
           ),
       ],
     );
@@ -1544,6 +1570,80 @@ class _MedidasCarrusel {
   final double anchoChico;
 
   final double alto;
+}
+
+/// Envuelve una tarjeta del carrusel con el mismo panel-al-pasar-el-mouse
+/// que ya usa `TarjetaDeCatalogo` en las grillas — pedido explícito: "que
+/// en el carrusel también salga al poner el mouse la selección como en
+/// las otras cards, reutiliza eso".
+///
+/// Por qué es un envoltorio APARTE y no algo agregado adentro de
+/// `_TarjetaGrande`: esa clase ya está muy afinada a mano (varias capas de
+/// comentarios documentando bugs ya resueltos de sombra, recorte y
+/// rendimiento durante el arrastre) — meterle un `MouseRegion` y un Stack
+/// más adentro arriesgaba romper algo de eso sin poder probarlo en
+/// pantalla antes de mandarlo. Envolviéndola desde afuera, `_TarjetaGrande`
+/// no cambia ni una línea.
+class _ConPanelDeHover extends StatefulWidget {
+  const _ConPanelDeHover({
+    required this.child,
+    required this.activo,
+    required this.titulo,
+    required this.encabezado,
+    required this.fecha,
+    required this.onTap,
+  });
+
+  final Widget child;
+
+  /// Solo la tarjeta grande y centrada tiene sitio para un panel — las de
+  /// los costados son tiras de hasta 40px, y en un teléfono no hay mouse
+  /// que pueda "pasar por encima" para empezar.
+  final bool activo;
+  final String titulo;
+  final String? encabezado;
+  final String? fecha;
+  final VoidCallback onTap;
+
+  @override
+  State<_ConPanelDeHover> createState() => _ConPanelDeHoverState();
+}
+
+class _ConPanelDeHoverState extends State<_ConPanelDeHover> {
+  bool _encima = false;
+
+  @override
+  Widget build(BuildContext context) {
+    if (!widget.activo) return widget.child;
+    return MouseRegion(
+      onEnter: (_) => setState(() => _encima = true),
+      onExit: (_) => setState(() => _encima = false),
+      child: Stack(
+        fit: StackFit.expand,
+        children: [
+          widget.child,
+          AnimatedOpacity(
+            opacity: _encima ? 1 : 0,
+            duration: const Duration(milliseconds: 160),
+            // Sin esto, el panel invisible se sigue comiendo los toques de
+            // la tarjeta de atrás — mismo criterio que TarjetaDeCatalogo.
+            child: IgnorePointer(
+              ignoring: !_encima,
+              child: ClipRRect(
+                borderRadius: BorderRadius.circular(20),
+                child: PanelInfoHover(
+                  titulo: widget.titulo,
+                  encabezado: widget.encabezado,
+                  fecha: widget.fecha,
+                  onTap: widget.onTap,
+                ),
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
 }
 
 /// Una tarjeta grande del carrusel.

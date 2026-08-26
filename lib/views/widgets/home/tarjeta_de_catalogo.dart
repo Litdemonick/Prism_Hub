@@ -1,8 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:prismhub/utils/breakpoints.dart';
-import 'package:prismhub/utils/i18n.dart';
 import 'package:prismhub/views/widgets/cache_network_image.dart';
 import 'package:prismhub/views/widgets/home/home_theme.dart';
+import 'package:prismhub/views/widgets/home/panel_info_hover.dart';
 import 'package:prismhub/utils/platform_tv.dart';
 
 /// Si el aparato se maneja con el dedo.
@@ -298,7 +298,7 @@ class _TarjetaDeCatalogoState extends State<TarjetaDeCatalogo> {
                                 // comiendo los toques del póster.
                                 child: IgnorePointer(
                                   ignoring: !panelVisible,
-                                  child: _panel(ancho),
+                                  child: _panel(),
                                 ),
                               ),
                           ],
@@ -386,128 +386,18 @@ class _TarjetaDeCatalogoState extends State<TarjetaDeCatalogo> {
 
   /// El panel que aparece al pasar el mouse, DENTRO del póster.
   ///
-  /// Es un DEGRADADO y no un color plano: arriba deja ver un poco la portada y
-  /// hacia abajo se cierra para que el texto se lea. Un rectángulo opaco tapaba
-  /// la imagen por completo y se veía como un bloque pegado encima — justo lo
-  /// que se quiere evitar. Así el panel se siente parte de la tarjeta.
-  Widget _panel(double ancho) {
-    return DecoratedBox(
-      decoration: const BoxDecoration(
-        gradient: LinearGradient(
-          begin: Alignment.topCenter,
-          end: Alignment.bottomCenter,
-          colors: [Color(0xA6101019), Color(0xE0101019), Color(0xF2101019)],
-          stops: [0.0, 0.45, 1.0],
-        ),
-      ),
-      child: Padding(
-        padding: const EdgeInsets.all(11),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            if (widget.encabezado != null) ...[
-              Text(
-                widget.encabezado!.toUpperCase(),
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-                style: TextStyle(
-                  fontSize: 9.5,
-                  letterSpacing: 0.9,
-                  fontWeight: FontWeight.w700,
-                  color: HomeTheme.textMuted,
-                ),
-              ),
-              const SizedBox(height: 6),
-            ],
-            Text(
-              widget.titulo,
-              maxLines: 3,
-              overflow: TextOverflow.ellipsis,
-              style: const TextStyle(
-                fontSize: 12.5,
-                height: 1.25,
-                fontWeight: FontWeight.w700,
-                color: Colors.white,
-              ),
-            ),
-            if (widget.fecha != null) ...[
-              const SizedBox(height: 5),
-              Row(
-                children: [
-                  Icon(Icons.calendar_today_rounded,
-                      size: 11, color: HomeTheme.textMuted),
-                  const SizedBox(width: 5),
-                  Expanded(
-                    child: Text(
-                      widget.fecha!,
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: TextStyle(
-                        fontSize: 11,
-                        color: HomeTheme.textMuted,
-                      ),
-                    ),
-                  ),
-                ],
-              ),
-            ],
-            if (widget.descripcion != null) ...[
-              const SizedBox(height: 8),
-              // Expanded y no un alto fijo: la descripción usa lo que sobre
-              // después del título y la fecha. Con alto fijo, un título de tres
-              // líneas la empujaba fuera del panel.
-              Expanded(
-                child: Text(
-                  widget.descripcion!,
-                  overflow: TextOverflow.fade,
-                  style: const TextStyle(
-                    fontSize: 11.5,
-                    height: 1.35,
-                    color: Color(0xFFC9C4D4),
-                  ),
-                ),
-              ),
-            ] else
-              const Spacer(),
-            const SizedBox(height: 6),
-            // El ÚNICO que abre la ficha cuando el panel está abierto. Tocar
-            // en cualquier otro lado lo cierra, así el panel no es una trampa.
-            //
-            // GestureDetector propio y opaco: sin esto el toque se lo llevaba
-            // la tarjeta de atrás y el botón no hacía nada.
-            GestureDetector(
-              behavior: HitTestBehavior.opaque,
-              onTap: () => widget.onTap?.call(),
-              child: Padding(
-                // Aire de sobra alrededor del texto: es el objetivo más chico
-                // del panel y en un teléfono tiene que poder tocarse sin
-                // apuntar.
-                padding: const EdgeInsets.symmetric(vertical: 6),
-                child: Row(
-                  children: [
-                    Icon(Icons.play_arrow_rounded,
-                        size: 17, color: _acento),
-                    const SizedBox(width: 4),
-                    Expanded(
-                      child: Text(
-                        'home.view-detail'.i18n.toUpperCase(),
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        style: TextStyle(
-                          fontSize: 10.5,
-                          letterSpacing: 0.6,
-                          fontWeight: FontWeight.w800,
-                          color: _acento,
-                        ),
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-            ),
-          ],
-        ),
-      ),
+  /// El contenido vive en `PanelInfoHover` — compartido con `_TarjetaGrande`
+  /// del carrusel de Inicio (`home_page_android.dart`), pedido explícito:
+  /// "que en el carrusel también salga al poner el mouse la selección como
+  /// en las otras cards, reutiliza eso". Una mejora acá vale para las dos.
+  Widget _panel() {
+    return PanelInfoHover(
+      titulo: widget.titulo,
+      encabezado: widget.encabezado,
+      fecha: widget.fecha,
+      descripcion: widget.descripcion,
+      acento: widget.acento,
+      onTap: widget.onTap,
     );
   }
 
