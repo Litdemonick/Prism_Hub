@@ -57,11 +57,36 @@ class _ZonaCatalogoPageState extends State<ZonaCatalogoPage> {
         ZonaPrincipal.mangas => 'home.zona-mangas'.i18n,
       };
 
+  /// El ícono y el color de cada zona — mismos íconos que ya eligió Android
+  /// TV para estas categorías (`_CategoriaTV`, home_page_tv.dart), para
+  /// reconocimiento cruzado entre plataformas. Alternar entre los dos
+  /// acentos del tema es suficiente para distinguirlas a simple vista, sin
+  /// inventar una paleta nueva.
+  ({IconData icono, Color acento}) get _decoracion => switch (widget.zona) {
+        ZonaPrincipal.peliculas => (
+            icono: Icons.movie_rounded,
+            acento: HomeTheme.accentPink
+          ),
+        ZonaPrincipal.series => (
+            icono: Icons.tv_rounded,
+            acento: HomeTheme.accentRed
+          ),
+        ZonaPrincipal.anime => (
+            icono: Icons.animation_rounded,
+            acento: HomeTheme.accentPink
+          ),
+        ZonaPrincipal.mangas => (
+            icono: Icons.auto_stories_rounded,
+            acento: HomeTheme.accentRed
+          ),
+      };
+
   /// Cuántas columnas entran y qué ancho tiene cada una — mismo cálculo que
   /// ya usa `ultimas_actualizaciones_mangadex_page.dart`: se parte del
   /// mismo ancho de tarjeta que el Home, así que una portada mide igual acá
   /// que en las filas de Inicio.
-  ({int columnas, double ancho}) _rejilla(BuildContext context, double disponible) {
+  ({int columnas, double ancho}) _rejilla(
+      BuildContext context, double disponible) {
     final ideal = TarjetaDeCatalogo.anchoPara(Ancho.de(context));
     const separacion = 16.0;
     final columnas =
@@ -79,112 +104,54 @@ class _ZonaCatalogoPageState extends State<ZonaCatalogoPage> {
     return copia;
   }
 
-  @override
-  Widget build(BuildContext context) {
-    return Scaffold(
-      backgroundColor: HomeTheme.bg,
-      appBar: AppBar(
-        backgroundColor: HomeTheme.bg,
-        foregroundColor: HomeTheme.textPrimary,
-        titleSpacing: 0,
-        title: Text(
-          _titulo,
-          style: TextStyle(
-            fontSize: 19,
-            fontWeight: FontWeight.w800,
-            letterSpacing: -0.2,
-            color: HomeTheme.textPrimary,
+  /// El encabezado: ícono decorativo + título, con el control de orden al
+  /// otro extremo — todo centrado entre sí en la misma fila.
+  ///
+  /// Sin `AppBar`: dibuja su propia superficie con elevación, y sobre el
+  /// fondo animado eso se ve como una franja despareja cruzando la
+  /// pantalla (mismo motivo por el que `library_page.dart` tampoco usa
+  /// una) — acá el título va suelto, con su propio aire, y se desplaza con
+  /// el resto en vez de quedar fijo para siempre.
+  Widget _encabezado(BuildContext context) {
+    final decoracion = _decoracion;
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(20, 20, 20, 16),
+      child: Row(
+        children: [
+          Container(
+            width: 44,
+            height: 44,
+            decoration: BoxDecoration(
+              color: decoracion.acento.withValues(alpha: 0.14),
+              borderRadius: BorderRadius.circular(14),
+              border: Border.all(
+                color: decoracion.acento.withValues(alpha: 0.28),
+              ),
+            ),
+            alignment: Alignment.center,
+            child: Icon(decoracion.icono, color: decoracion.acento, size: 22),
           ),
-        ),
-        actions: [
+          const SizedBox(width: 14),
+          Expanded(
+            child: Text(
+              _titulo,
+              style: TextStyle(
+                fontSize: 21,
+                fontWeight: FontWeight.w800,
+                letterSpacing: -0.3,
+                color: HomeTheme.textPrimary,
+              ),
+            ),
+          ),
           Obx(() {
             // Sin nada cargado todavía no tiene sentido ofrecer orden — se
             // ve al terminar de armar la lista de fuentes.
             if (!c.armado.value || c.fuentes.isEmpty) {
               return const SizedBox.shrink();
             }
-            return Padding(
-              padding: const EdgeInsets.only(right: 12),
-              child: _BotonDeOrden(
-                orden: _orden,
-                onChanged: (o) => setState(() => _orden = o),
-              ),
-            );
-          }),
-        ],
-      ),
-      body: Stack(
-        children: [
-          const Positioned.fill(child: AnimatedBackgroundGlow()),
-          Obx(() {
-            // ── Todavía no se sabe qué extensiones hay ──────────────────
-            //
-            // Antes de que `armado` diga que de verdad terminó de mirar,
-            // una lista vacía no significa "no hay nada" — mismo criterio
-            // que ya usa el Home con su propio `armado`.
-            if (!c.armado.value) {
-              return _cargando(context);
-            }
-            if (c.fuentes.isEmpty) {
-              // Ninguna extensión activa entra en esta zona — puede ser
-              // que no haya ninguna instalada, o que ninguna la declare
-              // todavía (contentKind). El mensaje de la Fase 5 cubre los
-              // dos casos sin mentir en ninguno.
-              return const ZonaSinClasificar();
-            }
-            final items = _ordenados();
-            if (items.isEmpty && !c.fuentes.any((f) => f.isFetching)) {
-              // Hay extensiones clasificadas en la zona, pero su catálogo
-              // vino vacío de todas — distinto de "ninguna la declara"
-              // (eso es ZonaSinClasificar, arriba).
-              return const _SinResultados();
-            }
-            return InfiniteScroller(
-              onRefresh: c.cargarInicial,
-              onLoad: c.cargarMas,
-              enableInfiniteScroll: c.puedeTraerMas,
-              child: LayoutBuilder(
-                builder: (context, restricciones) {
-                  const margen = 16.0;
-                  final disponible = restricciones.maxWidth - margen * 2;
-                  if (disponible <= 0) return const SizedBox.shrink();
-                  final rejilla = _rejilla(context, disponible);
-                  final alto = TarjetaDeCatalogo.altoTotalDeAncho(rejilla.ancho);
-                  return GridView.builder(
-                    padding: const EdgeInsets.fromLTRB(margen, 8, margen, 24),
-                    gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
-                      crossAxisCount: rejilla.columnas,
-                      childAspectRatio: rejilla.ancho / alto,
-                      crossAxisSpacing: 16,
-                      mainAxisSpacing: 16,
-                    ),
-                    itemCount: items.length,
-                    itemBuilder: (context, i) {
-                      final zi = items[i];
-                      return TarjetaDeCatalogo(
-                        key: ValueKey('${zi.package}|${zi.item.url}'),
-                        titulo: zi.item.title,
-                        subtitulo: zi.item.update,
-                        // De qué extensión viene — imprescindible acá: a
-                        // diferencia de una fila del Home (donde el
-                        // encabezado ya lo dice una sola vez), esta grilla
-                        // mezcla varias fuentes en la misma pantalla.
-                        encabezado: zi.nombre,
-                        portada: zi.item.cover,
-                        cabeceras: zi.item.headers,
-                        ancho: rejilla.ancho,
-                        onTap: () => ExtensionUtils.openExtensionDetail(
-                          context,
-                          package: zi.package,
-                          url: zi.item.url,
-                          cover: zi.item.cover,
-                          coverHeaders: zi.item.headers,
-                        ),
-                      );
-                    },
-                  );
-                },
-              ),
+            return _BotonDeOrden(
+              orden: _orden,
+              onChanged: (o) => setState(() => _orden = o),
             );
           }),
         ],
@@ -192,12 +159,105 @@ class _ZonaCatalogoPageState extends State<ZonaCatalogoPage> {
     );
   }
 
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      backgroundColor: HomeTheme.bg,
+      body: Stack(
+        children: [
+          const Positioned.fill(child: AnimatedBackgroundGlow()),
+          Column(
+            children: [
+              _encabezado(context),
+              Expanded(child: _contenido(context)),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _contenido(BuildContext context) {
+    return Obx(() {
+      // ── Todavía no se sabe qué extensiones hay ──────────────────
+      //
+      // Antes de que `armado` diga que de verdad terminó de mirar,
+      // una lista vacía no significa "no hay nada" — mismo criterio
+      // que ya usa el Home con su propio `armado`.
+      if (!c.armado.value) {
+        return _cargando(context);
+      }
+      if (c.fuentes.isEmpty) {
+        // Ninguna extensión activa entra en esta zona — puede ser
+        // que no haya ninguna instalada, o que ninguna la declare
+        // todavía (contentKind). El mensaje de la Fase 5 cubre los
+        // dos casos sin mentir en ninguno.
+        return const ZonaSinClasificar();
+      }
+      final items = _ordenados();
+      if (items.isEmpty && !c.fuentes.any((f) => f.isFetching)) {
+        // Hay extensiones clasificadas en la zona, pero su catálogo
+        // vino vacío de todas — distinto de "ninguna la declara"
+        // (eso es ZonaSinClasificar, arriba).
+        return const _SinResultados();
+      }
+      return InfiniteScroller(
+        onRefresh: c.cargarInicial,
+        onLoad: c.cargarMas,
+        enableInfiniteScroll: c.puedeTraerMas,
+        child: LayoutBuilder(
+          builder: (context, restricciones) {
+            const margen = 16.0;
+            final disponible = restricciones.maxWidth - margen * 2;
+            if (disponible <= 0) return const SizedBox.shrink();
+            final rejilla = _rejilla(context, disponible);
+            final alto = TarjetaDeCatalogo.altoTotalDeAncho(rejilla.ancho);
+            return GridView.builder(
+              padding: const EdgeInsets.fromLTRB(margen, 8, margen, 24),
+              gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
+                crossAxisCount: rejilla.columnas,
+                childAspectRatio: rejilla.ancho / alto,
+                crossAxisSpacing: 16,
+                mainAxisSpacing: 16,
+              ),
+              itemCount: items.length,
+              itemBuilder: (context, i) {
+                final zi = items[i];
+                return TarjetaDeCatalogo(
+                  key: ValueKey('${zi.package}|${zi.item.url}'),
+                  titulo: zi.item.title,
+                  subtitulo: zi.item.update,
+                  // De qué extensión viene — imprescindible acá: a
+                  // diferencia de una fila del Home (donde el
+                  // encabezado ya lo dice una sola vez), esta grilla
+                  // mezcla varias fuentes en la misma pantalla.
+                  encabezado: zi.nombre,
+                  portada: zi.item.cover,
+                  cabeceras: zi.item.headers,
+                  ancho: rejilla.ancho,
+                  onTap: () => ExtensionUtils.openExtensionDetail(
+                    context,
+                    package: zi.package,
+                    url: zi.item.url,
+                    cover: zi.item.cover,
+                    coverHeaders: zi.item.headers,
+                  ),
+                );
+              },
+            );
+          },
+        ),
+      );
+    });
+  }
+
   Widget _cargando(BuildContext context) {
     return LayoutBuilder(builder: (context, restricciones) {
       const margen = 16.0;
       final disponible = restricciones.maxWidth - margen * 2;
-      final rejilla =
-          disponible > 0 ? _rejilla(context, disponible) : (columnas: 2, ancho: 150.0);
+      final rejilla = disponible > 0
+          ? _rejilla(context, disponible)
+          : (columnas: 2, ancho: 150.0);
       final alto = TarjetaDeCatalogo.altoTotalDeAncho(rejilla.ancho);
       return EsqueletoDeGrilla(
         columnas: rejilla.columnas,
