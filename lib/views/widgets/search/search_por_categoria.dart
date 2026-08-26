@@ -60,6 +60,21 @@ class SearchPorCategoria extends StatelessWidget {
     ZonaPrincipal.mangas,
   ];
 
+  /// Un mismo anime/manga/película suele estar en varias extensiones a la
+  /// vez (JKAnime y TioAnime publican el mismo anime, por ejemplo) — pedido
+  /// explícito: "que no haya duplicaciones". Se compara por título
+  /// normalizado (minúsculas, sin tildes) en vez de por URL —dos
+  /// extensiones nunca comparten la misma URL de por sí, así que eso no
+  /// habría filtrado nada— y se queda con la primera que apareció, sea de
+  /// la extensión que sea.
+  List<_Hallazgo> _sinTitulosDuplicados(List<_Hallazgo> items) {
+    final vistos = <String>{};
+    return items.where((h) {
+      final titulo = SearchText.normalize(h.item.title);
+      return titulo.isEmpty || vistos.add(titulo);
+    }).toList();
+  }
+
   String _tituloDeZona(ZonaPrincipal z) => switch (z) {
         ZonaPrincipal.peliculas => 'home.zona-peliculas'.i18n,
         ZonaPrincipal.series => 'home.zona-series'.i18n,
@@ -232,7 +247,7 @@ class SearchPorCategoria extends StatelessWidget {
             if (porZona[z]?.isNotEmpty ?? false) ...[
               seccion(
                 titulo: _tituloDeZona(z),
-                items: porZona[z]!,
+                items: _sinTitulosDuplicados(porZona[z]!),
                 verMas: () => router.push(_rutaDeZona(z)),
               ),
               const SizedBox(height: 20),
@@ -243,7 +258,7 @@ class SearchPorCategoria extends StatelessWidget {
                 titulo: entrada.key == ExtensionType.bangumi
                     ? 'extension-type.video'.i18n
                     : 'extension-type.reading'.i18n,
-                items: entrada.value,
+                items: _sinTitulosDuplicados(entrada.value),
                 verMas: () {},
               ),
               const SizedBox(height: 20),

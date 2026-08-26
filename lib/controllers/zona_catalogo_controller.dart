@@ -6,6 +6,7 @@ import 'package:prismhub/controllers/catalogo_extensiones_controller.dart';
 import 'package:prismhub/models/extension.dart';
 import 'package:prismhub/utils/connectivity.dart';
 import 'package:prismhub/utils/extension.dart';
+import 'package:prismhub/utils/search_text.dart';
 
 /// Una extensión de la zona, con lo que ya trajo y en qué página va.
 ///
@@ -99,6 +100,22 @@ class ZonaCatalogoController extends GetxController {
   final _entrelazados = <ZonaItem>[];
   final _cursores = <String, int>{};
 
+  /// Título normalizado de cada ítem que YA entró a `_entrelazados` —
+  /// pedido explícito: "que no haya duplicaciones, hay muchas extensiones
+  /// que pueden tener el mismo anime". Varias extensiones de la misma zona
+  /// suelen traer el mismo título (JKAnime y TioAnime publican el mismo
+  /// anime, por ejemplo) — sin esto se veía dos, tres, cuatro veces la
+  /// misma portada, una por cada extensión que la tiene.
+  ///
+  /// `SearchText.normalize` (minúsculas, sin tildes, espacios colapsados)
+  /// y no una comparación literal: dos sitios rara vez escriben el título
+  /// EXACTO igual (mayúsculas, un espacio de más). Es una heurística —dos
+  /// obras distintas que por casualidad compartan título quedarían
+  /// fundidas en una— pero es el mismo riesgo que ya acepta el resto de la
+  /// app en casos parecidos, y preferible a mostrar la misma portada
+  /// repetida cuatro veces seguidas.
+  final _titulosVistos = <String>{};
+
   List<ZonaItem> get entrelazados => _entrelazados;
 
   /// Reparte en `_entrelazados` lo que haya de nuevo desde la última vez,
@@ -114,8 +131,15 @@ class ZonaCatalogoController extends GetxController {
             .clamp(0, f.items.length);
         if (hasta <= desde) continue;
         for (var i = desde; i < hasta; i++) {
-          _entrelazados
-              .add((package: f.package, nombre: f.nombre, item: f.items[i]));
+          final item = f.items[i];
+          final titulo = SearchText.normalize(item.title);
+          // Un título vacío no cuenta como duplicado de otro vacío — sin
+          // esto, dos ítems sin título (raro, pero pasa) se tapaban entre
+          // sí. `Set.add` devuelve false si ya estaba: se avanza el cursor
+          // igual la haya agregado o no, si no la próxima vuelta la vuelve
+          // a mirar y nunca progresa.
+          if (titulo.isNotEmpty && !_titulosVistos.add(titulo)) continue;
+          _entrelazados.add((package: f.package, nombre: f.nombre, item: item));
         }
         _cursores[f.package] = hasta;
         progreso = true;
@@ -352,6 +376,7 @@ class ZonaCatalogoController extends GetxController {
     }
     _entrelazados.clear();
     _cursores.clear();
+    _titulosVistos.clear();
     _actualizarEntrelazados();
     fuentes.refresh();
   }
@@ -384,6 +409,7 @@ class ZonaCatalogoController extends GetxController {
       // se agrega, nunca se vuelve a repartir lo que ya se entregó.
       _entrelazados.clear();
       _cursores.clear();
+      _titulosVistos.clear();
       _actualizarEntrelazados();
       await _pedir(fuentes.where((f) => f.items.isEmpty).toList());
     } finally {
