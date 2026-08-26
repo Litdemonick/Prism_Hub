@@ -14,9 +14,13 @@ class MainController extends GetxController {
   // El orden de acá tiene que ser el MISMO que el de `pages` y el de
   // `destinations` en main_page.dart. Es un solo lugar y se ve de un vistazo.
   static const tabHome = 0;
-  static const tabBiblioteca = 1;
-  static const tabExtensiones = 2;
-  static const tabAjustes = 3;
+  static const tabPeliculas = 1;
+  static const tabSeries = 2;
+  static const tabAnime = 3;
+  static const tabMangas = 4;
+  static const tabBiblioteca = 5;
+  static const tabExtensiones = 6;
+  static const tabAjustes = 7;
 
   final selectedTab = 0.obs;
 

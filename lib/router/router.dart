@@ -4,6 +4,7 @@ import 'package:fluent_ui/fluent_ui.dart';
 import 'package:get/get.dart';
 import 'package:go_router/go_router.dart';
 import 'package:prismhub/data/providers/anilist_provider.dart';
+import 'package:prismhub/models/extension.dart';
 import 'package:prismhub/models/index.dart';
 import 'package:prismhub/views/pages/detail_page.dart';
 import 'package:prismhub/views/pages/extension/extension_page.dart';
@@ -23,6 +24,7 @@ import 'package:prismhub/views/pages/settings/registro_en_vivo_page.dart';
 import 'package:prismhub/views/pages/settings/settings_page.dart';
 import 'package:prismhub/views/pages/tracking/anilist_more_page.dart';
 import 'package:prismhub/views/pages/tracking/anilist_tracking_page.dart';
+import 'package:prismhub/views/pages/zonas/zona_catalogo_page.dart';
 
 final rootNavigatorKey = GlobalKey<NavigatorState>();
 final _shellNavigatorKey = GlobalKey<NavigatorState>();
@@ -50,6 +52,26 @@ final router = GoRouter(
         GoRoute(
           path: '/',
           pageBuilder: (context, state) => _animation(state, const HomePage()),
+        ),
+        GoRoute(
+          path: '/peliculas',
+          pageBuilder: (context, state) => _animation(
+              state, const ZonaCatalogoPage(zona: ZonaPrincipal.peliculas)),
+        ),
+        GoRoute(
+          path: '/series',
+          pageBuilder: (context, state) => _animation(
+              state, const ZonaCatalogoPage(zona: ZonaPrincipal.series)),
+        ),
+        GoRoute(
+          path: '/anime',
+          pageBuilder: (context, state) => _animation(
+              state, const ZonaCatalogoPage(zona: ZonaPrincipal.anime)),
+        ),
+        GoRoute(
+          path: '/mangas',
+          pageBuilder: (context, state) => _animation(
+              state, const ZonaCatalogoPage(zona: ZonaPrincipal.mangas)),
         ),
         // Biblioteca: lo que el usuario ya tiene. Es el Home de antes, movido
         // tal cual — ver library_page.dart.

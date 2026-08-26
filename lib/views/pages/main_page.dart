@@ -11,6 +11,8 @@ import 'package:prismhub/views/pages/library_page.dart';
 import 'package:prismhub/views/pages/history_page.dart';
 import 'package:prismhub/controllers/main_controller.dart';
 import 'package:prismhub/views/pages/settings/settings_page.dart';
+import 'package:prismhub/views/pages/zonas/zona_catalogo_page.dart';
+import 'package:prismhub/models/extension.dart';
 import 'package:prismhub/router/router.dart';
 import 'package:prismhub/utils/application.dart';
 import 'package:prismhub/utils/i18n.dart';
@@ -95,6 +97,10 @@ class _DesktopMainPageState extends State<DesktopMainPage> with WindowListener {
   String _zona() {
     final ruta = widget.state.uri.path;
     if (ruta == '/') return 'common.home'.i18n;
+    if (ruta.startsWith('/peliculas')) return 'home.zona-peliculas'.i18n;
+    if (ruta.startsWith('/series')) return 'home.zona-series'.i18n;
+    if (ruta.startsWith('/anime')) return 'home.zona-anime'.i18n;
+    if (ruta.startsWith('/mangas')) return 'home.zona-mangas'.i18n;
     if (ruta.startsWith('/biblioteca')) return 'common.library'.i18n;
     if (ruta.startsWith('/search')) return 'common.search'.i18n;
     if (ruta.startsWith('/extension')) return 'common.extension'.i18n;
@@ -254,6 +260,40 @@ class _DesktopMainPageState extends State<DesktopMainPage> with WindowListener {
             body: const HomePage(),
             onTap: () {
               router.go('/');
+            },
+          ),
+          // Mismos íconos que ya eligió Android TV para estas tres
+          // categorías (`_CategoriaTV`, home_page_tv.dart).
+          fluent.PaneItem(
+            icon: const Icon(fluent.FluentIcons.my_movies_t_v),
+            title: Text('home.zona-peliculas'.i18n),
+            body: const ZonaCatalogoPage(zona: ZonaPrincipal.peliculas),
+            onTap: () {
+              router.go('/peliculas');
+            },
+          ),
+          fluent.PaneItem(
+            icon: const Icon(fluent.FluentIcons.t_v_monitor),
+            title: Text('home.zona-series'.i18n),
+            body: const ZonaCatalogoPage(zona: ZonaPrincipal.series),
+            onTap: () {
+              router.go('/series');
+            },
+          ),
+          fluent.PaneItem(
+            icon: const Icon(fluent.FluentIcons.video),
+            title: Text('home.zona-anime'.i18n),
+            body: const ZonaCatalogoPage(zona: ZonaPrincipal.anime),
+            onTap: () {
+              router.go('/anime');
+            },
+          ),
+          fluent.PaneItem(
+            icon: const Icon(fluent.FluentIcons.book_answers),
+            title: Text('home.zona-mangas'.i18n),
+            body: const ZonaCatalogoPage(zona: ZonaPrincipal.mangas),
+            onTap: () {
+              router.go('/mangas');
             },
           ),
           // Biblioteca: lo que el usuario YA tiene (Continuar viendo,
@@ -465,15 +505,23 @@ class _AndroidMainPageState extends fluent.State<AndroidMainPage> {
   /// canonizado, o sea que `const HomePage()` devuelve SIEMPRE el mismo objeto
   /// y rehacer la lista no cambiaría nada. Es justamente lo que hay que evitar.
   ///
-  /// De ahí los cuatro `ignore`: el analizador ve constructores que podrían
-  /// ser const y avisa, sin saber que acá eso rompe la función.
+  /// De ahí los `ignore`: el analizador ve constructores que podrían ser
+  /// const y avisa, sin saber que acá eso rompe la función.
   ///
   /// Buscar ya no tiene zona propia acá — ver `home_hero_banner.dart`/
   /// `home_page_tv.dart`, que ahora la empujan como pantalla suelta
   /// (`Get.to`), igual que Historial o el Repositorio.
+  ///
+  /// El orden tiene que ser el MISMO que `MainController.tabHome`/
+  /// `tabPeliculas`/etc. y que `destinations`, más abajo — ver el
+  /// comentario de `main_controller.dart`.
   static List<Widget> _crearZonas() => [
         // ignore: prefer_const_constructors
         HomePage(),
+        const ZonaCatalogoPage(zona: ZonaPrincipal.peliculas),
+        const ZonaCatalogoPage(zona: ZonaPrincipal.series),
+        const ZonaCatalogoPage(zona: ZonaPrincipal.anime),
+        const ZonaCatalogoPage(zona: ZonaPrincipal.mangas),
         // ignore: prefer_const_constructors
         LibraryPage(),
         // ignore: prefer_const_constructors
@@ -503,6 +551,15 @@ class _AndroidMainPageState extends fluent.State<AndroidMainPage> {
   Widget build(BuildContext context) {
     List<_Destination> destinations = <_Destination>[
       _Destination(Icons.home_outlined, Icons.home, 'common.home'.i18n),
+      // Mismos íconos que ya eligió Android TV para estas tres categorías
+      // (`_CategoriaTV`, home_page_tv.dart) — reconocimiento cruzado entre
+      // plataformas.
+      _Destination(Icons.movie_outlined, Icons.movie, 'home.zona-peliculas'.i18n),
+      _Destination(Icons.tv_outlined, Icons.tv_rounded, 'home.zona-series'.i18n),
+      _Destination(Icons.animation_outlined, Icons.animation_rounded,
+          'home.zona-anime'.i18n),
+      _Destination(Icons.auto_stories_outlined, Icons.auto_stories_rounded,
+          'home.zona-mangas'.i18n),
       // Biblioteca: lo que el usuario YA tiene (Continuar viendo, Favoritos).
       // Es el Home de antes, movido tal cual — ver library_page.dart.
       _Destination(Icons.video_library_outlined, Icons.video_library,
@@ -700,20 +757,23 @@ class _AndroidMainPageState extends fluent.State<AndroidMainPage> {
 
   /// ── Cuántos íconos entran en la barra ────────────────────────────────
   ///
-  /// Cuatro. El quinto, Ajustes, se va a los tres puntos junto con los atajos
-  /// que antes no estaban en ningún lado.
+  /// Seis: Inicio, Películas, Series, Anime, Mangas y Biblioteca — las
+  /// zonas de primer nivel. Extensiones y Ajustes se van a los tres puntos
+  /// junto con los atajos que antes no estaban en ningún lado: son a las
+  /// que menos se entra de las ocho, y Ajustes ya tiene su atajo arriba en
+  /// el Home.
   ///
-  /// Ajustes es el que sale y no otro a propósito: es al que menos se entra de
-  /// los cinco, y encima ya tiene su atajo arriba en el Home.
-  static const _enLaBarra = 4;
+  /// Riesgo a medir, no a asumir resuelto: la pastilla flotante está
+  /// calibrada a ojo para 4 íconos en un ancho de teléfono típico. Con 6
+  /// puede quedar apretada en un `compacto` angosto de verdad — falta
+  /// probarlo en un ancho real.
+  static const _enLaBarra = 6;
 
-  /// Cuántos van arriba del todo en el riel acostado.
-  ///
-  /// Tres: Inicio, Biblioteca y Buscar — a las que de verdad se entra. Con las
-  /// cuatro de la barra de abajo, el riel quedaba tan cargado que no se
-  /// distinguía a qué zona se iba. Extensiones no se pierde: baja con las
-  /// otras tres de más abajo, que acostado van directas igual.
-  static const _enElRiel = 3;
+  /// Cuántos van arriba del todo en el riel acostado — las mismas seis que
+  /// la barra de abajo, por la misma razón: son las zonas de primer nivel.
+  /// Extensiones/Ajustes bajan con el resto acostado igual (ver
+  /// `_barraVertical`).
+  static const _enElRiel = 6;
 
   /// El aparato está acostado: la barra va al costado y no abajo.
   ///
@@ -884,12 +944,20 @@ class _AndroidMainPageState extends fluent.State<AndroidMainPage> {
     );
   }
 
-  /// Las tres que no entran en la barra de abajo: Ajustes, Historial y
-  /// Favoritos.
+  /// Las que no entran en la barra de abajo: Extensiones, Ajustes,
+  /// Historial y Favoritos.
   ///
   /// En un solo lugar porque las usan los dos caminos: de pie salen del
   /// desplegable de los tres puntos, y acostado van directas en el riel.
+  ///
+  /// Extensiones se sumó acá al pasar la barra a seis zonas de contenido
+  /// (Inicio+4 zonas+Biblioteca) — antes entraba en la barra misma.
   List<(IconData, String, VoidCallback)> _extras() => [
+        (
+          Icons.extension_outlined,
+          'common.extension'.i18n,
+          () => _irAZona(MainController.tabExtensiones),
+        ),
         (
           Icons.settings_outlined,
           'common.settings'.i18n,
