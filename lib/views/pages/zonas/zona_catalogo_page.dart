@@ -212,6 +212,15 @@ class _ZonaCatalogoPageState extends State<ZonaCatalogoPage> {
             if (disponible <= 0) return const SizedBox.shrink();
             final rejilla = _rejilla(context, disponible);
             final alto = TarjetaDeCatalogo.altoTotalDeAncho(rejilla.ancho);
+            // Una fila más de esqueletos al pie mientras se pide la próxima
+            // página — mismo lenguaje visual que la carga inicial (Esqueleto),
+            // para que "cargando más" se vea igual de claro que "cargando".
+            // Sin esto, pedir más página no mostraba ningún indicio: la
+            // grilla se quedaba quieta hasta que llegaba el contenido nuevo,
+            // así que un pedido lento se sentía como que no había pasado
+            // nada y invitaba a hacer scroll de nuevo sobre lo mismo.
+            final cargandoMas = c.cargandoMas.value;
+            final extra = cargandoMas ? rejilla.columnas : 0;
             return GridView.builder(
               padding: const EdgeInsets.fromLTRB(margen, 8, margen, 24),
               gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
@@ -220,8 +229,11 @@ class _ZonaCatalogoPageState extends State<ZonaCatalogoPage> {
                 crossAxisSpacing: 16,
                 mainAxisSpacing: 16,
               ),
-              itemCount: items.length,
+              itemCount: items.length + extra,
               itemBuilder: (context, i) {
+                if (i >= items.length) {
+                  return EsqueletoTarjeta(ancho: rejilla.ancho);
+                }
                 final zi = items[i];
                 return TarjetaDeCatalogo(
                   key: ValueKey('${zi.package}|${zi.item.url}'),
@@ -313,27 +325,59 @@ class _BotonDeOrden extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    // PopupMenuButton a secas salía con el tema de Material por defecto —
+    // fondo claro y casi transparente, que contra el resto de la app (fondo
+    // oscuro con tarjetas bien opacas) se leía como roto. Se le pone la
+    // misma superficie y el mismo borde que usa cualquier otra tarjeta de la
+    // app (HomeTheme.cardSurface/border), y el ítem elegido en el acento
+    // rosa en vez del azul de Material que no combina con nada más acá.
     return PopupMenuButton<_Orden>(
       initialValue: orden,
       onSelected: onChanged,
+      color: HomeTheme.cardSurface,
+      surfaceTintColor: Colors.transparent,
+      elevation: 6,
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(12),
+        side: BorderSide(color: HomeTheme.border),
+      ),
       itemBuilder: (context) => _Orden.values
-          .map((o) => PopupMenuItem(value: o, child: Text(_etiqueta(o))))
+          .map((o) => PopupMenuItem(
+                value: o,
+                child: Text(
+                  _etiqueta(o),
+                  style: TextStyle(
+                    color: o == orden
+                        ? HomeTheme.accentPink
+                        : HomeTheme.textPrimary,
+                    fontWeight: o == orden ? FontWeight.w700 : FontWeight.w500,
+                  ),
+                ),
+              ))
           .toList(),
-      child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 8),
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+        decoration: BoxDecoration(
+          color: HomeTheme.cardSurface,
+          borderRadius: BorderRadius.circular(10),
+          border: Border.all(color: HomeTheme.border),
+        ),
         child: Row(
           mainAxisSize: MainAxisSize.min,
           children: [
-            Icon(Icons.sort_rounded, size: 18, color: HomeTheme.textMuted),
+            Icon(Icons.sort_rounded, size: 16, color: HomeTheme.textMuted),
             const SizedBox(width: 6),
             Text(
               _etiqueta(orden),
               style: TextStyle(
                 fontSize: 13,
                 fontWeight: FontWeight.w600,
-                color: HomeTheme.textMuted,
+                color: HomeTheme.textPrimary,
               ),
             ),
+            const SizedBox(width: 2),
+            Icon(Icons.expand_more_rounded,
+                size: 16, color: HomeTheme.textMuted),
           ],
         ),
       ),

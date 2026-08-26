@@ -45,6 +45,19 @@ class _InfiniteScrollerState extends State<InfiniteScroller> {
       if (_isLoding || !widget.enableInfiniteScroll) {
         return;
       }
+      // Se marca ANTES de llamar, no solo al terminar. `_isLoding` nunca se
+      // ponía en true acá arriba, así que este chequeo de guardia no
+      // guardaba nada: cada notificación de scroll mientras se está en el
+      // borde (el mouse no se mueve entero de una, manda varias seguidas)
+      // volvía a llamar a `onLoad()`, una encima de la otra. El controller
+      // de cada pantalla se defiende por su cuenta (`cargando`/`cargandoMas`
+      // en `ZonaCatalogoController`, `isFetching` en `SearchController`), así
+      // que nunca se vio contenido duplicado — pero de acá salían pedidos de
+      // más que se descartaban solos, en todas las pantallas de escritorio
+      // que usan este widget.
+      setState(() {
+        _isLoding = true;
+      });
       widget.onLoad().then((_) {
         if (mounted) {
           setState(() {
