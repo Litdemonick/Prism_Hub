@@ -63,32 +63,22 @@ class SearchPageController extends GetxController {
     if (types != null) {
       exts.removeWhere((element) => !types.contains(element.extension.type));
     }
-    // Zona +18 del buscador: solo extensiones marcadas +18. Buscador normal:
-    // ninguna, sin excepción — antes bastaba con tener el switch de NSFW
-    // prendido para que apareciesen acá mezcladas con el resto.
+    // Zona +18 del buscador: solo extensiones marcadas +18 (enteras) o
+    // mixtas (que aportan su parte adulta). Buscador normal: ninguna, sin
+    // excepción. Nada de contenido normal se mezcla en ninguno de los dos —
+    // es la misma garantía de separación estricta que rige todo el plan de
+    // zonas, y acá se hacía al revés: una extensión 100% normal (ni nsfw ni
+    // mixta) se colaba igual, solo que al final de la lista. Se corrige
+    // sacándolas del todo en vez de solo reordenarlas.
     if (nsfwOnly) {
-      // ── Acá están TODAS, con las +18 primero ─────────────────────────────
-      //
-      // Antes se descartaba todo lo que no fuera +18 o mixta. La idea era que
-      // la zona mostrara solo lo suyo, pero en la práctica dejaba a alguien que
-      // entró a buscar sin poder buscar en el resto de sus extensiones: tenía
-      // que salir de la zona, buscar, y volver.
-      //
-      // Ahora no se saca ninguna y manda el ORDEN: las de adultos enteras
-      // primero, después las que tienen las dos cosas, y al final las normales.
-      // Lo que se vino a buscar queda arriba, y lo demás está si hace falta.
-      //
-      // Al abrir una desde acá, el buscador por extensión le pone su filtro de
-      // adultos de entrada (ver `soloAdulto` en ExtensionSearcherPage); a una
-      // normal no hay nada que ponerle y se comporta como siempre.
-      int rango(ExtensionService e) {
-        if (e.extension.nsfw) return 0;
-        if (ExtensionUtils.esMixta(e.extension.package)) return 1;
-        return 2;
-      }
+      exts.removeWhere((element) =>
+          !element.extension.nsfw &&
+          !ExtensionUtils.esMixta(element.extension.package));
 
-      // Estable dentro de cada grupo: sin esto, dos extensiones del mismo
-      // rango podrían bailar de posición entre búsquedas.
+      // Entre las que quedan, las +18 enteras primero y las mixtas después —
+      // al abrir una desde acá, el buscador por extensión le pone su filtro
+      // de adultos de entrada (ver `soloAdulto` en ExtensionSearcherPage).
+      int rango(ExtensionService e) => e.extension.nsfw ? 0 : 1;
       final orden = {for (var i = 0; i < exts.length; i++) exts[i]: i};
       exts.sort((a, b) {
         final r = rango(a).compareTo(rango(b));
@@ -294,8 +284,19 @@ class SearchPageController extends GetxController {
               : ExtensionUtils.segurosDe(paquete);
           resultFuture = element.runitme.search('', 1, filter: filtroDeZona);
         } else {
+          // Mismo filtro de puerta que el catálogo de arriba, y por la misma
+          // razón: sin esto, escribir un título en la Zona +18 buscaba en el
+          // catálogo NORMAL de una extensión mixta (ManhwaWeb, ShadeManga) —
+          // ahí sí aparecía contenido sin +18 dentro de esa zona. Fuera de la
+          // zona, `segurosDe` es exactamente lo mismo que ya hacía antes (una
+          // extensión no mixta ignora el filtro y busca en todo su catálogo).
+          final paquete = element.runitme.extension.package;
+          final filtroDeZona = nsfwOnly
+              ? ExtensionUtils.adultosDe(paquete)
+              : ExtensionUtils.segurosDe(paquete);
           resultFuture = element.runitme.searchFirstPageWithBroadening(
-              SearchText.sanitizeForRemoteQuery(search.value));
+              SearchText.sanitizeForRemoteQuery(search.value),
+              filter: filtroDeZona);
         }
         // El catálogo es UN solo pedido — quince de sobra. La cascada de
         // reintentos (searchFirstPageWithBroadening) puede encadenar varios
