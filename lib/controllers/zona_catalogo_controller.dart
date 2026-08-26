@@ -403,8 +403,24 @@ class ZonaCatalogoController extends GetxController {
           f.agotada = true;
           return;
         }
-        final items = await runtime
-            .search('', f.pagina, filter: f.filtro)
+        // ── "Recientes" de verdad, no "lo que el sitio devuelva" ──────────
+        //
+        // Sin filtro que mandar, se pide por latest() — la MISMA regla que
+        // ya usa el Home (_traerDeVerdad, catalogo_extensiones_controller.
+        // dart) y por el mismo motivo: latest() es la API dedicada de la
+        // extensión para "lo último que publicó", garantizado por su propio
+        // contrato. search('', pagina) en cambio devuelve el catálogo del
+        // sitio en el orden que EL SITIO elija por defecto — que puede
+        // coincidir con lo más reciente (varias extensiones sí lo hacen) o
+        // no, y acá no hay forma de saberlo sin medir sitio por sitio.
+        //
+        // Solo se puede tomar este camino cuando no hace falta filtrar nada
+        // (una extensión sin puerta de adultos ni eje de formato que
+        // resolver): latest() no acepta filtros, así que con puerta cerrada
+        // o formato elegido no queda otra que search().
+        final items = await (f.filtro == null
+                ? runtime.latest(f.pagina)
+                : runtime.search('', f.pagina, filter: f.filtro))
             .timeout(const Duration(seconds: 20));
         if (items.isEmpty) {
           f.agotada = true;
