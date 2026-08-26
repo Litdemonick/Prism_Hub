@@ -223,34 +223,41 @@ class _TarjetaDeCatalogoState extends State<TarjetaDeCatalogo> {
                     borderRadius: radio,
                     // ── La sombra: difusa, nunca un contorno ──────────────
                     //
-                    // Antes el halo iba con poco desenfoque y una expansión
-                    // NEGATIVA, y eso lo pegaba al borde: se leía como una
-                    // línea de color alrededor de la tarjeta en vez de como
-                    // luz. Ahora el desenfoque es grande y la expansión
-                    // positiva, así el color se va apagando hacia afuera y no
-                    // deja ningún filo.
-                    //
-                    // Y son tres capas, no una: la profunda despega la tarjeta
+                    // Son tres capas, no una: la profunda despega la tarjeta
                     // del fondo, la cercana le da peso justo debajo, y el halo
                     // de color la enciende. Con una sola sombra la tarjeta o
                     // queda plana o queda de neón.
+                    //
+                    // ── Por qué el alcance de las tres está topado a ~13px ──
+                    //
+                    // Esta misma tarjeta se usa en filas horizontales de Inicio
+                    // con solo 14px de separación entre una y la siguiente
+                    // (home_page_windows.dart, separatorBuilder). Un halo de
+                    // blur 40 + spread 6 (~46px de alcance real) se mete de
+                    // sobra en el hueco y sigue de largo hacia la tarjeta de al
+                    // lado — que, al pintarse DESPUÉS en la lista, lo tapa de
+                    // golpe contra su propio borde. Eso se veía como una línea
+                    // vertical recta donde la sombra "se corta", justo del lado
+                    // en el que la vecina se pinta encima (reportado en vivo:
+                    // pasaba de un lado sí y del otro no, según el orden de
+                    // pintado). Manteniendo cada capa por debajo del hueco más
+                    // chico que existe hoy, la sombra siempre termina de
+                    // apagarse sola antes de tocar a la tarjeta de al lado.
                     boxShadow: resaltada
                         ? [
                             const BoxShadow(
                               color: Color(0x8A000000),
-                              blurRadius: 34,
-                              spreadRadius: 2,
-                              offset: Offset(0, 14),
+                              blurRadius: 16,
+                              offset: Offset(0, 8),
                             ),
                             const BoxShadow(
                               color: Color(0x66000000),
-                              blurRadius: 12,
-                              offset: Offset(0, 4),
+                              blurRadius: 8,
+                              offset: Offset(0, 3),
                             ),
                             BoxShadow(
-                              color: _acento.withValues(alpha: 0.22),
-                              blurRadius: 40,
-                              spreadRadius: 6,
+                              color: _acento.withValues(alpha: 0.24),
+                              blurRadius: 11,
                             ),
                           ]
                         : const [],
