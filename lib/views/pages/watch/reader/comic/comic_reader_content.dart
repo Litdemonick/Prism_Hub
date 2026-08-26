@@ -107,6 +107,25 @@ class _ComicReaderContentState extends State<ComicReaderContent> {
   // the current absolute pixel offset without needing a ScrollController.
   double _cascadeScrollOffset = 0;
   double _cascadeScrollMax = double.maxFinite;
+  // ── Por qué hace falta el mínimo, no solo el máximo ─────────────────────
+  //
+  // Bug real reportado en vivo: con el puntero AFUERA del área (rueda o
+  // flechas), bajar andaba pero después subir se quedaba trabado para
+  // siempre — adentro del área, en cambio, las dos direcciones andaban
+  // bien. `_scrollCascadeBy`/`_forwardBorderWheelScroll` siempre recortaban
+  // el destino con `.clamp(0.0, _cascadeScrollMax)`, asumiendo que 0 es
+  // siempre el techo de arriba. Eso es cierto si el capítulo arranca en la
+  // página 0 — pero `ScrollablePositionedList` recibe
+  // `initialScrollIndex: currentPage` (retomar un capítulo a la mitad), y
+  // ahí el `minScrollExtent` real de la lista es NEGATIVO: hay páginas de
+  // verdad antes del índice inicial, alcanzables con píxeles negativos. dentro
+  // del área, el Scrollable nativo respeta su propio mínimo real y sube sin
+  // problema; el clamp de acá, con el 0.0 fijo, le cortaba el paso a
+  // cualquier intento de llegar a esas páginas desde afuera del área — una
+  // vez que el offset guardado llegaba a 0, cualquier intento de seguir
+  // restando quedaba igual de recortado, y `target == _cascadeScrollOffset`
+  // cortaba el intento entero.
+  double _cascadeScrollMin = 0;
 
   // Captured from a ScrollNotification's context (see scrollList below) so
   // border-forwarded wheel scroll can call jumpTo() directly — a true
@@ -570,7 +589,8 @@ class _ComicReaderContentState extends State<ComicReaderContent> {
   // reinicie con cada evento), con el fallback animado para la ventanita
   // inicial en la que todavía no llegó ninguna notificación de scroll.
   void _scrollCascadeBy(double dy) {
-    final target = (_cascadeScrollOffset + dy).clamp(0.0, _cascadeScrollMax);
+    final target =
+        (_cascadeScrollOffset + dy).clamp(_cascadeScrollMin, _cascadeScrollMax);
     if (target == _cascadeScrollOffset) return;
     final position = _cascadeScrollPosition;
     if (position != null) {
@@ -600,8 +620,8 @@ class _ComicReaderContentState extends State<ComicReaderContent> {
         // es el Scrollable anidado y no este widget.
         if (!mounted) return;
         final dy = (e as PointerScrollEvent).scrollDelta.dy;
-        final target =
-            (_cascadeScrollOffset + dy).clamp(0.0, _cascadeScrollMax);
+        final target = (_cascadeScrollOffset + dy)
+            .clamp(_cascadeScrollMin, _cascadeScrollMax);
         if (target == _cascadeScrollOffset) return;
         final position = _cascadeScrollPosition;
         if (position != null) {
@@ -826,6 +846,7 @@ class _ComicReaderContentState extends State<ComicReaderContent> {
                     _cascadeScrollPosition = null;
                     _cascadeScrollOffset = 0;
                     _cascadeScrollMax = double.maxFinite;
+                    _cascadeScrollMin = 0;
                   }
 
                   final images = _c.watchData.value!.urls;
@@ -1131,6 +1152,7 @@ class _ComicReaderContentState extends State<ComicReaderContent> {
                       if (n is ScrollUpdateNotification) {
                         _cascadeScrollOffset = n.metrics.pixels;
                         _cascadeScrollMax = n.metrics.maxScrollExtent;
+                        _cascadeScrollMin = n.metrics.minScrollExtent;
                         // Va pidiendo las próximas páginas mientras se lee, no
                         // solo al abrir el capítulo.
                         _precacheAround(images, _c.currentPage.value);
