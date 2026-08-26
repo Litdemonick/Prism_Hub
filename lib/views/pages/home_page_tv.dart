@@ -12,21 +12,24 @@ part of 'home_page.dart';
 // la derecha, que es lo que la referencia (estilo Magis TV) agrega sobre el
 // diseño de escritorio.
 //
-// ── Por qué Películas/Series/Anime siguen `enConstruccion` acá ────────────
+// ── Por qué Mangas no tiene entrada acá ────────────────────────────────
 //
-// `ExtensionUtils.zonasDe` (ver lib/utils/extension.dart) ya sabe clasificar
-// una extensión en estas zonas de verdad — es lo que ya usan las 4 pestañas
-// nuevas de Android/Windows/Linux. Lo que falta del lado de TV es su propia
-// pantalla de catálogo (`ZonaCatalogoController`/`ZonaCatalogoPage`, para
-// cuando se arme la Fase 7 del plan de rediseño) en vez de las filas de
-// `_ContenidoTV` — hasta entonces, el sidebar las muestra igual, en
-// construcción, en vez de esconderlas.
-
-/// Las categorías del sidebar. Fijas y iguales para cualquier extensión.
-///
-/// `tv` es la única que no filtra nada: es la zona de canales en vivo, que
-/// todavía no existe. Se muestra igual —en construcción— y no escondida: si
-/// no está a la vista, nadie se entera de que viene.
+// Regla explícita del plan de rediseño: en TV solo streaming, nunca
+// lectura, en ninguna zona. `ZonaPrincipal.mangas` directamente no tiene
+// categoría en este sidebar — ni siquiera "en construcción" — así que no
+// hay forma de llegar a ella desde TV, ni aunque una extensión la
+// declare.
+//
+// ── Por qué Películas/Series/Anime YA muestran catálogo real ────────────
+//
+// Usan el mismo `ZonaCatalogoController` que ya prueban las 4 pestañas de
+// Android/Windows/Linux (Fase 6d del plan de rediseño), registrado con el
+// mismo `tag: zona.name` — visitar la misma zona desde el teléfono y
+// después desde TV encuentra lo que ya se había cargado, no hay dos
+// copias. Lo único propio de TV es CÓMO se dibuja: filas horizontales
+// (`_FilaZonaTv`) en vez de una grilla — ver el comentario largo en
+// `_ZonaTv` sobre por qué, con la navegación D-pad de una grilla 2D sin
+// probar todavía, no conviene arriesgarla acá.
 enum _CategoriaTV {
   /// El catálogo de todas las extensiones — lo que se ve al abrir, y por eso
   /// va primero: es donde arranca el foco y de donde parte todo.
@@ -38,30 +41,25 @@ enum _CategoriaTV {
   /// Continuar viendo/leyendo y favoritos: la LibraryPage de siempre.
   biblioteca(Icons.video_library_rounded, null, esBiblioteca: true),
 
-  // ── Estas tres todavía no se pueden armar de verdad ──────────────────
-  //
-  // Separar "películas" de "series" necesita saber QUÉ ofrece cada
-  // extensión, y hoy ninguna lo dice: solo declaran su tipo (vídeo, manga,
-  // novela) y géneros sueltos que cambian de sitio en sitio. Filtrar por un
-  // género llamado "película" daría listas vacías en la mayoría de las
-  // extensiones instaladas.
-  //
-  // Se muestran igual, en construcción, porque son parte del mapa de la app
-  // — no un secreto hasta que estén listas.
-  peliculas(Icons.movie_outlined, null, enConstruccion: true),
-  series(Icons.tv_rounded, null, enConstruccion: true),
-  anime(Icons.animation_rounded, null, enConstruccion: true);
+  peliculas(Icons.movie_outlined, null, zona: ZonaPrincipal.peliculas),
+  series(Icons.tv_rounded, null, zona: ZonaPrincipal.series),
+  anime(Icons.animation_rounded, null, zona: ZonaPrincipal.anime);
 
   const _CategoriaTV(
     this.icono,
     this.tipo, {
     this.enConstruccion = false,
     this.esBiblioteca = false,
+    this.zona,
   });
   final IconData icono;
   final ExtensionType? tipo;
   final bool enConstruccion;
   final bool esBiblioteca;
+
+  /// Si no es null, esta categoría muestra el catálogo de esa zona vía
+  /// `ZonaCatalogoController` — ver `_ZonaTv`.
+  final ZonaPrincipal? zona;
 
   String etiqueta() => switch (this) {
         _CategoriaTV.inicio => 'common.home'.i18n,
@@ -246,6 +244,8 @@ class _HomeTVState extends State<HomeTV> {
                                           ZonaEnCreacion(titulo: e.etiqueta()),
                                         _CategoriaTV.biblioteca =>
                                           const LibraryPage(),
+                                        final e when e.zona != null =>
+                                          _ZonaTv(zona: e.zona!),
                                         _ => _ContenidoTV(c: widget.c),
                                       },
                               ),
@@ -588,6 +588,205 @@ class _ContenidoTV extends StatelessWidget {
         ),
       ],
     );
+  }
+}
+
+/// El catálogo de una zona de contenido (Películas/Series/Anime), en TV.
+///
+/// Usa el mismo `ZonaCatalogoController` que ya prueban las 4 pestañas de
+/// Android/Windows/Linux (Fase 6d del plan de rediseño) — mismo
+/// `tag: zona.name`, así que visitar la misma zona desde el teléfono y
+/// después desde TV encuentra lo que ya se había cargado, no arma dos
+/// copias. Lo único propio de acá es CÓMO se dibuja: filas horizontales
+/// (`_FilaZonaTv`), no la grilla que usa `ZonaCatalogoPage`.
+///
+/// ── Por qué filas y no esa misma grilla ─────────────────────────────────
+///
+/// No está confirmado que una `GridView` sea navegable con D-pad de forma
+/// confiable con lo que hoy existe en la app: la navegación direccional de
+/// TV depende del `focusInDirection` geométrico por defecto de Flutter —no
+/// hay ninguna `FocusTraversalPolicy` propia—, y hay un precedente
+/// concreto de que ese mecanismo no siempre da el resultado esperado en
+/// layouts 2D: el panel de filtros de TV en `ExtensionSearcherPage` tuvo
+/// que anular a mano izquierda/derecha porque el foco saltaba de fila en
+/// un `Wrap` de chips. Las filas horizontales, en cambio, YA están
+/// probadas con D-pad en esta misma pantalla (`_ContenidoTV`/
+/// `_FilaWindows` con `conFocoTv: true`) — se reusa lo que ya funciona en
+/// vez de arriesgar algo sin confirmar. Probar una grilla real acá es
+/// trabajo aparte (Fase 7.1b del plan), opcional y solo si se verifica a
+/// mano con un control remoto de verdad.
+class _ZonaTv extends StatefulWidget {
+  const _ZonaTv({required this.zona});
+
+  final ZonaPrincipal zona;
+
+  @override
+  State<_ZonaTv> createState() => _ZonaTvState();
+}
+
+class _ZonaTvState extends State<_ZonaTv> {
+  late final ZonaCatalogoController c =
+      Get.isRegistered<ZonaCatalogoController>(tag: widget.zona.name)
+          ? Get.find<ZonaCatalogoController>(tag: widget.zona.name)
+          : Get.put(
+              ZonaCatalogoController(widget.zona),
+              tag: widget.zona.name,
+            );
+
+  @override
+  Widget build(BuildContext context) {
+    return Obx(() {
+      // Mismo criterio que en cualquier otra pantalla de la app: hasta que
+      // `armado` diga que de verdad terminó de mirar, una lista vacía no
+      // significa "no hay nada".
+      if (!c.armado.value) {
+        return const _HomeEsperando(conCabecera: false);
+      }
+      if (c.fuentes.isEmpty) {
+        // Ninguna extensión activa entra en esta zona — la misma pantalla
+        // que ya usa ZonaCatalogoPage para el mismo caso (Fase 5).
+        return const ZonaSinClasificar();
+      }
+      return ListView.builder(
+        physics: const AlwaysScrollableScrollPhysics(),
+        padding: const EdgeInsets.only(bottom: 24),
+        itemCount: c.fuentes.length,
+        itemBuilder: (context, i) => _FilaZonaTv(c: c, fuente: c.fuentes[i]),
+      );
+    });
+  }
+}
+
+/// Una fila de la zona: el nombre de la extensión y lo que trajo, en
+/// horizontal — calcada de `_FilaWindows` con `conFocoTv: true`, pero
+/// sobre un `ZonaFuente` (`ZonaCatalogoController`) en vez de una
+/// `FilaDeExtension` del Home, que es un modelo distinto (ver el
+/// comentario largo en `zona_catalogo_controller.dart` sobre por qué no
+/// se comparte).
+class _FilaZonaTv extends StatefulWidget {
+  const _FilaZonaTv({required this.c, required this.fuente});
+
+  final ZonaCatalogoController c;
+  final ZonaFuente fuente;
+
+  @override
+  State<_FilaZonaTv> createState() => _FilaZonaTvState();
+}
+
+class _FilaZonaTvState extends State<_FilaZonaTv> {
+  final _scroll = ScrollController();
+
+  @override
+  void initState() {
+    super.initState();
+    _scroll.addListener(_alAcercarseAlFinal);
+  }
+
+  @override
+  void dispose() {
+    _scroll.removeListener(_alAcercarseAlFinal);
+    _scroll.dispose();
+    super.dispose();
+  }
+
+  /// Pide más cuando falta poco para el final de ESTA fila.
+  ///
+  /// `cargarMas()` pide para TODAS las fuentes que todavía tengan margen,
+  /// no solo esta — mismo criterio que ya usa el Home
+  /// (`_pedirMasSiHaceFalta`): cualquier fila que se acerque a su borde
+  /// alcanza para disparar el pedido de la zona entera.
+  void _alAcercarseAlFinal() {
+    if (!_scroll.hasClients) return;
+    final restante = _scroll.position.maxScrollExtent - _scroll.offset;
+    if (restante < _anchoTarjetaTv(context) * 3) {
+      unawaited(widget.c.cargarMas());
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return RepaintBoundary(child: _contenido(context));
+  }
+
+  Widget _contenido(BuildContext context) {
+    return Obx(() {
+      // `fuentes` (RxList) es lo que hace que este Obx se entere cuando
+      // llegan más páginas — `ZonaFuente.items` en sí no es reactivo,
+      // `ZonaCatalogoController._pedir` lo muta EN EL LUGAR y avisa con
+      // `fuentes.refresh()`. Por eso se lee `widget.c.fuentes.length`
+      // antes que `widget.fuente.items`: es lo que suscribe a este Obx.
+      // ignore: unused_local_variable
+      final _ = widget.c.fuentes.length;
+      final items = widget.fuente.items;
+      return Padding(
+        padding: const EdgeInsets.only(top: 34),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Padding(
+              padding: EdgeInsets.symmetric(horizontal: _margen(context)),
+              child: Text(
+                widget.fuente.nombre,
+                style: TextStyle(
+                  fontSize: 20,
+                  fontWeight: FontWeight.w700,
+                  color: HomeTheme.textPrimary,
+                ),
+              ),
+            ),
+            const SizedBox(height: 18),
+            SizedBox(
+              height: _altoFilaTv(context),
+              child: items.isEmpty
+                  ? EsqueletoDeFila(
+                      ancho: _anchoTarjetaTv(context),
+                      separacion: 14,
+                      padding:
+                          EdgeInsets.symmetric(horizontal: _margen(context)),
+                      paddingDeCadaUno: const EdgeInsets.only(top: 10),
+                    )
+                  : ClipRect(
+                      clipper: const _SoloCostados(aireLateral: 12),
+                      child: ListView.builder(
+                        controller: _scroll,
+                        scrollDirection: Axis.horizontal,
+                        clipBehavior: Clip.none,
+                        padding: EdgeInsets.symmetric(
+                          horizontal: _margen(context) + 14,
+                        ),
+                        itemCount: items.length,
+                        itemBuilder: (context, i) {
+                          final item = items[i];
+                          void abrir() => ExtensionUtils.openExtensionDetail(
+                                context,
+                                package: widget.fuente.package,
+                                url: item.url,
+                                cover: item.cover,
+                                coverHeaders: item.headers,
+                              );
+                          return Padding(
+                            padding: const EdgeInsets.only(
+                                top: 10, right: 14),
+                            child: FocusableCard(
+                              onTap: abrir,
+                              altoMarco: _anchoTarjetaTv(context) * 3 / 2,
+                              child: TarjetaDeCatalogo(
+                                titulo: item.title,
+                                portada: item.cover,
+                                cabeceras: item.headers,
+                                fecha: item.update,
+                                ancho: _anchoTarjetaTv(context),
+                              ),
+                            ),
+                          );
+                        },
+                      ),
+                    ),
+            ),
+          ],
+        ),
+      );
+    });
   }
 }
 

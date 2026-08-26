@@ -6,6 +6,7 @@ import 'package:flutter/services.dart';
 import 'package:get/get.dart';
 import 'package:prismhub/controllers/catalogo_extensiones_controller.dart';
 import 'package:prismhub/controllers/main_controller.dart';
+import 'package:prismhub/controllers/zona_catalogo_controller.dart';
 import 'package:prismhub/models/index.dart';
 import 'package:prismhub/router/router.dart';
 import 'package:prismhub/utils/breakpoints.dart';
@@ -24,6 +25,7 @@ import 'package:prismhub/views/widgets/home/home_theme.dart';
 import 'package:prismhub/views/widgets/home/indicadores_de_pagina.dart';
 import 'package:prismhub/views/widgets/home/tarjeta_de_catalogo.dart';
 import 'package:prismhub/views/widgets/tv/focusable_card.dart';
+import 'package:prismhub/views/widgets/home/zona_sin_clasificar.dart';
 import 'package:prismhub/views/widgets/zona_en_creacion.dart';
 
 // ── Por qué está partido en tres archivos ───────────────────────────────────
