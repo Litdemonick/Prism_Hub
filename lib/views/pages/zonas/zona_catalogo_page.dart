@@ -539,6 +539,13 @@ class _BotonDeOrden extends StatelessWidget {
         borderRadius: BorderRadius.circular(12),
         side: BorderSide(color: HomeTheme.border),
       ),
+      // Sin esto el menú se achica al ancho del texto más corto ("Recientes"/
+      // "Alfabético", dos palabras sueltas) y queda una cajita angosta que
+      // no tapa bien el fondo detrás — reportado en vivo comparándolo con el
+      // de Formato, que al tener más opciones ya se ve ancho y prolijo. Un
+      // mínimo fijo le da el mismo porte a los dos, sin depender de cuántas
+      // letras tenga la opción más larga.
+      constraints: const BoxConstraints(minWidth: 170),
       itemBuilder: (context) => _Orden.values
           .map((o) => PopupMenuItem(
                 value: o,
