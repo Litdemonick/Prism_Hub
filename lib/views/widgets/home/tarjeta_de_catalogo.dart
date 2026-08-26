@@ -93,11 +93,16 @@ class TarjetaDeCatalogo extends StatefulWidget {
   /// la mitad se parece más a la tablet. Además acompaña en vivo cuando el
   /// usuario arrastra el borde de la ventana, cosa que el sistema operativo
   /// nunca puede contestar.
+  // Subido de 126/150/176/196: pedido explícito de tarjetas más grandes
+  // (estilo Crunchyroll) en las filas de Inicio — mismos cuatro
+  // breakpoints, solo más aire por tarjeta. Como todo el resto (alto de
+  // portada, alto total de la fila) se calcula A PARTIR de este número,
+  // cambiar solo acá alcanza para las tres plataformas.
   static double anchoPara(Ancho a) => a.elegir(
-        compacto: 126,
-        medio: 150,
-        amplio: 176,
-        enorme: 196,
+        compacto: 150,
+        medio: 180,
+        amplio: 210,
+        enorme: 240,
       );
 
   static double altoPortadaPara(Ancho a) => anchoPara(a) * 3 / 2;

@@ -120,21 +120,9 @@ class HomeAndroid extends StatelessWidget {
         // Con la lista capturada acá, las dos cuentas salen del mismo dato.
         final visibles = _visibles(c);
         return RefreshIndicator(
-          // ── Deslizar aplica los filtros ────────────────────────────────
-          //
-          // Y no solo refresca. El aviso de arriba dice «deslizá hacia abajo
-          // para aplicar», y hasta acá el gesto llamaba a `refrescarTodo`,
-          // que vuelve a pedir lo mismo de antes: el usuario marcaba un
-          // género, deslizaba, y no cambiaba nada.
-          //
-          // Sin cambios pendientes se comporta como siempre.
-          onRefresh: () async {
-            if (c.hayCambiosSinAplicar) {
-              await c.aplicarFiltros();
-              return;
-            }
-            await c.refrescarTodo();
-          },
+          // Sin la barra de chips ya no hay ningún filtro que "aplicar" —
+          // deslizar hacia abajo siempre vuelve a pedir lo mismo de antes.
+          onRefresh: c.refrescarTodo,
           child: ListView.builder(
             physics: const AlwaysScrollableScrollPhysics(),
             // Lo que ocupa la barra flotante, que con `extendBody` llega acá
@@ -161,8 +149,8 @@ class HomeAndroid extends StatelessWidget {
             //
             // El aviso de «no tenés extensiones» no se pierde: ese sale antes,
             // arriba, y solo cuando `armado` dice que de verdad no hay ninguna.
-            // +3: la cabecera, los filtros y el carrusel.
-            itemCount: (visibles.isEmpty ? 2 : visibles.length) + 3,
+            // +2: la cabecera y el carrusel.
+            itemCount: (visibles.isEmpty ? 2 : visibles.length) + 2,
             // **Acá está la carga perezosa.** ListView.builder solo construye
             // lo que está cerca de la pantalla, y cada fila pide en su
             // initState — así, con 30 extensiones se piden las 2 o 3 que se
@@ -172,12 +160,11 @@ class HomeAndroid extends StatelessWidget {
               // barra clavada arriba se come una franja de pantalla para
               // siempre, y acá lo que importa es la portada.
               0 => const _Cabecera(),
-              1 => _BarraDeFiltros(c: c),
               // El acordeón en su propia capa: mide, calcula y dibuja seis
               // tarjetas grandes. Sin esto, cualquier repintado de la lista
               // —una fila que termina de cargar más abajo— lo arrastra a
               // repintarse entero aunque no haya cambiado nada suyo.
-              2 => RepaintBoundary(child: _CarruselAndroid(c: c)),
+              1 => RepaintBoundary(child: _CarruselAndroid(c: c)),
               // RepaintBoundary por fila: sin esto, cualquier repintado
               // —el fondo animado, una portada que termina de cargar— vuelve a
               // pintar TODA la lista visible. Con la capa propia, cada fila se
@@ -188,12 +175,12 @@ class HomeAndroid extends StatelessWidget {
               // pantalla entera por una fila de más.
               _ => visibles.isEmpty
                   ? const _FilaEsperando()
-                  : (i - 3 < visibles.length
+                  : (i - 2 < visibles.length
                       ? RepaintBoundary(
                           child: _FilaAndroid(
-                            key: ValueKey(visibles[i - 3].package),
+                            key: ValueKey(visibles[i - 2].package),
                             c: c,
-                            fila: visibles[i - 3],
+                            fila: visibles[i - 2],
                           ),
                         )
                       : const SizedBox.shrink()),

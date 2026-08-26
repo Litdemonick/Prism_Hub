@@ -584,8 +584,8 @@ class _ContenidoTV extends StatelessWidget {
             return ListView.builder(
               physics: const AlwaysScrollableScrollPhysics(),
               padding: const EdgeInsets.only(bottom: 24),
-              // +2: el destacado y los filtros.
-              itemCount: (visibles.isEmpty ? 2 : visibles.length) + 2,
+              // +1: el destacado.
+              itemCount: (visibles.isEmpty ? 2 : visibles.length) + 1,
               itemBuilder: (context, i) => switch (i) {
                 // Sin FocusableCard alrededor: el carrusel se enfoca solo y
                 // maneja sus propias flechas (ver _CarruselAndroid con
@@ -594,14 +594,13 @@ class _ContenidoTV extends StatelessWidget {
                 0 => RepaintBoundary(
                     child: _CarruselAndroid(c: c, conFocoTv: true),
                   ),
-                1 => _BarraDeFiltros(c: c),
                 _ => visibles.isEmpty
                     ? const _FilaEsperando()
-                    : (i - 2 < visibles.length
+                    : (i - 1 < visibles.length
                         ? _FilaWindows(
-                            key: ValueKey(visibles[i - 2].package),
+                            key: ValueKey(visibles[i - 1].package),
                             c: c,
-                            fila: visibles[i - 2],
+                            fila: visibles[i - 1],
                             conFocoTv: true,
                           )
                         : const SizedBox.shrink()),

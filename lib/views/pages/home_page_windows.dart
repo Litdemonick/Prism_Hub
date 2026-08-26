@@ -80,20 +80,16 @@ class HomeWindows extends StatelessWidget {
           return lista;
         }();
         return RefreshIndicator(
-          onRefresh: () async {
-            if (c.hayCambiosSinAplicar) {
-              await c.aplicarFiltros();
-              return;
-            }
-            await c.refrescarTodo();
-          },
+          // Sin la barra de chips ya no hay ningún filtro que "aplicar" —
+          // deslizar hacia abajo siempre vuelve a pedir lo mismo de antes.
+          onRefresh: c.refrescarTodo,
           child: ListView.builder(
             physics: const AlwaysScrollableScrollPhysics(),
             // Arriba también: el acordeón arrancaba pegado al borde de la
             // ventana, sin nada entre la barra de título y la primera portada.
             // Se leía como si el contenido estuviera cortado por arriba.
             padding: const EdgeInsets.only(top: 20, bottom: 36),
-            // +2: el fondo grande de arriba y la barra de filtros.
+            // +1: el fondo grande de arriba.
             // ── Sin filas visibles, bloques grises: NUNCA el hueco ──────
             //
             // `visibles` puede quedar vacío aunque `filas` no lo esté: al
@@ -110,7 +106,7 @@ class HomeWindows extends StatelessWidget {
             //
             // El aviso de «no tenés extensiones» no se pierde: ese sale antes,
             // arriba, y solo cuando `armado` dice que de verdad no hay ninguna.
-            itemCount: (visibles.isEmpty ? 2 : visibles.length) + 2,
+            itemCount: (visibles.isEmpty ? 2 : visibles.length) + 1,
             // **Acá está la carga perezosa.** ListView.builder solo construye
             // lo que está cerca de la pantalla, y cada fila pide en su
             // initState — así, con 30 extensiones se piden las 2 o 3 que se
@@ -150,18 +146,13 @@ class HomeWindows extends StatelessWidget {
                   padding: EdgeInsets.symmetric(horizontal: _margen(context)),
                   child: RepaintBoundary(child: _CarruselAndroid(c: c)),
                 ),
-              // Los mismos filtros que en celular. El widget vive en el
-              // archivo de Android pero los tres son `part` de la misma
-              // biblioteca, así que se reusa tal cual en vez de escribir otro
-              // que se desincronice a la primera.
-              1 => _BarraDeFiltros(c: c),
               _ => visibles.isEmpty
                   ? const _FilaEsperando()
-                  : (i - 2 < visibles.length
+                  : (i - 1 < visibles.length
                       ? _FilaWindows(
-                          key: ValueKey(visibles[i - 2].package),
+                          key: ValueKey(visibles[i - 1].package),
                           c: c,
-                          fila: visibles[i - 2],
+                          fila: visibles[i - 1],
                         )
                       : const SizedBox.shrink()),
             },
