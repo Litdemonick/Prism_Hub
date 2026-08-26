@@ -1629,13 +1629,27 @@ class _ConPanelDeHoverState extends State<_ConPanelDeHover> {
             // la tarjeta de atrás — mismo criterio que TarjetaDeCatalogo.
             child: IgnorePointer(
               ignoring: !_encima,
-              child: ClipRRect(
-                borderRadius: BorderRadius.circular(20),
-                child: PanelInfoHover(
-                  titulo: widget.titulo,
-                  encabezado: widget.encabezado,
-                  fecha: widget.fecha,
-                  onTap: widget.onTap,
+              // El panel queda ENCIMA de _TarjetaGrande en el Stack, así
+              // que mientras está visible se lleva el toque él —el fondo
+              // con degradado de PanelInfoHover no es transparente para el
+              // hit test— y el GestureDetector propio de _TarjetaGrande,
+              // debajo, nunca lo llega a ver. Reportado en vivo: "no me
+              // deja darle click al seleccionado, solo donde dice ver
+              // detalles" (el único lugar del panel con su propio
+              // GestureDetector). Se agrega este de acá, igual que
+              // TarjetaDeCatalogo ya hace con el suyo: cualquier toque en
+              // el panel abre la ficha, no solo el botón.
+              child: GestureDetector(
+                behavior: HitTestBehavior.opaque,
+                onTap: widget.onTap,
+                child: ClipRRect(
+                  borderRadius: BorderRadius.circular(20),
+                  child: PanelInfoHover(
+                    titulo: widget.titulo,
+                    encabezado: widget.encabezado,
+                    fecha: widget.fecha,
+                    onTap: widget.onTap,
+                  ),
                 ),
               ),
             ),
