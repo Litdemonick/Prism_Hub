@@ -1,0 +1,57 @@
+import 'package:flutter/material.dart';
+import 'package:prismhub/utils/i18n.dart';
+import 'package:prismhub/views/widgets/home/home_theme.dart';
+
+/// Una zona (Películas/Series/Anime/Mangas) donde ninguna extensión ACTIVA
+/// entra todavía, según `ExtensionUtils.zonasDe` — distinto de no tener
+/// ninguna extensión instalada (`_SinExtensiones`, en `home_page.dart`).
+///
+/// ── Por qué es un estado propio y no el mismo "en construcción" ─────────
+///
+/// `ZonaEnCreacion` dice "esto todavía no existe en la app" — deja de ser
+/// cierto en cuanto la zona funciona de verdad. Esto en cambio dice "la
+/// zona funciona, pero tus extensiones no declaran nada para ella todavía"
+/// — que es exactamente lo que va a pasar en la práctica hasta que las
+/// extensiones reales (otro repo, `prism-plus`) declaren `@contentKind`.
+/// Confundir los dos mensajes le haría creer al usuario que hay que
+/// esperar una actualización de PrismHub, cuando en realidad lo que falta
+/// es que sus extensiones se pongan al día.
+///
+/// Se muestra cuando la lista filtrada por zona da vacía pero SÍ hay filas
+/// cargadas (`c.filas` no vacío) — quien llama decide esa distinción, este
+/// widget solo dibuja el aviso.
+class ZonaSinClasificar extends StatelessWidget {
+  const ZonaSinClasificar({super.key});
+
+  @override
+  Widget build(BuildContext context) {
+    return Center(
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 32),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(
+              Icons.filter_alt_off_rounded,
+              size: 44,
+              color: HomeTheme.textMuted,
+            ),
+            const SizedBox(height: 14),
+            ConstrainedBox(
+              constraints: const BoxConstraints(maxWidth: 420),
+              child: Text(
+                'home.zona-sin-clasificar'.i18n,
+                textAlign: TextAlign.center,
+                style: TextStyle(
+                  fontSize: 14,
+                  height: 1.45,
+                  color: HomeTheme.textMuted,
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
