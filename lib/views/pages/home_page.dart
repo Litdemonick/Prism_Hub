@@ -25,6 +25,7 @@ import 'package:prismhub/views/widgets/home/esqueleto.dart';
 import 'package:prismhub/views/widgets/home/home_theme.dart';
 import 'package:prismhub/views/widgets/home/indicadores_de_pagina.dart';
 import 'package:prismhub/views/widgets/home/panel_info_hover.dart';
+import 'package:prismhub/views/widgets/home/refresh_button.dart';
 import 'package:prismhub/views/widgets/home/tarjeta_de_catalogo.dart';
 import 'package:prismhub/views/widgets/tv/focusable_card.dart';
 import 'package:prismhub/views/widgets/home/zona_sin_clasificar.dart';

@@ -124,7 +124,29 @@ class HomeWindows extends StatelessWidget {
               // más para el lado.
               0 => Padding(
                   padding: EdgeInsets.symmetric(horizontal: _margen(context)),
-                  child: RepaintBoundary(child: _CarruselAndroid(c: c)),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      RepaintBoundary(child: _CarruselAndroid(c: c)),
+                      // Pedido explícito: un botón para poner al día las
+                      // filas de abajo sin que eso mueva ni cambie el
+                      // carrusel — refrescarTodo() no toca
+                      // carruselExt/carruselPos/_paqueteDeArranque en
+                      // ningún lado.
+                      Padding(
+                        padding: const EdgeInsets.only(top: 12, bottom: 4),
+                        // El ancho lo pone el SizedBox: el Column de arriba
+                        // usa crossAxisAlignment.start (para el carrusel),
+                        // así que sin esto Center no tenía dentro de qué
+                        // centrarse y el botón quedaba pegado a la
+                        // izquierda igual.
+                        child: SizedBox(
+                          width: double.infinity,
+                          child: Center(child: RefreshButton(onTap: c.refrescarTodo)),
+                        ),
+                      ),
+                    ],
+                  ),
                 ),
               _ => visibles.isEmpty
                   ? const _FilaEsperando()

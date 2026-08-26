@@ -157,9 +157,16 @@ class HomeAndroid extends StatelessWidget {
                     // aunque su contenido se ponga al día de paso —igual que
                     // ya hace el pull-to-refresh de toda la vida.
                     Padding(
-                      padding:
-                          EdgeInsets.fromLTRB(_margen(context), 12, 16, 4),
-                      child: RefreshButton(onTap: c.refrescarTodo),
+                      padding: const EdgeInsets.symmetric(vertical: 12),
+                      // El ancho lo pone el SizedBox: el Column de arriba
+                      // usa crossAxisAlignment.start (para el carrusel, que
+                      // no tiene que estirarse), así que sin esto Center no
+                      // tenía dentro de qué centrarse y el botón quedaba
+                      // pegado a la izquierda igual.
+                      child: SizedBox(
+                        width: double.infinity,
+                        child: Center(child: RefreshButton(onTap: c.refrescarTodo)),
+                      ),
                     ),
                   ],
                 ),

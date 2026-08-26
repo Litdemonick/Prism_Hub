@@ -79,7 +79,7 @@ class _RefreshButtonState extends State<RefreshButton>
               ),
               const SizedBox(width: 6),
               Text(
-                'common.refresh'.i18n,
+                (_isRefreshing ? 'common.refreshing' : 'common.refresh').i18n,
                 style: TextStyle(
                   fontSize: 12.5,
                   fontWeight: FontWeight.w600,

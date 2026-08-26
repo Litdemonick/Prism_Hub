@@ -21,6 +21,7 @@
     "confirm": "Confirm",
     "close": "Close",
     "refresh": "Refresh",
+    "refreshing": "Refreshing…",
     "copied": "Copied to clipboard",
     "uninstall": "Uninstall",
     "install": "Install",
