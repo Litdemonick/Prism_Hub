@@ -45,25 +45,11 @@ class FilaDeExtension {
     required this.nombre,
     this.estadoExt = EstadoExtension.activa,
     this.esVistaPrevia = false,
-    this.formatosPreferidos,
   });
 
   final String package;
   final String nombre;
   final EstadoExtension estadoExt;
-
-  /// Si no es null, esta fila es de una zona de contenido (Anime/Mangas) y
-  /// tiene que pedirle a la extensión SOLO el formato que le corresponde a
-  /// esa zona — `ExtensionUtils.formatosDeVideo` o `.formatosDeLectura`.
-  ///
-  /// Null (el caso normal, Inicio) significa lo de siempre: se pide con el
-  /// filtro que el usuario haya elegido arriba, sin ninguna restricción de
-  /// formato extra.
-  ///
-  /// Con esto puesto, si la extensión no tiene ningún eje que separe vídeo
-  /// de lectura, la fila no muestra nada (ver `_traerDeVerdad`) — nunca se
-  /// arriesga a mezclar las dos cosas en una zona que promete solo una.
-  final Set<String>? formatosPreferidos;
 
   /// El usuario NO la tiene instalada: se cargó solo para que el Home tenga
   /// contenido. Al tocar una de sus tarjetas se le ofrece instalarla.
@@ -1545,44 +1531,17 @@ class CatalogoExtensionesController extends GetxController {
         fila.estado.value = EstadoDeFila.fallo;
         return;
       }
-      // ── Fila de zona (Anime/Mangas): un camino aparte, más corto ────────
+      // ── Sin camino de zona acá ────────────────────────────────────────
       //
-      // No comparte nada del camino de abajo a propósito. Esa lógica lee
-      // `generoAplicado`/`estadoAplicado`/`formatoAplicado` —el filtro
-      // compartido de Inicio— y encima alimenta `destacados`/el caché de
-      // disco, los DOS indexados solo por `package`. Si una fila de zona
-      // pasara por ahí, la parte filtrada (solo el anime de una extensión
-      // mixta, por ejemplo) pisaría el caché y el destacado de Inicio para
-      // ESE MISMO paquete con un catálogo recortado — el bug de "se pisan
-      // entre sí" que este plan existe para evitar, con otro nombre.
-      if (fila.formatosPreferidos != null) {
-        final filtro =
-            _filtroDeFormatoZona(fila.package, fila.formatosPreferidos!);
-        // Sin eje que separe vídeo de lectura: no se muestra nada por esta
-        // fila. Mejor una zona con una fila de menos que una mezclada.
-        if (filtro == null) {
-          fila.estado.value = EstadoDeFila.fallo;
-          return;
-        }
-        final pagina = fila.pagina;
-        final items = await runtime
-            .search('', pagina, filter: filtro)
-            .timeout(const Duration(seconds: 20));
-        if (items.isEmpty) {
-          fila.estado.value =
-              fila.items.isEmpty ? EstadoDeFila.fallo : EstadoDeFila.lista;
-          return;
-        }
-        if (pagina <= 1) {
-          fila.items.assignAll(items);
-        } else {
-          final vistas = fila.items.map((e) => e.url).toSet();
-          fila.items.addAll(items.where((e) => !vistas.contains(e.url)));
-        }
-        fila.traidoEl = DateTime.now();
-        fila.estado.value = EstadoDeFila.lista;
-        return;
-      }
+      // Hubo una rama acá (Anime/Mangas pidiendo su propio formato con esta
+      // misma `FilaDeExtension`) que se sacó: una zona junta contenido de
+      // varias extensiones a la vez, con timeouts independientes por sitio
+      // —el problema que ya resuelve el pool de `SearchController`, no una
+      // fila más del Home—, y terminaba pisando `destacados`/el
+      // caché de disco (los dos indexados por `package`) si alguna vez
+      // reusaba esta fila. Las 4 zonas de contenido tienen su propio
+      // `ZonaCatalogoController`, que llama a `filtroDeFormatoZona` (más
+      // abajo en este archivo) directamente, sin pasar por acá.
       // ── Con género aplicado se pide por búsqueda, no por «lo último» ──
       //
       // `latest()` no acepta filtros: devuelve lo último y punto. El que sí
@@ -1652,18 +1611,24 @@ class CatalogoExtensionesController extends GetxController {
   }
 
   /// El filtro para pedirle a una extensión MIXTA solo su parte de vídeo o
-  /// solo su de lectura — para las filas de zona (Anime/Mangas), nunca para
-  /// Inicio. A propósito, NO lee `generoAplicado`/`estadoAplicado`/
+  /// solo su de lectura — lo usa `ZonaCatalogoController` (cada una de las
+  /// 4 zonas de contenido arma su propio catálogo por fuera de este
+  /// controller, ver ese archivo), nunca Inicio. Público a propósito: las
+  /// zonas no viven en este controller, así que necesitan poder pedirle
+  /// esto desde afuera sin duplicar el escaneo de `_ejesPorExtension`.
+  ///
+  /// A propósito, NO lee `generoAplicado`/`estadoAplicado`/
   /// `formatoAplicado` (el estado compartido y mutable de Inicio, ver el
   /// comentario largo en `hayCambiosSinAplicar`): una zona de contenido
   /// jamás debe pisar ni depender del filtro que el usuario dejó puesto en
-  /// otra pantalla.
+  /// otra pantalla — y tampoco muta nada acá, solo lee cachés propios.
   ///
   /// Null si la extensión no declara ningún eje que separe las dos cosas —
-  /// en ese caso la fila que llame a esto no muestra nada (ver
-  /// `_traerDeVerdad`): mejor no mostrar la fila que arriesgarse a mezclar
-  /// vídeo con lectura en una zona que promete solo una de las dos.
-  Map<String, List<String>>? _filtroDeFormatoZona(
+  /// quien llama a esto tiene que excluir esa extensión de la zona en vez
+  /// de mostrarla sin filtrar: mejor una zona con una fuente de menos que
+  /// arriesgarse a mezclar vídeo con lectura en una zona que promete solo
+  /// una de las dos.
+  Map<String, List<String>>? filtroDeFormatoZona(
     String package,
     Set<String> formatosCandidatos,
   ) {
