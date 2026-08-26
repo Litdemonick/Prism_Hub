@@ -30,6 +30,7 @@ import 'package:prismhub/views/widgets/tv/teclado_tv.dart';
 import 'package:prismhub/views/widgets/home/refresh_button.dart';
 import 'package:prismhub/views/widgets/infinite_scroller.dart';
 import 'package:prismhub/views/widgets/messenger.dart';
+import 'package:prismhub/views/pages/nsfw18/nsfw18_access.dart';
 import 'package:prismhub/views/widgets/platform_widget.dart';
 import 'package:prismhub/views/widgets/search_appbar.dart';
 
@@ -103,6 +104,57 @@ class _ExtensionSearcherPageState extends fluent.State<ExtensionSearcherPage> {
   // solo un aviso arriba.
   bool? _hasUpdate;
   bool _updatingExtension = false;
+
+  /// La pestaña Normal/+18, solo para extensiones MIXTAS (ManhwaWeb,
+  /// ShadeManga — `ExtensionUtils.esMixta`). Arranca en `widget.soloAdulto`
+  /// para que entrar desde la Zona +18 ya abra ahí, pero a partir de acá es
+  /// estado propio de esta pantalla: antes de esto no había ningún camino
+  /// para pasar de un catálogo al otro sin salir y volver a entrar por la
+  /// otra ruta.
+  late bool _pestanaAdulto = widget.soloAdulto;
+
+  /// Cambia de pestaña y recarga con el filtro que corresponde.
+  ///
+  /// ── Por qué pide PIN para entrar a "+18" pero nunca para volver ────────
+  ///
+  /// Si esto solo mirara el switch general de NSFW, cualquiera podría abrir
+  /// esta pantalla desde el buscador NORMAL —sin PIN, sin confirmación— y
+  /// tocar "+18" para ver contenido adulto sin fricción, saltándose la
+  /// protección que hoy exige la Zona +18. `confirmNsfw18Access` es la
+  /// misma puerta reusable que ya usa esa zona (confirmación + PIN, no una
+  /// segunda construida a mano acá). Volver a "Normal" nunca pide nada:
+  /// volver a lo seguro no necesita permiso.
+  ///
+  /// ── Por qué solo se toca la puerta, no todo `_selectedFilters` ─────────
+  ///
+  /// `ExtensionUtils.adultosDe`/`segurosDe` solo cubren el/los filtros que
+  /// tienen una puerta a adultos (ver `detectarMixtas`) — nunca género,
+  /// orden ni el resto. Reemplazar `_selectedFilters` entero tiraría
+  /// cualquier otro filtro que el usuario ya hubiera elegido; con
+  /// `addAll` se pisa SOLO la puerta y el resto queda como estaba.
+  Future<void> _cambiarPestana(bool adulto) async {
+    if (adulto == _pestanaAdulto) return;
+    if (adulto) {
+      final permitido = await confirmNsfw18Access(context);
+      if (!permitido || !mounted) return;
+      setState(() {
+        _pestanaAdulto = true;
+        _selectedFilters
+            .addAll(ExtensionUtils.adultosDe(widget.package) ?? const {});
+      });
+    } else {
+      setState(() {
+        _pestanaAdulto = false;
+        _selectedFilters
+            .addAll(ExtensionUtils.segurosDe(widget.package) ?? const {});
+      });
+    }
+    if (Platform.isAndroid) {
+      _easyRefreshController.callRefresh();
+    } else {
+      _goToPage(1);
+    }
+  }
 
   bool get _adultOptionSelected {
     if (_filters == null) return false;
@@ -691,7 +743,10 @@ class _ExtensionSearcherPageState extends fluent.State<ExtensionSearcherPage> {
       runtime: _runtime,
       filters: _filters!,
       // Fuera de la Zona +18 la puerta a adultos ni se ofrece.
-      desdeLaZona18: widget.soloAdulto,
+      // La pestaña ACTUAL, no la ruta de entrada — antes de la Fase 8 eran
+      // lo mismo (`soloAdulto` era fijo para toda la pantalla), pero ahora
+      // se puede cambiar de pestaña sin volver a entrar.
+      desdeLaZona18: _pestanaAdulto,
       selectedFilters: _selectedFilters,
       onSelectFilter: (selectedFilters, filters) {
         _selectedFilters = selectedFilters;
@@ -1193,6 +1248,20 @@ class _ExtensionSearcherPageState extends fluent.State<ExtensionSearcherPage> {
               onPressed: () => _onFilter(context),
             ),
         ],
+        // Solo si la extensión es mixta (ManhwaWeb, ShadeManga) — una
+        // normal no gana UI de más.
+        bottom: ExtensionUtils.esMixta(widget.package)
+            ? PreferredSize(
+                preferredSize: const Size.fromHeight(52),
+                child: Padding(
+                  padding: const EdgeInsets.fromLTRB(16, 4, 16, 12),
+                  child: _PestanasNormalAdulto(
+                    adulto: _pestanaAdulto,
+                    onChanged: _cambiarPestana,
+                  ),
+                ),
+              )
+            : null,
       ),
       body: Container(
         color: HomeTheme.bg,
@@ -1584,6 +1653,21 @@ class _ExtensionSearcherPageState extends fluent.State<ExtensionSearcherPage> {
                   ],
                 ),
               ),
+              // Solo si la extensión es mixta (ManhwaWeb, ShadeManga) — una
+              // normal no gana UI de más. Separada del ícono de filtros del
+              // sitio (arriba, en el mismo header) a propósito: mezclar las
+              // dos cosas en un solo diálogo es la queja que motivó esto.
+              if (ExtensionUtils.esMixta(widget.package))
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(16, 10, 16, 0),
+                  child: SizedBox(
+                    width: 260,
+                    child: _PestanasNormalAdulto(
+                      adulto: _pestanaAdulto,
+                      onChanged: _cambiarPestana,
+                    ),
+                  ),
+                ),
               const SizedBox(height: 8),
               // Grid + flechas prev/next EN SU PROPIA COLUMNA (Row), no
               // flotando encima de la grilla — así nunca se superponen a una
@@ -2154,6 +2238,73 @@ class _PuntoDeFiltro extends StatelessWidget {
       decoration: BoxDecoration(
         color: HomeTheme.accentPink,
         shape: BoxShape.circle,
+      ),
+    );
+  }
+}
+
+/// La pestaña Normal/+18 de una extensión mixta.
+///
+/// Separada a propósito del ícono de filtros del sitio (`tune_rounded`) y
+/// nunca mezclada en el mismo diálogo — mezclar las dos cosas es
+/// literalmente la queja que motivó esta fase: hoy la puerta a adultos de
+/// una extensión mixta vive escondida DENTRO del diálogo de filtros
+/// genérico, junto con género y orden.
+class _PestanasNormalAdulto extends StatelessWidget {
+  const _PestanasNormalAdulto({required this.adulto, required this.onChanged});
+
+  final bool adulto;
+  final ValueChanged<bool> onChanged;
+
+  Widget _segmento(String texto, bool valor) {
+    final elegido = adulto == valor;
+    final acento = valor ? HomeTheme.accentRed : HomeTheme.accentPink;
+    return Expanded(
+      // FocusableCard y no un GestureDetector a secas: en TV, con
+      // GestureDetector no hay nada que el D-pad pueda enfocar, y este
+      // control quedaría visible pero intocable con el mando — mismo
+      // motivo por el que los chips de filtro del Home lo usan.
+      child: FocusableCard(
+        borderRadius: 8,
+        accent: acento,
+        onTap: () => onChanged(valor),
+        child: AnimatedContainer(
+          duration: const Duration(milliseconds: 160),
+          height: 36,
+          alignment: Alignment.center,
+          decoration: BoxDecoration(
+            color: elegido ? acento.withValues(alpha: 0.18) : null,
+            borderRadius: BorderRadius.circular(8),
+            border: elegido ? Border.all(color: acento) : null,
+          ),
+          child: Text(
+            texto,
+            style: TextStyle(
+              fontSize: 13,
+              fontWeight: FontWeight.w700,
+              color: elegido ? acento : HomeTheme.textMuted,
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.all(4),
+      decoration: BoxDecoration(
+        color: HomeTheme.cardSurface,
+        borderRadius: BorderRadius.circular(10),
+        border: Border.all(color: HomeTheme.border),
+      ),
+      child: Row(
+        children: [
+          _segmento('extension-searcher.tab-normal'.i18n, false),
+          const SizedBox(width: 4),
+          _segmento('extension-searcher.tab-adulto'.i18n, true),
+        ],
       ),
     );
   }

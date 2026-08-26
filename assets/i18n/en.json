@@ -298,6 +298,8 @@
     "installed-new": "New"
   },
   "extension-searcher": {
+    "tab-normal": "Normal",
+    "tab-adulto": "18+",
     "nsfw-blocked": "This content is 18+. Enable adult content in Settings > General to view it.",
     "no-results": "No results found",
     "update-available": "This extension has a pending update. Update it before you can use it.",

@@ -294,6 +294,8 @@
     "installed-new": "Nuevas"
   },
   "extension-searcher": {
+    "tab-normal": "Normal",
+    "tab-adulto": "+18",
     "nsfw-blocked": "Este contenido es +18. Activá el contenido para adultos en Ajustes > General para poder verlo.",
     "no-results": "No se encontraron resultados",
     "update-available": "Esta extensión tiene una actualización pendiente. Actualizala para poder usarla.",
