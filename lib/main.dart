@@ -1241,10 +1241,25 @@ class _MainAppState extends State<MainApp> {
         // Ver el comentario del mismo cambio en la raíz de Android.
         themeMode:
             ModoDeColor.claro ? fluent.ThemeMode.light : fluent.ThemeMode.dark,
+        // ── El oscuro de Fluent, atado a la paleta de la app ────────────────
+        //
+        // Estaba con los valores de fábrica de Fluent — que en oscuro NO es
+        // negro, es un gris medio parejo (la "Mica" propia de Windows 11).
+        // Como el oscuro es el modo por defecto de toda la app, esto se veía
+        // TODO el tiempo: la barra de título, el panel lateral y cualquier
+        // menú de Fluent (PopupMenuButton incluido) salían en ese gris de
+        // fábrica en vez del fondo casi negro que usa el resto de la
+        // pantalla — reportado en vivo ("fondo gris"). Mismo arreglo que ya
+        // tenía el claro de acá abajo, con los equivalentes oscuros.
         darkTheme: fluent.FluentThemeData(
           brightness: Brightness.dark,
           visualDensity: VisualDensity.standard,
           accentColor: _fluentAccent,
+          scaffoldBackgroundColor: HomeTheme.bg,
+          micaBackgroundColor: HomeTheme.bg,
+          cardColor: HomeTheme.cardSurface,
+          menuColor: HomeTheme.cardSurface,
+          inactiveColor: HomeTheme.textPrimary,
         ),
         // ── El claro de Fluent, atado a la paleta de la app ─────────────────
         //
