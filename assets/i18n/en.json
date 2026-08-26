@@ -13,6 +13,7 @@
     "extension-repo": "Extension Repository",
     "settings": "Settings",
     "no-extension": "No installed extensions",
+    "no-extension-enabled": "You have extensions installed, but none enabled",
     "no-result": "No relevant results",
     "no-more-data": "No more data",
     "no-more-data-filtered": "No more data with this filter",

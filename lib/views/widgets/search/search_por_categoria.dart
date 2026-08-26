@@ -77,23 +77,35 @@ class SearchPorCategoria extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     if (runtimeList.isEmpty) {
+      // Dos casos bien distintos, antes con el mismo mensaje: sin ninguna
+      // extensión instalada, lo que hace falta es ir al Repositorio a
+      // instalar una. Con extensiones instaladas pero todas desactivadas
+      // (o inestables, ver ExtensionUtils.enabledRuntimes), instalar de
+      // nuevo no soluciona nada — lo que hace falta es activarlas, y eso
+      // se hace en Extensiones instaladas, no en el Repositorio.
+      final hayInstaladas = ExtensionUtils.runtimes.isNotEmpty;
       return SizedBox(
         height: 300,
         width: double.infinity,
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            Text('common.no-extension'.i18n),
+            Text(hayInstaladas
+                ? 'common.no-extension-enabled'.i18n
+                : 'common.no-extension'.i18n),
             const SizedBox(height: 8),
             PlatformFilledButton(
-              child: Text("common.extension-repo".i18n),
+              child: Text((hayInstaladas
+                      ? "common.extension-installed"
+                      : "common.extension-repo")
+                  .i18n),
               onPressed: () {
                 if (Platform.isAndroid) {
                   Get.find<MainController>().selectedTab.value =
                       MainController.tabExtensiones;
                   return;
                 }
-                router.push('/extension_repo');
+                router.push(hayInstaladas ? '/extension' : '/extension_repo');
               },
             )
           ],

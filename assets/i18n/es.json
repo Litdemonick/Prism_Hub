@@ -9,6 +9,7 @@
     "extension-repo": "Repositorio de extensiones",
     "settings": "Ajustes",
     "no-extension": "Sin extensiones instaladas",
+    "no-extension-enabled": "Tenés extensiones instaladas, pero ninguna activada",
     "no-result": "Sin resultados relevantes",
     "no-more-data": "No hay más datos",
     "no-more-data-filtered": "No hay más datos con este filtro",
