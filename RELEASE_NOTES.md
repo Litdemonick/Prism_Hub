@@ -1,4 +1,4 @@
-## PrismHub v1.0.35 — Android TV: el reproductor ya deja elegir servidor
+## PrismHub v1.0.36 — Android TV: zonas con cards horizontales
 
 > ⚠️ **La app sigue en mantenimiento general.** Se la sigue reestructurando
 > por dentro, así que es posible que te cruces con fallos o con cosas a
@@ -7,28 +7,20 @@
 
 ### 📺 Android TV
 
-- **El reproductor ya deja elegir servidor con el control remoto.** Al
-  desplegar la lista (flecha abajo), el mando quedaba "mudo": no dejaba
-  moverse entre servidores ni confirmar ninguno con OK — así que un video
-  con varios servidores nunca llegaba a reproducirse. Era un problema real
-  de foco, no del video en sí.
-- **La lista de servidores se despliega hacia abajo**, no empujando el
-  título y el progreso hacia arriba como antes.
-- **La selección con el mando se nota más.** El resplandor rosado era muy
-  sutil sobre portadas oscuras — ahora es más intenso y suma un borde
-  nítido, solo en televisor (en PC el hover del mouse queda igual que
-  siempre).
-- **El logo de arranque ya no sale gigante.** Tenía un tamaño que dependía
-  de cada pantalla; ahora es siempre el mismo, sin importar el televisor.
-- **Pantalla de arranque nueva**, con un banner fijo en vez de la animación
-  anterior.
-- **La actualización ya no se sentía "cancelada" la primera vez.** Al volver
-  del permiso de instalar, el reintento automático se rendía demasiado
-  rápido para navegar esa pantalla con el control remoto — ahora espera lo
-  que haga falta.
-- **Nada de manga ni novela en Biblioteca ni en Historial**, reforzando lo
-  que Inicio y Buscar ya bloqueaban — la regla de Android TV sigue siendo
-  "solo video, streaming".
+- **Las zonas (Películas/Series/Anime) ahora muestran cards horizontales**,
+  estilo miniatura de video, en vez del póster vertical — mismo diseño que
+  ya usan Continuar viendo y Favoritos.
+- **La lista de servidores del reproductor ya no se escondía sola.** Al
+  abrir un video que necesitaba elegir servidor, la lista podía
+  desaparecer a los 5 segundos aunque siguiera esperando una elección —
+  quedaba el aviso solo, sin nada para tocar.
+- **El carrusel de Inicio ya no mostraba manga ni novela.** Se había
+  quedado afuera del filtro que ya bloqueaba eso en las filas, el buscador,
+  Biblioteca e Historial.
+- **La pantalla de arranque ya es siempre el banner nuevo.** El logo
+  latiendo de antes seguía apareciendo en cada reapertura rápida de la
+  app (lo típico al estar probando algo) — ahora el banner se ve siempre,
+  en las cuatro plataformas.
 
 ---
 
@@ -74,16 +66,16 @@
 
 | Archivo | Para |
 |---|---|
-| **`PrismHub-setup-windows-v1.0.35.exe`** | **Instalador.** Lo normal: instala y crea el acceso directo |
-| `PrismHub-v1.0.35-windows-x64.zip` | Portable: se descomprime y se ejecuta, sin instalar |
+| **`PrismHub-setup-windows-v1.0.36.exe`** | **Instalador.** Lo normal: instala y crea el acceso directo |
+| `PrismHub-v1.0.36-windows-x64.zip` | Portable: se descomprime y se ejecuta, sin instalar |
 
 ### 🐧 Linux
 
 | Archivo | Para |
 |---|---|
-| `PrismHub-v1.0.35-linux-x64.tar.gz` | Se descomprime y se ejecuta |
+| `PrismHub-v1.0.36-linux-x64.tar.gz` | Se descomprime y se ejecuta |
 
-> Los archivos que llevan la versión en el nombre (`v1.0.35`) quedan fijos en
+> Los archivos que llevan la versión en el nombre (`v1.0.36`) quedan fijos en
 > esta publicación. Los de Android que **no** la llevan apuntan siempre a la
 > más nueva — son los que conviene usar para un enlace o un código que quede
 > guardado.
