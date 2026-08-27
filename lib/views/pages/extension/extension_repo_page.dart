@@ -934,7 +934,11 @@ class _ExtensionRepoPageState extends State<ExtensionRepoPage> {
         // desborda.
         resizeToAvoidBottomInset: false,
         appBar: SearchAppBar(
-          title: 'common.extension-repo'.i18n,
+          // "Repositorio de extensiones" completo no entraba en esta barra
+          // angosta junto a sus botones de acción — se veía cortado. El
+          // nombre corto alcanza acá igual que en la franja de Extensiones
+          // instaladas.
+          title: 'common.repo'.i18n,
           textEditingController: TextEditingController(text: c.search.value),
           onSubmitted: (value) {
             c.search.value = value;

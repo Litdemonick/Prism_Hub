@@ -926,7 +926,13 @@ class _ExtensionPageState extends State<ExtensionPage> {
             Column(
               children: [
                 FranjaDeZona(
-                  titulo: 'common.extension-installed'.i18n,
+                  // "Extensiones instaladas" completo (el mismo que usa el
+                  // encabezado de escritorio, con espacio de sobra) no
+                  // entraba en esta franja angosta con los botones de la
+                  // derecha — se veía cortado como "Extensiones inst…".
+                  // Acá alcanza con el nombre corto: la pantalla ya dice de
+                  // qué se trata por su cuenta.
+                  titulo: 'common.extension'.i18n,
                   ayuda: 'common.search'.i18n,
                   controlador: _androidSearchController,
                   alEscribir: (value) {
