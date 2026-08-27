@@ -606,8 +606,22 @@ class _SearchVacioState extends State<_SearchVacio> {
                     .addPostFrameCallback((_) => _actualizarFlechas());
                 return false;
               },
+              // ── Alto real encontrado, no el que "se veía bien" a ojo ──
+              //
+              // Esta fila fuerza un alto FIJO a cada chip de adentro (así
+              // funciona un ListView: el eje cruzado siempre les llega
+              // ajustado al alto del viewport, sea cual sea su contenido).
+              // Con 44 acá, después de restar el relleno vertical del ítem
+              // (6+6) y el propio de cada _ChipExtension (9+9), al ícono y
+              // al texto de adentro les quedaban apenas 14px de alto —justo
+              // lo que mide el ícono, CERO de sobra para el propio alto de
+              // línea del texto (fontSize 12.5 con su interlineado ronda
+              // los 15px). El texto terminaba tocando/pisando el borde
+              // redondeado de su propio chip -reportado en vivo con
+              // captura: "el contorno de cada botón corta el nombre".
+              // Con 54 queda holgura de sobra para cualquier fuente.
               child: SizedBox(
-                height: 44,
+                height: 54,
                 child: Row(
                   children: [
                     // Con su propio lugar reservado — solo aparece cuando de
