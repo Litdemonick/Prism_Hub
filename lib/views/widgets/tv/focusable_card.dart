@@ -192,7 +192,17 @@ class _FocusableCardState extends State<FocusableCard> {
     // cursor ni dedo que lo confirmen — así que tiene que notarse aunque se
     // mire de lejos, desde el sillón. El hover de mouse ya tiene al cursor
     // mismo como pista extra, por eso alcanza con menos.
-    final intensidadDelHalo = _tieneFoco ? 0.42 : 0.30;
+    //
+    // Reportado en vivo: en TV el resplandor solo (mismo que el hover de PC)
+    // "no se ve mucho" a la distancia normal de sillón, sobre todo con una
+    // portada oscura o con arte de por medio. En PC el halo se ve bien
+    // porque el cursor ya marca dónde está parado el usuario, encima del
+    // halo — en TV el halo es la ÚNICA pista, así que necesita más
+    // intensidad Y un borde nítido que no dependa del desenfoque para
+    // notarse. El hover de PC queda exactamente igual que antes.
+    final esTv = PlatformTv.esTelevisionSync;
+    final intensidadDelHalo = esTv ? 0.62 : (_tieneFoco ? 0.42 : 0.30);
+    final blurDelHalo = esTv ? 22.0 : 11.0;
     // ── En un aparato modesto, el marco y nada más ───────────────────────
     //
     // La escala es un transform animado: obliga a recomponer la tarjeta en
@@ -276,6 +286,17 @@ class _FocusableCardState extends State<FocusableCard> {
                         decoration: BoxDecoration(
                           borderRadius:
                               BorderRadius.circular(widget.borderRadius),
+                          // Borde nítido, SOLO en TV — ver el comentario de
+                          // arriba sobre por qué el halo solo no alcanza sin
+                          // cursor. En PC sigue sin dibujar ningún borde,
+                          // pedido explícito de que el hover se vea igual que
+                          // siempre (sin marco, solo el resplandor).
+                          border: esTv
+                              ? Border.all(
+                                  color: marco.withValues(alpha: 0.95),
+                                  width: 2.5,
+                                )
+                              : null,
                           boxShadow: [
                             const BoxShadow(
                               color: Color(0x8A000000),
@@ -289,7 +310,8 @@ class _FocusableCardState extends State<FocusableCard> {
                             ),
                             BoxShadow(
                               color: marco.withValues(alpha: intensidadDelHalo),
-                              blurRadius: 11,
+                              blurRadius: blurDelHalo,
+                              spreadRadius: esTv ? 1.5 : 0,
                             ),
                           ],
                         ),
