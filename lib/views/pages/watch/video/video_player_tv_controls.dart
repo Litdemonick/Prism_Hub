@@ -83,6 +83,11 @@ class _VideoPlayerTvControlsState extends State<VideoPlayerTvControls> {
   // hacer.
   final _focoServidorElegido = FocusNode(debugLabel: 'servidor-elegido-tv');
 
+  /// Mismo motivo que [_focoServidorElegido], para la fila de episodios que
+  /// se agrega al lado — pedido explícito: "los botones de elegir los
+  /// episodios, te faltó eso".
+  final _focoEpisodioElegido = FocusNode(debugLabel: 'episodio-elegido-tv');
+
   bool _barraVisible = true;
 
   /// Las opciones (servidores) están desplegadas.
@@ -105,6 +110,12 @@ class _VideoPlayerTvControlsState extends State<VideoPlayerTvControls> {
   /// aviso visual al avanzar/retroceder con las flechas.
   String? _seekFlash;
   Timer? _seekFlashTimer;
+
+  /// El volumen actual (0-100), solo mientras se está mostrando el aviso —
+  /// `null` cuando no hay que mostrar nada. Pedido explícito: aviso visual
+  /// al subir/bajar el volumen, iguel que el de avance/retroceso.
+  int? _volumenFlash;
+  Timer? _volumenFlashTimer;
 
   @override
   void initState() {
@@ -162,8 +173,10 @@ class _VideoPlayerTvControlsState extends State<VideoPlayerTvControls> {
     _paraOcultar?.cancel();
     _velocidadTimer?.cancel();
     _seekFlashTimer?.cancel();
+    _volumenFlashTimer?.cancel();
     _foco.dispose();
     _focoServidorElegido.dispose();
+    _focoEpisodioElegido.dispose();
     super.dispose();
   }
 
@@ -187,6 +200,15 @@ class _VideoPlayerTvControlsState extends State<VideoPlayerTvControls> {
     });
   }
 
+  /// Mismo mecanismo que el flash de avance/retroceso, para el volumen.
+  void _mostrarVolumenFlash(int volumen) {
+    _volumenFlashTimer?.cancel();
+    setState(() => _volumenFlash = volumen);
+    _volumenFlashTimer = Timer(const Duration(milliseconds: 900), () {
+      if (mounted) setState(() => _volumenFlash = null);
+    });
+  }
+
   /// Mueve el foco de verdad a la lista de servidores — ver el porqué en el
   /// comentario de [_focoServidorElegido].
   ///
@@ -197,6 +219,16 @@ class _VideoPlayerTvControlsState extends State<VideoPlayerTvControls> {
   void _pedirFocoServidor() {
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (mounted) _focoServidorElegido.requestFocus();
+    });
+  }
+
+  /// Igual que [_pedirFocoServidor], para la fila de episodios. Se usa al
+  /// abrir las opciones a mano (▼) — a diferencia de
+  /// `awaitingServerChoice`, que sigue enfocando servidores directo porque
+  /// ahí lo único que tiene sentido hacer es justo eso.
+  void _pedirFocoEpisodio() {
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) _focoEpisodioElegido.requestFocus();
     });
   }
 
@@ -253,21 +285,26 @@ class _VideoPlayerTvControlsState extends State<VideoPlayerTvControls> {
       _mostrarSeekFlash('-${_salto.inSeconds}s');
       return KeyEventResult.handled;
     }
-    // Bajar despliega las opciones dentro de la misma barra.
+    // Bajar despliega las opciones dentro de la misma barra. Foco a
+    // episodios primero — es lo que más se usa — y desde ahí se baja a
+    // servidores si hace falta.
     if (tecla == LogicalKeyboardKey.arrowDown) {
       setState(() {
         _opciones = true;
         _barraVisible = true;
       });
       _paraOcultar?.cancel();
-      _pedirFocoServidor();
+      _pedirFocoEpisodio();
       return KeyEventResult.handled;
     }
     // Subir: volumen. Llega hasta el doble del original porque hay material
     // grabado muy bajo (ver volumenMaximo en el controlador).
     if (tecla == LogicalKeyboardKey.arrowUp) {
       final v = _c.player.state.volume + 5;
-      _c.player.setVolume(v.clamp(0, VideoPlayerController.volumenMaximo));
+      final nuevo =
+          v.clamp(0, VideoPlayerController.volumenMaximo).toDouble();
+      _c.player.setVolume(nuevo);
+      _mostrarVolumenFlash(nuevo.round());
       return KeyEventResult.handled;
     }
     if (tecla == LogicalKeyboardKey.escape ||
@@ -484,6 +521,42 @@ class _VideoPlayerTvControlsState extends State<VideoPlayerTvControls> {
             ),
           ),
         ),
+        // ── Flash de volumen ─────────────────────────────────────────────
+        IgnorePointer(
+          child: Center(
+            child: AnimatedOpacity(
+              opacity: _volumenFlash == null ? 0 : 1,
+              duration: const Duration(milliseconds: 150),
+              child: Container(
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 22, vertical: 12),
+                decoration: BoxDecoration(
+                  color: Colors.black.withValues(alpha: 0.55),
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    const Icon(Icons.volume_up_rounded,
+                        color: Colors.white, size: 22),
+                    const SizedBox(width: 8),
+                    Text(
+                      // volumenMaximo puede pasar los 100 (audio grabado
+                      // bajo) — se muestra tal cual, sin fingir un tope de
+                      // 100% que no es el real.
+                      '${_volumenFlash ?? 0}%',
+                      style: const TextStyle(
+                        color: Colors.white,
+                        fontSize: 22,
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ),
+        ),
         // ── Velocidad de red ──────────────────────────────────────────────
         //
         // Pedido explícito: saber en tiempo real cómo va la conexión. Solo
@@ -528,6 +601,17 @@ class _VideoPlayerTvControlsState extends State<VideoPlayerTvControls> {
                   c: _c,
                   opciones: _opciones,
                   focoServidorElegido: _focoServidorElegido,
+                  focoEpisodioElegido: _focoEpisodioElegido,
+                  onElegirEpisodio: (i) {
+                    // Mismo guard que ya usa PC (_EpisodeState.onChange):
+                    // elegir otro capítulo mientras uno todavía está
+                    // resolviendo dejaba dos pedidos peleándose.
+                    if (_c.isGettingWatchData.value) return;
+                    _c.index.value = i;
+                    setState(() => _opciones = false);
+                    _foco.requestFocus();
+                    _reiniciarEspera();
+                  },
                   onElegirServidor: (nombre) {
                     // switchServer, NO selectServer — este último solo marca
                     // cuál es el servidor "actual" y vuelve a dejar
@@ -563,13 +647,17 @@ class _Barra extends StatelessWidget {
     required this.c,
     required this.opciones,
     required this.focoServidorElegido,
+    required this.focoEpisodioElegido,
     required this.onElegirServidor,
+    required this.onElegirEpisodio,
   });
 
   final VideoPlayerController c;
   final bool opciones;
   final FocusNode focoServidorElegido;
+  final FocusNode focoEpisodioElegido;
   final void Function(String) onElegirServidor;
+  final void Function(int) onElegirEpisodio;
 
   static String _tiempo(Duration d) {
     final h = d.inHours;
@@ -660,6 +748,12 @@ class _Barra extends StatelessWidget {
           // cosas "salían por arriba" en vez de desplegarse hacia abajo.
           if (opciones) ...[
             const SizedBox(height: 22),
+            _Episodios(
+              c: c,
+              onElegir: onElegirEpisodio,
+              focoElegido: focoEpisodioElegido,
+            ),
+            const SizedBox(height: 22),
             _Servidores(
               c: c,
               onElegir: onElegirServidor,
@@ -744,6 +838,88 @@ class _Servidores extends StatelessWidget {
                     ),
                     child: Text(
                       nombre,
+                      style: TextStyle(
+                        color: Colors.white,
+                        fontSize: 15,
+                        fontWeight:
+                            elegido ? FontWeight.w800 : FontWeight.w600,
+                      ),
+                    ),
+                  ),
+                );
+              },
+            ),
+          ),
+        ],
+      );
+    });
+  }
+}
+
+/// Los episodios, en una fila que se recorre con el mando — mismo patrón
+/// que [_Servidores]. Pedido explícito: "los botones de elegir los
+/// episodios, te faltó eso".
+class _Episodios extends StatelessWidget {
+  const _Episodios({
+    required this.c,
+    required this.onElegir,
+    required this.focoElegido,
+  });
+
+  final VideoPlayerController c;
+  final void Function(int) onElegir;
+
+  /// El nodo del episodio actualmente elegido — mismo motivo que
+  /// [_Servidores.focoElegido] (autofocus solo no alcanza cuando ya hay
+  /// algo enfocado en el mismo scope).
+  final FocusNode focoElegido;
+
+  @override
+  Widget build(BuildContext context) {
+    final episodios = c.playList;
+    if (episodios.isEmpty) return const SizedBox.shrink();
+    return Obx(() {
+      final actual = c.index.value;
+      return Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Text(
+            'video.tv-episodios'.i18n,
+            style: const TextStyle(
+              color: Colors.white70,
+              fontSize: 14,
+              fontWeight: FontWeight.w600,
+            ),
+          ),
+          const SizedBox(height: 12),
+          SizedBox(
+            height: 60,
+            child: ListView.separated(
+              scrollDirection: Axis.horizontal,
+              itemCount: episodios.length,
+              separatorBuilder: (_, __) => const SizedBox(width: 12),
+              itemBuilder: (context, i) {
+                final elegido = i == actual;
+                return FocusableCard(
+                  borderRadius: 10,
+                  // El del episodio actual recibe el FocusNode pedido a
+                  // mano al abrir las opciones — ver el porqué en
+                  // _focoEpisodioElegido.
+                  focusNode: elegido ? focoElegido : null,
+                  autofocus: elegido,
+                  onTap: () => onElegir(i),
+                  child: Container(
+                    alignment: Alignment.center,
+                    padding: const EdgeInsets.symmetric(horizontal: 22),
+                    decoration: BoxDecoration(
+                      color: elegido
+                          ? HomeTheme.accentPink
+                          : Colors.white.withValues(alpha: 0.14),
+                      borderRadius: BorderRadius.circular(10),
+                    ),
+                    child: Text(
+                      episodios[i].name,
                       style: TextStyle(
                         color: Colors.white,
                         fontSize: 15,
