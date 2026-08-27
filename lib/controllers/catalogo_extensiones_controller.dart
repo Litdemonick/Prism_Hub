@@ -82,6 +82,11 @@ class FilaDeExtension {
 
   /// De cuándo son los datos que se están mostrando. null = nunca cargó.
   DateTime? traidoEl;
+
+  /// De cuándo fue el ÚLTIMO intento, haya salido bien o mal. A diferencia
+  /// de [traidoEl] (que solo se pone si contestó), esto se pone siempre —
+  /// es lo que evita machacar un sitio caído. Ver `pedirSiHaceFalta`.
+  DateTime? intentadoEl;
 }
 
 /// Lo que alimenta el Home: **lo último de cada extensión instalada**.
@@ -116,6 +121,16 @@ class CatalogoExtensionesController extends GetxController {
   /// Media hora: el contenido nuevo de estos sitios no aparece cada minuto, y
   /// mientras tanto abrir el Home es instantáneo.
   static const _vigencia = Duration(minutes: 30);
+
+  /// Cuánto se espera antes de volver a intentarle a una fila que falló.
+  ///
+  /// Mucho más corta que [_vigencia] a propósito: acá no hay nada bueno que
+  /// mostrar, así que conviene reintentar antes que con una que sí anda.
+  /// Pero tampoco cero — un sitio caído (DNS, servidor abajo) no se cura en
+  /// dos segundos, y sin este freno cualquier remontaje de la fila —el Home
+  /// reordenándose mientras clasifica una extensión nueva, por ejemplo—
+  /// volvía a golpearlo en el acto.
+  static const _vigenciaFallo = Duration(minutes: 2);
 
   /// Cuántas extensiones se piden a la vez. Ver la decisión 3.
   ///
@@ -1237,6 +1252,25 @@ class CatalogoExtensionesController extends GetxController {
         return;
       }
     }
+    // ── Un sitio caído no se golpea sin parar ───────────────────────────
+    //
+    // Esta función la llama cada fila cuando "entra en pantalla" (ver
+    // `initState` en home_page_android.dart/home_page_windows.dart), y con
+    // una fila en `fallo` no había ningún freno: cada remontaje —el Home
+    // reordenándose mientras clasifica extensiones nuevas, por ejemplo—
+    // volvía a poner la fila en la cola sin esperar nada. Reportado en vivo:
+    // una extensión con el dominio caído (`Failed host lookup`) reintentaba
+    // cada pocos segundos sin parar.
+    //
+    // Con `forzar` (el botón de reintentar a mano, o tirar para refrescar)
+    // esto se saltea a propósito: ahí sí es lo que el usuario pidió.
+    if (!forzar && fila.estado.value == EstadoDeFila.fallo) {
+      final intentado = fila.intentadoEl;
+      if (intentado != null &&
+          DateTime.now().difference(intentado) < _vigenciaFallo) {
+        return;
+      }
+    }
     if (_cola.contains(fila)) return;
     fila.refrescando.value = true;
     _cola.add(fila);
@@ -1265,6 +1299,7 @@ class CatalogoExtensionesController extends GetxController {
   }
 
   Future<void> _traerDeVerdad(FilaDeExtension fila) async {
+    fila.intentadoEl = DateTime.now();
     // Solo se muestra "cargando" si no hay nada viejo que mostrar. Con datos
     // en pantalla, refrescar por detrás no tiene que parpadear.
     if (fila.items.isEmpty) fila.estado.value = EstadoDeFila.cargando;
