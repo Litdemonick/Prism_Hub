@@ -436,9 +436,19 @@ class _LibraryPageState extends State<LibraryPage> {
                                 // 32 (padding vertical del Column) + 32 (gap
                                 // arriba) + ~220 (alto mínimo del hero) — el
                                 // resto de la pantalla, con un piso razonable.
+                                //
+                                // El piso tiene que ser AL MENOS el mismo
+                                // `minHeight: 320` que `_BibliotecaVacia` ya
+                                // se pide a sí misma (icono + texto + botón +
+                                // su padding interno) — con 220 este SizedBox
+                                // le daba una altura TIGHT más chica que la
+                                // que pedía, y la apretaba: se veía "BOTTOM
+                                // OVERFLOWED BY 28 PIXELS" en un teléfono/
+                                // tablet acostado, donde el alto disponible
+                                // es chico. Reportado en vivo con captura.
                                 height:
                                     (outerConstraints.maxHeight - 32 - 32 - 220)
-                                        .clamp(220.0, double.infinity),
+                                        .clamp(320.0, double.infinity),
                                 child: const _BibliotecaVacia(),
                               ),
                             ..._continuarSecciones(context),

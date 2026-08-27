@@ -49,6 +49,22 @@ class ZonaSinClasificar extends StatelessWidget {
                 ),
               ),
             ),
+            // Pedido explícito: sin este empujoncito, nada en esta pantalla
+            // sugiere que se puede volver a pedir — el gesto ya funciona
+            // (ver ZonaCatalogoPage._conRefresco), solo faltaba decirlo.
+            const SizedBox(height: 8),
+            ConstrainedBox(
+              constraints: const BoxConstraints(maxWidth: 420),
+              child: Text(
+                'home.zona-sin-clasificar-refrescar'.i18n,
+                textAlign: TextAlign.center,
+                style: TextStyle(
+                  fontSize: 12.5,
+                  height: 1.4,
+                  color: HomeTheme.textMuted.withValues(alpha: 0.7),
+                ),
+              ),
+            ),
           ],
         ),
       ),

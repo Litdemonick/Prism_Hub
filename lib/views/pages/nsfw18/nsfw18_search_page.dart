@@ -8,6 +8,7 @@ import 'package:prismhub/utils/prismhub_storage.dart';
 import 'package:prismhub/utils/router.dart';
 import 'package:prismhub/views/pages/nsfw18/nsfw18_lock_page.dart';
 import 'package:prismhub/views/pages/search/search_page.dart';
+import 'package:prismhub/views/pages/zonas/zona_catalogo_page.dart';
 import 'package:prismhub/views/widgets/button.dart';
 import 'package:prismhub/views/widgets/home/home_theme.dart';
 import 'package:prismhub/views/widgets/messenger.dart';
@@ -48,6 +49,29 @@ Future<void> openNsfw18Search(
     return;
   }
   router.push('/adult-search');
+}
+
+// "Explorar" la Zona +18: el catálogo de TODAS sus extensiones (enteras +18
+// y la parte adulta de las mixtas) en una grilla, para navegar sin tener
+// que escribir nada — pedido explícito, con captura: "el search es para
+// buscar algo específico en la zona +18", el botón de Explorar tiene que
+// mostrar directo las cards, como ya hacen Películas/Series/Anime/Mangas.
+//
+// Antes este botón abría `Nsfw18SearchGate` —el buscador vacío hasta que se
+// escribe algo—, que es la pantalla correcta para BUSCAR pero no para
+// EXPLORAR: son dos acciones distintas y las dos apuntaban a la misma.
+//
+// Solo el camino `yaAutorizado`: hoy el único lugar que llama a esto es el
+// botón "Explorar" DENTRO de `Nsfw18ZonePage`, donde la confirmación y el
+// PIN ya se pasaron para entrar. Si en el futuro hace falta un camino sin
+// autorizar (un enlace directo, un atajo de afuera), se agrega entonces —
+// no antes, para no construir una compuerta que nadie usa todavía.
+Future<void> openNsfw18Catalog(BuildContext context) {
+  return Navigator.of(context).push(
+    MaterialPageRoute<void>(
+      builder: (_) => const ZonaCatalogoPage(zona: null),
+    ),
+  );
 }
 
 // Compuerta de la zona +18 del buscador. Mismo criterio que Nsfw18ZoneGate:

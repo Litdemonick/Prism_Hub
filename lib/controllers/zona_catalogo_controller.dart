@@ -1,11 +1,16 @@
 import 'dart:async';
+import 'dart:convert';
+import 'dart:io';
 
 import 'package:flutter/scheduler.dart';
 import 'package:get/get.dart';
+import 'package:path/path.dart' as p;
 import 'package:prismhub/controllers/catalogo_extensiones_controller.dart';
 import 'package:prismhub/models/extension.dart';
 import 'package:prismhub/utils/connectivity.dart';
 import 'package:prismhub/utils/extension.dart';
+import 'package:prismhub/utils/log.dart';
+import 'package:prismhub/utils/prismhub_directory.dart';
 import 'package:prismhub/utils/search_text.dart';
 
 /// Una extensión de la zona, con lo que ya trajo y en qué página va.
@@ -46,6 +51,13 @@ class ZonaFuente {
   bool isFetching = false;
   Future<void>? inFlight;
   Object? error;
+
+  /// Sus `items` vinieron del caché en disco, no de una respuesta real
+  /// todavía — ver `ZonaCatalogoController.cargarInicial`. Sigue contando
+  /// como "vacía" para el pool de pedidos: sin esto, mostrar el caché
+  /// cancelaba el pedido de verdad y la zona se quedaba con datos viejos
+  /// para siempre.
+  bool desdeCache = false;
 }
 
 /// Un ítem del catálogo de zona, con de qué extensión vino — para poder
@@ -65,7 +77,11 @@ typedef ZonaItem = ({String package, String nombre, ExtensionListItem item});
 class ZonaCatalogoController extends GetxController {
   ZonaCatalogoController(this.zona);
 
-  final ZonaPrincipal zona;
+  /// `null` es la Zona +18: mismo controller y mismo mecanismo de pool/
+  /// intercalado que las 4 zonas normales, pero con su propio criterio de
+  /// qué extensiones entran (ver `_armarFuentes`) — nunca se mezcla con
+  /// ninguna `ZonaPrincipal`.
+  final ZonaPrincipal? zona;
 
   final fuentes = <ZonaFuente>[].obs;
 
@@ -158,6 +174,20 @@ class ZonaCatalogoController extends GetxController {
   /// nada" (mismo criterio que `armado` en el Home).
   final armado = false.obs;
 
+  /// Cuántas veces se volvió a intentar armar por no haber motores todavía.
+  ///
+  /// Mismo problema que ya resolvió el Home
+  /// (`CatalogoExtensionesController._armarDeVerdad`, mismo comentario ahí):
+  /// esta zona arma sus fuentes apenas se entra a ella (`onInit`), y en ese
+  /// momento las extensiones pueden seguir cargando —`ExtensionUtils.runtimes`
+  /// todavía vacío—, así que `_armarFuentes()` da una lista vacía que no
+  /// significa "ninguna la declara", sino "todavía no se sabe". Reportado en
+  /// vivo en PC/Windows: la zona mostraba "ninguna de tus extensiones activas
+  /// declara contenido para esta zona" mientras en realidad seguía cargando.
+  /// Mismo remedio: reintentar unas pocas veces antes de dar el aviso por
+  /// bueno.
+  int _reintentosDeArmado = 0;
+
   static const _maxConcurrent = 4;
 
   /// Junta varios `fuentes.refresh()` seguidos en uno solo.
@@ -188,6 +218,7 @@ class ZonaCatalogoController extends GetxController {
   @override
   void onClose() {
     _debounceRefresco?.cancel();
+    _debounceGuardado?.cancel();
     super.onClose();
   }
 
@@ -195,6 +226,26 @@ class ZonaCatalogoController extends GetxController {
   /// siempre a una extensión con un catálogo enorme.
   static const _maxPaginas = 25;
 
+  // ── De vuelta a pedir el catálogo apenas se crea el controller ────────
+  //
+  // Hubo un intento de sacar esto de acá: un `IndexedStack` en escritorio
+  // (main_page.dart) montaba las 4 zonas JUNTAS al abrir la app, así que las
+  // 4 pedían su catálogo A LA VEZ y una extensión que sirve más de una zona
+  // (LaMovie en Películas Y Series, MangaDex en Mangas Y en la fila de
+  // Inicio) recibía pedidos simultáneos sobre el MISMO motor — reportado en
+  // vivo como "MangaDex no responde" con la web andando bien.
+  //
+  // Ese `IndexedStack` se revirtió del todo (rompía la navegación a la
+  // ficha: reemplazaba el Navigator anidado de la ShellRoute, así que
+  // `router.push('/detail')` cambiaba la URL pero no mostraba nada). Sin él,
+  // cada zona vuelve a construirse recién cuando el usuario entra de
+  // verdad — una sola a la vez, como siempre — así que el problema que
+  // motivó sacar esto de acá ya no existe. Dejarlo afuera SÍ rompía algo
+  // nuevo: `_alVolverA` (main_page.dart) solo pide de nuevo si el
+  // controller YA está registrado, y en la primera visita a una zona
+  // `didUpdateWidget` corre ANTES de que `ZonaCatalogoPage` llegue a crear
+  // su controller — la zona se quedaba con el esqueleto de carga para
+  // siempre, sin pedir nada nunca.
   @override
   void onInit() {
     super.onInit();
@@ -257,6 +308,32 @@ class ZonaCatalogoController extends GetxController {
     for (final entrada in ExtensionUtils.enabledRuntimes.entries) {
       final package = entrada.key;
       final extension = entrada.value.extension;
+      // ── Zona +18: criterio propio, separado del de las zonas normales ──
+      //
+      // Mismo criterio que ya usa `SearchPageController.getRuntime` en modo
+      // `nsfwOnly` — entera +18 (HentaiLA, VeoHentai), o mixta (ShadeManga,
+      // ManhwaWeb) aportando SOLO su parte de adultos. Una entera +18 no
+      // tiene puerta que cerrar: todo lo suyo ya es adulto, así que sin
+      // filtro alcanza — pedirle con `null` la deja usar su propio
+      // catálogo completo. Una mixta SÍ necesita el filtro explícito de
+      // `adultosDe`: sin él, cada una aplica su propio default —que es el
+      // seguro, a propósito— y la Zona +18 mostraría catálogo normal.
+      if (zona == null) {
+        if (!extension.nsfw && !ExtensionUtils.esMixta(package)) continue;
+        final filtroAdulto =
+            extension.nsfw ? null : ExtensionUtils.adultosDe(package);
+        // Una mixta sin filtro de adultos detectado todavía (recién
+        // instalada, `detectarMixtas` no la vio) se excluye por ahora —
+        // mismo criterio de "mejor una fuente de menos" que ya usan las
+        // zonas normales con una extensión `mixed` sin eje resuelto.
+        if (!extension.nsfw && filtroAdulto == null) continue;
+        nuevas.add(ZonaFuente(
+          package: package,
+          nombre: extension.name,
+          filtro: filtroAdulto,
+        ));
+        continue;
+      }
       // Una extensión marcada +18 de punta a punta (HentaiLA, VeoHentai)
       // NUNCA entra a una zona normal, sea cual sea su `contentKind` —
       // mismo criterio que ya aplica `SearchController` para el buscador
@@ -381,26 +458,149 @@ class ZonaCatalogoController extends GetxController {
     fuentes.refresh();
   }
 
+  // ─── Caché en disco ───────────────────────────────────────────────────
+  //
+  // Sin esto, entrar a una zona por primera vez en la sesión mostraba los
+  // bloques grises hasta que TODAS sus extensiones respondían — reportado
+  // en vivo como "demora en cargar las cards". El Home ya resuelve
+  // exactamente este mismo problema con su propio archivo
+  // (`CatalogoExtensionesController._archivo`); acá va la misma idea, un
+  // archivo por zona, para que lo último que se vio se muestre YA mientras
+  // el pedido de verdad refresca por detrás.
+  File get _archivoCache => File(p.join(
+        PrismHubDirectory.getDirectory,
+        'zona_${zona?.name ?? 'nsfw18'}.json',
+      ));
+
+  Map<String, dynamic>? _cacheDisco;
+  bool _cacheLeido = false;
+
+  Future<Map<String, dynamic>> _leerCacheDisco() async {
+    if (_cacheLeido) return _cacheDisco ?? const {};
+    _cacheLeido = true;
+    try {
+      final f = _archivoCache;
+      if (!await f.exists()) return const {};
+      final crudo = jsonDecode(await f.readAsString());
+      if (crudo is Map<String, dynamic>) _cacheDisco = crudo;
+    } catch (e) {
+      logger.info('[zona] caché ilegible, se ignora: $e');
+    }
+    return _cacheDisco ?? const {};
+  }
+
+  /// Junta varios guardados seguidos en uno solo — mismo motivo que
+  /// `_refrescarDebounced`: varias fuentes de la misma zona pueden terminar
+  /// su primer pedido casi juntas, y escribir el archivo una vez por cada
+  /// una es trabajo de disco de sobra por nada que valga la pena.
+  Timer? _debounceGuardado;
+  void _guardarCacheDebounced() {
+    _debounceGuardado?.cancel();
+    _debounceGuardado = Timer(const Duration(milliseconds: 400), () {
+      unawaited(_guardarCacheDisco());
+    });
+  }
+
+  Future<void> _guardarCacheDisco() async {
+    try {
+      final copia = <String, dynamic>{};
+      for (final f in fuentes) {
+        // Nunca lo que vino DEL caché sin haberse refrescado — guardar de
+        // vuelta lo mismo que se leyó no aporta nada y adelanta su fecha
+        // como si fuera contenido nuevo.
+        if (f.desdeCache || f.items.isEmpty) continue;
+        copia[f.package] = {
+          'fecha': DateTime.now().toIso8601String(),
+          // Solo lo que se llega a mostrar de esta fuente en un bloque —
+          // mismo recorte que ya usa el Home, para no engordar el archivo
+          // con páginas que el usuario nunca llegó a ver.
+          'items': f.items
+              .take(CatalogoExtensionesController.porExtension)
+              .map((i) => {'title': i.title, 'url': i.url, 'cover': i.cover})
+              .toList(),
+        };
+      }
+      await _archivoCache.writeAsString(jsonEncode(copia));
+    } catch (e) {
+      logger.info('[zona] no se pudo guardar el caché: $e');
+    }
+  }
+
+  static List<ExtensionListItem> _itemsDesdeCache(dynamic crudo) {
+    if (crudo is! List) return const [];
+    final salida = <ExtensionListItem>[];
+    for (final e in crudo) {
+      if (e is! Map) continue;
+      final titulo = e['title']?.toString();
+      final url = e['url']?.toString();
+      if (titulo == null || url == null) continue;
+      salida.add(ExtensionListItem(
+        title: titulo,
+        url: url,
+        cover: e['cover']?.toString(),
+      ));
+    }
+    return salida;
+  }
+
   Future<void> cargarInicial() async {
     if (cargando.value) return;
     cargando.value = true;
+    final nuevas = _armarFuentes();
+    // ── Puede ser que los motores todavía no estén ────────────────────────
+    //
+    // Ver el comentario largo de `_reintentosDeArmado`. Tres intentos cortos
+    // (600ms) antes de dar por bueno el aviso de "ninguna extensión declara
+    // esto": si a los casi dos segundos sigue sin haber ninguna, es que de
+    // verdad no hay, y ahí manda el aviso.
+    //
+    // Fuera del try/finally de abajo a propósito: ese `finally` es el que
+    // pone `armado.value = true`, y un `return` desde adentro lo hubiera
+    // disparado igual — justo lo que este reintento tiene que evitar.
+    if (nuevas.isEmpty && _reintentosDeArmado < 3) {
+      _reintentosDeArmado++;
+      cargando.value = false;
+      Future<void>.delayed(const Duration(milliseconds: 600), () {
+        if (fuentes.isEmpty) unawaited(cargarInicial());
+      });
+      return;
+    }
+    _reintentosDeArmado = 0;
     try {
-      final nuevas = _armarFuentes();
       // Se reusan las fuentes viejas que sigan correspondiendo, para no
       // tirar a la basura lo ya cargado si esto se vuelve a llamar (pull
       // to refresh) — mismo criterio que ya usa el Home con sus filas.
       final porPackage = {for (final f in fuentes) f.package: f};
+      final cache = await _leerCacheDisco();
       for (final f in nuevas) {
         final vieja = porPackage[f.package];
-        if (vieja == null) continue;
-        // Solo si el filtro es el mismo: si cambió (una extensión mixta
-        // que ahora sí/no declara su eje) el contenido viejo puede no
-        // corresponder más.
-        if (_mismoFiltro(vieja.filtro, f.filtro)) {
+        if (vieja != null && _mismoFiltro(vieja.filtro, f.filtro)) {
+          // Solo si el filtro es el mismo: si cambió (una extensión mixta
+          // que ahora sí/no declara su eje) el contenido viejo puede no
+          // corresponder más.
           f.items.addAll(vieja.items);
           f.pagina = vieja.pagina;
           f.agotada = vieja.agotada;
+          f.desdeCache = vieja.desdeCache;
+          continue;
         }
+        // Sin NADA en memoria todavía (primera vez en la sesión, `vieja ==
+        // null`): lo guardado en disco se muestra YA, sin esperar la red —
+        // se sigue pidiendo igual (`desdeCache` no cuenta como "ya tiene",
+        // ver `_pedir` más abajo), esto es solo para no abrir en blanco.
+        //
+        // Si en cambio `vieja` existe pero con OTRO filtro (el selector de
+        // Formato cambió), no se toca el disco: ese caché puede ser del
+        // filtro viejo, y mostrarlo sería mentir sobre qué se está viendo
+        // ahora. Se deja como estaba — el esqueleto de carga de siempre
+        // hasta que conteste el filtro nuevo.
+        if (vieja != null) continue;
+        final guardado = cache[f.package];
+        if (guardado is! Map) continue;
+        final items = _itemsDesdeCache(guardado['items']);
+        if (items.isEmpty) continue;
+        f.items.assignAll(items);
+        f.desdeCache = true;
       }
       fuentes.assignAll(nuevas);
       // Arranque de cero: acá SÍ corresponde reordenar todo (armado nuevo,
@@ -411,7 +611,9 @@ class ZonaCatalogoController extends GetxController {
       _cursores.clear();
       _titulosVistos.clear();
       _actualizarEntrelazados();
-      await _pedir(fuentes.where((f) => f.items.isEmpty).toList());
+      await _pedir(
+        fuentes.where((f) => f.items.isEmpty || f.desdeCache).toList(),
+      );
     } finally {
       cargando.value = false;
       armado.value = true;
@@ -511,6 +713,11 @@ class ZonaCatalogoController extends GetxController {
           _actualizarEntrelazados();
         }
         f.error = null;
+        // Ya contestó de verdad — lo que haya en pantalla ahora es real, no
+        // el eco de una sesión anterior. Se guarda para la PRÓXIMA vez que
+        // se abra esta zona (ver `cargarInicial`/`_leerCacheDisco`).
+        f.desdeCache = false;
+        _guardarCacheDebounced();
         _refrescarDebounced();
       } catch (e) {
         f.error = e;

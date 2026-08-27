@@ -532,6 +532,25 @@ class _Nsfw18ZonePageState extends State<Nsfw18ZonePage> {
                                         style: HomeTheme.tituloDeZona(),
                                       ),
                                     ),
+                                    // Sin esto no había NINGÚN camino a
+                                    // buscar algo puntual desde adentro de
+                                    // la zona — "Explorar" del banner de
+                                    // abajo ahora abre el catálogo (ver
+                                    // openNsfw18Catalog), no el buscador, y
+                                    // Ajustes es la única otra puerta.
+                                    // Reportado en vivo: "no veo el search
+                                    // adentro de la zona +18".
+                                    IconButton(
+                                      tooltip: 'nsfw18.search-zone-title'.i18n,
+                                      onPressed: () => openNsfw18Search(
+                                        context,
+                                        yaAutorizado: true,
+                                      ),
+                                      icon: Icon(
+                                        Icons.search_rounded,
+                                        color: HomeTheme.textPrimary,
+                                      ),
+                                    ),
                                     IconButton(
                                       tooltip: 'home.favorite'.i18n,
                                       onPressed: _favoritos,
@@ -555,29 +574,18 @@ class _Nsfw18ZonePageState extends State<Nsfw18ZonePage> {
                             Obx(() => HomeHeroBanner(
                                   background: c.heroBackground.value,
                                   gradient: HomeTheme.heroGradientRed,
-                                  // Estando DENTRO de la Zona +18, el
-                                  // catálogo que corresponde es el +18, no el
-                                  // normal. Antes esto mandaba al buscador
-                                  // general: en Android cambiaba a la pestaña
-                                  // Buscar y cerraba la zona entera, y en
-                                  // escritorio el default iba a /search.
-                                  //
-                                  // yaAutorizado: la confirmación y el PIN ya
-                                  // se pasaron para entrar acá; volver a
-                                  // pedirlos para moverse dentro de la misma
-                                  // zona no protege nada y encima dispara la
-                                  // biometría de nuevo.
+                                  // "Explorar" muestra el CATÁLOGO +18
+                                  // completo en cards, como las demás zonas
+                                  // — no el buscador (ese es para escribir
+                                  // algo puntual, y tiene su propia entrada).
+                                  // Ver el comentario largo en
+                                  // openNsfw18Catalog.
                                   //
                                   // Se apila ENCIMA de esta pantalla, así que
                                   // volver atrás cae siempre en el home +18,
                                   // sin importar desde dónde se haya entrado.
-                                  // Sin ramificar por plataforma: openNsfw18Search
-                                  // usa Navigator, que funciona igual en las
-                                  // tres.
-                                  onExploreCatalog: () => openNsfw18Search(
-                                    context,
-                                    yaAutorizado: true,
-                                  ),
+                                  onExploreCatalog: () =>
+                                      openNsfw18Catalog(context),
                                 )),
                             // El aire entre el hero y la primera fila se
                             // achica en horizontal de celular: ahí el alto
@@ -586,9 +594,17 @@ class _Nsfw18ZonePageState extends State<Nsfw18ZonePage> {
                             SizedBox(height: _tightTop(context) ? 14 : 32),
                             if (isEmpty)
                               SizedBox(
+                                // El piso tiene que ser AL MENOS el
+                                // `minHeight: 320` que `_Nsfw18EmptyState`
+                                // ya se pide a sí misma — mismo bug y mismo
+                                // arreglo que en `library_page.dart`
+                                // (`_BibliotecaVacia`), reportado en vivo
+                                // acá también con captura ("BOTTOM
+                                // OVERFLOWED BY 28 PIXELS" en tablet
+                                // acostada).
                                 height:
                                     (outerConstraints.maxHeight - 32 - 32 - 220)
-                                        .clamp(220.0, double.infinity),
+                                        .clamp(320.0, double.infinity),
                                 child: const _Nsfw18EmptyState(),
                               ),
                             ..._continuarSecciones(context),
