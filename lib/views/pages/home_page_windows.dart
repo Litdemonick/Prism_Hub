@@ -186,11 +186,23 @@ class _FilaWindows extends StatefulWidget {
   State<_FilaWindows> createState() => _FilaWindowsState();
 }
 
-/// El ancho de tarjeta en TV: más grande que el de escritorio (mismo
-/// `Ancho.anchoPara` como base, un cuarto más) porque en TV se mira desde
-/// el sillón, no a 30cm de la cara.
+/// El ancho de tarjeta en TV: un poco más grande que el de escritorio
+/// (mismo `Ancho.anchoPara` como base) porque en TV se mira desde el
+/// sillón, no a 30cm de la cara.
+///
+/// ── Por qué se achicó de 1.25 a 1.05 ────────────────────────────────────
+///
+/// Pedido explícito, con una captura de referencia de otra app de TV: ahí
+/// se ven DOS filas a la vez —una entera arriba y la de abajo asomando— y
+/// en esta pantalla, con las tarjetas al 1.25, una sola fila ocupaba casi
+/// toda la altura visible: no quedaba ningún indicio de que había más para
+/// abajo, se sentía como que la pantalla terminaba ahí. Con tarjetas más
+/// chicas, la MISMA fila pesa menos en la pantalla y entra más de una a la
+/// vez sin tocar el resto del diseño (el margen entre filas, pensado para
+/// que la tarjeta enfocada crezca sin pisar el título de la siguiente,
+/// sigue siendo el mismo).
 double _anchoTarjetaTv(BuildContext context) =>
-    TarjetaDeCatalogo.anchoPara(Ancho.de(context)) * 1.25;
+    TarjetaDeCatalogo.anchoPara(Ancho.de(context)) * 1.05;
 
 double _altoFilaTv(BuildContext context) =>
     TarjetaDeCatalogo.altoTotalDeAncho(_anchoTarjetaTv(context)) + 28;
