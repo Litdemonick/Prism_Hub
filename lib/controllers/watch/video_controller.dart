@@ -1496,20 +1496,33 @@ class VideoPlayerController extends GetxController with WidgetsBindingObserver {
       // "aparato modesto" del sistema). Escritorio, teléfonos y tablets
       // quedan EXACTAMENTE como estaban: `alto` es su nivel y también el
       // valor por omisión si no se pudo averiguar nada.
+      // ── Recorte MODERADO, no agresivo ───────────────────────────────────
+      //
+      // La 1.0.40 bajó esto hasta 24 MiB / 12 s en aparatos modestos,
+      // apuntando a un cierre por falta de memoria. Se corrige: el síntoma
+      // que se reportó después NO es un cierre —la app se congela y vuelve
+      // sola— y un colchón tan chico con un vídeo de bitrate alto se queda
+      // sin datos todo el tiempo, que es justamente una forma de producir
+      // esas pausas.
+      //
+      // Queda a la mitad del original en el nivel más bajo: suficiente para
+      // que no compita con el resto del sistema en un televisor de 1-2 GB,
+      // y de sobra para sostener la reproducción. Escritorio, teléfonos y
+      // tablets siguen EXACTAMENTE como estaban.
       final nivel = PerfilDeAparato.nivel;
       await np.setProperty(
         'cache-secs',
-        nivel.elegir(alto: '30', medio: '20', bajo: '12'),
+        nivel.elegir(alto: '30', medio: '25', bajo: '20'),
       );
       await np.setProperty(
         'demuxer-max-bytes',
         Platform.isAndroid
-            ? nivel.elegir(alto: '96MiB', medio: '48MiB', bajo: '24MiB')
+            ? nivel.elegir(alto: '96MiB', medio: '64MiB', bajo: '48MiB')
             : '192MiB',
       );
       await np.setProperty(
         'demuxer-readahead-secs',
-        nivel.elegir(alto: '10', medio: '8', bajo: '5'),
+        nivel.elegir(alto: '10', medio: '10', bajo: '8'),
       );
       // ── El reloj lo manda el AUDIO, y el vídeo se adapta ────────────────
       //
@@ -1527,17 +1540,25 @@ class VideoPlayerController extends GetxController with WidgetsBindingObserver {
       // pantalla y no algo que convenga que cambie sin querer si alguna vez
       // se toca otra opción o cambia una versión.
       //
-      // En un aparato modesto se sube a `decoder+vo`: además de saltear el
-      // dibujado de un cuadro que ya llegó tarde, se le permite a mpv NO
-      // decodificar los que sabe que van a llegar tarde. Es lo que evita
-      // que un stick barato se quede cada vez más atrás sin poder
-      // recuperarse — y también baja el calor, que en un stick con
-      // ventilación pobre termina en throttling y en más tirones todavía.
+      // ── Y `framedrop` se queda en `vo`, en TODOS los aparatos ───────────
+      //
+      // En la 1.0.40 se subió a `decoder+vo` en aparatos modestos con la
+      // idea de que descartar antes ayudaría a un stick que va justo. Salió
+      // al revés y se revierte: reportado en vivo apenas se probó, el vídeo
+      // pasó a verse "1 frame por 1 frame", a saltos.
+      //
+      // Es el comportamiento conocido de `decoder`: al descartar en el
+      // decodificador se pierden cuadros que otros necesitan como
+      // referencia, así que la imagen queda pegada al último keyframe y
+      // avanza a los tirones. La propia documentación de mpv lo desaconseja
+      // como valor de todos los días, y por eso su default es `vo` — que
+      // solo saltea el DIBUJADO de un cuadro que ya llegó tarde, sin tocar
+      // la decodificación ni romper las referencias.
+      //
+      // Queda escrito explícito igual (aunque coincida con el default) para
+      // que se lea la decisión y no vuelva a intentarse.
       await np.setProperty('video-sync', 'audio');
-      await np.setProperty(
-        'framedrop',
-        nivel == NivelDeAparato.alto ? 'vo' : 'decoder+vo',
-      );
+      await np.setProperty('framedrop', 'vo');
       // **El español primero, cuando la fuente trae varios idiomas.**
       //
       // Estos sitios son de contenido en español y quien los usa quiere el

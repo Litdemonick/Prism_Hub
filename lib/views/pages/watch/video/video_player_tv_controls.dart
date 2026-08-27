@@ -244,7 +244,22 @@ class _VideoPlayerTvControlsState extends State<VideoPlayerTvControls> {
   /// video_controller.dart) — acá solo hace falta cuidar que el widget
   /// siga montado antes de `setState`, que es lo único que este archivo
   /// puede saber por su cuenta.
+  /// ── Solo con los controles a la vista ──────────────────────────────
+  ///
+  /// Este dato sale de preguntarle una propiedad a mpv, y eso es un viaje
+  /// de ida y vuelta por el canal nativo. Mientras el vídeo corre, mpv está
+  /// ocupado decodificando: esa consulta compite con él y, en un televisor
+  /// que ya va justo, cada dos segundos es un pinchazo constante en el
+  /// mismo hilo del que depende que la imagen avance y que las teclas del
+  /// mando lleguen. Reportado en vivo: "se congela, no salen los controles
+  /// y después vuelve" — el síntoma de un hilo trabado, no de un crash.
+  ///
+  /// Y no hacía falta: el número solo se DIBUJA con la barra visible (ver
+  /// el `ValueListenableBuilder` de abajo), así que preguntarlo con la
+  /// barra escondida era trabajo tirado. Mirando una película —que es casi
+  /// todo el tiempo— ahora no se consulta nada.
   Future<void> _actualizarVelocidad() async {
+    if (!_barraVisible) return;
     final bps = await _c.cacheSpeedBps();
     if (mounted) _bps.value = bps;
   }
