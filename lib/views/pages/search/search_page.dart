@@ -691,16 +691,27 @@ class _SearchVacioState extends State<_SearchVacio> {
                         child: RepaintBoundary(
                           child: ShaderMask(
                             blendMode: BlendMode.dstIn,
-                            shaderCallback: (rect) => const LinearGradient(
+                            // Solo se difumina el lado que de verdad tiene
+                            // más para mostrar — reportado en vivo con
+                            // captura: el primer chip (sin flecha a la
+                            // izquierda, ya al principio de la fila) se veía
+                            // con una sombra rara en su propio borde, porque
+                            // antes el difuminado se aplicaba siempre en los
+                            // dos extremos sin mirar si hacía falta.
+                            shaderCallback: (rect) => LinearGradient(
                               begin: Alignment.centerLeft,
                               end: Alignment.centerRight,
                               colors: [
-                                Colors.transparent,
+                                _puedeRetroceder
+                                    ? Colors.transparent
+                                    : Colors.white,
                                 Colors.white,
                                 Colors.white,
-                                Colors.transparent,
+                                _puedeAvanzar
+                                    ? Colors.transparent
+                                    : Colors.white,
                               ],
-                              stops: [0.0, 0.08, 0.92, 1.0],
+                              stops: const [0.0, 0.08, 0.92, 1.0],
                             ).createShader(rect),
                             child: ListView.builder(
                               scrollDirection: Axis.horizontal,
