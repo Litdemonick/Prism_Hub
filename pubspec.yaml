@@ -98,6 +98,11 @@ dependencies:
   volume_controller: ^2.0.7
   screen_brightness: ^0.2.2+1
   auto_orientation: ^2.3.1
+  # Mantiene la pantalla encendida SOLO mientras el video reproduce de
+  # verdad (ver el `ever(isPlaying, ...)` en video_controller.dart). Ya
+  # estaba resuelta como dependencia transitiva (algún otro paquete la
+  # trae) — se declara directa porque ahora se llama a su API a mano.
+  wakelock_plus: ^1.1.4
   dlna_dart: ^0.0.8
   ed25519_edwards: ^0.3.1
   # Proxy HTTP local — un DLNA/Chromecast pide la URL del stream por su

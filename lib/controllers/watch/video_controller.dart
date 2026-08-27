@@ -44,6 +44,7 @@ import 'package:prismhub/utils/i18n.dart';
 import 'package:prismhub/utils/layout.dart';
 import 'package:prismhub/utils/prismhub_directory.dart';
 import 'package:prismhub/views/pages/watch/video/video_player_sidebar.dart';
+import 'package:wakelock_plus/wakelock_plus.dart';
 import 'package:prismhub/views/pages/watch/video/webview_player_page.dart'
     show isDirectStream, isKnownNativeServer;
 import 'package:window_manager/window_manager.dart';
@@ -1917,6 +1918,33 @@ class VideoPlayerController extends GetxController with WidgetsBindingObserver {
       // no en el próximo segundo.
       _ultimoRefrescoNotificacion = null;
       _refrescarNotificacion();
+    }));
+
+    // ── Pantalla encendida, SOLO mientras reproduce de verdad ──────────────
+    //
+    // Reportado en vivo en Android TV: sin nadie tocando el mando durante un
+    // rato, el propio televisor activa su salvapantallas por inactividad —y
+    // al volver a tocar algo para salir de ahí, la app se caía entera. Esto
+    // no puede ser un error de Dart atrapable con try/catch de este lado: un
+    // crash tan completo (la app se cierra sola, no una pantalla roja) es
+    // compatible con que el salvapantallas destruya la superficie nativa
+    // donde media_kit dibuja el video, y que el motor no sepa recrearla —
+    // arreglar ESO sería tocar la parte más delicada de todo el reproductor,
+    // que no se reescribe.
+    //
+    // El wakelock evita el problema de raíz: si el salvapantallas nunca
+    // llega a activarse mientras se está mirando algo, nunca hay superficie
+    // que destruir. Atado a `isPlaying` y no a "la pantalla del reproductor
+    // está abierta": en pausa (leyendo un cartel, revisando servidores) no
+    // hay nada animándose en el video, así que el televisor puede volver a
+    // su comportamiento normal de apagar la pantalla como corresponde.
+    _addWorker(ever(isPlaying, (bool reproduciendo) {
+      unawaited(
+        (reproduciendo ? WakelockPlus.enable() : WakelockPlus.disable())
+            .catchError((Object e) {
+          logger.warning('No se pudo cambiar el wakelock: $e');
+        }),
+      );
     }));
 
     // 监听进度
@@ -8152,6 +8180,13 @@ class VideoPlayerController extends GetxController with WidgetsBindingObserver {
   @override
   void onClose() async {
     WidgetsBinding.instance.removeObserver(this);
+    // Red de seguridad: si esto se cierra con isPlaying todavía en true (una
+    // salida abrupta, no un pause normal), el worker de arriba no llega a
+    // correr — sin esto la pantalla se hubiera quedado forzada a no apagarse
+    // nunca más, aun después de cerrar el reproductor.
+    unawaited(WakelockPlus.disable().catchError((Object e) {
+      logger.warning('No se pudo apagar el wakelock al cerrar: $e');
+    }));
     _beginPlaybackShutdown();
     if (PrismHubStorage.getSetting(SettingKey.autoTracking) == true &&
         anilistID != "") {
