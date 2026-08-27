@@ -886,22 +886,14 @@ class _AppRootState extends State<_AppRoot> with WidgetsBindingObserver {
   @override
   Widget build(BuildContext context) {
     if (!_ready) {
-      return MaterialApp(
+      return const MaterialApp(
         debugShowCheckedModeBanner: false,
-        // Volviendo, el MISMO logo que acaba de mostrar el sistema — sin la
-        // presentación, pero sin hueco.
-        //
-        // Acá había un rectángulo del color de fondo y nada más. La idea era
-        // no presentarse dos veces, pero el efecto era el contrario: el
-        // sistema dibuja su splash con el logo, Flutter entraba con el
-        // rectángulo, y el logo se APAGABA dejando la pantalla en negro
-        // mientras terminaba de cargar. Reportado en vivo: «sale el logo,
-        // luego pantalla negra, luego carga».
-        //
-        // Con el logo puesto el relevo es continuo, que es lo que hacen las
-        // demás apps. Y no cuesta tiempo: la espera artificial se saltea igual
-        // (ver `_volviendo`), así que dura lo que tarde la carga real.
-        home: SplashScreen(soloLogo: _volviendo),
+        // El mismo banner en TODA apertura, pedido explícito — ver el
+        // porqué en el doc de SplashScreen. La espera artificial de más
+        // abajo se sigue salteando en un "volver" reciente (`_volviendo`);
+        // lo único que cambia acá es que ya no hay una versión distinta y
+        // más liviana para ese caso.
+        home: SplashScreen(),
       );
     }
     return const MainApp();
