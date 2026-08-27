@@ -361,10 +361,32 @@ class _DesktopMainPageState extends State<DesktopMainPage> with WindowListener {
               // destino sola según dónde se esté parado. `_enRuta` es el
               // mismo chequeo que ya usa cada `_Burbuja` del panel para
               // saber si está seleccionada.
+              //
+              // ── `currentContext`, no el `context` de este botón ────────
+              //
+              // Bug real, encontrado en vivo: `openNsfw18Search(...,
+              // yaAutorizado: true)` empuja con `Navigator.of(context)`, a
+              // propósito (ver el comentario largo en nsfw18_search_page.
+              // dart) para apilarse en el MISMO navigator que ya muestra la
+              // Zona +18. Ese diseño asume que se lo llama desde ADENTRO
+              // del contenido de la zona (que vive en el navigator anidado
+              // de la ShellRoute, `widget.child`) — pero este botón vive en
+              // la barra superior de Fluent, AFUERA de `widget.child`, así
+              // que su `context` resuelve al navigator RAÍZ. El resultado:
+              // se apilaba una pantalla en el navigator raíz, y adentro de
+              // ella tocar una extensión usaba `router.push` (que opera
+              // sobre el navigator de la ShellRoute, uno más abajo) — la
+              // navegación pasaba en una capa TAPADA por la de arriba, así
+              // que tocar una extensión "no hacía nada" visible, y volver
+              // atrás revelaba esa navegación fantasma de golpe. `router.
+              // currentContext` es justo el context del navigator anidado
+              // de la ShellRoute en escritorio (ver router.dart) — con eso,
+              // el push cae en la MISMA capa que el resto de la navegación
+              // de esta zona.
               fluent.IconButton(
                 icon: const Icon(fluent.FluentIcons.search, size: 16.0),
                 onPressed: () => _enRuta('/adult-zone')
-                    ? openNsfw18Search(context, yaAutorizado: true)
+                    ? openNsfw18Search(currentContext, yaAutorizado: true)
                     : router.go('/search'),
               ),
               const SizedBox(width: 4),
