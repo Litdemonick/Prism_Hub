@@ -53,6 +53,29 @@ class _VideoPlayerTvControlsState extends State<VideoPlayerTvControls> {
 
   final _foco = FocusNode(debugLabel: 'reproductor-tv');
 
+  // ── Por qué la lista de servidores necesita SU PROPIO FocusNode ─────────
+  //
+  // Reportado en vivo: al desplegar servidores con ▼, el mando no dejaba
+  // elegir ninguno -ni con las flechas ni con OK. `_Servidores` le pedía
+  // `autofocus: true` a la tarjeta del servidor sonando, pero autofocus en
+  // Flutter solo hace algo si el FocusScope todavía no tiene NADA enfocado
+  // — y acá siempre había algo: `_foco` (el de esta barra, más arriba en el
+  // MISMO scope) ya se había quedado con el foco desde que se montó la
+  // pantalla, mucho antes de que las opciones se abrieran. La tarjeta del
+  // servidor se dibujaba, pedía foco, y no se lo daban: el mando seguía
+  // "parado" en `_foco`, que con las opciones abiertas solo entiende
+  // ◀ subir/escape/atrás para CERRARLAS — cualquier otra tecla (flechas
+  // para moverse entre servidores, OK para elegir uno) no tenía a quién
+  // llegarle.
+  //
+  // Con este nodo pedido a mano (ver dónde se llama `.requestFocus()` más
+  // abajo) el foco se mueve de verdad al abrir las opciones, y desde ahí
+  // las flechas SÍ encuentran las otras tarjetas (recorrido geométrico de
+  // Flutter, igual que en el resto de la app) y OK dispara el `onTap` de la
+  // tarjeta enfocada — que es exactamente lo que `FocusableCard` ya sabe
+  // hacer.
+  final _focoServidorElegido = FocusNode(debugLabel: 'servidor-elegido-tv');
+
   bool _barraVisible = true;
 
   /// Las opciones (servidores) están desplegadas.
@@ -77,7 +100,10 @@ class _VideoPlayerTvControlsState extends State<VideoPlayerTvControls> {
     // pantalla quedaba en negro con 00:00 y nada explicaba por qué —
     // reportado en un televisor real. Al levantarse esa bandera, las
     // opciones se abren solas: es justo el momento en que hay que elegir.
-    if (_c.awaitingServerChoice.value) _opciones = true;
+    if (_c.awaitingServerChoice.value) {
+      _opciones = true;
+      _pedirFocoServidor();
+    }
     _vigiaDeLaEleccion = ever(_c.awaitingServerChoice, (bool esperando) {
       if (!mounted || !esperando) return;
       setState(() {
@@ -85,6 +111,7 @@ class _VideoPlayerTvControlsState extends State<VideoPlayerTvControls> {
         _barraVisible = true;
       });
       _paraOcultar?.cancel();
+      _pedirFocoServidor();
     });
   }
 
@@ -93,7 +120,21 @@ class _VideoPlayerTvControlsState extends State<VideoPlayerTvControls> {
     _vigiaDeLaEleccion?.dispose();
     _paraOcultar?.cancel();
     _foco.dispose();
+    _focoServidorElegido.dispose();
     super.dispose();
+  }
+
+  /// Mueve el foco de verdad a la lista de servidores — ver el porqué en el
+  /// comentario de [_focoServidorElegido].
+  ///
+  /// Después del frame: la tarjeta recién se dibuja en este mismo build (o
+  /// en el que dispara `setState`), así que pedirle foco antes de que su
+  /// `RenderObject`/`FocusNode` esté de verdad adjunto al árbol no hace
+  /// nada.
+  void _pedirFocoServidor() {
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) _focoServidorElegido.requestFocus();
+    });
   }
 
   void _reiniciarEspera() {
@@ -154,6 +195,7 @@ class _VideoPlayerTvControlsState extends State<VideoPlayerTvControls> {
         _barraVisible = true;
       });
       _paraOcultar?.cancel();
+      _pedirFocoServidor();
       return KeyEventResult.handled;
     }
     // Subir: volumen. Llega hasta el doble del original porque hay material
@@ -324,6 +366,7 @@ class _VideoPlayerTvControlsState extends State<VideoPlayerTvControls> {
                 child: _Barra(
                   c: _c,
                   opciones: _opciones,
+                  focoServidorElegido: _focoServidorElegido,
                   onElegirServidor: (nombre) {
                     _c.selectServer(nombre);
                     setState(() => _opciones = false);
@@ -346,11 +389,13 @@ class _Barra extends StatelessWidget {
   const _Barra({
     required this.c,
     required this.opciones,
+    required this.focoServidorElegido,
     required this.onElegirServidor,
   });
 
   final VideoPlayerController c;
   final bool opciones;
+  final FocusNode focoServidorElegido;
   final void Function(String) onElegirServidor;
 
   static String _tiempo(Duration d) {
@@ -382,7 +427,11 @@ class _Barra extends StatelessWidget {
           // así al desplegarlas la barra crece hacia arriba y el progreso
           // —lo que uno estaba mirando— no se mueve de lugar.
           if (opciones) ...[
-            _Servidores(c: c, onElegir: onElegirServidor),
+            _Servidores(
+              c: c,
+              onElegir: onElegirServidor,
+              focoElegido: focoServidorElegido,
+            ),
             const SizedBox(height: 22),
           ],
           Text(
@@ -448,10 +497,19 @@ class _Barra extends StatelessWidget {
 
 /// Los servidores, en una fila que se recorre con el mando.
 class _Servidores extends StatelessWidget {
-  const _Servidores({required this.c, required this.onElegir});
+  const _Servidores({
+    required this.c,
+    required this.onElegir,
+    required this.focoElegido,
+  });
 
   final VideoPlayerController c;
   final void Function(String) onElegir;
+
+  /// El nodo del servidor actualmente elegido — ver por qué hace falta
+  /// pedirlo a mano en el comentario de
+  /// [_VideoPlayerTvControlsState._focoServidorElegido].
+  final FocusNode focoElegido;
 
   @override
   Widget build(BuildContext context) {
@@ -490,8 +548,12 @@ class _Servidores extends StatelessWidget {
                 final elegido = nombre == actual;
                 return FocusableCard(
                   borderRadius: 10,
-                  // Arranca en el que está sonando: es desde donde uno
-                  // quiere moverse para probar otro.
+                  // El del servidor sonando recibe el FocusNode que
+                  // VideoPlayerTvControls pide a mano al abrir las opciones
+                  // (autofocus solo no alcanzaba acá — ver el porqué en
+                  // _focoServidorElegido). Los demás siguen sin nodo propio:
+                  // se llega a ellos moviéndose con las flechas desde este.
+                  focusNode: elegido ? focoElegido : null,
                   autofocus: elegido,
                   onTap: () => onElegir(nombre),
                   child: Container(
