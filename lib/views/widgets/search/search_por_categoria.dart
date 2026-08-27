@@ -40,10 +40,8 @@ class SearchPorCategoria extends StatelessWidget {
     required this.kw,
     required this.runtimeList,
     required this.onClickMore,
-    this.cabecera,
   });
 
-  final Widget? cabecera;
   final String kw;
   final List<SearchResult> runtimeList;
 
@@ -225,7 +223,6 @@ class SearchPorCategoria extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          if (cabecera != null) cabecera!,
           const SizedBox(height: 8),
           if (relevantes.isNotEmpty) ...[
             seccion(

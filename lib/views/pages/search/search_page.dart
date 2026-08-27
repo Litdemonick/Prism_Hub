@@ -197,23 +197,49 @@ class _SearchPageState extends State<SearchPage> {
   }
 
   /// Los resultados, con la franja del título como primer elemento.
+  ///
+  /// ── `cabecera` FUERA del `Obx`, a propósito ─────────────────────────────
+  ///
+  /// Antes el `Obx` de acá devolvía DOS TIPOS DE WIDGET distintos según si
+  /// había texto escrito o no —un `Column` con `_SearchVacio`, o un
+  /// `SearchPorCategoria` entero— y en los dos, `cabecera` (que adentro
+  /// tiene el campo de texto) iba metido como parámetro/hijo de ese widget
+  /// que cambiaba de tipo. Apenas se escribía la PRIMERA letra (vacío →
+  /// algo), Flutter no puede reusar el `Element` de `cabecera` a través de
+  /// un cambio de tipo del padre: lo destruye y lo vuelve a crear entero,
+  /// campo de texto incluido. Eso es exactamente lo reportado en vivo: el
+  /// teclado se cierra, la pantalla se ve vacía un instante y vuelve a
+  /// aparecer con lo que ya se había escrito (el texto sobrevive porque
+  /// vive en `_searchController`, un `TextEditingController` aparte — pero
+  /// el `Element` del campo, y con él el foco/teclado, no).
+  ///
+  /// Con `cabecera` siempre en el MISMO lugar (primer hijo de un `Column`
+  /// que ya no cambia de tipo nunca), su `Element` nunca se destruye —solo
+  /// cambia lo de ABAJO, en su propio `Obx`. El costo: la franja deja de
+  /// esconderse al bajar en los resultados (ya no vive DENTRO del
+  /// `SingleChildScrollView` de `SearchPorCategoria`) — mismo compromiso
+  /// que la pantalla vacía ya tenía de por sí, ahora parejo en los dos
+  /// estados.
   Widget _buildResultados(Widget cabecera, void Function(int) onClickMore) {
-    return Obx(() {
-      if (c.search.value.trim().isEmpty) {
-        return Column(children: [
-          cabecera,
-          Expanded(child: _SearchVacio(nsfwOnly: widget.nsfwOnly)),
-        ]);
-      }
-      // ignore: invalid_use_of_protected_member
-      final list = c.searchResultList.value;
-      return SearchPorCategoria(
-        kw: c.search.value,
-        runtimeList: list,
-        onClickMore: onClickMore,
-        cabecera: cabecera,
-      );
-    });
+    return Column(
+      children: [
+        cabecera,
+        Expanded(
+          child: Obx(() {
+            if (c.search.value.trim().isEmpty) {
+              return _SearchVacio(nsfwOnly: widget.nsfwOnly);
+            }
+            // ignore: invalid_use_of_protected_member
+            final list = c.searchResultList.value;
+            return SearchPorCategoria(
+              kw: c.search.value,
+              runtimeList: list,
+              onClickMore: onClickMore,
+            );
+          }),
+        ),
+      ],
+    );
   }
 
   Widget _buildAndroidSearch(BuildContext context) {
