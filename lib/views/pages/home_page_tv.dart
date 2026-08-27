@@ -158,10 +158,39 @@ class _HomeTVState extends State<HomeTV> {
     // Solo si de verdad está vacía: con contenido cargado no se pide nada,
     // así que moverse entre zonas sigue siendo instantáneo.
     final zona = categoria.zona;
-    if (zona == null) return;
+    if (zona == null) {
+      // ── Inicio: el mismo problema, la misma cura ────────────────────
+      //
+      // El Home ya sabe detectar que cambiaron las extensiones, pero solo
+      // lo mira al REFRESCAR — deslizar hacia abajo en Android, el botón
+      // en escritorio. En un televisor no existe ninguno de los dos, así
+      // que instalar una extensión y volver al Inicio no la mostraba
+      // nunca: había que cerrar la app entera.
+      //
+      // ── Y el carrusel NO se resortea por esto ───────────────────────
+      //
+      // Aviso explícito: "nunca actualizar el carrusel, es único desde
+      // que se abre la app". Verificado en el controller: por dónde
+      // arranca el acordeón lo fija `_paqueteDeArranque ??=` UNA sola vez
+      // por apertura (`??=`, no `=`), así que volver a armar la lista no
+      // lo vuelve a sortear — el carrusel sigue entrando por la misma
+      // extensión y en el mismo orden. Lo único que cambia es que una
+      // extensión recién instalada pasa a tener su tanda, que es
+      // justamente lo que se está pidiendo al instalarla.
+      if (categoria == _CategoriaTV.inicio && widget.c.hayExtensionesNuevas) {
+        unawaited(widget.c.recargar());
+      }
+      return;
+    }
     if (!Get.isRegistered<ZonaCatalogoController>(tag: zona.name)) return;
     final c = Get.find<ZonaCatalogoController>(tag: zona.name);
-    if (c.fuentes.isEmpty || c.entrelazados.isEmpty) {
+    if (c.fuentes.isEmpty ||
+        c.entrelazados.isEmpty ||
+        // También si se instaló, activó o desactivó una extensión desde la
+        // última vez — ver `ZonaCatalogoController.hayExtensionesNuevas`.
+        // Sin esto, una zona que YA tenía contenido no se enteraba nunca de
+        // una extensión nueva: había que cerrar la app.
+        c.hayExtensionesNuevas) {
       unawaited(c.cargarInicial());
     }
   }
@@ -697,7 +726,9 @@ class _ZonaTvState extends State<_ZonaTv> {
     // este controller viene a garantizar. Y `cargarInicial()` tiene su
     // propio candado (`if (cargando.value) return`), así que aunque justo
     // estuviera cargando, esto no dispara un segundo pedido.
-    if (c.fuentes.isEmpty || c.entrelazados.isEmpty) {
+    if (c.fuentes.isEmpty ||
+        c.entrelazados.isEmpty ||
+        c.hayExtensionesNuevas) {
       unawaited(c.cargarInicial());
     }
   }

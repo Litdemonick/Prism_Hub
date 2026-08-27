@@ -603,6 +603,9 @@ class ZonaCatalogoController extends GetxController {
         f.desdeCache = true;
       }
       fuentes.assignAll(nuevas);
+      // Con qué extensiones activas se armó esta lista — ver
+      // [hayExtensionesNuevas].
+      _firmaAlArmar = _firmaDeExtensiones();
       // Arranque de cero: acá SÍ corresponde reordenar todo (armado nuevo,
       // filtro que cambió, o pull-to-refresh) — es la única vez que
       // `_entrelazados` se descarta entero. De acá en más (paginación) solo
@@ -638,6 +641,51 @@ class ZonaCatalogoController extends GetxController {
   /// Si queda alguna fuente con más para traer.
   bool get puedeTraerMas =>
       fuentes.any((f) => !f.agotada && f.pagina < _maxPaginas);
+
+  /// La firma de extensiones con la que se armó la lista de fuentes. Ver
+  /// [hayExtensionesNuevas].
+  String _firmaAlArmar = '';
+
+  /// Qué extensiones hay y en qué estado, en una cadena comparable.
+  ///
+  /// Mismo criterio que `CatalogoExtensionesController._firmaDeExtensiones`
+  /// (el del Inicio), y por los mismos motivos ya medidos allá: no alcanza
+  /// con los paquetes —prender o apagar una no los cambia— ni con la
+  /// cantidad —instalar una y sacar otra da el mismo número—. Y la VERSIÓN
+  /// hace falta porque una actualización puede cambiar si la extensión
+  /// corresponde a esta zona (pasó en vivo con ManhwaWeb, que al
+  /// actualizarse empezó a declararse distinto).
+  static String _firmaDeExtensiones() {
+    final partes = <String>[
+      for (final e in ExtensionUtils.runtimes.entries)
+        '${e.key}:${ExtensionUtils.isEnabled(e.key) ? 1 : 0}'
+            ':${e.value.extension.version}',
+    ]..sort();
+    return partes.join(',');
+  }
+
+  /// Se instaló, activó o desactivó alguna extensión desde la última vez
+  /// que esta zona armó su lista.
+  ///
+  /// ── El hueco que esto cubre ──────────────────────────────────────────
+  ///
+  /// La lista de fuentes se arma UNA vez (`cargarInicial`) y de ahí en más
+  /// la zona se queda viva con lo que trajo. Eso es a propósito —volver a
+  /// una zona la encuentra tal cual se dejó, sin recargar nada— pero deja
+  /// afuera un caso muy real: el usuario entra a Series, ve que no tiene
+  /// nada, va a instalar una extensión de series, y vuelve. La zona sigue
+  /// mostrando lo de antes, porque nadie le avisó que el conjunto de
+  /// extensiones cambió.
+  ///
+  /// Preguntado en vivo: "si el usuario no tenía extensiones en series,
+  /// ¿cómo refresca? ¿lo hace automático?".
+  ///
+  /// Se compara contra TODAS las instaladas y su estado, no solo contra las
+  /// que entran a esta zona: activar o desactivar una extensión desde
+  /// Ajustes también tiene que notarse acá, y una que hoy no clasifica para
+  /// la zona puede pasar a hacerlo al actualizarse. Es una comparación de
+  /// dos cadenas, así que preguntarlo al entrar a una zona no cuesta nada.
+  bool get hayExtensionesNuevas => _firmaDeExtensiones() != _firmaAlArmar;
 
   /// Se dejó de pedir porque TODAS las fuentes dijeron que no tienen más
   /// (devolvieron una página vacía), no porque se haya llegado al tope

@@ -1650,6 +1650,21 @@ class CatalogoExtensionesController extends GetxController {
   /// el mismo número y sí es un cambio.
   bool _cambiaronLasExtensiones() => _firmaDeExtensiones() != _firmaArmada;
 
+  /// Lo mismo, para quien esté afuera.
+  ///
+  /// ── Para qué se expone ───────────────────────────────────────────────
+  ///
+  /// Hasta ahora esto solo se miraba al REFRESCAR (ver `_refrescarDeVerdad`),
+  /// que en Android es deslizar hacia abajo y en escritorio el botón de
+  /// actualizar. En Android TV no existe ninguno de los dos gestos: un
+  /// televisor no tiene pantalla táctil y la Home de TV no tiene botón de
+  /// refrescar. O sea que instalar una extensión y volver al Inicio no la
+  /// mostraba NUNCA — había que cerrar la app entera.
+  ///
+  /// Preguntado en vivo a propósito de las zonas ("si el usuario no tenía
+  /// extensiones en series, ¿cómo refresca?"), y vale igual para el Inicio.
+  bool get hayExtensionesNuevas => _cambiaronLasExtensiones();
+
   /// Qué extensiones hay y en qué estado, en una cadena comparable.
   ///
   /// ── Por qué una firma y no comparar con `filas` ──────────────────────────
