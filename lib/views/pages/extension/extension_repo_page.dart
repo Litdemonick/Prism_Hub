@@ -308,6 +308,7 @@ class _ExtensionRepoPageState extends State<ExtensionRepoPage> {
   /// diga "hay un filtro activo" para no perder esa información.
   Widget _botonFiltros(BuildContext context) {
     final hayFiltro = c.searchType.value != null ||
+        c.searchZona.value != null ||
         c.searchLevel.value != 'all' ||
         c.searchNsfw.value != 'all' ||
         c.searchInstalled.value != 'all' ||
@@ -342,6 +343,37 @@ class _ExtensionRepoPageState extends State<ExtensionRepoPage> {
                       c.searchType.value = _readingTypes;
                     },
                   ),
+                ],
+              ),
+              // Más fino que Tipo: no "esto es vídeo" sino "esto aporta a
+              // ESTA zona en particular" — pedido explícito, misma
+              // clasificación que ya usan las zonas de Inicio/PC/Android
+              // (ExtensionUtils.zonasDe). Una extensión sin @contentKind
+              // declarado no aparece en ninguna de las tres, pero sigue
+              // viéndose en "Todas" — nunca se pierde por esto.
+              fluent.MenuFlyoutSubItem(
+                text: Text('extension-repo.filter-zona'.i18n),
+                items: (context) => [
+                  fluent.MenuFlyoutItem(
+                    text: Text('common.show-all'.i18n),
+                    onPressed: () {
+                      fluent.Flyout.of(context).close();
+                      c.searchZona.value = null;
+                    },
+                  ),
+                  for (final zona in ZonaPrincipal.values)
+                    fluent.MenuFlyoutItem(
+                      text: Text(switch (zona) {
+                        ZonaPrincipal.peliculas => 'home.zona-peliculas'.i18n,
+                        ZonaPrincipal.series => 'home.zona-series'.i18n,
+                        ZonaPrincipal.anime => 'home.zona-anime'.i18n,
+                        ZonaPrincipal.mangas => 'home.zona-mangas'.i18n,
+                      }),
+                      onPressed: () {
+                        fluent.Flyout.of(context).close();
+                        c.searchZona.value = zona;
+                      },
+                    ),
                 ],
               ),
               fluent.MenuFlyoutSubItem(
@@ -768,6 +800,16 @@ class _ExtensionRepoPageState extends State<ExtensionRepoPage> {
       extensionCards.removeWhere(
         (element) => !c.searchType.value!.contains(element.type),
       );
+    }
+    if (c.searchZona.value != null) {
+      // Sin clasificar (zonasDe da vacío) queda AFUERA de este filtro a
+      // propósito — mismo criterio que en toda la app: sin @contentKind
+      // declarado no se puede asegurar a qué zona pertenece, así que no
+      // se arriesga a mostrarla en una que quizás no le corresponde. Sigue
+      // viéndose igual en "Todas".
+      extensionCards.removeWhere((element) => !ExtensionUtils.zonasDe(
+            element.package,
+          ).contains(c.searchZona.value));
     }
     if (c.searchLang.value != 'all') {
       extensionCards.removeWhere(

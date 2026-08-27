@@ -14,6 +14,7 @@ class ExtensionRepoPageController extends GetxController {
 
   final isLoading = false.obs;
   final isError = false.obs;
+
   /// Motivo del último fallo, para poder decirlo en pantalla.
   final errorDetalle = ''.obs;
   final search = ''.obs;
@@ -29,6 +30,13 @@ class ExtensionRepoPageController extends GetxController {
   final RxString searchNsfw = 'all'.obs;
   // 'all' | 'installed' | 'available' | 'new'
   final RxString searchInstalled = 'all'.obs;
+  // null = todas las zonas. Más fino que `searchType` (vídeo/lectura en
+  // general): esto es "aporta a ESTA zona en particular" — misma
+  // clasificación que ya usan las zonas de Inicio/PC/Android
+  // (ExtensionUtils.zonasDe, según lo que declare @contentKind). Pedido
+  // explícito: que el usuario sepa que tocando acá solo ve extensiones
+  // enfocadas a ese contenido puntual, no todo lo que sea vídeo en general.
+  final Rx<ZonaPrincipal?> searchZona = Rx(null);
 
   /// Paquetes que este dispositivo ya vio en el catálogo. Sirve para saber
   /// cuáles son NUEVOS: el índice no trae fecha de publicación, así que no hay

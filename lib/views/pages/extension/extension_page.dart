@@ -163,6 +163,25 @@ class _ExtensionPageState extends State<ExtensionPage> {
           // Manga, novela y todo lo que se lee. `mixed` entra en las dos
           // porque una extensión así sirve para ambas cosas.
           return ExtensionUtils.readingTypes.contains(ext.type);
+        // Los tres de abajo son más finos que Video: no "esto es vídeo"
+        // sino "esto aporta a ESTA zona en particular" — misma
+        // clasificación que ya usan las zonas de Inicio/PC/Android
+        // (ExtensionUtils.zonasDe, según lo que declare @contentKind).
+        // Pedido explícito: que el usuario sepa que tocando acá solo
+        // ve extensiones enfocadas a ese contenido, no todo lo que sea
+        // vídeo en general.
+        case _ExtFilter.peliculas:
+          return ExtensionUtils.zonasDe(ext.package)
+              .contains(ZonaPrincipal.peliculas);
+        case _ExtFilter.series:
+          return ExtensionUtils.zonasDe(ext.package)
+              .contains(ZonaPrincipal.series);
+        case _ExtFilter.anime:
+          return ExtensionUtils.zonasDe(ext.package)
+              .contains(ZonaPrincipal.anime);
+        case _ExtFilter.mangas:
+          return ExtensionUtils.zonasDe(ext.package)
+              .contains(ZonaPrincipal.mangas);
         case _ExtFilter.desactivadas:
           return !ExtensionUtils.isEnabled(ext.package);
         case _ExtFilter.inestables:
@@ -1390,6 +1409,13 @@ enum _ExtFilter {
   nsfw,
   video,
   lectura,
+  // Más finos que Video: no "esto es vídeo" sino "esto aporta a ESTA zona
+  // en particular" — pedido explícito, para que tocando acá el usuario
+  // sepa que solo ve extensiones enfocadas a ese contenido puntual.
+  peliculas,
+  series,
+  anime,
+  mangas,
   desactivadas,
   inestables,
 }
@@ -1407,6 +1433,16 @@ extension _ExtFilterLabel on _ExtFilter {
         return 'extension.filter-video'.i18n;
       case _ExtFilter.lectura:
         return 'extension.filter-reading'.i18n;
+      // Mismas claves que ya usan las zonas de Inicio/PC/Android para
+      // estos mismos nombres — nada nuevo que traducir aparte.
+      case _ExtFilter.peliculas:
+        return 'home.zona-peliculas'.i18n;
+      case _ExtFilter.series:
+        return 'home.zona-series'.i18n;
+      case _ExtFilter.anime:
+        return 'home.zona-anime'.i18n;
+      case _ExtFilter.mangas:
+        return 'home.zona-mangas'.i18n;
       case _ExtFilter.desactivadas:
         return 'extension.filter-disabled'.i18n;
       case _ExtFilter.inestables:
