@@ -1,82 +1,82 @@
-## PrismHub v1.0.32 — Android TV, a que vaya fluido
+## PrismHub v1.0.33 — Películas, Series, Anime y Mangas, de verdad
 
-> ⚡ **Si en el televisor iba lenta o se cerraba sola, era esto.**
-> La causa de fondo: la app le pedía a la memoria de imágenes 220 MB en
-> cualquier aparato, sin fijarse cuánta memoria tenía de verdad. En un
-> televisor viejo o un stick barato, con menos de esos 220 MB para toda la
-> app, eso terminaba en el sistema cerrándola. Ahora la app se fija primero
-> qué tan potente es el televisor y le pide solo lo que le corresponde.
->
-> De paso se encontraron y se corrigieron varias animaciones que quedaban
-> corriendo para siempre de fondo sin que se viera nada en pantalla —cada
-> una obligaba al televisor a dibujar cuadros al pedo, todo el rato— y se
-> revisó a fondo qué se pinta de más en cada pantalla.
-
-Esta versión es la continuación directa de la 1.0.29-1.0.31: ahí llegó
-Android TV, acá se le hizo el trabajo de fondo para que ande bien en
-cualquier televisor, no solo en los potentes.
+> 🎬 **Las zonas de navegación ya no son un Inicio con otro nombre.**
+> Películas, Series, Anime y Mangas pasan a ser catálogos propios: entrás y
+> ves TODO lo que tus extensiones activas tienen para esa categoría, en
+> tarjetas grandes, con orden y sin mezclar. Una extensión con contenido
+> normal y +18 a la vez (ShadeManga, ManhwaWeb) solo muestra acá su parte
+> normal — lo demás vive donde corresponde, en la Zona +18.
 
 > ⚠️ **La app sigue en mantenimiento general.** Se la sigue reestructurando
 > por dentro, así que es posible que te cruces con fallos o con cosas a
 > medio terminar, también en teléfono y en PC. Si encontrás algo roto,
 > reportalo desde Ajustes → Reportar.
 
-### ⚡ Rendimiento y estabilidad en Android TV
+### 🎬 Las zonas, como catálogo real
 
-- **La causa de los cierres.** El techo de memoria para las portadas
-  decodificadas ahora se ajusta solo según el aparato, en vez de pedir
-  siempre lo mismo. Y si el sistema avisa que le falta memoria, la app
-  ahora escucha ese aviso y suelta lo que no hace falta, en vez de esperar
-  a que la cierren.
-- **Menos trabajo dibujando de fondo.** Varias animaciones quedaban vivas
-  aunque no se vieran —el menú lateral llegaba a montar zonas enteras que
-  nunca se habían abierto—, y eso obligaba al televisor a trabajar sin
-  necesidad, incluso con la pantalla quieta. Se apagaron.
-- **Mover el foco con el mando ya no repinta de más.** Antes, pasar de una
-  tarjeta a otra podía volver a dibujar la fila entera; ahora solo se
-  redibuja lo que de verdad cambió.
-- **Portadas más livianas.** Varias imágenes se decodificaban a resolución
-  completa aunque se mostraran chicas — la que más pesaba, el fondo grande
-  de la ficha.
-- **El arranque ya no tranca.** El logo y la animación de carga tenían un
-  efecto de sombra carísimo, recalculado sesenta veces por segundo, justo
-  en el momento en que la app está más ocupada iniciando. Se reemplazó por
-  algo que se ve igual y no cuesta nada.
-- **Sin adornos que un control remoto no puede usar.** El brillo de
-  "seguí deslizando" al final de una lista, o la transición de pantalla
-  completa que desliza dos pantallas a la vez: ninguno de los dos tiene
-  sentido con D-pad, y los dos costaban dibujado de más.
+- **Películas, Series, Anime y Mangas** ya muestran una grilla completa con
+  todo lo que tus extensiones activas declaran para esa categoría, no una
+  fila cortada del Inicio.
+- **La Zona +18 también.** "Explorar" ahora abre el catálogo completo de
+  extensiones +18 en tarjetas, en vez de mandarte al buscador vacío.
+- **Continuar viendo/leyendo y Favoritos quedan bien separados.** Lo que
+  guardás desde la Zona +18 va SIEMPRE a la biblioteca +18, nunca a la
+  general — y al revés. Antes una extensión mixta podía filtrarse a la
+  biblioteca equivocada sin que se notara.
+- **Botón de refrescar en PC** en cada zona (en Android ya existe deslizando
+  hacia abajo), y las zonas vacías por falta de conexión ahora sí dejan
+  volver a intentar deslizando.
 
-### 🧭 Cosas que el mando no podía alcanzar, y ahora sí
+### 🔍 Buscar
 
-- **Los filtros del Inicio se podían marcar pero no aplicar.** La app le
-  preguntaba al aparato "¿sos táctil?" para decidir si mostrar el botón de
-  aplicar, y un televisor contesta que sí —es Android— aunque no tenga con
-  qué deslizar. Quedaba el filtro marcado y sin botón para aplicarlo.
-- **Con más de 5 extensiones instaladas, no se podía llegar a las demás.**
-  La única forma de cambiar de página era deslizando o con unas flechitas
-  pensadas para mouse — ninguna de las dos existe con un control remoto.
-  Mismo problema en el Repositorio, con más de 4 extensiones por sección.
-- **Con un mouse conectado al televisor, hacer clic en una tarjeta no
-  abría nada.**
+- **Buscar dentro de UNA extensión puntual**, en PC y en Android, sin tener
+  que revisar los resultados de todas — con sus propios botones, arriba de
+  la pantalla. En Android TV el buscador se queda simple a propósito: ahí
+  se busca en todo de una, sin ese paso extra que con un control remoto
+  sobra.
+- **Errores de verdad, no "sin resultados".** Si una extensión puntual está
+  caída, ahora se dice y se ofrece reintentar, en vez de mostrar el mismo
+  cartel que cuando de verdad no hay nada.
+- **El teclado ya no se cierra solo** al escribir la primera letra en el
+  buscador de Android.
 
-### 📺 Las pantallas de Android TV, terminadas
+### 🧭 Navegación en PC y Android
 
-- **Biblioteca, Ajustes, Extensiones instaladas, Repositorio e Historial**
-  ya tienen el mismo trato que el Inicio y la Ficha: tarjetas grandes,
-  márgenes que no se recortan en televisores viejos, y todo alcanzable con
-  el mando.
-- **El menú lateral se contrae a solo íconos** y se despliega mostrando el
-  nombre mientras el mando está parado ahí — como en Netflix o YouTube.
-- **El buscador recuerda las últimas búsquedas** y las deja como botones
-  arriba del teclado: elegir una vale por diez letras tecleadas de a una.
-- **El televisor ya arranca apaisado y sin la barra de estado del
-  sistema**, que ahí no tiene nada que mostrar.
+- **Panel lateral de PC rediseñado**, con íconos circulares y sin scrollbar
+  interno en ventanas chicas.
+- **Desborde corregido en la barra de abajo de Android**, tanto de pie como
+  acostado.
+- **Zona de TV en vivo**, dejada lista en el menú de las tres plataformas
+  para cuando haya extensiones de streaming — hoy queda vacía a propósito.
+- **Tocar una card en Android** entra directo a la ficha; mantenerla
+  presionada muestra la info sin navegar.
 
-### 🧩 En todas las plataformas
+### 📺 Android TV
 
-- Se corrigió un aviso de actualización que podía repetirse encima de una
-  descarga que ya estaba en curso, si la conexión era lenta.
+- **El vídeo ya reproduce en televisores que antes se quedaban en negro**
+  (Fire TV y cajas Android genéricas): la detección de "esto es un
+  televisor" dependía de una sola señal del sistema que esos aparatos no
+  siempre dan bien, y sin ella la app entraba con controles pensados para
+  dedo, que un control remoto no puede tocar.
+- **La Zona +18 pide solo el PIN de la app**, sin pasar por huella ni por
+  ningún bloqueo del sistema — ninguno de los dos tiene sentido con un
+  mando.
+- **La selección con el mando ahora se ve como el mouse en PC**: un
+  resplandor con el color de acento, no un borde blanco suelto.
+
+### 🧩 Extensiones instaladas y Repositorio
+
+- **Filtros por zona** (Películas/Series/Anime/Mangas), además de los de
+  Video/Lectura — para saber de un vistazo qué extensión aporta a cada
+  categoría, en las tres plataformas.
+- **Menos botones sueltos en PC**: las cuatro acciones en bloque
+  (activar/desactivar/actualizar/desinstalar todas) y los cinco filtros del
+  Repositorio se juntan cada uno en un solo botón con menú.
+- **Desinstalar todas ahora también alcanza a las +18**, avisando antes
+  cuántas de esas se van a borrar.
+- **La grilla del Repositorio ya no salta de lugar** al instalar una
+  extensión marcada inestable.
+- **Cards más grandes en Android TV**, en las dos pantallas.
 
 ---
 
@@ -122,16 +122,16 @@ cualquier televisor, no solo en los potentes.
 
 | Archivo | Para |
 |---|---|
-| **`PrismHub-setup-windows-v1.0.32.exe`** | **Instalador.** Lo normal: instala y crea el acceso directo |
-| `PrismHub-v1.0.32-windows-x64.zip` | Portable: se descomprime y se ejecuta, sin instalar |
+| **`PrismHub-setup-windows-v1.0.33.exe`** | **Instalador.** Lo normal: instala y crea el acceso directo |
+| `PrismHub-v1.0.33-windows-x64.zip` | Portable: se descomprime y se ejecuta, sin instalar |
 
 ### 🐧 Linux
 
 | Archivo | Para |
 |---|---|
-| `PrismHub-v1.0.32-linux-x64.tar.gz` | Se descomprime y se ejecuta |
+| `PrismHub-v1.0.33-linux-x64.tar.gz` | Se descomprime y se ejecuta |
 
-> Los archivos que llevan la versión en el nombre (`v1.0.32`) quedan fijos en
+> Los archivos que llevan la versión en el nombre (`v1.0.33`) quedan fijos en
 > esta publicación. Los de Android que **no** la llevan apuntan siempre a la
 > más nueva — son los que conviene usar para un enlace o un código que quede
 > guardado.
