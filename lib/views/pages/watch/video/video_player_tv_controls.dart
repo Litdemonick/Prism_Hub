@@ -423,17 +423,6 @@ class _Barra extends StatelessWidget {
         mainAxisSize: MainAxisSize.min,
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          // Las opciones van ARRIBA del progreso y solo cuando se piden:
-          // así al desplegarlas la barra crece hacia arriba y el progreso
-          // —lo que uno estaba mirando— no se mueve de lugar.
-          if (opciones) ...[
-            _Servidores(
-              c: c,
-              onElegir: onElegirServidor,
-              focoElegido: focoServidorElegido,
-            ),
-            const SizedBox(height: 22),
-          ],
           Text(
             c.title,
             maxLines: 1,
@@ -489,6 +478,21 @@ class _Barra extends StatelessWidget {
               _Ayuda(tecla: 'EXIT', que: 'video.tv-salir'.i18n),
             ],
           ),
+          // Las opciones van DESPUÉS de todo lo demás y solo cuando se
+          // piden — pedido explícito: que al desplegarlas el contenido
+          // nuevo aparezca hacia ABAJO (más cerca del borde de la
+          // pantalla), no hacia arriba empujando el título. Antes iban
+          // primero en la columna, así que abrir opciones corría el
+          // título y el progreso hacia arriba — se leía como que las
+          // cosas "salían por arriba" en vez de desplegarse hacia abajo.
+          if (opciones) ...[
+            const SizedBox(height: 22),
+            _Servidores(
+              c: c,
+              onElegir: onElegirServidor,
+              focoElegido: focoServidorElegido,
+            ),
+          ],
         ],
       ),
     );
