@@ -92,6 +92,7 @@
     "zona-mangas": "Manga",
     "zona-en-camino": "Nothing here yet: this zone gets its sections with the metadata layer.",
     "zona-sin-clasificar": "None of your active extensions declare content for this zone yet.",
+    "zona-sin-clasificar-refrescar": "Try swiping up and down to refresh.",
     "zona-sin-resultados": "Your extensions for this zone have nothing to show right now.",
     "orden-recientes": "Recent",
     "orden-alfabetico": "Alphabetical",
@@ -199,7 +200,8 @@
     "filters-note": "Filters are defined by each extension. Updating them can bring new options, or change the ones already here, without updating PrismHub.",
     "recent": "Recent searches",
     "empty-hint": "Type something to search across all your extensions",
-    "most-relevant": "Most relevant results"
+    "most-relevant": "Most relevant results",
+    "search-in-extension": "Or search directly in one extension"
   },
   "extension": {
     "import": {

@@ -88,6 +88,7 @@
     "zona-mangas": "Mangas",
     "zona-en-camino": "Todavía no hay nada acá: las secciones de esta zona llegan con la capa de metadatos.",
     "zona-sin-clasificar": "Ninguna de tus extensiones activas declara contenido para esta zona todavía.",
+    "zona-sin-clasificar-refrescar": "Intentá deslizar hacia arriba y abajo para refrescar.",
     "zona-sin-resultados": "Tus extensiones de esta zona no tienen nada para mostrar por ahora.",
     "orden-recientes": "Recientes",
     "orden-alfabetico": "Alfabético",
@@ -195,7 +196,8 @@
     "filters-note": "Los filtros los define cada extensión. Al actualizarlas pueden aparecer más opciones, o cambiar las que ya están, sin que tengas que actualizar PrismHub.",
     "recent": "Búsquedas recientes",
     "empty-hint": "Escribí algo para buscar en todas tus extensiones",
-    "most-relevant": "Resultados más relevantes"
+    "most-relevant": "Resultados más relevantes",
+    "search-in-extension": "O buscá directo en una extensión"
   },
   "extension": {
     "import": {
