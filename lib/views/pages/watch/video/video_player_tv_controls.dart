@@ -359,6 +359,28 @@ class _VideoPlayerTvControlsState extends State<VideoPlayerTvControls> {
         tecla == LogicalKeyboardKey.numpadEnter ||
         tecla == LogicalKeyboardKey.space ||
         tecla == LogicalKeyboardKey.mediaPlayPause) {
+      // ── Elegir servidor y DAR PLAY son dos cosas distintas ────────────
+      //
+      // Reportado en vivo: "si ya tengo un servidor seleccionado, que me
+      // deje dar play — ahora tengo que ir hasta abajo y seleccionarlo otra
+      // vez". Tal cual: con el reproductor esperando elección,
+      // `playOrPause()` no tiene nada que arrancar (todavía no se abrió
+      // ninguna fuente), así que el OK no hacía nada y la única salida era
+      // bajar hasta la lista y confirmar ahí un servidor que YA estaba
+      // marcado como el actual.
+      //
+      // PC no tiene ese problema porque su cartel de "elegí un servidor" es
+      // tocable y llama a `switchServer(currentServerName)` — ver
+      // video_player_desktop_controls.dart. Acá se hace lo mismo con el OK:
+      // si ya hay un servidor elegido (el recordado de la última vez, o el
+      // primario que declaró la extensión), arranca con ese.
+      if (_c.awaitingServerChoice.value &&
+          _c.currentServerName.value.isNotEmpty) {
+        unawaited(_c.switchServer(_c.currentServerName.value));
+        setState(() => _opciones = false);
+        _reiniciarEspera();
+        return KeyEventResult.handled;
+      }
       _c.playOrPause();
       return KeyEventResult.handled;
     }
