@@ -78,7 +78,17 @@ class HomeHeroBanner extends StatelessWidget {
         final dpr = MediaQuery.devicePixelRatioOf(context);
         final cacheWidth = (imageWidth * dpr).ceil().clamp(1, 4096).toInt();
 
-        return Container(
+        // ── Animado, no un salto ────────────────────────────────────────
+        //
+        // Pedido explícito: rotar el celular entre vertical y horizontal
+        // cambiaba `compact` de un cuadro al otro, y con él el alto mínimo
+        // del hero y su relleno — un salto brusco, no una transición. Con
+        // `AnimatedContainer`/`AnimatedPadding` el mismo cambio de estado
+        // se interpola solo, sin tocar nada de lo que decide CUÁNDO es
+        // compacto (esa lógica sigue siendo la de siempre).
+        return AnimatedContainer(
+          duration: const Duration(milliseconds: 280),
+          curve: Curves.easeOutCubic,
           width: double.infinity,
           constraints: BoxConstraints(minHeight: compact ? 132 : 220),
           clipBehavior: Clip.antiAlias,
@@ -117,7 +127,9 @@ class HomeHeroBanner extends StatelessWidget {
                         isDesktop ? FilterQuality.low : FilterQuality.medium,
                   ),
                 ),
-              Padding(
+              AnimatedPadding(
+                duration: const Duration(milliseconds: 280),
+                curve: Curves.easeOutCubic,
                 padding: EdgeInsets.all(compact ? 16 : 28),
                 child: Align(
                   alignment: Alignment.bottomLeft,

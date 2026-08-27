@@ -225,6 +225,12 @@ class _Cabecera extends StatelessWidget {
   /// desde el Inicio.
   void _favoritos() => Get.to(() => const HistoryPage(soloFavoritos: true));
 
+  // Pedido explícito: acostado, la cabecera es lo único que queda a la
+  // vista sin desplazar (con poca altura, el hero con su botón "Explorar
+  // catálogo" —el otro camino al buscador— puede terminar debajo del
+  // pliegue). Acá arriba siempre se ve, en las dos orientaciones.
+  void _buscar() => Get.to(() => const SearchPage());
+
   void _extensiones() {
     if (!Get.isRegistered<MainController>()) return;
     Get.find<MainController>().changeTab(MainController.tabExtensiones);
@@ -236,7 +242,12 @@ class _Cabecera extends StatelessWidget {
     // En horizontal el alto es lo que escasea: la cabecera se achica para no
     // robarle sitio a las portadas, que son a lo que se vino.
     final bajo = MediaQuery.sizeOf(context).height < 500;
-    return Padding(
+    // Animado y no un salto: rotar el celular cambia `bajo` de un cuadro
+    // al otro, y con él este relleno — pedido explícito de que la rotación
+    // se vea fluida en vez de un corte brusco.
+    return AnimatedPadding(
+      duration: const Duration(milliseconds: 280),
+      curve: Curves.easeOutCubic,
       padding: EdgeInsets.fromLTRB(
         margen,
         // La barra de estado más un poco de aire. Ya no la reserva nadie
@@ -265,6 +276,11 @@ class _Cabecera extends StatelessWidget {
               // hasta que se separaron. Ahora salen todos de ahí.
               style: HomeTheme.tituloDeZona(bajo: bajo),
             ),
+          ),
+          _BotonDeCabecera(
+            icono: Icons.search_rounded,
+            etiqueta: 'common.search'.i18n,
+            onTap: _buscar,
           ),
           _BotonDeCabecera(
             icono: Icons.favorite_border_rounded,
