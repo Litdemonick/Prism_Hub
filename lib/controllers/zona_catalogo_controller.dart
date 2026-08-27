@@ -639,6 +639,25 @@ class ZonaCatalogoController extends GetxController {
   bool get puedeTraerMas =>
       fuentes.any((f) => !f.agotada && f.pagina < _maxPaginas);
 
+  /// Se dejó de pedir porque TODAS las fuentes dijeron que no tienen más
+  /// (devolvieron una página vacía), no porque se haya llegado al tope
+  /// propio de `_maxPaginas`.
+  ///
+  /// ── Por qué hace falta distinguir ────────────────────────────────────
+  ///
+  /// Los dos casos dejan `puedeTraerMas` en false, pero significan cosas
+  /// muy distintas de cara al usuario: uno es "esto es todo lo que hay" y
+  /// el otro es "hay más, pero la app deja de pedir acá". Tratarlos igual
+  /// llevaba a decirle "no hay más datos" a alguien que en realidad tiene
+  /// contenido esperando del otro lado — una afirmación que la app no
+  /// puede sostener.
+  ///
+  /// Con `_maxPaginas` en 25 y unas decenas de ítems por página, llegar al
+  /// tope pide bajar por miles de tarjetas: es un caso rarísimo, pero
+  /// afirmar algo falso cuando pasa sigue siendo afirmar algo falso.
+  bool get seAgotoDeVerdad =>
+      fuentes.isNotEmpty && fuentes.every((f) => f.agotada);
+
   Future<void> cargarMas() async {
     if (cargando.value || cargandoMas.value) return;
     final candidatas =

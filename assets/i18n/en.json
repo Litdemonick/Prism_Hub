@@ -94,6 +94,7 @@
     "zona-en-camino": "Nothing here yet: this zone gets its sections with the metadata layer.",
     "zona-sin-clasificar": "None of your active extensions declare content for this zone yet.",
     "zona-sin-clasificar-refrescar": "Try swiping up and down to refresh.",
+    "zona-hasta-aca": "This is as far as this zone goes for now",
     "zona-seguir-bajando": "Keep scrolling for more",
     "zona-sin-resultados": "Your extensions for this zone have nothing to show right now.",
     "orden-recientes": "Recent",

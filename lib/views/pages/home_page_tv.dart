@@ -849,6 +849,7 @@ class _ZonaTvState extends State<_ZonaTv> {
                 child: _PieDeZonaTv(
                   cargando: cargandoMas,
                   hayMas: c.puedeTraerMas,
+                  seAgotoDeVerdad: c.seAgotoDeVerdad,
                 ),
               ),
             ],
@@ -865,10 +866,19 @@ class _ZonaTvState extends State<_ZonaTv> {
 /// comentario de `_ZonaTvState.build`. Sin esto la lista simplemente se
 /// cortaba y no había forma de distinguir una cosa de la otra.
 class _PieDeZonaTv extends StatelessWidget {
-  const _PieDeZonaTv({required this.cargando, required this.hayMas});
+  const _PieDeZonaTv({
+    required this.cargando,
+    required this.hayMas,
+    required this.seAgotoDeVerdad,
+  });
 
   final bool cargando;
   final bool hayMas;
+
+  /// Ver [ZonaCatalogoController.seAgotoDeVerdad]: solo con esto en true se
+  /// puede afirmar que no hay más contenido. Sin él, quedarse sin páginas
+  /// puede ser el tope propio de la app y no el final del catálogo.
+  final bool seAgotoDeVerdad;
 
   @override
   Widget build(BuildContext context) {
@@ -898,12 +908,18 @@ class _PieDeZonaTv extends StatelessWidget {
                 ],
               )
             : Text(
-                // Con más para traer pero sin estar pidiéndolo ahora mismo,
-                // el pie invita a seguir bajando; sin más, dice que se
-                // llegó al final.
+                // Tres estados, no dos: "seguí bajando" mientras haya más
+                // para traer, "no hay más datos" SOLO si todas las fuentes
+                // dijeron de verdad que se quedaron sin nada, y un texto
+                // neutro si lo que se alcanzó fue el tope propio de la app
+                // (ver ZonaCatalogoController.seAgotoDeVerdad) — ahí sigue
+                // habiendo contenido del otro lado, así que decir que no
+                // hay más sería mentir.
                 hayMas
                     ? 'home.zona-seguir-bajando'.i18n
-                    : 'common.no-more-data'.i18n,
+                    : seAgotoDeVerdad
+                        ? 'common.no-more-data'.i18n
+                        : 'home.zona-hasta-aca'.i18n,
                 textAlign: TextAlign.center,
                 style: TextStyle(
                   fontSize: 15,
