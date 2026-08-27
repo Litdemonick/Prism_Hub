@@ -25,6 +25,7 @@ import 'package:prismhub/views/pages/settings/settings_page.dart';
 import 'package:prismhub/views/pages/tracking/anilist_more_page.dart';
 import 'package:prismhub/views/pages/tracking/anilist_tracking_page.dart';
 import 'package:prismhub/views/pages/zonas/zona_catalogo_page.dart';
+import 'package:prismhub/views/pages/zonas/zona_tv_page.dart';
 
 final rootNavigatorKey = GlobalKey<NavigatorState>();
 final _shellNavigatorKey = GlobalKey<NavigatorState>();
@@ -52,6 +53,11 @@ final router = GoRouter(
         GoRoute(
           path: '/',
           pageBuilder: (context, state) => _animation(state, const HomePage()),
+        ),
+        GoRoute(
+          path: '/tv',
+          pageBuilder: (context, state) =>
+              _animation(state, const ZonaTvPage()),
         ),
         GoRoute(
           path: '/peliculas',

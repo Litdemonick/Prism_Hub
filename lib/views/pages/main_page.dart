@@ -14,8 +14,10 @@ import 'package:prismhub/views/pages/home_page.dart';
 import 'package:prismhub/views/pages/library_page.dart';
 import 'package:prismhub/views/pages/history_page.dart';
 import 'package:prismhub/controllers/main_controller.dart';
+import 'package:prismhub/views/pages/search/search_page.dart';
 import 'package:prismhub/views/pages/settings/settings_page.dart';
 import 'package:prismhub/views/pages/zonas/zona_catalogo_page.dart';
+import 'package:prismhub/views/pages/zonas/zona_tv_page.dart';
 import 'package:prismhub/models/extension.dart';
 import 'package:prismhub/router/router.dart';
 import 'package:prismhub/utils/application.dart';
@@ -23,7 +25,6 @@ import 'package:prismhub/utils/i18n.dart';
 import 'package:prismhub/utils/modo_app.dart';
 import 'package:prismhub/utils/platform_tv.dart';
 import 'package:prismhub/utils/prismhub_storage.dart';
-import 'package:prismhub/views/widgets/nav/zona_glyph.dart';
 import 'package:prismhub/views/widgets/window_caption_buttons.dart';
 import 'package:window_manager/window_manager.dart';
 
@@ -68,6 +69,61 @@ class DesktopMainPage extends StatefulWidget {
 class _DesktopMainPageState extends State<DesktopMainPage> with WindowListener {
   late MainController c;
 
+  /// Si la ruta actual es esta (o una de sus subrutas) — para saber qué
+  /// burbuja del riel marcar como seleccionada. Compara contra la ruta y no
+  /// contra `c.selectedTab` a propósito: Repositorio y Ajustes navegan con
+  /// `router.go` directo, sin pasar por `changeTab`, así que el número de
+  /// pestaña se queda atrasado para esos dos — la ruta nunca miente.
+  ///
+  /// El corte con `/` es a propósito: sin él, `/extension_repo` "empieza
+  /// con" `/extension` y las dos burbujas se hubieran marcado juntas.
+  bool _enRuta(String ruta) {
+    final path = widget.state.uri.path;
+    if (ruta == '/') return path == '/';
+    return path == ruta || path.startsWith('$ruta/');
+  }
+
+  /// El tamaño de cada burbuja del riel, según el alto REAL de la ventana.
+  ///
+  /// ── El bug real que esto corrige ─────────────────────────────────────
+  ///
+  /// Con las 9 burbujas a su tamaño fijo (42px + 6px de aire arriba/abajo =
+  /// 54px cada una, ~486px en total) más el aire del encabezado, una
+  /// ventana baja (poca altura, ej. una mitad de pantalla en un monitor
+  /// normal) no alcanzaba a mostrarlas todas — y Fluent lo resuelve solo
+  /// con SU PROPIO scroll vertical en el riel, un scrollbar angosto al lado
+  /// de las burbujas. Se ve roto contra el resto del diseño. Pedido
+  /// explícito: "quita el scroll... acomoda los botones adaptable".
+  ///
+  /// Se calcula cuánto entra de verdad y se achica el diámetro (nunca por
+  /// debajo de 30, para que el ícono siga siendo tocable) antes de que
+  /// Fluent tenga que recurrir a su scroll.
+  ({double diametro, double espacioVertical}) _tamanoBurbujas(
+      BuildContext context) {
+    final altura = MediaQuery.sizeOf(context).height;
+    // 9 burbujas: Inicio + 4 zonas + Biblioteca + Extensiones (items) más
+    // Repositorio + Ajustes (footerItems) — la versión y el separador no
+    // cuentan, son chicos y fijos.
+    const cantidad = 9.0;
+    // Barra de título (~50) + el header de 16 que se le agregó al riel +
+    // un colchón para el separador y el aire del footer.
+    const reservado = 110.0;
+    final disponible = altura - reservado;
+    final porItem = (disponible / cantidad).clamp(24.0, 54.0);
+    // El piso baja bastante respecto de la primera versión (era 30/3): con
+    // una ventana de verdad chica, Fluent recurre a SU PROPIO scroll interno
+    // en el riel apenas la suma de las filas no entra en el alto que le
+    // queda — y esa fila tiene un mínimo propio del paquete, no solo el
+    // tamaño del ícono de adentro. Dejando que el ícono se achique más antes
+    // de tocar ese piso, hay más margen para evitar el scroll de Fluent en
+    // ventanas moderadamente bajas. En una MUY baja (una franja angosta de
+    // verdad) puede que ese mínimo propio de Fluent siga ganando — eso no es
+    // algo que se pueda seguir empujando solo desde el tamaño del ícono.
+    final diametro = (porItem - 4).clamp(18.0, 42.0);
+    final espacioVertical = ((porItem - diametro) / 2).clamp(1.0, 6.0);
+    return (diametro: diametro, espacioVertical: espacioVertical);
+  }
+
   @override
   void initState() {
     super.initState();
@@ -97,14 +153,16 @@ class _DesktopMainPageState extends State<DesktopMainPage> with WindowListener {
   ///
   /// ── Por qué acá y no en el `initState` de cada pantalla ─────────────────
   ///
-  /// Inicio y las 4 zonas de contenido viven en un `IndexedStack` (o
-  /// registradas por tag en GetX) que nunca se desmonta al cambiar de
-  /// pestaña — es lo que evita perder el scroll y el catálogo ya cargado.
-  /// Pero eso significa que `initState()` corre UNA sola vez por sesión:
-  /// cambiar de pestaña y volver no lo vuelve a disparar.
+  /// El WIDGET de cada zona (`ZonaCatalogoPage`) se rearma de cero en cada
+  /// navegación —esta pantalla cuelga de una `ShellRoute` de go_router, y
+  /// `widget.child` es su Navigator anidado: no hay ningún `IndexedStack`
+  /// escondido que lo evite (se intentó una vez y rompió la navegación a la
+  /// ficha, porque reemplazaba ese Navigator entero — revertido). Lo que SÍ
+  /// sobrevive es el `ZonaCatalogoController` de cada zona, registrado por
+  /// tag en GetX: el catálogo ya bajado no se pierde, solo se vuelve a
+  /// dibujar la grilla con lo que el controller ya tiene en memoria.
   ///
-  /// `widget.state` en cambio SÍ cambia en cada navegación (esta pantalla
-  /// es hija de una ShellRoute de go_router) — comparando la ruta vieja
+  /// `widget.state` cambia en cada navegación — comparando la ruta vieja
   /// contra la nueva en `didUpdateWidget` se sabe exactamente cuándo el
   /// usuario ACABA de entrar a una pestaña, sin importar que su contenido
   /// ya estuviera armado de antes.
@@ -156,7 +214,8 @@ class _DesktopMainPageState extends State<DesktopMainPage> with WindowListener {
         return;
       }
       final zona = _zonaDeRuta(ruta);
-      if (zona != null && Get.isRegistered<ZonaCatalogoController>(tag: zona.name)) {
+      if (zona != null &&
+          Get.isRegistered<ZonaCatalogoController>(tag: zona.name)) {
         Get.find<ZonaCatalogoController>(tag: zona.name).alTocarDeNuevo();
       }
       return;
@@ -256,13 +315,23 @@ class _DesktopMainPageState extends State<DesktopMainPage> with WindowListener {
 
   @override
   Widget build(BuildContext context) {
+    final burbujas = _tamanoBurbujas(context);
     return fluent.NavigationView(
       appBar: fluent.NavigationAppBar(
         leading: () {
           return fluent.IconButton(
             icon: const Icon(fluent.FluentIcons.back, size: 12.0),
             onPressed: () {
-              if (router.canPop()) {
+              // `router.canPop()` mira el navigator RAÍZ sin importar desde
+              // dónde se llame — reportado en vivo con el log completo:
+              // `Null check operator used on a null value` dentro de
+              // go_router (`_NavigatorStateIterator.moveNext`), porque el
+              // navigator anidado de esta ShellRoute no es el que ese
+              // método asume. `context.canPop()` resuelve el GoRouter más
+              // cercano A ESTE contexto —el mismo que usa `context.pop()`
+              // dos líneas más abajo—, así que los dos quedan consultando
+              // al mismo navigator.
+              if (context.canPop()) {
                 context.pop();
                 setState(() {});
               }
@@ -310,17 +379,30 @@ class _DesktopMainPageState extends State<DesktopMainPage> with WindowListener {
         );
       },
       pane: fluent.NavigationPane(
+        // Pedido explícito: sin el botón de arriba para plegar/desplegar el
+        // riel — acá el riel siempre va en `compact` (ver `displayMode` más
+        // abajo), así que ese botón no tenía ningún estado al que llevar.
+        toggleable: false,
         // Pedido explícito: iconos grandes en el panel lateral. Fluent
         // calcula el ancho de cada ícono del riel a partir de este
         // `compactWidth` (por defecto 50), así que hace falta agrandar el
-        // riel entero para que el ícono más grande (ver `size` en cada
-        // ZonaGlyph, abajo) tenga dónde entrar sin desbordar la fila —
-        // mismo desborde que ya se reportó una vez con el tamaño por
-        // defecto de Fluent.
+        // riel entero para que el ícono más grande (24, ver cada PaneItem
+        // abajo) tenga dónde entrar sin desbordar la fila — mismo desborde
+        // que ya se reportó una vez con el tamaño por defecto de Fluent.
         size: const fluent.NavigationPaneSize(
           openMaxWidth: 230,
           compactWidth: 64,
         ),
+        // Sin el botón de arriba, el riel arrancaba pegado al borde de la
+        // barra de título — un aire chico antes del primer ícono para que
+        // no quede a tope, pedido explícito.
+        header: const SizedBox(height: 16),
+        // Pedido explícito: nada de la marca rectangular que dibuja Fluent
+        // solo (`StickyNavigationIndicator`, el valor por defecto) — la
+        // burbuja de cada ítem (ver `_Burbuja` abajo) ya es su propio
+        // indicador, circular. Con los dos a la vez se veían dos marcas
+        // distintas compitiendo por decir "estás acá".
+        indicator: null,
         selected: c.selectedTab.value,
         onChanged: c.changeTab,
         displayMode: fluent.PaneDisplayMode.compact,
@@ -332,7 +414,15 @@ class _DesktopMainPageState extends State<DesktopMainPage> with WindowListener {
           // vive dentro de Ajustes, junto al switch de NSFW (ver
           // settings_page.dart), igual que ya estaba en Android.
           fluent.PaneItem(
-            icon: const ZonaGlyph(Forma.repositorio, size: 24),
+            tileColor: const fluent.WidgetStatePropertyAll(Colors.transparent),
+            selectedTileColor:
+                const fluent.WidgetStatePropertyAll(Colors.transparent),
+            icon: _Burbuja(
+              icono: fluent.FluentIcons.repo,
+              seleccionado: _enRuta('/extension_repo'),
+              diametro: burbujas.diametro,
+              espacioVertical: burbujas.espacioVertical,
+            ),
             title: Text('common.extension-repo'.i18n),
             body: const ExtensionPage(),
             onTap: () {
@@ -340,7 +430,15 @@ class _DesktopMainPageState extends State<DesktopMainPage> with WindowListener {
             },
           ),
           fluent.PaneItem(
-            icon: const ZonaGlyph(Forma.ajustes, size: 24),
+            tileColor: const fluent.WidgetStatePropertyAll(Colors.transparent),
+            selectedTileColor:
+                const fluent.WidgetStatePropertyAll(Colors.transparent),
+            icon: _Burbuja(
+              icono: fluent.FluentIcons.settings,
+              seleccionado: _enRuta('/settings'),
+              diametro: burbujas.diametro,
+              espacioVertical: burbujas.espacioVertical,
+            ),
             title: Text('common.settings'.i18n),
             body: const SettingsPage(),
             onTap: () {
@@ -355,8 +453,7 @@ class _DesktopMainPageState extends State<DesktopMainPage> with WindowListener {
           fluent.PaneItemWidgetAdapter(
             child: Builder(
               builder: (context) {
-                final abierto = fluent.NavigationView.of(context)
-                        .displayMode ==
+                final abierto = fluent.NavigationView.of(context).displayMode ==
                     fluent.PaneDisplayMode.open;
                 if (!abierto) return const SizedBox.shrink();
                 return const Padding(
@@ -372,31 +469,87 @@ class _DesktopMainPageState extends State<DesktopMainPage> with WindowListener {
         ],
         items: [
           fluent.PaneItem(
-            icon: const ZonaGlyph(Forma.inicio, size: 24),
+            tileColor: const WidgetStatePropertyAll(Colors.transparent),
+            selectedTileColor: const WidgetStatePropertyAll(Colors.transparent),
+            icon: _Burbuja(
+              icono: fluent.FluentIcons.home,
+              seleccionado: _enRuta('/'),
+              diametro: burbujas.diametro,
+              espacioVertical: burbujas.espacioVertical,
+            ),
             title: Text('common.home'.i18n),
             body: const HomePage(),
             onTap: () => _alTocarDestino('/'),
           ),
+          // TV/streaming en vivo: mismo lugar y mismo criterio que ya tiene
+          // Android TV (`_CategoriaTV.tv`) — todavía no hay ninguna extensión
+          // que declare este tipo de contenido, así que queda vacía a
+          // propósito hasta que aparezca una (ver `ZonaTvPage`).
           fluent.PaneItem(
-            icon: const ZonaGlyph(Forma.peliculas, size: 24),
+            tileColor: const WidgetStatePropertyAll(Colors.transparent),
+            selectedTileColor: const WidgetStatePropertyAll(Colors.transparent),
+            icon: _Burbuja(
+              icono: Icons.live_tv_rounded,
+              seleccionado: _enRuta('/tv'),
+              diametro: burbujas.diametro,
+              espacioVertical: burbujas.espacioVertical,
+            ),
+            title: Text('home.tv-canales'.i18n),
+            body: const ZonaTvPage(),
+            onTap: () => _alTocarDestino('/tv'),
+          ),
+          // Mismos íconos que ya usa Android (`destinations`, más abajo) y
+          // Android TV (`_CategoriaTV`, home_page_tv.dart) para estas
+          // cuatro — pedido explícito, en vez de los de Fluent que traía
+          // antes.
+          fluent.PaneItem(
+            tileColor: const WidgetStatePropertyAll(Colors.transparent),
+            selectedTileColor: const WidgetStatePropertyAll(Colors.transparent),
+            icon: _Burbuja(
+              icono: Icons.movie_rounded,
+              seleccionado: _enRuta('/peliculas'),
+              diametro: burbujas.diametro,
+              espacioVertical: burbujas.espacioVertical,
+            ),
             title: Text('home.zona-peliculas'.i18n),
             body: const ZonaCatalogoPage(zona: ZonaPrincipal.peliculas),
             onTap: () => _alTocarDestino('/peliculas'),
           ),
           fluent.PaneItem(
-            icon: const ZonaGlyph(Forma.series, size: 24),
+            tileColor: const WidgetStatePropertyAll(Colors.transparent),
+            selectedTileColor: const WidgetStatePropertyAll(Colors.transparent),
+            icon: _Burbuja(
+              icono: Icons.tv_rounded,
+              seleccionado: _enRuta('/series'),
+              diametro: burbujas.diametro,
+              espacioVertical: burbujas.espacioVertical,
+            ),
             title: Text('home.zona-series'.i18n),
             body: const ZonaCatalogoPage(zona: ZonaPrincipal.series),
             onTap: () => _alTocarDestino('/series'),
           ),
           fluent.PaneItem(
-            icon: const ZonaGlyph(Forma.anime, size: 24),
+            tileColor: const WidgetStatePropertyAll(Colors.transparent),
+            selectedTileColor: const WidgetStatePropertyAll(Colors.transparent),
+            icon: _Burbuja(
+              icono: Icons.animation_rounded,
+              seleccionado: _enRuta('/anime'),
+              diametro: burbujas.diametro,
+              espacioVertical: burbujas.espacioVertical,
+            ),
             title: Text('home.zona-anime'.i18n),
             body: const ZonaCatalogoPage(zona: ZonaPrincipal.anime),
             onTap: () => _alTocarDestino('/anime'),
           ),
           fluent.PaneItem(
-            icon: const ZonaGlyph(Forma.mangas, size: 24),
+            tileColor: const WidgetStatePropertyAll(Colors.transparent),
+            selectedTileColor: const WidgetStatePropertyAll(Colors.transparent),
+            icon: _Burbuja(
+              icono: Icons.auto_stories_rounded,
+              seleccionado: _enRuta('/mangas'),
+              diametro: burbujas.diametro,
+              espacioVertical: burbujas.espacioVertical,
+            ),
             title: Text('home.zona-mangas'.i18n),
             body: const ZonaCatalogoPage(zona: ZonaPrincipal.mangas),
             onTap: () => _alTocarDestino('/mangas'),
@@ -405,7 +558,14 @@ class _DesktopMainPageState extends State<DesktopMainPage> with WindowListener {
           // Favoritos). Es el Home de antes, movido tal cual sin rediseñar —
           // ver library_page.dart.
           fluent.PaneItem(
-            icon: const ZonaGlyph(Forma.biblioteca, size: 24),
+            tileColor: const WidgetStatePropertyAll(Colors.transparent),
+            selectedTileColor: const WidgetStatePropertyAll(Colors.transparent),
+            icon: _Burbuja(
+              icono: fluent.FluentIcons.library,
+              seleccionado: _enRuta('/biblioteca'),
+              diametro: burbujas.diametro,
+              espacioVertical: burbujas.espacioVertical,
+            ),
             title: Text('common.library'.i18n),
             body: const LibraryPage(),
             onTap: () {
@@ -413,7 +573,14 @@ class _DesktopMainPageState extends State<DesktopMainPage> with WindowListener {
             },
           ),
           fluent.PaneItem(
-            icon: const ZonaGlyph(Forma.extensiones, size: 24),
+            tileColor: const WidgetStatePropertyAll(Colors.transparent),
+            selectedTileColor: const WidgetStatePropertyAll(Colors.transparent),
+            icon: _Burbuja(
+              icono: fluent.FluentIcons.add_in,
+              seleccionado: _enRuta('/extension'),
+              diametro: burbujas.diametro,
+              espacioVertical: burbujas.espacioVertical,
+            ),
             title: Text('common.extension'.i18n),
             body: const ExtensionPage(),
             onTap: () {
@@ -468,6 +635,97 @@ class _DesktopMainPageState extends State<DesktopMainPage> with WindowListener {
     await PrismHubStorage.setSetting(
       SettingKey.windowPosition,
       "${value.dx},${value.dy}",
+    );
+  }
+}
+
+/// El ícono de cada destino del riel: una burbuja circular translúcida,
+/// estilo acrílico — pedido explícito ("como burbuja", con una captura de
+/// referencia de íconos redondos flotantes en vez del cuadrado con esquinas
+/// que dibuja Fluent por defecto.
+///
+/// Reemplaza del todo el indicador propio de Fluent (`tileColor`/
+/// `selectedTileColor` van transparentes en cada `PaneItem`, y
+/// `NavigationPane.indicator` va en `null`, ver más arriba) — con los dos
+/// indicadores a la vez se leían como dos marcas distintas.
+///
+/// Sin animación de tamaño/posición al pasar el mouse o seleccionar, mismo
+/// criterio que ya se usa en `BotonesVentana`: el color cambia al instante,
+/// nada se mueve ni escala.
+class _Burbuja extends StatefulWidget {
+  const _Burbuja({
+    required this.icono,
+    required this.seleccionado,
+    this.diametro = 42,
+    this.espacioVertical = 6,
+  });
+
+  final IconData icono;
+  final bool seleccionado;
+
+  /// El tamaño del círculo y el aire arriba/abajo — pedido explícito:
+  /// "quita el scroll cuando la ventana es chica, acomoda los botones
+  /// adaptable". Sin esto, una ventana baja (poca altura) desbordaba el
+  /// riel entero y Fluent lo resolvía con SU PROPIO scroll vertical — un
+  /// scrollbar angosto al lado de las burbujas, que se veía roto contra el
+  /// resto del diseño. `_DesktopMainPageState._tamanoBurbujas` calcula estos
+  /// dos números según el alto real de la ventana para que las 9 burbujas
+  /// entren siempre sin scroll, achicándose si hace falta.
+  final double diametro;
+  final double espacioVertical;
+
+  @override
+  State<_Burbuja> createState() => _BurbujaState();
+}
+
+class _BurbujaState extends State<_Burbuja> {
+  bool _hover = false;
+
+  @override
+  Widget build(BuildContext context) {
+    final acento = HomeTheme.accentPink;
+    final colorRelleno = widget.seleccionado
+        ? acento.withValues(alpha: 0.22)
+        : Colors.white.withValues(alpha: _hover ? 0.10 : 0.05);
+    final borde = widget.seleccionado
+        ? acento.withValues(alpha: 0.55)
+        : Colors.white.withValues(alpha: _hover ? 0.22 : 0.12);
+    // El aire vertical de sobra es lo que separa las burbujas entre sí: el
+    // riel de Fluent no tiene una propiedad de "espaciado entre ítems", pero
+    // sí deja crecer la fila más allá de su alto mínimo si el contenido pide
+    // más — pedido explícito ("da espacio"), sin tocar el ancho del riel.
+    return Padding(
+      padding: EdgeInsets.symmetric(vertical: widget.espacioVertical),
+      child: MouseRegion(
+        onEnter: (_) => setState(() => _hover = true),
+        onExit: (_) => setState(() => _hover = false),
+        child: Container(
+          width: widget.diametro,
+          height: widget.diametro,
+          decoration: BoxDecoration(
+            shape: BoxShape.circle,
+            color: colorRelleno,
+            border: Border.all(color: borde, width: 1.2),
+            boxShadow: widget.seleccionado
+                ? [
+                    BoxShadow(
+                      color: acento.withValues(alpha: 0.28),
+                      blurRadius: 14,
+                    ),
+                  ]
+                : null,
+          ),
+          alignment: Alignment.center,
+          child: Icon(
+            widget.icono,
+            // El ícono escala con el círculo — sin esto, achicar la burbuja
+            // en una ventana baja dejaba el ícono grande de siempre casi
+            // tocando el borde.
+            size: widget.diametro * 0.45,
+            color: widget.seleccionado ? acento : HomeTheme.textPrimary,
+          ),
+        ),
+      ),
     );
   }
 }
@@ -659,8 +917,10 @@ class _AndroidMainPageState extends fluent.State<AndroidMainPage> {
       // Mismos íconos que ya eligió Android TV para estas tres categorías
       // (`_CategoriaTV`, home_page_tv.dart) — reconocimiento cruzado entre
       // plataformas.
-      _Destination(Icons.movie_outlined, Icons.movie, 'home.zona-peliculas'.i18n),
-      _Destination(Icons.tv_outlined, Icons.tv_rounded, 'home.zona-series'.i18n),
+      _Destination(
+          Icons.movie_outlined, Icons.movie, 'home.zona-peliculas'.i18n),
+      _Destination(
+          Icons.tv_outlined, Icons.tv_rounded, 'home.zona-series'.i18n),
       _Destination(Icons.animation_outlined, Icons.animation_rounded,
           'home.zona-anime'.i18n),
       _Destination(Icons.auto_stories_outlined, Icons.auto_stories_rounded,
@@ -742,56 +1002,56 @@ class _AndroidMainPageState extends fluent.State<AndroidMainPage> {
                   child: PlatformTv.esTelevisionSync
                       ? _buildPages()
                       : _apaisado(context)
-                      // ── Teléfono acostado: riel a la izquierda ─────────────
-                      //
-                      // Abajo no puede quedarse. En horizontal el alto es lo único
-                      // que escasea —360 píxeles contra 800— y una barra abajo se
-                      // lleva la franja donde justamente se ven las portadas. A la
-                      // izquierda se come ancho, que es lo que sobra.
-                      //
-                      // Y va en un Row, no flotando encima: acostado el contenido
-                      // usa el ancho entero, así que una barra superpuesta taparía
-                      // la primera columna de tarjetas en vez de dejar ver algo por
-                      // detrás. Con el Row, el contenido empieza DESPUÉS del riel y
-                      // no se pisan nunca.
-                      ? Row(
-                          children: [
-                            // ── Al esconderse tiene que SOLTAR el ancho ───────
-                            //
-                            // Antes era un AnimatedSlide, que corre el riel hacia
-                            // afuera pero le deja el lugar reservado: en el Row
-                            // seguía ocupando su columna. O sea que en Ajustes
-                            // —la única zona donde la barra se esconde— quedaba
-                            // una franja vacía a la izquierda y todo el contenido
-                            // aparecía corrido a la derecha. Reportado en vivo.
-                            //
-                            // De pie no pasaba porque ahí la barra FLOTA encima
-                            // del contenido: correrla ya libera la pantalla.
-                            //
-                            // Con AnimatedSize el ancho se va con ella, así que
-                            // Ajustes usa la pantalla entera, y el encogerse se
-                            // ve como que la barra se retira.
-                            AnimatedSize(
-                              duration: const Duration(milliseconds: 260),
-                              curve: Curves.easeOutCubic,
-                              child: _barraEscondida
-                                  ? const SizedBox.shrink()
-                                  : _barraVertical(destinations),
-                            ),
-                            Expanded(
-                              // El riel YA dejó pasar la franja de la barra del
-                              // sistema. Sin sacarla de acá, el SafeArea de cada
-                              // zona la vuelve a reservar y el contenido queda con
-                              // el doble de margen a la izquierda.
-                              child: MediaQuery.removePadding(
-                                context: context,
-                                removeLeft: true,
-                                child: _buildPages(),
-                              ),
-                            ),
-                          ],
-                        )
-                      : _buildPages(),
+                          // ── Teléfono acostado: riel a la izquierda ─────────────
+                          //
+                          // Abajo no puede quedarse. En horizontal el alto es lo único
+                          // que escasea —360 píxeles contra 800— y una barra abajo se
+                          // lleva la franja donde justamente se ven las portadas. A la
+                          // izquierda se come ancho, que es lo que sobra.
+                          //
+                          // Y va en un Row, no flotando encima: acostado el contenido
+                          // usa el ancho entero, así que una barra superpuesta taparía
+                          // la primera columna de tarjetas en vez de dejar ver algo por
+                          // detrás. Con el Row, el contenido empieza DESPUÉS del riel y
+                          // no se pisan nunca.
+                          ? Row(
+                              children: [
+                                // ── Al esconderse tiene que SOLTAR el ancho ───────
+                                //
+                                // Antes era un AnimatedSlide, que corre el riel hacia
+                                // afuera pero le deja el lugar reservado: en el Row
+                                // seguía ocupando su columna. O sea que en Ajustes
+                                // —la única zona donde la barra se esconde— quedaba
+                                // una franja vacía a la izquierda y todo el contenido
+                                // aparecía corrido a la derecha. Reportado en vivo.
+                                //
+                                // De pie no pasaba porque ahí la barra FLOTA encima
+                                // del contenido: correrla ya libera la pantalla.
+                                //
+                                // Con AnimatedSize el ancho se va con ella, así que
+                                // Ajustes usa la pantalla entera, y el encogerse se
+                                // ve como que la barra se retira.
+                                AnimatedSize(
+                                  duration: const Duration(milliseconds: 260),
+                                  curve: Curves.easeOutCubic,
+                                  child: _barraEscondida
+                                      ? const SizedBox.shrink()
+                                      : _barraVertical(destinations),
+                                ),
+                                Expanded(
+                                  // El riel YA dejó pasar la franja de la barra del
+                                  // sistema. Sin sacarla de acá, el SafeArea de cada
+                                  // zona la vuelve a reservar y el contenido queda con
+                                  // el doble de margen a la izquierda.
+                                  child: MediaQuery.removePadding(
+                                    context: context,
+                                    removeLeft: true,
+                                    child: _buildPages(),
+                                  ),
+                                ),
+                              ],
+                            )
+                          : _buildPages(),
                 ),
               ],
             ),
@@ -829,7 +1089,8 @@ class _AndroidMainPageState extends fluent.State<AndroidMainPage> {
           // Una tablet es una pantalla táctil grande, no un escritorio: le sirve
           // lo mismo que al teléfono, con más aire. El aire ya lo da `_margen`,
           // que en `amplio` y `enorme` deja 32 y 48 píxeles a los costados.
-          bottomNavigationBar: (PlatformTv.esTelevisionSync || _apaisado(context))
+          bottomNavigationBar: (PlatformTv.esTelevisionSync ||
+                  _apaisado(context))
               ? null
               : AnimatedSlide(
                   offset: _barraEscondida ? const Offset(0, 1.6) : Offset.zero,
@@ -915,6 +1176,18 @@ class _AndroidMainPageState extends fluent.State<AndroidMainPage> {
   /// llega a los bordes, está despegada de abajo, tiene esquinas redondas y el
   /// contenido le pasa por detrás (`extendBody`). Fondo y zócalo no son lo
   /// mismo.
+  /// La pastilla estaba calibrada a ojo para 4 íconos de 46px — con las 6
+  /// zonas de primer nivel que tiene ahora (Inicio+4 zonas+Biblioteca), un
+  /// teléfono angosto de verdad no tenía ancho para seis círculos de ese
+  /// tamaño más el botón redondo del extremo: desbordaba. Reportado en vivo
+  /// con overflow.
+  ///
+  /// Ver el comentario largo en `_barraVertical`: acá también se probó
+  /// calcular el tamaño a mano (restando márgenes/botón/relleno) y por las
+  /// mismas dudas de redondeo se prefiere `FittedBox` — la pastilla se
+  /// dibuja a su tamaño natural y se achica ENTERA si no entra, nunca
+  /// desborda porque nunca ocupa más de lo que el padre le da.
+
   Widget _barraFlotante(List<_Destination> destinos) {
     // Lo que ocupa la barra del sistema —los tres botones, o la rayita de
     // gestos—. Sin esto la barra se apoya justo encima y en un teléfono con
@@ -939,26 +1212,42 @@ class _AndroidMainPageState extends fluent.State<AndroidMainPage> {
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
             Flexible(
-              child: DecoratedBox(
-                decoration: _pastilla,
-                child: Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 6),
-                  child: Row(
-                    // Que no se estire: la pastilla mide lo que miden sus
-                    // cuatro íconos y nada más.
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      for (var i = 0; i < _enLaBarra; i++)
-                        Padding(
-                          padding: const EdgeInsets.symmetric(
-                              horizontal: 3, vertical: 6),
-                          child: _IconoDeBarra(
-                            destino: destinos[i],
-                            elegido: c.selectedTab.value == i,
-                            onTap: () => _irAZona(i),
+              // FittedBox: la pastilla se dibuja a su tamaño natural (46px
+              // por ícono) y se achica ENTERA si no entra en el ancho que
+              // le tocó — ver el comentario largo más arriba.
+              child: FittedBox(
+                fit: BoxFit.scaleDown,
+                child: DecoratedBox(
+                  // Traslúcida acá, no la pastilla opaca de siempre —
+                  // pedido explícito: "que las cosas se vean atrás de
+                  // ella, en vertical" (de pie, esta barra). Baja el alfa
+                  // en vez de agregar desenfoque real (`BackdropFilter`):
+                  // el de abajo hay que recalcularlo en cada cuadro
+                  // mientras se hace scroll, justo encima de la grilla de
+                  // portadas que más se mueve — ya se había probado y
+                  // descartado por eso (ver el comentario de `_pastilla`).
+                  // Bajar la opacidad no cuesta nada por cuadro y ya deja
+                  // adivinarse lo que pasa por detrás.
+                  decoration: _pastillaFlotante,
+                  child: Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 6),
+                    child: Row(
+                      // Que no se estire: la pastilla mide lo que miden sus
+                      // cuatro íconos y nada más.
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        for (var i = 0; i < _enLaBarra; i++)
+                          Padding(
+                            padding: const EdgeInsets.symmetric(
+                                horizontal: 3, vertical: 6),
+                            child: _IconoDeBarra(
+                              destino: destinos[i],
+                              elegido: c.selectedTab.value == i,
+                              onTap: () => _irAZona(i),
+                            ),
                           ),
-                        ),
-                    ],
+                      ],
+                    ),
                   ),
                 ),
               ),
@@ -981,16 +1270,45 @@ class _AndroidMainPageState extends fluent.State<AndroidMainPage> {
   /// recuadro alrededor sería una caja dibujada sobre el vacío.
   ///
   /// Lo único que se marca es el elegido, con su círculo.
+  ///
+  /// ── Dos intentos de calcular el tamaño a mano, los dos se quedaron
+  /// cortos ─────────────────────────────────────────────────────────────
+  ///
+  /// Primero se restó a mano "lo que ya ocupan los márgenes y el relleno"
+  /// (`MediaQuery.sizeOf(context).height` menos una constante `reservado`).
+  /// Seguía desbordando 2px en vivo. Después se cambió por el alto REAL
+  /// que un `LayoutBuilder` le daba a la pastilla en ese punto exacto del
+  /// árbol — en teoría no podía desincronizarse nunca, y sin embargo el
+  /// mismo desborde de 2px volvió a aparecer, calcado, en un build limpio.
+  /// Sin poder reproducir el dispositivo real para depurarlo más a fondo,
+  /// la conclusión es que CUALQUIER cálculo a mano puede quedarse corto
+  /// por una diferencia de redondeo que no se ve leyendo el código.
+  ///
+  /// Ver `FittedBox` más abajo: la solución final no calcula nada.
   Widget _barraVertical(List<_Destination> destinos) {
-    // En horizontal la barra del sistema se mete por un COSTADO, y de qué lado
-    // depende de hacia dónde giró el teléfono. `viewPadding.left` contesta las
-    // dos: vale cero cuando quedó del otro lado.
+    // ── Los CUATRO lados, no solo la izquierda ────────────────────────────
+    //
+    // Antes solo se restaba `costados.left`, con la idea de que "la
+    // izquierda cubre los dos casos: da 0 cuando el corte de la cámara
+    // quedó del otro lado". Eso es falso a medias: cuando el teléfono gira
+    // para el otro sentido, el corte pasa a la DERECHA, y `right` acá
+    // seguía siendo un 12 fijo que no restaba nada del inset real — el
+    // riel quedaba dibujado debajo de la cámara/la franja de notificaciones
+    // de ese lado. Reportado en vivo con captura: "toca la zona de
+    // notificaciones", "no tiene safe area". Con los cuatro lados de
+    // `viewPadding` (0 en el que no tenga nada que evitar) el riel se
+    // corre del inset real sea cual sea el sentido en que quedó girado.
     final costados = MediaQuery.viewPaddingOf(context);
     return Padding(
-      // Aire parejo a los dos lados del riel, además de lo que se lleve la
-      // barra del sistema. Con 10 a la izquierda y 14 a la derecha los íconos
-      // quedaban corridos contra el borde en vez de centrados en su franja.
-      padding: EdgeInsets.only(left: costados.left + 12, right: 12),
+      // Aire parejo además de lo que se lleve la barra del sistema. Con 10
+      // a la izquierda y 14 a la derecha los íconos quedaban corridos
+      // contra el borde en vez de centrados en su franja.
+      padding: EdgeInsets.fromLTRB(
+        costados.left + 12,
+        costados.top + 6,
+        costados.right + 12,
+        costados.bottom + 6,
+      ),
       // ── Centrado a lo alto, explícito ─────────────────────────────────────
       //
       // Antes solo estaba el mainAxisAlignment de la columna, que centra
@@ -1011,38 +1329,62 @@ class _AndroidMainPageState extends fluent.State<AndroidMainPage> {
         // Con la misma pastilla que la barra de abajo se resuelve y además
         // quedan iguales: acostado y de pie son la misma barra, solo que
         // girada, y no había motivo para que se vieran distintas.
-        child: Container(
-          padding: const EdgeInsets.symmetric(vertical: 6, horizontal: 4),
-          decoration: _pastilla,
-          child: Column(
-            mainAxisAlignment: MainAxisAlignment.center,
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              for (var i = 0; i < _enElRiel; i++)
-                Padding(
-                  padding: const EdgeInsets.symmetric(vertical: 6),
-                  child: _IconoDeBarra(
-                    destino: destinos[i],
-                    elegido: c.selectedTab.value == i,
-                    onTap: () => _irAZona(i),
+        //
+        // (Se probó sacarla del todo para que el contenido se viera detrás
+        // — pedido mal entendido de mi parte: el pedido real era para la
+        // barra de ABAJO, "en horizontal no" tocar esta. Revertido.)
+        //
+        // ── FittedBox, no un cálculo de tamaño a mano ─────────────────────
+        //
+        // Dos intentos anteriores calculaban el diámetro del ícono a mano
+        // (primero con `MediaQuery.sizeOf(context).height` menos una
+        // constante "reservado", después con el alto real de un
+        // `LayoutBuilder`) y los DOS siguieron desbordando 2px en vivo —
+        // cualquier número que se le reste a mano puede quedarse corto por
+        // un pixel de diferencia entre lo que el código asume y lo que el
+        // layout real de ESE teléfono puntual necesita.
+        //
+        // `FittedBox` no calcula nada: dibuja la pastilla a su tamaño
+        // NATURAL (los íconos a 46, como en el resto de la app) y la achica
+        // como una sola unidad si no entra en el alto disponible —
+        // `BoxFit.scaleDown` nunca la agranda, solo la achica cuando hace
+        // falta. Matemáticamente no puede desbordar: por definición nunca
+        // ocupa más de lo que el padre le da.
+        child: FittedBox(
+          fit: BoxFit.scaleDown,
+          child: Container(
+            padding: const EdgeInsets.symmetric(vertical: 6, horizontal: 4),
+            decoration: _pastilla,
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                for (var i = 0; i < _enElRiel; i++)
+                  Padding(
+                    padding: const EdgeInsets.symmetric(vertical: 6),
+                    child: _IconoDeBarra(
+                      destino: destinos[i],
+                      elegido: c.selectedTab.value == i,
+                      onTap: () => _irAZona(i),
+                    ),
                   ),
-                ),
-              // ── Acostado, el riel es SOLO esas tres ─────────────────────────
-              //
-              // Ni los tres puntos ni las opciones que salían de ellos. El riel
-              // acostado es una columna angosta contra el borde: cuantos más
-              // íconos tiene, menos se distingue a qué zona se va, y el
-              // desplegable encima quedaba peor todavía —se dibujaba sobre el
-              // propio riel y empujaba los botones hacia arriba—.
-              //
-              // Lo que queda afuera sigue teniendo por dónde: Ajustes por su
-              // atajo del Home, Historial y Favoritos desde Biblioteca (sus «ver
-              // más» abren esas mismas pestañas), y Extensiones desde el aviso de
-              // «no tenés extensiones activas» y desde el Repositorio.
-              //
-              // De pie no cambia nada: barra abajo con cuatro y el resto en los
-              // tres puntos, que ahí sí hacen falta porque el ancho es el que es.
-            ],
+                // ── Acostado, el riel es SOLO esas tres ─────────────────────────
+                //
+                // Ni los tres puntos ni las opciones que salían de ellos. El riel
+                // acostado es una columna angosta contra el borde: cuantos más
+                // íconos tiene, menos se distingue a qué zona se va, y el
+                // desplegable encima quedaba peor todavía —se dibujaba sobre el
+                // propio riel y empujaba los botones hacia arriba—.
+                //
+                // Lo que queda afuera sigue teniendo por dónde: Ajustes por su
+                // atajo del Home, Historial y Favoritos desde Biblioteca (sus «ver
+                // más» abren esas mismas pestañas), y Extensiones desde el aviso de
+                // «no tenés extensiones activas» y desde el Repositorio.
+                //
+                // De pie no cambia nada: barra abajo con cuatro y el resto en los
+                // tres puntos, que ahí sí hacen falta porque el ancho es el que es.
+              ],
+            ),
           ),
         ),
       ),
@@ -1057,7 +1399,26 @@ class _AndroidMainPageState extends fluent.State<AndroidMainPage> {
   ///
   /// Extensiones se sumó acá al pasar la barra a seis zonas de contenido
   /// (Inicio+4 zonas+Biblioteca) — antes entraba en la barra misma.
+  ///
+  /// Buscar, primero de la lista — pedido explícito. Antes el único camino
+  /// era el ícono de lupa del banner de Inicio: si no se estaba parado ahí
+  /// (en una zona, en Biblioteca), no había forma de llegar al buscador
+  /// general sin volver antes a Inicio.
   List<(IconData, String, VoidCallback)> _extras() => [
+        (
+          Icons.search_rounded,
+          'common.search'.i18n,
+          () => Get.to(() => const SearchPage()),
+        ),
+        // TV/streaming en vivo — pedido explícito de dejarla puesta, pero
+        // SIN sumarle un ícono más al bottom-nav (ya viene justo de
+        // espacio, ver `_barraFlotante`/`_barraVertical`): vive acá, no en
+        // la barra, mientras no haya ninguna extensión real para mostrar.
+        (
+          Icons.live_tv_rounded,
+          'home.tv-canales'.i18n,
+          () => Get.to(() => const ZonaTvPage()),
+        ),
         (
           Icons.extension_outlined,
           'common.extension'.i18n,
@@ -1104,6 +1465,27 @@ class _AndroidMainPageState extends fluent.State<AndroidMainPage> {
         borderRadius: BorderRadius.circular(34),
         // El aro la despega del contenido: sin él, sobre una zona oscura se
         // funde con el fondo y los iconos vuelven a verse sueltos.
+        border: Border.all(color: Colors.white.withValues(alpha: 0.12)),
+        boxShadow: const [
+          BoxShadow(
+            color: Color(0x99000000),
+            blurRadius: 20,
+            offset: Offset(0, 8),
+          ),
+        ],
+      );
+
+  /// La misma pastilla, más traslúcida — solo para la barra flotante de
+  /// ABAJO (de pie). Pedido explícito: que se adivine el contenido detrás
+  /// de ella al hacer scroll. Alfa más bajo (0xB3 ≈ 70%, contra el 0xF2
+  /// ≈ 95% de la de siempre) en vez de un desenfoque real: un
+  /// `BackdropFilter` se recalcula en cada cuadro mientras se desplaza la
+  /// grilla de portadas que tiene justo detrás, y eso ya se probó y se
+  /// descartó por costoso (ver el comentario de `_pastilla`) — bajar el
+  /// alfa no cuesta nada por cuadro y ya deja notarse lo que hay atrás.
+  static BoxDecoration get _pastillaFlotante => BoxDecoration(
+        color: const Color(0xB30E0E14),
+        borderRadius: BorderRadius.circular(34),
         border: Border.all(color: Colors.white.withValues(alpha: 0.12)),
         boxShadow: const [
           BoxShadow(
@@ -1324,11 +1706,12 @@ class _IconoDeBarra extends StatelessWidget {
   final bool elegido;
   final VoidCallback onTap;
 
-  /// El lado del botón.
-  ///
-  /// En el riel acostado va más grande: ahí quedaron TRES destinos en una
-  /// columna con alto de sobra, así que a 46 se veían chicos y perdidos contra
-  /// el borde. De pie son cuatro en una barra angosta y ahí 46 es lo que entra.
+  // El lado del botón — 46 siempre. Que la pastilla entera entre en la
+  // pantalla (aunque tenga 6 destinos) ya no es cosa de este número: lo
+  // resuelve el `FittedBox` que envuelve la pastilla en
+  // `_barraFlotante`/`_barraVertical`, achicando el conjunto entero si
+  // hace falta en vez de calcular un tamaño por ícono a mano.
+  static const _tamano = 46.0;
 
   @override
   Widget build(BuildContext context) {
@@ -1339,12 +1722,12 @@ class _IconoDeBarra extends StatelessWidget {
       label: destino.label,
       child: InkResponse(
         onTap: onTap,
-        radius: 46.0 * 0.57,
+        radius: _tamano * 0.57,
         child: AnimatedContainer(
           duration: const Duration(milliseconds: 200),
           curve: Curves.easeOut,
-          width: 46,
-          height: 46,
+          width: _tamano,
+          height: _tamano,
           decoration: BoxDecoration(
             shape: BoxShape.circle,
             color: elegido ? acento.withValues(alpha: 0.3) : Colors.transparent,
@@ -1352,7 +1735,7 @@ class _IconoDeBarra extends StatelessWidget {
           child: Icon(
             elegido ? destino.selectedIcon : destino.icon,
             // Sigue al botón, para que la proporción sea la misma en los dos.
-            size: 46.0 * 0.5,
+            size: _tamano * 0.5,
             // La pastilla es oscura en los dos modos (ver _pastilla), así
             // que sus iconos van en blanco siempre. Con el color del tema se
             // volvían casi negros en claro: iconos negros sobre negro.
