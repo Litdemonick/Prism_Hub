@@ -381,7 +381,19 @@ class _VideoPlayerTvControlsState extends State<VideoPlayerTvControls> {
                   opciones: _opciones,
                   focoServidorElegido: _focoServidorElegido,
                   onElegirServidor: (nombre) {
-                    _c.selectServer(nombre);
+                    // switchServer, NO selectServer — este último solo marca
+                    // cuál es el servidor "actual" y vuelve a dejar
+                    // awaitingServerChoice en true (ver su propio cuerpo en
+                    // video_controller.dart); nunca resuelve ni arranca nada
+                    // por su cuenta. El cartel de "elegí un servidor" de PC
+                    // (video_player_desktop_controls.dart) llama
+                    // switchServer al tocarlo — es la función que de verdad
+                    // pide la URL y empieza a reproducir. Reportado en vivo:
+                    // el mando dejaba elegir server y confirmar con OK, pero
+                    // no pasaba nada — porque `selectServer` no hace pasar
+                    // nada, solo prepara el terreno para que algo MÁS llame a
+                    // switchServer.
+                    unawaited(_c.switchServer(nombre));
                     setState(() => _opciones = false);
                     _foco.requestFocus();
                     _reiniciarEspera();
