@@ -1,9 +1,8 @@
-## PrismHub v1.0.37 — Android TV: el video ya reproduce
+## PrismHub v1.0.38 — Android TV: el reproductor, al día
 
-> 🎬 **El bug grande de esta tanda: elegir un servidor con el control remoto
-> ya arranca la reproducción de verdad.** Antes confirmar con OK dejaba la
-> app dando vueltas en el mismo cartel de "elegí un servidor" sin que
-> pasara nada — estaba llamando a la función equivocada por dentro.
+> 📺 **El reproductor de TV se pone a la altura de PC**, con episodios,
+> volumen, velocidad de red y un aviso claro de pausa. Y se corrige un bug
+> real: el propio salvapantallas del televisor podía tirar la app entera.
 
 > ⚠️ **La app sigue en mantenimiento general.** Se la sigue reestructurando
 > por dentro, así que es posible que te cruces con fallos o con cosas a
@@ -12,16 +11,26 @@
 
 ### 📺 Android TV
 
-- **Elegir servidor con el mando ya reproduce el video.** Era el bug más
-  grande de todos: confirmar con OK dejaba la pantalla exactamente igual,
-  como si el control remoto no respondiera.
-
-### 📱 Pantalla de arranque
-
-- **Banner propio para cuando el celular está en vertical.** El banner de
-  arranque es panorámico, pensado para TV y horizontal — en un teléfono
-  parado se veía recortado de forma rara. Ahora hay un segundo banner,
-  compuesto directamente para esa forma de pantalla.
+- **Zonas (Películas/Series/Anime) con la misma grilla que PC** — cards
+  intercaladas de todas las extensiones juntas, y el mismo panel de info
+  (título, fecha, de qué extensión viene) que en PC aparece al pasar el
+  mouse, ahora con el foco del mando.
+- **El reproductor ya deja elegir episodio con el control remoto** —
+  bajando con ▼ aparece la lista, igual que ya tenía Servidores.
+- **Aviso de pausa**: un ícono grande se ve al pausar, y se desvanece solo
+  al retomar — antes no había ninguna señal de que el video estaba en
+  pausa y no colgado.
+- **Avisos al avanzar/retroceder y al subir volumen** — un cartel breve
+  confirma cuánto salta o a cuánto quedó el volumen.
+- **Velocidad de red en pantalla**, arriba a la derecha, mientras se mira
+  algo.
+- **La app ya no se cerraba al volver del salvapantallas del propio
+  televisor** — ahora la pantalla se mantiene encendida mientras el video
+  reproduce de verdad, y se libera en pausa.
+- **La actualización ya no pedía descargar dos veces** — algunas cajas de
+  TV no tenían la pantalla de permisos que se probaba primero; ahora se
+  prueban tres antes de rendirse, y si el archivo ya está completo en
+  disco, no se vuelve a bajar.
 
 ---
 
@@ -67,16 +76,16 @@
 
 | Archivo | Para |
 |---|---|
-| **`PrismHub-setup-windows-v1.0.37.exe`** | **Instalador.** Lo normal: instala y crea el acceso directo |
-| `PrismHub-v1.0.37-windows-x64.zip` | Portable: se descomprime y se ejecuta, sin instalar |
+| **`PrismHub-setup-windows-v1.0.38.exe`** | **Instalador.** Lo normal: instala y crea el acceso directo |
+| `PrismHub-v1.0.38-windows-x64.zip` | Portable: se descomprime y se ejecuta, sin instalar |
 
 ### 🐧 Linux
 
 | Archivo | Para |
 |---|---|
-| `PrismHub-v1.0.37-linux-x64.tar.gz` | Se descomprime y se ejecuta |
+| `PrismHub-v1.0.38-linux-x64.tar.gz` | Se descomprime y se ejecuta |
 
-> Los archivos que llevan la versión en el nombre (`v1.0.37`) quedan fijos en
+> Los archivos que llevan la versión en el nombre (`v1.0.38`) quedan fijos en
 > esta publicación. Los de Android que **no** la llevan apuntan siempre a la
 > más nueva — son los que conviene usar para un enlace o un código que quede
 > guardado.
