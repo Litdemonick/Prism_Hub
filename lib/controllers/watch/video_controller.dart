@@ -16,7 +16,9 @@ import 'package:media_kit_video/media_kit_video.dart';
 import 'package:prismhub/data/providers/anilist_provider.dart';
 import 'package:prismhub/data/providers/bt_server_provider.dart';
 import 'package:prismhub/models/index.dart';
+import 'package:prismhub/utils/alivio_de_memoria.dart';
 import 'package:prismhub/utils/comportamiento_sistema_tv.dart';
+import 'package:prismhub/utils/platform_tv.dart';
 import 'package:prismhub/utils/error.dart';
 import 'package:prismhub/utils/log.dart';
 import 'package:prismhub/utils/request.dart';
@@ -763,7 +765,24 @@ class VideoPlayerController extends GetxController with WidgetsBindingObserver {
   /// Cuanto se espera a que el usuario deje de tocar antes de mandar el salto.
   ///
   /// Corto a proposito: mas que esto y un solo toque se siente lento.
-  static const _esperaEntreSaltos = Duration(milliseconds: 350);
+  ///
+  /// ── Por qué en televisor se espera más ──────────────────────────────
+  ///
+  /// Con una barra táctil o con el mouse, el usuario ARRASTRA: mueve, ve, y
+  /// suelta cuando llegó — un gesto continuo del que 350 ms es un buen
+  /// final. Con un control remoto no hay arrastre: se aprieta la flecha
+  /// muchas veces seguidas, y entre pulsación y pulsación pasa fácil más de
+  /// un tercio de segundo. Con la ventana corta, una tanda de diez toques
+  /// se partía en varios saltos reales en vez de uno solo — y cada salto
+  /// hace que mpv tire el colchón entero y lo vuelva a llenar, que es el
+  /// momento de mayor consumo de memoria y CPU de todo el reproductor.
+  ///
+  /// En un televisor con poca RAM, encadenar esos picos es lo que puede
+  /// terminar con la app cerrada por el sistema. Con la ventana más larga,
+  /// una ráfaga de toques del mando es UN solo salto al punto final.
+  static Duration get _esperaEntreSaltos => PlatformTv.esTelevisionSync
+      ? const Duration(milliseconds: 650)
+      : const Duration(milliseconds: 350);
 
   /// Si la barra esta mostrando adonde VA en vez de donde esta.
   ///
@@ -1256,6 +1275,11 @@ class VideoPlayerController extends GetxController with WidgetsBindingObserver {
   @override
   void onInit() async {
     _enUso = this;
+    // Antes que nada: soltar las portadas del catálogo para dejarle la
+    // memoria al vídeo — ver AlivioDeMemoria.soltarAntesDeReproducir, que
+    // explica por qué esperar al aviso del sistema llega tarde en un
+    // televisor. No hace nada en aparatos con memoria de sobra.
+    AlivioDeMemoria.soltarAntesDeReproducir();
     WidgetsBinding.instance.addObserver(this);
     if (Platform.isAndroid) {
       // ── Se abre COMO ESTÉ el teléfono, y se puede girar ────────────────
@@ -1453,10 +1477,67 @@ class VideoPlayerController extends GetxController with WidgetsBindingObserver {
       // tres, que es el valor con el que se venía y el que evita que un parón a
       // mitad reanude para cortarse enseguida.
       await np.setProperty('cache-pause-wait', '3');
-      await np.setProperty('cache-secs', '30');
+      // ── El colchón, a la medida del aparato ─────────────────────────────
+      //
+      // Reportado en vivo en Android TV: la app "se congela, se reinicia y
+      // expulsa al usuario" al saltar en el vídeo. Ese síntoma —la app se
+      // va sola, sin pantalla de error de Flutter— es el que deja el
+      // matador por falta de memoria de Android, no una excepción de Dart.
+      //
+      // Y encaja con lo que había acá: 96 MiB de colchón, un número pensado
+      // para un teléfono actual con 6-8 GB de RAM (ver el comentario de
+      // arriba sobre el 4K). Un televisor barato tiene 1-2 GB para TODO, y
+      // ese colchón compite con la textura del vídeo, con Flutter y con el
+      // sistema. Saltar es justo el peor momento: mpv tira lo que tenía
+      // guardado y lo vuelve a llenar, con un pico de memoria en el medio.
+      //
+      // Se escala por el perfil que la app ya resuelve al arrancar (ver
+      // PerfilDeAparato, que mira la RAM total, los núcleos y la marca de
+      // "aparato modesto" del sistema). Escritorio, teléfonos y tablets
+      // quedan EXACTAMENTE como estaban: `alto` es su nivel y también el
+      // valor por omisión si no se pudo averiguar nada.
+      final nivel = PerfilDeAparato.nivel;
       await np.setProperty(
-          'demuxer-max-bytes', Platform.isAndroid ? '96MiB' : '192MiB');
-      await np.setProperty('demuxer-readahead-secs', '10');
+        'cache-secs',
+        nivel.elegir(alto: '30', medio: '20', bajo: '12'),
+      );
+      await np.setProperty(
+        'demuxer-max-bytes',
+        Platform.isAndroid
+            ? nivel.elegir(alto: '96MiB', medio: '48MiB', bajo: '24MiB')
+            : '192MiB',
+      );
+      await np.setProperty(
+        'demuxer-readahead-secs',
+        nivel.elegir(alto: '10', medio: '8', bajo: '5'),
+      );
+      // ── El reloj lo manda el AUDIO, y el vídeo se adapta ────────────────
+      //
+      // Reportado en vivo: "el audio no va sincronizado con el vídeo" y "va
+      // a tirones, no llega a 60 fps".
+      //
+      // Los dos síntomas son la misma cosa vista de dos lados: cuando el
+      // decodificador no da abasto, o el vídeo se atrasa (y entonces se
+      // desincroniza del audio) o el audio se frena para esperarlo (y
+      // entonces se entrecorta). La única salida buena es tirar cuadros:
+      // un salto de imagen se perdona, un audio picado no.
+      //
+      // `video-sync=audio` y `framedrop=vo` son los valores de fábrica de
+      // mpv, pero se ponen explícitos: son parte del contrato de esta
+      // pantalla y no algo que convenga que cambie sin querer si alguna vez
+      // se toca otra opción o cambia una versión.
+      //
+      // En un aparato modesto se sube a `decoder+vo`: además de saltear el
+      // dibujado de un cuadro que ya llegó tarde, se le permite a mpv NO
+      // decodificar los que sabe que van a llegar tarde. Es lo que evita
+      // que un stick barato se quede cada vez más atrás sin poder
+      // recuperarse — y también baja el calor, que en un stick con
+      // ventilación pobre termina en throttling y en más tirones todavía.
+      await np.setProperty('video-sync', 'audio');
+      await np.setProperty(
+        'framedrop',
+        nivel == NivelDeAparato.alto ? 'vo' : 'decoder+vo',
+      );
       // **El español primero, cuando la fuente trae varios idiomas.**
       //
       // Estos sitios son de contenido en español y quien los usa quiere el

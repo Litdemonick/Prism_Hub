@@ -82,6 +82,44 @@ class AlivioDeMemoria with WidgetsBindingObserver {
         PerfilDeAparato.nivel.elegir(alto: 1000, medio: 400, bajo: 200);
   }
 
+  /// Suelta las imágenes guardadas ANTES de abrir el reproductor.
+  ///
+  /// ── Por qué no alcanza con esperar a que el sistema pida ────────────
+  ///
+  /// [didHaveMemoryPressure] es reactivo: Android avisa cuando ya está
+  /// corto de memoria, y en un televisor de 1-2 GB ese aviso puede llegar
+  /// tarde — o directamente no llegar, porque el matador de procesos actúa
+  /// antes. El síntoma que eso deja es el reportado en vivo: la app "se
+  /// congela, se reinicia y expulsa al usuario", sin ninguna pantalla de
+  /// error de Flutter, que es la firma de un proceso matado por el sistema
+  /// y no de una excepción de Dart.
+  ///
+  /// Abrir un vídeo es justo el peor momento: el usuario viene de recorrer
+  /// el catálogo, así que la caché está llena de portadas grandes, y encima
+  /// de eso el reproductor va a pedir su colchón de red y su textura de
+  /// vídeo, que es lo más pesado que reserva la app.
+  ///
+  /// Soltar acá no cuesta nada visible: las portadas que hagan falta al
+  /// volver se vuelven a decodificar desde disco (siguen en la caché de
+  /// archivos, que es otra cosa), y mientras tanto la pantalla que se está
+  /// mirando es el vídeo.
+  ///
+  /// Solo en aparatos modestos: en un teléfono o una PC con memoria de
+  /// sobra, tirar la caché sería pagar decodificaciones de más al volver al
+  /// catálogo sin ganar nada a cambio.
+  static void soltarAntesDeReproducir() {
+    if (!PerfilDeAparato.esModesto) return;
+    final antes = PaintingBinding.instance.imageCache.currentSizeBytes;
+    if (antes == 0) return;
+    PaintingBinding.instance.imageCache.clear();
+    PaintingBinding.instance.imageCache.clearLiveImages();
+    logger.info(
+      'Antes de reproducir se soltaron '
+      '${(antes / (1024 * 1024)).toStringAsFixed(1)} MB de imágenes '
+      '(perfil ${PerfilDeAparato.nivel.name})',
+    );
+  }
+
   @override
   void didHaveMemoryPressure() {
     final antes = PaintingBinding.instance.imageCache.currentSizeBytes;

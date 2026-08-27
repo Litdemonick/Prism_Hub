@@ -596,11 +596,48 @@ class _HomeMediaCardState extends State<HomeMediaCard> {
       return FocusableCard(
         borderRadius: 10,
         accent: widget.acento,
+        // ── El marco abarca la PORTADA, no la tarjeta entera ────────────
+        //
+        // Reportado en vivo con foto (Historial de TV): el resplandor y el
+        // borde cubrían también el título y el subtítulo de abajo, y como
+        // esos textos no tienen fondo propio, el halo rosa se veía a través
+        // y los dejaba lavados, casi ilegibles. "Ahí solo es la card, no
+        // todo".
+        //
+        // Lo que el usuario está eligiendo es la portada; el texto de
+        // debajo es su etiqueta. Pasando el alto de la imagen, el marco se
+        // dibuja solo alrededor de ella —igual que ya hacían las tarjetas
+        // del catálogo (`TarjetaDeCatalogo`), que sí lo pasaban.
+        altoMarco: _altoDeLaPortada(context),
         onTap: widget.onTap ?? () {},
         child: IgnorePointer(child: _construir(context)),
       );
     }
     return _construir(context);
+  }
+
+  /// El alto de la imagen sola, sin el título ni el subtítulo de abajo.
+  ///
+  /// Se calcula igual que en `_construir` — la horizontal tiene su alto
+  /// fijo, y la vertical sigue al ancho para no deformar la portada.
+  double _altoDeLaPortada(BuildContext context) {
+    if (widget.horizontal) return HomeMediaCard.altoImagenAncha;
+    final isAndroidLandscape = Platform.isAndroid &&
+        !PlatformTv.esTelevisionSync &&
+        MediaQuery.of(context).orientation == Orientation.landscape;
+    final anchoBase = isAndroidLandscape
+        ? HomeMediaCard.androidLandscapeWidth
+        : Platform.isAndroid
+            ? HomeMediaCard.androidWidth
+            : HomeMediaCard.desktopWidth;
+    final altoBase = isAndroidLandscape
+        ? HomeMediaCard.androidLandscapeHeight
+        : Platform.isAndroid
+            ? HomeMediaCard.androidHeight
+            : HomeMediaCard.desktopHeight;
+    return widget.ancho == null
+        ? altoBase
+        : widget.ancho! * (altoBase / anchoBase);
   }
 
   Widget _construir(BuildContext context) {

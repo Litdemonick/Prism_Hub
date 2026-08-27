@@ -23,6 +23,7 @@ class PanelInfoHover extends StatelessWidget {
     this.descripcion,
     this.acento,
     this.onTap,
+    this.compacto = false,
   });
 
   final String titulo;
@@ -31,6 +32,23 @@ class PanelInfoHover extends StatelessWidget {
   final String? descripcion;
   final Color? acento;
   final VoidCallback? onTap;
+
+  /// El panel se ajusta a lo que tiene adentro, en vez de estirarse para
+  /// llenar el alto que le den.
+  ///
+  /// ── Para qué ────────────────────────────────────────────────────────
+  ///
+  /// En su uso normal (el hover de mouse) el panel cubre el póster entero y
+  /// puede repartir el espacio con un `Expanded`: la descripción se queda
+  /// con todo lo que sobre. En televisor no cubre el póster entero —taparlo
+  /// sería esconder justo lo que el usuario está mirando— así que se le da
+  /// una franja de abajo, y ahí un `Expanded` no sirve: obliga a fijar un
+  /// alto de antemano, y lo que no entra se corta.
+  ///
+  /// Reportado en vivo con foto: "al seleccionar se corta en vez de subir
+  /// la info". Con esto el panel mide lo que de verdad necesita y crece
+  /// hacia arriba lo justo, sea un título de una línea o de tres.
+  final bool compacto;
 
   Color get _acento => acento ?? HomeTheme.accentPink;
 
@@ -49,6 +67,7 @@ class PanelInfoHover extends StatelessWidget {
         padding: const EdgeInsets.all(11),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
+          mainAxisSize: compacto ? MainAxisSize.min : MainAxisSize.max,
           children: [
             if (encabezado != null) ...[
               Text(
