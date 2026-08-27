@@ -22,6 +22,7 @@ import 'package:prismhub/views/widgets/cache_network_image.dart';
 import 'package:prismhub/views/pages/home/ultimas_actualizaciones_mangadex_page.dart';
 import 'package:prismhub/views/widgets/home/animated_background_glow.dart';
 import 'package:prismhub/views/widgets/home/esqueleto.dart';
+import 'package:prismhub/views/widgets/home/home_media_card.dart';
 import 'package:prismhub/views/widgets/home/home_theme.dart';
 import 'package:prismhub/views/widgets/home/indicadores_de_pagina.dart';
 import 'package:prismhub/views/widgets/home/panel_info_hover.dart';

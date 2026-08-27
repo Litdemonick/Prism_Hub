@@ -679,6 +679,16 @@ class _ZonaTvState extends State<_ZonaTv> {
 /// `FilaDeExtension` del Home, que es un modelo distinto (ver el
 /// comentario largo en `zona_catalogo_controller.dart` sobre por qué no
 /// se comparte).
+///
+/// ── Por qué la tarjeta es horizontal (16:9) y no el póster vertical ──────
+///
+/// Pedido explícito, con una captura de referencia de otra app de TV: ahí
+/// las tarjetas de cada zona son miniaturas apaisadas (estilo "still" del
+/// video), no pósters verticales. Se reusa `HomeMediaCard` en su variante
+/// `horizontal` —la misma que ya prueban las filas de Continuar viendo/
+/// Favoritos en Historial— en vez de `TarjetaDeCatalogo` (el póster
+/// vertical que sigue usando la grilla de PC/Android en
+/// `ZonaCatalogoPage`, sin tocar: ahí no se pidió el cambio).
 class _FilaZonaTv extends StatefulWidget {
   const _FilaZonaTv({required this.c, required this.fuente});
 
@@ -714,7 +724,7 @@ class _FilaZonaTvState extends State<_FilaZonaTv> {
   void _alAcercarseAlFinal() {
     if (!_scroll.hasClients) return;
     final restante = _scroll.position.maxScrollExtent - _scroll.offset;
-    if (restante < _anchoTarjetaTv(context) * 3) {
+    if (restante < HomeMediaCard.anchoAncha * 3) {
       unawaited(widget.c.cargarMas());
     }
   }
@@ -752,10 +762,13 @@ class _FilaZonaTvState extends State<_FilaZonaTv> {
             ),
             const SizedBox(height: 18),
             SizedBox(
-              height: _altoFilaTv(context),
+              // Alto propio de la card horizontal (HomeMediaCard.altoTotalAncha)
+              // — NO el de `_altoFilaTv`, que está calculado para el póster
+              // vertical (`TarjetaDeCatalogo`) y lo sigue usando el Home.
+              height: HomeMediaCard.altoTotalAncha,
               child: items.isEmpty
                   ? EsqueletoDeFila(
-                      ancho: _anchoTarjetaTv(context),
+                      ancho: HomeMediaCard.anchoAncha,
                       separacion: 14,
                       padding:
                           EdgeInsets.symmetric(horizontal: _margen(context)),
@@ -784,13 +797,15 @@ class _FilaZonaTvState extends State<_FilaZonaTv> {
                             padding: const EdgeInsets.only(top: 10, right: 14),
                             child: FocusableCard(
                               onTap: abrir,
-                              altoMarco: _anchoTarjetaTv(context) * 3 / 2,
-                              child: TarjetaDeCatalogo(
-                                titulo: item.title,
-                                portada: item.cover,
-                                cabeceras: item.headers,
-                                fecha: item.update,
-                                ancho: _anchoTarjetaTv(context),
+                              altoMarco: HomeMediaCard.altoImagenAncha,
+                              child: HomeMediaCard(
+                                horizontal: true,
+                                ancho: HomeMediaCard.anchoAncha,
+                                title: item.title,
+                                subtitle: item.update,
+                                cover: item.cover,
+                                headers: item.headers,
+                                accent: HomeTheme.accentPink,
                               ),
                             ),
                           );
