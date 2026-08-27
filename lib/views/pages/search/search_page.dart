@@ -7,8 +7,6 @@ import 'package:get/get.dart';
 import 'package:prismhub/controllers/search_controller.dart';
 import 'package:prismhub/utils/extension.dart';
 import 'package:prismhub/utils/platform_tv.dart';
-import 'package:prismhub/utils/prismhub_storage.dart';
-import 'package:prismhub/views/pages/nsfw18/nsfw18_search_page.dart';
 import 'package:prismhub/views/pages/search/extension_searcher_page.dart';
 import 'package:prismhub/views/pages/search/search_page_tv.dart';
 import 'package:prismhub/views/widgets/franja_de_zona.dart';
@@ -108,37 +106,18 @@ class _SearchPageState extends State<SearchPage> {
     super.dispose();
   }
 
-  /// El filtro de tipo, en la barra de arriba. Solo Android.
-  ///
   // ── Sin botón de filtro en Android ────────────────────────────────────
   //
-  // Pedido explícito: "quitá el botón de filtros". Acá antes vivía TAMBIÉN
-  // la única puerta de Android a la Zona +18 (metida adentro de la hoja de
-  // filtros, separada por una línea — "no es un filtro, es otra
-  // pantalla"). Sacando el botón entero se perdía esa puerta, así que
-  // queda su propio ícono chico en la franja — ver `_botonZona18`.
+  // Pedido explícito: "quitá el botón de filtros". El filtro por tipo
+  // (Todo/Vídeo/Lectura) que vivía en esa hoja se va con ella —
+  // `_types`/`_typeLabels`/`_chipDeHoja` no tenían otro llamador.
   //
-  // El filtro por tipo (Todo/Vídeo/Lectura) que vivía en esa hoja se va
-  // con ella: `_types`/`_typeLabels`/`_chipDeHoja` no tenían otro llamador.
-
-  /// Ícono de entrada a la Zona +18 — reemplaza al viejo botón de filtro,
-  /// que era lo único que lo mostraba en Android. Mismas condiciones que
-  /// tenía ahí: nunca dentro de la propia Zona +18, y nunca con el switch
-  /// de NSFW apagado.
-  Widget _botonZona18(BuildContext context) {
-    if (widget.nsfwOnly) return const SizedBox.shrink();
-    // Obx y no una lectura suelta: ver PrismHubStorage.nsfwEnabled — en
-    // Android esta página no se reconstruye al volver de Ajustes, así que
-    // con la lectura directa el botón quedaba visible con el switch apagado.
-    return Obx(() {
-      if (!PrismHubStorage.nsfwEnabled.value) return const SizedBox.shrink();
-      return AccionDeFranja(
-        ayuda: 'nsfw18.search-zone-title'.i18n,
-        alTocar: () => openNsfw18Search(context),
-        icono: Icon(Icons.warning_amber_rounded, color: HomeTheme.accentRed),
-      );
-    });
-  }
+  // La puerta a la Zona +18 que vivía ahí (y que después tuvo su propio
+  // ícono en la franja, `_botonZona18`) se saca también, pedido explícito:
+  // esta es la búsqueda GENERAL, y ya hay un camino propio hasta la Zona
+  // +18 (Ajustes → Zona +18 → su propia lupa) — discreción con lo +18 es
+  // un principio del proyecto, así que menos puertas sueltas a esa zona,
+  // mejor.
 
   Widget _buildProgress() {
     return Obx(() {
@@ -301,10 +280,14 @@ class _SearchPageState extends State<SearchPage> {
                             Navigator.of(context).pop();
                           }
                         },
-                        // Sin el botón de filtro — pedido explícito. Lo único
-                        // que vivía ahí de verdad importante era la puerta a
-                        // la Zona +18 (ver _botonZona18), que se queda sola.
-                        acciones: [_botonZona18(context)],
+                        // Sin el botón de filtro, y sin el de la Zona +18
+                        // que vivía acá — pedido explícito: esta pantalla es
+                        // la búsqueda general, y ya hay un camino propio
+                        // hasta la Zona +18 (Ajustes → Zona +18 → su propia
+                        // lupa) — tenerlo repetido acá era otra puerta más
+                        // al mismo lugar, y discreción con lo +18 es un
+                        // principio del proyecto.
+                        acciones: const [],
                       ),
                       // Son 3 puntos de alto y dice si todavía están buscando.
                       Padding(
