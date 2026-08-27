@@ -532,25 +532,15 @@ class _Nsfw18ZonePageState extends State<Nsfw18ZonePage> {
                                         style: HomeTheme.tituloDeZona(),
                                       ),
                                     ),
-                                    // Sin esto no había NINGÚN camino a
-                                    // buscar algo puntual desde adentro de
-                                    // la zona — "Explorar" del banner de
-                                    // abajo ahora abre el catálogo (ver
-                                    // openNsfw18Catalog), no el buscador, y
-                                    // Ajustes es la única otra puerta.
-                                    // Reportado en vivo: "no veo el search
-                                    // adentro de la zona +18".
-                                    IconButton(
-                                      tooltip: 'nsfw18.search-zone-title'.i18n,
-                                      onPressed: () => openNsfw18Search(
-                                        context,
-                                        yaAutorizado: true,
-                                      ),
-                                      icon: Icon(
-                                        Icons.search_rounded,
-                                        color: HomeTheme.textPrimary,
-                                      ),
-                                    ),
+                                    // El buscador de esta zona ya NO tiene
+                                    // un botón propio acá — pedido explícito:
+                                    // con la lupa de la barra superior de
+                                    // Fluent (main_page.dart) detectando sola
+                                    // que se está en '/adult-zone' y abriendo
+                                    // openNsfw18Search en vez de la búsqueda
+                                    // general, tener las dos lupas a la vez
+                                    // en pantalla era mostrar dos caminos
+                                    // distintos a lo mismo.
                                     IconButton(
                                       tooltip: 'home.favorite'.i18n,
                                       onPressed: _favoritos,
@@ -649,6 +639,19 @@ class _Nsfw18ZonePageState extends State<Nsfw18ZonePage> {
           style: TextStyle(color: HomeTheme.textPrimary),
         ),
         actions: [
+          // En Android no hay ninguna lupa general que llegue hasta acá
+          // (esta pantalla se empuja ENCIMA del shell, así que ni el menú
+          // de los "..." ni el buscador del Inicio son alcanzables desde
+          // adentro) — a diferencia de PC, donde la barra superior de
+          // Fluent SÍ llega a todos lados y ya detecta sola esta zona (ver
+          // main_page.dart). Sin esta, no había ningún camino a buscar algo
+          // puntual desde adentro — reportado en vivo: "no veo el search
+          // adentro de la zona +18".
+          IconButton(
+            tooltip: 'nsfw18.search-zone-title'.i18n,
+            onPressed: () => openNsfw18Search(context, yaAutorizado: true),
+            icon: Icon(Icons.search_rounded, color: HomeTheme.textPrimary),
+          ),
           IconButton(
             tooltip: 'home.favorite'.i18n,
             onPressed: _favoritos,

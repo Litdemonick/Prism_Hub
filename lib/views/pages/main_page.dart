@@ -16,6 +16,7 @@ import 'package:prismhub/views/pages/history_page.dart';
 import 'package:prismhub/controllers/main_controller.dart';
 import 'package:prismhub/views/pages/search/search_page.dart';
 import 'package:prismhub/views/pages/settings/settings_page.dart';
+import 'package:prismhub/views/pages/nsfw18/nsfw18_search_page.dart';
 import 'package:prismhub/views/pages/zonas/zona_catalogo_page.dart';
 import 'package:prismhub/views/pages/zonas/zona_tv_page.dart';
 import 'package:prismhub/models/extension.dart';
@@ -351,9 +352,20 @@ class _DesktopMainPageState extends State<DesktopMainPage> with WindowListener {
               // en la barra superior, en vez de depender de un botón dentro
               // de cada zona: es el único lugar que se ve sea cual sea la
               // pantalla en la que se esté parado.
+              //
+              // Y DETECTA sola la Zona +18: antes esta misma barra convivía
+              // con OTRO botón de buscar, propio de esa zona
+              // (nsfw18_zone_page.dart), y las dos lupas juntas en pantalla
+              // se veían como dos caminos distintos a lo mismo — pedido
+              // explícito de que sea una sola, la de siempre, que cambie de
+              // destino sola según dónde se esté parado. `_enRuta` es el
+              // mismo chequeo que ya usa cada `_Burbuja` del panel para
+              // saber si está seleccionada.
               fluent.IconButton(
                 icon: const Icon(fluent.FluentIcons.search, size: 16.0),
-                onPressed: () => router.go('/search'),
+                onPressed: () => _enRuta('/adult-zone')
+                    ? openNsfw18Search(context, yaAutorizado: true)
+                    : router.go('/search'),
               ),
               const SizedBox(width: 4),
               SizedBox(
