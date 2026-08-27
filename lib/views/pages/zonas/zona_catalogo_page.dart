@@ -192,6 +192,14 @@ class _ZonaCatalogoPageState extends State<ZonaCatalogoPage> {
           Expanded(
             child: Text(
               _titulo,
+              // Sin esto, el título se envolvía a una segunda línea cuando
+              // el botón de Formato pasaba de "Filtro" (corto) al nombre
+              // real elegido ("Películas", más largo) y le comía el ancho
+              // — reportado en vivo con captura, en la zona Anime. El botón
+              // de al lado puede crecer; el título nunca tiene que partirse
+              // por eso.
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
               style: TextStyle(
                 fontSize: 21,
                 fontWeight: FontWeight.w800,
