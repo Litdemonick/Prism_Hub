@@ -417,55 +417,36 @@ class _ExtensionPageState extends State<ExtensionPage> {
     );
   }
 
-  /// La barra de filtros: los chips con un botón a cada lado.
+  /// La barra de filtros (escritorio): los chips y, al lado, un solo botón
+  /// con las cuatro acciones masivas en su menú.
   ///
-  /// ── Por qué así y no de las otras dos formas que se probaron ────────────
+  /// ── Por qué un solo botón y no cuatro píldoras sueltas ──────────────────
   ///
-  /// Juntos y centrados quedaban a un par de píxeles uno del otro, y hacen
-  /// cosas OPUESTAS: apagar las diecisiete cuando se querían prender es un
-  /// error caro de deshacer. Después se separaron a las puntas de la pantalla
-  /// y quedaron sueltos, lejos de todo, como si no fueran parte de la barra.
+  /// Antes eran cuatro botones con ícono+texto siempre a la vista, y
+  /// competían con los chips por el mismo renglón —a veces partiéndose a dos
+  /// líneas—. Pedido explícito: "hay muchos botones, organizalos para que
+  /// sea más fácil y compacto". Un solo disparador, con las cuatro adentro
+  /// de un menú, deja a los chips todo el ancho para ellos y reduce la
+  /// barra a dos elementos en vez de cinco.
   ///
-  /// Flanqueando los chips quedan separados entre sí —que es lo que importa—
-  /// pero agrupados con lo demás.
-  ///
-  /// En pantalla angosta no entran los tres en una línea: ahí los botones van
-  /// arriba y los chips debajo. Forzarlos igual dejaría los chips en una
-  /// rendija de cien píxeles.
+  /// En pantalla angosta no entran los dos en una línea: ahí el botón va
+  /// debajo y los chips arriba, con todo el ancho para ellos.
   Widget _buildBarraDeFiltros() {
-    final activar = _BotonMasivo(
-      icono: _masivoEnCurso
-          ? Icons.hourglass_top_rounded
-          : Icons.toggle_on_outlined,
-      label: 'extension.activar-todas'.i18n,
-      onTap: _masivoEnCurso
-          ? null
-          : () => _conElPasoCerrado(() => _cambiarTodas(true)),
-    );
-    final desactivar = _BotonMasivo(
-      icono: _masivoEnCurso
-          ? Icons.hourglass_top_rounded
-          : Icons.toggle_off_outlined,
-      label: 'extension.desactivar-todas'.i18n,
-      onTap: _masivoEnCurso
-          ? null
-          : () => _conElPasoCerrado(() => _cambiarTodas(false)),
-    );
-    final desinstalar = _BotonMasivo(
-      icono: _masivoEnCurso
-          ? Icons.hourglass_top_rounded
-          : Icons.delete_sweep_outlined,
-      label: 'extension.desinstalar-todas'.i18n,
-      onTap: _masivoEnCurso ? null : () => _conElPasoCerrado(_desinstalarTodas),
-    );
-    final actualizar = _BotonMasivo(
-      icono: _masivoEnCurso
-          ? Icons.hourglass_top_rounded
-          : Icons.system_update_alt_rounded,
-      label: 'extension.actualizar-todas'.i18n,
-      // Mientras corre, no se puede volver a tocar: son diecisiete descargas y
-      // dispararlas dos veces solo duplica el trabajo.
-      onTap: _masivoEnCurso ? null : () => _conElPasoCerrado(_actualizarTodas),
+    // ── Las cuatro acciones, en UN solo botón ───────────────────────────
+    //
+    // Pedido explícito: "hay muchos botones, organizalos para que sea más
+    // fácil y compacto". Antes esto eran CUATRO píldoras con ícono+texto
+    // siempre a la vista, compitiendo con los chips de filtro por el mismo
+    // renglón (y a veces partiéndose a dos líneas). Android ya resolvía
+    // exactamente esto con un solo ícono que abre una hoja — acá se aplica
+    // el mismo criterio: un solo botón "Acciones" con un menú, y los chips
+    // de filtro quedan con todo el ancho para ellos solos.
+    final acciones = _BotonDeAccionesMasivas(
+      enCurso: _masivoEnCurso,
+      onActivar: () => _conElPasoCerrado(() => _cambiarTodas(true)),
+      onDesactivar: () => _conElPasoCerrado(() => _cambiarTodas(false)),
+      onActualizar: () => _conElPasoCerrado(_actualizarTodas),
+      onDesinstalar: () => _conElPasoCerrado(_desinstalarTodas),
     );
 
     // ── Una línea o dos, y no lo decide solo el ancho ─────────────────────
@@ -484,26 +465,9 @@ class _ExtensionPageState extends State<ExtensionPage> {
     if (!unaSolaLinea) {
       return Column(
         children: [
-          // Los tres en una fila que se puede correr: en un teléfono angosto
-          // no entran, y partirlos en dos líneas se comería el alto que le
-          // falta a la lista.
-          SingleChildScrollView(
-            scrollDirection: Axis.horizontal,
-            child: Row(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                activar,
-                const SizedBox(width: 10),
-                desactivar,
-                const SizedBox(width: 10),
-                actualizar,
-                const SizedBox(width: 10),
-                desinstalar,
-              ],
-            ),
-          ),
-          const SizedBox(height: 10),
           _buildFilterChips(),
+          const SizedBox(height: 10),
+          acciones,
         ],
       );
     }
@@ -511,18 +475,12 @@ class _ExtensionPageState extends State<ExtensionPage> {
     return Row(
       mainAxisAlignment: MainAxisAlignment.center,
       children: [
-        activar,
-        const SizedBox(width: 14),
         // Flexible y no Expanded: así los chips ocupan lo que necesitan y el
         // conjunto queda centrado. Con Expanded se estirarían hasta el borde y
-        // los botones volverían a quedar en las puntas.
+        // el botón volvería a quedar en la punta.
         Flexible(child: _buildFilterChips()),
         const SizedBox(width: 14),
-        desactivar,
-        const SizedBox(width: 10),
-        actualizar,
-        const SizedBox(width: 10),
-        desinstalar,
+        acciones,
       ],
     );
   }
@@ -1143,8 +1101,7 @@ class _ExtensionPageState extends State<ExtensionPage> {
                                         ),
                                       );
                                     }
-                                    return ExtensionTile(
-                                        dePagina[i].extension);
+                                    return ExtensionTile(dePagina[i].extension);
                                   },
                                 ),
                               );
@@ -1458,30 +1415,58 @@ extension _ExtFilterLabel on _ExtFilter {
   }
 }
 
-/// Botón de acción masiva (activar o desactivar todas las visibles).
+/// Las cuatro acciones masivas (activar/desactivar/actualizar/desinstalar
+/// todas), juntas en un solo botón con menú — pedido explícito de que en
+/// escritorio dejen de ser cuatro píldoras siempre a la vista.
 ///
 /// Se distingue a propósito de los chips de filtro que tiene al lado: los
-/// chips SELECCIONAN y estos HACEN algo. Por eso llevan icono y borde propio,
-/// en vez de parecer un filtro más que se puede marcar.
-class _BotonMasivo extends StatelessWidget {
-  const _BotonMasivo({
-    required this.icono,
-    required this.label,
-    required this.onTap,
+/// chips SELECCIONAN y esto ABRE un menú de cosas que HACEN algo.
+class _BotonDeAccionesMasivas extends StatelessWidget {
+  const _BotonDeAccionesMasivas({
+    required this.enCurso,
+    required this.onActivar,
+    required this.onDesactivar,
+    required this.onActualizar,
+    required this.onDesinstalar,
   });
 
-  final IconData icono;
-  final String label;
-  final VoidCallback? onTap;
+  final bool enCurso;
+  final VoidCallback onActivar;
+  final VoidCallback onDesactivar;
+  final VoidCallback onActualizar;
+  final VoidCallback onDesinstalar;
 
   @override
   Widget build(BuildContext context) {
-    return Material(
-      color: Colors.transparent,
-      borderRadius: BorderRadius.circular(20),
-      child: InkWell(
-        borderRadius: BorderRadius.circular(20),
-        onTap: onTap,
+    // Mismo criterio que _BotonDeOrden/_BotonDeFormato en zona_catalogo_page
+    // .dart: sin este Theme local, PopupMenuButton dibuja un resaltado
+    // cuadrado de fábrica que se clava contra la esquina redondeada del
+    // menú. Acá no hay un ítem "elegido" que resaltar —son acciones, no una
+    // selección— así que ni siquiera hace falta el Container interno que
+    // usa aquel: alcanza con apagar el highlight por completo.
+    return Theme(
+      data: Theme.of(context).copyWith(highlightColor: Colors.transparent),
+      child: PopupMenuButton<VoidCallback>(
+        enabled: !enCurso,
+        onSelected: (accion) => accion(),
+        color: HomeTheme.cardSurface,
+        surfaceTintColor: Colors.transparent,
+        elevation: 6,
+        clipBehavior: Clip.antiAlias,
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(12),
+          side: BorderSide(color: HomeTheme.border),
+        ),
+        itemBuilder: (context) => [
+          _item(Icons.toggle_on_outlined, 'extension.activar-todas'.i18n,
+              onActivar),
+          _item(Icons.toggle_off_outlined, 'extension.desactivar-todas'.i18n,
+              onDesactivar),
+          _item(Icons.system_update_alt_rounded,
+              'extension.actualizar-todas'.i18n, onActualizar),
+          _item(Icons.delete_sweep_outlined, 'extension.desinstalar-todas'.i18n,
+              onDesinstalar),
+        ],
         child: Container(
           padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
           decoration: BoxDecoration(
@@ -1491,10 +1476,16 @@ class _BotonMasivo extends StatelessWidget {
           child: Row(
             mainAxisSize: MainAxisSize.min,
             children: [
-              Icon(icono, size: 17, color: HomeTheme.textMuted),
+              Icon(
+                enCurso
+                    ? Icons.hourglass_top_rounded
+                    : Icons.more_horiz_rounded,
+                size: 17,
+                color: HomeTheme.textMuted,
+              ),
               const SizedBox(width: 7),
               Text(
-                label,
+                'extension.acciones'.i18n,
                 style: TextStyle(
                   fontSize: 12.5,
                   fontWeight: FontWeight.w600,
@@ -1503,6 +1494,26 @@ class _BotonMasivo extends StatelessWidget {
               ),
             ],
           ),
+        ),
+      ),
+    );
+  }
+
+  PopupMenuItem<VoidCallback> _item(
+      IconData icono, String texto, VoidCallback accion) {
+    return PopupMenuItem(
+      value: accion,
+      padding: EdgeInsets.zero,
+      child: Container(
+        width: double.infinity,
+        margin: const EdgeInsets.symmetric(horizontal: 4, vertical: 2),
+        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 10),
+        child: Row(
+          children: [
+            Icon(icono, size: 18, color: HomeTheme.textPrimary),
+            const SizedBox(width: 10),
+            Text(texto, style: TextStyle(color: HomeTheme.textPrimary)),
+          ],
         ),
       ),
     );
