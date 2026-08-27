@@ -45,6 +45,7 @@
     "export": "Export",
     "show": "Show",
     "hide": "Hide",
+    "on": "On",
     "off": "Off",
     "error-message": "Error message",
     "disconnect": "Disconnect",

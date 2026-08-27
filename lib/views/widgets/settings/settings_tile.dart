@@ -112,21 +112,87 @@ class _SettingsTileState extends State<SettingsTile> {
     );
   }
 
+  /// La fila de Ajustes, en televisor.
+  ///
+  /// ── Por qué no alcanzaba con la de Android ──────────────────────────
+  ///
+  /// Android TV ES `Platform.isAndroid`, así que caía en `_buildAndroid` —
+  /// un `ListTile` con los tamaños de un teléfono, pensado para mirarse a
+  /// treinta centímetros y tocarse con el dedo. En una pantalla que se mira
+  /// desde el sillón queda chico, y el ícono y el texto se pierden.
+  /// Pedido explícito: "más grande, compacto, botones y formas distintas".
+  ///
+  /// Es una tarjeta, no una fila suelta: con el foco de un mando saltando
+  /// de una a otra, un bloque con bordes propios deja mucho más claro
+  /// dónde está parado el usuario que una línea de texto en una lista.
+  Widget _buildTv(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 22, vertical: 18),
+      clipBehavior: Clip.antiAlias,
+      decoration: BoxDecoration(
+        color: HomeTheme.cardSurface,
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: HomeTheme.border),
+      ),
+      child: Row(
+        children: [
+          if (widget.icon != null) ...[
+            IconTheme(
+              data: IconThemeData(size: 28, color: HomeTheme.accentPink),
+              child: widget.icon!,
+            ),
+            const SizedBox(width: 20),
+          ],
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                Text(
+                  widget.title,
+                  style: TextStyle(
+                    color: HomeTheme.textPrimary,
+                    fontSize: 19,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+                if (widget.buildSubtitle != null) ...[
+                  const SizedBox(height: 4),
+                  SettingsSubtitle(
+                    widget.buildSubtitle!.call(),
+                    fontSize: 15,
+                  ),
+                ],
+              ],
+            ),
+          ),
+          if (widget.trailing != null) ...[
+            const SizedBox(width: 16),
+            widget.trailing!,
+          ],
+        ],
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
-    final tile = PlatformBuildWidget(
+    if (PlatformTv.esTelevisionSync) {
+      final tile = _buildTv(context);
+      // Las filas que no hacen nada al tocarse (un texto informativo, o una
+      // cuyo control ya es enfocable solo —un interruptor, un desplegable—)
+      // se dejan sin envolver: enfocarlas sería parar el recorrido del mando
+      // en algo que no responde, o robarle el foco al control que sí.
+      if (widget.onTap == null) return tile;
+      return FocusableCard(
+        borderRadius: 14,
+        onTap: widget.onTap!,
+        child: IgnorePointer(child: tile),
+      );
+    }
+    return PlatformBuildWidget(
       androidBuilder: _buildAndroid,
       desktopBuilder: _buildDesktop,
-    );
-    // En TV cada fila de Ajustes tiene que poder enfocarse con el mando. Las
-    // que no hacen nada al tocarse (un texto informativo, un interruptor que
-    // se maneja solo) se dejan como están: enfocarlas sería parar el
-    // recorrido en algo que no responde.
-    if (!PlatformTv.esTelevisionSync || widget.onTap == null) return tile;
-    return FocusableCard(
-      borderRadius: 12,
-      onTap: widget.onTap!,
-      child: IgnorePointer(child: tile),
     );
   }
 }

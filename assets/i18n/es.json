@@ -55,6 +55,7 @@
     "source-timeout": "Esta fuente tardó demasiado en responder. Podés reintentar; las demás extensiones siguen buscando igual.",
     "disconnect": "Desconectar",
     "error-message": "Mensaje de error",
+    "on": "Activado",
     "off": "Desactivado",
     "no-connection": "Sin conexión a internet",
     "library": "Biblioteca"

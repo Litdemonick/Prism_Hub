@@ -50,6 +50,7 @@ import 'package:prismhub/utils/application.dart';
 import 'package:prismhub/views/widgets/home/animated_background_glow.dart';
 import 'package:prismhub/views/widgets/home/home_theme.dart';
 import 'package:prismhub/views/widgets/list_title.dart';
+import 'package:prismhub/views/pages/settings/settings_page_tv.dart';
 import 'package:prismhub/views/widgets/platform_widget.dart';
 import 'package:share_plus/share_plus.dart';
 import 'package:tmdb_api/tmdb_api.dart';
@@ -1367,7 +1368,17 @@ class _SettingsPageState extends State<SettingsPage> {
             // su explicación ocupaban media pantalla de texto plano dentro de
             // una lista de ajustes. En escritorio hay ancho de sobra, así que
             // se deja a la vista.
-            if (Platform.isAndroid)
+            //
+            // En televisor NO va, y no es por espacio: los dos valores que
+            // este ajuste guarda (`arrowLeft`/`arrowRight`) los usan el
+            // doble toque de celular y las flechas del teclado en
+            // escritorio. El reproductor de TV salta con un valor fijo de
+            // 10 segundos (ver `_salto` en video_player_tv_controls.dart) y
+            // nunca los lee — o sea que acá era un ajuste que se podía
+            // cambiar y no hacía absolutamente nada.
+            if (PlatformTv.esTelevisionSync)
+              const SizedBox.shrink()
+            else if (Platform.isAndroid)
               _SkipIntervalTile(onOpen: _openSkipIntervalPage)
             else
               ..._buildSkipIntervalChildren(),
@@ -1660,29 +1671,40 @@ class _SettingsPageState extends State<SettingsPage> {
       const SizedBox(height: 20),
       ListTitle(title: 'settings.about'.i18n),
       const SizedBox(height: 20),
+      // ── Los que mandan a una página web, nunca en televisor ───────────
+      //
+      // Pedido explícito: "quitá los botones de sugerencias y las cosas que
+      // mandan a páginas web". Y tiene sentido de fondo: abrir un enlace
+      // externo desde un televisor lo tira a un navegador que muchas cajas
+      // ni traen, y donde no hay forma cómoda de escribir un reporte con un
+      // control remoto. Un botón que lleva a un callejón sin salida es peor
+      // que no tenerlo.
+      //
       // Reportar fallos y proponer mejoras. Con fila y botón propios, no
       // solo como enlace suelto entre los de abajo: estando en beta es lo
       // que más conviene que el usuario encuentre.
-      SettingsTile(
-        isCard: true,
-        icon: const PlatformWidget(
-          androidWidget: Icon(Icons.feedback_outlined),
-          desktopWidget: Icon(fluent.FluentIcons.feedback, size: 24),
-        ),
-        title: 'settings.feedback'.i18n,
-        buildSubtitle: () => 'settings.feedback-subtitle'.i18n,
-        trailing: PlatformWidget(
-          androidWidget: TextButton(
-            onPressed: _abrirSugerencias,
-            child: Text('settings.feedback-button'.i18n),
+      if (!PlatformTv.esTelevisionSync) ...[
+        SettingsTile(
+          isCard: true,
+          icon: const PlatformWidget(
+            androidWidget: Icon(Icons.feedback_outlined),
+            desktopWidget: Icon(fluent.FluentIcons.feedback, size: 24),
           ),
-          desktopWidget: fluent.FilledButton(
-            onPressed: _abrirSugerencias,
-            child: Text('settings.feedback-button'.i18n),
+          title: 'settings.feedback'.i18n,
+          buildSubtitle: () => 'settings.feedback-subtitle'.i18n,
+          trailing: PlatformWidget(
+            androidWidget: TextButton(
+              onPressed: _abrirSugerencias,
+              child: Text('settings.feedback-button'.i18n),
+            ),
+            desktopWidget: fluent.FilledButton(
+              onPressed: _abrirSugerencias,
+              child: Text('settings.feedback-button'.i18n),
+            ),
           ),
         ),
-      ),
-      const SizedBox(height: 10),
+        const SizedBox(height: 10),
+      ],
       // El aviso legal también acá, para poder consultarlo cuando se quiera:
       // el del arranque se acepta una vez y no vuelve a verse.
       SettingsTile(
@@ -1708,23 +1730,26 @@ class _SettingsPageState extends State<SettingsPage> {
       const SizedBox(height: 10),
       // Los enlaces del proyecto dejan de ser texto suelto al final de
       // "Acerca de" y pasan a filas con botón, igual que el resto: antes
-      // convivían dos formas distintas de ofrecer lo mismo.
-      _enlaceTile(
-        androidIcon: Icons.code,
-        desktopIcon: fluent.FluentIcons.git_graph,
-        titulo: 'settings.link-source'.i18n,
-        subtitulo: 'settings.link-source-subtitle'.i18n,
-        url: 'https://github.com/Litdemonick/Prism_Hub',
-      ),
-      const SizedBox(height: 10),
-      _enlaceTile(
-        androidIcon: Icons.extension_outlined,
-        desktopIcon: fluent.FluentIcons.repo,
-        titulo: 'settings.link-extensions'.i18n,
-        subtitulo: 'settings.link-extensions-subtitle'.i18n,
-        url: 'https://github.com/Litdemonick/prism-plus',
-      ),
-      const SizedBox(height: 10),
+      // convivían dos formas distintas de ofrecer lo mismo. En televisor no
+      // van — ver el comentario de arriba sobre los enlaces externos.
+      if (!PlatformTv.esTelevisionSync) ...[
+        _enlaceTile(
+          androidIcon: Icons.code,
+          desktopIcon: fluent.FluentIcons.git_graph,
+          titulo: 'settings.link-source'.i18n,
+          subtitulo: 'settings.link-source-subtitle'.i18n,
+          url: 'https://github.com/Litdemonick/Prism_Hub',
+        ),
+        const SizedBox(height: 10),
+        _enlaceTile(
+          androidIcon: Icons.extension_outlined,
+          desktopIcon: fluent.FluentIcons.repo,
+          titulo: 'settings.link-extensions'.i18n,
+          subtitulo: 'settings.link-extensions-subtitle'.i18n,
+          url: 'https://github.com/Litdemonick/prism-plus',
+        ),
+        const SizedBox(height: 10),
+      ],
       SettingsTile(
         isCard: true,
         icon: const PlatformWidget(
@@ -1807,6 +1832,10 @@ class _SettingsPageState extends State<SettingsPage> {
                   Platform.isAndroid ? TextAlign.center : TextAlign.start,
               style: TextStyle(color: HomeTheme.textPrimary, height: 1.4),
             ),
+            // La lista de contribuyentes tampoco va en televisor: cada
+            // nombre es un enlace a GitHub — ver el comentario sobre los
+            // enlaces externos más arriba.
+            if (!PlatformTv.esTelevisionSync) ...[
             const SizedBox(height: 20),
             Text(
               'settings.contributors'.i18n,
@@ -1841,6 +1870,7 @@ class _SettingsPageState extends State<SettingsPage> {
                 ],
               ),
             ),
+            ],
           ],
         ),
       )
@@ -1947,6 +1977,18 @@ class _SettingsPageState extends State<SettingsPage> {
 
   @override
   Widget build(BuildContext context) {
+    // ── En televisor, una pantalla propia ────────────────────────────────
+    //
+    // Android TV ES `Platform.isAndroid`, así que caía en `_buildAndroid`:
+    // la misma lista de `ListTile` pensada para tocarse con el dedo a
+    // treinta centímetros. Pedido explícito de rehacerla entera — ver el
+    // doc de `SettingsPageTv`, que explica el diseño (categorías a un lado,
+    // sus ajustes al otro) y qué se dejó afuera y por qué.
+    //
+    // Se bifurca ACÁ y no en cada lugar que abre Ajustes: hay tres
+    // (`router.dart` y dos en `main_page.dart`), y con el tiempo alguno se
+    // hubiera quedado sin actualizar.
+    if (PlatformTv.esTelevisionSync) return const SettingsPageTv();
     return PlatformBuildWidget(
       androidBuilder: _buildAndroid,
       desktopBuilder: (context) => Container(
