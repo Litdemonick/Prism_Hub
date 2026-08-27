@@ -271,6 +271,7 @@
     "instalar-todas": "Install all",
     "desinstalar-todas": "Uninstall all",
     "masivo-confirmar-borrado": "{n} extensions will be uninstalled. Their settings are lost and you would have to install them again.",
+    "masivo-confirmar-borrado-incluye-nsfw": "That includes {n} marked 18+.",
     "masivo-desinstaladas": "{n} uninstalled.",
     "masivo-instaladas": "{n} installed.",
     "masivo-instaladas-con-fallos": "{n} installed, {f} failed.",

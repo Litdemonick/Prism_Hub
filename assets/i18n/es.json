@@ -267,6 +267,7 @@
     "instalar-todas": "Instalar todas",
     "desinstalar-todas": "Desinstalar todas",
     "masivo-confirmar-borrado": "Se van a desinstalar {n} extensiones. Sus ajustes se pierden y para recuperarlas hay que instalarlas de nuevo.",
+    "masivo-confirmar-borrado-incluye-nsfw": "Entre ellas, {n} marcadas +18.",
     "masivo-desinstaladas": "{n} desinstaladas.",
     "masivo-instaladas": "{n} instaladas.",
     "masivo-instaladas-con-fallos": "{n} instaladas, {f} no se pudieron.",

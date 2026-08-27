@@ -325,11 +325,15 @@ class _ExtensionPageState extends State<ExtensionPage> {
 
   /// Borra de golpe las extensiones que se están viendo.
   ///
-  /// ── Sobre las FILTRADAS, y con confirmación ─────────────────────────────
+  /// ── Sobre TODAS las instaladas, +18 incluidas ───────────────────────────
   ///
-  /// Mismo criterio que activar/desactivar: el botón hace lo que la pantalla
-  /// muestra. Si alguien está viendo «+18» y toca desinstalar, espera que se
-  /// vayan esas, no las diecisiete.
+  /// Antes solo alcanzaba a las FILTRADAS (lo que la pantalla mostraba en
+  /// ese momento) — mismo motivo por el que activar/desactivar masivo NO
+  /// respeta el filtro: pedido explícito, para no tener que entrar aparte a
+  /// desbloquear el filtro +18 solo para poder desinstalarlas junto con el
+  /// resto. La diferencia con activar/desactivar es que desinstalar no se
+  /// deshace, así que acá el aviso previo dice EXPLÍCITAMENTE cuántas de
+  /// esas son +18 — nadie se entera de un borrado que no esperaba.
   ///
   /// A diferencia de los otros botones masivos, este no se deshace: volver
   /// atrás significa reinstalar una por una y perder los ajustes de cada una.
@@ -337,17 +341,38 @@ class _ExtensionPageState extends State<ExtensionPage> {
   /// número es justo el aviso que la gente acepta sin leer.
   Future<void> _desinstalarTodas() async {
     if (_desinstalandoTodas) return;
-    final visibles = _applyFilters(c.runtimes.values.toList(growable: false));
+    final visibles = c.runtimes.values.toList(growable: false);
     if (visibles.isEmpty) return;
+    final nsfwCount = visibles.where((r) => r.extension.nsfw).length;
 
     final confirma = await showPlatformDialog(
       context: context,
       title: 'extension.desinstalar-todas'.i18n,
-      content: Text(FlutterI18n.translate(
-        context,
-        'extension.masivo-confirmar-borrado',
-        translationParams: {'n': '${visibles.length}'},
-      )),
+      content: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(FlutterI18n.translate(
+            context,
+            'extension.masivo-confirmar-borrado',
+            translationParams: {'n': '${visibles.length}'},
+          )),
+          if (nsfwCount > 0) ...[
+            const SizedBox(height: 10),
+            Text(
+              FlutterI18n.translate(
+                context,
+                'extension.masivo-confirmar-borrado-incluye-nsfw',
+                translationParams: {'n': '$nsfwCount'},
+              ),
+              style: const TextStyle(
+                color: Color(0xFFE5484D),
+                fontWeight: FontWeight.w700,
+              ),
+            ),
+          ],
+        ],
+      ),
       actions: [
         PlatformTextButton(
           onPressed: () => RouterUtils.pop(false),
