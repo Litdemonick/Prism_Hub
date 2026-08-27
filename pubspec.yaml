@@ -156,6 +156,7 @@ flutter:
     - assets/icon/logo_mark.png
     # El logo de la app tal cual, el que se ve en la pantalla de arranque.
     - assets/iconoapp2.png
+    - assets/banner_cargando_launch.jpg
     - assets/icon/anilist.jpg
     - assets/carddefaultoffline.png
     - assets/js/
