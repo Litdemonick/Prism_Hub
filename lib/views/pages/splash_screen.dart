@@ -24,17 +24,42 @@ class SplashScreen extends StatelessWidget {
 
   static const _fondo = Color(0xFF08080F);
 
+  /// El banner panorámico (2752×1536, ~16:9) — para TV, escritorio y
+  /// celular en horizontal.
+  static const _bannerHorizontal = 'assets/banner_cargando_launch.jpg';
+
+  /// El mismo diseño, recompuesto en vertical (1536×2752, ~9:16).
+  ///
+  /// ── Por qué dos archivos y no uno recortado por código ───────────────
+  ///
+  /// Reportado en vivo: con el banner horizontal estirado en un celular
+  /// parado, `BoxFit.cover` (el único fit que no deforma la imagen)
+  /// dejaba ver apenas una tira angosta y centrada del original —el logo
+  /// entraba, pero al lado quedaban fragmentos cortados de las portadas
+  /// de las puntas, sin el resto del collage alrededor que les da
+  /// sentido. Un recorte por código no soluciona eso: el problema no es
+  /// el encuadre, es que el diseño en sí está pensado para 16:9, no para
+  /// 9:16. Con un segundo banner compuesto directamente en vertical, cada
+  /// forma de pantalla muestra el diseño que le corresponde.
+  static const _bannerVertical = 'assets/banner_cargando_launch_vertical.jpg';
+
   @override
   Widget build(BuildContext context) {
-    final ancho = MediaQuery.sizeOf(context).width;
+    final tamano = MediaQuery.sizeOf(context);
     final dpr = MediaQuery.of(context).devicePixelRatio;
+    // Vertical: la pantalla es más angosta que alta. Es la MISMA cuenta que
+    // ya usa el resto de la app para saber si algo es "apaisado"
+    // (home_page_windows.dart) — nada nuevo, solo puesta en términos de
+    // alto/ancho en vez de ancho/alto. Un televisor SIEMPRE cae en el
+    // camino horizontal: no hay forma física de pararlo.
+    final esVertical = tamano.height > tamano.width;
     return Scaffold(
       backgroundColor: _fondo,
       body: SizedBox.expand(
         child: Image.asset(
-          'assets/banner_cargando_launch.jpg',
+          esVertical ? _bannerVertical : _bannerHorizontal,
           fit: BoxFit.cover,
-          cacheWidth: (ancho * dpr).round(),
+          cacheWidth: (tamano.width * dpr).round(),
           filterQuality: FilterQuality.medium,
         ),
       ),
