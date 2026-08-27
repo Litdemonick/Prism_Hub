@@ -89,7 +89,6 @@ class _VideoPlayerTvControlsState extends State<VideoPlayerTvControls> {
   @override
   void initState() {
     super.initState();
-    _reiniciarEspera();
     // ── Con varios servidores, el vídeo NO arranca solo ─────────────────
     //
     // Es a propósito (ver play() en el controlador): probar los cinco o seis
@@ -100,10 +99,24 @@ class _VideoPlayerTvControlsState extends State<VideoPlayerTvControls> {
     // pantalla quedaba en negro con 00:00 y nada explicaba por qué —
     // reportado en un televisor real. Al levantarse esa bandera, las
     // opciones se abren solas: es justo el momento en que hay que elegir.
+    //
+    // ── Por qué esto va ANTES de `_reiniciarEspera()` ────────────────────
+    //
+    // Reportado en vivo, con foto: el cartel de "Elegí un servidor" se
+    // quedaba solo en pantalla, SIN la lista de servidores debajo — como si
+    // el mando no respondiera. `_reiniciarEspera()` arranca un temporizador
+    // de 5s que esconde la barra, y solo lo salta si `_opciones` YA es
+    // `true` en ese momento. Estaba llamado ANTES de fijar `_opciones` acá
+    // abajo, así que siempre veía el valor viejo (`false`) y programaba el
+    // escondido igual — a los 5 segundos la lista desaparecía aunque el
+    // video siguiera esperando que alguien eligiera. Con el orden
+    // invertido, `_reiniciarEspera()` ya ve `_opciones = true` cuando hace
+    // falta y no programa nada.
     if (_c.awaitingServerChoice.value) {
       _opciones = true;
       _pedirFocoServidor();
     }
+    _reiniciarEspera();
     _vigiaDeLaEleccion = ever(_c.awaitingServerChoice, (bool esperando) {
       if (!mounted || !esperando) return;
       setState(() {
