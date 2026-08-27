@@ -984,10 +984,34 @@ class ApplicationUtils {
     String apkPath,
     BuildContext context,
   ) async {
+    // Cuánto tiempo total se espera antes de rendirse del todo.
+    //
+    // Reportado en vivo en Android TV: llegaba hasta acá, se descargaba
+    // bien, pero al volver de Ajustes la app "pedía de nuevo" en vez de
+    // instalar sola — había que tocar Actualizar una segunda vez para que
+    // ahí sí funcionara. La causa: el reintento de abajo se rendía después
+    // de apenas 3 intentos de 400ms (1.2 segundos) contados desde el
+    // PRIMER "resumed". En un celular, tocar un interruptor lleva un
+    // segundo. En un televisor, el mismo permiso se navega con el control
+    // remoto — bajar el foco, confirmar, volver — y eso solo, sin
+    // apurarse, ya pasa largo esos 1.2 segundos. Peor todavía: ese primer
+    // "resumed" puede disparar apenas arranca la transición a Ajustes,
+    // antes de que el usuario llegue siquiera a ver la pantalla — con lo
+    // cual los tres intentos se gastaban solos, sin que hubiera pasado
+    // nada todavía. El resultado se sentía igual en los dos casos: "se
+    // canceló", y la segunda pasada por Actualizar (que ya no tiene apuro,
+    // revisa el permiso una sola vez) andaba porque para entonces el
+    // permiso ya estaba dado hacía rato.
+    //
+    // Ahora se sigue escuchando a través de VARIOS "resumed" — el usuario
+    // puede volver a entrar a Ajustes más de una vez — durante hasta 3
+    // minutos en vez de rendirse en el primero.
+    final limite = DateTime.now().add(const Duration(minutes: 3));
     final observador = _EsperaPermisoDeInstalacion(() async {
       // El permiso puede tardar un instante en verse reflejado justo después
-      // de volver, así que se consulta un par de veces antes de rendirse.
-      for (var intento = 0; intento < 3; intento++) {
+      // de volver, así que se consulta un par de veces antes de rendirse de
+      // esta pasada — pero rendirse acá ya no apaga el observador (ver abajo).
+      for (var intento = 0; intento < 5; intento++) {
         final permitido = await _canalActualizacion
                 .invokeMethod<bool>('canInstallApks') ??
             false;
@@ -998,12 +1022,16 @@ class ApplicationUtils {
           } catch (e) {
             debugPrint('Reintento de instalación falló: $e');
           }
-          return;
+          return true; // Listo — dejar de escuchar.
         }
-        await Future<void>.delayed(const Duration(milliseconds: 400));
+        await Future<void>.delayed(const Duration(milliseconds: 500));
       }
-      // Siguió sin permiso: se avisa con el APK todavía guardado, así que
-      // tocar actualizar otra vez no vuelve a descargar nada.
+      if (DateTime.now().isBefore(limite)) {
+        return false; // Todavía sin permiso: puede volver a Ajustes, seguir esperando.
+      }
+      // Pasaron los 3 minutos sin permiso: recién ahí se avisa y se deja de
+      // escuchar. El APK sigue guardado, así que tocar Actualizar otra vez
+      // no vuelve a descargar nada.
       if (context.mounted) {
         showPlatformSnackbar(
           context: context,
@@ -1011,6 +1039,7 @@ class ApplicationUtils {
           content: 'upgrade.needs-install-permission'.i18n,
         );
       }
+      return true;
     });
     observador.empezar();
     await _canalActualizacion.invokeMethod('openInstallSettings');
@@ -1752,22 +1781,36 @@ class _ForcedUpdatePageState extends State<_ForcedUpdatePage> {
 /// Espera a que la app vuelva al frente para retomar algo que quedo pendiente
 /// en una pantalla del sistema (ver ApplicationUtils._instalarAlVolver).
 ///
-/// Se desengancha solo despues del primer regreso: no puede quedar escuchando
-/// para siempre ni disparar dos veces.
+/// `_alVolver` devuelve si ya terminó (true, se desengancha) o si hay que
+/// seguir esperando el próximo regreso (false) — un solo "resumed" no
+/// alcanza para dar por hecho que el usuario ya volvió de verdad: en un
+/// televisor, navegar la pantalla de permisos con el control remoto lleva
+/// más de un ida y vuelta.
 class _EsperaPermisoDeInstalacion with WidgetsBindingObserver {
   _EsperaPermisoDeInstalacion(this._alVolver);
 
-  final Future<void> Function() _alVolver;
+  final Future<bool> Function() _alVolver;
   bool _terminado = false;
+  // Evita superponer una segunda pasada mientras la anterior sigue
+  // consultando el permiso, si el sistema manda "resumed" más de una vez
+  // seguida (pasa en algunas transiciones de actividad).
+  bool _procesando = false;
 
   void empezar() => WidgetsBinding.instance.addObserver(this);
 
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
-    if (_terminado || state != AppLifecycleState.resumed) return;
-    _terminado = true;
-    WidgetsBinding.instance.removeObserver(this);
-    unawaited(_alVolver());
+    if (_terminado || _procesando || state != AppLifecycleState.resumed) {
+      return;
+    }
+    _procesando = true;
+    unawaited(_alVolver().then((listo) {
+      _procesando = false;
+      if (listo) {
+        _terminado = true;
+        WidgetsBinding.instance.removeObserver(this);
+      }
+    }));
   }
 }
 

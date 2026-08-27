@@ -1,6 +1,7 @@
 package com.prismhub.app
 
 import android.app.UiModeManager
+import android.content.ActivityNotFoundException
 import android.content.Context
 import android.content.Intent
 import android.content.res.Configuration
@@ -178,7 +179,25 @@ class MainActivity: AudioServiceFragmentActivity() {
             ).apply {
                 flags = Intent.FLAG_ACTIVITY_NEW_TASK
             }
-            startActivity(intent)
+            try {
+                startActivity(intent)
+            } catch (e: ActivityNotFoundException) {
+                // Algunas cajas de Android TV/Fire TV con una capa propia de
+                // Ajustes no traen esta pantalla especifica -sin el catch,
+                // esto tiraba una excepcion sin agarrar que subia tal cual al
+                // canal de Flutter, y del otro lado se veia como que la
+                // actualizacion "se cancelaba sola" en vez de decir que hacia
+                // falta dar el permiso a mano. La pantalla de detalles de la
+                // app SIEMPRE existe -es mas vueltas para el usuario, pero
+                // desde ahi tambien se llega al mismo permiso.
+                val fallback = Intent(
+                    Settings.ACTION_APPLICATION_DETAILS_SETTINGS,
+                    Uri.parse("package:$packageName")
+                ).apply {
+                    flags = Intent.FLAG_ACTIVITY_NEW_TASK
+                }
+                startActivity(fallback)
+            }
         }
     }
 
