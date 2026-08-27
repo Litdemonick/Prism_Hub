@@ -318,7 +318,33 @@ class _TarjetaDeCatalogoState extends State<TarjetaDeCatalogo> {
                                 // comiendo los toques del póster.
                                 child: IgnorePointer(
                                   ignoring: !panelVisible,
-                                  child: _panel(),
+                                  // ── En TV el panel NO tapa la portada ───
+                                  //
+                                  // Reportado en vivo con foto: la tarjeta
+                                  // enfocada "pierde toda la imagen". El
+                                  // panel cubre el póster entero con un
+                                  // degradado casi opaco — con mouse eso
+                                  // está bien (uno pasa por arriba a
+                                  // propósito para leer, y se va al correr
+                                  // el puntero), pero con un mando la
+                                  // tarjeta enfocada es justamente la que
+                                  // se está mirando: taparla entera deja al
+                                  // usuario sin ver qué eligió.
+                                  //
+                                  // Acotado a la mitad de abajo, la portada
+                                  // se sigue viendo y la info se lee igual
+                                  // — el degradado del panel ya arranca
+                                  // transparente arriba, así que el corte no
+                                  // se nota como un borde.
+                                  child: PlatformTv.esTelevisionSync
+                                      ? Align(
+                                          alignment: Alignment.bottomCenter,
+                                          child: FractionallySizedBox(
+                                            heightFactor: 0.52,
+                                            child: _panel(),
+                                          ),
+                                        )
+                                      : _panel(),
                                 ),
                               ),
                           ],

@@ -88,7 +88,48 @@ class _VideoPlayerTvControlsState extends State<VideoPlayerTvControls> {
   /// episodios, te faltó eso".
   final _focoEpisodioElegido = FocusNode(debugLabel: 'episodio-elegido-tv');
 
+  /// Envuelve la fila de episodios entera, sin ser un destino él mismo.
+  ///
+  /// ── Para qué ────────────────────────────────────────────────────────
+  ///
+  /// Reportado en vivo: con las opciones abiertas, subir "sube hasta
+  /// arriba" en vez de moverse entre las dos filas. La causa: `_tecla`
+  /// cerraba las opciones ante CUALQUIER flecha arriba, sin fijarse en qué
+  /// fila estaba parado el usuario — así que estando en Servidores (la de
+  /// abajo), subir cerraba todo el panel en vez de pasar a Episodios.
+  ///
+  /// Con este nodo se puede preguntar "¿el foco está en la fila de
+  /// episodios?" y cerrar solo desde ahí, que es la de más arriba.
+  ///
+  /// `canRequestFocus: false` + `skipTraversal: true` a propósito: es un
+  /// grupo para consultar, no un destino — un `FocusScope` de verdad
+  /// hubiera aislado cada fila y roto el recorrido geométrico entre las
+  /// dos, que es justamente lo que se quiere que funcione.
+  final _grupoEpisodios = FocusNode(
+    debugLabel: 'grupo-episodios-tv',
+    canRequestFocus: false,
+    skipTraversal: true,
+  );
+
   bool _barraVisible = true;
+
+  /// La barra sigue en el árbol.
+  ///
+  /// ── Por qué no alcanza con `_barraVisible` ──────────────────────────
+  ///
+  /// La barra se esconde con un `AnimatedOpacity`, y eso deja el widget
+  /// MONTADO: su `Obx` de progreso sigue reconstruyéndose con cada
+  /// actualización de posición que manda mpv —varias veces por segundo—
+  /// aunque no se vea nada. Mirando una película eso es trabajo puro al
+  /// pedo en el hilo de UI, justo el que tiene que estar libre para que el
+  /// video vaya fluido; es parte de lo reportado como "el video no va a 60
+  /// fps, va con delay".
+  ///
+  /// Con esta bandera aparte, la barra se saca del árbol recién cuando el
+  /// fundido TERMINÓ (`onEnd`), así no se pierde la animación de salida —
+  /// que es justo lo que se perdería atando el montaje a `_barraVisible` a
+  /// secas.
+  bool _barraMontada = true;
 
   /// Las opciones (servidores) están desplegadas.
   bool _opciones = false;
@@ -98,23 +139,37 @@ class _VideoPlayerTvControlsState extends State<VideoPlayerTvControls> {
   /// Vigila cuándo el reproductor se queda esperando que se elija servidor.
   Worker? _vigiaDeLaEleccion;
 
+  // ── Por qué estos tres son ValueNotifier y no campos con setState ──────
+  //
+  // Reportado en vivo: "la rueda de cargando va lenta dando vueltas", "el
+  // video va como a menos de 60 fps". Un `setState` acá reconstruye el
+  // Stack ENTERO del reproductor —los cinco `Obx`, la barra, las dos filas
+  // de opciones— y eso pasaba cada 2 segundos solo por refrescar el número
+  // de la velocidad de red, más una vez por cada pulsación de flecha. En un
+  // televisor modesto, cada una de esas reconstrucciones es un cuadro
+  // perdido, y eso es exactamente lo que se ve como una rueda que gira a
+  // tirones y un video que no va fluido.
+  //
+  // Con un `ValueNotifier` + `ValueListenableBuilder`, cambiar cualquiera
+  // de estos tres repinta SOLO su propio cartelito y nada más.
+
   /// Cuánto está entrando de la red ahora mismo, en bytes por segundo —
   /// pedido explícito: "un indicador de velocidad de descarga para que el
   /// usuario sepa en tiempo real cómo va la conexión". `null` mientras no
   /// hay nada que mostrar (recién abierto, o el dato no está disponible).
-  int? _bps;
+  final _bps = ValueNotifier<int?>(null);
   Timer? _velocidadTimer;
 
   /// Qué mostrar en el flash de avance/retroceso ("+10s"/"-10s"), y por
   /// cuánto — `null` cuando no hay que mostrar nada. Pedido explícito:
   /// aviso visual al avanzar/retroceder con las flechas.
-  String? _seekFlash;
+  final _seekFlash = ValueNotifier<String?>(null);
   Timer? _seekFlashTimer;
 
   /// El volumen actual (0-100), solo mientras se está mostrando el aviso —
   /// `null` cuando no hay que mostrar nada. Pedido explícito: aviso visual
-  /// al subir/bajar el volumen, iguel que el de avance/retroceso.
-  int? _volumenFlash;
+  /// al subir/bajar el volumen, igual que el de avance/retroceso.
+  final _volumenFlash = ValueNotifier<int?>(null);
   Timer? _volumenFlashTimer;
 
   @override
@@ -177,6 +232,10 @@ class _VideoPlayerTvControlsState extends State<VideoPlayerTvControls> {
     _foco.dispose();
     _focoServidorElegido.dispose();
     _focoEpisodioElegido.dispose();
+    _grupoEpisodios.dispose();
+    _bps.dispose();
+    _seekFlash.dispose();
+    _volumenFlash.dispose();
     super.dispose();
   }
 
@@ -187,25 +246,25 @@ class _VideoPlayerTvControlsState extends State<VideoPlayerTvControls> {
   /// puede saber por su cuenta.
   Future<void> _actualizarVelocidad() async {
     final bps = await _c.cacheSpeedBps();
-    if (mounted) setState(() => _bps = bps);
+    if (mounted) _bps.value = bps;
   }
 
   /// Muestra el flash de avance/retroceso y lo apaga solo — un cartel más
   /// que se quedara prendido para siempre sería peor que no tener ninguno.
   void _mostrarSeekFlash(String texto) {
     _seekFlashTimer?.cancel();
-    setState(() => _seekFlash = texto);
+    _seekFlash.value = texto;
     _seekFlashTimer = Timer(const Duration(milliseconds: 650), () {
-      if (mounted) setState(() => _seekFlash = null);
+      if (mounted) _seekFlash.value = null;
     });
   }
 
   /// Mismo mecanismo que el flash de avance/retroceso, para el volumen.
   void _mostrarVolumenFlash(int volumen) {
     _volumenFlashTimer?.cancel();
-    setState(() => _volumenFlash = volumen);
+    _volumenFlash.value = volumen;
     _volumenFlashTimer = Timer(const Duration(milliseconds: 900), () {
-      if (mounted) setState(() => _volumenFlash = null);
+      if (mounted) _volumenFlash.value = null;
     });
   }
 
@@ -234,7 +293,14 @@ class _VideoPlayerTvControlsState extends State<VideoPlayerTvControls> {
 
   void _reiniciarEspera() {
     _paraOcultar?.cancel();
-    if (!_barraVisible && mounted) setState(() => _barraVisible = true);
+    if (!_barraVisible && mounted) {
+      setState(() {
+        _barraVisible = true;
+        // Se monta YA (no al terminar el fundido): tiene que estar en el
+        // árbol para que haya algo que desvanecer hacia adentro.
+        _barraMontada = true;
+      });
+    }
     // Con las opciones desplegadas no se esconde nada: el usuario está
     // eligiendo algo y que se le desvanezca la pantalla sería absurdo.
     if (_opciones) return;
@@ -250,12 +316,19 @@ class _VideoPlayerTvControlsState extends State<VideoPlayerTvControls> {
     if (_c.disposed) return KeyEventResult.ignored;
     final tecla = evento.logicalKey;
 
-    // Con las opciones abiertas, las flechas son para moverse entre los
-    // servidores: no se tocan acá. Solo se atiende cerrar.
+    // Con las opciones abiertas, las flechas son para moverse entre las dos
+    // filas (Episodios arriba, Servidores abajo): no se tocan acá, las
+    // maneja el recorrido geométrico de siempre. Solo se atiende cerrar.
     if (_opciones) {
-      if (tecla == LogicalKeyboardKey.arrowUp ||
-          tecla == LogicalKeyboardKey.escape ||
-          tecla == LogicalKeyboardKey.goBack) {
+      final cerrar = tecla == LogicalKeyboardKey.escape ||
+          tecla == LogicalKeyboardKey.goBack ||
+          // Subir cierra SOLO desde la fila de más arriba (Episodios).
+          // Desde Servidores, subir tiene que llevar a Episodios — antes
+          // cerraba todo el panel sin importar dónde estuviera el foco,
+          // que es el "cualquier cosa que suba me sube hasta arriba"
+          // reportado en vivo. Ver [_grupoEpisodios].
+          (tecla == LogicalKeyboardKey.arrowUp && _grupoEpisodios.hasFocus);
+      if (cerrar) {
         setState(() => _opciones = false);
         _foco.requestFocus();
         _reiniciarEspera();
@@ -301,8 +374,7 @@ class _VideoPlayerTvControlsState extends State<VideoPlayerTvControls> {
     // grabado muy bajo (ver volumenMaximo en el controlador).
     if (tecla == LogicalKeyboardKey.arrowUp) {
       final v = _c.player.state.volume + 5;
-      final nuevo =
-          v.clamp(0, VideoPlayerController.volumenMaximo).toDouble();
+      final nuevo = v.clamp(0, VideoPlayerController.volumenMaximo).toDouble();
       _c.player.setVolume(nuevo);
       _mostrarVolumenFlash(nuevo.round());
       return KeyEventResult.handled;
@@ -340,8 +412,7 @@ class _VideoPlayerTvControlsState extends State<VideoPlayerTvControls> {
           return Center(
             child: Container(
               margin: const EdgeInsets.only(bottom: 120),
-              padding:
-                  const EdgeInsets.symmetric(horizontal: 34, vertical: 26),
+              padding: const EdgeInsets.symmetric(horizontal: 34, vertical: 26),
               decoration: BoxDecoration(
                 color: HomeTheme.oscuroSuperficie.withValues(alpha: 0.92),
                 borderRadius: BorderRadius.circular(16),
@@ -358,8 +429,7 @@ class _VideoPlayerTvControlsState extends State<VideoPlayerTvControls> {
                     child: Text(
                       _c.error.value,
                       textAlign: TextAlign.center,
-                      style:
-                          const TextStyle(fontSize: 16, color: Colors.white),
+                      style: const TextStyle(fontSize: 16, color: Colors.white),
                     ),
                   ),
                   const SizedBox(height: 18),
@@ -408,8 +478,13 @@ class _VideoPlayerTvControlsState extends State<VideoPlayerTvControls> {
                   _c.error.value.isEmpty);
           if (!cargando) return const SizedBox.shrink();
           return Center(
+            // Centrado de verdad, sin el desplazamiento hacia arriba que
+            // tenía antes (`margin: bottom: 120`) — reportado en vivo: la
+            // rueda quedaba en otra altura que el ícono de pausa, que sí
+            // está en el centro exacto, y se notaba el salto al pasar de
+            // una cosa a la otra. Los dos avisos ocupan ahora el mismo
+            // lugar; nunca se muestran a la vez (ver el Obx del ícono).
             child: Container(
-              margin: const EdgeInsets.only(bottom: 120),
               padding: const EdgeInsets.all(22),
               decoration: BoxDecoration(
                 color: Colors.black.withValues(alpha: 0.55),
@@ -431,8 +506,7 @@ class _VideoPlayerTvControlsState extends State<VideoPlayerTvControls> {
           return Center(
             child: Container(
               margin: const EdgeInsets.only(bottom: 120),
-              padding:
-                  const EdgeInsets.symmetric(horizontal: 34, vertical: 26),
+              padding: const EdgeInsets.symmetric(horizontal: 34, vertical: 26),
               decoration: BoxDecoration(
                 color: HomeTheme.oscuroSuperficie.withValues(alpha: 0.92),
                 borderRadius: BorderRadius.circular(16),
@@ -465,7 +539,21 @@ class _VideoPlayerTvControlsState extends State<VideoPlayerTvControls> {
         // `IgnorePointer`: es puro aviso, nunca puede robarle el foco/toque
         // a nada de lo que ya maneja `_tecla` más abajo.
         Obx(() {
-          final reproduciendo = _c.isPlaying.value;
+          // ── Nunca junto con otro aviso del centro ────────────────────
+          //
+          // Reportado en vivo: "el coso cargando se sobrepone con el botón
+          // de pausa". Los dos viven en el centro de la pantalla, y
+          // mientras carga `isPlaying` es false — así que se dibujaban
+          // encima uno del otro. La rueda ya dice todo lo que hay que decir
+          // en ese momento (está trabajando, esperá); el ícono de pausa
+          // solo tiene sentido cuando el video de verdad está detenido por
+          // alguien. Mismo criterio con el cartel de error y el de elegir
+          // servidor: mientras uno de esos está arriba, este no aparece.
+          final ocupadoElCentro = _c.isGettingWatchData.value ||
+              _c.awaitingServerChoice.value ||
+              _c.error.value.isNotEmpty ||
+              !_c.hasRenderedFrame.value;
+          final reproduciendo = _c.isPlaying.value || ocupadoElCentro;
           return IgnorePointer(
             child: AnimatedOpacity(
               opacity: reproduciendo ? 0 : 1,
@@ -499,22 +587,25 @@ class _VideoPlayerTvControlsState extends State<VideoPlayerTvControls> {
         // ── Flash de avance/retroceso ────────────────────────────────────
         IgnorePointer(
           child: Center(
-            child: AnimatedOpacity(
-              opacity: _seekFlash == null ? 0 : 1,
-              duration: const Duration(milliseconds: 150),
-              child: Container(
-                padding:
-                    const EdgeInsets.symmetric(horizontal: 22, vertical: 12),
-                decoration: BoxDecoration(
-                  color: Colors.black.withValues(alpha: 0.55),
-                  borderRadius: BorderRadius.circular(12),
-                ),
-                child: Text(
-                  _seekFlash ?? '',
-                  style: const TextStyle(
-                    color: Colors.white,
-                    fontSize: 22,
-                    fontWeight: FontWeight.w700,
+            child: ValueListenableBuilder<String?>(
+              valueListenable: _seekFlash,
+              builder: (context, texto, _) => AnimatedOpacity(
+                opacity: texto == null ? 0 : 1,
+                duration: const Duration(milliseconds: 150),
+                child: Container(
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 22, vertical: 12),
+                  decoration: BoxDecoration(
+                    color: Colors.black.withValues(alpha: 0.55),
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  child: Text(
+                    texto ?? '',
+                    style: const TextStyle(
+                      color: Colors.white,
+                      fontSize: 22,
+                      fontWeight: FontWeight.w700,
+                    ),
                   ),
                 ),
               ),
@@ -524,34 +615,37 @@ class _VideoPlayerTvControlsState extends State<VideoPlayerTvControls> {
         // ── Flash de volumen ─────────────────────────────────────────────
         IgnorePointer(
           child: Center(
-            child: AnimatedOpacity(
-              opacity: _volumenFlash == null ? 0 : 1,
-              duration: const Duration(milliseconds: 150),
-              child: Container(
-                padding:
-                    const EdgeInsets.symmetric(horizontal: 22, vertical: 12),
-                decoration: BoxDecoration(
-                  color: Colors.black.withValues(alpha: 0.55),
-                  borderRadius: BorderRadius.circular(12),
-                ),
-                child: Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    const Icon(Icons.volume_up_rounded,
-                        color: Colors.white, size: 22),
-                    const SizedBox(width: 8),
-                    Text(
-                      // volumenMaximo puede pasar los 100 (audio grabado
-                      // bajo) — se muestra tal cual, sin fingir un tope de
-                      // 100% que no es el real.
-                      '${_volumenFlash ?? 0}%',
-                      style: const TextStyle(
-                        color: Colors.white,
-                        fontSize: 22,
-                        fontWeight: FontWeight.w700,
+            child: ValueListenableBuilder<int?>(
+              valueListenable: _volumenFlash,
+              builder: (context, volumen, _) => AnimatedOpacity(
+                opacity: volumen == null ? 0 : 1,
+                duration: const Duration(milliseconds: 150),
+                child: Container(
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 22, vertical: 12),
+                  decoration: BoxDecoration(
+                    color: Colors.black.withValues(alpha: 0.55),
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      const Icon(Icons.volume_up_rounded,
+                          color: Colors.white, size: 22),
+                      const SizedBox(width: 8),
+                      Text(
+                        // volumenMaximo puede pasar los 100 (audio grabado
+                        // bajo) — se muestra tal cual, sin fingir un tope de
+                        // 100% que no es el real.
+                        '${volumen ?? 0}%',
+                        style: const TextStyle(
+                          color: Colors.white,
+                          fontSize: 22,
+                          fontWeight: FontWeight.w700,
+                        ),
                       ),
-                    ),
-                  ],
+                    ],
+                  ),
                 ),
               ),
             ),
@@ -563,29 +657,42 @@ class _VideoPlayerTvControlsState extends State<VideoPlayerTvControls> {
         // se muestra cuando hay un dato real que dar — `cacheSpeedBps()` da
         // `null` sin motor nativo, con el reproductor cerrándose, o si mpv
         // no contestó, y mostrar "0 KB/s" ahí sería inventar un dato.
-        if (_bps != null && _bps! > 0)
-          Positioned(
-            top: HomeTheme.overscanTv(context),
-            right: HomeTheme.overscanTv(context),
-            child: IgnorePointer(
-              child: Container(
-                padding: const EdgeInsets.symmetric(
-                    horizontal: 12, vertical: 6),
-                decoration: BoxDecoration(
-                  color: Colors.black.withValues(alpha: 0.55),
-                  borderRadius: BorderRadius.circular(8),
-                ),
-                child: Text(
-                  _formatoVelocidad(_bps!),
-                  style: const TextStyle(
-                    color: Colors.white70,
-                    fontSize: 13,
-                    fontWeight: FontWeight.w600,
+        //
+        // Y solo mientras los controles estén a la vista — pedido explícito:
+        // "que los KB/s se oculte solo, se muestre al ver los botones de las
+        // opciones". Mirando una película, un número cambiando en la esquina
+        // distrae; se va junto con la barra a los segundos, y vuelve con
+        // cualquier tecla, igual que el resto de los controles.
+        Positioned(
+          top: HomeTheme.overscanTv(context),
+          right: HomeTheme.overscanTv(context),
+          child: IgnorePointer(
+            child: ValueListenableBuilder<int?>(
+              valueListenable: _bps,
+              builder: (context, bps, _) {
+                if (!_barraVisible || bps == null || bps <= 0) {
+                  return const SizedBox.shrink();
+                }
+                return Container(
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                  decoration: BoxDecoration(
+                    color: Colors.black.withValues(alpha: 0.55),
+                    borderRadius: BorderRadius.circular(8),
                   ),
-                ),
-              ),
+                  child: Text(
+                    _formatoVelocidad(bps),
+                    style: const TextStyle(
+                      color: Colors.white70,
+                      fontSize: 13,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                );
+              },
             ),
           ),
+        ),
         Focus(
           focusNode: _foco,
           autofocus: true,
@@ -595,43 +702,53 @@ class _VideoPlayerTvControlsState extends State<VideoPlayerTvControls> {
             child: AnimatedOpacity(
               duration: const Duration(milliseconds: 220),
               opacity: _barraVisible ? 1 : 0,
-              child: IgnorePointer(
-                ignoring: !_barraVisible,
-                child: _Barra(
-                  c: _c,
-                  opciones: _opciones,
-                  focoServidorElegido: _focoServidorElegido,
-                  focoEpisodioElegido: _focoEpisodioElegido,
-                  onElegirEpisodio: (i) {
-                    // Mismo guard que ya usa PC (_EpisodeState.onChange):
-                    // elegir otro capítulo mientras uno todavía está
-                    // resolviendo dejaba dos pedidos peleándose.
-                    if (_c.isGettingWatchData.value) return;
-                    _c.index.value = i;
-                    setState(() => _opciones = false);
-                    _foco.requestFocus();
-                    _reiniciarEspera();
-                  },
-                  onElegirServidor: (nombre) {
-                    // switchServer, NO selectServer — este último solo marca
-                    // cuál es el servidor "actual" y vuelve a dejar
-                    // awaitingServerChoice en true (ver su propio cuerpo en
-                    // video_controller.dart); nunca resuelve ni arranca nada
-                    // por su cuenta. El cartel de "elegí un servidor" de PC
-                    // (video_player_desktop_controls.dart) llama
-                    // switchServer al tocarlo — es la función que de verdad
-                    // pide la URL y empieza a reproducir. Reportado en vivo:
-                    // el mando dejaba elegir server y confirmar con OK, pero
-                    // no pasaba nada — porque `selectServer` no hace pasar
-                    // nada, solo prepara el terreno para que algo MÁS llame a
-                    // switchServer.
-                    unawaited(_c.switchServer(nombre));
-                    setState(() => _opciones = false);
-                    _foco.requestFocus();
-                    _reiniciarEspera();
-                  },
-                ),
-              ),
+              // Recién acá se saca del árbol: con el fundido ya terminado,
+              // sacarla no se ve. Ver [_barraMontada].
+              onEnd: () {
+                if (!_barraVisible && mounted) {
+                  setState(() => _barraMontada = false);
+                }
+              },
+              child: !_barraMontada
+                  ? const SizedBox.shrink()
+                  : IgnorePointer(
+                      ignoring: !_barraVisible,
+                      child: _Barra(
+                        c: _c,
+                        opciones: _opciones,
+                        focoServidorElegido: _focoServidorElegido,
+                        focoEpisodioElegido: _focoEpisodioElegido,
+                        grupoEpisodios: _grupoEpisodios,
+                        onElegirEpisodio: (i) {
+                          // Mismo guard que ya usa PC (_EpisodeState.onChange):
+                          // elegir otro capítulo mientras uno todavía está
+                          // resolviendo dejaba dos pedidos peleándose.
+                          if (_c.isGettingWatchData.value) return;
+                          _c.index.value = i;
+                          setState(() => _opciones = false);
+                          _foco.requestFocus();
+                          _reiniciarEspera();
+                        },
+                        onElegirServidor: (nombre) {
+                          // switchServer, NO selectServer — este último solo marca
+                          // cuál es el servidor "actual" y vuelve a dejar
+                          // awaitingServerChoice en true (ver su propio cuerpo en
+                          // video_controller.dart); nunca resuelve ni arranca nada
+                          // por su cuenta. El cartel de "elegí un servidor" de PC
+                          // (video_player_desktop_controls.dart) llama
+                          // switchServer al tocarlo — es la función que de verdad
+                          // pide la URL y empieza a reproducir. Reportado en vivo:
+                          // el mando dejaba elegir server y confirmar con OK, pero
+                          // no pasaba nada — porque `selectServer` no hace pasar
+                          // nada, solo prepara el terreno para que algo MÁS llame a
+                          // switchServer.
+                          unawaited(_c.switchServer(nombre));
+                          setState(() => _opciones = false);
+                          _foco.requestFocus();
+                          _reiniciarEspera();
+                        },
+                      ),
+                    ),
             ),
           ),
         ),
@@ -648,6 +765,7 @@ class _Barra extends StatelessWidget {
     required this.opciones,
     required this.focoServidorElegido,
     required this.focoEpisodioElegido,
+    required this.grupoEpisodios,
     required this.onElegirServidor,
     required this.onElegirEpisodio,
   });
@@ -656,6 +774,9 @@ class _Barra extends StatelessWidget {
   final bool opciones;
   final FocusNode focoServidorElegido;
   final FocusNode focoEpisodioElegido;
+
+  /// Ver [_VideoPlayerTvControlsState._grupoEpisodios].
+  final FocusNode grupoEpisodios;
   final void Function(String) onElegirServidor;
   final void Function(int) onElegirEpisodio;
 
@@ -748,10 +869,15 @@ class _Barra extends StatelessWidget {
           // cosas "salían por arriba" en vez de desplegarse hacia abajo.
           if (opciones) ...[
             const SizedBox(height: 22),
-            _Episodios(
-              c: c,
-              onElegir: onElegirEpisodio,
-              focoElegido: focoEpisodioElegido,
+            // El `Focus` de grupo solo sirve para preguntar después si el
+            // foco cayó dentro de esta fila — ver [grupoEpisodios].
+            Focus(
+              focusNode: grupoEpisodios,
+              child: _Episodios(
+                c: c,
+                onElegir: onElegirEpisodio,
+                focoElegido: focoEpisodioElegido,
+              ),
             ),
             const SizedBox(height: 22),
             _Servidores(
@@ -799,13 +925,10 @@ class _Servidores extends StatelessWidget {
         crossAxisAlignment: CrossAxisAlignment.start,
         mainAxisSize: MainAxisSize.min,
         children: [
-          Text(
-            'video.tv-servidores'.i18n,
-            style: const TextStyle(
-              color: Colors.white70,
-              fontSize: 14,
-              fontWeight: FontWeight.w600,
-            ),
+          _TituloDeFila(
+            texto: 'video.tv-servidores'.i18n,
+            posicion: nombres.indexOf(actual),
+            total: nombres.length,
           ),
           const SizedBox(height: 12),
           SizedBox(
@@ -841,8 +964,7 @@ class _Servidores extends StatelessWidget {
                       style: TextStyle(
                         color: Colors.white,
                         fontSize: 15,
-                        fontWeight:
-                            elegido ? FontWeight.w800 : FontWeight.w600,
+                        fontWeight: elegido ? FontWeight.w800 : FontWeight.w600,
                       ),
                     ),
                   ),
@@ -884,13 +1006,10 @@ class _Episodios extends StatelessWidget {
         crossAxisAlignment: CrossAxisAlignment.start,
         mainAxisSize: MainAxisSize.min,
         children: [
-          Text(
-            'video.tv-episodios'.i18n,
-            style: const TextStyle(
-              color: Colors.white70,
-              fontSize: 14,
-              fontWeight: FontWeight.w600,
-            ),
+          _TituloDeFila(
+            texto: 'video.tv-episodios'.i18n,
+            posicion: actual,
+            total: episodios.length,
           ),
           const SizedBox(height: 12),
           SizedBox(
@@ -923,8 +1042,7 @@ class _Episodios extends StatelessWidget {
                       style: TextStyle(
                         color: Colors.white,
                         fontSize: 15,
-                        fontWeight:
-                            elegido ? FontWeight.w800 : FontWeight.w600,
+                        fontWeight: elegido ? FontWeight.w800 : FontWeight.w600,
                       ),
                     ),
                   ),
@@ -935,6 +1053,61 @@ class _Episodios extends StatelessWidget {
         ],
       );
     });
+  }
+}
+
+/// El título de una fila de opciones, con "3 de 24" al lado.
+///
+/// Pedido explícito: "la selección de episodios, que se vea bien para saber
+/// que hay más a la derecha o izquierda". Con una fila horizontal que se
+/// corta contra el borde de la pantalla no hay forma de saber si quedan dos
+/// o doscientos — y en un televisor no hay barra de desplazamiento ni
+/// gesto que lo revele.
+///
+/// Un contador y no un degradado en los bordes a propósito: dice MÁS (en
+/// cuál estoy, cuántos hay en total, cuánto falta) y no cuesta nada de
+/// dibujar — un degradado sobre una lista obliga a componer una capa
+/// aparte en cada cuadro, justo lo que se está tratando de evitar en el
+/// reproductor.
+class _TituloDeFila extends StatelessWidget {
+  const _TituloDeFila({
+    required this.texto,
+    required this.posicion,
+    required this.total,
+  });
+
+  final String texto;
+
+  /// Índice del elegido, empezando en 0. Negativo = ninguno todavía.
+  final int posicion;
+  final int total;
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      children: [
+        Text(
+          texto,
+          style: const TextStyle(
+            color: Colors.white70,
+            fontSize: 14,
+            fontWeight: FontWeight.w600,
+          ),
+        ),
+        // Con uno solo el contador no dice nada que no se vea.
+        if (total > 1) ...[
+          const SizedBox(width: 10),
+          Text(
+            posicion >= 0 ? '${posicion + 1} / $total' : '$total',
+            style: TextStyle(
+              color: HomeTheme.accentPink,
+              fontSize: 13,
+              fontWeight: FontWeight.w700,
+            ),
+          ),
+        ],
+      ],
+    );
   }
 }
 

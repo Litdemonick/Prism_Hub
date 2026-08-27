@@ -16,6 +16,7 @@ import 'package:prismhub/utils/prismhub_storage.dart';
 import 'package:prismhub/views/widgets/cache_network_image.dart';
 import 'package:prismhub/views/widgets/home/home_theme.dart';
 import 'package:prismhub/views/widgets/watch/aviso_extension_caida.dart';
+import 'package:prismhub/views/widgets/tv/focusable_card.dart';
 import 'package:prismhub/views/widgets/window_caption_buttons.dart';
 import 'package:prismhub/views/widgets/watch/playlist.dart';
 import 'package:window_manager/window_manager.dart';
@@ -173,6 +174,25 @@ class _VideoPlayerDesktopControlsState
     final serverStr = (server != null && server.isNotEmpty)
         ? ' en el servidor "$server"'
         : '';
+    // ── En televisor, un diálogo propio ──────────────────────────────────
+    //
+    // Reportado en vivo, con foto: la app se caía con «Null check operator
+    // used on a null value» apuntando justo a esta función. La causa es el
+    // `FluentTheme.of(context)` de abajo: en Android TV este widget se monta
+    // en modo `soloLogica` DENTRO del árbol Material de la app de Android,
+    // donde no hay ningún `FluentTheme` ancestro — y `FluentTheme.of` usa un
+    // `!` por dentro, así que revienta en vez de devolver null. En PC nunca
+    // pasó porque ahí la app entera ya vive bajo un FluentApp.
+    //
+    // No alcanzaba con hacer seguro ese `.of`: un `ContentDialog` de Fluent
+    // con sus botones tampoco se navega con un control remoto. Así que en TV
+    // va un diálogo Material con las dos opciones envueltas en
+    // `FocusableCard`, que es el mecanismo de foco que ya usa toda la rama
+    // de TV.
+    if (PlatformTv.esTelevisionSync) {
+      _mostrarResumeDialogTv(timeStr, serverStr, secs);
+      return;
+    }
     showDialog<void>(
       context: context,
       builder: (ctx) => FluentTheme(
@@ -209,6 +229,87 @@ class _VideoPlayerDesktopControlsState
       ),
     );
   }
+
+  /// El mismo aviso de «seguí donde quedaste», para televisor.
+  ///
+  /// Material y no Fluent — ver el porqué en `_showResumeDialog`. Los dos
+  /// botones van en `FocusableCard` para que el mando pueda elegirlos, y
+  /// «Continuar» arranca con el foco: es lo que el usuario quiere el 90% de
+  /// las veces, así que con un OK alcanza.
+  void _mostrarResumeDialogTv(String timeStr, String serverStr, int secs) {
+    material.showDialog<void>(
+      context: context,
+      barrierDismissible: false,
+      builder: (ctx) => material.Dialog(
+        backgroundColor: HomeTheme.oscuroSuperficie,
+        shape: material.RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(16),
+          side: const BorderSide(color: HomeTheme.oscuroBorde),
+        ),
+        child: material.Padding(
+          padding: const EdgeInsets.all(32),
+          child: material.Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              material.Text(
+                'Parece que anteriormente estabas mirando este vídeo'
+                '$serverStr. ¿Deseas continuar donde te quedaste? $timeStr',
+                textAlign: TextAlign.center,
+                style: const material.TextStyle(
+                  fontSize: 18,
+                  color: Colors.white,
+                  height: 1.4,
+                ),
+              ),
+              const SizedBox(height: 26),
+              material.Row(
+                mainAxisAlignment: material.MainAxisAlignment.center,
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  FocusableCard(
+                    borderRadius: 10,
+                    onTap: () {
+                      Navigator.of(ctx).pop();
+                      _c.cancelResume();
+                    },
+                    child: _botonResumeTv('Desde el principio', false),
+                  ),
+                  const SizedBox(width: 16),
+                  FocusableCard(
+                    borderRadius: 10,
+                    autofocus: true,
+                    onTap: () {
+                      Navigator.of(ctx).pop();
+                      _c.confirmResume(secs);
+                    },
+                    child: _botonResumeTv('Continuar', true),
+                  ),
+                ],
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _botonResumeTv(String texto, bool destacado) => material.Container(
+        padding: const EdgeInsets.symmetric(horizontal: 26, vertical: 14),
+        decoration: BoxDecoration(
+          color: destacado
+              ? HomeTheme.accentPink
+              : Colors.white.withValues(alpha: 0.14),
+          borderRadius: BorderRadius.circular(10),
+        ),
+        child: material.Text(
+          texto,
+          style: const material.TextStyle(
+            color: Colors.white,
+            fontSize: 16,
+            fontWeight: FontWeight.w700,
+          ),
+        ),
+      );
 
   @override
   Widget build(BuildContext context) {

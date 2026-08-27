@@ -255,66 +255,54 @@ class _FocusableCardState extends State<FocusableCard> {
             // encabezados. Con 1.03 se nota que está elegida y casi no
             // invade, así que nada queda cortado.
             scale: (activo && conEscala) ? 1.03 : 1.0,
-            // ── El resplandor va en una capa APARTE, no alrededor ────────
+            // ── Dos capas, y el orden importa ────────────────────────────
             //
-            // Envolviendo al hijo directamente en el `BoxDecoration` con
-            // sombra, cualquier relleno/recorte propio del hijo (una
-            // portada con su propio `ClipRRect`) tapa la sombra en vez de
-            // dejarla asomar. Como capa de arriba, superpuesta y con su
-            // propio relleno transparente (mismo truco que ya usa
-            // `_bordeCard` en home_media_card.dart), el hijo mide SIEMPRE
-            // lo mismo y la sombra se ve completa alrededor.
+            // Reportado en vivo con foto: la tarjeta enfocada se veía "toda
+            // rosada y borrosa", perdiendo la portada por completo. La causa
+            // estaba acá: el resplandor iba en una capa ENCIMA del hijo, con
+            // la caja sin relleno, confiando en que "la sombra se pinta
+            // afuera de estos límites". Eso no es cierto — Flutter dibuja un
+            // `BoxShadow` como una forma difuminada COMPLETA detrás de la
+            // caja, y si la caja es transparente, esa forma se ve entera a
+            // través. O sea que el halo del color de acento se estaba
+            // pintando sobre la portada, no alrededor. Con los valores
+            // suaves de antes casi no se notaba; al subirlos para que el
+            // foco se viera de lejos, tapó la imagen.
+            //
+            // Ahora son dos capas separadas, cada una donde corresponde:
+            //
+            //   1. El HALO va DEBAJO del hijo. El hijo es opaco (una
+            //      portada), así que tapa la parte del difuminado que caía
+            //      sobre él y solo queda a la vista lo que desborda — que
+            //      es exactamente el resplandor alrededor que se busca.
+            //   2. El BORDE va ENCIMA. Un borde sí es un anillo de verdad:
+            //      no pinta nada en el centro, así que sobre la portada se
+            //      ve nítido sin ensuciarla.
+            //
+            // `clipBehavior: Clip.none` para que el difuminado de la capa de
+            // abajo pueda salirse de los límites en vez de quedar cortado
+            // contra el borde del hijo.
             child: Stack(
+              clipBehavior: Clip.none,
               children: [
-                widget.builder?.call(_tieneFoco) ?? widget.child!,
+                // 1. El halo, debajo de todo.
                 Positioned(
                   left: 0,
                   right: 0,
                   top: 0,
-                  // Sin alto: el marco cubre al hijo entero (`bottom: 0`).
-                  // Con alto: solo esa franja de arriba — la portada, sin el
-                  // título de abajo. Ver `altoMarco`.
+                  // Sin alto: cubre al hijo entero (`bottom: 0`). Con alto:
+                  // solo esa franja de arriba — la portada, sin el título de
+                  // abajo. Ver `altoMarco`.
                   bottom: widget.altoMarco == null ? 0 : null,
                   height: widget.altoMarco,
                   child: IgnorePointer(
                     child: AnimatedOpacity(
                       duration: const Duration(milliseconds: 160),
                       opacity: activo ? 1 : 0,
-                      // ── El mismo resplandor que el hover de mouse en PC ──
-                      //
-                      // Antes era un marco (borde blanco/dorado según la
-                      // época) — pedido explícito: que se vea igual que el
-                      // hover de `TarjetaDeCatalogo` en PC, que no dibuja
-                      // ningún borde: crece un poco y una sombra de tres
-                      // capas la despega del fondo (una profunda, una
-                      // cercana, y un halo del color de acento encima).
-                      //
-                      // La caja en sí queda SIN relleno (transparente): lo
-                      // único que se ve es la sombra, que por definición se
-                      // pinta AFUERA de estos límites — así la portada de
-                      // adentro (o el hijo entero, sin `altoMarco`) se ve
-                      // intacta y el resplandor solo aparece alrededor.
-                      //
-                      // El alcance de cada capa está topado igual que en PC
-                      // (~13px) para no meterse en el hueco entre tarjetas
-                      // de una fila y pintarse encima de la vecina — mismo
-                      // motivo, mismo límite, ver el comentario largo en
-                      // tarjeta_de_catalogo.dart.
                       child: DecoratedBox(
                         decoration: BoxDecoration(
                           borderRadius:
                               BorderRadius.circular(widget.borderRadius),
-                          // Borde nítido, SOLO en TV — ver el comentario de
-                          // arriba sobre por qué el halo solo no alcanza sin
-                          // cursor. En PC sigue sin dibujar ningún borde,
-                          // pedido explícito de que el hover se vea igual que
-                          // siempre (sin marco, solo el resplandor).
-                          border: esTv
-                              ? Border.all(
-                                  color: marco.withValues(alpha: 0.95),
-                                  width: 2.5,
-                                )
-                              : null,
                           boxShadow: [
                             const BoxShadow(
                               color: Color(0x8A000000),
@@ -337,6 +325,34 @@ class _FocusableCardState extends State<FocusableCard> {
                     ),
                   ),
                 ),
+                widget.builder?.call(_tieneFoco) ?? widget.child!,
+                // 2. El borde nítido, encima — SOLO en TV. En PC el hover
+                // sigue sin ningún marco, pedido explícito de que se vea
+                // igual que siempre (solo el resplandor).
+                if (esTv)
+                  Positioned(
+                    left: 0,
+                    right: 0,
+                    top: 0,
+                    bottom: widget.altoMarco == null ? 0 : null,
+                    height: widget.altoMarco,
+                    child: IgnorePointer(
+                      child: AnimatedOpacity(
+                        duration: const Duration(milliseconds: 160),
+                        opacity: activo ? 1 : 0,
+                        child: DecoratedBox(
+                          decoration: BoxDecoration(
+                            borderRadius:
+                                BorderRadius.circular(widget.borderRadius),
+                            border: Border.all(
+                              color: marco.withValues(alpha: 0.95),
+                              width: 3,
+                            ),
+                          ),
+                        ),
+                      ),
+                    ),
+                  ),
               ],
             ),
           ),

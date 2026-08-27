@@ -143,6 +143,27 @@ class _HomeTVState extends State<HomeTV> {
       // A partir de acá esta zona se arma y se queda viva. Ver [_visitadas].
       _visitadas.add(categoria);
     });
+    // ── Y si la zona quedó vacía, se le pide de nuevo ──────────────────
+    //
+    // El chequeo equivalente al entrar por primera vez vive en
+    // `_ZonaTvState.initState` (ver el comentario largo ahí sobre por qué
+    // hace falta). Pero una zona ya visitada NO se vuelve a montar —
+    // `_visitadas` la mantiene viva a propósito— así que ese initState no
+    // corre de nuevo y volver a entrar no cambiaba nada.
+    //
+    // Con esto, entrar a una zona que quedó sin contenido vuelve a
+    // intentar. Es también lo que hace que instalar una extensión nueva y
+    // volver a la zona la encuentre, sin tener que cerrar la app.
+    //
+    // Solo si de verdad está vacía: con contenido cargado no se pide nada,
+    // así que moverse entre zonas sigue siendo instantáneo.
+    final zona = categoria.zona;
+    if (zona == null) return;
+    if (!Get.isRegistered<ZonaCatalogoController>(tag: zona.name)) return;
+    final c = Get.find<ZonaCatalogoController>(tag: zona.name);
+    if (c.fuentes.isEmpty || c.entrelazados.isEmpty) {
+      unawaited(c.cargarInicial());
+    }
   }
 
   @override
@@ -654,6 +675,31 @@ class _ZonaTvState extends State<_ZonaTv> {
   void initState() {
     super.initState();
     _scroll.addListener(_alAcercarseAlFinal);
+    // ── Refresco al entrar, pero SOLO si hace falta ────────────────────
+    //
+    // Reportado en vivo: "en las zonas no hay refresco automático, el
+    // usuario no tiene forma de que le aparezcan las cosas y no salen las
+    // cards".
+    //
+    // El controller pide su primera carga solo al CREARSE (`onInit`). Si
+    // ya estaba registrado de antes —la misma zona vista desde el teléfono,
+    // o una visita anterior en esta misma sesión— se reusa tal cual, y si
+    // aquella vez quedó sin nada (las extensiones todavía no habían
+    // terminado de cargar y se agotaron los tres reintentos de
+    // `cargarInicial`), la zona se quedaba vacía para siempre. En PC/
+    // Android eso se arregla solo con el botón de refrescar o deslizando
+    // hacia abajo; en TV no hay ninguno de los dos, así que no había NINGUNA
+    // salida salvo cerrar la app.
+    //
+    // "Controlado" y no un refresco en cada entrada: solo se pide si de
+    // verdad no hay nada que mostrar. Con contenido ya cargado no se toca
+    // nada — volver a una zona la encuentra tal cual se dejó, que es lo que
+    // este controller viene a garantizar. Y `cargarInicial()` tiene su
+    // propio candado (`if (cargando.value) return`), así que aunque justo
+    // estuviera cargando, esto no dispara un segundo pedido.
+    if (c.fuentes.isEmpty || c.entrelazados.isEmpty) {
+      unawaited(c.cargarInicial());
+    }
   }
 
   @override
