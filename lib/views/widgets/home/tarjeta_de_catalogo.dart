@@ -60,6 +60,7 @@ class TarjetaDeCatalogo extends StatefulWidget {
   final String? portada;
   final Map<String, String>? cabeceras;
   final VoidCallback? onTap;
+
   /// En null usa el acento del tema. Ver HomeHeroBanner.gradient.
   final Color? acento;
 
@@ -125,10 +126,12 @@ class _TarjetaDeCatalogoState extends State<TarjetaDeCatalogo> {
 
   bool _encima = false;
 
-  /// En pantalla táctil no hay «pasar por encima», así que el primer toque
-  /// muestra el panel y el segundo abre. Es la forma de que el usuario de
-  /// celular vea la fecha y la descripción sin tener que entrar a la ficha —
-  /// justo lo que el mouse resuelve solo en escritorio.
+  /// En pantalla táctil, el panel se revela con toque LARGO — pedido
+  /// explícito: "si se presiona sale la info y luego al tocarla entra al
+  /// detalle; si solo se toca se entra directamente". El toque simple
+  /// sigue yendo derecho a la ficha (ver el `onTap` de abajo); esto es
+  /// solo para quien quiere espiar el título/fecha/descripción antes de
+  /// decidir, sin que haga falta ese paso siempre.
   bool _abierto = false;
 
   bool get _hayPanel =>
@@ -155,7 +158,9 @@ class _TarjetaDeCatalogoState extends State<TarjetaDeCatalogo> {
     // El ancho sirve para decidir cuántas tarjetas entran; para saber si hay
     // con qué «pasar por encima» hay que preguntar por el aparato.
     final conMouse = !_esTactil;
-    // Se muestra por mouse en escritorio y por toque en celular.
+    // Con mouse, el hover ya lo revela sin gastar ningún click. Sin mouse,
+    // el toque LARGO lo revela (`_abierto`, ver `onLongPress` abajo) — el
+    // toque simple sigue yendo derecho a la ficha.
     final panelVisible = _hayPanel && (conMouse ? _encima : _abierto);
     // En TV la tarjeta NO se resalta sola.
     //
@@ -164,8 +169,7 @@ class _TarjetaDeCatalogoState extends State<TarjetaDeCatalogo> {
     // DOS escalas encimadas (esta de 1.04 y la del foco): la portada crecía
     // más que el marco y se salía por los bordes — el marco quedaba
     // dibujado "por dentro" de la imagen. Reportado en vivo.
-    final resaltada =
-        !PlatformTv.esTelevisionSync && (_encima || _abierto);
+    final resaltada = !PlatformTv.esTelevisionSync && (_encima || _abierto);
 
     final tarjeta = SizedBox(
       width: ancho,
@@ -177,33 +181,30 @@ class _TarjetaDeCatalogoState extends State<TarjetaDeCatalogo> {
           // Con mouse, tocar abre directo: el panel ya se ve solo con pasar
           // por encima.
           //
-          // Sin mouse el toque ALTERNA el panel — lo abre y lo cierra. Antes el
-          // segundo toque abría la ficha, así que una vez abierto el panel no
-          // había forma de sacárselo de encima sin entrar a algún lado. Ahora
-          // lo único que abre la ficha es el botón «Ver detalles», que para eso
-          // está.
+          // Sin mouse (celular/tablet), el toque TAMBIÉN abre directo —
+          // pedido explícito: "en Android tocar la card debe ir de una vez
+          // al detalle, no como Windows que selecciona y hay que volver a
+          // tocar". Antes acá el primer toque solo ALTERNABA el panel (había
+          // que tocar de nuevo «Ver detalles» para entrar) — un paso de más
+          // que tenía sentido con mouse (el panel ya se ve con el hover, sin
+          // gastar ningún toque) pero no con el dedo, donde no hay ningún
+          // "pasar por encima" previo: el primer contacto YA es la intención
+          // de abrir.
+          //
           // ── Y sin `onTap` propio, la tarjeta no atiende el toque ──────────
           //
           // Esto es lo que pasa en televisor: ahí el toque lo maneja el
           // FocusableCard que la envuelve por fuera, y por eso llega sin
-          // `onTap`. Pero este `GestureDetector` está POR DENTRO del suyo, así
-          // que era este el que ganaba el clic — y como `conMouse` es
-          // `!_esTactil`, o sea false en Android TV, en vez de abrir la ficha
-          // alternaba el panel de información.
-          //
-          // Con el mando no se notaba (el D-pad no pasa por acá, va por el
-          // foco), pero con un mouse enchufado al televisor hacer clic en una
-          // tarjeta no abría nada. Devolviendo null, el toque sigue de largo
-          // hasta quien sí sabe qué hacer con él.
-          onTap: widget.onTap == null
-              ? null
-              : () {
-                  if (conMouse || !_hayPanel) {
-                    widget.onTap?.call();
-                    return;
-                  }
-                  setState(() => _abierto = !_abierto);
-                },
+          // `onTap`. Devolviendo null, el toque sigue de largo hasta quien sí
+          // sabe qué hacer con él.
+          onTap: widget.onTap,
+          // Solo en pantalla táctil, y solo si hay algo que mostrar: un
+          // toque largo revela el panel sin navegar — pedido explícito. Con
+          // mouse no hace falta (`onHover` ya lo muestra) y en TV el gesto
+          // no existe.
+          onLongPress: (!conMouse && _hayPanel)
+              ? () => setState(() => _abierto = true)
+              : null,
           behavior: HitTestBehavior.opaque,
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
