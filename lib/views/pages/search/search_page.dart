@@ -687,44 +687,65 @@ class _SearchVacioState extends State<_SearchVacio> {
                         // desvanecer una portada) difumina esos bordes a
                         // transparente: el chip de la punta se apaga de a
                         // poco en vez de cortarse de golpe.
-                        child: ShaderMask(
-                          blendMode: BlendMode.dstIn,
-                          shaderCallback: (rect) => const LinearGradient(
-                            begin: Alignment.centerLeft,
-                            end: Alignment.centerRight,
-                            colors: [
-                              Colors.transparent,
-                              Colors.white,
-                              Colors.white,
-                              Colors.transparent,
-                            ],
-                            stops: [0.0, 0.08, 0.92, 1.0],
-                          ).createShader(rect),
-                          child: ListView.builder(
-                            scrollDirection: Axis.horizontal,
-                            controller: _scroll,
-                            // Además del difuminado: espacio de sobra para
-                            // que, cuando SÍ se está al principio o al
-                            // final de la fila (ahí no hay nada que
-                            // difuminar, el primer/último chip está
-                            // completo), no quede pegado contra la curva
-                            // de la cápsula —~21px de radio, con menos
-                            // relleno el fondo redondo terminaba antes que
-                            // el texto.
-                            padding: const EdgeInsets.symmetric(horizontal: 20),
-                            itemCount: extensiones.length,
-                            itemBuilder: (context, i) {
-                              final ext = extensiones[i];
-                              return Padding(
-                                padding: const EdgeInsets.symmetric(
-                                    vertical: 6, horizontal: 4),
-                                child: _ChipExtension(
-                                  nombre: ext.value,
-                                  onTap: () =>
-                                      _abrirExtension(context, ext.key),
-                                ),
-                              );
-                            },
+                        //
+                        // ── `RepaintBoundary` alrededor, no de gusto ──────
+                        //
+                        // Reportado en vivo: en Android horizontal, ENTRAR
+                        // al buscador se veía trabado (en vertical, no).
+                        // `ShaderMask` necesita su propia capa aparte
+                        // (`saveLayer`) para mezclar el degradado — cara de
+                        // por sí, y en horizontal hay más chips visibles a
+                        // la vez, así que la capa es más ancha y pesa más
+                        // todavía. Sin este límite, la ANIMACIÓN DE ENTRADA
+                        // de la pantalla (que anima TODO el árbol de golpe)
+                        // obligaba a rehacer esa capa en cada cuadro de la
+                        // transición, aunque el contenido de la fila no
+                        // hubiera cambiado un píxel. Con `RepaintBoundary`,
+                        // esa capa se arma una sola vez y la transición de
+                        // arriba solo la mueve/desvanece como una textura ya
+                        // lista — mismo criterio que ya usa el resto de la
+                        // app para pintados caros (una fila, una tarjeta).
+                        child: RepaintBoundary(
+                          child: ShaderMask(
+                            blendMode: BlendMode.dstIn,
+                            shaderCallback: (rect) => const LinearGradient(
+                              begin: Alignment.centerLeft,
+                              end: Alignment.centerRight,
+                              colors: [
+                                Colors.transparent,
+                                Colors.white,
+                                Colors.white,
+                                Colors.transparent,
+                              ],
+                              stops: [0.0, 0.08, 0.92, 1.0],
+                            ).createShader(rect),
+                            child: ListView.builder(
+                              scrollDirection: Axis.horizontal,
+                              controller: _scroll,
+                              // Además del difuminado: espacio de sobra para
+                              // que, cuando SÍ se está al principio o al
+                              // final de la fila (ahí no hay nada que
+                              // difuminar, el primer/último chip está
+                              // completo), no quede pegado contra la curva
+                              // de la cápsula —~21px de radio, con menos
+                              // relleno el fondo redondo terminaba antes que
+                              // el texto.
+                              padding:
+                                  const EdgeInsets.symmetric(horizontal: 20),
+                              itemCount: extensiones.length,
+                              itemBuilder: (context, i) {
+                                final ext = extensiones[i];
+                                return Padding(
+                                  padding: const EdgeInsets.symmetric(
+                                      vertical: 6, horizontal: 4),
+                                  child: _ChipExtension(
+                                    nombre: ext.value,
+                                    onTap: () =>
+                                        _abrirExtension(context, ext.key),
+                                  ),
+                                );
+                              },
+                            ),
                           ),
                         ),
                       ),
