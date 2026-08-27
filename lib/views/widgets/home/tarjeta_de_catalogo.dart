@@ -53,6 +53,7 @@ class TarjetaDeCatalogo extends StatefulWidget {
     this.descripcion,
     this.duracion,
     this.ancho,
+    this.tvFoco = false,
   });
 
   final String titulo;
@@ -78,6 +79,23 @@ class TarjetaDeCatalogo extends StatefulWidget {
   /// Cuánto dura, en minutos. Se muestra SIEMPRE, no solo al pasar el mouse:
   /// es de las cosas que más pesan para decidir si lo abrís ahora o después.
   final int? duracion;
+
+  /// El D-pad de TV tiene el foco en esta tarjeta AHORA MISMO.
+  ///
+  /// ── Por qué es un parámetro y no algo que la tarjeta detecte sola ────
+  ///
+  /// El resaltado (escala + sombra) de acá adentro está apagado a
+  /// propósito en TV — lo pone `FocusableCard`, que envuelve esta tarjeta
+  /// por fuera, y tenerlo en los dos lugares a la vez ya se probó y se
+  /// sacó (ver `resaltada` más abajo: dos escalas encimadas rompían el
+  /// recorte). Pero el PANEL de info (título/fecha/descripción, lo mismo
+  /// que ya se ve al pasar el mouse en PC) nunca tenía forma de aparecer
+  /// en TV con ese apagado — quedaba con el marco de foco puesto pero sin
+  /// ninguna de las dos cosas que ese marco anuncia. `FocusableCard` sabe
+  /// cuándo tiene el foco (es quien lo maneja); pasándoselo acá, la
+  /// tarjeta puede mostrar el panel SIN prender de nuevo su propia
+  /// escala/sombra.
+  final bool tvFoco;
 
   /// Ancho a la fuerza, para cuando la tarjeta va en una **grilla**.
   ///
@@ -161,7 +179,8 @@ class _TarjetaDeCatalogoState extends State<TarjetaDeCatalogo> {
     // Con mouse, el hover ya lo revela sin gastar ningún click. Sin mouse,
     // el toque LARGO lo revela (`_abierto`, ver `onLongPress` abajo) — el
     // toque simple sigue yendo derecho a la ficha.
-    final panelVisible = _hayPanel && (conMouse ? _encima : _abierto);
+    final panelVisible =
+        _hayPanel && (widget.tvFoco || (conMouse ? _encima : _abierto));
     // En TV la tarjeta NO se resalta sola.
     //
     // `_encima` es el hover del mouse, y en TV el resaltado lo pone

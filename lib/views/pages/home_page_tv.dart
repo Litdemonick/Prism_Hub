@@ -613,24 +613,23 @@ class _ContenidoTV extends StatelessWidget {
 /// Android/Windows/Linux (Fase 6d del plan de rediseño) — mismo
 /// `tag: zona.name`, así que visitar la misma zona desde el teléfono y
 /// después desde TV encuentra lo que ya se había cargado, no arma dos
-/// copias. Lo único propio de acá es CÓMO se dibuja: filas horizontales
-/// (`_FilaZonaTv`), no la grilla que usa `ZonaCatalogoPage`.
+/// copias.
 ///
-/// ── Por qué filas y no esa misma grilla ─────────────────────────────────
+/// ── Por qué ahora SÍ es una grilla, igual que PC/Android ─────────────────
 ///
-/// No está confirmado que una `GridView` sea navegable con D-pad de forma
-/// confiable con lo que hoy existe en la app: la navegación direccional de
-/// TV depende del `focusInDirection` geométrico por defecto de Flutter —no
-/// hay ninguna `FocusTraversalPolicy` propia—, y hay un precedente
-/// concreto de que ese mecanismo no siempre da el resultado esperado en
-/// layouts 2D: el panel de filtros de TV en `ExtensionSearcherPage` tuvo
-/// que anular a mano izquierda/derecha porque el foco saltaba de fila en
-/// un `Wrap` de chips. Las filas horizontales, en cambio, YA están
-/// probadas con D-pad en esta misma pantalla (`_ContenidoTV`/
-/// `_FilaWindows` con `conFocoTv: true`) — se reusa lo que ya funciona en
-/// vez de arriesgar algo sin confirmar. Probar una grilla real acá es
-/// trabajo aparte (Fase 7.1b del plan), opcional y solo si se verifica a
-/// mano con un control remoto de verdad.
+/// Pedido explícito, con una captura de `ZonaCatalogoPage` (PC): la misma
+/// grilla intercalada (`c.entrelazados`, sin agrupar por extensión, sin un
+/// título de fila por cada una) en vez de filas horizontales separadas por
+/// fuente. Antes se había optado por filas por un riesgo sin confirmar
+/// —el recorrido D-pad por defecto de Flutter (`focusInDirection`) no
+/// estaba probado en un layout 2D—, pero el pedido es directo y se
+/// implementa: mismo `SliverGridDelegateWithFixedCrossAxisCount` que ya usa
+/// `ZonaCatalogoPage._rejilla`, mismo `TarjetaDeCatalogo` (póster vertical,
+/// no la card horizontal que se había probado antes), cada celda envuelta
+/// en `FocusableCard` para el D-pad. Si el recorrido direccional no se
+/// siente bien en la práctica con un control remoto real, es el punto
+/// concreto a revisar — no hay forma de confirmarlo sin probarlo en un
+/// aparato de verdad.
 class _ZonaTv extends StatefulWidget {
   const _ZonaTv({required this.zona});
 
@@ -649,57 +648,6 @@ class _ZonaTvState extends State<_ZonaTv> {
               tag: widget.zona.name,
             );
 
-  @override
-  Widget build(BuildContext context) {
-    return Obx(() {
-      // Mismo criterio que en cualquier otra pantalla de la app: hasta que
-      // `armado` diga que de verdad terminó de mirar, una lista vacía no
-      // significa "no hay nada".
-      if (!c.armado.value) {
-        return const _HomeEsperando(conCabecera: false);
-      }
-      if (c.fuentes.isEmpty) {
-        // Ninguna extensión activa entra en esta zona — la misma pantalla
-        // que ya usa ZonaCatalogoPage para el mismo caso (Fase 5).
-        return const ZonaSinClasificar();
-      }
-      return ListView.builder(
-        physics: const AlwaysScrollableScrollPhysics(),
-        padding: const EdgeInsets.only(bottom: 24),
-        itemCount: c.fuentes.length,
-        itemBuilder: (context, i) => _FilaZonaTv(c: c, fuente: c.fuentes[i]),
-      );
-    });
-  }
-}
-
-/// Una fila de la zona: el nombre de la extensión y lo que trajo, en
-/// horizontal — calcada de `_FilaWindows` con `conFocoTv: true`, pero
-/// sobre un `ZonaFuente` (`ZonaCatalogoController`) en vez de una
-/// `FilaDeExtension` del Home, que es un modelo distinto (ver el
-/// comentario largo en `zona_catalogo_controller.dart` sobre por qué no
-/// se comparte).
-///
-/// ── Por qué la tarjeta es horizontal (16:9) y no el póster vertical ──────
-///
-/// Pedido explícito, con una captura de referencia de otra app de TV: ahí
-/// las tarjetas de cada zona son miniaturas apaisadas (estilo "still" del
-/// video), no pósters verticales. Se reusa `HomeMediaCard` en su variante
-/// `horizontal` —la misma que ya prueban las filas de Continuar viendo/
-/// Favoritos en Historial— en vez de `TarjetaDeCatalogo` (el póster
-/// vertical que sigue usando la grilla de PC/Android en
-/// `ZonaCatalogoPage`, sin tocar: ahí no se pidió el cambio).
-class _FilaZonaTv extends StatefulWidget {
-  const _FilaZonaTv({required this.c, required this.fuente});
-
-  final ZonaCatalogoController c;
-  final ZonaFuente fuente;
-
-  @override
-  State<_FilaZonaTv> createState() => _FilaZonaTvState();
-}
-
-class _FilaZonaTvState extends State<_FilaZonaTv> {
   final _scroll = ScrollController();
 
   @override
@@ -715,106 +663,118 @@ class _FilaZonaTvState extends State<_FilaZonaTv> {
     super.dispose();
   }
 
-  /// Pide más cuando falta poco para el final de ESTA fila.
-  ///
-  /// `cargarMas()` pide para TODAS las fuentes que todavía tengan margen,
-  /// no solo esta — mismo criterio que ya usa el Home
-  /// (`_pedirMasSiHaceFalta`): cualquier fila que se acerque a su borde
-  /// alcanza para disparar el pedido de la zona entera.
   void _alAcercarseAlFinal() {
     if (!_scroll.hasClients) return;
     final restante = _scroll.position.maxScrollExtent - _scroll.offset;
-    if (restante < HomeMediaCard.anchoAncha * 3) {
-      unawaited(widget.c.cargarMas());
+    if (restante < TarjetaDeCatalogo.anchoPara(Ancho.de(context)) * 3) {
+      unawaited(c.cargarMas());
     }
+  }
+
+  /// Cuántas columnas entran y qué ancho tiene la celda — misma cuenta que
+  /// `ZonaCatalogoPage._rejilla`, copiada acá porque es privada de ese
+  /// archivo (no se puede importar entre librerías distintas).
+  ({int columnas, double ancho}) _rejillaTv(
+      BuildContext context, double disponible) {
+    final ideal = TarjetaDeCatalogo.anchoPara(Ancho.de(context));
+    const separacion = 20.0;
+    final columnas =
+        ((disponible + separacion) / (ideal + separacion)).floor().clamp(2, 10);
+    final ancho = (disponible - separacion * (columnas - 1)) / columnas;
+    return (columnas: columnas, ancho: ancho);
   }
 
   @override
   Widget build(BuildContext context) {
-    return RepaintBoundary(child: _contenido(context));
-  }
-
-  Widget _contenido(BuildContext context) {
     return Obx(() {
-      // `fuentes` (RxList) es lo que hace que este Obx se entere cuando
-      // llegan más páginas — `ZonaFuente.items` en sí no es reactivo,
-      // `ZonaCatalogoController._pedir` lo muta EN EL LUGAR y avisa con
-      // `fuentes.refresh()`. Por eso se lee `widget.c.fuentes.length`
-      // antes que `widget.fuente.items`: es lo que suscribe a este Obx.
-      // ignore: unused_local_variable
-      final _ = widget.c.fuentes.length;
-      final items = widget.fuente.items;
-      return Padding(
-        padding: const EdgeInsets.only(top: 34),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Padding(
-              padding: EdgeInsets.symmetric(horizontal: _margen(context)),
-              child: Text(
-                widget.fuente.nombre,
-                style: TextStyle(
-                  fontSize: 20,
-                  fontWeight: FontWeight.w700,
-                  color: HomeTheme.textPrimary,
+      // Mismo criterio que en cualquier otra pantalla de la app: hasta que
+      // `armado` diga que de verdad terminó de mirar, una lista vacía no
+      // significa "no hay nada".
+      if (!c.armado.value) {
+        return const _HomeEsperando(conCabecera: false);
+      }
+      if (c.fuentes.isEmpty) {
+        // Ninguna extensión activa entra en esta zona — la misma pantalla
+        // que ya usa ZonaCatalogoPage para el mismo caso (Fase 5).
+        return const ZonaSinClasificar();
+      }
+      final items = c.entrelazados;
+      if (items.isEmpty && !c.fuentes.any((f) => f.isFetching)) {
+        // Hay fuentes clasificadas pero su catálogo vino vacío de todas —
+        // distinto de "ninguna la declara" (eso es ZonaSinClasificar,
+        // arriba).
+        return Center(
+          child: Text(
+            'common.no-data'.i18n,
+            style: TextStyle(color: HomeTheme.textMuted, fontSize: 16),
+          ),
+        );
+      }
+      return LayoutBuilder(
+        builder: (context, restricciones) {
+          const margen = 24.0;
+          final disponible = restricciones.maxWidth - margen * 2;
+          if (disponible <= 0) return const SizedBox.shrink();
+          final rejilla = _rejillaTv(context, disponible);
+          final alto = TarjetaDeCatalogo.altoTotalDeAncho(rejilla.ancho);
+          final cargandoMas = c.cargandoMas.value;
+          final extra = cargandoMas ? rejilla.columnas : 0;
+          return GridView.builder(
+            controller: _scroll,
+            // Mismo margen de precarga generoso que ZonaCatalogoPage: con
+            // tarjetas altas, el default de Flutter (250px) apenas cubre
+            // una fila de sobra.
+            scrollCacheExtent: ScrollCacheExtent.pixels(alto * 2),
+            padding: const EdgeInsets.fromLTRB(margen, 8, margen, 34),
+            gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
+              crossAxisCount: rejilla.columnas,
+              childAspectRatio: rejilla.ancho / alto,
+              crossAxisSpacing: 20,
+              mainAxisSpacing: 28,
+            ),
+            itemCount: items.length + extra,
+            itemBuilder: (context, i) {
+              if (i >= items.length) {
+                return EsqueletoTarjeta(ancho: rejilla.ancho);
+              }
+              final zi = items[i];
+              // Sin isAdultOption: a diferencia de ZonaCatalogoPage (que
+              // también representa la Zona +18 con `zona: null`), acá
+              // `zona` nunca es null — la Zona +18 de TV vive aparte, en
+              // Ajustes, con su propio PIN.
+              void abrir() => ExtensionUtils.openExtensionDetail(
+                    context,
+                    package: zi.package,
+                    url: zi.item.url,
+                    cover: zi.item.cover,
+                    coverHeaders: zi.item.headers,
+                  );
+              return FocusableCard(
+                onTap: abrir,
+                altoMarco: rejilla.ancho * 3 / 2,
+                // `builder` y no `child`: la tarjeta necesita saber si TIENE
+                // el foco ahora mismo para mostrar el panel de info (ver
+                // `TarjetaDeCatalogo.tvFoco`) — lo mismo que ya se ve al
+                // pasar el mouse en PC, pedido explícito de "replicar lo
+                // que tiene Windows a Android TV, sin duplicar el
+                // resaltado".
+                builder: (tieneFoco) => TarjetaDeCatalogo(
+                  titulo: zi.item.title,
+                  subtitulo: zi.item.update,
+                  // Imprescindible acá: a diferencia de una fila con
+                  // título propio, esta grilla mezcla varias fuentes en la
+                  // misma pantalla.
+                  encabezado: zi.nombre,
+                  fecha: zi.item.update,
+                  portada: zi.item.cover,
+                  cabeceras: zi.item.headers,
+                  ancho: rejilla.ancho,
+                  tvFoco: tieneFoco,
                 ),
-              ),
-            ),
-            const SizedBox(height: 18),
-            SizedBox(
-              // Alto propio de la card horizontal (HomeMediaCard.altoTotalAncha)
-              // — NO el de `_altoFilaTv`, que está calculado para el póster
-              // vertical (`TarjetaDeCatalogo`) y lo sigue usando el Home.
-              height: HomeMediaCard.altoTotalAncha,
-              child: items.isEmpty
-                  ? EsqueletoDeFila(
-                      ancho: HomeMediaCard.anchoAncha,
-                      separacion: 14,
-                      padding:
-                          EdgeInsets.symmetric(horizontal: _margen(context)),
-                      paddingDeCadaUno: const EdgeInsets.only(top: 10),
-                    )
-                  : ClipRect(
-                      clipper: const _SoloCostados(aireLateral: 12),
-                      child: ListView.builder(
-                        controller: _scroll,
-                        scrollDirection: Axis.horizontal,
-                        clipBehavior: Clip.none,
-                        padding: EdgeInsets.symmetric(
-                          horizontal: _margen(context) + 14,
-                        ),
-                        itemCount: items.length,
-                        itemBuilder: (context, i) {
-                          final item = items[i];
-                          void abrir() => ExtensionUtils.openExtensionDetail(
-                                context,
-                                package: widget.fuente.package,
-                                url: item.url,
-                                cover: item.cover,
-                                coverHeaders: item.headers,
-                              );
-                          return Padding(
-                            padding: const EdgeInsets.only(top: 10, right: 14),
-                            child: FocusableCard(
-                              onTap: abrir,
-                              altoMarco: HomeMediaCard.altoImagenAncha,
-                              child: HomeMediaCard(
-                                horizontal: true,
-                                ancho: HomeMediaCard.anchoAncha,
-                                title: item.title,
-                                subtitle: item.update,
-                                cover: item.cover,
-                                headers: item.headers,
-                                accent: HomeTheme.accentPink,
-                              ),
-                            ),
-                          );
-                        },
-                      ),
-                    ),
-            ),
-          ],
-        ),
+              );
+            },
+          );
+        },
       );
     });
   }

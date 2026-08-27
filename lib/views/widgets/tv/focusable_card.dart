@@ -28,14 +28,18 @@ import 'package:prismhub/views/widgets/home/home_theme.dart';
 class FocusableCard extends StatefulWidget {
   const FocusableCard({
     super.key,
-    required this.child,
+    this.child,
+    this.builder,
     required this.onTap,
     this.focusNode,
     this.autofocus = false,
     this.borderRadius = 8,
     this.accent,
     this.altoMarco,
-  });
+  }) : assert(
+          child != null || builder != null,
+          'FocusableCard necesita child o builder',
+        );
 
   /// Alto del resplandor de selección, cuando NO tiene que abarcar al hijo
   /// entero.
@@ -46,7 +50,21 @@ class FocusableCard extends StatefulWidget {
   /// dibuja solo alrededor de ella.
   final double? altoMarco;
 
-  final Widget child;
+  /// El caso simple: un hijo fijo, que no necesita saber si tiene el foco.
+  final Widget? child;
+
+  /// El caso con más información: el hijo cambia según si el foco está acá
+  /// o no — pedido explícito para las zonas de TV, donde el panel de info
+  /// (`PanelInfoHover`, el mismo que ya muestra el hover de mouse en PC)
+  /// tiene que aparecer con el foco del mando. `TarjetaDeCatalogo` no tiene
+  /// forma de saber esto por su cuenta —el resaltado vive acá afuera,
+  /// nunca adentro de la tarjeta, para no duplicar la escala/sombra (ver el
+  /// comentario en tarjeta_de_catalogo.dart)— así que quien envuelve con
+  /// `FocusableCard` es quien puede pasárselo.
+  ///
+  /// Uno de los dos, `child` o `builder`, tiene que venir.
+  final Widget Function(bool tieneFoco)? builder;
+
   final VoidCallback onTap;
 
   /// Si no se pasa, el widget crea y descarta el suyo. Pasarlo desde afuera
@@ -248,7 +266,7 @@ class _FocusableCardState extends State<FocusableCard> {
             // lo mismo y la sombra se ve completa alrededor.
             child: Stack(
               children: [
-                widget.child,
+                widget.builder?.call(_tieneFoco) ?? widget.child!,
                 Positioned(
                   left: 0,
                   right: 0,
