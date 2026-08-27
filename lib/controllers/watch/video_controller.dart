@@ -625,6 +625,29 @@ class VideoPlayerController extends GetxController with WidgetsBindingObserver {
     }
   }
 
+  /// Cuántos bytes por segundo está entrando ahora mismo, para mostrarle al
+  /// usuario cómo va la conexión — pedido explícito en Android TV, donde no
+  /// hay ningún otro indicador de red a la vista.
+  ///
+  /// `null` cuando no hay nada que mostrar (el motor no es el nativo, el
+  /// reproductor se está cerrando, o mpv no contestó) — nunca una excepción
+  /// hacia afuera. Mismas tres guardas que ya usa `_medir()` unas líneas más
+  /// abajo, expuestas acá porque esa función es privada y solo escribe al
+  /// registro: esto es lo mínimo necesario para que una pantalla de afuera
+  /// pueda preguntar sin tener que repetir (y arriesgar desactualizar) esas
+  /// mismas guardas por su cuenta.
+  Future<int?> cacheSpeedBps() async {
+    if (_disposed || _shutdownStarted || _playerDisposed) return null;
+    if (player.platform is! NativePlayer) return null;
+    try {
+      final np = player.platform as NativePlayer;
+      final crudo = (await np.getProperty('cache-speed')).trim();
+      return int.tryParse(crudo);
+    } catch (e) {
+      return null;
+    }
+  }
+
   Future<void> _medir(String motivo) async {
     // Tres candados antes de entrar a la librería nativa, no uno.
     //

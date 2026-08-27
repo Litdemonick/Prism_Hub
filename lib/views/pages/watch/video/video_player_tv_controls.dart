@@ -36,6 +36,13 @@ import 'package:prismhub/views/widgets/tv/focusable_card.dart';
 /// Cuánto salta cada pulsación de ◀ ▶.
 const _salto = Duration(seconds: 10);
 
+/// KB/s o MB/s, según convenga — para el indicador de velocidad de red.
+String _formatoVelocidad(int bps) {
+  final kbps = bps / 1024;
+  if (kbps < 1024) return '${kbps.toStringAsFixed(0)} KB/s';
+  return '${(kbps / 1024).toStringAsFixed(1)} MB/s';
+}
+
 /// Cuánto tarda la barra en irse sola cuando nadie toca nada.
 const _esperaParaOcultar = Duration(seconds: 5);
 
@@ -86,9 +93,30 @@ class _VideoPlayerTvControlsState extends State<VideoPlayerTvControls> {
   /// Vigila cuándo el reproductor se queda esperando que se elija servidor.
   Worker? _vigiaDeLaEleccion;
 
+  /// Cuánto está entrando de la red ahora mismo, en bytes por segundo —
+  /// pedido explícito: "un indicador de velocidad de descarga para que el
+  /// usuario sepa en tiempo real cómo va la conexión". `null` mientras no
+  /// hay nada que mostrar (recién abierto, o el dato no está disponible).
+  int? _bps;
+  Timer? _velocidadTimer;
+
+  /// Qué mostrar en el flash de avance/retroceso ("+10s"/"-10s"), y por
+  /// cuánto — `null` cuando no hay que mostrar nada. Pedido explícito:
+  /// aviso visual al avanzar/retroceder con las flechas.
+  String? _seekFlash;
+  Timer? _seekFlashTimer;
+
   @override
   void initState() {
     super.initState();
+    // Cada 2s alcanza: es un dato informativo, no algo que tenga que
+    // sentirse instantáneo, y preguntarle a mpv por una propiedad nativa
+    // más seguido no aporta nada y solo gasta.
+    _velocidadTimer = Timer.periodic(
+      const Duration(seconds: 2),
+      (_) => _actualizarVelocidad(),
+    );
+    _actualizarVelocidad();
     // ── Con varios servidores, el vídeo NO arranca solo ─────────────────
     //
     // Es a propósito (ver play() en el controlador): probar los cinco o seis
@@ -132,9 +160,31 @@ class _VideoPlayerTvControlsState extends State<VideoPlayerTvControls> {
   void dispose() {
     _vigiaDeLaEleccion?.dispose();
     _paraOcultar?.cancel();
+    _velocidadTimer?.cancel();
+    _seekFlashTimer?.cancel();
     _foco.dispose();
     _focoServidorElegido.dispose();
     super.dispose();
+  }
+
+  /// `_c.cacheSpeedBps()` ya trae sus propias guardas contra preguntarle a
+  /// un reproductor a medio cerrar (ver el comentario largo en
+  /// video_controller.dart) — acá solo hace falta cuidar que el widget
+  /// siga montado antes de `setState`, que es lo único que este archivo
+  /// puede saber por su cuenta.
+  Future<void> _actualizarVelocidad() async {
+    final bps = await _c.cacheSpeedBps();
+    if (mounted) setState(() => _bps = bps);
+  }
+
+  /// Muestra el flash de avance/retroceso y lo apaga solo — un cartel más
+  /// que se quedara prendido para siempre sería peor que no tener ninguno.
+  void _mostrarSeekFlash(String texto) {
+    _seekFlashTimer?.cancel();
+    setState(() => _seekFlash = texto);
+    _seekFlashTimer = Timer(const Duration(milliseconds: 650), () {
+      if (mounted) setState(() => _seekFlash = null);
+    });
   }
 
   /// Mueve el foco de verdad a la lista de servidores — ver el porqué en el
@@ -194,11 +244,13 @@ class _VideoPlayerTvControlsState extends State<VideoPlayerTvControls> {
     }
     if (tecla == LogicalKeyboardKey.arrowRight) {
       _c.seek(_c.position.value + _salto);
+      _mostrarSeekFlash('+${_salto.inSeconds}s');
       return KeyEventResult.handled;
     }
     if (tecla == LogicalKeyboardKey.arrowLeft) {
       final destino = _c.position.value - _salto;
       _c.seek(destino < Duration.zero ? Duration.zero : destino);
+      _mostrarSeekFlash('-${_salto.inSeconds}s');
       return KeyEventResult.handled;
     }
     // Bajar despliega las opciones dentro de la misma barra.
@@ -365,6 +417,102 @@ class _VideoPlayerTvControlsState extends State<VideoPlayerTvControls> {
             ),
           );
         }),
+        // ── Ícono central de play/pausa ──────────────────────────────────
+        //
+        // Pedido explícito, estilo YouTube/Netflix: al pausar, un ícono
+        // grande al centro con el fondo apenas oscurecido — sin eso, en TV
+        // no hay ningún otro indicio de que el video está en pausa y no
+        // colgado. Al retomar, el mismo ícono (ahora de play) se desvanece
+        // solo — no queda un botón tapando el video mientras se mira.
+        //
+        // `IgnorePointer`: es puro aviso, nunca puede robarle el foco/toque
+        // a nada de lo que ya maneja `_tecla` más abajo.
+        Obx(() {
+          final reproduciendo = _c.isPlaying.value;
+          return IgnorePointer(
+            child: AnimatedOpacity(
+              opacity: reproduciendo ? 0 : 1,
+              // Aparece rápido (que se note en el acto que se pausó);
+              // desaparece más despacio, para que alcance a leerse antes de
+              // esfumarse.
+              duration: Duration(milliseconds: reproduciendo ? 700 : 150),
+              curve: Curves.easeOut,
+              child: ColoredBox(
+                color: Colors.black.withValues(alpha: 0.25),
+                child: Center(
+                  child: Container(
+                    padding: const EdgeInsets.all(22),
+                    decoration: BoxDecoration(
+                      color: Colors.black.withValues(alpha: 0.45),
+                      shape: BoxShape.circle,
+                    ),
+                    child: Icon(
+                      reproduciendo
+                          ? Icons.play_arrow_rounded
+                          : Icons.pause_rounded,
+                      size: 64,
+                      color: Colors.white,
+                    ),
+                  ),
+                ),
+              ),
+            ),
+          );
+        }),
+        // ── Flash de avance/retroceso ────────────────────────────────────
+        IgnorePointer(
+          child: Center(
+            child: AnimatedOpacity(
+              opacity: _seekFlash == null ? 0 : 1,
+              duration: const Duration(milliseconds: 150),
+              child: Container(
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 22, vertical: 12),
+                decoration: BoxDecoration(
+                  color: Colors.black.withValues(alpha: 0.55),
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                child: Text(
+                  _seekFlash ?? '',
+                  style: const TextStyle(
+                    color: Colors.white,
+                    fontSize: 22,
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+              ),
+            ),
+          ),
+        ),
+        // ── Velocidad de red ──────────────────────────────────────────────
+        //
+        // Pedido explícito: saber en tiempo real cómo va la conexión. Solo
+        // se muestra cuando hay un dato real que dar — `cacheSpeedBps()` da
+        // `null` sin motor nativo, con el reproductor cerrándose, o si mpv
+        // no contestó, y mostrar "0 KB/s" ahí sería inventar un dato.
+        if (_bps != null && _bps! > 0)
+          Positioned(
+            top: HomeTheme.overscanTv(context),
+            right: HomeTheme.overscanTv(context),
+            child: IgnorePointer(
+              child: Container(
+                padding: const EdgeInsets.symmetric(
+                    horizontal: 12, vertical: 6),
+                decoration: BoxDecoration(
+                  color: Colors.black.withValues(alpha: 0.55),
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                child: Text(
+                  _formatoVelocidad(_bps!),
+                  style: const TextStyle(
+                    color: Colors.white70,
+                    fontSize: 13,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+              ),
+            ),
+          ),
         Focus(
           focusNode: _foco,
           autofocus: true,
