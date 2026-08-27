@@ -37,12 +37,13 @@ class FocusableCard extends StatefulWidget {
     this.altoMarco,
   });
 
-  /// Alto del marco de selección, cuando NO tiene que abarcar al hijo entero.
+  /// Alto del resplandor de selección, cuando NO tiene que abarcar al hijo
+  /// entero.
   ///
-  /// Las tarjetas del catálogo son portada + título debajo, y el marco
+  /// Las tarjetas del catálogo son portada + título debajo, y el resplandor
   /// alrededor de las dos cosas encierra un bloque de texto suelto en el
-  /// aire: lo que se está eligiendo es la portada. Pasando su alto, el marco
-  /// se dibuja solo sobre ella.
+  /// aire: lo que se está eligiendo es la portada. Pasando su alto, se
+  /// dibuja solo alrededor de ella.
   final double? altoMarco;
 
   final Widget child;
@@ -56,9 +57,9 @@ class FocusableCard extends StatefulWidget {
   final bool autofocus;
   final double borderRadius;
 
-  /// Color del borde de foco. Por defecto [HomeTheme.accentPink]; se pasa
-  /// [HomeTheme.accentRed] en pantallas de la Zona +18, mismo criterio que ya
-  /// usan [HomeMediaCard]/`HomeSection` con su parámetro `accent`.
+  /// Color del resplandor de foco. Por defecto [HomeTheme.accentPink]; se
+  /// pasa [HomeTheme.accentRed] en pantallas de la Zona +18, mismo criterio
+  /// que ya usan [HomeMediaCard]/`HomeSection` con su parámetro `accent`.
   final Color? accent;
 
   @override
@@ -71,7 +72,8 @@ class _FocusableCardState extends State<FocusableCard> {
   bool _tieneFoco = false;
 
   FocusNode get _focusNode =>
-      widget.focusNode ?? (_focusNodePropio ??= FocusNode(debugLabel: 'FocusableCard'));
+      widget.focusNode ??
+      (_focusNodePropio ??= FocusNode(debugLabel: 'FocusableCard'));
 
   @override
   void dispose() {
@@ -180,23 +182,24 @@ class _FocusableCardState extends State<FocusableCard> {
     // la cuenta no pierde nada y elimina el estado que se queda colgado.
     final activo =
         PlatformTv.esTelevisionSync ? _tieneFoco : (_hover || _tieneFoco);
-    // El color del marco de foco. `accent` sigue existiendo para quien
-    // quiera forzar otro (la Zona +18 usa el rojo), pero por defecto es el
-    // dorado — ver HomeTheme.focoTv.
-    final marco = widget.accent ?? HomeTheme.focoTv;
+    // El color del resplandor de foco. `accent` sigue existiendo para quien
+    // quiera forzar otro (la Zona +18 usa el rojo) — por defecto es el
+    // mismo rosa que ya usa el hover de mouse en PC (HomeTheme.accentPink),
+    // no un color aparte.
+    final marco = widget.accent ?? HomeTheme.accentPink;
     // El foco de D-pad es MÁS marcado que el hover de mouse a propósito: con
     // el mando es la ÚNICA señal de dónde está parado el usuario — sin
     // cursor ni dedo que lo confirmen — así que tiene que notarse aunque se
     // mire de lejos, desde el sillón. El hover de mouse ya tiene al cursor
     // mismo como pista extra, por eso alcanza con menos.
-    final grosor = _tieneFoco ? 3.5 : 2.0;
+    final intensidadDelHalo = _tieneFoco ? 0.42 : 0.30;
     // ── En un aparato modesto, el marco y nada más ───────────────────────
     //
     // La escala es un transform animado: obliga a recomponer la tarjeta en
     // cada cuadro de los 160 ms que dura. En un stick viejo eso es justo lo
     // que se siente como que el mando responde tarde.
     //
-    // El marco dorado ya dice dónde está parado el usuario —que es lo único
+    // El resplandor ya dice dónde está parado el usuario —que es lo único
     // que no se puede perder— y que aparezca de golpe no se nota mal: con un
     // control remoto el foco SALTA de tarjeta en tarjeta, no se desliza.
     final conEscala = PerfilDeAparato.nivel != NivelDeAparato.bajo;
@@ -224,17 +227,15 @@ class _FocusableCardState extends State<FocusableCard> {
             // encabezados. Con 1.03 se nota que está elegida y casi no
             // invade, así que nada queda cortado.
             scale: (activo && conEscala) ? 1.03 : 1.0,
-            // ── El borde va ENCIMA, no alrededor ─────────────────────────
+            // ── El resplandor va en una capa APARTE, no alrededor ────────
             //
-            // Con `Border.all` en el contenedor que envuelve al hijo, el
-            // grosor del borde le come lugar POR DENTRO: al enfocarse, la
-            // portada se achicaba unos píxeles y al desenfocarse volvía a
-            // crecer. Sumado a la escala, eso es el temblor feo que se veía
-            // al mover el foco de una tarjeta a otra.
-            //
-            // Como capa de arriba (mismo truco que ya usa `_bordeCard` en
-            // home_media_card.dart) el hijo mide SIEMPRE lo mismo: lo único
-            // que cambia es la línea pintada encima.
+            // Envolviendo al hijo directamente en el `BoxDecoration` con
+            // sombra, cualquier relleno/recorte propio del hijo (una
+            // portada con su propio `ClipRRect`) tapa la sombra en vez de
+            // dejarla asomar. Como capa de arriba, superpuesta y con su
+            // propio relleno transparente (mismo truco que ya usa
+            // `_bordeCard` en home_media_card.dart), el hijo mide SIEMPRE
+            // lo mismo y la sombra se ve completa alrededor.
             child: Stack(
               children: [
                 widget.child,
@@ -251,29 +252,46 @@ class _FocusableCardState extends State<FocusableCard> {
                     child: AnimatedOpacity(
                       duration: const Duration(milliseconds: 160),
                       opacity: activo ? 1 : 0,
-                      // Un solo marco, dorado.
+                      // ── El mismo resplandor que el hover de mouse en PC ──
                       //
-                      // Antes era del acento (rosa) con una línea clara por
-                      // dentro, porque sobre un botón YA rosa el marco se
-                      // fundía con el fondo. Esa línea doble se veía sucia y
-                      // dura de cerca; el dorado resuelve lo mismo con una
-                      // sola línea limpia — no se parece a ningún relleno de
-                      // la app, así que se distingue sobre cualquier cosa.
+                      // Antes era un marco (borde blanco/dorado según la
+                      // época) — pedido explícito: que se vea igual que el
+                      // hover de `TarjetaDeCatalogo` en PC, que no dibuja
+                      // ningún borde: crece un poco y una sombra de tres
+                      // capas la despega del fondo (una profunda, una
+                      // cercana, y un halo del color de acento encima).
                       //
-                      // Va dibujado con `Container` y no con `DecoratedBox`
-                      // pelado para poder pedir `Clip.antiAlias`: sin eso,
-                      // la curva de las esquinas sale escalonada (los
-                      // "pixeles" que se veían en el borde).
-                      child: Container(
-                        clipBehavior: Clip.antiAlias,
+                      // La caja en sí queda SIN relleno (transparente): lo
+                      // único que se ve es la sombra, que por definición se
+                      // pinta AFUERA de estos límites — así la portada de
+                      // adentro (o el hijo entero, sin `altoMarco`) se ve
+                      // intacta y el resplandor solo aparece alrededor.
+                      //
+                      // El alcance de cada capa está topado igual que en PC
+                      // (~13px) para no meterse en el hueco entre tarjetas
+                      // de una fila y pintarse encima de la vecina — mismo
+                      // motivo, mismo límite, ver el comentario largo en
+                      // tarjeta_de_catalogo.dart.
+                      child: DecoratedBox(
                         decoration: BoxDecoration(
                           borderRadius:
                               BorderRadius.circular(widget.borderRadius),
-                          // Solo la línea, sin halo ni sombra: el dorado ya
-                          // contrasta con todo lo de la app, y el resplandor
-                          // alrededor ensuciaba la portada en vez de
-                          // ayudar.
-                          border: Border.all(color: marco, width: grosor),
+                          boxShadow: [
+                            const BoxShadow(
+                              color: Color(0x8A000000),
+                              blurRadius: 16,
+                              offset: Offset(0, 8),
+                            ),
+                            const BoxShadow(
+                              color: Color(0x66000000),
+                              blurRadius: 8,
+                              offset: Offset(0, 3),
+                            ),
+                            BoxShadow(
+                              color: marco.withValues(alpha: intensidadDelHalo),
+                              blurRadius: 11,
+                            ),
+                          ],
                         ),
                       ),
                     ),
