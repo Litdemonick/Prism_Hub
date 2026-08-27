@@ -1438,61 +1438,78 @@ class _BotonDeAccionesMasivas extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    // ── Material propio, no de adorno ───────────────────────────────────
+    //
+    // Bug real, en vivo: `_buildDesktop()` de esta pantalla dibuja su
+    // contenido dentro de un `Container`/`Stack` sueltos, SIN `Scaffold` —
+    // a diferencia de `ZonaCatalogoPage`, que sí tiene uno (y por eso ahí
+    // `_BotonDeOrden`/`_BotonDeFormato`, con el mismo patrón, andan bien
+    // sin pedir nada más). `PopupMenuButton` necesita un `Material`
+    // ancestro para su propio splash/hover — sin ninguno en la cadena,
+    // `Material.of(context)` tira "Null check operator used on a null
+    // value" apenas el mouse pasa por encima o se lo toca (confirmado con
+    // el log completo). El botón viejo (`_BotonMasivo`) se autoenvolvía en
+    // `Material(color: Colors.transparent, ...)` por esto mismo — se había
+    // perdido al reemplazarlo por este.
+    //
     // Mismo criterio que _BotonDeOrden/_BotonDeFormato en zona_catalogo_page
-    // .dart: sin este Theme local, PopupMenuButton dibuja un resaltado
-    // cuadrado de fábrica que se clava contra la esquina redondeada del
-    // menú. Acá no hay un ítem "elegido" que resaltar —son acciones, no una
-    // selección— así que ni siquiera hace falta el Container interno que
-    // usa aquel: alcanza con apagar el highlight por completo.
-    return Theme(
-      data: Theme.of(context).copyWith(highlightColor: Colors.transparent),
-      child: PopupMenuButton<VoidCallback>(
-        enabled: !enCurso,
-        onSelected: (accion) => accion(),
-        color: HomeTheme.cardSurface,
-        surfaceTintColor: Colors.transparent,
-        elevation: 6,
-        clipBehavior: Clip.antiAlias,
-        shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(12),
-          side: BorderSide(color: HomeTheme.border),
-        ),
-        itemBuilder: (context) => [
-          _item(Icons.toggle_on_outlined, 'extension.activar-todas'.i18n,
-              onActivar),
-          _item(Icons.toggle_off_outlined, 'extension.desactivar-todas'.i18n,
-              onDesactivar),
-          _item(Icons.system_update_alt_rounded,
-              'extension.actualizar-todas'.i18n, onActualizar),
-          _item(Icons.delete_sweep_outlined, 'extension.desinstalar-todas'.i18n,
-              onDesinstalar),
-        ],
-        child: Container(
-          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
-          decoration: BoxDecoration(
-            borderRadius: BorderRadius.circular(20),
-            border: Border.all(color: HomeTheme.border),
+    // .dart para el Theme: sin este Theme local, PopupMenuButton dibuja un
+    // resaltado cuadrado de fábrica que se clava contra la esquina
+    // redondeada del menú. Acá no hay un ítem "elegido" que resaltar —son
+    // acciones, no una selección— así que alcanza con apagar el highlight
+    // por completo.
+    return Material(
+      color: Colors.transparent,
+      child: Theme(
+        data: Theme.of(context).copyWith(highlightColor: Colors.transparent),
+        child: PopupMenuButton<VoidCallback>(
+          enabled: !enCurso,
+          onSelected: (accion) => accion(),
+          color: HomeTheme.cardSurface,
+          surfaceTintColor: Colors.transparent,
+          elevation: 6,
+          clipBehavior: Clip.antiAlias,
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(12),
+            side: BorderSide(color: HomeTheme.border),
           ),
-          child: Row(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Icon(
-                enCurso
-                    ? Icons.hourglass_top_rounded
-                    : Icons.more_horiz_rounded,
-                size: 17,
-                color: HomeTheme.textMuted,
-              ),
-              const SizedBox(width: 7),
-              Text(
-                'extension.acciones'.i18n,
-                style: TextStyle(
-                  fontSize: 12.5,
-                  fontWeight: FontWeight.w600,
-                  color: HomeTheme.textPrimary,
+          itemBuilder: (context) => [
+            _item(Icons.toggle_on_outlined, 'extension.activar-todas'.i18n,
+                onActivar),
+            _item(Icons.toggle_off_outlined, 'extension.desactivar-todas'.i18n,
+                onDesactivar),
+            _item(Icons.system_update_alt_rounded,
+                'extension.actualizar-todas'.i18n, onActualizar),
+            _item(Icons.delete_sweep_outlined,
+                'extension.desinstalar-todas'.i18n, onDesinstalar),
+          ],
+          child: Container(
+            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+            decoration: BoxDecoration(
+              borderRadius: BorderRadius.circular(20),
+              border: Border.all(color: HomeTheme.border),
+            ),
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Icon(
+                  enCurso
+                      ? Icons.hourglass_top_rounded
+                      : Icons.more_horiz_rounded,
+                  size: 17,
+                  color: HomeTheme.textMuted,
                 ),
-              ),
-            ],
+                const SizedBox(width: 7),
+                Text(
+                  'extension.acciones'.i18n,
+                  style: TextStyle(
+                    fontSize: 12.5,
+                    fontWeight: FontWeight.w600,
+                    color: HomeTheme.textPrimary,
+                  ),
+                ),
+              ],
+            ),
           ),
         ),
       ),
