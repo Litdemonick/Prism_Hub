@@ -6,6 +6,7 @@ import 'package:prismhub/utils/extension.dart';
 import 'package:prismhub/utils/extension_signature.dart';
 import 'package:prismhub/utils/i18n.dart';
 import 'package:prismhub/utils/log.dart';
+import 'package:prismhub/utils/platform_tv.dart';
 import 'package:prismhub/utils/prismhub_storage.dart';
 import 'package:prismhub/utils/request.dart';
 import 'package:prismhub/utils/router.dart';
@@ -382,10 +383,16 @@ class _ExtensionCardState extends State<ExtensionCard> {
   // inestable/oficial) — antes eran Text sueltos uno al lado del otro en
   // un Wrap, así que sin ningún límite visual entre ellos se leían todos
   // pegados como una sola frase corrida ("Lectura es 18+ PrismPlus").
-  Widget _badge(String text, {Color? color}) {
+  //
+  // `tv`: más grande, mismo criterio que el resto de _buildAndroidTile
+  // ("la card se mira desde el sillón, no a 30cm"). Por defecto en false
+  // porque _buildDesktop también llama a este mismo método y ahí nunca
+  // corresponde el tamaño de TV.
+  Widget _badge(String text, {Color? color, bool tv = false}) {
     final c = color ?? HomeTheme.textMuted;
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+      padding:
+          EdgeInsets.symmetric(horizontal: tv ? 11 : 8, vertical: tv ? 5 : 3),
       decoration: BoxDecoration(
         color: c.withValues(alpha: 0.14),
         borderRadius: BorderRadius.circular(6),
@@ -393,7 +400,7 @@ class _ExtensionCardState extends State<ExtensionCard> {
       child: Text(
         text,
         style: TextStyle(
-          fontSize: 11,
+          fontSize: tv ? 15 : 11,
           color: c,
           fontWeight: FontWeight.w600,
         ),
@@ -472,12 +479,19 @@ class _ExtensionCardState extends State<ExtensionCard> {
   }
 
   Widget _buildAndroidTile(BuildContext context) {
+    // En TV todo más grande: la card se mira desde el sillón, no a 30cm —
+    // mismo criterio, y el mismo campo, que ya usa ExtensionTile (la card
+    // de Extensiones instaladas) para esto mismo.
+    final tv = PlatformTv.esTelevisionSync;
     return ListTile(
-      leading: _iconBox(size: 40, iconSize: 20),
-      title: Text(widget.name),
+      leading: tv
+          ? _iconBox(size: 56, iconSize: 28)
+          : _iconBox(size: 40, iconSize: 20),
+      title:
+          Text(widget.name, style: tv ? const TextStyle(fontSize: 20) : null),
       subtitle: DefaultTextStyle(
           style: TextStyle(
-            fontSize: 12,
+            fontSize: tv ? 15 : 12,
             color: Theme.of(context).textTheme.bodySmall!.color,
           ),
           child: Column(
@@ -495,21 +509,23 @@ class _ExtensionCardState extends State<ExtensionCard> {
                 spacing: 6,
                 runSpacing: 6,
                 children: [
-                  _badge(widget.version),
-                  _badge(ExtensionUtils.typeToString(widget.type)),
-                  _badge(_langBadgeLabel(widget.lang)),
-                  if (widget.nsfw) _badge('+18', color: Colors.redAccent),
+                  _badge(widget.version, tv: tv),
+                  _badge(ExtensionUtils.typeToString(widget.type), tv: tv),
+                  _badge(_langBadgeLabel(widget.lang), tv: tv),
+                  if (widget.nsfw)
+                    _badge('+18', color: Colors.redAccent, tv: tv),
                   if (widget.unstable)
                     _badge(
                         ExtensionUtils.etiquetaCortaInestable(
                             widget.unstableReason),
-                        color: Colors.orange),
+                        color: Colors.orange,
+                        tv: tv),
                   // Solo indica que el catálogo trae firma de prism+ (no
                   // valida acá — eso pasa recién al instalar, ver
                   // _install()). Es solo informativo, no editable.
                   if (widget.signature != null && widget.signature!.isNotEmpty)
                     _badge('extension.official-badge'.i18n,
-                        color: HomeTheme.accentPink),
+                        color: HomeTheme.accentPink, tv: tv),
                 ],
               ),
               // Descripción — de qué va la extensión (anime, lectura,
@@ -555,13 +571,16 @@ class _ExtensionCardState extends State<ExtensionCard> {
       // Ancho SIEMPRE fijo (antes 90/96 según hasUpgrade) — que cambie de
       // 90 a 96 al instalar corría el botón unos píxeles hacia la
       // izquierda justo al tocarlo, se sentía como que "la card se mueve".
+      // En TV, más ancho: botones más grandes (mejor blanco para el mando)
+      // necesitan más lugar — sigue siendo UN solo valor fijo por
+      // plataforma, así que la card nunca cambia de ancho por su cuenta.
       trailing: SizedBox(
-        width: 96,
+        width: tv ? 168 : 96,
         child: isLoading
-            ? const SizedBox(
-                width: 25,
-                height: 25,
-                child: ProgressRing(),
+            ? SizedBox(
+                width: tv ? 32 : 25,
+                height: tv ? 32 : 25,
+                child: const ProgressRing(),
               )
             // Inestable y todavía no instalada: bloqueada, no se ofrece
             // "Instalar" — el mensaje ya se explica en el subtítulo de
@@ -579,13 +598,13 @@ class _ExtensionCardState extends State<ExtensionCard> {
                         children: [
                           if (hasUpgrade)
                             SizedBox(
-                              height: 32,
+                              height: tv ? 44 : 32,
                               child: FilledButton(
                                 style: TextButton.styleFrom(
-                                  padding:
-                                      const EdgeInsets.symmetric(horizontal: 8),
+                                  padding: EdgeInsets.symmetric(
+                                      horizontal: tv ? 14 : 8),
                                   minimumSize: Size.zero,
-                                  textStyle: const TextStyle(fontSize: 12),
+                                  textStyle: TextStyle(fontSize: tv ? 15 : 12),
                                 ),
                                 onPressed: () async {
                                   await _install();
@@ -601,13 +620,13 @@ class _ExtensionCardState extends State<ExtensionCard> {
                               ),
                             ),
                           SizedBox(
-                            height: 32,
+                            height: tv ? 44 : 32,
                             child: TextButton(
                               style: TextButton.styleFrom(
-                                padding:
-                                    const EdgeInsets.symmetric(horizontal: 8),
+                                padding: EdgeInsets.symmetric(
+                                    horizontal: tv ? 14 : 8),
                                 minimumSize: Size.zero,
-                                textStyle: const TextStyle(fontSize: 12),
+                                textStyle: TextStyle(fontSize: tv ? 15 : 12),
                               ),
                               onPressed: () async {
                                 await ExtensionUtils.uninstall(widget.package);
@@ -622,11 +641,19 @@ class _ExtensionCardState extends State<ExtensionCard> {
                           ),
                         ],
                       )
-                    : TextButton(
-                        onPressed: () async {
-                          await _install();
-                        },
-                        child: Text('common.install'.i18n),
+                    : SizedBox(
+                        height: tv ? 44 : null,
+                        child: TextButton(
+                          style: tv
+                              ? TextButton.styleFrom(
+                                  textStyle: const TextStyle(fontSize: 15),
+                                )
+                              : null,
+                          onPressed: () async {
+                            await _install();
+                          },
+                          child: Text('common.install'.i18n),
+                        ),
                       ),
       ),
     );

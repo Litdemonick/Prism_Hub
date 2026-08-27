@@ -391,9 +391,8 @@ class _ExtensionTileState extends State<ExtensionTile> {
     // viene a tocar— es un blanco diminuto para el mando.
     final tv = PlatformTv.esTelevisionSync;
     return ListTile(
-      contentPadding: tv
-          ? const EdgeInsets.symmetric(horizontal: 22, vertical: 14)
-          : null,
+      contentPadding:
+          tv ? const EdgeInsets.symmetric(horizontal: 22, vertical: 14) : null,
       leading: tv
           ? _iconBox(size: 56, iconSize: 28)
           : _iconBox(size: 40, iconSize: 20),
@@ -419,13 +418,15 @@ class _ExtensionTileState extends State<ExtensionTile> {
             spacing: 6,
             runSpacing: 6,
             children: [
-              _badge(widget.extension.version),
-              _badge(ExtensionUtils.typeToString(widget.extension.type)),
-              _badge(_langBadgeLabel(widget.extension.lang)),
-              if (widget.extension.nsfw) _badge('18+', color: Colors.redAccent),
+              _badge(widget.extension.version, tv: tv),
+              _badge(ExtensionUtils.typeToString(widget.extension.type),
+                  tv: tv),
+              _badge(_langBadgeLabel(widget.extension.lang), tv: tv),
+              if (widget.extension.nsfw)
+                _badge('18+', color: Colors.redAccent, tv: tv),
               if (_unstable)
                 _badge(ExtensionUtils.etiquetaCortaInestable(_motivoInestable),
-                    color: Colors.orange),
+                    color: Colors.orange, tv: tv),
             ],
           ),
           // Descripción — de qué va la extensión (anime, lectura, series,
@@ -440,6 +441,7 @@ class _ExtensionTileState extends State<ExtensionTile> {
                 widget.extension.description!,
                 maxLines: 2,
                 overflow: TextOverflow.ellipsis,
+                style: tv ? const TextStyle(fontSize: 15) : null,
               ),
             ),
           // Botón real (antes era un texto rojo subrayado, se sentía como
@@ -523,11 +525,20 @@ class _ExtensionTileState extends State<ExtensionTile> {
       trailing: Row(
         mainAxisSize: MainAxisSize.min,
         children: [
-          Switch(
-            value: _enabled,
-            onChanged: _cambiandoEstado ? null : _toggleEnabled,
+          // Más grande en TV — es lo que uno viene a tocar/apuntar con el
+          // mando, y de fábrica es un blanco chico (ver el comentario de
+          // más arriba en este método). Transform.scale y no un Switch
+          // distinto: agranda el widget entero, hitbox incluido, sin
+          // tener que reimplementar su lógica.
+          Transform.scale(
+            scale: tv ? 1.3 : 1.0,
+            child: Switch(
+              value: _enabled,
+              onChanged: _cambiandoEstado ? null : _toggleEnabled,
+            ),
           ),
           IconButton(
+            iconSize: tv ? 28 : null,
             onPressed: () {
               // 弹出菜单 — solo desinstalar (ajustes/editar código quitados a
               // pedido del usuario).
@@ -641,17 +652,24 @@ class _ExtensionTileState extends State<ExtensionTile> {
 
   // Pill con fondo propio para cada badge — mismo widget que ExtensionCard
   // del repositorio, repetido acá porque no comparten archivo.
-  Widget _badge(String text, {Color? color}) {
+  //
+  // `tv`: más grande, mismo criterio que el resto de _buildAndroidTile
+  // ("la fila se mira desde el sillón, no a 30cm"). Por defecto en false
+  // porque _buildDesktop también llama a este mismo método y ahí nunca
+  // corresponde el tamaño de TV.
+  Widget _badge(String text, {Color? color, bool tv = false}) {
     final c = color ?? HomeTheme.textMuted;
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+      padding:
+          EdgeInsets.symmetric(horizontal: tv ? 11 : 8, vertical: tv ? 5 : 3),
       decoration: BoxDecoration(
         color: c.withValues(alpha: 0.14),
         borderRadius: BorderRadius.circular(6),
       ),
       child: Text(
         text,
-        style: TextStyle(fontSize: 11, color: c, fontWeight: FontWeight.w600),
+        style: TextStyle(
+            fontSize: tv ? 15 : 11, color: c, fontWeight: FontWeight.w600),
       ),
     );
   }
