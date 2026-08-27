@@ -1,11 +1,28 @@
 <?xml version="1.0" encoding="utf-8"?>
 <!-- Modify this file to customize your launch splash screen -->
+<!--
+    Reportado en vivo: en Android TV el logo salía enorme, pegado a los
+    bordes de la pantalla. `launch_logo.png` vive en `drawable/` sin
+    variantes por densidad (1168x1168px), así que Android lo trata como un
+    recurso a 160dpi y lo dibuja a su tamaño intrínseco -1168dp-, muchísimo
+    más grande que cualquier pantalla real. Con `<bitmap gravity="center">`
+    esto NO se nota (o se nota menos) en un celular porque el recorte
+    resultante, centrado sobre una imagen simétrica, todavía se lee como un
+    logo grande; en un televisor -pantalla más ancha y a menudo con una
+    densidad reportada más baja- el mismo recorte deja ver casi toda la
+    imagen pegada a los cuatro bordes.
+
+    El `<item>` de un layer-list SÍ soporta ancho/alto fijos (a diferencia
+    del `<bitmap>` de adentro, que solo soporta gravity, nunca escalar) — con
+    eso el logo queda con el MISMO tamaño en dp en cualquier pantalla, en vez
+    de heredar el tamaño intrínseco del PNG.
+-->
 <layer-list xmlns:android="http://schemas.android.com/apk/res/android">
     <item android:drawable="@color/launch_background" />
 
-    <item>
-        <bitmap
-            android:gravity="center"
-            android:src="@drawable/launch_logo" />
-    </item>
+    <item
+        android:width="220dp"
+        android:height="220dp"
+        android:gravity="center"
+        android:drawable="@drawable/launch_logo" />
 </layer-list>
