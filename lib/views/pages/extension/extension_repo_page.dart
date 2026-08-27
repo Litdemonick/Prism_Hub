@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:easy_refresh/easy_refresh.dart';
 import 'package:fluent_ui/fluent_ui.dart' as fluent;
 import 'package:flutter/material.dart';
@@ -39,14 +41,13 @@ class _ExtensionRepoPageState extends State<ExtensionRepoPage> {
   static const _videoTypes = ExtensionUtils.videoTypes;
   static const _readingTypes = ExtensionUtils.readingTypes;
 
-  // Uno por dropdown: crearlos de nuevo en cada build (en vez de guardarlos
-  // como campos) rompía el flyout a mitad de abrir cuando Obx reconstruía
-  // la barra de filtros por un cambio de otro control.
-  final _typeFlyoutController = fluent.FlyoutController();
-  final _levelFlyoutController = fluent.FlyoutController();
-  final _langFlyoutController = fluent.FlyoutController();
-  final _nsfwFlyoutController = fluent.FlyoutController();
-  final _installedFlyoutController = fluent.FlyoutController();
+  // Uno solo para los cinco filtros, que ahora conviven en un único menú
+  // con submenús (ver _botonFiltros) — antes había uno por dropdown, cuando
+  // cada filtro tenía su propia pill y su propio flyout independiente.
+  // Creado como campo (no en build) por el mismo motivo que ya valía para
+  // los cinco viejos: recrearlo en cada build rompía el flyout a mitad de
+  // abrir cuando Obx reconstruía la barra por un cambio de otro control.
+  final _filtrosFlyoutController = fluent.FlyoutController();
 
   // Se pide el PIN para ver el filtro +18 de esta pantalla — por visita, no
   // se guarda en disco ni se comparte con la Zona +18. Mientras esté en
@@ -104,11 +105,7 @@ class _ExtensionRepoPageState extends State<ExtensionRepoPage> {
 
   @override
   void dispose() {
-    _typeFlyoutController.dispose();
-    _levelFlyoutController.dispose();
-    _langFlyoutController.dispose();
-    _nsfwFlyoutController.dispose();
-    _installedFlyoutController.dispose();
+    _filtrosFlyoutController.dispose();
     _desktopScrollController.dispose();
     super.dispose();
   }
@@ -300,17 +297,107 @@ class _ExtensionRepoPageState extends State<ExtensionRepoPage> {
   // reemplaza los fluent.ComboBox sueltos (look genérico de sistema, poco
   // integrado) por algo con la misma superficie/borde que el resto de la
   // app (mismo patrón que las tarjetas de abajo).
-  Widget _filterChip({
-    required fluent.FlyoutController controller,
-    required String label,
-    required String value,
-    required List<fluent.MenuFlyoutItemBase> Function(BuildContext) items,
-  }) {
+  /// Los cinco filtros (Tipo/Nivel/+18/Instalada/Idioma), en un solo botón
+  /// con un menú de submenús — cada `MenuFlyoutSubItem` abre exactamente la
+  /// misma lista de opciones que antes tenía su propia pill suelta.
+  ///
+  /// Con un punto rosa cuando hay algún filtro puesto (distinto del valor
+  /// "todas"/"all" de cada uno) — mismo criterio que ya usa el ícono
+  /// equivalente en Android (`extension_page.dart`, el "tune" de la
+  /// franja): sin la pill mostrando el valor elegido, hace falta ALGO que
+  /// diga "hay un filtro activo" para no perder esa información.
+  Widget _botonFiltros(BuildContext context) {
+    final hayFiltro = c.searchType.value != null ||
+        c.searchLevel.value != 'all' ||
+        c.searchNsfw.value != 'all' ||
+        c.searchInstalled.value != 'all' ||
+        c.searchLang.value != 'all';
     return fluent.FlyoutTarget(
-      controller: controller,
+      controller: _filtrosFlyoutController,
       child: GestureDetector(
-        onTap: () => controller.showFlyout(
-          builder: (context) => fluent.MenuFlyout(items: items(context)),
+        onTap: () => _filtrosFlyoutController.showFlyout(
+          builder: (flyoutContext) => fluent.MenuFlyout(
+            items: [
+              fluent.MenuFlyoutSubItem(
+                text: Text('extension-repo.filter-type'.i18n),
+                items: (context) => [
+                  fluent.MenuFlyoutItem(
+                    text: Text('common.show-all'.i18n),
+                    onPressed: () {
+                      fluent.Flyout.of(context).close();
+                      c.searchType.value = null;
+                    },
+                  ),
+                  fluent.MenuFlyoutItem(
+                    text: Text('extension-type.video'.i18n),
+                    onPressed: () {
+                      fluent.Flyout.of(context).close();
+                      c.searchType.value = _videoTypes;
+                    },
+                  ),
+                  fluent.MenuFlyoutItem(
+                    text: Text('extension-type.reading'.i18n),
+                    onPressed: () {
+                      fluent.Flyout.of(context).close();
+                      c.searchType.value = _readingTypes;
+                    },
+                  ),
+                ],
+              ),
+              fluent.MenuFlyoutSubItem(
+                text: Text('extension-repo.filter-level'.i18n),
+                items: (context) => [
+                  for (final level in ['all', 'stable', 'unstable'])
+                    fluent.MenuFlyoutItem(
+                      text: Text('extension-repo.level-$level'.i18n),
+                      onPressed: () {
+                        fluent.Flyout.of(context).close();
+                        c.searchLevel.value = level;
+                      },
+                    ),
+                ],
+              ),
+              fluent.MenuFlyoutSubItem(
+                text: Text('extension-repo.filter-nsfw'.i18n),
+                items: (context) => [
+                  for (final v in ['all', 'sfw', 'nsfw'])
+                    fluent.MenuFlyoutItem(
+                      text: Text('extension-repo.nsfw-$v'.i18n),
+                      onPressed: () {
+                        fluent.Flyout.of(context).close();
+                        unawaited(_elegirFiltroNsfw(v));
+                      },
+                    ),
+                ],
+              ),
+              fluent.MenuFlyoutSubItem(
+                text: Text('extension-repo.filter-installed'.i18n),
+                items: (context) => [
+                  for (final v in ['all', 'installed', 'available', 'new'])
+                    fluent.MenuFlyoutItem(
+                      text: Text('extension-repo.installed-$v'.i18n),
+                      onPressed: () {
+                        fluent.Flyout.of(context).close();
+                        c.searchInstalled.value = v;
+                      },
+                    ),
+                ],
+              ),
+              fluent.MenuFlyoutSubItem(
+                text: Text('extension-repo.filter-lang'.i18n),
+                items: (context) => [
+                  for (final entry in _langLabels.entries)
+                    fluent.MenuFlyoutItem(
+                      text: Text(entry.value),
+                      onPressed: () {
+                        fluent.Flyout.of(context).close();
+                        c.searchLang.value = entry.key;
+                      },
+                    ),
+                ],
+              ),
+            ],
+          ),
         ),
         child: MouseRegion(
           cursor: SystemMouseCursors.click,
@@ -324,19 +411,27 @@ class _ExtensionRepoPageState extends State<ExtensionRepoPage> {
             child: Row(
               mainAxisSize: MainAxisSize.min,
               children: [
+                Icon(Icons.tune_rounded, size: 15, color: HomeTheme.textMuted),
+                const SizedBox(width: 8),
                 Text(
-                  '$label: ',
-                  style:
-                      TextStyle(color: HomeTheme.textMuted, fontSize: 13),
-                ),
-                Text(
-                  value,
+                  'search.filter'.i18n,
                   style: TextStyle(
                     color: HomeTheme.textPrimary,
                     fontSize: 13,
                     fontWeight: FontWeight.w600,
                   ),
                 ),
+                if (hayFiltro) ...[
+                  const SizedBox(width: 6),
+                  Container(
+                    width: 7,
+                    height: 7,
+                    decoration: BoxDecoration(
+                      shape: BoxShape.circle,
+                      color: HomeTheme.accentPink,
+                    ),
+                  ),
+                ],
                 const SizedBox(width: 6),
                 Icon(
                   fluent.FluentIcons.chevron_down,
@@ -1044,11 +1139,10 @@ class _ExtensionRepoPageState extends State<ExtensionRepoPage> {
                           );
                         }),
                         const SizedBox(height: 20),
-                        // Barra de filtros: cada control es su propia pill
-                        // separada (antes todos compartían una sola caja —
-                        // acá se leen como piezas distintas, más fácil de
-                        // escanear). Wrap para que reflowe en vez de
-                        // desbordar en ventana angosta. Centrada para
+                        // Barra de acciones: el botón de Filtros (los cinco
+                        // juntos, ver _botonFiltros), Instalar todas, el
+                        // buscador y refrescar. Wrap para que reflowe en vez
+                        // de desbordar en ventana angosta. Centrada para
                         // acompañar el resto del centrado de la página.
                         Wrap(
                           alignment: WrapAlignment.center,
@@ -1056,126 +1150,18 @@ class _ExtensionRepoPageState extends State<ExtensionRepoPage> {
                           spacing: 10,
                           runSpacing: 10,
                           children: [
-                            Obx(() => _filterChip(
-                                  controller: _typeFlyoutController,
-                                  label: 'extension-repo.filter-type'.i18n,
-                                  value: switch (c.searchType.value) {
-                                    null => 'common.show-all'.i18n,
-                                    _videoTypes => 'extension-type.video'.i18n,
-                                    _readingTypes =>
-                                      'extension-type.reading'.i18n,
-                                    _ => 'common.show-all'.i18n,
-                                  },
-                                  items: (context) => [
-                                    fluent.MenuFlyoutItem(
-                                      text: Text('common.show-all'.i18n),
-                                      onPressed: () {
-                                        fluent.Flyout.of(context).close();
-                                        c.searchType.value = null;
-                                      },
-                                    ),
-                                    fluent.MenuFlyoutItem(
-                                      text: Text('extension-type.video'.i18n),
-                                      onPressed: () {
-                                        fluent.Flyout.of(context).close();
-                                        c.searchType.value = _videoTypes;
-                                      },
-                                    ),
-                                    fluent.MenuFlyoutItem(
-                                      text: Text('extension-type.reading'.i18n),
-                                      onPressed: () {
-                                        fluent.Flyout.of(context).close();
-                                        c.searchType.value = _readingTypes;
-                                      },
-                                    ),
-                                  ],
-                                )),
-                            Obx(() => _filterChip(
-                                  controller: _levelFlyoutController,
-                                  label: 'extension-repo.filter-level'.i18n,
-                                  value: switch (c.searchLevel.value) {
-                                    'stable' =>
-                                      'extension-repo.level-stable'.i18n,
-                                    'unstable' =>
-                                      'extension-repo.level-unstable'.i18n,
-                                    _ => 'extension-repo.level-all'.i18n,
-                                  },
-                                  items: (context) => [
-                                    for (final level in [
-                                      'all',
-                                      'stable',
-                                      'unstable',
-                                    ])
-                                      fluent.MenuFlyoutItem(
-                                        text: Text(
-                                          'extension-repo.level-$level'.i18n,
-                                        ),
-                                        onPressed: () {
-                                          fluent.Flyout.of(context).close();
-                                          c.searchLevel.value = level;
-                                        },
-                                      ),
-                                  ],
-                                )),
-                            Obx(() => _filterChip(
-                                  controller: _nsfwFlyoutController,
-                                  label: 'extension-repo.filter-nsfw'.i18n,
-                                  value:
-                                      'extension-repo.nsfw-${c.searchNsfw.value}'
-                                          .i18n,
-                                  items: (context) => [
-                                    for (final v in ['all', 'sfw', 'nsfw'])
-                                      fluent.MenuFlyoutItem(
-                                        text: Text(
-                                          'extension-repo.nsfw-$v'.i18n,
-                                        ),
-                                        onPressed: () {
-                                          fluent.Flyout.of(context).close();
-                                          _elegirFiltroNsfw(v);
-                                        },
-                                      ),
-                                  ],
-                                )),
-                            Obx(() => _filterChip(
-                                  controller: _installedFlyoutController,
-                                  label: 'extension-repo.filter-installed'.i18n,
-                                  value:
-                                      'extension-repo.installed-${c.searchInstalled.value}'
-                                          .i18n,
-                                  items: (context) => [
-                                    for (final v in [
-                                      'all',
-                                      'installed',
-                                      'available',
-                                      'new',
-                                    ])
-                                      fluent.MenuFlyoutItem(
-                                        text: Text(
-                                          'extension-repo.installed-$v'.i18n,
-                                        ),
-                                        onPressed: () {
-                                          fluent.Flyout.of(context).close();
-                                          c.searchInstalled.value = v;
-                                        },
-                                      ),
-                                  ],
-                                )),
-                            Obx(() => _filterChip(
-                                  controller: _langFlyoutController,
-                                  label: 'extension-repo.filter-lang'.i18n,
-                                  value: _langLabels[c.searchLang.value] ??
-                                      c.searchLang.value,
-                                  items: (context) => [
-                                    for (final entry in _langLabels.entries)
-                                      fluent.MenuFlyoutItem(
-                                        text: Text(entry.value),
-                                        onPressed: () {
-                                          fluent.Flyout.of(context).close();
-                                          c.searchLang.value = entry.key;
-                                        },
-                                      ),
-                                  ],
-                                )),
+                            // ── Los cinco filtros, en UN solo botón ─────────
+                            //
+                            // Pedido explícito: "hay muchos botones,
+                            // organizalos para que sea más fácil y
+                            // compacto". Antes eran cinco pills sueltas
+                            // (Tipo/Nivel/+18/Instalada/Idioma) siempre a la
+                            // vista, cada una con su propio flyout. Se
+                            // consolidan en un solo disparador "Filtros" con
+                            // un menú de submenús (MenuFlyoutSubItem) — cada
+                            // uno abre exactamente la misma lista de opciones
+                            // que ya tenía su chip, no se inventó ninguna.
+                            Obx(() => _botonFiltros(context)),
                             // Instalar todo lo que está a la vista. Al final
                             // de la barra: es una acción, no un filtro, y
                             // pegada a los filtros deja claro que actúa sobre
