@@ -78,8 +78,29 @@ class _HistoryPageState extends State<HistoryPage> {
   /// El índice de la pestaña «Todo» de Favoritos. Ver [_tabs].
   static const _favTodo = 5;
 
-  List<int> get _pestanas =>
-      widget.soloFavoritos ? const [_favTodo, 3, 4] : const [0, 1, 2];
+  // En Android TV, sin pestaña de Lectura -mismo criterio que Inicio/Buscar/
+  // Biblioteca: nada de manga/novela en TV, en ningún lado. El índice 0/
+  // _favTodo ("Todo") tampoco puede colar lectura mezclada — ver
+  // _sinLecturaEnTv más abajo, que filtra eso independientemente de la
+  // pestaña.
+  List<int> get _pestanas {
+    if (PlatformTv.esTelevisionSync) {
+      return widget.soloFavoritos ? const [_favTodo, 3] : const [0, 1];
+    }
+    return widget.soloFavoritos ? const [_favTodo, 3, 4] : const [0, 1, 2];
+  }
+
+  /// Saca la lectura de una lista en Android TV — se aplica en TODAS las
+  /// pestañas, incluida "Todo", para que no quede colando ahí aunque la
+  /// pestaña de Lectura ya no exista.
+  List<T> _sinLecturaEnTv<T>(List<T> items, ExtensionType Function(T) tipoDe) {
+    if (!PlatformTv.esTelevisionSync) return items;
+    return items
+        .where((e) =>
+            !ExtensionUtils.readingTypes.contains(tipoDe(e)) ||
+            ExtensionUtils.videoTypes.contains(tipoDe(e)))
+        .toList();
+  }
 
   late int _tabIndex = _pestanas.contains(widget.initialTab)
       ? widget.initialTab
@@ -240,10 +261,13 @@ class _HistoryPageState extends State<HistoryPage> {
       if (desde != null && h.date.isBefore(desde)) return false;
       return true;
     }).toList();
-    return _aplicarOrden(
-      _aplicarEstado(base),
-      (h) => h.title,
-      (h) => h.date,
+    return _sinLecturaEnTv(
+      _aplicarOrden(
+        _aplicarEstado(base),
+        (h) => h.title,
+        (h) => h.date,
+      ),
+      (h) => h.type,
     );
   }
 
@@ -256,7 +280,10 @@ class _HistoryPageState extends State<HistoryPage> {
     }).toList();
     // Los favoritos no llevan estado de avance (eso vive en el historial), así
     // que el filtro de estado no aplica — solo el orden.
-    return _aplicarOrden(base, (f) => f.title, (f) => f.date);
+    return _sinLecturaEnTv(
+      _aplicarOrden(base, (f) => f.title, (f) => f.date),
+      (f) => f.type,
+    );
   }
 
   /// Alterna entre "en curso" y "visto". No toca la fecha: mover un título
