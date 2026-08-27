@@ -101,13 +101,29 @@ class MainActivity: AudioServiceFragmentActivity() {
             }
     }
 
-    // Es la forma oficial de saber si esto es un Android TV (o una caja
-    // Google TV/leanback) en vez de un teléfono o tablet: el sistema mismo
-    // reporta el "modo de UI" actual, y UI_MODE_TYPE_TELEVISION es el valor
-    // que usa cualquier launcher de TV real.
+    // UiModeManager es la forma "oficial" de Google, pero NO alcanza sola:
+    // reportado en un televisor real donde la app entraba como si fuera un
+    // teléfono (todo el layout de teléfono, y el reproductor con controles
+    // táctiles que un mando no puede tocar — pantalla negra, nada responde).
+    // Fire OS (Amazon) es el caso conocido: es un fork de Android, y en
+    // varias versiones NO deja `currentModeType` en UI_MODE_TYPE_TELEVISION
+    // aunque el aparato sea, de hecho, un televisor — el propio Amazon
+    // documenta que hay que revisar el FEATURE_LEANBACK del sistema en vez
+    // de (o además de) UiModeManager. Cualquier TV box genérico con una capa
+    // propia encima de Android puede tener el mismo problema.
+    //
+    // Con las tres condiciones en OR, alcanza con que UNA sola diga la
+    // verdad — FEATURE_LEANBACK es el que Google exige declarar para
+    // publicar en la Play Store de TV, así que un Android TV/Google TV real
+    // (Fire TV incluido, que también lo requiere para su tienda) lo trae
+    // sí o sí, incluso cuando UiModeManager se equivoca.
     private fun isTelevision(): Boolean {
         val uiModeManager = getSystemService(Context.UI_MODE_SERVICE) as? UiModeManager
-        return uiModeManager?.currentModeType == Configuration.UI_MODE_TYPE_TELEVISION
+        if (uiModeManager?.currentModeType == Configuration.UI_MODE_TYPE_TELEVISION) {
+            return true
+        }
+        return packageManager.hasSystemFeature(android.content.pm.PackageManager.FEATURE_LEANBACK) ||
+            packageManager.hasSystemFeature("android.hardware.type.television")
     }
 
     // Todo lo que hace falta saber del aparato para decidir cuánto puede
