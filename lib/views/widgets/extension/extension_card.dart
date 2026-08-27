@@ -366,6 +366,18 @@ class _ExtensionCardState extends State<ExtensionCard> {
     );
   }
 
+  // "es"/"en"/"multi" a "ES"/"EN"/"Multi" — antes esta card mostraba el
+  // código crudo tal cual venía del manifiesto, en minúscula, mientras que
+  // la de Extensiones instaladas (extension_tile.dart) ya lo formateaba.
+  // Mismos tres casos que reconoce ExtensionUtils.coincideIdioma; cualquier
+  // código no anticipado se muestra en mayúsculas en vez de ocultarse.
+  String _langBadgeLabel(String lang) => switch (lang) {
+        'es' => 'ES',
+        'en' => 'EN',
+        'multi' => 'Multi',
+        _ => lang.toUpperCase(),
+      };
+
   // Pill con fondo propio para cada badge (versión/tipo/idioma/18+/
   // inestable/oficial) — antes eran Text sueltos uno al lado del otro en
   // un Wrap, así que sin ningún límite visual entre ellos se leían todos
@@ -486,7 +498,7 @@ class _ExtensionCardState extends State<ExtensionCard> {
                 children: [
                   _badge(widget.version),
                   _badge(ExtensionUtils.typeToString(widget.type)),
-                  _badge(widget.lang),
+                  _badge(_langBadgeLabel(widget.lang)),
                   if (widget.nsfw) _badge('+18', color: Colors.redAccent),
                   if (widget.unstable)
                     _badge(ExtensionUtils.etiquetaCortaInestable(widget.unstableReason),
@@ -692,7 +704,7 @@ class _ExtensionCardState extends State<ExtensionCard> {
                 runSpacing: 6,
                 children: [
                   _badge(ExtensionUtils.typeToString(widget.type)),
-                  _badge(widget.lang),
+                  _badge(_langBadgeLabel(widget.lang)),
                   if (widget.nsfw) _badge('+18', color: Colors.redAccent),
                   if (widget.unstable)
                     _badge(ExtensionUtils.etiquetaCortaInestable(widget.unstableReason),
