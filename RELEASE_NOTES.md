@@ -1,4 +1,9 @@
-## PrismHub v1.0.36 — Android TV: zonas con cards horizontales
+## PrismHub v1.0.37 — Android TV: el video ya reproduce
+
+> 🎬 **El bug grande de esta tanda: elegir un servidor con el control remoto
+> ya arranca la reproducción de verdad.** Antes confirmar con OK dejaba la
+> app dando vueltas en el mismo cartel de "elegí un servidor" sin que
+> pasara nada — estaba llamando a la función equivocada por dentro.
 
 > ⚠️ **La app sigue en mantenimiento general.** Se la sigue reestructurando
 > por dentro, así que es posible que te cruces con fallos o con cosas a
@@ -7,20 +12,16 @@
 
 ### 📺 Android TV
 
-- **Las zonas (Películas/Series/Anime) ahora muestran cards horizontales**,
-  estilo miniatura de video, en vez del póster vertical — mismo diseño que
-  ya usan Continuar viendo y Favoritos.
-- **La lista de servidores del reproductor ya no se escondía sola.** Al
-  abrir un video que necesitaba elegir servidor, la lista podía
-  desaparecer a los 5 segundos aunque siguiera esperando una elección —
-  quedaba el aviso solo, sin nada para tocar.
-- **El carrusel de Inicio ya no mostraba manga ni novela.** Se había
-  quedado afuera del filtro que ya bloqueaba eso en las filas, el buscador,
-  Biblioteca e Historial.
-- **La pantalla de arranque ya es siempre el banner nuevo.** El logo
-  latiendo de antes seguía apareciendo en cada reapertura rápida de la
-  app (lo típico al estar probando algo) — ahora el banner se ve siempre,
-  en las cuatro plataformas.
+- **Elegir servidor con el mando ya reproduce el video.** Era el bug más
+  grande de todos: confirmar con OK dejaba la pantalla exactamente igual,
+  como si el control remoto no respondiera.
+
+### 📱 Pantalla de arranque
+
+- **Banner propio para cuando el celular está en vertical.** El banner de
+  arranque es panorámico, pensado para TV y horizontal — en un teléfono
+  parado se veía recortado de forma rara. Ahora hay un segundo banner,
+  compuesto directamente para esa forma de pantalla.
 
 ---
 
@@ -66,16 +67,16 @@
 
 | Archivo | Para |
 |---|---|
-| **`PrismHub-setup-windows-v1.0.36.exe`** | **Instalador.** Lo normal: instala y crea el acceso directo |
-| `PrismHub-v1.0.36-windows-x64.zip` | Portable: se descomprime y se ejecuta, sin instalar |
+| **`PrismHub-setup-windows-v1.0.37.exe`** | **Instalador.** Lo normal: instala y crea el acceso directo |
+| `PrismHub-v1.0.37-windows-x64.zip` | Portable: se descomprime y se ejecuta, sin instalar |
 
 ### 🐧 Linux
 
 | Archivo | Para |
 |---|---|
-| `PrismHub-v1.0.36-linux-x64.tar.gz` | Se descomprime y se ejecuta |
+| `PrismHub-v1.0.37-linux-x64.tar.gz` | Se descomprime y se ejecuta |
 
-> Los archivos que llevan la versión en el nombre (`v1.0.36`) quedan fijos en
+> Los archivos que llevan la versión en el nombre (`v1.0.37`) quedan fijos en
 > esta publicación. Los de Android que **no** la llevan apuntan siempre a la
 > más nueva — son los que conviene usar para un enlace o un código que quede
 > guardado.
