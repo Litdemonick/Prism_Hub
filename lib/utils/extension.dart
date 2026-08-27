@@ -1947,7 +1947,6 @@ class ExtensionUtils {
     await HomePageController.callRefreshAll();
   }
 
-
   static final RegExp _episodeNumberPattern = RegExp(r'\d+(?:\.\d+)?');
 
   // El número real de episodio/capítulo, extraído del título guardado —
@@ -2092,6 +2091,22 @@ class ExtensionUtils {
     }
 
     return zonas;
+  }
+
+  /// Si esta extensión NUNCA aporta vídeo — ni sola ni mixta. A propósito
+  /// distinto de `zonasDe(package).isEmpty`: una extensión SIN @contentKind
+  /// declarado (hoy, las 19 reales) también da `zonasDe` vacío, y esa es
+  /// justo la que nunca tiene que desaparecer de ningún lado ("sin
+  /// clasificar" no es lo mismo que "sin vídeo"). Esto mira el `type`
+  /// —dato que SIEMPRE se conoce, sin depender de que nadie declare nada—
+  /// así que solo da `true` para una extensión de lectura pura (manga,
+  /// novela) confirmada como tal. Pensado para Android TV: "solo es
+  /// vídeo/streaming, nada de lectura" (ver `_ContenidoTV` en
+  /// home_page_tv.dart).
+  static bool esSoloLectura(String package) {
+    final ext = runtimes[package]?.extension ?? vistaPrevia[package]?.extension;
+    if (ext == null) return false;
+    return readingTypes.contains(ext.type) && !videoTypes.contains(ext.type);
   }
 
   static addLog(

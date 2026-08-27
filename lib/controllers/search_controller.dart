@@ -5,6 +5,7 @@ import 'package:get/get.dart';
 import 'package:prismhub/models/extension.dart';
 import 'package:prismhub/utils/connectivity.dart';
 import 'package:prismhub/utils/extension.dart';
+import 'package:prismhub/utils/platform_tv.dart';
 import 'package:prismhub/utils/search_text.dart';
 import 'package:prismhub/data/services/extension_service.dart';
 
@@ -95,6 +96,15 @@ class SearchPageController extends GetxController {
     final exts = ExtensionUtils.enabledRuntimes.values.toList();
     if (types != null) {
       exts.removeWhere((element) => !types.contains(element.extension.type));
+    }
+    // En Android TV, nada de lectura — pedido explícito: "solo es video,
+    // streaming, nada de lectura". Una extensión de lectura pura (manga,
+    // novela) no tiene ninguna forma sensata de mostrarse ni de leerse con
+    // un control remoto; una mixta sigue buscándose igual, por su parte de
+    // vídeo.
+    if (PlatformTv.esTelevisionSync) {
+      exts.removeWhere(
+          (element) => ExtensionUtils.esSoloLectura(element.extension.package));
     }
     // Zona +18 del buscador: solo extensiones marcadas +18 (enteras) o
     // mixtas (que aportan su parte adulta). Buscador normal: ninguna, sin

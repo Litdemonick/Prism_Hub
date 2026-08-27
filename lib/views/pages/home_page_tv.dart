@@ -552,6 +552,17 @@ class _ContenidoTV extends StatelessWidget {
       .where((f) => ZonasPreferidasEnInicio.pasaElFiltro(
             ExtensionUtils.zonasDe(f.package),
           ))
+      // En TV, nada de lectura — pedido explícito: "solo es video,
+      // streaming, nada de lectura". `esSoloLectura` y no `zonasDe(...)
+      // .isEmpty`: una extensión SIN @contentKind declarado (hoy, las 19
+      // reales) también da zonasDe vacío, y esa nunca tiene que
+      // desaparecer por "sin clasificar" — acá lo que importa es el
+      // `type`, que siempre se conoce. Una mixta (ShadeManga) sigue
+      // entrando porque SÍ aporta video, aunque su fila mezcle formatos
+      // — ese reparto por formato es cosa de la Zona
+      // (ZonaCatalogoController), que Inicio nunca hizo ni en teléfono
+      // ni en PC.
+      .where((f) => !ExtensionUtils.esSoloLectura(f.package))
       .toList();
 
   @override
@@ -770,8 +781,7 @@ class _FilaZonaTvState extends State<_FilaZonaTv> {
                                 coverHeaders: item.headers,
                               );
                           return Padding(
-                            padding: const EdgeInsets.only(
-                                top: 10, right: 14),
+                            padding: const EdgeInsets.only(top: 10, right: 14),
                             child: FocusableCard(
                               onTap: abrir,
                               altoMarco: _anchoTarjetaTv(context) * 3 / 2,
