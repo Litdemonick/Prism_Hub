@@ -465,8 +465,7 @@ class _ExtensionCardState extends State<ExtensionCard> {
       child: Stack(
         children: [
           _buildAndroidTile(context),
-          if (isInstall)
-            Positioned(top: 8, right: 8, child: _installedBadge()),
+          if (isInstall) Positioned(top: 8, right: 8, child: _installedBadge()),
         ],
       ),
     );
@@ -501,7 +500,9 @@ class _ExtensionCardState extends State<ExtensionCard> {
                   _badge(_langBadgeLabel(widget.lang)),
                   if (widget.nsfw) _badge('+18', color: Colors.redAccent),
                   if (widget.unstable)
-                    _badge(ExtensionUtils.etiquetaCortaInestable(widget.unstableReason),
+                    _badge(
+                        ExtensionUtils.etiquetaCortaInestable(
+                            widget.unstableReason),
                         color: Colors.orange),
                   // Solo indica que el catálogo trae firma de prism+ (no
                   // valida acá — eso pasa recién al instalar, ver
@@ -569,63 +570,64 @@ class _ExtensionCardState extends State<ExtensionCard> {
             // en ExtensionTile vía hasExtensionUpdate.
             : (widget.unstable && !isInstall)
                 ? const SizedBox.shrink()
-            : isInstall
-                ? Wrap(
-                    alignment: WrapAlignment.end,
-                    crossAxisAlignment: WrapCrossAlignment.center,
-                    spacing: 4,
-                    runSpacing: 0,
-                    children: [
-                      if (hasUpgrade)
-                        SizedBox(
-                          height: 32,
-                          child: FilledButton(
-                            style: TextButton.styleFrom(
-                              padding:
-                                  const EdgeInsets.symmetric(horizontal: 8),
-                              minimumSize: Size.zero,
-                              textStyle: const TextStyle(fontSize: 12),
+                : isInstall
+                    ? Wrap(
+                        alignment: WrapAlignment.end,
+                        crossAxisAlignment: WrapCrossAlignment.center,
+                        spacing: 4,
+                        runSpacing: 0,
+                        children: [
+                          if (hasUpgrade)
+                            SizedBox(
+                              height: 32,
+                              child: FilledButton(
+                                style: TextButton.styleFrom(
+                                  padding:
+                                      const EdgeInsets.symmetric(horizontal: 8),
+                                  minimumSize: Size.zero,
+                                  textStyle: const TextStyle(fontSize: 12),
+                                ),
+                                onPressed: () async {
+                                  await _install();
+                                  // mounted: instalar y desinstalar tardan (red + escritura en disco) y
+                                  // la tarjeta puede irse mientras tanto —cambiando de pestaña, tocando
+                                  // atras, o simplemente porque la lista se refresco—. setState sobre un
+                                  // widget ya desmontado tira "setState() called after dispose()" y se
+                                  // lleva la pantalla puesta.
+                                  if (!mounted) return;
+                                  setState(() {});
+                                },
+                                child: Text('extension-repo.upgrade'.i18n),
+                              ),
                             ),
-                            onPressed: () async {
-                              await _install();
-                              // mounted: instalar y desinstalar tardan (red + escritura en disco) y
-                              // la tarjeta puede irse mientras tanto —cambiando de pestaña, tocando
-                              // atras, o simplemente porque la lista se refresco—. setState sobre un
-                              // widget ya desmontado tira "setState() called after dispose()" y se
-                              // lleva la pantalla puesta.
-                              if (!mounted) return;
-                              setState(() {});
-                            },
-                            child: Text('extension-repo.upgrade'.i18n),
+                          SizedBox(
+                            height: 32,
+                            child: TextButton(
+                              style: TextButton.styleFrom(
+                                padding:
+                                    const EdgeInsets.symmetric(horizontal: 8),
+                                minimumSize: Size.zero,
+                                textStyle: const TextStyle(fontSize: 12),
+                              ),
+                              onPressed: () async {
+                                await ExtensionUtils.uninstall(widget.package);
+                                // Ver la nota de mounted mas arriba.
+                                if (!mounted) return;
+                                setState(() {
+                                  isInstall = false;
+                                });
+                              },
+                              child: Text('common.uninstall'.i18n),
+                            ),
                           ),
-                        ),
-                      SizedBox(
-                        height: 32,
-                        child: TextButton(
-                          style: TextButton.styleFrom(
-                            padding: const EdgeInsets.symmetric(horizontal: 8),
-                            minimumSize: Size.zero,
-                            textStyle: const TextStyle(fontSize: 12),
-                          ),
-                          onPressed: () async {
-                            await ExtensionUtils.uninstall(widget.package);
-                            // Ver la nota de mounted mas arriba.
-                            if (!mounted) return;
-                            setState(() {
-                              isInstall = false;
-                            });
-                          },
-                          child: Text('common.uninstall'.i18n),
-                        ),
+                        ],
+                      )
+                    : TextButton(
+                        onPressed: () async {
+                          await _install();
+                        },
+                        child: Text('common.install'.i18n),
                       ),
-                    ],
-                  )
-                : TextButton(
-                    onPressed: () async {
-                      await _install();
-                    },
-                    child: Text('common.install'.i18n),
-                  ),
       ),
     );
   }
@@ -707,21 +709,39 @@ class _ExtensionCardState extends State<ExtensionCard> {
                   _badge(_langBadgeLabel(widget.lang)),
                   if (widget.nsfw) _badge('+18', color: Colors.redAccent),
                   if (widget.unstable)
-                    _badge(ExtensionUtils.etiquetaCortaInestable(widget.unstableReason),
+                    _badge(
+                        ExtensionUtils.etiquetaCortaInestable(
+                            widget.unstableReason),
                         color: Colors.orange),
                   if (widget.signature != null && widget.signature!.isNotEmpty)
                     _badge('extension.official-badge'.i18n,
                         color: HomeTheme.accentPink),
                 ],
               ),
-              if (widget.unstable && !isInstall) ...[
+              // Visibility con maintainSize, no un `if` — mismo criterio
+              // que ya usa _buildAndroidTile más arriba en este archivo.
+              // Reportado en vivo en PC: instalar una extensión marcada
+              // inestable hacía desaparecer este aviso de golpe, la card
+              // se achicaba, y el Wrap de la grilla reacomodaba TODAS las
+              // que venían después — se sentía como que la lista "salta"
+              // justo al tocar instalar. Con el espacio siempre reservado
+              // (para cualquier extensión inestable, se muestre el texto o
+              // no en este momento), instalarla no cambia el alto de la
+              // card y nada de alrededor se mueve.
+              if (widget.unstable) ...[
                 const SizedBox(height: 8),
-                Text(
-                  widget.blockedReasonKey.i18n,
-                  textAlign: TextAlign.center,
-                  style: const TextStyle(fontSize: 11, color: Colors.orange),
-                  maxLines: 2,
-                  overflow: TextOverflow.ellipsis,
+                Visibility(
+                  visible: !isInstall,
+                  maintainSize: true,
+                  maintainAnimation: true,
+                  maintainState: true,
+                  child: Text(
+                    widget.blockedReasonKey.i18n,
+                    textAlign: TextAlign.center,
+                    style: const TextStyle(fontSize: 11, color: Colors.orange),
+                    maxLines: 2,
+                    overflow: TextOverflow.ellipsis,
+                  ),
                 ),
               ],
               const Spacer(),
@@ -753,8 +773,7 @@ class _ExtensionCardState extends State<ExtensionCard> {
                           : isInstall
                               ? Wrap(
                                   alignment: WrapAlignment.center,
-                                  crossAxisAlignment:
-                                      WrapCrossAlignment.center,
+                                  crossAxisAlignment: WrapCrossAlignment.center,
                                   spacing: 8,
                                   runSpacing: 8,
                                   children: [
@@ -770,16 +789,16 @@ class _ExtensionCardState extends State<ExtensionCard> {
                                         ),
                                         child: fluent.FilledButton(
                                           style: fluent.ButtonStyle(
-                                            padding: fluent.WidgetStateProperty
-                                                .all(
+                                            padding:
+                                                fluent.WidgetStateProperty.all(
                                               const EdgeInsets.symmetric(
                                                   horizontal: 10),
                                             ),
                                           ),
                                           child: Text(
                                             'extension-repo.upgrade'.i18n,
-                                            style: const TextStyle(
-                                                fontSize: 12),
+                                            style:
+                                                const TextStyle(fontSize: 12),
                                           ),
                                           onPressed: () async {
                                             await _install();
@@ -795,8 +814,8 @@ class _ExtensionCardState extends State<ExtensionCard> {
                                       ),
                                       child: fluent.HyperlinkButton(
                                         style: fluent.ButtonStyle(
-                                          padding: fluent.WidgetStateProperty
-                                              .all(
+                                          padding:
+                                              fluent.WidgetStateProperty.all(
                                             const EdgeInsets.symmetric(
                                                 horizontal: 4),
                                           ),
