@@ -10,6 +10,7 @@ import 'package:prismhub/models/index.dart';
 import 'package:prismhub/utils/extension.dart';
 import 'package:prismhub/utils/i18n.dart';
 import 'package:prismhub/utils/log.dart';
+import 'package:prismhub/utils/platform_tv.dart';
 import 'package:prismhub/utils/prismhub_directory.dart';
 import 'package:path/path.dart' as p;
 
@@ -172,10 +173,23 @@ class CatalogoExtensionesController extends GetxController {
   ///
   /// ── Por qué no es `destacados` a secas ──────────────────────────────────
   ///
-  /// Sin la barra de filtros ya no hay nada que dejar afuera acá — es una
-  /// vista calculada (rotada, ver `_rotadas`) sobre `destacados` entero.
-  List<(String, List<ExtensionListItem>)> get destacadosVisibles =>
-      _rotadas(destacados.toList());
+  /// Sin la barra de filtros ya no hay nada que dejar afuera acá salvo, en
+  /// Android TV, la lectura — ver el porqué abajo. Es una vista calculada
+  /// (rotada, ver `_rotadas`) sobre `destacados` entero.
+  List<(String, List<ExtensionListItem>)> get destacadosVisibles {
+    var lista = destacados.toList();
+    // En Android TV, nada de lectura — mismo criterio que ya se aplica en
+    // Inicio (_visibles), Buscar, Biblioteca e Historial. `destacados` (el
+    // carrusel) es una lista APARTE de `filas`, así que ese filtro no lo
+    // alcanzaba: reportado en vivo, "en el carrusel quitar en androidtv las
+    // que tienen contenido de lectura".
+    if (PlatformTv.esTelevisionSync) {
+      lista = lista
+          .where((par) => !ExtensionUtils.esSoloLectura(par.$1))
+          .toList();
+    }
+    return _rotadas(lista);
+  }
 
   /// La misma lista, empezando por otra extensión.
   ///
