@@ -627,37 +627,65 @@ class _SearchVacioState extends State<_SearchVacio> {
                           borderRadius: BorderRadius.circular(999),
                           border: Border.all(color: HomeTheme.border),
                         ),
-                        child: ListView.builder(
-                          scrollDirection: Axis.horizontal,
-                          controller: _scroll,
-                          // ── Bastante para librar la curva del container ──
-                          //
-                          // El container que envuelve esta lista es una
-                          // "cápsula" (`borderRadius: circular(999)`, arriba)
-                          // con las puntas casi tan redondeadas como su
-                          // alto — acá, ~21px de radio. Con solo 10px de
-                          // relleno, el primer/último chip quedaba pegado
-                          // contra esa curva y el fondo redondo terminaba
-                          // ANTES que el texto: se veía como si la propia
-                          // forma le cortara la palabra. Reportado en vivo
-                          // con captura, en celular y en PC — es el mismo
-                          // widget en la búsqueda general y en la Zona +18,
-                          // así que el arreglo alcanza a las dos. Con margen
-                          // mayor al radio, el chip entero queda en la parte
-                          // recta de la cápsula.
-                          padding: const EdgeInsets.symmetric(horizontal: 20),
-                          itemCount: extensiones.length,
-                          itemBuilder: (context, i) {
-                            final ext = extensiones[i];
-                            return Padding(
-                              padding: const EdgeInsets.symmetric(
-                                  vertical: 6, horizontal: 4),
-                              child: _ChipExtension(
-                                nombre: ext.value,
-                                onTap: () => _abrirExtension(context, ext.key),
-                              ),
-                            );
-                          },
+                        // ── Se difumina, no se corta en seco ────────────
+                        //
+                        // Mirando la mitad de la fila (que es lo normal:
+                        // ni al principio ni al final), el chip de cada
+                        // punta queda A LA MITAD por diseño — es lo que
+                        // dice "hay más para este lado", igual que
+                        // cualquier fila horizontal de por acá. El
+                        // problema reportado en vivo con captura no era
+                        // ESO: era que ese chip a la mitad se veía cortado
+                        // en seco, con su propio texto y su propia
+                        // cápsula redondeada terminando de golpe contra
+                        // el borde recto del contenedor — dos formas
+                        // redondas distintas (la del chip y la de este
+                        // contenedor) chocando en un límite duro.
+                        //
+                        // El `ShaderMask` (mismo mecanismo que ya usa
+                        // `_HeroCover` en `home_hero_banner.dart` para
+                        // desvanecer una portada) difumina esos bordes a
+                        // transparente: el chip de la punta se apaga de a
+                        // poco en vez de cortarse de golpe.
+                        child: ShaderMask(
+                          blendMode: BlendMode.dstIn,
+                          shaderCallback: (rect) => const LinearGradient(
+                            begin: Alignment.centerLeft,
+                            end: Alignment.centerRight,
+                            colors: [
+                              Colors.transparent,
+                              Colors.white,
+                              Colors.white,
+                              Colors.transparent,
+                            ],
+                            stops: [0.0, 0.08, 0.92, 1.0],
+                          ).createShader(rect),
+                          child: ListView.builder(
+                            scrollDirection: Axis.horizontal,
+                            controller: _scroll,
+                            // Además del difuminado: espacio de sobra para
+                            // que, cuando SÍ se está al principio o al
+                            // final de la fila (ahí no hay nada que
+                            // difuminar, el primer/último chip está
+                            // completo), no quede pegado contra la curva
+                            // de la cápsula —~21px de radio, con menos
+                            // relleno el fondo redondo terminaba antes que
+                            // el texto.
+                            padding: const EdgeInsets.symmetric(horizontal: 20),
+                            itemCount: extensiones.length,
+                            itemBuilder: (context, i) {
+                              final ext = extensiones[i];
+                              return Padding(
+                                padding: const EdgeInsets.symmetric(
+                                    vertical: 6, horizontal: 4),
+                                child: _ChipExtension(
+                                  nombre: ext.value,
+                                  onTap: () =>
+                                      _abrirExtension(context, ext.key),
+                                ),
+                              );
+                            },
+                          ),
                         ),
                       ),
                     ),
