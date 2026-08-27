@@ -86,6 +86,17 @@ class _ExtensionSearcherPageState extends fluent.State<ExtensionSearcherPage> {
   final List<List<ExtensionListItem>> _virtualPages = [];
 
   bool _isLoading = true;
+
+  /// El error real de la ÚLTIMA carga que terminó en fallo (no "no hay más
+  /// datos" — eso ya tiene su propio aviso, distinto). `null` mientras haya
+  /// contenido en pantalla o la última carga haya salido bien.
+  ///
+  /// Sin esto, un sitio caído mostraba EXACTAMENTE el mismo cartel que una
+  /// búsqueda sin resultados ("no se encontró nada") — con un snackbar que
+  /// aparecía dos segundos y se iba, así que el usuario terminaba pensando
+  /// que el título no existía en vez de que la extensión no respondió.
+  /// Reportado explícito: "marcale correctamente el error".
+  Object? _ultimoError;
   final EasyRefreshController _easyRefreshController = EasyRefreshController();
   Map<String, ExtensionFilter>? _filters;
   Map<String, List<String>> _selectedFilters = {};
@@ -480,6 +491,7 @@ class _ExtensionSearcherPageState extends fluent.State<ExtensionSearcherPage> {
       _browsePage = page;
       _browseData = [];
       _isLoading = true;
+      _ultimoError = null;
     });
     try {
       final collected = <ExtensionListItem>[];
@@ -580,7 +592,13 @@ class _ExtensionSearcherPageState extends fluent.State<ExtensionSearcherPage> {
       }
     } catch (e) {
       if (!mounted || myGen != _requestGen) return;
-      setState(() => _browsePage = oldPage);
+      // Solo si de verdad no quedó nada en pantalla: con `_virtualPages` no
+      // vacío, esta página falló pero las anteriores siguen ahí — no tiene
+      // sentido tapar contenido bueno con un cartel de error.
+      setState(() {
+        _browsePage = oldPage;
+        if (_virtualPages.isEmpty) _ultimoError = e;
+      });
       showPlatformSnackbar(
         context: context,
         content: friendlyError(e),
@@ -615,6 +633,7 @@ class _ExtensionSearcherPageState extends fluent.State<ExtensionSearcherPage> {
     try {
       _isLoading = true;
       if (_nsfwBlocked) _nsfwBlocked = false;
+      if (_data.isEmpty) _ultimoError = null;
       setState(() {});
       // Algunas fuentes (ej. jk) tienen páginas que se solapan con la
       // anterior — una sola página toda duplicada NO significa que no haya
@@ -691,6 +710,9 @@ class _ExtensionSearcherPageState extends fluent.State<ExtensionSearcherPage> {
       _data.addAll(fresh);
     } catch (e) {
       if (myGen != _requestGen) return;
+      // Solo si de verdad no quedó nada en pantalla — con contenido ya
+      // cargado, esto es "no se pudo traer más", no "esto no anda".
+      if (_data.isEmpty) _ultimoError = e;
       if (!mounted) rethrow;
       showPlatformSnackbar(
           // ignore: use_build_context_synchronously
@@ -1161,6 +1183,38 @@ class _ExtensionSearcherPageState extends fluent.State<ExtensionSearcherPage> {
   }
 
   Widget _buildNoResultsMessage() {
+    // ── Un sitio caído no es lo mismo que "no encontró nada" ─────────────
+    //
+    // Antes las dos caían en el mismo cartel de "sin resultados" — con el
+    // único aviso real (el snackbar de friendlyError) desapareciendo solo
+    // a los pocos segundos. El usuario terminaba pensando que el título no
+    // existía en esa extensión, cuando en realidad ni siquiera respondió.
+    // Pedido explícito: "márcale correctamente el error".
+    if (_ultimoError != null) {
+      return Center(
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 32),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Icon(Icons.cloud_off_rounded, color: HomeTheme.textMuted, size: 40),
+              const SizedBox(height: 12),
+              Text(
+                friendlyError(_ultimoError),
+                textAlign: TextAlign.center,
+                style: TextStyle(color: HomeTheme.textMuted, fontSize: 14),
+              ),
+              const SizedBox(height: 16),
+              PlatformFilledButton(
+                onPressed: () =>
+                    Platform.isAndroid ? _onLoad() : _goToPage(_browsePage),
+                child: Text('common.retry'.i18n),
+              ),
+            ],
+          ),
+        ),
+      );
+    }
     // Sin sesión de AniList (o extensión ni anime ni manga) esta parte
     // simplemente no se ofrece — no tiene sentido empujar un login solo
     // para esto, y sin token la llamada fallaría igual.

@@ -13,6 +13,7 @@ class HorizontalList extends StatefulWidget {
     this.itemCount,
     this.itemBuilder,
     this.contentBuilder,
+    this.mostrarFlecha = true,
   }) : assert(
           (itemCount != null && itemBuilder != null) || contentBuilder != null,
           "itemCount and itemBuilder or contentBuilder must not be null",
@@ -22,6 +23,10 @@ class HorizontalList extends StatefulWidget {
   final int? itemCount;
   final Widget? Function(BuildContext, int)? itemBuilder;
   final Widget Function(ScrollController)? contentBuilder;
+
+  /// En `false` para una sección que no lleva a ningún lado (`onClickMore`
+  /// vacío) — ver el comentario largo en `HorizontalTitle`.
+  final bool mostrarFlecha;
 
   @override
   State<HorizontalList> createState() => _HorizontalListState();
@@ -55,10 +60,13 @@ class _HorizontalListState extends State<HorizontalList> {
               ),
             ),
             const Spacer(),
-            TextButton(
-              onPressed: widget.onClickMore,
-              child: Text('common.show-all'.i18n),
-            )
+            // Mismo criterio que la flecha de escritorio: sin destino real,
+            // sin botón que prometa uno.
+            if (widget.mostrarFlecha)
+              TextButton(
+                onPressed: widget.onClickMore,
+                child: Text('common.show-all'.i18n),
+              ),
           ],
         ),
         const SizedBox(height: 8),
@@ -96,6 +104,7 @@ class _HorizontalListState extends State<HorizontalList> {
             HorizontalTitle(
               widget.title,
               onClick: widget.onClickMore,
+              mostrarFlecha: widget.mostrarFlecha,
             ),
             const Spacer(),
             Row(
@@ -150,9 +159,21 @@ class _HorizontalListState extends State<HorizontalList> {
 }
 
 class HorizontalTitle extends StatefulWidget {
-  const HorizontalTitle(this.text, {super.key, required this.onClick});
+  const HorizontalTitle(
+    this.text, {
+    super.key,
+    required this.onClick,
+    this.mostrarFlecha = true,
+  });
   final String text;
   final Function() onClick;
+
+  /// La flechita de "hay más para ver acá" — en `false` para una sección
+  /// que no lleva a ningún lado (ej. "Más relevantes" en Buscar, cuyo
+  /// `onClick` no hace nada): sin esto, el título se veía clickeable —
+  /// cursor de mano, resaltado al pasar el mouse, flecha — prometiendo una
+  /// navegación que nunca pasaba.
+  final bool mostrarFlecha;
 
   @override
   State<HorizontalTitle> createState() => _HorizontalTitleState();
@@ -163,6 +184,19 @@ class _HorizontalTitleState extends State<HorizontalTitle> {
 
   @override
   Widget build(BuildContext context) {
+    if (!widget.mostrarFlecha) {
+      return Padding(
+        padding: const EdgeInsets.symmetric(vertical: 10),
+        child: Text(
+          widget.text,
+          style: TextStyle(
+            fontSize: 16,
+            fontWeight: FontWeight.bold,
+            color: HomeTheme.textPrimary,
+          ),
+        ),
+      );
+    }
     return MouseRegion(
       cursor: SystemMouseCursors.click,
       onEnter: (event) {

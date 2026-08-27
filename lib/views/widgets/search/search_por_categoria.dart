@@ -178,12 +178,18 @@ class SearchPorCategoria extends StatelessWidget {
       required String titulo,
       required List<_Hallazgo> items,
       required VoidCallback verMas,
+      // "Más relevantes" no lleva a ningún lado (no hay una zona propia
+      // para eso) — sin esto, su título salía con la flechita y el cursor
+      // de mano de una sección que sí navega, prometiendo un "ver más" que
+      // nunca pasaba nada al tocarlo.
+      bool mostrarFlecha = true,
     }) {
       return Padding(
         padding: const EdgeInsets.symmetric(horizontal: 16),
         child: HorizontalList(
           title: titulo,
           onClickMore: verMas,
+          mostrarFlecha: mostrarFlecha,
           contentBuilder: (controller) => SizedBox(
             height: 240,
             child: ListView.builder(
@@ -240,6 +246,7 @@ class SearchPorCategoria extends StatelessWidget {
                   return rango(a).compareTo(rango(b));
                 })),
               verMas: () {},
+              mostrarFlecha: false,
             ),
             const SizedBox(height: 20),
           ],

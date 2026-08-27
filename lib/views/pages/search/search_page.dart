@@ -1,9 +1,9 @@
 import 'dart:async';
+import 'dart:io';
 
 import 'package:fluent_ui/fluent_ui.dart' as fluent;
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
-import 'package:prismhub/models/extension.dart';
 import 'package:prismhub/controllers/search_controller.dart';
 import 'package:prismhub/utils/extension.dart';
 import 'package:prismhub/utils/platform_tv.dart';
@@ -74,16 +74,6 @@ class _SearchPageState extends State<SearchPage> {
   // siendo tipos distintos (el lector usa una UI distinta para cada uno).
   // videoTypes/readingTypes viven en ExtensionUtils (único lugar) — antes
   // este mismo set estaba duplicado acá y en extension_repo_page.dart.
-  static const _types = <Set<ExtensionType>?>[
-    null,
-    ExtensionUtils.videoTypes,
-    ExtensionUtils.readingTypes,
-  ];
-  static const _typeLabels = [
-    'search.all',
-    'extension-type.video',
-    'extension-type.reading'
-  ];
 
   @override
   void initState() {
@@ -120,150 +110,32 @@ class _SearchPageState extends State<SearchPage> {
 
   /// El filtro de tipo, en la barra de arriba. Solo Android.
   ///
-  /// ── Por qué sale del cuerpo ─────────────────────────────────────────────
-  ///
-  /// Los chips vivían en una fila propia debajo del buscador, y esa franja se
-  /// llevaba su alto justo encima de los resultados — que es lo que uno vino a
-  /// ver. Acostado, donde el alto es lo que falta, era media pantalla de
-  /// portadas.
-  ///
-  /// Es el mismo patrón que ya usan Instaladas y el Repositorio: un icono que
-  /// abre una hoja. Que las tres zonas se manejen igual vale más que ahorrarse
-  /// un toque.
-  ///
-  /// El puntito avisa cuando hay un tipo elegido: metido dentro de la hoja,
-  /// uno se olvida de que filtró y una lista corta parece un error.
-  Widget _botonDeFiltro(BuildContext context) {
-    return Obx(() {
-      final filtrando = c.cuurentExtensionType.value != null;
-      // AccionDeFranja y no IconButton: uno suelto viene a 48 y estira la
-      // franja justo lo que se quería sacar.
-      return AccionDeFranja(
-        ayuda: 'search.filter'.i18n,
-        alTocar: () => _abrirFiltros(context),
-        icono: Stack(
-          clipBehavior: Clip.none,
-          children: [
-            const Icon(Icons.tune_rounded),
-            if (filtrando)
-              Positioned(
-                right: -1,
-                top: -1,
-                child: Container(
-                  width: 9,
-                  height: 9,
-                  decoration: BoxDecoration(
-                    color: _accent,
-                    shape: BoxShape.circle,
-                  ),
-                ),
-              ),
-          ],
-        ),
-      );
-    });
-  }
+  // ── Sin botón de filtro en Android ────────────────────────────────────
+  //
+  // Pedido explícito: "quitá el botón de filtros". Acá antes vivía TAMBIÉN
+  // la única puerta de Android a la Zona +18 (metida adentro de la hoja de
+  // filtros, separada por una línea — "no es un filtro, es otra
+  // pantalla"). Sacando el botón entero se perdía esa puerta, así que
+  // queda su propio ícono chico en la franja — ver `_botonZona18`.
+  //
+  // El filtro por tipo (Todo/Vídeo/Lectura) que vivía en esa hoja se va
+  // con ella: `_types`/`_typeLabels`/`_chipDeHoja` no tenían otro llamador.
 
-  void _abrirFiltros(BuildContext context) {
-    showModalBottomSheet(
-      context: context,
-      showDragHandle: true,
-      useSafeArea: true,
-      isScrollControlled: true,
-      backgroundColor: HomeTheme.cardSurface,
-      builder: (hojaContext) {
-        return StatefulBuilder(
-          builder: (hojaContext, setHoja) {
-            return SingleChildScrollView(
-              padding: const EdgeInsets.fromLTRB(20, 4, 20, 24),
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    'search.filter'.i18n,
-                    style: TextStyle(
-                      color: HomeTheme.textMuted,
-                      fontSize: 12,
-                      fontWeight: FontWeight.w600,
-                    ),
-                  ),
-                  const SizedBox(height: 10),
-                  Wrap(
-                    spacing: 10,
-                    runSpacing: 10,
-                    children: [
-                      for (var i = 0; i < _types.length; i++)
-                        _chipDeHoja(i, setHoja),
-                    ],
-                  ),
-                  // La Zona +18 no es un filtro: es otra pantalla. Va abajo y
-                  // separada, para que no se lea como un tipo más.
-                  Builder(builder: (context) {
-                    final boton = _buildNsfwButton(context);
-                    if (boton is SizedBox) return const SizedBox.shrink();
-                    return Padding(
-                      padding: const EdgeInsets.only(top: 20),
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Divider(height: 1, color: HomeTheme.border),
-                          const SizedBox(height: 16),
-                          boton,
-                        ],
-                      ),
-                    );
-                  }),
-                ],
-              ),
-            );
-          },
-        );
-      },
-    );
-  }
-
-  /// Un chip dentro de la hoja: repinta la hoja Y aplica la búsqueda.
-  Widget _chipDeHoja(int index, void Function(void Function()) setHoja) {
-    final type = _types[index];
-    final selected = c.cuurentExtensionType.value == type;
-    return GestureDetector(
-      onTap: () {
-        c.getRuntime(types: type);
-        setHoja(() {});
-      },
-      child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 9),
-        decoration: BoxDecoration(
-          color: selected ? _accent.withValues(alpha: 0.18) : HomeTheme.bg,
-          borderRadius: BorderRadius.circular(999),
-          border: Border.all(color: selected ? _accent : HomeTheme.border),
-        ),
-        child: Text(
-          _typeLabels[index].i18n,
-          style: TextStyle(
-            color: selected ? _accent : HomeTheme.textPrimary,
-            fontSize: 13,
-            fontWeight: FontWeight.w600,
-          ),
-        ),
-      ),
-    );
-  }
-
-  // Botón de entrada a la zona +18 del buscador. Solo aparece en el buscador
-  // normal (dentro de la zona +18 no tiene sentido) y solo si el switch de NSFW
-  // de Ajustes está prendido — si está apagado, el contenido +18 no existe para
-  // la app y ofrecer la puerta sería confuso.
-  Widget _buildNsfwButton(BuildContext context) {
+  /// Ícono de entrada a la Zona +18 — reemplaza al viejo botón de filtro,
+  /// que era lo único que lo mostraba en Android. Mismas condiciones que
+  /// tenía ahí: nunca dentro de la propia Zona +18, y nunca con el switch
+  /// de NSFW apagado.
+  Widget _botonZona18(BuildContext context) {
     if (widget.nsfwOnly) return const SizedBox.shrink();
     // Obx y no una lectura suelta: ver PrismHubStorage.nsfwEnabled — en
     // Android esta página no se reconstruye al volver de Ajustes, así que
     // con la lectura directa el botón quedaba visible con el switch apagado.
     return Obx(() {
       if (!PrismHubStorage.nsfwEnabled.value) return const SizedBox.shrink();
-      return _Nsfw18SearchButton(
-        onTap: () => openNsfw18Search(context),
+      return AccionDeFranja(
+        ayuda: 'nsfw18.search-zone-title'.i18n,
+        alTocar: () => openNsfw18Search(context),
+        icono: Icon(Icons.warning_amber_rounded, color: HomeTheme.accentRed),
       );
     });
   }
@@ -301,7 +173,9 @@ class _SearchPageState extends State<SearchPage> {
 
   Widget _buildResults(void Function(int) onClickMore) {
     return Obx(() {
-      if (c.search.value.trim().isEmpty) return const _SearchVacio();
+      if (c.search.value.trim().isEmpty) {
+        return _SearchVacio(nsfwOnly: widget.nsfwOnly);
+      }
       // ignore: invalid_use_of_protected_member
       final list = c.searchResultList.value;
       // Antes tenía un ValueKey(search + tipo) — cambiar de chip o
@@ -326,7 +200,10 @@ class _SearchPageState extends State<SearchPage> {
   Widget _buildResultados(Widget cabecera, void Function(int) onClickMore) {
     return Obx(() {
       if (c.search.value.trim().isEmpty) {
-        return Column(children: [cabecera, const Expanded(child: _SearchVacio())]);
+        return Column(children: [
+          cabecera,
+          Expanded(child: _SearchVacio(nsfwOnly: widget.nsfwOnly)),
+        ]);
       }
       // ignore: invalid_use_of_protected_member
       final list = c.searchResultList.value;
@@ -361,52 +238,66 @@ class _SearchPageState extends State<SearchPage> {
           child: Stack(
             children: [
               const Positioned.fill(child: AnimatedBackgroundGlow()),
-              // La franja va DENTRO del área desplazable, como primer
-              // elemento: se va con los resultados al bajar y vuelve al subir,
-              // igual que el nombre de la app en el Inicio. Ver la nota en
-              // franja_de_zona.dart.
-              _buildResultados(
-                Column(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    // Zona +18: título propio y flecha para salir. El buscador
-                    // normal es una pestaña del shell —no tiene a dónde
-                    // volver— así que ahí la flecha va en null.
-                    FranjaDeZona(
-                      titulo: widget.nsfwOnly
-                          ? "nsfw18.search-zone-title".i18n
-                          : "common.search".i18n,
-                      controlador: _searchController,
-                      ayuda: "search.hint-text".i18n,
-                      alEscribir: _alEscribirEnVivo,
-                      alEnviar: c.submitSearch,
-                      alVolver: widget.nsfwOnly
-                          ? () {
-                              if (Navigator.of(context).canPop()) {
-                                Navigator.of(context).pop();
-                              }
-                            }
-                          : null,
-                      // El filtro de tipo, en la franja: ver _botonDeFiltro.
-                      acciones: [_botonDeFiltro(context)],
-                    ),
-                    // Son 3 puntos de alto y dice si todavía están buscando.
-                    Padding(
-                      padding: const EdgeInsets.fromLTRB(16, 4, 16, 6),
-                      child: _buildProgress(),
-                    ),
-                  ],
+              // El fondo animado sí va de borde a borde (puro decorado);
+              // el contenido de acá adentro no puede — sin esto, en
+              // horizontal (celular/tablet girado) la franja de arriba y
+              // la fila de chips de "buscar en extensión" se dibujaban
+              // debajo de la cámara frontal, del lado que hubiera quedado
+              // el corte. Mismo criterio que ya se aplicó en las 4 zonas
+              // de contenido. Reportado en vivo con captura, apuntando
+              // justo a la flechita de la fila de chips.
+              SafeArea(
+                // La franja va DENTRO del área desplazable, como primer
+                // elemento: se va con los resultados al bajar y vuelve al
+                // subir, igual que el nombre de la app en el Inicio. Ver
+                // la nota en franja_de_zona.dart.
+                child: _buildResultados(
+                  Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      // Antes la flecha solo iba en la Zona +18 —"el buscador
+                      // normal es una pestaña del shell, no tiene a dónde
+                      // volver"—, cierto mientras el único camino de entrada
+                      // era Inicio empujándolo con Get.to. Ahora también se
+                      // llega desde los tres puntitos del riel, así que
+                      // siempre hay un "atrás" real al que volver. Reportado
+                      // en vivo: "buscar no tiene flechita para hechar atrás".
+                      FranjaDeZona(
+                        titulo: widget.nsfwOnly
+                            ? "nsfw18.search-zone-title".i18n
+                            : "common.search".i18n,
+                        controlador: _searchController,
+                        ayuda: "search.hint-text".i18n,
+                        alEscribir: _alEscribirEnVivo,
+                        alEnviar: c.submitSearch,
+                        alVolver: () {
+                          if (Navigator.of(context).canPop()) {
+                            Navigator.of(context).pop();
+                          }
+                        },
+                        // Sin el botón de filtro — pedido explícito. Lo único
+                        // que vivía ahí de verdad importante era la puerta a
+                        // la Zona +18 (ver _botonZona18), que se queda sola.
+                        acciones: [_botonZona18(context)],
+                      ),
+                      // Son 3 puntos de alto y dice si todavía están buscando.
+                      Padding(
+                        padding: const EdgeInsets.fromLTRB(16, 4, 16, 6),
+                        child: _buildProgress(),
+                      ),
+                    ],
+                  ),
+                  (index) {
+                    Get.to(ExtensionSearcherPage(
+                      package: c.getPackgeByIndex(index),
+                      keyWord: c.search.value,
+                      // Desde la Zona +18 la extensión mixta se abre con su
+                      // filtro de adultos ya puesto: si no, mostraba su catálogo
+                      // general, que es justo lo que esa zona no es.
+                      soloAdulto: widget.nsfwOnly,
+                    ));
+                  },
                 ),
-                (index) {
-                  Get.to(ExtensionSearcherPage(
-                    package: c.getPackgeByIndex(index),
-                    keyWord: c.search.value,
-                    // Desde la Zona +18 la extensión mixta se abre con su
-                    // filtro de adultos ya puesto: si no, mostraba su catálogo
-                    // general, que es justo lo que esa zona no es.
-                    soloAdulto: widget.nsfwOnly,
-                  ));
-                },
               ),
             ],
           ),
@@ -454,9 +345,10 @@ class _SearchPageState extends State<SearchPage> {
                           placeholder: "search.hint-text".i18n,
                           decoration:
                               const WidgetStatePropertyAll(BoxDecoration()),
-                          style:
-                              TextStyle(color: HomeTheme.textPrimary, fontSize: 15),
-                          placeholderStyle: TextStyle(color: HomeTheme.textMuted),
+                          style: TextStyle(
+                              color: HomeTheme.textPrimary, fontSize: 15),
+                          placeholderStyle:
+                              TextStyle(color: HomeTheme.textMuted),
                           // Buscar en vivo, sin esperar Enter — ver
                           // _alEscribirEnVivo.
                           onChanged: _alEscribirEnVivo,
@@ -544,59 +436,303 @@ class _SearchPageState extends State<SearchPage> {
   }
 }
 
-// Puerta a la zona +18 del buscador. En rojo a propósito (mismo acento que la
-// Zona +18 del Home) y con el aviso de que pide PIN, para que se entienda a qué
-// lleva antes de tocarlo. Se usa igual en Windows, Linux y Android: es un widget
-// Material puro (no depende del árbol fluent) y el hover solo cambia el color,
-// así que se ve y se comporta igual en las tres plataformas.
-class _Nsfw18SearchButton extends StatefulWidget {
-  const _Nsfw18SearchButton({required this.onTap});
+/// El cuerpo de Buscar antes de escribir nada — pedido explícito: esta
+/// pantalla ANTES pedía el catálogo completo de cada extensión activa
+/// apenas se abría (o al tocar un chip de tipo), así que se sentía como un
+/// Inicio más, con filas de portadas, en vez de un buscador. Ahora no se
+/// pide ni se muestra nada hasta que el usuario escribe algo de verdad —
+/// ver el mismo criterio en `SearchPageController.getRuntime()`.
+///
+/// Pedido explícito, aparte: un atajo para buscar DENTRO de una sola
+/// extensión (ej. "buscar en JKAnime") sin tener que escribir algo primero
+/// y esperar a que respondan las demás — un botón por extensión elegible,
+/// que abre `ExtensionSearcherPage` directo.
+class _SearchVacio extends StatefulWidget {
+  const _SearchVacio({required this.nsfwOnly});
 
-  final VoidCallback onTap;
+  /// true en la Zona +18 del buscador — mismo criterio de qué extensiones
+  /// entran que ya usa `SearchPageController.getRuntime()`.
+  final bool nsfwOnly;
 
   @override
-  State<_Nsfw18SearchButton> createState() => _Nsfw18SearchButtonState();
+  State<_SearchVacio> createState() => _SearchVacioState();
 }
 
-class _Nsfw18SearchButtonState extends State<_Nsfw18SearchButton> {
-  bool _hovered = false;
+class _SearchVacioState extends State<_SearchVacio> {
+  // Fila con scroll horizontal y no `Wrap` — pedido explícito: con muchas
+  // extensiones instaladas, `Wrap` las apilaba en varias filas cortas que
+  // en una ventana angosta se veían amontonadas. Un scroll horizontal
+  // escala igual de bien con 3 que con 30, sin cambiar de forma según el
+  // ancho — mismo patrón que ya usa el resto de la app para listas de
+  // extensiones.
+  final _scroll = ScrollController();
+
+  // ── Flechita en su propio espacio, no encima de los chips ──────────────
+  //
+  // `HorizontalScrollFade` (lo que se usaba antes) dibuja la flecha
+  // FLOTANDO sobre el contenido, con un degradado detrás — pensado para
+  // portadas, donde un chip/tarjeta parcialmente tapado no molesta. Acá el
+  // texto de un chip quedaba literalmente atrás del círculo negro.
+  // Reportado en vivo con captura: "la flechita no debe ponerse al frente,
+  // debe estar en su espacio". Con `Expanded` + un botón aparte, la lista
+  // nunca ocupa el lugar de la flecha ni al revés.
+  bool _puedeAvanzar = false;
+  // La de la izquierda — se me había pasado la primera vez: sin ella, una
+  // vez que se scrolleaba para el costado no había forma de volver salvo
+  // arrastrando a mano. Reportado en vivo: "te faltó poner flecha a la
+  // izquierda".
+  bool _puedeRetroceder = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _scroll.addListener(_actualizarFlechas);
+    WidgetsBinding.instance.addPostFrameCallback((_) => _actualizarFlechas());
+  }
+
+  void _actualizarFlechas() {
+    if (!mounted || !_scroll.hasClients) return;
+    final puedeAvanzar =
+        _scroll.position.pixels < _scroll.position.maxScrollExtent - 1;
+    final puedeRetroceder =
+        _scroll.position.pixels > _scroll.position.minScrollExtent + 1;
+    if (puedeAvanzar != _puedeAvanzar || puedeRetroceder != _puedeRetroceder) {
+      setState(() {
+        _puedeAvanzar = puedeAvanzar;
+        _puedeRetroceder = puedeRetroceder;
+      });
+    }
+  }
+
+  void _mover(double dir) {
+    if (!_scroll.hasClients) return;
+    final destino = (_scroll.offset + 220 * dir)
+        .clamp(0.0, _scroll.position.maxScrollExtent);
+    _scroll.animateTo(destino,
+        duration: const Duration(milliseconds: 260),
+        curve: Curves.easeOutCubic);
+  }
+
+  @override
+  void dispose() {
+    _scroll.removeListener(_actualizarFlechas);
+    _scroll.dispose();
+    super.dispose();
+  }
+
+  /// Mismo filtro que `getRuntime()`: en la Zona +18, entera +18 o mixta
+  /// (aportando su parte de adultos); fuera de la zona, ninguna entera +18
+  /// (una mixta sí, con su catálogo normal). No se REUSA `getRuntime()`
+  /// porque esa función además dispara el pool de búsqueda — acá no hay
+  /// nada que buscar todavía, solo la lista de nombres para los botones.
+  List<MapEntry<String, String>> _extensionesElegibles() {
+    final entradas = ExtensionUtils.enabledRuntimes.entries
+        .where((e) {
+          final esNsfw = e.value.extension.nsfw;
+          final esMixta = ExtensionUtils.esMixta(e.key);
+          return widget.nsfwOnly ? (esNsfw || esMixta) : !esNsfw;
+        })
+        .map((e) => MapEntry(e.key, e.value.extension.name))
+        .toList();
+    entradas.sort((a, b) => a.value.compareTo(b.value));
+    return entradas;
+  }
+
+  void _abrirExtension(BuildContext context, String package) {
+    if (Platform.isAndroid) {
+      Get.to(
+          ExtensionSearcherPage(package: package, soloAdulto: widget.nsfwOnly));
+      return;
+    }
+    router.push(Uri(
+      path: '/search_extension',
+      queryParameters: {
+        'package': package,
+        if (widget.nsfwOnly) 'soloAdulto': '1',
+      },
+    ).toString());
+  }
 
   @override
   Widget build(BuildContext context) {
-    return MouseRegion(
-      cursor: SystemMouseCursors.click,
-      onEnter: (_) => setState(() => _hovered = true),
-      onExit: (_) => setState(() => _hovered = false),
-      child: GestureDetector(
-        onTap: widget.onTap,
-        child: AnimatedContainer(
-          duration: const Duration(milliseconds: 150),
+    final extensiones = _extensionesElegibles();
+    // ── Arriba, pegado a la barra de búsqueda — no centrado ────────────────
+    //
+    // Antes todo esto vivía en un `Center`, así que con pocas extensiones
+    // (los botones ocupan una o dos líneas) el bloque entero flotaba a
+    // mitad de pantalla, lejos de la barra donde el usuario tiene puesta la
+    // atención. Pedido explícito: "ponlos arriba, no en la mitad".
+    return SingleChildScrollView(
+      padding: const EdgeInsets.fromLTRB(20, 20, 20, 24),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          if (extensiones.isNotEmpty) ...[
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 4),
+              child: Text(
+                'search.search-in-extension'.i18n,
+                style: TextStyle(
+                  fontSize: 12,
+                  fontWeight: FontWeight.w700,
+                  letterSpacing: 0.4,
+                  color: HomeTheme.textMuted,
+                ),
+              ),
+            ),
+            const SizedBox(height: 12),
+            // Pedido explícito, con dibujo: un solo contenedor redondeado
+            // con las extensiones espaciadas ADENTRO, y las flechas
+            // sueltas a los costados de ESE contenedor — no cada chip
+            // suelto sobre el fondo de la pantalla.
+            // ── Las flechas se re-evalúan solas si el ancho cambia ────────
+            //
+            // Antes solo se recalculaban al scrollear (`_scroll.addListener`)
+            // y una vez al montar. Angostar la ventana en PC, o rotar el
+            // celular, cambia cuánto entra sin que nadie arrastre nada: el
+            // `maxScrollExtent` pasa a ser mayor que cero, pero como ningún
+            // scroll disparó el oyente, `_puedeAvanzar` se quedaba en su
+            // valor viejo (`false`) y la fila quedaba cortada en seco, sin
+            // ninguna flecha que avisara que hay más para el costado.
+            // Reportado en vivo con captura, achicando la ventana.
+            //
+            // `ScrollMetricsNotification` es justo la señal de Flutter para
+            // "las métricas del scroll cambiaron sin que nadie scrolleara"
+            // —se dispara sola con cualquier resize del viewport—, así que
+            // no hace falta inventar un LayoutBuilder propio para esto.
+            NotificationListener<ScrollMetricsNotification>(
+              onNotification: (_) {
+                WidgetsBinding.instance
+                    .addPostFrameCallback((_) => _actualizarFlechas());
+                return false;
+              },
+              child: SizedBox(
+                height: 44,
+                child: Row(
+                  children: [
+                    // Con su propio lugar reservado — solo aparece cuando de
+                    // verdad hay para dónde volver, así que no le quita ancho
+                    // a los chips si ya se está en el principio.
+                    if (_puedeRetroceder) ...[
+                      _FlechaDeChips(
+                        onTap: () => _mover(-1),
+                        izquierda: true,
+                      ),
+                      const SizedBox(width: 8),
+                    ],
+                    Expanded(
+                      child: Container(
+                        decoration: BoxDecoration(
+                          color: HomeTheme.cardSurface.withValues(alpha: 0.5),
+                          borderRadius: BorderRadius.circular(999),
+                          border: Border.all(color: HomeTheme.border),
+                        ),
+                        child: ListView.builder(
+                          scrollDirection: Axis.horizontal,
+                          controller: _scroll,
+                          // ── Bastante para librar la curva del container ──
+                          //
+                          // El container que envuelve esta lista es una
+                          // "cápsula" (`borderRadius: circular(999)`, arriba)
+                          // con las puntas casi tan redondeadas como su
+                          // alto — acá, ~21px de radio. Con solo 10px de
+                          // relleno, el primer/último chip quedaba pegado
+                          // contra esa curva y el fondo redondo terminaba
+                          // ANTES que el texto: se veía como si la propia
+                          // forma le cortara la palabra. Reportado en vivo
+                          // con captura, en celular y en PC — es el mismo
+                          // widget en la búsqueda general y en la Zona +18,
+                          // así que el arreglo alcanza a las dos. Con margen
+                          // mayor al radio, el chip entero queda en la parte
+                          // recta de la cápsula.
+                          padding: const EdgeInsets.symmetric(horizontal: 20),
+                          itemCount: extensiones.length,
+                          itemBuilder: (context, i) {
+                            final ext = extensiones[i];
+                            return Padding(
+                              padding: const EdgeInsets.symmetric(
+                                  vertical: 6, horizontal: 4),
+                              child: _ChipExtension(
+                                nombre: ext.value,
+                                onTap: () => _abrirExtension(context, ext.key),
+                              ),
+                            );
+                          },
+                        ),
+                      ),
+                    ),
+                    // Ídem, del otro lado: solo cuando de verdad hay más para
+                    // el costado.
+                    if (_puedeAvanzar) ...[
+                      const SizedBox(width: 8),
+                      _FlechaDeChips(onTap: () => _mover(1)),
+                    ],
+                  ],
+                ),
+              ),
+            ),
+            const SizedBox(height: 28),
+          ],
+          Center(
+            child: Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 12),
+              child: Column(
+                children: [
+                  Icon(Icons.search_rounded,
+                      size: 36, color: HomeTheme.textMuted),
+                  const SizedBox(height: 10),
+                  Text(
+                    'search.empty-hint'.i18n,
+                    textAlign: TextAlign.center,
+                    style: TextStyle(
+                      fontSize: 13,
+                      height: 1.4,
+                      color: HomeTheme.textMuted,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+/// Un botón chico, redondeado — "buscar en <nombre>".
+class _ChipExtension extends StatelessWidget {
+  const _ChipExtension({required this.nombre, required this.onTap});
+
+  final String nombre;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      onTap: onTap,
+      child: MouseRegion(
+        cursor: SystemMouseCursors.click,
+        child: Container(
           padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 9),
           decoration: BoxDecoration(
-            color:
-                HomeTheme.accentRed.withValues(alpha: _hovered ? 0.26 : 0.14),
+            color: HomeTheme.cardSurface,
             borderRadius: BorderRadius.circular(999),
-            border: Border.all(
-              color: HomeTheme.accentRed.withValues(alpha: _hovered ? 1 : 0.55),
-            ),
+            border: Border.all(color: HomeTheme.border),
           ),
           child: Row(
             mainAxisSize: MainAxisSize.min,
             children: [
-              Icon(Icons.warning_amber_rounded,
-                  size: 15, color: HomeTheme.accentRed),
+              Icon(Icons.search_rounded, size: 14, color: HomeTheme.textMuted),
               const SizedBox(width: 6),
               Text(
-                'nsfw18.search-button'.i18n,
+                nombre,
                 style: TextStyle(
-                  color: HomeTheme.accentRed,
-                  fontSize: 13,
-                  fontWeight: FontWeight.w700,
+                  fontSize: 12.5,
+                  fontWeight: FontWeight.w600,
+                  color: HomeTheme.textPrimary,
                 ),
               ),
-              const SizedBox(width: 5),
-              Icon(Icons.lock_outline,
-                  size: 13, color: HomeTheme.accentRed.withValues(alpha: 0.75)),
             ],
           ),
         ),
@@ -605,35 +741,37 @@ class _Nsfw18SearchButtonState extends State<_Nsfw18SearchButton> {
   }
 }
 
-/// El cuerpo de Buscar antes de escribir nada — pedido explícito: esta
-/// pantalla ANTES pedía el catálogo completo de cada extensión activa
-/// apenas se abría (o al tocar un chip de tipo), así que se sentía como un
-/// Inicio más, con filas de portadas, en vez de un buscador. Ahora no se
-/// pide ni se muestra nada hasta que el usuario escribe algo de verdad —
-/// ver el mismo criterio en `SearchPageController.getRuntime()`.
-class _SearchVacio extends StatelessWidget {
-  const _SearchVacio();
+/// El botón de "hay más para el costado" de la fila de chips — con sus
+/// propios colores del tema (no el círculo negro fijo que traía
+/// `HorizontalScrollFade` por defecto, que en modo claro se veía como una
+/// mancha oscura sin ninguna relación con el resto de la pantalla).
+class _FlechaDeChips extends StatelessWidget {
+  const _FlechaDeChips({required this.onTap, this.izquierda = false});
+
+  final VoidCallback onTap;
+  final bool izquierda;
 
   @override
   Widget build(BuildContext context) {
-    return Center(
-      child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 32),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Icon(Icons.search_rounded, size: 44, color: HomeTheme.textMuted),
-            const SizedBox(height: 14),
-            Text(
-              'search.empty-hint'.i18n,
-              textAlign: TextAlign.center,
-              style: TextStyle(
-                fontSize: 14,
-                height: 1.45,
-                color: HomeTheme.textMuted,
-              ),
-            ),
-          ],
+    return GestureDetector(
+      onTap: onTap,
+      child: MouseRegion(
+        cursor: SystemMouseCursors.click,
+        child: Container(
+          width: 32,
+          height: 32,
+          decoration: BoxDecoration(
+            shape: BoxShape.circle,
+            color: HomeTheme.cardSurface,
+            border: Border.all(color: HomeTheme.border),
+          ),
+          child: Icon(
+            izquierda
+                ? Icons.chevron_left_rounded
+                : Icons.chevron_right_rounded,
+            size: 18,
+            color: HomeTheme.textPrimary,
+          ),
         ),
       ),
     );
