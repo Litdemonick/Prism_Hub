@@ -884,6 +884,11 @@
     "biometric-denied": "Your identity could not be confirmed. The +18 Zone needs your fingerprint, face or device credential before asking for the PIN.",
     "biometric-retry": "Try again",
     "age-help": "Select your date of birth",
+    "age-dia": "Day",
+    "age-mes": "Month",
+    "age-ano": "Year",
+    "age-cambiar": "Change",
+    "age-mover": "Move",
     "age-denied-title": "Adults only",
     "age-denied": "Based on the date you entered you do not meet the minimum age, so this section cannot be enabled.\n\nIf you picked the wrong date, try again."
   },

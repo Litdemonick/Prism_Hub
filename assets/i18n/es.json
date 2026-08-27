@@ -880,6 +880,11 @@
     "biometric-denied": "No se pudo confirmar tu identidad. La Zona +18 necesita la huella, el rostro o la credencial de tu dispositivo antes de pedir el PIN.",
     "biometric-retry": "Reintentar",
     "age-help": "Elegí tu fecha de nacimiento",
+    "age-dia": "Día",
+    "age-mes": "Mes",
+    "age-ano": "Año",
+    "age-cambiar": "Cambiar",
+    "age-mover": "Mover",
     "age-denied-title": "Contenido solo para mayores",
     "age-denied": "Según la fecha que indicaste no alcanzás la edad mínima, así que esta sección no puede activarse.\n\nSi te equivocaste al elegirla, volvé a intentarlo."
   },
