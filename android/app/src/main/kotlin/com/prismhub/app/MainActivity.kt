@@ -171,32 +171,38 @@ class MainActivity: AudioServiceFragmentActivity() {
             packageManager.canRequestPackageInstalls()
     }
 
+    // Tres intentos, cada vez mas generico -y el ultimo SIEMPRE existe en
+    // cualquier Android, TV o no. Reportado en vivo: en algunas cajas ni
+    // ACTION_MANAGE_UNKNOWN_APP_SOURCES ni ACTION_APPLICATION_DETAILS_SETTINGS
+    // abren nada (capas propias de Ajustes que no traen esas pantallas), y
+    // sin un ultimo fallback garantizado esta funcion terminaba sin abrir
+    // NADA visible -del lado de Flutter se veia como que la actualizacion
+    // "no hacia nada" y habia que tocar Actualizar una segunda vez, porque
+    // para entonces el usuario habia entrado a Ajustes por su cuenta y ya
+    // tenia el permiso dado.
     private fun openInstallSettings() {
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-            val intent = Intent(
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.O) return
+        val intentos = listOf(
+            Intent(
                 Settings.ACTION_MANAGE_UNKNOWN_APP_SOURCES,
                 Uri.parse("package:$packageName")
-            ).apply {
-                flags = Intent.FLAG_ACTIVITY_NEW_TASK
-            }
+            ),
+            Intent(
+                Settings.ACTION_APPLICATION_DETAILS_SETTINGS,
+                Uri.parse("package:$packageName")
+            ),
+            // Sin URI de paquete: la pantalla de Ajustes general, que existe
+            // en TODO Android. Peor experiencia (el usuario tiene que
+            // navegar el resto a mano) pero nunca deja al botón sin abrir
+            // nada.
+            Intent(Settings.ACTION_SETTINGS)
+        )
+        for (intent in intentos) {
             try {
-                startActivity(intent)
+                startActivity(intent.apply { flags = Intent.FLAG_ACTIVITY_NEW_TASK })
+                return
             } catch (e: ActivityNotFoundException) {
-                // Algunas cajas de Android TV/Fire TV con una capa propia de
-                // Ajustes no traen esta pantalla especifica -sin el catch,
-                // esto tiraba una excepcion sin agarrar que subia tal cual al
-                // canal de Flutter, y del otro lado se veia como que la
-                // actualizacion "se cancelaba sola" en vez de decir que hacia
-                // falta dar el permiso a mano. La pantalla de detalles de la
-                // app SIEMPRE existe -es mas vueltas para el usuario, pero
-                // desde ahi tambien se llega al mismo permiso.
-                val fallback = Intent(
-                    Settings.ACTION_APPLICATION_DETAILS_SETTINGS,
-                    Uri.parse("package:$packageName")
-                ).apply {
-                    flags = Intent.FLAG_ACTIVITY_NEW_TASK
-                }
-                startActivity(fallback)
+                continue
             }
         }
     }

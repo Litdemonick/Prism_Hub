@@ -859,18 +859,42 @@ class ApplicationUtils {
       final downloadPath =
           '${downloadDir.path}${Platform.pathSeparator}${asset['name']}';
 
-      // Descargar con progreso
-      await dio.download(url, downloadPath, onReceiveProgress: (count, total) {
-        // total llega en -1 cuando el servidor no dice cuanto pesa. Ahi la
-        // barra se queda indeterminada, pero al menos se muestra lo bajado:
-        // que el numero suba ya dice que no se colgo.
-        progreso.value = total > 0
-            ? (
-                parte: count / total,
-                texto: '${_enMegas(count)} / ${_enMegas(total)} MB',
-              )
-            : (parte: null, texto: '${_enMegas(count)} MB');
-      });
+      // Si ya está descargado de un intento anterior, no se vuelve a bajar.
+      //
+      // Reportado en vivo en Android TV: la primera pasada por Actualizar
+      // terminaba de descargar pero se quedaba sin dar el permiso de
+      // instalar apps desconocidas (ver openInstallSettings), así que
+      // había que tocar Actualizar de nuevo — y eso volvía a bajar los
+      // mismos megas de antes, con la conexión lenta típica de un
+      // televisor. El tamaño exacto lo da GitHub en cada asset del
+      // release; si el archivo que ya está en disco coincide byte a byte,
+      // es el mismo APK completo y no partido a la mitad — se salta la
+      // descarga y se va directo a instalar.
+      final tamanoEsperado = asset['size'] as int?;
+      final archivoDescarga = File(downloadPath);
+      final yaDescargado = tamanoEsperado != null &&
+          await archivoDescarga.exists() &&
+          await archivoDescarga.length() == tamanoEsperado;
+      if (yaDescargado) {
+        progreso.value = (
+          parte: 1.0,
+          texto: '${_enMegas(tamanoEsperado)} MB',
+        );
+      } else {
+        // Descargar con progreso
+        await dio.download(url, downloadPath,
+            onReceiveProgress: (count, total) {
+          // total llega en -1 cuando el servidor no dice cuanto pesa. Ahi la
+          // barra se queda indeterminada, pero al menos se muestra lo bajado:
+          // que el numero suba ya dice que no se colgo.
+          progreso.value = total > 0
+              ? (
+                  parte: count / total,
+                  texto: '${_enMegas(count)} / ${_enMegas(total)} MB',
+                )
+              : (parte: null, texto: '${_enMegas(count)} MB');
+        });
+      }
 
       final assetName = (asset['name'] as String).toLowerCase();
 
@@ -1042,7 +1066,26 @@ class ApplicationUtils {
       return true;
     });
     observador.empezar();
-    await _canalActualizacion.invokeMethod('openInstallSettings');
+    try {
+      await _canalActualizacion.invokeMethod('openInstallSettings');
+    } catch (e) {
+      // El nativo ya prueba tres pantallas de Ajustes distintas antes de
+      // rendirse (ver openInstallSettings en MainActivity.kt) — esto solo
+      // cubre el caso de que ni siquiera esas tres existan. Sin el catch,
+      // la excepción subía sin agarrar y el observador se quedaba
+      // escuchando un "resumed" que ya nunca iba a llegar (la app nunca se
+      // fue a segundo plano de verdad), así que tocar Actualizar de nuevo
+      // era la ÚNICA forma de salir de ese estado — se avisa de una vez en
+      // vez de dejar al usuario adivinando por qué "no pasó nada".
+      debugPrint('openInstallSettings falló: $e');
+      if (context.mounted) {
+        showPlatformSnackbar(
+          context: context,
+          title: 'upgrade.install-failed'.i18n,
+          content: 'upgrade.needs-install-permission'.i18n,
+        );
+      }
+    }
   }
 
   static Future<void> _installAndroidApk(
