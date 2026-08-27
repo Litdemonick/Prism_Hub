@@ -194,7 +194,12 @@ class _LibraryPageState extends State<LibraryPage> {
         ),
         const SizedBox(height: 32),
       ],
-      if (lectura.isNotEmpty) ...[
+      // En Android TV, nada de lectura -mismo criterio que Inicio/Buscar
+      // (ExtensionUtils.esSoloLectura): un favorito de manga/novela no tiene
+      // forma sensata de leerse con un control remoto, y sin este filtro
+      // quedaba colando por Biblioteca aunque Inicio y Buscar ya lo
+      // bloquearan.
+      if (lectura.isNotEmpty && !PlatformTv.esTelevisionSync) ...[
         seccion(
           titulo: 'home.favorite-reading'.i18n,
           tab: _tabFavLectura,
@@ -307,7 +312,9 @@ class _LibraryPageState extends State<LibraryPage> {
         ),
         const SizedBox(height: 32),
       ],
-      if (lectura.isNotEmpty) ...[
+      // En Android TV, nada de lectura — ver el mismo comentario en
+      // _favoritosSecciones.
+      if (lectura.isNotEmpty && !PlatformTv.esTelevisionSync) ...[
         seccion(
           titulo: 'home.continue-reading'.i18n,
           tab: _tabLectura,
