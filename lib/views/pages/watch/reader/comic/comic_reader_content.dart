@@ -647,9 +647,26 @@ class _ComicReaderContentState extends State<ComicReaderContent> {
   // Shown per-page while its image is still loading — scrolling fast
   // through not-yet-loaded pages used to hit a blank box; the dimmed
   // branded art fills that space instead of leaving it empty.
-  Widget _buildPlaceholder(BuildContext context) {
-    final width = MediaQuery.of(context).size.width;
-    final height = MediaQuery.of(context).size.height;
+  //
+  // El alto YA NO es el de toda la pantalla: eso no tiene ninguna relación
+  // con el alto real que va a tener la página (con BoxFit.fitWidth el alto
+  // final depende del ANCHO y de la proporción de la imagen, no de la
+  // ventana). Con un alto fijo de pantalla completa, apenas la imagen
+  // terminaba de cargar el ítem cambiaba de alto de golpe y
+  // ScrollablePositionedList reacomodaba el scroll para compensar — se
+  // sentía, scrolleando, como que la página daba un salto hacia atrás
+  // (reportado en vivo, mínimo pero notorio, y en cualquier extensión: es
+  // el mismo widget para todas). Estimar el alto con la proporción típica
+  // de una página de manga/manhwa (más alta que ancha, ~1.45:1) deja mucho
+  // menos diferencia entre el placeholder y la imagen real, así que el
+  // reacomodo al cargar es mucho más chico o directamente imperceptible.
+  // `width` es el ancho real que va a usar la imagen (effectiveWidth del
+  // llamador, ya con el zoom-alejado de la cascada aplicado si corresponde)
+  // — no MediaQuery, que da el ancho de TODA la ventana sin los márgenes ni
+  // el achique de zoom.
+  Widget _buildPlaceholder(BuildContext context, double width) {
+    final topeDeAlto = MediaQuery.of(context).size.height;
+    final height = (width * 1.45).clamp(1.0, topeDeAlto);
     return SizedBox(
       width: width,
       height: height,
@@ -1191,7 +1208,8 @@ class _ComicReaderContentState extends State<ComicReaderContent> {
                           url,
                           width: double.infinity,
                           fit: BoxFit.fitWidth,
-                          placeholder: _buildPlaceholder(context),
+                          placeholder:
+                              _buildPlaceholder(context, effectiveWidth),
                           headers: _c.watchData.value?.headers,
                         );
                       },
