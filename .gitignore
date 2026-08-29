@@ -68,6 +68,12 @@ Web/node_modules/
 
 # Configuracion local de herramientas, no va al repositorio
 .claude/
+.specify/
+
+# Especificaciones y planes de trabajo (spec-kit). Mismo criterio que
+# PROGRESO.md: el repo muestra el codigo y las versiones, no en que se
+# esta trabajando ni como se planifico.
+specs/
 
 # Documentos de trabajo: solo locales, no van al repo publico.
 # El repo muestra el codigo y las versiones, no como se trabaja ni en que se
