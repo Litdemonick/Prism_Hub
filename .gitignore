@@ -69,6 +69,11 @@ Web/node_modules/
 # Configuracion local de herramientas, no va al repositorio
 .claude/
 .specify/
+.continue/
+.sentry-native/
+
+# Registros que deja Flutter al compilar, en la raiz del proyecto.
+flutter_*.log
 
 # Especificaciones y planes de trabajo (spec-kit). Mismo criterio que
 # PROGRESO.md: el repo muestra el codigo y las versiones, no en que se
@@ -82,7 +87,6 @@ CLAUDE.md
 FLUJO.md
 PROGRESO.md
 SESSION.md
-.continue/
 
 # Repositorio del sitio, clonado adentro de esta carpeta. Es un repo APARTE con
 # su propio historial: si se agrega desde aca queda como un submodulo a medias
