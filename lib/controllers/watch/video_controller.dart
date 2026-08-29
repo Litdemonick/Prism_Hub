@@ -34,6 +34,7 @@ import 'package:prismhub/utils/audio_hls.dart';
 import 'package:prismhub/utils/bomba_de_datos.dart';
 import 'package:prismhub/controllers/watch/banco_de_pruebas.dart';
 import 'package:prismhub/controllers/watch/dibujado_de_video.dart';
+import 'package:prismhub/controllers/watch/frecuencia_de_pantalla.dart';
 import 'package:prismhub/controllers/watch/recorte_fmp4.dart';
 import 'package:prismhub/utils/watch_state.dart';
 import 'package:prismhub/data/services/database_service.dart';
@@ -291,6 +292,8 @@ class VideoPlayerController extends GetxController with WidgetsBindingObserver {
     final quiere = audiosHls[indice];
     try {
       hasRenderedFrame.value = false;
+      // Otro vídeo, otros cuadros por segundo.
+      _cuadrosPorSegundoCache = null;
       // Fuente nueva: se olvida el cuadro anterior y la red se rearma
       // sola con el primer cuadro de esta. Ver hasRenderedFrame.
       _hayCuadro = false;
@@ -638,6 +641,35 @@ class VideoPlayerController extends GetxController with WidgetsBindingObserver {
       final crudo = (await np.getProperty('cache-speed')).trim();
       return int.tryParse(crudo);
     } catch (e) {
+      return null;
+    }
+  }
+
+  /// Los cuadros por segundo del vídeo abierto, o null si todavía no se sabe.
+  ///
+  /// Se usa para pedirle al televisor la frecuencia de pantalla que le va (ver
+  /// [FrecuenciaDePantalla]). Va con los MISMOS tres candados que [_medir]:
+  /// preguntarle una propiedad a libmpv con el reproductor cerrándose entra a
+  /// la librería nativa con un manejador que puede estar ya liberado.
+  ///
+  /// Lee `container-fps`, que es lo que declara el archivo, y no
+  /// `estimated-vf-fps`, que es lo que está saliendo de verdad: el segundo baja
+  /// cuando el aparato no da abasto, así que usarlo acá sería pedirle a la
+  /// pantalla un modo elegido justamente por el problema que se quiere
+  /// arreglar.
+  double? _cuadrosPorSegundoCache;
+  Future<double?> _cuadrosPorSegundo() async {
+    if (_cuadrosPorSegundoCache != null) return _cuadrosPorSegundoCache;
+    if (_disposed || _shutdownStarted || _playerDisposed) return null;
+    if (player.platform is! NativePlayer) return null;
+    final np = player.platform as NativePlayer;
+    try {
+      final crudo = (await np.getProperty('container-fps')).trim();
+      final fps = double.tryParse(crudo);
+      if (fps == null || fps <= 0) return null;
+      _cuadrosPorSegundoCache = fps;
+      return fps;
+    } catch (_) {
       return null;
     }
   }
@@ -1517,6 +1549,12 @@ class VideoPlayerController extends GetxController with WidgetsBindingObserver {
       // sostiene — mpv no la cambia nunca por su cuenta.
       if (primerCuadro && _hayCuadro) {
         unawaited(_medir('arrancó'));
+        // Y se le pide al televisor la frecuencia que le va a ESTE video. Acá
+        // y no antes: los cuadros por segundo recién se conocen cuando mpv
+        // abrió el archivo. Ver FrecuenciaDePantalla — en cualquier otro
+        // aparato no hace nada.
+        unawaited(_cuadrosPorSegundo()
+            .then((fps) => FrecuenciaDePantalla.ajustarA(fps)));
       }
       // El VR se decide ACA y no en el aviso de la altura.
       //
@@ -2590,6 +2628,9 @@ class VideoPlayerController extends GetxController with WidgetsBindingObserver {
   Duration? _midStreamResumeAt;
 
   void _beginPlaybackShutdown() {
+    // La pantalla vuelve a su modo de siempre. Si no, el televisor se queda a
+    // 24 Hz para TODO el sistema y su propio menú se ve a tirones.
+    unawaited(FrecuenciaDePantalla.soltar());
     // ── Lo PRIMERO de todo: que deje de sonar ─────────────────────────────
     //
     // Antes lo primero que se hacía era bajar el volumen, sí, pero dentro de

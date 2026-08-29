@@ -8,6 +8,7 @@ import android.content.res.Configuration
 import android.net.Uri
 import android.os.Build
 import android.provider.Settings
+import android.view.WindowManager
 import androidx.core.content.FileProvider
 // AudioServiceFragmentActivity y no FlutterFragmentActivity a secas.
 //
@@ -80,6 +81,14 @@ class MainActivity: AudioServiceFragmentActivity() {
                     "perfilDelAparato" -> {
                         result.success(perfilDelAparato())
                     }
+                    "ajustarFrecuenciaDePantalla" -> {
+                        val fps = call.argument<Double>("fps")
+                        result.success(ajustarFrecuenciaDePantalla(fps))
+                    }
+                    "soltarFrecuenciaDePantalla" -> {
+                        soltarFrecuenciaDePantalla()
+                        result.success(null)
+                    }
                     "openInstallSettings" -> {
                         openInstallSettings()
                         result.success(null)
@@ -142,6 +151,105 @@ class MainActivity: AudioServiceFragmentActivity() {
     // modesto" (la fija el fabricante) — pero no todos los sticks baratos la
     // declaran, así que además se manda la memoria total y los núcleos, y del
     // lado de Dart se decide con los tres.
+    // ── Poner la pantalla a la frecuencia del contenido ─────────────────────
+    //
+    // El problema, y es de aritmetica, no de potencia: casi todo el anime y las
+    // peliculas van a 23,976 o 24 cuadros por segundo, y un televisor va a 60
+    // Hz. Sin pedirle que cambie de modo, esos 24 cuadros hay que repartirlos
+    // en 60 refrescos: unos duran dos y otros tres. Eso es un tiron visible en
+    // cualquier movimiento lateral de camara, y NO mejora con un televisor mas
+    // potente — por eso el usuario lo reporta tambien en los buenos.
+    //
+    // Es lo que hacen YouTube y Netflix en Android TV, y por eso se ven fluidos.
+    //
+    // Se elige el modo que MEJOR divide con los cuadros del contenido, no el
+    // mas parecido: 24 en una pantalla de 48 Hz va perfecto (cada cuadro dura
+    // dos refrescos exactos), y 24 en una de 50 no, aunque 50 este mas cerca
+    // de 48.
+    //
+    // preferredDisplayModeId y no setFrameRate(): el segundo existe recien
+    // desde Android 11 y es una SUGERENCIA que muchos televisores ignoran. El
+    // modo preferido de la ventana esta desde Android 6 y es lo que de verdad
+    // hace renegociar el HDMI.
+    //
+    // Devuelve la frecuencia que quedo puesta, o null si no se pudo. Que no se
+    // pueda es normal —hay televisores con un solo modo— y no es un error: se
+    // sigue reproduciendo igual, solo que con el tiron de siempre.
+    private fun ajustarFrecuenciaDePantalla(fps: Double?): Double? {
+        if (fps == null || fps <= 0) return null
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.M) return null
+        return try {
+            val display = window?.decorView?.display ?: return null
+            val actual = display.mode ?: return null
+            val modos = display.supportedModes ?: return null
+
+            // Solo modos con la MISMA resolucion que la puesta. Cambiar de
+            // resolucion por un tema de cuadros seria cambiar dos cosas a la
+            // vez, y bajar de 4K a 1080p sin que nadie lo pidiera.
+            val candidatos = modos.filter {
+                it.physicalWidth == actual.physicalWidth &&
+                    it.physicalHeight == actual.physicalHeight
+            }
+            if (candidatos.size < 2) return null
+
+            // Cuantos refrescos dura cada cuadro. Si da entero, cada cuadro
+            // dura lo mismo y no hay tiron; cuanto mas se aleja de un entero,
+            // peor se ve.
+            fun desajuste(hz: Float): Double {
+                val refrescosPorCuadro = hz / fps
+                if (refrescosPorCuadro < 0.99) return Double.MAX_VALUE
+                return kotlin.math.abs(
+                    refrescosPorCuadro - kotlin.math.round(refrescosPorCuadro)
+                )
+            }
+
+            val mejor = candidatos.minByOrNull { desajuste(it.refreshRate) }
+                ?: return null
+            // Si el que ya esta puesto es igual de bueno, no se toca: cambiar de
+            // modo hace parpadear la pantalla mientras el HDMI renegocia.
+            if (desajuste(mejor.refreshRate) >= desajuste(actual.refreshRate)) {
+                return null
+            }
+
+            val params: WindowManager.LayoutParams = window.attributes
+            if (modoOriginal == null) modoOriginal = actual.modeId
+            params.preferredDisplayModeId = mejor.modeId
+            window.attributes = params
+            mejor.refreshRate.toDouble()
+        } catch (e: Exception) {
+            // Un instrumento para que se vea mejor no puede impedir que se vea.
+            null
+        }
+    }
+
+    // El modo que tenia la pantalla antes de que la app lo tocara.
+    private var modoOriginal: Int? = null
+
+    // Devuelve la pantalla a su modo de siempre.
+    //
+    // Hace falta si o si: sin esto el televisor queda a 24 Hz para TODO el
+    // sistema al salir del video, y el menu del propio televisor se ve a
+    // tirones. Se llama al cerrar el reproductor y tambien al irse la app.
+    private fun soltarFrecuenciaDePantalla() {
+        val original = modoOriginal ?: return
+        try {
+            val params: WindowManager.LayoutParams = window.attributes
+            params.preferredDisplayModeId = original
+            window.attributes = params
+        } catch (e: Exception) {
+            // Nada que hacer; el sistema lo recupera al cerrar la app.
+        } finally {
+            modoOriginal = null
+        }
+    }
+
+    // Red de seguridad: si la app se va sin pasar por el cierre del
+    // reproductor, la pantalla no puede quedarse en el modo del video.
+    override fun onDestroy() {
+        soltarFrecuenciaDePantalla()
+        super.onDestroy()
+    }
+
     private fun perfilDelAparato(): Map<String, Any> {
         val am = getSystemService(Context.ACTIVITY_SERVICE) as? android.app.ActivityManager
         var memoriaTotalMb = 0L
