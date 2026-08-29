@@ -2671,9 +2671,6 @@ class VideoPlayerController extends GetxController with WidgetsBindingObserver {
   Duration? _midStreamResumeAt;
 
   void _beginPlaybackShutdown() {
-    // La pantalla vuelve a su modo de siempre. Si no, el televisor se queda a
-    // 24 Hz para TODO el sistema y su propio menú se ve a tirones.
-    unawaited(FrecuenciaDePantalla.soltar());
     // ── Lo PRIMERO de todo: que deje de sonar ─────────────────────────────
     //
     // Antes lo primero que se hacía era bajar el volumen, sí, pero dentro de
@@ -2847,6 +2844,27 @@ class VideoPlayerController extends GetxController with WidgetsBindingObserver {
     } catch (e) {
       logger.severe('player.dispose error: $e');
     }
+
+    // ── La pantalla vuelve a su modo de siempre, y va ACÁ ────────────────
+    //
+    // Reportado en vivo en un televisor: darle a SALIR mientras reproducía
+    // cerraba la app entera.
+    //
+    // Estaba al PRINCIPIO del apagado, o sea en paralelo con la destrucción
+    // de la superficie de vídeo. Y devolver el modo de pantalla hace que el
+    // televisor renegocie el HDMI: la superficie se recrea justo mientras
+    // media_kit la está liberando. Ese cruce es exactamente la clase de
+    // carrera que este archivo ya documenta como causa de SIGSEGV en
+    // `video_output_dispose` — y un fallo nativo se lleva el proceso entero,
+    // sin dejar ni una pantalla de error de Flutter, que es lo que se vio.
+    //
+    // Acá abajo el reproductor ya soltó todo lo suyo, así que la
+    // renegociación no puede cruzarse con nada.
+    //
+    // Hace falta sí o sí: sin esto el televisor se queda a 24 Hz para TODO el
+    // sistema y su propio menú se ve a tirones. El lado nativo tiene además
+    // su red en `onDestroy` por si la app se va sin pasar por acá.
+    await FrecuenciaDePantalla.soltar();
   }
 
   Future<void> closeRoute([BuildContext? context]) async {
