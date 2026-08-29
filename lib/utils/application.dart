@@ -182,31 +182,52 @@ class ApplicationUtils {
     }
   }
 
-  /// ¿Este release se declaró a mano como exclusivo de la OTRA variante de
-  /// Android (TV vs celular/tablet)?
+  /// ¿Este release se declaró a mano como exclusivo de OTRA plataforma?
   ///
-  /// TV y celular/tablet corren el mismo APK — no hay forma de compilar uno
-  /// sin el otro, así que `_traeEstaPlataforma` no puede distinguirlos (las
-  /// dos son "Android" por igual). Cuando una corrección es puntual de una
-  /// sola variante (ej. algo que solo pasa con el mando de un televisor) y
-  /// no tiene sentido molestar a la otra con un aviso de actualización que
-  /// no le trae nada, se declara a mano en el cuerpo del release — mismo
-  /// mecanismo que `min-update-from`, un comentario HTML invisible en la
-  /// página de GitHub pero legible desde acá:
+  /// Hay dos casos que el nombre de los archivos no puede distinguir solo:
   ///
-  ///     <!-- solo-plataforma: androidtv -->   (o "android" para lo opuesto)
+  ///  - **Android TV contra celular/tablet**: corren el MISMO APK, así que no
+  ///    hay forma de compilar uno sin el otro.
+  ///  - **Un release que se publicó completo pero solo interesa a una
+  ///    plataforma**: los tres archivos existen, pero avisar a las demás sería
+  ///    mandarlas a actualizar por algo que no les cambia nada.
   ///
-  /// Sin la marca, el release aplica a las dos variantes — igual que hasta
-  /// ahora.
-  static bool _soloParaOtraVarianteAndroid(dynamic body) {
-    if (!Platform.isAndroid || body is! String) return false;
+  /// Para los dos se declara a mano en el cuerpo del release — mismo mecanismo
+  /// que `min-update-from`, un comentario HTML invisible en la página de
+  /// GitHub pero legible desde acá:
+  ///
+  ///     <!-- solo-plataforma: androidtv -->
+  ///
+  /// Valores aceptados: `androidtv`, `android`, `windows` y `linux`. Se puede
+  /// poner más de uno separados por coma.
+  ///
+  /// Sin la marca, el release aplica a todos — igual que siempre.
+  static bool _soloParaOtraPlataforma(dynamic body) {
+    if (body is! String) return false;
     final marca = RegExp(
-      r'solo-plataforma:\s*(androidtv|android)\b',
+      r'solo-plataforma:\s*([a-z, ]+)',
       caseSensitive: false,
-    ).firstMatch(body)?.group(1)?.toLowerCase();
+    ).firstMatch(body)?.group(1);
     if (marca == null) return false;
-    final esParaTv = marca == 'androidtv';
-    return esParaTv != PlatformTv.esTelevisionSync;
+    final para = marca
+        .toLowerCase()
+        .split(',')
+        .map((s) => s.trim())
+        .where((s) => s.isNotEmpty)
+        .toSet();
+    if (para.isEmpty) return false;
+    final soyYo = switch (true) {
+      _ when Platform.isAndroid && PlatformTv.esTelevisionSync => 'androidtv',
+      _ when Platform.isAndroid => 'android',
+      _ when Platform.isWindows => 'windows',
+      _ when Platform.isLinux => 'linux',
+      _ => '',
+    };
+    // Un valor que no se reconoce no puede dejar a nadie sin actualizaciones:
+    // si la marca no nombra ninguna plataforma conocida, se ignora.
+    const conocidas = {'androidtv', 'android', 'windows', 'linux'};
+    if (!para.any(conocidas.contains)) return false;
+    return !para.contains(soyYo);
   }
 
   /// Busca, entre los releases más recientes del repo, el más nuevo que sea
@@ -250,11 +271,11 @@ class ApplicationUtils {
         // reciente al más viejo), así que no tiene sentido seguir mirando.
         return null;
       }
-      if (_soloParaOtraVarianteAndroid(release['body'])) {
-        // Declarado a mano para la otra variante de Android (TV vs
-        // celular/tablet): no es para mí aunque el .apk esté ahí — ya se
-        // sabe con certeza por la marca, no hace falta esperar a que
-        // termine de subir nada. Sigo mirando hacia atrás.
+      if (_soloParaOtraPlataforma(release['body'])) {
+        // Declarado a mano para otra plataforma: no es para mí aunque el
+        // archivo esté ahí. Ya se sabe con certeza por la marca, así que no
+        // hace falta esperar a que termine de subir nada. Sigo mirando hacia
+        // atrás por si uno anterior sí me incluía.
         continue;
       }
       if (_algoTodaviaSubiendo(release['assets']) ||
