@@ -33,6 +33,7 @@ import 'package:prismhub/utils/notificacion_reproductor.dart';
 import 'package:prismhub/utils/audio_hls.dart';
 import 'package:prismhub/utils/bomba_de_datos.dart';
 import 'package:prismhub/controllers/watch/banco_de_pruebas.dart';
+import 'package:prismhub/controllers/watch/dibujado_de_video.dart';
 import 'package:prismhub/controllers/watch/recorte_fmp4.dart';
 import 'package:prismhub/utils/watch_state.dart';
 import 'package:prismhub/data/services/database_service.dart';
@@ -102,7 +103,13 @@ class VideoPlayerController extends GetxController with WidgetsBindingObserver {
   static const double volumenMaximo = 200;
 
   final player = Player();
-  late final videoController = VideoController(player);
+  // La configuracion del dibujado sale de DibujadoDeVideo, que la elige segun
+  // el aparato. Antes esto iba sin un solo parametro, o sea que el televisor
+  // mas barato y el PC mas nuevo recibian lo mismo.
+  late final videoController = VideoController(
+    player,
+    configuration: DibujadoDeVideo.paraEsteAparato(),
+  );
 
   final showSidebar = false.obs;
   final isOpenSidebar = false.obs;
