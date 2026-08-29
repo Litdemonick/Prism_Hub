@@ -225,12 +225,7 @@ class _SideBarSettingsState extends State<_SideBarSettings> {
                               Text('video.sidebar.vr-single'.i18n),
                               const SizedBox(height: 2),
                               Text(
-                                // Mismo motivo que en el telefono: el recorte
-                                // lo hace mpv acá y el televisor decodifica por
-                                // su cuenta, así que no le llega.
-                                _c.dlnaDevice.value != null
-                                    ? 'video.sidebar.not-while-casting'.i18n
-                                    : 'video.sidebar.vr-single-hint'.i18n,
+                                'video.sidebar.vr-single-hint'.i18n,
                                 style: const TextStyle(fontSize: 12),
                               ),
                             ],
@@ -239,9 +234,7 @@ class _SideBarSettingsState extends State<_SideBarSettings> {
                         const SizedBox(width: 10),
                         fluent.ToggleSwitch(
                           checked: _c.vrUnaPantalla.value,
-                          onChanged: _c.dlnaDevice.value != null
-                              ? null
-                              : (_) => _c.alternarVrUnaPantalla(),
+                          onChanged: (_) => _c.alternarVrUnaPantalla(),
                         ),
                       ],
                     ),
@@ -659,10 +652,6 @@ class _SideBarSettingsState extends State<_SideBarSettings> {
           // llegan — para que llegaran habría que reconvertir el vídeo entero
           // en el teléfono y mandárselo así.
           //
-          // Antes quedaban tocables: el interruptor se encendía, el recorte se
-          // aplicaba a un reproductor que estaba parado, y el televisor seguía
-          // mostrando la imagen doble. Se veía como que la app no obedecía.
-          final casteando = _c.dlnaDevice.value != null;
           final esVr = _c.esVideoVr.value;
           // Los dos, no uno u otro.
           //
@@ -680,26 +669,20 @@ class _SideBarSettingsState extends State<_SideBarSettings> {
                 SwitchListTile(
                   contentPadding: EdgeInsets.zero,
                   value: _c.vrUnaPantalla.value,
-                  onChanged:
-                      casteando ? null : (_) => _c.alternarVrUnaPantalla(),
+                  onChanged: (_) => _c.alternarVrUnaPantalla(),
                   title: Text('video.sidebar.vr-single'.i18n),
                   subtitle: Text(
-                    casteando
-                        ? 'video.sidebar.not-while-casting'.i18n
-                        : 'video.sidebar.vr-single-hint'.i18n,
+                    'video.sidebar.vr-single-hint'.i18n,
                     style: const TextStyle(fontSize: 12),
                   ),
                 ),
               SwitchListTile(
                 contentPadding: EdgeInsets.zero,
                 value: _c.llenarPantalla.value,
-                onChanged:
-                    casteando ? null : (v) => _c.llenarPantalla.value = v,
+                onChanged: (v) => _c.llenarPantalla.value = v,
                 title: Text('video.sidebar.fill'.i18n),
                 subtitle: Text(
-                  casteando
-                      ? 'video.sidebar.not-while-casting'.i18n
-                      : 'video.sidebar.fill-hint'.i18n,
+                  'video.sidebar.fill-hint'.i18n,
                   style: const TextStyle(fontSize: 12),
                 ),
               ),

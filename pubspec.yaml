@@ -103,11 +103,12 @@ dependencies:
   # estaba resuelta como dependencia transitiva (algún otro paquete la
   # trae) — se declara directa porque ahora se llama a su API a mano.
   wakelock_plus: ^1.1.4
-  dlna_dart: ^0.0.8
   ed25519_edwards: ^0.3.1
-  # Proxy HTTP local — un DLNA/Chromecast pide la URL del stream por su
-  # cuenta y no puede mandar el Referer/User-Agent que muchas fuentes de
-  # anime exigen; ver lib/utils/cast_relay_server.dart.
+  # Proxy HTTP local. Se levanto para el casteo (que ya no existe), pero
+  # sigue haciendo falta para la reproduccion normal: cuando una lista HLS
+  # reparte sus pedacitos entre varios nodos y alguno esta caido o lento, el
+  # relay los sirve esquivando el nodo malo. Ver lib/utils/cast_relay_server.dart
+  # (el nombre quedo del casteo; lo que hace hoy no tiene nada que ver).
   shelf: ^1.4.2
   # Recorte/zoom de la captura del reproductor WebView (le sacamos la barra
   # de controles del sitio antes de guardarla como portada de "Continuar

@@ -20,6 +20,7 @@ import 'package:prismhub/utils/alivio_de_memoria.dart';
 import 'package:prismhub/utils/comportamiento_sistema_tv.dart';
 import 'package:prismhub/utils/platform_tv.dart';
 import 'package:prismhub/utils/error.dart';
+import 'package:prismhub/utils/cast_relay_server.dart';
 import 'package:prismhub/utils/log.dart';
 import 'package:prismhub/utils/request.dart';
 import 'package:prismhub/views/dialogs/bt_dialog.dart';
@@ -27,16 +28,10 @@ import 'package:prismhub/controllers/home_controller.dart';
 import 'package:prismhub/controllers/main_controller.dart';
 import 'package:prismhub/router/router.dart';
 import 'package:prismhub/utils/bt_server.dart';
-import 'package:prismhub/utils/cast_aparato.dart';
-import 'package:prismhub/utils/cast_formatos.dart';
-import 'package:prismhub/utils/cast_hls_ts.dart';
-import 'package:prismhub/utils/cast_log.dart';
 import 'package:prismhub/utils/connectivity.dart';
-import 'package:prismhub/utils/cast_metadata.dart';
 import 'package:prismhub/utils/notificacion_reproductor.dart';
 import 'package:prismhub/utils/audio_hls.dart';
 import 'package:prismhub/utils/bomba_de_datos.dart';
-import 'package:prismhub/utils/cast_relay_server.dart';
 import 'package:prismhub/controllers/watch/recorte_fmp4.dart';
 import 'package:prismhub/utils/watch_state.dart';
 import 'package:prismhub/data/services/database_service.dart';
@@ -196,20 +191,10 @@ class VideoPlayerController extends GetxController with WidgetsBindingObserver {
     // El tope era 100, o sea el volumen original: con una pista grabada baja no
     // quedaba nada por hacer. Ahora llega hasta volumenMaximo.
     LogicalKeyboardKey.arrowUp: () {
-      // Transmitiendo, el volumen que importa es el del APARATO: el de aca no
-      // sale por ningun lado porque el sonido lo hace el televisor.
-      if (dlnaDevice.value != null) {
-        ajustarVolumenCast(0.05);
-        return;
-      }
       final volume = player.state.volume + 5.0;
       player.setVolume(volume.clamp(0.0, volumenMaximo));
     },
     LogicalKeyboardKey.arrowDown: () {
-      if (dlnaDevice.value != null) {
-        ajustarVolumenCast(-0.05);
-        return;
-      }
       final volume = player.state.volume - 5.0;
       player.setVolume(volume.clamp(0.0, volumenMaximo));
     },
@@ -451,10 +436,8 @@ class VideoPlayerController extends GetxController with WidgetsBindingObserver {
   /// Se corta con las mismas condiciones con las que los controles deciden
   /// mostrar la rueda: si hay un error en pantalla, un aviso de servidor caído
   /// o falta elegir servidor, NO se está cargando nada y el botón tiene que
-  /// responder. Y casteando tampoco: ahí el reproductor de acá está parado a
-  /// propósito y el que manda es el aparato.
+  /// responder.
   bool get esperandoElPrimerCuadro =>
-      dlnaDevice.value == null &&
       !isGettingWatchData.value &&
       !hasRenderedFrame.value &&
       error.value.isEmpty &&
@@ -697,11 +680,6 @@ class VideoPlayerController extends GetxController with WidgetsBindingObserver {
     _muestreo?.cancel();
     _vigilanteDeAtasco = Timer.periodic(const Duration(milliseconds: 500), (_) {
       if (_disposed) return;
-      // Casteando no aplica: el reproductor de aca esta parado a proposito.
-      if (dlnaDevice.value != null) {
-        if (imagenCongelada.value) imagenCongelada.value = false;
-        return;
-      }
       // Nada que vigilar si todavia no empezo, si esta pausado a proposito, o
       // si el video corre por el navegador.
       if (!hasRenderedFrame.value ||
@@ -877,8 +855,6 @@ class VideoPlayerController extends GetxController with WidgetsBindingObserver {
   void _seguirVolumenLocal() {
     _addSubscription(player.stream.volume.listen((v) {
       if (_disposed) return;
-      // Transmitiendo manda el volumen del televisor, que se avisa aparte.
-      if (dlnaDevice.value != null) return;
       final antes = _ultimoVolumen;
       _ultimoVolumen = v;
       // El primer valor es con el que se abrió el reproductor, no un cambio.
@@ -982,295 +958,24 @@ class VideoPlayerController extends GetxController with WidgetsBindingObserver {
   // 播放状态
   final isPlaying = false.obs;
 
-  // dlna 设备
-  final dlnaDevice = Rx<AparatoDeCasteo?>(null);
 
-  // 定时器
-  Timer? _dlnaTimer;
   final List<Worker> _workers = [];
   final List<StreamSubscription> _subscriptions = [];
 
-  // Ultimo fallo del relay ya avisado, para no repetir el mismo aviso una vez
-  // por segundo mientras corre el timer de estado.
-  String? _fallaDeCastAvisada;
 
-  /// El vídeo de esta transmisión, reempaquetado a MPEG-TS.
-  ///
-  /// Null cuando se está mandando el original. Cuando viene, el televisor está
-  /// recibiendo un flujo que se arma sobre la marcha: no tiene un largo con el
-  /// que calcular a qué byte saltar, así que adelantar no es pedirle que salte
-  /// sino **rearmarle el flujo desde otro pedacito**. Ver [_saltarEnCastTs].
-  PlanTs? _planTs;
 
-  /// En qué momento del episodio empieza el flujo que está recibiendo.
-  ///
-  /// El televisor cuenta desde cero porque para él cada salto es un vídeo
-  /// nuevo; esto es lo que hay que sumarle para saber por dónde va de verdad.
-  Duration _desfaseTs = Duration.zero;
 
-  /// Enganchando con el aparato: mandarle el video y que arranque puede tardar
-  /// varios segundos, y hasta ahora no se veia nada en ese rato — parecia que
-  /// el toque no habia hecho efecto. Tambien evita que se dispare dos veces.
-  final castConectando = false.obs;
 
-  /// Resolviendo el episodio siguiente para mandarlo al mismo aparato.
-  ///
-  /// Aparte de castConectando porque el aviso tiene que decir otra cosa: no es
-  /// "conectando con el dispositivo" sino "cambiando de episodio", que es lo
-  /// que de verdad esta pasando y puede tardar bastante mas.
-  final castCambiandoEpisodio = false.obs;
 
-  /// Aviso breve que se muestra DENTRO del panel de casteo, en el renglon del
-  /// estado. Fuera del panel quedaba una segunda caja oscura encima de la
-  /// primera; adentro es una sola cosa que cambia de texto.
-  final castAviso = Rxn<String>();
 
-  /// Velocidad que informa el aparato, cuando no es la normal.
-  ///
-  /// Si desde el televisor se pone x2, x4..., la app no se enteraba: seguia
-  /// diciendo "transmitiendo" como si nada, y el usuario veia la barra de
-  /// progreso corriendo raro sin explicacion. El estado que devuelve el aparato
-  /// trae la velocidad, asi que se lee de ahi.
-  final castVelocidad = Rxn<String>();
 
-  /// Saltando a otro punto del video EN el aparato.
-  ///
-  /// El televisor tarda en llegar y mientras tanto deja la imagen congelada; de
-  /// este lado no pasaba nada y parecia que el salto se habia perdido. Con esto
-  /// el panel muestra la rueda y dice que espere.
-  final castBuscando = false.obs;
-  Duration? _objetivoDeSalto;
   Timer? _castBuscandoTimer;
 
-  /// Volumen del APARATO, de 0 a 100.
-  ///
-  /// Deslizando de arriba abajo con la transmision puesta, lo que se movia era
-  /// el volumen del telefono — que no sale por ningun lado, porque el sonido lo
-  /// esta haciendo el televisor. Ahora se le manda a el.
-  final castVolumen = 50.obs;
   Timer? _volumenCastTimer;
 
-  /// Velocidad pedida al aparato manteniendo apretado (1 = normal).
-  final castVelocidadPedida = 1.obs;
 
-  /// Se le mando el video y todavia no empezo a verse.
-  ///
-  /// Aceptar la orden y empezar a reproducir son dos cosas distintas: el
-  /// aparato contesta enseguida y despues se toma lo suyo para bajar y llenar
-  /// el buffer. Antes el aviso de carga se apagaba con la respuesta, asi que
-  /// desaparecia a los pocos milisegundos mientras la pantalla grande seguia en
-  /// negro. Esto se mantiene hasta que el aparato informa que esta
-  /// REPRODUCIENDO de verdad.
-  final castEsperandoPlay = false.obs;
   Timer? _esperaPlayTimer;
 
-  /// Comprueba si el aparato llego a pedirnos el video. Ver connectDLNADevice.
-  Timer? _pedidoCastTimer;
-
-  /// La direccion que le mandamos NOSOTROS al aparato.
-  ///
-  /// DLNA no tiene ningun bloqueo: si otro telefono le manda otro video al
-  /// mismo televisor, el segundo simplemente pisa al primero. Guardando lo que
-  /// mandamos se puede comparar contra lo que el aparato dice estar
-  /// reproduciendo y darnos cuenta de que ya no es nuestro.
-  String? _urlEnviadaAlCast;
-
-  /// Cada cuantas vueltas del sondeo se comprueba que el video siga siendo el
-  /// nuestro. Cada segundo seria un pedido de mas por segundo al televisor para
-  /// algo que no cambia casi nunca.
-  static const _vueltasEntreControles = 5;
-  int _vueltasDesdeElControl = 0;
-
-  /// Posicion del ultimo momento en que se confirmo que el video era nuestro.
-  ///
-  /// Entre un control y el siguiente pueden pasar unos segundos, y si en el
-  /// medio otro dispositivo tomo el televisor, la posicion que informa pasa a
-  /// ser la del OTRO video. Guardar esa en el historial escribiria el progreso
-  /// ajeno sobre el episodio propio, asi que al detectar el robo se vuelve a
-  /// este valor, que si era nuestro.
-  Duration _posicionUltimoControl = Duration.zero;
-
-  /// Controles seguidos en los que el aparato dijo estar con otra direccion.
-  /// Ver _comprobarQueSigaSiendoNuestro.
-  int _desajustesSeguidos = 0;
-
-  /// Lee el volumen que tiene puesto el aparato, para arrancar desde ahi.
-  Future<void> _leerVolumenDelCast(AparatoDeCasteo aparato) async {
-    try {
-      final v = await aparato.leerVolumen();
-      if (v != null) castVolumen.value = v.clamp(0, 100);
-    } catch (e) {
-      // Sin este dato se arranca desde el ultimo conocido: subir y bajar sigue
-      // andando, solo que la primera vez puede dar un salto.
-      logger.warning('El aparato no informo su volumen', e);
-    }
-  }
-
-  /// Si este aparato acepta que le cambien el volumen.
-  ///
-  /// Se descubre probando —no hay forma de preguntarlo antes— y una vez que se
-  /// sabe que no, se deja de intentar: seguir mandandole ordenes que rechaza en
-  /// cada movimiento del dedo es inundarlo para nada.
-  bool castVolumenSoportado = true;
-
-  /// Sube o baja el volumen del aparato. [delta] va en fraccion (-1 a 1).
-  void ajustarVolumenCast(double delta) {
-    final aparato = dlnaDevice.value;
-    if (aparato == null) return;
-    if (!castVolumenSoportado) {
-      castAviso.value = 'video.cast-volume-no'.i18n;
-      Timer(const Duration(seconds: 3), () {
-        if (castAviso.value == 'video.cast-volume-no'.i18n) {
-          castAviso.value = null;
-        }
-      });
-      return;
-    }
-    final nuevo = (castVolumen.value + (delta * 100).round()).clamp(0, 100);
-    if (nuevo == castVolumen.value) return;
-    castVolumen.value = nuevo;
-    castAviso.value = '${'video.cast-volume'.i18n} $nuevo%';
-    // Se manda al soltar, no en cada pixel.
-    //
-    // Arrastrar dispara decenas de eventos por segundo y cada uno seria un
-    // pedido HTTP al televisor: se lo inundaba y el volumen llegaba tarde y a
-    // los saltos. Con este respiro se manda solo el ultimo valor.
-    _volumenCastTimer?.cancel();
-    _volumenCastTimer = Timer(const Duration(milliseconds: 220), () async {
-      var acepto = true;
-      try {
-        await aparato.ponerVolumen(castVolumen.value);
-      } catch (e) {
-        // Hay aparatos que directamente no dejan cambiarles el volumen desde
-        // afuera. Antes el numero se movia igual y el televisor seguia como
-        // estaba, asi que parecia que la app no obedecia.
-        acepto = false;
-        logger.warning('El aparato no acepto el volumen', e);
-      }
-      if (_disposed || dlnaDevice.value != aparato) return;
-      if (!acepto) {
-        castVolumenSoportado = false;
-        castAviso.value = 'video.cast-volume-no'.i18n;
-        Timer(const Duration(seconds: 3), () {
-          if (castAviso.value == 'video.cast-volume-no'.i18n) {
-            castAviso.value = null;
-          }
-        });
-        return;
-      }
-      // El cartel se va solo un rato despues del ultimo movimiento.
-      Timer(const Duration(milliseconds: 900), () {
-        if (castAviso.value?.startsWith('video.cast-volume'.i18n) ?? false) {
-          castAviso.value = null;
-        }
-      });
-    });
-  }
-
-  /// Manda al aparato a x2, x4, x8... o de vuelta a la normal.
-  ///
-  /// Muchos aparatos solo aceptan la velocidad normal y contestan un error; en
-  /// ese caso se avisa y se vuelve a 1, en vez de dejar creer que anda.
-  Future<void> pedirVelocidadCast(int velocidad) async {
-    final aparato = dlnaDevice.value;
-    if (aparato == null) return;
-    final acepto = await aparato.ponerVelocidad(velocidad);
-    if (!acepto) {
-      castVelocidadPedida.value = 1;
-      castAviso.value = 'video.cast-speed-unsupported'.i18n;
-      Timer(const Duration(milliseconds: 1800), () {
-        if (castAviso.value == 'video.cast-speed-unsupported'.i18n) {
-          castAviso.value = null;
-        }
-      });
-      return;
-    }
-    castVelocidadPedida.value = velocidad;
-  }
-
-  void _empezoSaltoEnCast(Duration objetivo) {
-    _objetivoDeSalto = objetivo;
-    castBuscando.value = true;
-    _castBuscandoTimer?.cancel();
-    // Techo por si el aparato nunca informa haber llegado: mejor soltar el
-    // aviso que dejarlo girando para siempre.
-    _castBuscandoTimer = Timer(const Duration(seconds: 8), () {
-      castBuscando.value = false;
-      _objetivoDeSalto = null;
-    });
-  }
-
-  void _revisarSaltoEnCast() {
-    final objetivo = _objetivoDeSalto;
-    if (!castBuscando.value || objetivo == null) return;
-    // Llego: el aparato ya informa una posicion cerca de donde se le pidio.
-    if ((position.value - objetivo).abs() <= const Duration(seconds: 3)) {
-      _castBuscandoTimer?.cancel();
-      castBuscando.value = false;
-      _objetivoDeSalto = null;
-    }
-  }
-
-  // Foto del casteo justo antes de empezar a cerrar, para que el historial
-  // pueda guardar por donde iba el TELEVISOR. Ver _beginPlaybackShutdown.
-  bool _casteabaAlCerrar = false;
-  Duration _posicionCastAlCerrar = Duration.zero;
-  Duration _duracionCastAlCerrar = Duration.zero;
-
-  /// Si tiene sentido ofrecer el casteo AHORA.
-  ///
-  /// Regla: si el reproductor nativo no esta reproduciendo bien, castear
-  /// tampoco va a andar — el aparato pide el mismo video por su cuenta y se va
-  /// a topar con lo mismo. Ofrecer el boton igual solo lleva a una pantalla
-  /// negra en el televisor y a un "no se pudo reproducir" sin explicacion, asi
-  /// que se apaga y se dice por que.
-  ///
-  /// Se apoya en observables (duration, isGettingWatchData...) para que un Obx
-  /// que lo lea se entere solo cuando cambia.
-  bool get puedeCastear {
-    // Ya conectado: el boton tiene que seguir vivo para poder cortar.
-    if (dlnaDevice.value != null) return true;
-    // Todavia resolviendo el servidor: no hay nada que mandar.
-    if (isGettingWatchData.value) return false;
-    if (watchData == null) return false;
-    // El respaldo por WebView reproduce DENTRO de una pagina web, no hay una
-    // direccion de video que el televisor pueda pedir.
-    if (isWebViewActive.value || webViewFallback.value != null) return false;
-    // Con duracion conocida es que mpv abrio el medio de verdad. Mientras siga
-    // en cero, o no abrio o esta fallando.
-    return duration.value > Duration.zero;
-  }
-
-  /// Por que no se puede castear, para el aviso del boton apagado.
-  /// Si el botón de castear tiene que estar en pantalla.
-  ///
-  /// Mientras el vídeo todavía se está abriendo, **no**. Antes se dibujaba
-  /// igual, apagado, y en el teléfono cada toque escupía un aviso: tocarlo tres
-  /// veces mientras cargaba dejaba tres avisos encimados. Y no aportaba nada,
-  /// porque es un estado que dura unos segundos y se resuelve solo.
-  ///
-  /// Cuando el motivo es PERMANENTE el botón sí se queda: en el respaldo por
-  /// navegador no hay una dirección que mandarle al televisor, y ahí el aviso
-  /// explica algo que no va a cambiar por esperar. Esconderlo dejaría al
-  /// usuario buscando un botón que estaba hace un momento.
-  bool get mostrarBotonDeCast {
-    // Ya conectado: tiene que seguir para poder cortar.
-    if (dlnaDevice.value != null) return true;
-    if (isWebViewActive.value || webViewFallback.value != null) return true;
-    return puedeCastear;
-  }
-
-  String get motivoSinCast {
-    if (isGettingWatchData.value) return 'video.cast-wait'.i18n;
-    if (isWebViewActive.value || webViewFallback.value != null) {
-      return 'video.cast-webview'.i18n;
-    }
-    return 'video.cast-unavailable'.i18n;
-  }
-
-  // URL de relay activa (si el stream necesitó headers) — se limpia del
-  // servidor local al desconectar, ver disconnectDLNADevice().
-  String? _dlnaRelayUrl;
 
   @override
   void onInit() async {
@@ -1702,50 +1407,7 @@ class VideoPlayerController extends GetxController with WidgetsBindingObserver {
       // nombre del anterior. Se rehace en vez de actualizarse porque cambia el
       // título, y con él la ficha entera.
       unawaited(_mostrarNotificacion());
-      // Casteando, el episodio nuevo tiene que ir tambien al televisor.
-      //
-      // Antes play() abria el episodio nuevo ACA mientras el televisor seguia
-      // con el anterior: sonaban los dos a la vez, cada uno con otra cosa, y la
-      // unica salida era desconectar y volver a elegir el aparato.
-      final aparato = dlnaDevice.value;
-      if (aparato == null) {
-        await play();
-        return;
-      }
-      // Transmitiendo, el episodio nuevo se resuelve con el reproductor de aca
-      // EN SILENCIO.
-      //
-      // play() abre el video y arranca a reproducir; recien despues
-      // connectDLNADevice lo para. En ese hueco sonaba el episodio nuevo por el
-      // telefono encima de lo que ya estaba saliendo por el televisor.
-      final volumenPrevio = player.state.volume;
-      castCambiandoEpisodio.value = true;
-      try {
-        await player.setVolume(0);
-      } catch (_) {
-        // Si no se puede bajar, igual conviene seguir: peor es no encadenar.
-      }
-      try {
-        await play();
-        if (_disposed || watchData == null) return;
-        // Sigue siendo el mismo aparato? Si se desconecto o se cambio mientras
-        // se resolvia el episodio, mandarselo seria pisarle la eleccion.
-        // Por identificador y no por instancia: comparar objetos daria
-        // siempre distinto y el episodio nuevo nunca llegaria al televisor.
-        if (dlnaDevice.value?.id != aparato.id) return;
-        await connectDLNADevice(aparato);
-      } finally {
-        // Si el aparato acepto, el aviso sigue hasta que se vea de verdad —
-        // lo apaga el sondeo. Si no acepto, se apaga aca mismo.
-        if (!castEsperandoPlay.value) castCambiandoEpisodio.value = false;
-        // El volumen vuelve siempre: si el casteo fallo y se sigue viendo aca,
-        // dejarlo mudo seria peor que el problema que se estaba evitando.
-        if (!_disposed) {
-          try {
-            await player.setVolume(volumenPrevio);
-          } catch (_) {}
-        }
-      }
+      await play();
     }));
 
     // 切换倍速
@@ -1880,10 +1542,7 @@ class VideoPlayerController extends GetxController with WidgetsBindingObserver {
         // el recorte en cada uno seria pelearle al usuario que lo apago a mano.
         if (_vrPorReaplicar) {
           _vrPorReaplicar = false;
-          // Transmitiendo no: el recorte lo hace mpv y el televisor decodifica
-          // por su cuenta, asi que no le llega. Igual que el interruptor, que
-          // queda deshabilitado mientras se castea.
-          if (esVideoVr.value && dlnaDevice.value == null) {
+          if (esVideoVr.value) {
             unawaited(alternarVrUnaPantalla());
           }
         }
@@ -2000,9 +1659,6 @@ class VideoPlayerController extends GetxController with WidgetsBindingObserver {
 
     // 总时长监听
     _addSubscription(player.stream.duration.listen((event) {
-      if (dlnaDevice.value != null) {
-        return;
-      }
       // Con recorte, mpv solo conoce el largo del pedazo que se le dio. La
       // barra tiene que seguir mostrando el episodio entero, o al saltar al
       // minuto 20 el vídeo "duraría" 91 minutos en vez de 111.
@@ -2017,9 +1673,6 @@ class VideoPlayerController extends GetxController with WidgetsBindingObserver {
 
     // 监听播放状态
     _addSubscription(player.stream.playing.listen((event) {
-      if (dlnaDevice.value != null) {
-        return;
-      }
       isPlaying.value = event;
       if (event) {
         unawaited(_touchHistory());
@@ -2074,9 +1727,6 @@ class VideoPlayerController extends GetxController with WidgetsBindingObserver {
 
     // 监听进度
     _addSubscription(player.stream.position.listen((crudo) {
-      if (dlnaDevice.value != null) {
-        return;
-      }
       // Con recorte, mpv cuenta desde el principio del PEDAZO que se le dio, no
       // del episodio. Se traduce acá arriba, una sola vez, para que todo lo de
       // abajo —aceptar la posición, la notificación, el guardado del minuto—
@@ -2159,8 +1809,6 @@ class VideoPlayerController extends GetxController with WidgetsBindingObserver {
     _addWorker(ever(ConnectivityUtils.isOnline, (online) {
       if (online != true || _disposed) return;
       // Casteando no: el televisor baja el video por su cuenta y tiene su
-      // propia conexion; ahi el vigilante del aparato es el que manda.
-      if (dlnaDevice.value != null) return;
       // Con el respaldo por navegador tampoco: ese no lo manejamos nosotros.
       if (isWebViewActive.value || isGettingWatchData.value) return;
       // Solo si de verdad se rompio algo. Un cambio de red mientras todo va
@@ -2171,7 +1819,7 @@ class VideoPlayerController extends GetxController with WidgetsBindingObserver {
       // Se da un respiro: apenas cambia la interfaz, la red nueva todavia no
       // resuelve nombres y el reintento saldria fallado igual.
       Timer(const Duration(milliseconds: 1200), () {
-        if (_disposed || dlnaDevice.value != null) return;
+        if (_disposed) return;
         if (!imagenCongelada.value && serverFailedMessage.value.isEmpty) return;
         // ── Se vuelve a chequear, no solo al entrar al Timer ────────────
         //
@@ -2208,12 +1856,10 @@ class VideoPlayerController extends GetxController with WidgetsBindingObserver {
     // Casteando no se toca: ahí el colchón que importa es el del televisor, y el
     // de mpv sería un cero que borraría la sombra.
     _addSubscription(player.stream.buffer.listen((event) {
-      if (dlnaDevice.value != null) return;
       buffer.value = event;
     }));
 
     _addSubscription(player.stream.buffering.listen((buffering) {
-      if (dlnaDevice.value != null) return;
       // Si la posición avanzó hace menos de 800ms, el flag crudo está
       // desfasado (evento de "terminó de bufferizar" perdido) — se ignora.
       final advancedRecently = _lastPositionAdvanceAt != null &&
@@ -2479,7 +2125,6 @@ class VideoPlayerController extends GetxController with WidgetsBindingObserver {
     // (runtime.watch). switchServer ya dispara el diálogo de "¿continuar?"
     // si corresponde una vez que abre.
     if (watchData!.type != ExtensionWatchBangumiType.torrent &&
-        dlnaDevice.value == null &&
         availableServers.length > 1) {
       if (autoResume && _applyPreferredServer()) {
         if (_shouldResumeInWebView() && _openPreferredWebViewFallback()) {
@@ -2521,14 +2166,7 @@ class VideoPlayerController extends GetxController with WidgetsBindingObserver {
 
         playTorrentFile(torrentMediaFileList.first);
       } else {
-        if (dlnaDevice.value != null) {
-          await dlnaDevice.value!.cargar(
-            url: watchData!.url,
-            titulo: '$title — ${playList[index.value].name}',
-            mime: mimeDeUrl(watchData!.url),
-          );
-          if (_disposed) return;
-        } else {
+        {
           // Si recordamos un servidor que ya funcionó en este episodio, usarlo
           // como primario para no re-buscar entre todos (carga más rápido).
           _applyPreferredServer();
@@ -2764,9 +2402,6 @@ class VideoPlayerController extends GetxController with WidgetsBindingObserver {
     } catch (_) {
       // Si el reproductor ya no está, no hay nada que pausar.
     }
-    // Transmitiendo, también se le suelta el televisor: lo que está mostrando
-    // sale de una extensión que ya no puede servir el siguiente episodio.
-    if (dlnaDevice.value != null) unawaited(disconnectDLNADevice());
   }
 
   /// Comprueba que la extensión siga estando antes de pedirle nada.
@@ -3006,7 +2641,6 @@ class VideoPlayerController extends GetxController with WidgetsBindingObserver {
     if (!_shutdownCompleter.isCompleted) {
       _shutdownCompleter.complete();
     }
-    _dlnaTimer?.cancel();
     _bufferingStallTimer?.cancel();
     _qualitySwitchTimer?.cancel();
     _redDeLaRueda?.cancel();
@@ -3026,8 +2660,6 @@ class VideoPlayerController extends GetxController with WidgetsBindingObserver {
     avisoVolumen.value = null;
     // Una orden de pausa/reproduccion pedida justo antes de cerrar saltaba
     // despues sobre un aparato que ya se solto.
-    _playPedidoTimer?.cancel();
-    _playPedido = null;
     // La notificación se va con el reproductor: dejarla en la barra sin nadie
     // del otro lado sería un panel de control que no controla nada.
     // Con el dueño: al pasar de una obra a otra este reproductor se cierra
@@ -3038,35 +2670,9 @@ class VideoPlayerController extends GetxController with WidgetsBindingObserver {
     _castBuscandoTimer?.cancel();
     _volumenCastTimer?.cancel();
     _esperaPlayTimer?.cancel();
-    _pedidoCastTimer?.cancel();
     _vigilanteDeAtasco?.cancel();
     _muestreo?.cancel();
     imagenCongelada.value = false;
-    final device = dlnaDevice.value;
-    // Se anota que se estaba casteando y por donde iba ANTES de soltar nada.
-    //
-    // Esto corre antes de que se guarde el historial, y ahi hace falta saberlo:
-    // el reproductor de aca lleva parado desde que empezo la transmision, asi
-    // que su posicion vale cero y el progreso se perderia entero. Preguntar por
-    // dlnaDevice mas adelante no sirve, porque tres lineas mas abajo ya es null.
-    if (device != null && !_casteabaAlCerrar) {
-      _casteabaAlCerrar = true;
-      _posicionCastAlCerrar = position.value;
-      _duracionCastAlCerrar = duration.value;
-    }
-    dlnaDevice.value = null;
-    if (device != null) {
-      // unawaited + catchError: device.stop() devuelve un Future, asi que un
-      // try/catch alrededor NO atrapa nada — si el aparato esta apagado o fuera
-      // de la red, el fallo quedaba como error asincrono sin dueño.
-      unawaited(device.soltar().catchError((Object e) {
-        logger.warning('El aparato no respondio al cerrar el reproductor', e);
-      }));
-    }
-    if (_dlnaRelayUrl != null) {
-      CastRelayServer.unregister(_dlnaRelayUrl!);
-      _dlnaRelayUrl = null;
-    }
   }
 
   void stopPlaybackImmediately() {
@@ -3141,10 +2747,7 @@ class VideoPlayerController extends GetxController with WidgetsBindingObserver {
     // empezo la transmision, asi que saldria un cuadro negro que ademas pisaria
     // la miniatura buena que ya estaba guardada. En ese caso _saveHistory
     // conserva la anterior.
-    final frame =
-        (saveHistory && dlnaDevice.value == null && !_casteabaAlCerrar)
-            ? await _capturarFrameActual()
-            : null;
+    final frame = saveHistory ? await _capturarFrameActual() : null;
 
     // Recien aca se pausa: el fotograma ya esta tomado.
     await player.pause().timeout(const Duration(seconds: 2)).catchError((_) {});
@@ -3352,78 +2955,7 @@ class VideoPlayerController extends GetxController with WidgetsBindingObserver {
   /// tocaba el casteo para nada: el televisor se quedaba con el stream viejo, el
   /// telefono arrancaba el nuevo con sonido, y la pantalla seguia diciendo que
   /// se estaba transmitiendo. Dos videos distintos sonando a la vez.
-  Future<void> switchServer(String name) async {
-    final aparato = dlnaDevice.value;
-    if (aparato == null) return _switchServerLocal(name);
-
-    // Cambiar de CALIDAD y cambiar de SERVIDOR no son lo mismo, aunque los dos
-    // pasen por aca (ver _servidoresSonCalidades).
-    //
-    // Una calidad distinta es el MISMO video: se le manda al aparato y sigue
-    // donde iba. Un servidor distinto es otra fuente entera, con otro formato y
-    // otras cabeceras, y con el Chromecast eso no se puede hacer en caliente:
-    // su receptor es una aplicacion web que ya tiene cargado lo anterior, y
-    // pisarlo a mitad de camino lo deja en negro sin decir nada. Se corta
-    // limpio y se avisa, que es lo unico honesto.
-    final esCalidad = _servidoresSonCalidades;
-    if (!esCalidad && aparato.esChromecast) {
-      sendMessage(Message(Text('video.cast-server-cambiado'.i18n)));
-      await disconnectDLNADevice();
-      return _switchServerLocal(name);
-    }
-
-    // Que el usuario sepa que esta pasando: resolver la fuente y volver a
-    // mandarsela al televisor lleva unos segundos, y sin esto la imagen se
-    // quedaba congelada sin ninguna señal.
-    castConectando.value = true;
-    castAviso.value = (esCalidad
-            ? 'video.cast-cambiando-calidad'
-            : 'video.cast-cambiando-servidor')
-        .i18n;
-
-    // Donde iba, para no volver al principio por cambiar de servidor.
-    final donde = position.value;
-    // Se resuelve EN SILENCIO: abrir el servidor nuevo arranca la reproduccion
-    // aca, y sin esto sonaba encima de lo que salia por el televisor.
-    final volumenPrevio = player.state.volume;
-    try {
-      await player.setVolume(0);
-    } catch (_) {}
-    try {
-      await _switchServerLocal(name);
-      if (_disposed || watchData == null) return;
-      // Se desconecto o se cambio de aparato mientras resolvia: no se le pisa.
-      if (dlnaDevice.value != aparato) return;
-      // Este servidor va por WebView: no hay una direccion que el televisor
-      // pueda pedir, asi que se corta la transmision y se avisa, en vez de
-      // dejarla mostrando algo que ya no es lo que se esta viendo.
-      if (webViewFallback.value != null || isWebViewActive.value) {
-        sendMessage(Message(Text('video.cast-webview'.i18n)));
-        await disconnectDLNADevice();
-        return;
-      }
-      // Fallo el cambio: el televisor se queda con lo que ya andaba, que es
-      // mejor que cortarle la reproduccion por un servidor que no sirvio.
-      if (serverFailedMessage.value.isNotEmpty) return;
-      await connectDLNADevice(aparato);
-      if (_disposed || dlnaDevice.value != aparato) return;
-      await _irAEnElAparato(aparato, donde);
-    } finally {
-      if (!_disposed) {
-        // El aviso se suelta pase lo que pase. Si el cambio fallo, quien lo
-        // detecto ya puso SU mensaje —el de formato, el de resolucion— y este
-        // encima lo taparia; y si salio bien, dejarlo seria mentir.
-        castConectando.value = false;
-        if (castAviso.value == 'video.cast-cambiando-calidad'.i18n ||
-            castAviso.value == 'video.cast-cambiando-servidor'.i18n) {
-          castAviso.value = null;
-        }
-        try {
-          await player.setVolume(volumenPrevio);
-        } catch (_) {}
-      }
-    }
-  }
+  Future<void> switchServer(String name) => _switchServerLocal(name);
 
   _switchServerLocal(String name) async {
     if (_disposed) return;
@@ -3873,8 +3405,6 @@ class VideoPlayerController extends GetxController with WidgetsBindingObserver {
     // Ya esta reproduciendo esa misma: no se toca, para no recargar de gusto.
     if (watchData?.url == elegida.value.url) return;
     // Casteando tampoco: cambiar la calidad ahi implica volver a mandarselo al
-    // aparato, y no es momento de hacerlo por nuestra cuenta.
-    if (dlnaDevice.value != null) return;
     logger.info('Calidad de arranque: ${elegida.key}');
     unawaited(switchQuality(elegida.value.url));
   }
@@ -3882,47 +3412,6 @@ class VideoPlayerController extends GetxController with WidgetsBindingObserver {
   // 切换画质
   switchQuality(String qualityUrl) async {
     final headers = watchData!.headers;
-
-    // Transmitiendo, la calidad nueva va al TELEVISOR.
-    //
-    // Antes esto solo abria la calidad nueva en el reproductor de aca y no
-    // tocaba el casteo: el televisor se quedaba con la calidad vieja y el
-    // telefono empezaba a sonar encima con la nueva.
-    final aparato = dlnaDevice.value;
-    if (aparato != null) {
-      // Donde iba, para no volver al principio por cambiar de calidad.
-      final donde = position.value;
-      // La direccion de la calidad elegida pasa a ser la del contenido, para
-      // que el relay le sirva ESA al televisor.
-      watchData = ExtensionBangumiWatch(
-        type: watchData!.type,
-        url: qualityUrl,
-        subtitles: watchData!.subtitles,
-        headers: headers,
-        audioTrack: watchData!.audioTrack,
-      );
-      // Que se vea que esta cambiando: volver a mandarle el video al televisor
-      // lleva unos segundos y la imagen se queda quieta mientras tanto.
-      castConectando.value = true;
-      castAviso.value = 'video.cast-cambiando-calidad'.i18n;
-      try {
-        await connectDLNADevice(aparato);
-        if (_disposed || dlnaDevice.value != aparato) return;
-        await _irAEnElAparato(aparato, donde);
-      } finally {
-        if (!_disposed) {
-          castConectando.value = false;
-          // Solo el propio: si el cambio fallo, quien lo detecto ya puso su
-          // mensaje —el de formato, el de resolucion— y taparlo seria perder
-          // justo lo que explica que paso.
-          if (castAviso.value == 'video.cast-cambiando-calidad'.i18n) {
-            castAviso.value = null;
-          }
-        }
-      }
-      return;
-    }
-
     final currentSecond = player.state.position.inSeconds;
     await _ensureVideoSurfaceMounted();
     if (_disposed) return;
@@ -4035,7 +3524,7 @@ class VideoPlayerController extends GetxController with WidgetsBindingObserver {
         portada: _portadaParaNotificacion,
         duracion: duration.value,
         reproduciendo: isPlaying.value,
-        enTelevisor: dlnaDevice.value != null,
+        enTelevisor: false,
         alReproducir: safePlay,
         alPausar: safePause,
         alSaltar: (donde) => unawaited(seek(donde)),
@@ -4055,13 +3544,6 @@ class VideoPlayerController extends GetxController with WidgetsBindingObserver {
     }
   }
 
-  /// La app no está en pantalla ahora mismo.
-  ///
-  /// Importa para el casteo: en segundo plano Android recorta la red (Doze), así
-  /// que las consultas al televisor pueden fallar aunque el televisor esté
-  /// reproduciendo perfecto. Sin distinguirlo, dejar la app un rato de lado y
-  /// volver cortaba una transmisión que estaba sana.
-  bool _enSegundoPlano = false;
 
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
@@ -4071,7 +3553,6 @@ class VideoPlayerController extends GetxController with WidgetsBindingObserver {
     if (_disposed) return;
     if (state == AppLifecycleState.paused ||
         state == AppLifecycleState.hidden) {
-      _enSegundoPlano = true;
       // ── Se PAUSA al irse de la app ────────────────────────────────────────
       //
       // Acá solo se anotaba el historial y se volvía. O sea que saliendo con la
@@ -4105,7 +3586,6 @@ class VideoPlayerController extends GetxController with WidgetsBindingObserver {
     }
 
     if (state == AppLifecycleState.resumed) {
-      _enSegundoPlano = false;
       // La hora y la batería se vuelven a esconder.
       //
       // El modo inmersivo se pide UNA sola vez, en onInit, y Android lo suelta
@@ -4123,13 +3603,6 @@ class VideoPlayerController extends GetxController with WidgetsBindingObserver {
       if (Platform.isAndroid) {
         _barrasDelSistemaVisibles();
       }
-      // Cuenta limpia: los fallos de mientras no estuvo en pantalla no valen,
-      // porque pudieron ser del recorte de red y no del televisor.
-      _fallosDeCastSeguidos = 0;
-      // Y se pregunta YA en vez de esperar a la próxima vuelta del reloj: si
-      // mientras tanto el televisor se apagó o alguien le mandó otra cosa, es
-      // ahora cuando el usuario está mirando la pantalla.
-      if (dlnaDevice.value != null) unawaited(_getDLNAStatus());
       return;
     }
 
@@ -4153,13 +3626,6 @@ class VideoPlayerController extends GetxController with WidgetsBindingObserver {
       //
       // Sin await a propósito: en `detached` puede no quedar tiempo para
       // esperar una respuesta por red, y bloquear el cierre sería peor que no
-      // llegar a soltarlo.
-      final aparato = dlnaDevice.value;
-      if (aparato != null) {
-        unawaited(aparato.soltar().catchError((Object e) {
-          logger.info('No se pudo soltar el aparato al cerrar: $e');
-        }));
-      }
     }
   }
 
@@ -4359,16 +3825,6 @@ class VideoPlayerController extends GetxController with WidgetsBindingObserver {
 
       final epName = playList[index.value].name;
 
-      // Transmitiendo, el progreso lo lleva el TELEVISOR, no el reproductor de
-      // aca — que esta parado a proposito desde que empezo el casteo.
-      //
-      // Se leia player.state.position/duration, que en ese rato valen cero: al
-      // salir del episodio mientras se casteaba se guardaba progreso 0 y se
-      // perdia todo lo visto. Las Rx position/duration si estan al dia, porque
-      // el timer de estado las va llenando con lo que informa el aparato.
-      // Se mira tambien _casteabaAlCerrar: al cerrar el reproductor, el
-      // desmontaje suelta el aparato ANTES de llegar aca, asi que preguntar
-      // solo por dlnaDevice daria false justo en el caso que importa.
       // ── Se guarda la posición del EPISODIO, no la de mpv ─────────────────
       //
       // Con el recorte de fMP4, mpv reproduce un pedazo que arranca en cero, así
@@ -4381,17 +3837,8 @@ class VideoPlayerController extends GetxController with WidgetsBindingObserver {
       // vale cero— y la correcta cuando lo hay. Igual para la duración: con
       // recorte, la de mpv es la del pedazo, y guardarla haría que el vídeo
       // pareciera más corto de lo que es.
-      final casteando = dlnaDevice.value != null || _casteabaAlCerrar;
-      final posicionSeg = !casteando
-          ? position.value.inSeconds
-          : (dlnaDevice.value != null
-              ? position.value.inSeconds
-              : _posicionCastAlCerrar.inSeconds);
-      final duracionSeg = !casteando
-          ? duration.value.inSeconds
-          : (dlnaDevice.value != null
-              ? duration.value.inSeconds
-              : _duracionCastAlCerrar.inSeconds);
+      final posicionSeg = position.value.inSeconds;
+      final duracionSeg = duration.value.inSeconds;
 
       // ── El progreso que se guarda tiene que ser creíble ──────────────────
       //
@@ -4426,12 +3873,8 @@ class VideoPlayerController extends GetxController with WidgetsBindingObserver {
       // al cerrar el reproductor, donde capturar acá sería tarde) o tomarse en
       // el momento, para las llamadas que ocurren con la reproducción viva.
       //
-      // Casteando no se intenta capturar: el reproductor de aca esta parado y
-      // la captura saldria negra, pisando la buena que ya estaba guardada.
       final data = frameCapturado ??
-          ((captureScreenshot && !casteando)
-              ? await _capturarFrameActual()
-              : null);
+          (captureScreenshot ? await _capturarFrameActual() : null);
 
       logger.info('save history');
 
@@ -5012,797 +4455,6 @@ class VideoPlayerController extends GetxController with WidgetsBindingObserver {
     );
   }
 
-  // 连接 DLNA 设备
-  connectDLNADevice(AparatoDeCasteo aparato) async {
-    // Se puede llegar aca despues de un await (cambio de episodio casteando)
-    // con el reproductor ya cerrado.
-    if (_disposed) return;
-    if (watchData == null) {
-      sendMessage(Message(Text('等待视频加载'.i18n)));
-      return;
-    }
-    // Dos conexiones a la vez no: tocar el aparato dos veces, o elegir otro
-    // mientras el primero todavia esta enganchando, dejaba dos enganches
-    // pisandose y el estado a medio armar.
-    if (castConectando.value) return;
-    castConectando.value = true;
-
-    // Si ya se estaba transmitiendo a OTRO aparato, hay que soltar el anterior
-    // ANTES de enganchar el nuevo. Sin esto el televisor viejo se quedaba
-    // reproduciendo por su cuenta —nadie le decia que parara— y su relay
-    // quedaba registrado para siempre, porque _dlnaRelayUrl se pisaba con el
-    // nuevo sin soltar el de antes.
-    final anterior = dlnaDevice.value;
-    if (anterior != null && anterior.id != aparato.id) {
-      // Por IDENTIFICADOR y no por instancia: cada busqueda crea objetos nuevos
-      // del mismo televisor, asi que comparar los objetos daria siempre "es
-      // otro" y se soltaria el que en realidad se acaba de elegir.
-      unawaited(Future(() async {
-        try {
-          await anterior.soltar();
-        } catch (e) {
-          logger.warning('El aparato anterior no respondio al soltarlo', e);
-        }
-      }));
-    }
-    if (_dlnaRelayUrl != null) {
-      CastRelayServer.unregister(_dlnaRelayUrl!);
-      _dlnaRelayUrl = null;
-    }
-
-    var url = watchData!.url;
-    // El tipo se saca de la direccion REAL, no de la del relay: la del relay
-    // termina en /relay/<token> y no dice nada del formato.
-    final urlOriginal = url;
-    final headers = watchData!.headers;
-    CastRelayServer.ultimoError = null;
-    _fallaDeCastAvisada = null;
-    // Cuenta limpia para el vigilante de estado: los fallos y el "ya lo vi
-    // reproducir" de una transmision anterior no valen para esta.
-    _fallosDeCastSeguidos = 0;
-    _vioReproduciendoEnCast = false;
-    _lecturasParadoSeguidas = 0;
-    _consultandoCast = false;
-    // El renderer DLNA pide la URL con SU propio cliente HTTP — no hay
-    // forma de decirle que mande el Referer/User-Agent que la fuente
-    // exige. Sin esto, cualquier fuente con headers obligatorios se veía
-    // sana localmente pero fallaba en silencio en el TV. Con headers, se
-    // pasa por el relay local en vez de la URL directa (ver
-    // cast_relay_server.dart).
-    // ¿Este aparato puede con lo que le vamos a mandar?
-    //
-    // Se le pregunta ANTES en vez de mandarle y ver qué pasa, porque un
-    // televisor que no puede con el formato **acepta igual la orden**: contesta
-    // que sí, muestra el título que le mandamos en la ficha y no dibuja nunca
-    // nada. Desde afuera eso se ve idéntico a que esté funcionando, y era
-    // exactamente lo que pasaba: HLS —que es lo que sirven casi todas las
-    // extensiones— no lo reproduce ningún televisor DLNA. Medido: Kodi publica
-    // 94 formatos con HLS entre ellos y reproduce; el televisor publica 29 sin
-    // ninguno de HLS y se queda en negro.
-    //
-    // Cuando no puede, se le manda el mismo vídeo reempaquetado como MPEG-TS,
-    // que sí está en su lista y no cuesta recodificar nada (cast_hls_ts.dart).
-    PlanTs? planTs;
-    _planTs = null;
-    _desfaseTs = Duration.zero;
-    var mime = mimeDeUrl(urlOriginal);
-    // La linea de cabecera de toda la transmision: contra que aparato, por que
-    // protocolo y con que formato se arranca. Todo lo que venga despues en el
-    // registro cuelga de aca.
-    //
-    // De las cabeceras de la fuente van solo los NOMBRES: en Referer y Cookie
-    // viaja la direccion del contenido, y el archivo se comparte.
-    CastLog.paso('Arranca: ${aparato.ficha} — origen '
-        '${CastLog.donde(urlOriginal)} mime=$mime — cabeceras de la fuente: '
-        '${headers == null || headers.isEmpty ? 'ninguna' : headers.keys.join(', ')}');
-    if (aparato is AparatoDlna && mime.contains('mpegurl')) {
-      if (!await FormatosDelAparato.aceptaHls(aparato.device)) {
-        final aceptaTs = await FormatosDelAparato.aceptaTs(aparato.device);
-        CastLog.paso('${aparato.nombre} no acepta HLS; '
-            'MPEG-TS: ${aceptaTs ? "sí" : "no"}');
-        if (aceptaTs) {
-          // El MISMO User-Agent que usa el relay, no uno leído a mano: si el
-          // ajuste está vacío hay que caer en el de navegador, porque con el
-          // que pone dart:io las fuentes detrás de Cloudflare contestan 403.
-          planTs = await CastHlsATs.analizar(
-            urlOriginal,
-            headers ?? const {},
-            CastRelayServer.uaPorDefecto,
-          );
-        }
-        if (planTs == null) {
-          // Ni HLS ni reempaquetado: mandarlo igual sería dejar la pantalla en
-          // negro sin explicación, que es de donde venimos.
-          CastLog.fallo('${aparato.nombre} no soporta el formato del vídeo y '
-              'no se pudo reempaquetar: no se le manda nada');
-          castConectando.value = false;
-          castAviso.value = null;
-          sendMessage(Message(Text('video.cast-formato-aparato'.i18n)));
-          return;
-        }
-        mime = 'video/mpeg';
-        CastLog.paso('Se reempaqueta a MPEG-TS: ${planTs.pedacitos.length} '
-            'pedacitos, ${planTs.duracion.inMinutes} min');
-        _planTs = planTs;
-        // El largo lo sabemos NOSOTROS por la lista, aunque el televisor no
-        // pueda saberlo del flujo. Sin esto la barra queda vacía y no habría
-        // dónde tocar para adelantar.
-        duration.value = planTs.duracion;
-      }
-    }
-
-    // Con reempaquetado el relay es obligatorio aunque no haya cabeceras: es el
-    // relay el que va pegando los pedacitos.
-    if (planTs != null || (headers != null && headers.isNotEmpty)) {
-      try {
-        url = await CastRelayServer.registerAndGetUrl(
-          targetUrl: url,
-          headers: headers,
-          planTs: planTs,
-        );
-        _dlnaRelayUrl = url;
-      } catch (e) {
-        CastLog.fallo('El relay no se pudo levantar, se castea la dirección '
-            'directa: $e');
-        if (planTs != null) {
-          // Sin relay no hay reempaquetado posible, y la lista cruda ya sabemos
-          // que este aparato no la reproduce.
-          castConectando.value = false;
-          castAviso.value = null;
-          sendMessage(Message(Text('video.cast-sin-alcance'.i18n)));
-          return;
-        }
-      }
-    }
-    dlnaDevice.value = aparato;
-    _urlEnviadaAlCast = url;
-    _vueltasDesdeElControl = 0;
-    _desajustesSeguidos = 0;
-    _posicionUltimoControl = Duration.zero;
-    try {
-      // preparar() antes de nada: en DLNA no hace falta, pero el Chromecast
-      // tiene que abrir su conexion y lanzar su reproductor primero. Si eso
-      // falla no se sigue, que seria mandarle el video a nadie.
-      if (!await aparato.preparar()) {
-        throw StateError('El aparato no acepto la conexion');
-      }
-      await aparato.cargar(
-        url: url,
-        titulo: '$title — ${playList[index.value].name}',
-        mime: mime,
-        // Con reempaquetado NO se puede saltar por bytes, y hay que decírselo:
-        // ese flujo se arma sobre la marcha y no tiene largo. Prometerle lo
-        // contrario hace que el aparato cierre la conexión y la reabra creyendo
-        // que puede seguir desde otro punto — y como no puede, le llega desde el
-        // principio. Ver cast_metadata.dart.
-        puedeSaltar: planTs == null,
-      );
-      CastLog.paso('El aparato aceptó la orden; se le anunció '
-          '${CastLog.anuncio(url)}');
-    } catch (e) {
-      // Un aparato que no contesta dejaba la excepcion suelta y la pantalla en
-      // modo casteo sin que nada se estuviera reproduciendo. Se deshace todo y
-      // se avisa, que es lo unico honesto que se puede hacer.
-      CastLog.fallo('El aparato no aceptó el vídeo', e);
-      dlnaDevice.value = null;
-      if (_dlnaRelayUrl != null) {
-        CastRelayServer.unregister(_dlnaRelayUrl!);
-        _dlnaRelayUrl = null;
-      }
-      sendMessage(Message(Text('video.cast-failed'.i18n)));
-      return;
-    } finally {
-      // En finally y no al final del camino feliz: si algo de lo que viene
-      // despues fallara, esta bandera quedaba en true PARA SIEMPRE y el boton
-      // de transmitir y el de reproducir se quedaban apagados sin forma de
-      // recuperarlos salvo salir del episodio.
-      castConectando.value = false;
-    }
-    // Recien aca se para el reproductor de aca: si se paraba antes y el
-    // televisor terminaba fallando, quedaban los dos sin reproducir nada.
-    //
-    // Con su propio catch: que no se pueda parar el de aca no invalida que el
-    // televisor ya este reproduciendo, y sin esto la excepcion se llevaba
-    // puesta la creacion del timer de estado — la transmision quedaba andando
-    // pero la app sin enterarse de nada de lo que pasaba en el televisor.
-    try {
-      await player.stop();
-    } catch (e) {
-      logger.warning('No se pudo parar el reproductor local al castear', e);
-    }
-    // Cancelar cualquier timer previo antes de crear uno nuevo — si el
-    // usuario elige otro dispositivo DLNA sin desconectar el anterior
-    // primero, sin esto quedaban DOS timers corriendo _getDLNAStatus() cada
-    // segundo para siempre (uno por cada dispositivo elegido en la sesión).
-    _dlnaTimer?.cancel();
-    // Si el reproductor se cerro mientras se enganchaba, no se arranca ningun
-    // timer: quedaria latiendo cada segundo sobre un controlador destruido.
-    if (_disposed || dlnaDevice.value == null) return;
-    // Se arranca desde el volumen que YA tiene el aparato, para que el primer
-    // deslizamiento no le pegue un salto.
-    // Cuenta limpia por aparato: que el anterior no dejara cambiarle el volumen
-    // no dice nada de este.
-    castVolumenSoportado = true;
-    // La notificación pasa a decir que está sonando en el televisor, y sus
-    // botones a hablarle a él.
-    unawaited(_mostrarNotificacion());
-    unawaited(_leerVolumenDelCast(aparato));
-    castVelocidadPedida.value = 1;
-    // Sigue "cargando" hasta que el aparato diga que reproduce de verdad.
-    castEsperandoPlay.value = true;
-    // A los ocho segundos se comprueba si el aparato LLEGO a pedirnos el video.
-    //
-    // Un televisor en negro se ve igual en dos casos muy distintos: cuando no
-    // nos alcanza por la red, y cuando nos alcanza pero no puede con el
-    // formato. El relay sabe cual de los dos es —si le pidieron algo o no—, y
-    // sin decirlo se termina probando a ciegas.
-    _pedidoCastTimer?.cancel();
-    _bytesDelCastVistos = 0;
-    _revisionesDelCast = 0;
-    _pedidoCastTimer = Timer(_esperaDeVeredicto, _veredictoDelCast);
-    _esperaPlayTimer?.cancel();
-    // Techo por si nunca lo informa (firmware que no actualiza su estado): el
-    // aviso se va y quedan los controles, mejor que una rueda eterna.
-    _esperaPlayTimer = Timer(const Duration(seconds: 30), () {
-      castEsperandoPlay.value = false;
-      castCambiandoEpisodio.value = false;
-    });
-    _dlnaTimer = Timer.periodic(const Duration(seconds: 1), (timer) {
-      _getDLNAStatus();
-    });
-  }
-
-  /// Cuánto se espera antes de decir nada sobre una transmisión que no arranca.
-  static const _esperaDeVeredicto = Duration(seconds: 8);
-
-  /// Cuántas veces más se vuelve a mirar mientras siga entrando vídeo.
-  static const _maxRevisionesDelCast = 3;
-
-  int _bytesDelCastVistos = 0;
-  int _revisionesDelCast = 0;
-
-  /// Por qué el aparato todavía no muestra nada.
-  ///
-  /// Son TRES casos y antes se distinguían dos, así que el que faltaba salía en
-  /// pantalla siendo mentira. Medido en vivo: el aviso de "recibió el vídeo pero
-  /// no puede reproducirlo" se mostró **139 milisegundos antes** de que el
-  /// televisor informara que estaba REPRODUCIENDO. Estaba cargando, nada más.
-  ///
-  ///  - No pidió nada: no llega hasta nosotros. Es red.
-  ///  - Pidió pero no bajó un solo byte: preguntó por el formato (el HEAD con el
-  ///    que un DLNA consulta si le sirve) y lo rechazó. Eso sí es formato.
-  ///  - Está bajando: no hay nada roto, está cargando. Se espera.
-  ///
-  /// El error de fondo era dar por "bajó datos" lo que solo decía "pidió": un
-  /// HEAD, que es lo primero que manda un televisor, ya marcaba la sesión como
-  /// pedida sin que se hubiera entregado nada. Ahora se cuentan los bytes.
-  void _veredictoDelCast() {
-    if (_disposed || dlnaDevice.value == null) return;
-    if (isPlaying.value) return;
-    if (_dlnaRelayUrl == null) return;
-
-    final pidio = CastRelayServer.huboPedido(_dlnaRelayUrl);
-    final bytes = CastRelayServer.bytesServidos(_dlnaRelayUrl);
-    final segundos = (_revisionesDelCast + 1) * _esperaDeVeredicto.inSeconds;
-
-    if (!pidio) {
-      CastLog.paso(
-          'A los $segundos s sin imagen: el aparato NO pidió nada → no '
-          'llega hasta nosotros, es red');
-      castAviso.value = 'video.cast-sin-alcance'.i18n;
-      return;
-    }
-
-    // Sigue entrando vídeo: se le da otra vuelta antes de decir nada.
-    if (bytes > _bytesDelCastVistos &&
-        _revisionesDelCast < _maxRevisionesDelCast) {
-      _revisionesDelCast++;
-      _bytesDelCastVistos = bytes;
-      CastLog.paso('A los $segundos s sin imagen todavía, pero el aparato ya '
-          'bajó ${(bytes / 1024).round()} KiB y sigue bajando → está cargando, '
-          'se espera (revisión $_revisionesDelCast de $_maxRevisionesDelCast)');
-      _pedidoCastTimer?.cancel();
-      _pedidoCastTimer = Timer(_esperaDeVeredicto, _veredictoDelCast);
-      return;
-    }
-
-    if (bytes == 0) {
-      // Preguntó y se fue sin bajar nada: el formato no le sirve. Bajar la
-      // calidad no ayudaría, porque no llegó a mirar el vídeo sino la ficha.
-      CastLog.paso('A los $segundos s sin imagen: el aparato pidió desde '
-          '${CastRelayServer.quienPidio(_dlnaRelayUrl)} pero no bajó NI UN BYTE '
-          '→ preguntó por el formato y lo rechazó');
-      castAviso.value = 'video.cast-formato'.i18n;
-      return;
-    }
-
-    // Bajó datos y dejó de bajar sin dar imagen: eso ya sí es no poder con lo
-    // que le mandamos. Si es 4K o 2K lo más probable es que sea la RESOLUCIÓN y
-    // no el formato — los televisores publican "video/mp4" a secas, sin decir
-    // hasta qué resolución llegan.
-    CastLog.fallo('A los $segundos s sin imagen: el aparato bajó '
-        '${(bytes / 1024).round()} KiB y se detuvo → no puede con lo que le '
-        'mandamos');
-    if (_bajarCalidadParaElTelevisor()) return;
-    castAviso.value = 'video.cast-formato'.i18n;
-  }
-
-  /// Manda el aparato a un punto exacto del video.
-  ///
-  /// No se usa seek() del controlador: ese calcula un salto RELATIVO contra
-  /// position.value, y justo despues de re-enganchar ese valor todavia es el de
-  /// antes del cambio — el salto saldria a cualquier lado.
-  /// Manda el aparato a un punto exacto del video.
-  ///
-  /// Se espera un poco antes: recien arrancado, varios aparatos ignoran el
-  /// salto porque todavia no terminaron de cargar el video.
-  Future<void> _irAEnElAparato(AparatoDeCasteo aparato, Duration donde) async {
-    if (donde <= Duration.zero) return;
-    await Future<void>.delayed(const Duration(milliseconds: 800));
-    if (_disposed || dlnaDevice.value?.id != aparato.id) return;
-    try {
-      await aparato.irA(donde);
-    } catch (e) {
-      logger.warning('No se pudo retomar el punto en el aparato', e);
-    }
-  }
-
-  /// Vuelve a mandarle el video al MISMO dispositivo.
-  ///
-  /// El televisor puede fallar por cosas pasajeras —un corte de red, que la
-  /// direccion firmada de la fuente caduco entre que se pidio y se envio, o que
-  /// el aparato todavia estaba ocupado con lo anterior— y hasta ahora la unica
-  /// salida era desconectar y volver a elegirlo de la lista.
-  ///
-  /// Se vuelve a PEDIR la direccion a la fuente, no se reenvia la de antes.
-  ///
-  /// Las fuentes firman la direccion para una IP y con un vencimiento adentro
-  /// (Eporner, por ejemplo, la arma como `<vence>_<ip>_<n>/archivo.mp4`).
-  /// Cuando vence, la fuente contesta 403 y el aparato solo dice "no se pudo
-  /// reproducir". Reenviar esa misma direccion falla exactamente igual —
-  /// confirmado en el registro de Kodi del usuario, con dos intentos separados
-  /// por tres minutos dando los dos 403 sobre la misma direccion de origen.
-  Future<void> reintentarCast() async {
-    final device = dlnaDevice.value;
-    if (device == null) return;
-    // Ya hay un reintento o un enganche en curso: tocar de nuevo no encola otro.
-    if (castConectando.value) return;
-    // Se enciende YA, antes de tocar la red.
-    //
-    // Volver a resolver el video puede tardar varios segundos, y en ese rato el
-    // boton no daba ninguna señal: parecia que no habia hecho nada y se
-    // terminaba tocando de nuevo. Ahora el panel muestra la rueda desde el
-    // primer momento y el boton queda bloqueado.
-    castConectando.value = true;
-    try {
-      // Se limpia el relay anterior: registrar uno nuevo sin soltar el viejo
-      // deja entradas colgadas por cada reintento.
-      if (_dlnaRelayUrl != null) {
-        CastRelayServer.unregister(_dlnaRelayUrl!);
-        _dlnaRelayUrl = null;
-      }
-      try {
-        await device.soltar();
-      } catch (_) {
-        // Puede estar ya parado o no responder: no frena el reintento.
-      }
-      // Direccion nueva y fresca. Si esto falla se avisa y no se sigue:
-      // castear con la vieja seria repetir el mismo error a proposito.
-      try {
-        await getWatchData();
-      } catch (e) {
-        logger.warning('No se pudo volver a resolver el video para el cast', e);
-        sendMessage(Message(Text(friendlyError(e))));
-        return;
-      }
-      if (_disposed || watchData == null) return;
-    } finally {
-      // Se apaga justo antes de pasarle la posta a connectDLNADevice, que la
-      // vuelve a encender de inmediato (su cuerpo corre sin ningun await de por
-      // medio hasta ahi, asi que no se ve ningun parpadeo). Sin esto, su propia
-      // proteccion contra dobles enganches cortaria el reintento en seco.
-      castConectando.value = false;
-    }
-    await connectDLNADevice(device);
-  }
-
-  // 断开 DLNA 设备
-  //
-  // [pararAparato] en false cuando la transmision ya NO es nuestra: si otro
-  // dispositivo tomo el televisor, mandarle stop le cortaria el video a el.
-  disconnectDLNADevice({bool pararAparato = true}) async {
-    if (dlnaDevice.value == null) {
-      return;
-    }
-    final device = dlnaDevice.value!;
-    // Donde iba el televisor, para no volver al principio.
-    final donde = position.value;
-    // Se suelta el aparato ANTES de nada: asi la pantalla deja de mostrar el
-    // modo casteo en el acto, sin esperar a que el televisor conteste. Un
-    // televisor lento tardaba segundos en responder al stop y en ese rato la
-    // app se veia trabada.
-    dlnaDevice.value = null;
-    _dlnaTimer?.cancel();
-    // Se le manda parar sin esperarlo, pero atajando el error: sin el catch, un
-    // aparato ya apagado o fuera de la red tiraba una excepcion suelta que
-    // nadie manejaba.
-    if (pararAparato) {
-      unawaited(Future(() async {
-        try {
-          await device.soltar();
-        } catch (e) {
-          logger.warning('El aparato no respondio al cortar la transmision', e);
-        }
-      }));
-    }
-    _urlEnviadaAlCast = null;
-    _planTs = null;
-    _desfaseTs = Duration.zero;
-    if (_dlnaRelayUrl != null) {
-      CastRelayServer.unregister(_dlnaRelayUrl!);
-      _dlnaRelayUrl = null;
-    }
-    // Se limpia el ultimo fallo del relay: si no, al volver a castear mas tarde
-    // saldria de nuevo el aviso de un error que ya paso.
-    CastRelayServer.ultimoError = null;
-    _fallaDeCastAvisada = null;
-    // Todos los estados del panel se apagan juntos: si alguno quedaba puesto,
-    // al volver a castear mas tarde el panel arrancaba mostrando una espera que
-    // ya no existia.
-    castConectando.value = false;
-    castEsperandoPlay.value = false;
-    castCambiandoEpisodio.value = false;
-    castBuscando.value = false;
-    castVelocidad.value = null;
-    castVelocidadPedida.value = 1;
-    castAviso.value = null;
-    _desajustesSeguidos = 0;
-    _objetivoDeSalto = null;
-    _castBuscandoTimer?.cancel();
-    _esperaPlayTimer?.cancel();
-    _pedidoCastTimer?.cancel();
-    _volumenCastTimer?.cancel();
-
-    // Y el reproductor local vuelve a andar.
-    //
-    // Al empezar a transmitir se llama a player.stop(), porque el video pasa a
-    // verse en el televisor y dejarlo decodificando aca seria gastar bateria
-    // para nada. Pero al desconectar nadie lo volvia a abrir: quedaba la
-    // pantalla negra con los controles muertos, y la unica salida era salir del
-    // episodio y entrar de nuevo.
-    //
-    // Se retoma donde estaba el televisor, que es lo que uno espera al cortar
-    // la transmision para seguir mirando en el dispositivo.
-    if (_disposed) return;
-    final actual = watchData;
-    if (actual == null) return;
-    // Todavia no hay imagen: mpv tiene que volver a abrir el video desde cero.
-    // Sin esto quedaba en true de antes de castear y la rueda de carga no
-    // aparecia, asi que el rato hasta el primer cuadro se veia como una
-    // pantalla negra trabada.
-    hasRenderedFrame.value = false;
-    // Fuente nueva: se olvida el cuadro anterior y la red se rearma
-    // sola con el primer cuadro de esta. Ver hasRenderedFrame.
-    _hayCuadro = false;
-    _posicionAlPrimerCuadro = null;
-    _redDeLaRueda?.cancel();
-    _redDeLaRueda = null;
-    try {
-      await player.open(Media(actual.url, httpHeaders: actual.headers));
-      // El salto va DESPUES de que open() termino, que es cuando mpv ya conoce
-      // la duracion; pedirlo antes se pierde y el episodio arrancaba de cero.
-      // Mismo cuidado que en "continuar viendo": pedirle el salto a mpv
-      // apenas vuelve open() se pierde si todavia no conoce la duracion.
-      if (donde > Duration.zero) await _saltarCuandoSePueda(donde);
-    } catch (e) {
-      logger.warning(
-          'No se pudo retomar la reproduccion local tras el cast', e);
-      // Que no quede la rueda girando para siempre si la reapertura fallo.
-      hasRenderedFrame.value = true;
-      sendMessage(Message(Text(friendlyError(e))));
-    }
-  }
-
-  // Consultas al aparato que ya estan en vuelo, fallos seguidos, y si alguna
-  // vez llego a reproducir. Ver _getDLNAStatus.
-  bool _consultandoCast = false;
-  int _fallosDeCastSeguidos = 0;
-  bool _vioReproduciendoEnCast = false;
-  int _lecturasParadoSeguidas = 0;
-
-  /// Cuantas consultas seguidas pueden fallar antes de dar la transmision por
-  /// perdida. Se consulta cada segundo, asi que son ~5 segundos de silencio:
-  /// suficiente para aguantar un bache de red y poco para que se note.
-  static const _fallosParaDarPorPerdido = 5;
-
-  /// Comprueba que el aparato siga reproduciendo lo que le mandamos nosotros.
-  ///
-  /// Si otro dispositivo le mando otra cosa, se suelta la transmision SIN
-  /// pararle el video: ya no es nuestro, y pararlo seria cortarle la
-  /// reproduccion a quien la tomo.
-  void _comprobarQueSigaSiendoNuestro(String? actual) {
-    final nuestra = _urlEnviadaAlCast;
-    if (nuestra == null) return;
-    // Todavia no empezo lo que le acabamos de mandar: NO se comprueba.
-    //
-    // Al cambiar de episodio se le manda una direccion nueva, pero el aparato
-    // sigue informando la ANTERIOR hasta que termina de cambiar. Comprobando en
-    // ese hueco, las direcciones no coinciden y se concluia que otro
-    // dispositivo se habia quedado con el televisor: cambiar de episodio
-    // casteando cortaba la transmision sola.
-    if (castEsperandoPlay.value || castCambiandoEpisodio.value) {
-      _desajustesSeguidos = 0;
-      return;
-    }
-    // Vacio o desconocido: no se concluye nada. Solo se actua cuando el aparato
-    // dice con todas las letras que esta con OTRA direccion. Los aparatos que
-    // no informan esto (el Chromecast, por ejemplo) caen aca y no pasa nada.
-    if (actual == null || actual.isEmpty) return;
-    if (actual == nuestra) {
-      _desajustesSeguidos = 0;
-      // Confirmado nuestro: se anota por donde iba, para poder volver a este
-      // punto si en el proximo control resulta que nos lo tomaron.
-      _posicionUltimoControl = position.value;
-      return;
-    }
-
-    // Tiene que no coincidir DOS controles seguidos.
-    //
-    // Un aparato puede informar la direccion vieja un momento despues de haber
-    // aceptado la nueva; con una sola lectura, ese instante bastaba para cortar
-    // la transmision. Alguien que de verdad tomo el televisor sigue con lo suyo
-    // en el control siguiente.
-    if (++_desajustesSeguidos < 2) return;
-    _desajustesSeguidos = 0;
-
-    logger.info('Otro dispositivo tomo el televisor: $actual');
-    // La posicion que informa el aparato ya es la del OTRO video. Se vuelve a
-    // la ultima que se confirmo nuestra ANTES de desconectar, que es la que va
-    // a usar el historial y la que retoma el reproductor de aca.
-    if (_posicionUltimoControl > Duration.zero) {
-      position.value = _posicionUltimoControl;
-    }
-    sendMessage(Message(
-      Text('video.cast-taken-over'.i18n),
-      time: const Duration(seconds: 6),
-    ));
-    unawaited(disconnectDLNADevice(pararAparato: false));
-  }
-
-  // 获取 DLNA 播放状态
-  _getDLNAStatus() async {
-    final device = dlnaDevice.value;
-    if (device == null) {
-      return;
-    }
-    // Una consulta por vez.
-    //
-    // El timer dispara cada segundo y NO espera a que esta funcion termine. Con
-    // el televisor apagado, cada consulta se queda colgada hasta que la red se
-    // rinda —decenas de segundos— y mientras tanto arrancaba otra cada segundo:
-    // se apilaban conexiones muertas de a montones, justo cuando el aparato ya
-    // no estaba para contestar ninguna.
-    if (_consultandoCast) return;
-    _consultandoCast = true;
-    // Este método corre desde un Timer.periodic de 1s mientras dure el cast
-    // (ver connectDLNADevice) — sin try/catch, un TV desconectado/
-    // inalcanzable o un formato de posición inesperado (firmware distinto)
-    // tira la MISMA excepción sin manejar una vez por segundo para siempre,
-    // sin que el usuario vea ningún aviso.
-    // El aparato solo sabe decir "no se pudo reproducir". El motivo de verdad
-    // lo vio el relay cuando la fuente lo rechazo, asi que se lo muestra al
-    // usuario en cuanto aparece — una sola vez, que si no el aviso se repetiria
-    // cada segundo mientras dure el timer.
-    final falla = CastRelayServer.ultimoError;
-    if (falla != null && falla != _fallaDeCastAvisada) {
-      _fallaDeCastAvisada = falla;
-      sendMessage(Message(Text(falla), time: const Duration(seconds: 6)));
-    }
-    try {
-      final info = await device.leerEstado();
-      if (info == null) throw StateError('El aparato no informo su estado');
-      // Contesto: lo que hubiera pasado antes fue un bache y ya paso.
-      _fallosDeCastSeguidos = 0;
-      final reproduciendo = info.reproduciendo;
-      // Con una orden nuestra en vuelo, lo que informa es lo de ANTES de esa
-      // orden: pisarlo hacia parpadear el boton entre pausa y reproducir.
-      if (_aceptarReproduciendo(reproduciendo)) {
-        isPlaying.value = reproduciendo;
-      }
-      // La notificación también, que transmitiendo es el único mando que queda
-      // con la app en segundo plano: el reproductor de acá está parado y no
-      // emite nada, así que sin esto se quedaba con lo último que vio.
-      _refrescarNotificacion();
-      if (reproduciendo) {
-        _vioReproduciendoEnCast = true;
-        // Empezo de verdad: recien aca se saca el aviso de carga.
-        if (castEsperandoPlay.value) {
-          _esperaPlayTimer?.cancel();
-          castEsperandoPlay.value = false;
-          // El aviso de cambio de episodio dura hasta ACA, no hasta que el
-          // aparato acepta: si no, decia "cambiando de episodio" un instante y
-          // despues pasaba a "conectando" mientras la pantalla grande seguia
-          // en negro, contando dos cosas para una sola espera.
-          castCambiandoEpisodio.value = false;
-        }
-      }
-
-      // Velocidad puesta EN el aparato (x2, x4...). Solo cuando no es la
-      // normal: con la normal no hay nada que decir.
-      castVelocidad.value = info.velocidad;
-
-      // Lo pararon DESDE el televisor (con su control remoto, o porque
-      // termino). Se distingue de una pausa: pausar informa PAUSED_PLAYBACK,
-      // parar informa STOPPED o que ya no hay nada cargado.
-      //
-      // Antes esto se leia como "no esta reproduciendo" a secas, asi que la
-      // pantalla decia "En pausa, toca para seguir" y tocar no hacia nada:
-      // se le pedia reanudar a un aparato que ya no tenia el video cargado.
-      final parado = info.parado;
-      // Tiene que estar parado DOS vueltas seguidas.
-      //
-      // Manejando desde el control del televisor, adelantar hace que varios
-      // reproductores informen STOPPED un instante mientras vuelven a llenar el
-      // buffer. Con una sola lectura, usar el control remoto para adelantar
-      // cortaba la transmision. Una parada de verdad sigue parada al segundo.
-      _lecturasParadoSeguidas = parado ? _lecturasParadoSeguidas + 1 : 0;
-      if (_lecturasParadoSeguidas >= 2 && _vioReproduciendoEnCast) {
-        // Se acabo el episodio, o lo pararon a mano? El aparato informa lo
-        // mismo en los dos casos, asi que se mira DONDE quedo.
-        //
-        // position/duration conservan la ultima lectura buena, porque la rama
-        // de parado corta antes de refrescarlas.
-        final dur = duration.value;
-        final pos = position.value;
-        final falta = dur - pos;
-        final termino = dur > Duration.zero &&
-            (falta <= const Duration(seconds: 15) ||
-                falta.inMilliseconds <= dur.inMilliseconds * 0.08);
-
-        if (termino && playMode.value == PlaylistMode.loop) {
-          // En bucle: de nuevo desde el principio, en el mismo aparato.
-          logger.info('Fin del episodio en el aparato: se repite');
-          _lecturasParadoSeguidas = 0;
-          try {
-            // seek() y no seekByCurrent(): el segundo espera el XML crudo que
-            // devuelve position(), no una hora suelta.
-            await device.irA(Duration.zero);
-            await device.reproducir();
-          } catch (e) {
-            logger.warning('No se pudo repetir el episodio en el aparato', e);
-          }
-          return;
-        }
-
-        if (termino &&
-            // Mismo ajuste que mirando aca: encadenar es algo que se pide.
-            autoPlayNextActivado &&
-            playMode.value != PlaylistMode.single &&
-            index.value < playList.length - 1) {
-          // Encadena al siguiente SIN soltar el aparato.
-          //
-          // El encadenado normal lo dispara player.stream.completed del
-          // reproductor de aca, que mientras se transmite esta parado a
-          // proposito y no emite nunca — asi que casteando no habia encadenado.
-          // Al mover el indice, el vigilante de episodio resuelve el siguiente
-          // y lo vuelve a mandar al MISMO aparato, sin cortar la transmision.
-          logger.info('Fin del episodio en el aparato: va el siguiente');
-          _lecturasParadoSeguidas = 0;
-          _vioReproduciendoEnCast = false;
-          index.value++;
-          return;
-        }
-
-        if (termino) {
-          // Era el ultimo (o la lista esta en modo de uno solo).
-          sendMessage(Message(Text('video.play-complete'.i18n)));
-        } else {
-          sendMessage(Message(Text('video.cast-stopped-device'.i18n)));
-        }
-        logger.info('La transmision se corto desde el aparato');
-        await disconnectDLNADevice();
-        return;
-      }
-
-      // Solo si el aparato las informo: null no es cero. Pisar la posicion con
-      // cero en una vuelta que no trajo el dato hacia saltar la barra al
-      // principio y volver, que ademas disparaba el aviso de "buscando".
-      // Reempaquetado: el televisor cuenta desde cero en cada salto, porque
-      // para el cada uno es un video nuevo. Lo que va en la barra es eso mas el
-      // punto del episodio donde arranco el flujo que esta recibiendo.
-      //
-      // Y la duracion NO se toca: el largo lo sacamos de la lista, y el
-      // televisor solo puede informar lo que lleva bajado de un flujo que
-      // todavia se esta armando.
-      final plan = _planTs;
-      if (plan != null) {
-        // Mismo motivo que en el reproductor de aca: con un salto en camino la
-        // barra muestra adonde va y no se pisa.
-        final donde = info.posicion;
-        if (donde != null && _aceptarPosicion(_desfaseTs + donde)) {
-          position.value = _desfaseTs + donde;
-        }
-        duration.value = plan.duracion;
-      } else {
-        final donde = info.posicion;
-        if (donde != null && _aceptarPosicion(donde)) {
-          position.value = donde;
-        }
-        // Solo si de verdad informo un largo. Un cero es "no lo se", y dejarlo
-        // pasar borraba el que la app ya conocia de haber abierto el video
-        // antes de castear — con la barra quedando sin recorrido.
-        final largo = info.duracion;
-        if (largo != null && largo > Duration.zero) duration.value = largo;
-      }
-      // Ya llego a donde se le pidio? Entonces se saca la rueda de "buscando".
-      _revisarSaltoEnCast();
-
-      // Si el aparato dijo por que no pudo, se muestra.
-      //
-      // El receptor avisa el motivo —formato que no entiende, direccion que no
-      // pudo bajar— y eso se estaba descartando: en la pantalla del televisor
-      // quedaba el titulo sobre negro y de este lado no habia forma de saber
-      // cual de las dos cosas era.
-      if (device is AparatoChromecast) {
-        final fallo = device.fallo;
-        if (fallo != null && fallo != _fallaDeCastAvisada) {
-          _fallaDeCastAvisada = fallo;
-          sendMessage(Message(
-            Text('${'video.cast-device-error'.i18n} ($fallo)'),
-            time: const Duration(seconds: 8),
-          ));
-        }
-      }
-
-      // Sigue siendo NUESTRO video?
-      //
-      // DLNA no tiene ningun bloqueo: si otro telefono le manda otro video al
-      // mismo televisor, el segundo pisa al primero sin avisar a nadie. Del
-      // lado del primero no se notaba nada — seguia diciendo "transmitiendo",
-      // la barra pasaba a seguir el OTRO video, y lo peor: al guardar el
-      // historial se anotaba el progreso del video ajeno sobre el episodio
-      // propio. Y al desconectar le paraba la reproduccion al otro.
-      if (++_vueltasDesdeElControl >= _vueltasEntreControles) {
-        _vueltasDesdeElControl = 0;
-        _comprobarQueSigaSiendoNuestro(info.urlActual);
-      }
-    } catch (e) {
-      // Se apago, se quedo sin red, o se salio de la app del televisor.
-      //
-      // Antes esto solo dejaba una linea en el registro, una vez por segundo y
-      // para siempre: la app seguia diciendo "Reproduciendo en <aparato>" sobre
-      // una pantalla negra, sin ninguna señal de que ya no habia nadie del otro
-      // lado. Se aguantan unos segundos por si es un bache, y si no vuelve se
-      // da por perdida y se retoma aca donde iba.
-      // En segundo plano no se cuenta.
-      //
-      // Android recorta la red cuando la app no está en pantalla, asi que estos
-      // fallos no dicen nada del televisor: puede estar reproduciendo perfecto.
-      // Contandolos, dejar la app de lado un rato y volver cortaba una
-      // transmision sana. Al volver a primer plano se pregunta de nuevo y ahi
-      // si vale lo que conteste.
-      if (_enSegundoPlano) {
-        logger.info('_getDLNAStatus fallo en segundo plano (no cuenta): $e');
-        return;
-      }
-      _fallosDeCastSeguidos++;
-      logger.warning('_getDLNAStatus falló '
-          '($_fallosDeCastSeguidos/$_fallosParaDarPorPerdido): $e');
-      if (_fallosDeCastSeguidos >= _fallosParaDarPorPerdido) {
-        sendMessage(Message(Text('video.cast-lost'.i18n),
-            time: const Duration(seconds: 5)));
-        await disconnectDLNADevice();
-      }
-    } finally {
-      // Siempre, pase lo que pase: si quedara en true, no se volveria a
-      // consultar nunca y el estado del televisor se congelaria.
-      _consultandoCast = false;
-    }
-  }
-
-  // Verifica si el host de una URL es alcanzable vía TCP.
-  // Dart maneja EHOSTUNREACH (errno 113) limpiamente;
-  // libmpv/libavformat tienen un bug que causa SIGSEGV con ese errno.
   /// Cuánto se espera el saludo TCP antes de dar el host por lento.
   ///
   /// Era 1 segundo. Alcanza por ethernet contra un servidor cercano, que es
@@ -7717,77 +6369,10 @@ class VideoPlayerController extends GetxController with WidgetsBindingObserver {
       logger.info('play/pausa ignorado: hay un salto en curso');
       return;
     }
-    if (dlnaDevice.value == null) {
-      player.playOrPause();
-      return;
-    }
-    await _pedirAlAparato(reproducir: !isPlaying.value);
+    player.playOrPause();
   }
 
-  /// Lo ultimo que se le pidio al aparato y todavia no confirmo.
-  ///
-  /// Null cuando no hay nada en vuelo. Ver [_pedirAlAparato].
-  bool? _playPedido;
-  Timer? _playPedidoTimer;
 
-  /// Cuanto se espera antes de mandarle la orden al aparato.
-  static const _esperaPlayPausa = Duration(milliseconds: 250);
-
-  /// Le pide al aparato que reproduzca o que pause, aguantando el toqueteo.
-  ///
-  /// Transmitiendo, si el aparato esta reproduciendo solo se sabe por el sondeo
-  /// de cada segundo. Con eso, dos toques seguidos al boton mandaban PAUSAR las
-  /// dos veces —el segundo se decidia con un estado que todavia era el de antes
-  /// del primero— y el video quedaba al reves de lo que mostraba el boton.
-  ///
-  /// Asi que el boton cambia en el acto y la orden sale una sola vez, con lo
-  /// ultimo que se haya pedido. Mientras tanto no se le hace caso a lo que
-  /// informa el aparato, que sigue contando lo de antes.
-  Future<void> _pedirAlAparato({required bool reproducir}) async {
-    final aparato = dlnaDevice.value;
-    if (aparato == null) return;
-    // El boton responde ya, sin esperar al televisor.
-    isPlaying.value = reproducir;
-    _playPedido = reproducir;
-    _playPedidoTimer?.cancel();
-    _playPedidoTimer = Timer(_esperaPlayPausa, () async {
-      final quiero = _playPedido;
-      if (quiero == null || _disposed || dlnaDevice.value != aparato) return;
-      try {
-        if (quiero) {
-          await aparato.reproducir();
-        } else {
-          await aparato.pausar();
-        }
-      } catch (e) {
-        // El aparato no contesto o no acepto: se deshace el cambio del boton
-        // en vez de dejarlo diciendo algo que no pasa.
-        logger.warning('El aparato no acepto reproducir/pausar', e);
-        if (_disposed || dlnaDevice.value != aparato) return;
-        _playPedido = null;
-        isPlaying.value = !reproducir;
-        castAviso.value = 'video.cast-failed'.i18n;
-        Timer(const Duration(seconds: 3), () {
-          if (castAviso.value == 'video.cast-failed'.i18n) {
-            castAviso.value = null;
-          }
-        });
-      }
-    });
-  }
-
-  /// Si lo que informa el aparato ya coincide con lo ultimo que le pedimos.
-  ///
-  /// Mientras no coincida se ignora: esta contando lo de antes de la orden.
-  bool _aceptarReproduciendo(bool informado) {
-    final pedido = _playPedido;
-    if (pedido == null) return true;
-    // Todavia sin mandar: no puede haber cambiado nada.
-    if (_playPedidoTimer?.isActive ?? false) return false;
-    if (informado != pedido) return false;
-    _playPedido = null;
-    return true;
-  }
 
   // Wrappers seguros para los botones de play/pause "crudos" de los
   // controles (antes llamaban controller.player.play/.pause DIRECTO, sin
@@ -7805,13 +6390,6 @@ class VideoPlayerController extends GetxController with WidgetsBindingObserver {
     if (tutorialArriba.value) return;
     // Transmitiendo, quien reproduce es el televisor.
     //
-    // Estos dos no lo miraban: tocaban el reproductor de aca, que mientras se
-    // transmite esta parado a proposito. O sea que las teclas de medios y los
-    // botones que pasan por aca no hacian absolutamente nada al castear.
-    if (dlnaDevice.value != null) {
-      unawaited(_pedirAlAparato(reproducir: true));
-      return;
-    }
     try {
       player.play();
     } catch (e) {
@@ -7821,10 +6399,6 @@ class VideoPlayerController extends GetxController with WidgetsBindingObserver {
 
   void safePause() {
     if (_disposed) return;
-    if (dlnaDevice.value != null) {
-      unawaited(_pedirAlAparato(reproducir: false));
-      return;
-    }
     try {
       player.pause();
     } catch (e) {
@@ -7882,16 +6456,7 @@ class VideoPlayerController extends GetxController with WidgetsBindingObserver {
     _destinoDeSalto = donde;
     position.value = donde;
 
-    // Transmitiendo, la rueda de "esperá que el televisor llegue" se enciende
-    // YA y no cuando se manda el salto.
-    //
-    // Entre soltar la barra y mandar la orden pasan unas decimas, y en ese rato
-    // no habia ninguna señal: en el telefono se soltaba la barra y no se notaba
-    // si estaba cargando o si se habia colgado. Ahi la imagen la tiene el
-    // televisor, asi que sin aviso no hay nada que mirar.
-    if (dlnaDevice.value != null) _empezoSaltoEnCast(donde);
-
-    // Y el salto se manda cuando el usuario deja de tocar, una sola vez.
+    // El salto se manda cuando el usuario deja de tocar, una sola vez.
     _juntadorDeSaltos?.cancel();
     // Ojo: NO se suelta _destinoDeSalto al mandarlo. Se suelta cuando el
     // reproductor informe que llego (ver _aceptarPosicion), o cuando salte la
@@ -7906,7 +6471,7 @@ class VideoPlayerController extends GetxController with WidgetsBindingObserver {
     // Se recuerda si estaba reproduciendo, porque al terminar el salto hay que
     // dejarlo como estaba: si el usuario había pausado a propósito, saltar no
     // puede ponerlo a reproducir.
-    if (_recorte != null && dlnaDevice.value == null) {
+    if (_recorte != null) {
       _reproduciaAntesDelSalto = isPlaying.value;
       try {
         player.pause();
@@ -7934,68 +6499,17 @@ class VideoPlayerController extends GetxController with WidgetsBindingObserver {
   /// Manda el salto ya juntado al que este reproduciendo.
   Future<void> _mandarSalto(Duration duration) async {
     if (_disposed) return;
-    if (dlnaDevice.value == null) {
-      // En fMP4 no se salta: se rehace la lista para que empiece ahí. Pedirle
-      // el salto a mpv en ese formato lo deja clavado — ver RecorteFmp4.
-      //
-      // Transmitiendo NO se usa: ahí la dirección se la queda el televisor, que
-      // salta por su cuenta y no pasa por mpv.
-      final recorte = _recorte;
-      if (recorte != null) {
-        await _saltarConRecorte(recorte, duration);
-        return;
-      }
-      player.seek(duration);
+    // En fMP4 no se salta: se rehace la lista para que empiece ahí. Pedirle
+    // el salto a mpv en ese formato lo deja clavado — ver RecorteFmp4.
+    final recorte = _recorte;
+    if (recorte != null) {
+      await _saltarConRecorte(recorte, duration);
       return;
     }
-    // Hay aparatos que no saben ir a un punto exacto (el mando de Roku
-    // adelanta a saltos y nada mas). Se dice, en vez de mandar la orden y
-    // dejar la rueda girando esperando algo que no va a pasar.
-    // Video reempaquetado: el televisor no puede saltar dentro de un flujo que
-    // se va armando sobre la marcha, asi que se le rearma desde el pedacito que
-    // corresponde. El mando sigue siendo este aparato.
-    if (_planTs != null) {
-      await _saltarEnCastTs(duration);
-      return;
-    }
-    if (!dlnaDevice.value!.permiteSaltar) {
-      castAviso.value = 'video.cast-no-seek'.i18n;
-      Timer(const Duration(milliseconds: 2000), () {
-        if (castAviso.value == 'video.cast-no-seek'.i18n) {
-          castAviso.value = null;
-        }
-      });
-      return;
-    }
-    // El aparato tarda en llegar y deja la imagen congelada mientras tanto: se
-    // avisa antes de mandarlo, no despues.
-    _empezoSaltoEnCast(duration);
-    // Salto ABSOLUTO y no relativo: antes se calculaba la diferencia contra la
-    // posicion conocida y se mandaba eso, asi que una posicion desactualizada
-    // dejaba el salto en cualquier lado.
-    await dlnaDevice.value!.irA(duration);
+    player.seek(duration);
   }
 
-  /// Techo de resolucion a partir del cual se sospecha del televisor.
-  ///
-  /// 1080p es lo que reproduce practicamente cualquier aparato con DLNA; de ahi
-  /// para arriba es donde empiezan a quedarse cortos.
-  static const _techoParaTelevisor = 1080;
 
-  /// Cuantos pixeles de alto es una calidad, por su nombre.
-  ///
-  /// Los nombres vienen de dos lados —del playlist maestro de un HLS y de la
-  /// cabecera que manda la extension— y no siempre traen el numero: "4K" y
-  /// "2K" son igual de comunes que "2160p".
-  static int _alturaDeNombre(String nombre) {
-    final n = nombre.toLowerCase();
-    final conNumero = RegExp(r'(\d{3,4})\s*p\b').firstMatch(n);
-    if (conNumero != null) return int.tryParse(conNumero.group(1)!) ?? 0;
-    if (RegExp(r'\b8k\b').hasMatch(n)) return 4320;
-    if (RegExp(r'\b4k\b').hasMatch(n)) return 2160;
-    if (RegExp(r'\b2k\b').hasMatch(n)) return 1440;
-    return 0;
-  }
 
   /// El televisor bajo el video y no pudo: si esta en 4K o 2K, se baja la
   /// calidad y se dice por que.
@@ -8008,117 +6522,6 @@ class VideoPlayerController extends GetxController with WidgetsBindingObserver {
   /// Devuelve true si encontro una calidad mas baja y la puso. En ese caso no
   /// se muestra el aviso generico: se muestra este, que dice lo que pasa de
   /// verdad y que ya se esta arreglando solo.
-  bool _bajarCalidadParaElTelevisor() {
-    // Las calidades vienen de dos lados segun la extension. Ver hayCalidades.
-    final opciones = <String, String>{
-      if (qualityMap.isNotEmpty) ...qualityMap,
-      if (_servidoresSonCalidades) ...availableServers,
-    };
-    if (opciones.length < 2) return false;
-
-    final actual = _servidoresSonCalidades && currentServerName.value.isNotEmpty
-        ? currentServerName.value
-        : opciones.entries
-            .firstWhere((e) => e.value == watchData?.url,
-                orElse: () => const MapEntry('', ''))
-            .key;
-    final alturaActual = _alturaDeNombre(actual);
-    if (alturaActual <= _techoParaTelevisor) return false;
-
-    // La mejor que el televisor tenga chance de aguantar.
-    final candidatas = opciones.entries.where((e) {
-      final h = _alturaDeNombre(e.key);
-      return h > 0 && h <= _techoParaTelevisor;
-    }).toList()
-      ..sort(
-          (a, b) => _alturaDeNombre(b.key).compareTo(_alturaDeNombre(a.key)));
-    if (candidatas.isEmpty) return false;
-    final elegida = candidatas.first;
-
-    logger.info('El televisor no pudo con $actual: se baja a ${elegida.key}');
-    castAviso.value = 'video.cast-resolucion'
-        .i18n
-        .replaceAll('%s', actual)
-        .replaceAll('%t', elegida.key);
-    // switchQuality ya sabe que casteando la calidad nueva va al TELEVISOR y
-    // no al reproductor de aca.
-    unawaited(_servidoresSonCalidades
-        ? switchServer(elegida.key)
-        : switchQuality(elegida.value));
-    return true;
-  }
-
-  /// Adelanta en una transmision reempaquetada a MPEG-TS.
-  ///
-  /// El televisor esta recibiendo un flujo sin largo conocido, asi que pedirle
-  /// que salte no sirve de nada. Lo que se hace es armarle **otro flujo** que
-  /// empieza en el pedacito donde cae ese momento y mandarselo como si fuera un
-  /// video nuevo. Para el usuario es lo mismo: toca la barra y el televisor
-  /// sigue desde ahi.
-  ///
-  /// Se puede porque la lista dice cuanto dura cada pedacito, asi que se sabe
-  /// en cual cae cualquier minuto del episodio (ver PlanTs.indiceDe).
-  Future<void> _saltarEnCastTs(Duration donde) async {
-    final plan = _planTs;
-    final aparato = dlnaDevice.value;
-    if (plan == null || aparato == null) return;
-
-    final indice = plan.indiceDe(donde);
-    final recortado = plan.recortadoDesde(indice);
-    // El salto cae en el principio del pedacito, no en el segundo exacto: es
-    // donde el flujo puede empezar a decodificarse. Se informa ESE, para que la
-    // barra no diga un numero y el televisor este en otro.
-    _empezoSaltoEnCast(recortado.inicio);
-    // Y se corrige adonde se espera llegar, que es lo que compara
-    // _aceptarPosicion: si quedara el segundo exacto que se pidio, la posicion
-    // real nunca caeria dentro del margen y la barra se quedaria clavada.
-    _destinoDeSalto = recortado.inicio;
-
-    final viejo = _dlnaRelayUrl;
-    try {
-      final url = await CastRelayServer.registerAndGetUrl(
-        targetUrl: plan.pedacitos[indice].toString(),
-        headers: plan.headers,
-        planTs: recortado,
-      );
-      await aparato.cargar(
-        url: url,
-        titulo: '$title — ${playList[index.value].name}',
-        mime: 'video/mpeg',
-        // Acá SIEMPRE es reempaquetado (por eso el mime fijo), así que nunca se
-        // puede saltar por bytes. Ver el mismo comentario en connectDLNADevice.
-        puedeSaltar: false,
-      );
-      _dlnaRelayUrl = url;
-      _urlEnviadaAlCast = url;
-      _desfaseTs = recortado.inicio;
-      position.value = recortado.inicio;
-      // El anterior recien aca: si algo de lo de arriba fallara, soltarlo antes
-      // habria dejado la transmision cortada Y sin forma de volver.
-      if (viejo != null && viejo != url) CastRelayServer.unregister(viejo);
-      // La cuenta del vigilante arranca de nuevo: para el es un video distinto
-      // y las lecturas del anterior no valen.
-      _vioReproduciendoEnCast = false;
-      _lecturasParadoSeguidas = 0;
-      _desajustesSeguidos = 0;
-    } catch (e) {
-      logger.warning('No se pudo adelantar en el televisor', e);
-      castBuscando.value = false;
-      castAviso.value = 'video.cast-no-seek'.i18n;
-      Timer(const Duration(milliseconds: 2000), () {
-        if (castAviso.value == 'video.cast-no-seek'.i18n) {
-          castAviso.value = null;
-        }
-      });
-    }
-  }
-
-  // Devuelve barras de sistema y rotación al estado normal. Es idempotente a
-  // propósito: se llama tanto desde onClose (destrucción del controller) como
-  // desde closeRoute (salida explícita del usuario). Antes solo estaba en
-  // onClose, y si por lo que sea ese no llegaba a correr, el celular quedaba
-  // trabado en horizontal para TODA la app hasta reiniciarla — reportado en
-  // vivo. Llamarlo dos veces no molesta; no llamarlo nunca sí.
   Future<void> restoreSystemUiOnExit() async {
     if (!Platform.isAndroid) return;
     // El botón manual no puede sobrevivir al reproductor: si quedara en true,
