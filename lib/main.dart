@@ -14,6 +14,7 @@ import 'package:prismhub/utils/connectivity.dart';
 import 'package:prismhub/utils/bloqueador_anuncios.dart';
 import 'package:prismhub/utils/log.dart';
 import 'package:prismhub/utils/platform_tv.dart';
+import 'package:prismhub/utils/centinela_de_arranque.dart';
 import 'package:prismhub/utils/prismhub_directory.dart';
 import 'package:prismhub/utils/request.dart';
 import 'package:prismhub/views/pages/debug_page.dart';
@@ -233,6 +234,14 @@ void main(List<String> args) async {
       runApp(_StartupErrorApp(message: '$e'));
       return;
     }
+
+    // Apenas hay carpeta: deja la marca de "esta sesion empezo" y, si la
+    // anterior no se cerro bien, lo anota en el registro. Ver
+    // CentinelaDeArranque — es la unica forma de enterarse de un cierre que
+    // no pasa por Dart (fallo nativo, o el sistema matando la app por
+    // memoria), que es lo reportado en televisor.
+    await CentinelaDeArranque.comenzar();
+
     try {
       await PrismHubStorage.ensureInitialized();
       // El modo de color, apenas hay almacenamiento y ANTES de dibujar nada:
@@ -677,6 +686,10 @@ class _AppRootState extends State<_AppRoot> with WidgetsBindingObserver {
     // no corre nada nuestro, así que la última marca tiene que estar puesta de
     // antes. `paused` es el último aviso garantizado.
     if (estado != AppLifecycleState.paused) return;
+    // Esta sesion se fue de primer plano por las buenas: se suelta el
+    // centinela. Ver CentinelaDeArranque.terminarBien para por que va aca y
+    // no en `detached`.
+    CentinelaDeArranque.terminarBien();
     unawaited(
       PrismHubStorage.setSetting(
         _claveUltimoUso,
