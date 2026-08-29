@@ -7,7 +7,7 @@ import 'package:prismhub/utils/log.dart';
 /// televisor que no puede con el formato **acepta igual la orden** y muestra el
 /// título, o sea que desde afuera se ve idéntico a que funcione.
 ///
-/// Todas las líneas llevan `[casteo]` adelante para poder sacarlas del archivo
+/// Todas las líneas llevan `[relay]` adelante para poder sacarlas del archivo
 /// de un tirón.
 ///
 /// **Nunca entra un título ni una dirección del contenido**: el archivo se
@@ -15,11 +15,11 @@ import 'package:prismhub/utils/log.dart';
 /// no en qué vídeo era. Las direcciones pasan siempre por [donde], que cambia el
 /// servidor por un seudónimo estable — así se sigue viendo si los pedacitos
 /// salían de otro servidor que la lista, que sí es dato, sin decir de dónde.
-class CastLog {
-  static void paso(String texto) => logger.info('[casteo] $texto');
+class RelayLog {
+  static void paso(String texto) => logger.info('[relay] $texto');
 
   static void fallo(String texto, [Object? error]) =>
-      logger.warning('[casteo] $texto', error);
+      logger.warning('[relay] $texto', error);
 
   /// Una dirección en forma publicable: `servidor#a3f1 .m3u8`.
   ///

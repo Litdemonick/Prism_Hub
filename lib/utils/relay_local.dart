@@ -3,24 +3,39 @@ import 'dart:convert';
 import 'dart:io';
 import 'dart:typed_data';
 
-import 'package:prismhub/utils/cast_hls_ts.dart';
-import 'package:prismhub/utils/cast_log.dart';
+import 'package:prismhub/utils/nodos_lentos.dart';
+import 'package:prismhub/utils/relay_log.dart';
 import 'package:prismhub/utils/prismhub_storage.dart';
 import 'package:shelf/shelf.dart';
 import 'package:shelf/shelf_io.dart' as shelf_io;
 
-// Un dispositivo DLNA/Chromecast pide la URL del stream por su cuenta con
-// SU PROPIO cliente HTTP — no hay forma de decirle "mandá este Referer/
-// User-Agent". Muchas fuentes de anime (voe, streamwish, etc.) rechazan
-// el pedido sin esos headers, así que casteá esas URLs directo fallaba en
-// silencio en el TV/Chromecast aunque anduvieran perfecto localmente.
-//
-// Este servidor corre en la LAN (127.0.0.1 no sirve — el dispositivo que
-// castea es OTRA máquina) y hace de intermediario: el dispositivo le pide
-// a ESTE servidor, que a su vez pide la URL real con los headers
-// correctos y le reenvía la respuesta tal cual (incluyendo Range, para
-// que el seek siga funcionando).
-class CastRelayServer {
+/// Servidor HTTP local que se mete en el medio entre el reproductor y el CDN.
+///
+/// ── Para qué sirve HOY ──────────────────────────────────────────────────────
+///
+/// Para esquivar nodos caídos. Una lista HLS reparte sus pedacitos entre varios
+/// nodos del CDN, y basta con que uno no responda para que el vídeo se corte
+/// aunque los demás estén perfectos. Pasando por acá, cuando un nodo no entrega
+/// a tiempo se le pide el MISMO pedacito a otro de los que lo tienen, y de paso
+/// queda anotado para no volver a esperarlo (ver [NodosLentos]).
+///
+/// Se enciende solo cuando hace falta: si la lista tiene un solo nodo, no hay a
+/// quién cambiarle y el relay se saca del camino — ver `_comoAbrir` en el
+/// controlador del reproductor.
+///
+/// ── De dónde viene el nombre y por qué ya no dice la verdad ─────────────────
+///
+/// Se escribió para el casteo. Un aparato DLNA o Chromecast pide la dirección
+/// del vídeo por su cuenta, con su propio cliente HTTP, y no hay forma de
+/// decirle «mandá este Referer»: muchas fuentes lo exigen y sin él contestan
+/// que no. El relay resolvía eso pidiendo la dirección real con las cabeceras
+/// correctas y reenviando la respuesta tal cual.
+///
+/// El casteo se retiró, pero esto se quedó porque **la parte de esquivar nodos
+/// nunca fue del casteo**: la usa la reproducción normal, en las cuatro
+/// plataformas. Se renombró de `CastRelayServer` a `RelayLocal` para que el
+/// nombre deje de mentir.
+class RelayLocal {
   static HttpServer? _server;
   static int? _port;
   static final Map<String, _RelayTarget> _targets = {};
@@ -56,7 +71,6 @@ class CastRelayServer {
   static Future<String> registerAndGetUrl({
     required String targetUrl,
     Map<String, String>? headers,
-    PlanTs? planTs,
     bool esquivarNodosCaidos = false,
   }) async {
     await _ensureRunning();
@@ -69,7 +83,6 @@ class CastRelayServer {
       targetUrl,
       headers ?? const {},
       sesion,
-      planTs: planTs,
       esquivarNodosCaidos: esquivarNodosCaidos,
     );
     final ip = await _localLanAddress();
@@ -90,9 +103,8 @@ class CastRelayServer {
       );
     }
     _base = 'http://$ip:$_port';
-    CastLog.paso('Relay escuchando en 0.0.0.0:$_port; al aparato se le anuncia '
-        '$ip:$_port — origen ${CastLog.donde(targetUrl)}'
-        '${planTs == null ? '' : ', reempaquetando a MPEG-TS'}');
+    RelayLog.paso('Relay escuchando en 0.0.0.0:$_port; al aparato se le anuncia '
+        '$ip:$_port — origen ${RelayLog.donde(targetUrl)}');
     return '$_base/relay/$token';
   }
 
@@ -207,45 +219,6 @@ class CastRelayServer {
     return _targets[uri.pathSegments[1]]?.sesion;
   }
 
-  /// Cabeceras de permiso para que un receptor web pueda bajar el video.
-  ///
-  /// El receptor del Chromecast es una APLICACION WEB: para HLS baja cada
-  /// pedacito con una peticion de navegador, y sin este permiso el propio
-  /// navegador la bloquea antes de salir. El resultado era que el aparato
-  /// aceptaba el video, mostraba el titulo, y no dibujaba nunca nada.
-  ///
-  /// No molesta a nadie mas: un televisor DLNA baja el video con su propio
-  /// cliente HTTP y estas cabeceras las ignora.
-  // Cabeceras que pide el estándar DLNA y que no estábamos mandando.
-  //
-  // Sin ellas, un LG con webOS acepta la orden, muestra el título y la barra
-  // de carga… y nunca dibuja la imagen: aceptó el transporte pero no sabe
-  // cómo consumir el flujo. Kodi y Samsung son permisivos y andan igual, por
-  // eso el fallo parecía cosa de un televisor roto. Comprobado en vivo que ese
-  // mismo LG (55UT8050PSB, 2025) SÍ recibe por DLNA desde otras apps, así que
-  // el que estaba incompleto era este servidor.
-  //
-  // transferMode: "Streaming" es lo que corresponde a vídeo que se mira
-  // mientras llega, en vez de "Interactive" (imágenes) o "Background"
-  // (descarga).
-  //
-  // DLNA.ORG_OP=00: no se puede saltar, ni por tiempo ni por byte. Es la
-  // verdad —el TS se arma sobre la marcha y por eso va Accept-Ranges: none— y
-  // decirlo evita que el televisor intente un salto que va a fallar.
-  //
-  // DLNA.ORG_FLAGS=0x01700000: streaming + transferencia en segundo plano +
-  // aguantar pausas de conexión + DLNA v1.5. Los ceros de atrás son parte del
-  // formato (son 32 dígitos hexadecimales en total, no un relleno inventado).
-  //
-  // A propósito NO se declara DLNA.ORG_PN: es opcional, y poner un perfil
-  // equivocado es peor que no poner ninguno — el televisor intentaría decodificar
-  // como ese perfil en vez de mirar el flujo.
-  static const _dlna = {
-    'transferMode.dlna.org': 'Streaming',
-    'contentFeatures.dlna.org':
-        'DLNA.ORG_OP=00;DLNA.ORG_CI=0;'
-        'DLNA.ORG_FLAGS=01700000000000000000000000000000',
-  };
 
   static const _permisos = {
     'Access-Control-Allow-Origin': '*',
@@ -285,25 +258,8 @@ class CastRelayServer {
       // televisor DLNA pregunta si el flujo le sirve ANTES de bajar nada. Sin
       // verlas no habia forma de saber si el televisor estaba negociando de
       // verdad o si solo abrio la conexion y se fue.
-      CastLog.paso('El aparato pidio desde $quien: ${request.method} '
-          '${CastLog.cabeceras(request.headers)}');
-    } else if (request.method.toUpperCase() == 'GET' && target.planTs != null) {
-      // VOLVIÓ a pedir el vídeo entero. SOLO para el flujo reempaquetado.
-      //
-      // Ahí un GET nuevo sí significa que el aparato cortó y volvió a empezar,
-      // porque ese flujo se sirve de una sola vez: un pedido nuevo lo arma desde
-      // el principio y el vídeo arranca de cero. Sin esta línea, un bucle de
-      // reinicios no dejaba ningún rastro en el registro.
-      //
-      // Y NO en los demás casos, que es lo que hacía antes: sirviendo una lista
-      // HLS pedacito por pedacito —como hace el reproductor nativo— cada uno es
-      // un GET, así que el aviso saltaba cientos de veces anunciando un reinicio
-      // que no existía. Un aviso que grita siempre no avisa de nada.
-      final servidos = bytesPorSesion[target.sesion] ?? 0;
-      CastLog.paso('El aparato VOLVIÓ a pedir el vídeo tras '
-          '${(servidos / 1024 / 1024).toStringAsFixed(1)} MiB servidos '
-          '(${CastLog.cabeceras(request.headers)}) — si esto se repite, el '
-          'vídeo se está reiniciando solo');
+      RelayLog.paso('El aparato pidio desde $quien: ${request.method} '
+          '${RelayLog.cabeceras(request.headers)}');
     }
 
     // El receptor pregunta primero con HEAD (el "Stat" de Kodi) para saber
@@ -312,62 +268,6 @@ class CastRelayServer {
     // respuesta no traía lo que había preguntado.
     final esHead = request.method.toUpperCase() == 'HEAD';
 
-    // Televisor que no entiende HLS: se le manda el vídeo ya pegado en un
-    // MPEG-TS continuo en vez de la lista. Ver cast_hls_ts.dart.
-    final plan = target.planTs;
-    if (plan != null) {
-      final cabeceras = {
-        'Content-Type': 'video/mpeg',
-        // De largo desconocido a propósito: se va armando sobre la marcha. Por
-        // eso tampoco se puede adelantar, y se avisa antes de empezar.
-        'Accept-Ranges': 'none',
-        'Cache-Control': 'no-cache',
-        ..._dlna,
-        ..._permisos,
-      };
-      if (primerPedido) {
-        CastLog.paso('Se le sirve MPEG-TS reempaquetado con '
-            '${CastLog.cabeceras(cabeceras)}');
-      }
-      if (esHead) return Response.ok(null, headers: cabeceras);
-      // Si ya se le venía sirviendo, se SIGUE donde iba en vez de empezar de
-      // cero.
-      //
-      // Un aparato puede cortar y volver a pedir por muchos motivos —se le llenó
-      // el buffer, un hipo de red, su propio reproductor decidió reabrir—, y no
-      // los controlamos. Lo que sí controlamos es qué le mandamos cuando vuelve:
-      // hasta ahora era el vídeo entero desde el principio, así que cada
-      // reintento suyo se veía como que el capítulo se reiniciaba solo, una y
-      // otra vez. Medido en vivo: pedidos nuevos tras 8,3 · 16,6 · 33,3 MiB
-      // servidos, con el vídeo volviendo al inicio cada vez.
-      //
-      // Se retoma en el ÚLTIMO pedacito entregado y no en el siguiente: ese
-      // puede haber quedado a medio reproducir del otro lado. Repetir unos
-      // segundos no se nota; saltearlos, sí.
-      final ultimo = _pedacitoPorSesion[target.sesion];
-      // Se retrocede un poco: lo que se sirvió por delante y el aparato no llegó
-      // a mostrar se pierde al cortar, y retomar justo donde se dejó de servir
-      // se saltea ese tramo — es el salto hacia adelante que se veía. Ver
-      // PlanTs.retomarDesde.
-      final desde = ultimo == null ? null : plan.retomarDesde(ultimo);
-      final aServir = desde == null ? plan : plan.recortadoDesde(desde);
-      if (desde != null) {
-        CastLog.paso('Se retoma el reempaquetado en el pedacito ${desde + 1} '
-            '(lo último servido fue el ${ultimo! + 1}; se retrocede para no '
-            'saltearse lo que el aparato no llegó a mostrar) — quedan '
-            '${plan.pedacitos.length - desde} de ${plan.pedacitos.length}');
-      }
-      return Response.ok(
-        _contando(
-          target.sesion,
-          CastHlsATs.servir(
-            aServir,
-            alEntregar: (indice) => _pedacitoPorSesion[target.sesion] = indice,
-          ),
-        ),
-        headers: cabeceras,
-      );
-    }
 
     final client = _cliente;
     try {
@@ -425,7 +325,7 @@ class CastRelayServer {
         final motivo = await _motivoLegible(upstreamRes);
         ultimoError = 'La fuente rechazó el vídeo (HTTP '
             '${upstreamRes.statusCode})${motivo.isEmpty ? '' : ': $motivo'}';
-        CastLog.fallo('Relay: $ultimoError — ${CastLog.donde(target.url)}');
+        RelayLog.fallo('Relay: $ultimoError — ${RelayLog.donde(target.url)}');
         return Response(upstreamRes.statusCode, body: motivo);
       }
 
@@ -441,7 +341,7 @@ class CastRelayServer {
         final crudo = await _leerTodo(upstreamRes);
         final lista = await _reescribirLista(crudo, uri, target);
         if (primerPedido) {
-          CastLog.paso('Se le sirve la lista HLS reescrita '
+          RelayLog.paso('Se le sirve la lista HLS reescrita '
               '(${crudo.length} bytes de origen)');
         }
         return Response.ok(
@@ -478,8 +378,8 @@ class CastRelayServer {
         // aca, donde el content-length de la fuente se conserva y el salto por
         // bytes funciona. Si el registro muestra un televisor que se queda en
         // negro por este camino, esa diferencia es lo primero a mirar.
-        CastLog.paso('Se le sirve tal cual (HTTP ${upstreamRes.statusCode}) '
-            'con ${CastLog.cabeceras(resHeaders)}');
+        RelayLog.paso('Se le sirve tal cual (HTTP ${upstreamRes.statusCode}) '
+            'con ${RelayLog.cabeceras(resHeaders)}');
       }
 
       if (esHead) {
@@ -505,7 +405,7 @@ class CastRelayServer {
       );
     } catch (e) {
       ultimoError = 'No se pudo alcanzar la fuente del vídeo: $e';
-      CastLog.fallo('Relay: $ultimoError — ${CastLog.donde(target.url)}');
+      RelayLog.fallo('Relay: $ultimoError — ${RelayLog.donde(target.url)}');
       return Response.internalServerError(body: 'relay error: $e');
     }
   }
@@ -678,7 +578,7 @@ class CastRelayServer {
       await res.drain<void>().timeout(const Duration(seconds: 4),
           onTimeout: () {});
       if (ok) {
-        CastLog.paso('Los pedacitos van directo: el relay se saca del camino');
+        RelayLog.paso('Los pedacitos van directo: el relay se saca del camino');
       }
       return ok;
     } catch (_) {
@@ -704,14 +604,14 @@ class CastRelayServer {
         final bytes = await _bajarPedacitoEntero(uri, target)
             .timeout(_plazoPorPedacito);
         if (uri.host != original.host) {
-          CastLog.paso('El pedacito se consiguió en ${uri.host} — '
+          RelayLog.paso('El pedacito se consiguió en ${uri.host} — '
               '${(bytes.length / 1024).round()} KiB en '
               '${reloj.elapsedMilliseconds} ms');
         }
         return bytes;
       } catch (e) {
-        CastHlsATs.anotarNodoLento(uri.host);
-        CastLog.paso('${uri.host} no dio el pedacito en '
+        NodosLentos.anotar(uri.host);
+        RelayLog.paso('${uri.host} no dio el pedacito en '
             '${reloj.elapsedMilliseconds} ms, se prueba otro nodo — $e');
       }
     }
@@ -761,8 +661,8 @@ class CastRelayServer {
     ];
     // Los ya conocidos como lentos, al final: no se descartan porque un nodo
     // puede recuperarse, y quedarse sin candidatos sería peor.
-    final buenos = candidatos.where((u) => !CastHlsATs.nodoLento(u.host));
-    final malos = candidatos.where((u) => CastHlsATs.nodoLento(u.host));
+    final buenos = candidatos.where((u) => !NodosLentos.esLento(u.host));
+    final malos = candidatos.where((u) => NodosLentos.esLento(u.host));
     return [...buenos, ...malos];
   }
 
@@ -792,8 +692,8 @@ class CastRelayServer {
         final ritmo = entregados / reloj.elapsed.inSeconds;
         if (ritmo < _ritmoMinimo) {
           yaAnotado = true;
-          CastHlsATs.anotarNodoLento(host);
-          CastLog.paso('$host va a ${(ritmo / 1024).round()} KiB/s: se anota '
+          NodosLentos.anotar(host);
+          RelayLog.paso('$host va a ${(ritmo / 1024).round()} KiB/s: se anota '
               'como lento y los pedacitos siguientes lo esquivan');
         }
       }
@@ -851,7 +751,7 @@ class CastRelayServer {
     // Sin force: si justo hay una respuesta a medio mandar, se la deja
     // terminar en vez de cortarla por la mitad.
     unawaited(server.close().catchError((Object e) {
-      CastLog.fallo('No se pudo cerrar el servidor del relay', e);
+      RelayLog.fallo('No se pudo cerrar el servidor del relay', e);
     }));
   }
 
@@ -883,7 +783,7 @@ class CastRelayServer {
     for (final iface in interfaces) {
       for (final addr in iface.addresses) {
         if (!addr.isLoopback) {
-          CastLog.paso('Interfaces IPv4: ${candidatas.join(', ')} → se anuncia '
+          RelayLog.paso('Interfaces IPv4: ${candidatas.join(', ')} → se anuncia '
               '${addr.address} por ${iface.name} (criterio: la primera de la '
               'lista, sin mirar la subred del aparato)');
           return addr.address;
@@ -892,14 +792,14 @@ class CastRelayServer {
     }
     // Nada alcanzable desde afuera. Devolver loopback seria peor que no
     // devolver nada: parece una direccion valida y no lo es.
-    CastLog.fallo('Sin ninguna IPv4 no-loopback: no hay direccion que anunciar');
+    RelayLog.fallo('Sin ninguna IPv4 no-loopback: no hay direccion que anunciar');
     return null;
   }
 }
 
 class _RelayTarget {
   _RelayTarget(this.url, this.headers, this.sesion,
-      {this.planTs, this.esquivarNodosCaidos = false});
+      {this.esquivarNodosCaidos = false});
   final String url;
   final Map<String, String> headers;
 
@@ -914,10 +814,6 @@ class _RelayTarget {
   /// nodo que no entrega.
   final bool esquivarNodosCaidos;
 
-  /// Cuando viene, a este token no se le sirve la lista HLS sino los pedacitos
-  /// pegados en un MPEG-TS continuo, que es lo único que entiende un televisor
-  /// viejo. Ver cast_hls_ts.dart.
-  final PlanTs? planTs;
 
   /// Agrupa el maestro con los segmentos que salieron de su lista, para poder
   /// soltarlos todos juntos al desconectar (ver unregister).

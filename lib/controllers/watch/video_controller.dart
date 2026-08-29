@@ -20,7 +20,7 @@ import 'package:prismhub/utils/alivio_de_memoria.dart';
 import 'package:prismhub/utils/comportamiento_sistema_tv.dart';
 import 'package:prismhub/utils/platform_tv.dart';
 import 'package:prismhub/utils/error.dart';
-import 'package:prismhub/utils/cast_relay_server.dart';
+import 'package:prismhub/utils/relay_local.dart';
 import 'package:prismhub/utils/log.dart';
 import 'package:prismhub/utils/request.dart';
 import 'package:prismhub/views/dialogs/bt_dialog.dart';
@@ -5804,7 +5804,7 @@ class VideoPlayerController extends GetxController with WidgetsBindingObserver {
     }
 
     try {
-      final relay = await CastRelayServer.registerAndGetUrl(
+      final relay = await RelayLocal.registerAndGetUrl(
         targetUrl: direccion,
         headers: hdrs,
         esquivarNodosCaidos: true,
