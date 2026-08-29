@@ -614,7 +614,24 @@ class CatalogoExtensionesController extends GetxController {
     // vacía. Se agotaban los treinta segundos, el escaneo salía con las manos
     // vacías y los chips no aparecían nunca. En el teléfono sí, porque
     // contestaba más rápido — de ahí que pasara en una y no en la otra.
-    await Future<void>.delayed(const Duration(milliseconds: 800));
+    //
+    // En televisor se espera bastante más. Reportado en vivo: «al abrir la app
+    // se siente lento y después se recupera». Esto le pide sus filtros a cada
+    // extensión instalada, y cada una arranca su propio motor de JavaScript —
+    // con doce extensiones son doce motores compitiendo por el mismo
+    // procesador justo cuando la Home está dibujándose y bajando portadas. En
+    // un teléfono no se nota; en un televisor, sí.
+    //
+    // No se puede saltear: lo que llena esta pasada (`_ejesPorExtension`,
+    // `_segurosPorExtension`) lo usan la separación de contenido para adultos
+    // y el filtrado de las zonas, aunque el televisor no tenga barra de
+    // filtros. Pero SÍ puede esperar: nada de lo que se ve al abrir depende de
+    // esto, y llegando unos segundos después nadie lo nota.
+    await Future<void>.delayed(
+      PlatformTv.esTelevisionSync
+          ? const Duration(seconds: 6)
+          : const Duration(milliseconds: 800),
+    );
 
     // Lo guardado ya está en pantalla; esto lo confirma o lo corrige. Si el
     // escaneo no encuentra nada —sin extensiones activas, todas fallando— se

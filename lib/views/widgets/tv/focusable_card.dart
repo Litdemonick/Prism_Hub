@@ -230,7 +230,25 @@ class _FocusableCardState extends State<FocusableCard> {
     // El resplandor ya dice dónde está parado el usuario —que es lo único
     // que no se puede perder— y que aparezca de golpe no se nota mal: con un
     // control remoto el foco SALTA de tarjeta en tarjeta, no se desliza.
-    final conEscala = PerfilDeAparato.nivel != NivelDeAparato.bajo;
+    // ── Sin crecido en NINGÚN televisor ──────────────────────────────────
+    //
+    // Esto estaba apagado solo en el nivel más bajo, y el argumento que lo
+    // justificaba —el de arriba: con un control remoto el foco SALTA de
+    // tarjeta en tarjeta, no se desliza, así que un crecido animado no aporta
+    // nada que el resplandor no diga ya— vale igual en CUALQUIER televisor.
+    //
+    // Y el costo también es el mismo en todos. Reportado en vivo: la app va a
+    // tirones en televisores potentes, no solo en los modestos. Un televisor
+    // es potente DECODIFICANDO VÍDEO, que es para lo que está hecho; su GPU
+    // componiendo interfaz es floja comparada con la de un teléfono de gama
+    // media. Cada movimiento del foco con crecido animado repinta la tarjeta y
+    // lo que tenga alrededor durante 160 ms, y eso se paga en cada pulsación
+    // del mando.
+    //
+    // Fuera de televisor no cambia nada: ahí el foco se mueve con el ratón y
+    // el crecido es la señal de que algo es tocable.
+    final conEscala =
+        !PlatformTv.esTelevisionSync && PerfilDeAparato.nivel != NivelDeAparato.bajo;
     final tarjeta = Focus(
       focusNode: _focusNode,
       autofocus: widget.autofocus,

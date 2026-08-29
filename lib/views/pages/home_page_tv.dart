@@ -334,7 +334,20 @@ class _ZonaQueAparece extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final contenido = RepaintBoundary(child: child);
-    if (PerfilDeAparato.nivel == NivelDeAparato.bajo) return contenido;
+    // Sin fundido en NINGÚN televisor, no solo en los modestos.
+    //
+    // Este widget solo lo usa la Home de TV, así que esto es «nunca». El
+    // motivo es el mismo que el del crecido del foco (ver FocusableCard):
+    // reportado en vivo que la app va a tirones también en televisores
+    // potentes, y componer media pantalla con opacidad durante 260 ms en cada
+    // cambio de zona es de lo más caro que hace la interfaz. Un televisor es
+    // potente decodificando vídeo; su GPU componiendo interfaz no lo es.
+    //
+    // El contenido aparece puesto, que en un televisor no se extraña.
+    if (PlatformTv.esTelevisionSync ||
+        PerfilDeAparato.nivel == NivelDeAparato.bajo) {
+      return contenido;
+    }
     return TweenAnimationBuilder<double>(
       tween: Tween(begin: 0, end: 1),
       duration: const Duration(milliseconds: 260),
