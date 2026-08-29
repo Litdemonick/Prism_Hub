@@ -114,10 +114,25 @@ class MotorMpv implements MotorDeVideo {
   Stream<bool> get finales => player.stream.completed;
 
   @override
-  Widget vista({required BoxFit ajuste, required Color fondo}) => Video(
+  Widget vista({
+    required BoxFit ajuste,
+    required Color fondo,
+    Alignment alineacion = Alignment.center,
+    Widget? encima,
+  }) =>
+      Video(
         controller: videoController,
         fit: ajuste,
         fill: fondo,
+        alignment: alineacion,
+        // Los subtítulos los dibuja la app, no media_kit.
+        subtitleViewConfiguration: const SubtitleViewConfiguration(
+          visible: false,
+        ),
+        // `controls` y no una capa por fuera: es el hueco propio de media_kit
+        // para lo que va encima de la imagen. Por fuera del Video taparía los
+        // botones.
+        controls: encima == null ? null : (_) => encima,
       );
 
   @override

@@ -99,7 +99,20 @@ abstract class MotorDeVideo {
   /// una textura de Flutter y el motor de Android sobre una superficie nativa.
   /// Por eso la vista se pide acá en vez de que la pantalla arme el widget —
   /// así el reproductor no necesita saber cuál está corriendo.
-  Widget vista({required BoxFit ajuste, required Color fondo});
+  ///
+  /// [encima] se dibuja sobre la imagen. Va por parámetro y no como una capa
+  /// que ponga la pantalla por su cuenta porque cada motor lo coloca distinto:
+  /// media_kit tiene su propio hueco para eso, y el de Android necesita una
+  /// pila aparte. Puesto afuera taparía los botones.
+  ///
+  /// [alineacion] es dónde queda la imagen cuando no llena el marco — con
+  /// «llenar pantalla» se ancla abajo para no recortar los subtítulos quemados.
+  Widget vista({
+    required BoxFit ajuste,
+    required Color fondo,
+    Alignment alineacion = Alignment.center,
+    Widget? encima,
+  });
 
   // ── Lo que no todos pueden ────────────────────────────────────────────────
 

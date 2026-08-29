@@ -3,7 +3,6 @@ import 'dart:io';
 
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
-import 'package:media_kit_video/media_kit_video.dart';
 import 'package:prismhub/views/widgets/home/home_theme.dart';
 import 'package:prismhub/controllers/watch/video_controller.dart';
 import 'package:prismhub/views/pages/watch/video/video_player_desktop_controls.dart';
@@ -140,79 +139,42 @@ class _VideoPlayerContenState extends State<VideoPlayerConten> {
       }
       return _conTutorial(
         c,
-        Video(
-          controller: c.videoController,
+        // La vista la arma el MOTOR, no esta pantalla.
+        //
+        // Es el punto donde los dos motores de verdad difieren: mpv dibuja
+        // sobre una textura de Flutter y el de Android sobre una superficie
+        // nativa. Pidiendosela al motor, esta pantalla se arma igual con
+        // cualquiera de los dos. Ver MotorDeVideo.vista.
+        c.motor.vista(
           // ── De pie, el hueco NO es negro ──────────────────────────────
           //
-          // El vídeo es una franja 16:9 anclada arriba, así que debajo queda
+          // El video es una franja 16:9 anclada arriba, asi que debajo queda
           // media pantalla libre. En negro plano eso se lee como que la app se
-          // rompió o se quedó colgada: no hay nada que diga que ese hueco es
-          // parte del reproductor. Con el fondo de la app se entiende que es la
-          // misma pantalla y que ahí es donde caen los controles.
+          // rompio o se quedo colgada. Con el fondo de la app se entiende que
+          // es la misma pantalla y que ahi es donde caen los controles.
           //
-          // Acostado se queda en negro, que es lo correcto: ahí el hueco son
-          // las franjas de un vídeo que no llena, y cualquier color que no sea
+          // Acostado se queda en negro, que es lo correcto: ahi el hueco son
+          // las franjas de un video que no llena, y cualquier color que no sea
           // negro compite con la imagen.
-          fill: MediaQuery.orientationOf(context) == Orientation.portrait
+          fondo: MediaQuery.orientationOf(context) == Orientation.portrait
               ? HomeTheme.oscuroFondo
               : Colors.black,
-          // Con el modo VR puesto, la imagen LLENA la pantalla.
-          //
-          // Al recortar un VR a la mitad izquierda queda un cuadro con otra
-          // proporción, y ajustándolo entero (lo de siempre) sobran barras
-          // negras a los costados o arriba: en el teléfono se veía una franja
-          // chica en el medio de una pantalla casi toda negra.
-          //
-          // Solo en modo VR. Para un vídeo normal recortar sería peor —se
-          // perdería parte de la imagen sin que nadie lo haya pedido— así que
-          // ahí se sigue mostrando entero como siempre.
           // Recorta para llenar cuando el usuario lo pidio (video normal) o
           // cuando el recorte del VR dejo un cuadro con otra proporcion.
-          fit: (c.vrUnaPantalla.value || c.llenarPantalla.value)
+          ajuste: (c.vrUnaPantalla.value || c.llenarPantalla.value)
               ? BoxFit.cover
               : BoxFit.contain,
-          // Llenando la pantalla, el recorte se lleva la parte de ARRIBA.
-          //
-          // BoxFit.cover recorta centrado, o sea que saca lo mismo arriba que
-          // abajo — y abajo es justo donde van los subtitulos quemados en la
-          // imagen (los que vienen dentro del video, que no se pueden mover).
-          // Con "llenar pantalla" puesto se cortaban a la mitad o desaparecian.
-          //
-          // Anclando abajo, todo lo que sobra sale de arriba: la franja de
-          // subtitulos se salva entera. Se pierde mas cielo o fondo en la parte
-          // superior, que es lo que uno esta dispuesto a ceder cuando pide
-          // llenar la pantalla.
-          //
-          // En VR no: ahi el recorte ya lo hace el propio reproductor con las
-          // medidas reales (ver _aplicarRecorteVr), y mover el anclaje
-          // descuadraria esa cuenta.
-          //
-          // ── De pie va CENTRADA ───────────────────────────────────────────
-          //
-          // Se probó anclada arriba, pensando en «vídeo arriba y controles
-          // abajo». No es lo que hace un reproductor de pie: pegada al techo, la
-          // imagen queda contra la barra de estado y el título se le monta
-          // encima, y todo el aire sobra abajo de golpe.
-          //
-          // Centrada queda con aire arriba y abajo repartido: el título respira
-          // en la franja de arriba, los controles en la de abajo, y la imagen —
-          // que es lo que uno mira— queda a la altura de los ojos. Es lo que
-          // hace YouTube de pie a pantalla completa.
-          alignment: (c.llenarPantalla.value && !c.vrUnaPantalla.value)
+          // Llenando la pantalla, el recorte se lleva la parte de ARRIBA:
+          // abajo van los subtitulos quemados en la imagen, que con el recorte
+          // centrado se cortaban a la mitad. De pie va centrada, que es lo que
+          // hace YouTube a pantalla completa.
+          alineacion: (c.llenarPantalla.value && !c.vrUnaPantalla.value)
               ? Alignment.bottomCenter
               : Alignment.center,
-          subtitleViewConfiguration: const SubtitleViewConfiguration(
-            visible: false,
-          ),
-          // El cuadro congelado, tapando el hueco de la reapertura al saltar.
-          //
-          // Va DENTRO de `controls` a propósito: así queda encima de la imagen
-          // pero DEBAJO de los botones, que tienen que seguir viéndose y
-          // respondiendo mientras dura. Por fuera del Video los habría tapado.
-          //
-          // Es null salvo durante un salto, así que el resto del tiempo esto no
-          // dibuja nada.
-          controls: (state) => Stack(
+          // El cuadro congelado tapa el hueco de la reapertura al saltar, y va
+          // DEBAJO de los botones: por eso los dos entran juntos como lo que
+          // va encima de la imagen. Es null salvo durante un salto.
+          encima: Stack(
             fit: StackFit.expand,
             children: [
               Obx(() {
