@@ -485,7 +485,13 @@
     "backup-import-nothing-new": "You already had everything this backup held, so nothing changed.",
     "backup-import-hist": "{n} titles went to your history.",
     "backup-import-favs": "{n} were added to favourites.",
-    "backup-import-missing-title": "You are missing these extensions"
+    "backup-import-missing-title": "You are missing these extensions",
+    "motor": "Video engine",
+    "motor-subtitle": "Which one plays the video. It is here for testing: if a server misbehaves with one, switch and reopen the episode. Automatic uses the usual one.",
+    "motor-auto": "Automatic",
+    "motor-mpv": "mpv (the usual one)",
+    "motor-exo": "ExoPlayer (native to Android)",
+    "motor-puesto": "In use"
   },
   "external-player-launching": "Launching {player}",
   "detail": {

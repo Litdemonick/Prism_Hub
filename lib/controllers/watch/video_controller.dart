@@ -36,7 +36,7 @@ import 'package:prismhub/controllers/watch/banco_de_pruebas.dart';
 import 'package:prismhub/controllers/watch/dibujado_de_video.dart';
 import 'package:prismhub/controllers/watch/frecuencia_de_pantalla.dart';
 import 'package:prismhub/controllers/watch/motor/motor_de_video.dart';
-import 'package:prismhub/controllers/watch/motor/motor_mpv.dart';
+import 'package:prismhub/controllers/watch/motor/eleccion_de_motor.dart';
 import 'package:prismhub/controllers/watch/recorte_fmp4.dart';
 import 'package:prismhub/utils/watch_state.dart';
 import 'package:prismhub/data/services/database_service.dart';
@@ -122,8 +122,10 @@ class VideoPlayerController extends GetxController with WidgetsBindingObserver {
   /// se lo pide al motor. Ese es el punto donde los dos motores difieren de
   /// verdad —textura contra superficie nativa— y tenerlo detras de la fachada
   /// es lo que permite meter el segundo sin tocar la pantalla.
-  late final MotorDeVideo motor =
-      MotorMpv(player: player, videoController: videoController);
+  late final MotorDeVideo motor = EleccionDeMotor.armar(
+    player: player,
+    videoController: videoController,
+  );
 
   final showSidebar = false.obs;
   final isOpenSidebar = false.obs;

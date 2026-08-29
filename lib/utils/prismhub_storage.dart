@@ -470,6 +470,13 @@ class SettingKey {
   // puede deducir de los datos: se calcula contra lo que este dispositivo ya
   // habia visto.
   static const seenRepoPackages = "SeenRepoPackages";
+  // Que motor de video usar. 'auto' (de fabrica), 'mpv' o 'exoplayer'.
+  //
+  // TEMPORAL, y a proposito: esta en la version publicada para poder recorrer
+  // las extensiones probando los dos motores en aparatos reales, sin tener que
+  // publicar una version por prueba. Se saca cuando el motor este decidido por
+  // plataforma y formato — ver EleccionDeMotor.
+  static const motorDeVideo = 'MotorDeVideo';
   static const tmdbKey = 'TMDBKey';
   static const autoCheckUpdate = 'AutoCheckUpdate';
   static const language = 'Language';

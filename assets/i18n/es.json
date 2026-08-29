@@ -481,7 +481,13 @@
     "backup-import-nothing-new": "Ya tenías todo lo que traía esta copia, así que no cambió nada.",
     "backup-import-hist": "{n} títulos entraron al historial.",
     "backup-import-favs": "{n} se agregaron a favoritos.",
-    "backup-import-missing-title": "Te faltan estas extensiones"
+    "backup-import-missing-title": "Te faltan estas extensiones",
+    "motor": "Motor de vídeo",
+    "motor-subtitle": "Con cuál se reproduce. Está para probar: si un servidor va mal con uno, cambiá y volvé a abrir el episodio. En automático se usa el de siempre.",
+    "motor-auto": "Automático",
+    "motor-mpv": "mpv (el de siempre)",
+    "motor-exo": "ExoPlayer (nativo de Android)",
+    "motor-puesto": "Puesto"
   },
   "external-player-launching": "Lanzando {player}",
   "detail": {
