@@ -313,33 +313,48 @@ class _FocusableCardState extends State<FocusableCard> {
                   // abajo. Ver `altoMarco`.
                   bottom: widget.altoMarco == null ? 0 : null,
                   height: widget.altoMarco,
+                  // ── En televisor: UNA sombra, y sin fundido ───────────
+                  //
+                  // Cada sombra con desenfoque es una forma difuminada que la
+                  // GPU tiene que pintar aparte, y acá había tres por tarjeta.
+                  // Encima el fundido de 160 ms obliga a componer todo eso en
+                  // un lienzo aparte durante la animación, en CADA pulsación
+                  // del mando. Es lo que hacía sentir la navegación pesada en
+                  // el televisor.
+                  //
+                  // Las dos sombras oscuras son profundidad: separan la
+                  // tarjeta del fondo. En un televisor eso no se extraña —
+                  // el halo de color ya dice dónde está parado el usuario, que
+                  // es lo único que no se puede perder.
+                  //
+                  // Y sin fundido por el mismo motivo que el crecido: con un
+                  // mando el foco SALTA de tarjeta en tarjeta, así que que el
+                  // halo aparezca puesto es lo que corresponde. Fuera de
+                  // televisor todo queda igual que estaba.
                   child: IgnorePointer(
-                    child: AnimatedOpacity(
-                      duration: const Duration(milliseconds: 160),
-                      opacity: activo ? 1 : 0,
-                      child: DecoratedBox(
-                        decoration: BoxDecoration(
-                          borderRadius:
-                              BorderRadius.circular(widget.borderRadius),
-                          boxShadow: [
-                            const BoxShadow(
-                              color: Color(0x8A000000),
-                              blurRadius: 16,
-                              offset: Offset(0, 8),
-                            ),
-                            const BoxShadow(
-                              color: Color(0x66000000),
-                              blurRadius: 8,
-                              offset: Offset(0, 3),
-                            ),
-                            BoxShadow(
-                              color: marco.withValues(alpha: intensidadDelHalo),
-                              blurRadius: blurDelHalo,
-                              spreadRadius: esTv ? 1.5 : 0,
-                            ),
-                          ],
+                    child: _Halo(
+                      visible: activo,
+                      conFundido: !esTv,
+                      radio: widget.borderRadius,
+                      sombras: [
+                        if (!esTv) ...const [
+                          BoxShadow(
+                            color: Color(0x8A000000),
+                            blurRadius: 16,
+                            offset: Offset(0, 8),
+                          ),
+                          BoxShadow(
+                            color: Color(0x66000000),
+                            blurRadius: 8,
+                            offset: Offset(0, 3),
+                          ),
+                        ],
+                        BoxShadow(
+                          color: marco.withValues(alpha: intensidadDelHalo),
+                          blurRadius: blurDelHalo,
+                          spreadRadius: esTv ? 1.5 : 0,
                         ),
-                      ),
+                      ],
                     ),
                   ),
                 ),
@@ -354,19 +369,16 @@ class _FocusableCardState extends State<FocusableCard> {
                     top: 0,
                     bottom: widget.altoMarco == null ? 0 : null,
                     height: widget.altoMarco,
+                    // Mismo criterio que el halo: en televisor se pinta o no
+                    // se pinta, sin fundido. Ver el comentario de allá.
                     child: IgnorePointer(
-                      child: AnimatedOpacity(
-                        duration: const Duration(milliseconds: 160),
-                        opacity: activo ? 1 : 0,
-                        child: DecoratedBox(
-                          decoration: BoxDecoration(
-                            borderRadius:
-                                BorderRadius.circular(widget.borderRadius),
-                            border: Border.all(
-                              color: marco.withValues(alpha: 0.95),
-                              width: 3,
-                            ),
-                          ),
+                      child: _Halo(
+                        visible: activo,
+                        conFundido: !esTv,
+                        radio: widget.borderRadius,
+                        borde: Border.all(
+                          color: marco.withValues(alpha: 0.95),
+                          width: 3,
                         ),
                       ),
                     ),
@@ -387,5 +399,48 @@ class _FocusableCardState extends State<FocusableCard> {
     //
     // Es, de todo lo que se tocó, lo que más se nota con el mando en la mano.
     return RepaintBoundary(child: tarjeta);
+  }
+}
+
+
+/// El resplandor del foco.
+///
+/// Con [conFundido] aparece y desaparece con una transición; sin él, se pinta
+/// o no se pinta. En televisor va sin fundido a propósito — ver el comentario
+/// de arriba, en la capa del halo.
+///
+/// Cuando no está visible y no hay fundido, no devuelve NADA: ni una caja
+/// vacía ni una sombra transparente. Es la diferencia entre que la GPU tenga
+/// que componer una capa por cada tarjeta de la pantalla o que no exista.
+class _Halo extends StatelessWidget {
+  const _Halo({
+    required this.visible,
+    required this.conFundido,
+    required this.radio,
+    this.sombras,
+    this.borde,
+  });
+
+  final bool visible;
+  final bool conFundido;
+  final double radio;
+  final List<BoxShadow>? sombras;
+  final BoxBorder? borde;
+
+  @override
+  Widget build(BuildContext context) {
+    final caja = DecoratedBox(
+      decoration: BoxDecoration(
+        borderRadius: BorderRadius.circular(radio),
+        boxShadow: sombras,
+        border: borde,
+      ),
+    );
+    if (!conFundido) return visible ? caja : const SizedBox.shrink();
+    return AnimatedOpacity(
+      duration: const Duration(milliseconds: 160),
+      opacity: visible ? 1 : 0,
+      child: caja,
+    );
   }
 }
