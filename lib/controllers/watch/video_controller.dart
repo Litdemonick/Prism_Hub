@@ -32,6 +32,7 @@ import 'package:prismhub/utils/connectivity.dart';
 import 'package:prismhub/utils/notificacion_reproductor.dart';
 import 'package:prismhub/utils/audio_hls.dart';
 import 'package:prismhub/utils/bomba_de_datos.dart';
+import 'package:prismhub/controllers/watch/banco_de_pruebas.dart';
 import 'package:prismhub/controllers/watch/recorte_fmp4.dart';
 import 'package:prismhub/utils/watch_state.dart';
 import 'package:prismhub/data/services/database_service.dart';
@@ -507,6 +508,7 @@ class VideoPlayerController extends GetxController with WidgetsBindingObserver {
     _redDeLaRueda = null;
     hasRenderedFrame.value = true;
     logger.info('rueda apagada: $porQue');
+    BancoDePruebas.seVio();
   }
 
   // Flag de buffering YA corregido con la posición real — ver
@@ -2229,6 +2231,7 @@ class VideoPlayerController extends GetxController with WidgetsBindingObserver {
               // interno solo, dejando al usuario colgado en el frame
               // congelado (reportado en vivo). Por eso el reset va primero.
               webViewOpenedOnce.value = false;
+              BancoDePruebas.cayoAlNavegador();
               webViewFallback.value = {
                 'url': primaryUrl,
                 'name': currentServerName.value,
@@ -2939,6 +2942,9 @@ class VideoPlayerController extends GetxController with WidgetsBindingObserver {
 
     final embedUrl = availableServers[name]!;
     logger.info('switchServer: $name → $embedUrl');
+    // Arranca el cronometro del recorrido de extensiones. Ver BancoDePruebas.
+    BancoDePruebas.empezar(
+        extension: runtime.extension.package, servidor: name);
 
     isGettingWatchData.value = true;
 
@@ -5296,6 +5302,7 @@ class VideoPlayerController extends GetxController with WidgetsBindingObserver {
       return false;
     }
     webViewOpenedOnce.value = false;
+    BancoDePruebas.cayoAlNavegador();
     webViewFallback.value = {
       'url': url,
       'name': name,
@@ -5994,6 +6001,7 @@ class VideoPlayerController extends GetxController with WidgetsBindingObserver {
       unawaited(switchServer(name));
       return;
     }
+    BancoDePruebas.fallo('agotó los $_maxServerRetries reintentos');
     _setServerFailed(name);
   }
 
@@ -6025,6 +6033,7 @@ class VideoPlayerController extends GetxController with WidgetsBindingObserver {
       // ANTES de asignar webViewFallback.value (ese ever() dispara
       // sincrónico).
       webViewOpenedOnce.value = false;
+      BancoDePruebas.cayoAlNavegador();
       webViewFallback.value = {
         'url': url,
         'name': name,
@@ -6138,6 +6147,7 @@ class VideoPlayerController extends GetxController with WidgetsBindingObserver {
         // Orden importa: ver comentario en play() sobre por qué el reset va
         // ANTES de asignar webViewFallback.value.
         webViewOpenedOnce.value = false;
+        BancoDePruebas.cayoAlNavegador();
         webViewFallback.value = {
           'url': embedUrl,
           'name': name,
@@ -6237,6 +6247,7 @@ class VideoPlayerController extends GetxController with WidgetsBindingObserver {
         // Orden importa: ver comentario en play() sobre por qué el reset va
         // ANTES de asignar webViewFallback.value.
         webViewOpenedOnce.value = false;
+        BancoDePruebas.cayoAlNavegador();
         webViewFallback.value = {
           'url': _episodePageUrl,
           'name': 'WebView',
