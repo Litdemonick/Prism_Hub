@@ -943,8 +943,6 @@ class _ExtensionSearcherPageState extends fluent.State<ExtensionSearcherPage> {
         // Sin isScrollControlled/DraggableScrollableSheet, el sheet quedaba
         // con una altura fija chica (no la real disponible) — en horizontal
         // (poca altura vertical) apenas entraban 1-2 filas de chips.
-        // Mismo patrón ya usado en video_player_mobile_controls.dart para
-        // el selector de dispositivo DLNA.
         useSafeArea: true,
         isScrollControlled: true,
         showDragHandle: true,

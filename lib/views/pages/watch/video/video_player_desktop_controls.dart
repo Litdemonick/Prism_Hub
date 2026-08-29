@@ -390,8 +390,7 @@ class _VideoPlayerDesktopControlsState
               //
               // Antes en PC no había ninguna señal: se tocaban las flechas o se
               // movía el deslizador y el sonido cambiaba sin que nada dijera en
-              // cuánto quedó. Transmitiendo no sale: ahí el volumen que importa
-              // es el del televisor, y ese se avisa dentro del panel de casteo.
+              // cuánto quedó.
               Positioned.fill(
                 child: IgnorePointer(
                   child: Obx(() {
@@ -1322,8 +1321,8 @@ class _VolumeState extends State<_Volume> {
     super.initState();
     _volume.value = widget.player.state.volume;
     // Antes el valor se leía una sola vez al crear el widget y quedaba
-    // pegado — si el volumen cambiaba por otro lado (atajo de teclado, DLNA,
-    // etc.) el ícono y el slider seguían mostrando el valor viejo. Escuchar
+    // pegado — si el volumen cambiaba por otro lado (un atajo de teclado, por
+    // ejemplo) el ícono y el slider seguían mostrando el valor viejo. Escuchar
     // el stream real lo mantiene siempre sincronizado.
     _volumeSub = widget.player.stream.volume.listen((v) {
       _volume.value = v;
@@ -1979,24 +1978,16 @@ class _SeekBarState extends State<_SeekBar> {
 
   // La barra lee del CONTROLADOR, no del reproductor de mpv.
   //
-  // Dos motivos, los dos vistos en vivo:
-  //
-  //  - **Casteando, mpv está parado.** Su posición y su duración son cero, así
-  //    que la barra mostraba "0:00 / 0:00" y no se podía tocar, aunque el
-  //    episodio estuviera corriendo en el televisor. El controlador sí sabe por
-  //    dónde va: el largo lo saca de la lista de pedacitos y la posición del
-  //    propio aparato.
-  //  - **Saltando, mpv informa posiciones viejas.** Entre que se suelta la barra
-  //    y el vídeo llega de verdad al punto nuevo siguen llegando las de antes:
-  //    el indicador se va de un tirón para atrás y un instante después salta
-  //    adelante. El controlador ya filtra eso (ver haySaltoPendiente), y acá se
-  //    estaba leyendo en crudo, salteándose ese filtrado.
+  // Saltando, mpv informa posiciones viejas: entre que se suelta la barra y el
+  // vídeo llega de verdad al punto nuevo siguen llegando las de antes, así que
+  // el indicador se va de un tirón para atrás y un instante después salta
+  // adelante. El controlador ya filtra eso (ver haySaltoPendiente); leyéndolo
+  // en crudo se salteaba ese filtrado. Visto en vivo.
   @override
   void initState() {
     super.initState();
     // Lo que el controlador YA tenía antes de montarse esta barra: sin esto se
-    // queda en cero hasta que algo cambie, y casteando el largo se calcula una
-    // sola vez al empezar — o sea que no cambiaría nunca más.
+    // queda en cero hasta que algo cambie.
     position = widget.controller.position.value;
     duration = widget.controller.duration.value;
     buffer = widget.controller.buffer.value;

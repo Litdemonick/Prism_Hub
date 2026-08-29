@@ -1616,8 +1616,8 @@ class _SettingsPageState extends State<SettingsPage> {
                 // El registro se junta en memoria y se vuelca cada 2 segundos.
                 // Sin esto, quien acaba de ver algo fallar y exporta enseguida
                 // se lleva un archivo SIN el fallo — que es justo lo que iba a
-                // reportar. Pasó en vivo: se exportó despues de castear y la
-                // ultima linea del archivo era de una semana antes.
+                // reportar. Pasó en vivo: la ultima linea del archivo era de
+                // una semana antes.
                 androidWidget: TextButton(
                   onPressed: () async {
                     await PrismLog.flush();

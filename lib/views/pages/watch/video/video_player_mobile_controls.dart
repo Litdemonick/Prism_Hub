@@ -530,8 +530,7 @@ class _VideoPlayerMobileControlsState extends State<VideoPlayerMobileControls> {
                   // Deslizar arriba/abajo para el volumen se saca — a pedido
                   // explícito, ahora hay un control de volumen propio (ver
                   // _VolumeButtonMobile en el pie) que además se ve, en vez
-                  // de un gesto invisible que había que descubrir. Transmitir
-                  // sigue con lo suyo (ajustarVolumenCast) por su propio lado.
+                  // de un gesto invisible que había que descubrir.
                   onLongPressStart: (details) {
                     _isLongPress = true;
                     _c.player.setRate(_velocidadSostenida);
@@ -763,11 +762,8 @@ class _VideoPlayerMobileControlsState extends State<VideoPlayerMobileControls> {
             // Devolución visual del doble toque: cuántos segundos se saltó y
             // hacia dónde.
             //
-            // Va DESPUÉS del bloque del centro a propósito. Estaba antes, así
-            // que al transmitir el panel de casteo —que ocupa el centro— se
-            // dibujaba encima y el cartel quedaba tapado justo cuando más hacía
-            // falta: al hacer doble toque mientras se castea, no se veía nada y
-            // parecía que el gesto no había hecho efecto.
+            // Va DESPUÉS del bloque del centro a propósito: lo que se dibuja
+            // ahí ocupa el mismo sitio y taparía este cartel.
             //
             // IgnorePointer para no robar toques a la capa de gestos.
             Positioned.fill(
@@ -1276,8 +1272,7 @@ class _VolumeButtonMobileState extends State<_VolumeButtonMobile> {
       // Silencia y des-silencia con un toque en la bocina, a pedido
       // explícito: antes el ícono era decorativo y bajar a cero obligaba a
       // arrastrar la barra hasta el fondo y después volver a buscar el punto
-      // donde estaba. Va por `cambiar`, así respeta el caso de casteo (donde
-      // el volumen es el del APARATO y se manda por diferencia).
+      // donde estaba.
       void alternarSilencio() {
         if (valor > 0) {
           _volumenAntesDeSilenciar = valor;

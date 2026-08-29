@@ -733,8 +733,8 @@ class VideoPlayerController extends GetxController with WidgetsBindingObserver {
   ///
   /// Los saltos seguidos se JUNTAN en uno solo. Tocar cinco veces "+10s" tiene
   /// que llevar 50 segundos adelante, no disparar cinco busquedas: cada una
-  /// tarda —y casteando encima rearma el flujo entero— asi que mandarlas todas
-  /// dejaba la imagen congelada un rato largo y a veces terminaba en cualquier
+  /// tarda, asi que mandarlas todas dejaba la imagen congelada un rato largo
+  /// y a veces terminaba en cualquier
   /// lado, porque cada toque se calculaba sobre una posicion que todavia era la
   /// vieja.
   Duration? _destinoDeSalto;
@@ -817,12 +817,9 @@ class VideoPlayerController extends GetxController with WidgetsBindingObserver {
     if (dur > Duration.zero && to > dur) to = dur;
     final salto = (to - position.value).inSeconds;
     _anunciarSalto(salto);
-    // seek() del controlador y NO player.seek(): el primero sabe si hay un
-    // aparato conectado y le habla a el. Con player.seek() las teclas movian el
-    // reproductor de aca, que mientras se transmite esta parado — o sea que en
-    // PC adelantar y retroceder no hacian absolutamente nada al castear.
-    //
-    // markSeeking lo hace seek() por dentro, asi que aca ya no va.
+    // seek() del controlador y NO player.seek(): el primero junta los saltos
+    // seguidos y sabe del recorte de fMP4. markSeeking lo hace por dentro, asi
+    // que aca ya no va.
     unawaited(seek(to));
   }
 
@@ -838,9 +835,7 @@ class VideoPlayerController extends GetxController with WidgetsBindingObserver {
   /// En PC no había ninguna señal: se tocaban las flechas o se movía el
   /// deslizador y el sonido cambiaba sin que nada dijera en cuánto quedó.
   ///
-  /// Null cuando no hay nada que mostrar. Transmitiendo se queda siempre en
-  /// null: ahí el volumen que importa es el del televisor y ese ya se avisa
-  /// dentro del panel de casteo (ver [ajustarVolumenCast]).
+  /// Null cuando no hay nada que mostrar.
   final avisoVolumen = RxnString();
   Timer? _avisoVolumenTimer;
 
@@ -964,14 +959,6 @@ class VideoPlayerController extends GetxController with WidgetsBindingObserver {
 
 
 
-
-
-
-
-
-  Timer? _castBuscandoTimer;
-
-  Timer? _volumenCastTimer;
 
 
   Timer? _esperaPlayTimer;
@@ -1681,13 +1668,6 @@ class VideoPlayerController extends GetxController with WidgetsBindingObserver {
 
     // La notificación sigue a isPlaying, venga de donde venga.
     //
-    // Antes el refresco inmediato estaba dentro del aviso de arriba, que se
-    // CORTA cuando se está transmitiendo (ahí quien reproduce es el televisor y
-    // el reproductor de acá está parado). O sea que justo casteando —que es
-    // cuando la notificación es el único mando que queda— el botón tardaba
-    // hasta un segundo en cambiar, y tocarlo dos veces rápido dejaba el icono
-    // diciendo una cosa y el televisor haciendo otra.
-    //
     // Colgado del observable, se entera igual si el cambio vino del
     // reproductor de acá, del televisor o de un botón de la propia
     // notificación.
@@ -1808,8 +1788,7 @@ class VideoPlayerController extends GetxController with WidgetsBindingObserver {
     // se retoma en el punto donde iba.
     _addWorker(ever(ConnectivityUtils.isOnline, (online) {
       if (online != true || _disposed) return;
-      // Casteando no: el televisor baja el video por su cuenta y tiene su
-      // Con el respaldo por navegador tampoco: ese no lo manejamos nosotros.
+      // Con el respaldo por navegador no: ese no lo manejamos nosotros.
       if (isWebViewActive.value || isGettingWatchData.value) return;
       // Solo si de verdad se rompio algo. Un cambio de red mientras todo va
       // bien no tiene por que interrumpir nada.
@@ -1848,13 +1827,8 @@ class VideoPlayerController extends GetxController with WidgetsBindingObserver {
     // Cuánto lleva descargado por delante, para la sombra de la barra.
     //
     // El controlador declaraba este dato pero no lo llenaba nadie: la barra lo
-    // leía de mpv por su cuenta. Al unificarla para que funcione también
-    // casteando —donde mpv está parado y sus números son cero— la sombra se
-    // quedó sin quien se la diera. Va acá, que es donde vive el resto del estado
+    // leía de mpv por su cuenta. Va acá, que es donde vive el resto del estado
     // de reproducción, y así hay UN solo lugar del que leerlo.
-    //
-    // Casteando no se toca: ahí el colchón que importa es el del televisor, y el
-    // de mpv sería un cero que borraría la sombra.
     _addSubscription(player.stream.buffer.listen((event) {
       buffer.value = event;
     }));
@@ -2667,8 +2641,6 @@ class VideoPlayerController extends GetxController with WidgetsBindingObserver {
     // notificación al que acababa de empezar.
     if (Platform.isAndroid) NotificacionReproductor.esconder(this);
     _skipBadgeTimer?.cancel();
-    _castBuscandoTimer?.cancel();
-    _volumenCastTimer?.cancel();
     _esperaPlayTimer?.cancel();
     _vigilanteDeAtasco?.cancel();
     _muestreo?.cancel();
@@ -2742,11 +2714,6 @@ class VideoPlayerController extends GetxController with WidgetsBindingObserver {
     // Acá el player todavía está sano (es el mismo estado que en cualquier
     // momento de la reproducción) y además va con timeout, así que en el peor
     // caso se pierde la miniatura, nunca se cuelga el cierre.
-    //
-    // Casteando no se captura: el reproductor de aca lleva parado desde que
-    // empezo la transmision, asi que saldria un cuadro negro que ademas pisaria
-    // la miniatura buena que ya estaba guardada. En ese caso _saveHistory
-    // conserva la anterior.
     final frame = saveHistory ? await _capturarFrameActual() : null;
 
     // Recien aca se pausa: el fotograma ya esta tomado.
@@ -2948,13 +2915,6 @@ class VideoPlayerController extends GetxController with WidgetsBindingObserver {
   //        b) URL de embed conocido → resolveEmbed on-demand vía SDK.
   //        c) URL de episodio → extensión la procesa normalmente.
   //   2. Si la extensión no puede resolver (error/vacío) → fallback WebView sniffer.
-  /// Cambia de servidor, y si se estaba transmitiendo manda el nuevo al mismo
-  /// aparato en vez de dejar cada uno con una cosa distinta.
-  ///
-  /// El cambio de servidor abre el stream nuevo en el reproductor de ACA y no
-  /// tocaba el casteo para nada: el televisor se quedaba con el stream viejo, el
-  /// telefono arrancaba el nuevo con sonido, y la pantalla seguia diciendo que
-  /// se estaba transmitiendo. Dos videos distintos sonando a la vez.
   Future<void> switchServer(String name) => _switchServerLocal(name);
 
   _switchServerLocal(String name) async {
@@ -3404,7 +3364,6 @@ class VideoPlayerController extends GetxController with WidgetsBindingObserver {
     final elegida = cabe.isNotEmpty ? cabe.first : deMayorAMenor.last;
     // Ya esta reproduciendo esa misma: no se toca, para no recargar de gusto.
     if (watchData?.url == elegida.value.url) return;
-    // Casteando tampoco: cambiar la calidad ahi implica volver a mandarselo al
     logger.info('Calidad de arranque: ${elegida.key}');
     unawaited(switchQuality(elegida.value.url));
   }
@@ -5925,9 +5884,8 @@ class VideoPlayerController extends GetxController with WidgetsBindingObserver {
   // pedido sin decir nada. El aviso decía "te quedaste en el minuto tal", uno
   // aceptaba, y el episodio arrancaba de cero.
   //
-  // No es nuevo en este archivo: al volver de castear ya estaba anotado que el
-  // salto tiene que ir DESPUÉS de que `open()` terminó, que es cuando mpv ya
-  // conoce la duración. Faltaba acá.
+  // El salto tiene que ir DESPUÉS de que `open()` terminó, que es cuando mpv
+  // ya conoce la duración.
   //
   // Así que se espera a que la conozca, se salta, y se COMPRUEBA que haya
   // llegado. Si no llegó se reintenta: con HLS el primer salto a veces cae en

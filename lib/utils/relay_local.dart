@@ -171,12 +171,8 @@ class RelayLocal {
   /// Cuántos bytes de vídeo se le entregaron de verdad a cada transmisión.
   ///
   /// [pedidosPorSesion] decía "pidió", y con eso se concluía que "bajó datos".
-  /// No es lo mismo, y la diferencia importa: un televisor DLNA pregunta
-  /// PRIMERO con un HEAD para ver si el formato le sirve, y ese HEAD ya marcaba
-  /// la sesión como pedida aunque no se hubiera entregado un solo byte. Con eso,
-  /// un aparato que negoció y se fue —y otro que está bajando bien pero lento—
-  /// daban el mismo veredicto: "llega pero no puede con el formato". El de la
-  /// conexión lenta lo recibía siendo mentira.
+  /// No es lo mismo: un HEAD ya marcaba la sesión como pedida aunque no se
+  /// hubiera entregado un solo byte.
   ///
   /// Contar bytes separa los tres casos de verdad: no pidió nada (es red), pidió
   /// pero no bajó nada (negoció y lo rechazó: es el formato), o está bajando
@@ -251,14 +247,10 @@ class RelayLocal {
               .address ??
           'desconocido';
       pedidosPorSesion[target.sesion] = quien;
-      // CON QUE cabeceras pidio, no solo que pidio.
-      //
-      // Ahi va lo que el aparato dice de si mismo: su User-Agent, si pide un
-      // trozo (Range), y sobre todo getcontentFeatures.dlna.org, que es como un
-      // televisor DLNA pregunta si el flujo le sirve ANTES de bajar nada. Sin
-      // verlas no habia forma de saber si el televisor estaba negociando de
-      // verdad o si solo abrio la conexion y se fue.
-      RelayLog.paso('El aparato pidio desde $quien: ${request.method} '
+      // CON QUE cabeceras pidio, no solo que pidio: ahi va el User-Agent y
+      // si pide un trozo (Range), que es lo que hace falta para entender un
+      // pedido que se comporta raro.
+      RelayLog.paso('Pedido desde $quien: ${request.method} '
           '${RelayLog.cabeceras(request.headers)}');
     }
 
@@ -282,7 +274,7 @@ class RelayLocal {
       // — que es justo lo que se seguía viendo.
       //
       // Ahora se baja entero contra reloj: si no termina a tiempo se abandona y
-      // se pide el MISMO archivo a otro nodo, igual que en el casteo. Cabe en
+      // se pide el MISMO archivo a otro nodo. Cabe en
       // memoria de sobra (los pedacitos medidos van de 200 KiB a 8 MiB).
       if (!esLista && !esHead && target.esquivarNodosCaidos) {
         final bytes = await _pedacitoConFailover(uri, target);
@@ -372,12 +364,6 @@ class RelayLocal {
       resHeaders.addAll(_permisos);
 
       if (primerPedido) {
-        // OJO al leer el registro: por este camino NO salen las cabeceras
-        // _dlna. Solo las lleva el reempaquetado a MPEG-TS, porque su
-        // DLNA.ORG_OP=00 ("no se puede saltar") es cierto ahi y seria mentira
-        // aca, donde el content-length de la fuente se conserva y el salto por
-        // bytes funciona. Si el registro muestra un televisor que se queda en
-        // negro por este camino, esa diferencia es lo primero a mirar.
         RelayLog.paso('Se le sirve tal cual (HTTP ${upstreamRes.statusCode}) '
             'con ${RelayLog.cabeceras(resHeaders)}');
       }
@@ -738,9 +724,9 @@ class RelayLocal {
 
   /// Cierra el servidor cuando ya no queda nada que servir.
   ///
-  /// Se abria en el primer casteo y no se cerraba nunca: quedaba un puerto
+  /// Se abria la primera vez y no se cerraba nunca: quedaba un puerto
   /// escuchando en la red local durante toda la vida de la app, aunque hiciera
-  /// rato que no se transmitiera nada. Al volver a castear se levanta solo.
+  /// rato sin usarse. Cuando vuelve a hacer falta se levanta solo.
   static void _cerrarSiSobra() {
     if (_targets.isNotEmpty) return;
     final server = _server;

@@ -29,14 +29,13 @@ import 'package:prismhub/utils/log.dart';
 /// adelante. El reproductor pide de a poco, como siempre; la fuente entrega de
 /// corrido, que es lo único que sabe hacer rápido.
 ///
-/// ── Por qué no está dentro del relay del casteo ─────────────────────────────
+/// ── Por qué no está dentro del relay local ──────────────────────────────────
 ///
-/// Porque ese es el relay del casteo. Sirve para lo mismo por fuera —un
-/// servidor local que hace de intermediario— pero comparte servidor, cliente
-/// HTTP y estado con la transmisión a televisores, y reenvía el `Range` tal cual
-/// río arriba, que es justamente lo que acá no sirve. Metiendo esto adentro,
-/// cualquier error de acá podría llevarse puesto el casteo. Van separados a
-/// propósito.
+/// [RelayLocal] sirve para lo mismo por fuera —un servidor local que hace de
+/// intermediario— pero reenvía el `Range` tal cual río arriba, que es
+/// justamente lo que acá no sirve, y comparte servidor, cliente HTTP y estado
+/// con el rodeo de nodos caídos. Metiendo esto adentro, cualquier error de acá
+/// podría llevárselo puesto. Van separados a propósito.
 ///
 /// ── Qué pasa si algo falla ──────────────────────────────────────────────────
 ///
@@ -152,10 +151,9 @@ class BombaDeDatos {
       final servidor = await _levantar();
       final token = '${DateTime.now().microsecondsSinceEpoch}-${++_correlativo}';
       _archivos[token] = _Archivo(url, cabeceras ?? const {});
-      // Loopback y nada más: esto es para el reproductor de este equipo. El
-      // relay del casteo sí sale a la red, porque del otro lado hay otro
-      // aparato; acá anunciar la LAN sería servir el vídeo a toda la casa sin
-      // ningún motivo.
+      // Loopback y nada más: esto es para el reproductor de este equipo.
+      // Anunciar la LAN sería servir el vídeo a toda la casa sin ningún
+      // motivo.
       return 'http://127.0.0.1:${servidor.port}/bomba/$token';
     } catch (e) {
       logger.info('bomba · no se pudo levantar el servidor local: $e');

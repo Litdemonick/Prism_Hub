@@ -1,17 +1,16 @@
 import 'package:prismhub/utils/log.dart';
 
-/// El registro del casteo, en un solo lugar y sin nada del contenido.
+/// El registro del relay local, en un solo lugar y sin nada del contenido.
 ///
-/// Por qué existe: tres aparatos fallan de tres formas distintas y la app no
-/// contaba nada de lo que hacía, así que todo diagnóstico era adivinanza. Un
-/// televisor que no puede con el formato **acepta igual la orden** y muestra el
-/// título, o sea que desde afuera se ve idéntico a que funcione.
+/// Por qué existe: cuando el relay se mete en el medio para esquivar un nodo
+/// caído, todo lo que pasa ocurre por debajo y sin dejar rastro — un pedacito
+/// que no llegó y uno que se pidió a otro nodo se ven igual desde afuera.
 ///
 /// Todas las líneas llevan `[relay]` adelante para poder sacarlas del archivo
 /// de un tirón.
 ///
 /// **Nunca entra un título ni una dirección del contenido**: el archivo se
-/// comparte para diagnosticar y la causa está en la negociación con el aparato,
+/// comparte para diagnosticar y la causa está en qué nodo respondió y cuál no,
 /// no en qué vídeo era. Las direcciones pasan siempre por [donde], que cambia el
 /// servidor por un seudónimo estable — así se sigue viendo si los pedacitos
 /// salían de otro servidor que la lista, que sí es dato, sin decir de dónde.
@@ -66,24 +65,6 @@ class RelayLog {
               : '${e.key}: ${e.value}')
           .join(' | ');
 
-  /// Qué contestó un aparato DLNA a una orden.
-  ///
-  /// Un fallo de UPnP viaja como un cuerpo SOAP con `<errorCode>` adentro y
-  /// código HTTP 500, así que sin mirarlo todo error se veía igual. Los que más
-  /// aparecen: 701 (no hay nada cargado), 714 (no reconoce el formato), 716 (no
-  /// pudo bajar la dirección).
-  static String respuestaUpnp(String xml) {
-    final codigo =
-        RegExp(r'<errorCode>(\d+)</errorCode>').firstMatch(xml)?.group(1);
-    if (codigo == null) {
-      return xml.contains('Fault') ? 'fallo SOAP sin codigo' : 'aceptado';
-    }
-    final texto = RegExp(r'<errorDescription>([^<]*)</errorDescription>')
-        .firstMatch(xml)
-        ?.group(1)
-        ?.trim();
-    return 'error UPnP $codigo${texto == null || texto.isEmpty ? '' : ' ($texto)'}';
-  }
 
   static String _seudonimo(String host) =>
       (host.hashCode & 0xffff).toRadixString(16).padLeft(4, '0');

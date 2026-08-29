@@ -276,11 +276,6 @@ class _TutorialReproductorState extends State<TutorialReproductor>
           icono: Icons.hd_outlined,
         ),
         _Paso(
-          titulo: t('cast-title'),
-          detalle: t('cast-body'),
-          icono: Icons.cast_rounded,
-        ),
-        _Paso(
           titulo: t('settings-title'),
           detalle: t('settings-body'),
           icono: Icons.tune_rounded,
@@ -341,11 +336,6 @@ class _TutorialReproductorState extends State<TutorialReproductor>
         titulo: t('quality-title'),
         detalle: t('quality-body'),
         icono: Icons.hd_outlined,
-      ),
-      _Paso(
-        titulo: t('cast-title'),
-        detalle: t('cast-body'),
-        icono: Icons.cast_rounded,
       ),
       _Paso(
         titulo: t('settings-title'),
