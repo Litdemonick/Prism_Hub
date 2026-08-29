@@ -35,6 +35,8 @@ import 'package:prismhub/utils/bomba_de_datos.dart';
 import 'package:prismhub/controllers/watch/banco_de_pruebas.dart';
 import 'package:prismhub/controllers/watch/dibujado_de_video.dart';
 import 'package:prismhub/controllers/watch/frecuencia_de_pantalla.dart';
+import 'package:prismhub/controllers/watch/motor/motor_de_video.dart';
+import 'package:prismhub/controllers/watch/motor/motor_mpv.dart';
 import 'package:prismhub/controllers/watch/recorte_fmp4.dart';
 import 'package:prismhub/utils/watch_state.dart';
 import 'package:prismhub/data/services/database_service.dart';
@@ -111,6 +113,17 @@ class VideoPlayerController extends GetxController with WidgetsBindingObserver {
     player,
     configuration: DibujadoDeVideo.paraEsteAparato(),
   );
+
+  /// El motor de video detras de la fachada.
+  ///
+  /// Hoy siempre es mpv y `player`/`videoController` siguen accesibles para lo
+  /// que es propio de el (propiedades de libmpv, pistas, captura). Lo que gana
+  /// la app con esto es que la PANTALLA ya no arma el widget de video a mano:
+  /// se lo pide al motor. Ese es el punto donde los dos motores difieren de
+  /// verdad —textura contra superficie nativa— y tenerlo detras de la fachada
+  /// es lo que permite meter el segundo sin tocar la pantalla.
+  late final MotorDeVideo motor =
+      MotorMpv(player: player, videoController: videoController);
 
   final showSidebar = false.obs;
   final isOpenSidebar = false.obs;
@@ -4579,6 +4592,22 @@ class VideoPlayerController extends GetxController with WidgetsBindingObserver {
       _destinoDeSalto = null;
       cuadroCongelado.value = null;
       unawaited(anterior.limpiar());
+    }
+    // ── El rodeo se enciende SOLO si el motor lo necesita ─────────────────
+    //
+    // `RecorteFmp4` son 482 líneas que existen porque mpv se queda clavado al
+    // saltar dentro de una lista fMP4 (bug de ffmpeg, `mpv#15184`, cerrado
+    // como *not planned*). Es un rodeo para un defecto de UN motor, no algo
+    // que el reproductor necesite por sí mismo.
+    //
+    // Preguntándole al motor en vez de asumirlo, el día que corra uno que sí
+    // sabe saltar en fMP4 este camino se apaga solo, sin tocar nada acá. Y
+    // mientras tanto no cambia nada: mpv declara que no puede, así que sigue
+    // entrando igual que siempre.
+    if (motor.soporta(CapacidadDeMotor.saltoEnFmp4)) {
+      logger.info('recorte fMP4: no hace falta, ${motor.nombre} sabe saltar en '
+          'fMP4 por su cuenta');
+      return;
     }
     try {
       _recorte = await RecorteFmp4.preparar(
