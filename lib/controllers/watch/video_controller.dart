@@ -215,12 +215,12 @@ class VideoPlayerController extends GetxController with WidgetsBindingObserver {
     // El tope era 100, o sea el volumen original: con una pista grabada baja no
     // quedaba nada por hacer. Ahora llega hasta volumenMaximo.
     LogicalKeyboardKey.arrowUp: () {
-      final volume = player.state.volume + 5.0;
-      player.setVolume(volume.clamp(0.0, volumenMaximo));
+      final volume = motor.volumen + 5.0;
+      motor.ponerVolumen(volume.clamp(0.0, volumenMaximo));
     },
     LogicalKeyboardKey.arrowDown: () {
-      final volume = player.state.volume - 5.0;
-      player.setVolume(volume.clamp(0.0, volumenMaximo));
+      final volume = motor.volumen - 5.0;
+      motor.ponerVolumen(volume.clamp(0.0, volumenMaximo));
     },
   };
 
@@ -537,7 +537,7 @@ class VideoPlayerController extends GetxController with WidgetsBindingObserver {
   }
 
   // Flag de buffering YA corregido con la posición real — ver
-  // player.stream.buffering.listen más abajo. El flag crudo de mpv
+  // motor.cargas.listen más abajo. El flag crudo de mpv
   // (paused-for-cache) confirmado en vivo que a veces queda pegado en true
   // para siempre (el evento de "ya terminó de bufferizar" no siempre llega
   // por la plataforma), aunque el video ya esté reproduciendo frames nuevos
@@ -889,7 +889,7 @@ class VideoPlayerController extends GetxController with WidgetsBindingObserver {
     });
   }
 
-  // Los atajos de teclado llamaban a player.seek() DIRECTO, salteándose la
+  // Los atajos de teclado llamaban a motor.saltarA() DIRECTO, salteándose la
   // marca de búsqueda que sí hace seek(): con las teclas y las flechas la
   // imagen se congelaba sin ninguna rueda, aunque con la barra de progreso
   // funcionara. Todos pasan por acá.
@@ -901,7 +901,7 @@ class VideoPlayerController extends GetxController with WidgetsBindingObserver {
     if (dur > Duration.zero && to > dur) to = dur;
     final salto = (to - position.value).inSeconds;
     _anunciarSalto(salto);
-    // seek() del controlador y NO player.seek(): el primero junta los saltos
+    // seek() del controlador y NO motor.saltarA(): el primero junta los saltos
     // seguidos y sabe del recorte de fMP4. markSeeking lo hace por dentro, asi
     // que aca ya no va.
     unawaited(seek(to));
@@ -932,7 +932,7 @@ class VideoPlayerController extends GetxController with WidgetsBindingObserver {
   /// todo lo que lo mueva —las flechas, el deslizador, o lo que se agregue
   /// después— sin tener que acordarse de avisar en cada sitio.
   void _seguirVolumenLocal() {
-    _addSubscription(player.stream.volume.listen((v) {
+    _addSubscription(motor.volumenes.listen((v) {
       if (_disposed) return;
       final antes = _ultimoVolumen;
       _ultimoVolumen = v;
@@ -1483,7 +1483,7 @@ class VideoPlayerController extends GetxController with WidgetsBindingObserver {
 
     // 切换倍速
     _addWorker(ever(currentSpeed, (callback) {
-      player.setRate(callback);
+      motor.ponerVelocidad(callback);
     }));
 
     // 显示剧集列表
@@ -1503,7 +1503,7 @@ class VideoPlayerController extends GetxController with WidgetsBindingObserver {
     }));
 
     // 自动切换下一集
-    _addSubscription(player.stream.completed.listen((event) {
+    _addSubscription(motor.finales.listen((event) {
       // Cerrando: no se toca nada.
       //
       // Este aviso llega por un stream, y las suscripciones se cancelan en
@@ -1515,7 +1515,7 @@ class VideoPlayerController extends GetxController with WidgetsBindingObserver {
         return;
       }
       if (playMode.value == PlaylistMode.loop) {
-        player.seek(Duration.zero);
+        motor.saltarA(Duration.zero);
         safePlay();
         return;
       }
@@ -1551,15 +1551,15 @@ class VideoPlayerController extends GetxController with WidgetsBindingObserver {
         sendMessage(Message(Text('video.episode-finished'.i18n)));
         return;
       }
-      if (!player.state.buffering) {
+      if (!motor.cargando) {
         index.value++;
       }
     }));
 
     // 讀取現在的畫質
     _addSubscription(player.stream.height.listen((event) async {
-      if (player.state.width != null) {
-        final width = player.state.width;
+      if (motor.ancho != null) {
+        final width = motor.ancho;
         // Mismo nombre que en el menú de calidades: antes acá decía
         // "1920x1080" y en el menú otra cosa, y no se entendía cuál estaba
         // puesta.
@@ -1627,7 +1627,7 @@ class VideoPlayerController extends GetxController with WidgetsBindingObserver {
     }));
 
     // 自动恢复上次播放进度 (solo cuando el diálogo no lo maneja)
-    _addSubscription(player.stream.duration.listen((event) async {
+    _addSubscription(motor.duraciones.listen((event) async {
       if (_isAutoSeekPosition || event.inSeconds == 0) return;
       // Si hay un diálogo de resume pendiente, él maneja el seek — no interferir.
       if (_pendingResumeSeconds != null || resumePrompt.value != null) {
@@ -1677,7 +1677,7 @@ class VideoPlayerController extends GetxController with WidgetsBindingObserver {
           if (recorte != null) {
             // ── Con recorte NO se retoma por acá ─────────────────────────
             //
-            // Este camino restaura la posición guardada con un `player.seek()`
+            // Este camino restaura la posición guardada con un `motor.saltarA()`
             // en cuanto se conoce la duración. Con el recorte hace daño:
             //
             //  - es un salto de mpv sobre fMP4, o sea el que no funciona;
@@ -1696,7 +1696,7 @@ class VideoPlayerController extends GetxController with WidgetsBindingObserver {
                 'listener de duración — de eso se encarga el cartel');
           } else {
             _isAutoSeekPosition = true;
-            player.seek(Duration(seconds: guardado));
+            motor.saltarA(Duration(seconds: guardado));
             sendMessage(Message(Text('video.resume-last-playback'.i18n)));
           }
         }
@@ -1735,7 +1735,7 @@ class VideoPlayerController extends GetxController with WidgetsBindingObserver {
     }));
 
     // 总时长监听
-    _addSubscription(player.stream.duration.listen((event) {
+    _addSubscription(motor.duraciones.listen((event) {
       // Con recorte, mpv solo conoce el largo del pedazo que se le dio. La
       // barra tiene que seguir mostrando el episodio entero, o al saltar al
       // minuto 20 el vídeo "duraría" 91 minutos en vez de 111.
@@ -1749,7 +1749,7 @@ class VideoPlayerController extends GetxController with WidgetsBindingObserver {
     }));
 
     // 监听播放状态
-    _addSubscription(player.stream.playing.listen((event) {
+    _addSubscription(motor.reproducciones.listen((event) {
       isPlaying.value = event;
       if (event) {
         unawaited(_touchHistory());
@@ -1796,7 +1796,7 @@ class VideoPlayerController extends GetxController with WidgetsBindingObserver {
     }));
 
     // 监听进度
-    _addSubscription(player.stream.position.listen((crudo) {
+    _addSubscription(motor.posiciones.listen((crudo) {
       // Con recorte, mpv cuenta desde el principio del PEDAZO que se le dio, no
       // del episodio. Se traduce acá arriba, una sola vez, para que todo lo de
       // abajo —aceptar la posición, la notificación, el guardado del minuto—
@@ -1854,7 +1854,7 @@ class VideoPlayerController extends GetxController with WidgetsBindingObserver {
           if (_positionAfterSeek == null) {
             // El salto en sí. Todavía no hay reproducción.
             _positionAfterSeek = event;
-          } else if (event != _positionAfterSeek && !player.state.buffering) {
+          } else if (event != _positionAfterSeek && !motor.cargando) {
             // Segunda posición distinta y sin buffer pendiente: ya está
             // reproduciendo. Si el tramo estaba cargado esto llega en el
             // frame siguiente y la rueda apenas parpadea; si no, se queda
@@ -1919,11 +1919,11 @@ class VideoPlayerController extends GetxController with WidgetsBindingObserver {
     // El controlador declaraba este dato pero no lo llenaba nadie: la barra lo
     // leía de mpv por su cuenta. Va acá, que es donde vive el resto del estado
     // de reproducción, y así hay UN solo lugar del que leerlo.
-    _addSubscription(player.stream.buffer.listen((event) {
+    _addSubscription(motor.colchones.listen((event) {
       buffer.value = event;
     }));
 
-    _addSubscription(player.stream.buffering.listen((buffering) {
+    _addSubscription(motor.cargas.listen((buffering) {
       // Si la posición avanzó hace menos de 800ms, el flag crudo está
       // desfasado (evento de "terminó de bufferizar" perdido) — se ignora.
       final advancedRecently = _lastPositionAdvanceAt != null &&
@@ -1957,7 +1957,7 @@ class VideoPlayerController extends GetxController with WidgetsBindingObserver {
         // saber si es caudal o es otra cosa.
         _bufferingStallTimer = Timer(const Duration(seconds: 35), () {
           // Pausado no está cargando nada: no hay atasco que registrar.
-          if (!player.state.playing) return;
+          if (!motor.reproduciendo) return;
           logger.warning('Lleva 35 s cargando en "${currentServerName.value}". '
               'Se sigue esperando: no se da por caído ni se cambia de servidor '
               'solo.');
@@ -1967,7 +1967,7 @@ class VideoPlayerController extends GetxController with WidgetsBindingObserver {
     }));
 
     // 错误监听 — detectar fallo de reproducción
-    _addSubscription(player.stream.error.listen((event) {
+    _addSubscription(motor.errores.listen((event) {
       // "Could not open codec": casi siempre es el decodificador por HARDWARE
       // que no puede con este vídeo, no un vídeo roto.
       //
@@ -2360,7 +2360,7 @@ class VideoPlayerController extends GetxController with WidgetsBindingObserver {
           }
           // Servidor cargó OK — iniciar en pausa para que el usuario
           // decida cuándo reproducir.
-          await player.pause();
+          await motor.pausar();
           if (watchData!.audioTrack != null) {
             await player.setAudioTrack(
               AudioTrack.uri(watchData!.audioTrack!),
@@ -2463,7 +2463,7 @@ class VideoPlayerController extends GetxController with WidgetsBindingObserver {
     isSeeking.value = false;
     _seekWatchdog?.cancel();
     try {
-      player.pause();
+      motor.pausar();
     } catch (_) {
       // Si el reproductor ya no está, no hay nada que pausar.
     }
@@ -2571,7 +2571,7 @@ class VideoPlayerController extends GetxController with WidgetsBindingObserver {
     try {
       // Con tope: si el reproductor esta colgado, el aviso NO puede quedarse
       // esperandolo. Vale mas mostrar la actualizacion que apagar el audio.
-      await c.player.pause().timeout(const Duration(seconds: 2));
+      await c.motor.pausar().timeout(const Duration(seconds: 2));
     } catch (_) {
       // Un reproductor a medio cerrar puede rechazar la orden. No es motivo
       // para no mostrar el aviso.
@@ -2614,8 +2614,8 @@ class VideoPlayerController extends GetxController with WidgetsBindingObserver {
     // hilos de media_kit que ya está documentado más abajo— no arrastra a las
     // otras. Con `await` una sola bastaría para que no se ejecute ninguna.
     try {
-      unawaited(c.player.setVolume(0).catchError((_) {}));
-      unawaited(c.player.pause().catchError((_) {}));
+      unawaited(c.motor.ponerVolumen(0).catchError((_) {}));
+      unawaited(c.motor.pausar().catchError((_) {}));
       unawaited(c.player.stop().catchError((_) {}));
     } catch (e) {
       // Ni siquiera esto puede tirar: estamos en el camino de cierre y una
@@ -2664,7 +2664,7 @@ class VideoPlayerController extends GetxController with WidgetsBindingObserver {
 
   // Posición a restaurar después de una recuperación automática a mitad de
   // episodio (corte real de stream, no un fallo de conexión inicial — ver
-  // player.stream.error.listen y el watchdog de buffering). switchServer()
+  // motor.errores.listen y el watchdog de buffering). switchServer()
   // siempre abre la fuente nueva desde 0; sin esto, un simple hipo de red a
   // mitad de capítulo reiniciaba el episodio entero en vez de seguir donde
   // se cortó.
@@ -2695,8 +2695,8 @@ class VideoPlayerController extends GetxController with WidgetsBindingObserver {
     // corriendo y gastando, y si algo lo reanuda vuelve a oírse. Los dos van en
     // paralelo, alcanza con que llegue uno.
     try {
-      unawaited(player.setVolume(0).catchError((_) {}));
-      unawaited(player.pause().catchError((_) {}));
+      unawaited(motor.ponerVolumen(0).catchError((_) {}));
+      unawaited(motor.pausar().catchError((_) {}));
     } catch (_) {}
 
     ++_switchServerGen;
@@ -2811,7 +2811,7 @@ class VideoPlayerController extends GetxController with WidgetsBindingObserver {
     final frame = saveHistory ? await _capturarFrameActual() : null;
 
     // Recien aca se pausa: el fotograma ya esta tomado.
-    await player.pause().timeout(const Duration(seconds: 2)).catchError((_) {});
+    await motor.pausar().timeout(const Duration(seconds: 2)).catchError((_) {});
 
     _beginPlaybackShutdown();
     await Future<void>.delayed(const Duration(milliseconds: 80));
@@ -2866,7 +2866,7 @@ class VideoPlayerController extends GetxController with WidgetsBindingObserver {
     // buscaba —que deje de sonar apenas se toca salir— sin competir con nada.
     // El apagado, con la captura adentro, va más abajo, cuando la ventana ya
     // dejó de moverse.
-    unawaited(player.setVolume(0).catchError((_) {}));
+    unawaited(motor.ponerVolumen(0).catchError((_) {}));
 
     // Con TOPE, y sin dejar que un fallo frene la salida.
     //
@@ -2980,7 +2980,7 @@ class VideoPlayerController extends GetxController with WidgetsBindingObserver {
         hasRenderedFrame.value &&
         serverFailedMessage.value.isEmpty &&
         webViewFallback.value == null &&
-        player.state.duration > Duration.zero;
+        motor.duracion > Duration.zero;
     if (canResumeLoadedNativeServer) {
       currentServerName.value = name;
       awaitingServerChoice.value = false;
@@ -3060,7 +3060,7 @@ class VideoPlayerController extends GetxController with WidgetsBindingObserver {
           _lastOpenedServerName = name;
           _markNativePlayback(name);
           if (_pendingResumeSeconds != null) {
-            await player.pause();
+            await motor.pausar();
             // Pausado a proposito para preguntar: la rueda no puede quedar
             // girando detras del dialogo. Ver hasRenderedFrame.
             _marcarQueYaSeVe('pausado a propósito para preguntar');
@@ -3093,7 +3093,7 @@ class VideoPlayerController extends GetxController with WidgetsBindingObserver {
           _lastOpenedServerName = name;
           _markNativePlayback(name);
           if (_pendingResumeSeconds != null) {
-            await player.pause();
+            await motor.pausar();
             // Pausado a proposito para preguntar: la rueda no puede quedar
             // girando detras del dialogo. Ver hasRenderedFrame.
             _marcarQueYaSeVe('pausado a propósito para preguntar');
@@ -3158,7 +3158,7 @@ class VideoPlayerController extends GetxController with WidgetsBindingObserver {
       // así que abrir vía switchServer (elegido a mano o recordado) nunca
       // mostraba el diálogo y arrancaba de cero en silencio.
       if (_pendingResumeSeconds != null) {
-        await player.pause();
+        await motor.pausar();
         // Pausado a proposito para preguntar: la rueda no puede quedar
         // girando detras del dialogo. Ver hasRenderedFrame.
         _marcarQueYaSeVe('pausado a propósito para preguntar');
@@ -3468,7 +3468,7 @@ class VideoPlayerController extends GetxController with WidgetsBindingObserver {
   // 切换画质
   switchQuality(String qualityUrl) async {
     final headers = watchData!.headers;
-    final currentSecond = player.state.position.inSeconds;
+    final currentSecond = motor.posicion.inSeconds;
     await _ensureVideoSurfaceMounted();
     if (_disposed) return;
     await player.open(
@@ -3478,7 +3478,7 @@ class VideoPlayerController extends GetxController with WidgetsBindingObserver {
     // Antes este timer no se guardaba en ningún campo ni tenía límite de
     // intentos — si el seek real cae en el keyframe más cercano y nunca
     // coincide exactamente con currentSecond (pasa seguido), quedaba
-    // llamando player.seek()/player.state cada segundo para siempre, y si
+    // llamando motor.saltarA()/player.state cada segundo para siempre, y si
     // el usuario cerraba el reproductor antes de que coincidiera, sobre un
     // Player ya dispuesto. Guardado en un campo (cancelado en onClose) +
     // límite de 10 intentos como red de seguridad.
@@ -3486,8 +3486,8 @@ class VideoPlayerController extends GetxController with WidgetsBindingObserver {
     var attempts = 0;
     _qualitySwitchTimer = Timer.periodic(const Duration(seconds: 1), (timer) {
       attempts++;
-      player.seek(Duration(seconds: currentSecond));
-      if (player.state.position.inSeconds == currentSecond || attempts >= 10) {
+      motor.saltarA(Duration(seconds: currentSecond));
+      if (motor.posicion.inSeconds == currentSecond || attempts >= 10) {
         timer.cancel();
       }
     });
@@ -3632,7 +3632,7 @@ class VideoPlayerController extends GetxController with WidgetsBindingObserver {
       // importa, porque entonces tampoco está sonando.
       if (Platform.isAndroid) {
         try {
-          unawaited(player.pause().catchError((_) {}));
+          unawaited(motor.pausar().catchError((_) {}));
         } catch (_) {}
       }
       // refreshHome en false: la pantalla de Home no está visible en ese
@@ -3715,10 +3715,10 @@ class VideoPlayerController extends GetxController with WidgetsBindingObserver {
       final conRecorte = _recorte != null;
       final totalSeconds = duration.value.inSeconds > 0 || conRecorte
           ? duration.value.inSeconds
-          : player.state.duration.inSeconds;
+          : motor.duracion.inSeconds;
       final progressSeconds = position.value.inSeconds > 0 || conRecorte
           ? position.value.inSeconds
-          : player.state.position.inSeconds;
+          : motor.posicion.inSeconds;
       await DatabaseService.putHistory(
         History()
           ..url = detailUrl
@@ -3884,7 +3884,7 @@ class VideoPlayerController extends GetxController with WidgetsBindingObserver {
       // ── Se guarda la posición del EPISODIO, no la de mpv ─────────────────
       //
       // Con el recorte de fMP4, mpv reproduce un pedazo que arranca en cero, así
-      // que `player.state.position` es la posición DENTRO del pedazo. Guardando
+      // que `motor.posicion` es la posición DENTRO del pedazo. Guardando
       // eso, estar en el minuto 14 de un episodio abierto desde el 13:54 se
       // anotaba como **6 segundos**, y al volver el diálogo ofrecía continuar en
       // 00:06. Visto en vivo.
@@ -3984,7 +3984,7 @@ class VideoPlayerController extends GetxController with WidgetsBindingObserver {
 
   // Guarda progreso mientras se mira por el fallback de WebView (botón
   // "Abrir en el navegador"). Ese modo no usa el player nativo (media_kit),
-  // así que _saveHistory() de arriba no sirve: no hay player.state.position
+  // así que _saveHistory() de arriba no sirve: no hay motor.posicion
   // ni player.screenshot() real. Se usa en cambio un contador de segundos
   // transcurridos (aproximado, no la posición real del video del sitio) y
   // una captura de la propia WebView como portada — mismo mecanismo, otra
@@ -4388,8 +4388,8 @@ class VideoPlayerController extends GetxController with WidgetsBindingObserver {
       await np.setProperty('video-crop', '');
       return (await np.getProperty('video-crop')).trim().isEmpty;
     }
-    final w = player.state.width ?? 0;
-    final h = player.state.height ?? 0;
+    final w = motor.ancho ?? 0;
+    final h = motor.alto ?? 0;
     if (w <= 1 || h <= 1) return false;
 
     final mitad = w ~/ 2;
@@ -4807,7 +4807,7 @@ class VideoPlayerController extends GetxController with WidgetsBindingObserver {
       var velocidad = '';
       // Para detectar que no avanza: si el decodificador no llega, seguir
       // esperando no arregla nada y deja al usuario mirando una imagen quieta.
-      var ultimaVista = player.state.position;
+      var ultimaVista = motor.posicion;
       var quietoDesde = DateTime.now();
       while (!_disposed && reloj.elapsed < const Duration(seconds: 8)) {
         // Si ya se pidió otro salto, este destino quedó viejo: seguir corriendo
@@ -4816,7 +4816,7 @@ class VideoPlayerController extends GetxController with WidgetsBindingObserver {
           logger.info('recorte fMP4: se corta el afinado, hay otro salto');
           break;
         }
-        final donde = player.state.position;
+        final donde = motor.posicion;
         final resta = falta - donde;
         if (resta <= Duration.zero) break;
 
@@ -4851,7 +4851,7 @@ class VideoPlayerController extends GetxController with WidgetsBindingObserver {
     if (_disposed) return;
     logger.info('recorte fMP4: afinado corriendo ${falta.inMilliseconds} ms a 8x '
         'en ${reloj.elapsedMilliseconds} ms reales → '
-        '${(player.state.position + recorte.desfase).inSeconds}s');
+        '${(motor.posicion + recorte.desfase).inSeconds}s');
   }
 
   /// Suelta el cuadro congelado cuando el vídeo volvió a avanzar.
@@ -4890,8 +4890,8 @@ class VideoPlayerController extends GetxController with WidgetsBindingObserver {
       // Y además tiene que estar reproduciendo: con el búfer todavía llenándose
       // la posición se mueve pero la imagen no está, y destapar ahí es
       // exactamente el parpadeo que se quiere evitar.
-      if (player.state.position - base > const Duration(milliseconds: 120) &&
-          !player.state.buffering) {
+      if (motor.posicion - base > const Duration(milliseconds: 120) &&
+          !motor.cargando) {
         break;
       }
     }
@@ -4931,7 +4931,7 @@ class VideoPlayerController extends GetxController with WidgetsBindingObserver {
 
   /// Rehace la lista para que empiece en [destino] y la abre.
   ///
-  /// Es lo que reemplaza al `player.seek()` cuando hay recorte. Cuesta una
+  /// Es lo que reemplaza al `motor.saltarA()` cuando hay recorte. Cuesta una
   /// reapertura (~1,5 s medidos en zilla), pero hoy el salto directo
   /// sencillamente no llega nunca.
   Future<void> _saltarConRecorte(RecorteFmp4 recorte, Duration destino) async {
@@ -4992,7 +4992,7 @@ class VideoPlayerController extends GetxController with WidgetsBindingObserver {
     _clearSeeking();
     // La barra vuelve a donde el vídeo está de verdad, no donde se quiso ir.
     if (_recorte != null) {
-      position.value = player.state.position + _recorte!.desfase;
+      position.value = motor.posicion + _recorte!.desfase;
     }
   }
 
@@ -5045,7 +5045,7 @@ class VideoPlayerController extends GetxController with WidgetsBindingObserver {
 
     // Dónde está el vídeo AHORA, para que un salto adelante no termine detrás.
     // Es la posición real del episodio, no la del pedazo. Ver listaDesde.
-    final estabaEn = player.state.position + recorte.desfase;
+    final estabaEn = motor.posicion + recorte.desfase;
     final ruta = await recorte.listaDesde(destino, sinQuedarAtrasDe: estabaEn);
     // La barra pasa YA al minuto donde va a quedar el vídeo, y se queda ahí.
     //
@@ -5085,7 +5085,7 @@ class VideoPlayerController extends GetxController with WidgetsBindingObserver {
     // Se intentaron las dos formas de cerrar esa diferencia, y las DOS están
     // descartadas con medición. No reintentarlas:
     //
-    //  1. `player.seek()` corto después de abrir → no hace nada. Es el mismo
+    //  1. `motor.saltarA()` corto después de abrir → no hace nada. Es el mismo
     //     bug de fMP4 en pequeño: el registro decía «ajuste fino de 5000 ms» y
     //     el vídeo se quedaba igual en 11 s.
     //
@@ -5140,14 +5140,14 @@ class VideoPlayerController extends GetxController with WidgetsBindingObserver {
       // cuando ya llegó.
       if (!_reproduciaAntesDelSalto && _saltoPendiente == null) {
         try {
-          player.pause();
+          motor.pausar();
         } catch (_) {}
       }
       // La imagen se destapa recién cuando el vídeo REPRODUCE en el punto
       // nuevo. Si hubo afinado, ya está ahí, así que se cuenta desde ese punto
       // y no desde cero.
       unawaited(_soltarCuadroCuandoHayaImagen(
-          desdeAquiSuma: player.state.position));
+          desdeAquiSuma: motor.posicion));
     } catch (e) {
       _rendirseConElSalto();
       logger.warning('recorte fMP4: no se pudo reabrir en $destino', e);
@@ -5291,11 +5291,11 @@ class VideoPlayerController extends GetxController with WidgetsBindingObserver {
       if (!completer.isCompleted) completer.complete(ok);
     }
 
-    subs.add(player.stream.error.listen((e) {
+    subs.add(motor.errores.listen((e) {
       logger.warning('media_kit no pudo reproducir ($url): $e');
       finish(false);
     }));
-    subs.add(player.stream.duration.listen((d) {
+    subs.add(motor.duraciones.listen((d) {
       if (d > Duration.zero) finish(true);
     }));
     subs.add(player.stream.videoParams.listen((p) {
@@ -5341,7 +5341,7 @@ class VideoPlayerController extends GetxController with WidgetsBindingObserver {
         //
         //  - la lista ya se armó desde el punto que corresponde, así que no hay
         //    nada que recuperar;
-        //  - es un `player.seek()` sobre fMP4, o sea el salto que no funciona;
+        //  - es un `motor.saltarA()` sobre fMP4, o sea el salto que no funciona;
         //  - y devolvía al minuto viejo justo cuando se había pedido el
         //    principio. Reportado en vivo: cancelar el cartel de continuar y
         //    querer ir al comienzo terminaba de vuelta en el 19.
@@ -5354,7 +5354,7 @@ class VideoPlayerController extends GetxController with WidgetsBindingObserver {
         // Recuperación de un corte a mitad de capítulo (ver
         // _midStreamResumeAt) — seguir donde se quedó en vez de arrancar
         // la fuente nueva desde 0.
-        player.seek(_midStreamResumeAt!);
+        motor.saltarA(_midStreamResumeAt!);
         _midStreamResumeAt = null;
       }
     }
@@ -6049,7 +6049,7 @@ class VideoPlayerController extends GetxController with WidgetsBindingObserver {
 
     for (var intento = 1; intento <= 3; intento++) {
       try {
-        await player.seek(destino);
+        await motor.saltarA(destino);
       } catch (e) {
         logger.warning('no se pudo saltar a $destino', e);
         return;
@@ -6194,7 +6194,7 @@ class VideoPlayerController extends GetxController with WidgetsBindingObserver {
       _lastOpenedServerName = name;
       _markNativePlayback(name);
       if (_pendingResumeSeconds != null) {
-        await player.pause();
+        await motor.pausar();
         // Pausado a proposito para preguntar: la rueda no puede quedar
         // girando detras del dialogo. Ver hasRenderedFrame.
         _marcarQueYaSeVe('pausado a propósito para preguntar');
@@ -6467,7 +6467,7 @@ class VideoPlayerController extends GetxController with WidgetsBindingObserver {
     // Transmitiendo, quien reproduce es el televisor.
     //
     try {
-      player.play();
+      motor.reproducir();
     } catch (e) {
       logger.severe('safePlay() error: $e');
     }
@@ -6476,7 +6476,7 @@ class VideoPlayerController extends GetxController with WidgetsBindingObserver {
   void safePause() {
     if (_disposed) return;
     try {
-      player.pause();
+      motor.pausar();
     } catch (e) {
       logger.severe('safePause() error: $e');
     }
@@ -6550,7 +6550,7 @@ class VideoPlayerController extends GetxController with WidgetsBindingObserver {
     if (_recorte != null) {
       _reproduciaAntesDelSalto = isPlaying.value;
       try {
-        player.pause();
+        motor.pausar();
       } catch (_) {}
     }
 
@@ -6582,7 +6582,7 @@ class VideoPlayerController extends GetxController with WidgetsBindingObserver {
       await _saltarConRecorte(recorte, duration);
       return;
     }
-    player.seek(duration);
+    motor.saltarA(duration);
   }
 
 

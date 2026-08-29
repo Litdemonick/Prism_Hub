@@ -108,6 +108,9 @@ class MotorMpv implements MotorDeVideo {
   Stream<bool> get cargas => player.stream.buffering;
 
   @override
+  Stream<double> get volumenes => player.stream.volume;
+
+  @override
   Stream<String> get errores => player.stream.error;
 
   @override

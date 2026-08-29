@@ -86,6 +86,7 @@ abstract class MotorDeVideo {
   Stream<Duration> get colchones;
   Stream<bool> get reproducciones;
   Stream<bool> get cargas;
+  Stream<double> get volumenes;
   Stream<String> get errores;
 
   /// El vídeo llegó al final. Es lo que encadena el episodio siguiente.

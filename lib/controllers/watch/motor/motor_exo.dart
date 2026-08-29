@@ -46,6 +46,7 @@ class MotorExo implements MotorDeVideo {
   final _colchones = StreamController<Duration>.broadcast();
   final _reproducciones = StreamController<bool>.broadcast();
   final _cargas = StreamController<bool>.broadcast();
+  final _volumenes = StreamController<double>.broadcast();
   final _errores = StreamController<String>.broadcast();
   final _finales = StreamController<bool>.broadcast();
 
@@ -60,6 +61,7 @@ class MotorExo implements MotorDeVideo {
   Duration? _ultimoColchon;
   bool? _ultimoReproduciendo;
   bool? _ultimoCargando;
+  double? _ultimoVolumen;
   bool _yaAvisoElFinal = false;
 
   @override
@@ -77,6 +79,7 @@ class MotorExo implements MotorDeVideo {
     _ultimoColchon = null;
     _ultimoReproduciendo = null;
     _ultimoCargando = null;
+    _ultimoVolumen = null;
     _yaAvisoElFinal = false;
 
     final cx = VideoPlayerController.networkUrl(
@@ -128,6 +131,11 @@ class MotorExo implements MotorDeVideo {
       _ultimoCargando = v.isBuffering;
       if (!_cargas.isClosed) _cargas.add(v.isBuffering);
     }
+    final vol = v.volume * 100;
+    if (vol != _ultimoVolumen) {
+      _ultimoVolumen = vol;
+      if (!_volumenes.isClosed) _volumenes.add(vol);
+    }
 
     // El final se avisa UNA vez.
     //
@@ -165,6 +173,7 @@ class MotorExo implements MotorDeVideo {
       _colchones,
       _reproducciones,
       _cargas,
+      _volumenes,
       _errores,
       _finales,
     ]) {
@@ -265,6 +274,9 @@ class MotorExo implements MotorDeVideo {
 
   @override
   Stream<bool> get cargas => _cargas.stream;
+
+  @override
+  Stream<double> get volumenes => _volumenes.stream;
 
   @override
   Stream<String> get errores => _errores.stream;
