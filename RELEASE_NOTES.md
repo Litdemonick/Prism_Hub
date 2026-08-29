@@ -1,33 +1,72 @@
-## PrismHub v1.0.41 — Android TV: correcciones del reproductor
+## PrismHub v1.0.42 — El reproductor, por dentro
 
-> 🔧 **Corrige tres problemas introducidos o detectados en la 1.0.40**: el
-> video que se veía cuadro por cuadro, los controles que no respondían, y
-> el reproductor que quedaba esperando sin salida.
+> 📺 **Dos cambios apuntan al vídeo en televisor**, que es lo que peor
+> andaba: la pantalla ahora se pone a la frecuencia del vídeo, y se suma un
+> segundo motor de reproducción que se puede elegir a mano para probarlo.
 
 > ⚠️ **La app sigue en mantenimiento general.** Se la sigue reestructurando
 > por dentro, así que es posible que te cruces con fallos o con cosas a
 > medio terminar, también en teléfono y en PC. Si encontrás algo roto,
 > reportalo desde Ajustes → Reportar.
 
-### 📺 Android TV — reproductor
+### 📺 El vídeo en televisor
 
-- **El video ya no debería verse cuadro por cuadro.** En la 1.0.40 se
-  activó un descarte de imagen demasiado agresivo que, al saltear cuadros
-  que otros necesitan como referencia, dejaba la imagen pegada y avanzando
-  a tirones. Se revirtió.
-- **Los controles vuelven a responder.** El indicador de velocidad de red
-  consultaba al motor de video cada 2 segundos, compitiendo con él en el
-  mismo hilo del que dependen la imagen y las teclas del mando. Ahora solo
-  consulta cuando los controles están a la vista.
-- **Dar play con el servidor ya elegido.** Si ya había un servidor
-  seleccionado, había que bajar hasta la lista y volver a confirmarlo para
-  que arrancara. Ahora el botón OK arranca directamente.
-- **"Continuar viendo" ya no puede dejar el reproductor trabado.** Ese
-  aviso bloqueaba todo hasta responderlo, y en televisor podía quedar sin
-  recibir el control remoto. Ahora retoma solo y avisa sin bloquear —
-  con la flecha izquierda volvés al principio.
-- **Colchón de descarga menos recortado**, para que un video pesado no se
-  quede sin datos.
+- **La pantalla se pone a la frecuencia del vídeo.** Casi todo el anime y
+  las películas van a 24 cuadros por segundo, y un televisor va a 60. Sin
+  pedirle que cambie, esos 24 cuadros se reparten en 60 refrescos: unos
+  duran dos y otros tres, y eso se ve como un tirón en cualquier
+  movimiento de cámara. No era falta de potencia — las cuentas no daban.
+  Ahora se le pide el modo que corresponde al abrir el vídeo, y se lo
+  devuelve al salir. Si el televisor no deja cambiarlo, se reproduce igual
+  que antes.
+- **El dibujado se ajusta al aparato.** Hasta ahora el televisor más
+  modesto y la PC más nueva recibían exactamente la misma configuración.
+  Ahora un aparato de gama baja dibuja a una resolución acotada, que se
+  nota mucho menos que una imagen a tirones.
+
+### 🔧 Segundo motor de reproducción (para probar)
+
+En **Ajustes → Reproductor** aparece, solo en Android, la opción de elegir
+con qué motor se reproduce: el de siempre o **ExoPlayer**, el nativo de
+Android.
+
+- Queda en **Automático**, que usa el de siempre. El nuevo se elige a mano.
+- Está para probar: si un servidor va mal con uno, cambiás y volvés a abrir
+  el episodio.
+- Dos motivos para que exista: ExoPlayer sabe saltar en listas donde el
+  motor actual se queda clavado, y dibuja sobre una superficie del sistema
+  en vez de pasar por dos capas de gráficos.
+
+> Es temporal. Cuando esté claro cuál conviene en cada caso, la app va a
+> elegir sola y el ajuste desaparece.
+
+### 📖 Lectura
+
+- **Se corrigió el salto hacia atrás al desplazar en modo cascada.** El
+  hueco que se reservaba para cada página no tenía relación con el alto que
+  la página iba a tener, así que al terminar de cargar el contenido se
+  reacomodaba de golpe. Pasaba en cualquier extensión de lectura.
+
+### 🧹 Limpieza
+
+- **Se retiró la transmisión a otros aparatos** (el botón de enviar el
+  vídeo a un televisor o Chromecast). Eran más de seis mil líneas que
+  complicaban el reproductor por dentro y hacían más difícil arreglar lo
+  que de verdad se usa. Puede volver más adelante, ya sobre una base
+  ordenada.
+
+### 🛠️ Por dentro
+
+- **Si la app se cierra sola, ahora queda registrado.** Un cierre por un
+  fallo del sistema no dejaba ningún rastro, así que no había forma de
+  perseguirlo. Ahora el arranque siguiente lo anota con cuánto duró la
+  sesión y en qué aparato. Si te pasa, exportá el registro desde Ajustes.
+- **Cada servidor deja anotado cómo le fue**: si reprodujo de forma nativa
+  o hizo falta el navegador interno, y cuánto tardó en aparecer la imagen.
+  Sirve para ir revisando extensión por extensión cuáles conviene mejorar.
+- **Las actualizaciones pueden publicarse por plataforma.** Una corrección
+  que solo toca Android ya no obliga a Windows y Linux a actualizar por un
+  archivo que no cambió para ellos.
 
 ---
 
@@ -73,16 +112,16 @@
 
 | Archivo | Para |
 |---|---|
-| **`PrismHub-setup-windows-v1.0.41.exe`** | **Instalador.** Lo normal: instala y crea el acceso directo |
-| `PrismHub-v1.0.41-windows-x64.zip` | Portable: se descomprime y se ejecuta, sin instalar |
+| **`PrismHub-setup-windows-v1.0.42.exe`** | **Instalador.** Lo normal: instala y crea el acceso directo |
+| `PrismHub-v1.0.42-windows-x64.zip` | Portable: se descomprime y se ejecuta, sin instalar |
 
 ### 🐧 Linux
 
 | Archivo | Para |
 |---|---|
-| `PrismHub-v1.0.41-linux-x64.tar.gz` | Se descomprime y se ejecuta |
+| `PrismHub-v1.0.42-linux-x64.tar.gz` | Se descomprime y se ejecuta |
 
-> Los archivos que llevan la versión en el nombre (`v1.0.41`) quedan fijos en
+> Los archivos que llevan la versión en el nombre (`v1.0.42`) quedan fijos en
 > esta publicación. Los de Android que **no** la llevan apuntan siempre a la
 > más nueva — son los que conviene usar para un enlace o un código que quede
 > guardado.
