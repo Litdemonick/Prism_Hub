@@ -14,6 +14,7 @@ import 'package:prismhub/utils/i18n.dart';
 import 'package:prismhub/utils/modo_app.dart';
 import 'package:prismhub/utils/request.dart';
 import 'package:prismhub/utils/prismhub_storage.dart';
+import 'package:prismhub/utils/platform_tv.dart';
 import 'package:prismhub/utils/router.dart';
 import 'package:prismhub/views/widgets/button.dart';
 import 'package:prismhub/views/widgets/home/home_theme.dart';
@@ -129,47 +130,176 @@ class ApplicationUtils {
     return hasInnoUninstaller || lower.contains(r'\program files');
   }
 
-  /// ¿El release está COMPLETO? Tiene que traer el archivo de las tres
-  /// plataformas: Windows, Linux y Android.
+  /// ¿Todavía no está claro qué trae este release — nada subido aún, o
+  /// alguno de sus archivos a medias?
   ///
   /// Cada job del workflow sube lo suyo al terminar, así que un release recién
   /// publicado pasa por estados intermedios — visto en vivo: Linux listo a los
-  /// 4 minutos, Windows y Android todavía compilando. Si en esa ventana se
-  /// anuncia la versión nueva, quien la reciba se encuentra con una descarga
-  /// que no existe, o peor, con un release al que después le falta su archivo
-  /// porque ese job falló.
+  /// 4 minutos, Windows y Android todavía compilando. Un asset a medio subir
+  /// aparece en la API con state "uploaded" recién cuando terminó; cualquier
+  /// otro estado significa que sigue en curso.
   ///
-  /// Mientras falte cualquiera de las tres, no se avisa a NADIE. Se vuelve a
-  /// mirar en la próxima comprobación y, cuando esté entero, llega solo.
-  static bool _releaseCompleto(dynamic assets, String tagName) {
+  /// Una lista de assets VACÍA cuenta igual como "todavía en curso" — no como
+  /// "no trae nada para mí" —: un release recién creado empieza sin ningún
+  /// archivo listado hasta que el primer job termina de subir el suyo, y en
+  /// esa ventana no se sabe todavía si va a incluir esta plataforma o no.
+  static bool _algoTodaviaSubiendo(dynamic assets) {
     try {
       final list = (assets as List).cast<Map<String, dynamic>>();
-      final nombres = list
+      if (list.isEmpty) return true;
+      return list.any((a) {
+        final estado = (a['state'] as String?)?.toLowerCase();
+        return estado != null && estado != 'uploaded';
+      });
+    } catch (_) {
+      // Ante un formato inesperado se asume que sigue en curso: no avisar de
+      // más es preferible a mandar a alguien a una descarga rota.
+      return true;
+    }
+  }
+
+  /// ¿Este release trae el archivo de la plataforma en la que corre la app?
+  ///
+  /// Desde que un release puede publicarse para UNA SOLA plataforma (ver
+  /// `_ultimoReleaseParaEstaPlataforma`), ya no tiene sentido pedir las tres
+  /// juntas acá: un release hecho a propósito solo para Android, por
+  /// ejemplo, nunca va a traer el instalador de Windows, y eso no lo vuelve
+  /// "incompleto" para quien SÍ corre en Android.
+  static bool _traeEstaPlataforma(dynamic assets) {
+    try {
+      final nombres = (assets as List)
+          .cast<Map<String, dynamic>>()
           .map((a) => (a['name'] as String?)?.toLowerCase() ?? '')
           .where((n) => n.isNotEmpty)
           .toList();
       if (nombres.isEmpty) return false;
-
-      // Un asset a medio subir aparece en la API con state "uploaded" recién
-      // cuando terminó; cualquier otro estado significa que sigue en curso.
-      final subiendo = list.any((a) {
-        final estado = (a['state'] as String?)?.toLowerCase();
-        return estado != null && estado != 'uploaded';
-      });
-      if (subiendo) return false;
-
-      final hayAndroid = nombres.any((n) => n.endsWith('.apk'));
-      final hayLinux = nombres.any((n) => n.contains('linux'));
+      if (Platform.isAndroid) return nombres.any((n) => n.endsWith('.apk'));
+      if (Platform.isLinux) return nombres.any((n) => n.contains('linux'));
       // En Windows puede venir el instalador, el comprimido, o los dos.
-      final hayWindows = nombres.any(
-        (n) => n.endsWith('.exe') || n.contains('windows'),
-      );
-      return hayAndroid && hayLinux && hayWindows;
+      return nombres.any((n) => n.endsWith('.exe') || n.contains('windows'));
     } catch (_) {
-      // Ante un formato inesperado se asume incompleto: no avisar de más es
-      // preferible a mandar a alguien a una descarga rota.
       return false;
     }
+  }
+
+  /// ¿Este release se declaró a mano como exclusivo de la OTRA variante de
+  /// Android (TV vs celular/tablet)?
+  ///
+  /// TV y celular/tablet corren el mismo APK — no hay forma de compilar uno
+  /// sin el otro, así que `_traeEstaPlataforma` no puede distinguirlos (las
+  /// dos son "Android" por igual). Cuando una corrección es puntual de una
+  /// sola variante (ej. algo que solo pasa con el mando de un televisor) y
+  /// no tiene sentido molestar a la otra con un aviso de actualización que
+  /// no le trae nada, se declara a mano en el cuerpo del release — mismo
+  /// mecanismo que `min-update-from`, un comentario HTML invisible en la
+  /// página de GitHub pero legible desde acá:
+  ///
+  ///     <!-- solo-plataforma: androidtv -->   (o "android" para lo opuesto)
+  ///
+  /// Sin la marca, el release aplica a las dos variantes — igual que hasta
+  /// ahora.
+  static bool _soloParaOtraVarianteAndroid(dynamic body) {
+    if (!Platform.isAndroid || body is! String) return false;
+    final marca = RegExp(
+      r'solo-plataforma:\s*(androidtv|android)\b',
+      caseSensitive: false,
+    ).firstMatch(body)?.group(1)?.toLowerCase();
+    if (marca == null) return false;
+    final esParaTv = marca == 'androidtv';
+    return esParaTv != PlatformTv.esTelevisionSync;
+  }
+
+  /// Busca, entre los releases más recientes del repo, el más nuevo que sea
+  /// candidato para ESTA plataforma — no necesariamente el último publicado
+  /// en el repo entero, si ese fue hecho a propósito solo para otra(s)
+  /// plataforma(s) (ver el pedido de "actualizar solo Android sin molestar a
+  /// Windows/Linux con algo que no les trae nada").
+  ///
+  /// "Candidato" no es lo mismo que "listo para ofrecer": acá solo se decide
+  /// SI aplica, no si ya está completo. Cada llamador decide qué hacer con
+  /// un candidato que todavía se está publicando o le faltan las notas — el
+  /// chequeo forzado espera en silencio (`_ultimoReleaseParaEstaPlataforma`),
+  /// el manual le explica al usuario qué falta (`checkUpdate`).
+  ///
+  /// Antes esto era un solo `GET releases/latest`: alcanzaba porque un
+  /// release siempre traía las tres plataformas juntas. Con releases
+  /// parciales, "el último del repo" y "el último que me toca a mí" pueden
+  /// ser dos cosas distintas, así que hay que mirar hacia atrás hasta
+  /// encontrar el que aplique.
+  ///
+  /// `per_page=10` alcanza de sobra para el ritmo de publicación de este
+  /// proyecto — y sigue costando UNA sola llamada a la API (mismo cupo que
+  /// antes, no se multiplicó nada).
+  ///
+  /// Una versión de la app ANTERIOR a este cambio sigue pidiendo
+  /// `releases/latest` con la lógica vieja (exige las tres plataformas), así
+  /// que un release parcial le resulta invisible — nunca rompe nada, sigue
+  /// esperando en silencio hasta que salga un release completo que sí la
+  /// actualice. Por eso el primer release que lleve este fix conviene que
+  /// salga completo para las tres plataformas.
+  static Future<Map<String, dynamic>?> _candidatoRelevante() async {
+    const url =
+        "https://api.github.com/repos/Litdemonick/Prism_Hub/releases?per_page=10";
+    final res = await dio.get(url);
+    final releases = (res.data as List).cast<Map<String, dynamic>>();
+    for (final release in releases) {
+      final tagName = release['tag_name'] as String;
+      if (!_isRemoteVersionNewer(tagName.replaceFirst('v', ''))) {
+        // Llegamos a uno igual o más viejo que lo instalado: no hay nada
+        // más nuevo detrás de este en la lista (viene ordenada del más
+        // reciente al más viejo), así que no tiene sentido seguir mirando.
+        return null;
+      }
+      if (_soloParaOtraVarianteAndroid(release['body'])) {
+        // Declarado a mano para la otra variante de Android (TV vs
+        // celular/tablet): no es para mí aunque el .apk esté ahí — ya se
+        // sabe con certeza por la marca, no hace falta esperar a que
+        // termine de subir nada. Sigo mirando hacia atrás.
+        continue;
+      }
+      if (_algoTodaviaSubiendo(release['assets']) ||
+          _traeEstaPlataforma(release['assets'])) {
+        // O bien todavía no se sabe qué va a traer (se está publicando: no
+        // conviene saltarlo, podría terminar incluyendo esta plataforma), o
+        // bien ya se sabe que SÍ la incluye. Cualquiera de los dos es un
+        // candidato válido para ofrecer (una vez que termine de estar listo).
+        return release;
+      }
+      // Publicado a propósito solo para otra(s) plataforma(s), y ya
+      // terminó de subir todo: no es para mí. Sigo mirando hacia atrás por
+      // si uno más viejo (pero igual más nuevo que lo instalado) sí me
+      // incluía.
+    }
+    return null;
+  }
+
+  /// Versión de `_candidatoRelevante` para el chequeo que NO puede molestar
+  /// a nadie si algo todavía está a medias (el forzado/periódico, que
+  /// bloquea la app entera): solo devuelve un release cuando está
+  /// completamente listo para esta plataforma, y deja
+  /// `_esperandoReleaseIncompleto` en el estado que le corresponde para que
+  /// el chequeo periódico sepa si tiene que insistir pronto o no.
+  static Future<Map<String, dynamic>?> _ultimoReleaseParaEstaPlataforma() async {
+    final release = await _candidatoRelevante();
+    if (release == null) {
+      // Nada nuevo de verdad: si venía esperando un release a medio
+      // publicar, ya no hay por qué seguir mirando seguido.
+      _esperandoReleaseIncompleto = false;
+      _rafagasRapidas = 0;
+      return null;
+    }
+    if (_algoTodaviaSubiendo(release['assets']) ||
+        !_traeEstaPlataforma(release['assets']) ||
+        !_notasPublicadas(release['body'])) {
+      // Candidato real, pero todavía no está listo del todo (subiendo, o
+      // completo pero sin notas escritas): se sigue mirando seguido hasta
+      // que lo esté (ver _cadaCuantoEsperando).
+      _esperandoReleaseIncompleto = true;
+      return null;
+    }
+    _esperandoReleaseIncompleto = false;
+    _rafagasRapidas = 0;
+    return release;
   }
 
   /// ¿Las notas de la versión ya están escritas?
@@ -370,51 +500,22 @@ class ApplicationUtils {
 
   static Future<void> _checkForcedUpdate(BuildContext context) async {
     try {
-      const url =
-          "https://api.github.com/repos/Litdemonick/Prism_Hub/releases/latest";
-      final res = await dio.get(url);
-      final tagName = res.data["tag_name"] as String;
-      final remoteVersion = tagName.replaceFirst('v', '');
-      if (!_isRemoteVersionNewer(remoteVersion)) {
-        // Nada nuevo: si venia esperando un release a medio publicar, ya no
-        // hay por que seguir mirando seguido.
-        _esperandoReleaseIncompleto = false;
-        _rafagasRapidas = 0;
-        return;
-      }
+      // Busca el release más nuevo que aplique a esta plataforma — ver
+      // _ultimoReleaseParaEstaPlataforma. Si vuelve null puede ser que no
+      // haya nada más nuevo que lo instalado, o que sí haya pero todavía
+      // esté incompleto: en los dos casos no hay nada para ofrecer todavía,
+      // y la función ya dejó _esperandoReleaseIncompleto en el valor que
+      // corresponde para el chequeo periódico (ver _cadaCuantoEsperando).
+      final release = await _ultimoReleaseParaEstaPlataforma();
+      if (release == null) return;
       if (!context.mounted) return;
 
-      // Un release se publica ANTES de que todas las plataformas terminen de
-      // subir lo suyo: cada job del workflow sube su archivo cuando acaba. O
-      // sea que hay una ventana en la que el release ya existe pero el
-      // instalador de ESTA plataforma todavía no está — por ejemplo Linux
-      // termina primero y un usuario de Android vería "hay 1.0.9" con nada
-      // que descargar.
-      //
-      // Así que la versión nueva no se anuncia hasta que el archivo que le
-      // toca a este dispositivo esté realmente publicado. Si falta, se sale en
-      // silencio y se vuelve a mirar en la próxima comprobación.
-      // Release incompleto: todavía se están subiendo archivos, o alguno de
-      // los jobs falló. En cualquiera de los dos casos no se avisa.
-      if (!_releaseCompleto(res.data['assets'], tagName)) {
-        // Hay version nueva pero le faltan archivos: se mira seguido hasta que
-        // termine de publicarse (ver _cadaCuantoEsperando).
-        _esperandoReleaseIncompleto = true;
-        return;
-      }
-
-      // Y tampoco se avisa con las notas todavía sin escribir: esta pantalla
-      // tapa la app entera, así que salir sin explicar qué trae la versión deja
-      // al usuario eligiendo a ciegas. Ver _notasPublicadas.
-      if (!_notasPublicadas(res.data['body'])) {
-        // Mismo caso: estan los archivos pero falta el texto.
-        _esperandoReleaseIncompleto = true;
-        return;
-      }
+      final tagName = release['tag_name'] as String;
+      final remoteVersion = tagName.replaceFirst('v', '');
 
       final asset = Platform.isAndroid
-          ? _findAndroidAsset(res.data['assets'])
-          : _findAsset(res.data['assets'], tagName);
+          ? _findAndroidAsset(release['assets'])
+          : _findAsset(release['assets'], tagName);
       if (asset == null) {
         _esperandoReleaseIncompleto = true;
         return;
@@ -449,8 +550,8 @@ class ApplicationUtils {
             pageBuilder: (context, animation, secondaryAnimation) =>
                 _ForcedUpdatePage(
               remoteVersion: remoteVersion,
-              changelog: (res.data['body'] as String?) ?? '',
-              htmlUrl: res.data['html_url'] as String,
+              changelog: (release['body'] as String?) ?? '',
+              htmlUrl: release['html_url'] as String,
               asset: asset,
             ),
             transitionsBuilder:
@@ -487,17 +588,15 @@ class ApplicationUtils {
       return;
     }
     try {
-      const url =
-          "https://api.github.com/repos/Litdemonick/Prism_Hub/releases/latest";
-      final res = await dio.get(url);
-      final tagName = res.data["tag_name"] as String;
-      final remoteVersion = tagName.replaceFirst('v', '');
-      debugPrint('remoteVersion: $remoteVersion');
-      if (_isRemoteVersionNewer(remoteVersion)) {
+      final release = await _candidatoRelevante();
+      if (release != null) {
+        final tagName = release['tag_name'] as String;
+        final remoteVersion = tagName.replaceFirst('v', '');
+        debugPrint('remoteVersion: $remoteVersion');
         // Esta versión es demasiado vieja para instalar la nueva encima: no se
         // ofrece la actualización automática, se manda a la página de
         // versiones. Ver _demasiadoViejoParaActualizar.
-        if (_demasiadoViejoParaActualizar(res.data['body'])) {
+        if (_demasiadoViejoParaActualizar(release['body'])) {
           // Diálogo y no un aviso pasajero: esto no es "che, hay novedades",
           // es "esta actualización NO se va a poder instalar sola". Si se va
           // solo a los dos segundos, el usuario se queda sin saber qué hacer.
@@ -519,7 +618,7 @@ class ApplicationUtils {
                   onPressed: () {
                     RouterUtils.pop();
                     launchUrl(
-                      Uri.parse(res.data['html_url'] as String),
+                      Uri.parse(release['html_url'] as String),
                       mode: LaunchMode.externalApplication,
                     );
                   },
@@ -530,19 +629,21 @@ class ApplicationUtils {
           }
           return;
         }
-        // Ver el comentario largo de la comprobación al arrancar: mientras el
-        // archivo de esta plataforma no esté subido, no se ofrece nada.
-        final completo = _releaseCompleto(res.data['assets'], tagName);
+        // Ver el comentario largo de _ultimoReleaseParaEstaPlataforma:
+        // mientras el archivo de esta plataforma no esté subido (o el
+        // release recién esté empezando a publicarse), no se ofrece nada.
+        final completo = !_algoTodaviaSubiendo(release['assets']) &&
+            _traeEstaPlataforma(release['assets']);
         final asset = completo
             ? (Platform.isAndroid
-                ? _findAndroidAsset(res.data['assets'])
-                : _findAsset(res.data['assets'], tagName))
+                ? _findAndroidAsset(release['assets'])
+                : _findAsset(release['assets'], tagName))
             : null;
         // Las notas se tratan igual que los archivos: un release se puede
         // publicar con el cuerpo vacío y editarse después, y ofrecer la
         // actualización en esa ventana es pedirle al usuario que decida sin
         // saber qué trae. Ver _notasPublicadas.
-        final notasListas = _notasPublicadas(res.data['body']);
+        final notasListas = _notasPublicadas(release['body']);
         if (asset == null || !notasListas) {
           // Acá SÍ se avisa, a diferencia del arranque: el usuario apretó
           // "Comprobar" y dejarlo sin respuesta parecería que el botón no
@@ -574,7 +675,7 @@ class ApplicationUtils {
                 'version': remoteVersion,
               },
             ),
-            content: _notasDeVersion(res.data['body']),
+            content: _notasDeVersion(release['body']),
             // El contenido ya desplaza solo: ver el comentario de `scrollable`
             // en showPlatformDialog.
             scrollable: false,
@@ -612,7 +713,7 @@ class ApplicationUtils {
               'version': remoteVersion,
             },
           ),
-          content: _notasDeVersion(res.data['body']),
+          content: _notasDeVersion(release['body']),
           maxWidth: _anchoDialogoNotas,
           actions: [
             PlatformTextButton(

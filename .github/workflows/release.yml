@@ -10,24 +10,63 @@ on:
   # artifact de Actions (privado, no un release) cuando se dispara así; solo
   # publica de verdad cuando lo dispara un push de tag v* (ver los "if:" más
   # abajo en cada job "Release ...").
+  #
+  # TAMBIÉN sirve para publicar una actualización de UNA SOLA plataforma (ej.
+  # arreglar algo puntual de Android sin obligar a Windows/Linux a bajar un
+  # archivo que no cambió para ellos): correr esto a mano eligiendo el tag ya
+  # publicado como "Use workflow from", tildar `publicar` y solo la(s)
+  # plataforma(s) que corresponda.
+  #
+  # `publicar` en `false` por default es la puerta de seguridad: sin tildarla
+  # a propósito, un run manual se comporta EXACTO como hasta ahora (nunca
+  # publica nada, solo sirve para probar el build de Linux) aunque las
+  # casillas de plataforma vengan tildadas.
   workflow_dispatch:
+    inputs:
+      publicar:
+        description: "Publicar de verdad (si no, este run es solo de prueba)"
+        type: boolean
+        default: false
+      build_android:
+        description: "Incluir Android en la publicación"
+        type: boolean
+        default: true
+      build_windows:
+        description: "Incluir Windows en la publicación"
+        type: boolean
+        default: true
+      build_linux:
+        description: "Incluir Linux en la publicación"
+        type: boolean
+        default: true
 
 permissions:
   contents: write
 
 jobs:
   build-and-release-android:
-    # Se salta en workflow_dispatch: un run manual es para probar el fix de
-    # Linux puntualmente, no hace falta gastar minutos de CI ni firmar un APK
-    # de Android que no cambió.
-    if: github.event_name == 'push'
+    # Corre en un push de tag v* (como siempre) O en un run manual que pida
+    # publicar de verdad Y tenga Android tildado — ver los inputs de
+    # workflow_dispatch más arriba. Sin `publicar:true`, un run manual sigue
+    # sin tocar este job, igual que hasta ahora.
+    if: |
+      github.event_name == 'push' ||
+      (github.event_name == 'workflow_dispatch' &&
+       inputs.publicar == true &&
+       inputs.build_android == true)
     runs-on: ubuntu-latest
     permissions:
       contents: write
     steps:
       - uses: actions/checkout@v4
         with:
-          ref: main
+          # El tag exacto que disparó esto, no la punta de main. En un push
+          # de tag v* las dos cosas coinciden siempre (main y el tag apuntan
+          # al mismo commit apenas se publica), pero un run manual contra un
+          # tag más viejo (para publicar solo esta plataforma más tarde)
+          # tiene que compilar el commit QUE DICE el tag, no lo último que
+          # haya en main en ese momento.
+          ref: ${{ github.ref_name }}
       - uses: actions/setup-java@v4
         with:
           distribution: temurin
@@ -472,10 +511,16 @@ jobs:
           name: PrismHub-linux-x64-test
           path: PrismHub-${{ github.ref_name }}-linux-x64.tar.gz
           retention-days: 7
-      # Solo publica de verdad cuando lo dispara un push de tag v* — un run
-      # manual (workflow_dispatch) nunca toca el release público.
+      # Publica de verdad en un push de tag v* (como siempre) o en un run
+      # manual con `publicar:true` y Linux tildado — ver los inputs de
+      # workflow_dispatch más arriba. Cualquier otro run manual (la prueba de
+      # siempre) nunca toca el release público.
       - name: Release Linux
-        if: github.event_name == 'push'
+        if: |
+          github.event_name == 'push' ||
+          (github.event_name == 'workflow_dispatch' &&
+           inputs.publicar == true &&
+           inputs.build_linux == true)
         uses: ncipollo/release-action@v1
         with:
           token: ${{ secrets.GITHUB_TOKEN }}
@@ -484,15 +529,22 @@ jobs:
           generateReleaseNotes: true
 
   build-and-release-windows:
-    # Se salta en workflow_dispatch — ver comentario en build-and-release-android.
-    if: github.event_name == 'push'
+    # Ver comentario en build-and-release-android: mismo criterio, con
+    # build_windows en vez de build_android.
+    if: |
+      github.event_name == 'push' ||
+      (github.event_name == 'workflow_dispatch' &&
+       inputs.publicar == true &&
+       inputs.build_windows == true)
     runs-on: windows-2022
     permissions:
       contents: write
     steps:
       - uses: actions/checkout@v4
         with:
-          ref: main
+          # Ver el mismo comentario en build-and-release-android: el commit
+          # exacto del tag, no la punta de main.
+          ref: ${{ github.ref_name }}
       - uses: subosito/flutter-action@v2
         with:
           channel: stable
@@ -575,14 +627,34 @@ jobs:
       - build-and-release-android
       - build-and-release-linux
       - build-and-release-windows
-    if: github.event_name == 'push'
+    # `needs` por sí solo exige que las TRES hayan terminado con éxito —
+    # y un job saltado (plataforma no tildada en un run manual) NO cuenta
+    # como éxito, así que este paso se saltearía entero apenas falte una
+    # plataforma a propósito. `always()` saca ese corte automático; las
+    # comparaciones de abajo siguen bloqueando la publicación de las notas
+    # si algo de lo que SÍ corrió falló de verdad (o se canceló).
+    if: |
+      always() &&
+      (github.event_name == 'push' ||
+       (github.event_name == 'workflow_dispatch' && inputs.publicar == true)) &&
+      needs.build-and-release-android.result != 'failure' &&
+      needs.build-and-release-android.result != 'cancelled' &&
+      needs.build-and-release-linux.result != 'failure' &&
+      needs.build-and-release-linux.result != 'cancelled' &&
+      needs.build-and-release-windows.result != 'failure' &&
+      needs.build-and-release-windows.result != 'cancelled'
     runs-on: ubuntu-latest
     permissions:
       contents: write
     steps:
       - uses: actions/checkout@v4
         with:
-          ref: main
+          # El tag exacto, no la punta de main — mismo motivo que en Android
+          # y Windows: si esto corre bien después (un run manual publicando
+          # una plataforma que quedó pendiente), main ya pudo haber avanzado
+          # a una versión más nueva, y sus RELEASE_NOTES.md ya no describen
+          # ESTE release.
+          ref: ${{ github.ref_name }}
       - name: Publicar las notas escritas
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
