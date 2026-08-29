@@ -720,11 +720,39 @@ class VideoPlayerController extends GetxController with WidgetsBindingObserver {
       final porCache = d(await np.getProperty('paused-for-cache'));
       final quieto = d(await np.getProperty('core-idle'));
       final donde = d(await np.getProperty('time-pos'));
+      // **QUIÉN está decodificando de verdad, y qué.**
+      //
+      // Es el dato que faltaba para explicar el caso reportado: «algunos
+      // animes van lentísimos hasta que la app se cierra». Se le pide
+      // decodificación por hardware (`hwdec=auto-safe`), pero eso es un
+      // PEDIDO: si el códec o el perfil no están soportados por el aparato
+      // —10 bits, HEVC en cajas viejas, AV1— mpv cae a software sin avisar.
+      //
+      // Y en un televisor eso es la diferencia entre reproducir y no: su
+      // procesador no da para decodificar 1080p por software, así que el vídeo
+      // se arrastra, los cuadros se acumulan y el sistema termina cerrando la
+      // app. Desde afuera se ve exactamente como «este anime va mal».
+      //
+      // `hwdec-current` dice qué se está usando REALMENTE (`no` = software), y
+      // el códec dice por qué.
+      final decodificador = d(await np.getProperty('hwdec-current'));
+      final codec = d(await np.getProperty('video-codec'));
       logger.info('medición ($motivo) · colchón: $colchon s · entrando: '
           '$caudal B/s · variante: $bitrate bps · cuadros tirados: $tirados · '
           'calidad: ${currentQuality.value} · posición: '
           '${position.value.inSeconds}s · time-pos: $donde · pause: $pausa · '
-          'paused-for-cache: $porCache · core-idle: $quieto');
+          'paused-for-cache: $porCache · core-idle: $quieto · '
+          'decodifica: $decodificador · códec: $codec');
+      // Y si cayó a software en un televisor, se dice aparte y fuerte: es la
+      // causa más probable de que ESE título vaya mal cuando los demás van
+      // bien, y buscando "SOFTWARE" en el registro aparece de una.
+      if (PlatformTv.esTelevisionSync &&
+          (decodificador == 'no' || decodificador == '—')) {
+        logger.warning('DECODIFICACIÓN POR SOFTWARE en televisor · códec '
+            '$codec · este título va a ir a tirones y puede llegar a cerrar '
+            'la app: el procesador de un televisor no da para decodificar '
+            'vídeo por su cuenta. Probar con otro servidor o calidad.');
+      }
     } catch (e) {
       logger
           .info('medición ($motivo): no se pudieron leer las propiedades — $e');
