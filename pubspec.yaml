@@ -117,6 +117,7 @@ dependencies:
   # el código de la app en sí también la necesita en runtime.
   image: ^4.8.0
   audio_service: ^0.18.19
+  video_player: ^2.14.0
 
 dev_dependencies:
   flutter_test:
