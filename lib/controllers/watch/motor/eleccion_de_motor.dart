@@ -50,9 +50,29 @@ class EleccionDeMotor {
     return autom;
   }
 
-  /// Si en este aparato se puede elegir. Fuera de Android hay un solo motor,
-  /// así que el interruptor no se muestra.
-  static bool get sePuedeElegir => Platform.isAndroid;
+  /// Si en este aparato se puede elegir.
+  ///
+  /// ── APAGADO a propósito, y esto hay que arreglarlo antes de encenderlo ───
+  ///
+  /// Salió en la 1.0.42 y estaba roto: al elegir ExoPlayer se escuchaba el
+  /// audio pero la pantalla quedaba NEGRA. Reportado en vivo en un televisor.
+  ///
+  /// La causa, medida: el commit que metió la fachada enganchó la VISTA al
+  /// motor, pero no la REPRODUCCIÓN. El controlador sigue abriendo el vídeo
+  /// con `player.open()` de media_kit en los siete sitios donde abre, y lee
+  /// todo su estado —posición, duración, si reproduce— de `player.state`. Así
+  /// que al elegir ExoPlayer pasaba esto:
+  ///
+  ///   - la vista era la de ExoPlayer, que no tenía nada cargado → negro;
+  ///   - mpv seguía reproduciendo por debajo → se escuchaba.
+  ///
+  /// Encenderlo de nuevo pide llevar a la fachada las aperturas Y todo el
+  /// estado que el controlador lee del reproductor. Es el paso 3.2 del plan
+  /// (partir el reproductor), que justamente por eso iba antes.
+  ///
+  /// Mientras tanto se apaga: un interruptor que deja la pantalla en negro es
+  /// peor que no tenerlo.
+  static bool get sePuedeElegir => false;
 
   /// Arma el motor que corresponde.
   ///
