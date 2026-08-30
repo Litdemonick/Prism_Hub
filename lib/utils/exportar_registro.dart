@@ -54,9 +54,18 @@ class ExportarRegistro {
   /// Con [lineas] se arma sobre esas y no sobre el archivo entero — es como
   /// se exporta o se sirve una sesión anterior concreta, ya recortada por
   /// quien la eligió.
+  /// Cuántas líneas de registro llevaba lo último que se armó.
+  ///
+  /// Lo pregunta el servidor de red para poder decirlo en la página. Se guarda
+  /// acá y no se calcula afuera para que sea EXACTAMENTE el mismo número que
+  /// el del resumen: contarlo por separado es como terminaron siendo dos
+  /// números distintos en la misma pantalla.
+  static int cuantasLineas = 0;
+
   static Future<String> armar({String? soloArea, List<String>? lineas}) async {
     await PrismLog.flush();
     lineas ??= await _leerTodo();
+    cuantasLineas = lineas.length;
 
     final salida = StringBuffer()
       ..writeln('═══════════════════════════════════════════════════')

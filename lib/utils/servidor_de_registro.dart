@@ -175,11 +175,14 @@ class ServidorDeRegistro {
         soloArea: areaElegida,
         lineas: lineasFijas,
       );
-      // Cuántas líneas se están sirviendo: es lo primero que se mira para
-      // saber si lo que llegó al navegador es todo o le falta algo.
-      const salto = 10; // el salto de linea
-      final cuantas =
-          texto.codeUnits.where((c) => c == salto).length;
+      // ── Se cuentan las líneas del REGISTRO, no las del documento ──────
+      //
+      // Contaba los saltos de línea del texto ya armado, o sea que sumaba
+      // también los recuadros, los títulos de sección y los renglones en
+      // blanco. Salían 582 arriba y 544 en el resumen de más abajo, en la
+      // misma página: dos números distintos para lo mismo, y quien la abre no
+      // tiene forma de saber cuál creer.
+      final cuantas = ExportarRegistro.cuantasLineas;
       pedido.response
         ..statusCode = HttpStatus.ok
         ..headers.contentType = ContentType.html
