@@ -1,52 +1,61 @@
-## PrismHub v1.0.44 — Android TV: se cerraba al salir, y va más fluido
+## PrismHub v1.0.45 — Los registros, hechos de nuevo
 
-> 📺 **Corrige un fallo que cerraba la app entera**: en televisor, salir del
-> reproductor mientras se estaba viendo algo sacaba al usuario de la app. Era
-> un problema introducido en la 1.0.42.
+> 🔍 **Ahora se puede saber qué pasó.** Si la app se cierra sola o algo va
+> mal, el registro guarda todo y se lee desde la propia app: qué estaba
+> haciendo, en qué aparato y con qué extensión.
 
 > ⚠️ **La app sigue en mantenimiento general.** Se la sigue reestructurando
 > por dentro, así que es posible que te cruces con fallos o con cosas a medio
 > terminar. Si encontrás algo roto, reportalo desde Ajustes → Reportar.
 
-### 📺 Android TV — corregido
+### 🔍 Registros
 
-- **Ya no se cierra al salir del reproductor.** La app devolvía la pantalla a
-  su modo normal al mismo tiempo que liberaba el vídeo, y en un televisor ese
-  cambio de modo hace renegociar la conexión con la pantalla justo mientras
-  el vídeo se está soltando. Las dos cosas cruzándose cerraban la app de
-  golpe, sin ningún mensaje. Ahora el modo se devuelve al final, cuando ya no
-  queda nada del reproductor.
-- **El aviso de versión nueva ya se puede leer con el control remoto.** Esa
-  pantalla usaba la disposición de teléfono, que se desplaza con el dedo: con
-  un mando no había forma de bajar, y todo lo que no entrara quedaba sin
-  leerse. Y como ese aviso bloquea la app, había que decidir a ciegas. Ahora
-  las flechas desplazan el texto.
+- **Se guardan siempre.** Había un interruptor para activarlos, y estaba al
+  revés de lo que hace falta: el archivo es lo único que explica un cierre —lo
+  que estaba en memoria se va con la app— así que ese interruptor solo servía
+  para que, justo cuando algo falla, no hubiera nada que mirar.
+- **Se ve el historial completo, no solo lo de ahora.** Antes el visor
+  arrancaba vacío en cada apertura, y lo anterior se perdía. Ahora al abrirlo
+  está todo, incluidas las sesiones anteriores.
+- **Si la app se cerró sola, dice qué estaba haciendo.** Se anota sobre la
+  marcha, así que al volver a abrirla queda el recorrido de los últimos pasos:
+  a qué zona fuiste, qué servidor abriste, si llegó a verse imagen.
+- **Cada sesión empieza indicando el aparato**: versión, si es televisor,
+  teléfono o PC, y qué tan potente lo considera la app.
+- **Filtros por área** — Todo, Fallos, Extensiones, Reproductor — con botones
+  grandes en televisor y compactos en teléfono. Un archivo de miles de líneas
+  se vuelve buscable.
+- **Colores** para las líneas que se buscan a propósito: el comienzo de cada
+  sesión, el resultado de cada servidor y el último rastro antes de un cierre.
+- **Exportar** sigue estando en PC y en Android. En televisor no aparece,
+  porque ahí no hay a dónde exportar — se lee desde la app.
 
-### ⚡ Android TV — fluidez
+### 🔒 Seguridad
 
-Segunda tanda de mejoras sobre la misma idea de la 1.0.43: un televisor es
-potente **decodificando vídeo**, que es para lo que está hecho, pero su parte
-gráfica es más floja que la de un teléfono de gama media.
+- **El registro se puede compartir sin exponer nada tuyo.** Se auditó y no se
+  saneaba: las direcciones se escribían enteras, y ahí viajan las credenciales
+  con las que se firma el vídeo y el nombre de lo que estabas viendo. Ahora se
+  conserva el servidor y el formato —que es lo que sirve para arreglar— y se
+  va todo lo demás, incluido tu nombre de usuario del sistema.
+- **Las pantallas de error también.** El mensaje de un fallo arrastra lo que
+  estaba en juego cuando ocurrió; y esa pantalla es justamente la que uno
+  fotografía para reportar.
+- **Los favoritos del contenido para adultos ya no pueden asomarse** por una
+  ruta interna que no filtraba.
 
-- **El resplandor del foco cuesta mucho menos.** Cada tarjeta pintaba tres
-  sombras difuminadas y las hacía aparecer con una transición en cada
-  movimiento del mando. Ahora en televisor es una sola, y aparece puesta —
-  con un control remoto el foco *salta* de tarjeta en tarjeta, así que la
-  transición no aportaba nada y se pagaba en cada pulsación.
-- **Las tarjetas no enfocadas ya no dejan una capa vacía.** Antes cada una
-  mantenía su resplandor invisible; ahora, de todas las que hay en pantalla,
-  solo la enfocada existe.
+### 📺 Android TV
 
-### 🛠️ Por dentro
+- **El aviso rojo en Ajustes desapareció.** Salía en la sección de contenido
+  para adultos. Y detrás había otro fallo tapado: al activar ese contenido, el
+  botón para entrar a la zona no aparecía hasta salir y volver a entrar.
+- **El registro se recorre con el control remoto** — flechas, y los botones de
+  salto rápido mueven de a una pantalla.
 
-- **El reproductor pasa a hablarle a su motor a través de una capa
-  intermedia.** No cambia nada de cómo se ve ni de cómo funciona: por debajo
-  corre el mismo motor de siempre. Es el trabajo previo para poder usar un
-  motor distinto en Android, que es lo que va a corregir el salto en ciertos
-  formatos y el desfase de audio en televisor.
-- **Los avisos de versión pueden dirigirse a una plataforma concreta**, para
-  que una corrección que solo toca al televisor no haga actualizar a quienes
-  usan Windows o Linux.
+### 🖥️ Windows, Linux y Android
+
+- **Ya no salen dos avisos de la misma versión.** Había dos caminos que
+  avisaban de una actualización y ninguno sabía del otro, así que cuando una
+  publicación terminaba de subirse los dos aparecían a la vez.
 
 ---
 
@@ -92,16 +101,16 @@ gráfica es más floja que la de un teléfono de gama media.
 
 | Archivo | Para |
 |---|---|
-| **`PrismHub-setup-windows-v1.0.44.exe`** | **Instalador.** Lo normal: instala y crea el acceso directo |
-| `PrismHub-v1.0.44-windows-x64.zip` | Portable: se descomprime y se ejecuta, sin instalar |
+| **`PrismHub-setup-windows-v1.0.45.exe`** | **Instalador.** Lo normal: instala y crea el acceso directo |
+| `PrismHub-v1.0.45-windows-x64.zip` | Portable: se descomprime y se ejecuta, sin instalar |
 
 ### 🐧 Linux
 
 | Archivo | Para |
 |---|---|
-| `PrismHub-v1.0.44-linux-x64.tar.gz` | Se descomprime y se ejecuta |
+| `PrismHub-v1.0.45-linux-x64.tar.gz` | Se descomprime y se ejecuta |
 
-> Los archivos que llevan la versión en el nombre (`v1.0.44`) quedan fijos en
+> Los archivos que llevan la versión en el nombre (`v1.0.45`) quedan fijos en
 > esta publicación. Los de Android que **no** la llevan apuntan siempre a la
 > más nueva — son los que conviene usar para un enlace o un código que quede
 > guardado.
