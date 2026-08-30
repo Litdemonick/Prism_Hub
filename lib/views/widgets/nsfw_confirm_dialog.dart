@@ -276,14 +276,16 @@ class _NsfwConfirmContent extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final media = MediaQuery.of(context);
+    // Solo el tamaño: con `MediaQuery.of(context)` entero, este diálogo se
+    // reconstruía ante cualquier cambio del entorno y no solo ante el que mira.
+    final media = MediaQuery.sizeOf(context);
     // Horizontal en un celular: la altura útil es muy poca y el diálogo dejaba
     // la tarjeta de "Sí, es contenido +18" fuera de la vista, sin forma de
     // llegar a ella (reportado en vivo). Se detecta por ALTURA, no por
     // orientación: una ventana de escritorio angosta de alto tiene el mismo
     // problema, y un tablet en horizontal tiene alto de sobra y no necesita
     // apretar nada.
-    final tight = media.size.height < 560;
+    final tight = media.height < 560;
     final gap = tight ? 6.0 : 12.0;
 
     final content = Column(
@@ -422,8 +424,8 @@ class _NsfwConfirmContent extends StatelessWidget {
         // diálogo no tiene por qué ocupar toda la pantalla cuando no hace
         // falta.
         maxHeight: tight
-            ? math.max(120.0, media.size.height - 200)
-            : media.size.height * 0.7,
+            ? math.max(120.0, media.height - 200)
+            : media.height * 0.7,
       ),
       child: SingleChildScrollView(child: content),
     );

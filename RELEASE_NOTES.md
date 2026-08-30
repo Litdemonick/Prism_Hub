@@ -1,59 +1,64 @@
-## PrismHub v1.0.60 — Vuelven los subtítulos en Android
+## PrismHub v1.0.61 — PrismHub+: la app se adapta a tu aparato
 
-> 🔤 **Si estás en Android y no veías subtítulos, era esto.** La 1.0.59 cambió
-> el motor de vídeo de Android y con ese motor los subtítulos no llegaban a
-> pantalla: la app los descargaba y no los mostraba. Tampoco se podía elegir
-> pista de audio. Volvimos al motor de siempre y las dos cosas andan otra vez.
+> ⚡ **Nuevo: PrismHub+.** La app ahora mira en qué aparato está corriendo
+> —televisor, teléfono, tablet o PC— y se ajusta a lo que ese aparato puede dar.
+> Está en **Ajustes → PrismHub+**, con todo a la vista: qué detectó, qué cambió
+> por eso, y un interruptor para apagarlo.
 
 > ⚠️ **La app sigue en mantenimiento general.** Se la sigue reestructurando por
 > dentro, así que es posible que te cruces con fallos o con cosas a medio
 > terminar. Si encontrás algo roto, reportalo desde Ajustes → Reportar.
 
-### 🔤 El motor de vídeo, uno solo otra vez
+### ⚡ PrismHub+
 
-- **Android vuelve a mpv**, el mismo que usan Windows y Linux. Con eso vuelven
-  los **subtítulos** —los del archivo y los que trae la extensión aparte— y la
-  **elección de pista de audio**, que en la 1.0.59 no estaban.
-- **Se fue el selector de motor de Ajustes.** No queda nada que elegir: hay uno
-  y es el mismo en todas las plataformas.
+Hasta ahora la app pedía lo mismo en todos lados: 1080p de vídeo, todas las
+peticiones a la vez, todos los efectos. Eso está bien en un teléfono nuevo y es
+demasiado en un televisor de 1 GB.
 
-El cambio de la 1.0.59 buscaba sacar el vídeo del dibujado de la interfaz, y en
-eso funcionó: medido en un teléfono, el tiempo de dibujar cada cuadro bajó de
-unos 140 ms a menos de 40. Pero se llevó puestas demasiadas cosas que dependían
-del motor anterior, y aparecían de a una. Preferimos volver a lo probado y
-retomarlo con más cuidado.
+- **Pide la calidad que tu aparato puede mostrar y sostener.** En un televisor
+  de 720p pedir 1080p es decodificar un tercio más de imagen de la que se ve y
+  descargar casi el doble de datos para tirarlos. Es un **techo**, no un
+  objetivo: si la fuente solo tiene 720p, se ve 720p.
+- **Si el vídeo se corta dos veces, baja un escalón de calidad solo.** Ni el
+  aparato ni la pantalla dicen cuánto está llegando por la red en este momento;
+  eso solo lo dice que el vídeo se corte.
+- **Reparte las peticiones al abrir la app.** Todas las zonas piden sus
+  carruseles a la vez, y en un televisor con cuatro núcleos eso son más de cien
+  peticiones en catorce segundos peleándose entre ellas.
+- **Los carruseles construyen menos de más al deslizarse**, y los efectos caros
+  —el desenfoque del fondo, el crecido de las tarjetas— se ajustan al aparato.
+- **Y si la app va a tirones de todos modos, baja el nivel sola** y lo recuerda
+  para la próxima vez. Ya medíamos cada cuadro; ahora eso sirve para algo.
 
-### 🐞 Correcciones
+Apagado, todo vuelve a comportarse como antes, y se dice bien claro tanto en la
+pantalla como en el registro.
 
-- **El recuadro rojo de error encima del vídeo, en el teléfono.** Aparecía al
-  abrir el reproductor y se redibujaba en cada cuadro. Era el control de volumen
-  pidiéndole al sistema que vigilara algo que no cambiaba nunca.
-- **La rueda de carga y el botón de pausa ya no se dibujan uno encima del otro.**
-  Los dos van al centro exacto de la pantalla y ninguno miraba al otro.
-- **Mientras dice «Obteniendo enlace…» ya no gira nada más.** El cartel del
-  centro y el botón de abajo daban la misma noticia dos veces, a destiempo.
-- **Al salir del reproductor o cambiar de servidor, el vídeo se detiene de
-  verdad.** Había caminos por los que seguía sonando.
+### 🖥️ Ahora se mide el aparato en todas las plataformas
 
-### ⚡ Empieza antes
+Antes esto solo se calculaba en televisores. Un portátil de dos núcleos recibía
+el mismo trato que una máquina nueva, y un teléfono de 2 GB el mismo que uno de
+12.
 
-- **Cuando el servidor tiene varios nodos y algunos están caídos**, ahora se
-  prueban solapados en vez de uno detrás de otro. Antes, a cada nodo muerto se
-  le esperaban ocho segundos: con cinco caídos seguidos eran cuarenta segundos
-  mirando una rueda para terminar bajando de uno que contestaba en dos.
-- No se descarga nada dos veces: se suma otro nodo solo mientras ninguno dé
-  señales de vida, y en cuanto uno empieza a mandar datos se lo espera a él.
+- Se miran la **memoria** y los **núcleos**, y ahora también los **físicos**:
+  ocho lógicos pueden ser cuatro reales, y dos hilos del mismo núcleo no
+  decodifican vídeo en paralelo.
+- **Un televisor potente ya puede contar como capaz.** Antes ninguno pasaba de
+  «medio», así que un Fire TV 4K recibía el mismo trato que un stick de 1 GB.
+- **«Pedir siempre la máxima calidad»** queda bloqueado, con el motivo, en los
+  aparatos donde solo puede romper la reproducción.
+
+### 📡 El registro de otro aparato ya no se pierde
+
+Al abrir el registro de un televisor caído decía «se cortó la conexión, lo de
+abajo es lo último que llegó» y abajo no había nada.
+
+Ahora se guarda en disco lo último que llegó de cada aparato y se muestra
+apenas se abre la pantalla, con una franja que dice **de qué día y hora es** —un
+registro viejo que parece de ahora lleva a mirar el fallo equivocado.
 
 ### 🔎 Diagnóstico
 
-Para poder arreglar lo que falla en televisores sin ir a ciegas:
-
-- **Se mide el desfase entre el audio y el vídeo.** Es el reporte que más se
-  repite en televisores y hasta ahora se hablaba de él sin un número. Ahora el
-  registro dice cuántos milisegundos, hacia qué lado, con qué códec, si está
-  decodificando por hardware y **por dónde sale el audio** —no es lo mismo el
-  altavoz del televisor que una barra por HDMI, que suma su propio retardo—.
-- **Los errores dicen dónde pasaron.** Antes, en la app compilada, quedaban
-  como «Instance of FlutterErrorDetails» y había que adivinar.
-- **Los cuadros lentos dicen en qué pantalla ocurrieron.** El dato estaba
-  puesto pero no salía nunca en Android.
+- **Se mide el desfase entre el audio y el vídeo**, con los milisegundos, hacia
+  qué lado, el códec, si decodifica por hardware y por dónde sale el audio.
+- El registro dice qué decidió PrismHub+ al arrancar, y avisa fuerte si está
+  apagado.

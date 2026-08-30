@@ -665,7 +665,7 @@ class _ComicReaderContentState extends State<ComicReaderContent> {
   // — no MediaQuery, que da el ancho de TODA la ventana sin los márgenes ni
   // el achique de zoom.
   Widget _buildPlaceholder(BuildContext context, double width) {
-    final topeDeAlto = MediaQuery.of(context).size.height;
+    final topeDeAlto = MediaQuery.sizeOf(context).height;
     final height = (width * 1.45).clamp(1.0, topeDeAlto);
     return SizedBox(
       width: width,

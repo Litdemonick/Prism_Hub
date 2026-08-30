@@ -487,7 +487,7 @@ class _VideoPlayerMobileControlsState extends State<VideoPlayerMobileControls> {
                   onHorizontalDragUpdate: (details) {
                     if (_activePointers > 1) return;
                     if (!_c.vrUnaPantalla.value) return;
-                    final ancho = MediaQuery.of(context).size.width;
+                    final ancho = MediaQuery.sizeOf(context).width;
                     if (ancho <= 0) return;
                     _c.moverVr(-details.delta.dx / ancho);
                   },

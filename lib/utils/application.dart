@@ -1738,7 +1738,7 @@ class _ForcedUpdatePageState extends State<_ForcedUpdatePage> {
 
   @override
   Widget build(BuildContext context) {
-    final isMobile = MediaQuery.of(context).size.width < 600;
+    final isMobile = MediaQuery.sizeOf(context).width < 600;
 
     if (!isMobile) {
       return PopScope(
@@ -1918,8 +1918,8 @@ class _ForcedUpdatePageState extends State<_ForcedUpdatePage> {
                   // En horizontal el alto util es la mitad, asi que 0.8 dejaba
                   // el contenido apretado contra los bordes; se deja mas margen
                   // cuando la pantalla es baja.
-                  maxHeight: MediaQuery.of(context).size.height *
-                      (MediaQuery.of(context).orientation ==
+                  maxHeight: MediaQuery.sizeOf(context).height *
+                      (MediaQuery.orientationOf(context) ==
                               Orientation.landscape
                           ? 0.86
                           : 0.8),
@@ -2096,7 +2096,7 @@ class _NotasDeVersionState extends State<_NotasDeVersion> {
     // pasa de la pantalla. En el telefono se mide contra el alto real (funciona
     // igual en vertical que en horizontal, donde el alto util es la mitad).
     final alto = Platform.isAndroid
-        ? MediaQuery.of(context).size.height * 0.42
+        ? MediaQuery.sizeOf(context).height * 0.42
         : 400.0;
     return SizedBox(
       width: double.maxFinite,

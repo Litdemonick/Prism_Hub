@@ -848,7 +848,7 @@ class _PanelCatalogoState extends State<_PanelCatalogo> {
   @override
   Widget build(BuildContext context) {
     final grupos = _porGrupo;
-    final alto = MediaQuery.of(context).size.height;
+    final alto = MediaQuery.sizeOf(context).height;
     return Dialog(
       backgroundColor: HomeTheme.cardSurface,
       insetPadding: const EdgeInsets.symmetric(horizontal: 20, vertical: 32),

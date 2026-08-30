@@ -46,7 +46,7 @@ class SplashScreen extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final tamano = MediaQuery.sizeOf(context);
-    final dpr = MediaQuery.of(context).devicePixelRatio;
+    final dpr = MediaQuery.devicePixelRatioOf(context);
     // Vertical: la pantalla es más angosta que alta. Es la MISMA cuenta que
     // ya usa el resto de la app para saber si algo es "apaisado"
     // (home_page_windows.dart) — nada nuevo, solo puesta en términos de

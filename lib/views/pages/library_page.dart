@@ -38,7 +38,7 @@ const bool _wideCards = true;
 // de aire vertical se nota muchísimo más que en vertical o en escritorio.
 bool _tightTop(BuildContext context) =>
     Platform.isAndroid &&
-    MediaQuery.of(context).orientation == Orientation.landscape;
+    MediaQuery.orientationOf(context) == Orientation.landscape;
 
 class LibraryPage extends StatefulWidget {
   const LibraryPage({super.key});

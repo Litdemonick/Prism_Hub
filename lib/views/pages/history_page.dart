@@ -438,7 +438,7 @@ class _HistoryPageState extends State<HistoryPage> {
     final itemCount = favorites?.length ?? history!.length;
 
     final isAndroidLandscape = Platform.isAndroid &&
-        MediaQuery.of(context).orientation == Orientation.landscape;
+        MediaQuery.orientationOf(context) == Orientation.landscape;
 
     // Tarjeta ancha 16:9 solo cuando la pestaña muestra SOLO vídeo y hay ancho
     // para ella. En "Todo" conviven los dos tipos y la grilla reserva un único
@@ -1243,7 +1243,7 @@ class _HistoryPageState extends State<HistoryPage> {
                   // Acostado en un teléfono, 25 se come una franja que le
                   // hace falta a la lista.
                   bajo: Platform.isAndroid &&
-                      MediaQuery.of(context).orientation ==
+                      MediaQuery.orientationOf(context) ==
                           Orientation.landscape,
                 ),
               ),

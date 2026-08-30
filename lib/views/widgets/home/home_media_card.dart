@@ -624,7 +624,7 @@ class _HomeMediaCardState extends State<HomeMediaCard> {
     if (widget.horizontal) return HomeMediaCard.altoImagenAncha;
     final isAndroidLandscape = Platform.isAndroid &&
         !PlatformTv.esTelevisionSync &&
-        MediaQuery.of(context).orientation == Orientation.landscape;
+        MediaQuery.orientationOf(context) == Orientation.landscape;
     final anchoBase = isAndroidLandscape
         ? HomeMediaCard.androidLandscapeWidth
         : Platform.isAndroid
@@ -668,7 +668,7 @@ class _HomeMediaCardState extends State<HomeMediaCard> {
     // que se mira de lejos.
     final isAndroidLandscape = Platform.isAndroid &&
         !PlatformTv.esTelevisionSync &&
-        MediaQuery.of(context).orientation == Orientation.landscape;
+        MediaQuery.orientationOf(context) == Orientation.landscape;
     final anchoBase = isAndroidLandscape
         ? HomeMediaCard.androidLandscapeWidth
         : Platform.isAndroid

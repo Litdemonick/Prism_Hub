@@ -246,12 +246,16 @@ class _PinDialogState extends State<_PinDialog> {
 
   @override
   Widget build(BuildContext context) {
-    final media = MediaQuery.of(context);
+    // Con los getters acotados y no con `MediaQuery.of(context)` entero: así
+    // esta fila se reconstruye cuando cambia el ALTO o el TECLADO, que es lo
+    // único que mira, y no cada vez que cambia cualquier cosa del entorno.
+    final alto = MediaQuery.sizeOf(context).height;
+    final tecladoAbajo = MediaQuery.viewInsetsOf(context).bottom;
     // Lo que de verdad queda libre arriba del teclado. Dialog ya le suma
     // viewInsets a su padding, pero se mide igual acá para decidir el layout:
     // el umbral tiene que mirar el hueco real, no el alto de la pantalla (en
     // vertical con el teclado abierto sobra espacio; en horizontal no).
-    final free = media.size.height - media.viewInsets.bottom;
+    final free = alto - tecladoAbajo;
     final compact = free < 280;
 
     final pinField = _field(

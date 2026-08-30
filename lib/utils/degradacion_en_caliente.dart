@@ -2,7 +2,6 @@ import 'dart:async';
 
 import 'package:prismhub/utils/log.dart';
 import 'package:prismhub/utils/platform_tv.dart';
-import 'package:prismhub/utils/prismhub_mas.dart';
 import 'package:prismhub/utils/prismhub_storage.dart';
 
 /// Baja el nivel del aparato en caliente si la app va a tirones de verdad.
@@ -44,8 +43,10 @@ import 'package:prismhub/utils/prismhub_storage.dart';
 /// problema no es el nivel y bajarlo otra vez solo empeora la imagen sin
 /// arreglar nada. Queda escrito en el registro, que es lo que hace falta.
 ///
-/// **No hace nada con PrismHub+ apagado.** Apagarlo es pedir explícitamente que
-/// la app no se adapte; bajar el nivel por la espalda sería ignorarlo.
+/// **Se puede deshacer.** Si alguna vez bajara el nivel de un aparato que sí
+/// podía, en Ajustes → PrismHub+ está «volver a medir», que olvida lo aprendido
+/// y arranca de cero. Es la única salida que hace falta: lo demás no es una
+/// preferencia sino la app enterándose de con qué cuenta.
 class DegradacionEnCaliente {
   DegradacionEnCaliente._();
 
@@ -91,7 +92,7 @@ class DegradacionEnCaliente {
 
   /// Se le pasa cada cuadro medido. Tiene que ser barato: corre en cada cuadro.
   static void mirarCuadro(int totalMs) {
-    if (_yaBajo || !PrismHubMas.encendido) return;
+    if (_yaBajo) return;
     final desde = _arranque;
     if (desde == null) return;
     if (DateTime.now().difference(desde) < _graciaAlArrancar) return;
@@ -180,7 +181,7 @@ class DegradacionEnCaliente {
     _yaBajo = true;
   }
 
-  /// Olvida lo aprendido. Se llama al apagar PrismHub+ desde Ajustes.
+  /// Olvida lo aprendido, para volver a medir el aparato desde cero.
   static Future<void> olvidar() async {
     _yaBajo = false;
     _ventanasMalasSeguidas = 0;

@@ -74,7 +74,7 @@ class HomeHeroBanner extends StatelessWidget {
         // para las filas de cards y el inicio se sentía apretado. Acá se pone
         // compacto — mismo contenido, menos aire y tipografía más chica.
         final compact = Platform.isAndroid &&
-            MediaQuery.of(context).orientation == Orientation.landscape;
+            MediaQuery.orientationOf(context) == Orientation.landscape;
         final dpr = MediaQuery.devicePixelRatioOf(context);
         final cacheWidth = (imageWidth * dpr).ceil().clamp(1, 4096).toInt();
 

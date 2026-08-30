@@ -163,7 +163,7 @@ class _VideoPlayerState extends State<VideoPlayer> {
       );
     }
     return Obx(() {
-      final maxWidth = MediaQuery.of(context).size.width;
+      final maxWidth = MediaQuery.sizeOf(context).width;
       // El área del video SIEMPRE ocupa el espacio entero disponible
       // (Expanded en la Row, Positioned.fill en el Stack — nunca un ancho
       // fijo en píxeles): un ancho calculado a partir de MediaQuery queda un

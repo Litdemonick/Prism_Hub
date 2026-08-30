@@ -852,7 +852,7 @@ class _VideoPlayerDesktopControlsState
                           // la derecha, como al empujar una foto.
                           onHorizontalDragUpdate: (d) {
                             if (!_c.vrUnaPantalla.value) return;
-                            final ancho = MediaQuery.of(context).size.width;
+                            final ancho = MediaQuery.sizeOf(context).width;
                             if (ancho <= 0) return;
                             _c.moverVr(-d.delta.dx / ancho);
                           },

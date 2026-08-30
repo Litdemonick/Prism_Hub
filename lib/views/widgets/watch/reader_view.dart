@@ -30,7 +30,7 @@ class ReaderView<T extends ReaderController> extends StatelessWidget {
               if (event.position.dy < 60) {
                 c.showControlPanel();
               }
-              if (event.position.dy > MediaQuery.of(context).size.height - 60) {
+              if (event.position.dy > MediaQuery.sizeOf(context).height - 60) {
                 c.showControlPanel();
               }
             },
@@ -87,7 +87,7 @@ class ReaderView<T extends ReaderController> extends StatelessWidget {
                         // sea cómoda de acertar.
                         const edge = 80.0;
                         final xPos = details.globalPosition.dx;
-                        final width = MediaQuery.of(context).size.width;
+                        final width = MediaQuery.sizeOf(context).width;
                         if (xPos < edge) {
                           c.previousPage();
                         } else if (xPos > width - edge) {

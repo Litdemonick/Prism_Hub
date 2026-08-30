@@ -85,7 +85,7 @@ class _HomeSectionState extends State<HomeSection> {
     // variante más chica de las tres para la fila entera.
     final isAndroidLandscape = Platform.isAndroid &&
         !PlatformTv.esTelevisionSync &&
-        MediaQuery.of(context).orientation == Orientation.landscape;
+        MediaQuery.orientationOf(context) == Orientation.landscape;
     final cardWidth = isAndroidLandscape
         ? HomeMediaCard.androidLandscapeWidth
         : Platform.isAndroid

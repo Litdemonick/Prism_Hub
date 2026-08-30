@@ -5,7 +5,6 @@ import 'package:flutter/rendering.dart';
 import 'package:prismhub/utils/log.dart';
 import 'package:prismhub/utils/platform_tv.dart';
 import 'package:prismhub/utils/prismhub_directory.dart';
-import 'package:prismhub/utils/prismhub_storage.dart';
 
 /// **PrismHub+**: mira en qué aparato está corriendo la app y la ajusta a él.
 ///
@@ -25,42 +24,27 @@ import 'package:prismhub/utils/prismhub_storage.dart';
 /// Acá está todo junto. Lo que se detecta lo resuelve [PerfilDeAparato] al
 /// arrancar; lo que se hace con eso se decide en este archivo y en ninguno más.
 ///
-/// ── Y se puede apagar ───────────────────────────────────────────────────────
+/// ── Y por qué NO se puede apagar ────────────────────────────────────────────
 ///
-/// Apagado, todo devuelve lo mismo que devolvía antes de que esto existiera: la
-/// app pide 1080p, no le pone turno a las peticiones y no recorta nada. Sirve
-/// para dos cosas —comparar si de verdad está ayudando, y darle salida a quien
-/// prefiera calidad a fluidez— y es lo que hace que esto no sea una caja negra.
+/// Llegó a tener un interruptor y se sacó. Apagarlo no era una preferencia: era
+/// dejar que la app pidiera 220 MB de imágenes y ciento treinta peticiones a la
+/// vez en un televisor de 0,9 GB, o sea pedirle al sistema que la cerrara.
 ///
-/// Cuando está apagado se dice en el registro y en Ajustes, para que nadie
-/// investigue durante media hora por qué su televisor va lento con la
-/// optimización desactivada.
+/// Lo que sí es una preferencia —pedir siempre la máxima calidad de vídeo—
+/// tiene su propio ajuste en Reproducción, que es donde corresponde. Esto no es
+/// una opción de gusto: es cómo la app se entera de con qué cuenta.
+///
+/// Lo que queda para quien lo necesite es **volver a medir el aparato**, por si
+/// alguna vez lo clasificara peor de lo que es. Eso no apaga nada.
 class PrismHubMas {
   PrismHubMas._();
 
-  /// Si está encendido. De fábrica sí.
-  ///
-  /// Se lee del ajuste cada vez y no se guarda en memoria: apagarlo tiene que
-  /// notarse sin reiniciar la app.
-  static bool get encendido {
-    try {
-      final v = PrismHubStorage.getSetting(SettingKey.prismhubMas);
-      return v is bool ? v : true;
-    } catch (_) {
-      // Preguntar antes de que el almacenamiento esté listo. Pasa en el
-      // arranque más temprano y en las pruebas, y no puede ser motivo de que
-      // nada reviente: encendido es lo de fábrica.
-      return true;
-    }
-  }
-
-  /// El nivel que se usa para decidir. Apagado, siempre el de un aparato capaz.
-  static NivelDeAparato get nivel =>
-      encendido ? PerfilDeAparato.nivel : NivelDeAparato.alto;
+  /// El nivel con el que se decide todo.
+  static NivelDeAparato get nivel => PerfilDeAparato.nivel;
 
   /// Si este aparato recibe algún recorte ahora mismo.
   static bool get estaAjustando =>
-      encendido && PerfilDeAparato.nivel != NivelDeAparato.alto;
+      PerfilDeAparato.nivel != NivelDeAparato.alto;
 
   // ── Lo que se ajusta ──────────────────────────────────────────────────────
 
@@ -198,11 +182,6 @@ class PrismHubMas {
   /// Es la línea que contesta «¿por qué en este aparato se ve distinto?» sin
   /// tener que deducirlo del resto del registro.
   static void anotarEnElRegistro() {
-    if (!encendido) {
-      logger.info('PrismHub+ está APAGADO: la app no ajusta nada a este '
-          'aparato. Si va lento, ese es el primer sitio donde mirar.');
-      return;
-    }
     logger.info(
       'PrismHub+ · aparato ${PerfilDeAparato.nivel.name} · '
       'vídeo hasta ${techoDeCalidad}p · '

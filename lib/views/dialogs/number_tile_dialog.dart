@@ -53,7 +53,7 @@ class _NumberTileDialogState extends State<NumberTileDialog> {
           builder: (context) => Padding(
             padding: const EdgeInsets.all(20),
             child: Padding(
-              padding: MediaQuery.of(context).viewInsets,
+              padding: MediaQuery.viewInsetsOf(context),
               // SingleChildScrollView: en horizontal con el teclado abierto
               // (autofocus más abajo lo abre solo) queda muy poco alto útil
               // y este contenido no entraba — franja amarilla de overflow.

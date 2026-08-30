@@ -7,7 +7,6 @@ import 'package:prismhub/utils/encabezado_de_sesion.dart';
 import 'package:prismhub/utils/i18n.dart';
 import 'package:prismhub/utils/platform_tv.dart';
 import 'package:prismhub/utils/prismhub_mas.dart';
-import 'package:prismhub/utils/prismhub_storage.dart';
 import 'package:prismhub/views/widgets/home/home_theme.dart';
 import 'package:prismhub/views/widgets/tv/focusable_card.dart';
 
@@ -42,6 +41,7 @@ class _PrismHubMasPageState extends State<PrismHubMasPage> {
   /// Cuántos MB soltó la última limpieza, o null si todavía no se limpió.
   double? _soltados;
   bool _limpiando = false;
+  bool _seVolvioAMedir = false;
 
   bool get _tv => PlatformTv.esTelevisionSync;
 
@@ -49,16 +49,17 @@ class _PrismHubMasPageState extends State<PrismHubMasPage> {
   double get _textoSz => _tv ? 17 : 14;
   double get _chicoSz => _tv ? 15 : 12;
 
-  Future<void> _alternar() async {
-    await PrismHubStorage.setSetting(
-      SettingKey.prismhubMas,
-      !PrismHubMas.encendido,
-    );
-    // Al apagarlo se olvida lo aprendido: si alguien pide que la app no se
-    // adapte, arrastrar un nivel rebajado de antes sería seguir adaptándola.
-    if (!PrismHubMas.encendido) await DegradacionEnCaliente.olvidar();
-    PrismHubMas.anotarEnElRegistro();
-    if (mounted) setState(() {});
+  /// Olvida lo que PrismHub+ aprendió usando este aparato.
+  ///
+  /// Es la única salida que hace falta: si alguna vez el vigilante bajara el
+  /// nivel de un aparato que sí podía —porque el sistema estaba ocupado con
+  /// otra cosa, por ejemplo—, sin esto quedaría rebajado para siempre.
+  ///
+  /// No apaga nada. PrismHub+ vuelve a medir en el arranque siguiente.
+  Future<void> _volverAMedir() async {
+    await DegradacionEnCaliente.olvidar();
+    if (!mounted) return;
+    setState(() => _seVolvioAMedir = true);
   }
 
   Future<void> _limpiar() async {
@@ -73,7 +74,6 @@ class _PrismHubMasPageState extends State<PrismHubMasPage> {
 
   @override
   Widget build(BuildContext context) {
-    final encendido = PrismHubMas.encendido;
     return Scaffold(
       backgroundColor: HomeTheme.bg,
       appBar: AppBar(
@@ -101,8 +101,6 @@ class _PrismHubMasPageState extends State<PrismHubMasPage> {
                 padding: EdgeInsets.all(_tv ? 28 : 16),
                 children: [
                   _queEs(),
-                  const SizedBox(height: 18),
-                  _elInterruptor(encendido),
                   const SizedBox(height: 22),
                   _rotulo('settings.mas-tu-aparato'.i18n),
                   const SizedBox(height: 10),
@@ -110,9 +108,9 @@ class _PrismHubMasPageState extends State<PrismHubMasPage> {
                   const SizedBox(height: 22),
                   _rotulo('settings.mas-que-ajusta'.i18n),
                   const SizedBox(height: 10),
-                  _loQueAjusta(encendido),
+                  _loQueAjusta(),
                   const SizedBox(height: 22),
-                  _rotulo('settings.mas-limpieza'.i18n),
+                  _rotulo('settings.mas-mantenimiento'.i18n),
                   const SizedBox(height: 10),
                   _laLimpieza(),
                   const SizedBox(height: 28),
@@ -147,69 +145,6 @@ class _PrismHubMasPageState extends State<PrismHubMasPage> {
         ),
       );
 
-  Widget _elInterruptor(bool encendido) => FocusableCard(
-        borderRadius: 14,
-        conCrecido: false,
-        onTap: () => unawaited(_alternar()),
-        child: Container(
-          padding: EdgeInsets.symmetric(
-            horizontal: _tv ? 20 : 14,
-            vertical: _tv ? 20 : 14,
-          ),
-          decoration: BoxDecoration(
-            borderRadius: BorderRadius.circular(14),
-            color: Color.alphaBlend(
-              Colors.white.withValues(alpha: 0.05),
-              HomeTheme.bg,
-            ),
-          ),
-          child: Row(
-            children: [
-              Icon(
-                encendido ? Icons.bolt : Icons.bolt_outlined,
-                color: encendido ? HomeTheme.accentPink : HomeTheme.textMuted,
-                size: _tv ? 30 : 24,
-              ),
-              SizedBox(width: _tv ? 18 : 14),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      'settings.mas-optimizar'.i18n,
-                      style: TextStyle(
-                        fontSize: _textoSz + 1,
-                        fontWeight: FontWeight.w600,
-                        color: HomeTheme.textPrimary,
-                      ),
-                    ),
-                    const SizedBox(height: 4),
-                    Text(
-                      encendido
-                          ? (PrismHubMas.estaAjustando
-                              ? 'settings.mas-ajustando'.i18n
-                              : 'settings.mas-sin-recortes'.i18n)
-                          : 'settings.mas-apagado-aviso'.i18n,
-                      style: TextStyle(
-                        fontSize: _chicoSz,
-                        height: 1.4,
-                        color: encendido
-                            ? HomeTheme.textMuted
-                            : HomeTheme.accentRed,
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-              SizedBox(width: _tv ? 14 : 10),
-              // Una pastilla con la palabra y no un interruptor dibujado: desde
-              // el sillón, la perilla de un switch chico no se lee.
-              _Pastilla(activa: encendido, grande: _tv),
-            ],
-          ),
-        ),
-      );
-
   Widget _rotulo(String texto) => Padding(
         padding: const EdgeInsets.only(left: 4),
         child: Text(
@@ -238,7 +173,7 @@ class _PrismHubMasPageState extends State<PrismHubMasPage> {
         ],
       );
 
-  Widget _loQueAjusta(bool encendido) {
+  Widget _loQueAjusta() {
     final sinRecorte = 'settings.mas-sin-recorte'.i18n;
     final peticiones = PrismHubMas.peticionesALaVez;
     final deMas = PrismHubMas.pixelesQueSeConstruyenDeMas;
@@ -269,18 +204,6 @@ class _PrismHubMasPageState extends State<PrismHubMasPage> {
           tamano: _textoSz,
           tamanoChico: _chicoSz,
         ),
-        if (!encendido)
-          Padding(
-            padding: const EdgeInsets.only(top: 8),
-            child: Text(
-              'settings.mas-apagado-detalle'.i18n,
-              style: TextStyle(
-                fontSize: _chicoSz,
-                height: 1.4,
-                color: HomeTheme.accentRed,
-              ),
-            ),
-          ),
       ],
     );
   }
@@ -336,6 +259,43 @@ class _PrismHubMasPageState extends State<PrismHubMasPage> {
                     fontSize: _textoSz,
                     fontWeight: FontWeight.w600,
                     color: HomeTheme.textPrimary,
+                  ),
+                ),
+              ),
+            ),
+          ),
+          const SizedBox(height: 18),
+          Text(
+            'settings.mas-volver-a-medir-detalle'.i18n,
+            style: TextStyle(
+              fontSize: _chicoSz,
+              height: 1.5,
+              color: HomeTheme.textMuted,
+            ),
+          ),
+          const SizedBox(height: 12),
+          FocusableCard(
+            borderRadius: 10,
+            conCrecido: false,
+            onTap: () => unawaited(_volverAMedir()),
+            child: Container(
+              width: double.infinity,
+              padding: EdgeInsets.symmetric(vertical: _tv ? 16 : 12),
+              decoration: BoxDecoration(
+                borderRadius: BorderRadius.circular(10),
+                border: Border.all(color: HomeTheme.border),
+              ),
+              child: Center(
+                child: Text(
+                  _seVolvioAMedir
+                      ? 'settings.mas-se-volvera-a-medir'.i18n
+                      : 'settings.mas-volver-a-medir'.i18n,
+                  style: TextStyle(
+                    fontSize: _textoSz,
+                    fontWeight: FontWeight.w600,
+                    color: _seVolvioAMedir
+                        ? const Color(0xFF6FCFA5)
+                        : HomeTheme.textPrimary,
                   ),
                 ),
               ),
@@ -425,37 +385,4 @@ class _Fila extends StatelessWidget {
           ],
         ),
       );
-}
-
-class _Pastilla extends StatelessWidget {
-  const _Pastilla({required this.activa, required this.grande});
-
-  final bool activa;
-  final bool grande;
-
-  @override
-  Widget build(BuildContext context) {
-    final color = activa ? HomeTheme.accentPink : HomeTheme.textMuted;
-    return Container(
-      padding: EdgeInsets.symmetric(
-        horizontal: grande ? 18 : 12,
-        vertical: grande ? 9 : 6,
-      ),
-      decoration: BoxDecoration(
-        color: activa
-            ? color.withValues(alpha: 0.20)
-            : Colors.white.withValues(alpha: 0.07),
-        borderRadius: BorderRadius.circular(999),
-        border: Border.all(color: activa ? color : HomeTheme.border),
-      ),
-      child: Text(
-        activa ? 'common.on'.i18n : 'common.off'.i18n,
-        style: TextStyle(
-          fontSize: grande ? 15 : 12,
-          fontWeight: FontWeight.w700,
-          color: color,
-        ),
-      ),
-    );
-  }
 }
