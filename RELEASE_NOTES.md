@@ -1,45 +1,46 @@
-## PrismHub v1.0.55 — Registros limpios y una pantalla menos que se rompe
+## PrismHub v1.0.56 — El televisor se encuentra solo
 
-> 🧾 **Actualizá para poder reportar bien.** Esta versión arregla un fallo que
-> rompía un trozo de la pantalla en algunos televisores, hace que el registro
-> empiece limpio cada vez que volvés a la app, y dice **por qué** se cerró
-> cuando se cierra sola.
+> 📡 **Se acabó escribir direcciones.** En el teléfono, la tablet o el PC:
+> Ajustes → Registros → **«Ver el registro de un televisor»**. Busca en tu red,
+> muestra los que estén compartiendo y lo abre de un toque.
 
 > ⚠️ **La app sigue en mantenimiento general.** Se la sigue reestructurando
 > por dentro, así que es posible que te cruces con fallos o con cosas a medio
 > terminar. Si encontrás algo roto, reportalo desde Ajustes → Reportar.
 
-### 📺 Un trozo de pantalla que se rompía en televisor
+### 📡 Ver el registro de un televisor, sin escribir nada
 
-- En algunos televisores aparecía un rectángulo de error en medio del
-  reproductor. La causa: widgets pensados para la versión de escritorio que se
-  montan igual en Android, donde les falta el tema que necesitan — y en vez de
-  arreglárselas, se caían.
-- Ahora, si les falta, usan un tema por defecto. En PC no cambia nada.
+- En el televisor se enciende igual que antes: **Ajustes → Ver registro → «Ver
+  desde otro aparato»**. Y ahí ya no hace falta apuntar la dirección.
+- En el otro aparato aparece en una lista y se abre de un toque. Se ve dentro
+  de PrismHub, con los mismos colores del visor de siempre — no en una página
+  pelada del navegador.
+- **Si la conexión se corta, lo que ya llegó no se borra.** Si el televisor se
+  cayó, eso es justamente lo que hace falta para saber por qué.
+- Sigue funcionando por navegador si preferís: la dirección se muestra igual.
 
-### 🧾 El registro empieza limpio
+### 🔗 Y la dirección, mucho más corta
 
-- En televisor «cerrar la app» casi nunca la cierra: Android la deja en segundo
-  plano y volver retoma el mismo proceso. El registro seguía escribiendo sobre
-  la misma sesión, así que al abrirlo aparecían las líneas de hace horas.
-- Ahora, si volvés después de un rato, empieza una **sesión nueva**. La
-  anterior no se pierde: pasa al Historial, como siempre.
-- No se mata la app al salir a propósito: eso haría lento el siguiente
-  arranque, que es lo que más se nota en un televisor.
+- Antes: `http://192.168.50.183:40365/r/ab3k9x`. Ahora: `192.168.50.183:8787/ab3k`
+  — y **ya no cambia en toda la sesión**, así que apagar y volver a encender no
+  te obliga a escribirla de nuevo.
+- **Elige bien la dirección.** Un televisor con cable y wifi tiene dos, y se
+  tomaba la primera sin mirar cuál. Ahora prefiere `192.168.x.x`, que es lo que
+  reparten casi todos los routers de casa, y deja las dos anotadas en el
+  registro por si la otra fuera la buena.
 
-### ❓ Y dice por qué se cerró
+### 🔒 Sobre la privacidad, dicho claro
 
-- Cuando la app se cierra sola no hay error que mostrar: o reventó algo nativo
-  o el sistema la cerró por falta de memoria. **Se ven idénticos desde fuera y
-  llevan a arreglos opuestos.**
-- Ahora los avisos de memoria quedan en el rastro, así que el propio registro
-  lo distingue: si el rastro termina en varios «el sistema pidió memoria», fue
-  lo segundo.
+- El televisor solo se anuncia **mientras vos lo enciendas**, se apaga solo a
+  los 45 minutos y es de solo lectura.
+- Quien esté en tu red puede encontrarlo en ese rato sin ver la pantalla del
+  televisor — antes hacía falta verla. Es el precio de la comodidad, y el
+  registro sigue saliendo **sin credenciales, sin qué estuviste viendo y sin
+  datos tuyos**.
 
-### 🗂️ Menos ruido, sin perder nada
+### 🔧 Actualizaciones
 
-- **Una apertura de la app = una entrada en el Historial.** Se partía en varias
-  porque la cabecera podía escribirse más de una vez.
-- **Cada pedido de una extensión se anotaba dos veces**, cada línea con media
-  verdad. Ahora es una sola con todo: extensión, servidor, código y tiempo. En
-  la carga del inicio son 150 líneas donde había 300.
+- Cuando el instalador no aparece al actualizar, el registro ahora dice por
+  qué: si falta el permiso de instalar apps o si el instalador se lanzó y el
+  televisor no lo trajo al frente. Son dos problemas distintos que desde fuera
+  se ven igual.
