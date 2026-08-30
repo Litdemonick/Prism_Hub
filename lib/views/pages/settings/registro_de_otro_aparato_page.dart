@@ -367,6 +367,25 @@ class _RegistroRemotoPageState extends State<_RegistroRemotoPage> {
     super.dispose();
   }
 
+  /// Si la vista está pegada al final, que es donde aparece lo nuevo.
+  bool _alFinal = true;
+
+  /// Apaga el seguimiento cuando el desplazamiento se va del fondo.
+  bool _mirarDesplazamiento(ScrollNotification n) {
+    if (n is! ScrollUpdateNotification && n is! ScrollEndNotification) {
+      return false;
+    }
+    final abajo = n.metrics.maxScrollExtent - n.metrics.pixels < 24;
+    if (abajo != _alFinal) setState(() => _alFinal = abajo);
+    return false;
+  }
+
+  /// La cabecera sin el «· N líneas» del final.
+  static String _sinElConteo(String cabecera) {
+    final corte = cabecera.lastIndexOf(' · ');
+    return corte < 0 ? cabecera : cabecera.substring(0, corte);
+  }
+
   Future<void> _copiar(String url) async {
     await Clipboard.setData(ClipboardData(text: url));
     if (!mounted) return;
@@ -451,16 +470,18 @@ class _RegistroRemotoPageState extends State<_RegistroRemotoPage> {
       // peor caso se ve una línea de más, que es infinitamente mejor que ver
       // el registro con la primera línea cortada sin saberlo.
       final tieneCabecera = partido.isNotEmpty && !esElRecuadro(partido.first);
-      // ── Si cambió lo que se está sirviendo, se empieza de arriba ──────
-      //
-      // La cabecera dice qué es y de qué zona. Cuando cambia, lo que hay
-      // debajo es OTRA cosa —otra zona, u otra apertura— y dejar el
-      // desplazamiento donde estaba muestra la mitad de un texto nuevo desde
-      // un punto que no significa nada. Volver arriba es lo que hace que se
-      // lea como «esto se acaba de renovar» y no como «esto se movió solo».
       final nuevaCabecera = tieneCabecera ? partido.first : '';
-      final cambioLoQueSeSirve =
-          _cabecera.isNotEmpty && nuevaCabecera != _cabecera;
+      // ── Se compara SIN el conteo de líneas ────────────────────────────
+      //
+      // La cabecera termina en «· N líneas», y ese número sube con cada línea
+      // nueva. Comparándola entera, CADA refresco parecía un cambio de lo que
+      // se sirve — reportado en vivo: «a veces al arrastrar la barra me
+      // devuelve arriba». Era esto, no la barra.
+      //
+      // Lo que importa es si cambió el ORIGEN o la ZONA, que es todo lo que va
+      // antes del conteo.
+      final cambioLoQueSeSirve = _cabecera.isNotEmpty &&
+          _sinElConteo(nuevaCabecera) != _sinElConteo(_cabecera);
       setState(() {
         _cabecera = nuevaCabecera;
         _lineas = tieneCabecera
@@ -469,8 +490,22 @@ class _RegistroRemotoPageState extends State<_RegistroRemotoPage> {
         _fallo = null;
         _primeraVez = false;
       });
-      if (cambioLoQueSeSirve && _scroll.hasClients) {
-        _scroll.jumpTo(0);
+      // ── Se sigue el FINAL, no el principio ────────────────────────────
+      //
+      // Un registro en vivo se lee por abajo: lo último que pasó es lo que
+      // interesa. Mandaba la vista arriba, o sea al principio de la sesión,
+      // que es lo más viejo — reportado en vivo: «se actualiza y me sube
+      // arriba en vez de abajo».
+      //
+      // Y solo mientras se esté abajo. Si la persona subió a leer algo, se
+      // queda donde está: arrastrarla al fondo mientras lee es la forma más
+      // rápida de volver inútil un visor en vivo. Mismo criterio que el visor
+      // del propio aparato.
+      if ((cambioLoQueSeSirve || _alFinal) && _scroll.hasClients) {
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          if (!mounted || !_scroll.hasClients) return;
+          _scroll.jumpTo(_scroll.position.maxScrollExtent);
+        });
       }
     } catch (e) {
       if (!mounted) return;
@@ -611,58 +646,78 @@ class _RegistroRemotoPageState extends State<_RegistroRemotoPage> {
       );
     }
     final agrupadas = agruparElRecuadro(_lineas);
-    // ── Con barra, y que se pueda arrastrar ────────────────────────────
-    //
-    // Reportado en vivo: «el scroll es tosco al tocar la barra». La barra que
-    // sale por defecto en escritorio es solo un indicador —muestra dónde
-    // estás pero no se puede agarrar— así que al intentar arrastrarla no pasa
-    // nada y parece que la pantalla se traba. Con `interactive` se agarra y
-    // se lleva, que es lo que uno intenta hacer con un registro largo.
-    return RawScrollbar(
-      controller: _scroll,
-      // Siempre a la vista y agarrable.
-      //
-      // La de por defecto aparece al desplazar y se desvanece, y en escritorio
-      // es solo un indicador —no se puede agarrar—. En un registro de miles de
-      // líneas eso deja sin la única forma cómoda de moverse rápido: al
-      // intentar arrastrarla no pasa nada y parece que la pantalla se trabó.
-      //
-      // Ancha a propósito: doce puntos es lo que hace falta para acertarle con
-      // el dedo, y con el ratón tampoco molesta.
-      interactive: true,
-      thumbVisibility: true,
-      thickness: 12,
-      radius: const Radius.circular(6),
-      thumbColor: HomeTheme.accentPink.withValues(alpha: 0.55),
-      child: SeleccionableSiSePuede(
-        child: ListView.builder(
-          controller: _scroll,
-          padding: const EdgeInsets.fromLTRB(12, 8, 12, 24),
-          itemCount: agrupadas.length,
-          itemBuilder: (context, i) {
-            final linea = agrupadas[i];
-            final estilo = TextStyle(
-              fontFamily: 'monospace',
-              fontFamilyFallback: const [
-                'Consolas',
-                'DejaVu Sans Mono',
-                'Courier New',
-              ],
-              fontSize: 11.5,
-              height: 1.35,
-              color: colorDeLinea(linea),
-            );
-            return Padding(
-              padding: const EdgeInsets.symmetric(vertical: 2),
-              child: esElRecuadro(linea)
-                  ? FittedBox(
-                      fit: BoxFit.scaleDown,
-                      alignment: Alignment.centerLeft,
-                      child: Text(linea, style: estilo, softWrap: false),
-                    )
-                  : Text(linea, style: estilo),
-            );
-          },
+    return NotificationListener<ScrollNotification>(
+      onNotification: _mirarDesplazamiento,
+      child: Padding(
+        // ── El registro, dentro de un panel con contorno ────────────────
+        //
+        // Igual que la página que sirve el televisor. No es adorno: un texto
+        // monoespaciado pegado a los cuatro bordes de la ventana se lee como
+        // parte del marco de la app, y cuesta ver dónde empieza y dónde
+        // termina — sobre todo buscando una línea concreta entre miles. Con el
+        // contorno, el registro es un objeto con principio y fin.
+        padding: const EdgeInsets.fromLTRB(12, 4, 12, 12),
+        child: DecoratedBox(
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(10),
+            color: Colors.black.withValues(alpha: 0.22),
+            border: Border.all(color: HomeTheme.border),
+          ),
+          child: ClipRRect(
+            borderRadius: BorderRadius.circular(9),
+            // ── Con barra, agarrable y de tamaño estable ────────────────
+            //
+            // La que sale por defecto en escritorio aparece al desplazar, se
+            // desvanece y no se puede agarrar: al intentar arrastrarla no pasa
+            // nada y parece que la pantalla se trabó.
+            //
+            // Y el tirador se agrandaba y achicaba solo. Una lista perezosa no
+            // sabe cuánto mide en total: lo ESTIMA con el promedio de lo que
+            // ya construyó, y las líneas de un registro miden cosas muy
+            // distintas —una suelta, un recuadro de veinte—. Con un mínimo
+            // deja de encogerse hasta casi desaparecer.
+            child: RawScrollbar(
+              controller: _scroll,
+              interactive: true,
+              thumbVisibility: true,
+              thickness: 12,
+              minThumbLength: 48,
+              radius: const Radius.circular(6),
+              thumbColor: HomeTheme.accentPink.withValues(alpha: 0.55),
+              child: SeleccionableSiSePuede(
+                child: ListView.builder(
+                  controller: _scroll,
+                  padding: const EdgeInsets.fromLTRB(12, 8, 12, 24),
+                  itemCount: agrupadas.length,
+                  itemBuilder: (context, i) {
+                    final linea = agrupadas[i];
+                    final estilo = TextStyle(
+                      fontFamily: 'monospace',
+                      fontFamilyFallback: const [
+                        'Consolas',
+                        'DejaVu Sans Mono',
+                        'Courier New',
+                      ],
+                      fontSize: 11.5,
+                      height: 1.35,
+                      color: colorDeLinea(linea),
+                    );
+                    return Padding(
+                      padding: const EdgeInsets.symmetric(vertical: 2),
+                      child: esElRecuadro(linea)
+                          ? FittedBox(
+                              fit: BoxFit.scaleDown,
+                              alignment: Alignment.centerLeft,
+                              child:
+                                  Text(linea, style: estilo, softWrap: false),
+                            )
+                          : Text(linea, style: estilo),
+                    );
+                  },
+                ),
+              ),
+            ),
+          ),
         ),
       ),
     );
