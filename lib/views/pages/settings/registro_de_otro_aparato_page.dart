@@ -43,6 +43,21 @@ class RegistroDeOtroAparatoPage extends StatefulWidget {
 
 class _RegistroDeOtroAparatoPageState extends State<RegistroDeOtroAparatoPage> {
   List<({String aparato, String url})> _encontrados = const [];
+
+  /// Los que contestaron en alguna búsqueda anterior y ahora no.
+  ///
+  /// ── Por qué se muestran igual ───────────────────────────────────────────
+  ///
+  /// Un televisor deja de contestar por tres motivos que desde acá se ven
+  /// idénticos: se apagó el servidor a mano, se cumplieron los tres cuartos de
+  /// hora, o la app se cayó. Haciéndolo desaparecer de la lista, los tres se
+  /// leen como «acá nunca hubo nada» — y el tercero es justamente el caso en
+  /// que uno estaba mirando.
+  ///
+  /// Se quedan, apagados y aparte, con su dirección: se puede abrir igual por
+  /// si volvió, y sobre todo se sabe que existió.
+  List<({String aparato, String url})> _perdidos = const [];
+
   bool _buscando = true;
 
   @override
@@ -80,7 +95,14 @@ class _RegistroDeOtroAparatoPageState extends State<RegistroDeOtroAparatoPage> {
     setState(() => _buscando = true);
     final hallazgos = await AnuncioDeRegistro.buscar();
     if (!mounted) return;
+    final vivos = {for (final h in hallazgos) h.url};
     setState(() {
+      // Lo que se conocía y ya no contesta pasa a la otra lista; lo que vuelve
+      // a contestar sale de ella.
+      _perdidos = [
+        for (final v in [..._encontrados, ..._perdidos])
+          if (!vivos.contains(v.url)) v,
+      ];
       _encontrados = hallazgos;
       _buscando = false;
     });
@@ -178,74 +200,103 @@ class _RegistroDeOtroAparatoPageState extends State<RegistroDeOtroAparatoPage> {
         ),
       );
     }
+    final filas = <Widget>[
+      if (_encontrados.isNotEmpty) _rotulo('settings.log-en-linea'.i18n),
+      for (final e in _encontrados) _tarjeta(e, activo: true),
+      if (_perdidos.isNotEmpty) ...[
+        const SizedBox(height: 8),
+        _rotulo('settings.log-sin-conexion'.i18n),
+        for (final e in _perdidos) _tarjeta(e, activo: false),
+      ],
+    ];
     return ListView.builder(
       padding: const EdgeInsets.all(16),
-      itemCount: _encontrados.length,
-      itemBuilder: (context, i) {
-        final e = _encontrados[i];
-        return Padding(
-          key: ValueKey(e.url),
-          padding: const EdgeInsets.only(bottom: 10),
-          child: FocusableCard(
-            borderRadius: 12,
-            conCrecido: false,
-            onTap: () => Navigator.of(context).push(
-              MaterialPageRoute<void>(
-                builder: (_) =>
-                    _RegistroRemotoPage(aparato: e.aparato, url: e.url),
-              ),
-            ),
-            child: Container(
-              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 14),
-              decoration: BoxDecoration(
-                borderRadius: BorderRadius.circular(12),
-                color: Color.alphaBlend(
-                  Colors.white.withValues(alpha: 0.05),
-                  HomeTheme.bg,
-                ),
-              ),
-              child: Row(
-                children: [
-                  Icon(Icons.tv, color: HomeTheme.accentPink, size: 24),
-                  const SizedBox(width: 14),
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          e.aparato.isEmpty ? 'PrismHub' : e.aparato,
-                          style: TextStyle(
-                            fontSize: 15,
-                            fontWeight: FontWeight.w600,
-                            color: HomeTheme.textPrimary,
-                          ),
-                        ),
-                        const SizedBox(height: 3),
-                        // La dirección, a la vista pero sin botones al lado.
-                        //
-                        // Acá sirve para reconocer cuál televisor es cuando
-                        // hay más de uno. Copiarla y abrirla en el navegador
-                        // están DENTRO, en la pantalla del registro: son
-                        // cosas que se hacen sobre el que ya se eligió, y
-                        // acá solo llenaban la fila de iconos chicos entre
-                        // los que hay que apuntar.
-                        Text(
-                          e.url,
-                          style: TextStyle(
-                            fontSize: 12,
-                            color: HomeTheme.textMuted,
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                  Icon(Icons.chevron_right, color: HomeTheme.textMuted),
-                ],
-              ),
+      itemCount: filas.length,
+      itemBuilder: (context, i) => filas[i],
+    );
+  }
+
+  /// El rótulo de cada bloque.
+  Widget _rotulo(String texto) => Padding(
+        padding: const EdgeInsets.only(left: 4, bottom: 8, top: 4),
+        child: Text(
+          texto.toUpperCase(),
+          style: TextStyle(
+            fontSize: 11,
+            letterSpacing: 1.1,
+            fontWeight: FontWeight.w700,
+            color: HomeTheme.textMuted,
+          ),
+        ),
+      );
+
+  Widget _tarjeta(({String aparato, String url}) e, {required bool activo}) {
+    return Padding(
+      key: ValueKey(e.url),
+      padding: const EdgeInsets.only(bottom: 10),
+      child: FocusableCard(
+        borderRadius: 12,
+        conCrecido: false,
+        onTap: () => Navigator.of(context).push(
+          MaterialPageRoute<void>(
+            builder: (_) => _RegistroRemotoPage(aparato: e.aparato, url: e.url),
+          ),
+        ),
+        child: Container(
+          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 14),
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(12),
+            color: Color.alphaBlend(
+              Colors.white.withValues(alpha: 0.05),
+              HomeTheme.bg,
             ),
           ),
-        );
-      },
+          child: Row(
+            children: [
+              Icon(
+                activo ? Icons.tv : Icons.tv_off,
+                color: activo ? HomeTheme.accentPink : HomeTheme.textMuted,
+                size: 24,
+              ),
+              const SizedBox(width: 14),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      e.aparato.isEmpty ? 'PrismHub' : e.aparato,
+                      style: TextStyle(
+                        fontSize: 15,
+                        fontWeight: FontWeight.w600,
+                        color: activo
+                            ? HomeTheme.textPrimary
+                            : HomeTheme.textMuted,
+                      ),
+                    ),
+                    const SizedBox(height: 3),
+                    // La dirección, a la vista pero sin botones al lado.
+                    //
+                    // Acá sirve para reconocer cuál televisor es cuando
+                    // hay más de uno. Copiarla y abrirla en el navegador
+                    // están DENTRO, en la pantalla del registro: son
+                    // cosas que se hacen sobre el que ya se eligió, y
+                    // acá solo llenaban la fila de iconos chicos entre
+                    // los que hay que apuntar.
+                    Text(
+                      e.url,
+                      style: TextStyle(
+                        fontSize: 12,
+                        color: HomeTheme.textMuted,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              Icon(Icons.chevron_right, color: HomeTheme.textMuted),
+            ],
+          ),
+        ),
+      ),
     );
   }
 }
@@ -333,8 +384,7 @@ class _RegistroRemotoPageState extends State<_RegistroRemotoPage> {
       final salio = await ExportarRegistro.entregar(
         lineas: _lineas,
         etiqueta: 'televisor',
-        deOtroAparato:
-            widget.aparato.isEmpty ? widget.url : widget.aparato,
+        deOtroAparato: widget.aparato.isEmpty ? widget.url : widget.aparato,
       );
       if (!salio || !mounted) return;
       showPlatformSnackbar(
@@ -400,8 +450,7 @@ class _RegistroRemotoPageState extends State<_RegistroRemotoPage> {
       // Comprobando que no sea parte del recuadro, eso no puede pasar: en el
       // peor caso se ve una línea de más, que es infinitamente mejor que ver
       // el registro con la primera línea cortada sin saberlo.
-      final tieneCabecera =
-          partido.isNotEmpty && !esElRecuadro(partido.first);
+      final tieneCabecera = partido.isNotEmpty && !esElRecuadro(partido.first);
       // ── Si cambió lo que se está sirviendo, se empieza de arriba ──────
       //
       // La cabecera dice qué es y de qué zona. Cuando cambia, lo que hay

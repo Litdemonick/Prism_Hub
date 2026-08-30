@@ -506,6 +506,8 @@
     "log-sin-navegador": "Could not open a browser. The address is copied: paste it by hand.",
     "log-buscar-subtitle": "Finds TVs on your network that are sharing their log and opens it here, with no address to type.",
     "log-buscando": "Searching your network…",
+    "log-en-linea": "Sharing now",
+    "log-sin-conexion": "Connection lost",
     "log-nada-en-la-red": "No TV is sharing its log right now.\n\nOn the TV: Settings → View log → “View from another device”. Both need to be on the same network.",
     "log-remoto-cortado": "The connection to the TV dropped. Below is the last thing that arrived. Still retrying.",
     "log-limpiar": "Clear the log?",
