@@ -1589,9 +1589,15 @@ class VideoPlayerController extends GetxController with WidgetsBindingObserver {
           PrismHubStorage.getSetting(SettingKey.empezarEnMaximaCalidad) == true;
       await np.setProperty(
         'hls-bitrate',
-        // 10 Mbps: por encima de lo que pide un 1080p normal y por debajo de
-        // lo que pide un 4K. mpv elige la mejor variante que no lo supere.
-        siempreMaxima ? 'max' : '10000000',
+        // El mismo techo que usa la elección de calidad, traducido a bits por
+        // segundo. Va acá además de allá porque esto decide qué variante abre
+        // mpv de ENTRADA: sin esto, en un televisor de 720p arrancaba en 1080p
+        // y recién después se cambiaba, que es una reapertura entera del vídeo
+        // —y unos segundos de rueda— para terminar donde se podía empezar.
+        //
+        // 3 Mbps para 720p y 10 para 1080p: por encima de lo que pide cada uno
+        // con holgura, y por debajo del siguiente escalón.
+        siempreMaxima ? 'max' : _bitratePorTecho(_techoDeCalidad()),
       );
       // Proxy de Ajustes → mpv: desbloquea CDNs filtrados por el ISP.
       // Sin esto el proxy solo llega a la resolución del embed, no al stream.
@@ -3749,14 +3755,85 @@ class VideoPlayerController extends GetxController with WidgetsBindingObserver {
     }
     // La altura viaja dentro de "orden" (ver _VarianteCalidad).
     int altura(_VarianteCalidad v) => v.orden ~/ 100000;
-    // La mejor que no pase de 1080. Si TODAS pasan, la mas chica de todas, que
-    // es lo mas cerca de 1080 que ofrece ese video.
-    final cabe = deMayorAMenor.where((e) => altura(e.value) <= 1080).toList();
+    // La mejor que no pase del techo. Si TODAS lo pasan, la mas chica, que es
+    // lo mas cerca del techo que ofrece ese video.
+    final techo = _techoDeCalidad();
+    final cabe = deMayorAMenor.where((e) => altura(e.value) <= techo).toList();
     final elegida = cabe.isNotEmpty ? cabe.first : deMayorAMenor.last;
     // Ya esta reproduciendo esa misma: no se toca, para no recargar de gusto.
     if (watchData?.url == elegida.value.url) return;
-    logger.info('Calidad de arranque: ${elegida.key}');
+    logger.info('Calidad de arranque: ${elegida.key} (techo ${techo}p)');
     unawaited(switchQuality(elegida.value.url));
+  }
+
+  /// Hasta qué altura tiene sentido pedir vídeo en ESTE aparato.
+  ///
+  /// ── Por qué no es 1080 fijo para todos ──────────────────────────────────
+  ///
+  /// Lo era, y en un televisor de 1280x720 eso significaba pedir 1080p para
+  /// mostrarlo en una pantalla que no tiene esos píxeles. Se paga dos veces:
+  /// el decodificador procesa un tercio más de imagen de la que se va a ver, y
+  /// la descarga trae casi el doble de datos.
+  ///
+  /// Medido en un MediaTek de 0,9 GB con Android 9, pantalla 1280x720:
+  /// reproduciendo 1080p, «colchón: 0 s · entrando: 506 B/s» — el colchón vacío
+  /// y la reproducción parándose sola. La red de ese aparato no sostenía el
+  /// 1080p que ni siquiera podía mostrar.
+  ///
+  /// Se pide lo que la pantalla puede mostrar, con un colchón hacia arriba: un
+  /// vídeo un poco más grande que la pantalla se ve mejor que uno más chico
+  /// estirado, así que se acepta la primera altura estándar que la cubra.
+  ///
+  /// ── Y solo donde el tamaño no cambia ────────────────────────────────────
+  ///
+  /// En un televisor la pantalla es la que es. En un PC la ventana se
+  /// redimensiona y se pone a pantalla completa, así que atar la calidad al
+  /// tamaño de ahora dejaría la imagen mala al maximizar. Ahí se queda en 1080
+  /// como estaba.
+  int _techoDeCalidad() {
+    const porDefecto = 1080;
+    if (!PlatformTv.esTelevisionSync) return porDefecto;
+    try {
+      final v = WidgetsBinding.instance.platformDispatcher.views.firstOrNull;
+      final alto = v?.physicalSize.height ?? 0;
+      return techoParaPantallaDe(alto);
+    } catch (_) {
+      return porDefecto;
+    }
+  }
+
+  /// Cuántos bits por segundo pedirle a mpv para un techo de altura dado.
+  ///
+  /// Es una traducción aproximada a propósito: lo que mpv compara es el ancho
+  /// de banda que declara cada variante en la lista, y esos números los pone
+  /// cada sitio como quiere. Los valores están elegidos con holgura hacia
+  /// arriba para no dejar afuera una variante que sí es de esa altura pero
+  /// viene codificada con más caudal del habitual.
+  static String _bitratePorTecho(int techo) => switch (techo) {
+        <= 720 => '3000000',
+        <= 1080 => '10000000',
+        <= 1440 => '20000000',
+        _ => '40000000',
+      };
+
+  /// La altura de vídeo que conviene pedir para una pantalla de [alto] píxeles.
+  ///
+  /// Va aparte y es pública para poder probarla: el resto de [_techoDeCalidad]
+  /// depende de la ventana y de si el aparato es un televisor, y eso no se
+  /// puede montar en una prueba.
+  ///
+  /// Se elige la primera altura estándar que CUBRA la pantalla, no la más
+  /// cercana: con 800 px de pantalla, 720 se vería estirado y 1080 no. Quedarse
+  /// corto se nota; pasarse un poco, no.
+  static int techoParaPantallaDe(double alto) {
+    // Sin un dato creíble se deja el de siempre: un tope inventado es peor.
+    // Por debajo de 400 px no puede ser la pantalla de un televisor.
+    if (alto < 400 || !alto.isFinite) return 1080;
+    for (final escalon in const [720, 1080, 1440, 2160]) {
+      if (alto <= escalon) return escalon;
+    }
+    // Más alta que 4K: se pide 4K, que es lo más que publican las fuentes.
+    return 2160;
   }
 
   // 切换画质
