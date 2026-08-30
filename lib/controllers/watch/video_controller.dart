@@ -204,6 +204,9 @@ class VideoPlayerController extends GetxController with WidgetsBindingObserver {
     bool arrancar = true,
   }) async {
     final aparte = _subtitulosDeLaExtension();
+    // Se recuerda qué se abrió, para poder reabrirlo por el otro motor si este
+    // falla DESPUÉS. Ver _caerALaReservaPorError.
+    _loUltimoQueSeAbrio = (url: url, cabeceras: cabeceras, aparte: aparte);
     try {
       await motor.abrir(
         url,
@@ -235,6 +238,82 @@ class VideoPlayerController extends GetxController with WidgetsBindingObserver {
         subtitulosAparte: aparte,
       );
     }
+  }
+
+  /// Lo último que se le pidió abrir al motor.
+  ({
+    String url,
+    Map<String, String>? cabeceras,
+    List<Map<String, String>> aparte,
+  })? _loUltimoQueSeAbrio;
+
+  /// Cae al motor de reserva por un error que llegó DESPUÉS de abrir.
+  ///
+  /// ── Por qué no alcanzaba con el try/catch de [_abrirFuente] ─────────────
+  ///
+  /// Ese atrapa lo que revienta al abrir, y con mpv eso era casi todo: mpv
+  /// mira el contenido y falla ahí mismo si no lo entiende.
+  ///
+  /// El motor de Android no funciona así. `abrir` vuelve enseguida —preparar
+  /// la fuente es asíncrono— y si no puede con el formato, el error llega
+  /// segundos más tarde por el flujo de errores. O sea que el try/catch no ve
+  /// nada y la caída a mpv nunca pasaba.
+  ///
+  /// Medido en un teléfono con una fuente directa de player.zilla-networks.com:
+  /// «media3: ERROR_CODE_PARSING_CONTAINER_UNSUPPORTED: Source error», y el
+  /// reproductor quedaba colgado sin imagen y sin caer a mpv, que esa misma
+  /// fuente la abre sin problema.
+  ///
+  /// Solo antes del primer cuadro: si ya se estaba viendo, el problema no es
+  /// el motor sino la fuente o la red, y para eso está el cambio de servidor.
+  Future<void> _caerALaReservaPorError(String motivo) async {
+    final reserva = _motorDeReserva;
+    final ultimo = _loUltimoQueSeAbrio;
+    if (reserva == null || _yaCayoALaReserva || ultimo == null) return;
+    if (hasRenderedFrame.value || _disposed) return;
+    _yaCayoALaReserva = true;
+    logger.warning('${motor.nombre} falló después de abrir, se reintenta con '
+        '${reserva.nombre}: $motivo');
+    CentinelaDeArranque.marcar('cae al motor de reserva');
+    try {
+      await motor.parar();
+    } catch (_) {
+      // Si el que falló ni siquiera puede pararse, se sigue igual: lo que
+      // importa es que el otro arranque.
+    }
+    if (_disposed) return;
+    _motorEnUso = reserva;
+    try {
+      await motor.abrir(
+        ultimo.url,
+        cabeceras: ultimo.cabeceras,
+        subtitulosAparte: ultimo.aparte,
+      );
+    } catch (e) {
+      // Si el de reserva tampoco puede, el problema es la fuente. Se deja que
+      // siga el camino normal de servidor caído en vez de tragarlo acá.
+      logger.severe('${reserva.nombre} tampoco pudo con la fuente: $e');
+      serverFailedMessage.value = availableServers.length > 1
+          ? 'Este servidor no se puede reproducir.\n'
+              'Cambiá de servidor con el botón Servidor.'
+          : 'Este servidor no se puede reproducir. Intentá más tarde.';
+    }
+  }
+
+  /// Un error del motor que dice «no puedo con este formato».
+  ///
+  /// Se miran solo los de formato —contenedor, códec, manifiesto— y NO los de
+  /// red. Un 403 o un servidor caído los va a ver igual el otro motor, así que
+  /// cambiar de motor sería perder segundos para llegar al mismo sitio; de eso
+  /// se encarga el cambio de servidor, que es lo que corresponde.
+  static bool _esErrorDeFormato(String error) {
+    final e = error.toUpperCase();
+    return e.contains('PARSING_CONTAINER') ||
+        e.contains('PARSING_MANIFEST') ||
+        e.contains('DECODING_FORMAT') ||
+        e.contains('DECODER_INIT') ||
+        e.contains('DECODER_QUERY') ||
+        e.contains('UNSUPPORTED');
   }
 
   /// Los subtítulos que la extensión entrega aparte del vídeo.
@@ -613,6 +692,32 @@ class VideoPlayerController extends GetxController with WidgetsBindingObserver {
       !awaitingServerChoice.value &&
       !isWebViewActive.value;
 
+  /// Si la rueda de carga tiene que estar girando ahora mismo.
+  ///
+  /// ── Por qué un único sitio ──────────────────────────────────────────────
+  ///
+  /// Esta condición estaba escrita a mano dentro del widget de la rueda, y el
+  /// botón central de pausa —que se dibuja en el MISMO punto de la pantalla—
+  /// no la miraba. O sea que había momentos con la rueda girando y el botón
+  /// encima: reportado como «el de pausa se ve duplicado en el centro».
+  ///
+  /// Un reproductor de verdad muestra una cosa o la otra, nunca las dos. Con
+  /// la condición acá, la rueda y todo lo que tenga que apartarse leen lo
+  /// mismo y no pueden desincronizarse.
+  ///
+  /// Gira en dos situaciones distintas:
+  ///
+  ///  - Se está abriendo una fuente y todavía no hay imagen.
+  ///  - Ya hay imagen, pero está detenida: un salto en curso, el colchón
+  ///    vacío, o la imagen congelada sin que el motor avise que está cargando
+  ///    —que pasa con la red mal—.
+  bool get ruedaGirando =>
+      esperandoElPrimerCuadro ||
+      (hasRenderedFrame.value &&
+          (isSeeking.value ||
+              imagenCongelada.value ||
+              (isPlaying.value && isActuallyBuffering.value)));
+
   /// Si la barra de progreso NO se debe poder tocar ahora mismo.
   ///
   /// Un único sitio para las dos plataformas: la barra de escritorio y la del
@@ -675,7 +780,10 @@ class VideoPlayerController extends GetxController with WidgetsBindingObserver {
     _redDeLaRueda = null;
     hasRenderedFrame.value = true;
     logger.info('rueda apagada: $porQue');
-    BancoDePruebas.seVio();
+    // Con el motor de verdad y no con «mpv» fijo: el registro decía «· mpv»
+    // en un teléfono que estaba usando media3, que es justo el dato que hace
+    // falta para comparar los dos.
+    BancoDePruebas.seVio(motor: motor.nombre);
     CentinelaDeArranque.marcar('primer cuadro en pantalla');
   }
 
@@ -754,6 +862,14 @@ class VideoPlayerController extends GetxController with WidgetsBindingObserver {
   /// termina discutiendo sobre ajustes que quizá nunca estuvieron activos.
   Future<void> _confirmarAjustes() async {
     if (_disposed || _shutdownStarted || _playerDisposed) return;
+    // Con otro motor no hay nada que confirmar, y confirmarlo igual MIENTE.
+    //
+    // En Android el reproductor de media_kit sigue existiendo aunque no se use
+    // —también es libmpv—, así que este bloque leía sus propiedades y escribía
+    // «mpv quedó con: cache=yes · cache-secs=30…» en el registro de un
+    // teléfono que estaba reproduciendo con media3. O sea, los valores de
+    // fábrica de un reproductor vacío, presentados como los ajustes activos.
+    if (motor.nombre != 'mpv') return;
     if (player.platform is! NativePlayer) return;
     final np = player.platform as NativePlayer;
     try {
@@ -832,6 +948,25 @@ class VideoPlayerController extends GetxController with WidgetsBindingObserver {
     }
   }
 
+  /// La medición con lo que sabe cualquier motor.
+  ///
+  /// Menos datos que con mpv —no hay caudal de descarga ni cuántos cuadros se
+  /// tiraron— pero son los que de verdad se pueden saber, y alcanzan para lo
+  /// que se usa esto: si está detenido, si está esperando datos, y cuánto
+  /// tiene descargado por delante.
+  void _medirPorLaFachada(String motivo) {
+    final colchon = motor.colchon - motor.posicion;
+    final ancho = motor.ancho ?? 0;
+    final alto = motor.alto ?? 0;
+    logger.info('medición ($motivo) · motor: ${motor.nombre} · colchón: '
+        '${colchon.isNegative ? 0 : colchon.inSeconds} s · posición: '
+        '${motor.posicion.inSeconds}s · reproduciendo: '
+        '${motor.reproduciendo ? 'sí' : 'no'} · esperando datos: '
+        '${motor.cargando ? 'sí' : 'no'} · imagen: '
+        '${ancho > 0 ? '${ancho}x$alto' : '—'} · calidad: '
+        '${currentQuality.value.isEmpty ? '—' : currentQuality.value}');
+  }
+
   Future<void> _medir(String motivo) async {
     // Tres candados antes de entrar a la librería nativa, no uno.
     //
@@ -840,6 +975,17 @@ class VideoPlayerController extends GetxController with WidgetsBindingObserver {
     // sigue sonando de fondo. Por eso además de _disposed se miran las marcas
     // del apagado, que se ponen ANTES de liberar nada.
     if (_disposed || _shutdownStarted || _playerDisposed) return;
+    // Con otro motor se mide igual, pero con lo que ese motor sí sabe.
+    //
+    // Todo lo de abajo son propiedades de libmpv. En Android salían todas en
+    // guiones —«colchón: — s · entrando: — B/s · pause: yes · core-idle:
+    // yes»— porque se le preguntaban a un reproductor de media_kit que nunca
+    // recibió la fuente. Una medición que siempre dice lo mismo es peor que no
+    // tenerla: parece un dato y no lo es.
+    if (motor.nombre != 'mpv') {
+      _medirPorLaFachada(motivo);
+      return;
+    }
     if (player.platform is! NativePlayer) return;
     final np = player.platform as NativePlayer;
     try {
@@ -1704,9 +1850,13 @@ class VideoPlayerController extends GetxController with WidgetsBindingObserver {
     }));
 
     // 讀取現在的畫質
-    _addSubscription(player.stream.height.listen((event) async {
-      if (motor.ancho != null) {
-        final width = motor.ancho;
+    // Del motor: `player.stream.height` es de media_kit y con el motor de
+    // Android no llega nunca, así que la calidad que se muestra arriba se
+    // quedaba vacía o con la del vídeo anterior.
+    _addSubscription(motor.medidas.listen((m) async {
+      final event = m.alto;
+      if (m.ancho > 0) {
+        final width = m.ancho;
         // Mismo nombre que en el menú de calidades: antes acá decía
         // "1920x1080" y en el menú otra cosa, y no se entendía cuál estaba
         // puesta.
@@ -2135,6 +2285,20 @@ class VideoPlayerController extends GetxController with WidgetsBindingObserver {
 
     // 错误监听 — detectar fallo de reproducción
     _addSubscription(motor.errores.listen((event) {
+      // ── Lo primero: ¿este motor puede con esta fuente? ────────────────
+      //
+      // Va antes que todo lo demás porque el resto de este bloque está
+      // escrito contra los mensajes de mpv, y un error de Media3 no coincide
+      // con ninguno: se caía por el final sin hacer nada y el reproductor
+      // quedaba colgado. Ver _caerALaReservaPorError.
+      if (_esErrorDeFormato(event) &&
+          !_yaCayoALaReserva &&
+          !hasRenderedFrame.value &&
+          _motorDeReserva != null) {
+        logger.severe('${motor.nombre}: $event');
+        unawaited(_caerALaReservaPorError(event));
+        return;
+      }
       // "Could not open codec": casi siempre es el decodificador por HARDWARE
       // que no puede con este vídeo, no un vídeo roto.
       //
@@ -2249,7 +2413,12 @@ class VideoPlayerController extends GetxController with WidgetsBindingObserver {
     if (_disposed) {
       return;
     }
-    player.stop();
+    // Por el motor y no por `player`: con el de Android, `player` es un
+    // reproductor de media_kit que nunca recibió la fuente, así que pararlo
+    // no paraba NADA — el vídeo seguía sonando mientras se resolvía el
+    // siguiente. `MotorMpv.parar()` es exactamente `player.stop()`, así que
+    // en escritorio no cambia nada.
+    motor.parar();
     isGettingWatchData.value = true;
     awaitingServerChoice.value = false;
     hasRenderedFrame.value = false;
@@ -2784,7 +2953,12 @@ class VideoPlayerController extends GetxController with WidgetsBindingObserver {
     try {
       unawaited(c.motor.ponerVolumen(0).catchError((_) {}));
       unawaited(c.motor.pausar().catchError((_) {}));
-      unawaited(c.player.stop().catchError((_) {}));
+      // Por el motor y no por `player`: con el de Android, `player` es un
+      // reproductor de media_kit que nunca recibió la fuente, así que pararlo
+      // no paraba NADA — el vídeo seguía sonando mientras se resolvía el
+      // siguiente. `MotorMpv.parar()` es exactamente `player.stop()`, así que
+      // en escritorio no cambia nada.
+      unawaited(c.motor.parar().catchError((_) {}));
     } catch (e) {
       // Ni siquiera esto puede tirar: estamos en el camino de cierre y una
       // excepción acá dejaría la app colgada al salir.
@@ -3002,7 +3176,12 @@ class VideoPlayerController extends GetxController with WidgetsBindingObserver {
     // prolijitud en la liberación nativa a que un cuelgue de la librería
     // tilde la apertura siguiente entera.
     try {
-      await player.stop().timeout(const Duration(seconds: 3));
+      // Por el motor y no por `player`: con el de Android, `player` es un
+      // reproductor de media_kit que nunca recibió la fuente, así que pararlo
+      // no paraba NADA — el vídeo seguía sonando mientras se resolvía el
+      // siguiente. `MotorMpv.parar()` es exactamente `player.stop()`, así que
+      // en escritorio no cambia nada.
+      await motor.parar().timeout(const Duration(seconds: 3));
       await Future<void>.delayed(const Duration(milliseconds: 180));
     } catch (_) {}
 
@@ -5437,7 +5616,12 @@ class VideoPlayerController extends GetxController with WidgetsBindingObserver {
     // condición documentada en shutdownPlayback), no puede trabar la
     // apertura siguiente por un stop() que nunca vuelve.
     try {
-      await player.stop().timeout(const Duration(seconds: 2));
+      // Por el motor y no por `player`: con el de Android, `player` es un
+      // reproductor de media_kit que nunca recibió la fuente, así que pararlo
+      // no paraba NADA — el vídeo seguía sonando mientras se resolvía el
+      // siguiente. `MotorMpv.parar()` es exactamente `player.stop()`, así que
+      // en escritorio no cambia nada.
+      await motor.parar().timeout(const Duration(seconds: 2));
     } catch (_) {}
     if (_isPlaybackClosed()) return false;
 
@@ -5485,7 +5669,12 @@ class VideoPlayerController extends GetxController with WidgetsBindingObserver {
 
     if (_isPlaybackClosed()) {
       try {
-        unawaited(player.stop());
+        // Por el motor y no por `player`: con el de Android, `player` es un
+        // reproductor de media_kit que nunca recibió la fuente, así que pararlo
+        // no paraba NADA — el vídeo seguía sonando mientras se resolvía el
+        // siguiente. `MotorMpv.parar()` es exactamente `player.stop()`, así que
+        // en escritorio no cambia nada.
+        unawaited(motor.parar());
       } catch (_) {}
       return false;
     }
@@ -5503,14 +5692,19 @@ class VideoPlayerController extends GetxController with WidgetsBindingObserver {
     }
 
     subs.add(motor.errores.listen((e) {
-      logger.warning('media_kit no pudo reproducir ($url): $e');
+      logger.warning('${motor.nombre} no pudo reproducir ($url): $e');
       finish(false);
     }));
     subs.add(motor.duraciones.listen((d) {
       if (d > Duration.zero) finish(true);
     }));
-    subs.add(player.stream.videoParams.listen((p) {
-      if ((p.w ?? 0) > 0 && (p.h ?? 0) > 0) finish(true);
+    // Por el motor: era `player.stream.videoParams`, de media_kit, y con el
+    // motor de Android no llegaba — o sea que esta comprobación se quedaba
+    // esperando SOLO la duración. En una emisión sin duración conocida eso es
+    // esperar los 35 segundos enteros para nada, y darla por fallada cuando en
+    // realidad se estaba viendo.
+    subs.add(motor.medidas.listen((m) {
+      if (m.ancho > 0 && m.alto > 0) finish(true);
     }));
 
     // Confirmado en vivo varias veces (Streamwish, y de nuevo con Voe/voe.sx):
@@ -5536,7 +5730,12 @@ class VideoPlayerController extends GetxController with WidgetsBindingObserver {
     }
     if (_disposed) {
       try {
-        unawaited(player.stop());
+        // Por el motor y no por `player`: con el de Android, `player` es un
+        // reproductor de media_kit que nunca recibió la fuente, así que pararlo
+        // no paraba NADA — el vídeo seguía sonando mientras se resolvía el
+        // siguiente. `MotorMpv.parar()` es exactamente `player.stop()`, así que
+        // en escritorio no cambia nada.
+        unawaited(motor.parar());
       } catch (_) {}
       return false;
     }

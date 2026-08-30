@@ -471,38 +471,9 @@ class _VideoPlayerDesktopControlsState
                         //     con HLS.
                         //  2. Salto en curso (barra, teclas o flechas).
                         //  3. Buffer vacío durante la reproducción.
-                        opacity: (((!_c.isGettingWatchData.value &&
-                                    !_c.hasRenderedFrame.value &&
-                                    // Si hay un error en pantalla, ahi hay una
-                                    // tarjeta con su boton (reintentar / elegir
-                                    // otro servidor) y NO se esta cargando
-                                    // nada: la rueda girando detras hacia
-                                    // pensar que algo seguia en curso.
-                                    _c.error.value.isEmpty &&
-                                    // Mismo caso que el error de arriba: el
-                                    // aviso de "el servidor fallo, toca para
-                                    // reproducir" espera una accion y no hay
-                                    // nada cargando. El fallo de servidor no
-                                    // se guarda en `error` —tiene su propio
-                                    // campo— asi que la comprobacion anterior
-                                    // no lo cubria.
-                                    _c.serverFailedMessage.value.isEmpty &&
-                                    // Mismo caso: el boton de play espera un
-                                    // clic, no hay nada cargando.
-                                    !_c.awaitingServerChoice.value &&
-                                    // Con el reproductor de WebView activo no
-                                    // va a pintarse nunca un cuadro nativo, asi
-                                    // que esta rueda giraria para siempre.
-                                    !_c.isWebViewActive.value) ||
-                                (_c.hasRenderedFrame.value &&
-                                    (_c.isSeeking.value ||
-                                        // Ver imagenCongelada: con la red mal
-                                        // mpv deja de avisar que carga.
-                                        _c.imagenCongelada.value ||
-                                        (_c.isPlaying.value &&
-                                            _c.isActuallyBuffering.value)))))
-                            ? 1
-                            : 0,
+                        // Misma condición que en el teléfono, y en un solo sitio:
+                        // ver ruedaGirando en el controlador.
+                        opacity: _c.ruedaGirando ? 1 : 0,
                         child: const Center(
                           child: DecoratedBox(
                             decoration: BoxDecoration(

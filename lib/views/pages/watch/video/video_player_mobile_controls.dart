@@ -298,41 +298,7 @@ class _VideoPlayerMobileControlsState extends State<VideoPlayerMobileControls> {
                       //     con HLS.
                       //  2. Salto en curso (barra, teclas o flechas).
                       //  3. Buffer vacío durante la reproducción.
-                      opacity: (((!_c.isGettingWatchData.value &&
-                                  !_c.hasRenderedFrame.value &&
-                                  // Ver el comentario equivalente en los
-                                  // controles de escritorio.
-                                  _c.error.value.isEmpty &&
-                                  // El aviso de "el servidor falló, tocá para
-                                  // reproducir" espera una acción del usuario:
-                                  // nada está cargando y la rueda no tiene por
-                                  // qué girar. Faltaba esta condición y se veía
-                                  // dando vueltas DETRÁS del aviso, que encima
-                                  // hace parecer que si uno espera se arregla
-                                  // solo. El fallo de servidor no se guarda en
-                                  // `error` —tiene su propio campo— así que la
-                                  // comprobación de arriba no lo cubría.
-                                  _c.serverFailedMessage.value.isEmpty &&
-                                  // Esperando que se elija/confirme servidor:
-                                  // el boton de play esta ahi pidiendo un
-                                  // toque y no hay nada cargando. La rueda
-                                  // girando detras hacia parecer que si uno
-                                  // espera arranca solo.
-                                  !_c.awaitingServerChoice.value &&
-                                  !_c.isWebViewActive.value) ||
-                              (_c.hasRenderedFrame.value &&
-                                  (_c.isSeeking.value ||
-                                      // imagenCongelada: con la red mal, mpv
-                                      // deja de avisar que esta cargando, asi
-                                      // que la rueda no salia y la pantalla
-                                      // quedaba quieta sin explicacion. Esto
-                                      // mira que la posicion no avance, que es
-                                      // lo unico que siempre se puede saber.
-                                      _c.imagenCongelada.value ||
-                                      (_c.isPlaying.value &&
-                                          _c.isActuallyBuffering.value)))))
-                          ? 1
-                          : 0,
+                      opacity: _c.ruedaGirando ? 1 : 0,
                       child: const Center(
                         child: DecoratedBox(
                           decoration: BoxDecoration(
@@ -1029,6 +995,10 @@ class _VideoPlayerMobileControlsState extends State<VideoPlayerMobileControls> {
             Positioned.fill(
               child: Obx(() {
                 if (_c.isGettingWatchData.value ||
+                    // Ni mientras gira la rueda: los dos se dibujan en el
+                    // centro exacto, así que se veían encimados. Un
+                    // reproductor de verdad muestra una cosa o la otra.
+                    _c.ruedaGirando ||
                     // Ni cuando el centro ya tiene su propio cartel con su
                     // botón: el de «Tocá para reproducir el servidor elegido»,
                     // el de un servidor que falló y el de error. Los tres

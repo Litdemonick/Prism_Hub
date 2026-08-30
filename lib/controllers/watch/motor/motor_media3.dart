@@ -581,43 +581,27 @@ class MotorMedia3 implements MotorDeVideo {
       child: Stack(
         fit: StackFit.expand,
         children: [
-          if (_capaAparte)
-            // La vista de plataforma: una SurfaceView de verdad, en su propia
-            // capa del compositor del aparato.
-            //
-            // AndroidView y no `Texture`: no hay textura que dibujar. El vídeo
-            // lo pone el sistema por debajo y Flutter solo reserva el hueco.
-            // Por eso tampoco se envuelve en un FittedBox — el ajuste lo hace
-            // la propia SurfaceView con el tamaño que le toca, y meterla en un
-            // FittedBox la escalaría dos veces.
-            const _VistaEnCapaAparte()
-          else if (id != null)
-            // Escucha SOLO las medidas del vídeo.
-            //
-            // Es lo único de acá que cambia cuando cambia el vídeo, y aislarlo
-            // en un ValueListenableBuilder evita que la posición —que llega
-            // cuatro veces por segundo— haga reconstruir la imagen. Ese es el
-            // grueso de la diferencia entre una interfaz fluida y una que da
-            // tirones mientras se reproduce.
-            ValueListenableBuilder<Size?>(
-              valueListenable: _medidas,
-              builder: (context, medidas, _) {
-                final t = Texture(textureId: id);
-                if (medidas == null) return t;
-                // FittedBox con el tamaño real: es lo que hace que `ajuste` y
-                // `alineacion` signifiquen lo mismo que en el otro motor. La
-                // textura sola se estira para llenar y no respeta ninguno.
-                return FittedBox(
-                  fit: ajuste,
-                  alignment: alineacion,
-                  child: SizedBox(
-                    width: medidas.width,
-                    height: medidas.height,
-                    child: t,
-                  ),
-                );
-              },
+          // Las dos formas de dibujar pasan por el mismo encuadre.
+          //
+          // La textura y la capa aparte se comportan igual en esto: las dos se
+          // estiran a ocupar TODO lo que se les dé. Sin encuadrar, un vídeo
+          // apaisado en un teléfono en vertical se deformaba para llenar la
+          // pantalla entera, sin que nadie hubiera pedido llenar pantalla.
+          ValueListenableBuilder<Size?>(
+            valueListenable: _medidas,
+            builder: (context, medidas, _) => _Encuadre(
+              medidas: medidas,
+              ajuste: ajuste,
+              alineacion: alineacion,
+              // Se arma acá adentro y no afuera para que quede DENTRO del
+              // ValueListenableBuilder: así lo único que se redibuja cuando
+              // cambia el tamaño del vídeo es la imagen, y no los controles
+              // que la envuelven.
+              hijo: _capaAparte
+                  ? const _VistaEnCapaAparte()
+                  : (id == null ? null : Texture(textureId: id)),
             ),
+          ),
           if (encima != null) encima,
         ],
       ),
@@ -730,4 +714,70 @@ class _VistaEnCapaAparte extends StatelessWidget {
   }
 
   static const _tipo = 'com.prismhub.app/media3/vista';
+}
+
+/// Deja la imagen con la proporción que le corresponde, con sus bandas.
+///
+/// ── Por qué no alcanza con dejarla suelta ───────────────────────────────────
+///
+/// Ni la textura ni la `SurfaceView` respetan la proporción del vídeo: las dos
+/// se estiran a ocupar todo el hueco que se les dé. En un teléfono en vertical
+/// eso deformaba un vídeo apaisado hasta llenar la pantalla entera, como si se
+/// hubiera pedido «llenar pantalla» sin haberlo pedido.
+///
+/// ── Y por qué se mide en vez de escalar ─────────────────────────────────────
+///
+/// Lo natural sería un `FittedBox`, que es lo que se usaba con la textura. Pero
+/// una vista de plataforma no es un dibujo de Flutter: es una vista del sistema
+/// puesta encima, y Flutter le traslada las transformaciones con límites. Una
+/// escala que en un widget normal es gratis, ahí puede terminar en una vista
+/// del tamaño equivocado o directamente sin dibujar.
+///
+/// Con [applyBoxFit] se calcula el tamaño final y se le da a la vista ESE
+/// tamaño, sin transformar nada. El resultado es el mismo y no depende de qué
+/// transformaciones soporte cada versión de Android.
+class _Encuadre extends StatelessWidget {
+  const _Encuadre({
+    required this.medidas,
+    required this.ajuste,
+    required this.alineacion,
+    required this.hijo,
+  });
+
+  final Size? medidas;
+  final BoxFit ajuste;
+  final Alignment alineacion;
+  final Widget? hijo;
+
+  @override
+  Widget build(BuildContext context) {
+    final h = hijo;
+    // Sin imagen todavía, o sin saber cuánto mide: el hueco vacío. El fondo lo
+    // pinta quien envuelve a esto.
+    if (h == null) return const SizedBox.expand();
+    final m = medidas;
+    if (m == null || m.width <= 0 || m.height <= 0) return h;
+    return LayoutBuilder(
+      builder: (context, limites) {
+        if (!limites.hasBoundedWidth || !limites.hasBoundedHeight) return h;
+        final hueco = Size(limites.maxWidth, limites.maxHeight);
+        final encaje = applyBoxFit(ajuste, m, hueco);
+        final destino = encaje.destination;
+        if (destino.width <= 0 || destino.height <= 0) return h;
+        // ClipRect porque con «llenar pantalla» el destino es MÁS grande que el
+        // hueco a propósito —se recorta lo que sobra—. Sin recortar, esa parte
+        // se dibujaría encima de los controles.
+        return ClipRect(
+          child: Align(
+            alignment: alineacion,
+            child: SizedBox(
+              width: destino.width,
+              height: destino.height,
+              child: h,
+            ),
+          ),
+        );
+      },
+    );
+  }
 }
