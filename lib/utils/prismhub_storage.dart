@@ -517,6 +517,13 @@ class SettingKey {
   /// equipo de los ultimos años mueve sin problemas, y arrancar en 4K en uno
   /// que no lo aguanta se siente como que el reproductor va mal. No es un
   /// tope: el menu de calidades sigue ofreciendo todo, 4K incluido.
+  // PrismHub+ encendido. De fabrica si.
+  //
+  // Es el optimizador: mira en que aparato corre la app y la ajusta a el.
+  // Apagado, todo se comporta como antes de que existiera — la app pide 1080p,
+  // no le pone turno a las peticiones y no recorta animaciones. Ver PrismHubMas.
+  static const prismhubMas = 'PrismHubMas';
+
   static const empezarEnMaximaCalidad = 'EmpezarEnMaximaCalidad';
 
   /// Al terminar un episodio, pasar solo al siguiente.

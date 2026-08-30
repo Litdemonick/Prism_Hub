@@ -26,6 +26,7 @@ import 'package:prismhub/views/widgets/home/home_theme.dart';
 import 'package:prismhub/router/router.dart';
 import 'package:prismhub/utils/extension.dart';
 import 'package:prismhub/utils/i18n.dart';
+import 'package:prismhub/utils/prismhub_mas.dart';
 import 'package:prismhub/utils/prismhub_storage.dart';
 import 'package:prismhub/utils/alivio_de_memoria.dart';
 import 'package:prismhub/utils/application.dart';
@@ -858,6 +859,10 @@ class _AppRootState extends State<_AppRoot> with WidgetsBindingObserver {
       // decidir; hasta este punto casi no se decodificó nada, así que ese
       // techo alto no llega a llenarse.
       AlivioDeMemoria.aplicarTechoDeImagenes();
+      // Y qué decidió PrismHub+ con ese aparato. Es la línea que contesta «¿por
+      // qué en este televisor se ve distinto?» sin tener que deducirlo del
+      // resto del registro — y la que avisa, fuerte, cuando está apagado.
+      PrismHubMas.anotarEnElRegistro();
       // La cabecera de la sesión, recién acá: es el primer momento en que se
       // sabe qué aparato es esto y qué perfil le tocó. Ver EncabezadoDeSesion.
       EncabezadoDeSesion.escribir(version: packageInfo.version);

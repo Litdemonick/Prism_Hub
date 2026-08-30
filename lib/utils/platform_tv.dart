@@ -38,7 +38,9 @@ class PlatformTv {
           esTelevision: esTelevisionSync,
           bajaMemoria: datos['bajaMemoria'] == true,
           memoriaTotalMb: (datos['memoriaTotalMb'] as num?)?.toInt() ?? 0,
-          nucleos: (datos['nucleos'] as num?)?.toInt() ?? 0,
+          // Lo mismo que en escritorio: los físicos mandan. El canal nativo
+          // manda los lógicos, que es lo que expone Android.
+          nucleos: PerfilDeAparato._nucleosParaDecidir(),
         );
         return;
       }
@@ -229,6 +231,41 @@ class PerfilDeAparato {
     return NivelDeAparato.medio;
   }
 
+  /// Cuántos núcleos FÍSICOS tiene el procesador, o 0 si no se pudo saber.
+  ///
+  /// Se usa además de los lógicos para decidir el nivel del aparato: un
+  /// procesador de dos núcleos con cuatro hilos no rinde como uno de cuatro
+  /// núcleos, y contarlo como cuatro sería tratarlo mejor de lo que puede.
+  static int nucleosFisicos() {
+    try {
+      if (Platform.isWindows) {
+        final n = windowsDeviceInfo.numberOfCores;
+        return n > 0 ? n : 0;
+      }
+      if (Platform.isAndroid || Platform.isLinux) {
+        // Cada núcleo físico aparece como un par «physical id + core id». Los
+        // hilos del mismo núcleo repiten ese par, así que contando los pares
+        // distintos salen los físicos.
+        final pares = <String>{};
+        String fisico = '0';
+        String core = '';
+        for (final l in File('/proc/cpuinfo').readAsLinesSync()) {
+          if (l.startsWith('physical id')) {
+            fisico = l.split(':').last.trim();
+          } else if (l.startsWith('core id')) {
+            core = l.split(':').last.trim();
+            pares.add('$fisico/$core');
+          }
+        }
+        if (pares.isNotEmpty) return pares.length;
+      }
+    } catch (_) {
+      // Sin ese archivo, sin permiso, o con un formato que no trae esos
+      // campos —pasa en varios ARM—: se contesta 0 y decide el resto.
+    }
+    return 0;
+  }
+
   /// El perfil en Windows, Linux y macOS.
   ///
   /// ── Por qué hacía falta ─────────────────────────────────────────────────
@@ -249,13 +286,23 @@ class PerfilDeAparato {
         // Android. Acá deciden la memoria y los núcleos.
         bajaMemoria: false,
         memoriaTotalMb: memoria,
-        nucleos: Platform.numberOfProcessors,
+        // Los físicos si se pueden saber: dos hilos del mismo núcleo no
+        // decodifican vídeo en paralelo, así que contar los lógicos haría
+        // parecer capaz a un procesador que no lo es.
+        nucleos: _nucleosParaDecidir(),
       );
     } catch (e) {
       // Sin el dato se queda en alto, que es como venía siendo. Esto no puede
       // ser lo que impida arrancar.
       logger.info('No se pudo medir el aparato: $e');
     }
+  }
+
+  /// Con cuántos núcleos se decide: los físicos si se conocen, y si no los
+  /// lógicos, que es lo único que hay.
+  static int _nucleosParaDecidir() {
+    final fisicos = nucleosFisicos();
+    return fisicos > 0 ? fisicos : Platform.numberOfProcessors;
   }
 
   /// La memoria física en MB, o 0 si no se pudo saber.

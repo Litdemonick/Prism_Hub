@@ -54,6 +54,7 @@ import 'package:window_manager/window_manager.dart';
 import 'package:path/path.dart' as path;
 import 'package:fluent_ui/fluent_ui.dart' as fluent;
 import 'package:crypto/crypto.dart';
+import 'package:prismhub/utils/prismhub_mas.dart';
 import 'package:prismhub/utils/prismhub_storage.dart';
 import 'package:prismhub/views/widgets/home/home_theme.dart';
 import 'package:prismhub/utils/extension.dart';
@@ -3910,7 +3911,7 @@ class VideoPlayerController extends GetxController with WidgetsBindingObserver {
     // «¿cuántos puede DECODIFICAR sin atragantarse?». Un televisor con panel
     // 4K y un procesador de 2018 contesta 2160 a la primera y 720 a la
     // segunda, y la que vale es la segunda.
-    final porPerfil = techoParaNivel(PerfilDeAparato.nivel);
+    final porPerfil = PrismHubMas.techoDeCalidad;
     // Fuera del televisor no se mira la pantalla: en un PC la ventana se
     // redimensiona y se pone a pantalla completa, así que atar la calidad al
     // tamaño de ahora dejaría la imagen mala al maximizar. Se queda en 1080
@@ -3944,6 +3945,8 @@ class VideoPlayerController extends GetxController with WidgetsBindingObserver {
   /// porque no se mide el aparato. Un PC lento sigue pidiendo 1080p como
   /// hasta ahora — para arreglarlo habría que medirlo primero, y eso es otro
   /// trabajo.
+  /// Lo decide PrismHub+. Se conserva acá para poder probarlo sin montar el
+  /// resto de la app.
   static int techoParaNivel(NivelDeAparato nivel) => switch (nivel) {
         // Un aparato modesto no decodifica 1080p con soltura, y en la mayoría
         // ni siquiera puede mostrarlo. 720p se ve bien y le sobra margen.

@@ -3,6 +3,7 @@ import 'dart:io';
 import 'package:media_kit_video/media_kit_video.dart';
 import 'package:prismhub/utils/log.dart';
 import 'package:prismhub/utils/platform_tv.dart';
+import 'package:prismhub/utils/prismhub_mas.dart';
 
 /// Cómo se dibuja el vídeo en ESTE aparato.
 ///
@@ -80,7 +81,7 @@ class DibujadoDeVideo {
       return const VideoControllerConfiguration();
     }
 
-    return PerfilDeAparato.nivel.elegir(
+    return PrismHubMas.nivel.elegir(
       // Un televisor que anda bien: se deja dibujar a resolución completa. El
       // recorte solo se justifica donde de verdad no da abasto.
       alto: const VideoControllerConfiguration(),

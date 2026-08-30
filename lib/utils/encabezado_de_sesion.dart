@@ -60,11 +60,22 @@ class EncabezadoDeSesion {
   /// UNA persona sigue afuera y a propósito: el nombre que le puso al aparato
   /// —que suele llevar el nombre propio—, el número de serie, el identificador
   /// de publicidad y cualquier cuenta.
-  static List<String> fichaDelAparato() {
-    final ficha = <String>[];
+  static List<String> fichaDelAparato() => [
+        for (final p in fichaEnPares())
+          '${p.etiqueta.padRight(10)} ${p.valor}',
+      ];
+
+  /// La misma ficha, en pares, para poder dibujarla en una pantalla.
+  ///
+  /// El registro la quiere alineada en una columna de texto; la pantalla de
+  /// PrismHub+ la quiere como etiqueta y valor por separado. Se arma una sola
+  /// vez acá y cada uno la formatea a su manera, para que no puedan decir cosas
+  /// distintas.
+  static List<({String etiqueta, String valor})> fichaEnPares() {
+    final ficha = <({String etiqueta, String valor})>[];
     void agregar(String etiqueta, String valor) {
       if (valor.trim().isEmpty) return;
-      ficha.add('${etiqueta.padRight(10)} $valor');
+      ficha.add((etiqueta: etiqueta, valor: valor));
     }
 
     agregar('sistema', _sistemaCompleto());
@@ -506,8 +517,25 @@ class EncabezadoDeSesion {
   /// binarios distintos por ABI, y un aparato que corre la app en 32 bits
   /// teniendo 64 —pasa en cajas de televisor mal armadas— se comporta
   /// distinto y no hay forma de saberlo si no está escrito.
+  /// ── Lógicos y físicos, que no son lo mismo ─────────────────────────────
+  ///
+  /// `numberOfProcessors` devuelve los núcleos LÓGICOS: en un procesador con
+  /// hilos por núcleo, ocho lógicos pueden ser cuatro físicos. Para decidir
+  /// cuánto puede gastar la app importan los físicos —dos hilos del mismo
+  /// núcleo no decodifican vídeo en paralelo— así que ver solo el número
+  /// grande hacía parecer capaz a un aparato que no lo es.
+  ///
+  /// En Windows lo dice la información del sistema; en Linux y Android sale de
+  /// contar los pares «id de núcleo + id de físico» distintos en
+  /// `/proc/cpuinfo`, que es de donde lo saca cualquier herramienta del
+  /// sistema. Si no se puede averiguar, se muestran solo los lógicos en vez de
+  /// inventar un número.
   static String _procesador() {
-    final nucleos = '${Platform.numberOfProcessors} núcleos';
+    final logicos = Platform.numberOfProcessors;
+    final fisicos = PerfilDeAparato.nucleosFisicos();
+    final nucleos = (fisicos > 0 && fisicos != logicos)
+        ? '$logicos núcleos ($fisicos físicos)'
+        : '$logicos núcleos';
     try {
       if (!Platform.isAndroid) return nucleos;
       final a = androidDeviceInfo;

@@ -3,6 +3,7 @@ import 'dart:collection';
 
 import 'package:dio/dio.dart';
 import 'package:prismhub/utils/platform_tv.dart';
+import 'package:prismhub/utils/prismhub_mas.dart';
 
 /// Cuántas cosas pueden estar en el aire a la vez.
 ///
@@ -10,10 +11,19 @@ import 'package:prismhub/utils/platform_tv.dart';
 /// de las que se le dijeron, que siempre libere el sitio —también cuando lo que
 /// estaba haciendo falla— y que no se quede nadie esperando para siempre.
 class ColaDeConcurrencia {
-  ColaDeConcurrencia(this.tope);
+  ColaDeConcurrencia(int tope) : _tope = (() => tope);
+
+  /// Con el tope leído cada vez en vez de fijado al construirla.
+  ///
+  /// Hace falta porque PrismHub+ se puede apagar desde Ajustes y eso tiene que
+  /// notarse sin reiniciar la app. Con el número copiado al arrancar, la cola
+  /// se quedaba con el tope de cuando se creó.
+  ColaDeConcurrencia.segun(int Function() tope) : _tope = tope;
+
+  final int Function() _tope;
 
   /// Cuántas a la vez. Con 0 o menos no hay cola: pasa todo.
-  final int tope;
+  int get tope => _tope();
 
   var _enVuelo = 0;
   final _esperando = Queue<Completer<void>>();
@@ -87,6 +97,8 @@ class ColaDeExtensiones extends Interceptor {
   /// Ocho en uno medio, que aguanta más pero tampoco es un teléfono nuevo.
   ///
   /// Sin tope en el resto: ver la nota de la clase.
+  /// Lo decide PrismHub+, que es donde están todos los ajustes por aparato.
+  /// Se conserva acá para poder probarlo sin montar el resto.
   static int topeParaNivel(NivelDeAparato nivel) => switch (nivel) {
         NivelDeAparato.bajo => 4,
         NivelDeAparato.medio => 8,
@@ -99,7 +111,7 @@ class ColaDeExtensiones extends Interceptor {
   /// de nada: con trece extensiones y cuatro cada una siguen siendo cincuenta y
   /// dos a la vez. Lo que satura al aparato es el total, no el reparto.
   static final ColaDeConcurrencia cola =
-      ColaDeConcurrencia(topeParaNivel(PerfilDeAparato.nivel));
+      ColaDeConcurrencia.segun(() => PrismHubMas.peticionesALaVez);
 
   /// La marca que dice que esta petición ya tomó su sitio.
   ///

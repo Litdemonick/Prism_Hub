@@ -12,6 +12,7 @@ import 'package:prismhub/utils/zonas_preferidas.dart';
 import 'package:prismhub/views/pages/extension/extension_page.dart';
 import 'package:prismhub/views/pages/extension/extension_repo_page.dart';
 import 'package:prismhub/views/pages/nsfw18/nsfw18_zone_page.dart';
+import 'package:prismhub/views/pages/settings/prismhub_mas_page.dart';
 import 'package:prismhub/views/pages/settings/registro_en_vivo_page.dart';
 import 'package:prismhub/views/widgets/home/home_theme.dart';
 import 'package:prismhub/views/widgets/tv/focusable_card.dart';
@@ -244,6 +245,15 @@ class _SettingsPageTvState extends State<SettingsPageTv> {
           titulo: 'settings.view-log'.i18n,
           subtitulo: 'settings.view-log-tv-subtitle'.i18n,
           onTap: () => Get.to(() => const RegistroEnVivoPage()),
+        ),
+        // PrismHub+ va en General y no en Reproducción: no es un ajuste del
+        // reproductor, es lo que decide cómo se comporta la app entera en este
+        // aparato — el vídeo, las peticiones y las animaciones.
+        _Boton(
+          icono: Icons.bolt,
+          titulo: 'PrismHub+',
+          subtitulo: 'settings.mas-subtitulo'.i18n,
+          onTap: () => Get.to(() => const PrismHubMasPage()),
         ),
       ];
 
