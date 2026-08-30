@@ -6,6 +6,7 @@ import 'dart:math';
 import 'package:prismhub/utils/anuncio_de_registro.dart';
 import 'package:prismhub/utils/encabezado_de_sesion.dart';
 import 'package:prismhub/utils/exportar_registro.dart';
+import 'package:prismhub/utils/sesiones_del_registro.dart';
 import 'package:prismhub/utils/zonas_del_registro.dart';
 import 'package:prismhub/utils/log.dart';
 import 'package:prismhub/utils/platform_tv.dart';
@@ -294,13 +295,36 @@ class ServidorDeRegistro {
   /// filtro de zona. Lo único que se agrega es una línea arriba diciendo qué
   /// es y de dónde sale.
   static Future<String> _loQueSeVeEnElAparato() async {
-    final todas = lineasFijas ?? await ExportarRegistro.lineasDelRegistro();
+    final todas = lineasFijas ?? await _laSesionDeAhora();
     final z = zonaElegida ?? ZonaDelRegistro.todo;
     final vistas = z == ZonaDelRegistro.todo
         ? todas
         : todas.where(z.seVe).toList(growable: false);
     _cuantasSirvio = vistas.length;
     return vistas.join('\n');
+  }
+
+  /// Solo las líneas de la apertura de ahora, que es lo que muestra el visor.
+  ///
+  /// ── Por qué no el archivo entero ────────────────────────────────────────
+  ///
+  /// Se servía todo lo guardado. Reportado en vivo: «en el televisor tengo 296
+  /// líneas y al compartir aparecen como 6000». Y las dos cifras eran ciertas:
+  /// la pantalla muestra la apertura de ahora y el archivo tiene todas las
+  /// anteriores.
+  ///
+  /// Eso rompe justamente lo que este visor viene a dar — mirar desde el PC lo
+  /// mismo que se está viendo en el televisor. Con seis mil líneas de las
+  /// cuales cinco mil setecientas son de ayer, encontrar lo que acaba de pasar
+  /// es peor que no tener nada.
+  ///
+  /// Las anteriores no se pierden: están en el historial, y desde ahí se
+  /// comparte una concreta cuando hace falta (eso es lo que pone
+  /// [lineasFijas]).
+  static Future<List<String>> _laSesionDeAhora() async {
+    final todas = await ExportarRegistro.lineasDelRegistro();
+    final sesiones = partirEnSesiones(todas);
+    return sesiones.isEmpty ? todas : sesiones.last.lineas;
   }
 
   /// Qué se está sirviendo, en una línea, para la página y para el registro.
