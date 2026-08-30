@@ -73,6 +73,31 @@ class ApplicationUtils {
 
   /// Para que otras partes puedan preguntar sin poder tocarla.
   static bool get instalacionEnCurso => _instalacionEnCurso;
+
+  /// Ya hay un aviso de versión nueva en pantalla.
+  ///
+  /// ── El fallo que tapa ─────────────────────────────────────────────────
+  ///
+  /// Reportado en vivo con captura, en PC: salían DOS avisos de la misma
+  /// versión, uno encima del otro.
+  ///
+  /// La causa es que hay dos caminos distintos que avisan, y ninguno sabía
+  /// del otro:
+  ///
+  ///   checkForcedUpdate   la pantalla que TAPA la app entera. Sale sola al
+  ///                       arrancar y en el chequeo periódico.
+  ///   checkUpdate         el diálogo descartable. Sale al tocar «Comprobar»
+  ///                       en Ajustes y en los reintentos que se programan
+  ///                       cuando el release todavía estaba a medio publicar.
+  ///
+  /// Cada uno tenía sus propios candados —`_forcedUpdatePageOpen`,
+  /// `_forcedUpdateCheckInFlight`— pero eran suyos: nada impedía que el
+  /// reintento del segundo saltara justo cuando el primero ya estaba
+  /// mostrando la pantalla, que es exactamente lo que pasó.
+  ///
+  /// Este es uno solo para los dos. Ninguna app debería mostrar el mismo
+  /// aviso dos veces.
+  static bool _avisoDeVersionEnPantalla = false;
   static Future<void>? _forcedUpdateCheckInFlight;
 
   static void scheduleForcedUpdateCheck(BuildContext context) {
@@ -503,6 +528,9 @@ class ApplicationUtils {
     // checkUpdate, que avisa en qué modo está).
     if (!ModoApp.esRelease) return;
     if (_forcedUpdatePageOpen) return;
+    // El otro camino ya tiene un aviso en pantalla: no se apila encima. Es la
+    // otra mitad del candado — ver _avisoDeVersionEnPantalla.
+    if (_avisoDeVersionEnPantalla) return;
     // Ya se está bajando/instalando: no se vuelve a avisar de la misma
     // versión encima de la descarga que el usuario ya aceptó. Con una
     // conexión lenta la descarga dura minutos y el chequeo periódico seguía
@@ -564,6 +592,7 @@ class ApplicationUtils {
       if (!context.mounted) return;
 
       _forcedUpdatePageOpen = true;
+      _avisoDeVersionEnPantalla = true;
       try {
         await Navigator.of(context, rootNavigator: true).push(
           PageRouteBuilder(
@@ -582,8 +611,12 @@ class ApplicationUtils {
         );
       } finally {
         _forcedUpdatePageOpen = false;
+        _avisoDeVersionEnPantalla = false;
       }
     } catch (e) {
+      // Mismo motivo que en checkUpdate: el candado no puede quedarse trabado
+      // por un fallo.
+      _avisoDeVersionEnPantalla = false;
       // Silencioso: si no se puede chequear (sin internet, GitHub caído), no
       // hay que bloquear el uso de la app por un error de red — el gate solo
       // se muestra cuando SÍ se confirma una versión nueva.
@@ -608,6 +641,11 @@ class ApplicationUtils {
       }
       return;
     }
+    // Ya hay un aviso puesto (la pantalla bloqueante, u otro diálogo): no se
+    // apila un segundo. Ver _avisoDeVersionEnPantalla.
+    if (_avisoDeVersionEnPantalla || _forcedUpdatePageOpen) return;
+    // Y tampoco mientras se está bajando algo: el usuario ya aceptó.
+    if (_instalacionEnCurso) return;
     try {
       final release = await _candidatoRelevante();
       if (release != null) {
@@ -622,6 +660,8 @@ class ApplicationUtils {
           // es "esta actualización NO se va a poder instalar sola". Si se va
           // solo a los dos segundos, el usuario se queda sin saber qué hacer.
           if (context.mounted) {
+            _avisoDeVersionEnPantalla = true;
+            try {
             await showPlatformDialog(
               context: context,
               title: FlutterI18n.translate(
@@ -647,6 +687,9 @@ class ApplicationUtils {
                 ),
               ],
             );
+            } finally {
+              _avisoDeVersionEnPantalla = false;
+            }
           }
           return;
         }
@@ -686,7 +729,9 @@ class ApplicationUtils {
           return;
         }
         _cancelarReintentos();
+        _avisoDeVersionEnPantalla = true;
         if (Platform.isAndroid) {
+          try {
           await showPlatformDialog(
             context: context,
             title: FlutterI18n.translate(
@@ -722,10 +767,15 @@ class ApplicationUtils {
               )
             ],
           );
+          } finally {
+            _avisoDeVersionEnPantalla = false;
+          }
           return;
         }
 
-        showPlatformDialog(
+        // El de escritorio NO se espera (no lleva `await`), así que el
+        // candado se suelta cuando el diálogo se cierra, no acá.
+        unawaited(showPlatformDialog(
           context: context,
           title: FlutterI18n.translate(
             context,
@@ -753,7 +803,7 @@ class ApplicationUtils {
               child: Text('upgrade.download-install'.i18n),
             )
           ],
-        );
+        ).whenComplete(() => _avisoDeVersionEnPantalla = false));
       } else {
         if (!showSnackbar) {
           return;
@@ -765,6 +815,13 @@ class ApplicationUtils {
         );
       }
     } catch (e) {
+      // El candado se suelta pase lo que pase.
+      //
+      // Sin esto, un fallo entre tomarlo y mostrar el diálogo lo dejaría
+      // puesto para siempre — y con él puesto no vuelve a avisarse NUNCA de
+      // ninguna versión nueva, en toda la sesión. Un candado que se traba es
+      // peor que el aviso duplicado que vino a arreglar.
+      _avisoDeVersionEnPantalla = false;
       if (!showSnackbar) {
         return;
       }
