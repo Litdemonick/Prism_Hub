@@ -787,6 +787,21 @@ class _AppRootState extends State<_AppRoot> with WidgetsBindingObserver {
       // La cabecera de la sesión, recién acá: es el primer momento en que se
       // sabe qué aparato es esto y qué perfil le tocó. Ver EncabezadoDeSesion.
       EncabezadoDeSesion.escribir(version: packageInfo.version);
+      // Y qué extensiones hay puestas, que es lo primero que hace falta
+      // preguntar ante un «esta extensión no carga». Va acá y no dentro de la
+      // cabecera porque las extensiones se cargan antes (línea de arriba,
+      // ExtensionUtils.ensureInitialized) pero la cabecera necesita saber
+      // primero qué aparato es: son dos datos que llegan en momentos
+      // distintos y cada uno se escribe cuando está.
+      EncabezadoDeSesion.escribirExtensiones(
+        ExtensionUtils.runtimes.values.map(
+          (r) => (
+            paquete: r.extension.package,
+            version: r.extension.version,
+            activa: ExtensionUtils.isEnabled(r.extension.package),
+          ),
+        ),
+      );
       // ── Lo que un televisor hace distinto de arranque ────────────────────
       //
       // Un televisor SIEMPRE está apaisado — no hay forma física de girarlo —

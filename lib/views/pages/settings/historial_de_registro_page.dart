@@ -8,7 +8,6 @@ import 'package:prismhub/utils/exportar_registro.dart';
 import 'package:prismhub/utils/i18n.dart';
 import 'package:prismhub/utils/log.dart';
 import 'package:prismhub/utils/platform_tv.dart';
-import 'package:prismhub/utils/encabezado_de_sesion.dart';
 import 'package:prismhub/utils/sesiones_del_registro.dart';
 import 'package:prismhub/utils/servidor_de_registro.dart';
 import 'package:prismhub/views/widgets/seleccionable_si_se_puede.dart';
