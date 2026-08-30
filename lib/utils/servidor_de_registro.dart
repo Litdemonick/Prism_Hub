@@ -175,12 +175,17 @@ class ServidorDeRegistro {
         soloArea: areaElegida,
         lineas: lineasFijas,
       );
+      // Cuántas líneas se están sirviendo: es lo primero que se mira para
+      // saber si lo que llegó al navegador es todo o le falta algo.
+      const salto = 10; // el salto de linea
+      final cuantas =
+          texto.codeUnits.where((c) => c == salto).length;
       pedido.response
         ..statusCode = HttpStatus.ok
         ..headers.contentType = ContentType.html
         // Nada de caché: se abre para ver lo último, no lo de hace un rato.
         ..headers.set(HttpHeaders.cacheControlHeader, 'no-store')
-        ..write(_pagina(texto));
+        ..write(_pagina(texto, cuantas));
       await pedido.response.close();
     } catch (e) {
       logger.info('servidor de registro: $e');
@@ -208,7 +213,7 @@ class ServidorDeRegistro {
   /// Sencilla a propósito: texto monoespaciado sobre fondo oscuro, con un
   /// refresco cada cinco segundos. Nada de esto se sirve desde fuera —es un
   /// solo archivo, sin recursos— así que no hay nada más que traer.
-  static String _pagina(String registro) {
+  static String _pagina(String registro, int cuantasLineas) {
     final escapado = const HtmlEscape().convert(registro);
     return '''<!doctype html>
 <html lang="es"><head>
@@ -224,7 +229,7 @@ class ServidorDeRegistro {
   pre{white-space:pre-wrap;word-break:break-word;margin:0}
 </style></head><body>
 <h1>Registro de PrismHub</h1>
-<p class="que">${const HtmlEscape().convert(_loQueSeSirve)}</p>
+<p class="que">${const HtmlEscape().convert(_loQueSeSirve)} · $cuantasLineas líneas</p>
 <p>${const HtmlEscape().convert(EncabezadoDeSesion.resumenDelAparato())} · se actualiza solo cada 5 s</p>
 <pre>$escapado</pre>
 </body></html>''';
