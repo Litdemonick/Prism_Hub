@@ -513,6 +513,8 @@
     "log-limpiar-zona": "Only \"{zona}\" from this session is erased. The other areas and the previous sessions are left alone.",
     "log-cleared-zona": "\"{zona}\" log cleared",
     "log-en-red-cortar": "Cut the connection?",
+    "log-en-red-cambiar": "Change what you are sharing?",
+    "log-en-red-cambiar-detalle": "Whoever is watching from another device will switch to “{zona}”. If you say no, this TV changes anyway and the other side keeps seeing what it had.",
     "log-en-red-cortar-detalle": "Anyone reading the log from another device is left with nothing. Opening it again means typing a new address: the code changes every time.",
     "log-zona": "Area",
     "log-acciones": "Actions",

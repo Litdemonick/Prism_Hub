@@ -402,14 +402,27 @@ class _RegistroRemotoPageState extends State<_RegistroRemotoPage> {
       // el registro con la primera línea cortada sin saberlo.
       final tieneCabecera =
           partido.isNotEmpty && !esElRecuadro(partido.first);
+      // ── Si cambió lo que se está sirviendo, se empieza de arriba ──────
+      //
+      // La cabecera dice qué es y de qué zona. Cuando cambia, lo que hay
+      // debajo es OTRA cosa —otra zona, u otra apertura— y dejar el
+      // desplazamiento donde estaba muestra la mitad de un texto nuevo desde
+      // un punto que no significa nada. Volver arriba es lo que hace que se
+      // lea como «esto se acaba de renovar» y no como «esto se movió solo».
+      final nuevaCabecera = tieneCabecera ? partido.first : '';
+      final cambioLoQueSeSirve =
+          _cabecera.isNotEmpty && nuevaCabecera != _cabecera;
       setState(() {
-        _cabecera = tieneCabecera ? partido.first : '';
+        _cabecera = nuevaCabecera;
         _lineas = tieneCabecera
             ? (partido.length > 1 ? partido.sublist(1) : const <String>[])
             : partido;
         _fallo = null;
         _primeraVez = false;
       });
+      if (cambioLoQueSeSirve && _scroll.hasClients) {
+        _scroll.jumpTo(0);
+      }
     } catch (e) {
       if (!mounted) return;
       // Lo que ya llegó NO se borra: si el televisor se cayó, esto es

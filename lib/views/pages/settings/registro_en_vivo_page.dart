@@ -664,11 +664,44 @@ class _RegistroEnVivoPageState extends State<RegistroEnVivoPage> {
 
   /// Cambia el filtro y deja todo lo demás mirando lo mismo.
   void _elegirFiltro(ZonaDelRegistro f) {
+    final compartiendo = ServidorDeRegistro.encendido;
+    final antes = _filtro;
     setState(() {
       _filtro = f;
       _recalcularVisibles();
-      // El que esté mirando desde el navegador ve el mismo cambio en cinco
-      // segundos, sin tocar nada de su lado.
+    });
+    // ── Con alguien mirando, se pregunta antes de cambiarle la vista ────
+    //
+    // Sin el servidor encendido esto no existe: se cambia de zona y ya.
+    //
+    // Con el servidor encendido hay otra persona del otro lado leyendo, y
+    // cambiar de zona acá le vaciaba la pantalla sin aviso — estaba siguiendo
+    // un fallo en «Reproductor» y de golpe le aparecía otra cosa. Puede ser
+    // justo lo que se quiere («mirá esto otro») o puede ser que uno solo
+    // estaba buscando algo de paso.
+    //
+    // Así que se pregunta. Si se dice que no, el televisor cambia de zona y lo
+    // que se comparte se queda donde estaba: son dos cosas distintas y no
+    // tienen por qué ir juntas.
+    if (!compartiendo || antes == f) {
+      ServidorDeRegistro.areaElegida = f.area;
+      ServidorDeRegistro.zonaElegida = f;
+      return;
+    }
+    unawaited(_preguntarSiCambiaLoCompartido(f));
+  }
+
+  Future<void> _preguntarSiCambiaLoCompartido(ZonaDelRegistro f) async {
+    final si = await _confirmar(
+      titulo: 'settings.log-en-red-cambiar'.i18n,
+      detalle: FlutterI18n.translate(
+        context,
+        'settings.log-en-red-cambiar-detalle',
+        translationParams: {'zona': f.clave.i18n},
+      ),
+    );
+    if (!si || !mounted) return;
+    setState(() {
       ServidorDeRegistro.areaElegida = f.area;
       ServidorDeRegistro.zonaElegida = f;
     });
@@ -1204,7 +1237,10 @@ class _RegistroEnVivoPageState extends State<RegistroEnVivoPage> {
               icono: ServidorDeRegistro.encendido
                   ? Icons.wifi_tethering
                   : Icons.wifi_tethering_off,
-              texto: 'settings.log-en-red'.i18n,
+              // Con la zona que se está compartiendo, que no siempre es la
+              // que se está mirando: se puede haber dicho que no al cambio.
+              // Sin decirlo, uno cree que el otro está viendo lo mismo.
+              texto: _etiquetaDeLaRed,
               elegido: ServidorDeRegistro.encendido,
               onTap: _alternarServidor,
             ),
@@ -1233,6 +1269,15 @@ class _RegistroEnVivoPageState extends State<RegistroEnVivoPage> {
         ),
       ],
     );
+  }
+
+  /// «Ver desde otro aparato», y qué zona se está compartiendo.
+  String get _etiquetaDeLaRed {
+    final base = 'settings.log-en-red'.i18n;
+    if (!ServidorDeRegistro.encendido) return base;
+    final z = ServidorDeRegistro.zonaElegida;
+    if (z == null || z == _filtro) return base;
+    return '$base · ${z.clave.i18n}';
   }
 
   /// «Historial», con cuántas aperturas anteriores hay detrás.

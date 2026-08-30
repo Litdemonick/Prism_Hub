@@ -560,18 +560,62 @@ class _SesionPageState extends State<_SesionPage> {
       : widget.sesion.lineas.where(_zona.seVe).toList(growable: false);
 
   void _elegirZona(ZonaDelRegistro z) {
+    final compartiendo = ServidorDeRegistro.encendido;
+    final antes = _zona;
     setState(() {
       _zona = z;
       // Lo que se sirve por la red sigue a lo que se está mirando: ver una
       // cosa en la pantalla y otra en el navegador obliga a ir traduciendo
       // entre las dos.
-      if (ServidorDeRegistro.encendido) {
-        ServidorDeRegistro.lineasFijas = _visibles;
-        ServidorDeRegistro.areaElegida = _zona.area;
-        // Las líneas ya vienen filtradas: la zona es solo para el título.
-        ServidorDeRegistro.zonaElegida = null;
-      }
     });
+    // Con alguien mirando desde otro aparato se pregunta antes de cambiarle
+    // la vista. Mismo criterio que en el registro en vivo: puede ser justo lo
+    // que se quiere, o puede que uno solo estuviera buscando algo de paso.
+    if (!compartiendo || antes == z) return;
+    unawaited(_preguntarSiCambiaLoCompartido());
+  }
+
+  Future<void> _preguntarSiCambiaLoCompartido() async {
+    final si = await _confirmarCambio();
+    if (!si || !mounted) return;
+    setState(() {
+      ServidorDeRegistro.lineasFijas = _visibles;
+      ServidorDeRegistro.areaElegida = _zona.area;
+      // Las líneas ya vienen filtradas: la zona es solo para el título.
+      ServidorDeRegistro.zonaElegida = null;
+    });
+  }
+
+  Future<bool> _confirmarCambio() async {
+    final r = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        backgroundColor: HomeTheme.bg,
+        title: Text('settings.log-en-red-cambiar'.i18n,
+            style: TextStyle(color: HomeTheme.textPrimary)),
+        content: Text(
+          FlutterI18n.translate(
+            context,
+            'settings.log-en-red-cambiar-detalle',
+            translationParams: {'zona': _zona.clave.i18n},
+          ),
+          style: TextStyle(color: HomeTheme.textMuted, fontSize: 13),
+        ),
+        actions: [
+          TextButton(
+            autofocus: true,
+            onPressed: () => Navigator.of(context).pop(false),
+            child: Text('common.no'.i18n),
+          ),
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(true),
+            child: Text('common.yes'.i18n,
+                style: TextStyle(color: HomeTheme.accentPink)),
+          ),
+        ],
+      ),
+    );
+    return r ?? false;
   }
 
   Future<void> _exportar() async {

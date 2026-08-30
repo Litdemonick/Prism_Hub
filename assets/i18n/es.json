@@ -509,6 +509,8 @@
     "log-limpiar-zona": "Se borra solo lo de «{zona}» de esta sesión. Lo de las demás zonas y las aperturas anteriores no se tocan.",
     "log-cleared-zona": "Registro de «{zona}» limpiado",
     "log-en-red-cortar": "¿Cortar la conexión?",
+    "log-en-red-cambiar": "¿Cambiar lo que estás compartiendo?",
+    "log-en-red-cambiar-detalle": "Quien esté mirando desde otro aparato pasa a ver «{zona}». Si decís que no, el televisor cambia igual y del otro lado sigue viendo lo de antes.",
     "log-en-red-cortar-detalle": "Quien esté leyendo el registro desde otro aparato se queda sin nada. Para volver a abrirla hay que escribir una dirección nueva: el código cambia cada vez.",
     "log-zona": "Zona",
     "log-acciones": "Acciones",
