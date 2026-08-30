@@ -23,6 +23,16 @@
   los renglones del documento —recuadros y títulos incluidos— en vez de las
   líneas del registro.
 
+### ⏱️ La conexión de red dura 45 minutos
+
+- Estaba en 15, pensada para «leer un registro y cerrar». En el uso real es
+  otra cosa: se enciende para dejarla puesta mientras se prueba algo —un
+  episodio entero, varias extensiones— mirando el navegador en paralelo. Se
+  cortaba a mitad de la prueba, y volver a levantarla obliga a escribir otra
+  dirección porque el código cambia cada vez.
+- Sigue habiendo tope: es lo que garantiza que nadie se la deje abierta sin
+  darse cuenta.
+
 ### 🔦 El aviso del wakelock, una sola vez
 
 - En algunos televisores ese canal del sistema no responde, y no responde

@@ -35,7 +35,8 @@ import 'package:prismhub/utils/platform_tv.dart';
 ///  - **Con un código al azar en la dirección.** Que alguien esté en el mismo
 ///    wifi no alcanza: hay que estar viendo la pantalla del televisor para
 ///    saber la dirección completa. Sin el código, el servidor contesta que no.
-///  - **Se apaga solo a los quince minutos.** Nadie se lo olvida encendido.
+///  - **Se apaga solo a los tres cuartos de hora.** Nadie se lo olvida
+///    encendido toda la tarde.
 ///  - **Solo lee el registro.** No hay ninguna otra ruta, y no escribe nada.
 ///  - **Y ese registro ya viene saneado** desde que se escribe: sin
 ///    credenciales, sin qué se estaba viendo y sin el nombre de usuario del
@@ -49,9 +50,16 @@ class ServidorDeRegistro {
 
   /// Cuánto queda encendido si nadie lo apaga.
   ///
-  /// Quince minutos: alcanza de sobra para leer un registro y no deja el
-  /// servidor abierto toda la tarde por olvido.
-  static const _cuantoDura = Duration(minutes: 15);
+  /// Tres cuartos de hora. Empezó en quince minutos, pensando en «leer un
+  /// registro y cerrar», y en el uso real resultó corto: esto se enciende para
+  /// dejarlo puesto mientras se prueba algo —reproducir un episodio entero,
+  /// recorrer varias extensiones— mirando el navegador en paralelo. Se cortaba
+  /// a mitad de la prueba, y volver a levantarlo obliga a escribir otra
+  /// dirección porque el código cambia cada vez.
+  ///
+  /// Sigue habiendo tope, y no es un detalle: es lo que garantiza que nadie
+  /// se lo deje abierto sin darse cuenta.
+  static const _cuantoDura = Duration(minutes: 45);
 
   /// La dirección para escribir en el otro aparato, o null si está apagado.
   static String? direccion;

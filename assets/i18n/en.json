@@ -498,7 +498,7 @@
     "log-filtro-reproductor": "Player",
     "log-en-red": "View from another device",
     "log-en-red-como": "Type this address in the browser of your PC or phone, on the same network. You will see the whole log, where you can copy and search.",
-    "log-en-red-aviso": "It turns itself off after 15 minutes. Only the log can be read, and it already comes without addresses or your data.",
+    "log-en-red-aviso": "It turns itself off after 45 minutes. Only the log can be read, and it already comes without addresses or your data.",
     "log-en-red-sin-red": "Could not start: you need to be on a home network (Wi-Fi or cable).",
     "log-limpiar": "Clear the log?",
     "log-limpiar-todo": "Everything from this session is erased and it starts over. Previous sessions are left alone: they stay in History.",
