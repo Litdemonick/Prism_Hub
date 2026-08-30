@@ -1,42 +1,59 @@
-## PrismHub v1.0.59 — Cada plataforma con el motor que le corresponde
+## PrismHub v1.0.60 — Vuelven los subtítulos en Android
 
-> 🎬 **Se acabó elegir motor de vídeo.** En Android —teléfono y televisor— va
-> **ExoPlayer**, el del sistema. En PC y Linux va **mpv**. Y si alguna fuente
-> se le resiste a ExoPlayer, la app cae a mpv sola sin que te enteres.
+> 🔤 **Si estás en Android y no veías subtítulos, era esto.** La 1.0.59 cambió
+> el motor de vídeo de Android y con ese motor los subtítulos no llegaban a
+> pantalla: la app los descargaba y no los mostraba. Tampoco se podía elegir
+> pista de audio. Volvimos al motor de siempre y las dos cosas andan otra vez.
 
-> ⚠️ **La app sigue en mantenimiento general.** Se la sigue reestructurando
-> por dentro, así que es posible que te cruces con fallos o con cosas a medio
+> ⚠️ **La app sigue en mantenimiento general.** Se la sigue reestructurando por
+> dentro, así que es posible que te cruces con fallos o con cosas a medio
 > terminar. Si encontrás algo roto, reportalo desde Ajustes → Reportar.
 
-### 🎬 El motor, decidido por plataforma
+### 🔤 El motor de vídeo, uno solo otra vez
 
-- **Por qué ExoPlayer en Android**: dibuja en una capa nativa del sistema, así
-  que el vídeo y la interfaz van por carriles separados — la interfaz se
-  redibuja solo cuando algo cambia y el vídeo avanza a su ritmo. Con el camino
-  anterior compartían carril: **cada cuadro de vídeo era una pasada de dibujado
-  de toda la interfaz**. Es lo mismo que hacen las apps de vídeo del sistema.
-- **Y ExoPlayer ya reconoce las listas del relay.** Fallaban todas con «Source
-  error»: el relay servía sus direcciones sin extensión, y ExoPlayer decide qué
-  es cada cosa por ahí — tomaba una lista de reproducción por un archivo de
-  vídeo y se caía al leerla.
-- **Con reserva automática**: si una fuente no abre con ExoPlayer, se abre con
-  mpv y queda anotado. Nadie se queda sin ver nada.
+- **Android vuelve a mpv**, el mismo que usan Windows y Linux. Con eso vuelven
+  los **subtítulos** —los del archivo y los que trae la extensión aparte— y la
+  **elección de pista de audio**, que en la 1.0.59 no estaban.
+- **Se fue el selector de motor de Ajustes.** No queda nada que elegir: hay uno
+  y es el mismo en todas las plataformas.
 
-### 📡 Ver el registro de un televisor
+El cambio de la 1.0.59 buscaba sacar el vídeo del dibujado de la interfaz, y en
+eso funcionó: medido en un teléfono, el tiempo de dibujar cada cuadro bajó de
+unos 140 ms a menos de 40. Pero se llevó puestas demasiadas cosas que dependían
+del motor anterior, y aparecían de a una. Preferimos volver a lo probado y
+retomarlo con más cuidado.
 
-- **Se recuerdan los televisores**, con la fecha y hora en que se los vio. Si
-  uno deja de compartir —o **si la app se le cayó**— sigue en la lista, aparte
-  y marcado como sin conexión. Antes desaparecía como si nunca hubiera estado.
-- Se ven **enseguida al entrar**, antes de que termine la búsqueda.
-- **La barra de desplazamiento** ya no se agranda y achica sola, y **el
-  refresco ya no te devuelve arriba**: sigue el final, que es donde está lo
-  último, y solo si ya estabas abajo.
-- El registro va dentro de un panel con contorno, y podés **guardarlo o
-  compartirlo** desde el teléfono o el PC.
+### 🐞 Correcciones
+
+- **El recuadro rojo de error encima del vídeo, en el teléfono.** Aparecía al
+  abrir el reproductor y se redibujaba en cada cuadro. Era el control de volumen
+  pidiéndole al sistema que vigilara algo que no cambiaba nunca.
+- **La rueda de carga y el botón de pausa ya no se dibujan uno encima del otro.**
+  Los dos van al centro exacto de la pantalla y ninguno miraba al otro.
+- **Mientras dice «Obteniendo enlace…» ya no gira nada más.** El cartel del
+  centro y el botón de abajo daban la misma noticia dos veces, a destiempo.
+- **Al salir del reproductor o cambiar de servidor, el vídeo se detiene de
+  verdad.** Había caminos por los que seguía sonando.
+
+### ⚡ Empieza antes
+
+- **Cuando el servidor tiene varios nodos y algunos están caídos**, ahora se
+  prueban solapados en vez de uno detrás de otro. Antes, a cada nodo muerto se
+  le esperaban ocho segundos: con cinco caídos seguidos eran cuarenta segundos
+  mirando una rueda para terminar bajando de uno que contestaba en dos.
+- No se descarga nada dos veces: se suma otro nodo solo mientras ninguno dé
+  señales de vida, y en cuanto uno empieza a mandar datos se lo espera a él.
 
 ### 🔎 Diagnóstico
 
-- **Los cuadros lentos ahora dicen en qué pantalla pasaron.** «build=490ms» no
-  decía si fue el catálogo, la ficha o el reproductor.
-- El registro dice **cuándo es el primer arranque después de actualizar**, con
-  la versión de la que venías.
+Para poder arreglar lo que falla en televisores sin ir a ciegas:
+
+- **Se mide el desfase entre el audio y el vídeo.** Es el reporte que más se
+  repite en televisores y hasta ahora se hablaba de él sin un número. Ahora el
+  registro dice cuántos milisegundos, hacia qué lado, con qué códec, si está
+  decodificando por hardware y **por dónde sale el audio** —no es lo mismo el
+  altavoz del televisor que una barra por HDMI, que suma su propio retardo—.
+- **Los errores dicen dónde pasaron.** Antes, en la app compilada, quedaban
+  como «Instance of FlutterErrorDetails» y había que adivinar.
+- **Los cuadros lentos dicen en qué pantalla ocurrieron.** El dato estaba
+  puesto pero no salía nunca en Android.
