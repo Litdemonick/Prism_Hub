@@ -487,7 +487,8 @@
     "motor-auto": "Automático",
     "motor-mpv": "mpv (el de siempre)",
     "motor-exo": "ExoPlayer (nativo de Android)",
-    "motor-puesto": "Puesto"
+    "motor-puesto": "Puesto",
+    "view-log-tv-subtitle": "Todo lo que pasa, incluidas las sesiones anteriores. Si la app se cerró sola, acá queda qué estaba haciendo."
   },
   "external-player-launching": "Lanzando {player}",
   "detail": {

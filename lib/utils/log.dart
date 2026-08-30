@@ -6,6 +6,7 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/widgets.dart';
 import 'package:logging/logging.dart';
 import 'package:prismhub/utils/prismhub_directory.dart';
+import 'package:prismhub/utils/platform_tv.dart';
 import 'package:prismhub/utils/prismhub_storage.dart';
 import 'package:path/path.dart' as path;
 
@@ -187,7 +188,19 @@ class PrismLog {
     // sesión, sin perder el volcado por consola que sirve para verlo en vivo.
     if (kProfileMode) {
       debugPrint(batch);
-    } else if (PrismHubStorage.getSetting(SettingKey.saveLog) != true) {
+    } else if (!PlatformTv.esTelevisionSync &&
+        PrismHubStorage.getSetting(SettingKey.saveLog) != true) {
+      // ── En televisor se escribe SIEMPRE, sin preguntar ─────────────────
+      //
+      // Ahí el archivo no es «por si querés exportarlo»: es lo ÚNICO que
+      // explica un cierre. La app se cierra sola, se vuelve a abrir, y lo que
+      // pasó antes solo existe si quedó escrito — en la memoria no, porque
+      // esa se fue con el proceso.
+      //
+      // Y no hay a quién preguntarle: el interruptor de Ajustes se sacó de la
+      // pantalla de televisor justamente porque ahí no tiene sentido apagarlo.
+      // Dejarlo respondiendo a un ajuste invisible sería peor: el registro
+      // aparecería vacío sin ninguna explicación.
       // En release manda el interruptor de Ajustes. En perfilado no se pregunta:
       // esa compilación no la usa nadie para ver una serie, se usa para medir.
       return;

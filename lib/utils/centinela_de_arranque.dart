@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 
@@ -94,18 +95,78 @@ class CentinelaDeArranque {
           'Un cierre asi no pasa por los enganches de Dart: suele ser un fallo '
           'del codigo nativo o el sistema cerrando la app por memoria.',
         );
+        if (_anterior!.rastro.isEmpty) {
+          logger.severe('Sin rastro de lo que estaba haciendo.');
+        } else {
+          logger.severe('LO ULTIMO QUE HIZO LA APP ANTES DE CERRARSE:'
+              ' ${_anterior!.rastro.join(" | ")}');
+        }
       }
-      await _archivo.writeAsString(
-        jsonEncode({
-          'comenzoEn': DateTime.now().toIso8601String(),
-          'version': version ?? 'desconocida',
-          'aparato': _aparato,
-        }),
-        flush: true,
-      );
+      _comenzoEn = DateTime.now();
+      _version = version ?? 'desconocida';
+      _rastro.clear();
+      await _guardar();
     } catch (e) {
       // A propósito no se relanza: ver el comentario de arriba.
       logger.warning('CentinelaDeArranque.comenzar no pudo escribir: $e');
+    }
+  }
+
+  static DateTime? _comenzoEn;
+  static String _version = 'desconocida';
+
+  /// Las últimas cosas que hizo la app, en orden.
+  ///
+  /// ── Para qué ────────────────────────────────────────────────────────────
+  ///
+  /// El centinela ya decía QUE la sesión anterior murió de golpe, pero no qué
+  /// estaba haciendo. Y eso es la mitad del diagnóstico: no es lo mismo morir
+  /// abriendo un vídeo, recorriendo el catálogo o cambiando de zona.
+  ///
+  /// Cuando el proceso se va de golpe —fallo nativo, o el sistema cerrando la
+  /// app por memoria— no queda nadie para anotar nada. Así que se anota
+  /// ANTES, sobre la marcha: cada paso importante deja su marca en el archivo,
+  /// y si la sesión no vuelve, esas marcas son lo último que se sabe.
+  ///
+  /// ── Por qué solo las últimas ────────────────────────────────────────────
+  ///
+  /// Guardar todo obligaría a escribir un archivo cada vez más grande en cada
+  /// paso, en un aparato al que justamente le falta aire. Con las últimas doce
+  /// alcanza para ver el camino que llevó al cierre.
+  static final _rastro = <String>[];
+  static const _cuantasSeGuardan = 12;
+
+  /// Anota algo que la app acaba de hacer.
+  ///
+  /// Va corto y sin datos del usuario: el archivo se comparte para
+  /// diagnosticar. «abrió el reproductor», no qué episodio.
+  static void marcar(String que) {
+    try {
+      if (_comenzoEn == null) return;
+      final desde = DateTime.now().difference(_comenzoEn!).inSeconds;
+      _rastro.add('+${desde}s $que');
+      if (_rastro.length > _cuantasSeGuardan) _rastro.removeAt(0);
+      // Se escribe en el momento, sin esperar: si el proceso muere en el paso
+      // siguiente, esta marca tiene que estar ya en el disco.
+      unawaited(_guardar());
+    } catch (_) {
+      // Un instrumento de diagnóstico no puede tumbar nada.
+    }
+  }
+
+  static Future<void> _guardar() async {
+    try {
+      await _archivo.writeAsString(
+        jsonEncode({
+          'comenzoEn': (_comenzoEn ?? DateTime.now()).toIso8601String(),
+          'version': _version,
+          'aparato': _aparato,
+          'rastro': _rastro,
+        }),
+        flush: true,
+      );
+    } catch (_) {
+      // Sin permiso o sin espacio: se sigue igual.
     }
   }
 
@@ -157,6 +218,7 @@ class CentinelaDeArranque {
         duracion: DateTime.now().difference(comenzo),
         version: datos['version'] as String? ?? 'desconocida',
         aparato: datos['aparato'] as String? ?? 'desconocido',
+        rastro: (datos['rastro'] as List?)?.cast<String>() ?? const [],
       );
     } catch (e) {
       // Archivo a medio escribir: justamente lo que deja un cierre de golpe.
@@ -167,6 +229,7 @@ class CentinelaDeArranque {
         duracion: Duration.zero,
         version: 'desconocida',
         aparato: 'desconocido',
+        rastro: const [],
       );
     }
   }
@@ -184,10 +247,14 @@ class SesionAnterior {
     required this.duracion,
     required this.version,
     required this.aparato,
+    required this.rastro,
   });
 
   final DateTime comenzoEn;
   final Duration duracion;
   final String version;
   final String aparato;
+
+  /// Lo último que hizo la app antes de morir, en orden.
+  final List<String> rastro;
 }

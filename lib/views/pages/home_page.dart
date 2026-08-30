@@ -11,6 +11,7 @@ import 'package:prismhub/controllers/zona_catalogo_controller.dart';
 import 'package:prismhub/models/index.dart';
 import 'package:prismhub/router/router.dart';
 import 'package:prismhub/utils/breakpoints.dart';
+import 'package:prismhub/utils/centinela_de_arranque.dart';
 import 'package:prismhub/utils/extension.dart';
 import 'package:prismhub/utils/i18n.dart';
 import 'package:prismhub/utils/platform_tv.dart';

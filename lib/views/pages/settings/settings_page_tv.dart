@@ -232,17 +232,14 @@ class _SettingsPageTvState extends State<SettingsPageTv> {
           clave: SettingKey.checkNewEpisodes,
           porDefecto: true,
         ),
-        _Interruptor(
-          icono: Icons.description_outlined,
-          titulo: 'settings.save-log'.i18n,
-          subtitulo: 'settings.save-log-subtitle'.i18n,
-          clave: SettingKey.saveLog,
-          porDefecto: false,
-        ),
+        // Sin el interruptor de "guardar registro": en televisor se escribe
+        // siempre (ver PrismLog). Ahí ese archivo no es una opción, es lo
+        // único que explica un cierre — y no hay dónde exportarlo ni con qué
+        // abrirlo, así que se lee desde acá mismo.
         _Boton(
           icono: Icons.article_outlined,
           titulo: 'settings.view-log'.i18n,
-          subtitulo: 'settings.view-log-subtitle'.i18n,
+          subtitulo: 'settings.view-log-tv-subtitle'.i18n,
           onTap: () => Get.to(() => const RegistroEnVivoPage()),
         ),
       ];

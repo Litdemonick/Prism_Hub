@@ -1,4 +1,6 @@
 import 'dart:async';
+import 'dart:convert';
+import 'dart:io';
 
 import 'package:fluent_ui/fluent_ui.dart' as fluent;
 import 'package:flutter/material.dart';
@@ -51,12 +53,63 @@ class _RegistroEnVivoPageState extends State<RegistroEnVivoPage> {
   Timer? _reloj;
   final _scroll = ScrollController();
 
+  /// Lo que quedó de arranques anteriores, leído del archivo.
+  ///
+  /// Va delante de lo que hay en memoria y no se vuelve a leer: el archivo no
+  /// cambia hacia atrás, solo crece por el final — y eso ya lo cubre lo que
+  /// está en memoria.
+  List<String> _deAntes = const [];
+
   @override
   void initState() {
     super.initState();
+    // ── Se lee TAMBIÉN el archivo, en las cuatro plataformas ────────────
+    //
+    // El visor arrancaba vacío en cada apertura: mostraba lo que estaba
+    // pasando, no el historial. Reportado en vivo: «al entrar y salir se
+    // borra el historial».
+    //
+    // Y es justo al revés de lo que hace falta. Lo que explica un cierre no
+    // es lo que pasa DESPUÉS de volver a abrir la app: es lo que pasó ANTES,
+    // y eso solo existe en el archivo — la memoria se fue con el proceso.
+    //
+    // En televisor además no hay alternativa: no hay dónde exportar ni con
+    // qué abrirlo. Pero en teléfono y en PC tener el historial acá también
+    // ahorra el rodeo de exportar, abrir con otra cosa y buscar a mano.
+    unawaited(_leerLoAnterior());
     _refrescar();
     _reloj = Timer.periodic(_cadencia, (_) => _refrescar());
   }
+
+  Future<void> _leerLoAnterior() async {
+    try {
+      final archivo = File(PrismLog.logFilePath);
+      if (!await archivo.exists()) return;
+      final texto = await archivo.readAsString();
+      final todas = const LineSplitter()
+          .convert(texto)
+          .where((l) => l.trim().isNotEmpty);
+      // Solo el final. Un archivo de sesiones enteras puede tener decenas de
+      // miles de líneas, y construirlas todas es justo lo que no hay que
+      // hacer en un televisor.
+      final desde = todas.length > _topeDeLoAnterior
+          ? todas.length - _topeDeLoAnterior
+          : 0;
+      if (!mounted) return;
+      setState(() => _deAntes = todas.skip(desde).toList(growable: false));
+      if (_alFinal) _bajarAlFinal();
+    } catch (e) {
+      // Sin permiso, o el archivo a medio escribir: se sigue con lo que haya
+      // en memoria, que es como se comportaba antes.
+      debugPrint('No se pudo leer el registro anterior: $e');
+    }
+  }
+
+  /// Cuántas líneas del archivo se traen.
+  ///
+  /// Bastante más que las que caben en pantalla, para poder subir a ver qué
+  /// pasó antes de un cierre, pero acotado: son widgets que hay que construir.
+  static const _topeDeLoAnterior = 3000;
 
   @override
   void dispose() {
@@ -164,9 +217,11 @@ class _RegistroEnVivoPageState extends State<RegistroEnVivoPage> {
       child: ListView.builder(
         controller: _scroll,
         padding: const EdgeInsets.fromLTRB(12, 8, 12, 24),
-        itemCount: _lineas.length,
+        itemCount: _deAntes.length + _lineas.length,
         itemBuilder: (context, index) {
-          final linea = _lineas[index];
+          final linea = index < _deAntes.length
+              ? _deAntes[index]
+              : _lineas[index - _deAntes.length];
           return Padding(
             padding: const EdgeInsets.symmetric(vertical: 2),
             child: Text(linea, style: _mono.copyWith(color: _colorDe(linea))),

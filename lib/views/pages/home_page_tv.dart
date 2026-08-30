@@ -138,6 +138,7 @@ class _HomeTVState extends State<HomeTV> {
   /// (Películas/Series/Anime) van a traer el suyo vía `ZonaCatalogoController`
   /// cuando se armen — ninguna de las dos depende de marcar nada acá.
   void _elegir(_CategoriaTV categoria) {
+    CentinelaDeArranque.marcar('va a la zona ${categoria.name}');
     setState(() {
       _categoria = categoria;
       // A partir de acá esta zona se arma y se queda viva. Ver [_visitadas].

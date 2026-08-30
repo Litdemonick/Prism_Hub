@@ -21,6 +21,7 @@ import 'package:prismhub/utils/comportamiento_sistema_tv.dart';
 import 'package:prismhub/utils/platform_tv.dart';
 import 'package:prismhub/utils/error.dart';
 import 'package:prismhub/utils/relay_local.dart';
+import 'package:prismhub/utils/centinela_de_arranque.dart';
 import 'package:prismhub/utils/log.dart';
 import 'package:prismhub/utils/request.dart';
 import 'package:prismhub/views/dialogs/bt_dialog.dart';
@@ -534,6 +535,7 @@ class VideoPlayerController extends GetxController with WidgetsBindingObserver {
     hasRenderedFrame.value = true;
     logger.info('rueda apagada: $porQue');
     BancoDePruebas.seVio();
+    CentinelaDeArranque.marcar('primer cuadro en pantalla');
   }
 
   // Flag de buffering YA corregido con la posición real — ver
@@ -2671,6 +2673,7 @@ class VideoPlayerController extends GetxController with WidgetsBindingObserver {
   Duration? _midStreamResumeAt;
 
   void _beginPlaybackShutdown() {
+    CentinelaDeArranque.marcar('cierra el reproductor');
     // ── Lo PRIMERO de todo: que deje de sonar ─────────────────────────────
     //
     // Antes lo primero que se hacía era bajar el volumen, sí, pero dentro de
@@ -3054,6 +3057,8 @@ class VideoPlayerController extends GetxController with WidgetsBindingObserver {
     // Arranca el cronometro del recorrido de extensiones. Ver BancoDePruebas.
     BancoDePruebas.empezar(
         extension: runtime.extension.package, servidor: name);
+    CentinelaDeArranque.marcar(
+        'abre servidor "$name" de ${runtime.extension.package}');
 
     isGettingWatchData.value = true;
 
