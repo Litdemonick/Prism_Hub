@@ -32,7 +32,10 @@ void main() {
       _linea('INFO', 'rueda apagada: primer cuadro listo'),
       _linea('INFO', 'media_kit error: algo'),
       _linea('INFO', 'mpv: cambio de pista'),
-      _linea('INFO', 'exoplayer: preparado'),
+      // El desfase de audio es lo que se mira en un televisor, así que
+      // tiene que caer en la zona del reproductor y no en «todo».
+      _linea('WARNING', 'DESFASE DE AUDIO de 120 ms'),
+      _linea('INFO', 'desfase de audio · el peor: 45 ms'),
       _linea('INFO', 'salto a 90s ignorado'),
       _linea('INFO', 'bomba · el servidor local falló'),
       _linea('INFO', 'FRAME LENTO detectado'),

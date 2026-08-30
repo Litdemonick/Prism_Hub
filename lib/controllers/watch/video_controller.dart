@@ -870,12 +870,31 @@ class VideoPlayerController extends GetxController with WidgetsBindingObserver {
       // el códec dice por qué.
       final decodificador = d(await np.getProperty('hwdec-current'));
       final codec = d(await np.getProperty('video-codec'));
+      // **El desfase de audio, medido y no supuesto.**
+      //
+      // Es el reporte que más se repite en televisores —«el audio va
+      // adelantado»— y hasta ahora se discutía sin un número. `avsync` es la
+      // diferencia real entre el audio y el vídeo que mpv acaba de presentar,
+      // en segundos y con signo: positivo, el vídeo va por delante; negativo,
+      // el audio.
+      //
+      // `total-avsync-change` es cuánto tuvo que corregir acumulado: un avsync
+      // chico con una corrección acumulada grande significa que se mantiene a
+      // costa de estirar el audio, y eso también se oye.
+      //
+      // Y por dónde sale el audio, que en Android TV cambia el resultado: no
+      // es lo mismo el altavoz del televisor que una barra por HDMI, que suma
+      // su propio retardo.
+      final desfase = d(await np.getProperty('avsync'));
+      final corregido = d(await np.getProperty('total-avsync-change'));
+      final salida = d(await np.getProperty('current-ao'));
       logger.info('medición ($motivo) · colchón: $colchon s · entrando: '
           '$caudal B/s · variante: $bitrate bps · cuadros tirados: $tirados · '
           'calidad: ${currentQuality.value} · posición: '
           '${position.value.inSeconds}s · time-pos: $donde · pause: $pausa · '
           'paused-for-cache: $porCache · core-idle: $quieto · '
-          'decodifica: $decodificador · códec: $codec');
+          'decodifica: $decodificador · códec: $codec · desfase: $desfase s · '
+          'corregido: $corregido s · salida de audio: $salida');
       // Y si cayó a software en un televisor, se dice aparte y fuerte: es la
       // causa más probable de que ESE título vaya mal cuando los demás van
       // bien, y buscando "SOFTWARE" en el registro aparece de una.
@@ -913,6 +932,11 @@ class VideoPlayerController extends GetxController with WidgetsBindingObserver {
       if (imagenCongelada.value != congelada) {
         imagenCongelada.value = congelada;
       }
+      // El desfase de audio se mira cada dos segundos, no cada medio: leer una
+      // propiedad de mpv cruza a la librería nativa, y esto corre mientras se
+      // reproduce.
+      _vueltasParaElDesfase = (_vueltasParaElDesfase + 1) % 4;
+      if (_vueltasParaElDesfase == 0) unawaited(_mirarElDesfase());
       // Se rindio: se avisa UNA vez y se deja de insistir, para que el usuario
       // pueda elegir en vez de mirar una rueda eterna.
       if (quieto >= _atascoParaRendirse && !_atascoAvisado) {
@@ -929,6 +953,61 @@ class VideoPlayerController extends GetxController with WidgetsBindingObserver {
   }
 
   bool _atascoAvisado = false;
+
+  int _vueltasParaElDesfase = 0;
+
+  /// El desfase más grande visto en esta reproducción, en segundos.
+  double _peorDesfase = 0;
+  bool _desfaseAvisado = false;
+
+  /// A partir de cuánto se oye.
+  ///
+  /// 80 ms. Por debajo de eso el oído no separa la voz del movimiento de los
+  /// labios; por encima empieza a notarse, y pasados los 150 ms molesta a
+  /// cualquiera. Se avisa en el medio para que quede anotado ANTES de que la
+  /// persona lo reporte.
+  static const _desfaseQueSeOye = 0.08;
+
+  /// Vigila que el audio y el vídeo no se separen.
+  ///
+  /// ── Por qué se mide en vez de suponerlo ─────────────────────────────────
+  ///
+  /// «El audio va adelantado en el televisor» es de los reportes que más se
+  /// repiten, y se venía discutiendo sin un número: no se sabía si eran 20 ms
+  /// —que no se oyen— o 300, ni si pasaba siempre o solo con ciertos códecs, ni
+  /// si el televisor con barra de sonido por HDMI se comportaba distinto.
+  ///
+  /// `avsync` es la diferencia real que mpv acaba de presentar. Se guarda la
+  /// peor de toda la reproducción y se avisa UNA vez al pasar el umbral, con
+  /// todo el contexto alrededor: sin el códec y el decodificador al lado, el
+  /// número solo no dice qué hacer.
+  Future<void> _mirarElDesfase() async {
+    if (_disposed || _shutdownStarted || _playerDisposed) return;
+    if (motor.nombre != 'mpv') return;
+    if (player.platform is! NativePlayer) return;
+    try {
+      final crudo =
+          (await (player.platform as NativePlayer).getProperty('avsync')).trim();
+      final ahora = double.tryParse(crudo);
+      if (ahora == null) return;
+      if (ahora.abs() > _peorDesfase.abs()) _peorDesfase = ahora;
+      if (_desfaseAvisado || ahora.abs() < _desfaseQueSeOye) return;
+      _desfaseAvisado = true;
+      final ms = (ahora * 1000).round();
+      logger.warning(
+        'DESFASE DE AUDIO de $ms ms (${ms > 0 ? 'el vídeo va por delante' : 'el '
+            'audio va por delante'}). Se mide una vez y no se vuelve a avisar '
+            'en esta reproducción.',
+      );
+      // La medición completa al lado, que es lo que dice qué hacer con el
+      // número: el códec, si está decodificando por hardware, y por dónde sale
+      // el audio.
+      unawaited(_medir('desfase de audio'));
+    } catch (e) {
+      // Un instrumento no puede tumbar la reproducción que está midiendo.
+      logger.info('no se pudo leer el desfase de audio: $e');
+    }
+  }
 
   // Búsqueda en curso (arrastrar o tocar la barra de progreso). Hace falta
   // aparte de isActuallyBuffering porque ese flag se APAGA justo en este caso:
@@ -2291,6 +2370,11 @@ class VideoPlayerController extends GetxController with WidgetsBindingObserver {
     // aviso de atasco vuelve a estar disponible.
     _calidadInicialElegida = false;
     _atascoAvisado = false;
+    // El desfase se mide por reproducción: uno malo en un episodio no dice
+    // nada del siguiente, que puede venir con otro códec y de otro servidor.
+    _peorDesfase = 0;
+    _desfaseAvisado = false;
+    _vueltasParaElDesfase = 0;
     imagenCongelada.value = false;
     _historyTouchInFlight = false;
     isActuallyBuffering.value = false;
@@ -2844,6 +2928,16 @@ class VideoPlayerController extends GetxController with WidgetsBindingObserver {
 
   void _beginPlaybackShutdown() {
     CentinelaDeArranque.marcar('cierra el reproductor');
+    // El peor desfase de audio de toda la reproducción, al cerrar.
+    //
+    // El aviso de arriba salta al cruzar el umbral y no vuelve a hablar; este
+    // resumen dice cómo terminó. Los dos hacen falta: uno para enterarse
+    // cuando pasa, el otro para comparar un televisor contra otro sin tener
+    // que leer el registro entero.
+    if (_peorDesfase.abs() >= 0.02) {
+      logger.info('desfase de audio · el peor de esta reproducción: '
+          '${(_peorDesfase * 1000).round()} ms');
+    }
     // ── Lo PRIMERO de todo: que deje de sonar ─────────────────────────────
     //
     // Antes lo primero que se hacía era bajar el volumen, sí, pero dentro de
