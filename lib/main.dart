@@ -187,9 +187,18 @@ void main(List<String> args) async {
           // parpadeo que cualquiera nota, y ahí sí corresponde el aviso.
           // Los demás siguen registrándose igual, como información: no se
           // pierde ni uno, y en la zona «Reproductor» están todos.
+          // ── Con la pantalla en la que pasó ───────────────────────────
+          //
+          // «build=490ms» dice que algo tardó, no QUÉ. Con cientos de estas
+          // líneas repartidas por una sesión entera, no hay forma de saber si
+          // fue el catálogo, la ficha o el reproductor — y sin eso no se puede
+          // ir a mirar el sitio correcto.
+          //
+          // El nombre de la ruta es lo más barato que responde esa pregunta:
+          // sale de un dato que el navegador ya tiene, sin instrumentar nada.
           final linea =
               'FRAME LENTO: build=${buildMs}ms raster=${rasterMs}ms '
-              'total=${totalMs}ms';
+              'total=${totalMs}ms${_dondeEstamos()}';
           if (workMs >= 250) {
             logger.warning(linea);
           } else {
@@ -1600,5 +1609,22 @@ class _StartupErrorApp extends StatelessWidget {
         ),
       ),
     );
+  }
+}
+
+
+/// En qué pantalla está la app, para acompañar a los cuadros lentos.
+///
+/// Devuelve vacío si no se puede averiguar: un instrumento de diagnóstico no
+/// puede tumbar nada, y menos desde dentro del aviso de que algo va lento.
+String _dondeEstamos() {
+  try {
+    final ruta = rootNavigatorKey.currentContext == null
+        ? null
+        : ModalRoute.of(rootNavigatorKey.currentContext!)?.settings.name;
+    if (ruta == null || ruta.isEmpty) return '';
+    return ' · en $ruta';
+  } catch (_) {
+    return '';
   }
 }
