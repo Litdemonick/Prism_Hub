@@ -66,6 +66,20 @@ class ServidorDeRegistro {
 
   static bool get encendido => _servidor != null;
 
+  /// Qué se está sirviendo, dicho en palabras.
+  ///
+  /// ── Por qué hace falta escribirlo ───────────────────────────────────────
+  ///
+  /// La página decía «todo el registro» pasara lo que pasara, así que desde el
+  /// navegador no había forma de saber si lo que se estaba mirando era lo que
+  /// pasa ahora o una apertura anterior guardada — y las dos se ven igual, con
+  /// las mismas líneas y el mismo aspecto.
+  ///
+  /// Reportado en vivo: «debe especificar cuándo es historial y en qué zona
+  /// está». Va a la página Y al registro: quien lo enciende tiene que poder
+  /// comprobar después, en el propio archivo, qué estuvo compartiendo.
+  static String? queSeSirve;
+
   /// Las líneas concretas que hay que servir, o null para el registro entero.
   ///
   /// Lo pone el visor cuando lo que se está mirando es una sesión anterior:
@@ -105,7 +119,7 @@ class ServidorDeRegistro {
       direccion = 'http://$ip:${s.port}/r/$_codigo';
       _apagado = Timer(_cuantoDura, apagar);
       logger.info('Registro accesible desde la red durante '
-          '${_cuantoDura.inMinutes} minutos');
+          '${_cuantoDura.inMinutes} minutos · se comparte: $_loQueSeSirve');
       return (direccion: direccion, fallo: null);
     } catch (e) {
       logger.warning('No se pudo levantar el servidor de registro: $e');
@@ -122,10 +136,12 @@ class ServidorDeRegistro {
     direccion = null;
     _codigo = null;
     lineasFijas = null;
+    queSeSirve = null;
+    areaElegida = null;
     if (s == null) return;
     try {
       await s.close(force: true);
-      logger.info('Servidor de registro apagado');
+      logger.info('Servidor de registro apagado: se deja de compartir');
     } catch (_) {
       // Ya estaba cerrado.
     }
@@ -175,6 +191,18 @@ class ServidorDeRegistro {
     }
   }
 
+  /// Qué se está sirviendo, en una línea, para la página y para el registro.
+  ///
+  /// Dos datos y no uno: DE DÓNDE salen las líneas —lo que está pasando ahora
+  /// o una apertura guardada— y QUÉ ZONA de ellas. Sin el primero, una sesión
+  /// anterior se lee como si fuera lo de ahora y se persigue un fallo que ya
+  /// no está pasando.
+  static String get _loQueSeSirve {
+    final origen = queSeSirve ?? 'registro de ahora';
+    final zona = areaElegida ?? 'todas las zonas';
+    return '$origen · $zona';
+  }
+
   /// La página que se ve en el navegador.
   ///
   /// Sencilla a propósito: texto monoespaciado sobre fondo oscuro, con un
@@ -192,10 +220,12 @@ class ServidorDeRegistro {
   body{background:#11131a;color:#c9ccd6;font:12px/1.5 ui-monospace,Consolas,monospace;margin:0;padding:16px}
   h1{color:#f0568d;font-size:15px;margin:0 0 4px}
   p{color:#7b8194;margin:0 0 16px;font-size:12px}
+  p.que{color:#e8b339;margin:0 0 4px;font-size:13px;font-weight:600}
   pre{white-space:pre-wrap;word-break:break-word;margin:0}
 </style></head><body>
 <h1>Registro de PrismHub</h1>
-<p>${const HtmlEscape().convert(EncabezadoDeSesion.resumenDelAparato())} · ${const HtmlEscape().convert(areaElegida ?? 'todo el registro')} · se actualiza solo cada 5 s</p>
+<p class="que">${const HtmlEscape().convert(_loQueSeSirve)}</p>
+<p>${const HtmlEscape().convert(EncabezadoDeSesion.resumenDelAparato())} · se actualiza solo cada 5 s</p>
 <pre>$escapado</pre>
 </body></html>''';
   }

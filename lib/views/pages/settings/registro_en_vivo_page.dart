@@ -315,6 +315,7 @@ class _RegistroEnVivoPageState extends State<RegistroEnVivoPage> {
     }
     ServidorDeRegistro.areaElegida = _filtro.area;
     ServidorDeRegistro.lineasFijas = null;
+    ServidorDeRegistro.queSeSirve = 'registro de ahora';
     final r = await ServidorDeRegistro.encender();
     if (!mounted) return;
     setState(() {});
