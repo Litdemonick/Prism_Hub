@@ -2091,11 +2091,12 @@ class VideoPlayerController extends GetxController with WidgetsBindingObserver {
         }
         _decodeErrorBurstCount++;
         if (_decodeErrorBurstCount == 1) {
-          logger.severe('media_kit error: $event');
+          logger.severe('${motor.nombre}: $event');
         }
         if (_decodeErrorBurstCount == 20 && serverFailedMessage.value.isEmpty) {
           logger.severe(
-              'media_kit error: ráfaga de errores de decodificación, tratando como servidor roto ($event)');
+              '${motor.nombre}: ráfaga de errores de decodificación, '
+              'tratando como servidor roto ($event)');
           serverFailedMessage.value = availableServers.length > 1
               ? 'Servidor "${currentServerName.value}" con audio/video dañado.\n'
                   'Cambiá de servidor con el botón Servidor.'
@@ -2103,7 +2104,7 @@ class VideoPlayerController extends GetxController with WidgetsBindingObserver {
         }
         return;
       }
-      logger.severe('media_kit error: $event');
+      logger.severe('${motor.nombre}: $event');
       final isDup = event == _lastErrorEvent;
       _lastErrorEvent = event;
       // Errores técnicos de libmpv/ffmpeg no se muestran al usuario:

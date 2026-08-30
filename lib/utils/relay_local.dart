@@ -105,7 +105,9 @@ class RelayLocal {
     _base = 'http://$ip:$_port';
     RelayLog.paso('Relay escuchando en 0.0.0.0:$_port; al aparato se le anuncia '
         '$ip:$_port — origen ${RelayLog.donde(targetUrl)}');
-    return '$_base/relay/$token';
+    // Con la extensión de la fuente pegada: es lo que le dice a ExoPlayer que
+    // esto es una lista HLS y no un archivo de vídeo suelto. Ver _extensionDe.
+    return '$_base/relay/$token${_extensionDe(targetUrl)}';
   }
 
   // Direccion base del relay, cacheada: al reescribir una lista HLS hay que
@@ -233,7 +235,7 @@ class RelayLocal {
     if (segments.length < 2 || segments[0] != 'relay') {
       return Response.notFound('not found');
     }
-    final target = _targets[segments[1]];
+    final target = _targets[_soloElToken(segments[1])];
     if (target == null) return Response.notFound('unknown relay token');
 
     // Se anota que el aparato llego hasta aca. Solo la primera vez de cada
@@ -692,12 +694,50 @@ class RelayLocal {
     final absoluta = base.resolve(destino).toString();
     final clave = '${padre.sesion}|$absoluta';
     final yaEsta = _tokensPorUrl[clave];
-    if (yaEsta != null) return '$relayBase/relay/$yaEsta';
+    if (yaEsta != null) {
+      return '$relayBase/relay/$yaEsta${_extensionDe(absoluta)}';
+    }
     final token = '${padre.sesion}-${++_correlativo}';
     _targets[token] = _RelayTarget(absoluta, padre.headers, padre.sesion,
         esquivarNodosCaidos: padre.esquivarNodosCaidos);
     _tokensPorUrl[clave] = token;
-    return '$relayBase/relay/$token';
+    return '$relayBase/relay/$token${_extensionDe(absoluta)}';
+  }
+
+  /// La extensión de la dirección original, para pegarla al token.
+  ///
+  /// ── Por qué hace falta ──────────────────────────────────────────────────
+  ///
+  /// Las direcciones del relay eran `/relay/<token>`, sin extensión. A mpv le
+  /// da igual: mira el contenido. A ExoPlayer NO — decide qué es cada cosa por
+  /// el final de la dirección, así que una lista HLS servida como
+  /// `/relay/abc-1` la tomaba por un archivo de vídeo suelto, intentaba leer
+  /// texto como si fuera un contenedor y se caía.
+  ///
+  /// Medido en el registro de un televisor: cada intento con ExoPlayer daba
+  /// «Video player had error h0.l: Source error» a los 300 ms de que el relay
+  /// sirviera la lista, y sin llegar a pedir ni un pedacito — o sea, al
+  /// leerla, no al reproducirla. Con mpv, la misma fuente y el mismo relay
+  /// andaban.
+  ///
+  /// Se mira el token entero al resolver (ver [_soloElToken]), así que agregar
+  /// esto no cambia nada de lo que ya funcionaba.
+  static String _extensionDe(String url) {
+    final camino = Uri.tryParse(url)?.path ?? '';
+    final punto = camino.lastIndexOf('.');
+    final barra = camino.lastIndexOf('/');
+    if (punto <= barra || punto == camino.length - 1) return '';
+    final ext = camino.substring(punto);
+    // Solo extensiones cortas y de letras: una dirección con un punto en medio
+    // del nombre no tiene por qué terminar pegándole basura al token.
+    if (ext.length > 6) return '';
+    return RegExp(r'^\.[A-Za-z0-9]+$').hasMatch(ext) ? ext : '';
+  }
+
+  /// El token sin la extensión que se le pegó al construir la dirección.
+  static String _soloElToken(String segmento) {
+    final punto = segmento.lastIndexOf('.');
+    return punto <= 0 ? segmento : segmento.substring(0, punto);
   }
 
   // Libera la memoria de un target una vez que ya no hace falta (al
