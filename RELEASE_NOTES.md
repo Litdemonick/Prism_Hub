@@ -1,57 +1,54 @@
-## PrismHub v1.0.49 — Que el registro sirva para arreglar
+## PrismHub v1.0.50 — Saber en qué aparato pasó
 
-> 🔎 **Ahora se ve lo que hace la app, no solo lo que falla.** Cada pedido de
-> red, cada paso que das y todo lo que antes solo salía por consola queda
-> escrito. Si algo no te anda, el registro que exportes ya trae con qué
-> encontrarlo.
+> 🩺 **El registro ahora abre con la ficha del aparato**: sistema, marca,
+> modelo, memoria, procesador y pantalla. Es lo primero que hace falta para
+> entender un fallo, y va también en cada archivo que exportes.
 
 > ⚠️ **La app sigue en mantenimiento general.** Se la sigue reestructurando
 > por dentro, así que es posible que te cruces con fallos o con cosas a medio
 > terminar. Si encontrás algo roto, reportalo desde Ajustes → Reportar.
 
-### 🔎 Mucho más registro (todas las plataformas)
+### 🐞 Se caía al abrir el registro en el teléfono
 
-- **Cada pedido de red de la app queda anotado**: método, servidor, código de
-  respuesta y cuánto tardó. Antes solo se anotaba lo de las extensiones, así
-  que cuando algo «no cargaba» y la extensión ni intervenía, no había nada que
-  mirar. Ni cabeceras ni contenido, a propósito: ahí es donde viajan las
-  cookies.
-- **Lo que antes solo salía por consola ahora se guarda.** Había medio
-  centenar de mensajes que se perdían — justo en televisor y teléfono, donde
-  nadie tiene una consola abierta.
-- **Se ve lo que estabas haciendo**, paso a paso, y no solo después de un
-  cierre: a qué zona fuiste, qué instalaste, cuándo buscaste. De la búsqueda
-  **no** se guarda qué escribiste.
-- **Las zonas ahora dividen bien.** Se revisó el código y faltaban la mitad de
-  las marcas reales: el reproductor y las extensiones dejaban líneas fuera de
-  su zona. Y un fallo aparece en «Fallos» además de en la suya, para no tener
-  que elegir primero de qué parte de la app era.
-- **Lo normal se lee en blanco.** Iba en gris apagado, que es el color de
-  «esto no importa» — y era la mayor parte del registro.
+- La pantalla no llegaba a abrirse. La causa estaba en el propio registro que
+  se pudo exportar: los manejadores de selección —los dos círculos con los que
+  se ajusta la selección con el dedo— se caen cuando la lista se rehace, y esta
+  se rehace cuatro veces por segundo mientras entran líneas.
+- La selección de texto queda en escritorio, que es donde de verdad se usa y
+  donde ese problema no existe. En teléfono y televisor ya está exportar.
 
-### 🖼️ El nombre de PrismHub, entero
+### 🩺 La ficha del aparato
 
-- Se veía cortado en todas las plataformas. Las letras mezclaban dos tipos de
-  caracteres, y cuando al aparato le falta alguno lo saca de otra fuente con
-  otro ancho: ahí la letra se desarma. Ahora está dibujado con uno solo.
-- El recuadro se mide solo en vez de estar escrito a mano, así que no puede
-  quedar abierto.
-- Y cada sesión guarda su hora de apertura, así el historial ya no muestra
-  aperturas «sin fecha».
+- Antes decía solo el identificador de compilación del sistema — ni marca, ni
+  modelo, ni memoria. Ahora: **sistema y versión completa** (Windows 11 Pro con
+  su compilación, Android con su API), **marca y modelo**, **memoria**,
+  **núcleos**, **perfil**, **resolución de pantalla** e **idioma**.
+- Va al abrir la app y encabeza cada archivo exportado, en todas las zonas.
+- **Sigue sin salir lo que te identifica**: ni el nombre que le pusiste al
+  aparato, ni su número de serie, ni identificadores de publicidad, ni tu
+  cuenta. Marca y modelo los comparten millones de aparatos y son justo lo que
+  permite reproducir un fallo que solo pasa en el tuyo. Está explicado dentro
+  del propio registro.
 
-### 📺 Televisor
+### 📤 Exportar
 
-- **El historial usa el mismo diseño que el registro**: columna de acciones al
-  costado en las tres pantallas, así que salir, cambiar de zona o encender la
-  conexión se hace desde cualquier punto sin subir hasta arriba.
-- **Al abrir una sesión guardada podés filtrar por zona** igual que en el
-  registro en vivo — Todo, Fallos, Extensiones, Reproductor.
-- **La luz de selección ya no se sale de la tarjeta.** El resplandor se dibuja
-  detrás y las tarjetas eran translúcidas, así que se veía entero a través.
+- **El archivo dice qué es**: `PrismHub-fallos-2026-08-29-2319.log`. Salían
+  todos con el mismo nombre, así que dos exportados eran «reporte» y
+  «reporte(1)». La fecha va del año al minuto, para que ordenados por nombre
+  queden en orden de tiempo.
+- Los del historial salen con «historial» adelante.
 
-### 💻 PC y Android
+### 🎨 Detalles
 
-- Cada plataforma con lo suyo: en teléfono y escritorio la barra de arriba se
-  queda —con el dedo o el ratón se llega sin recorrer nada— y ahí va exportar.
-  «Ver desde otro aparato» sigue siendo solo de televisor, que es donde no hay
-  a dónde exportar.
+- **Las filas anchas ya no crecen al seleccionarlas.** En el historial de PC se
+  pegaban a los bordes y quedaban mordidas contra la lista.
+- **El brillo rosado de selección se ve más**: más color y menos desenfoque,
+  para que se lea como un contorno y no como una mancha.
+- **El contador ahora cuenta las líneas que se ven.** Contaba el total, así que
+  no se movía al cambiar de zona.
+- **Los títulos se encogen antes que cortarse** — en teléfonos angostos salía
+  «Ver registro…».
+- **Márgenes seguros en apaisado**: el recorte de cámara y la barra de gestos
+  se comían texto contra el borde.
+- El bloqueador de anuncios ya no aparece en «Extensiones»: es de la app, no de
+  una extensión.
