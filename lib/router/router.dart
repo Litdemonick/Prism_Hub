@@ -245,6 +245,23 @@ Page<void> _animation(GoRouterState state, Widget child) {
   return CustomTransitionPage<void>(
     key: state.pageKey,
     child: child,
+    // ── `opaque: false`, y no es un detalle ─────────────────────────────
+    //
+    // Reportado en vivo en PC: al entrar a Registros —y a cualquier otra de
+    // estas pantallas— se veía un parpadeo blanco antes de que apareciera el
+    // contenido.
+    //
+    // Con `opaque: true` (lo de fábrica), Flutter deja de pintar la pantalla
+    // que se está yendo porque da por hecho que la nueva la tapa entera. Pero
+    // la nueva ENTRA CON UN FUNDIDO: durante esos 220 ms todavía es
+    // semitransparente, así que lo que se ve por detrás no es la pantalla
+    // anterior sino el fondo de la ventana, que en escritorio es claro. Ese es
+    // el blanco.
+    //
+    // Sin opacar, la anterior se sigue dibujando debajo y el fundido es un
+    // cruce de verdad entre las dos. Cuesta pintar dos pantallas durante esos
+    // 220 ms y a cambio no hay ningún destello.
+    opaque: false,
     transitionDuration: const Duration(milliseconds: 220),
     reverseTransitionDuration: const Duration(milliseconds: 180),
     transitionsBuilder: (context, animation, secondaryAnimation, child) {
