@@ -61,6 +61,13 @@ class _RegistroEnVivoPageState extends State<RegistroEnVivoPage> {
   Timer? _reloj;
   final _scroll = ScrollController();
 
+  /// A dónde salta el foco cuando se pulsa izquierda desde el registro.
+  ///
+  /// Se lo lleva la zona que esté puesta, no la primera de la lista: quien
+  /// vuelve a la columna casi siempre viene a cambiar de zona, y aparecer
+  /// justo sobre la actual dice además en cuál estaba.
+  final _focoDelRail = FocusNode(debugLabel: 'registro-rail');
+
   /// Si el foco del mando está sobre el registro.
   ///
   /// Un bloque de texto que se desplaza no puede mostrarlo por su cuenta —no
@@ -217,6 +224,7 @@ class _RegistroEnVivoPageState extends State<RegistroEnVivoPage> {
   void dispose() {
     _reloj?.cancel();
     _scroll.dispose();
+    _focoDelRail.dispose();
     super.dispose();
   }
 
@@ -265,6 +273,19 @@ class _RegistroEnVivoPageState extends State<RegistroEnVivoPage> {
   /// aparato, y muestra la dirección en grande.
   Future<void> _alternarServidor() async {
     if (ServidorDeRegistro.encendido) {
+      // Se pregunta antes de cortar.
+      //
+      // El mismo botón enciende y apaga, así que con la conexión activa una
+      // pulsación de más la corta — y del otro lado hay alguien mirando el
+      // registro en un navegador, que se queda sin nada sin entender por qué.
+      // Volver a levantarla no es gratis: cambia el código de la dirección y
+      // hay que escribirla de nuevo entera.
+      if (!await _confirmar(
+        titulo: 'settings.log-en-red-cortar'.i18n,
+        detalle: 'settings.log-en-red-cortar-detalle'.i18n,
+      )) {
+        return;
+      }
       await ServidorDeRegistro.apagar();
       if (mounted) setState(() {});
       return;
@@ -340,21 +361,49 @@ class _RegistroEnVivoPageState extends State<RegistroEnVivoPage> {
     if (!_pausado) _refrescar();
   }
 
-  /// Vacía el registro y lo deja empezado de nuevo.
+  /// Vacía la sesión de ahora y la deja empezada de nuevo.
   ///
-  /// Vacía TODO —las cuatro zonas y el historial de aperturas anteriores— y
-  /// no solo lo que se esté mirando: un botón que dice «limpiar» y deja
-  /// cosas adentro no es de fiar, y encima el resultado dependería del filtro
-  /// que estuviera puesto, que no es lo que nadie espera.
+  /// ── Qué se lleva y qué no ───────────────────────────────────────────────
   ///
-  /// Y no queda en blanco: se vuelve a escribir la presentación, así que la
-  /// pantalla queda como recién abierta —con el nombre, qué es esto y de qué
-  /// aparato se trata— en vez de un vacío que se lee igual que un fallo.
+  /// **El historial NO se toca.** Pedido explícito: «el historial no se
+  /// limpia, siempre se guarda la info». Y es lo correcto de fondo — las
+  /// aperturas anteriores son lo que explica un cierre, así que un botón que
+  /// se las llevara de paso destruiría justo lo que sirve para arreglar el
+  /// problema que llevó a apretarlo.
+  ///
+  /// **Se limpia la zona que se esté mirando.** En «Todo» se va todo lo de
+  /// esta sesión; en «Reproductor» se va solo eso y lo de las extensiones
+  /// queda. Quien limpia ruido de una prueba no quiere perder lo que ni
+  /// estaba viendo.
+  ///
+  /// **Y no queda en blanco**: se vuelve a escribir la presentación, así que
+  /// la pantalla queda como recién abierta —con el nombre, qué es esto y de
+  /// qué aparato se trata— en vez de un vacío que se lee igual que un fallo.
+  ///
+  /// Pregunta antes, porque no se puede deshacer.
   Future<void> _limpiar() async {
+    final zona = _filtro == _Filtro.todo ? null : _filtro.clave.i18n;
+    if (!await _confirmar(
+      titulo: 'settings.log-limpiar'.i18n,
+      detalle: zona == null
+          ? 'settings.log-limpiar-todo'.i18n
+          : FlutterI18n.translate(
+              context,
+              'settings.log-limpiar-zona',
+              translationParams: {'zona': zona},
+            ),
+    )) {
+      return;
+    }
     try {
-      await PrismLog.limpiar();
-      EncabezadoDeSesion.escribir(version: await _version());
-      await PrismLog.flush();
+      final version = await _version();
+      await PrismLog.limpiarSesionActual(
+        // En «Todo» no sobrevive nada; en una zona concreta sobrevive todo lo
+        // que NO sea de esa zona.
+        dejar: _filtro == _Filtro.todo ? null : (l) => !_filtro.acepta(l),
+        escribirCabecera: () =>
+            EncabezadoDeSesion.escribir(version: version),
+      );
     } catch (e) {
       if (!mounted) return;
       showPlatformSnackbar(
@@ -371,14 +420,23 @@ class _RegistroEnVivoPageState extends State<RegistroEnVivoPage> {
     setState(() {
       _generacion = PrismLog.generacion;
       _lineas = PrismLog.enMemoria;
+      // Lo leído del archivo se descarta: el archivo acaba de cambiar debajo,
+      // así que lo que había en pantalla ya no se corresponde con él. Se
+      // vuelve a leer, que además recuenta las aperturas anteriores.
       _deAntes = const [];
-      _cuantasAnteriores = 0;
       _alFinal = true;
       _recalcularVisibles();
     });
+    unawaited(_leerLoAnterior());
     showPlatformSnackbar(
       context: context,
-      content: 'settings.log-cleared'.i18n,
+      content: zona == null
+          ? 'settings.log-cleared'.i18n
+          : FlutterI18n.translate(
+              context,
+              'settings.log-cleared-zona',
+              translationParams: {'zona': zona},
+            ),
     );
   }
 
@@ -393,6 +451,42 @@ class _RegistroEnVivoPageState extends State<RegistroEnVivoPage> {
     } catch (_) {
       return '';
     }
+  }
+
+  /// Un sí o no, con los botones grandes para un control remoto.
+  ///
+  /// Cancelar toma el foco al abrir: si alguien llegó acá de más, la
+  /// pulsación que hace por costumbre es la que NO rompe nada.
+  Future<bool> _confirmar({
+    required String titulo,
+    required String detalle,
+  }) async {
+    final r = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        backgroundColor: HomeTheme.bg,
+        title: Text(titulo, style: TextStyle(color: HomeTheme.textPrimary)),
+        content: Text(
+          detalle,
+          style: TextStyle(color: HomeTheme.textMuted, fontSize: 13),
+        ),
+        actions: [
+          TextButton(
+            autofocus: true,
+            onPressed: () => Navigator.of(context).pop(false),
+            child: Text('common.cancel'.i18n),
+          ),
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(true),
+            child: Text(
+              'common.confirm'.i18n,
+              style: TextStyle(color: HomeTheme.accentPink),
+            ),
+          ),
+        ],
+      ),
+    );
+    return r ?? false;
   }
 
   /// Exporta lo que se está mirando, diciendo si algo salió mal.
@@ -487,9 +581,10 @@ class _RegistroEnVivoPageState extends State<RegistroEnVivoPage> {
     final todas = _deAntes.isEmpty
         ? _lineas
         : <String>[..._deAntes, ..._lineas.skip(_dondeSigueLaMemoria())];
-    _visibles = _filtro == _Filtro.todo
+    final filtradas = _filtro == _Filtro.todo
         ? todas
         : todas.where(_filtro.acepta).toList(growable: false);
+    _visibles = agruparElRecuadro(filtradas);
   }
 
   /// Desde qué línea de la memoria hay que seguir, para no repetir.
@@ -617,7 +712,10 @@ class _RegistroEnVivoPageState extends State<RegistroEnVivoPage> {
     );
   }
 
-  Widget _buildLista({bool paraTelevisor = false}) {
+  Widget _buildLista({
+    bool paraTelevisor = false,
+    VoidCallback? alIrIzquierda,
+  }) {
     final visibles = _visibles;
     if (visibles.isEmpty && _lineas.isEmpty) {
       return Center(
@@ -643,6 +741,7 @@ class _RegistroEnVivoPageState extends State<RegistroEnVivoPage> {
               setState(() => _elRegistroTieneFoco = tiene);
             }
           : null,
+      alIrIzquierda: alIrIzquierda,
       child: SelectionArea(
         child: ListView.builder(
           controller: _scroll,
@@ -652,17 +751,40 @@ class _RegistroEnVivoPageState extends State<RegistroEnVivoPage> {
           itemCount: visibles.length,
           itemBuilder: (context, index) {
             final linea = visibles[index];
+            final estilo = (paraTelevisor ? _monoDeTelevisor : _mono)
+                .copyWith(color: _colorDe(linea));
             return Padding(
               padding: const EdgeInsets.symmetric(vertical: 2),
-              child: Text(
-                linea,
-                style: (paraTelevisor ? _monoDeTelevisor : _mono)
-                    .copyWith(color: _colorDe(linea)),
-              ),
+              child: esElRecuadro(linea)
+                  ? _recuadroCompleto(linea, estilo)
+                  : Text(linea, style: estilo),
             );
           },
         ),
       ),
+    );
+  }
+
+  /// El recuadro de presentación, entero y sin cortarse.
+  ///
+  /// ── Por qué necesita trato aparte ───────────────────────────────────────
+  ///
+  /// Es dibujo hecho con caracteres: solo se entiende si todas sus líneas
+  /// quedan alineadas y ninguna se parte. Como cualquier otra línea del
+  /// registro, se le aplicaba el ajuste de texto normal — así que en cuanto
+  /// no entraba a lo ancho, las líneas largas se partían en dos y el recuadro
+  /// se veía roto. Reportado en vivo: «el prism, el unicode, se corta».
+  ///
+  /// Se dibuja como UNA sola pieza que se achica hasta entrar. Que sea una
+  /// sola importa: si cada línea se escalara por su cuenta, cada una quedaría
+  /// de un tamaño distinto y el dibujo se desarmaría igual. Y no se agranda
+  /// nunca —solo se reduce— para que en una pantalla ancha se lea al mismo
+  /// tamaño que el resto del registro.
+  Widget _recuadroCompleto(String bloque, TextStyle estilo) {
+    return FittedBox(
+      fit: BoxFit.scaleDown,
+      alignment: Alignment.centerLeft,
+      child: Text(bloque, style: estilo, softWrap: false),
     );
   }
 
@@ -676,7 +798,12 @@ class _RegistroEnVivoPageState extends State<RegistroEnVivoPage> {
       padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
       color: HomeTheme.accentPink.withValues(alpha: 0.14),
       child: Text(
-        'settings.log-paused-hint'.i18n,
+        // Con la zona adelante: pausado en «Fallos» y pausado en «Todo» se
+        // veían igual, y son cosas distintas — en una faltan líneas porque el
+        // filtro las saca y en la otra porque la vista está congelada.
+        _filtro == _Filtro.todo
+            ? 'settings.log-paused-hint'.i18n
+            : '${_filtro.clave.i18n} · ${'settings.log-paused-hint'.i18n}',
         style: TextStyle(fontSize: 12, color: HomeTheme.textPrimary),
       ),
     );
@@ -1008,6 +1135,7 @@ class _RegistroEnVivoPageState extends State<RegistroEnVivoPage> {
                 texto: f.clave.i18n,
                 elegido: _filtro == f,
                 onTap: () => _elegirFiltro(f),
+                foco: _filtro == f ? _focoDelRail : null,
               ),
             const SizedBox(height: 18),
             _tituloDeGrupo('settings.log-acciones'.i18n),
@@ -1049,6 +1177,20 @@ class _RegistroEnVivoPageState extends State<RegistroEnVivoPage> {
               texto: 'common.clear'.i18n,
               onTap: _limpiar,
             ),
+            const SizedBox(height: 14),
+            // Salir, abajo del todo.
+            //
+            // En un televisor el botón de atrás del mando existe, pero no
+            // todos los mandos lo traen en un sitio evidente —y en algunos
+            // cajones ni siquiera está— así que una pantalla sin salida
+            // visible es una pantalla de la que se sale apagando el aparato.
+            // Va último porque es lo que menos se usa: bajando se llega a
+            // todo lo demás primero.
+            _opcionDeRail(
+              icono: Icons.arrow_back,
+              texto: 'common.exit'.i18n,
+              onTap: () => Navigator.of(context).maybePop(),
+            ),
           ],
         ),
       ),
@@ -1089,11 +1231,13 @@ class _RegistroEnVivoPageState extends State<RegistroEnVivoPage> {
     required VoidCallback onTap,
     IconData? icono,
     bool elegido = false,
+    FocusNode? foco,
   }) {
     return Padding(
       padding: const EdgeInsets.only(bottom: 6),
       child: FocusableCard(
         borderRadius: 10,
+        focusNode: foco,
         onTap: onTap,
         child: AnimatedContainer(
           duration: const Duration(milliseconds: 120),
@@ -1163,7 +1307,10 @@ class _RegistroEnVivoPageState extends State<RegistroEnVivoPage> {
                 borderRadius: BorderRadius.circular(11),
                 child: NotificationListener<ScrollNotification>(
                   onNotification: _mirarDesplazamiento,
-                  child: _buildLista(paraTelevisor: true),
+                  child: _buildLista(
+                    paraTelevisor: true,
+                    alIrIzquierda: () => _focoDelRail.requestFocus(),
+                  ),
                 ),
               ),
             ),

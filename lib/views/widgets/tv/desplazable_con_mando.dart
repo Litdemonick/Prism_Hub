@@ -35,10 +35,26 @@ class DesplazableConMando extends StatefulWidget {
     this.autofocus = true,
     this.paso = 220,
     this.alCambiarFoco,
+    this.alIrIzquierda,
   });
 
   final ScrollController controlador;
   final Widget child;
+
+  /// Qué hacer cuando se pulsa izquierda estando acá.
+  ///
+  /// ── Por qué no se deja al recorrido automático ──────────────────────────
+  ///
+  /// Flutter mueve el foco al enfocable más cercano en esa dirección, y eso
+  /// alcanza entre tarjetas. Acá no: lo que tiene el foco es un `Scrollable`
+  /// que ocupa media pantalla, y las flechas horizontales las reclama él
+  /// antes —son las de desplazamiento lateral— así que nunca llegaban a
+  /// convertirse en un salto de foco.
+  ///
+  /// Reportado en vivo: «al entrar y hacer scroll no me deja apuntar a la
+  /// izquierda donde están los otros botones». Con esto, quien arma la
+  /// pantalla dice explícitamente a dónde va esa pulsación.
+  final VoidCallback? alIrIzquierda;
 
   /// Avisa cuando esta zona toma o suelta el foco.
   ///
@@ -127,6 +143,11 @@ class _DesplazableConMandoState extends State<DesplazableConMando> {
           return _mover(widget.paso * 3, sostenido: sostenido)
               ? KeyEventResult.handled
               : KeyEventResult.ignored;
+        }
+        if (tecla == LogicalKeyboardKey.arrowLeft &&
+            widget.alIrIzquierda != null) {
+          widget.alIrIzquierda!();
+          return KeyEventResult.handled;
         }
         if (tecla == LogicalKeyboardKey.pageUp) {
           return _mover(-widget.paso * 3, sostenido: sostenido)

@@ -364,7 +364,7 @@ class _SesionPageState extends State<_SesionPage> {
         actions: [
           TextButton(
             onPressed: () => Navigator.of(context).pop(),
-            child: Text('common.ok'.i18n),
+            child: Text('common.close'.i18n),
           ),
         ],
       ),
