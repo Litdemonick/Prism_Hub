@@ -111,10 +111,17 @@ class ServidorDeRegistro {
     }
     if (_servidor != null) return (direccion: direccion, fallo: null);
     try {
-      _codigo = _codigoAlAzar();
-      // Puerto 0: lo elige el sistema entre los libres. Fijar uno a mano es
-      // pedir que choque con otra cosa del aparato.
-      final s = await HttpServer.bind(InternetAddress.anyIPv4, 0);
+      // El código se saca UNA vez por arranque de la app, no en cada
+      // encendido.
+      //
+      // Antes cambiaba cada vez, así que apagar y volver a encender —o que se
+      // apagara solo a los tres cuartos de hora— obligaba a escribir una
+      // dirección nueva entera en el otro aparato. Y no aportaba: lo que
+      // protege es que haya que estar viendo la pantalla del televisor para
+      // conocerla, y eso vale igual con un código por sesión. Cuando la app se
+      // cierra, se va con ella.
+      _codigo ??= _codigoAlAzar();
+      final s = await _escuchar();
       _servidor = s;
       s.listen(_atender, onError: (Object e) {
         logger.warning('servidor de registro: $e');
@@ -124,7 +131,10 @@ class ServidorDeRegistro {
         await apagar();
         return (direccion: null, fallo: FalloDeServidor.sinRed);
       }
-      direccion = 'http://$ip:${s.port}/r/$_codigo';
+      // Sin «/r/» delante: eran dos caracteres más que teclear mirando una
+      // pantalla a tres metros, y no separaban nada — no hay otra cosa
+      // servida en este puerto.
+      direccion = 'http://$ip:${s.port}/$_codigo';
       _apagado = Timer(_cuantoDura, apagar);
       logger.info('Registro accesible desde la red durante '
           '${_cuantoDura.inMinutes} minutos · se comparte: $_loQueSeSirve');
@@ -142,7 +152,8 @@ class ServidorDeRegistro {
     final s = _servidor;
     _servidor = null;
     direccion = null;
-    _codigo = null;
+    // El código NO se borra: es de la sesión de la app, no de este encendido.
+    // Ver encender().
     lineasFijas = null;
     queSeSirve = null;
     areaElegida = null;
@@ -155,13 +166,47 @@ class ServidorDeRegistro {
     }
   }
 
-  /// Seis caracteres al azar. No es una contraseña —la protección de verdad es
+  /// El puerto que se intenta primero.
+  ///
+  /// ── Por qué uno fijo y no el que dé el sistema ──────────────────────────
+  ///
+  /// Empezó pidiendo el puerto 0 —«que lo elija el sistema»— para no chocar
+  /// con nada. Eso está bien cuando la dirección se copia y se pega; acá se
+  /// lee de una pantalla a tres metros y se escribe a mano en otro aparato, y
+  /// cinco dígitos al azar (`:40365`) son la mitad de lo que hay que teclear.
+  ///
+  /// Con uno fijo, la dirección solo cambia en la parte que de verdad cambia.
+  /// Y si estuviera ocupado no se pierde nada: se cae al de antes.
+  ///
+  /// 8787 y no algo como 8080: los puertos «bonitos» son los que ya tiene
+  /// tomados cualquier otra cosa del aparato.
+  static const _puertoPreferido = 8787;
+
+  /// Abre el puerto de siempre, y si no se puede, cualquiera.
+  static Future<HttpServer> _escuchar() async {
+    try {
+      return await HttpServer.bind(InternetAddress.anyIPv4, _puertoPreferido);
+    } catch (_) {
+      // Ocupado por otra app del televisor. Se sigue con uno al azar: la
+      // dirección queda más larga, pero funciona igual.
+      return HttpServer.bind(InternetAddress.anyIPv4, 0);
+    }
+  }
+
+  /// Cuatro caracteres al azar. No es una contraseña —la protección de verdad es
   /// que hay que ver la pantalla— pero evita que alguien que sepa la IP entre
   /// probando la ruta.
   static String _codigoAlAzar() {
+    // Sin las letras y números que se confunden leyendo de lejos: ni ele ni
+    // uno, ni o ni cero. Escribir mal la dirección y ver un 404 sin saber por
+    // qué es peor que tener que mirar la pantalla otra vez.
     const alfabeto = 'abcdefghijkmnpqrstuvwxyz23456789';
     final r = Random.secure();
-    return List.generate(6, (_) => alfabeto[r.nextInt(alfabeto.length)]).join();
+    // Cuatro y no seis: un millón de combinaciones, en una red de casa, con
+    // el servidor apagado casi todo el tiempo y solo lectura del otro lado.
+    // La protección de verdad sigue siendo que hay que ver la pantalla; esto
+    // es para que alguien que sepa la IP no entre probando la ruta.
+    return List.generate(4, (_) => alfabeto[r.nextInt(alfabeto.length)]).join();
   }
 
   static Future<void> _atender(HttpRequest pedido) async {
@@ -171,13 +216,11 @@ class ServidorDeRegistro {
       // Dos rutas válidas, las dos con el código: la página y el texto que la
       // página va a buscar cada pocos segundos. Cualquier otra cosa se
       // contesta igual —404 pelado— para no ir diciendo qué existe y qué no.
-      final conCodigo = esperado != null &&
-          ruta.length >= 2 &&
-          ruta[0] == 'r' &&
-          ruta[1] == esperado;
-      final esLaPagina = conCodigo && ruta.length == 2;
+      final conCodigo =
+          esperado != null && ruta.isNotEmpty && ruta[0] == esperado;
+      final esLaPagina = conCodigo && ruta.length == 1;
       final esElTexto =
-          conCodigo && ruta.length == 3 && ruta[2] == 'texto';
+          conCodigo && ruta.length == 2 && ruta[1] == 'texto';
       if (!esLaPagina && !esElTexto) {
         pedido.response.statusCode = HttpStatus.notFound;
         await pedido.response.close();
@@ -338,6 +381,39 @@ setInterval(traer, 5000);
 
   /// La dirección de este aparato en la red de casa.
   static Future<String?> _ipDeLaRed() async {
+    final candidatas = await _todasLasDeCasa();
+    if (candidatas.isEmpty) return null;
+    // ── Se prefiere 192.168.x.x ─────────────────────────────────────────
+    //
+    // Antes se tomaba la primera que apareciera, sin mirar cuál era. En un
+    // televisor con cable Y wifi hay dos —visto en vivo: eth0 192.168.50.183 y
+    // wlan0 192.168.50.236— y si la elegida no es la que el PC puede alcanzar,
+    // la dirección no abre y no hay forma de saber por qué.
+    //
+    // 192.168 es el rango que reparten prácticamente todos los routers de
+    // casa, así que ante la duda es la que más probabilidades tiene de ser la
+    // buena. Las otras dos —10.x y 172.16-31— suelen ser de redes virtuales,
+    // VPN o del propio sistema.
+    final elegida = candidatas.firstWhere(
+      (a) => a.startsWith('192.168.'),
+      orElse: () => candidatas.first,
+    );
+    // Y se anotan TODAS, no solo la elegida: si la que se muestra no abre, en
+    // el registro está la otra para probar sin adivinar.
+    if (candidatas.length > 1) {
+      logger.info('Direcciones de red del aparato: ${candidatas.join(", ")} '
+          '· se publica $elegida');
+    }
+    return elegida;
+  }
+
+  /// Las direcciones privadas del aparato, en el orden en que las da el
+  /// sistema.
+  ///
+  /// Solo redes privadas: si lo único que hay es una dirección pública, esto
+  /// no es una red de casa y no corresponde publicar nada en ella.
+  static Future<List<String>> _todasLasDeCasa() async {
+    final salida = <String>[];
     try {
       final interfaces = await NetworkInterface.list(
         type: InternetAddressType.IPv4,
@@ -346,20 +422,18 @@ setInterval(traer, 5000);
       );
       for (final iface in interfaces) {
         for (final dir in iface.addresses) {
-          // Solo redes privadas: si lo único que hay es una dirección pública,
-          // esto no es una red de casa y no corresponde publicar nada.
           final a = dir.address;
           if (a.startsWith('192.168.') ||
               a.startsWith('10.') ||
               RegExp(r'^172\.(1[6-9]|2\d|3[01])\.').hasMatch(a)) {
-            return a;
+            salida.add(a);
           }
         }
       }
     } catch (_) {
       // Sin permiso de red o sin interfaces: se avisa arriba.
     }
-    return null;
+    return salida;
   }
 }
 
