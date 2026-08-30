@@ -62,7 +62,18 @@ class ExportarRegistro {
       ..writeln('═══════════════════════════════════════════════════')
       ..writeln('  REGISTRO DE PRISMHUB')
       ..writeln('  ${DateTime.now().toIso8601String()}')
-      ..writeln('  ${EncabezadoDeSesion.resumenDelAparato()}')
+      ..writeln('═══════════════════════════════════════════════════');
+    // La ficha entera del aparato y no una línea de resumen.
+    //
+    // Es lo primero que hay que saber al recibir un reporte, y preguntarlo
+    // por mensaje cuesta un día de ida y vuelta. Marca, modelo, memoria y
+    // pantalla son lo que separa «esto es un fallo» de «este aparato no da
+    // más». Ver EncabezadoDeSesion.fichaDelAparato, que además explica qué se
+    // deja afuera a propósito.
+    for (final l in EncabezadoDeSesion.fichaDelAparato()) {
+      salida.writeln('  $l');
+    }
+    salida
       ..writeln('═══════════════════════════════════════════════════')
       ..writeln();
 
@@ -130,11 +141,35 @@ class ExportarRegistro {
   ///
   /// Con [lineas] se exporta ese juego concreto —una apertura anterior
   /// elegida en el historial— en vez del archivo entero.
-  static Future<bool> entregar({String? soloArea, List<String>? lineas}) async {
+  /// Cómo se llama el archivo que sale.
+  ///
+  /// ── Por qué lleva la zona y la fecha ────────────────────────────────────
+  ///
+  /// Salían todos como `PrismHub-reporte.log`. Con dos exportados la carpeta
+  /// ya tenía `PrismHub-reporte(1).log` y no había forma de saber cuál era
+  /// cuál —ni de qué zona, ni de cuándo— sin abrirlos. Y quien los recibe,
+  /// menos.
+  ///
+  /// Ahora el nombre lo dice: `PrismHub-fallos-2026-08-29-2319.log`. La fecha
+  /// va al revés (año primero) para que ordenados por nombre queden también en
+  /// orden de tiempo.
+  static String nombreDeArchivo(String etiqueta) {
+    final ahora = DateTime.now();
+    String dos(int n) => n.toString().padLeft(2, '0');
+    final cuando = '${ahora.year}-${dos(ahora.month)}-${dos(ahora.day)}'
+        '-${dos(ahora.hour)}${dos(ahora.minute)}';
+    return 'PrismHub-$etiqueta-$cuando.log';
+  }
+
+  static Future<bool> entregar({
+    String? soloArea,
+    List<String>? lineas,
+    String etiqueta = 'todo',
+  }) async {
     final texto = await armar(soloArea: soloArea, lineas: lineas);
-    final destino = File(
-      '${File(PrismLog.logFilePath).parent.path}/PrismHub-reporte.log',
-    );
+    final nombre = nombreDeArchivo(etiqueta);
+    final destino =
+        File('${File(PrismLog.logFilePath).parent.path}/$nombre');
     await destino.writeAsString(texto, flush: true);
 
     if (Platform.isAndroid || Platform.isIOS) {
@@ -144,7 +179,7 @@ class ExportarRegistro {
     final elegido = await FilePicker.platform.saveFile(
       type: FileType.custom,
       allowedExtensions: ['log'],
-      fileName: 'PrismHub-reporte.log',
+      fileName: nombre,
     );
     if (elegido == null) return false;
     await destino.copy(elegido);
