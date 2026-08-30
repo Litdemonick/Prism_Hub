@@ -300,38 +300,38 @@ class _VideoPlayerMobileControlsState extends State<VideoPlayerMobileControls> {
                       //  2. Salto en curso (barra, teclas o flechas).
                       //  3. Buffer vacío durante la reproducción.
                       opacity: (((!_c.isGettingWatchData.value &&
-                                      !_c.hasRenderedFrame.value &&
-                                      // Ver el comentario equivalente en los
-                                      // controles de escritorio.
-                                      _c.error.value.isEmpty &&
-                                      // El aviso de "el servidor falló, tocá para
-                                      // reproducir" espera una acción del usuario:
-                                      // nada está cargando y la rueda no tiene por
-                                      // qué girar. Faltaba esta condición y se veía
-                                      // dando vueltas DETRÁS del aviso, que encima
-                                      // hace parecer que si uno espera se arregla
-                                      // solo. El fallo de servidor no se guarda en
-                                      // `error` —tiene su propio campo— así que la
-                                      // comprobación de arriba no lo cubría.
-                                      _c.serverFailedMessage.value.isEmpty &&
-                                      // Esperando que se elija/confirme servidor:
-                                      // el boton de play esta ahi pidiendo un
-                                      // toque y no hay nada cargando. La rueda
-                                      // girando detras hacia parecer que si uno
-                                      // espera arranca solo.
-                                      !_c.awaitingServerChoice.value &&
-                                      !_c.isWebViewActive.value) ||
-                                  (_c.hasRenderedFrame.value &&
-                                      (_c.isSeeking.value ||
-                                          // imagenCongelada: con la red mal, mpv
-                                          // deja de avisar que esta cargando, asi
-                                          // que la rueda no salia y la pantalla
-                                          // quedaba quieta sin explicacion. Esto
-                                          // mira que la posicion no avance, que es
-                                          // lo unico que siempre se puede saber.
-                                          _c.imagenCongelada.value ||
-                                          (_c.isPlaying.value &&
-                                              _c.isActuallyBuffering.value)))))
+                                  !_c.hasRenderedFrame.value &&
+                                  // Ver el comentario equivalente en los
+                                  // controles de escritorio.
+                                  _c.error.value.isEmpty &&
+                                  // El aviso de "el servidor falló, tocá para
+                                  // reproducir" espera una acción del usuario:
+                                  // nada está cargando y la rueda no tiene por
+                                  // qué girar. Faltaba esta condición y se veía
+                                  // dando vueltas DETRÁS del aviso, que encima
+                                  // hace parecer que si uno espera se arregla
+                                  // solo. El fallo de servidor no se guarda en
+                                  // `error` —tiene su propio campo— así que la
+                                  // comprobación de arriba no lo cubría.
+                                  _c.serverFailedMessage.value.isEmpty &&
+                                  // Esperando que se elija/confirme servidor:
+                                  // el boton de play esta ahi pidiendo un
+                                  // toque y no hay nada cargando. La rueda
+                                  // girando detras hacia parecer que si uno
+                                  // espera arranca solo.
+                                  !_c.awaitingServerChoice.value &&
+                                  !_c.isWebViewActive.value) ||
+                              (_c.hasRenderedFrame.value &&
+                                  (_c.isSeeking.value ||
+                                      // imagenCongelada: con la red mal, mpv
+                                      // deja de avisar que esta cargando, asi
+                                      // que la rueda no salia y la pantalla
+                                      // quedaba quieta sin explicacion. Esto
+                                      // mira que la posicion no avance, que es
+                                      // lo unico que siempre se puede saber.
+                                      _c.imagenCongelada.value ||
+                                      (_c.isPlaying.value &&
+                                          _c.isActuallyBuffering.value)))))
                           ? 1
                           : 0,
                       child: const Center(
@@ -1260,78 +1260,88 @@ class _VolumeButtonMobileState extends State<_VolumeButtonMobile> {
 
   @override
   Widget build(BuildContext context) {
-    return Obx(() {
-      final valor = _volumen;
-      const tope = VideoPlayerController.volumenMaximo;
+    // ── Sin Obx: acá no hay nada observable que mirar ──────────────────
+    //
+    // Este bloque leía `_volumen`, que es un campo normal de este widget y se
+    // actualiza con setState. Un Obx que no lee ninguna variable observable no
+    // tiene a qué suscribirse, y GetX lo detecta y lanza — Flutter reemplaza
+    // el trozo por su pantalla de error y lo vuelve a intentar en cada cuadro,
+    // así que salía un recuadro rojo encima del reproductor y el registro se
+    // llenaba de la misma línea decenas de veces por segundo.
+    //
+    // Visto en el registro de un teléfono: «[Get] the improper use of a GetX
+    // has been detected», repetida cada 8 ms desde el momento en que se abre
+    // el reproductor.
+    final valor = _volumen;
+    const tope = VideoPlayerController.volumenMaximo;
 
-      void cambiar(double nuevo) {
-        widget.controller.player.setVolume(nuevo);
-        setState(() => _volumen = nuevo);
+    void cambiar(double nuevo) {
+      widget.controller.player.setVolume(nuevo);
+      setState(() => _volumen = nuevo);
+    }
+
+    // Silencia y des-silencia con un toque en la bocina, a pedido
+    // explícito: antes el ícono era decorativo y bajar a cero obligaba a
+    // arrastrar la barra hasta el fondo y después volver a buscar el punto
+    // donde estaba.
+    void alternarSilencio() {
+      if (valor > 0) {
+        _volumenAntesDeSilenciar = valor;
+        cambiar(0);
+        return;
       }
+      // Clamp al tope de ESTE momento: se puede haber silenciado con el
+      // volumen local amplificado (hasta 200) y des-silenciar ya
+      // transmitiendo, donde el máximo del aparato es 100.
+      final volver =
+          _volumenAntesDeSilenciar > 0 ? _volumenAntesDeSilenciar : 100.0;
+      cambiar(volver.clamp(0, tope));
+    }
 
-      // Silencia y des-silencia con un toque en la bocina, a pedido
-      // explícito: antes el ícono era decorativo y bajar a cero obligaba a
-      // arrastrar la barra hasta el fondo y después volver a buscar el punto
-      // donde estaba.
-      void alternarSilencio() {
-        if (valor > 0) {
-          _volumenAntesDeSilenciar = valor;
-          cambiar(0);
-          return;
-        }
-        // Clamp al tope de ESTE momento: se puede haber silenciado con el
-        // volumen local amplificado (hasta 200) y des-silenciar ya
-        // transmitiendo, donde el máximo del aparato es 100.
-        final volver =
-            _volumenAntesDeSilenciar > 0 ? _volumenAntesDeSilenciar : 100.0;
-        cambiar(volver.clamp(0, tope));
-      }
-
-      return Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          // InkWell y no IconButton: el botón de Material reserva 48px de
-          // ancho mínimo y esta fila ya venía justa de espacio (ver el
-          // comentario del orden de los botones en _Footer). Con este
-          // relleno el objetivo queda en 34px, cómodo de tocar, sin sumar
-          // los 26 extra que empujarían de nuevo a pantalla completa.
-          InkWell(
-            onTap: alternarSilencio,
-            customBorder: const CircleBorder(),
-            child: Padding(
-              padding: const EdgeInsets.all(6),
-              child: Icon(_iconoPara(valor, tope), size: 22),
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        // InkWell y no IconButton: el botón de Material reserva 48px de
+        // ancho mínimo y esta fila ya venía justa de espacio (ver el
+        // comentario del orden de los botones en _Footer). Con este
+        // relleno el objetivo queda en 34px, cómodo de tocar, sin sumar
+        // los 26 extra que empujarían de nuevo a pantalla completa.
+        InkWell(
+          onTap: alternarSilencio,
+          customBorder: const CircleBorder(),
+          child: Padding(
+            padding: const EdgeInsets.all(6),
+            child: Icon(_iconoPara(valor, tope), size: 22),
+          ),
+        ),
+        // Más ancha y con más área de agarre que un slider de Material
+        // por defecto — a pedido explícito: en un teléfono, con el dedo
+        // encima del video, el thumb chico era difícil de acertar y de
+        // arrastrar con precisión.
+        SizedBox(
+          width: 150,
+          child: SliderTheme(
+            data: SliderTheme.of(context).copyWith(
+              thumbShape: const RoundSliderThumbShape(enabledThumbRadius: 9),
+              overlayShape: const RoundSliderOverlayShape(overlayRadius: 18),
+            ),
+            child: Slider(
+              value: valor.clamp(0, tope),
+              max: tope,
+              label: '${valor.round()}%',
+              onChanged: cambiar,
             ),
           ),
-          // Más ancha y con más área de agarre que un slider de Material
-          // por defecto — a pedido explícito: en un teléfono, con el dedo
-          // encima del video, el thumb chico era difícil de acertar y de
-          // arrastrar con precisión.
-          SizedBox(
-            width: 150,
-            child: SliderTheme(
-              data: SliderTheme.of(context).copyWith(
-                thumbShape: const RoundSliderThumbShape(enabledThumbRadius: 9),
-                overlayShape: const RoundSliderOverlayShape(overlayRadius: 18),
-              ),
-              child: Slider(
-                value: valor.clamp(0, tope),
-                max: tope,
-                label: '${valor.round()}%',
-                onChanged: cambiar,
-              ),
-            ),
+        ),
+        SizedBox(
+          width: 32,
+          child: Text(
+            '${valor.round()}%',
+            style: const TextStyle(fontSize: 12, color: Colors.white70),
           ),
-          SizedBox(
-            width: 32,
-            child: Text(
-              '${valor.round()}%',
-              style: const TextStyle(fontSize: 12, color: Colors.white70),
-            ),
-          ),
-        ],
-      );
-    });
+        ),
+      ],
+    );
   }
 }
 

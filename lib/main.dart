@@ -55,13 +55,22 @@ void main(List<String> args) async {
     PrismLog.capturarDebugPrint();
 
     FlutterError.onError = (FlutterErrorDetails details) {
-      // details.exception a secas es solo el resumen ("A RenderFlex
-      // overflowed by 13 pixels..."), sin el widget/archivo/línea donde
-      // pasó — eso vive en el árbol de diagnóstico que arma
-      // details.toString(), y se estaba tirando. Sin esto había que
-      // reproducir el error a mano con la consola de flutter run abierta
-      // para saber DÓNDE, en vez de leerlo en el log ya guardado.
-      logger.severe(details.toString(), details.exception, details.stack);
+      // ── Por qué NO se usa details.toString() ──────────────────────────
+      //
+      // Se usaba, justamente para no perder el árbol de diagnóstico con el
+      // widget, el archivo y la línea. Pero eso solo pasa en depuración: ese
+      // árbol lo arma código encerrado en `assert`, que en la app compilada
+      // no existe, y `toString()` cae al de cualquier objeto.
+      //
+      // En el registro de un teléfono se veía literalmente esto, repetido
+      // cientos de veces:
+      //
+      //     SEVERE  Instance of 'FlutterErrorDetails'
+      //             [Get] the improper use of a GetX has been detected.
+      //
+      // O sea que el aviso llegaba, pero venía vacío justo del lado que hacía
+      // falta. Se arma a mano con lo que sí sobrevive a la compilación.
+      logger.severe(_dondeFallo(details), details.exception, details.stack);
     };
 
     // Errores del motor nativo/engine que no pasan por el árbol de widgets
@@ -85,18 +94,6 @@ void main(List<String> args) async {
       // subtype of type 'String'" a secas no dice en qué widget pasó, y sin
       // eso hay que adivinar. Con la librería y las primeras líneas del
       // stack se ubica el archivo exacto de una.
-      const nl = '\n';
-      final where = details.library ?? '';
-      final frames = (details.stack?.toString() ?? '')
-          .split(nl)
-          .where((l) => l.contains('package:prismhub'))
-          .take(4)
-          .join(nl);
-      final parts = <String>[
-        '${details.exception}',
-        if (where.isNotEmpty) '[$where]',
-        if (frames.isNotEmpty) frames,
-      ];
       // ── Saneado ANTES de mostrarlo ──────────────────────────────────────
       //
       // El mensaje de una excepción arrastra lo que estaba en juego cuando
@@ -109,7 +106,9 @@ void main(List<String> args) async {
       // aguantar salir de la casa. Es el mismo criterio que ya rige para el
       // registro, y va con el mismo saneado para no tener dos reglas que se
       // separen con el tiempo.
-      return _StartupErrorView(message: PrismLog.sanear(parts.join('$nl$nl')));
+      return _StartupErrorView(
+        message: PrismLog.sanear(_dondeFallo(details)),
+      );
     };
 
     WidgetsFlutterBinding.ensureInitialized();
@@ -196,8 +195,7 @@ void main(List<String> args) async {
           //
           // El nombre de la ruta es lo más barato que responde esa pregunta:
           // sale de un dato que el navegador ya tiene, sin instrumentar nada.
-          final linea =
-              'FRAME LENTO: build=${buildMs}ms raster=${rasterMs}ms '
+          final linea = 'FRAME LENTO: build=${buildMs}ms raster=${rasterMs}ms '
               'total=${totalMs}ms${_dondeEstamos()}';
           if (workMs >= 250) {
             logger.warning(linea);
@@ -1077,7 +1075,9 @@ class _MainAppState extends State<MainApp> {
         // Le avisa a la barra flotante cuándo hay una pantalla encima, para que
         // se esconda deslizándose en vez de desaparecer de golpe. Ver
         // ObservadorDePila en main_page.dart.
-        navigatorObservers: [ObservadorDePila()],
+        // _DondeEstamos no toca la interfaz: solo anota en qué pantalla se
+        // está, para poder acompañar con eso a los avisos de cuadros lentos.
+        navigatorObservers: [ObservadorDePila(), _DondeEstamos()],
         debugShowCheckedModeBanner: false,
         // ── El tema de Material/Fluent sigue al modo ──────────────────────
         //
@@ -1142,7 +1142,9 @@ class _MainAppState extends State<MainApp> {
             ? const _ComportamientoDeScrollTv()
             : null,
         builder: (context, child) {
-          if (child == null || !PlatformTv.esTelevisionSync) return child ?? const SizedBox.shrink();
+          if (child == null || !PlatformTv.esTelevisionSync) {
+            return child ?? const SizedBox.shrink();
+          }
           // El botón central del D-pad (OK/select) llega como
           // LogicalKeyboardKey.select, y Flutter NO lo liga a ActivateIntent
           // por default —solo enter/espacio—. Sin esto, un botón de
@@ -1612,19 +1614,114 @@ class _StartupErrorApp extends StatelessWidget {
   }
 }
 
+/// Dónde falló, con lo que sobrevive a la app compilada.
+///
+/// `FlutterErrorDetails.toString()` trae el árbol de diagnóstico entero —el
+/// widget, el archivo, la línea— pero solo en depuración: eso lo arma código
+/// dentro de `assert`, que en la app que usa la gente no está. Ahí devuelve
+/// «Instance of 'FlutterErrorDetails'», que es exactamente lo que apareció en
+/// el registro de un teléfono con un error repitiéndose en cada cuadro.
+///
+/// Estas tres piezas sí quedan:
+///
+/// - el mensaje de la excepción,
+/// - `library`, que dice de qué parte salió («widgets library»),
+/// - las líneas del stack que son nuestras, que es lo que de verdad ubica.
+///
+/// Del stack se toman solo las de `package:prismhub`: las de Flutter son
+/// siempre las mismas y no distinguen un error de otro.
+String _dondeFallo(FlutterErrorDetails details) {
+  final donde = details.library ?? '';
+  final nuestras = (details.stack?.toString() ?? '')
+      .split('\n')
+      .where((l) => l.contains('package:prismhub'))
+      .take(4)
+      .join('\n');
+  return [
+    details.exceptionAsString(),
+    if (donde.isNotEmpty) '[$donde]',
+    if (nuestras.isNotEmpty) nuestras,
+  ].join(' ');
+}
 
 /// En qué pantalla está la app, para acompañar a los cuadros lentos.
 ///
-/// Devuelve vacío si no se puede averiguar: un instrumento de diagnóstico no
-/// puede tumbar nada, y menos desde dentro del aviso de que algo va lento.
-String _dondeEstamos() {
-  try {
-    final ruta = rootNavigatorKey.currentContext == null
-        ? null
-        : ModalRoute.of(rootNavigatorKey.currentContext!)?.settings.name;
-    if (ruta == null || ruta.isEmpty) return '';
-    return ' · en $ruta';
-  } catch (_) {
-    return '';
+/// ── Por qué no sale del nombre de la ruta ───────────────────────────────────
+///
+/// La primera versión leía `ModalRoute.of(...).settings.name`, y en el registro
+/// de un teléfono salió CERO veces. El motivo: las pantallas que se empujan con
+/// `MaterialPageRoute` —el reproductor, la ficha, casi todo en Android— no
+/// llevan nombre, así que ese campo es null y no había nada que escribir.
+///
+/// Con un observador del navegador se anota la última pantalla que se abrió, y
+/// si no tiene nombre se usa el tipo del widget, que siempre está. Es el dato
+/// que convierte un «build=490ms» suelto en algo que se puede ir a mirar.
+class _DondeEstamos extends NavigatorObserver {
+  static String _pantalla = '';
+
+  static void _anotar(Route<dynamic>? ruta) {
+    if (ruta == null) return;
+    final nombre = ruta.settings.name;
+    if (nombre != null && nombre.isNotEmpty) {
+      _pantalla = nombre;
+      return;
+    }
+    // Sin nombre hay que ir a buscarlo al árbol. Se hace después del cuadro
+    // porque en el momento del push la pantalla todavía no se construyó.
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _pantalla = _buscarEnElArbol(ruta) ?? ruta.runtimeType.toString();
+    });
   }
+
+  /// El nombre del widget que hace de pantalla, buscándolo debajo de la ruta.
+  ///
+  /// Se recorre poco y a lo ancho: la pantalla en sí está a pocos niveles del
+  /// tope, y lo que hay en el medio son envoltorios del framework. Con un tope
+  /// de nodos visitados, porque debajo de esto cuelga la app entera y recorrerla
+  /// para escribir una línea de registro sería peor que no tener la línea.
+  static String? _buscarEnElArbol(Route<dynamic> ruta) {
+    final desde = ruta is ModalRoute ? ruta.subtreeContext : null;
+    if (desde == null) return null;
+    var vistos = 0;
+    String? hallado;
+    void mirar(Element e) {
+      if (hallado != null || vistos++ > 400) return;
+      final t = e.widget.runtimeType.toString();
+      // Los widgets generados llevan el tipo entre `<>` o empiezan con `_`;
+      // ninguno de los dos es un nombre que sirva para ubicarse.
+      if (!t.startsWith('_') && !t.contains('<')) {
+        for (final pista in const ['Page', 'Screen', 'Vista', 'Pantalla']) {
+          if (t.endsWith(pista)) {
+            hallado = t;
+            return;
+          }
+        }
+      }
+      e.visitChildren(mirar);
+    }
+
+    try {
+      (desde as Element).visitChildren(mirar);
+    } catch (_) {
+      // El árbol se puede haber desarmado entre el cuadro y esto.
+      return null;
+    }
+    return hallado;
+  }
+
+  @override
+  void didPush(Route<dynamic> ruta, Route<dynamic>? anterior) => _anotar(ruta);
+
+  @override
+  void didPop(Route<dynamic> ruta, Route<dynamic>? anterior) =>
+      _anotar(anterior);
+
+  @override
+  void didReplace({Route<dynamic>? newRoute, Route<dynamic>? oldRoute}) =>
+      _anotar(newRoute);
+}
+
+String _dondeEstamos() {
+  final p = _DondeEstamos._pantalla;
+  return p.isEmpty ? '' : ' · en $p';
 }
