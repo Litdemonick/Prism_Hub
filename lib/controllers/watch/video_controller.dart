@@ -1140,8 +1140,12 @@ class VideoPlayerController extends GetxController with WidgetsBindingObserver {
       // sensor. De pie abre de pie, acostado abre acostado, y girar funciona en
       // los dos sentidos. Que un vídeo se vea mejor acostado es cierto, pero
       // eso lo decide quien mira girando el teléfono, no la app girándoselo.
-      await AutoOrientation.fullAutoMode();
-      SystemChrome.setPreferredOrientations(DeviceOrientation.values);
+      // Mismo motivo que al salir: un televisor no gira, y pedirle que
+      // suelte las orientaciones deshace el bloqueo apaisado del arranque.
+      if (!PlatformTv.esTelevisionSync) {
+        await AutoOrientation.fullAutoMode();
+        SystemChrome.setPreferredOrientations(DeviceOrientation.values);
+      }
     }
     _initSettings();
     _initPlayer();
@@ -3958,6 +3962,26 @@ class VideoPlayerController extends GetxController with WidgetsBindingObserver {
   Future<Uint8List?> _capturarFrameActual() async {
     // hasRenderedFrame: sin un frame pintado, screenshot() devuelve negro.
     if (_disposed || _playerDisposed || !hasRenderedFrame.value) return null;
+    // ── En un aparato modesto NO se captura ─────────────────────────────
+    //
+    // `screenshot()` trae el cuadro desde la GPU a memoria. Eso ya es caro, y
+    // acá pasa en el peor momento posible: saliendo del reproductor, con la
+    // superficie de vídeo a punto de liberarse y hasta dos segundos de espera
+    // bloqueando el cierre. Reportado en vivo: «al salir de repente puede
+    // petar, dar pantalla negra o laguear».
+    //
+    // Y encima en televisor no funcionaba: en dos registros distintos aparece
+    // «No se pudo capturar el frame del video: RangeError», de dentro de
+    // media_kit. O sea que se pagaba el coste y no se conseguía la miniatura.
+    //
+    // Lo que se pierde es la miniatura de «Continuar viendo», que en esos
+    // aparatos ya no se estaba consiguiendo. La tarjeta se queda con la
+    // portada de siempre, que es la reserva que este método ya tenía.
+    if (PerfilDeAparato.esModesto) {
+      logger.info('No se captura el cuadro en este aparato: cuesta caro al '
+          'salir y la tarjeta se queda con la portada');
+      return null;
+    }
     try {
       return await player.screenshot().timeout(const Duration(seconds: 2));
     } catch (e) {
@@ -6716,6 +6740,28 @@ class VideoPlayerController extends GetxController with WidgetsBindingObserver {
   /// verdad y que ya se esta arreglando solo.
   Future<void> restoreSystemUiOnExit() async {
     if (!Platform.isAndroid) return;
+    // ── En televisor NO se toca nada de esto ────────────────────────────
+    //
+    // Reportado en vivo: a un usuario, al salir del reproductor, la app se le
+    // quedó en negro en el televisor.
+    //
+    // Todo lo de acá abajo es lógica de teléfono: mostrar y esconder la barra
+    // de estado y la de navegación, y devolver las cuatro orientaciones. Un
+    // televisor no tiene ninguna de esas cosas — no hay barras que restaurar y
+    // no se puede girar.
+    //
+    // Y no es solo que sobre: hace daño. `setPreferredOrientations` con las
+    // cuatro DESHACE el bloqueo apaisado que la app pone al arrancar en
+    // televisor, y cambiar el modo de interfaz del sistema le pide a Android
+    // que reconfigure la ventana justo cuando el reproductor está soltando su
+    // superficie de vídeo. Esa reconfiguración, en una caja de televisión, es
+    // exactamente la clase de cosa que deja la pantalla en negro sin que se
+    // caiga nada — no hay excepción de Dart porque no hay error: la ventana
+    // quedó sin nada que dibujar.
+    //
+    // Saliendo antes, el cierre en televisor hace menos cosas y ninguna de
+    // ellas puede pelearse con la superficie que se está liberando.
+    if (PlatformTv.esTelevisionSync) return;
     // El botón manual no puede sobrevivir al reproductor: si quedara en true,
     // la próxima vez que se abra otro vídeo arrancaría en pantalla completa sin
     // que nadie lo haya tocado.
@@ -6781,6 +6827,10 @@ class VideoPlayerController extends GetxController with WidgetsBindingObserver {
   /// ya está en el modo que corresponde, pedirlo de nuevo no cuesta nada.
   void pantallaSegunOrientacion({required bool acostado}) {
     if (!Platform.isAndroid) return;
+    // En televisor no hay orientación que seguir ni barras que mover, y esto
+    // lo llama la página en CADA reconstrucción — o sea que era un pedido al
+    // sistema por cuadro, para nada. Ver restoreSystemUiOnExit.
+    if (PlatformTv.esTelevisionSync) return;
     _acostadoActual = acostado;
     // Reportado en vivo: girar el teléfono adentro del reproductor abría el
     // teclado en pantalla solo, sin que nadie tocara ningún campo de texto.
