@@ -10,6 +10,7 @@ import 'package:flutter/services.dart';
 import 'package:flutter_i18n/flutter_i18n.dart';
 import 'package:flutter_markdown/flutter_markdown.dart';
 import 'package:path_provider/path_provider.dart';
+import 'package:prismhub/utils/log.dart';
 import 'package:prismhub/utils/i18n.dart';
 import 'package:prismhub/utils/modo_app.dart';
 import 'package:prismhub/utils/request.dart';
@@ -1247,6 +1248,8 @@ class ApplicationUtils {
     });
     observador.empezar();
     try {
+      logger.info('Actualización: falta el permiso de instalar apps, '
+          'se abren los ajustes del sistema');
       await _canalActualizacion.invokeMethod('openInstallSettings');
     } catch (e) {
       // El nativo ya prueba tres pantallas de Ajustes distintas antes de
@@ -1280,6 +1283,15 @@ class ApplicationUtils {
     const platform = _canalActualizacion;
     final canInstall =
         await platform.invokeMethod<bool>('canInstallApks') ?? false;
+    // Queda escrito qué camino se tomó.
+    //
+    // Reportado en vivo en televisor: «al darle actualizar, carga y luego se
+    // queda en la misma pantalla, no redirige al instalador». Desde fuera,
+    // «se abrió Ajustes de permisos» y «se lanzó el instalador y el sistema
+    // no lo trajo al frente» se ven igual —la app sigue ahí— y llevan a
+    // arreglos distintos. Con esto, el registro lo dice.
+    logger.info('Actualización: APK listo en disco · permiso para instalar: '
+        '${canInstall ? "sí" : "no"}');
     if (!canInstall) {
       // Ya NO se lanza un error acá. Se abre Ajustes y queda esperando la
       // vuelta para instalar solo (ver _instalarAlVolver): lanzar cortaba el
@@ -1297,7 +1309,13 @@ class ApplicationUtils {
     // Uri.file() crudo pisaría exactamente el mismo bug de FileUriExposedException
     // de arriba. Si esto falla, el error real sube tal cual al snackbar de
     // _downloadAndInstall.
-    await platform.invokeMethod('installApk', {'apkPath': apkPath});
+    try {
+      await platform.invokeMethod('installApk', {'apkPath': apkPath});
+      logger.info('Actualización: se lanzó el instalador del sistema');
+    } catch (e) {
+      logger.warning('Actualización: el instalador del sistema no arrancó: $e');
+      rethrow;
+    }
   }
 
   static Directory _findExtractedAppDir(Directory extractDir) {
