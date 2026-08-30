@@ -86,9 +86,13 @@ class ExportarRegistro {
   /// Con [soloArea] se arma solo esa —la que el usuario tenga elegida en el
   /// visor— para que lo que se lee desde otro aparato coincida con lo que se
   /// está mirando en la pantalla del televisor. Sin ella, van todas.
-  static Future<String> armar({String? soloArea}) async {
+  ///
+  /// Con [lineas] se arma sobre esas y no sobre el archivo entero — es como
+  /// se exporta o se sirve una sesión anterior concreta, ya recortada por
+  /// quien la eligió.
+  static Future<String> armar({String? soloArea, List<String>? lineas}) async {
     await PrismLog.flush();
-    final lineas = await _leerTodo();
+    lineas ??= await _leerTodo();
 
     final salida = StringBuffer()
       ..writeln('═══════════════════════════════════════════════════')
@@ -159,8 +163,11 @@ class ExportarRegistro {
   /// Con [soloArea] sale solo la zona que se está mirando en el visor: quien
   /// exporta desde el filtro de fallos quiere mandar los fallos, no dos mil
   /// líneas más de las que ya decidió que no le interesaban.
-  static Future<bool> entregar({String? soloArea}) async {
-    final texto = await armar(soloArea: soloArea);
+  ///
+  /// Con [lineas] se exporta ese juego concreto —una apertura anterior
+  /// elegida en el historial— en vez del archivo entero.
+  static Future<bool> entregar({String? soloArea, List<String>? lineas}) async {
+    final texto = await armar(soloArea: soloArea, lineas: lineas);
     final destino = File(
       '${File(PrismLog.logFilePath).parent.path}/PrismHub-reporte.log',
     );

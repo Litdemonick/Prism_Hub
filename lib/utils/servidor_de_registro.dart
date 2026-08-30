@@ -66,13 +66,28 @@ class ServidorDeRegistro {
 
   static bool get encendido => _servidor != null;
 
-  /// Lo enciende y devuelve la dirección, o null si no se pudo.
+  /// Las líneas concretas que hay que servir, o null para el registro entero.
+  ///
+  /// Lo pone el visor cuando lo que se está mirando es una sesión anterior:
+  /// ahí lo que interesa no es lo que está pasando ahora, sino ese arranque
+  /// en particular. Sin esto, el navegador mostraría algo distinto de lo que
+  /// hay en la pantalla del televisor.
+  static List<String>? lineasFijas;
+
+  /// Lo enciende y dice qué pasó.
+  ///
+  /// Devuelve la dirección, o el motivo por el que no se pudo. Antes devolvía
+  /// null a secas para las tres formas de fallar, así que la pantalla solo
+  /// podía decir «no se pudo» — y quien lo lee no tiene con qué saber si le
+  /// falta conectar el televisor a la red o si el problema es otro.
   ///
   /// Solo en televisor: en un teléfono o un PC ya se puede exportar el
   /// archivo, así que abrir un servidor sería sumar riesgo sin ganar nada.
-  static Future<String?> encender() async {
-    if (!PlatformTv.esTelevisionSync) return null;
-    if (_servidor != null) return direccion;
+  static Future<({String? direccion, FalloDeServidor? fallo})> encender() async {
+    if (!PlatformTv.esTelevisionSync) {
+      return (direccion: null, fallo: FalloDeServidor.noEsTelevisor);
+    }
+    if (_servidor != null) return (direccion: direccion, fallo: null);
     try {
       _codigo = _codigoAlAzar();
       // Puerto 0: lo elige el sistema entre los libres. Fijar uno a mano es
@@ -80,22 +95,22 @@ class ServidorDeRegistro {
       final s = await HttpServer.bind(InternetAddress.anyIPv4, 0);
       _servidor = s;
       s.listen(_atender, onError: (Object e) {
-        logger.info('servidor de registro: $e');
+        logger.warning('servidor de registro: $e');
       });
       final ip = await _ipDeLaRed();
       if (ip == null) {
         await apagar();
-        return null;
+        return (direccion: null, fallo: FalloDeServidor.sinRed);
       }
       direccion = 'http://$ip:${s.port}/r/$_codigo';
       _apagado = Timer(_cuantoDura, apagar);
       logger.info('Registro accesible desde la red durante '
           '${_cuantoDura.inMinutes} minutos');
-      return direccion;
+      return (direccion: direccion, fallo: null);
     } catch (e) {
-      logger.info('No se pudo levantar el servidor de registro: $e');
+      logger.warning('No se pudo levantar el servidor de registro: $e');
       await apagar();
-      return null;
+      return (direccion: null, fallo: FalloDeServidor.noSePudo);
     }
   }
 
@@ -106,6 +121,7 @@ class ServidorDeRegistro {
     _servidor = null;
     direccion = null;
     _codigo = null;
+    lineasFijas = null;
     if (s == null) return;
     try {
       await s.close(force: true);
@@ -139,7 +155,10 @@ class ServidorDeRegistro {
         await pedido.response.close();
         return;
       }
-      final texto = await ExportarRegistro.armar(soloArea: areaElegida);
+      final texto = await ExportarRegistro.armar(
+        soloArea: areaElegida,
+        lineas: lineasFijas,
+      );
       pedido.response
         ..statusCode = HttpStatus.ok
         ..headers.contentType = ContentType.html
@@ -206,4 +225,23 @@ class ServidorDeRegistro {
     }
     return null;
   }
+}
+
+/// Por qué no se pudo encender el servidor.
+///
+/// Cada uno lleva a un mensaje distinto en pantalla, porque llevan a arreglos
+/// distintos: uno se soluciona conectando el televisor a la red y los otros
+/// no se solucionan desde ahí.
+enum FalloDeServidor {
+  /// No es un televisor. No debería llegar acá: el botón no existe fuera de
+  /// televisor. Está por si algún día se llama desde otro lado.
+  noEsTelevisor,
+
+  /// El aparato no está en ninguna red de casa. Es el caso realista: un
+  /// televisor sin wifi ni cable conectado.
+  sinRed,
+
+  /// El sistema no dejó abrir el puerto. Algunos televisores con la app en
+  /// segundo plano, o con políticas del fabricante, lo bloquean.
+  noSePudo,
 }

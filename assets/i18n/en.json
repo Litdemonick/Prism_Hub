@@ -498,7 +498,20 @@
     "log-en-red": "View from another device",
     "log-en-red-como": "Type this address in the browser of your PC or phone, on the same network. You will see the whole log, where you can copy and search.",
     "log-en-red-aviso": "It turns itself off after 15 minutes. Only the log can be read, and it already comes without addresses or your data.",
-    "log-en-red-sin-red": "Could not start: you need to be on a home network (Wi-Fi or cable)."
+    "log-en-red-sin-red": "Could not start: you need to be on a home network (Wi-Fi or cable).",
+    "log-zona": "Area",
+    "log-acciones": "Actions",
+    "log-historial": "History",
+    "log-historial-vacio": "No previous sessions saved yet. Once you close and reopen the app, this session will show up here.",
+    "log-historial-error": "Could not read the history: {error}",
+    "log-historial-sin-fecha": "No date",
+    "log-historial-hoy": "Today",
+    "log-historial-ayer": "Yesterday",
+    "log-historial-fallos": "{n} with errors",
+    "log-en-red-bloqueado": "The system would not let the port open on this device. This usually happens with the app in the background: try again with PrismHub on screen.",
+    "log-export-listo": "Log exported",
+    "log-export-error": "Could not export: {error}",
+    "log-clear-error": "Could not clear the log: {error}"
   },
   "external-player-launching": "Launching {player}",
   "detail": {
