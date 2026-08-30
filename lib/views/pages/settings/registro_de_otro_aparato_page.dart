@@ -41,39 +41,40 @@ class RegistroDeOtroAparatoPage extends StatefulWidget {
       _RegistroDeOtroAparatoPageState();
 }
 
-class _RegistroDeOtroAparatoPageState extends State<RegistroDeOtroAparatoPage> {
-  List<({String aparato, String url})> _encontrados = const [];
+class _RegistroDeOtroAparatoPageState
+    extends State<RegistroDeOtroAparatoPage> {
+  /// Los que están contestando ahora mismo.
+  List<TelevisorConocido> _enLinea = const [];
 
-  /// Los que contestaron en alguna búsqueda anterior y ahora no.
+  /// Los que compartieron alguna vez y ahora no contestan.
   ///
   /// ── Por qué se muestran igual ───────────────────────────────────────────
   ///
   /// Un televisor deja de contestar por tres motivos que desde acá se ven
   /// idénticos: se apagó el servidor a mano, se cumplieron los tres cuartos de
-  /// hora, o la app se cayó. Haciéndolo desaparecer de la lista, los tres se
-  /// leen como «acá nunca hubo nada» — y el tercero es justamente el caso en
-  /// que uno estaba mirando.
+  /// hora, o la app se cayó. Sin mostrarlos, los tres se leen como «acá nunca
+  /// hubo nada» — y el tercero es justamente el caso en el que uno estaba
+  /// mirando.
   ///
-  /// Se quedan, apagados y aparte, con su dirección: se puede abrir igual por
-  /// si volvió, y sobre todo se sabe que existió.
-  List<({String aparato, String url})> _perdidos = const [];
+  /// Se quedan apagados y aparte, con su dirección y con cuándo se los vio por
+  /// última vez. Se pueden abrir igual por si volvieron.
+  List<TelevisorConocido> _sinConexion = const [];
 
   bool _buscando = true;
 
   @override
   void initState() {
     super.initState();
-    // ── La búsqueda arranca DESPUÉS de la animación de entrada ──────────
+    // Lo conocido se muestra YA, antes de buscar.
     //
-    // Reportado en vivo: «al tocar la zona para ver el registro del televisor
-    // parpadea en blanco». Buscar abre un socket, manda mensajes a toda la red
-    // y arma un temporizador, y todo eso empezaba en el mismo cuadro en que la
-    // pantalla entra deslizándose. Un cuadro perdido justo ahí es el
-    // parpadeo — no hay nada dibujado todavía y se ve el fondo de la
-    // transición.
-    //
-    // Esperando a que termine, la pantalla entra limpia y la búsqueda empieza
-    // con la animación ya quieta. Mismo criterio que el visor del registro.
+    // Buscar tarda un par de segundos, y arrancar con la pantalla vacía hace
+    // creer que no hay nada — justo lo contrario de lo que se quiere cuando el
+    // televisor se cayó y uno viene a ver por qué.
+    _sinConexion = TelevisoresConocidos.leer();
+    // La búsqueda arranca DESPUÉS de la animación de entrada: abre un socket,
+    // manda mensajes a toda la red y arma un temporizador, y todo eso en el
+    // mismo cuadro en que la pantalla entra deslizándose cuesta un cuadro —
+    // que es el parpadeo.
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (!mounted) return;
       final animacion = ModalRoute.of(context)?.animation;
@@ -94,18 +95,67 @@ class _RegistroDeOtroAparatoPageState extends State<RegistroDeOtroAparatoPage> {
   Future<void> _buscar() async {
     setState(() => _buscando = true);
     final hallazgos = await AnuncioDeRegistro.buscar();
+    await TelevisoresConocidos.anotar(hallazgos);
     if (!mounted) return;
     final vivos = {for (final h in hallazgos) h.url};
+    final ahora = DateTime.now();
     setState(() {
-      // Lo que se conocía y ya no contesta pasa a la otra lista; lo que vuelve
-      // a contestar sale de ella.
-      _perdidos = [
-        for (final v in [..._encontrados, ..._perdidos])
-          if (!vivos.contains(v.url)) v,
+      _enLinea = [
+        for (final h in hallazgos)
+          TelevisorConocido(aparato: h.aparato, url: h.url, visto: ahora),
       ];
-      _encontrados = hallazgos;
+      _sinConexion = [
+        for (final t in TelevisoresConocidos.leer())
+          if (!vivos.contains(t.url)) t,
+      ];
       _buscando = false;
     });
+  }
+
+  Future<void> _olvidarLosCaidos() async {
+    if (!await _confirmar(
+      'settings.log-olvidar'.i18n,
+      'settings.log-olvidar-detalle'.i18n,
+    )) {
+      return;
+    }
+    await TelevisoresConocidos.olvidar();
+    // Los que están en línea se vuelven a anotar enseguida: lo que se olvida
+    // de verdad es lo que ya no contesta.
+    await TelevisoresConocidos.anotar(
+      [for (final t in _enLinea) (aparato: t.aparato, url: t.url)],
+    );
+    if (!mounted) return;
+    setState(() => _sinConexion = const []);
+  }
+
+  Future<bool> _confirmar(String titulo, String detalle) async {
+    final r = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        backgroundColor: HomeTheme.bg,
+        title: Text(titulo, style: TextStyle(color: HomeTheme.textPrimary)),
+        content: Text(
+          detalle,
+          style: TextStyle(color: HomeTheme.textMuted, fontSize: 13),
+        ),
+        actions: [
+          TextButton(
+            autofocus: true,
+            onPressed: () => Navigator.of(context).pop(false),
+            child: Text('common.cancel'.i18n),
+          ),
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(true),
+            child: Text(
+              'common.delete'.i18n,
+              style: TextStyle(color: HomeTheme.accentRed),
+            ),
+          ),
+        ],
+      ),
+    );
+    return r ?? false;
   }
 
   @override
@@ -119,28 +169,38 @@ class _RegistroDeOtroAparatoPageState extends State<RegistroDeOtroAparatoPage> {
           style: TextStyle(color: HomeTheme.textPrimary),
         ),
         actions: [
+          if (_sinConexion.isNotEmpty)
+            IconButton(
+              tooltip: 'settings.log-olvidar'.i18n,
+              icon: const Icon(Icons.delete_sweep_outlined),
+              color: HomeTheme.textMuted,
+              onPressed: _olvidarLosCaidos,
+            ),
           IconButton(
             tooltip: 'common.refresh'.i18n,
-            icon: const Icon(Icons.refresh),
+            icon: _buscando
+                ? SizedBox(
+                    width: 18,
+                    height: 18,
+                    child: CircularProgressIndicator(
+                      strokeWidth: 2,
+                      color: HomeTheme.textPrimary,
+                    ),
+                  )
+                : const Icon(Icons.refresh),
             color: HomeTheme.textPrimary,
             onPressed: _buscando ? null : _buscar,
           ),
         ],
       ),
-      // ── Ancho acotado, y centrado ────────────────────────────────────
-      //
-      // En un teléfono de pie la lista ocupa lo que hay y está bien. En un PC
-      // a pantalla completa, o en una tablet apaisada, una tarjeta de punta a
-      // punta deja el nombre del televisor pegado al borde izquierdo y la
-      // flecha al derecho, con medio metro de nada en medio.
-      //
-      // SafeArea con los lados: apaisado, el recorte de cámara y la barra de
-      // gestos se comen la primera columna. Arriba no, que de eso ya se ocupó
-      // la barra de título.
       // ColoredBox además del `backgroundColor` del Scaffold: durante la
       // transición, lo que se ve por debajo es el fondo del tema de Material,
       // que en esta app no es el mismo. Pintarlo acá hace que el primer cuadro
       // ya salga del color correcto.
+      //
+      // Y el ancho se acota y se centra: en un PC a pantalla completa, o en una
+      // tablet apaisada, una tarjeta de punta a punta deja el nombre pegado a
+      // un borde y la flecha al otro, con medio metro de nada en medio.
       body: ColoredBox(
         color: HomeTheme.bg,
         child: SafeArea(
@@ -157,7 +217,8 @@ class _RegistroDeOtroAparatoPageState extends State<RegistroDeOtroAparatoPage> {
   }
 
   Widget _cuerpo() {
-    if (_buscando) {
+    final hayAlgo = _enLinea.isNotEmpty || _sinConexion.isNotEmpty;
+    if (_buscando && !hayAlgo) {
       return Center(
         child: Column(
           mainAxisSize: MainAxisSize.min,
@@ -172,7 +233,7 @@ class _RegistroDeOtroAparatoPageState extends State<RegistroDeOtroAparatoPage> {
         ),
       );
     }
-    if (_encontrados.isEmpty) {
+    if (!hayAlgo) {
       return Center(
         child: Padding(
           padding: const EdgeInsets.all(28),
@@ -201,12 +262,12 @@ class _RegistroDeOtroAparatoPageState extends State<RegistroDeOtroAparatoPage> {
       );
     }
     final filas = <Widget>[
-      if (_encontrados.isNotEmpty) _rotulo('settings.log-en-linea'.i18n),
-      for (final e in _encontrados) _tarjeta(e, activo: true),
-      if (_perdidos.isNotEmpty) ...[
+      if (_enLinea.isNotEmpty) _rotulo('settings.log-en-linea'.i18n),
+      for (final e in _enLinea) _tarjeta(e, activo: true),
+      if (_sinConexion.isNotEmpty) ...[
         const SizedBox(height: 8),
         _rotulo('settings.log-sin-conexion'.i18n),
-        for (final e in _perdidos) _tarjeta(e, activo: false),
+        for (final e in _sinConexion) _tarjeta(e, activo: false),
       ],
     ];
     return ListView.builder(
@@ -216,7 +277,6 @@ class _RegistroDeOtroAparatoPageState extends State<RegistroDeOtroAparatoPage> {
     );
   }
 
-  /// El rótulo de cada bloque.
   Widget _rotulo(String texto) => Padding(
         padding: const EdgeInsets.only(left: 4, bottom: 8, top: 4),
         child: Text(
@@ -230,7 +290,7 @@ class _RegistroDeOtroAparatoPageState extends State<RegistroDeOtroAparatoPage> {
         ),
       );
 
-  Widget _tarjeta(({String aparato, String url}) e, {required bool activo}) {
+  Widget _tarjeta(TelevisorConocido e, {required bool activo}) {
     return Padding(
       key: ValueKey(e.url),
       padding: const EdgeInsets.only(bottom: 10),
@@ -268,25 +328,37 @@ class _RegistroDeOtroAparatoPageState extends State<RegistroDeOtroAparatoPage> {
                       style: TextStyle(
                         fontSize: 15,
                         fontWeight: FontWeight.w600,
-                        color: activo
-                            ? HomeTheme.textPrimary
-                            : HomeTheme.textMuted,
+                        color:
+                            activo ? HomeTheme.textPrimary : HomeTheme.textMuted,
                       ),
                     ),
                     const SizedBox(height: 3),
-                    // La dirección, a la vista pero sin botones al lado.
-                    //
-                    // Acá sirve para reconocer cuál televisor es cuando
-                    // hay más de uno. Copiarla y abrirla en el navegador
-                    // están DENTRO, en la pantalla del registro: son
-                    // cosas que se hacen sobre el que ya se eligió, y
-                    // acá solo llenaban la fila de iconos chicos entre
-                    // los que hay que apuntar.
+                    // La dirección, a la vista pero sin botones al lado: acá
+                    // sirve para reconocer cuál es cuando hay más de uno.
+                    // Copiarla y abrirla en el navegador están DENTRO, sobre el
+                    // que ya se eligió.
                     Text(
                       e.url,
+                      style:
+                          TextStyle(fontSize: 12, color: HomeTheme.textMuted),
+                    ),
+                    const SizedBox(height: 2),
+                    // Cuándo se lo vio. En los caídos es el dato que dice si
+                    // vale la pena intentar —hace un minuto o antier— y en los
+                    // que están en línea confirma que la respuesta es de ahora.
+                    Text(
+                      activo
+                          ? 'settings.log-visto-ahora'.i18n
+                          : FlutterI18n.translate(
+                              context,
+                              'settings.log-visto',
+                              translationParams: {'cuando': _cuando(e.visto)},
+                            ),
                       style: TextStyle(
-                        fontSize: 12,
-                        color: HomeTheme.textMuted,
+                        fontSize: 11,
+                        color: activo
+                            ? const Color(0xFF6FCFA5)
+                            : HomeTheme.textPlaceholder,
                       ),
                     ),
                   ],
@@ -298,6 +370,16 @@ class _RegistroDeOtroAparatoPageState extends State<RegistroDeOtroAparatoPage> {
         ),
       ),
     );
+  }
+
+  /// Fecha y hora de cuándo se lo vio.
+  ///
+  /// Completas y no «hace un rato»: estas listas se miran para decidir si esa
+  /// dirección todavía sirve, y para eso hace falta el dato, no una impresión.
+  String _cuando(DateTime d) {
+    String dos(int n) => n.toString().padLeft(2, '0');
+    final fecha = '${d.year}-${dos(d.month)}-${dos(d.day)}';
+    return '$fecha · ${dos(d.hour)}:${dos(d.minute)}';
   }
 }
 

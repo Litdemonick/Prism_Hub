@@ -491,6 +491,9 @@ class SettingKey {
   // volver a escribirlas letra por letra con el mando. Ver
   // busquedas_recientes.dart.
   static const busquedasRecientesTv = 'BusquedasRecientesTv';
+  // Los televisores que alguna vez compartieron su registro en esta red, con
+  // cuándo se los vio por última vez. Ver AnuncioDeRegistro.
+  static const televisoresDeRegistro = 'TelevisoresDeRegistro';
   // Versión en la que el usuario aceptó el aviso de beta. Vacío = todavía no
   // lo aceptó, así que el aviso vuelve a salir en el próximo arranque.
   static const betaNoticeAccepted = 'BetaNoticeAccepted';
