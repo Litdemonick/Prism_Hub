@@ -6,6 +6,7 @@ import 'dart:math';
 import 'package:prismhub/utils/anuncio_de_registro.dart';
 import 'package:prismhub/utils/encabezado_de_sesion.dart';
 import 'package:prismhub/utils/exportar_registro.dart';
+import 'package:prismhub/utils/zonas_del_registro.dart';
 import 'package:prismhub/utils/log.dart';
 import 'package:prismhub/utils/platform_tv.dart';
 
@@ -72,6 +73,14 @@ class ServidorDeRegistro {
   /// habría que ir traduciendo mentalmente entre los dos, que es justo lo que
   /// esto viene a evitar.
   static String? areaElegida;
+
+  /// La zona elegida, para filtrar igual que la pantalla del aparato.
+  ///
+  /// Va junto a [areaElegida] —que es solo el nombre para mostrar— porque
+  /// filtrar y titular son dos cosas distintas y hacerlas con el mismo dato
+  /// fue lo que las separó: el nombre servía para titular pero no sabía qué
+  /// líneas dejar pasar.
+  static ZonaDelRegistro? zonaElegida;
 
   static bool get encendido => _servidor != null;
 
@@ -165,6 +174,7 @@ class ServidorDeRegistro {
     lineasFijas = null;
     queSeSirve = null;
     areaElegida = null;
+    zonaElegida = null;
     if (s == null) return;
     try {
       await s.close(force: true);
@@ -234,10 +244,7 @@ class ServidorDeRegistro {
         await pedido.response.close();
         return;
       }
-      final texto = await ExportarRegistro.armar(
-        soloArea: areaElegida,
-        lineas: lineasFijas,
-      );
+      final texto = await _loQueSeVeEnElAparato();
       // ── Se cuentan las líneas del REGISTRO, no las del documento ──────
       //
       // Contaba los saltos de línea del texto ya armado, o sea que sumaba
@@ -245,7 +252,7 @@ class ServidorDeRegistro {
       // blanco. Salían 582 arriba y 544 en el resumen de más abajo, en la
       // misma página: dos números distintos para lo mismo, y quien la abre no
       // tiene forma de saber cuál creer.
-      final cuantas = ExportarRegistro.cuantasLineas;
+      final cuantas = _cuantasSirvio;
       pedido.response
         ..statusCode = HttpStatus.ok
         ..headers.contentType =
@@ -263,6 +270,37 @@ class ServidorDeRegistro {
         await pedido.response.close();
       } catch (_) {}
     }
+  }
+
+  /// Cuántas líneas llevaba lo último que se sirvió.
+  static int _cuantasSirvio = 0;
+
+  /// El registro tal como se ve en la pantalla del aparato.
+  ///
+  /// ── Por qué no se manda el exportado ────────────────────────────────────
+  ///
+  /// Se servía lo mismo que sale al exportar: un archivo con resumen arriba y
+  /// las líneas repartidas en secciones —fallos, reproductor, extensiones,
+  /// general—. Eso está bien para mandarle un reporte a alguien, y mal para
+  /// mirar en vivo: **el orden en que pasaron las cosas es justamente la
+  /// información**. Repartidas en bloques, un fallo y lo que lo causó quedan
+  /// en secciones distintas y a cientos de líneas de distancia.
+  ///
+  /// Y encima no coincidía con lo que se estaba mirando en el aparato, que
+  /// muestra las líneas en orden. Reportado en vivo: «al compartir desde otro
+  /// aparato debe verse toda la info igual que en la consola del aparato».
+  ///
+  /// Ahora se sirve eso: las mismas líneas, en el mismo orden, con el mismo
+  /// filtro de zona. Lo único que se agrega es una línea arriba diciendo qué
+  /// es y de dónde sale.
+  static Future<String> _loQueSeVeEnElAparato() async {
+    final todas = lineasFijas ?? await ExportarRegistro.lineasDelRegistro();
+    final z = zonaElegida ?? ZonaDelRegistro.todo;
+    final vistas = z == ZonaDelRegistro.todo
+        ? todas
+        : todas.where(z.seVe).toList(growable: false);
+    _cuantasSirvio = vistas.length;
+    return vistas.join('\n');
   }
 
   /// Qué se está sirviendo, en una línea, para la página y para el registro.

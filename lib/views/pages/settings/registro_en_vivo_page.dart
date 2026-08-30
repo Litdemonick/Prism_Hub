@@ -314,6 +314,7 @@ class _RegistroEnVivoPageState extends State<RegistroEnVivoPage> {
       return;
     }
     ServidorDeRegistro.areaElegida = _filtro.area;
+    ServidorDeRegistro.zonaElegida = _filtro;
     ServidorDeRegistro.lineasFijas = null;
     ServidorDeRegistro.queSeSirve = 'registro de ahora';
     final r = await ServidorDeRegistro.encender();
@@ -669,6 +670,7 @@ class _RegistroEnVivoPageState extends State<RegistroEnVivoPage> {
       // El que esté mirando desde el navegador ve el mismo cambio en cinco
       // segundos, sin tocar nada de su lado.
       ServidorDeRegistro.areaElegida = f.area;
+      ServidorDeRegistro.zonaElegida = f;
     });
   }
 

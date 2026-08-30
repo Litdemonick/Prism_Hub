@@ -360,6 +360,8 @@ class _SesionPageState extends State<_SesionPage> {
       if (ServidorDeRegistro.encendido) {
         ServidorDeRegistro.lineasFijas = _visibles;
         ServidorDeRegistro.areaElegida = _zona.area;
+        // Las líneas ya vienen filtradas: la zona es solo para el título.
+        ServidorDeRegistro.zonaElegida = null;
       }
     });
   }
@@ -428,6 +430,7 @@ class _SesionPageState extends State<_SesionPage> {
     // Se sirve ESTA sesión, y la zona que se esté mirando de ella.
     ServidorDeRegistro.lineasFijas = _visibles;
     ServidorDeRegistro.areaElegida = _zona.area;
+    ServidorDeRegistro.zonaElegida = null;
     // Con la fecha, no solo «historial»: hay diez aperturas guardadas y desde
     // el navegador tienen todas la misma pinta.
     ServidorDeRegistro.queSeSirve =

@@ -123,6 +123,18 @@ class ExportarRegistro {
   ///
   /// Los dos no se suman: lo que está en memoria ya se escribió al archivo por
   /// el volcado de arriba, así que juntarlos duplicaría el final.
+  /// Las líneas del registro, tal cual, sin agrupar ni encabezar.
+  ///
+  /// Público para que el servidor de red pueda mostrar lo MISMO que la
+  /// pantalla del aparato: en orden y filtrado por zona, no repartido en
+  /// secciones. Agrupar está bien para un archivo que se manda; para mirar en
+  /// vivo lo que está pasando, no — el orden en que pasaron las cosas es
+  /// justamente la información.
+  static Future<List<String>> lineasDelRegistro() async {
+    await PrismLog.flush();
+    return _leerTodo();
+  }
+
   static Future<List<String>> _leerTodo() async {
     try {
       final f = File(PrismLog.logFilePath);
