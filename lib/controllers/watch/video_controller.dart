@@ -3791,16 +3791,48 @@ class VideoPlayerController extends GetxController with WidgetsBindingObserver {
   /// tamaño de ahora dejaría la imagen mala al maximizar. Ahí se queda en 1080
   /// como estaba.
   int _techoDeCalidad() {
-    const porDefecto = 1080;
-    if (!PlatformTv.esTelevisionSync) return porDefecto;
+    // Dos topes, y manda el MÁS BAJO de los dos.
+    //
+    // Son dos preguntas distintas: «¿cuántos píxeles puede MOSTRAR?» y
+    // «¿cuántos puede DECODIFICAR sin atragantarse?». Un televisor con panel
+    // 4K y un procesador de 2018 contesta 2160 a la primera y 720 a la
+    // segunda, y la que vale es la segunda.
+    final porPerfil = techoParaNivel(PerfilDeAparato.nivel);
+    if (!PlatformTv.esTelevisionSync) return porPerfil;
     try {
       final v = WidgetsBinding.instance.platformDispatcher.views.firstOrNull;
-      final alto = v?.physicalSize.height ?? 0;
-      return techoParaPantallaDe(alto);
+      final porPantalla = techoParaPantallaDe(v?.physicalSize.height ?? 0);
+      return porPantalla < porPerfil ? porPantalla : porPerfil;
     } catch (_) {
-      return porDefecto;
+      return porPerfil;
     }
   }
+
+  /// Hasta qué altura puede con el vídeo un aparato de este nivel.
+  ///
+  /// ── Por qué hace falta además del tope de la pantalla ───────────────────
+  ///
+  /// El de la pantalla no cubre a un teléfono lento: su pantalla es de 1080p o
+  /// más, así que ese tope no lo frena nunca, y sin embargo puede tener dos
+  /// núcleos y poca memoria. Lo mismo un televisor con panel 4K y procesador
+  /// viejo, que es el caso más común de todos.
+  ///
+  /// El nivel lo resuelve la app al arrancar mirando la memoria total, los
+  /// núcleos y la marca de «aparato modesto» que pone el propio sistema. Ver
+  /// PerfilDeAparato.
+  ///
+  /// En escritorio esto no frena nada: hoy el nivel ahí es siempre `alto`
+  /// porque no se mide el aparato. Un PC lento sigue pidiendo 1080p como
+  /// hasta ahora — para arreglarlo habría que medirlo primero, y eso es otro
+  /// trabajo.
+  static int techoParaNivel(NivelDeAparato nivel) => switch (nivel) {
+        // Un aparato modesto no decodifica 1080p con soltura, y en la mayoría
+        // ni siquiera puede mostrarlo. 720p se ve bien y le sobra margen.
+        NivelDeAparato.bajo => 720,
+        NivelDeAparato.medio => 1080,
+        // Sin recorte por este lado: decide la pantalla, o 1080 como siempre.
+        NivelDeAparato.alto => 2160,
+      };
 
   /// Cuántos bits por segundo pedirle a mpv para un techo de altura dado.
   ///

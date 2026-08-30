@@ -1,5 +1,6 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:prismhub/controllers/watch/video_controller.dart';
+import 'package:prismhub/utils/platform_tv.dart';
 
 /// Qué calidad de vídeo se pide según la pantalla que tiene el aparato.
 ///
@@ -15,6 +16,24 @@ import 'package:prismhub/controllers/watch/video_controller.dart';
 void main() {
   int techo(double alto) =>
       VideoPlayerController.techoParaPantallaDe(alto);
+
+  group('y también del aparato', () {
+    // El tope de la pantalla no cubre a un teléfono lento: su pantalla es de
+    // 1080p o más, así que ese tope no lo frena nunca aunque tenga dos núcleos
+    // y poca memoria. Ni a un televisor con panel 4K y procesador de 2018, que
+    // es el caso más común. Por eso hay un segundo tope, y manda el más bajo.
+    test('un aparato modesto no pasa de 720', () {
+      expect(VideoPlayerController.techoParaNivel(NivelDeAparato.bajo), 720);
+    });
+
+    test('uno medio llega a 1080', () {
+      expect(VideoPlayerController.techoParaNivel(NivelDeAparato.medio), 1080);
+    });
+
+    test('uno capaz no se frena por acá: decide la pantalla', () {
+      expect(VideoPlayerController.techoParaNivel(NivelDeAparato.alto), 2160);
+    });
+  });
 
   group('el techo de calidad sale de la pantalla', () {
     test('un televisor de 720p pide 720, no 1080', () {

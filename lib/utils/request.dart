@@ -2,6 +2,7 @@ import 'package:cookie_jar/cookie_jar.dart';
 import 'package:dio/dio.dart';
 import 'package:dio_cookie_manager/dio_cookie_manager.dart';
 import 'package:flutter_socks_proxy/socks_proxy.dart';
+import 'package:prismhub/utils/cola_de_extensiones.dart';
 import 'package:prismhub/utils/traza_de_red.dart';
 import 'package:prismhub/utils/prismhub_directory.dart';
 import 'package:prismhub/utils/prismhub_storage.dart';
@@ -116,6 +117,10 @@ class PrismRequest {
         sendTimeout: const Duration(seconds: 15),
       ));
       d.interceptors.add(CookieManager(cookieJarForPackage(package)));
+      // El turno va ANTES de la traza: así lo que queda anotado como duración
+      // es lo que tardó la petición de verdad, no lo que estuvo esperando su
+      // turno. Si no, una espera nuestra se leería como un sitio lento.
+      d.interceptors.add(ColaDeExtensiones());
       d.interceptors.add(TrazaDeRed(paquete: package));
       return d;
     });
