@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:get/get.dart';
+import 'package:prismhub/utils/centinela_de_arranque.dart';
 import 'package:prismhub/controllers/watch/video_controller.dart';
 import 'package:prismhub/utils/i18n.dart';
 import 'package:prismhub/views/pages/watch/video/video_player_desktop_controls.dart';
@@ -418,9 +419,26 @@ class _VideoPlayerTvControlsState extends State<VideoPlayerTvControls> {
     }
     if (tecla == LogicalKeyboardKey.escape ||
         tecla == LogicalKeyboardKey.goBack) {
+      CentinelaDeArranque.marcar('sale del reproductor con el mando');
       unawaited(_c.closeRoute(context));
       return KeyEventResult.handled;
     }
+    // ── Una tecla que llega hasta acá y no se usa ────────────────────────
+    //
+    // Se deja escrita a propósito. Reportado en vivo: «al estar reproduciendo
+    // y darle a EXIT en el control remoto me cerró la app, pero no crasheó».
+    //
+    // El botón EXIT no es el mismo en todos los mandos: algunos mandan atrás
+    // —y eso ya está resuelto arriba— y otros mandan una tecla propia del
+    // fabricante que Android atiende por su cuenta cerrando la aplicación,
+    // sin pasar nunca por acá. Los dos casos se ven idénticos desde el sofá y
+    // llevan a arreglos opuestos, así que con adivinar no alcanza.
+    //
+    // Si la tecla aparece en esta línea del registro, la app la recibió y se
+    // puede atender. Si el registro corta sin ella, la cerró el sistema y no
+    // hay nada que atender de este lado.
+    CentinelaDeArranque.marcar('tecla sin usar en el reproductor: '
+        '${tecla.keyLabel.isEmpty ? tecla.keyId : tecla.keyLabel}');
     return KeyEventResult.ignored;
   }
 
