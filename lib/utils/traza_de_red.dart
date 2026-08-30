@@ -34,6 +34,27 @@ class TrazaDeRed extends Interceptor {
 
   static const _cuando = 'traza-inicio';
 
+  /// De qué extensión son los pedidos de este cliente, si es de alguna.
+  ///
+  /// La app tiene un cliente propio y uno por extensión. Sin esto, los de las
+  /// extensiones salían anotados dos veces —una acá y otra en
+  /// `ExtensionUtils.addNetworkLog`, con el paquete pero sin el tiempo— así
+  /// que el registro traía el doble de líneas de las que hacían falta y ambas
+  /// decían media verdad. Ahora sale una sola, con las dos cosas.
+  final String? paquete;
+
+  TrazaDeRed({this.paquete});
+
+  /// Con la palabra «extension» adelante cuando lo es, y no solo el paquete.
+  ///
+  /// No es adorno: es lo que hace que la línea caiga en la zona «Extensiones»
+  /// del visor. Esa clasificación va por la marca con que cada parte de la app
+  /// firma sus líneas, y un identificador de paquete a secas no la lleva —
+  /// estos pedidos habrían terminado en «General de la app», lejos de donde
+  /// se los busca.
+  String get _quien =>
+      paquete == null ? marca : '$marca extension $paquete';
+
   @override
   void onRequest(RequestOptions options, RequestInterceptorHandler handler) {
     options.extra[_cuando] = DateTime.now();
@@ -45,7 +66,7 @@ class TrazaDeRed extends Interceptor {
     Response<dynamic> response,
     ResponseInterceptorHandler handler,
   ) {
-    logger.info('$marca ${response.requestOptions.method} '
+    logger.info('$_quien ${response.requestOptions.method} '
         '${response.requestOptions.uri} → ${response.statusCode}'
         '${_cuantoTardo(response.requestOptions)}');
     handler.next(response);
@@ -56,7 +77,7 @@ class TrazaDeRed extends Interceptor {
     // Como aviso y no como información: esto es lo que se busca al abrir la
     // zona de fallos, y sin el nivel correcto quedaría enterrado entre
     // cientos de pedidos que salieron bien.
-    logger.warning('$marca ${err.requestOptions.method} '
+    logger.warning('$_quien ${err.requestOptions.method} '
         '${err.requestOptions.uri} → ${_porQue(err)}'
         '${_cuantoTardo(err.requestOptions)}');
     handler.next(err);

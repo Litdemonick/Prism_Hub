@@ -116,7 +116,7 @@ class PrismRequest {
         sendTimeout: const Duration(seconds: 15),
       ));
       d.interceptors.add(CookieManager(cookieJarForPackage(package)));
-      d.interceptors.add(TrazaDeRed());
+      d.interceptors.add(TrazaDeRed(paquete: package));
       return d;
     });
   }

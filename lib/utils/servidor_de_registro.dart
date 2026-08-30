@@ -168,13 +168,17 @@ class ServidorDeRegistro {
     try {
       final esperado = _codigo;
       final ruta = pedido.uri.pathSegments;
-      // Una sola ruta válida, y con el código. Cualquier otra cosa se contesta
-      // igual —404 pelado— para no ir diciendo qué existe y qué no.
-      final valido = esperado != null &&
-          ruta.length == 2 &&
+      // Dos rutas válidas, las dos con el código: la página y el texto que la
+      // página va a buscar cada pocos segundos. Cualquier otra cosa se
+      // contesta igual —404 pelado— para no ir diciendo qué existe y qué no.
+      final conCodigo = esperado != null &&
+          ruta.length >= 2 &&
           ruta[0] == 'r' &&
           ruta[1] == esperado;
-      if (!valido) {
+      final esLaPagina = conCodigo && ruta.length == 2;
+      final esElTexto =
+          conCodigo && ruta.length == 3 && ruta[2] == 'texto';
+      if (!esLaPagina && !esElTexto) {
         pedido.response.statusCode = HttpStatus.notFound;
         await pedido.response.close();
         return;
@@ -193,10 +197,13 @@ class ServidorDeRegistro {
       final cuantas = ExportarRegistro.cuantasLineas;
       pedido.response
         ..statusCode = HttpStatus.ok
-        ..headers.contentType = ContentType.html
+        ..headers.contentType =
+            esElTexto ? ContentType.text : ContentType.html
         // Nada de caché: se abre para ver lo último, no lo de hace un rato.
         ..headers.set(HttpHeaders.cacheControlHeader, 'no-store')
-        ..write(_pagina(texto, cuantas));
+        ..write(esElTexto
+            ? '$_loQueSeSirve · $cuantas líneas\n$texto'
+            : _pagina(texto, cuantas));
       await pedido.response.close();
     } catch (e) {
       logger.info('servidor de registro: $e');
@@ -224,13 +231,37 @@ class ServidorDeRegistro {
   /// Sencilla a propósito: texto monoespaciado sobre fondo oscuro, con un
   /// refresco cada cinco segundos. Nada de esto se sirve desde fuera —es un
   /// solo archivo, sin recursos— así que no hay nada más que traer.
+  /// La página que se ve en el navegador.
+  ///
+  /// ── Por qué NO se recarga sola con `meta refresh` ───────────────────────
+  ///
+  /// Era una recarga del navegador cada cinco segundos, y eso tiene un fallo
+  /// que aparece justo en el peor momento: **si la app del televisor se cae,
+  /// la siguiente recarga no encuentra a nadie y el navegador reemplaza la
+  /// página por su pantalla de error**. O sea que se pierde de vista
+  /// exactamente lo que se estaba mirando para entender por qué se cayó.
+  ///
+  /// Reportado en vivo: «si el televisor crasheó no puedo ver los registros
+  /// porque la página se cae».
+  ///
+  /// Ahora la página se carga una vez y va a buscar el texto por su cuenta. Si
+  /// la búsqueda falla **no se toca lo que hay en pantalla**: se avisa arriba
+  /// de que se cortó y a qué hora fue lo último que llegó, y se sigue
+  /// intentando. Lo último que alcanzó a decir el televisor antes de caerse
+  /// queda ahí, que es lo único que importa en ese momento.
+  ///
+  /// Y si la app vuelve, se retoma sola. Salvo que se haya reiniciado: ahí el
+  /// código de la dirección es otro y hay que mirar la pantalla del televisor,
+  /// cosa que el aviso también dice.
   static String _pagina(String registro, int cuantasLineas) {
     final escapado = const HtmlEscape().convert(registro);
+    final aparato =
+        const HtmlEscape().convert(EncabezadoDeSesion.resumenDelAparato());
+    final queSirve = const HtmlEscape().convert(_loQueSeSirve);
     return '''<!doctype html>
 <html lang="es"><head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<meta http-equiv="refresh" content="5">
 <title>Registro de PrismHub</title>
 <style>
   body{background:#11131a;color:#c9ccd6;font:12px/1.5 ui-monospace,Consolas,monospace;margin:0;padding:16px}
@@ -238,11 +269,70 @@ class ServidorDeRegistro {
   p{color:#7b8194;margin:0 0 16px;font-size:12px}
   p.que{color:#e8b339;margin:0 0 4px;font-size:13px;font-weight:600}
   pre{white-space:pre-wrap;word-break:break-word;margin:0}
+  #corte{display:none;background:#3a1216;border:1px solid #e5484d;color:#ffb3b6;
+         padding:10px 12px;border-radius:6px;margin:0 0 14px;font-size:12px}
+  #corte b{color:#fff}
 </style></head><body>
 <h1>Registro de PrismHub</h1>
-<p class="que">${const HtmlEscape().convert(_loQueSeSirve)} · $cuantasLineas líneas</p>
-<p>${const HtmlEscape().convert(EncabezadoDeSesion.resumenDelAparato())} · se actualiza solo cada 5 s</p>
-<pre>$escapado</pre>
+<div id="corte"></div>
+<p class="que" id="que">$queSirve · $cuantasLineas líneas</p>
+<p>$aparato · se actualiza solo cada 5 s</p>
+<pre id="txt">$escapado</pre>
+<script>
+// Se guarda aparte lo ultimo que llego bien. Si el televisor se cae, esto
+// sigue en pantalla: es justo lo que hace falta para saber por que se cayo.
+var ultimaHora = new Date();
+var cortado = false;
+function dosCifras(n){ return (n < 10 ? '0' : '') + n; }
+function hora(d){
+  return dosCifras(d.getHours()) + ':' + dosCifras(d.getMinutes()) +
+         ':' + dosCifras(d.getSeconds());
+}
+function avisarCorte(){
+  if (cortado) return;
+  cortado = true;
+  var c = document.getElementById('corte');
+  c.innerHTML = '<b>Se corto la conexion con el televisor.</b> ' +
+    'Lo de abajo es lo ultimo que llego, a las ' + hora(ultimaHora) + '. ' +
+    'Se sigue intentando: si la app vuelve, esto se actualiza solo. ' +
+    'Si se reinicio, la direccion cambio y hay que mirarla en el televisor.';
+  c.style.display = 'block';
+  document.title = '(sin conexion) Registro de PrismHub';
+}
+function volvio(){
+  if (!cortado) return;
+  cortado = false;
+  document.getElementById('corte').style.display = 'none';
+  document.title = 'Registro de PrismHub';
+}
+function traer(){
+  var x = new XMLHttpRequest();
+  // Sin expresion regular a proposito: en Dart, el simbolo de dolar que lleva
+  // una dentro se confunde con una interpolacion y hay que escaparlo, que es
+  // como se rompen estas cosas al editarlas.
+  var base = location.pathname;
+  if (base.charAt(base.length - 1) === '/') {
+    base = base.substring(0, base.length - 1);
+  }
+  x.open('GET', base + '/texto', true);
+  x.timeout = 8000;
+  x.onload = function(){
+    if (x.status !== 200 || !x.responseText) { avisarCorte(); return; }
+    var todo = x.responseText;
+    var corte = todo.indexOf('\n');
+    document.getElementById('que').textContent =
+      corte < 0 ? '' : todo.substring(0, corte);
+    document.getElementById('txt').textContent =
+      corte < 0 ? todo : todo.substring(corte + 1);
+    ultimaHora = new Date();
+    volvio();
+  };
+  x.onerror = avisarCorte;
+  x.ontimeout = avisarCorte;
+  try { x.send(); } catch (e) { avisarCorte(); }
+}
+setInterval(traer, 5000);
+</script>
 </body></html>''';
   }
 

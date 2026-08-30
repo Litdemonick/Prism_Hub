@@ -83,6 +83,25 @@ void main() {
       expect(esGeneral(l), isTrue);
     });
 
+    test('un pedido de red DE UNA EXTENSION entra aca, no en general', () {
+      // La traza de red y la de extensiones se unificaron en una sola linea.
+      // Si esa linea no llevara la palabra «extension», caeria en «General de
+      // la app» — lejos de donde se la busca.
+      final l = _linea(
+        'INFO',
+        '[red] extension io.prismhub.latanime GET https://latanime.org/… '
+            '→ 200 · 480 ms',
+      );
+      expect(ZonaDelRegistro.extensiones.acepta(l), isTrue);
+      expect(esGeneral(l), isFalse);
+    });
+
+    test('un pedido de red DE LA APP no entra: no es de ninguna extension', () {
+      final l = _linea('INFO', '[red] GET https://api.github.com/… → 200');
+      expect(ZonaDelRegistro.extensiones.acepta(l), isFalse);
+      expect(esGeneral(l), isTrue);
+    });
+
     test('no se lleva lo del reproductor', () {
       expect(
         ZonaDelRegistro.extensiones

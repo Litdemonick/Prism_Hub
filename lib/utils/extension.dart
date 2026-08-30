@@ -2172,10 +2172,16 @@ class ExtensionUtils {
     String key,
     ExtensionNetworkLog log,
   ) {
-    if (log.statusCode != null) {
-      logger.info('extension ${log.extension.package} · '
-          '${log.method} ${log.url} → ${log.statusCode}');
-    }
+    // Acá ya NO se escribe al registro.
+    //
+    // Lo hace TrazaDeRed, que está en el mismo cliente y además sabe cuánto
+    // tardó el pedido y por qué falló. Con las dos, cada pedido de extensión
+    // salía dos veces en el archivo —una con el paquete y otra con el
+    // tiempo— y en la carga del inicio eso son trescientas líneas donde
+    // alcanzaban ciento cincuenta. Ahora TrazaDeRed lleva también el paquete.
+    //
+    // Esta ventana sigue recibiendo el detalle completo (cabeceras, cuerpo),
+    // que es lo que ella aporta y no va al archivo nunca.
     if (!Get.isRegistered<SettingsController>()) {
       return;
     }
