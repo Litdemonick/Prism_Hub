@@ -6,7 +6,7 @@ import 'package:flutter/services.dart';
 import 'package:flutter_i18n/flutter_i18n.dart';
 import 'package:get/get.dart';
 import 'package:media_kit/media_kit.dart';
-import 'package:prismhub/views/widgets/subtitulos_del_motor.dart';
+import 'package:media_kit_video/media_kit_video.dart';
 import 'package:prismhub/views/widgets/tema_fluent_seguro.dart';
 import 'package:prismhub/controllers/watch/video_controller.dart';
 import 'package:prismhub/views/pages/watch/video/webview_player_page.dart'
@@ -515,10 +515,12 @@ class _VideoPlayerDesktopControlsState
                         alpha: _c.subtitleBackgroundOpacity.value,
                       ),
                     );
-                    return SubtitulosDelMotor(
-                      controlador: _c,
-                      estilo: textStyle,
-                      alineacion: _c.subtitleTextAlign.value,
+                    return SubtitleView(
+                      controller: _c.videoController,
+                      configuration: SubtitleViewConfiguration(
+                        style: textStyle,
+                        textAlign: _c.subtitleTextAlign.value,
+                      ),
                     );
                   },
                 ),

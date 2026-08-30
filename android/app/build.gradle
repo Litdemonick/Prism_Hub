@@ -39,18 +39,6 @@ def _keyPassword = System.getenv("KEY_PASSWORD") ?: keystoreProperties.getProper
 // Locally it isn't present, so debug/release fall back to the default debug keystore.
 def hasReleaseKeystore = _storePassword != null && _storeFile.exists()
 
-// La version de Media3 (ExoPlayer), en un solo lugar.
-//
-// Se fijo en 1.9.2 y no en una mas vieja porque es la que de verdad corre: el
-// complemento video_player ya arrastraba Media3 a esa version, y Gradle se
-// queda con la mas alta. Con la nuestra en 1.5.1, `gradlew :app:dependencies`
-// mostraba «1.5.1 -> 1.9.2», o sea que se compilaba contra una API y se
-// ejecutaba contra otra. Anda igual, pero es la clase de desajuste que un dia
-// aparece como un metodo que no existe en tiempo de ejecucion.
-//
-// Cuando se saque video_player, esta linea pasa a ser la unica que manda.
-ext.media3Version = "1.9.2"
-
 android {
     namespace "com.prismhub.app"
     compileSdk 36
@@ -164,20 +152,6 @@ flutter {
 }
 
 dependencies {
-    // ── Media3 (ExoPlayer), el reproductor de Android ────────────────────
-    //
-    // Se habla con el directo en vez de por el complemento video_player, que
-    // no expone ni los subtitulos, ni la eleccion de pista de audio, ni la
-    // tunelizacion. Ver ReproductorMedia3 para las tres medidas.
-    //
-    // Se traen solo los modulos que se usan: el reproductor, y los lectores de
-    // HLS y DASH, que son los dos formatos que entregan las extensiones. El
-    // paquete media3-ui NO entra: los subtitulos los dibuja Flutter con los
-    // ajustes que la app ya tiene, y los controles son nuestros.
-    implementation "androidx.media3:media3-exoplayer:$media3Version"
-    implementation "androidx.media3:media3-exoplayer-hls:$media3Version"
-    implementation "androidx.media3:media3-exoplayer-dash:$media3Version"
-
     // La biblioteca de Kotlin ya NO se declara aca. Con Kotlin integrado la
     // pone Flutter, en la version que corresponde a SU compilador.
     //

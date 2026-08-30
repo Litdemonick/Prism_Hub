@@ -102,7 +102,6 @@ class EncabezadoDeSesion {
 
     try {
       agregar('proxy', PrismHubStorage.getSetting(SettingKey.proxyType));
-      agregar('motor', PrismHubStorage.getSetting(SettingKey.motorDeVideo));
       agregar(
         'reproductor',
         PrismHubStorage.getSetting(SettingKey.videoPlayer),

@@ -46,7 +46,6 @@ import 'package:prismhub/views/widgets/settings/settings_tile.dart';
 import 'package:prismhub/controllers/main_controller.dart';
 import 'package:prismhub/utils/i18n.dart';
 import 'package:prismhub/utils/platform_tv.dart';
-import 'package:prismhub/controllers/watch/motor/eleccion_de_motor.dart';
 import 'package:prismhub/utils/prismhub_storage.dart';
 import 'package:prismhub/utils/router.dart';
 import 'package:prismhub/utils/application.dart';
@@ -1107,19 +1106,6 @@ class _SettingsPageState extends State<SettingsPage> {
             // El motor de video. TEMPORAL — esta para poder recorrer las
             // extensiones probando los dos en aparatos reales, sin publicar
             // una version por prueba. Ver EleccionDeMotor.
-            if (EleccionDeMotor.sePuedeElegir)
-              SettingsRadiosTile<String>(
-                title: 'settings.motor'.i18n,
-                buildSubtitle: () => 'settings.motor-subtitle'.i18n,
-                itemNameValue: {
-                  'settings.motor-auto'.i18n: EleccionDeMotor.autom,
-                  'settings.motor-mpv'.i18n: EleccionDeMotor.mpv,
-                  'settings.motor-exo'.i18n: EleccionDeMotor.exo,
-                },
-                buildGroupValue: () => EleccionDeMotor.elegido,
-                applyValue: (value) => PrismHubStorage.setSetting(
-                    SettingKey.motorDeVideo, value),
-              ),
           ],
         ),
       ),

@@ -6,7 +6,6 @@ import 'package:prismhub/utils/modo_app.dart';
 import 'package:prismhub/models/index.dart';
 import 'package:prismhub/utils/application.dart';
 import 'package:prismhub/utils/i18n.dart';
-import 'package:prismhub/controllers/watch/motor/eleccion_de_motor.dart';
 import 'package:prismhub/utils/prismhub_storage.dart';
 import 'package:prismhub/utils/zonas_preferidas.dart';
 import 'package:prismhub/views/pages/extension/extension_page.dart';
@@ -262,29 +261,6 @@ class _SettingsPageTvState extends State<SettingsPageTv> {
           clave: SettingKey.autoPlayNext,
           porDefecto: false,
         ),
-        // El motor de video. TEMPORAL — ver EleccionDeMotor.
-        if (EleccionDeMotor.sePuedeElegir) ...[
-          const SizedBox(height: 12),
-          _Nota('settings.motor-subtitle'.i18n),
-          const SizedBox(height: 12),
-          for (final opcion in const [
-            (EleccionDeMotor.autom, 'settings.motor-auto'),
-            (EleccionDeMotor.mpv, 'settings.motor-mpv'),
-            (EleccionDeMotor.exo, 'settings.motor-exo'),
-          ])
-            _Boton(
-              icono: Icons.memory_rounded,
-              titulo: opcion.$2.i18n,
-              subtitulo: EleccionDeMotor.elegido == opcion.$1
-                  ? 'settings.motor-puesto'.i18n
-                  : null,
-              onTap: () async {
-                await PrismHubStorage.setSetting(
-                    SettingKey.motorDeVideo, opcion.$1);
-                setState(() {});
-              },
-            ),
-        ],
       ];
 
   List<Widget> _inicio() => [

@@ -3,8 +3,6 @@ import 'package:flutter/material.dart';
 import 'package:fluent_ui/fluent_ui.dart' as fluent;
 import 'package:get/get.dart';
 import 'package:media_kit/media_kit.dart';
-import 'package:flutter_i18n/flutter_i18n.dart';
-import 'package:prismhub/controllers/watch/motor/motor_media3.dart';
 import 'package:prismhub/controllers/watch/video_controller.dart';
 import 'package:prismhub/utils/color.dart';
 import 'package:prismhub/utils/i18n.dart';
@@ -1175,15 +1173,6 @@ class _TrackSelector extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    // El motor de Android tiene su propia lista de pistas.
-    //
-    // No es un capricho de estilo: la de abajo sale del reproductor de
-    // media_kit, que en Android nunca recibe la fuente. Dibujarla ahí daría una
-    // lista vacía con un «Este vídeo trae un solo audio» que sería mentira.
-    final motor = controller.motor;
-    if (motor is MotorMedia3) {
-      return _PistasDeMedia3(controller: controller, motor: motor);
-    }
     return ListView(
       padding: const EdgeInsets.symmetric(vertical: 10),
       children: [
@@ -1325,98 +1314,4 @@ String _nombreDeLaPista(String? titulo, String? idioma, int indice) {
   if (titulo != null && titulo.trim().isNotEmpty) return titulo;
   if (idioma != null && idioma.trim().isNotEmpty) return idioma;
   return 'Pista ${indice + 1}';
-}
-
-/// El selector de pistas del motor de Android.
-///
-/// ── Por qué es otra lista y no la misma ─────────────────────────────────────
-///
-/// Las dos muestran lo mismo —subtítulos arriba, audio abajo— pero de dos
-/// sitios que no se parecen. La de media_kit trabaja con objetos `SubtitleTrack`
-/// y `AudioTrack`, con sus entradas especiales `no` y `auto` que no son pistas
-/// sino órdenes. La de Media3 trabaja con identificadores de grupo y posición,
-/// y no tiene esas entradas: apagar los subtítulos es apagar el tipo de pista.
-///
-/// Forzar las dos en un solo widget obligaría a traducir de un modelo al otro
-/// en el medio del dibujado, que es donde peor se lee y donde más fácil se
-/// mezcla lo que hace cada motor.
-class _PistasDeMedia3 extends StatelessWidget {
-  const _PistasDeMedia3({required this.controller, required this.motor});
-
-  final VideoPlayerController controller;
-  final MotorMedia3 motor;
-
-  @override
-  Widget build(BuildContext context) {
-    return ValueListenableBuilder<List<PistaDeMedia3>>(
-      valueListenable: motor.pistasParaLaLista,
-      builder: (context, pistas, _) {
-        final texto = [
-          for (final p in pistas)
-            if (p.tipo == 'texto') p,
-        ];
-        final audio = [
-          for (final p in pistas)
-            if (p.tipo == 'audio') p,
-        ];
-        // Ninguna elegida quiere decir subtítulos apagados. Se calcula en vez
-        // de guardarse aparte para que la marca sea siempre lo que el motor
-        // está haciendo de verdad, y no lo que la lista cree recordar.
-        final sinSubtitulo = !texto.any((p) => p.elegida);
-        return ListView(
-          padding: const EdgeInsets.symmetric(vertical: 10),
-          children: [
-            ListTitle(title: 'video.subtitle'.i18n),
-            ListTile(
-              selected: sinSubtitulo,
-              title: Text('common.off'.i18n),
-              onTap: () {
-                motor.elegirPista(tipo: 'texto');
-                controller.showSidebar.value = false;
-              },
-            ),
-            if (texto.isEmpty) _nadaQueElegir(context, 'video.subtitle'.i18n),
-            for (final (i, p) in texto.indexed) _fila(p, i),
-            const SizedBox(height: 10),
-            ListTitle(title: 'video.audio'.i18n),
-            const SizedBox(height: 5),
-            if (audio.length < 2) _nadaQueElegir(context, 'video.audio'.i18n),
-            for (final (i, p) in audio.indexed) _fila(p, i),
-          ],
-        );
-      },
-    );
-  }
-
-  Widget _fila(PistaDeMedia3 p, int i) => ListTile(
-        selected: p.elegida,
-        // Una pista que el decodificador de este aparato no soporta se muestra
-        // igual, apagada. Esconderla dejaría a la persona buscando un audio que
-        // la extensión sí trae y que acá no se puede oír, sin ninguna pista de
-        // por qué no está.
-        enabled: p.sePuede,
-        title: Text(p.comoSeLlama(i + 1)),
-        subtitle: p.idioma != null && p.titulo != null ? Text(p.idioma!) : null,
-        onTap: p.sePuede
-            ? () {
-                motor.elegirPista(tipo: p.tipo, id: p.id);
-                controller.showSidebar.value = false;
-              }
-            : null,
-      );
-
-  // El contexto viaja por parámetro y no se saca de Get.context: ese puede ser
-  // null justo cuando se está cerrando el panel, y sería una caída por dibujar
-  // un renglón informativo.
-  Widget _nadaQueElegir(BuildContext context, String que) => Padding(
-        padding: const EdgeInsets.fromLTRB(16, 2, 16, 6),
-        child: Text(
-          FlutterI18n.translate(
-            context,
-            'video.una-sola-pista',
-            translationParams: {'que': que.toLowerCase()},
-          ),
-          style: TextStyle(fontSize: 12, color: Colors.white.withAlpha(120)),
-        ),
-      );
 }

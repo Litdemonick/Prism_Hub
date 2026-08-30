@@ -4,7 +4,7 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_i18n/flutter_i18n.dart';
 import 'package:get/get.dart';
-import 'package:prismhub/views/widgets/subtitulos_del_motor.dart';
+import 'package:media_kit_video/media_kit_video.dart';
 import 'package:prismhub/utils/prismhub_storage.dart';
 import 'package:prismhub/controllers/watch/video_controller.dart';
 import 'package:prismhub/utils/i18n.dart';
@@ -340,10 +340,12 @@ class _VideoPlayerMobileControlsState extends State<VideoPlayerMobileControls> {
                       alpha: _c.subtitleBackgroundOpacity.value,
                     ),
                   );
-                  return SubtitulosDelMotor(
-                    controlador: _c,
-                    estilo: textStyle,
-                    alineacion: _c.subtitleTextAlign.value,
+                  return SubtitleView(
+                    controller: _c.videoController,
+                    configuration: SubtitleViewConfiguration(
+                      style: textStyle,
+                      textAlign: _c.subtitleTextAlign.value,
+                    ),
                   );
                 },
               ),

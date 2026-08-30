@@ -481,12 +481,6 @@
     "backup-import-hist": "{n} títulos entraron al historial.",
     "backup-import-favs": "{n} se agregaron a favoritos.",
     "backup-import-missing-title": "Te faltan estas extensiones",
-    "motor": "Motor de vídeo",
-    "motor-subtitle": "Con cuál se reproduce. Está para probar: si un servidor va mal con uno, cambiá y volvé a abrir el episodio. En automático se usa el de siempre.",
-    "motor-auto": "Automático",
-    "motor-mpv": "mpv (el de siempre)",
-    "motor-exo": "ExoPlayer (nativo de Android)",
-    "motor-puesto": "Puesto",
     "view-log-tv-subtitle": "Todo lo que pasa, incluidas las sesiones anteriores. Si la app se cerró sola, acá queda qué estaba haciendo.",
     "log-filtro-todo": "Todo",
     "log-filtro-fallos": "Fallos",
@@ -700,8 +694,7 @@
     "tv-retomando": "Retomando desde {tiempo} — apretá ◀ para volver al principio",
     "tv-servidores": "Servidor",
     "tv-elegi-servidor": "Elegí un servidor de la lista de abajo y apretá OK para empezar",
-    "tv-episodios": "Episodio",
-    "una-sola-pista": "Este vídeo trae un solo {que}"
+    "tv-episodios": "Episodio"
   },
   "comic-settings": {
     "read-mode": "Modo de lectura",

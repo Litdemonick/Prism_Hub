@@ -485,12 +485,6 @@
     "backup-import-hist": "{n} titles went to your history.",
     "backup-import-favs": "{n} were added to favourites.",
     "backup-import-missing-title": "You are missing these extensions",
-    "motor": "Video engine",
-    "motor-subtitle": "Which one plays the video. It is here for testing: if a server misbehaves with one, switch and reopen the episode. Automatic uses the usual one.",
-    "motor-auto": "Automatic",
-    "motor-mpv": "mpv (the usual one)",
-    "motor-exo": "ExoPlayer (native to Android)",
-    "motor-puesto": "In use",
     "view-log-tv-subtitle": "Everything that happens, including previous sessions. If the app closed by itself, what it was doing is here.",
     "log-filtro-todo": "All",
     "log-filtro-fallos": "Failures",
@@ -704,8 +698,7 @@
     "tv-retomando": "Resuming from {tiempo} — press ◀ to start over",
     "tv-servidores": "Server",
     "tv-elegi-servidor": "Pick a server from the list below and press OK to start",
-    "tv-episodios": "Episode",
-    "una-sola-pista": "This video has only one {que}"
+    "tv-episodios": "Episode"
   },
   "comic-settings": {
     "read-mode": "Read mode",

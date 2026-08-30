@@ -38,7 +38,6 @@ import 'package:prismhub/controllers/watch/dibujado_de_video.dart';
 import 'package:prismhub/controllers/watch/frecuencia_de_pantalla.dart';
 import 'package:prismhub/controllers/watch/motor/motor_de_video.dart';
 import 'package:prismhub/controllers/watch/motor/eleccion_de_motor.dart';
-import 'package:prismhub/controllers/watch/motor/motor_mpv.dart';
 import 'package:prismhub/controllers/watch/recorte_fmp4.dart';
 import 'package:prismhub/utils/watch_state.dart';
 import 'package:prismhub/data/services/database_service.dart';
@@ -116,31 +115,18 @@ class VideoPlayerController extends GetxController with WidgetsBindingObserver {
     configuration: DibujadoDeVideo.paraEsteAparato(),
   );
 
-  /// El motor de video detras de la fachada.
+  /// El motor de vídeo detrás de la fachada. Hoy hay uno solo: mpv.
   ///
-  /// Hoy siempre es mpv y `player`/`videoController` siguen accesibles para lo
-  /// que es propio de el (propiedades de libmpv, pistas, captura). Lo que gana
-  /// la app con esto es que la PANTALLA ya no arma el widget de video a mano:
-  /// se lo pide al motor. Ese es el punto donde los dos motores difieren de
-  /// verdad —textura contra superficie nativa— y tenerlo detras de la fachada
-  /// es lo que permite meter el segundo sin tocar la pantalla.
-  late final MotorDeVideo _motorPrincipal = EleccionDeMotor.armar(
+  /// `player` y `videoController` siguen accesibles para lo que es propio de él
+  /// —propiedades de libmpv, pistas, captura de fotogramas—. Lo que gana la app
+  /// con la fachada es que el resto ya no le habla a media_kit directo: la
+  /// pantalla le pide el widget de vídeo al motor, y el controlador le pide el
+  /// estado. Eso quedó de haber probado un segundo motor, y conviene que quede:
+  /// es el trabajo que habría que rehacer si algún día se retoma.
+  late final MotorDeVideo motor = EleccionDeMotor.armar(
     player: player,
     videoController: videoController,
   );
-
-  /// El que se usa ahora mismo. Cambia solo si hay que caer a la reserva.
-  MotorDeVideo? _motorEnUso;
-
-  MotorDeVideo get motor => _motorEnUso ??= _motorPrincipal;
-
-  /// El de reserva: mpv, que se traga casi cualquier cosa.
-  ///
-  /// Solo existe cuando el principal NO es mpv — o sea, en Android. En
-  /// escritorio el principal ya es este y no hay a dónde caer.
-  late final MotorDeVideo? _motorDeReserva = _motorPrincipal.nombre == 'mpv'
-      ? null
-      : MotorMpv(player: player, videoController: videoController);
 
   /// Si ya se avisó de que el wakelock no responde en este aparato.
   bool _yaAvisoDelWakelock = false;
@@ -203,150 +189,8 @@ class VideoPlayerController extends GetxController with WidgetsBindingObserver {
     Map<String, String>? cabeceras,
     bool arrancar = true,
   }) async {
-    final aparte = _subtitulosDeLaExtension();
-    // Se recuerda qué se abrió, para poder reabrirlo por el otro motor si este
-    // falla DESPUÉS. Ver _caerALaReservaPorError.
-    _loUltimoQueSeAbrio = (url: url, cabeceras: cabeceras, aparte: aparte);
-    try {
-      await motor.abrir(
-        url,
-        cabeceras: cabeceras,
-        arrancar: arrancar,
-        subtitulosAparte: aparte,
-      );
-    } catch (e) {
-      // ── Si el motor de Android no puede abrirla, se cae a mpv ─────────
-      //
-      // Ya no hay interruptor en Ajustes: el motor lo decide la plataforma.
-      // Eso está bien mientras funcione, y deja sin salida a quien se tope con
-      // una fuente rara — antes podía cambiar a mano, ahora no.
-      //
-      // Así que la salida la toma la app: si ExoPlayer no abre, se abre con
-      // mpv, que es el que se traga casi cualquier cosa. La persona ve el
-      // vídeo; nosotros vemos en el registro con qué fuente pasó, que es lo
-      // que hace falta para arreglarlo de verdad.
-      if (_motorDeReserva == null || _yaCayoALaReserva) rethrow;
-      _yaCayoALaReserva = true;
-      logger.warning('${motor.nombre} no pudo abrir la fuente, se sigue con '
-          '${_motorDeReserva!.nombre}: $e');
-      CentinelaDeArranque.marcar('cae al motor de reserva');
-      _motorEnUso = _motorDeReserva;
-      await motor.abrir(
-        url,
-        cabeceras: cabeceras,
-        arrancar: arrancar,
-        subtitulosAparte: aparte,
-      );
-    }
+    await motor.abrir(url, cabeceras: cabeceras, arrancar: arrancar);
   }
-
-  /// Lo último que se le pidió abrir al motor.
-  ({
-    String url,
-    Map<String, String>? cabeceras,
-    List<Map<String, String>> aparte,
-  })? _loUltimoQueSeAbrio;
-
-  /// Cae al motor de reserva por un error que llegó DESPUÉS de abrir.
-  ///
-  /// ── Por qué no alcanzaba con el try/catch de [_abrirFuente] ─────────────
-  ///
-  /// Ese atrapa lo que revienta al abrir, y con mpv eso era casi todo: mpv
-  /// mira el contenido y falla ahí mismo si no lo entiende.
-  ///
-  /// El motor de Android no funciona así. `abrir` vuelve enseguida —preparar
-  /// la fuente es asíncrono— y si no puede con el formato, el error llega
-  /// segundos más tarde por el flujo de errores. O sea que el try/catch no ve
-  /// nada y la caída a mpv nunca pasaba.
-  ///
-  /// Medido en un teléfono con una fuente directa de player.zilla-networks.com:
-  /// «media3: ERROR_CODE_PARSING_CONTAINER_UNSUPPORTED: Source error», y el
-  /// reproductor quedaba colgado sin imagen y sin caer a mpv, que esa misma
-  /// fuente la abre sin problema.
-  ///
-  /// Solo antes del primer cuadro: si ya se estaba viendo, el problema no es
-  /// el motor sino la fuente o la red, y para eso está el cambio de servidor.
-  Future<void> _caerALaReservaPorError(String motivo) async {
-    final reserva = _motorDeReserva;
-    final ultimo = _loUltimoQueSeAbrio;
-    if (reserva == null || _yaCayoALaReserva || ultimo == null) return;
-    if (hasRenderedFrame.value || _disposed) return;
-    _yaCayoALaReserva = true;
-    logger.warning('${motor.nombre} falló después de abrir, se reintenta con '
-        '${reserva.nombre}: $motivo');
-    CentinelaDeArranque.marcar('cae al motor de reserva');
-    try {
-      await motor.parar();
-    } catch (_) {
-      // Si el que falló ni siquiera puede pararse, se sigue igual: lo que
-      // importa es que el otro arranque.
-    }
-    if (_disposed) return;
-    _motorEnUso = reserva;
-    try {
-      await motor.abrir(
-        ultimo.url,
-        cabeceras: ultimo.cabeceras,
-        subtitulosAparte: ultimo.aparte,
-      );
-    } catch (e) {
-      // Si el de reserva tampoco puede, el problema es la fuente. Se deja que
-      // siga el camino normal de servidor caído en vez de tragarlo acá.
-      logger.severe('${reserva.nombre} tampoco pudo con la fuente: $e');
-      serverFailedMessage.value = availableServers.length > 1
-          ? 'Este servidor no se puede reproducir.\n'
-              'Cambiá de servidor con el botón Servidor.'
-          : 'Este servidor no se puede reproducir. Intentá más tarde.';
-    }
-  }
-
-  /// Un error del motor que dice «no puedo con este formato».
-  ///
-  /// Se miran solo los de formato —contenedor, códec, manifiesto— y NO los de
-  /// red. Un 403 o un servidor caído los va a ver igual el otro motor, así que
-  /// cambiar de motor sería perder segundos para llegar al mismo sitio; de eso
-  /// se encarga el cambio de servidor, que es lo que corresponde.
-  static bool _esErrorDeFormato(String error) {
-    final e = error.toUpperCase();
-    return e.contains('PARSING_CONTAINER') ||
-        e.contains('PARSING_MANIFEST') ||
-        e.contains('DECODING_FORMAT') ||
-        e.contains('DECODER_INIT') ||
-        e.contains('DECODER_QUERY') ||
-        e.contains('UNSUPPORTED');
-  }
-
-  /// Los subtítulos que la extensión entrega aparte del vídeo.
-  ///
-  /// ── Por qué hay que pasárselos al motor al abrir ────────────────────────
-  ///
-  /// Con mpv no hacía falta: la lista se le daba después, con
-  /// `player.setSubtitleTrack`, y él se encargaba. El motor de Android no
-  /// funciona así — los subtítulos externos se declaran junto con la fuente,
-  /// al preparar la reproducción, porque pasan a ser pistas del contenido.
-  ///
-  /// Sin esto, en Android no se veía NI UNO: la extensión entregaba su `.vtt`,
-  /// la app lo guardaba en su lista, y esa lista la miraba un dibujante de
-  /// subtítulos atado a media_kit, que con este motor nunca recibe la fuente.
-  List<Map<String, String>> _subtitulosDeLaExtension() {
-    final lista = watchData?.subtitles;
-    if (lista == null || lista.isEmpty) return const [];
-    return [
-      for (final s in lista)
-        if (s.url.isNotEmpty)
-          {
-            'url': s.url,
-            if (s.language != null) 'idioma': s.language!,
-            'titulo': s.title,
-          },
-    ];
-  }
-
-  /// Si ya se cayó a la reserva en esta reproducción.
-  ///
-  /// Una sola vez: si el de reserva tampoco puede, el problema es la fuente y
-  /// hay que decirlo, no seguir rebotando entre motores.
-  bool _yaCayoALaReserva = false;
 
   final showSidebar = false.obs;
   final isOpenSidebar = false.obs;
@@ -2285,20 +2129,6 @@ class VideoPlayerController extends GetxController with WidgetsBindingObserver {
 
     // 错误监听 — detectar fallo de reproducción
     _addSubscription(motor.errores.listen((event) {
-      // ── Lo primero: ¿este motor puede con esta fuente? ────────────────
-      //
-      // Va antes que todo lo demás porque el resto de este bloque está
-      // escrito contra los mensajes de mpv, y un error de Media3 no coincide
-      // con ninguno: se caía por el final sin hacer nada y el reproductor
-      // quedaba colgado. Ver _caerALaReservaPorError.
-      if (_esErrorDeFormato(event) &&
-          !_yaCayoALaReserva &&
-          !hasRenderedFrame.value &&
-          _motorDeReserva != null) {
-        logger.severe('${motor.nombre}: $event');
-        unawaited(_caerALaReservaPorError(event));
-        return;
-      }
       // "Could not open codec": casi siempre es el decodificador por HARDWARE
       // que no puede con este vídeo, no un vídeo roto.
       //

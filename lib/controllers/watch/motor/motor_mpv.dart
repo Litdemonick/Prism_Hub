@@ -44,10 +44,6 @@ class MotorMpv implements MotorDeVideo {
     String url, {
     Map<String, String>? cabeceras,
     bool arrancar = true,
-    // Se recibe y no se usa: mpv ya trae los subtítulos de la extensión por
-    // su propio camino, con `player.setSubtitleTrack` sobre la lista que arma
-    // el reproductor. Sumarlos acá los duplicaría en la lista de pistas.
-    List<Map<String, String>> subtitulosAparte = const [],
   }) =>
       player.open(Media(url, httpHeaders: cabeceras), play: arrancar);
 

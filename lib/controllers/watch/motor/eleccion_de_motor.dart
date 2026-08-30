@@ -1,121 +1,58 @@
-import 'dart:io';
-
 import 'package:media_kit/media_kit.dart';
 import 'package:media_kit_video/media_kit_video.dart';
 import 'package:prismhub/controllers/watch/dibujado_de_video.dart';
 import 'package:prismhub/controllers/watch/motor/motor_de_video.dart';
-import 'package:prismhub/controllers/watch/motor/motor_media3.dart';
 import 'package:prismhub/controllers/watch/motor/motor_mpv.dart';
-import 'package:prismhub/utils/log.dart';
-import 'package:prismhub/utils/prismhub_storage.dart';
 
-/// Qué motor de vídeo usar.
+/// Qué motor de vídeo usa la app: mpv, en las cuatro plataformas.
 ///
-/// ── El criterio: plataforma y formato, NUNCA extensión ──────────────────────
+/// ── Hubo un segundo motor, y se volvió atrás ────────────────────────────────
 ///
-/// Es la decisión de fondo y conviene dejarla escrita porque es fácil
-/// equivocarse: **el motor no se elige por extensión**. jkanime sola tiene once
-/// servidores de once proveedores distintos, y VOE aparece en jkanime, latanime
-/// y animefenix — es el mismo flujo, no puede cambiar de motor según de dónde
-/// venga el enlace.
+/// Se escribió un motor propio para Android contra Media3, con el vídeo
+/// dibujado en una capa aparte del sistema en vez de pasar por el dibujado de
+/// la interfaz.
 ///
-/// Lo que decide es:
+/// La parte técnica funcionó, y está medido en un teléfono: el tiempo de
+/// dibujado de cada cuadro bajó de unos 140 ms a menos de 40, que era
+/// exactamente lo que se buscaba.
 ///
-///  - **La plataforma.** En Windows y Linux no hay ExoPlayer: siempre mpv.
-///  - **El formato.** HLS con fMP4 es donde mpv se queda clavado al saltar.
+/// Lo que lo tumbó fue otra cosa. Media docena de partes de la app le hablaban
+/// a media_kit directo —los subtítulos, la lista de pistas de audio, el aviso
+/// de que ya hay imagen, parar el vídeo al salir— y con un segundo motor cada
+/// una de esas se rompía en silencio, de a una, y había que ir encontrándolas
+/// probando en un aparato real. Cada una costaba una vuelta entera de prueba.
 ///
-/// Si la regla fuera por extensión, mañana otra sirve fMP4 y vuelve a fallar.
-/// Por formato queda cubierta sola.
+/// Se vuelve a un solo motor, que es lo que estaba probado y andando.
 ///
-/// ── Ya no se elige a mano ───────────────────────────────────────────────────
+/// ── Qué queda de aquello, y por qué conviene que quede ──────────────────────
 ///
-/// El interruptor de Ajustes existió para recorrer las extensiones probando
-/// los dos motores en aparatos reales. Ese recorrido terminó con la decisión
-/// tomada: **escritorio con mpv, Android con ExoPlayer**, que es lo mismo que
-/// hacen las apps de vídeo del sistema.
+/// La fachada [MotorDeVideo]. Las partes de la app que antes le hablaban a
+/// media_kit directo ahora le hablan a ella, así que si algún día se retoma un
+/// segundo motor, ese trabajo de rastreo ya está hecho.
+///
+/// El motor de Media3 —con su lado nativo en Kotlin, sus subtítulos y su
+/// selector de pistas— está en el historial del repositorio. No se perdió.
+///
+/// ── Y por qué esto no se elige a mano ───────────────────────────────────────
 ///
 /// Un interruptor obliga a la persona a decidir algo sobre lo que no tiene
-/// información —cuál de dos motores va mejor con el servidor que le tocó— y
-/// deja media base usando el camino equivocado sin saberlo.
-///
-/// ── Y con reserva automática ────────────────────────────────────────────────
-///
-/// Sacar el interruptor deja sin salida a quien se tope con una fuente que
-/// ExoPlayer no sepa abrir. Por eso, si falla al abrir, se cae a mpv solo y
-/// queda anotado en el registro. La persona ve el vídeo; nosotros vemos en el
-/// registro con qué fuente pasó.
+/// información. Con un solo motor, además, no habría nada que elegir.
 class EleccionDeMotor {
   EleccionDeMotor._();
 
-  static const autom = 'auto';
   static const mpv = 'mpv';
-  static const exo = 'exoplayer';
 
-  /// Lo que quedó guardado de cuando se podía elegir.
-  ///
-  /// Ya no decide nada — se conserva solo para poder anotarlo en el registro
-  /// si algún aparato viene de una versión donde sí se elegía, y entender por
-  /// qué se comportaba distinto.
-  static String get elegido {
-    final guardado = PrismHubStorage.getSetting(SettingKey.motorDeVideo);
-    if (guardado is String &&
-        (guardado == mpv || guardado == exo || guardado == autom)) {
-      return guardado;
-    }
-    return autom;
-  }
-
-  /// Ya no se elige a mano en ninguna plataforma. Ver la nota de la clase.
+  /// No se elige: hay uno solo. Se conserva porque la pantalla de Ajustes
+  /// pregunta antes de dibujar nada.
   static bool get sePuedeElegir => false;
 
   static MotorDeVideo armar({
     required Player player,
     required VideoController videoController,
-  }) {
-    final cual = _decidir();
-    logger.info('Motor de vídeo: $cual '
-        '(ajuste: $elegido, plataforma: ${Platform.operatingSystem})');
-    if (cual == exo) return MotorMedia3();
-    return MotorMpv(player: player, videoController: videoController);
-  }
+  }) =>
+      MotorMpv(player: player, videoController: videoController);
 
-  static String _decidir() {
-    // Escritorio: mpv, que es el único que hay ahí.
-    if (!Platform.isAndroid) return mpv;
-    // Android entero —teléfono, tablet y televisor—: ExoPlayer, hablado
-    // directo por Media3. Es el motor del sistema, el mismo que usan las apps
-    // de vídeo de Android.
-    //
-    // OJO con lo que esto da y lo que no. Da el decodificador de Android, que
-    // está más al día con los formatos, y el salto en HLS fMP4 que a mpv lo
-    // deja clavado. NO da todavía la separación entre el vídeo y la interfaz:
-    // eso necesita una SurfaceView, y hoy se dibuja sobre una textura igual
-    // que media_kit. Se probó el atajo —la superficie nativa del complemento
-    // video_player— y dejó la pantalla negra con el audio andando.
-    return exo;
-  }
-
-  /// Lo que queda del camino viejo, por si hiciera falta volver a mirarlo.
-  // ignore: unused_element
-  static String _decidirPorAjuste() {
-    if (!Platform.isAndroid) return mpv;
-    final pedido = elegido;
-    if (pedido == exo) return exo;
-    if (pedido == mpv) return mpv;
-    // Automático: por ahora mpv, que es lo probado.
-    //
-    // El automático va a pasar a elegir por formato —ExoPlayer cuando la lista
-    // sea fMP4, que es donde mpv se traba— pero eso se enciende cuando el
-    // recorrido de extensiones confirme que ExoPlayer se comporta bien. Hasta
-    // entonces, dejar el automático en lo conocido es lo honesto: nadie recibe
-    // un motor sin probar por una actualización.
-    return mpv;
-  }
-
-  /// La configuración de dibujado, solo si el motor la usa.
-  ///
-  /// Es de media_kit; ExoPlayer dibuja por su cuenta. Se pide igual porque el
-  /// `VideoController` se crea siempre.
+  /// La configuración de dibujado del vídeo, según el aparato.
   static VideoControllerConfiguration dibujado() =>
       DibujadoDeVideo.paraEsteAparato();
 }
