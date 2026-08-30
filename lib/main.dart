@@ -26,6 +26,7 @@ import 'package:prismhub/views/widgets/home/home_theme.dart';
 import 'package:prismhub/router/router.dart';
 import 'package:prismhub/utils/extension.dart';
 import 'package:prismhub/utils/i18n.dart';
+import 'package:prismhub/utils/degradacion_en_caliente.dart';
 import 'package:prismhub/utils/prismhub_mas.dart';
 import 'package:prismhub/utils/prismhub_storage.dart';
 import 'package:prismhub/utils/alivio_de_memoria.dart';
@@ -174,6 +175,14 @@ void main(List<String> args) async {
         final rasterMs = timing.rasterDuration.inMilliseconds;
         final totalMs = timing.totalSpan.inMilliseconds;
         final workMs = buildMs + rasterMs;
+        // Lo mismo que ya se estaba midiendo, ahora también SIRVE para algo:
+        // si la app va a tirones de verdad durante varios segundos seguidos,
+        // PrismHub+ baja el nivel del aparato. Ver DegradacionEnCaliente.
+        //
+        // Se le pasa el trabajo (build + raster) y no el total: el total
+        // incluye lo que el cuadro estuvo esperando, y un cuadro que espera
+        // porque no hay nada que hacer no es un tirón.
+        DegradacionEnCaliente.mirarCuadro(workMs);
         if (buildMs > 50 || rasterMs > 50 || workMs > 80) {
           // ── Aviso solo si el tirón se ve ────────────────────────────
           //
@@ -862,6 +871,11 @@ class _AppRootState extends State<_AppRoot> with WidgetsBindingObserver {
       // Y qué decidió PrismHub+ con ese aparato. Es la línea que contesta «¿por
       // qué en este televisor se ve distinto?» sin tener que deducirlo del
       // resto del registro — y la que avisa, fuerte, cuando está apagado.
+      // Lo que se aprendió en sesiones anteriores usando este aparato vale
+      // más que lo que dicen sus números, así que se aplica DESPUÉS de
+      // medirlo y ANTES de anotar qué quedó.
+      DegradacionEnCaliente.aplicarLoAprendido();
+      DegradacionEnCaliente.empezar();
       PrismHubMas.anotarEnElRegistro();
       // La cabecera de la sesión, recién acá: es el primer momento en que se
       // sabe qué aparato es esto y qué perfil le tocó. Ver EncabezadoDeSesion.

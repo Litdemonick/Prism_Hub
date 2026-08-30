@@ -524,6 +524,13 @@ class SettingKey {
   // no le pone turno a las peticiones y no recorta animaciones. Ver PrismHubMas.
   static const prismhubMas = 'PrismHubMas';
 
+  // El nivel al que PrismHub+ rebajo este aparato en una sesion anterior.
+  //
+  // Vacio si nunca hizo falta. Se guarda para no volver a pagar, en cada
+  // arranque, el rato de ir a tirones hasta que el vigilante lo detecte otra
+  // vez. Ver DegradacionEnCaliente.
+  static const nivelRebajado = 'NivelRebajado';
+
   static const empezarEnMaximaCalidad = 'EmpezarEnMaximaCalidad';
 
   /// Al terminar un episodio, pasar solo al siguiente.

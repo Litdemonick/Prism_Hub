@@ -41,8 +41,15 @@ class PrismHubMas {
   /// Se lee del ajuste cada vez y no se guarda en memoria: apagarlo tiene que
   /// notarse sin reiniciar la app.
   static bool get encendido {
-    final v = PrismHubStorage.getSetting(SettingKey.prismhubMas);
-    return v is bool ? v : true;
+    try {
+      final v = PrismHubStorage.getSetting(SettingKey.prismhubMas);
+      return v is bool ? v : true;
+    } catch (_) {
+      // Preguntar antes de que el almacenamiento esté listo. Pasa en el
+      // arranque más temprano y en las pruebas, y no puede ser motivo de que
+      // nada reviente: encendido es lo de fábrica.
+      return true;
+    }
   }
 
   /// El nivel que se usa para decidir. Apagado, siempre el de un aparato capaz.

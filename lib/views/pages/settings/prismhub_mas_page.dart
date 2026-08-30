@@ -2,6 +2,7 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_i18n/flutter_i18n.dart';
+import 'package:prismhub/utils/degradacion_en_caliente.dart';
 import 'package:prismhub/utils/encabezado_de_sesion.dart';
 import 'package:prismhub/utils/i18n.dart';
 import 'package:prismhub/utils/platform_tv.dart';
@@ -53,6 +54,9 @@ class _PrismHubMasPageState extends State<PrismHubMasPage> {
       SettingKey.prismhubMas,
       !PrismHubMas.encendido,
     );
+    // Al apagarlo se olvida lo aprendido: si alguien pide que la app no se
+    // adapte, arrastrar un nivel rebajado de antes sería seguir adaptándola.
+    if (!PrismHubMas.encendido) await DegradacionEnCaliente.olvidar();
     PrismHubMas.anotarEnElRegistro();
     if (mounted) setState(() {});
   }
