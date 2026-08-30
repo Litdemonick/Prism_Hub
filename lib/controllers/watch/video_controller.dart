@@ -1723,9 +1723,14 @@ class VideoPlayerController extends GetxController with WidgetsBindingObserver {
     // primer cuadro y se queda en pausa llenando el colchón, así que apagarla
     // en este momento mostraba la imagen congelada unos segundos antes de que
     // arrancara. Se apaga cuando el vídeo AVANZA.
-    _addSubscription(player.stream.videoParams.listen((p) {
+    // Del motor y no de media_kit: con el motor de Android este aviso no
+    // llegaba nunca, y de él cuelgan CUATRO cosas — la rueda de carga, el
+    // desbloqueo de la barra, el vídeo en 360° y la frecuencia de la
+    // pantalla. En el teléfono eso se veía como el vídeo andando perfecto
+    // con la rueda girando encima y la barra de progreso sin responder.
+    _addSubscription(motor.medidas.listen((p) {
       final primerCuadro = !_hayCuadro;
-      if ((p.w ?? 0) > 0 && (p.h ?? 0) > 0) {
+      if (p.ancho > 0 && p.alto > 0) {
         final antes = _hayCuadro;
         _hayCuadro = true;
         if (!antes) {
@@ -1753,8 +1758,8 @@ class VideoPlayerController extends GetxController with WidgetsBindingObserver {
       // vuelve a cambiar, no se reintentaba nunca. Eso hacia que el interruptor
       // no apareciera en videos que si lo eran. Aca las dos medidas vienen
       // juntas en el mismo aviso, asi que no hay nada que se pueda cruzar.
-      if ((p.w ?? 0) > 0 && (p.h ?? 0) > 0) {
-        esVideoVr.value = _pareceVr(p.w, p.h, _pistasDeVr);
+      if (p.ancho > 0 && p.alto > 0) {
+        esVideoVr.value = _pareceVr(p.ancho, p.alto, _pistasDeVr);
         // Y aca se decide que pasa con el recorte que traia el video ANTERIOR.
         //
         // Al abrir contenido nuevo el recorte se quita siempre (ver

@@ -150,6 +150,8 @@ class MotorMedia3 implements MotorDeVideo {
   final _finales = StreamController<bool>.broadcast();
   final _pistas = StreamController<List<PistaDeMedia3>>.broadcast();
   final _subtitulos = StreamController<List<String>>.broadcast();
+  final _medidasDelVideo =
+      StreamController<({int ancho, int alto})>.broadcast();
 
   Duration _posicion = Duration.zero;
   Duration _duracion = Duration.zero;
@@ -385,12 +387,31 @@ class MotorMedia3 implements MotorDeVideo {
         final b = _alto ?? 0;
         _medidas.value =
             (a > 0 && b > 0) ? Size(a.toDouble(), b.toDouble()) : null;
+        // Además del notificador que usa la vista, sale por la fachada: de
+        // este aviso cuelgan la rueda de carga, la barra de progreso, el vídeo
+        // en 360° y la frecuencia de la pantalla. Ver MotorDeVideo.medidas.
+        if (!_medidasDelVideo.isClosed) {
+          _medidasDelVideo.add((ancho: a, alto: b));
+        }
       case 'error':
         final texto = crudo['valor']?.toString() ?? 'error desconocido';
         logger.severe('media3: $texto');
         if (!_errores.isClosed) _errores.add(texto);
       case 'primerCuadro':
         // Lo que confirma que se está viendo algo, no solo que suena.
+        //
+        // Se escribe en el registro a propósito, y con el camino que se usó:
+        // es la única línea que separa «anduvo» de «anduvo pero cayó al plan
+        // B», y las dos se ven igual desde afuera —en las dos hay imagen—. Sin
+        // esto no habría forma de saber, leyendo el registro de alguien, si su
+        // aparato está usando la capa del sistema o si terminó en textura.
+        if (!_seVioAlgo) {
+          logger.info(
+            'media3: primer cuadro en pantalla '
+            '(${_capaAparte ? 'capa aparte del sistema' : 'textura'}'
+            '${_tunelizando ? ', tunelizado' : ''})',
+          );
+        }
         _seVioAlgo = true;
         _vigilante?.cancel();
         // Si se probó la capa aparte y anduvo, queda anotado: así el próximo
@@ -524,6 +545,9 @@ class MotorMedia3 implements MotorDeVideo {
   Stream<String> get errores => _errores.stream;
 
   @override
+  Stream<({int ancho, int alto})> get medidas => _medidasDelVideo.stream;
+
+  @override
   Stream<bool> get finales => _finales.stream;
 
   // ── La imagen ─────────────────────────────────────────────────────────────
@@ -626,6 +650,7 @@ class MotorMedia3 implements MotorDeVideo {
       _finales,
       _pistas,
       _subtitulos,
+      _medidasDelVideo,
     ]) {
       if (!c.isClosed) await c.close();
     }

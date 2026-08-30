@@ -97,6 +97,21 @@ abstract class MotorDeVideo {
   Stream<double> get volumenes;
   Stream<String> get errores;
 
+  /// Las medidas del vídeo, cada vez que se conocen o cambian.
+  ///
+  /// ── Por qué está en la fachada y no se lee de cada motor ────────────────
+  ///
+  /// Esto no es solo el tamaño de la imagen: es **el aviso de que hay imagen**.
+  /// De él cuelgan el apagado de la rueda de carga, el desbloqueo de la barra
+  /// de progreso, la detección de vídeo en 360° y el ajuste de frecuencia de
+  /// la pantalla del televisor.
+  ///
+  /// Estaba leído directo de media_kit, y al meter el motor de Android eso
+  /// dejó de llegar: la rueda giraba para siempre por encima del vídeo —que se
+  /// veía perfecto— y la barra quedaba bloqueada sin poder tocarla. Un dato del
+  /// que dependen cuatro cosas no puede salir de un motor concreto.
+  Stream<({int ancho, int alto})> get medidas;
+
   /// El vídeo llegó al final. Es lo que encadena el episodio siguiente.
   Stream<bool> get finales;
 

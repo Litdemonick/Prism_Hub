@@ -118,6 +118,10 @@ class MotorMpv implements MotorDeVideo {
   Stream<String> get errores => player.stream.error;
 
   @override
+  Stream<({int ancho, int alto})> get medidas => player.stream.videoParams
+      .map((p) => (ancho: p.w ?? 0, alto: p.h ?? 0));
+
+  @override
   Stream<bool> get finales => player.stream.completed;
 
   @override
