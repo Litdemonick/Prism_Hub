@@ -120,21 +120,107 @@ class AlivioDeMemoria with WidgetsBindingObserver {
     );
   }
 
+  /// Cuántas veces pidió memoria el sistema en esta sesión.
+  static int _cuantasVeces = 0;
+
+  /// Cuándo fue la última, para no contar dos veces el mismo apretón.
+  static DateTime? _laUltima;
+
+  /// Desde cuántos avisos se considera que el aparato va justo de verdad.
+  ///
+  /// Uno o dos en una sesión larga es Android haciendo su trabajo. Media
+  /// docena es otra cosa: el aparato viene peleando por memoria todo el rato,
+  /// y ahí el techo que le pusimos a las imágenes es parte del problema.
+  static const _cuandoYaEsDemasiado = 6;
+
+  /// Si ya se bajó el techo por insistencia del sistema.
+  static bool _techoBajado = false;
+
   @override
   void didHaveMemoryPressure() {
-    final antes = PaintingBinding.instance.imageCache.currentSizeBytes;
-    // `clear` saca lo guardado y `clearLiveImages` suelta además lo que sigue
-    // en pantalla. Las dos: con solo la primera, las portadas que se están
-    // viendo en ese momento —que son las más grandes— no se sueltan, y son
-    // justo las que hacen la diferencia cuando el sistema está pidiendo aire.
+    // ── Por qué acá no se mide lo que se soltó ──────────────────────────
+    //
+    // La versión anterior leía `currentSizeBytes` antes de vaciar y escribía
+    // cuántos megas se habían soltado. Salía SIEMPRE «0.0 MB», cientos de
+    // veces, y parecía que esto no hacía nada.
+    //
+    // No era eso. Flutter llama a los observadores DESPUÉS de haber vaciado
+    // él mismo la caché de imágenes: en `WidgetsBinding.handleMemoryPressure`
+    // lo primero es `super.handleMemoryPressure()` —que en `PaintingBinding`
+    // hace `imageCache.clear()`— y recién entonces avisa a los observadores.
+    // O sea que cuando esto corre, la caché ya está vacía por definición y
+    // ese número no podía dar otra cosa.
+    //
+    // Lo que de verdad suelta este método es lo OTRO: las imágenes vivas —las
+    // que están en pantalla, que son las más grandes y que Flutter no toca— y
+    // los dos registros de portadas. Eso es lo que se cuenta ahora.
+    final vivas = PaintingBinding.instance.imageCache.liveImageCount;
+
+    // `clear` por si acaso —no cuesta nada y no depende del orden de arriba,
+    // que es de Flutter y puede cambiar— y `clearLiveImages`, que es lo que
+    // aporta esto: sin ella, las portadas que se están viendo en ese momento
+    // no se sueltan, y son justo las que hacen la diferencia cuando el
+    // sistema está pidiendo aire.
     PaintingBinding.instance.imageCache.clear();
     PaintingBinding.instance.imageCache.clearLiveImages();
     CacheNetWorkImagePic.olvidarLoRecordado();
     PortadasPerdidas.olvidarLoMirado();
+
+    // ── Dos avisos seguidos son un solo apretón ─────────────────────────
+    //
+    // Android manda `onTrimMemory` con varios niveles a la vez, así que esto
+    // llega por parejas separadas por un milisegundo. Contarlas dobles
+    // inflaba el número y llenaba el registro de líneas repetidas.
+    final ahora = DateTime.now();
+    final anterior = _laUltima;
+    _laUltima = ahora;
+    if (anterior != null &&
+        ahora.difference(anterior) < const Duration(seconds: 2)) {
+      return;
+    }
+    _cuantasVeces++;
+
+    // ── Y por qué esto es informativo y no un aviso ─────────────────────
+    //
+    // Que el sistema pida memoria es normal: pasa cada vez que se abre otra
+    // app. Que la nuestra la suelte es la app funcionando bien, no fallando.
+    // Marcado como aviso, esto llenaba la zona de «Fallos» con cientos de
+    // líneas que no son fallos y enterraba las que sí — en un registro real
+    // había catorce errores de verdad perdidos entre doscientos cuarenta y
+    // nueve avisos.
+    logger.info(
+      'El sistema pidió memoria ($_cuantasVeces.ª vez): se soltaron '
+      '$vivas imágenes en uso · perfil ${PerfilDeAparato.nivel.name}',
+    );
+
+    _bajarElTechoSiInsiste();
+  }
+
+  /// Si el sistema insiste, se le baja el techo a las imágenes.
+  ///
+  /// ── Por qué reaccionar y no solo soltar ─────────────────────────────────
+  ///
+  /// El techo se elige por el perfil del aparato, que es una estimación hecha
+  /// de antemano. Cuando el sistema pide memoria media docena de veces en una
+  /// sesión, está diciendo con hechos que esa estimación quedó grande para lo
+  /// que hoy tiene libre — puede ser un teléfono capaz con otras diez apps
+  /// abiertas, y ahí el perfil no se equivocó, cambió la situación.
+  ///
+  /// Se baja un escalón y no más: pasar de golpe al mínimo haría que el
+  /// catálogo tuviera que redecodificar portadas todo el rato, cambiando un
+  /// problema de memoria por uno de fluidez. Y una sola vez por sesión, para
+  /// que no se vaya escalonando hasta lo inservible.
+  static void _bajarElTechoSiInsiste() {
+    if (_techoBajado || _cuantasVeces < _cuandoYaEsDemasiado) return;
+    _techoBajado = true;
+    final cache = PaintingBinding.instance.imageCache;
+    final antes = cache.maximumSizeBytes;
+    cache.maximumSizeBytes = (antes * 0.6).round();
+    cache.maximumSize = (cache.maximumSize * 0.6).round();
     logger.warning(
-      'El sistema pidió memoria: se soltaron '
-      '${(antes / (1024 * 1024)).toStringAsFixed(1)} MB de imágenes '
-      '(perfil ${PerfilDeAparato.nivel.name})',
+      'El sistema pidió memoria $_cuantasVeces veces: se baja el techo de '
+      'imágenes de ${antes >> 20} a ${cache.maximumSizeBytes >> 20} MB '
+      'para lo que queda de sesión',
     );
   }
 }

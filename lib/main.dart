@@ -175,9 +175,26 @@ void main(List<String> args) async {
         final totalMs = timing.totalSpan.inMilliseconds;
         final workMs = buildMs + rasterMs;
         if (buildMs > 50 || rasterMs > 50 || workMs > 80) {
-          logger.warning(
-            'FRAME LENTO: build=${buildMs}ms raster=${rasterMs}ms total=${totalMs}ms',
-          );
+          // ── Aviso solo si el tirón se ve ────────────────────────────
+          //
+          // A 60 Hz, pasarse de 50 ms es perder tres cuadros: molesta, pero
+          // pasa constantemente en cualquier aparato y no es un fallo. Como
+          // aviso, esto llenaba la zona de «Fallos» —ciento treinta líneas en
+          // un registro real— y enterraba los errores de verdad, que eran
+          // catorce.
+          //
+          // A partir de un cuarto de segundo ya no es un tirón sino un
+          // parpadeo que cualquiera nota, y ahí sí corresponde el aviso.
+          // Los demás siguen registrándose igual, como información: no se
+          // pierde ni uno, y en la zona «Reproductor» están todos.
+          final linea =
+              'FRAME LENTO: build=${buildMs}ms raster=${rasterMs}ms '
+              'total=${totalMs}ms';
+          if (workMs >= 250) {
+            logger.warning(linea);
+          } else {
+            logger.info(linea);
+          }
         }
       }
     });
