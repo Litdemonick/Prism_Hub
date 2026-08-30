@@ -35,6 +35,20 @@
 - **Si se corta la conexión, no se borra lo que ya llegó** — que es justo lo
   que hace falta si el televisor se cayó.
 
+### 📺 Entrar y salir del reproductor, en televisor
+
+- **Se quedaba en negro al salir.** Al cerrar se restauraba la interfaz del
+  sistema —barra de estado, barra de navegación, orientaciones— que es lógica
+  de teléfono: un televisor no tiene nada de eso. Y no solo sobraba: deshacía
+  el bloqueo apaisado y le pedía a Android reconfigurar la ventana justo
+  mientras el reproductor soltaba su superficie de vídeo. La ventana quedaba
+  sin nada que dibujar, sin ningún error de por medio.
+- **Sale más rápido y con menos tirones.** También se dejó de pedir el ajuste
+  de orientación en cada cuadro, y de traer el cuadro actual desde la GPU para
+  la miniatura de «Continuar viendo» en aparatos modestos — costaba hasta dos
+  segundos justo al cerrar **y en televisor fallaba igual** (aparece en dos
+  registros de dos aparatos distintos). La tarjeta se queda con la portada.
+
 ### 🐞 Corregido
 
 - **Ya no parpadea en blanco al entrar.** Se buscaba en la red en el mismo
