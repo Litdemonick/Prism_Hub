@@ -1,65 +1,42 @@
-## PrismHub v1.0.58 — Lo que compartís es lo que estás viendo
+## PrismHub v1.0.59 — Cada plataforma con el motor que le corresponde
 
-> 🔢 **Decía 296 líneas en el televisor y 6000 al compartir.** Las dos cifras
-> eran ciertas, y ese era el problema: la pantalla muestra la apertura de
-> ahora y se enviaba el archivo entero, con todas las anteriores.
+> 🎬 **Se acabó elegir motor de vídeo.** En Android —teléfono y televisor— va
+> **ExoPlayer**, el del sistema. En PC y Linux va **mpv**. Y si alguna fuente
+> se le resiste a ExoPlayer, la app cae a mpv sola sin que te enteres.
 
 > ⚠️ **La app sigue en mantenimiento general.** Se la sigue reestructurando
 > por dentro, así que es posible que te cruces con fallos o con cosas a medio
 > terminar. Si encontrás algo roto, reportalo desde Ajustes → Reportar.
 
-### 🔢 Compartir muestra exactamente lo mismo
+### 🎬 El motor, decidido por plataforma
 
-- Ahora se envía **la apertura de ahora**, y encima se le aplica **la zona que
-  tengas puesta** en la pantalla. El número de arriba coincide con el del
-  televisor, zona por zona.
-- Con seis mil líneas de las cuales cinco mil setecientas eran de ayer,
-  encontrar lo que acaba de pasar era peor que no tener nada.
-- Las anteriores no se pierden: están en Historial, y desde ahí podés
-  compartir una concreta cuando haga falta.
+- **Por qué ExoPlayer en Android**: dibuja en una capa nativa del sistema, así
+  que el vídeo y la interfaz van por carriles separados — la interfaz se
+  redibuja solo cuando algo cambia y el vídeo avanza a su ritmo. Con el camino
+  anterior compartían carril: **cada cuadro de vídeo era una pasada de dibujado
+  de toda la interfaz**. Es lo mismo que hacen las apps de vídeo del sistema.
+- **Y ExoPlayer ya reconoce las listas del relay.** Fallaban todas con «Source
+  error»: el relay servía sus direcciones sin extensión, y ExoPlayer decide qué
+  es cada cosa por ahí — tomaba una lista de reproducción por un archivo de
+  vídeo y se caía al leerla.
+- **Con reserva automática**: si una fuente no abre con ExoPlayer, se abre con
+  mpv y queda anotado. Nadie se queda sin ver nada.
 
-### 🔒 La Zona +18 en televisor pedía permiso… y no lo pedía
+### 📡 Ver el registro de un televisor
 
-- **Se abría sin la confirmación de edad y sin el PIN.** El televisor iba
-  directo a la pantalla de adentro: la puerta estaba puesta y se pasaba por al
-  lado. Ahora entra por donde entran PC y teléfono.
-- **Y ahora se puede poner o cambiar el PIN desde el televisor.** No estaba: un
-  televisor con el PIN sin configurar había que configurarlo desde otro
-  aparato.
+- **Se recuerdan los televisores**, con la fecha y hora en que se los vio. Si
+  uno deja de compartir —o **si la app se le cayó**— sigue en la lista, aparte
+  y marcado como sin conexión. Antes desaparecía como si nunca hubiera estado.
+- Se ven **enseguida al entrar**, antes de que termine la búsqueda.
+- **La barra de desplazamiento** ya no se agranda y achica sola, y **el
+  refresco ya no te devuelve arriba**: sigue el final, que es donde está lo
+  último, y solo si ya estabas abajo.
+- El registro va dentro de un panel con contorno, y podés **guardarlo o
+  compartirlo** desde el teléfono o el PC.
 
-### 📺 «Acerca de» ahora dice qué versión tenés
+### 🔎 Diagnóstico
 
-- En televisor faltaba. Era el primer dato que hace falta al reportar algo, y
-  la única forma de saberlo era abrir el registro y leer la cabecera.
-
-### 🖥️ Sin parpadeos blancos en PC
-
-- Al entrar a Registros —y a cualquier otra de estas pantallas— se veía un
-  destello blanco. La pantalla nueva entra con un fundido, y durante esos
-  milisegundos lo que se veía por detrás no era la anterior sino el fondo
-  claro de la ventana.
-
-### 📡 Televisores encontrados, clasificados
-
-- **«Compartiendo ahora» y «Se perdió la conexión»**, en bloques separados. Un
-  televisor deja de contestar porque lo apagaste, porque se cumplió el tiempo
-  o **porque la app se cayó** — y los tres se veían igual: desapareciendo de la
-  lista. El tercero es justo el caso en el que estabas mirando.
-- El registro se muestra dentro de un panel con contorno, como la página web:
-  un texto pegado a los cuatro bordes se lee como parte del marco de la app.
-
-### 🔀 Cambiar de zona con alguien mirando
-
-- Son dos pantallas distintas —el registro en vivo y una apertura del
-  historial— y cada una con sus cuatro zonas. Lo que se comparte sale de donde
-  estés parado.
-- **Ahora pregunta antes de cambiarle la vista al otro.** Estaba siguiendo un
-  fallo en «Reproductor» y de golpe le aparecía otra cosa. Si decís que no, el
-  televisor cambia igual y lo compartido se queda donde estaba — son dos cosas
-  distintas y no tienen por qué ir juntas.
-- Cuando difieren, el botón lo dice. Sin eso uno cree que el otro está viendo
-  lo mismo.
-- **Del lado que mira**, al cambiar lo que se sirve la pantalla vuelve arriba:
-  lo de abajo es otra cosa, y dejar el scroll donde estaba muestra la mitad de
-  un texto nuevo desde un punto que no significa nada. Sigue actualizándose
-  cada 5 segundos, con el botón de refrescar al lado.
+- **Los cuadros lentos ahora dicen en qué pantalla pasaron.** «build=490ms» no
+  decía si fue el catálogo, la ficha o el reproductor.
+- El registro dice **cuándo es el primer arranque después de actualizar**, con
+  la versión de la que venías.
