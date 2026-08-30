@@ -1,5 +1,7 @@
 import 'dart:io';
 
+import 'package:flutter/widgets.dart';
+import 'package:prismhub/utils/application.dart';
 import 'package:prismhub/utils/log.dart';
 import 'package:prismhub/utils/platform_tv.dart';
 
@@ -25,16 +27,55 @@ import 'package:prismhub/utils/platform_tv.dart';
 class EncabezadoDeSesion {
   EncabezadoDeSesion._();
 
-  /// El aparato en una línea, sin la versión ni el adorno.
+  /// El aparato en una línea, para encabezar un reporte.
   ///
-  /// La usa el exportador para encabezar el reporte. Va acá y no allá para que
-  /// haya UN solo sitio que decida qué se cuenta del aparato — si mañana se
-  /// suma o se saca un dato, no hay dos textos que se separen.
+  /// Es el resumen corto: marca, modelo y sistema. La ficha completa —con la
+  /// memoria, la pantalla y el resto— está en [fichaDelAparato].
   static String resumenDelAparato() {
-    final partes = <String>[_dondeEstamos(), _sistema()];
-    final m = _memoria();
-    if (m != null) partes.add(m);
+    final partes = <String>[_dondeEstamos(), _marcaYModelo(), _sistema()]
+        .where((p) => p.isNotEmpty)
+        .toList(growable: false);
     return partes.join(' · ');
+  }
+
+  /// Todo lo que hace falta saber del aparato para entender un fallo.
+  ///
+  /// ── Por qué tan detallado ───────────────────────────────────────────────
+  ///
+  /// Pedido explícito: «así me entero en qué sistema está el usuario, sus
+  /// recursos, qué marca de tele, modelo, etc.». Y es exactamente lo que
+  /// separa un reporte útil de uno que no se puede usar: un tirón en un
+  /// televisor de 1 GB y el mismo tirón en un PC de 32 son dos problemas
+  /// distintos con la misma línea de registro, y sin esto hay que preguntarlo
+  /// por mensaje y esperar.
+  ///
+  /// Va en varias líneas y no en una: en una sola quedaba un renglón larguísimo
+  /// que en un teléfono se corta y en un reporte nadie lee entero.
+  ///
+  /// ── Y qué sigue sin llevar ──────────────────────────────────────────────
+  ///
+  /// Marca y modelo no señalan a nadie: los comparten millones de aparatos, y
+  /// son justo lo que hace falta para reproducir un fallo. Lo que identifica a
+  /// UNA persona sigue afuera y a propósito: el nombre que le puso al aparato
+  /// —que suele llevar el nombre propio—, el número de serie, el identificador
+  /// de publicidad y cualquier cuenta.
+  static List<String> fichaDelAparato() {
+    final ficha = <String>[];
+    void agregar(String etiqueta, String valor) {
+      if (valor.trim().isEmpty) return;
+      ficha.add('${etiqueta.padRight(10)} $valor');
+    }
+
+    agregar('sistema', _sistemaCompleto());
+    agregar('aparato', [_dondeEstamos(), _marcaYModelo()]
+        .where((p) => p.isNotEmpty)
+        .join(' · '));
+    agregar('memoria', _memoriaFisica());
+    agregar('cpu', '${Platform.numberOfProcessors} núcleos');
+    agregar('perfil', _perfil());
+    agregar('pantalla', _pantalla());
+    agregar('idioma', Platform.localeName);
+    return ficha;
   }
 
   /// Escribe la cabecera. Se llama una vez, cuando ya se sabe qué aparato es.
@@ -63,10 +104,21 @@ class EncabezadoDeSesion {
   /// registro se exporta y lo abre otra persona en otro lado.
   static List<String> _presentacion(String version) {
     return [
-      ..._marco(_nombre),
+      // El sistema va DENTRO del recuadro, junto al nombre.
+      //
+      // Estaba debajo, en la línea del resumen, mezclado con la versión del
+      // sistema y el perfil — o sea que para saber de qué aparato salía un
+      // registro había que leer una línea larga. Pedido explícito: «indicá en
+      // el mensaje de PrismHub de la consola en qué sistema se abrió».
+      //
+      // Es lo primero que se pregunta al abrir un registro que te mandaron, y
+      // ahora está en grande junto al nombre. El detalle completo sigue justo
+      // abajo, para lo que haga falta afinar.
+      ..._marco([..._nombre, 'abierto en ${_dondeEstamos()}']),
       '',
       '  PrismHub $version',
-      '  ${resumenDelAparato()}',
+      // La ficha entera, una línea por dato. Ver fichaDelAparato.
+      for (final l in fichaDelAparato()) '  $l',
       // Con fecha y hora completas, y no solo por dejar constancia: es lo que
       // deja que el historial ponga «Hoy 21:59» en cada apertura. Las líneas
       // del recuadro van crudas, sin el encabezado de `logging`, así que sin
@@ -86,7 +138,13 @@ class EncabezadoDeSesion {
       ..._bloque('QUÉ NO LLEVA', [
         '· No lleva qué estuviste viendo.',
         '· No lleva contraseñas ni credenciales de ningún sitio.',
-        '· No lleva tu nombre, tu cuenta ni el nombre de tu equipo.',
+        '· No lleva tu nombre ni tu cuenta.',
+        '· No lleva el nombre que le pusiste al aparato, ni su',
+        '  número de serie, ni identificadores de publicidad.',
+        '',
+        'Arriba sí está la marca y el modelo. Eso lo comparten',
+        'millones de aparatos, no señala a nadie, y es lo que',
+        'permite reproducir un fallo que solo pasa en el tuyo.',
         '',
         'Las direcciones salen recortadas a propósito: se conserva',
         'el servidor y el formato, que es lo que sirve para',
@@ -181,31 +239,145 @@ class EncabezadoDeSesion {
     return 'DESCONOCIDO';
   }
 
+  /// La versión del sistema en una línea corta.
   static String _sistema() {
     try {
-      // La versión del sistema, sin el nombre del equipo: en Windows y en
-      // Linux `operatingSystemVersion` a veces trae el nombre de la máquina, y
-      // ese sí identifica.
-      final crudo = Platform.operatingSystemVersion;
-      return crudo.length > 60 ? crudo.substring(0, 60) : crudo;
+      if (Platform.isAndroid) {
+        return 'Android ${androidDeviceInfo.version.release}';
+      }
+      if (Platform.isWindows) {
+        return windowsDeviceInfo.productName;
+      }
+      if (Platform.isLinux) {
+        return linuxDeviceInfo.prettyName;
+      }
+      return Platform.operatingSystem;
     } catch (_) {
-      return 'sistema desconocido';
+      // Todavía no se leyó la información del aparato, o esta plataforma no
+      // la trae. Un dato de menos no puede impedir que se escriba el resto.
+      return '';
     }
   }
 
-  /// El perfil que la app le asignó al aparato y en qué se basó.
+  /// El sistema con todo lo que sirve: nombre, versión y compilación.
   ///
-  /// Es la mitad de entender un problema de rendimiento: si un televisor quedó
-  /// clasificado como capaz y va a tirones, puede que la clasificación esté
-  /// mal, y eso solo se ve teniéndola escrita.
-  static String? _memoria() {
+  /// «Windows 11 Pro (10.0.26200)» dice mucho más que «Windows»: una
+  /// compilación concreta explica fallos que en otra no pasan.
+  static String _sistemaCompleto() {
     try {
-      return 'perfil ${PerfilDeAparato.nivel.name} · '
-          '${Platform.numberOfProcessors} núcleos';
+      if (Platform.isAndroid) {
+        final v = androidDeviceInfo.version;
+        return 'Android ${v.release} (API ${v.sdkInt}, ${v.incremental})';
+      }
+      if (Platform.isWindows) {
+        final w = windowsDeviceInfo;
+        return '${w.productName} '
+            '(${w.majorVersion}.${w.minorVersion}.${w.buildNumber})';
+      }
+      if (Platform.isLinux) {
+        final l = linuxDeviceInfo;
+        return [l.prettyName, l.versionId].whereType<String>().join(' · ');
+      }
     } catch (_) {
-      return null;
+      // Se cae al de abajo.
+    }
+    return _recorte(Platform.operatingSystemVersion, 70);
+  }
+
+  /// Quién lo fabricó y qué modelo es.
+  ///
+  /// En Android es lo que dice si un fallo es de una caja concreta —los
+  /// televisores baratos traen decodificadores muy distintos entre sí— y en
+  /// escritorio no existe, así que ahí queda vacío y no se escribe.
+  static String _marcaYModelo() {
+    try {
+      if (!Platform.isAndroid) return '';
+      final a = androidDeviceInfo;
+      final partes = <String>{a.manufacturer, a.brand}
+          .where((p) => p.trim().isNotEmpty)
+          .map(_conMayuscula)
+          .toList();
+      final marca = partes.join('/');
+      return marca.isEmpty ? a.model : '$marca ${a.model}';
+    } catch (_) {
+      return '';
     }
   }
+
+  /// Cuánta memoria tiene el aparato.
+  ///
+  /// Es la mitad de cualquier problema de rendimiento: la app se comporta muy
+  /// distinto con 1 GB que con 8, y sin el dato no hay forma de saber si lo
+  /// que se está mirando es un fallo o un aparato que no da más.
+  static String _memoriaFisica() {
+    try {
+      if (Platform.isAndroid) {
+        // device_info_plus no expone la RAM en Android, así que se lee de
+        // /proc, que es de donde la saca el propio sistema.
+        final linea = File('/proc/meminfo')
+            .readAsLinesSync()
+            .firstWhere((l) => l.startsWith('MemTotal'), orElse: () => '');
+        final kb = int.tryParse(
+          RegExp(r'(\d+)').firstMatch(linea)?.group(1) ?? '',
+        );
+        if (kb != null) return _enGigas(kb * 1024);
+      }
+      if (Platform.isWindows) {
+        return _enGigas(windowsDeviceInfo.systemMemoryInMegabytes * 1024 * 1024);
+      }
+      if (Platform.isLinux) {
+        final linea = File('/proc/meminfo')
+            .readAsLinesSync()
+            .firstWhere((l) => l.startsWith('MemTotal'), orElse: () => '');
+        final kb = int.tryParse(
+          RegExp(r'(\d+)').firstMatch(linea)?.group(1) ?? '',
+        );
+        if (kb != null) return _enGigas(kb * 1024);
+      }
+    } catch (_) {
+      // Sin permiso de lectura o sin ese archivo: se sigue sin el dato.
+    }
+    return '';
+  }
+
+  static String _enGigas(int bytes) =>
+      '${(bytes / (1024 * 1024 * 1024)).toStringAsFixed(1)} GB';
+
+  /// El tamaño real de la pantalla y a cuántos puntos por pulgada dibuja.
+  ///
+  /// Explica una clase entera de fallos que solo se ven en un aparato: un
+  /// texto que se corta o una tarjeta que no entra casi siempre son cuestión
+  /// de cuántos píxeles lógicos hay, no del modelo.
+  static String _pantalla() {
+    try {
+      final v = WidgetsBinding.instance.platformDispatcher.views.firstOrNull;
+      if (v == null) return '';
+      final t = v.physicalSize;
+      final d = v.devicePixelRatio;
+      if (t.isEmpty || d <= 0) return '';
+      final ancho = (t.width / d).round();
+      final alto = (t.height / d).round();
+      return '${t.width.round()}x${t.height.round()} '
+          '· ${ancho}x$alto pt · x${d.toStringAsFixed(1)}';
+    } catch (_) {
+      return '';
+    }
+  }
+
+  static String _perfil() {
+    try {
+      return PerfilDeAparato.nivel.name;
+    } catch (_) {
+      return '';
+    }
+  }
+
+  static String _conMayuscula(String s) =>
+      s.isEmpty ? s : s[0].toUpperCase() + s.substring(1);
+
+  static String _recorte(String s, int tope) =>
+      s.length > tope ? s.substring(0, tope) : s;
+
 }
 
 /// Si esta línea es parte del recuadro de presentación.
