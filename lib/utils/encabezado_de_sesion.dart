@@ -3,6 +3,7 @@ import 'dart:io';
 import 'package:flutter/widgets.dart';
 import 'package:prismhub/utils/application.dart';
 import 'package:prismhub/utils/log.dart';
+import 'package:prismhub/utils/prismhub_storage.dart';
 import 'package:prismhub/utils/platform_tv.dart';
 
 /// La cabecera que abre cada sesión en el registro.
@@ -71,11 +72,51 @@ class EncabezadoDeSesion {
         .where((p) => p.isNotEmpty)
         .join(' · '));
     agregar('memoria', _memoriaFisica());
-    agregar('cpu', '${Platform.numberOfProcessors} núcleos');
+    agregar('cpu', _procesador());
     agregar('perfil', _perfil());
     agregar('pantalla', _pantalla());
     agregar('idioma', Platform.localeName);
     return ficha;
+  }
+
+  /// Los ajustes que cambian cómo se comporta la app.
+  ///
+  /// ── Por qué hacen falta ─────────────────────────────────────────────────
+  ///
+  /// Dos personas con el mismo aparato y la misma versión pueden tener
+  /// historias completamente distintas según cómo lo tengan configurado. Con
+  /// un proxy puesto, TODA la red pasa por otro lado y un «no carga» no
+  /// significa lo mismo. Con el bloqueador apagado, una página que se cae por
+  /// un anuncio se cae solo para quien lo apagó.
+  ///
+  /// Sin esto, cada reporte arranca con tres preguntas de ida y vuelta. Solo
+  /// van los que cambian el comportamiento — no la lista entera de ajustes,
+  /// que sería ruido.
+  static List<String> ajustesQueImportan() {
+    final salida = <String>[];
+    void agregar(String etiqueta, Object? valor) {
+      final texto = valor?.toString() ?? '';
+      if (texto.trim().isEmpty) return;
+      salida.add('${etiqueta.padRight(10)} $texto');
+    }
+
+    try {
+      agregar('proxy', PrismHubStorage.getSetting(SettingKey.proxyType));
+      agregar('motor', PrismHubStorage.getSetting(SettingKey.motorDeVideo));
+      agregar(
+        'reproductor',
+        PrismHubStorage.getSetting(SettingKey.videoPlayer),
+      );
+      agregar('idioma-app', PrismHubStorage.getSetting(SettingKey.language));
+      final apagadas =
+          PrismHubStorage.getSetting(SettingKey.disabledExtensions);
+      if (apagadas is List && apagadas.isNotEmpty) {
+        agregar('apagadas', '${apagadas.length} extensiones');
+      }
+    } catch (_) {
+      // El almacenamiento todavía no está listo: se sigue sin esta parte.
+    }
+    return salida;
   }
 
   /// Escribe la cabecera. Se llama una vez, cuando ya se sabe qué aparato es.
@@ -88,6 +129,35 @@ class EncabezadoDeSesion {
     for (final l in _presentacion(version)) {
       PrismLog.crudo(l);
     }
+  }
+
+  /// Deja escritas las extensiones instaladas y con qué versión.
+  ///
+  /// ── Por qué en su propio momento ────────────────────────────────────────
+  ///
+  /// La mayoría de los reportes son «esta extensión no carga», y hasta ahora
+  /// el registro no decía ni cuáles hay puestas ni en qué versión — así que
+  /// no se podía distinguir un fallo de la app de una extensión vieja, que es
+  /// la primera pregunta.
+  ///
+  /// No va en la cabecera porque cuando esa se escribe las extensiones
+  /// todavía no se cargaron. Se llama aparte, cuando ya están, y por eso es
+  /// un método propio y no parte de [escribir].
+  static void escribirExtensiones(
+    Iterable<({String paquete, String version, bool activa})> instaladas,
+  ) {
+    final lista = instaladas.toList(growable: false);
+    if (lista.isEmpty) {
+      PrismLog.crudo('  extensiones: ninguna instalada');
+      return;
+    }
+    PrismLog.crudo('  ┌─ EXTENSIONES INSTALADAS (${lista.length})');
+    for (final e in lista) {
+      final estado = e.activa ? '' : '  (apagada)';
+      PrismLog.crudo('  │  ${e.paquete} · v${e.version}$estado');
+    }
+    PrismLog.crudo('  └─');
+    PrismLog.crudo('');
   }
 
   /// Lo primero que se ve al abrir el registro.
@@ -119,6 +189,9 @@ class EncabezadoDeSesion {
       '  PrismHub $version',
       // La ficha entera, una línea por dato. Ver fichaDelAparato.
       for (final l in fichaDelAparato()) '  $l',
+      // Y cómo está configurada la app, que cambia lo que significa todo lo
+      // demás. Ver ajustesQueImportan.
+      for (final l in ajustesQueImportan()) '  $l',
       // Con fecha y hora completas, y no solo por dejar constancia: es lo que
       // deja que el historial ponga «Hoy 21:59» en cada apertura. Las líneas
       // del recuadro van crudas, sin el encabezado de `logging`, así que sin
@@ -357,10 +430,36 @@ class EncabezadoDeSesion {
       if (t.isEmpty || d <= 0) return '';
       final ancho = (t.width / d).round();
       final alto = (t.height / d).round();
+      // Los hercios: media docena de fallos del reproductor son de cuadros
+      // que no encajan con el refresco de la pantalla, y sin este número no
+      // se puede ni empezar a mirarlo. Ver FrecuenciaDePantalla.
+      final hz = v.display.refreshRate;
       return '${t.width.round()}x${t.height.round()} '
-          '· ${ancho}x$alto pt · x${d.toStringAsFixed(1)}';
+          '· ${ancho}x$alto pt · x${d.toStringAsFixed(1)}'
+          '${hz > 0 ? ' · ${hz.toStringAsFixed(0)} Hz' : ''}';
     } catch (_) {
       return '';
+    }
+  }
+
+  /// Cuántos núcleos y de qué arquitectura.
+  ///
+  /// La arquitectura importa de verdad acá: mpv y los decodificadores traen
+  /// binarios distintos por ABI, y un aparato que corre la app en 32 bits
+  /// teniendo 64 —pasa en cajas de televisor mal armadas— se comporta
+  /// distinto y no hay forma de saberlo si no está escrito.
+  static String _procesador() {
+    final nucleos = '${Platform.numberOfProcessors} núcleos';
+    try {
+      if (!Platform.isAndroid) return nucleos;
+      final a = androidDeviceInfo;
+      final abi = a.supportedAbis.isEmpty ? '' : a.supportedAbis.first;
+      final chip = a.hardware.isNotEmpty ? a.hardware : a.board;
+      return [nucleos, abi, chip]
+          .where((p) => p.trim().isNotEmpty)
+          .join(' · ');
+    } catch (_) {
+      return nucleos;
     }
   }
 
@@ -378,65 +477,4 @@ class EncabezadoDeSesion {
   static String _recorte(String s, int tope) =>
       s.length > tope ? s.substring(0, tope) : s;
 
-}
-
-/// Si esta línea es parte del recuadro de presentación.
-///
-/// Vive acá, junto al sitio que dibuja el recuadro, para que no haya dos
-/// ideas distintas de qué cuenta como recuadro. Si mañana cambia el dibujo,
-/// cambia en un solo archivo.
-bool esElRecuadro(String linea) {
-  for (final c in _caracteresDelRecuadro) {
-    if (linea.contains(c)) return true;
-  }
-  return false;
-}
-
-/// Los caracteres con los que está dibujado. Ninguno lo escribe otra cosa de
-/// la app: son de dibujo de cajas, no de texto.
-const _caracteresDelRecuadro = ['╔', '╚', '║', '╗', '╝', '┌', '└', '├', '│'];
-
-/// Junta las líneas seguidas del recuadro en una sola.
-///
-/// El recuadro es un dibujo, no texto: solo se entiende con todas sus líneas
-/// alineadas entre sí. Mostrado línea por línea, cada una se ajusta al ancho
-/// por su cuenta y en cuanto una no entra se parte en dos — que es como se
-/// rompía en pantalla.
-///
-/// Juntándolas, quien lo dibuja puede tratarlo como un bloque: achicarlo
-/// entero hasta que entre, sin que las líneas se desalineen entre sí.
-///
-/// El resto de las líneas pasan tal cual, una por una, porque son texto de
-/// verdad y ahí ajustar al ancho es lo correcto.
-List<String> agruparElRecuadro(List<String> lineas) {
-  if (lineas.isEmpty) return lineas;
-  var hayAlguno = false;
-  for (final l in lineas) {
-    if (esElRecuadro(l)) {
-      hayAlguno = true;
-      break;
-    }
-  }
-  // Sin recuadro no se copia nada: es el caso de casi todos los refrescos, y
-  // recorrer miles de líneas para no cambiar ninguna sería trabajo tirado.
-  if (!hayAlguno) return lineas;
-
-  final salida = <String>[];
-  final bloque = <String>[];
-  void cerrarBloque() {
-    if (bloque.isEmpty) return;
-    salida.add(bloque.join('\n'));
-    bloque.clear();
-  }
-
-  for (final l in lineas) {
-    if (esElRecuadro(l)) {
-      bloque.add(l);
-    } else {
-      cerrarBloque();
-      salida.add(l);
-    }
-  }
-  cerrarBloque();
-  return salida;
 }

@@ -156,6 +156,23 @@ void main() {
       });
     }
 
+    test('los apartados de la presentación también, no solo el nombre', () {
+      // Se miraba solo el marco de arriba, asi que «QUÉ ES ESTO» y «QUÉ NO
+      // LLEVA» —dibujados con otros caracteres— desaparecían al filtrar. Se
+      // veía el nombre en grande y debajo, directo, líneas técnicas.
+      const apartado = '  │  · No lleva qué estuviste viendo.';
+      const borde = '  ┌─ QUÉ ES ESTO ──────────────────────';
+      for (final z in ZonaDelRegistro.values) {
+        expect(z.seVe(apartado), isTrue, reason: '${z.name} · apartado');
+        expect(z.seVe(borde), isTrue, reason: '${z.name} · borde');
+      }
+    });
+
+    test('la lista de extensiones instaladas también', () {
+      const linea = '  │  io.prismhub.animeav1 · v1.2.3';
+      expect(ZonaDelRegistro.reproductor.seVe(linea), isTrue);
+    });
+
     test('pero no se repite dentro de cada sección del exportado', () {
       expect(ZonaDelRegistro.reproductor.acepta(cabecera), isFalse);
     });
