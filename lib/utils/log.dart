@@ -286,6 +286,39 @@ class PrismLog {
     await flush();
   }
 
+  /// Reescribe el archivo dejando solo estas líneas.
+  ///
+  /// ── Para qué ────────────────────────────────────────────────────────────
+  ///
+  /// Es lo que permite borrar aperturas guardadas del historial sin tocar el
+  /// resto. Quien llama arma la lista de lo que se queda —normalmente todas
+  /// las sesiones menos las que se eligieron borrar— y acá se escribe.
+  ///
+  /// ── Por qué se vuelca antes ─────────────────────────────────────────────
+  ///
+  /// El registro se junta en memoria y se escribe en tandas cada dos segundos.
+  /// Sin volcar primero, una tanda pendiente se escribiría DESPUÉS de este
+  /// reemplazo y quedaría pegada al final de un archivo que quien la generó ya
+  /// no reconoce — con líneas de la sesión de ahora colgando de un archivo que
+  /// se acaba de recortar.
+  ///
+  /// La memoria no se toca: lo que se está viendo en vivo sigue igual, y es
+  /// correcto que siga — no se está borrando la sesión de ahora.
+  static Future<void> conservarSolo(List<String> lineas) async {
+    await flush();
+    try {
+      final file = File(logFilePath);
+      // El salto de linea, por su codigo: escribirlo como literal en
+      // este archivo es como se rompio dos veces al editarlo.
+      final salto = String.fromCharCode(10);
+      final texto = lineas.isEmpty ? '' : lineas.join(salto) + salto;
+      await file.writeAsString(texto, flush: true);
+    } catch (e) {
+      logger.info('No se pudo reescribir el registro: $e');
+      rethrow;
+    }
+  }
+
   /// El registro entero, para mostrarlo o exportarlo.
   ///
   /// Vuelca primero lo pendiente, así lo que se lee incluye lo último que

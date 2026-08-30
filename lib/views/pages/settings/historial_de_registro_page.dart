@@ -40,6 +40,15 @@ class HistorialDeRegistroPage extends StatefulWidget {
 
 class _HistorialDeRegistroPageState extends State<HistorialDeRegistroPage> {
   List<SesionDelRegistro> _sesiones = const [];
+
+  /// TODAS las del archivo, la de ahora incluida.
+  ///
+  /// Hace falta aparte de [_sesiones] —que solo tiene las anteriores— porque
+  /// al borrar hay que volver a escribir el archivo con lo que se queda, y lo
+  /// que se queda incluye la sesión de ahora, que en esta lista no se muestra.
+  /// Sin esto, borrar una apertura vieja se llevaría por delante la actual.
+  List<SesionDelRegistro> _todas = const [];
+
   bool _cargando = true;
   String? _fallo;
 
@@ -82,6 +91,7 @@ class _HistorialDeRegistroPageState extends State<HistorialDeRegistroPage> {
       final todas = partirEnSesiones(lineas);
       if (!mounted) return;
       setState(() {
+        _todas = todas;
         // La última es la de ahora, y esa ya se ve en la pantalla anterior.
         // Repetirla acá sería ofrecer dos caminos al mismo sitio.
         _sesiones = todas.length <= 1
@@ -172,6 +182,25 @@ class _HistorialDeRegistroPageState extends State<HistorialDeRegistroPage> {
       return _aviso('settings.log-historial-vacio'.i18n);
     }
     final tv = PlatformTv.esTelevisionSync;
+    final dias = _porDia;
+    // Se arma una sola lista con los encabezados de día y sus aperturas
+    // debajo, en vez de una lista de listas: así el desplazamiento es uno
+    // solo, que con un mando es lo único manejable.
+    final filas = <Widget>[];
+    var primera = true;
+    dias.forEach((dia, delDia) {
+      filas.add(_encabezadoDeDia(dia, delDia));
+      for (final s in delDia) {
+        filas.add(Padding(
+          // La lista se rehace al volver de una sesión o al borrar, y sin
+          // clave el estado de cada tarjeta se emparejaría por posición.
+          key: ValueKey(s.cuando?.toIso8601String() ?? 'sin-fecha-${s.hashCode}'),
+          padding: const EdgeInsets.only(bottom: 10),
+          child: _tarjeta(s, primera: primera),
+        ));
+        primera = false;
+      }
+    });
     return ListView.builder(
       // Aire arriba, y no un margen parejo.
       //
@@ -180,15 +209,104 @@ class _HistorialDeRegistroPageState extends State<HistorialDeRegistroPage> {
       // en televisor— y se leía como si estuviera cortada por arriba.
       // Reportado en vivo. En televisor va más, que es donde más se nota.
       padding: EdgeInsets.fromLTRB(16, tv ? 34 : 16, tv ? 20 : 16, 20),
-      itemCount: _sesiones.length,
-      itemBuilder: (context, i) => Padding(
-        // La lista se rehace cuando se vuelve de una sesión, y sin clave el
-        // estado de cada tarjeta se emparejaría por posición.
-        key: ValueKey(_sesiones[i].cuando?.toIso8601String() ?? 'sin-fecha-$i'),
-        padding: const EdgeInsets.only(bottom: 10),
-        child: _tarjeta(_sesiones[i], primera: i == 0),
+      itemCount: filas.length,
+      itemBuilder: (context, i) => filas[i],
+    );
+  }
+
+  /// Las aperturas agrupadas por día, de la más reciente a la más vieja.
+  ///
+  /// ── Por qué por día y no de a diez ──────────────────────────────────────
+  ///
+  /// Se pidió partirlas en bloques «cada diez, como subcarpetas» para poder
+  /// buscar a medida que se acumulan. El bloque de diez tiene un problema: no
+  /// significa nada. «Las diez anteriores» cambia de contenido cada vez que se
+  /// abre la app, así que el bloque donde estaba lo que uno buscaba ayer hoy
+  /// es otro.
+  ///
+  /// El día sí significa algo, y es como se busca de verdad: «lo de anoche»,
+  /// «lo del martes». Un día con veinte aperturas sigue siendo un bloque, y
+  /// uno con dos también — y en los dos casos el nombre dice qué hay dentro.
+  ///
+  /// Además es lo que hace útil el borrado por bloque: «borrar todo lo del
+  /// martes» es una decisión que se puede tomar; «borrar el bloque 3», no.
+  Map<String, List<SesionDelRegistro>> get _porDia {
+    final salida = <String, List<SesionDelRegistro>>{};
+    for (final s in _sesiones) {
+      final c = s.cuando;
+      final dia = c == null
+          ? 'settings.log-historial-sin-fecha'.i18n
+          : '${c.year}-${_dosCifras(c.month)}-${_dosCifras(c.day)}';
+      salida.putIfAbsent(dia, () => []).add(s);
+    }
+    return salida;
+  }
+
+  /// Reescribe el archivo sin las sesiones que se quitan.
+  ///
+  /// Se trabaja sobre [_todas] y no sobre lo que se ve: la sesión de ahora no
+  /// está en la lista de la pantalla, y si no se conservara, borrar una
+  /// apertura vieja se llevaría por delante la actual.
+  Future<void> _borrar(bool Function(SesionDelRegistro) seVa) async {
+    final quedan = _todas.where((s) => !seVa(s)).toList(growable: false);
+    final cuantas = _todas.length - quedan.length;
+    if (cuantas == 0) return;
+    try {
+      await PrismLog.conservarSolo(
+        quedan.expand((s) => s.lineas).toList(growable: false),
+      );
+    } catch (e) {
+      if (!mounted) return;
+      showPlatformSnackbar(
+        context: context,
+        content: FlutterI18n.translate(
+          context,
+          'settings.log-borrar-error',
+          translationParams: {'error': '$e'},
+        ),
+      );
+      return;
+    }
+    if (!mounted) return;
+    showPlatformSnackbar(
+      context: context,
+      content: FlutterI18n.translate(
+        context,
+        'settings.log-borradas',
+        translationParams: {'n': '$cuantas'},
       ),
     );
+    await _cargar();
+  }
+
+  /// Pregunta antes de borrar. No se puede deshacer.
+  Future<bool> _confirmar(String titulo, String detalle) async {
+    final r = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        backgroundColor: HomeTheme.bg,
+        title: Text(titulo, style: TextStyle(color: HomeTheme.textPrimary)),
+        content: Text(
+          detalle,
+          style: TextStyle(color: HomeTheme.textMuted, fontSize: 13),
+        ),
+        actions: [
+          TextButton(
+            autofocus: true,
+            onPressed: () => Navigator.of(context).pop(false),
+            child: Text('common.cancel'.i18n),
+          ),
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(true),
+            child: Text(
+              'common.delete'.i18n,
+              style: TextStyle(color: HomeTheme.accentRed),
+            ),
+          ),
+        ],
+      ),
+    );
+    return r ?? false;
   }
 
   Widget _aviso(String texto) => Center(
@@ -201,6 +319,71 @@ class _HistorialDeRegistroPageState extends State<HistorialDeRegistroPage> {
           ),
         ),
       );
+
+  /// El rótulo de un día, con cuántas aperturas tiene y el botón de vaciarlo.
+  Widget _encabezadoDeDia(String dia, List<SesionDelRegistro> delDia) {
+    final tv = PlatformTv.esTelevisionSync;
+    return Padding(
+      key: ValueKey('dia-$dia'),
+      padding: const EdgeInsets.only(top: 6, bottom: 8, left: 4),
+      child: Row(
+        children: [
+          Expanded(
+            child: Text(
+              '$dia · ${FlutterI18n.translate(
+                context,
+                'settings.log-historial-cuantas',
+                translationParams: {'n': '${delDia.length}'},
+              )}',
+              style: TextStyle(
+                fontSize: tv ? 14 : 12,
+                letterSpacing: 0.8,
+                fontWeight: FontWeight.w700,
+                color: HomeTheme.textMuted,
+              ),
+            ),
+          ),
+          // Borrar el día entero. Es la razón de agrupar: «borrar todo lo del
+          // martes» es una decisión que se puede tomar de una.
+          FocusableCard(
+            borderRadius: 8,
+            conCrecido: false,
+            onTap: () async {
+              if (!await _confirmar(
+                'settings.log-borrar-dia'.i18n,
+                FlutterI18n.translate(
+                  context,
+                  'settings.log-borrar-dia-detalle',
+                  translationParams: {'n': '${delDia.length}', 'dia': dia},
+                ),
+              )) {
+                return;
+              }
+              await _borrar(delDia.contains);
+            },
+            child: Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Icon(Icons.delete_sweep_outlined,
+                      size: tv ? 20 : 18, color: HomeTheme.textMuted),
+                  const SizedBox(width: 6),
+                  Text(
+                    'common.clear'.i18n,
+                    style: TextStyle(
+                      fontSize: tv ? 13 : 12,
+                      color: HomeTheme.textMuted,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
 
   Widget _tarjeta(SesionDelRegistro sesion, {required bool primera}) {
     final tv = PlatformTv.esTelevisionSync;
@@ -262,6 +445,31 @@ class _HistorialDeRegistroPageState extends State<HistorialDeRegistroPage> {
                     ),
                   ),
                 ],
+              ),
+            ),
+            // Borrar solo esta. Va dentro de la tarjeta y no deslizando:
+            // deslizar no existe con un mando, y una acción que en un aparato
+            // sí está y en otro no es la clase de cosa que hace que la gente
+            // crea que la app le falta algo.
+            FocusableCard(
+              borderRadius: 8,
+              conCrecido: false,
+              onTap: () async {
+                if (!await _confirmar(
+                  'settings.log-borrar-una'.i18n,
+                  'settings.log-borrar-una-detalle'.i18n,
+                )) {
+                  return;
+                }
+                await _borrar((s) => identical(s, sesion));
+              },
+              child: Padding(
+                padding: const EdgeInsets.all(8),
+                child: Icon(
+                  Icons.delete_outline,
+                  size: tv ? 22 : 20,
+                  color: HomeTheme.textMuted,
+                ),
               ),
             ),
             Icon(
