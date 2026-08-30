@@ -514,6 +514,7 @@
     "log-olvidar-detalle": "The ones that no longer answer are removed from the list. Those sharing right now stay, and any of them shows up again on its own when it shares.",
     "log-nada-en-la-red": "No TV is sharing its log right now.\n\nOn the TV: Settings → View log → “View from another device”. Both need to be on the same network.",
     "log-remoto-cortado": "The connection to the TV dropped. Below is the last thing that arrived. Still retrying.",
+    "log-remoto-vacio-sin-conexion": "Nothing arrived before the connection dropped.\n\nOn the TV: Settings → View log → “View from another device”. It turns itself off after 45 minutes, and the address changes when you turn it back on.",
     "log-limpiar": "Clear the log?",
     "log-limpiar-todo": "Everything from this session is erased and it starts over. Previous sessions are left alone: they stay in History.",
     "log-limpiar-zona": "Only \"{zona}\" from this session is erased. The other areas and the previous sessions are left alone.",

@@ -720,7 +720,16 @@ class _RegistroRemotoPageState extends State<_RegistroRemotoPage> {
         child: Padding(
           padding: const EdgeInsets.all(28),
           child: Text(
-            'settings.log-empty'.i18n,
+            // Vacío Y sin conexión no es lo mismo que vacío a secas.
+            //
+            // Decía «dejá esta pantalla abierta y usá la app: lo que vaya
+            // pasando aparece acá», que es cierto cuando hay conexión y
+            // mentira cuando se cortó — ahí no va a aparecer nada por más que
+            // se espere. Se ve en la foto: el aviso rojo de arriba dice que se
+            // cortó y el de abajo invita a esperar.
+            _fallo != null
+                ? 'settings.log-remoto-vacio-sin-conexion'.i18n
+                : 'settings.log-empty'.i18n,
             textAlign: TextAlign.center,
             style: TextStyle(color: HomeTheme.textMuted, fontSize: 14),
           ),

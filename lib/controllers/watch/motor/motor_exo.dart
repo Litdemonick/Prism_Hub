@@ -1,5 +1,4 @@
 import 'dart:async';
-import 'dart:io';
 
 import 'package:flutter/widgets.dart';
 import 'package:prismhub/controllers/watch/motor/motor_de_video.dart';
@@ -88,24 +87,34 @@ class MotorExo implements MotorDeVideo {
       // Sin las cabeceras muchas fuentes contestan que no: el Referer y el
       // User-Agent son lo que las convence de entregar el vídeo.
       httpHeaders: cabeceras ?? const {},
-      // ── Superficie nativa y no textura ────────────────────────────────
+      // ── Textura, NO superficie nativa. Y duele decirlo ─────────────────
       //
-      // Acá está la razón de tener este motor. Con una textura, cada cuadro
-      // hace el mismo viaje que con mpv —decodificador, contexto gráfico,
-      // textura, y recién ahí Flutter lo compone— y son dos pasadas de GPU
-      // por cuadro. En un televisor, cuya GPU es floja aunque decodifique
-      // vídeo de sobra, eso es justo lo que se paga.
+      // La superficie nativa es la razon de fondo para tener este motor: con
+      // ella el decodificador pinta en una capa aparte del sistema y el video
+      // deja de pasar por el dibujado de la interfaz. Se activo por eso.
       //
-      // Con superficie nativa el decodificador pinta directo en una capa del
-      // sistema. Es lo que hace que las apps de vídeo de un televisor vayan
-      // suaves en cajas donde todo lo demás va a tirones, y lo que abre la
-      // puerta al modo tunelizado, que la textura no permite ni en teoría.
+      // Y hubo que sacarla. En un televisor con Android 9 el resultado fue:
+      // audio bien, posicion avanzando —o sea, ExoPlayer reproduciendo— y la
+      // pantalla NEGRA, mas una tanda de cuadros lentos, y al final la app
+      // dando la fuente por no reproducible porque nunca llego un cuadro.
       //
-      // Solo en Android: en escritorio esta ruta no existe y el motor de allá
-      // es mpv de todos modos.
-      viewType: Platform.isAndroid
-          ? VideoViewType.platformView
-          : VideoViewType.textureView,
+      // La causa estaba escrita en el README del propio complemento:
+      // «Using VideoViewType.platformView is not currently recommended on
+      // Android due to a known issue affecting platform views on Android»
+      // (flutter/flutter#164899). Comprobar que la opcion EXISTIA no era
+      // comprobar que se podia usar.
+      //
+      // ── Que significa esto para la app ────────────────────────────────
+      //
+      // Que por `video_player` NO se puede tener hoy el dibujado en capa
+      // aparte: renderiza a textura, igual que media_kit. Asi que cambiar a
+      // ExoPlayer da su decodificador —mas al dia con los formatos de
+      // Android— pero NO la separacion entre video e interfaz.
+      //
+      // Esa separacion sigue siendo el objetivo, y para conseguirla hace
+      // falta una integracion propia con Media3 en Kotlin, con un SurfaceView
+      // de verdad. No es este parametro.
+      viewType: VideoViewType.textureView,
     );
     _cx = cx;
     cx.addListener(() => _mirarYAvisar(cx));
