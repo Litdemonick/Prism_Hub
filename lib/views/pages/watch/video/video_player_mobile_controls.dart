@@ -1374,19 +1374,18 @@ class _Footer extends StatelessWidget {
                   ),
                 ),
                 Obx(() {
-                  // Resolviendo el servidor elegido — bloquear el botón para
-                  // no permitir otro toque/doble intento mientras carga.
+                  // Resolviendo el servidor elegido — el botón se apaga para
+                  // no permitir otro toque mientras carga.
+                  //
+                  // Apagado, no dando vueltas. En el centro de la pantalla ya
+                  // está el cartel «Obteniendo enlace…», que dice exactamente
+                  // eso; una rueda acá abajo es la misma noticia dos veces, y
+                  // encima con dos cosas girando a destiempo. Un reproductor de
+                  // verdad avisa una sola vez.
                   if (controller.isGettingWatchData.value) {
                     return const IconButton(
                       onPressed: null,
-                      icon: SizedBox(
-                        width: 24,
-                        height: 24,
-                        child: CircularProgressIndicator(
-                          strokeWidth: 2,
-                          color: HomeTheme.oscuroAcento,
-                        ),
-                      ),
+                      icon: Icon(Icons.play_arrow, size: 30),
                     );
                   }
                   if (controller.awaitingServerChoice.value) {
