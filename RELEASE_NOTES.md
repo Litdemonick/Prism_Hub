@@ -1,54 +1,52 @@
-## PrismHub v1.0.43 — Android TV: fluidez
+## PrismHub v1.0.44 — Android TV: se cerraba al salir, y va más fluido
 
-<!-- solo-plataforma: androidtv -->
-
-> 📺 **Esta versión es solo para televisor.** Windows, Linux, teléfono y
-> tablet siguen en la 1.0.42: nada de lo que cambia acá los toca, así que no
-> tiene sentido hacerlos actualizar.
+> 📺 **Corrige un fallo que cerraba la app entera**: en televisor, salir del
+> reproductor mientras se estaba viendo algo sacaba al usuario de la app. Era
+> un problema introducido en la 1.0.42.
 
 > ⚠️ **La app sigue en mantenimiento general.** Se la sigue reestructurando
 > por dentro, así que es posible que te cruces con fallos o con cosas a medio
 > terminar. Si encontrás algo roto, reportalo desde Ajustes → Reportar.
 
-### 📺 Que la interfaz vaya fluida
+### 📺 Android TV — corregido
 
-Se venía notando que la app va a tirones en el televisor — **también en
-televisores potentes**. Que falle igual en un aparato bueno descarta que sea
-falta de fuerza, y apunta a otra cosa: un televisor es potente
-**decodificando vídeo**, que es para lo que está hecho. Su parte gráfica,
-componiendo menús y tarjetas, es más floja que la de un teléfono de gama
-media. Pero la app solo le aligeraba el trabajo a los aparatos más modestos,
-así que un televisor normal recibía casi todo igual que un teléfono.
+- **Ya no se cierra al salir del reproductor.** La app devolvía la pantalla a
+  su modo normal al mismo tiempo que liberaba el vídeo, y en un televisor ese
+  cambio de modo hace renegociar la conexión con la pantalla justo mientras
+  el vídeo se está soltando. Las dos cosas cruzándose cerraban la app de
+  golpe, sin ningún mensaje. Ahora el modo se devuelve al final, cuando ya no
+  queda nada del reproductor.
+- **El aviso de versión nueva ya se puede leer con el control remoto.** Esa
+  pantalla usaba la disposición de teléfono, que se desplaza con el dedo: con
+  un mando no había forma de bajar, y todo lo que no entrara quedaba sin
+  leerse. Y como ese aviso bloquea la app, había que decidir a ciegas. Ahora
+  las flechas desplazan el texto.
 
-- **El foco ya no crece al moverse.** Con un control remoto el foco *salta*
-  de tarjeta en tarjeta, no se desliza: el resplandor ya dice dónde estás
-  parado, y el crecido animado obligaba a repintar la tarjeta y lo de
-  alrededor en cada pulsación del mando.
-- **Sin fundido al cambiar de zona.** El contenido aparece puesto. Componer
-  media pantalla con transparencia era de lo más caro que hacía la interfaz,
-  y en un televisor no se extraña.
-- **Al abrir la app ya no debería sentirse pesada al principio.** Había una
-  tarea que le pedía sus datos a cada extensión instalada apenas arrancaba, y
-  cada una levanta su propio motor — con doce extensiones, doce motores
-  compitiendo por el procesador justo mientras la pantalla se dibuja y bajan
-  las portadas. Ahora esa tarea espera a que la app asiente.
+### ⚡ Android TV — fluidez
 
-### 🔍 Para encontrar por qué algunos títulos van mal
+Segunda tanda de mejoras sobre la misma idea de la 1.0.43: un televisor es
+potente **decodificando vídeo**, que es para lo que está hecho, pero su parte
+gráfica es más floja que la de un teléfono de gama media.
 
-Si algunos animes van lentísimos o llegan a cerrar la app y otros van bien, el
-reproductor no es el culpable — algo particular de ese vídeo lo es. La
-sospecha es que en esos casos el televisor **no puede decodificar ese formato
-por hardware** y lo hace por software, que es algo que su procesador no da.
+- **El resplandor del foco cuesta mucho menos.** Cada tarjeta pintaba tres
+  sombras difuminadas y las hacía aparecer con una transición en cada
+  movimiento del mando. Ahora en televisor es una sola, y aparece puesta —
+  con un control remoto el foco *salta* de tarjeta en tarjeta, así que la
+  transición no aportaba nada y se pagaba en cada pulsación.
+- **Las tarjetas no enfocadas ya no dejan una capa vacía.** Antes cada una
+  mantenía su resplandor invisible; ahora, de todas las que hay en pantalla,
+  solo la enfocada existe.
 
-Ahora eso queda anotado en el registro: qué códec es y quién lo está
-decodificando de verdad. **Si te pasa, exportá el registro desde Ajustes y
-compartilo** — con eso se puede confirmar y arreglar.
+### 🛠️ Por dentro
 
-### 🔧 Corregido de la 1.0.42
-
-- **El selector de motor de vídeo se retiró.** Salió sin terminar: al elegir
-  el motor nuevo se escuchaba el audio pero la pantalla quedaba en negro.
-  Vuelve cuando esté completo.
+- **El reproductor pasa a hablarle a su motor a través de una capa
+  intermedia.** No cambia nada de cómo se ve ni de cómo funciona: por debajo
+  corre el mismo motor de siempre. Es el trabajo previo para poder usar un
+  motor distinto en Android, que es lo que va a corregir el salto en ciertos
+  formatos y el desfase de audio en televisor.
+- **Los avisos de versión pueden dirigirse a una plataforma concreta**, para
+  que una corrección que solo toca al televisor no haga actualizar a quienes
+  usan Windows o Linux.
 
 ---
 
@@ -94,16 +92,16 @@ compartilo** — con eso se puede confirmar y arreglar.
 
 | Archivo | Para |
 |---|---|
-| **`PrismHub-setup-windows-v1.0.43.exe`** | **Instalador.** Lo normal: instala y crea el acceso directo |
-| `PrismHub-v1.0.43-windows-x64.zip` | Portable: se descomprime y se ejecuta, sin instalar |
+| **`PrismHub-setup-windows-v1.0.44.exe`** | **Instalador.** Lo normal: instala y crea el acceso directo |
+| `PrismHub-v1.0.44-windows-x64.zip` | Portable: se descomprime y se ejecuta, sin instalar |
 
 ### 🐧 Linux
 
 | Archivo | Para |
 |---|---|
-| `PrismHub-v1.0.43-linux-x64.tar.gz` | Se descomprime y se ejecuta |
+| `PrismHub-v1.0.44-linux-x64.tar.gz` | Se descomprime y se ejecuta |
 
-> Los archivos que llevan la versión en el nombre (`v1.0.43`) quedan fijos en
+> Los archivos que llevan la versión en el nombre (`v1.0.44`) quedan fijos en
 > esta publicación. Los de Android que **no** la llevan apuntan siempre a la
 > más nueva — son los que conviene usar para un enlace o un código que quede
 > guardado.
