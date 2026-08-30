@@ -10,6 +10,7 @@ import 'package:prismhub/utils/encabezado_de_sesion.dart';
 import 'package:prismhub/utils/i18n.dart';
 import 'package:prismhub/utils/sesiones_del_registro.dart';
 import 'package:prismhub/views/pages/settings/historial_de_registro_page.dart';
+import 'package:prismhub/views/widgets/seleccionable_si_se_puede.dart';
 import 'package:prismhub/views/widgets/tv/columna_de_acciones.dart';
 import 'package:prismhub/views/widgets/tv/desplazable_con_mando.dart';
 import 'package:prismhub/views/widgets/tv/focusable_card.dart';
@@ -403,8 +404,7 @@ class _RegistroEnVivoPageState extends State<RegistroEnVivoPage> {
         // En «Todo» no sobrevive nada; en una zona concreta sobrevive todo lo
         // que NO sea de esa zona.
         dejar: _filtro == ZonaDelRegistro.todo ? null : (l) => !_filtro.seVe(l),
-        escribirCabecera: () =>
-            EncabezadoDeSesion.escribir(version: version),
+        escribirCabecera: () => EncabezadoDeSesion.escribir(version: version),
       );
     } catch (e) {
       if (!mounted) return;
@@ -499,7 +499,10 @@ class _RegistroEnVivoPageState extends State<RegistroEnVivoPage> {
   /// peor forma de fallar porque no da ninguna pista de qué hacer.
   Future<void> _exportar() async {
     try {
-      final salio = await ExportarRegistro.entregar(soloArea: _filtro.area);
+      final salio = await ExportarRegistro.entregar(
+        soloArea: _filtro.area,
+        etiqueta: _filtro.name,
+      );
       if (!salio || !mounted) return;
       showPlatformSnackbar(
         context: context,
@@ -533,10 +536,20 @@ class _RegistroEnVivoPageState extends State<RegistroEnVivoPage> {
 
   String get _titulo => 'settings.view-log'.i18n;
 
+  /// Cuántas líneas hay a la vista.
+  ///
+  /// Cuenta las FILTRADAS, no las que hay en total. Contaba el total, así que
+  /// el número no se movía al cambiar de zona: decía «2.560 líneas» tanto en
+  /// «Todo» como en «Fallos», donde había doscientas. Un número que no
+  /// responde a lo que uno acaba de tocar se lee como que el filtro no hizo
+  /// nada.
+  ///
+  /// Se recalcula solo, porque [_visibles] cambia con cada línea nueva y con
+  /// cada cambio de zona.
   String get _contador => FlutterI18n.translate(
         context,
         'settings.log-lines',
-        translationParams: {'n': '${_lineas.length}'},
+        translationParams: {'n': '$_cuantasVisibles'},
       );
 
   // Los avisos del propio registro llevan color: en una pared de texto gris,
@@ -565,6 +578,9 @@ class _RegistroEnVivoPageState extends State<RegistroEnVivoPage> {
   /// el historial recién leído, o el filtro.
   List<String> _visibles = const [];
 
+  /// Cuántas líneas hay a la vista, sin agrupar. Ver [_recalcularVisibles].
+  int _cuantasVisibles = 0;
+
   void _recalcularVisibles() {
     final todas = _deAntes.isEmpty
         ? _lineas
@@ -572,6 +588,10 @@ class _RegistroEnVivoPageState extends State<RegistroEnVivoPage> {
     final filtradas = _filtro == ZonaDelRegistro.todo
         ? todas
         : todas.where(_filtro.seVe).toList(growable: false);
+    // Se cuenta ANTES de agrupar: agrupar junta las treinta líneas del
+    // recuadro en una sola pieza para poder dibujarlo, y si se contara después
+    // el número diría treinta menos de las que hay de verdad.
+    _cuantasVisibles = filtradas.length;
     _visibles = agruparElRecuadro(filtradas);
   }
 
@@ -721,9 +741,10 @@ class _RegistroEnVivoPageState extends State<RegistroEnVivoPage> {
       );
     }
 
-    // SelectionArea y no un SelectableText por línea: así se puede arrastrar y
+    // Envuelto y no con un SelectableText por línea: así se puede arrastrar y
     // copiar un tramo entero (un stack trace completo, por ejemplo) para
-    // pegarlo en un reporte, en vez de línea por línea.
+    // pegarlo en un reporte, en vez de línea por línea. Y solo en escritorio
+    // — ver SeleccionableSiSePuede, que explica el fallo que evita.
     return DesplazableConMando(
       controlador: _scroll,
       alCambiarFoco: paraTelevisor
@@ -733,7 +754,7 @@ class _RegistroEnVivoPageState extends State<RegistroEnVivoPage> {
             }
           : null,
       alIrIzquierda: alIrIzquierda,
-      child: SelectionArea(
+      child: SeleccionableSiSePuede(
         child: ListView.builder(
           controller: _scroll,
           padding: paraTelevisor
@@ -836,9 +857,19 @@ class _RegistroEnVivoPageState extends State<RegistroEnVivoPage> {
       backgroundColor: HomeTheme.bg,
       appBar: AppBar(
         backgroundColor: HomeTheme.bg,
-        title: Text(
-          _titulo,
-          style: TextStyle(color: HomeTheme.textPrimary),
+        // Se encoge antes que cortarse.
+        //
+        // Con cinco botones al lado, en un teléfono angosto no quedaba ancho
+        // para el título y salía «Ver registro…». Reportado en vivo. Bajar un
+        // punto o dos de tamaño lo entra entero, y se lee igual.
+        title: FittedBox(
+          fit: BoxFit.scaleDown,
+          alignment: Alignment.centerLeft,
+          child: Text(
+            _titulo,
+            maxLines: 1,
+            style: TextStyle(color: HomeTheme.textPrimary),
+          ),
         ),
         actions: [
           IconButton(
@@ -889,33 +920,42 @@ class _RegistroEnVivoPageState extends State<RegistroEnVivoPage> {
           ),
         ],
       ),
-      body: Column(
-        children: [
-          if (_pausado) _bandaDePausa(),
-          _barraDeFiltros(),
-          Padding(
-            padding: const EdgeInsets.fromLTRB(16, 8, 16, 0),
-            child: Align(
-              alignment: Alignment.centerLeft,
-              child: Text(
-                _contador,
-                style: TextStyle(
-                    fontSize: 12, color: HomeTheme.textMuted),
+      // SafeArea con los lados puestos.
+      //
+      // El Scaffold ya aparta la barra de estado de arriba, pero no los lados
+      // — y apaisado, el recorte de cámara y la barra de gestos se comen texto
+      // en el borde. Reportado en vivo: «agregale safearea en modo horizontal
+      // en celulares». Arriba va en false: de eso ya se ocupó la barra, y
+      // ponerlo dos veces deja un hueco.
+      body: SafeArea(
+        top: false,
+        child: Column(
+          children: [
+            if (_pausado) _bandaDePausa(),
+            _barraDeFiltros(),
+            Padding(
+              padding: const EdgeInsets.fromLTRB(16, 8, 16, 0),
+              child: Align(
+                alignment: Alignment.centerLeft,
+                child: Text(
+                  _contador,
+                  style: TextStyle(fontSize: 12, color: HomeTheme.textMuted),
+                ),
               ),
             ),
-          ),
-          Expanded(
-            child: Stack(
-              children: [
-                NotificationListener<ScrollNotification>(
-                  onNotification: _mirarDesplazamiento,
-                  child: _buildLista(),
-                ),
-                if (!_alFinal) _botonAlFinal(),
-              ],
+            Expanded(
+              child: Stack(
+                children: [
+                  NotificationListener<ScrollNotification>(
+                    onNotification: _mirarDesplazamiento,
+                    child: _buildLista(),
+                  ),
+                  if (!_alFinal) _botonAlFinal(),
+                ],
+              ),
             ),
-          ),
-        ],
+          ],
+        ),
       ),
     );
   }
@@ -941,8 +981,8 @@ class _RegistroEnVivoPageState extends State<RegistroEnVivoPage> {
                     const SizedBox(height: 4),
                     Text(
                       _contador,
-                      style: TextStyle(
-                          fontSize: 12, color: HomeTheme.textMuted),
+                      style:
+                          TextStyle(fontSize: 12, color: HomeTheme.textMuted),
                     ),
                   ],
                 ),

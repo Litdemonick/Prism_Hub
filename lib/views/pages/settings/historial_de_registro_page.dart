@@ -11,6 +11,7 @@ import 'package:prismhub/utils/platform_tv.dart';
 import 'package:prismhub/utils/encabezado_de_sesion.dart';
 import 'package:prismhub/utils/sesiones_del_registro.dart';
 import 'package:prismhub/utils/servidor_de_registro.dart';
+import 'package:prismhub/views/widgets/seleccionable_si_se_puede.dart';
 import 'package:prismhub/views/widgets/home/home_theme.dart';
 import 'package:prismhub/views/widgets/messenger.dart';
 import 'package:prismhub/utils/zonas_del_registro.dart';
@@ -110,7 +111,10 @@ class _HistorialDeRegistroPageState extends State<HistorialDeRegistroPage> {
             style: TextStyle(color: HomeTheme.textPrimary),
           ),
         ),
-        body: _cuerpo(),
+        // Los lados: apaisado, el recorte de cámara y la barra de gestos se
+        // comen la primera columna de las tarjetas. Arriba no, que de eso ya
+        // se ocupó la barra de título.
+        body: SafeArea(top: false, child: _cuerpo()),
       );
     }
     // En televisor, la misma columna que las otras dos pantallas.
@@ -197,6 +201,9 @@ class _HistorialDeRegistroPageState extends State<HistorialDeRegistroPage> {
         sesion.lineas.where(ZonaDelRegistro.fallos.acepta).length;
     return FocusableCard(
       borderRadius: 12,
+      // Una fila de ancho completo: crecer solo la pega contra los bordes de
+      // la pantalla, y dentro de una lista que recorta queda mordida.
+      conCrecido: false,
       // La primera toma el foco al entrar: con un mando, tener que bajar una
       // vez para empezar a elegir es una pulsación que no hace falta.
       autofocus: primera,
@@ -343,7 +350,12 @@ class _SesionPageState extends State<_SesionPage> {
 
   Future<void> _exportar() async {
     try {
-      final salio = await ExportarRegistro.entregar(lineas: _visibles);
+      // Con «historial» adelante: al recibir dos archivos, uno de la sesión
+      // de ahora y otro de una anterior, el nombre tiene que decir cuál es.
+      final salio = await ExportarRegistro.entregar(
+        lineas: _visibles,
+        etiqueta: 'historial-${_zona.name}',
+      );
       if (!salio || !mounted) return;
       showPlatformSnackbar(
         context: context,
@@ -550,9 +562,16 @@ class _SesionPageState extends State<_SesionPage> {
       backgroundColor: HomeTheme.bg,
       appBar: AppBar(
         backgroundColor: HomeTheme.bg,
-        title: Text(
-          _tituloDeLaSesion(),
-          style: TextStyle(color: HomeTheme.textPrimary),
+        // Se encoge antes que cortarse: una fecha larga con el botón al lado
+        // no entra en un teléfono angosto.
+        title: FittedBox(
+          fit: BoxFit.scaleDown,
+          alignment: Alignment.centerLeft,
+          child: Text(
+            _tituloDeLaSesion(),
+            maxLines: 1,
+            style: TextStyle(color: HomeTheme.textPrimary),
+          ),
         ),
         actions: [
           IconButton(
@@ -563,11 +582,14 @@ class _SesionPageState extends State<_SesionPage> {
           ),
         ],
       ),
-      body: Column(
-        children: [
-          _barraDeZonas(),
-          Expanded(child: _texto()),
-        ],
+      body: SafeArea(
+        top: false,
+        child: Column(
+          children: [
+            _barraDeZonas(),
+            Expanded(child: _texto()),
+          ],
+        ),
       ),
     );
   }
@@ -653,7 +675,7 @@ class _SesionPageState extends State<_SesionPage> {
           : null,
       alIrIzquierda:
           paraTelevisor ? () => _focoDelRail.requestFocus() : null,
-      child: SelectionArea(
+      child: SeleccionableSiSePuede(
         child: ListView.builder(
           controller: _scroll,
           padding: paraTelevisor

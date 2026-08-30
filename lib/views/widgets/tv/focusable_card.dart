@@ -36,10 +36,26 @@ class FocusableCard extends StatefulWidget {
     this.borderRadius = 8,
     this.accent,
     this.altoMarco,
+    this.conCrecido = true,
   }) : assert(
           child != null || builder != null,
           'FocusableCard necesita child o builder',
         );
+
+  /// Si al enfocarse crece un poco.
+  ///
+  /// ── Cuándo hay que apagarlo ─────────────────────────────────────────────
+  ///
+  /// El crecido es la señal de «esto se puede tocar» y funciona bien en una
+  /// tarjeta chica rodeada de espacio. En una fila que ocupa TODO el ancho no:
+  /// no queda margen hacia donde crecer, así que la fila se pega a los bordes
+  /// de la pantalla y, dentro de una lista que recorta, se ve mordida.
+  ///
+  /// Reportado en vivo en PC: «al tocar en historial cualquiera y salir se
+  /// agranda la card de esa opción y se pega a los bordes».
+  ///
+  /// En esas filas el resplandor solo ya dice todo lo que hay que decir.
+  final bool conCrecido;
 
   /// Alto del resplandor de selección, cuando NO tiene que abarcar al hijo
   /// entero.
@@ -219,8 +235,15 @@ class _FocusableCardState extends State<FocusableCard> {
     // intensidad Y un borde nítido que no dependa del desenfoque para
     // notarse. El hover de PC queda exactamente igual que antes.
     final esTv = PlatformTv.esTelevisionSync;
-    final intensidadDelHalo = esTv ? 0.62 : (_tieneFoco ? 0.42 : 0.30);
-    final blurDelHalo = esTv ? 22.0 : 11.0;
+    // ── El brillo, más marcado ──────────────────────────────────────────
+    //
+    // Pedido explícito: «cada botón, mejorá ese brillo rosado». Con el foco
+    // sube y se cierra —más color y menos desenfoque— para que se lea como un
+    // contorno encendido y no como una mancha alrededor. El hover de ratón se
+    // queda suave: ahí el cursor ya dice dónde está uno parado, y subirlo
+    // convertiría cada pasada del ratón en un destello.
+    final intensidadDelHalo = esTv ? 0.62 : (_tieneFoco ? 0.55 : 0.26);
+    final blurDelHalo = esTv ? 22.0 : (_tieneFoco ? 14.0 : 10.0);
     // ── En un aparato modesto, el marco y nada más ───────────────────────
     //
     // La escala es un transform animado: obliga a recomponer la tarjeta en
@@ -247,8 +270,9 @@ class _FocusableCardState extends State<FocusableCard> {
     //
     // Fuera de televisor no cambia nada: ahí el foco se mueve con el ratón y
     // el crecido es la señal de que algo es tocable.
-    final conEscala =
-        !PlatformTv.esTelevisionSync && PerfilDeAparato.nivel != NivelDeAparato.bajo;
+    final conEscala = widget.conCrecido &&
+        !PlatformTv.esTelevisionSync &&
+        PerfilDeAparato.nivel != NivelDeAparato.bajo;
     final tarjeta = Focus(
       focusNode: _focusNode,
       autofocus: widget.autofocus,

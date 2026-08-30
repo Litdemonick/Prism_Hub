@@ -150,6 +150,9 @@ class OpcionDeColumna extends StatelessWidget {
       child: FocusableCard(
         borderRadius: 10,
         focusNode: foco,
+        // Ocupa el ancho entero de la columna: sin margen hacia donde crecer,
+        // el crecido solo la pega contra los bordes. Ver conCrecido.
+        conCrecido: false,
         onTap: onTap,
         child: AnimatedContainer(
           duration: const Duration(milliseconds: 120),
