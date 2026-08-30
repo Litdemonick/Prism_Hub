@@ -27,12 +27,23 @@ import 'package:prismhub/utils/prismhub_storage.dart';
 /// Si la regla fuera por extensión, mañana otra sirve fMP4 y vuelve a fallar.
 /// Por formato queda cubierta sola.
 ///
-/// ── El interruptor de Ajustes es TEMPORAL ───────────────────────────────────
+/// ── Ya no se elige a mano ───────────────────────────────────────────────────
 ///
-/// Está en la versión publicada a propósito, para poder recorrer las veinte
-/// extensiones probando los dos motores en un televisor y un teléfono reales,
-/// sin publicar una versión por prueba. Se saca cuando el recorrido termine y
-/// el automático esté confirmado.
+/// El interruptor de Ajustes existió para recorrer las extensiones probando
+/// los dos motores en aparatos reales. Ese recorrido terminó con la decisión
+/// tomada: **escritorio con mpv, Android con ExoPlayer**, que es lo mismo que
+/// hacen las apps de vídeo del sistema.
+///
+/// Un interruptor obliga a la persona a decidir algo sobre lo que no tiene
+/// información —cuál de dos motores va mejor con el servidor que le tocó— y
+/// deja media base usando el camino equivocado sin saberlo.
+///
+/// ── Y con reserva automática ────────────────────────────────────────────────
+///
+/// Sacar el interruptor deja sin salida a quien se tope con una fuente que
+/// ExoPlayer no sepa abrir. Por eso, si falla al abrir, se cae a mpv solo y
+/// queda anotado en el registro. La persona ve el vídeo; nosotros vemos en el
+/// registro con qué fuente pasó.
 class EleccionDeMotor {
   EleccionDeMotor._();
 
@@ -40,7 +51,11 @@ class EleccionDeMotor {
   static const mpv = 'mpv';
   static const exo = 'exoplayer';
 
-  /// Lo que el usuario eligió, o [autom] si no tocó nada.
+  /// Lo que quedó guardado de cuando se podía elegir.
+  ///
+  /// Ya no decide nada — se conserva solo para poder anotarlo en el registro
+  /// si algún aparato viene de una versión donde sí se elegía, y entender por
+  /// qué se comportaba distinto.
   static String get elegido {
     final guardado = PrismHubStorage.getSetting(SettingKey.motorDeVideo);
     if (guardado is String &&
@@ -50,47 +65,9 @@ class EleccionDeMotor {
     return autom;
   }
 
-  /// Si en este aparato se puede elegir.
-  ///
-  /// ── APAGADO a propósito, y esto hay que arreglarlo antes de encenderlo ───
-  ///
-  /// Salió en la 1.0.42 y estaba roto: al elegir ExoPlayer se escuchaba el
-  /// audio pero la pantalla quedaba NEGRA. Reportado en vivo en un televisor.
-  ///
-  /// La causa, medida: el commit que metió la fachada enganchó la VISTA al
-  /// motor, pero no la REPRODUCCIÓN. El controlador abría el vídeo con
-  /// `player.open()` de media_kit en los siete sitios donde abre. Así que al
-  /// elegir ExoPlayer pasaba esto:
-  ///
-  ///   - la vista era la de ExoPlayer, que no tenía nada cargado → negro;
-  ///   - mpv seguía reproduciendo por debajo → se escuchaba.
-  ///
-  /// Ya está conectado: las aperturas pasan por `_abrirFuente`, que va a la
-  /// fachada, así que cambiar de motor cambia de verdad lo que reproduce. Y
-  /// ExoPlayer dibuja en superficie nativa, que es su ventaja de fondo.
-  ///
-  /// Lo que sigue SIN pasar por la fachada son los extras propios de mpv
-  /// —propiedades de libmpv, pistas, captura del cuadro, el recorte fMP4—.
-  /// Todos se apagan solos cuando el motor no es mpv (`player.platform is!
-  /// NativePlayer`), así que con ExoPlayer se pierde esa información de
-  /// diagnóstico pero no la reproducción.
-  ///
-  /// ── Por qué el interruptor sigue a la vista ─────────────────────────────
-  ///
-  /// Cada extensión tiene sus servidores y cada servidor su formato, así que
-  /// cuál de los dos motores conviene no se sabe leyendo código: se sabe
-  /// probando extensión por extensión en aparatos reales. El interruptor está
-  /// para eso, es temporal, y se saca cuando la elección esté decidida por
-  /// plataforma y formato.
-  static bool get sePuedeElegir => true;
+  /// Ya no se elige a mano en ninguna plataforma. Ver la nota de la clase.
+  static bool get sePuedeElegir => false;
 
-  /// Arma el motor que corresponde.
-  ///
-  /// [player] y [videoController] son los de media_kit, que se crean igual
-  /// siempre: el reproductor los sigue usando para cosas propias de mpv
-  /// (propiedades de libmpv, pistas, captura). Si el motor elegido es ExoPlayer
-  /// quedan sin usarse para reproducir, pero crearlos no cuesta nada y evita
-  /// tener que hacer condicionales por todo el controlador.
   static MotorDeVideo armar({
     required Player player,
     required VideoController videoController,
@@ -103,7 +80,21 @@ class EleccionDeMotor {
   }
 
   static String _decidir() {
-    // Fuera de Android no hay alternativa, pase lo que pase en el ajuste.
+    // Escritorio: mpv, que es el único que hay ahí.
+    if (!Platform.isAndroid) return mpv;
+    // Android —teléfono y televisor—: ExoPlayer.
+    //
+    // Es el motor del sistema, dibuja en superficie nativa y por eso el vídeo
+    // y la interfaz van por carriles separados: la interfaz se redibuja solo
+    // cuando algo cambia y el vídeo avanza a su ritmo. Con textura los dos
+    // comparten carril y cada cuadro de vídeo es una pasada de dibujado de la
+    // interfaz — que es lo que se medía como tirones en televisores.
+    return exo;
+  }
+
+  /// Lo que queda del camino viejo, por si hiciera falta volver a mirarlo.
+  // ignore: unused_element
+  static String _decidirPorAjuste() {
     if (!Platform.isAndroid) return mpv;
     final pedido = elegido;
     if (pedido == exo) return exo;

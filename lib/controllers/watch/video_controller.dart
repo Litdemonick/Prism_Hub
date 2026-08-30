@@ -38,6 +38,7 @@ import 'package:prismhub/controllers/watch/dibujado_de_video.dart';
 import 'package:prismhub/controllers/watch/frecuencia_de_pantalla.dart';
 import 'package:prismhub/controllers/watch/motor/motor_de_video.dart';
 import 'package:prismhub/controllers/watch/motor/eleccion_de_motor.dart';
+import 'package:prismhub/controllers/watch/motor/motor_mpv.dart';
 import 'package:prismhub/controllers/watch/recorte_fmp4.dart';
 import 'package:prismhub/utils/watch_state.dart';
 import 'package:prismhub/data/services/database_service.dart';
@@ -123,10 +124,23 @@ class VideoPlayerController extends GetxController with WidgetsBindingObserver {
   /// se lo pide al motor. Ese es el punto donde los dos motores difieren de
   /// verdad —textura contra superficie nativa— y tenerlo detras de la fachada
   /// es lo que permite meter el segundo sin tocar la pantalla.
-  late final MotorDeVideo motor = EleccionDeMotor.armar(
+  late final MotorDeVideo _motorPrincipal = EleccionDeMotor.armar(
     player: player,
     videoController: videoController,
   );
+
+  /// El que se usa ahora mismo. Cambia solo si hay que caer a la reserva.
+  MotorDeVideo? _motorEnUso;
+
+  MotorDeVideo get motor => _motorEnUso ??= _motorPrincipal;
+
+  /// El de reserva: mpv, que se traga casi cualquier cosa.
+  ///
+  /// Solo existe cuando el principal NO es mpv — o sea, en Android. En
+  /// escritorio el principal ya es este y no hay a dónde caer.
+  late final MotorDeVideo? _motorDeReserva = _motorPrincipal.nombre == 'mpv'
+      ? null
+      : MotorMpv(player: player, videoController: videoController);
 
   /// Si ya se avisó de que el wakelock no responde en este aparato.
   bool _yaAvisoDelWakelock = false;
@@ -188,8 +202,35 @@ class VideoPlayerController extends GetxController with WidgetsBindingObserver {
     String url, {
     Map<String, String>? cabeceras,
     bool arrancar = true,
-  }) =>
-      motor.abrir(url, cabeceras: cabeceras, arrancar: arrancar);
+  }) async {
+    try {
+      await motor.abrir(url, cabeceras: cabeceras, arrancar: arrancar);
+    } catch (e) {
+      // ── Si el motor de Android no puede abrirla, se cae a mpv ─────────
+      //
+      // Ya no hay interruptor en Ajustes: el motor lo decide la plataforma.
+      // Eso está bien mientras funcione, y deja sin salida a quien se tope con
+      // una fuente rara — antes podía cambiar a mano, ahora no.
+      //
+      // Así que la salida la toma la app: si ExoPlayer no abre, se abre con
+      // mpv, que es el que se traga casi cualquier cosa. La persona ve el
+      // vídeo; nosotros vemos en el registro con qué fuente pasó, que es lo
+      // que hace falta para arreglarlo de verdad.
+      if (_motorDeReserva == null || _yaCayoALaReserva) rethrow;
+      _yaCayoALaReserva = true;
+      logger.warning('${motor.nombre} no pudo abrir la fuente, se sigue con '
+          '${_motorDeReserva!.nombre}: $e');
+      CentinelaDeArranque.marcar('cae al motor de reserva');
+      _motorEnUso = _motorDeReserva;
+      await motor.abrir(url, cabeceras: cabeceras, arrancar: arrancar);
+    }
+  }
+
+  /// Si ya se cayó a la reserva en esta reproducción.
+  ///
+  /// Una sola vez: si el de reserva tampoco puede, el problema es la fuente y
+  /// hay que decirlo, no seguir rebotando entre motores.
+  bool _yaCayoALaReserva = false;
 
   final showSidebar = false.obs;
   final isOpenSidebar = false.obs;
