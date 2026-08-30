@@ -25,6 +25,18 @@
 - Los avisos llegaban de a pares porque Android manda varios niveles a la vez;
   ahora cuentan como uno solo.
 
+### 🎯 Los botones ya no se quedan encendidos
+
+- En la columna del televisor quedaban **varios botones marcados a la vez**, y
+  con tres luces puestas no se sabe cuál se va a activar al pulsar. Por eso
+  parecía que «a veces cuesta»: el mando respondía bien, lo que estaba mal era
+  dónde parecía estar el foco.
+- La causa: la columna cambia de largo —«volver al final» solo está cuando te
+  fuiste del fondo— y al aparecer o desaparecer, cada botón heredaba el estado
+  del que tenía al lado.
+- Corregido también en las filas de zonas de PC y Android y en la lista del
+  historial, donde hoy no se notaba pero podía aparecer en cualquier momento.
+
 ### 🧹 «Fallos» vuelve a servir
 
 - Que el sistema pida memoria es normal —pasa cada vez que abrís otra app— y
