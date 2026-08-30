@@ -1,5 +1,7 @@
 import 'dart:io';
 
+import 'package:prismhub/utils/application.dart';
+
 import 'package:flutter/services.dart';
 import 'package:prismhub/utils/log.dart';
 
@@ -19,7 +21,10 @@ class PlatformTv {
   static bool esTelevisionSync = false;
 
   static Future<void> ensureInitialized() async {
-    if (!Platform.isAndroid) return;
+    if (!Platform.isAndroid) {
+      await PerfilDeAparato.resolverEnEscritorio();
+      return;
+    }
     try {
       // Una sola llamada trae las cuatro cosas: si es televisor y los tres
       // datos con los que se decide cuánto puede gastar la app. Antes eran dos
@@ -132,37 +137,147 @@ class PerfilDeAparato {
   /// Atajo para lo más común: «¿esto es un aparato que hay que cuidar?».
   static bool get esModesto => nivel != NivelDeAparato.alto;
 
+  /// Si en este aparato tiene sentido ofrecer «pedir siempre la máxima
+  /// calidad».
+  ///
+  /// ── Por qué es un ajuste que se puede bloquear ──────────────────────────
+  ///
+  /// Ese interruptor le dice a la app que apunte siempre a la variante más
+  /// alta que publique la fuente: 1080p, 4K, la que haya. En un aparato capaz
+  /// es lo que quiere quien tiene con qué.
+  ///
+  /// En uno modesto no es una preferencia, es una forma de romper la
+  /// reproducción: medido en un televisor de 0,9 GB con pantalla de 720p,
+  /// pidiendo 1080p el colchón se vaciaba a cero y el vídeo se paraba solo. Con
+  /// 4K ni arrancaría. Dejar el interruptor a la vista ahí es ofrecer un botón
+  /// que solo puede empeorar las cosas, sin decirlo.
+  ///
+  /// Se bloquea en el nivel bajo y se explica por qué, en vez de esconderlo:
+  /// alguien que lo busca tiene que encontrar la respuesta, no un hueco.
+  ///
+  /// **Y también se ignora si quedó encendido de antes**, porque el aparato
+  /// puede haber cambiado de nivel al actualizar la app.
+  static bool get puedeExigirMaximaCalidad => nivel != NivelDeAparato.bajo;
+
   /// Decide el nivel con lo que informó el sistema.
   ///
-  /// Los tres datos juntos y no uno solo: `isLowRamDevice` es la respuesta
-  /// oficial de Android, pero la declara el fabricante y varios sticks baratos
-  /// no la ponen. La memoria total y la cantidad de núcleos los delatan igual.
+  /// ── Qué se mira, y por qué no alcanza con un dato ───────────────────────
+  ///
+  /// `isLowRamDevice` es la respuesta oficial de Android, pero la declara el
+  /// fabricante y varios sticks baratos no la ponen. La memoria total y los
+  /// núcleos los delatan igual, así que se miran los tres.
+  ///
+  /// ── Y por qué el listón no es el mismo en un televisor ──────────────────
+  ///
+  /// Porque no hacen lo mismo. Un televisor con 2 GB dedica casi todo a la
+  /// interfaz del sistema y al decodificador, y comparte el procesador con él;
+  /// un teléfono con 2 GB es un teléfono modesto pero entero para la app. El
+  /// mismo número significa cosas distintas, así que los cortes son distintos.
+  ///
+  /// Un televisor SÍ puede llegar al nivel alto: un Fire TV 4K con 3 GB y ocho
+  /// núcleos no tiene por qué recibir el mismo trato que un stick de 1 GB, y
+  /// tratarlo así sería desperdiciarlo.
   static void resolver({
     required bool esTelevision,
     required bool bajaMemoria,
     required int memoriaTotalMb,
     required int nucleos,
   }) {
-    // Teléfonos y tablets siguen como hasta ahora. Este trabajo salió de que la
-    // app se petaba en televisores, y no hay ninguna medición que diga que un
-    // teléfono modesto necesite lo mismo — meterlo acá sin dato sería cambiar
-    // el comportamiento de la mayoría de los usuarios a ciegas.
-    if (!esTelevision) {
-      nivel = NivelDeAparato.alto;
-      return;
-    }
-    // memoriaTotalMb en 0 significa "no se pudo averiguar", no "no tiene
-    // memoria": por eso se pregunta que sea mayor que cero antes de compararlo.
-    final pocaMemoria = memoriaTotalMb > 0 && memoriaTotalMb < 1500;
-    // Lo mismo con los núcleos: 0 es que no se supo.
-    final pocosNucleos = nucleos > 0 && nucleos <= 2;
-    nivel = (bajaMemoria || pocaMemoria || pocosNucleos)
-        ? NivelDeAparato.bajo
-        : NivelDeAparato.medio;
+    nivel = _decidir(
+      esTelevision: esTelevision,
+      bajaMemoria: bajaMemoria,
+      memoriaTotalMb: memoriaTotalMb,
+      nucleos: nucleos,
+    );
     logger.info(
       'Perfil del aparato: ${nivel.name} '
-      '(bajaMemoria=$bajaMemoria, memoria=${memoriaTotalMb}MB, '
-      'nucleos=$nucleos)',
+      '(televisor=$esTelevision, bajaMemoria=$bajaMemoria, '
+      'memoria=${memoriaTotalMb}MB, nucleos=$nucleos)',
     );
+  }
+
+  /// La decisión sola, sin tocar nada y sin escribir en el registro.
+  ///
+  /// Va aparte para poder probarla: lo demás depende del sistema.
+  ///
+  /// Un 0 en memoria o núcleos significa «no se pudo averiguar», no «no
+  /// tiene»: por eso se pregunta que sean mayores que cero antes de comparar.
+  /// Sin datos, se queda en alto, que es como se comportaba la app hasta que
+  /// esto existió.
+  static NivelDeAparato _decidir({
+    required bool esTelevision,
+    required bool bajaMemoria,
+    required int memoriaTotalMb,
+    required int nucleos,
+  }) {
+    // Lo que dice el propio sistema manda por encima de cualquier número.
+    if (bajaMemoria) return NivelDeAparato.bajo;
+
+    // (memoria para ser modesto, memoria para ser capaz, núcleos para capaz)
+    final (topeBajo, pisoAlto, nucleosAlto) =
+        esTelevision ? (1500, 3000, 4) : (2000, 4000, 4);
+
+    if (memoriaTotalMb > 0 && memoriaTotalMb < topeBajo) {
+      return NivelDeAparato.bajo;
+    }
+    if (nucleos > 0 && nucleos <= 2) return NivelDeAparato.bajo;
+    if (memoriaTotalMb >= pisoAlto && nucleos >= nucleosAlto) {
+      return NivelDeAparato.alto;
+    }
+    // Sin ningún dato creíble no se recorta nada: es como venía siendo.
+    if (memoriaTotalMb <= 0 && nucleos <= 0) return NivelDeAparato.alto;
+    return NivelDeAparato.medio;
+  }
+
+  /// El perfil en Windows, Linux y macOS.
+  ///
+  /// ── Por qué hacía falta ─────────────────────────────────────────────────
+  ///
+  /// Hasta ahora esto solo se calculaba en Android: en escritorio el nivel era
+  /// siempre alto, sin haber medido nada. O sea que un portátil viejo de dos
+  /// núcleos recibía exactamente el mismo trato que una máquina nueva, y la
+  /// app pedía 1080p y treinta peticiones a la vez en los dos.
+  ///
+  /// Los datos son los mismos que ya se anotan en la cabecera del registro, así
+  /// que no hace falta nada nuevo: la memoria física y los núcleos.
+  static Future<void> resolverEnEscritorio() async {
+    try {
+      final memoria = await _memoriaDeEscritorioMb();
+      resolver(
+        esTelevision: false,
+        // No existe en escritorio: es una marca que pone el fabricante en
+        // Android. Acá deciden la memoria y los núcleos.
+        bajaMemoria: false,
+        memoriaTotalMb: memoria,
+        nucleos: Platform.numberOfProcessors,
+      );
+    } catch (e) {
+      // Sin el dato se queda en alto, que es como venía siendo. Esto no puede
+      // ser lo que impida arrancar.
+      logger.info('No se pudo medir el aparato: $e');
+    }
+  }
+
+  /// La memoria física en MB, o 0 si no se pudo saber.
+  static Future<int> _memoriaDeEscritorioMb() async {
+    try {
+      if (Platform.isWindows) {
+        return windowsDeviceInfo.systemMemoryInMegabytes;
+      }
+      if (Platform.isLinux) {
+        // De donde la saca el propio sistema.
+        final linea = File('/proc/meminfo')
+            .readAsLinesSync()
+            .firstWhere((l) => l.startsWith('MemTotal'), orElse: () => '');
+        final kb = int.tryParse(
+          RegExp(r'(\d+)').firstMatch(linea)?.group(1) ?? '',
+        );
+        if (kb != null) return kb ~/ 1024;
+      }
+    } catch (_) {
+      // Sin permiso, sin ese archivo, o la info del sistema todavía sin
+      // cargar: se sigue sin el dato.
+    }
+    return 0;
   }
 }

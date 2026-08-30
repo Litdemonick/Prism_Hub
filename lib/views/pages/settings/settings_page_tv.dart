@@ -6,6 +6,7 @@ import 'package:prismhub/utils/modo_app.dart';
 import 'package:prismhub/models/index.dart';
 import 'package:prismhub/utils/application.dart';
 import 'package:prismhub/utils/i18n.dart';
+import 'package:prismhub/utils/platform_tv.dart';
 import 'package:prismhub/utils/prismhub_storage.dart';
 import 'package:prismhub/utils/zonas_preferidas.dart';
 import 'package:prismhub/views/pages/extension/extension_page.dart';
@@ -253,6 +254,11 @@ class _SettingsPageTvState extends State<SettingsPageTv> {
           subtitulo: 'settings.max-quality-subtitle'.i18n,
           clave: SettingKey.empezarEnMaximaCalidad,
           porDefecto: false,
+          // En un aparato modesto esto no es una preferencia: es una forma de
+          // romper la reproducción. Ver PerfilDeAparato.
+          bloqueadoPorque: PerfilDeAparato.puedeExigirMaximaCalidad
+              ? null
+              : 'settings.max-quality-bloqueada'.i18n,
         ),
         _Interruptor(
           icono: Icons.skip_next_rounded,
@@ -514,6 +520,7 @@ class _Interruptor extends StatefulWidget {
     this.onTap,
     this.acento,
     this.alCambiar,
+    this.bloqueadoPorque,
   });
 
   final IconData icono;
@@ -535,6 +542,13 @@ class _Interruptor extends StatefulWidget {
   /// solo alcanza para la fila misma.
   final VoidCallback? alCambiar;
 
+  /// Si esta fila no se puede tocar en este aparato, POR QUÉ.
+  ///
+  /// Se muestra en vez del subtítulo y la fila queda apagada. Se prefiere esto
+  /// a esconderla: quien viene buscando el ajuste tiene que encontrar la
+  /// respuesta, no un hueco donde recordaba que estaba.
+  final String? bloqueadoPorque;
+
   @override
   State<_Interruptor> createState() => _InterruptorState();
 }
@@ -547,12 +561,22 @@ class _InterruptorState extends State<_Interruptor> {
 
   @override
   Widget build(BuildContext context) {
+    final bloqueado = widget.bloqueadoPorque != null;
     return _FilaTv(
       icono: widget.icono,
       titulo: widget.titulo,
-      subtitulo: widget.subtitulo,
-      acento: widget.acento,
-      trailing: widget.valorTexto != null
+      subtitulo: widget.bloqueadoPorque ?? widget.subtitulo,
+      acento: bloqueado ? HomeTheme.textMuted : widget.acento,
+      trailing: bloqueado
+          ? Text(
+              'settings.no-en-este-aparato'.i18n,
+              style: TextStyle(
+                fontSize: 14,
+                fontWeight: FontWeight.w600,
+                color: HomeTheme.textMuted,
+              ),
+            )
+          : widget.valorTexto != null
           ? Text(
               widget.valorTexto!,
               style: TextStyle(
@@ -561,13 +585,15 @@ class _InterruptorState extends State<_Interruptor> {
                 color: widget.acento ?? HomeTheme.accentPink,
               ),
             )
-          : _Pastilla(activa: _activo, acento: widget.acento),
-      onTap: widget.onTap ??
-          () async {
-            await PrismHubStorage.setSetting(widget.clave!, !_activo);
-            if (mounted) setState(() {});
-            widget.alCambiar?.call();
-          },
+              : _Pastilla(activa: _activo, acento: widget.acento),
+      onTap: bloqueado
+          ? null
+          : widget.onTap ??
+              () async {
+                await PrismHubStorage.setSetting(widget.clave!, !_activo);
+                if (mounted) setState(() {});
+                widget.alCambiar?.call();
+              },
     );
   }
 }

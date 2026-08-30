@@ -530,7 +530,9 @@
     "log-en-red-bloqueado": "El sistema no dejó abrir el puerto en este aparato. Suele pasar con la app en segundo plano: volvé a intentarlo con PrismHub abierto en pantalla.",
     "log-export-listo": "Registro exportado",
     "log-export-error": "No se pudo exportar: {error}",
-    "log-clear-error": "No se pudo limpiar el registro: {error}"
+    "log-clear-error": "No se pudo limpiar el registro: {error}",
+    "max-quality-bloqueada": "Este aparato no da para pedir siempre la máxima calidad: pedir más de lo que puede mostrar hace que el vídeo se corte. La app elige sola la mejor que aguanta.",
+    "no-en-este-aparato": "No en este aparato"
   },
   "external-player-launching": "Lanzando {player}",
   "detail": {

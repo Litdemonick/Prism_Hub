@@ -1082,18 +1082,30 @@ class _SettingsPageState extends State<SettingsPage> {
             // siga solo es algo que se pide, no algo que deba pasar sin avisar.
             // Apagado por defecto: arranca alrededor de 1080p. No es un tope
             // — el menu de calidades del reproductor sigue ofreciendo todo.
-            SettingsSwitchTile(
-              title: 'settings.max-quality'.i18n,
-              buildSubtitle: () => 'settings.max-quality-subtitle'.i18n,
-              buildValue: () =>
-                  PrismHubStorage.getSetting(
-                          SettingKey.empezarEnMaximaCalidad) ==
-                      true,
-              onChanged: (value) {
-                PrismHubStorage.setSetting(
-                    SettingKey.empezarEnMaximaCalidad, value);
-              },
-            ),
+            // En un aparato modesto esto no es una preferencia: es una forma
+            // de romper la reproduccion, asi que se muestra apagado y con el
+            // motivo. Ver PerfilDeAparato.puedeExigirMaximaCalidad.
+            if (PerfilDeAparato.puedeExigirMaximaCalidad)
+              SettingsSwitchTile(
+                title: 'settings.max-quality'.i18n,
+                buildSubtitle: () => 'settings.max-quality-subtitle'.i18n,
+                buildValue: () =>
+                    PrismHubStorage.getSetting(
+                            SettingKey.empezarEnMaximaCalidad) ==
+                        true,
+                onChanged: (value) {
+                  PrismHubStorage.setSetting(
+                      SettingKey.empezarEnMaximaCalidad, value);
+                },
+              )
+            else
+              SettingsSwitchTile(
+                title: 'settings.max-quality'.i18n,
+                buildSubtitle: () => 'settings.max-quality-bloqueada'.i18n,
+                buildValue: () => false,
+                enabled: false,
+                onChanged: (_) {},
+              ),
             SettingsSwitchTile(
               title: 'settings.autoplay-next'.i18n,
               buildSubtitle: () => 'settings.autoplay-next-subtitle'.i18n,

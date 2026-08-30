@@ -1686,8 +1686,13 @@ class VideoPlayerController extends GetxController with WidgetsBindingObserver {
       //
       // Y si alguien prefiere arrancar siempre en la máxima, lo enciende en
       // Ajustes una vez y se acabó.
+      // Y en un aparato modesto se ignora aunque esté encendido: puede haberlo
+      // dejado puesto en una versión anterior, o el nivel del aparato puede
+      // haber cambiado al actualizar. Ver PerfilDeAparato.
       final siempreMaxima =
-          PrismHubStorage.getSetting(SettingKey.empezarEnMaximaCalidad) == true;
+          PrismHubStorage.getSetting(SettingKey.empezarEnMaximaCalidad) ==
+                  true &&
+              PerfilDeAparato.puedeExigirMaximaCalidad;
       await np.setProperty(
         'hls-bitrate',
         // El mismo techo que usa la elección de calidad, traducido a bits por
@@ -3837,8 +3842,10 @@ class VideoPlayerController extends GetxController with WidgetsBindingObserver {
       List<MapEntry<String, _VarianteCalidad>> deMayorAMenor) {
     if (_calidadInicialElegida || _disposed) return;
     _calidadInicialElegida = true;
-    // Con el ajuste encendido no se toca nada: arranca en la mas alta.
-    if (PrismHubStorage.getSetting(SettingKey.empezarEnMaximaCalidad) == true) {
+    // Con el ajuste encendido no se toca nada: arranca en la mas alta. Salvo en
+    // un aparato modesto, donde ese ajuste no manda — ver PerfilDeAparato.
+    if (PrismHubStorage.getSetting(SettingKey.empezarEnMaximaCalidad) == true &&
+        PerfilDeAparato.puedeExigirMaximaCalidad) {
       return;
     }
     if (deMayorAMenor.isEmpty) return;
@@ -3904,7 +3911,13 @@ class VideoPlayerController extends GetxController with WidgetsBindingObserver {
     // 4K y un procesador de 2018 contesta 2160 a la primera y 720 a la
     // segunda, y la que vale es la segunda.
     final porPerfil = techoParaNivel(PerfilDeAparato.nivel);
-    if (!PlatformTv.esTelevisionSync) return porPerfil;
+    // Fuera del televisor no se mira la pantalla: en un PC la ventana se
+    // redimensiona y se pone a pantalla completa, así que atar la calidad al
+    // tamaño de ahora dejaría la imagen mala al maximizar. Se queda en 1080
+    // como venía siendo, salvo que el aparato no dé ni para eso.
+    if (!PlatformTv.esTelevisionSync) {
+      return porPerfil < 1080 ? porPerfil : 1080;
+    }
     try {
       final v = WidgetsBinding.instance.platformDispatcher.views.firstOrNull;
       final porPantalla = techoParaPantallaDe(v?.physicalSize.height ?? 0);

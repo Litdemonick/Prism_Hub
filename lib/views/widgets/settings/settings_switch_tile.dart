@@ -12,6 +12,7 @@ class SettingsSwitchTile extends StatefulWidget {
     required this.onChanged,
     this.buildSubtitle,
     this.isCard = false,
+    this.enabled = true,
   });
   final Widget? icon;
   final String title;
@@ -19,6 +20,13 @@ class SettingsSwitchTile extends StatefulWidget {
   final bool Function() buildValue;
   final Function(bool) onChanged;
   final bool isCard;
+
+  /// Si se puede tocar. Apagado, la fila se ve pero no alterna nada.
+  ///
+  /// Se prefiere esto a esconder el ajuste: quien viene buscándolo tiene que
+  /// encontrar el motivo por el que no está disponible, no un hueco donde
+  /// recordaba que estaba. El motivo va en el subtítulo.
+  final bool enabled;
 
   @override
   State<SettingsSwitchTile> createState() => _SettingsSwitchTileState();
@@ -49,21 +57,24 @@ class _SettingsSwitchTileState extends State<SettingsSwitchTile> {
       // alterna en mouse/dedo — que ya es lo que hacen la mayoría de las
       // apps de ajustes — y en TV el SELECT del mando cae sobre algo del
       // tamaño de toda la fila, no del interruptor solo.
-      onTap: _alternar,
+      onTap: widget.enabled ? _alternar : null,
       trailing: IgnorePointer(
         // El propio Switch/Toggle deja de escuchar toques: si los dos
         // reaccionaran, un clic en el interruptor lo alternaría dos veces
         // (una por él, otra por la fila) y quedaría en el estado de
         // arranque. `IgnorePointer` no afecta el D-pad: eso lo maneja
         // `onTap` de arriba, no un gesto sobre este widget puntual.
-        child: PlatformWidget(
-          androidWidget: Switch(
-            value: widget.buildValue(),
-            onChanged: (_) {},
-          ),
-          desktopWidget: fluent.ToggleSwitch(
-            checked: widget.buildValue(),
-            onChanged: (_) {},
+        child: Opacity(
+          opacity: widget.enabled ? 1 : 0.4,
+          child: PlatformWidget(
+            androidWidget: Switch(
+              value: widget.buildValue(),
+              onChanged: (_) {},
+            ),
+            desktopWidget: fluent.ToggleSwitch(
+              checked: widget.buildValue(),
+              onChanged: (_) {},
+            ),
           ),
         ),
       ),

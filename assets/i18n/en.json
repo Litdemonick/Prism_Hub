@@ -534,7 +534,9 @@
     "log-en-red-bloqueado": "The system would not let the port open on this device. This usually happens with the app in the background: try again with PrismHub on screen.",
     "log-export-listo": "Log exported",
     "log-export-error": "Could not export: {error}",
-    "log-clear-error": "Could not clear the log: {error}"
+    "log-clear-error": "Could not clear the log: {error}",
+    "max-quality-bloqueada": "This device cannot always request the highest quality: asking for more than it can show makes playback stall. The app picks the best one it can sustain.",
+    "no-en-este-aparato": "Not on this device"
   },
   "external-player-launching": "Launching {player}",
   "detail": {
