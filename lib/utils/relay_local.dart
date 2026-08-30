@@ -3,6 +3,7 @@ import 'dart:convert';
 import 'dart:io';
 import 'dart:typed_data';
 
+import 'package:prismhub/utils/carrera_de_nodos.dart';
 import 'package:prismhub/utils/nodos_lentos.dart';
 import 'package:prismhub/utils/relay_log.dart';
 import 'package:prismhub/utils/prismhub_storage.dart';
@@ -103,7 +104,8 @@ class RelayLocal {
       );
     }
     _base = 'http://$ip:$_port';
-    RelayLog.paso('Relay escuchando en 0.0.0.0:$_port; al aparato se le anuncia '
+    RelayLog.paso(
+        'Relay escuchando en 0.0.0.0:$_port; al aparato se le anuncia '
         '$ip:$_port — origen ${RelayLog.donde(targetUrl)}');
     // Con la extensión de la fuente pegada: es lo que le dice a ExoPlayer que
     // esto es una lista HLS y no un archivo de vídeo suelto. Ver _extensionDe.
@@ -217,7 +219,6 @@ class RelayLocal {
     return _targets[uri.pathSegments[1]]?.sesion;
   }
 
-
   static const _permisos = {
     'Access-Control-Allow-Origin': '*',
     'Access-Control-Allow-Methods': 'GET, HEAD, OPTIONS',
@@ -243,11 +244,11 @@ class RelayLocal {
     // todos taparia lo unico que interesa, que es el primero.
     final primerPedido = !pedidosPorSesion.containsKey(target.sesion);
     if (primerPedido) {
-      final quien = (request.context['shelf.io.connection_info']
-                  as HttpConnectionInfo?)
-              ?.remoteAddress
-              .address ??
-          'desconocido';
+      final quien =
+          (request.context['shelf.io.connection_info'] as HttpConnectionInfo?)
+                  ?.remoteAddress
+                  .address ??
+              'desconocido';
       pedidosPorSesion[target.sesion] = quien;
       // CON QUE cabeceras pidio, no solo que pidio: ahi va el User-Agent y
       // si pide un trozo (Range), que es lo que hace falta para entender un
@@ -261,7 +262,6 @@ class RelayLocal {
     // GET: se abría la descarga entera del vídeo solo para tirarla, y la
     // respuesta no traía lo que había preguntado.
     final esHead = request.method.toUpperCase() == 'HEAD';
-
 
     final client = _cliente;
     try {
@@ -294,12 +294,12 @@ class RelayLocal {
       }
       final upstreamReq =
           esHead ? await client.headUrl(uri) : await client.getUrl(uri);
-      target.headers.forEach((key, value) => upstreamReq.headers.set(key, value));
+      target.headers
+          .forEach((key, value) => upstreamReq.headers.set(key, value));
       // Si la extension no mando User-Agent, el que pone dart:io hace que
       // Cloudflare conteste 403 (medido). Ver _uaPorDefecto.
       if (upstreamReq.headers.value(HttpHeaders.userAgentHeader) == null ||
-          !target.headers.keys
-              .any((k) => k.toLowerCase() == 'user-agent')) {
+          !target.headers.keys.any((k) => k.toLowerCase() == 'user-agent')) {
         upstreamReq.headers.set(HttpHeaders.userAgentHeader, _uaPorDefecto);
       }
       final range = request.headers['range'];
@@ -430,13 +430,16 @@ class RelayLocal {
       var texto = utf8.decode(bytes, allowMalformed: true);
       // De una página de bloqueo solo interesa el texto, no el HTML entero.
       texto = texto
-          .replaceAll(RegExp(r'<(script|style)[\s\S]*?</\1>', caseSensitive: false), ' ')
+          .replaceAll(
+              RegExp(r'<(script|style)[\s\S]*?</\1>', caseSensitive: false),
+              ' ')
           .replaceAll(RegExp(r'<[^>]+>'), ' ')
           .replaceAll(RegExp(r'\s+'), ' ')
           .trim();
       if (texto.length > 200) texto = '${texto.substring(0, 200)}…';
       // Si quedó ilegible (binario), no se muestra nada.
-      final raros = texto.runes.where((r) => r < 32 || r > 126 && r < 160).length;
+      final raros =
+          texto.runes.where((r) => r < 32 || r > 126 && r < 160).length;
       if (texto.isEmpty || raros > texto.length ~/ 10) return '';
       return texto;
     } catch (_) {
@@ -563,8 +566,9 @@ class RelayLocal {
       final ok = res.statusCode >= 200 && res.statusCode < 300;
       // El cuerpo se descarta, pero hay que drenarlo para que la conexion
       // vuelva al pozo en vez de quedar a medio usar.
-      await res.drain<void>().timeout(const Duration(seconds: 4),
-          onTimeout: () {});
+      await res
+          .drain<void>()
+          .timeout(const Duration(seconds: 4), onTimeout: () {});
       if (ok) {
         RelayLog.paso('Los pedacitos van directo: el relay se saca del camino');
       }
@@ -581,33 +585,77 @@ class RelayLocal {
   /// los buenos y corta rápido con los que no entregan.
   static const _plazoPorPedacito = Duration(seconds: 8);
 
-  /// Baja un pedacito entero, probando otros nodos si el suyo no entrega.
+  /// Cuánto se espera a que un nodo dé señales de vida antes de sumar otro.
+  ///
+  /// ── Por qué existe esto ─────────────────────────────────────────────────
+  ///
+  /// Antes los nodos se probaban de a uno: si el primero no entregaba, se le
+  /// aguantaban los ocho segundos enteros y recién ahí se pasaba al siguiente.
+  /// Medido en un teléfono con jkanime, con cinco nodos caídos seguidos:
+  ///
+  ///     cdn6 no dio el pedacito en 8001 ms, se prueba otro nodo
+  ///     cdn4 no dio el pedacito en 8001 ms, se prueba otro nodo
+  ///     cdn1 no dio el pedacito en 8006 ms, se prueba otro nodo
+  ///     cdn2 no dio el pedacito en 8014 ms, se prueba otro nodo
+  ///     cdn5 no dio el pedacito en 8007 ms, se prueba otro nodo
+  ///
+  /// Cuarenta segundos mirando una rueda para terminar bajando de un nodo que
+  /// contestaba en dos.
+  ///
+  /// ── Y por qué no se lanzan todos de una ─────────────────────────────────
+  ///
+  /// Porque sería bajar el mismo pedacito seis veces con los datos de la
+  /// persona. Lo que se hace es sumar nodos DE A UNO y solo mientras ninguno
+  /// haya dado señales: en cuanto uno empieza a mandar bytes, se deja de
+  /// sumar y se lo espera a él.
+  ///
+  /// Dos segundos y medio: un nodo sano empieza a mandar mucho antes de eso
+  /// —lo que tarda son los megas, no el saludo—, así que en el caso bueno se
+  /// hace UNA sola petición, igual que antes.
+  static const _pacienciaSinSenales = Duration(milliseconds: 2500);
+
+  /// Baja un pedacito entero, sumando otros nodos si el suyo no da señales.
+  ///
+  /// El reparto entre nodos vive en [CarreraDeNodos], que es donde está
+  /// explicado y probado. Acá solo se dice QUÉ es un intento y qué se anota.
   ///
   /// Devuelve null si ninguno pudo — ahí quien llama sigue por el camino normal.
   static Future<List<int>?> _pedacitoConFailover(
       Uri original, _RelayTarget target) async {
-    for (final uri in _nodosParaProbar(original, target)) {
-      final reloj = Stopwatch()..start();
-      try {
-        final bytes = await _bajarPedacitoEntero(uri, target)
-            .timeout(_plazoPorPedacito);
-        if (uri.host != original.host) {
-          RelayLog.paso('El pedacito se consiguió en ${uri.host} — '
-              '${(bytes.length / 1024).round()} KiB en '
-              '${reloj.elapsedMilliseconds} ms');
-        }
-        return bytes;
-      } catch (e) {
+    final relojes = <Uri, Stopwatch>{};
+    return CarreraDeNodos.correr<Uri, List<int>>(
+      candidatos: _nodosParaProbar(original, target),
+      paciencia: _pacienciaSinSenales,
+      tope: _plazoPorPedacito,
+      intentar: (uri, darSenales) {
+        relojes[uri] = Stopwatch()..start();
+        return _bajarPedacitoEntero(uri, target, alPrimerByte: darSenales);
+      },
+      alGanar: (uri, bytes) {
+        if (uri.host == original.host) return;
+        RelayLog.paso('El pedacito se consiguió en ${uri.host} — '
+            '${(bytes.length / 1024).round()} KiB en '
+            '${relojes[uri]?.elapsedMilliseconds ?? 0} ms');
+      },
+      alFallar: (uri, e) {
         NodosLentos.anotar(uri.host);
         RelayLog.paso('${uri.host} no dio el pedacito en '
-            '${reloj.elapsedMilliseconds} ms, se prueba otro nodo — $e');
-      }
-    }
-    return null;
+            '${relojes[uri]?.elapsedMilliseconds ?? 0} ms, se prueba otro '
+            'nodo — $e');
+      },
+    );
   }
 
+  /// [alPrimerByte] se llama en cuanto llega el primer bloque del cuerpo.
+  ///
+  /// Es lo que distingue un nodo muerto de uno lento: el muerto no manda nada,
+  /// el lento manda despacio. Sin esta señal habría que elegir entre esperar de
+  /// más al muerto o bajar dos veces lo del lento.
   static Future<List<int>> _bajarPedacitoEntero(
-      Uri uri, _RelayTarget target) async {
+    Uri uri,
+    _RelayTarget target, {
+    void Function()? alPrimerByte,
+  }) async {
     final req = await _cliente.getUrl(uri);
     target.headers.forEach((k, v) => req.headers.set(k, v));
     if (!target.headers.keys.any((k) => k.toLowerCase() == 'user-agent')) {
@@ -619,7 +667,12 @@ class RelayLocal {
       throw HttpException('HTTP ${res.statusCode}');
     }
     final juntado = BytesBuilder(copy: false);
+    var primero = true;
     await for (final bloque in res) {
+      if (primero) {
+        primero = false;
+        alPrimerByte?.call();
+      }
       juntado.add(bloque);
     }
     return juntado.takeBytes();
@@ -809,7 +862,8 @@ class RelayLocal {
     for (final iface in interfaces) {
       for (final addr in iface.addresses) {
         if (!addr.isLoopback) {
-          RelayLog.paso('Interfaces IPv4: ${candidatas.join(', ')} → se anuncia '
+          RelayLog.paso(
+              'Interfaces IPv4: ${candidatas.join(', ')} → se anuncia '
               '${addr.address} por ${iface.name} (criterio: la primera de la '
               'lista, sin mirar la subred del aparato)');
           return addr.address;
@@ -818,7 +872,8 @@ class RelayLocal {
     }
     // Nada alcanzable desde afuera. Devolver loopback seria peor que no
     // devolver nada: parece una direccion valida y no lo es.
-    RelayLog.fallo('Sin ninguna IPv4 no-loopback: no hay direccion que anunciar');
+    RelayLog.fallo(
+        'Sin ninguna IPv4 no-loopback: no hay direccion que anunciar');
     return null;
   }
 }
@@ -839,7 +894,6 @@ class _RelayTarget {
   /// perder la única forma de hacerlo: el reproductor volvería a pedirle a un
   /// nodo que no entrega.
   final bool esquivarNodosCaidos;
-
 
   /// Agrupa el maestro con los segmentos que salieron de su lista, para poder
   /// soltarlos todos juntos al desconectar (ver unregister).
