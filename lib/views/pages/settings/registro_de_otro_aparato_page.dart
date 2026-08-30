@@ -3,12 +3,15 @@ import 'dart:convert';
 import 'dart:io';
 
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:prismhub/utils/anuncio_de_registro.dart';
 import 'package:prismhub/utils/i18n.dart';
 import 'package:prismhub/utils/zonas_del_registro.dart';
 import 'package:prismhub/views/widgets/home/home_theme.dart';
+import 'package:prismhub/views/widgets/messenger.dart';
 import 'package:prismhub/views/widgets/seleccionable_si_se_puede.dart';
 import 'package:prismhub/views/widgets/tv/focusable_card.dart';
+import 'package:url_launcher/url_launcher.dart';
 
 /// Busca televisores con el registro abierto y lo muestra, sin escribir nada.
 ///
@@ -55,6 +58,44 @@ class _RegistroDeOtroAparatoPageState
       _encontrados = hallazgos;
       _buscando = false;
     });
+  }
+
+  Future<void> _copiar(String url) async {
+    await Clipboard.setData(ClipboardData(text: url));
+    if (!mounted) return;
+    showPlatformSnackbar(context: context, content: 'common.copied'.i18n);
+  }
+
+  /// Abre la dirección en el navegador del sistema.
+  ///
+  /// Sigue estando aunque el registro se pueda ver acá dentro: en un PC es
+  /// cómodo tenerlo en otra ventana, al lado de la app, en vez de ir y venir
+  /// entre pantallas.
+  Future<void> _enElNavegador(String url) async {
+    try {
+      final abierto = await launchUrl(
+        Uri.parse(url),
+        mode: LaunchMode.externalApplication,
+      );
+      if (abierto) return;
+      await _dejarlaCopiada(url);
+    } catch (_) {
+      await _dejarlaCopiada(url);
+    }
+  }
+
+  /// Cuando no hay navegador que abrir, al menos que quede copiada.
+  ///
+  /// El aviso dice que lo está, así que tiene que estarlo: un mensaje que
+  /// promete algo que no pasó es peor que no decir nada — se pega en cualquier
+  /// lado y aparece lo que hubiera antes en el portapapeles.
+  Future<void> _dejarlaCopiada(String url) async {
+    await Clipboard.setData(ClipboardData(text: url));
+    if (!mounted) return;
+    showPlatformSnackbar(
+      context: context,
+      content: 'settings.log-sin-navegador'.i18n,
+    );
   }
 
   @override
@@ -184,6 +225,14 @@ class _RegistroDeOtroAparatoPageState
                           ),
                         ),
                         const SizedBox(height: 3),
+                        // La dirección sigue a la vista.
+                        //
+                        // Verla no es un resto de cuando había que
+                        // escribirla: es lo que deja abrirla en el navegador
+                        // —que a veces es lo que uno quiere, para tenerla en
+                        // otra ventana mientras usa la app— y copiarla para
+                        // mandársela a alguien. Que ya no HAGA falta
+                        // escribirla no es razón para esconderla.
                         Text(
                           e.url,
                           style: TextStyle(
@@ -193,6 +242,18 @@ class _RegistroDeOtroAparatoPageState
                         ),
                       ],
                     ),
+                  ),
+                  IconButton(
+                    tooltip: 'settings.log-copiar'.i18n,
+                    icon: const Icon(Icons.copy_rounded, size: 20),
+                    color: HomeTheme.textMuted,
+                    onPressed: () => _copiar(e.url),
+                  ),
+                  IconButton(
+                    tooltip: 'settings.log-en-navegador'.i18n,
+                    icon: const Icon(Icons.open_in_browser, size: 20),
+                    color: HomeTheme.textMuted,
+                    onPressed: () => _enElNavegador(e.url),
                   ),
                   Icon(Icons.chevron_right, color: HomeTheme.textMuted),
                 ],

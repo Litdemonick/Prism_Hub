@@ -17,7 +17,10 @@
   pelada del navegador.
 - **Si la conexión se corta, lo que ya llegó no se borra.** Si el televisor se
   cayó, eso es justamente lo que hace falta para saber por qué.
-- Sigue funcionando por navegador si preferís: la dirección se muestra igual.
+- **La dirección sigue a la vista, con dos botones**: copiarla o abrirla en el
+  navegador. Que ya no haga falta escribirla no es razón para esconderla — en
+  un PC es cómodo tenerla en otra ventana al lado de la app, y copiarla sirve
+  para mandársela a alguien.
 
 ### 🔗 Y la dirección, mucho más corta
 
