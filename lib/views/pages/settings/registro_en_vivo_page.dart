@@ -10,6 +10,7 @@ import 'package:prismhub/views/widgets/tv/desplazable_con_mando.dart';
 import 'package:prismhub/views/widgets/tv/focusable_card.dart';
 import 'package:prismhub/utils/exportar_registro.dart';
 import 'package:prismhub/utils/log.dart';
+import 'package:prismhub/utils/servidor_de_registro.dart';
 import 'package:prismhub/utils/platform_tv.dart';
 import 'package:prismhub/views/widgets/home/home_theme.dart';
 import 'package:prismhub/views/widgets/messenger.dart';
@@ -161,6 +162,70 @@ class _RegistroEnVivoPageState extends State<RegistroEnVivoPage> {
     });
   }
 
+  /// Enciende o apaga el servidor que deja leer el registro desde otro
+  /// aparato, y muestra la dirección en grande.
+  Future<void> _alternarServidor() async {
+    if (ServidorDeRegistro.encendido) {
+      await ServidorDeRegistro.apagar();
+      if (mounted) setState(() {});
+      return;
+    }
+    ServidorDeRegistro.areaElegida = _filtro.area;
+    final direccion = await ServidorDeRegistro.encender();
+    if (!mounted) return;
+    setState(() {});
+    if (direccion == null) {
+      showPlatformSnackbar(
+        context: context,
+        content: 'settings.log-en-red-sin-red'.i18n,
+      );
+      return;
+    }
+    await showDialog<void>(
+      context: context,
+      builder: (context) => AlertDialog(
+        backgroundColor: HomeTheme.cardSurface,
+        title: Text('settings.log-en-red'.i18n,
+            style: TextStyle(color: HomeTheme.textPrimary)),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              'settings.log-en-red-como'.i18n,
+              style: TextStyle(color: HomeTheme.textMuted, fontSize: 14),
+            ),
+            const SizedBox(height: 18),
+            // Grande y monoespaciada: hay que copiarla mirando la pantalla
+            // desde el sillón y escribirla en otro aparato, así que cada
+            // carácter tiene que leerse sin dudar.
+            SelectableText(
+              direccion,
+              style: TextStyle(
+                fontFamily: 'monospace',
+                fontFamilyFallback: const ['Consolas', 'Courier New'],
+                fontSize: 26,
+                fontWeight: FontWeight.w700,
+                color: HomeTheme.accentPink,
+              ),
+            ),
+            const SizedBox(height: 18),
+            Text(
+              'settings.log-en-red-aviso'.i18n,
+              style: TextStyle(color: HomeTheme.textMuted, fontSize: 13),
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(),
+            child: Text('common.close'.i18n),
+          ),
+        ],
+      ),
+    );
+  }
+
   void _alternarPausa() {
     setState(() => _pausado = !_pausado);
     // Al reanudar se muestra YA lo que se acumuló mientras estuvo en pausa, sin
@@ -258,7 +323,12 @@ class _RegistroEnVivoPageState extends State<RegistroEnVivoPage> {
               child: Center(
                 child: FocusableCard(
                   borderRadius: 999,
-                  onTap: () => setState(() => _filtro = f),
+                  onTap: () => setState(() {
+                    _filtro = f;
+                    // El que esté mirando desde el navegador ve el mismo
+                    // cambio en cinco segundos, sin tocar nada de su lado.
+                    ServidorDeRegistro.areaElegida = f.area;
+                  }),
                   child: AnimatedContainer(
                     duration: const Duration(milliseconds: 120),
                     padding: EdgeInsets.symmetric(
@@ -404,7 +474,21 @@ class _RegistroEnVivoPageState extends State<RegistroEnVivoPage> {
               tooltip: 'common.export'.i18n,
               icon: const Icon(Icons.ios_share),
               color: HomeTheme.textPrimary,
-              onPressed: ExportarRegistro.entregar,
+              onPressed: () =>
+                  ExportarRegistro.entregar(soloArea: _filtro.area),
+            ),
+          // En televisor, en vez de exportar: leerlo desde otro aparato de la
+          // red. Ver ServidorDeRegistro.
+          if (PlatformTv.esTelevisionSync)
+            IconButton(
+              tooltip: 'settings.log-en-red'.i18n,
+              icon: Icon(ServidorDeRegistro.encendido
+                  ? Icons.wifi_tethering
+                  : Icons.wifi_tethering_off),
+              color: ServidorDeRegistro.encendido
+                  ? HomeTheme.accentPink
+                  : HomeTheme.textPrimary,
+              onPressed: _alternarServidor,
             ),
           IconButton(
             tooltip: 'common.clear'.i18n,
@@ -588,6 +672,21 @@ enum _Filtro {
 
   /// La clave de idioma del botón.
   final String clave;
+
+  /// La sección del exportado que corresponde a este filtro, o null si son
+  /// todas.
+  ///
+  /// Es lo que ata las tres salidas —lo que se ve en pantalla, lo que se
+  /// exporta y lo que se sirve por la red— a una sola idea de «zona». Si
+  /// cada una decidiera por su cuenta qué entra, mirar el televisor y mirar
+  /// el navegador darían resultados distintos y no habría forma de saber
+  /// cuál de los dos está bien.
+  String? get area => switch (this) {
+        _Filtro.todo => null,
+        _Filtro.fallos => ExportarRegistro.areaFallos,
+        _Filtro.extensiones => ExportarRegistro.areaExtensiones,
+        _Filtro.reproductor => ExportarRegistro.areaReproductor,
+      };
 
   /// Si una línea entra en este filtro.
   bool acepta(String l) => switch (this) {

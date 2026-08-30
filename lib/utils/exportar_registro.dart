@@ -72,8 +72,21 @@ class ExportarRegistro {
   static bool _esGeneral(String l) =>
       !_esFallo(l) && !_esReproductor(l) && !_esExtension(l);
 
+  /// Los nombres de las áreas, para que quien llame pueda pedir una sola.
+  ///
+  /// Se exponen desde acá y no se repiten afuera: el visor y el servidor de
+  /// red tienen que agrupar EXACTAMENTE igual que el exportado, o lo que se
+  /// ve en pantalla y lo que se manda dirían cosas distintas.
+  static const areaFallos = 'FALLOS Y AVISOS';
+  static const areaReproductor = 'REPRODUCTOR';
+  static const areaExtensiones = 'EXTENSIONES Y SERVIDORES';
+
   /// Arma el texto completo, ya ordenado por secciones.
-  static Future<String> armar() async {
+  ///
+  /// Con [soloArea] se arma solo esa —la que el usuario tenga elegida en el
+  /// visor— para que lo que se lee desde otro aparato coincida con lo que se
+  /// está mirando en la pantalla del televisor. Sin ella, van todas.
+  static Future<String> armar({String? soloArea}) async {
     await PrismLog.flush();
     final lineas = await _leerTodo();
 
@@ -100,6 +113,7 @@ class ExportarRegistro {
     salida.writeln();
 
     for (final (titulo, entra) in _secciones) {
+      if (soloArea != null && titulo != soloArea) continue;
       final delArea = lineas.where(entra).toList(growable: false);
       salida
         ..writeln('───────────────────────────────────────────────────')
@@ -141,8 +155,12 @@ class ExportarRegistro {
   ///
   /// En teléfono, por el menú de compartir. En escritorio, eligiendo dónde
   /// guardarlo. Devuelve false si la persona canceló.
-  static Future<bool> entregar() async {
-    final texto = await armar();
+  ///
+  /// Con [soloArea] sale solo la zona que se está mirando en el visor: quien
+  /// exporta desde el filtro de fallos quiere mandar los fallos, no dos mil
+  /// líneas más de las que ya decidió que no le interesaban.
+  static Future<bool> entregar({String? soloArea}) async {
+    final texto = await armar(soloArea: soloArea);
     final destino = File(
       '${File(PrismLog.logFilePath).parent.path}/PrismHub-reporte.log',
     );

@@ -492,7 +492,11 @@
     "log-filtro-todo": "Todo",
     "log-filtro-fallos": "Fallos",
     "log-filtro-extensiones": "Extensiones",
-    "log-filtro-reproductor": "Reproductor"
+    "log-filtro-reproductor": "Reproductor",
+    "log-en-red": "Ver desde otro aparato",
+    "log-en-red-como": "Escribí esta dirección en el navegador de tu PC o tu teléfono, conectados a la misma red. Vas a ver el registro completo, y ahí sí podés copiarlo y buscar.",
+    "log-en-red-aviso": "Se apaga solo a los 15 minutos. Solo se puede leer el registro, y ese ya sale sin direcciones ni datos tuyos.",
+    "log-en-red-sin-red": "No se pudo: hace falta estar conectado a una red de casa (wifi o cable)."
   },
   "external-player-launching": "Lanzando {player}",
   "detail": {

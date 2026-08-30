@@ -496,7 +496,11 @@
     "log-filtro-todo": "All",
     "log-filtro-fallos": "Failures",
     "log-filtro-extensiones": "Extensions",
-    "log-filtro-reproductor": "Player"
+    "log-filtro-reproductor": "Player",
+    "log-en-red": "View from another device",
+    "log-en-red-como": "Type this address in the browser of your PC or phone, on the same network. You will see the whole log, where you can copy and search.",
+    "log-en-red-aviso": "It turns itself off after 15 minutes. Only the log can be read, and it already comes without addresses or your data.",
+    "log-en-red-sin-red": "Could not start: you need to be on a home network (Wi-Fi or cable)."
   },
   "external-player-launching": "Launching {player}",
   "detail": {
