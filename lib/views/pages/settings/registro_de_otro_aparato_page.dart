@@ -39,15 +39,39 @@ class RegistroDeOtroAparatoPage extends StatefulWidget {
       _RegistroDeOtroAparatoPageState();
 }
 
-class _RegistroDeOtroAparatoPageState
-    extends State<RegistroDeOtroAparatoPage> {
+class _RegistroDeOtroAparatoPageState extends State<RegistroDeOtroAparatoPage> {
   List<({String aparato, String url})> _encontrados = const [];
   bool _buscando = true;
 
   @override
   void initState() {
     super.initState();
-    unawaited(_buscar());
+    // ── La búsqueda arranca DESPUÉS de la animación de entrada ──────────
+    //
+    // Reportado en vivo: «al tocar la zona para ver el registro del televisor
+    // parpadea en blanco». Buscar abre un socket, manda mensajes a toda la red
+    // y arma un temporizador, y todo eso empezaba en el mismo cuadro en que la
+    // pantalla entra deslizándose. Un cuadro perdido justo ahí es el
+    // parpadeo — no hay nada dibujado todavía y se ve el fondo de la
+    // transición.
+    //
+    // Esperando a que termine, la pantalla entra limpia y la búsqueda empieza
+    // con la animación ya quieta. Mismo criterio que el visor del registro.
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      final animacion = ModalRoute.of(context)?.animation;
+      if (animacion == null || animacion.isCompleted) {
+        unawaited(_buscar());
+        return;
+      }
+      void alTerminar(AnimationStatus estado) {
+        if (estado != AnimationStatus.completed) return;
+        animacion.removeStatusListener(alTerminar);
+        if (mounted) unawaited(_buscar());
+      }
+
+      animacion.addStatusListener(alTerminar);
+    });
   }
 
   Future<void> _buscar() async {
@@ -127,12 +151,19 @@ class _RegistroDeOtroAparatoPageState
       // SafeArea con los lados: apaisado, el recorte de cámara y la barra de
       // gestos se comen la primera columna. Arriba no, que de eso ya se ocupó
       // la barra de título.
-      body: SafeArea(
-        top: false,
-        child: Center(
-          child: ConstrainedBox(
-            constraints: const BoxConstraints(maxWidth: 720),
-            child: _cuerpo(),
+      // ColoredBox además del `backgroundColor` del Scaffold: durante la
+      // transición, lo que se ve por debajo es el fondo del tema de Material,
+      // que en esta app no es el mismo. Pintarlo acá hace que el primer cuadro
+      // ya salga del color correcto.
+      body: ColoredBox(
+        color: HomeTheme.bg,
+        child: SafeArea(
+          top: false,
+          child: Center(
+            child: ConstrainedBox(
+              constraints: const BoxConstraints(maxWidth: 720),
+              child: _cuerpo(),
+            ),
           ),
         ),
       ),
@@ -196,7 +227,8 @@ class _RegistroDeOtroAparatoPageState
             conCrecido: false,
             onTap: () => Navigator.of(context).push(
               MaterialPageRoute<void>(
-                builder: (_) => _RegistroRemotoPage(aparato: e.aparato, url: e.url),
+                builder: (_) =>
+                    _RegistroRemotoPage(aparato: e.aparato, url: e.url),
               ),
             ),
             child: Container(
