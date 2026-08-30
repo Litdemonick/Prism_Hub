@@ -17,6 +17,7 @@ import 'package:prismhub/views/pages/extension/extension_repo_page.dart';
 import 'package:prismhub/views/pages/settings/bloqueador_page.dart';
 import 'package:prismhub/views/pages/settings/copia_elegir_extensiones.dart';
 import 'package:prismhub/views/pages/settings/copia_resultado.dart';
+import 'package:prismhub/views/pages/settings/registro_de_otro_aparato_page.dart';
 import 'package:prismhub/views/pages/settings/registro_en_vivo_page.dart';
 import 'package:fluent_ui/fluent_ui.dart' as fluent;
 import 'package:flutter/material.dart';
@@ -846,6 +847,15 @@ class _SettingsPageState extends State<SettingsPage> {
   ///    navegaba (el botón parecía muerto).
   ///  - En escritorio manda go_router y el navegador de GetX no está activo,
   ///    así que va por su ruta.
+  /// Abre la búsqueda de televisores con el registro compartido.
+  void _buscarRegistroEnLaRed(BuildContext context) {
+    Navigator.of(context).push(
+      MaterialPageRoute<void>(
+        builder: (_) => const RegistroDeOtroAparatoPage(),
+      ),
+    );
+  }
+
   void _abrirVisorDeRegistro(BuildContext context) {
     if (Platform.isAndroid) {
       Navigator.of(context).push(
@@ -1624,6 +1634,29 @@ class _SettingsPageState extends State<SettingsPage> {
                 ),
               ),
             ),
+            // Buscar el registro de un televisor de la misma red.
+            //
+            // Solo fuera de televisor: es el aparato que MIRA, no el que
+            // comparte. En el televisor el botón equivalente está dentro del
+            // propio visor, y comparte en vez de buscar.
+            if (!PlatformTv.esTelevisionSync) ...[
+              const SizedBox(height: 10),
+              SettingsTile(
+                title: 'settings.log-buscar'.i18n,
+                buildSubtitle: () => 'settings.log-buscar-subtitle'.i18n,
+                onTap: () => _buscarRegistroEnLaRed(context),
+                trailing: PlatformWidget(
+                  androidWidget: TextButton(
+                    onPressed: () => _buscarRegistroEnLaRed(context),
+                    child: Text('settings.open'.i18n),
+                  ),
+                  desktopWidget: fluent.FilledButton(
+                    onPressed: () => _buscarRegistroEnLaRed(context),
+                    child: Text('settings.open'.i18n),
+                  ),
+                ),
+              ),
+            ],
             const SizedBox(height: 10),
             // 导出日志
             SettingsTile(

@@ -3,6 +3,7 @@ import 'dart:convert';
 import 'dart:io';
 import 'dart:math';
 
+import 'package:prismhub/utils/anuncio_de_registro.dart';
 import 'package:prismhub/utils/encabezado_de_sesion.dart';
 import 'package:prismhub/utils/exportar_registro.dart';
 import 'package:prismhub/utils/log.dart';
@@ -135,6 +136,12 @@ class ServidorDeRegistro {
       // pantalla a tres metros, y no separaban nada — no hay otra cosa
       // servida en este puerto.
       direccion = 'http://$ip:${s.port}/$_codigo';
+      // Y se anuncia, para que el teléfono o el PC lo encuentren sin que
+      // nadie tenga que escribir la dirección. Ver AnuncioDeRegistro.
+      unawaited(AnuncioDeRegistro.anunciar(
+        url: direccion!,
+        aparato: EncabezadoDeSesion.resumenDelAparato(),
+      ));
       _apagado = Timer(_cuantoDura, apagar);
       logger.info('Registro accesible desde la red durante '
           '${_cuantoDura.inMinutes} minutos · se comparte: $_loQueSeSirve');
@@ -149,6 +156,7 @@ class ServidorDeRegistro {
   static Future<void> apagar() async {
     _apagado?.cancel();
     _apagado = null;
+    unawaited(AnuncioDeRegistro.callar());
     final s = _servidor;
     _servidor = null;
     direccion = null;
