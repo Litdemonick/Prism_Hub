@@ -1,4 +1,5 @@
 import 'package:flutter/widgets.dart';
+import 'package:prismhub/utils/centinela_de_arranque.dart';
 import 'package:prismhub/utils/log.dart';
 import 'package:prismhub/utils/platform_tv.dart';
 import 'package:prismhub/utils/portadas_perdidas.dart';
@@ -203,6 +204,16 @@ class AlivioDeMemoria with WidgetsBindingObserver {
     logger.info(
       'El sistema pidió memoria ($_cuantasVeces.ª vez): se soltaron '
       '$vivas imágenes en uso · perfil ${PerfilDeAparato.nivel.name}',
+    );
+    // También al rastro del centinela.
+    //
+    // Es lo que deja contestar «¿por qué se cerró?» la próxima vez que se
+    // abra la app. Un cierre precedido de tres o cuatro de estos no es un
+    // fallo del código: es el sistema quedándose sin memoria y matando el
+    // proceso, y las dos cosas se ven idénticas desde fuera —la app
+    // desaparece— pero llevan a arreglos opuestos.
+    CentinelaDeArranque.marcar(
+      'el sistema pidió memoria ($_cuantasVeces.ª)',
     );
 
     _bajarElTechoSiInsiste();

@@ -92,8 +92,11 @@ class CentinelaDeArranque {
           'duro ${_anterior!.duracion.inSeconds}s, '
           'version ${_anterior!.version}, '
           'aparato ${_anterior!.aparato}. '
-          'Un cierre asi no pasa por los enganches de Dart: suele ser un fallo '
-          'del codigo nativo o el sistema cerrando la app por memoria.',
+          'Un cierre asi no pasa por los enganches de Dart, asi que no hay '
+          'excepcion que mostrar: o revento el codigo nativo (reproductor, '
+          'decodificador) o el sistema cerro la app por falta de memoria. '
+          'El rastro de abajo dice cual de las dos: si termina en varios '
+          '"el sistema pidio memoria", fue lo segundo.',
         );
         if (_anterior!.rastro.isEmpty) {
           logger.severe('Sin rastro de lo que estaba haciendo.');

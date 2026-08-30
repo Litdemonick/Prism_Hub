@@ -719,6 +719,29 @@ class _AppRootState extends State<_AppRoot> with WidgetsBindingObserver {
   @override
   void didChangeAppLifecycleState(AppLifecycleState estado) {
     super.didChangeAppLifecycleState(estado);
+    // ── Volver después de un rato empieza una sesión nueva ──────────────
+    //
+    // En un televisor, «cerrar la app» casi nunca la cierra: Android la deja
+    // en segundo plano y volver a entrar retoma el mismo proceso. Para el
+    // registro eso significa que la sesión no termina nunca — se sigue
+    // escribiendo sobre la misma, así que al abrir «Ver registro» aparecen
+    // las líneas de hace horas y nada empieza limpio.
+    //
+    // Reportado en vivo: «al cerrar y abrir el app debe limpiar la consola y
+    // empezar con logs nuevos».
+    //
+    // La respuesta NO es matar el proceso al salir: eso hace lento el
+    // siguiente arranque, que es justo lo que más se nota en un televisor. Es
+    // reconocer que una vuelta después de un rato YA ES una sesión nueva, y
+    // escribirle su cabecera. La de antes no se pierde: pasa al historial,
+    // como cualquier otra.
+    //
+    // El mismo rato que ya usa la app para decidir si el arranque se siente
+    // como abrirla o como retomarla — ver _ventanaEnCaliente.
+    if (estado == AppLifecycleState.resumed) {
+      unawaited(_sesionNuevaSiVolvioDespuesDeUnRato());
+      return;
+    }
     // Se anota al IRSE, no al volver: cuando Android decide matar el proceso ya
     // no corre nada nuestro, así que la última marca tiene que estar puesta de
     // antes. `paused` es el último aviso garantizado.
@@ -737,6 +760,33 @@ class _AppRootState extends State<_AppRoot> with WidgetsBindingObserver {
         logger.info('No se pudo anotar el último uso: $e');
       }),
     );
+  }
+
+  /// Abre una sesión nueva en el registro si la vuelta ya no es «retomar».
+  ///
+  /// Se apoya en la marca que deja [didChangeAppLifecycleState] al irse. Si no
+  /// hay marca —el proceso arrancó de cero— no hay nada que hacer: la cabecera
+  /// del arranque ya se escribió.
+  Future<void> _sesionNuevaSiVolvioDespuesDeUnRato() async {
+    try {
+      final ultimo = PrismHubStorage.getSetting(_claveUltimoUso);
+      if (ultimo is! int) return;
+      final fuera = DateTime.now().difference(
+        DateTime.fromMillisecondsSinceEpoch(ultimo),
+      );
+      if (fuera < _ventanaEnCaliente) return;
+      // `forzar` porque la cabecera de este proceso ya está escrita: esto es
+      // una sesión nueva a propósito, no una repetición.
+      EncabezadoDeSesion.escribir(version: packageInfo.version, forzar: true);
+      logger.info('Se vuelve después de ${fuera.inMinutes} min fuera: '
+          'empieza una sesión nueva. La anterior queda en el historial.');
+      // Y el centinela vuelve a montar guardia: esta sesión también tiene que
+      // poder decir si termina mal.
+      CentinelaDeArranque.marcar('vuelve a primer plano');
+    } catch (e) {
+      // Un instrumento de diagnóstico no puede tumbar nada.
+      logger.info('No se pudo empezar una sesión nueva: $e');
+    }
   }
 
   Future<void> _init() async {
