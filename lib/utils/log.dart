@@ -63,9 +63,58 @@ class PrismLog {
   // cuanto más se acumulaban logs. Bufferizado, una racha de 50 errores en
   // un segundo genera un solo volcado (a archivo o consola) en vez de 50.
   static void _queueLog(String log) {
-    _recordar(log);
-    _pending.writeln(log);
+    final limpio = sanear(log);
+    _recordar(limpio);
+    _pending.writeln(limpio);
     _flushTimer ??= Timer(const Duration(seconds: 2), _flush);
+  }
+
+  // ── Lo que NO puede salir en el registro ─────────────────────────────────
+  //
+  // El registro se comparte para diagnosticar: se exporta, se pega en un
+  // reporte, se manda por mensaje. Así que no puede llevar dos clases de cosa:
+  //
+  //  1. **Credenciales.** Las direcciones de los CDN suelen firmarse con un
+  //     token en la consulta (`?token=…&expires=…`, `?md5=…`). Quien tenga esa
+  //     línea puede bajar el vídeo haciéndose pasar por esta sesión.
+  //  2. **Qué estaba viendo la persona.** La ruta de una dirección suele traer
+  //     el nombre del título. Un registro compartido no tiene por qué contar
+  //     eso de nadie.
+  //
+  // Y lo que SÍ tiene que quedar, porque es el diagnóstico: el servidor
+  // (cuál falló), el formato (.m3u8, .mp4, .ts) y la forma del error.
+  //
+  // Va acá, en el único punto por el que pasan TODAS las líneas, y no en cada
+  // sitio que registra algo: son decenas y alcanza con que a uno se le escape
+  // para que la protección no sirva.
+  static final _direcciones = RegExp(r'https?://[^\s"<>\]]+');
+  static final _rutaDeUsuario =
+      RegExp(r'([A-Za-z]:\\Users\\|/home/|/Users/)([^\\/\s]+)');
+
+  /// Deja una línea de registro en condiciones de compartirse.
+  ///
+  /// Público para poder probarlo: es la clase de cosa que si se rompe en
+  /// silencio nadie se entera hasta que ya se filtró algo.
+  static String sanear(String linea) {
+    var salida = linea.replaceAllMapped(_direcciones, (m) {
+      final crudo = m.group(0)!;
+      final uri = Uri.tryParse(crudo);
+      if (uri == null || uri.host.isEmpty) return '‹dirección›';
+      // La extensión del archivo se conserva: distinguir un .m3u8 de un .mp4
+      // es la mitad de entender por qué un servidor no reprodujo.
+      final ultimo = uri.pathSegments.isEmpty ? '' : uri.pathSegments.last;
+      final punto = ultimo.lastIndexOf('.');
+      final formato =
+          (punto > 0 && punto < ultimo.length - 1) ? ultimo.substring(punto) : '';
+      // El puerto queda: un 127.0.0.1 con puerto es el relay local, y saber
+      // que una dirección pasó por ahí importa.
+      final donde = uri.hasPort ? '${uri.host}:${uri.port}' : uri.host;
+      return '${uri.scheme}://$donde/…$formato';
+    });
+    // El nombre de usuario del sistema aparece en cualquier ruta de archivo.
+    salida = salida.replaceAllMapped(
+        _rutaDeUsuario, (m) => '${m.group(1)}‹usuario›');
+    return salida;
   }
 
   /// Lo último que pasó, EN MEMORIA, para el visor en vivo.
