@@ -47,6 +47,32 @@ class ExtensionService {
   /// dentro de `extensionsDir` se considera instalado (hay un escaneo y hasta
   /// un vigilante de esa carpeta). Sin este parámetro, previsualizar una
   /// extensión sería instalarla por la puerta de atrás.
+  /// Deja la extensión LISTA PARA USAR, pero sin levantar su motor todavía.
+  ///
+  /// ── Por qué el motor no se crea acá ─────────────────────────────────────
+  ///
+  /// Cada extensión tiene su propio motor de JavaScript, y levantarlo no es
+  /// barato: además del guion de la extensión, ese motor evalúa CryptoJS,
+  /// jsencrypt y md5 — unos 148 KB de JavaScript minificado que hay que
+  /// analizar y dejar en memoria. Por motor.
+  ///
+  /// Antes se levantaban TODOS al arrancar la app. Con diecinueve extensiones
+  /// instaladas eso son diecinueve copias de esas tres librerías vivas desde
+  /// el primer segundo, más diecinueve pilas de un mega. Medido en un
+  /// televisor de 0,9 GB con trece extensiones: el sistema pidió memoria
+  /// cuatro veces en los primeros cuarenta segundos, y los cuadros lentos de
+  /// la app se concentraban justo en esa ventana.
+  ///
+  /// Y la mayoría no se usa nunca en una sesión: se abre la app, se mira una
+  /// zona y se reproduce algo de UNA extensión.
+  ///
+  /// Lo que sí se hace acá es todo lo barato —leer el nombre, la versión, el
+  /// tipo, los ajustes declarados— porque de eso viven el catálogo, la
+  /// pantalla de extensiones y los filtros, y todo eso tiene que estar listo
+  /// sin tocar un solo motor.
+  ///
+  /// El motor se levanta solo la primera vez que se le pide algo a la
+  /// extensión. Ver [asegurarMotor].
   initRuntime(Extension ext, {String? rutaGuion}) async {
     extension = ext;
     className = extension.package.replaceAll('.', '');
@@ -56,6 +82,34 @@ class ExtensionService {
     if (!className.isAlphabetOnly) {
       className = "${className.replaceAll(RegExp(r'[^a-zA-z]'), '')}Renamed";
     }
+    _rutaGuion = rutaGuion;
+    return this;
+  }
+
+  /// De dónde sale el guion. Null es «de la carpeta de instaladas».
+  String? _rutaGuion;
+
+  /// Si el motor de esta extensión ya está levantado.
+  bool get motorListo => _motorListo;
+  bool _motorListo = false;
+
+  /// Lo que está levantando el motor ahora mismo, si hay algo.
+  ///
+  /// Sin esto, dos llamadas a la vez —que es lo normal: el Home pide varias
+  /// zonas juntas— levantarían dos motores para la misma extensión y el
+  /// segundo pisaría al primero, dejando el primero vivo y sin dueño.
+  Future<void>? _levantando;
+
+  /// Levanta el motor si hace falta. Barato de llamar de más.
+  Future<void> asegurarMotor() {
+    if (_motorListo) return Future<void>.value();
+    return _levantando ??= _levantarMotor().whenComplete(() {
+      _levantando = null;
+    });
+  }
+
+  Future<void> _levantarMotor() async {
+    final rutaGuion = _rutaGuion;
     // 读取文件
     final file = File(
         rutaGuion ?? '${ExtensionUtils.extensionsDir}/${extension.package}.js');
@@ -357,7 +411,7 @@ class ExtensionService {
     }
     // 初始化运行扩展
     await _initRunExtension(content);
-    return this;
+    _motorListo = true;
   }
 
   _initRunExtension(String extScript) async {
@@ -746,6 +800,12 @@ async function stringify(callback) {
 
   Future<T> runExtension<T>(Future<T> Function() fun) async {
     try {
+      // El motor se levanta acá, la primera vez que de verdad hace falta.
+      //
+      // Este es el paso obligado de TODAS las llamadas a la extensión —listar,
+      // buscar, la ficha, el enlace de vídeo—, así que poniéndolo acá no queda
+      // ningún camino por el que se le pida algo a un motor que no está.
+      await asegurarMotor();
       return await fun();
     } catch (e) {
       ExtensionUtils.addLog(

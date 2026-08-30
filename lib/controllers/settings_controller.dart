@@ -107,7 +107,10 @@ class SettingsController extends GetxController {
         final arguments = call["arguments"];
         final extension = ExtensionUtils.runtimes[arguments["package"]];
         final method = arguments["method"];
-        final runtime = extension!.runtime;
+        // La consola de extensiones es el único sitio que le habla al motor
+        // sin pasar por runExtension, así que acá hay que pedirlo a mano.
+        await extension!.asegurarMotor();
+        final runtime = extension.runtime;
         try {
           final jsResult = await runtime.handlePromise(
             await runtime.evaluateAsync('stringify(()=>{return $method})'),

@@ -8,6 +8,7 @@ import 'package:prismhub/data/services/extension_service.dart';
 import 'package:prismhub/models/index.dart';
 import 'package:prismhub/data/services/database_service.dart';
 import 'package:prismhub/utils/novedades.dart';
+import 'package:prismhub/utils/platform_tv.dart';
 import 'package:prismhub/utils/prismhub_mas.dart';
 import 'package:prismhub/utils/connectivity.dart';
 import 'package:prismhub/utils/extension.dart';
@@ -337,8 +338,25 @@ class HomePageController extends GetxController {
     return {'Referer': site};
   }
 
+  /// A cuántas extensiones se les pide material para el fondo del Inicio.
+  ///
+  /// Cada una cuesta levantar su motor de JavaScript y una consulta de red. En
+  /// un aparato modesto eso se nota en el arranque; en uno capaz no, pero
+  /// tampoco hace falta más material del que se va a usar.
+  int get _cuantasParaElFondo => switch (PrismHubMas.nivel) {
+        NivelDeAparato.bajo => 2,
+        NivelDeAparato.medio => 3,
+        NivelDeAparato.alto => 5,
+      };
+
+  /// Con cuántas portadas juntadas se deja de preguntar.
+  ///
+  /// El fondo cambia cada ocho segundos y se elige al azar: con cuarenta
+  /// portadas no se repite ninguna en varios minutos de Inicio.
+  static const _portadasQueAlcanzan = 40;
+
   Future<void> _refreshHeroPool() async {
-    final exts = ExtensionUtils.enabledRuntimes.values.toList();
+    var exts = ExtensionUtils.enabledRuntimes.values.toList();
     // Zona +18: el pool del hero sale SOLO de extensiones 100% nsfw — una
     // extensión "mixta" (ej. ShadeManga) no sirve acá porque latest(1)
     // ignora el filtro adulto, así que no hay forma de garantizar que lo
@@ -365,12 +383,37 @@ class HomePageController extends GetxController {
       return;
     }
 
+    // ── No se le pregunta a TODAS. Y este era el arranque pesado ─────────
+    //
+    // Esto existe para elegir la imagen de fondo del Inicio. Nada más. Y le
+    // pedía su catálogo a CADA extensión instalada.
+    //
+    // Con trece extensiones eso es levantar trece motores de JavaScript y
+    // disparar trece consultas antes de que se vea nada — y cada motor evalúa
+    // 148 KB de librerías. Medido en un televisor de 0,9 GB: unas ciento
+    // treinta peticiones en catorce segundos, el sistema pidiendo memoria
+    // cuatro veces en esa ventana, y una consulta que tardó 15,4 segundos
+    // porque la app competía consigo misma.
+    //
+    // Para un fondo alcanza con unas pocas: cada extensión devuelve una
+    // veintena de portadas, así que con dos ya sobra material. Se pregunta a
+    // las primeras y se corta en cuanto hay de sobra.
+    exts = exts.take(_cuantasParaElFondo).toList();
+
     final results = <(String, Map<String, String>?)>[];
     const batchSize = 2;
     for (var i = 0; i < exts.length; i += batchSize) {
       final batch = exts.skip(i).take(batchSize);
       final batchResults = await Future.wait(batch.map(_fetchHeroItems));
       results.addAll(batchResults.expand((e) => e));
+      // Con material de sobra no se sigue preguntando: lo que venga después
+      // no cambia nada de lo que se ve y sí cuesta un motor más.
+      if (results.length >= _portadasQueAlcanzan) {
+        _extensionPool = results;
+        _hasLoadedPoolOnce = true;
+        _pickHeroBackground();
+        return;
+      }
       if (heroBackground.value == null && results.isNotEmpty) {
         _extensionPool = results;
         _pickHeroBackground();

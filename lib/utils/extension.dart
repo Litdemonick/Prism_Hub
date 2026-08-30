@@ -1749,7 +1749,16 @@ class ExtensionUtils {
     _loading.add(pkg);
     await File(savePath).writeAsString(script);
     try {
-      runtimes[pkg] = await ExtensionService().initRuntime(ext);
+      final servicio = await ExtensionService().initRuntime(ext);
+      runtimes[pkg] = servicio;
+      // Al INSTALAR sí se levanta el motor de una.
+      //
+      // Instalar es una acción explícita, y lo que se espera después es entrar
+      // a la extensión y que ande. Además es cuando se registran sus ajustes,
+      // que si no aparecerían recién la primera vez que se la use. El costo se
+      // paga una vez y con la persona esperando a propósito, no en el arranque
+      // de todas las sesiones.
+      await servicio.asegurarMotor();
     } catch (e) {
       // Init failed — remove the bad runtime and file so it doesn't persist
       // and break loading on the next launch.
