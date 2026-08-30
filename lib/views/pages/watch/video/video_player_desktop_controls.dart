@@ -1545,6 +1545,7 @@ class _QualityState extends State<_Quality> {
                               onPressed: () {
                                 widget.controller.switchQuality(
                                   quality.value,
+                                  aMano: true,
                                 );
                                 Flyout.of(context).close();
                               },

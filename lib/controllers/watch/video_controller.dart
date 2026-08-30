@@ -931,6 +931,13 @@ class VideoPlayerController extends GetxController with WidgetsBindingObserver {
       final congelada = quieto >= _atascoParaAvisar;
       if (imagenCongelada.value != congelada) {
         imagenCongelada.value = congelada;
+        // Solo se cuenta el momento en que EMPIEZA a congelarse. Contarlo
+        // mientras dura sumaría dos por segundo y bajaría la calidad de golpe
+        // por un único tropiezo.
+        if (congelada) {
+          _vecesCongelada++;
+          unawaited(_bajarUnaCalidadSiNoDaAbasto());
+        }
       }
       // El desfase de audio se mira cada dos segundos, no cada medio: leer una
       // propiedad de mpv cruza a la librería nativa, y esto corre mientras se
@@ -953,6 +960,100 @@ class VideoPlayerController extends GetxController with WidgetsBindingObserver {
   }
 
   bool _atascoAvisado = false;
+
+  /// Cuántas veces se congeló la imagen en esta reproducción.
+  int _vecesCongelada = 0;
+
+  /// Cuántos escalones de calidad se bajaron solos en esta reproducción.
+  int _bajadasDeCalidad = 0;
+
+  /// Si la calidad de ahora la eligió una persona desde el menú.
+  bool _calidadElegidaAMano = false;
+
+  /// Cuántos tropiezos se aguantan antes de bajar un escalón.
+  ///
+  /// Dos, no uno: un solo corte lo produce cualquier hipo de red y bajar la
+  /// calidad por eso sería castigar a quien tiene buena conexión por un mal
+  /// segundo. Dos seguidos ya es un patrón.
+  static const _tropiezosParaBajar = 2;
+
+  /// Y cuántos escalones como mucho.
+  ///
+  /// Dos. Cada bajada reabre el vídeo, así que encadenarlas sería el mismo
+  /// corte que se está tratando de evitar. Si con dos escalones menos sigue sin
+  /// poder, el problema no es la calidad.
+  static const _maxBajadas = 2;
+
+  /// Baja un escalón de calidad cuando el vídeo no da abasto.
+  ///
+  /// ── Por qué esto hace falta además del techo por aparato ────────────────
+  ///
+  /// El techo se decide ANTES de reproducir, mirando la pantalla y el aparato.
+  /// Eso contesta «cuánto puede mostrar y decodificar», pero no «cuánto le está
+  /// llegando ahora mismo».
+  ///
+  /// Medido en un televisor MediaTek de 0,9 GB: los pedacitos llegaban a unos
+  /// 490 KiB/s —cerca de 4 Mb/s— y el colchón se vaciaba. Con esa conexión, en
+  /// ese momento, ni siquiera un 720p entra siempre. Y al revés: el mismo
+  /// aparato en otra red aguanta sin problema. Un número fijo no puede acertar
+  /// las dos cosas.
+  ///
+  /// Esto se apoya en el único dato que no miente: si la imagen se congela una
+  /// y otra vez, lo que sea que se esté pidiendo es más de lo que llega.
+  ///
+  /// ── Qué NO hace ─────────────────────────────────────────────────────────
+  ///
+  /// No vuelve a subir. Subir y bajar solo es cómo se llega a un vídeo que
+  /// cambia de calidad cada veinte segundos, que se ve peor que quedarse abajo.
+  /// Y no le pisa la elección a nadie: si la calidad la eligió una persona
+  /// desde el menú, se respeta y se avisa en el registro en vez de cambiarla.
+  Future<void> _bajarUnaCalidadSiNoDaAbasto() async {
+    if (_disposed || _shutdownStarted) return;
+    if (_vecesCongelada < _tropiezosParaBajar) return;
+    if (_bajadasDeCalidad >= _maxBajadas) return;
+    if (qualityMap.length < 2) return;
+    if (_calidadElegidaAMano) {
+      if (_bajadasDeCalidad == 0) {
+        _bajadasDeCalidad = _maxBajadas; // para no repetir este aviso
+        logger.info('El vídeo se corta, pero la calidad la elegiste vos: no se '
+            'toca. Se puede bajar a mano desde el menú de calidades.');
+      }
+      return;
+    }
+    // Dónde está la que suena ahora dentro de la lista, que va de mayor a
+    // menor. Se busca por dirección y no por nombre: el nombre sale de las
+    // medidas que reporta el reproductor y puede no coincidir exactamente con
+    // la etiqueta del menú.
+    final urls = qualityMap.values.toList(growable: false);
+    final actual = watchData?.url;
+    var i = actual == null ? -1 : urls.indexOf(actual);
+    if (i < 0) {
+      // No se la reconoce: se cuenta como si fuera la primera, que es la más
+      // alta y por lo tanto la que conviene bajar.
+      i = 0;
+    }
+    if (i + 1 >= urls.length) {
+      logger.info('El vídeo se corta y ya está en la calidad más baja '
+          '(${qualityMap.keys.last}): el problema no es la calidad.');
+      _bajadasDeCalidad = _maxBajadas;
+      return;
+    }
+    _bajadasDeCalidad++;
+    _vecesCongelada = 0;
+    final nombre = qualityMap.keys.elementAt(i + 1);
+    logger.warning('El vídeo se cortó $_tropiezosParaBajar veces: se baja a '
+        '$nombre para que no se corte más (bajada $_bajadasDeCalidad de '
+        '$_maxBajadas)');
+    // Sin FlutterI18n.translate: ese pide un contexto, y `Get.context` puede ser
+    // null justo cuando se está cerrando el reproductor — que es un momento
+    // muy posible para que esto salte. Es el mismo patrón que usa el resto de
+    // los avisos de acá.
+    sendMessage(Message(
+      Text('video.bajando-calidad'.i18n.replaceAll('{calidad}', nombre)),
+      time: const Duration(seconds: 4),
+    ));
+    await switchQuality(urls[i + 1]);
+  }
 
   int _vueltasParaElDesfase = 0;
 
@@ -2380,6 +2481,11 @@ class VideoPlayerController extends GetxController with WidgetsBindingObserver {
     // nada del siguiente, que puede venir con otro códec y de otro servidor.
     _peorDesfase = 0;
     _desfaseAvisado = false;
+    // Contenido nuevo: los tropiezos del anterior no cuentan, y la elección a
+    // mano tampoco se arrastra.
+    _vecesCongelada = 0;
+    _bajadasDeCalidad = 0;
+    _calidadElegidaAMano = false;
     _vueltasParaElDesfase = 0;
     imagenCongelada.value = false;
     _historyTouchInFlight = false;
@@ -3869,7 +3975,13 @@ class VideoPlayerController extends GetxController with WidgetsBindingObserver {
   }
 
   // 切换画质
-  switchQuality(String qualityUrl) async {
+  /// [aMano] es true cuando la eligió una persona desde el menú de calidades.
+  ///
+  /// Se distingue del cambio automático porque una elección a mano manda: si
+  /// alguien pide 1080p a propósito, la app no se la baja sola por la espalda.
+  /// Ver [_bajarUnaCalidadSiNoDaAbasto].
+  switchQuality(String qualityUrl, {bool aMano = false}) async {
+    if (aMano) _calidadElegidaAMano = true;
     final headers = watchData!.headers;
     final currentSecond = motor.posicion.inSeconds;
     await _ensureVideoSurfaceMounted();
@@ -7043,17 +7155,6 @@ class VideoPlayerController extends GetxController with WidgetsBindingObserver {
 
 
 
-  /// El televisor bajo el video y no pudo: si esta en 4K o 2K, se baja la
-  /// calidad y se dice por que.
-  ///
-  /// Un televisor publica los FORMATOS que acepta pero no hasta que RESOLUCION
-  /// llega, asi que esto no se puede preguntar antes — solo se puede deducir
-  /// cuando ya fallo. Y el sintoma es inconfundible: bajo los datos (por eso
-  /// llegamos hasta aca) y aun asi no dibuja nada.
-  ///
-  /// Devuelve true si encontro una calidad mas baja y la puso. En ese caso no
-  /// se muestra el aviso generico: se muestra este, que dice lo que pasa de
-  /// verdad y que ya se esta arreglando solo.
   Future<void> restoreSystemUiOnExit() async {
     if (!Platform.isAndroid) return;
     // ── En televisor NO se toca nada de esto ────────────────────────────

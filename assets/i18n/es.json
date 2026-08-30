@@ -694,7 +694,8 @@
     "tv-retomando": "Retomando desde {tiempo} — apretá ◀ para volver al principio",
     "tv-servidores": "Servidor",
     "tv-elegi-servidor": "Elegí un servidor de la lista de abajo y apretá OK para empezar",
-    "tv-episodios": "Episodio"
+    "tv-episodios": "Episodio",
+    "bajando-calidad": "Se baja a {calidad} para que no se corte"
   },
   "comic-settings": {
     "read-mode": "Modo de lectura",

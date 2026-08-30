@@ -1106,7 +1106,7 @@ class _QualitySelectorState extends State<_QualitySelector> {
                     // alcanza con compararlas.
                     activo: quality.key == _c.currentQuality.value,
                     onTap: () {
-                      _c.switchQuality(quality.value);
+                      _c.switchQuality(quality.value, aMano: true);
                       _c.showSidebar.value = false;
                     },
                   ),

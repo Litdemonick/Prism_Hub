@@ -698,7 +698,8 @@
     "tv-retomando": "Resuming from {tiempo} — press ◀ to start over",
     "tv-servidores": "Server",
     "tv-elegi-servidor": "Pick a server from the list below and press OK to start",
-    "tv-episodios": "Episode"
+    "tv-episodios": "Episode",
+    "bajando-calidad": "Switching to {calidad} to stop the stalling"
   },
   "comic-settings": {
     "read-mode": "Read mode",
