@@ -177,6 +177,9 @@ class _HistorialDeRegistroPageState extends State<HistorialDeRegistroPage> {
           tv ? 20 : 12),
       itemCount: _sesiones.length,
       itemBuilder: (context, i) => Padding(
+        // La lista se rehace cuando se vuelve de una sesión, y sin clave el
+        // estado de cada tarjeta se emparejaría por posición.
+        key: ValueKey(_sesiones[i].cuando?.toIso8601String() ?? 'sin-fecha-$i'),
         padding: const EdgeInsets.only(bottom: 10),
         child: _tarjeta(_sesiones[i], primera: i == 0),
       ),
@@ -311,13 +314,22 @@ class _SesionPageState extends State<_SesionPage> {
 
   bool _tieneFoco = false;
 
+  /// Un nodo por zona, fijo. Mismo motivo que en el registro en vivo: un
+  /// nodo que cambia de tarjeta deja marcada a la que se lo sacaron.
+  late final List<FocusNode> _focosDeZona = [
+    for (final z in ZonaDelRegistro.values)
+      FocusNode(debugLabel: 'sesion-zona-${z.name}'),
+  ];
+
   /// A dónde salta el foco al pulsar izquierda desde el texto.
-  final _focoDelRail = FocusNode(debugLabel: 'sesion-rail');
+  FocusNode get _focoDelRail => _focosDeZona[_zona.index];
 
   @override
   void dispose() {
     _scroll.dispose();
-    _focoDelRail.dispose();
+    for (final f in _focosDeZona) {
+      f.dispose();
+    }
     super.dispose();
   }
 
@@ -501,10 +513,11 @@ class _SesionPageState extends State<_SesionPage> {
                   opciones: [
                     for (final z in ZonaDelRegistro.values)
                       OpcionDeColumna(
+                        id: z.name,
                         texto: z.clave.i18n,
                         elegido: _zona == z,
                         onTap: () => _elegirZona(z),
-                        foco: _zona == z ? _focoDelRail : null,
+                        foco: _focosDeZona[z.index],
                       ),
                   ],
                 ),
@@ -512,6 +525,7 @@ class _SesionPageState extends State<_SesionPage> {
                   titulo: 'settings.log-acciones'.i18n,
                   opciones: [
                     OpcionDeColumna(
+                      id: 'red',
                       icono: ServidorDeRegistro.encendido
                           ? Icons.wifi_tethering
                           : Icons.wifi_tethering_off,
@@ -603,6 +617,8 @@ class _SesionPageState extends State<_SesionPage> {
         children: [
           for (final z in ZonaDelRegistro.values)
             Padding(
+              // Ver la nota de la barra de zonas del registro en vivo.
+              key: ValueKey(z.name),
               padding: const EdgeInsets.only(right: 8),
               child: Center(
                 child: FocusableCard(

@@ -64,12 +64,30 @@ class _RegistroEnVivoPageState extends State<RegistroEnVivoPage> {
   Timer? _reloj;
   final _scroll = ScrollController();
 
+  /// Un nodo de foco por zona, fijo.
+  ///
+  /// ── Por qué uno por zona y no uno que se mueva ──────────────────────────
+  ///
+  /// Antes había un solo nodo que se le pasaba a la zona elegida. O sea que al
+  /// cambiar de zona el nodo cambiaba de tarjeta — y una tarjeta a la que le
+  /// sacan el nodo nunca se entera de que perdió el foco, así que se quedaba
+  /// encendida. Con tres cambios de zona quedaban tres botones marcados a la
+  /// vez, y ahí ya no se sabe cuál se va a activar al pulsar.
+  ///
+  /// Cada zona tiene el suyo desde el principio y no se lo presta a nadie.
+  /// «Volver a la columna» es entonces pedirle el foco al de la zona puesta,
+  /// sin mover nada.
+  late final List<FocusNode> _focosDeZona = [
+    for (final z in ZonaDelRegistro.values)
+      FocusNode(debugLabel: 'registro-zona-${z.name}'),
+  ];
+
   /// A dónde salta el foco cuando se pulsa izquierda desde el registro.
   ///
   /// Se lo lleva la zona que esté puesta, no la primera de la lista: quien
   /// vuelve a la columna casi siempre viene a cambiar de zona, y aparecer
   /// justo sobre la actual dice además en cuál estaba.
-  final _focoDelRail = FocusNode(debugLabel: 'registro-rail');
+  FocusNode get _focoDelRail => _focosDeZona[_filtro.index];
 
   /// Si el foco del mando está sobre el registro.
   ///
@@ -227,7 +245,9 @@ class _RegistroEnVivoPageState extends State<RegistroEnVivoPage> {
   void dispose() {
     _reloj?.cancel();
     _scroll.dispose();
-    _focoDelRail.dispose();
+    for (final f in _focosDeZona) {
+      f.dispose();
+    }
     super.dispose();
   }
 
@@ -683,6 +703,11 @@ class _RegistroEnVivoPageState extends State<RegistroEnVivoPage> {
         children: [
           for (final f in ZonaDelRegistro.values)
             Padding(
+              // Con clave por el mismo motivo que en la columna del
+              // televisor: que el estado de cada pastilla siga a su zona y no
+              // al lugar que ocupa. Acá la lista no cambia de largo hoy, pero
+              // el día que cambie el fallo sería invisible.
+              key: ValueKey(f.name),
               padding: const EdgeInsets.only(right: 8),
               child: Center(
                 child: FocusableCard(
@@ -1136,7 +1161,7 @@ class _RegistroEnVivoPageState extends State<RegistroEnVivoPage> {
                 texto: f.clave.i18n,
                 elegido: _filtro == f,
                 onTap: () => _elegirFiltro(f),
-                foco: _filtro == f ? _focoDelRail : null,
+                foco: _focosDeZona[f.index],
               ),
           ],
         ),
@@ -1144,6 +1169,7 @@ class _RegistroEnVivoPageState extends State<RegistroEnVivoPage> {
           titulo: 'settings.log-acciones'.i18n,
           opciones: [
             OpcionDeColumna(
+              id: 'pausa',
               icono: _pausado ? Icons.play_arrow : Icons.pause,
               texto: _pausado
                   ? 'settings.log-resume'.i18n
@@ -1164,11 +1190,13 @@ class _RegistroEnVivoPageState extends State<RegistroEnVivoPage> {
                 },
               ),
             OpcionDeColumna(
+              id: 'historial',
               icono: Icons.history,
               texto: _etiquetaDeHistorial,
               onTap: _verHistorial,
             ),
             OpcionDeColumna(
+              id: 'red',
               icono: ServidorDeRegistro.encendido
                   ? Icons.wifi_tethering
                   : Icons.wifi_tethering_off,

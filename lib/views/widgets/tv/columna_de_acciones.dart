@@ -92,7 +92,30 @@ class ColumnaDeAcciones extends StatelessWidget {
                     ),
                   ),
                 ),
-              for (final opcion in grupo.opciones) opcion,
+              // ── Con clave, y no sueltas ───────────────────────────
+              //
+              // Sin clave, Flutter empareja los hijos de una columna por
+              // POSICIÓN: el primero con el primero, el segundo con el
+              // segundo. Y esta columna cambia de largo — «volver al final»
+              // solo está cuando la vista se fue del fondo — así que al
+              // aparecer o desaparecer, todo lo que viene detrás se corre un
+              // lugar y hereda el estado interno de su vecino, marca de
+              // selección incluida.
+              //
+              // Reportado en vivo con foto: tres botones encendidos a la vez.
+              // Y con tres luces puestas no se sabe cuál se va a activar al
+              // pulsar, que es el «a veces cuesta» del mismo reporte — el
+              // mando respondía bien, lo que estaba mal era dónde parecía
+              // estar el foco.
+              //
+              // Con la clave, cada opción se empareja consigo misma
+              // independientemente de dónde quede. La pone acá el contenedor
+              // y no cada quien la usa, para que no dependa de acordarse.
+              for (final opcion in grupo.opciones)
+                KeyedSubtree(
+                  key: ValueKey(opcion.id ?? opcion.texto),
+                  child: opcion,
+                ),
             ],
           ],
         ),
@@ -119,10 +142,23 @@ class OpcionDeColumna extends StatelessWidget {
     super.key,
     required this.texto,
     required this.onTap,
+    this.id,
     this.icono,
     this.elegido = false,
     this.foco,
   });
+
+  /// Cómo se llama esta opción para la columna, con independencia de lo que
+  /// diga en pantalla.
+  ///
+  /// Hace falta cuando la etiqueta cambia sola: «Pausar» pasa a «Seguir» e
+  /// «Historial (9)» a «Historial (10)». Si la identidad fuera el texto, esos
+  /// cambios contarían como una opción distinta y la tarjeta se reharía —
+  /// perdiendo el foco justo en el momento en que la persona la está
+  /// pulsando, que es cuando la etiqueta cambia.
+  ///
+  /// Donde la etiqueta es fija no hace falta ponerlo.
+  final String? id;
 
   final String texto;
   final VoidCallback onTap;
