@@ -27,20 +27,13 @@ class _Nsfw18PinSettingsTileState extends State<Nsfw18PinSettingsTile> {
       : 'nsfw18.settings-pin-set'.i18n;
 
   Future<void> _openSetPinDialog() async {
-    // Android va por un diálogo propio (_PinDialog) y no por showPlatformDialog:
-    // el AlertDialog de Material no da control sobre dónde van título y botones,
-    // y en celular en HORIZONTAL el espacio útil arriba del teclado es de ~120
-    // puntos lógicos — ahí título + dos campos + dos botones no entran y
-    // Material los terminaba dibujando encima uno del otro (confirmado en vivo).
-    // Escritorio se queda con showPlatformDialog, que ahí funciona bien y tiene
-    // el look fluent del resto de la app.
+    // Android comparte el diálogo con la pantalla de televisor (ver
+    // abrirDialogoDePin). Escritorio se queda con el suyo, que tiene el
+    // aspecto fluent del resto de la app y ahí funciona bien.
     final saved = Platform.isAndroid
-        ? await showDialog<bool>(
-            context: context,
-            builder: (_) => _PinDialog(title: _pinDialogTitle),
-          )
-        : await _openDesktopSetPinDialog();
-    if (saved == true && mounted) {
+        ? await abrirDialogoDePin(context)
+        : await _openDesktopSetPinDialog() == true;
+    if (saved && mounted) {
       setState(() => _configured = true);
     }
   }
@@ -360,4 +353,37 @@ class _PinDialogState extends State<_PinDialog> {
       ),
     );
   }
+}
+
+
+/// Abre el diálogo de poner o cambiar el PIN de la Zona +18.
+///
+/// ── Por qué está suelta y no dentro de la fila de Ajustes ───────────────────
+///
+/// Esta pantalla existe en dos formas: la de PC y teléfono, que usa
+/// [Nsfw18PinSettingsTile], y la de televisor, que dibuja sus propias filas
+/// grandes para el mando. La segunda no podía abrir este diálogo porque vivía
+/// dentro del estado privado de la primera — y por eso en televisor no había
+/// forma de poner ni de cambiar el PIN.
+///
+/// Devuelve true si se guardó uno nuevo.
+///
+/// Android va por un diálogo propio y no por `showPlatformDialog`: el
+/// `AlertDialog` de Material no da control sobre dónde van título y botones, y
+/// en un teléfono en HORIZONTAL el espacio útil arriba del teclado es de unos
+/// 120 puntos lógicos — ahí título, dos campos y dos botones no entran, y
+/// Material los terminaba dibujando encima uno del otro.
+Future<bool> abrirDialogoDePin(BuildContext context) async {
+  final titulo = Nsfw18Zone.isPinConfigured
+      ? 'nsfw18.settings-pin-change'.i18n
+      : 'nsfw18.settings-pin-set'.i18n;
+  // Solo Android —televisor incluido—. En escritorio el diálogo lo abre la
+  // propia fila de Ajustes, que es donde vive ese camino y donde tiene el
+  // aspecto del resto de la app.
+  if (!Platform.isAndroid) return false;
+  final r = await showDialog<bool>(
+    context: context,
+    builder: (_) => _PinDialog(title: titulo),
+  );
+  return r == true;
 }

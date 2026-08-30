@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
+import 'package:prismhub/utils/nsfw18_zone.dart';
+import 'package:prismhub/views/pages/nsfw18/nsfw18_pin_settings_tile.dart';
 import 'package:prismhub/utils/modo_app.dart';
 import 'package:prismhub/models/index.dart';
 import 'package:prismhub/utils/application.dart';
@@ -359,13 +361,41 @@ class _SettingsPageTvState extends State<SettingsPageTv> {
         // eso la zona no tiene nada que mostrar. Y para que aparezca al
         // encender el interruptor de arriba alcanza con que esta pantalla se
         // redibuje, que es lo que hace `alCambiar`.
-        if (PrismHubStorage.getSetting(SettingKey.enableNSFW) == true)
+        if (PrismHubStorage.getSetting(SettingKey.enableNSFW) == true) ...[
+          // ── Se entra por la COMPUERTA, no por la zona ──────────────────
+          //
+          // Iba directo a `Nsfw18ZonePage`, que es la pantalla de adentro. O
+          // sea que en televisor se entraba sin la confirmación de edad y sin
+          // el PIN — la puerta estaba puesta y se pasaba por al lado.
+          //
+          // `Nsfw18ZoneGate` es la que pregunta y pide el PIN antes de dejar
+          // ver nada, y es por donde entran PC y teléfono desde siempre.
           _Boton(
             icono: Icons.lock_open_rounded,
             titulo: 'nsfw18.title'.i18n,
-            onTap: () => Get.to(() => const Nsfw18ZonePage()),
+            onTap: () => Get.to(() => const Nsfw18ZoneGate()),
             acento: HomeTheme.accentRed,
           ),
+          // Y poder ponerlo o cambiarlo, que tampoco estaba.
+          //
+          // Sin esto, un televisor con el PIN sin configurar no tenía forma de
+          // configurarlo: había que hacerlo desde otro aparato. Y con uno
+          // puesto, tampoco de cambiarlo.
+          _Boton(
+            icono: Icons.password_rounded,
+            titulo: Nsfw18Zone.isPinConfigured
+                ? 'nsfw18.settings-pin-change'.i18n
+                : 'nsfw18.settings-pin-set'.i18n,
+            subtitulo: Nsfw18Zone.isPinConfigured
+                ? 'nsfw18.settings-pin-configured'.i18n
+                : 'nsfw18.settings-pin-none'.i18n,
+            onTap: () async {
+              await abrirDialogoDePin(context);
+              if (mounted) setState(() {});
+            },
+            acento: HomeTheme.accentRed,
+          ),
+        ],
       ];
 
   List<Widget> _acercaDe() => [
