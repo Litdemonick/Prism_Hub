@@ -510,6 +510,7 @@
     "log-acciones": "Actions",
     "log-historial": "History",
     "log-historial-vacio": "No previous sessions saved yet. Once you close and reopen the app, this session will show up here.",
+    "log-historial-cuantas": "{n} saved sessions",
     "log-historial-error": "Could not read the history: {error}",
     "log-historial-sin-fecha": "No date",
     "log-historial-hoy": "Today",

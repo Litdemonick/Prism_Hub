@@ -506,6 +506,7 @@
     "log-acciones": "Acciones",
     "log-historial": "Historial",
     "log-historial-vacio": "Todavía no hay aperturas anteriores guardadas. Al cerrar y volver a abrir la app, la sesión de ahora queda acá.",
+    "log-historial-cuantas": "{n} aperturas guardadas",
     "log-historial-error": "No se pudo leer el historial: {error}",
     "log-historial-sin-fecha": "Sin fecha",
     "log-historial-hoy": "Hoy",

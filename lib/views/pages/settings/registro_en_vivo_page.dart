@@ -10,11 +10,13 @@ import 'package:prismhub/utils/encabezado_de_sesion.dart';
 import 'package:prismhub/utils/i18n.dart';
 import 'package:prismhub/utils/sesiones_del_registro.dart';
 import 'package:prismhub/views/pages/settings/historial_de_registro_page.dart';
+import 'package:prismhub/views/widgets/tv/columna_de_acciones.dart';
 import 'package:prismhub/views/widgets/tv/desplazable_con_mando.dart';
 import 'package:prismhub/views/widgets/tv/focusable_card.dart';
 import 'package:prismhub/utils/exportar_registro.dart';
 import 'package:prismhub/utils/log.dart';
 import 'package:prismhub/utils/servidor_de_registro.dart';
+import 'package:prismhub/utils/zonas_del_registro.dart';
 import 'package:prismhub/utils/platform_tv.dart';
 import 'package:prismhub/views/widgets/home/home_theme.dart';
 import 'package:prismhub/views/widgets/messenger.dart';
@@ -382,7 +384,7 @@ class _RegistroEnVivoPageState extends State<RegistroEnVivoPage> {
   ///
   /// Pregunta antes, porque no se puede deshacer.
   Future<void> _limpiar() async {
-    final zona = _filtro == _Filtro.todo ? null : _filtro.clave.i18n;
+    final zona = _filtro == ZonaDelRegistro.todo ? null : _filtro.clave.i18n;
     if (!await _confirmar(
       titulo: 'settings.log-limpiar'.i18n,
       detalle: zona == null
@@ -400,7 +402,7 @@ class _RegistroEnVivoPageState extends State<RegistroEnVivoPage> {
       await PrismLog.limpiarSesionActual(
         // En «Todo» no sobrevive nada; en una zona concreta sobrevive todo lo
         // que NO sea de esa zona.
-        dejar: _filtro == _Filtro.todo ? null : (l) => !_filtro.acepta(l),
+        dejar: _filtro == ZonaDelRegistro.todo ? null : (l) => !_filtro.seVe(l),
         escribirCabecera: () =>
             EncabezadoDeSesion.escribir(version: version),
       );
@@ -539,21 +541,7 @@ class _RegistroEnVivoPageState extends State<RegistroEnVivoPage> {
 
   // Los avisos del propio registro llevan color: en una pared de texto gris,
   // encontrar el error a ojo es justamente lo que uno vino a hacer acá.
-  Color _colorDe(String linea) {
-    if (linea.contains(' SEVERE ') || linea.contains(' SHOUT ')) {
-      return HomeTheme.accentRed;
-    }
-    if (linea.contains(' WARNING ')) return const Color(0xFFE8B339);
-    // La cabecera de sesión, en verde y fuerte: es lo que separa una sesión de
-    // la siguiente en un archivo que ya trae varias, así que tiene que
-    // encontrarse de un vistazo al recorrer.
-    if (linea.contains('═══')) return const Color(0xFF6FCFA5);
-    // El veredicto de cada servidor y el rastro del último cierre: son las dos
-    // líneas que se buscan a propósito, así que se despegan del resto.
-    if (linea.contains('RESULTADO ·')) return const Color(0xFF62B6FF);
-    if (linea.contains('LO ULTIMO QUE HIZO')) return const Color(0xFFD98CFF);
-    return const Color(0xFFB9BBC6);
-  }
+  Color _colorDe(String linea) => colorDeLinea(linea);
 
   /// Por qué categoría se está mirando el registro.
   ///
@@ -561,7 +549,7 @@ class _RegistroEnVivoPageState extends State<RegistroEnVivoPage> {
   /// buscando UNA cosa: por qué falló una extensión, por qué se cerró la app,
   /// o qué hizo el reproductor. Recorrerlo entero con el mando para encontrar
   /// eso es lo que lo vuelve inútil en un televisor.
-  _Filtro _filtro = _Filtro.todo;
+  ZonaDelRegistro _filtro = ZonaDelRegistro.todo;
 
   /// Las líneas que se están mostrando, ya filtradas.
   ///
@@ -581,9 +569,9 @@ class _RegistroEnVivoPageState extends State<RegistroEnVivoPage> {
     final todas = _deAntes.isEmpty
         ? _lineas
         : <String>[..._deAntes, ..._lineas.skip(_dondeSigueLaMemoria())];
-    final filtradas = _filtro == _Filtro.todo
+    final filtradas = _filtro == ZonaDelRegistro.todo
         ? todas
-        : todas.where(_filtro.acepta).toList(growable: false);
+        : todas.where(_filtro.seVe).toList(growable: false);
     _visibles = agruparElRecuadro(filtradas);
   }
 
@@ -632,7 +620,7 @@ class _RegistroEnVivoPageState extends State<RegistroEnVivoPage> {
   }
 
   /// Cambia el filtro y deja todo lo demás mirando lo mismo.
-  void _elegirFiltro(_Filtro f) {
+  void _elegirFiltro(ZonaDelRegistro f) {
     setState(() {
       _filtro = f;
       _recalcularVisibles();
@@ -673,7 +661,7 @@ class _RegistroEnVivoPageState extends State<RegistroEnVivoPage> {
         scrollDirection: Axis.horizontal,
         padding: EdgeInsets.symmetric(horizontal: tv ? 20 : 12),
         children: [
-          for (final f in _Filtro.values)
+          for (final f in ZonaDelRegistro.values)
             Padding(
               padding: const EdgeInsets.only(right: 8),
               child: Center(
@@ -689,8 +677,11 @@ class _RegistroEnVivoPageState extends State<RegistroEnVivoPage> {
                     decoration: BoxDecoration(
                       borderRadius: BorderRadius.circular(999),
                       color: _filtro == f
-                          ? HomeTheme.accentPink.withValues(alpha: 0.22)
-                          : Colors.white.withValues(alpha: 0.06),
+                          ? Color.alphaBlend(
+                              HomeTheme.accentPink.withValues(alpha: 0.22),
+                              HomeTheme.bg,
+                            )
+                          : _superficie,
                     ),
                     child: Text(
                       f.clave.i18n,
@@ -801,7 +792,7 @@ class _RegistroEnVivoPageState extends State<RegistroEnVivoPage> {
         // Con la zona adelante: pausado en «Fallos» y pausado en «Todo» se
         // veían igual, y son cosas distintas — en una faltan líneas porque el
         // filtro las saca y en la otra porque la vista está congelada.
-        _filtro == _Filtro.todo
+        _filtro == ZonaDelRegistro.todo
             ? 'settings.log-paused-hint'.i18n
             : '${_filtro.clave.i18n} · ${'settings.log-paused-hint'.i18n}',
         style: TextStyle(fontSize: 12, color: HomeTheme.textPrimary),
@@ -1092,54 +1083,27 @@ class _RegistroEnVivoPageState extends State<RegistroEnVivoPage> {
     );
   }
 
-  /// Ancho de la columna de acciones.
-  ///
-  /// Suficiente para que ninguna etiqueta se corte a la distancia de un sofá,
-  /// y no más: lo que importa de esta pantalla es el registro, y cada píxel
-  /// que se lleva la columna es una línea menos de texto a lo ancho.
-  static const _anchoDelRail = 250.0;
-
   Widget _railDeTelevisor() {
-    return Container(
-      width: _anchoDelRail,
-      padding: const EdgeInsets.fromLTRB(20, 20, 12, 20),
-      decoration: BoxDecoration(
-        border: Border(
-          right: BorderSide(color: Colors.white.withValues(alpha: 0.07)),
-        ),
-      ),
-      // Se desplaza por si un televisor con poca altura útil no llega a
-      // mostrar las nueve cosas: es preferible que se pueda bajar a que la
-      // última quede cortada contra el borde.
-      child: SingleChildScrollView(
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            Text(
-              _titulo,
-              style: TextStyle(
-                fontSize: 20,
-                fontWeight: FontWeight.w700,
-                color: HomeTheme.textPrimary,
-              ),
-            ),
-            const SizedBox(height: 4),
-            Text(
-              _contador,
-              style: TextStyle(fontSize: 12, color: HomeTheme.textMuted),
-            ),
-            const SizedBox(height: 18),
-            _tituloDeGrupo('settings.log-zona'.i18n),
-            for (final f in _Filtro.values)
-              _opcionDeRail(
+    return ColumnaDeAcciones(
+      titulo: _titulo,
+      detalle: _contador,
+      grupos: [
+        GrupoDeColumna(
+          titulo: 'settings.log-zona'.i18n,
+          opciones: [
+            for (final f in ZonaDelRegistro.values)
+              OpcionDeColumna(
                 texto: f.clave.i18n,
                 elegido: _filtro == f,
                 onTap: () => _elegirFiltro(f),
                 foco: _filtro == f ? _focoDelRail : null,
               ),
-            const SizedBox(height: 18),
-            _tituloDeGrupo('settings.log-acciones'.i18n),
-            _opcionDeRail(
+          ],
+        ),
+        GrupoDeColumna(
+          titulo: 'settings.log-acciones'.i18n,
+          opciones: [
+            OpcionDeColumna(
               icono: _pausado ? Icons.play_arrow : Icons.pause,
               texto: _pausado
                   ? 'settings.log-resume'.i18n
@@ -1151,7 +1115,7 @@ class _RegistroEnVivoPageState extends State<RegistroEnVivoPage> {
             // hace nada, en una columna que se recorre botón por botón, es
             // una pulsación tirada cada vez que se pasa por encima.
             if (!_alFinal)
-              _opcionDeRail(
+              OpcionDeColumna(
                 icono: Icons.arrow_downward,
                 texto: 'settings.log-to-bottom'.i18n,
                 onTap: () {
@@ -1159,12 +1123,12 @@ class _RegistroEnVivoPageState extends State<RegistroEnVivoPage> {
                   _bajarAlFinal();
                 },
               ),
-            _opcionDeRail(
+            OpcionDeColumna(
               icono: Icons.history,
               texto: _etiquetaDeHistorial,
               onTap: _verHistorial,
             ),
-            _opcionDeRail(
+            OpcionDeColumna(
               icono: ServidorDeRegistro.encendido
                   ? Icons.wifi_tethering
                   : Icons.wifi_tethering_off,
@@ -1172,28 +1136,30 @@ class _RegistroEnVivoPageState extends State<RegistroEnVivoPage> {
               elegido: ServidorDeRegistro.encendido,
               onTap: _alternarServidor,
             ),
-            _opcionDeRail(
+            OpcionDeColumna(
               icono: Icons.delete_outline,
               texto: 'common.clear'.i18n,
               onTap: _limpiar,
             ),
-            const SizedBox(height: 14),
-            // Salir, abajo del todo.
-            //
-            // En un televisor el botón de atrás del mando existe, pero no
-            // todos los mandos lo traen en un sitio evidente —y en algunos
-            // cajones ni siquiera está— así que una pantalla sin salida
-            // visible es una pantalla de la que se sale apagando el aparato.
-            // Va último porque es lo que menos se usa: bajando se llega a
-            // todo lo demás primero.
-            _opcionDeRail(
+          ],
+        ),
+        // Salir, en su propio grupo y al final.
+        //
+        // En un televisor el botón de atrás del mando existe, pero no todos
+        // los mandos lo traen en un sitio evidente —y en algunos cajones ni
+        // siquiera está— así que una pantalla sin salida visible es una
+        // pantalla de la que se sale apagando el aparato. Va último porque es
+        // lo que menos se usa: bajando se llega a todo lo demás primero.
+        GrupoDeColumna(
+          opciones: [
+            OpcionDeColumna(
               icono: Icons.arrow_back,
               texto: 'common.exit'.i18n,
               onTap: () => Navigator.of(context).maybePop(),
             ),
           ],
         ),
-      ),
+      ],
     );
   }
 
@@ -1208,77 +1174,6 @@ class _RegistroEnVivoPageState extends State<RegistroEnVivoPage> {
     return _cuantasAnteriores > 0 ? '$base ($_cuantasAnteriores)' : base;
   }
 
-  Widget _tituloDeGrupo(String texto) => Padding(
-        padding: const EdgeInsets.only(left: 4, bottom: 8),
-        child: Text(
-          texto.toUpperCase(),
-          style: TextStyle(
-            fontSize: 11,
-            letterSpacing: 1.1,
-            fontWeight: FontWeight.w700,
-            color: HomeTheme.textMuted,
-          ),
-        ),
-      );
-
-  /// Una fila de la columna: se ilumina con el foco y se marca si está puesta.
-  ///
-  /// Son dos señales distintas y hacen falta las dos. El resplandor dice DÓNDE
-  /// estás parado; el relleno dice QUÉ está activo. Con una sola no se puede
-  /// distinguir «el filtro Fallos está puesto» de «estoy encima de Fallos».
-  Widget _opcionDeRail({
-    required String texto,
-    required VoidCallback onTap,
-    IconData? icono,
-    bool elegido = false,
-    FocusNode? foco,
-  }) {
-    return Padding(
-      padding: const EdgeInsets.only(bottom: 6),
-      child: FocusableCard(
-        borderRadius: 10,
-        focusNode: foco,
-        onTap: onTap,
-        child: AnimatedContainer(
-          duration: const Duration(milliseconds: 120),
-          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 11),
-          decoration: BoxDecoration(
-            borderRadius: BorderRadius.circular(10),
-            color: elegido
-                ? HomeTheme.accentPink.withValues(alpha: 0.20)
-                : Colors.white.withValues(alpha: 0.05),
-          ),
-          child: Row(
-            children: [
-              if (icono != null) ...[
-                Icon(
-                  icono,
-                  size: 18,
-                  color:
-                      elegido ? HomeTheme.accentPink : HomeTheme.textPrimary,
-                ),
-                const SizedBox(width: 10),
-              ],
-              Expanded(
-                child: Text(
-                  texto,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: TextStyle(
-                    fontSize: 14,
-                    fontWeight: elegido ? FontWeight.w700 : FontWeight.w500,
-                    color:
-                        elegido ? HomeTheme.accentPink : HomeTheme.textPrimary,
-                  ),
-                ),
-              ),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-
   /// El registro, con un borde que se enciende cuando tiene el foco.
   Widget _panelDeTelevisor() {
     return Padding(
@@ -1291,26 +1186,13 @@ class _RegistroEnVivoPageState extends State<RegistroEnVivoPage> {
             const SizedBox(height: 10),
           ],
           Expanded(
-            child: AnimatedContainer(
-              duration: const Duration(milliseconds: 140),
-              decoration: BoxDecoration(
-                borderRadius: BorderRadius.circular(12),
-                color: Colors.black.withValues(alpha: 0.22),
-                border: Border.all(
-                  color: _elRegistroTieneFoco
-                      ? HomeTheme.accentPink
-                      : Colors.white.withValues(alpha: 0.08),
-                  width: _elRegistroTieneFoco ? 2 : 1,
-                ),
-              ),
-              child: ClipRRect(
-                borderRadius: BorderRadius.circular(11),
-                child: NotificationListener<ScrollNotification>(
-                  onNotification: _mirarDesplazamiento,
-                  child: _buildLista(
-                    paraTelevisor: true,
-                    alIrIzquierda: () => _focoDelRail.requestFocus(),
-                  ),
+            child: PanelDeTelevisor(
+              tieneFoco: _elRegistroTieneFoco,
+              child: NotificationListener<ScrollNotification>(
+                onNotification: _mirarDesplazamiento,
+                child: _buildLista(
+                  paraTelevisor: true,
+                  alIrIzquierda: () => _focoDelRail.requestFocus(),
                 ),
               ),
             ),
@@ -1331,69 +1213,18 @@ class _RegistroEnVivoPageState extends State<RegistroEnVivoPage> {
   }
 }
 
-/// Por qué se filtra el registro.
+/// El relleno de las tarjetas de estas pantallas, opaco.
 ///
-/// No son niveles de gravedad —eso ya lo dice el color— sino ÁREAS: quien abre
-/// el registro viene buscando una cosa concreta, y son casi siempre estas
-/// cuatro. Filtrar por área es lo que hace utilizable un archivo de miles de
-/// líneas en un televisor, donde recorrerlo con el mando no es opción.
-enum _Filtro {
-  todo('settings.log-filtro-todo'),
-
-  /// Solo lo que salió mal. Es el primer sitio donde mirar.
-  fallos('settings.log-filtro-fallos'),
-
-  /// Extensiones y servidores: qué resolvió, cuál falló, cuánto tardó.
-  extensiones('settings.log-filtro-extensiones'),
-
-  /// El reproductor: qué decodifica, cuadros perdidos, saltos.
-  reproductor('settings.log-filtro-reproductor');
-
-  const _Filtro(this.clave);
-
-  /// La clave de idioma del botón.
-  final String clave;
-
-  /// La sección del exportado que corresponde a este filtro, o null si son
-  /// todas.
-  ///
-  /// Es lo que ata las tres salidas —lo que se ve en pantalla, lo que se
-  /// exporta y lo que se sirve por la red— a una sola idea de «zona». Si
-  /// cada una decidiera por su cuenta qué entra, mirar el televisor y mirar
-  /// el navegador darían resultados distintos y no habría forma de saber
-  /// cuál de los dos está bien.
-  String? get area => switch (this) {
-        _Filtro.todo => null,
-        _Filtro.fallos => ExportarRegistro.areaFallos,
-        _Filtro.extensiones => ExportarRegistro.areaExtensiones,
-        _Filtro.reproductor => ExportarRegistro.areaReproductor,
-      };
-
-  /// Si una línea entra en este filtro.
-  bool acepta(String l) => switch (this) {
-        _Filtro.todo => true,
-        _Filtro.fallos => l.contains(' SEVERE ') ||
-            l.contains(' SHOUT ') ||
-            l.contains(' WARNING ') ||
-            l.contains('LO ULTIMO QUE HIZO') ||
-            l.contains('no se cerro normalmente'),
-        // La cabecera de sesión entra en TODOS los filtros: sin ella no se
-        // sabría de qué sesión ni de qué aparato son las líneas que quedan.
-        _Filtro.extensiones => l.contains('═══') ||
-            l.contains('RESULTADO ·') ||
-            l.contains('switchServer') ||
-            l.contains('[home]') ||
-            l.contains('ficha ·') ||
-            l.contains('extension') ||
-            l.contains('Extension'),
-        _Filtro.reproductor => l.contains('═══') ||
-            l.contains('medición') ||
-            l.contains('rueda') ||
-            l.contains('recorte') ||
-            l.contains('DECODIFICACIÓN') ||
-            l.contains('FRAME LENTO') ||
-            l.contains('Pantalla puesta') ||
-            l.contains('Dibujado del vídeo') ||
-            l.contains('Motor de vídeo'),
-      };
-}
+/// ── Por qué no puede ser semitransparente ───────────────────────────────
+///
+/// El resplandor de foco de [FocusableCard] se dibuja DEBAJO del hijo, y
+/// cuenta con que el hijo lo tape: así solo queda a la vista lo que desborda,
+/// que es el halo alrededor. Con un relleno al 5% de blanco eso no pasa — el
+/// difuminado se ve entero a través de la tarjeta y parece que la luz se
+/// sale del área. Reportado en vivo con foto: «al pasar el mouse y volver, la
+/// luz se sale del área».
+///
+/// Se mezcla contra el fondo en vez de usar un color aparte para que el
+/// aspecto quede igual que antes y siga siguiendo al tema claro/oscuro.
+Color get _superficie =>
+    Color.alphaBlend(Colors.white.withValues(alpha: 0.05), HomeTheme.bg);
