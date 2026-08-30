@@ -62,52 +62,113 @@ class EncabezadoDeSesion {
   /// se dice acá, dentro del propio archivo, para que siga estando cuando el
   /// registro se exporta y lo abre otra persona en otro lado.
   static List<String> _presentacion(String version) {
-    final aparato = resumenDelAparato();
     return [
-      '╔══════════════════════════════════════════════════════════════╗',
-      '║                                                              ║',
-      '║      ██████╗ ██████╗ ██╗███████╗███╗   ███╗                  ║',
-      '║      ██╔══██╗██╔══██╗██║██╔════╝████╗ ████║                  ║',
-      '║      ██████╔╝██████╔╝██║███████╗██╔████╔██║   H U B          ║',
-      '║      ██╔═══╝ ██╔══██╗██║╚════██║██║╚██╔╝██║                  ║',
-      '║      ██║     ██║  ██║██║███████║██║ ╚═╝ ██║                  ║',
-      '║      ╚═╝     ╚═╝  ╚═╝╚═╝╚══════╝╚═╝     ╚═╝                  ║',
-      '║                                                              ║',
-      '╚══════════════════════════════════════════════════════════════╝',
+      ..._marco(_nombre),
       '',
-      '  ┌─ QUÉ ES ESTO ──────────────────────────────────────────────',
-      '  │',
-      '  │  Acá se ve lo que hace la app por dentro: qué extensión',
-      '  │  respondió, qué servidor falló, cuánto tardó un vídeo en',
-      '  │  empezar. Sirve para encontrar fallos y mejorar la app.',
-      '  │',
-      '  │  Si algo no te anda, podés exportar este registro y',
-      '  │  mandárselo a quien mantiene PrismHub. Con esto se puede',
-      '  │  arreglar de verdad, en vez de adivinar.',
-      '  │',
-      '  ├─ QUÉ NO LLEVA ─────────────────────────────────────────────',
-      '  │',
-      '  │  · No lleva qué estuviste viendo.',
-      '  │  · No lleva contraseñas ni credenciales de ningún sitio.',
-      '  │  · No lleva tu nombre, tu cuenta ni el nombre de tu equipo.',
-      '  │',
-      '  │  Las direcciones salen recortadas a propósito: se conserva',
-      '  │  el servidor y el formato, que es lo que sirve para',
-      '  │  arreglar, y se va todo lo demás.',
-      '  │',
-      '  ├─ Y NADA SE MANDA SOLO ─────────────────────────────────────',
-      '  │',
-      '  │  Este archivo se queda en tu aparato. No se sube a ningún',
-      '  │  lado ni lo lee nadie salvo que vos decidas compartirlo.',
-      '  │',
-      '  │  PrismHub está hecho para ser seguro con quien lo usa, y',
-      '  │  todo lo que hace está a la vista, empezando por esto.',
-      '  │',
+      '  PrismHub $version',
+      '  ${resumenDelAparato()}',
+      // Con fecha y hora completas, y no solo por dejar constancia: es lo que
+      // deja que el historial ponga «Hoy 21:59» en cada apertura. Las líneas
+      // del recuadro van crudas, sin el encabezado de `logging`, así que sin
+      // esto una sesión que no llegara a registrar nada más se quedaría sin
+      // ninguna hora que mostrar.
+      '  abierto: ${_sinMicrosegundos(DateTime.now())}',
+      '',
+      ..._bloque('QUÉ ES ESTO', [
+        'Acá se ve lo que hace la app por dentro: qué extensión',
+        'respondió, qué servidor falló, cuánto tardó un vídeo en',
+        'empezar. Sirve para encontrar fallos y mejorar la app.',
+        '',
+        'Si algo no te anda, podés exportar este registro y',
+        'mandárselo a quien mantiene PrismHub. Con esto se puede',
+        'arreglar de verdad, en vez de adivinar.',
+      ]),
+      ..._bloque('QUÉ NO LLEVA', [
+        '· No lleva qué estuviste viendo.',
+        '· No lleva contraseñas ni credenciales de ningún sitio.',
+        '· No lleva tu nombre, tu cuenta ni el nombre de tu equipo.',
+        '',
+        'Las direcciones salen recortadas a propósito: se conserva',
+        'el servidor y el formato, que es lo que sirve para',
+        'arreglar, y se va todo lo demás.',
+      ]),
+      ..._bloque('Y NADA SE MANDA SOLO', [
+        'Este archivo se queda en tu aparato. No se sube a ningún',
+        'lado ni lo lee nadie salvo que vos decidas compartirlo.',
+        '',
+        'PrismHub está hecho para ser seguro con quien lo usa, y',
+        'todo lo que hace está a la vista, empezando por esto.',
+      ]),
       '  └────────────────────────────────────────────────────────────',
       '',
-      '═══ PrismHub $version · $aparato',
-      '',
     ];
+  }
+
+  /// El nombre, dibujado con un solo carácter.
+  ///
+  /// ── Por qué solo con bloque lleno y espacios ────────────────────────────
+  ///
+  /// La versión anterior mezclaba el bloque lleno con esquinas de recuadro
+  /// (╗ ╔ ╝) para redondear las letras. Se veía bien en un editor y mal en la
+  /// app: son caracteres de familias distintas, y en cuanto la fuente
+  /// monoespaciada del aparato no tiene alguno, el sistema lo saca de otra
+  /// fuente con otro ancho — y ahí la letra se desarma. Reportado en vivo con
+  /// foto en PC: «se corta el nombre de prism arriba».
+  ///
+  /// Con un solo carácter eso no puede pasar: o está y todo mide igual, o no
+  /// está y todo mide igual de distinto, pero el dibujo se sostiene.
+  static const _nombre = [
+    '█████ █████  ███  █████ █   █',
+    '█   █ █   █   █   █     ██ ██',
+    '█████ █████   █   █████ █ █ █',
+    '█     █  █    █       █ █   █',
+    '█     █   █  ███  █████ █   █',
+    '',
+    'H U B  ·  registro de la aplicación',
+  ];
+
+  /// Encierra unas líneas en un recuadro, calculando el ancho.
+  ///
+  /// El ancho se mide acá y no se escribe a mano: un recuadro dibujado a mano
+  /// en un literal se rompe con el primer carácter que alguien agregue o
+  /// saque, y se rompe en silencio — nadie cuenta columnas al revisar un
+  /// cambio. Midiéndolo, el recuadro cierra siempre.
+  static List<String> _marco(List<String> dentro) {
+    var ancho = 0;
+    for (final l in dentro) {
+      if (l.length > ancho) ancho = l.length;
+    }
+    final barra = '═' * (ancho + 4);
+    return [
+      '╔$barra╗',
+      '║${' ' * (ancho + 4)}║',
+      for (final l in dentro) '║  ${l.padRight(ancho)}  ║',
+      '║${' ' * (ancho + 4)}║',
+      '╚$barra╝',
+    ];
+  }
+
+  /// Un apartado de texto, con su título.
+  ///
+  /// Sin borde derecho a propósito: el texto de adentro se puede tocar sin
+  /// tener que volver a cuadrar nada, y una línea que se pase de largo no
+  /// deja el recuadro abierto — que es la forma habitual en que estas cosas
+  /// se ven rotas.
+  static List<String> _bloque(String titulo, List<String> lineas) {
+    final guiones = '─' * (58 - titulo.length - 4);
+    return [
+      '  ┌─ $titulo $guiones',
+      '  │',
+      for (final l in lineas) l.isEmpty ? '  │' : '  │  $l',
+      '  │',
+    ];
+  }
+
+  /// La fecha sin los microsegundos, que no le dicen nada a nadie.
+  static String _sinMicrosegundos(DateTime cuando) {
+    final s = cuando.toIso8601String().replaceFirst('T', ' ');
+    final punto = s.indexOf('.');
+    return punto < 0 ? s : s.substring(0, punto);
   }
 
   /// El nombre grande: es lo primero que se busca al abrir el archivo.
