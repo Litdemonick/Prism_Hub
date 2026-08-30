@@ -18,6 +18,36 @@
 - Las anteriores no se pierden: están en Historial, y desde ahí podés
   compartir una concreta cuando haga falta.
 
+### 🔒 La Zona +18 en televisor pedía permiso… y no lo pedía
+
+- **Se abría sin la confirmación de edad y sin el PIN.** El televisor iba
+  directo a la pantalla de adentro: la puerta estaba puesta y se pasaba por al
+  lado. Ahora entra por donde entran PC y teléfono.
+- **Y ahora se puede poner o cambiar el PIN desde el televisor.** No estaba: un
+  televisor con el PIN sin configurar había que configurarlo desde otro
+  aparato.
+
+### 📺 «Acerca de» ahora dice qué versión tenés
+
+- En televisor faltaba. Era el primer dato que hace falta al reportar algo, y
+  la única forma de saberlo era abrir el registro y leer la cabecera.
+
+### 🖥️ Sin parpadeos blancos en PC
+
+- Al entrar a Registros —y a cualquier otra de estas pantallas— se veía un
+  destello blanco. La pantalla nueva entra con un fundido, y durante esos
+  milisegundos lo que se veía por detrás no era la anterior sino el fondo
+  claro de la ventana.
+
+### 📡 Televisores encontrados, clasificados
+
+- **«Compartiendo ahora» y «Se perdió la conexión»**, en bloques separados. Un
+  televisor deja de contestar porque lo apagaste, porque se cumplió el tiempo
+  o **porque la app se cayó** — y los tres se veían igual: desapareciendo de la
+  lista. El tercero es justo el caso en el que estabas mirando.
+- El registro se muestra dentro de un panel con contorno, como la página web:
+  un texto pegado a los cuatro bordes se lee como parte del marco de la app.
+
 ### 🔀 Cambiar de zona con alguien mirando
 
 - Son dos pantallas distintas —el registro en vivo y una apertura del
