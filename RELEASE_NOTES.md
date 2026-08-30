@@ -1,41 +1,45 @@
-## PrismHub v1.0.54 — Que el registro no mienta
+## PrismHub v1.0.55 — Registros limpios y una pantalla menos que se rompe
 
-> 🎯 **Dos avisos que no eran ciertos, corregidos.** Uno acusaba al reproductor
-> de un salto que había pedido la propia app; el otro daba dos números
-> distintos para lo mismo en la misma pantalla.
+> 🧾 **Actualizá para poder reportar bien.** Esta versión arregla un fallo que
+> rompía un trozo de la pantalla en algunos televisores, hace que el registro
+> empiece limpio cada vez que volvés a la app, y dice **por qué** se cerró
+> cuando se cierra sola.
 
 > ⚠️ **La app sigue en mantenimiento general.** Se la sigue reestructurando
 > por dentro, así que es posible que te cruces con fallos o con cosas a medio
 > terminar. Si encontrás algo roto, reportalo desde Ajustes → Reportar.
 
-### 🎯 «Salto fantasma» era un falso positivo
+### 📺 Un trozo de pantalla que se rompía en televisor
 
-- El registro avisaba de que el vídeo se movía solo. No era cierto: el salto lo
-  pedía la propia app al retomar donde lo habías dejado, por un camino que el
-  detector no miraba.
-- Un aviso falso en la zona de Fallos es peor que ninguno — manda a buscar un
-  problema que no existe, justo en la pantalla que se abre cuando algo va mal.
-- El detector sigue puesto, pero ahora cuando avise será por algo.
+- En algunos televisores aparecía un rectángulo de error en medio del
+  reproductor. La causa: widgets pensados para la versión de escritorio que se
+  montan igual en Android, donde les falta el tema que necesitan — y en vez de
+  arreglárselas, se caían.
+- Ahora, si les falta, usan un tema por defecto. En PC no cambia nada.
 
-### 🔢 La página de red contaba mal
+### 🧾 El registro empieza limpio
 
-- Decía «582 líneas» arriba y «544» en el resumen, en la misma página. Contaba
-  los renglones del documento —recuadros y títulos incluidos— en vez de las
-  líneas del registro.
+- En televisor «cerrar la app» casi nunca la cierra: Android la deja en segundo
+  plano y volver retoma el mismo proceso. El registro seguía escribiendo sobre
+  la misma sesión, así que al abrirlo aparecían las líneas de hace horas.
+- Ahora, si volvés después de un rato, empieza una **sesión nueva**. La
+  anterior no se pierde: pasa al Historial, como siempre.
+- No se mata la app al salir a propósito: eso haría lento el siguiente
+  arranque, que es lo que más se nota en un televisor.
 
-### ⏱️ La conexión de red dura 45 minutos
+### ❓ Y dice por qué se cerró
 
-- Estaba en 15, pensada para «leer un registro y cerrar». En el uso real es
-  otra cosa: se enciende para dejarla puesta mientras se prueba algo —un
-  episodio entero, varias extensiones— mirando el navegador en paralelo. Se
-  cortaba a mitad de la prueba, y volver a levantarla obliga a escribir otra
-  dirección porque el código cambia cada vez.
-- Sigue habiendo tope: es lo que garantiza que nadie se la deje abierta sin
-  darse cuenta.
+- Cuando la app se cierra sola no hay error que mostrar: o reventó algo nativo
+  o el sistema la cerró por falta de memoria. **Se ven idénticos desde fuera y
+  llevan a arreglos opuestos.**
+- Ahora los avisos de memoria quedan en el rastro, así que el propio registro
+  lo distingue: si el rastro termina en varios «el sistema pidió memoria», fue
+  lo segundo.
 
-### 🔦 El aviso del wakelock, una sola vez
+### 🗂️ Menos ruido, sin perder nada
 
-- En algunos televisores ese canal del sistema no responde, y no responde
-  nunca: salían cuatro avisos idénticos por minuto. Ahora sale uno, y dice lo
-  que importa: **en ese aparato la pantalla podría apagarse sola mientras
-  reproducís**.
+- **Una apertura de la app = una entrada en el Historial.** Se partía en varias
+  porque la cabecera podía escribirse más de una vez.
+- **Cada pedido de una extensión se anotaba dos veces**, cada línea con media
+  verdad. Ahora es una sola con todo: extensión, servidor, código y tiempo. En
+  la carga del inicio son 150 líneas donde había 300.
