@@ -5,7 +5,11 @@ import 'dart:io';
 import 'package:fluent_ui/fluent_ui.dart' as fluent;
 import 'package:flutter/material.dart';
 import 'package:flutter_i18n/flutter_i18n.dart';
+import 'package:package_info_plus/package_info_plus.dart';
+import 'package:prismhub/utils/encabezado_de_sesion.dart';
 import 'package:prismhub/utils/i18n.dart';
+import 'package:prismhub/utils/sesiones_del_registro.dart';
+import 'package:prismhub/views/pages/settings/historial_de_registro_page.dart';
 import 'package:prismhub/views/widgets/tv/desplazable_con_mando.dart';
 import 'package:prismhub/views/widgets/tv/focusable_card.dart';
 import 'package:prismhub/utils/exportar_registro.dart';
@@ -57,6 +61,20 @@ class _RegistroEnVivoPageState extends State<RegistroEnVivoPage> {
   Timer? _reloj;
   final _scroll = ScrollController();
 
+  /// Si el foco del mando está sobre el registro.
+  ///
+  /// Un bloque de texto que se desplaza no puede mostrarlo por su cuenta —no
+  /// hay tarjeta que se ilumine— y sin eso, en un televisor, no se sabe si las
+  /// flechas van a mover el texto o a saltar a otro botón.
+  bool _elRegistroTieneFoco = false;
+
+  /// Cuántas aperturas anteriores hay guardadas, para el botón de historial.
+  ///
+  /// Se muestra el número a propósito: un botón que a veces lleva a una lista
+  /// vacía y a veces no, sin decirlo de antemano, es una pulsación perdida —
+  /// y con un control remoto eso se nota.
+  int _cuantasAnteriores = 0;
+
   /// Lo que quedó de arranques anteriores, leído del archivo.
   ///
   /// Va delante de lo que hay en memoria y no se vuelve a leer: el archivo no
@@ -80,8 +98,37 @@ class _RegistroEnVivoPageState extends State<RegistroEnVivoPage> {
     // En televisor además no hay alternativa: no hay dónde exportar ni con
     // qué abrirlo. Pero en teléfono y en PC tener el historial acá también
     // ahorra el rodeo de exportar, abrir con otra cosa y buscar a mano.
-    unawaited(_leerLoAnterior());
+    // ── Primero se abre la pantalla; después se lee el archivo ──────────
+    //
+    // Reportado en vivo: «la primera vez entra bien, salgo y entro otra vez y
+    // se peta, carga lento y luego entra». Encaja con lo que hace esto: en la
+    // primera visita el archivo estaba casi vacío, y en la segunda ya trae la
+    // sesión anterior entera.
+    //
+    // Leer y partir en líneas es trabajo del hilo de la interfaz, y arrancaba
+    // en el mismo cuadro en que empieza la animación de entrada. En un
+    // televisor eso son varios cuadros perdidos encima de la transición, que
+    // es justo donde más se notan.
+    //
+    // Ahora se espera a que la transición termine. La pantalla entra vacía y
+    // fluida, y el historial aparece un instante después — que es el orden
+    // correcto: lo primero es que la pantalla responda.
     _refrescar();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      final animacion = ModalRoute.of(context)?.animation;
+      if (animacion == null || animacion.isCompleted) {
+        unawaited(_leerLoAnterior());
+        return;
+      }
+      void alTerminar(AnimationStatus estado) {
+        if (estado != AnimationStatus.completed) return;
+        animacion.removeStatusListener(alTerminar);
+        if (mounted) unawaited(_leerLoAnterior());
+      }
+
+      animacion.addStatusListener(alTerminar);
+    });
     _reloj = Timer.periodic(_cadencia, (_) => _refrescar());
   }
 
@@ -89,10 +136,11 @@ class _RegistroEnVivoPageState extends State<RegistroEnVivoPage> {
     try {
       final archivo = File(PrismLog.logFilePath);
       if (!await archivo.exists()) return;
-      final texto = await archivo.readAsString();
+      final texto = await _colaDelArchivo(archivo);
       final todas = const LineSplitter()
           .convert(texto)
-          .where((l) => l.trim().isNotEmpty);
+          .where((l) => l.trim().isNotEmpty)
+          .toList(growable: false);
       // Solo el final. Un archivo de sesiones enteras puede tener decenas de
       // miles de líneas, y construirlas todas es justo lo que no hay que
       // hacer en un televisor.
@@ -100,7 +148,23 @@ class _RegistroEnVivoPageState extends State<RegistroEnVivoPage> {
           ? todas.length - _topeDeLoAnterior
           : 0;
       if (!mounted) return;
-      setState(() => _deAntes = todas.skip(desde).toList(growable: false));
+      // ── Solo la sesión de ahora ───────────────────────────────────────
+      //
+      // Reportado en vivo: «veo que ya contiene cosas y nunca comienza desde
+      // cero», «siempre al cerrar y abrir el app». El archivo es acumulativo
+      // y el visor lo mostraba entero, así que al abrirlo ya venía con lo de
+      // ayer pegado arriba y no había forma de ver dónde empezaba lo de
+      // recién.
+      //
+      // Ahora acá entra solo la última apertura, que arranca con la
+      // presentación. Lo anterior no se pierde: está en «Historial», ordenado
+      // por fecha y hora.
+      final sesiones = partirEnSesiones(todas.sublist(desde));
+      setState(() {
+        _deAntes = sesiones.isEmpty ? const [] : sesiones.last.lineas;
+        _cuantasAnteriores = sesiones.isEmpty ? 0 : sesiones.length - 1;
+        _recalcularVisibles();
+      });
       if (_alFinal) _bajarAlFinal();
     } catch (e) {
       // Sin permiso, o el archivo a medio escribir: se sigue con lo que haya
@@ -108,6 +172,40 @@ class _RegistroEnVivoPageState extends State<RegistroEnVivoPage> {
       debugPrint('No se pudo leer el registro anterior: $e');
     }
   }
+
+  /// El último tramo del archivo, sin traer el resto a memoria.
+  ///
+  /// El registro se recorta solo a 10 MB (ver `PrismLog._recortar`), así que
+  /// `readAsString()` podía cargar diez megas y partirlos en cien mil líneas
+  /// para quedarse con las últimas tres mil. En un PC no se nota; en un
+  /// televisor es el congelamiento al entrar.
+  ///
+  /// Se lee desde el final con posicionamiento directo, y se descarta lo que
+  /// haya antes del primer salto de línea para no empezar con media línea
+  /// cortada, que en pantalla se ve como basura.
+  static Future<String> _colaDelArchivo(File archivo) async {
+    final largo = await archivo.length();
+    if (largo <= _bytesDeCola) return archivo.readAsString();
+    final mango = await archivo.open();
+    try {
+      await mango.setPosition(largo - _bytesDeCola);
+      final bytes = await mango.read(_bytesDeCola);
+      // allowMalformed: el corte cae en cualquier byte, y bien puede partir
+      // un carácter de varios bytes por la mitad. Sin esto, el primer
+      // carácter roto tiraría toda la lectura.
+      final texto = utf8.decode(bytes, allowMalformed: true);
+      final corte = texto.indexOf(String.fromCharCode(10));
+      return corte < 0 ? texto : texto.substring(corte + 1);
+    } finally {
+      await mango.close();
+    }
+  }
+
+  /// Cuánto se lee del final del archivo.
+  ///
+  /// A ojo, unas seis mil líneas: de sobra para las tres mil que se
+  /// conservan, con margen para las que se descarten por vacías.
+  static const _bytesDeCola = 700 * 1024;
 
   /// Cuántas líneas del archivo se traen.
   ///
@@ -143,6 +241,7 @@ class _RegistroEnVivoPageState extends State<RegistroEnVivoPage> {
     setState(() {
       _generacion = generacion;
       _lineas = PrismLog.enMemoria;
+      _recalcularVisibles();
     });
     if (_alFinal) _bajarAlFinal();
   }
@@ -171,16 +270,24 @@ class _RegistroEnVivoPageState extends State<RegistroEnVivoPage> {
       return;
     }
     ServidorDeRegistro.areaElegida = _filtro.area;
-    final direccion = await ServidorDeRegistro.encender();
+    ServidorDeRegistro.lineasFijas = null;
+    final r = await ServidorDeRegistro.encender();
     if (!mounted) return;
     setState(() {});
-    if (direccion == null) {
+    if (r.direccion == null) {
+      // Cada fallo lleva a un arreglo distinto, así que se dice cuál fue en
+      // vez de un «no se pudo» que deja a oscuras.
       showPlatformSnackbar(
         context: context,
-        content: 'settings.log-en-red-sin-red'.i18n,
+        content: switch (r.fallo) {
+          FalloDeServidor.sinRed => 'settings.log-en-red-sin-red'.i18n,
+          FalloDeServidor.noSePudo => 'settings.log-en-red-bloqueado'.i18n,
+          _ => 'settings.log-en-red-sin-red'.i18n,
+        },
       );
       return;
     }
+    final direccion = r.direccion!;
     await showDialog<void>(
       context: context,
       builder: (context) => AlertDialog(
@@ -233,18 +340,99 @@ class _RegistroEnVivoPageState extends State<RegistroEnVivoPage> {
     if (!_pausado) _refrescar();
   }
 
+  /// Vacía el registro y lo deja empezado de nuevo.
+  ///
+  /// Vacía TODO —las cuatro zonas y el historial de aperturas anteriores— y
+  /// no solo lo que se esté mirando: un botón que dice «limpiar» y deja
+  /// cosas adentro no es de fiar, y encima el resultado dependería del filtro
+  /// que estuviera puesto, que no es lo que nadie espera.
+  ///
+  /// Y no queda en blanco: se vuelve a escribir la presentación, así que la
+  /// pantalla queda como recién abierta —con el nombre, qué es esto y de qué
+  /// aparato se trata— en vez de un vacío que se lee igual que un fallo.
   Future<void> _limpiar() async {
-    await PrismLog.limpiar();
+    try {
+      await PrismLog.limpiar();
+      EncabezadoDeSesion.escribir(version: await _version());
+      await PrismLog.flush();
+    } catch (e) {
+      if (!mounted) return;
+      showPlatformSnackbar(
+        context: context,
+        content: FlutterI18n.translate(
+          context,
+          'settings.log-clear-error',
+          translationParams: {'error': '$e'},
+        ),
+      );
+      return;
+    }
     if (!mounted) return;
     setState(() {
       _generacion = PrismLog.generacion;
-      _lineas = const [];
+      _lineas = PrismLog.enMemoria;
+      _deAntes = const [];
+      _cuantasAnteriores = 0;
       _alFinal = true;
+      _recalcularVisibles();
     });
     showPlatformSnackbar(
       context: context,
       content: 'settings.log-cleared'.i18n,
     );
+  }
+
+  /// La versión que se escribe en la cabecera al limpiar.
+  ///
+  /// Se pregunta en el momento y no se guarda: pasa una vez, cuando alguien
+  /// aprieta un botón, y tener el dato colgando de la pantalla es una copia
+  /// más que mantener al día.
+  static Future<String> _version() async {
+    try {
+      return (await PackageInfo.fromPlatform()).version;
+    } catch (_) {
+      return '';
+    }
+  }
+
+  /// Exporta lo que se está mirando, diciendo si algo salió mal.
+  ///
+  /// Antes se llamaba al exportador directamente y un fallo —sin permiso de
+  /// escritura, disco lleno, el menú de compartir que no abre— se perdía sin
+  /// que nadie se enterara: el botón se apretaba y no pasaba nada, que es la
+  /// peor forma de fallar porque no da ninguna pista de qué hacer.
+  Future<void> _exportar() async {
+    try {
+      final salio = await ExportarRegistro.entregar(soloArea: _filtro.area);
+      if (!salio || !mounted) return;
+      showPlatformSnackbar(
+        context: context,
+        content: 'settings.log-export-listo'.i18n,
+      );
+    } catch (e) {
+      if (!mounted) return;
+      showPlatformSnackbar(
+        context: context,
+        content: FlutterI18n.translate(
+          context,
+          'settings.log-export-error',
+          translationParams: {'error': '$e'},
+        ),
+      );
+    }
+  }
+
+  /// Abre el historial de aperturas anteriores.
+  Future<void> _verHistorial() async {
+    await Navigator.of(context).push(
+      MaterialPageRoute<void>(
+        builder: (_) => const HistorialDeRegistroPage(),
+      ),
+    );
+    // Al volver, el servidor de red puede haber quedado sirviendo una sesión
+    // concreta. Acá se mira lo de ahora, así que se le saca esa atadura.
+    ServidorDeRegistro.lineasFijas = null;
+    if (mounted) setState(() {});
   }
 
   String get _titulo => 'settings.view-log'.i18n;
@@ -281,13 +469,82 @@ class _RegistroEnVivoPageState extends State<RegistroEnVivoPage> {
   /// eso es lo que lo vuelve inútil en un televisor.
   _Filtro _filtro = _Filtro.todo;
 
-  /// Las líneas que corresponden al filtro puesto.
+  /// Las líneas que se están mostrando, ya filtradas.
   ///
-  /// Se calcula al construir y no se guarda: el registro crece mientras se
-  /// mira, así que una copia filtrada quedaría vieja enseguida.
-  List<String> _conFiltro(List<String> todas) {
-    if (_filtro == _Filtro.todo) return todas;
-    return todas.where((l) => _filtro.acepta(l)).toList(growable: false);
+  /// ── Por qué se guarda y no se calcula al construir ──────────────────────
+  ///
+  /// Antes se armaba en cada `build`: juntar el historial con lo de memoria
+  /// —hasta 4.500 líneas— y recorrerlas todas aplicando el filtro. Y `build`
+  /// corre cuatro veces por segundo mientras entran líneas, más una vez por
+  /// cada aviso de desplazamiento. En un televisor eso es un tirón constante
+  /// justo mientras se intenta leer.
+  ///
+  /// Ahora se recalcula solo cuando cambia algo que lo afecta: líneas nuevas,
+  /// el historial recién leído, o el filtro.
+  List<String> _visibles = const [];
+
+  void _recalcularVisibles() {
+    final todas = _deAntes.isEmpty
+        ? _lineas
+        : <String>[..._deAntes, ..._lineas.skip(_dondeSigueLaMemoria())];
+    _visibles = _filtro == _Filtro.todo
+        ? todas
+        : todas.where(_filtro.acepta).toList(growable: false);
+  }
+
+  /// Desde qué línea de la memoria hay que seguir, para no repetir.
+  ///
+  /// ── El solapamiento ─────────────────────────────────────────────────────
+  ///
+  /// Las dos fuentes se pisan. El archivo se escribe en tandas cada dos
+  /// segundos, así que todo lo que hay en memoria ya está también en el
+  /// archivo — y al juntar «lo de antes» con «lo de ahora» sin más, el tramo
+  /// compartido salía dos veces. Reportado en vivo: «no duplicaciones, veo
+  /// que ya contiene cosas».
+  ///
+  /// El archivo NO se vuelve a leer (solo crece por el final, y ese final es
+  /// justo lo que la memoria ya trae), así que lo correcto es lo que dice el
+  /// usuario: agregar, no volver a empezar. Se busca dónde termina lo leído
+  /// del archivo dentro de la memoria y se sigue desde la línea siguiente.
+  ///
+  /// ── Por qué se compara un tramo y no una línea ──────────────────────────
+  ///
+  /// Una sola línea puede repetirse tal cual (un reintento, un aviso que
+  /// vuelve), y cortar en la coincidencia equivocada se comería líneas
+  /// buenas. Con las últimas del archivo en fila, una coincidencia falsa deja
+  /// de ser realista.
+  ///
+  /// Si no se encuentra nada, la memoria ya dejó atrás lo que se leyó del
+  /// archivo —el buffer va rotando y descarta por delante— así que todo lo
+  /// que hay en memoria es posterior y entra entero.
+  int _dondeSigueLaMemoria() {
+    if (_deAntes.isEmpty || _lineas.isEmpty) return 0;
+    final cuantas = _deAntes.length < 4 ? _deAntes.length : 4;
+    final cola = _deAntes.sublist(_deAntes.length - cuantas);
+    // De atrás hacia adelante: interesa la coincidencia MÁS reciente, que es
+    // donde de verdad termina lo ya mostrado.
+    for (var i = _lineas.length - cola.length; i >= 0; i--) {
+      var igual = true;
+      for (var j = 0; j < cola.length; j++) {
+        if (_lineas[i + j] != cola[j]) {
+          igual = false;
+          break;
+        }
+      }
+      if (igual) return i + cola.length;
+    }
+    return 0;
+  }
+
+  /// Cambia el filtro y deja todo lo demás mirando lo mismo.
+  void _elegirFiltro(_Filtro f) {
+    setState(() {
+      _filtro = f;
+      _recalcularVisibles();
+      // El que esté mirando desde el navegador ve el mismo cambio en cinco
+      // segundos, sin tocar nada de su lado.
+      ServidorDeRegistro.areaElegida = f.area;
+    });
   }
 
   // Monoespaciada con lista de reemplazos: 'monospace' es un nombre genérico
@@ -300,6 +557,10 @@ class _RegistroEnVivoPageState extends State<RegistroEnVivoPage> {
     fontSize: 11.5,
     height: 1.35,
   );
+
+  /// La misma, algo más grande: un televisor se mira desde tres metros y a
+  /// 11,5 puntos el registro no se lee, se adivina.
+  static final _monoDeTelevisor = _mono.copyWith(fontSize: 13.5);
 
   /// La barra de filtros.
   ///
@@ -323,12 +584,7 @@ class _RegistroEnVivoPageState extends State<RegistroEnVivoPage> {
               child: Center(
                 child: FocusableCard(
                   borderRadius: 999,
-                  onTap: () => setState(() {
-                    _filtro = f;
-                    // El que esté mirando desde el navegador ve el mismo
-                    // cambio en cinco segundos, sin tocar nada de su lado.
-                    ServidorDeRegistro.areaElegida = f.area;
-                  }),
+                  onTap: () => _elegirFiltro(f),
                   child: AnimatedContainer(
                     duration: const Duration(milliseconds: 120),
                     padding: EdgeInsets.symmetric(
@@ -361,8 +617,8 @@ class _RegistroEnVivoPageState extends State<RegistroEnVivoPage> {
     );
   }
 
-  Widget _buildLista() {
-    final visibles = _conFiltro([..._deAntes, ..._lineas]);
+  Widget _buildLista({bool paraTelevisor = false}) {
+    final visibles = _visibles;
     if (visibles.isEmpty && _lineas.isEmpty) {
       return Center(
         child: Padding(
@@ -381,19 +637,31 @@ class _RegistroEnVivoPageState extends State<RegistroEnVivoPage> {
     // pegarlo en un reporte, en vez de línea por línea.
     return DesplazableConMando(
       controlador: _scroll,
+      alCambiarFoco: paraTelevisor
+          ? (tiene) {
+              if (!mounted) return;
+              setState(() => _elRegistroTieneFoco = tiene);
+            }
+          : null,
       child: SelectionArea(
-      child: ListView.builder(
-        controller: _scroll,
-        padding: const EdgeInsets.fromLTRB(12, 8, 12, 24),
-        itemCount: visibles.length,
-        itemBuilder: (context, index) {
-          final linea = visibles[index];
-          return Padding(
-            padding: const EdgeInsets.symmetric(vertical: 2),
-            child: Text(linea, style: _mono.copyWith(color: _colorDe(linea))),
-          );
-        },
-      ),
+        child: ListView.builder(
+          controller: _scroll,
+          padding: paraTelevisor
+              ? const EdgeInsets.fromLTRB(18, 14, 18, 24)
+              : const EdgeInsets.fromLTRB(12, 8, 12, 24),
+          itemCount: visibles.length,
+          itemBuilder: (context, index) {
+            final linea = visibles[index];
+            return Padding(
+              padding: const EdgeInsets.symmetric(vertical: 2),
+              child: Text(
+                linea,
+                style: (paraTelevisor ? _monoDeTelevisor : _mono)
+                    .copyWith(color: _colorDe(linea)),
+              ),
+            );
+          },
+        ),
       ),
     );
   }
@@ -474,8 +742,7 @@ class _RegistroEnVivoPageState extends State<RegistroEnVivoPage> {
               tooltip: 'common.export'.i18n,
               icon: const Icon(Icons.ios_share),
               color: HomeTheme.textPrimary,
-              onPressed: () =>
-                  ExportarRegistro.entregar(soloArea: _filtro.area),
+              onPressed: _exportar,
             ),
           // En televisor, en vez de exportar: leerlo desde otro aparato de la
           // red. Ver ServidorDeRegistro.
@@ -490,6 +757,12 @@ class _RegistroEnVivoPageState extends State<RegistroEnVivoPage> {
                   : HomeTheme.textPrimary,
               onPressed: _alternarServidor,
             ),
+          IconButton(
+            tooltip: _etiquetaDeHistorial,
+            icon: const Icon(Icons.history),
+            color: HomeTheme.textPrimary,
+            onPressed: _verHistorial,
+          ),
           IconButton(
             tooltip: 'common.clear'.i18n,
             icon: const Icon(Icons.delete_outline),
@@ -576,6 +849,18 @@ class _RegistroEnVivoPageState extends State<RegistroEnVivoPage> {
               ),
               const SizedBox(width: 10),
               fluent.Button(
+                onPressed: _verHistorial,
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    const Icon(fluent.FluentIcons.history, size: 14),
+                    const SizedBox(width: 8),
+                    Text(_etiquetaDeHistorial),
+                  ],
+                ),
+              ),
+              const SizedBox(width: 10),
+              fluent.Button(
                 onPressed: _limpiar,
                 child: Row(
                   mainAxisSize: MainAxisSize.min,
@@ -641,10 +926,259 @@ class _RegistroEnVivoPageState extends State<RegistroEnVivoPage> {
     );
   }
 
+  // ══ TELEVISOR ═══════════════════════════════════════════════════════════
+  //
+  // ── Por qué no alcanzaba con la pantalla de Android ────────────────────
+  //
+  // Reportado en vivo, tres cosas a la vez: «es difícil subir todo eso para
+  // tocar los botones de arriba», «al scrollear presionando se para» y «no se
+  // ve dónde estoy seleccionando». Las tres salen de lo mismo — una pantalla
+  // pensada para el dedo, usada con un mando.
+  //
+  // Con el dedo, los botones de la barra superior están siempre ahí. Con un
+  // mando hay que LLEGAR hasta ellos, y desde el medio de un registro de tres
+  // mil líneas eso son cientos de pulsaciones hacia arriba. Un botón que
+  // existe pero al que no se puede llegar es lo mismo que no tenerlo.
+  //
+  // ── La disposición ─────────────────────────────────────────────────────
+  //
+  // Los mandos a distancia están hechos para moverse en cruz, así que las
+  // acciones van en una columna al costado: desde cualquier punto del
+  // registro, IZQUIERDA salta directo a ellas — sin importar por dónde vaya
+  // el desplazamiento— y DERECHA vuelve al texto. Todo a una pulsación.
+  //
+  // Y cada cosa que se puede elegir se ilumina al tener el foco, incluido el
+  // propio registro, que al ser una pared de texto no tenía forma de decir
+  // que estaba seleccionado.
+  Widget _buildTelevisor(BuildContext context) {
+    return Scaffold(
+      backgroundColor: HomeTheme.bg,
+      body: SafeArea(
+        child: Row(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            _railDeTelevisor(),
+            Expanded(child: _panelDeTelevisor()),
+          ],
+        ),
+      ),
+    );
+  }
+
+  /// Ancho de la columna de acciones.
+  ///
+  /// Suficiente para que ninguna etiqueta se corte a la distancia de un sofá,
+  /// y no más: lo que importa de esta pantalla es el registro, y cada píxel
+  /// que se lleva la columna es una línea menos de texto a lo ancho.
+  static const _anchoDelRail = 250.0;
+
+  Widget _railDeTelevisor() {
+    return Container(
+      width: _anchoDelRail,
+      padding: const EdgeInsets.fromLTRB(20, 20, 12, 20),
+      decoration: BoxDecoration(
+        border: Border(
+          right: BorderSide(color: Colors.white.withValues(alpha: 0.07)),
+        ),
+      ),
+      // Se desplaza por si un televisor con poca altura útil no llega a
+      // mostrar las nueve cosas: es preferible que se pueda bajar a que la
+      // última quede cortada contra el borde.
+      child: SingleChildScrollView(
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Text(
+              _titulo,
+              style: TextStyle(
+                fontSize: 20,
+                fontWeight: FontWeight.w700,
+                color: HomeTheme.textPrimary,
+              ),
+            ),
+            const SizedBox(height: 4),
+            Text(
+              _contador,
+              style: TextStyle(fontSize: 12, color: HomeTheme.textMuted),
+            ),
+            const SizedBox(height: 18),
+            _tituloDeGrupo('settings.log-zona'.i18n),
+            for (final f in _Filtro.values)
+              _opcionDeRail(
+                texto: f.clave.i18n,
+                elegido: _filtro == f,
+                onTap: () => _elegirFiltro(f),
+              ),
+            const SizedBox(height: 18),
+            _tituloDeGrupo('settings.log-acciones'.i18n),
+            _opcionDeRail(
+              icono: _pausado ? Icons.play_arrow : Icons.pause,
+              texto: _pausado
+                  ? 'settings.log-resume'.i18n
+                  : 'settings.log-pause'.i18n,
+              elegido: _pausado,
+              onTap: _alternarPausa,
+            ),
+            // Solo aparece cuando la vista se fue del fondo: un botón que no
+            // hace nada, en una columna que se recorre botón por botón, es
+            // una pulsación tirada cada vez que se pasa por encima.
+            if (!_alFinal)
+              _opcionDeRail(
+                icono: Icons.arrow_downward,
+                texto: 'settings.log-to-bottom'.i18n,
+                onTap: () {
+                  setState(() => _alFinal = true);
+                  _bajarAlFinal();
+                },
+              ),
+            _opcionDeRail(
+              icono: Icons.history,
+              texto: _etiquetaDeHistorial,
+              onTap: _verHistorial,
+            ),
+            _opcionDeRail(
+              icono: ServidorDeRegistro.encendido
+                  ? Icons.wifi_tethering
+                  : Icons.wifi_tethering_off,
+              texto: 'settings.log-en-red'.i18n,
+              elegido: ServidorDeRegistro.encendido,
+              onTap: _alternarServidor,
+            ),
+            _opcionDeRail(
+              icono: Icons.delete_outline,
+              texto: 'common.clear'.i18n,
+              onTap: _limpiar,
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  /// «Historial», con cuántas aperturas anteriores hay detrás.
+  ///
+  /// El número va en el propio botón porque el resultado de apretarlo depende
+  /// de él: sin nada guardado lleva a una pantalla vacía, y con un control
+  /// remoto eso son cuatro pulsaciones —entrar, ver que no hay nada, volver—
+  /// que se evitan sabiéndolo antes.
+  String get _etiquetaDeHistorial {
+    final base = 'settings.log-historial'.i18n;
+    return _cuantasAnteriores > 0 ? '$base ($_cuantasAnteriores)' : base;
+  }
+
+  Widget _tituloDeGrupo(String texto) => Padding(
+        padding: const EdgeInsets.only(left: 4, bottom: 8),
+        child: Text(
+          texto.toUpperCase(),
+          style: TextStyle(
+            fontSize: 11,
+            letterSpacing: 1.1,
+            fontWeight: FontWeight.w700,
+            color: HomeTheme.textMuted,
+          ),
+        ),
+      );
+
+  /// Una fila de la columna: se ilumina con el foco y se marca si está puesta.
+  ///
+  /// Son dos señales distintas y hacen falta las dos. El resplandor dice DÓNDE
+  /// estás parado; el relleno dice QUÉ está activo. Con una sola no se puede
+  /// distinguir «el filtro Fallos está puesto» de «estoy encima de Fallos».
+  Widget _opcionDeRail({
+    required String texto,
+    required VoidCallback onTap,
+    IconData? icono,
+    bool elegido = false,
+  }) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 6),
+      child: FocusableCard(
+        borderRadius: 10,
+        onTap: onTap,
+        child: AnimatedContainer(
+          duration: const Duration(milliseconds: 120),
+          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 11),
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(10),
+            color: elegido
+                ? HomeTheme.accentPink.withValues(alpha: 0.20)
+                : Colors.white.withValues(alpha: 0.05),
+          ),
+          child: Row(
+            children: [
+              if (icono != null) ...[
+                Icon(
+                  icono,
+                  size: 18,
+                  color:
+                      elegido ? HomeTheme.accentPink : HomeTheme.textPrimary,
+                ),
+                const SizedBox(width: 10),
+              ],
+              Expanded(
+                child: Text(
+                  texto,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: TextStyle(
+                    fontSize: 14,
+                    fontWeight: elegido ? FontWeight.w700 : FontWeight.w500,
+                    color:
+                        elegido ? HomeTheme.accentPink : HomeTheme.textPrimary,
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  /// El registro, con un borde que se enciende cuando tiene el foco.
+  Widget _panelDeTelevisor() {
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(16, 20, 20, 20),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          if (_pausado) ...[
+            _bandaDePausa(),
+            const SizedBox(height: 10),
+          ],
+          Expanded(
+            child: AnimatedContainer(
+              duration: const Duration(milliseconds: 140),
+              decoration: BoxDecoration(
+                borderRadius: BorderRadius.circular(12),
+                color: Colors.black.withValues(alpha: 0.22),
+                border: Border.all(
+                  color: _elRegistroTieneFoco
+                      ? HomeTheme.accentPink
+                      : Colors.white.withValues(alpha: 0.08),
+                  width: _elRegistroTieneFoco ? 2 : 1,
+                ),
+              ),
+              child: ClipRRect(
+                borderRadius: BorderRadius.circular(11),
+                child: NotificationListener<ScrollNotification>(
+                  onNotification: _mirarDesplazamiento,
+                  child: _buildLista(paraTelevisor: true),
+                ),
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     return PlatformBuildWidget(
-      androidBuilder: _buildAndroid,
+      androidBuilder: (context) => PlatformTv.esTelevisionSync
+          ? _buildTelevisor(context)
+          : _buildAndroid(context),
       desktopBuilder: _buildDesktop,
     );
   }
