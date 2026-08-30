@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
+import 'package:prismhub/utils/modo_app.dart';
 import 'package:prismhub/models/index.dart';
 import 'package:prismhub/utils/application.dart';
 import 'package:prismhub/utils/i18n.dart';
@@ -370,9 +371,21 @@ class _SettingsPageTvState extends State<SettingsPageTv> {
   List<Widget> _acercaDe() => [
         _Nota('settings.about-description'.i18n),
         const SizedBox(height: 12),
+        // La versión instalada, a la vista.
+        //
+        // No estaba en televisor. En PC y en teléfono sale debajo de «Buscar
+        // actualizaciones», pero acá la fila es de otra clase y se quedó sin
+        // ella — así que la única forma de saber qué versión tenía un
+        // televisor era abrir el registro y leer la cabecera.
+        //
+        // Es el primer dato que hace falta al reportar algo, y el primero que
+        // hay que preguntar al recibirlo. Con el modo al lado cuando no es una
+        // versión publicable, igual que en las otras plataformas: sirve para
+        // distinguir la app instalada de una compilación de pruebas.
         _Boton(
           icono: Icons.system_update_rounded,
           titulo: 'settings.upgrade'.i18n,
+          subtitulo: ModoApp.versionConModo(packageInfo.version),
           onTap: () => ApplicationUtils.checkUpdate(context, showSnackbar: true),
         ),
       ];
