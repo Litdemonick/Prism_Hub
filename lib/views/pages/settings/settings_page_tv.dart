@@ -343,20 +343,31 @@ class _SettingsPageTvState extends State<SettingsPageTv> {
           clave: SettingKey.enableNSFW,
           porDefecto: false,
           acento: HomeTheme.accentRed,
+          // Al encenderlo aparece el botón de entrar a la zona, que vive en
+          // esta misma lista: hay que redibujarla entera, no solo la fila.
+          alCambiar: () => setState(() {}),
         ),
-        Obx(() {
-          // El botón de entrar solo aparece con el contenido +18 activado —
-          // sin eso la zona no tiene nada que mostrar.
-          final activo =
-              PrismHubStorage.getSetting(SettingKey.enableNSFW) == true;
-          if (!activo) return const SizedBox.shrink();
-          return _Boton(
+        // ── Sin Obx acá, y es el motivo del fallo que se veía ────────────
+        //
+        // Reportado en vivo con foto en un televisor: en esta pantalla salía
+        // el aviso rojo de GetX «improper use of a GetX has been detected».
+        //
+        // La causa: esto era un `Obx`, pero adentro no leía ninguna variable
+        // observable — leía del almacenamiento, que es un valor común. GetX
+        // detecta que no tiene nada a lo que suscribirse y protesta, con
+        // razón: un `Obx` así nunca se volvería a dibujar solo.
+        //
+        // El botón de entrar solo aparece con el contenido +18 activado, sin
+        // eso la zona no tiene nada que mostrar. Y para que aparezca al
+        // encender el interruptor de arriba alcanza con que esta pantalla se
+        // redibuje, que es lo que hace `alCambiar`.
+        if (PrismHubStorage.getSetting(SettingKey.enableNSFW) == true)
+          _Boton(
             icono: Icons.lock_open_rounded,
             titulo: 'nsfw18.title'.i18n,
             onTap: () => Get.to(() => const Nsfw18ZonePage()),
             acento: HomeTheme.accentRed,
-          );
-        }),
+          ),
       ];
 
   List<Widget> _acercaDe() => [
@@ -486,6 +497,7 @@ class _Interruptor extends StatefulWidget {
     this.valorTexto,
     this.onTap,
     this.acento,
+    this.alCambiar,
   });
 
   final IconData icono;
@@ -501,6 +513,11 @@ class _Interruptor extends StatefulWidget {
   final String? valorTexto;
   final VoidCallback? onTap;
   final Color? acento;
+
+  /// Se avisa cuando el valor cambió, para que la pantalla que contiene esta
+  /// fila pueda redibujar lo que dependa de él. El `setState` de acá adentro
+  /// solo alcanza para la fila misma.
+  final VoidCallback? alCambiar;
 
   @override
   State<_Interruptor> createState() => _InterruptorState();
@@ -533,6 +550,7 @@ class _InterruptorState extends State<_Interruptor> {
           () async {
             await PrismHubStorage.setSetting(widget.clave!, !_activo);
             if (mounted) setState(() {});
+            widget.alCambiar?.call();
           },
     );
   }
