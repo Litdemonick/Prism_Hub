@@ -128,10 +128,22 @@ class AlivioDeMemoria with WidgetsBindingObserver {
 
   /// Desde cuántos avisos se considera que el aparato va justo de verdad.
   ///
-  /// Uno o dos en una sesión larga es Android haciendo su trabajo. Media
-  /// docena es otra cosa: el aparato viene peleando por memoria todo el rato,
-  /// y ahí el techo que le pusimos a las imágenes es parte del problema.
-  static const _cuandoYaEsDemasiado = 6;
+  /// Uno o dos en una sesión larga es Android haciendo su trabajo. Varios
+  /// seguidos son otra cosa: el aparato viene peleando por memoria todo el
+  /// rato, y ahí el techo que le pusimos a las imágenes es parte del problema.
+  ///
+  /// ── Por qué el número depende del aparato ───────────────────────────────
+  ///
+  /// Medido en un televisor real de 0,9 GB: cuatro avisos en siete minutos, sin
+  /// hacer nada raro —abrir la app, mirar el catálogo, reproducir un episodio—.
+  /// Con el umbral igual para todos, eso no llegaba a disparar nunca y el
+  /// aparato seguía toda la sesión con un techo que no le entra.
+  ///
+  /// En un aparato con memoria de sobra el mismo número diría otra cosa: ahí
+  /// que el sistema pida un par de veces es normal y bajar el techo sería
+  /// pagar redecodificaciones sin motivo. Por eso el flojo reacciona antes.
+  static int get _cuandoYaEsDemasiado =>
+      PerfilDeAparato.nivel.elegir(alto: 6, medio: 4, bajo: 3);
 
   /// Si ya se bajó el techo por insistencia del sistema.
   static bool _techoBajado = false;
