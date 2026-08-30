@@ -704,7 +704,8 @@
     "tv-retomando": "Resuming from {tiempo} — press ◀ to start over",
     "tv-servidores": "Server",
     "tv-elegi-servidor": "Pick a server from the list below and press OK to start",
-    "tv-episodios": "Episode"
+    "tv-episodios": "Episode",
+    "una-sola-pista": "This video has only one {que}"
   },
   "comic-settings": {
     "read-mode": "Read mode",

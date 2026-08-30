@@ -700,7 +700,8 @@
     "tv-retomando": "Retomando desde {tiempo} — apretá ◀ para volver al principio",
     "tv-servidores": "Servidor",
     "tv-elegi-servidor": "Elegí un servidor de la lista de abajo y apretá OK para empezar",
-    "tv-episodios": "Episodio"
+    "tv-episodios": "Episodio",
+    "una-sola-pista": "Este vídeo trae un solo {que}"
   },
   "comic-settings": {
     "read-mode": "Modo de lectura",

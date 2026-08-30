@@ -180,6 +180,13 @@ class MotorMedia3 implements MotorDeVideo {
   /// Las que se conocen ahora mismo.
   List<PistaDeMedia3> get pistasDeAhora => _ultimasPistas;
 
+  /// Las mismas, para que la lista de Ajustes se dibuje sola cuando cambien.
+  ///
+  /// Va por notificador además del flujo porque el selector de pistas tiene que
+  /// redibujarse solo él: colgado de un observable del reproductor arrastraría
+  /// a todo el panel en cada aviso.
+  final pistasParaLaLista = ValueNotifier<List<PistaDeMedia3>>(const []);
+
   /// El texto del subtítulo, por si alguien prefiere el flujo.
   Stream<List<String>> get subtitulos => _subtitulos.stream;
 
@@ -344,6 +351,7 @@ class MotorMedia3 implements MotorDeVideo {
     _ancho = null;
     _alto = null;
     _ultimasPistas = const [];
+    pistasParaLaLista.value = const [];
     _seVioAlgo = false;
     lineasDeSubtitulo.value = const [];
     _medidas.value = null;
@@ -401,6 +409,7 @@ class MotorMedia3 implements MotorDeVideo {
                 .toList(growable: false) ??
             const <PistaDeMedia3>[];
         _ultimasPistas = lista;
+        pistasParaLaLista.value = lista;
         if (!_pistas.isClosed) _pistas.add(lista);
       case 'subtitulo':
         final lineas = (crudo['valor'] as List?)
@@ -630,6 +639,7 @@ class MotorMedia3 implements MotorDeVideo {
     // una caída que aparecería justo al salir del vídeo.
     _medidas.value = null;
     lineasDeSubtitulo.value = const [];
+    pistasParaLaLista.value = const [];
   }
 
   @override
