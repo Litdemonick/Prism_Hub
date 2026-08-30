@@ -203,8 +203,14 @@ class VideoPlayerController extends GetxController with WidgetsBindingObserver {
     Map<String, String>? cabeceras,
     bool arrancar = true,
   }) async {
+    final aparte = _subtitulosDeLaExtension();
     try {
-      await motor.abrir(url, cabeceras: cabeceras, arrancar: arrancar);
+      await motor.abrir(
+        url,
+        cabeceras: cabeceras,
+        arrancar: arrancar,
+        subtitulosAparte: aparte,
+      );
     } catch (e) {
       // ── Si el motor de Android no puede abrirla, se cae a mpv ─────────
       //
@@ -222,8 +228,39 @@ class VideoPlayerController extends GetxController with WidgetsBindingObserver {
           '${_motorDeReserva!.nombre}: $e');
       CentinelaDeArranque.marcar('cae al motor de reserva');
       _motorEnUso = _motorDeReserva;
-      await motor.abrir(url, cabeceras: cabeceras, arrancar: arrancar);
+      await motor.abrir(
+        url,
+        cabeceras: cabeceras,
+        arrancar: arrancar,
+        subtitulosAparte: aparte,
+      );
     }
+  }
+
+  /// Los subtítulos que la extensión entrega aparte del vídeo.
+  ///
+  /// ── Por qué hay que pasárselos al motor al abrir ────────────────────────
+  ///
+  /// Con mpv no hacía falta: la lista se le daba después, con
+  /// `player.setSubtitleTrack`, y él se encargaba. El motor de Android no
+  /// funciona así — los subtítulos externos se declaran junto con la fuente,
+  /// al preparar la reproducción, porque pasan a ser pistas del contenido.
+  ///
+  /// Sin esto, en Android no se veía NI UNO: la extensión entregaba su `.vtt`,
+  /// la app lo guardaba en su lista, y esa lista la miraba un dibujante de
+  /// subtítulos atado a media_kit, que con este motor nunca recibe la fuente.
+  List<Map<String, String>> _subtitulosDeLaExtension() {
+    final lista = watchData?.subtitles;
+    if (lista == null || lista.isEmpty) return const [];
+    return [
+      for (final s in lista)
+        if (s.url.isNotEmpty)
+          {
+            'url': s.url,
+            if (s.language != null) 'idioma': s.language!,
+            'titulo': s.title,
+          },
+    ];
   }
 
   /// Si ya se cayó a la reserva en esta reproducción.

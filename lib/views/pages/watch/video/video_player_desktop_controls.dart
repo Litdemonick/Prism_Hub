@@ -6,7 +6,7 @@ import 'package:flutter/services.dart';
 import 'package:flutter_i18n/flutter_i18n.dart';
 import 'package:get/get.dart';
 import 'package:media_kit/media_kit.dart';
-import 'package:media_kit_video/media_kit_video.dart';
+import 'package:prismhub/views/widgets/subtitulos_del_motor.dart';
 import 'package:prismhub/views/widgets/tema_fluent_seguro.dart';
 import 'package:prismhub/controllers/watch/video_controller.dart';
 import 'package:prismhub/views/pages/watch/video/webview_player_page.dart'
@@ -53,7 +53,6 @@ class _VideoPlayerDesktopControlsState
     extends State<VideoPlayerDesktopControls> {
   late final _c = widget.controller;
   final FocusNode _focusNode = FocusNode();
-  final _subtitleViewKey = GlobalKey<SubtitleViewState>();
   Worker? _webViewWorker;
   Worker? _resumeWorker;
   Worker? _tutorialWorker;
@@ -225,7 +224,8 @@ class _VideoPlayerDesktopControlsState
         // quedaba con el tema claro/celeste por defecto de toda la app en
         // vez del oscuro+morado del reproductor.
         data: temaFluent(context).copyWith(
-          accentColor: AccentColor.swatch(const {'normal': HomeTheme.oscuroAcento}),
+          accentColor:
+              AccentColor.swatch(const {'normal': HomeTheme.oscuroAcento}),
         ),
         child: ContentDialog(
           title: const Text('¡Un momento!'),
@@ -472,36 +472,35 @@ class _VideoPlayerDesktopControlsState
                         //  2. Salto en curso (barra, teclas o flechas).
                         //  3. Buffer vacío durante la reproducción.
                         opacity: (((!_c.isGettingWatchData.value &&
-                                        !_c.hasRenderedFrame.value &&
-                                        // Si hay un error en pantalla, ahi hay una
-                                        // tarjeta con su boton (reintentar / elegir
-                                        // otro servidor) y NO se esta cargando
-                                        // nada: la rueda girando detras hacia
-                                        // pensar que algo seguia en curso.
-                                        _c.error.value.isEmpty &&
-                                        // Mismo caso que el error de arriba: el
-                                        // aviso de "el servidor fallo, toca para
-                                        // reproducir" espera una accion y no hay
-                                        // nada cargando. El fallo de servidor no
-                                        // se guarda en `error` —tiene su propio
-                                        // campo— asi que la comprobacion anterior
-                                        // no lo cubria.
-                                        _c.serverFailedMessage.value.isEmpty &&
-                                        // Mismo caso: el boton de play espera un
-                                        // clic, no hay nada cargando.
-                                        !_c.awaitingServerChoice.value &&
-                                        // Con el reproductor de WebView activo no
-                                        // va a pintarse nunca un cuadro nativo, asi
-                                        // que esta rueda giraria para siempre.
-                                        !_c.isWebViewActive.value) ||
-                                    (_c.hasRenderedFrame.value &&
-                                        (_c.isSeeking.value ||
-                                            // Ver imagenCongelada: con la red mal
-                                            // mpv deja de avisar que carga.
-                                            _c.imagenCongelada.value ||
-                                            (_c.isPlaying.value &&
-                                                _c.isActuallyBuffering
-                                                    .value)))))
+                                    !_c.hasRenderedFrame.value &&
+                                    // Si hay un error en pantalla, ahi hay una
+                                    // tarjeta con su boton (reintentar / elegir
+                                    // otro servidor) y NO se esta cargando
+                                    // nada: la rueda girando detras hacia
+                                    // pensar que algo seguia en curso.
+                                    _c.error.value.isEmpty &&
+                                    // Mismo caso que el error de arriba: el
+                                    // aviso de "el servidor fallo, toca para
+                                    // reproducir" espera una accion y no hay
+                                    // nada cargando. El fallo de servidor no
+                                    // se guarda en `error` —tiene su propio
+                                    // campo— asi que la comprobacion anterior
+                                    // no lo cubria.
+                                    _c.serverFailedMessage.value.isEmpty &&
+                                    // Mismo caso: el boton de play espera un
+                                    // clic, no hay nada cargando.
+                                    !_c.awaitingServerChoice.value &&
+                                    // Con el reproductor de WebView activo no
+                                    // va a pintarse nunca un cuadro nativo, asi
+                                    // que esta rueda giraria para siempre.
+                                    !_c.isWebViewActive.value) ||
+                                (_c.hasRenderedFrame.value &&
+                                    (_c.isSeeking.value ||
+                                        // Ver imagenCongelada: con la red mal
+                                        // mpv deja de avisar que carga.
+                                        _c.imagenCongelada.value ||
+                                        (_c.isPlaying.value &&
+                                            _c.isActuallyBuffering.value)))))
                             ? 1
                             : 0,
                         child: const Center(
@@ -545,13 +544,10 @@ class _VideoPlayerDesktopControlsState
                         alpha: _c.subtitleBackgroundOpacity.value,
                       ),
                     );
-                    return SubtitleView(
-                      controller: _c.videoController,
-                      configuration: SubtitleViewConfiguration(
-                        style: textStyle,
-                        textAlign: _c.subtitleTextAlign.value,
-                      ),
-                      key: _subtitleViewKey,
+                    return SubtitulosDelMotor(
+                      controlador: _c,
+                      estilo: textStyle,
+                      alineacion: _c.subtitleTextAlign.value,
                     );
                   },
                 ),
@@ -1383,7 +1379,8 @@ class _VolumeState extends State<_Volume> {
   Widget build(BuildContext context) {
     return FluentTheme(
       data: FluentThemeData.dark().copyWith(
-        accentColor: AccentColor.swatch(const {'normal': HomeTheme.oscuroAcento}),
+        accentColor:
+            AccentColor.swatch(const {'normal': HomeTheme.oscuroAcento}),
       ),
       child: Obx(
         () => Row(
@@ -1463,8 +1460,8 @@ class _EpisodeState extends State<_Episode> {
               builder: (context) {
                 return FluentTheme(
                   data: FluentThemeData.dark().copyWith(
-                    accentColor:
-                        AccentColor.swatch(const {'normal': HomeTheme.oscuroAcento}),
+                    accentColor: AccentColor.swatch(
+                        const {'normal': HomeTheme.oscuroAcento}),
                   ),
                   child: FlyoutContent(
                     padding: const EdgeInsets.all(0),
@@ -1640,8 +1637,8 @@ class _TrackState extends State<_Track> {
             builder: (context) {
               return FluentTheme(
                 data: FluentThemeData.dark().copyWith(
-                  accentColor:
-                      AccentColor.swatch(const {'normal': HomeTheme.oscuroAcento}),
+                  accentColor: AccentColor.swatch(
+                      const {'normal': HomeTheme.oscuroAcento}),
                 ),
                 child: FlyoutContent(
                   useAcrylic: true,
@@ -1839,8 +1836,8 @@ class _TorrentFilesState extends State<_TorrentFiles> {
             builder: (context) {
               return FluentTheme(
                 data: FluentThemeData.dark().copyWith(
-                  accentColor:
-                      AccentColor.swatch(const {'normal': HomeTheme.oscuroAcento}),
+                  accentColor: AccentColor.swatch(
+                      const {'normal': HomeTheme.oscuroAcento}),
                 ),
                 child: FlyoutContent(
                   useAcrylic: true,
@@ -1914,8 +1911,8 @@ class _SpeedState extends State<_Speed> {
             builder: (context) {
               return FluentTheme(
                 data: FluentThemeData.dark().copyWith(
-                  accentColor:
-                      AccentColor.swatch(const {'normal': HomeTheme.oscuroAcento}),
+                  accentColor: AccentColor.swatch(
+                      const {'normal': HomeTheme.oscuroAcento}),
                 ),
                 child: FlyoutContent(
                   useAcrylic: true,
@@ -2034,7 +2031,8 @@ class _SeekBarState extends State<_SeekBar> {
 
     return FluentTheme(
       data: temaFluent(context).copyWith(
-        accentColor: AccentColor.swatch(const {'normal': HomeTheme.oscuroAcento}),
+        accentColor:
+            AccentColor.swatch(const {'normal': HomeTheme.oscuroAcento}),
       ),
       // Sin altura fija: el Stack se ajusta solo a la altura natural del
       // Slider (el hijo más alto, sin posicionar).

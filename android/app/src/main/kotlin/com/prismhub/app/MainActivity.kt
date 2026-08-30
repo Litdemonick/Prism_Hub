@@ -21,6 +21,7 @@ import androidx.core.content.FileProvider
 //    (audio_service). Sin esto, tocar la notificación cuando la app ya no está
 //    en memoria levantaría un motor NUEVO: la app arrancaría de cero y los
 //    botones quedarían hablándole a un reproductor que ya no existe.
+import com.prismhub.app.media3.PuenteMedia3
 import com.ryanheise.audioservice.AudioServiceFragmentActivity
 import io.flutter.embedding.engine.FlutterEngine
 import io.flutter.plugin.common.MethodChannel
@@ -41,8 +42,20 @@ class MainActivity: AudioServiceFragmentActivity() {
     // reabra la misma ficha.
     private var enlaceInicial: String? = null
 
+    // El reproductor nativo de Media3. Ver PuenteMedia3 para por que no
+    // alcanzaba con el complemento video_player.
+    private var media3: PuenteMedia3? = null
+
     override fun configureFlutterEngine(flutterEngine: FlutterEngine) {
         super.configureFlutterEngine(flutterEngine)
+
+        media3 = PuenteMedia3(
+            applicationContext,
+            flutterEngine.dartExecutor.binaryMessenger,
+            // El renderizador de Flutter ES el registro de texturas: es quien
+            // sabe crear una que Flutter pueda dibujar despues con Texture().
+            flutterEngine.renderer,
+        )
         
         canalEnlaces = MethodChannel(
             flutterEngine.dartExecutor.binaryMessenger, CANAL_ENLACES
@@ -247,6 +260,12 @@ class MainActivity: AudioServiceFragmentActivity() {
     // reproductor, la pantalla no puede quedarse en el modo del video.
     override fun onDestroy() {
         soltarFrecuenciaDePantalla()
+        // Sin esto quedan el decodificador y la textura tomados hasta que el
+        // sistema mate el proceso — y en un televisor con poca memoria eso es
+        // justo lo que hace que la segunda entrada al reproductor vaya peor
+        // que la primera.
+        media3?.desenchufar()
+        media3 = null
         super.onDestroy()
     }
 

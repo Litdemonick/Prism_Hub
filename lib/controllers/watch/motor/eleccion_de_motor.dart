@@ -4,7 +4,7 @@ import 'package:media_kit/media_kit.dart';
 import 'package:media_kit_video/media_kit_video.dart';
 import 'package:prismhub/controllers/watch/dibujado_de_video.dart';
 import 'package:prismhub/controllers/watch/motor/motor_de_video.dart';
-import 'package:prismhub/controllers/watch/motor/motor_exo.dart';
+import 'package:prismhub/controllers/watch/motor/motor_media3.dart';
 import 'package:prismhub/controllers/watch/motor/motor_mpv.dart';
 import 'package:prismhub/utils/log.dart';
 import 'package:prismhub/utils/prismhub_storage.dart';
@@ -75,20 +75,23 @@ class EleccionDeMotor {
     final cual = _decidir();
     logger.info('Motor de vídeo: $cual '
         '(ajuste: $elegido, plataforma: ${Platform.operatingSystem})');
-    if (cual == exo) return MotorExo();
+    if (cual == exo) return MotorMedia3();
     return MotorMpv(player: player, videoController: videoController);
   }
 
   static String _decidir() {
     // Escritorio: mpv, que es el único que hay ahí.
     if (!Platform.isAndroid) return mpv;
-    // Android —teléfono y televisor—: ExoPlayer.
+    // Android entero —teléfono, tablet y televisor—: ExoPlayer, hablado
+    // directo por Media3. Es el motor del sistema, el mismo que usan las apps
+    // de vídeo de Android.
     //
-    // Es el motor del sistema, dibuja en superficie nativa y por eso el vídeo
-    // y la interfaz van por carriles separados: la interfaz se redibuja solo
-    // cuando algo cambia y el vídeo avanza a su ritmo. Con textura los dos
-    // comparten carril y cada cuadro de vídeo es una pasada de dibujado de la
-    // interfaz — que es lo que se medía como tirones en televisores.
+    // OJO con lo que esto da y lo que no. Da el decodificador de Android, que
+    // está más al día con los formatos, y el salto en HLS fMP4 que a mpv lo
+    // deja clavado. NO da todavía la separación entre el vídeo y la interfaz:
+    // eso necesita una SurfaceView, y hoy se dibuja sobre una textura igual
+    // que media_kit. Se probó el atajo —la superficie nativa del complemento
+    // video_player— y dejó la pantalla negra con el audio andando.
     return exo;
   }
 

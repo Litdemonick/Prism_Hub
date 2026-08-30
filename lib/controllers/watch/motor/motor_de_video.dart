@@ -37,10 +37,18 @@ abstract class MotorDeVideo {
 
   /// Abre una dirección. [cabeceras] son las que exige la fuente (Referer,
   /// User-Agent); sin ellas muchos servidores contestan que no.
+  ///
+  /// [subtitulosAparte] son los que la extensión entrega por su lado, con
+  /// `url`, `idioma` y `titulo`. Van acá y no en una llamada posterior porque
+  /// el motor de Android los suma como pistas del contenido al preparar la
+  /// fuente: así aparecen en la misma lista que las que trae el archivo y se
+  /// eligen igual. mpv los ignora — ya los maneja por su cuenta, con su propia
+  /// lista de pistas.
   Future<void> abrir(
     String url, {
     Map<String, String>? cabeceras,
     bool arrancar = true,
+    List<Map<String, String>> subtitulosAparte = const [],
   });
 
   /// Suelta todo lo nativo. Después de esto el motor no se puede volver a usar.
